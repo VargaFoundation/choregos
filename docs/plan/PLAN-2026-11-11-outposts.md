@@ -118,7 +118,10 @@ reference to its outpost; `Permission.OUTPOST_MANAGE`; the principal kind; audit
 `apps/api/tests/test_outposts_api.py` shows: an enrolment token used twice, or after 15 minutes, is
 refused; an instance is born pending; an approval with another fingerprint, or by a token instead of a
 person's session, is refused; a revocation moves the epoch; without `outpost:manage` the routes answer
-403, and with `CHOREGOS_OUTPOSTS` off a creation is refused. On PostgreSQL:
+403, and with `CHOREGOS_OUTPOSTS` off a creation is refused; an outpost and its enrolment token come back
+with the door's `door_keys` to pin (ADR 0148 §13), and the token with the door's public origin, a setting
+of the installation; a paused outpost is resumed (`resumeOutpost`); a revoked outpost is deleted
+(`deleteOutpost`), and one that still has connectors is not (409). On PostgreSQL:
 `test_every_table_is_under_rls_or_exempted` passes with no new exemption; a session that names outpost A
 reads and claims no row of outpost B, of the same organisation or another, **from a query with no `WHERE`
 clause**; the migration goes down and up again.
@@ -134,7 +137,8 @@ another outpost's call (404, never 403), a body above the cap (before parsing), 
 an answer under a previous epoch is refused. `test_outpost_long_poll_holds_no_connection.py`: a hundred
 waiting polls hold no pooled connection; a call written is handed over within a second, and still within
 the periodic look when the relay is stopped. `test_outpost_door_conformance.py`: the live routes are the
-contract's. The boundary test is green with the directory in `DOOR_DIRS` and the four routes in
+contract's, every call the door hands over is signed with its key (ADR 0148 §13), and the contract's
+vectors verify. The boundary test is green with the directory in `DOOR_DIRS` and the four routes in
 `DOOR_ROUTES`, and red when the door imports the broker.
 
 ### S65-13 · feat(api,adapters): a connector reached through an outpost, and its fakes
@@ -171,12 +175,14 @@ MCP client of `choregos_adapters`. Depends on S65-10 only. **Accepted when** its
 request the contract's fixtures accept, a backoff with jitter, and a daemon that stops polling and says so
 when the door's minimum version is above its own; a tool outside its patterns, a tool its server does not
 declare read-only under `writes: deny`, an unknown alias and a payload above its ceiling are each refused
-with a code and a local audit line, the server having received nothing; a daemon killed in the middle of a
-write and restarted reports the call unanswered and does not execute it again; a call id seen twice is
-answered from the journal; `doctor` fails, one test per check, on DNS, the TLS chain behind a private
-certificate authority, the outbound proxy, clock drift, the door, each alias and the policy's validity. No
-private key appears in an output or a log line. `tests/packaging/test_distributables.py` lists the package,
-and the ceiling of `tests/architecture/test_packages_imports_of_the_api.py` does not move.
+with a code and a local audit line, the server having received nothing; a call that is unsigned, or signed
+by a key its policy file does not pin, is refused `signature_refused` and logged without its envelope being
+opened (ADR 0148 §13); a daemon killed in the middle of a write and restarted reports the call unanswered
+and does not execute it again; a call id seen twice is answered from the journal; `doctor` fails, one test
+per check, on DNS, the TLS chain behind a private certificate authority, the outbound proxy, clock drift,
+the door, each alias, the policy's validity and `door_keys` that do not parse as keys. No private key
+appears in an output or a log line. `tests/packaging/test_distributables.py` lists the package, and the
+ceiling of `tests/architecture/test_packages_imports_of_the_api.py` does not move.
 
 ### S65-16 · feat(charts): the door's own Deployment and route; the chart `choregos-outpost`
 
@@ -187,27 +193,31 @@ servers the operator chooses to run beside it. Depends on S65-12 and S65-15. **A
 `tests/charts/test_outpost_door_routed.py` (on the model of `test_a2a_door_routed.py`) shows: disabled,
 nothing of the door is rendered; enabled, the route serves `/outposts` under the door's hostnames only; a
 door hostname that is also a console hostname fails the render; dedicated, a Deployment serves the door
-alone. `tests/charts/test_outpost_chart.py`: the pod is locked down as a plugin server's is (ADR 0096 §2),
-and its NetworkPolicy lets egress through to the control plane and the listed Services only. `make
-charts-lint` is green for both charts.
+alone; enabled, the chart generates the door's signing key once, keeps it across upgrades and mounts it
+where the door runs (ADR 0148 §13). `tests/charts/test_outpost_chart.py`: the pod is locked down as a
+plugin server's is (ADR 0096 §2), and its NetworkPolicy lets egress through to the control plane and the
+listed Services only. `make charts-lint` is green for both charts.
 
 ### S65-17 · feat(cli,web): `choregos outposts`, the Outposts page, the connector form, the access tab
 
-`choregos outposts create | list | show | approve | revoke | pause`; an administration page (presence,
-pending instances with the fingerprint to approve, pause, the last calls and their refusal codes); the
-form of a connector at an outpost; the outpost and its offline state on an agent's access tab. Depends on
-S65-11 (and on S65-13 for the form and the tab). **Accepted when** every management route has a client
-(`tests/web/test_api_routes_have_a_client.py`, no new entry in `NO_CLIENT_YET`); `docs/cli.md` is
+`choregos outposts create | list | show | approve | revoke | pause | resume | delete`; an administration
+page (presence, pending instances with the fingerprint to approve, pause, the last calls and their refusal
+codes); the form of a connector at an outpost; the outpost and its offline state on an agent's access tab.
+Depends on S65-11 (and on S65-13 for the form and the tab). **Accepted when** every management route has a
+client (`tests/web/test_api_routes_have_a_client.py`, no new entry in `NO_CLIENT_YET`); `docs/cli.md` is
 regenerated; the web tests show that a pending instance cannot be approved without its fingerprint
-confirmed, that a paused outpost says so, and that the access tab names the outpost and `offline`.
+confirmed, that a paused outpost says so, and that the access tab names the outpost and `offline`; the
+console and the CLI print, beside the enrolment command, the `door_keys` lines to put in the policy file
+(ADR 0148 §13), and resuming and deleting an outpost have their client.
 
 ### S65-18 · docs: outposts for whoever operates the platform, and for whoever runs one
 
 `docs/outposts.md` and `docs/outpost-operator.md`; lines in `docs/security.md`, `docs/deployment.md`,
 `docs/concepts.md` and `docs/positioning.md`. Depends on S65-13, S65-15, S65-16 and S65-17. **Accepted
 when** `tests/docs` is green; the operator's guide carries, each under a heading a test looks for: what
-the daemon does and cannot do, the one firewall rule, the policy file, the local audit log, upgrades that
-are pulled and verified, who is responsible for what, and that an outpost does not give data residency;
+the daemon does and cannot do, the one firewall rule, the policy file, the door's keys it pins and how
+they are rotated (ADR 0148 §13), the local audit log, upgrades that are pulled and verified, who is
+responsible for what, and that an outpost does not give data residency;
 the commands it shows are the ones the daemon's help prints; the platform's page offers an organisation's
 own MCP gateway (ADR 0105) before it describes an outpost.
 

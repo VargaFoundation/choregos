@@ -1,0 +1,225 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://choregos.dev/schemas/outpost-answer.schema.json",
+  "title": "OutpostAnswer",
+  "description": "What a daemon reports of a call it took to its server, before it seals it to the call's `answer_key` (ADR 0148 §5). An answer says the call passed the outpost's own checks; a call that did not is a refusal (`outpost-refusal.schema.json`), never an answer.",
+  "type": "object",
+  "required": [
+    "id",
+    "outcome"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$",
+      "description": "The call's id."
+    },
+    "outcome": {
+      "enum": [
+        "result",
+        "error",
+        "unanswered",
+        "oversized"
+      ],
+      "description": "`result`: the server answered. `error`: it answered a JSON-RPC error, so it says it did not do the call. `unanswered`: the call was sent, or begun, and the daemon holds no answer (a timeout at the endpoint, a lost connection, a restart in the middle): executed or not, nobody knows. `oversized`: the server answered and its result is above the outpost's ceiling or the door's cap; it was executed and its result is not sent."
+    },
+    "result": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "default": null,
+      "description": "`call_tool`, outcome `result`: the server's result as it answered it (`content`, `structuredContent`, `isError`), untouched."
+    },
+    "tools": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "maxItems": 1024,
+      "items": {
+        "$ref": "#/$defs/tool"
+      },
+      "default": null,
+      "description": "`list_tools`, outcome `result`: the tools the server lists and the outpost's policy lets through."
+    },
+    "error": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/error"
+        }
+      ],
+      "default": null
+    },
+    "write": {
+      "type": [
+        "boolean",
+        "null"
+      ],
+      "default": null,
+      "description": "What the outpost read from its own server: the tool does not declare itself read-only."
+    },
+    "replayed": {
+      "type": "boolean",
+      "default": false,
+      "description": "The answer comes from the daemon's journal of call ids: the server was not called again (ADR 0149 §5)."
+    },
+    "duration_ms": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0,
+      "default": null
+    }
+  },
+  "if": {
+    "properties": {
+      "outcome": {
+        "const": "result"
+      }
+    },
+    "required": [
+      "outcome"
+    ]
+  },
+  "then": {
+    "properties": {
+      "error": {
+        "type": "null"
+      }
+    },
+    "oneOf": [
+      {
+        "required": [
+          "result"
+        ],
+        "properties": {
+          "result": {
+            "type": "object"
+          },
+          "tools": {
+            "type": "null"
+          }
+        }
+      },
+      {
+        "required": [
+          "tools"
+        ],
+        "properties": {
+          "tools": {
+            "type": "array"
+          },
+          "result": {
+            "type": "null"
+          }
+        }
+      }
+    ]
+  },
+  "else": {
+    "if": {
+      "properties": {
+        "outcome": {
+          "const": "error"
+        }
+      },
+      "required": [
+        "outcome"
+      ]
+    },
+    "then": {
+      "required": [
+        "error"
+      ],
+      "properties": {
+        "error": {
+          "type": "object"
+        },
+        "result": {
+          "type": "null"
+        },
+        "tools": {
+          "type": "null"
+        }
+      }
+    },
+    "else": {
+      "properties": {
+        "error": {
+          "type": "null"
+        },
+        "result": {
+          "type": "null"
+        },
+        "tools": {
+          "type": "null"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "tool": {
+      "type": "object",
+      "description": "A tool as the MCP client reads a `tools/list` entry.",
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 8192,
+          "default": ""
+        },
+        "input_schema": {
+          "type": "object",
+          "default": {}
+        },
+        "read_only": {
+          "type": "boolean",
+          "default": false,
+          "description": "The server's `annotations.readOnlyHint`; without a declaration a tool is taken for a write."
+        },
+        "output_schema": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "default": null
+        }
+      }
+    },
+    "error": {
+      "type": "object",
+      "description": "The JSON-RPC error the endpoint's server answered.",
+      "required": [
+        "message"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "code": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "default": null
+        }
+      }
+    }
+  }
+}

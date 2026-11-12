@@ -1,0 +1,13 @@
+{
+  "type": "about:blank",
+  "title": "Upgrade required",
+  "status": 426,
+  "code": "protocol_unsupported",
+  "detail": "this door serves protocol 2 and above; the daemon speaks 1",
+  "instance": "/outposts/v1/poll",
+  "server_time": "2026-11-12T10:07:31Z",
+  "protocol": {
+    "current": 3,
+    "minimum": 2
+  }
+}

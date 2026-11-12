@@ -23,6 +23,8 @@ import yaml
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 OPENAPI = ROOT / "packages" / "contracts" / "openapi.yaml"
+#: The outposts' door has a contract document of its own (ADR 0148 §2): its paths are contract paths too.
+DOOR_CONTRACTS = (ROOT / "packages" / "contracts" / "outpost-door.yaml",)
 WEB_SRC = ROOT / "apps" / "web" / "src"
 WEB_MOCKS = WEB_SRC / "mocks"
 CLI_SRC = ROOT / "packages" / "cli" / "src"
@@ -32,7 +34,9 @@ API_SRC = ROOT / "apps" / "api" / "src"
 #: under that prefix. The MCP and A2A doors, their discovery documents and `/metrics` are served
 #: outside the contract (`include_in_schema=False`): no contract path names them yet, so their entries
 #: are checked against the API's own route declarations instead, and cover them the day one enters the
-#: contract. Later stories (S46-07, S47-14, S47-15) add their machine-only routes here.
+#: contract. The outposts' door is outside the API's document like them, and unlike them it has a contract
+#: of its own (`DOOR_CONTRACTS`): its paths are read from there, and its entry is checked against them.
+#: Later stories (S46-07, S47-14, S47-15) add their machine-only routes here.
 MACHINE_ONLY_ROUTES: dict[str, str] = {
     "/webhooks/*": "a forge, a tracker, a pipeline, a deployer, Alertmanager or a plugin's server posts "
     "its signed events",
@@ -49,6 +53,8 @@ MACHINE_ONLY_ROUTES: dict[str, str] = {
     "JSON-RPC, and `choregos a2a` (S62-03) with the same `a2a` token; outside the contract",
     "/a2a/orgs/{org}/.well-known/agent-card.json": "the A2A door's agent card, read by the calling agent "
     "and `choregos a2a skills`; outside the contract",
+    "/outposts/v1/*": "the outposts' door (ADR 0148): the daemon `choregos-outpost` enrols, polls, answers "
+    "and refuses there, under its own signature; its contract is `packages/contracts/outpost-door.yaml`",
     "/metrics": "the Prometheus scrape, read by the monitoring stack; outside the contract",
     "/downloads/cli/manifest.json": "the CLI the instance bundles (S62-08): read by the install scripts, "
     "`choregos self update` and the console's download block; files, not an API resource, outside the "
@@ -93,7 +99,22 @@ NOT_CALLED_BY_A_CLIENT: dict[str, str] = {
 }
 
 #: Paths whose console screen is a story still to come: that story removes its entries.
-NO_CLIENT_YET: dict[str, str] = {}
+_OUTPOSTS = (
+    "outposts (S65-10, ADR 0147): contract first; S65-17 gives it `choregos outposts` and the Outposts page, "
+    "and removes this entry"
+)
+NO_CLIENT_YET: dict[str, str] = {
+    "/orgs/{org}/outposts": _OUTPOSTS,
+    "/orgs/{org}/outposts/{slug}": _OUTPOSTS,
+    "/orgs/{org}/outposts/{slug}/pause": _OUTPOSTS,
+    "/orgs/{org}/outposts/{slug}/resume": _OUTPOSTS,
+    "/orgs/{org}/outposts/{slug}/revoke": _OUTPOSTS,
+    "/orgs/{org}/outposts/{slug}/enrolments": _OUTPOSTS,
+    "/orgs/{org}/outposts/{slug}/instances": _OUTPOSTS,
+    "/orgs/{org}/outposts/{slug}/instances/{instance_id}/approve": _OUTPOSTS,
+    "/orgs/{org}/outposts/{slug}/instances/{instance_id}/revoke": _OUTPOSTS,
+    "/orgs/{org}/outposts/{slug}/calls": _OUTPOSTS,
+}
 
 #: Paths the CLI calls and the console must not: an operator's command, not a screen.
 CLI_ONLY: dict[str, str] = {
@@ -131,8 +152,9 @@ def path_pattern(path: str) -> re.Pattern[str]:
 
 @functools.cache
 def contract_paths() -> tuple[str, ...]:
-    spec = yaml.safe_load(OPENAPI.read_text(encoding="utf-8"))
-    return tuple(spec["paths"])
+    """The paths of the API's contract, then those of each door that has a contract of its own."""
+    documents = [yaml.safe_load(path.read_text(encoding="utf-8")) for path in (OPENAPI, *DOOR_CONTRACTS)]
+    return tuple(path for document in documents for path in document["paths"])
 
 
 def _read(files: Iterable[pathlib.Path]) -> str:
@@ -233,6 +255,13 @@ def test_a_new_client_less_path_is_refused() -> None:
     assert unexplained(["/projects/{id}/metrics/brand-new"], web, "") == ["/projects/{id}/metrics/brand-new"]
     assert unexplained(["/projects/{id}/metrics/dora"], web, "") == []
     assert unexplained(["/internal/runs/{id}/brand-new", "/healthz"], "", "") == []
+    # A door's own contract is read too (ADR 0148): its paths are held by its entry, whatever a verb adds.
+    door = [path for path in contract_paths() if path.startswith("/outposts/v1/")]
+    assert len(door) == 4 and unexplained(door, "", "") == []
+    assert unexplained(["/outposts/v2/poll", "/orgs/{org}/outposts/{slug}/brand-new"], "", "") == [
+        "/outposts/v2/poll",
+        "/orgs/{org}/outposts/{slug}/brand-new",
+    ]
     # A machine-only door that enters the contract is covered whatever its parameter is named.
     assert unexplained(["/mcp/projects/{slug}"], "", "") == []
 

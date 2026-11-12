@@ -1,0 +1,13 @@
+{
+  "id": "2d7a9c40-1e6b-4f38-8c05-6a1b3e9d7f24",
+  "kind": "list_tools",
+  "endpoint": "tracker",
+  "deadline": "2026-11-12T10:00:30Z",
+  "answer_key": "Q4IMFCU_Csh9pa0aiVR8ouhVAHi-W_CSVzbx0EVCtmI",
+  "asserted": {
+    "sub": "user:ada@example.org",
+    "org": "acme",
+    "purpose": "discovery",
+    "connector": "tracker-at-the-factory"
+  }
+}

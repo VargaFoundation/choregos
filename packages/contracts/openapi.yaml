@@ -33,6 +33,7 @@ tags:
   - { name: knowledge }
   - { name: ui }
   - { name: webhooks }
+  - { name: outposts }
   - { name: internal }
 paths:
   /me:
@@ -2202,6 +2203,206 @@ paths:
         organisation without an assertion key.
       responses:
         "200": { description: The JSON Web Key Set, content: { application/json: { schema: { $ref: "#/components/schemas/JsonWebKeySet" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/outposts:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    get:
+      tags: [outposts]
+      operationId: listOutposts
+      description: >-
+        The organisation's outposts (ADR 0147): places a person enrolled, which only dial out. Each comes with its
+        status, whether an active instance polled within the poll window, the endpoint aliases its instances
+        announce and the connectors that route to it. The platform stores no address and no credential of an
+        outpost's side, so none is here. `outpost:manage`.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/OutpostList" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [outposts]
+      operationId: createOutpost
+      description: >-
+        Creates an outpost of this organisation, with no instance yet: an instance comes from an enrolment token
+        and a person's approval (ADR 0147 §4). `outpost:manage`, audited as `outpost.create`. 409
+        `outposts_disabled` while the deployment keeps outposts switched off (`CHOREGOS_OUTPOSTS`), 409
+        `outpost_exists` when the slug is taken.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/OutpostCreate" } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Outpost" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/OutpostConflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/outposts/{slug}:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { $ref: "#/components/parameters/OutpostSlug" }
+    get:
+      tags: [outposts]
+      operationId: getOutpost
+      description: One outpost. `outpost:manage`.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Outpost" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [outposts]
+      operationId: deleteOutpost
+      description: >-
+        Removes a revoked outpost, with its instances and what is left of its calls. Refused with 409
+        `outpost_in_use` while connectors still route to it (`connectors` names them, ADR 0149 §1), and with 409
+        `outpost_not_revoked` otherwise: revoking is the one gesture that moves the epoch. `outpost:manage`,
+        audited.
+      responses:
+        "204": { description: Removed }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/OutpostConflict" }
+  /orgs/{org}/outposts/{slug}/pause:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { $ref: "#/components/parameters/OutpostSlug" }
+    post:
+      tags: [outposts]
+      operationId: pauseOutpost
+      description: >-
+        Pauses the outpost: nothing more is handed to it from the next poll, whose stop flag tells its instances;
+        what they hold may finish (ADR 0148 §10). A call routed to it is refused `outpost_paused` and writes
+        nothing. Pausing a paused outpost changes nothing. This is how a healthy outpost is retired or held;
+        revoking answers a key that may be stolen. `outpost:manage`, audited as `outpost.pause`. 409
+        `outpost_revoked` for a revoked one.
+      responses:
+        "200": { description: Paused, content: { application/json: { schema: { $ref: "#/components/schemas/Outpost" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/OutpostConflict" }
+  /orgs/{org}/outposts/{slug}/resume:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { $ref: "#/components/parameters/OutpostSlug" }
+    post:
+      tags: [outposts]
+      operationId: resumeOutpost
+      description: >-
+        Resumes a paused outpost; resuming one that is not paused changes nothing. `outpost:manage`, audited.
+        409 `outpost_revoked` for a revoked one.
+      responses:
+        "200": { description: Active again, content: { application/json: { schema: { $ref: "#/components/schemas/Outpost" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/OutpostConflict" }
+  /orgs/{org}/outposts/{slug}/revoke:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { $ref: "#/components/parameters/OutpostSlug" }
+    post:
+      tags: [outposts]
+      operationId: revokeOutpost
+      description: >-
+        Revokes the outpost and every instance of it, from the next request, and moves its epoch: no answer is
+        taken for what its instances had in flight, and a write among it ends in doubt (ADR 0147 §5, ADR 0149 §5).
+        It is final; revoking a revoked outpost changes nothing. Connectors that name it stay and are refused
+        `outpost_paused` until they are routed elsewhere. `outpost:manage`, audited as `outpost.revoke`.
+      responses:
+        "200": { description: Revoked, content: { application/json: { schema: { $ref: "#/components/schemas/Outpost" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/outposts/{slug}/enrolments:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { $ref: "#/components/parameters/OutpostSlug" }
+    post:
+      tags: [outposts]
+      operationId: createOutpostEnrolment
+      description: >-
+        Issues an enrolment token for one instance of this outpost: single use, valid 15 minutes at most, stored
+        as a digest, and its plaintext is returned only once (ADR 0147 §4). `choregos-outpost enrol` presents
+        it; the instance it enrols is born pending. A stolen token enrols an instance nobody approves. The
+        answer also carries what the operator writes in the outpost's policy file: the door's origin and the
+        door's keys to pin (ADR 0148 §13).
+        `outpost:manage`, audited. 409 `outposts_disabled`, or `outpost_revoked`.
+      requestBody:
+        required: false
+        content: { application/json: { schema: { $ref: "#/components/schemas/OutpostEnrolmentCreate" } } }
+      responses:
+        "201": { description: Issued, content: { application/json: { schema: { $ref: "#/components/schemas/OutpostEnrolmentCreated" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/OutpostConflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/outposts/{slug}/instances:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { $ref: "#/components/parameters/OutpostSlug" }
+    get:
+      tags: [outposts]
+      operationId: listOutpostInstances
+      description: >-
+        The outpost's instances, pending ones first: each copy of the daemon with the fingerprint of its signing
+        key, what it announces, its version and when it was last seen. `outpost:manage`.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/OutpostInstanceList" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/outposts/{slug}/instances/{instance_id}/approve:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { $ref: "#/components/parameters/OutpostSlug" }
+      - { $ref: "#/components/parameters/OutpostInstanceId" }
+    post:
+      tags: [outposts]
+      operationId: approveOutpostInstance
+      description: >-
+        A person approves a pending instance by sending the fingerprint the daemon printed: it must be the one
+        the door recorded (409 `fingerprint_mismatch` otherwise), and only then is the instance `active`
+        (ADR 0147 §4). It takes a person's session that carries a recent authentication, as a decision on an
+        action does: 401 `step_up_required` otherwise, and an API token cannot approve (403). `outpost:manage`,
+        audited as `outpost.approve`. 409 `instance_not_pending` for an instance already approved or revoked,
+        `outpost_revoked` for a revoked outpost.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/OutpostInstanceApprove" } } }
+      responses:
+        "200": { description: Approved, content: { application/json: { schema: { $ref: "#/components/schemas/OutpostInstance" } } } }
+        "401": { description: A fresh authentication is needed (`step_up_required`), content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/OutpostConflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/outposts/{slug}/instances/{instance_id}/revoke:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { $ref: "#/components/parameters/OutpostSlug" }
+      - { $ref: "#/components/parameters/OutpostInstanceId" }
+    post:
+      tags: [outposts]
+      operationId: revokeOutpostInstance
+      description: >-
+        Revokes one instance, pending or active, from its next request, and moves the outpost's epoch: nothing
+        in flight at the outpost is taken, from this instance or another (ADR 0147 §5). It is final; revoking a
+        revoked instance changes nothing. `outpost:manage`, audited as `outpost.revoke`.
+      responses:
+        "200": { description: Revoked, content: { application/json: { schema: { $ref: "#/components/schemas/OutpostInstance" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/outposts/{slug}/calls:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { $ref: "#/components/parameters/OutpostSlug" }
+    get:
+      tags: [outposts]
+      operationId: listOutpostCalls
+      description: >-
+        The recent calls routed to this outpost, newest first, with how each ended: its state, the outcome its
+        instance reported or the code of its refusal. Digests only: no arguments and no result, which the
+        platform deletes when a call completes (ADR 0148 §11). `outpost:manage`.
+      parameters:
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
+        - { name: state, in: query, required: false, schema: { $ref: "#/components/schemas/OutpostCallState" } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/OutpostCallPage" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
   /orgs/{org}/network-activity:
     parameters: [{ $ref: "#/components/parameters/Org" }]
@@ -5248,6 +5449,8 @@ components:
       description: a capability; the registry says which ones exist (`GET /connectors/types`, ADR 0034)
       schema: { type: string, pattern: "^[a-z][a-z0-9_]{1,31}$" }
     PluginName: { name: name, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+    OutpostSlug: { name: slug, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+    OutpostInstanceId: { name: instance_id, in: path, required: true, schema: { type: string, pattern: "^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$" } }
     Cursor: { name: cursor, in: query, schema: { type: string } }
     Limit: { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
   responses:
@@ -5269,6 +5472,9 @@ components:
     McpGatewayConflict:
       description: "State conflict on the organisation's MCP gateway (ADR 0105): `code` is `gateway_in_use` (with `connectors`), `gateway_required`, `gateway_not_configured` or `gateway_assertion_key_missing`."
       content: { application/problem+json: { schema: { $ref: "#/components/schemas/McpGatewayConflict" } } }
+    OutpostConflict:
+      description: "State conflict that concerns an outpost (ADRs 0147 and 0149): `code` says which, among the codes of `OutpostConflict`."
+      content: { application/problem+json: { schema: { $ref: "#/components/schemas/OutpostConflict" } } }
     ValidationError:
       description: Unprocessable entity
       content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } }
@@ -5733,7 +5939,7 @@ components:
         name: { type: string }
         kind: { type: string }
         type: { type: string }
-        config: { type: object, additionalProperties: true }
+        config: { type: object, additionalProperties: true, description: "the type's configuration, as `GET /connectors/types` gives its schema; for the type `mcp-outpost` it is `McpOutpostConnectorConfig`: an outpost and an endpoint alias, no URL and no secret (ADR 0149)" }
         secret_refs: { type: object, additionalProperties: { type: string } }
         secrets: { type: array, items: { $ref: "#/components/schemas/ConnectorSecretState" } }
         status: { type: string }
@@ -5959,7 +6165,7 @@ components:
         name: { type: string, pattern: "^[a-z][a-z0-9-]{1,62}$" }
         type: { type: string }
         kind: { type: [string, "null"] }
-        config: { type: object, additionalProperties: true }
+        config: { type: object, additionalProperties: true, description: "the type's configuration; for the type `mcp-outpost`, `McpOutpostConnectorConfig`" }
         secret_refs: { type: object, additionalProperties: { type: string } }
         secret_values: { type: object, additionalProperties: { type: string }, writeOnly: true, description: "secret values typed in the console, field -> value: sealed, never returned (ADR 0058). A key may be a slot of a pooled field (`api_key.2`, ADR 0089)." }
         availability: { $ref: "#/components/schemas/ConnectorAvailability" }
@@ -8567,6 +8773,218 @@ components:
         tools: { type: [integer, "null"], description: "how many tools the server lists" }
         elapsed_ms: { type: integer, minimum: 0 }
         error: { type: [string, "null"], description: "names the gateway; never a credential" }
+    OutpostStatus:
+      type: string
+      enum: [active, paused, revoked]
+      description: "`paused`: nothing more is handed to it, what its instances hold may finish. `revoked`: final; its instances are revoked and its epoch moved (ADR 0147 §5)."
+    OutpostInstanceStatus:
+      type: string
+      enum: [pending, active, revoked]
+      description: "`pending`: enrolled with a token and handed nothing until a person approves it against its fingerprint (ADR 0147 §4)."
+    OutpostCapability:
+      type: string
+      enum: [tools, runs]
+      description: "What an outpost may be used for (ADR 0147 §11). `tools` is the one capability of this version. `runs` is reserved: no daemon announces it and no organisation can enable it (ADR 0149 §12)."
+    OutpostCallKind:
+      type: string
+      enum: [call_tool, list_tools]
+      description: "A tool call, or a tool listing (discovery)."
+    OutpostCallState:
+      type: string
+      enum: [pending, claimed, answered, refused, expired, timed_out, in_doubt]
+      description: >-
+        `pending`: claimed by no instance yet. `claimed`: leased to one instance. `answered`: that instance
+        answered within its lease. `refused`: the outpost's own policy refused it, and nothing reached its server.
+        `expired`: no active instance claimed it in time, and nothing reached any server. `timed_out`: a claimed
+        read got no answer within its lease; it may be asked again. `in_doubt`: a claimed write got no answer
+        within its lease; nobody knows whether the server executed it, and it is never handed over again
+        (ADR 0149 §5).
+    OutpostAnswerOutcome:
+      type: string
+      enum: [result, error, unanswered, oversized]
+      description: >-
+        What the instance reported of a call it took to its server. `result`: the server answered. `error`: it
+        answered a JSON-RPC error. `unanswered`: the call was sent, or begun, and the instance holds no answer.
+        `oversized`: the server answered and its result was above a ceiling; it was executed and its result
+        was not sent.
+    OutpostRefusalCode:
+      type: string
+      enum: [unknown_endpoint, tool_not_allowed, write_denied, payload_too_large, busy, endpoint_unavailable, unsupported_kind, signature_refused, call_unreadable, deadline_passed, cancelled]
+      description: "Why an outpost did not execute a call: a closed list that names a class of refusal and never the rule that produced it (ADR 0147 §10). Whatever the code, the outpost's server did not receive the call. `signature_refused` on a call the platform did hand over says that the outpost's policy file does not pin the key the door signs with (ADR 0148 §13)."
+    OutpostCreate:
+      type: object
+      additionalProperties: false
+      required: [slug]
+      properties:
+        slug: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$", description: "the name connectors route by and the journal shows (`outpost:<slug>/<alias>`)" }
+        display_name: { type: [string, "null"], maxLength: 200 }
+        capabilities: { type: array, minItems: 1, uniqueItems: true, items: { type: string, enum: [tools] }, default: [tools], description: "what the organisation enables this outpost for; `tools` is the one capability that can be enabled" }
+    OutpostInstanceCounts:
+      type: object
+      additionalProperties: false
+      required: [pending, active, revoked]
+      properties:
+        pending: { type: integer, minimum: 0 }
+        active: { type: integer, minimum: 0 }
+        revoked: { type: integer, minimum: 0 }
+    Outpost:
+      type: object
+      additionalProperties: false
+      description: "An outpost as its organisation keeps it (ADR 0147). Nothing of the outpost's side is stored: no address, no credential (ADR 0147 §7)."
+      required: [slug, display_name, status, capabilities, epoch, online, last_seen_at, instances, endpoints, connectors, door_keys, created_by, created_at]
+      properties:
+        slug: { type: string }
+        display_name: { type: string }
+        status: { $ref: "#/components/schemas/OutpostStatus" }
+        capabilities: { type: array, items: { $ref: "#/components/schemas/OutpostCapability" }, description: "what the organisation enabled; an outpost is used only for what its instances also announce" }
+        epoch: { type: integer, minimum: 0, description: "moved by every revocation, of the outpost or of one instance: an answer is taken only under the epoch its call was claimed in (ADR 0147 §5)" }
+        online: { type: boolean, description: "an active instance polled within the poll window" }
+        last_seen_at: { type: [string, "null"], format: date-time, description: "the last poll of any of its instances" }
+        instances: { $ref: "#/components/schemas/OutpostInstanceCounts" }
+        endpoints: { type: array, items: { type: string }, description: "the endpoint aliases its active instances announce: names only, which a connector's `endpoint` picks from" }
+        connectors: { type: array, items: { type: string }, description: "the `mcp-outpost` connectors that route to it; it is not deleted while one remains" }
+        door_keys: { type: array, maxItems: 4, items: { type: string, pattern: "^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$" }, description: "the door's public signing keys an operator pins in the outpost's policy file (`door_keys`), which is the only place an outpost reads them from (ADR 0148 §13): the first is the one that signs now, the others are announced for a rotation. Public keys, each the unpadded base64url of 32 raw bytes; empty while the deployment has no door" }
+        created_by: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+    OutpostList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/Outpost" } }
+    OutpostEnrolmentCreate:
+      type: object
+      additionalProperties: false
+      properties:
+        expires_in_minutes: { type: integer, minimum: 1, maximum: 15, default: 15 }
+    OutpostEnrolmentCreated:
+      type: object
+      additionalProperties: false
+      description: "An enrolment token, shown once. The platform keeps its digest."
+      required: [id, token, expires_at, control_plane, door_keys]
+      properties:
+        id: { type: string }
+        token: { type: string, description: "The plaintext token, returned only once: what `choregos-outpost enrol` presents." }
+        expires_at: { type: string, format: date-time }
+        control_plane: { type: [string, "null"], description: "the door's origin, as the outpost's policy file names it (`control_plane`); null when the deployment declares none" }
+        door_keys: { type: array, minItems: 1, maxItems: 4, items: { type: string, pattern: "^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$" }, description: "the door's public signing keys to pin in the outpost's policy file (`door_keys`) before the daemon starts: the first is the one that signs now, the others are announced for a rotation. The console and the CLI print them beside the enrolment command; no answer of the door itself carries them (ADR 0148 §13)" }
+    OutpostInstance:
+      type: object
+      additionalProperties: false
+      description: "One copy of the daemon `choregos-outpost`, with keys made on the spot (ADR 0147 §2). Only public data: the platform never holds a private key of an instance."
+      required: [id, status, fingerprint, daemon_version, protocol, capabilities, endpoints, facts, enrolled_at, approved_by, approved_at, revoked_by, revoked_at, last_seen_at, online, in_flight]
+      properties:
+        id: { type: string }
+        status: { $ref: "#/components/schemas/OutpostInstanceStatus" }
+        fingerprint: { type: string, pattern: "^SHA256:[A-Za-z0-9_-]{43}$", description: "`SHA256:` and the unpadded base64url SHA-256 of its raw Ed25519 signing key: what the daemon printed at enrolment and a person compares before approving" }
+        daemon_version: { type: string, description: "the daemon's own release, as it announced it last" }
+        protocol: { type: integer, minimum: 1, description: "the door protocol it spoke last" }
+        capabilities: { type: array, items: { $ref: "#/components/schemas/OutpostCapability" }, description: "what it announces" }
+        endpoints: { type: array, items: { type: string }, description: "the aliases its policy file serves, as its last poll announced them; empty before its first" }
+        facts: { type: object, additionalProperties: { type: string }, description: "what it said of itself at enrolment (a host name, a platform): stored as data, never interpreted" }
+        enrolled_at: { type: string, format: date-time }
+        approved_by: { type: [string, "null"] }
+        approved_at: { type: [string, "null"], format: date-time }
+        revoked_by: { type: [string, "null"] }
+        revoked_at: { type: [string, "null"], format: date-time }
+        last_seen_at: { type: [string, "null"], format: date-time }
+        online: { type: boolean, description: "active, and it polled within the poll window" }
+        in_flight: { type: integer, minimum: 0, description: "the calls it holds and has not answered" }
+    OutpostInstanceList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/OutpostInstance" } }
+    OutpostInstanceApprove:
+      type: object
+      additionalProperties: false
+      required: [fingerprint]
+      properties:
+        fingerprint: { type: string, pattern: "^SHA256:[A-Za-z0-9_-]{43}$", description: "the fingerprint the daemon printed, as the person read it there" }
+    OutpostCallRecord:
+      type: object
+      additionalProperties: false
+      description: "What the platform keeps of a call through an outpost: references and digests, never its arguments or its result (ADR 0148 §11)."
+      required: [id, kind, state, connector, endpoint, tool, write, instance_id, epoch, outcome, is_error, refusal, arguments_sha256, result_sha256, project, run_id, action_id, created_at, claimed_at, finished_at]
+      properties:
+        id: { type: string }
+        kind: { $ref: "#/components/schemas/OutpostCallKind" }
+        state: { $ref: "#/components/schemas/OutpostCallState" }
+        connector: { type: [string, "null"], description: "the connector that routed it; null once that connector is gone" }
+        endpoint: { type: string, description: "the alias it was sent to" }
+        tool: { type: [string, "null"], description: "null for a tool listing" }
+        write: { type: boolean, description: "the platform took it for a write: it is delivered at most once" }
+        instance_id: { type: [string, "null"], description: "the instance that claimed it" }
+        epoch: { type: [integer, "null"], description: "the outpost's epoch when it was claimed" }
+        outcome: { oneOf: [{ $ref: "#/components/schemas/OutpostAnswerOutcome" }, { type: "null" }], description: "what the instance reported, for an answered call" }
+        is_error: { type: [boolean, "null"], description: "outcome `result`: the server's own result says it is an error" }
+        refusal: { oneOf: [{ $ref: "#/components/schemas/OutpostRefusalCode" }, { type: "null" }], description: "why the outpost refused it, for a refused call" }
+        arguments_sha256: { type: [string, "null"], description: "the SHA-256 of the canonical JSON of its arguments, as a `tool.called` event keeps it and as the outpost's own audit log writes it" }
+        result_sha256: { type: [string, "null"] }
+        project: { type: [string, "null"] }
+        run_id: { type: [string, "null"] }
+        action_id: { type: [string, "null"], description: "the governed action a write belongs to" }
+        created_at: { type: string, format: date-time }
+        claimed_at: { type: [string, "null"], format: date-time }
+        finished_at: { type: [string, "null"], format: date-time }
+    OutpostCallPage:
+      type: object
+      additionalProperties: false
+      required: [items, meta]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/OutpostCallRecord" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+    McpOutpostConnectorConfig:
+      type: object
+      additionalProperties: false
+      description: >-
+        The `config` of an organisation connector of type `mcp-outpost` (kind `mcp`, ADR 0149 §1): a tool server
+        that lives at an outpost. It names the outpost and the alias of an endpoint in that outpost's policy
+        file. It has no URL and no secret field: the address and the credential are the outpost's and exist in
+        its file only (ADR 0147 §7), and a declaration that carries either is a 422.
+      required: [outpost, endpoint]
+      properties:
+        outpost: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$", description: "an outpost of the same organisation" }
+        endpoint: { type: string, pattern: "^[a-z][a-z0-9-]{0,62}$", description: "the alias of an endpoint in that outpost's policy file" }
+        timeout_s: { type: number, minimum: 1, maximum: 120, default: 30, description: "seconds before a call is abandoned, the wait for an instance to claim it included" }
+    OutpostConflict:
+      type: object
+      description: >-
+        The 409 body of the refusals that concern an outpost (ADRs 0147 and 0149): an RFC 9457 problem with a
+        `code`. On the outposts' own routes: `outposts_disabled` (the deployment keeps outposts switched off),
+        `outpost_exists`, `outpost_revoked`, `outpost_not_revoked` and `outpost_in_use` (the outpost is not
+        deleted while connectors route to it; `connectors` names them), `instance_not_pending` and
+        `fingerprint_mismatch`. Where a connector is reached through an outpost, the refusals of ADR 0149 §7 that
+        a 409 carries: `outpost_paused` (paused, revoked, or outposts switched off: nothing was written),
+        `outpost_offline` (no active instance claimed the call in time), `outpost_refused` (the outpost's own
+        policy refused; `refusal` is its code) and `outpost_timeout` (a claimed read got no answer in time).
+        Each of these four names the `outpost`.
+      additionalProperties: false
+      required: [type, title, status, code]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string, description: "the request path, as the API always sets it on a problem" }
+        errors:
+          type: array
+          description: "the problem's `errors` list, as on `Problem` (an API refusal may carry it)"
+          items:
+            type: object
+            properties:
+              loc: { type: array, items: { type: string } }
+              msg: { type: string }
+              code: { type: string }
+              line: { type: integer }
+              column: { type: integer }
+        retry_after: { type: integer }
+        code: { type: string, enum: [outposts_disabled, outpost_exists, outpost_revoked, outpost_not_revoked, outpost_in_use, instance_not_pending, fingerprint_mismatch, outpost_paused, outpost_offline, outpost_refused, outpost_timeout] }
+        outpost: { type: string, description: "the outpost the refusal is about" }
+        endpoint: { type: string, description: "the alias the call was for" }
+        refusal: { $ref: "#/components/schemas/OutpostRefusalCode" }
+        connectors: { type: array, items: { type: string }, description: "the connectors that route to the outpost (`outpost_in_use`)" }
     JsonWebKeySet:
       type: object
       description: "A JSON Web Key Set (RFC 7517): public keys only."

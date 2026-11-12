@@ -1,0 +1,9 @@
+{
+  "type": "about:blank",
+  "title": "Not authenticated",
+  "status": 401,
+  "code": "stale_iat",
+  "detail": "the signature was issued more than 60 seconds from this door's clock",
+  "instance": "/outposts/v1/poll",
+  "server_time": "2026-11-12T10:07:31Z"
+}

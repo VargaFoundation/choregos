@@ -1,0 +1,86 @@
+{
+  "description": "Signed requests of an instance (outpost-door.yaml, x-request-signature). The private signing key is the SHA-256 of `signing_key_label` (UTF-8): test material only, derivable by anyone. `body` is the exact text that was sent, `signature` the value of the Outpost-Signature header. The enrolment's signature is made with the key it enrols and carries no `kid`, `nonce` or `seq`.",
+  "signing_key_label": "choregos outpost contract v1: test signing key",
+  "signing_key": "Rc1PTmqSEE66sm_bZBFUhfd49nHRyIwM62KuqS2PvXQ",
+  "fingerprint": "SHA256:09wT63TkuDIeTj6MxD5TFt7dxaJNpfKNrUkVyJymRJE",
+  "instance_id": "b3c1f6a2-6d0e-4b7a-9a55-2f1c8e7d4a90",
+  "requests": [
+    {
+      "name": "enrol",
+      "method": "POST",
+      "url": "https://outposts.example.com/outposts/v1/enrol",
+      "body": "{\"protocol\":1,\"token\":\"enrolment-token-example-0000\",\"signing_key\":\"Rc1PTmqSEE66sm_bZBFUhfd49nHRyIwM62KuqS2PvXQ\",\"sealing_key\":\"sTi3s2Pg2FWi9AkPTs73jJ0gfifo3rgtRSVjxJ9Aphw\",\"daemon_version\":\"0.26.0\",\"capabilities\":[\"tools\"],\"facts\":{\"hostname\":\"outpost-0.tools.svc\",\"platform\":\"linux/amd64\"}}",
+      "header": {
+        "alg": "EdDSA",
+        "typ": "choregos-outpost+jwt"
+      },
+      "claims": {
+        "htm": "POST",
+        "htu": "https://outposts.example.com/outposts/v1/enrol",
+        "body_sha256": "61c9c7d78e98f65ad59bd04f5dd9d18cb8a2543794ad77c8cadb65e3c0e65b4d",
+        "iat": 1794477600
+      },
+      "signature": "eyJhbGciOiJFZERTQSIsInR5cCI6ImNob3JlZ29zLW91dHBvc3Qrand0In0.eyJodG0iOiJQT1NUIiwiaHR1IjoiaHR0cHM6Ly9vdXRwb3N0cy5leGFtcGxlLmNvbS9vdXRwb3N0cy92MS9lbnJvbCIsImJvZHlfc2hhMjU2IjoiNjFjOWM3ZDc4ZTk4ZjY1YWQ1OWJkMDRmNWRkOWQxOGNiOGEyNTQzNzk0YWQ3N2M4Y2FkYjY1ZTNjMGU2NWI0ZCIsImlhdCI6MTc5NDQ3NzYwMH0.CoSPXvWCQ6m4WfgatHkYd2uX2mWOCchAcsl36r9o_6SyJNgYI8m2MaBReARuuNIS6LMSCKY32UhD_QXTz-cMDw"
+    },
+    {
+      "name": "poll",
+      "method": "POST",
+      "url": "https://outposts.example.com/outposts/v1/poll",
+      "body": "{\"protocol\":1,\"daemon_version\":\"0.26.0\",\"wait_s\":25,\"capacity\":7,\"capabilities\":[\"tools\"],\"endpoints\":[\"tracker\"],\"running\":[\"c41d8a70-2f5e-4b19-a3c6-0e9b7d5f1a62\"]}",
+      "header": {
+        "alg": "EdDSA",
+        "typ": "choregos-outpost+jwt",
+        "kid": "b3c1f6a2-6d0e-4b7a-9a55-2f1c8e7d4a90"
+      },
+      "claims": {
+        "htm": "POST",
+        "htu": "https://outposts.example.com/outposts/v1/poll",
+        "body_sha256": "bf204846bec74d4509450df52a635223a96dc1893fbb639b7378b74bfbd3fb02",
+        "iat": 1794477600,
+        "nonce": "v1.1794477600.example-nonce",
+        "seq": 41
+      },
+      "signature": "eyJhbGciOiJFZERTQSIsImtpZCI6ImIzYzFmNmEyLTZkMGUtNGI3YS05YTU1LTJmMWM4ZTdkNGE5MCIsInR5cCI6ImNob3JlZ29zLW91dHBvc3Qrand0In0.eyJodG0iOiJQT1NUIiwiaHR1IjoiaHR0cHM6Ly9vdXRwb3N0cy5leGFtcGxlLmNvbS9vdXRwb3N0cy92MS9wb2xsIiwiYm9keV9zaGEyNTYiOiJiZjIwNDg0NmJlYzc0ZDQ1MDk0NTBkZjUyYTYzNTIyM2E5NmRjMTg5M2ZiYjYzOWI3Mzc4Yjc0YmZiZDNmYjAyIiwiaWF0IjoxNzk0NDc3NjAwLCJub25jZSI6InYxLjE3OTQ0Nzc2MDAuZXhhbXBsZS1ub25jZSIsInNlcSI6NDF9.wXUEpq1pD4nS0AM0bip4zn0tbBZa_eiQDLxeuugPkk7dqPuAvRRwSdo5YTWCvSfWV0MtLrhH-3pST0riIjsGAA"
+    },
+    {
+      "name": "answer",
+      "method": "POST",
+      "url": "https://outposts.example.com/outposts/v1/calls/8f0e6b1c-5a3d-4c57-9e21-7b2a4d9c0f13/answer",
+      "body": "{\"sealed\":\"uS1nQlfwlroXQk7Rb5uY7F75s80-rULhg0Gty4EikifDjBLqenqN78Dk9ZqBJ8eeW0JmM2R7httqHccoiMApSd_VMojPcvXjBX4u_xSjCKKyzd_PCW-m1THNOBaTzyMHTbRi66lwKBaWmJLGD17stTTuQvaotRwOtxDDXWrICHqxPj3-YiYOi5DIAvIuSFBhXVuiewKHVHds9OLpEcx77oPqIB5oX1ZYTftdh6uC5pfKfc0nES93fwXFrbTJ0ID1MwSNsHyfmoyEtZhFHklnMrrBSW6xNOTTKateuM19PgDLsZRp0J_YPOcowxy-CfLS8yFrSVZ-9wad2QWBysfkP2L1BVcKwszYHX4A3SFkE-9cVb1yVX95qRE1UxYhiHlkGoxe9lhY88Q90K2yzcrApSLdvVZ3RV9p\"}",
+      "header": {
+        "alg": "EdDSA",
+        "typ": "choregos-outpost+jwt",
+        "kid": "b3c1f6a2-6d0e-4b7a-9a55-2f1c8e7d4a90"
+      },
+      "claims": {
+        "htm": "POST",
+        "htu": "https://outposts.example.com/outposts/v1/calls/8f0e6b1c-5a3d-4c57-9e21-7b2a4d9c0f13/answer",
+        "body_sha256": "da83279cd666f3f0cfd562d515cd8935cff3a9ed96e8ff40b3dbc27f77f08060",
+        "iat": 1794477600,
+        "nonce": "v1.1794477600.example-nonce",
+        "seq": 42
+      },
+      "signature": "eyJhbGciOiJFZERTQSIsImtpZCI6ImIzYzFmNmEyLTZkMGUtNGI3YS05YTU1LTJmMWM4ZTdkNGE5MCIsInR5cCI6ImNob3JlZ29zLW91dHBvc3Qrand0In0.eyJodG0iOiJQT1NUIiwiaHR1IjoiaHR0cHM6Ly9vdXRwb3N0cy5leGFtcGxlLmNvbS9vdXRwb3N0cy92MS9jYWxscy84ZjBlNmIxYy01YTNkLTRjNTctOWUyMS03YjJhNGQ5YzBmMTMvYW5zd2VyIiwiYm9keV9zaGEyNTYiOiJkYTgzMjc5Y2Q2NjZmM2YwY2ZkNTYyZDUxNWNkODkzNWNmZjNhOWVkOTZlOGZmNDBiM2RiYzI3Zjc3ZjA4MDYwIiwiaWF0IjoxNzk0NDc3NjAwLCJub25jZSI6InYxLjE3OTQ0Nzc2MDAuZXhhbXBsZS1ub25jZSIsInNlcSI6NDJ9.3wlksVDRDlYrPoxU6sIlY2g04uoszCjFdWIocU7hy6B_VwxZNYZHCfuFGH9qN-hn-_sNjqCRRb-d5bpFvVKwBA"
+    },
+    {
+      "name": "refuse",
+      "method": "POST",
+      "url": "https://outposts.example.com/outposts/v1/calls/c41d8a70-2f5e-4b19-a3c6-0e9b7d5f1a62/refuse",
+      "body": "{\"code\":\"tool_not_allowed\"}",
+      "header": {
+        "alg": "EdDSA",
+        "typ": "choregos-outpost+jwt",
+        "kid": "b3c1f6a2-6d0e-4b7a-9a55-2f1c8e7d4a90"
+      },
+      "claims": {
+        "htm": "POST",
+        "htu": "https://outposts.example.com/outposts/v1/calls/c41d8a70-2f5e-4b19-a3c6-0e9b7d5f1a62/refuse",
+        "body_sha256": "308524c1f12a041139aedb8255d39143967c3ef88c1f8865e3bfd07f28dabd8b",
+        "iat": 1794477600,
+        "nonce": "v1.1794477600.example-nonce",
+        "seq": 43
+      },
+      "signature": "eyJhbGciOiJFZERTQSIsImtpZCI6ImIzYzFmNmEyLTZkMGUtNGI3YS05YTU1LTJmMWM4ZTdkNGE5MCIsInR5cCI6ImNob3JlZ29zLW91dHBvc3Qrand0In0.eyJodG0iOiJQT1NUIiwiaHR1IjoiaHR0cHM6Ly9vdXRwb3N0cy5leGFtcGxlLmNvbS9vdXRwb3N0cy92MS9jYWxscy9jNDFkOGE3MC0yZjVlLTRiMTktYTNjNi0wZTliN2Q1ZjFhNjIvcmVmdXNlIiwiYm9keV9zaGEyNTYiOiIzMDg1MjRjMWYxMmEwNDExMzlhZWRiODI1NWQzOTE0Mzk2N2MzZWY4OGMxZjg4NjVlM2JmZDA3ZjI4ZGFiZDhiIiwiaWF0IjoxNzk0NDc3NjAwLCJub25jZSI6InYxLjE3OTQ0Nzc2MDAuZXhhbXBsZS1ub25jZSIsInNlcSI6NDN9.g1WGFDG6CXaO_MSMxb9UYht7y4yAGQRWrfKNSgiz9u41YJNjA4IAJSlutpXnPzqbahbOkYgKz5vCVcY5OOK0Bg"
+    }
+  ]
+}
