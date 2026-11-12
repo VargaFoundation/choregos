@@ -159,7 +159,7 @@ def test_sessions_are_grouped_apart_and_each_status_reads_as_a_word(platform: Pl
         ],
     )
     said = _said(_run())
-    for words in ("◐ queued implement", "● running session · support", "✓ done", "✗ failed", "■ cancelled"):
+    for words in ("○ queued implement", "● running session · support", "✓ done", "✗ failed", "■ cancelled"):
         assert words in said, words
     assert said.index("your sessions and conversations") < said.index("Ended in the last hour")
     assert said.index("your sessions and conversations") < said.index("● running session · support")

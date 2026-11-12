@@ -127,7 +127,7 @@ governance this platform exists for.
    binary, at the instance's version.
 
 9. **Colour orients, and is never alone** (ADR 0120 carried to the terminal):
-   - status is a glyph and a word, then a colour: `● running` blue, `◐ queued` blue, `⏸ waiting for you` amber,
+   - status is a glyph and a word, then a colour: `● running` blue, `○ queued` grey (nothing has started: it must not read as work in progress; the editor uses the same outline circle), `⏸ waiting for you` amber,
      `✓ done` green, `✗ failed` red, `■ stopped` grey; the live tree's frame is blue, the decisions' amber; an
      identity (a workflow) takes its hue from the same stable hash as the console's `workflowHue`, never red;
      the accent is for focus and selection only;

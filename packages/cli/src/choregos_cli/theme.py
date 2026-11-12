@@ -30,7 +30,7 @@ class Status:
 
 
 RUNNING = Status("●", "*", "running", "blue")
-QUEUED = Status("◐", "o", "queued", "blue")
+QUEUED = Status("○", "o", "queued", "bright_black")
 WAITING = Status("⏸", "!", "waiting for you", "yellow")
 DONE = Status("✓", "+", "done", "green")
 FAILED = Status("✗", "x", "failed", "red")
