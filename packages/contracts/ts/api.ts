@@ -1146,6 +1146,8 @@ export type ProcessStep = {
   model?: string | null;
   /** The group of a human actor. */
   group?: string | null;
+  /** The person a human actor names, by e-mail (ADR 0153): asked first, before the group. */
+  user?: string | null;
   /** The SLA of a human actor. */
   sla_hours?: number | null;
   /** The argv of a job actor. */
@@ -4182,6 +4184,8 @@ export type AssistantBinding = {
 };
 
 export type Assistant = {
+  /** the installation's id: what the cost and activity routes' `assistant` filter takes (ADR 0141 §1) */
+  id: string;
   slug: string;
   plugin: string;
   plugin_version: string;
@@ -4905,6 +4909,28 @@ export type HumanRequest = {
   decision?: {
     [key: string]: unknown;
   } | null;
+  /** Who the request is addressed to (ADR 0153): the workflow's human actor, or an organisation administrator's reassignment. Null when the step names nobody. */
+  assignee?: HumanRequestAssignee | null;
+};
+
+/** Who a waiting request is addressed to — a person, a group, or a person first (ADR 0153). */
+export type HumanRequestAssignee = {
+  /** The person, by e-mail, lowercase. */
+  user?: string | null;
+  /** The group, resolved for the project (`{project}` replaced). */
+  group?: string | null;
+  /** An organisation administrator reassigned the request. */
+  reassigned?: boolean;
+};
+
+/** A waiting request readdressed (ADR 0153): a person, a group, or both, and why. */
+export type AssigneeChange = {
+  /** A member of the organisation, by e-mail. */
+  user?: string | null;
+  /** A group; `{project}` names the work item's project. */
+  group?: string | null;
+  /** Why — kept in the audit log. */
+  reason: string;
 };
 
 export type WorkItemAction = {
@@ -6084,6 +6110,7 @@ export interface Operations {
   putWorkflow: { method: "PUT"; path: "/projects/{id}/workflow"; body: WorkflowPut; response: WorkflowDef };
   putWorkflowRouting: { method: "PUT"; path: "/projects/{id}/workflow-routing"; body: WorkflowRouting; response: WorkflowRouting };
   readyz: { method: "GET"; path: "/readyz"; body: never; response: void };
+  reassignHumanRequest: { method: "POST"; path: "/work-items/{id}/human-requests/{request_id}/assignee"; body: AssigneeChange; response: HumanRequest };
   refreshGitHubInstallations: { method: "POST"; path: "/orgs/{org}/github/refresh"; body: never; response: GitHubAppStatus };
   refuseMyConversationAction: { method: "POST"; path: "/me/conversations/{conversation_id}/actions/{action_id}/refuse"; body: never; response: ConversationAction };
   refuseOrgEgressRequest: { method: "POST"; path: "/orgs/{org}/egress/requests/{rule_id}/refuse"; body: EgressDecision; response: EgressRule };

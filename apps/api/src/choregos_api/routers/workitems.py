@@ -6,8 +6,9 @@ from __future__ import annotations
 from typing import Annotated, Any
 
 from choregos_adapters.storage import ObjectStoreError
-from choregos_contracts import Artifact, Control, EventType, HumanDecision, HumanRequestKind
+from choregos_contracts import Artifact, Control, EventType, HumanDecision, HumanRequestKind, Role
 from choregos_core import WorkflowEngine, utcnow
+from choregos_core.dsl.groups import group_for
 from fastapi import APIRouter, Query, Response, status
 from sqlalchemy import select
 
@@ -21,6 +22,7 @@ from ..logging import get_logger
 from ..object_store import object_store
 from ..rbac import Permission
 from ..schemas import (
+    AssigneeChange,
     DecisionRequest,
     HandOff,
     HumanRequestDto,
@@ -59,7 +61,14 @@ from ..services.artifacts import (
     revision,
     to_contract,
 )
-from ..services.human_groups import decider_group_verdict, group_of_the_step
+from ..services.human_assignee import (
+    StepAssignee,
+    assignee_of_the_request,
+    decider_verdict,
+    refusal,
+    sla_passed,
+    users_known_in,
+)
 from ..services.receipts import work_item_handoffs
 from ..services.routing import refuse_reserved_fields, validate_fields
 from ..services.work_item_controls import apply_control
@@ -351,16 +360,15 @@ async def post_decision(id: str, body: DecisionRequest, session: Db, principal: 
         raise conflict("no human request is pending on this work item")
     if request_row.decided_at is not None:
         raise conflict("this request has already been decided")
-    # A step addressed to a group is answered by a member of it (ADR 0044, ADR 0052): the rank above is
+    # A step addressed to a group is answered by a member of it (ADR 0044, ADR 0052), one addressed to
+    # a person by that person, the group joining once the SLA has passed (ADR 0153): the rank above is
     # necessary, not sufficient. An organisation administrator may override — audited, never silent.
-    group = await group_of_the_step(session, item, request_row.transition_id)
-    verdict = decider_group_verdict(principal, org_slug, group)
-    if verdict == "refused":
-        raise forbidden(
-            f"this step is addressed to the group `{group}`: only its members answer it "
-            "(identity-provider groups, as of your last sign-in)"
-        )
-    if verdict == "override":
+    assignee = await assignee_of_the_request(session, item, request_row)
+    after_sla = sla_passed(request_row)
+    verdict = decider_verdict(principal, org_slug, assignee, after_sla=after_sla)
+    if verdict == "refused" and assignee is not None:
+        raise forbidden(refusal(assignee, after_sla=after_sla))
+    if verdict == "override" and assignee is not None:
         await record(
             session,
             principal,
@@ -368,8 +376,10 @@ async def post_decision(id: str, body: DecisionRequest, session: Db, principal: 
             org_id=project.org_id,
             target_type="work_item",
             target_id=item.id,
-            group=group,
+            group=assignee.group,
             transition=request_row.transition_id,
+            **({"user": assignee.user} if assignee.user else {}),
+            **({"reassigned": True} if assignee.reassigned else {}),
         )
     await check_gesture(
         session,
@@ -450,6 +460,58 @@ async def post_decision(id: str, body: DecisionRequest, session: Db, principal: 
         kind=body.kind,
     )
     return human_request_dto(request_row)
+
+
+@router.post(
+    "/work-items/{id}/human-requests/{request_id}/assignee",
+    response_model=HumanRequestDto,
+    operation_id="reassignHumanRequest",
+)
+async def reassign_human_request(
+    id: str, request_id: str, body: AssigneeChange, session: Db, principal: Me
+) -> HumanRequestDto:
+    """An organisation administrator readdresses a waiting request (ADR 0153): to a person, a group, or
+    both (the person first, the group once the SLA has passed). The override is kept on the request and
+    replaces the workflow's actor for this request only; the workflow does not change. Audited, with
+    who it was addressed to before and after, and why."""
+    item, project = await _load(session, id, principal)
+    _, org_slug = await resolve_project(session, project.id)
+    if principal.org_roles.get(org_slug) != Role.ORG_ADMIN:
+        raise forbidden("reassigning a waiting request is an organisation administrator's gesture")
+    user = body.user.strip().lower() if body.user else None
+    group = group_for(body.group, project.slug) if body.group and body.group.strip() else None
+    if user is None and group is None:
+        raise unprocessable("a request is reassigned to a person (`user`), a group (`group`), or both")
+    if not body.reason.strip():
+        raise unprocessable("a reassignment says why (`reason`): it is kept in the audit log")
+    row = (
+        await session.execute(
+            select(HumanRequest).where(HumanRequest.id == request_id, HumanRequest.work_item_id == item.id)
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        raise not_found("Human request", request_id)
+    if row.decided_at is not None:
+        raise conflict("this request has already been decided")
+    if user is not None and user not in await users_known_in(session, project.org_id):
+        raise unprocessable(f"`{user}` is not a member of this organisation")
+    before = await assignee_of_the_request(session, item, row)
+    after = StepAssignee(user=user, group=group, reassigned=True)
+    row.assignee = {"user": user, "group": group}
+    await record(
+        session,
+        principal,
+        "workitem.request.reassign",
+        org_id=project.org_id,
+        target_type="work_item",
+        target_id=item.id,
+        request_id=row.id,
+        transition=row.transition_id,
+        before=before.as_dict() if before else None,
+        after=after.as_dict(),
+        reason=body.reason.strip(),
+    )
+    return human_request_dto(row)
 
 
 async def _migration_target(
