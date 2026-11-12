@@ -8,7 +8,7 @@ private key, webhook secret and client secret in one envelope sealed under the d
 A new table, nothing rewritten; the downgrade drops it (and the App's credentials with it).
 
 Revision ID: 6dbee3522739
-Revises: f9b1d3e5a7c0
+Revises: f1b3d5e7a9c2
 Create Date: 2026-11-12 14:00:00+00:00
 """
 
@@ -20,7 +20,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "6dbee3522739"
-down_revision: str | None = "f9b1d3e5a7c0"
+down_revision: str | None = "f1b3d5e7a9c2"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

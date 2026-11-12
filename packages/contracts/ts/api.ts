@@ -3866,6 +3866,8 @@ export type GatewayModel = {
   max_input_tokens?: number | null;
   supports_tool_calling?: boolean;
   supports_vision?: boolean;
+  /** Whether the gateway says the model reasons; null when it does not say. */
+  supports_reasoning?: boolean | null;
   /** What the gateway says the model does; `evaluation` is a decision model (ADR 0121). */
   mode?: string;
   internal_price?: boolean;
@@ -3889,6 +3891,8 @@ export type ModelGatewayFacts = {
   max_input_tokens?: number | null;
   supports_tool_calling?: boolean;
   supports_vision?: boolean;
+  /** whether the model reasons before it answers, as the gateway states it; null when it does not say */
+  supports_reasoning?: boolean | null;
   mode?: string;
 };
 
@@ -4240,6 +4244,8 @@ export type AssistantBinding = {
 };
 
 export type Assistant = {
+  /** the installation's id: what the cost and activity routes' `assistant` filter takes (ADR 0141 §1) */
+  id: string;
   slug: string;
   plugin: string;
   plugin_version: string;

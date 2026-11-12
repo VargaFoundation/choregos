@@ -1589,7 +1589,7 @@ class AgentStopResult(Dto):
     status: Literal["suspended"] = "suspended"
     runs_cancelled: int
     sessions_closed: int
-    #: Conversation turns are not cancelled yet (S63, then S64-09): always 0.
+    #: Conversation turns in flight whose cancel was requested (ADR 0142 §4 bis).
     turns_cancelled: int = 0
     not_stopped: list[AgentNotStopped] = Field(default_factory=list)
 

@@ -51,7 +51,16 @@ class AssistantBinding(Dto):
     enabled: bool
 
 
+class AssistantStop(Dto):
+    """Who stopped the assistant, when and why (ADR 0142 §4 bis)."""
+
+    at: datetime
+    by: str
+    reason: str
+
+
 class Assistant(Dto):
+    id: str
     slug: str
     plugin: str
     plugin_version: str
@@ -62,10 +71,28 @@ class Assistant(Dto):
     audience_groups: list[str]
     channel: Channel
     status: Status
+    #: Set while a person has stopped the assistant: `status` then reads `suspended`.
+    stopped: AssistantStop | None = None
     policy_overrides: dict[str, Any]
     bindings: list[AssistantBinding]
     created_by: str | None = None
     created_at: datetime
+
+
+class AssistantNotStopped(Dto):
+    kind: Literal["turn"] = "turn"
+    id: str
+    detail: str
+
+
+class AssistantStopResult(Dto):
+    """What stopping an assistant did (`POST /orgs/{org}/assistants/{slug}/stop`, ADR 0142 §4 bis)."""
+
+    slug: str
+    status: Literal["suspended"] = "suspended"
+    #: Turns in flight whose cancel was requested: each settles at its next model or tool call.
+    turns_cancelled: int
+    not_stopped: list[AssistantNotStopped] = Field(default_factory=list)
 
 
 class AssistantList(Dto):

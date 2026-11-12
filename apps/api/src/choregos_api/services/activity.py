@@ -15,8 +15,9 @@ A run's spend so far is the gateway's count for its key, never written to the le
 every `SPEND_TTL_S` per run (`spend_so_far`); a gateway that fails, is slow, or a run without a key
 gives `None`, never zeros. A run whose spend was booked shows the booked figures.
 
-Conversation turns (`kind=turn`, the `assistant` filter) live on the S63 branch, not here: both are
-accepted and answer nothing until S64-09.
+Conversation turns (`kind=turn`, S64-09c) are read by `activity_turns`: a conversation's person and its
+assistant's auditors see them; the `assistant` filter (an installation's id) keeps only them, and a
+conversation is never listed as a session. Runs and sessions belong to no assistant.
 """
 
 from __future__ import annotations
@@ -39,6 +40,7 @@ from ..knowledge.marked import readable
 from ..logging import get_logger
 from ..rbac import Permission
 from ..schemas.activity import ActivityEntry, ActivityList, SpendSoFar
+from .activity_turns import turn_entries
 from .initiator import initiator
 
 if TYPE_CHECKING:
@@ -76,11 +78,14 @@ class ActivityFilters:
     kind: str | None = None
 
     def wants(self, kind: str) -> bool:
-        """Whether entries of this kind can match. An assistant or a turn is S64-09's: nothing yet."""
-        if self.assistant is not None or kind == "turn":
-            return False
+        """Whether entries of this kind can match."""
         if self.kind is not None and self.kind != kind:
             return False
+        if kind == "turn":
+            # A turn belongs to a person's conversation: no project the filter names, no workflow.
+            return self.project is None and self.workflow is None
+        if self.assistant is not None:
+            return False  # only a turn belongs to an assistant
         # A session belongs to no workflow.
         return not (kind == "session" and self.workflow is not None)
 
@@ -91,6 +96,7 @@ class ActivityFilters:
             and (self.project is None or entry.project_slug == self.project)
             and (self.workflow is None or entry.workflow == self.workflow)
             and (self.agent is None or entry.agent_slug == self.agent)
+            and (self.assistant is None or entry.assistant == self.assistant)
         )
 
 
@@ -333,6 +339,7 @@ def _sessions_query(reader: ActivityReader) -> Any:
     query = select(AgentSessionRecord).where(
         AgentSessionRecord.org_id == reader.org_id,
         AgentSessionRecord.user_id == reader.principal.user_id,
+        AgentSessionRecord.kind != "conversation",  # a conversation's entries are its turns
     )
     if reader.filters.agent is not None:
         query = query.where(AgentSessionRecord.agent_slug == reader.filters.agent)
@@ -376,6 +383,10 @@ async def list_activity(session: AsyncSession, reader: ActivityReader) -> Activi
             .limit(FINISHED_MAX)
         )
         finished += await _session_entries(session, reader, list(closed.scalars()), projects, gateways)
+    if filters.wants("turn"):
+        turns_live, turns_ended = await turn_entries(reader, since, gateways.of_sessions(reader.org_id))
+        in_flight += turns_live
+        finished += turns_ended
     in_flight.sort(key=lambda e: e.started_at, reverse=True)
     finished.sort(key=lambda e: e.ended_at or e.started_at, reverse=True)
     return ActivityList(in_flight=in_flight, finished=finished[:FINISHED_MAX])
@@ -431,12 +442,32 @@ async def _session_of_event(
     record = await session.get(AgentSessionRecord, str(event.data.get("session_id") or ""))
     if record is None or record.org_id != reader.org_id or record.user_id != reader.principal.user_id:
         return None
+    if record.kind == "conversation":
+        return None  # its entries are turns (`_turn_of_event`)
     project = await _project_seen(session, reader, record.project_id)
     if project is None:
         return None
     entries = await _session_entries(session, reader, [record], {project.id: project}, _Gateways(session))
     entry = entries[0]
     return ("activity.upsert" if entry.status == "open" else "activity.ended"), entry
+
+
+async def _turn_of_event(
+    session: AsyncSession, reader: ActivityReader, event: ChoregosEvent
+) -> tuple[str, ActivityEntry] | None:
+    """The turn of the conversation an event names, if the reader may see it (read in the platform scope:
+    an auditor reads other people's turns, never their content)."""
+    live, ended = await turn_entries(
+        reader,
+        utcnow() - FINISHED_WINDOW,
+        _Gateways(session).of_sessions(reader.org_id),
+        only=str(event.data.get("session_id")),
+    )
+    if live:
+        return "activity.upsert", live[0]
+    if ended:
+        return "activity.ended", ended[0]
+    return None
 
 
 async def entry_of_event(
@@ -448,8 +479,11 @@ async def entry_of_event(
     found: tuple[str, ActivityEntry] | None = None
     if event.type in RUN_EVENTS and event.data.get("run_id") and reader.filters.wants("run"):
         found = await _run_of_event(session, reader, event)
-    elif event.data.get("session_id") and reader.filters.wants("session"):
-        found = await _session_of_event(session, reader, event)
+    elif event.data.get("session_id"):
+        if reader.filters.wants("session"):
+            found = await _session_of_event(session, reader, event)
+        if found is None and reader.filters.wants("turn"):
+            found = await _turn_of_event(session, reader, event)
     if found is None or not reader.filters.keeps(found[1]):
         return None
     return found
