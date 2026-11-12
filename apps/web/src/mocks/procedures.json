@@ -2401,6 +2401,65 @@
     "origin": "shipped"
   },
   {
+    "id": "connector.notify.teams",
+    "title": "Connect Microsoft Teams for an assistant's deliveries",
+    "version": 1,
+    "audience": "project_owner",
+    "applies_to": {
+      "connector": "notify/teams"
+    },
+    "link": null,
+    "reviewed": "2026-11-12",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- A Teams channel where the assistant's task outputs and its owners' notices should appear.\n- The right to add a workflow to that channel (otherwise a Teams administrator does it).\n- Management of the assistant's installation in Choregos (`assistant:manage`)."
+      },
+      {
+        "key": "at",
+        "title": "At Microsoft Teams",
+        "markdown": "1. In the channel, open **Workflows** and pick the template **Post to a channel when a webhook request is\n   received**.\n2. Name it, choose the team and the channel, and finish: Teams shows the workflow's URL. Copy it.\n3. An older incoming webhook (Office 365 connector) URL works too, while your tenant still allows them."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "- The URL is the credential: whoever holds it can post to the channel. Choregos seals it and never shows it\n  again.\n- Nothing is read from Teams; Choregos only posts message cards."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "1. Open the assistant's installation (**Assistants**, the installation's page) as one of its managers.\n2. In the **Microsoft Teams** card, paste the URL and save it. It is sealed and the field empties.\n3. In the task's `deliver` list of the assistant's manifest, `teams` now posts to that channel; the\n   installation's owners' notices (plugin upgrades, knowledge updates) go there too.\n4. Open the URL's host in the organisation's egress allowlist: `*.logic.azure.com` or\n   `*.environment.api.powerplatform.com` for a Workflows URL, `*.webhook.office.com` for an incoming webhook."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Run a task on demand whose `deliver` lists `teams`, and look at the channel: a card with the task's title\nand its output appears."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- The card never appears and the run's delivery says the host is refused: open the URL's host in the egress\n  allowlist.\n- `webhook answered 400`: the workflow expects another payload; recreate it from the template above.\n- `webhook answered 404` or `401`: the workflow was deleted or turned off; create a new one and save its URL.\n- The installation shows Teams as not configured: the URL was removed; paste it again."
+      }
+    ],
+    "values": {},
+    "egress": [],
+    "fields": {
+      "webhook_url": "the Workflows (or incoming webhook) URL that posts to the channel"
+    },
+    "vendor_docs": [
+      {
+        "title": "Create incoming webhooks with Workflows for Microsoft Teams",
+        "url": "https://support.microsoft.com/office/create-incoming-webhooks-with-workflows-for-microsoft-teams-8ae491c7-0394-4861-ba59-055e33f75498"
+      },
+      {
+        "title": "Create an Incoming Webhook",
+        "url": "https://learn.microsoft.com/microsoftteams/platform/webhooks-and-connectors/how-to/add-incoming-webhook"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
     "id": "connector.runtime.aca",
     "title": "Run agent stages as Azure Container Apps jobs",
     "version": 1,

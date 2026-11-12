@@ -14,7 +14,7 @@ from typing import Any
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from .conftest import login, without_postgres
+from .conftest import SUITE_ON_POSTGRES, login, without_postgres
 from .kits.conversations import ME, _events, _open, _record, _say
 from .kits.slow_model import _slow
 from .test_agent_sessions import Upstream, _agent, _key_rows, _ledger, upstream  # noqa: F401
@@ -30,6 +30,11 @@ async def _second_replica(email: str) -> AsyncClient:
     return http
 
 
+@pytest.mark.skipif(
+    not SUITE_ON_POSTGRES,
+    reason="the cross-replica cancel exists when the application runs on PostgreSQL: CI's PostgreSQL pass "
+    "(`CHOREGOS_TEST_SUITE_ON_POSTGRES=1`) runs it",
+)
 async def test_a_cancel_sent_to_another_replica_stops_the_turn(
     client: AsyncClient,
     admin: str,
@@ -45,6 +50,13 @@ async def test_a_cancel_sent_to_another_replica_stops_the_turn(
     conversation = await _open("varga", admin)
     turn = asyncio.ensure_future(_say(client, conversation, "Where is order 42?"))
     await asyncio.wait_for(transport.waiting.wait(), 10)
+    # Another replica sees the turn by its committed lease: wait until it is there, as a real second
+    # request would only come after it (on a loaded runner the model may be reached first).
+    for _ in range(100):
+        if (await _record(conversation)).turn_lease_until is not None:
+            break
+        await asyncio.sleep(0.05)
+    assert (await _record(conversation)).turn_lease_until is not None, "the running turn holds a lease"
 
     # The cancel reaches a replica that does not run the turn: the registry is per process.
     monkeypatch.setattr(conversation_turns, "_RUNNING", {})
