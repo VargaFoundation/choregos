@@ -1752,6 +1752,12 @@ value>` on the first model call. Nothing said the key had never resolved.
 If the API refuses to start with `réglages non résolus`, fix the source of the secret — the key
 is missing where it is stored, not where it is read.
 
+## Upgrading past 0.27.1
+
+Changes merged after v0.27.1, shipped with the next release.
+
+**The GitHub App can be created from the console** (S70-21, [ADR 0161](adr/0161-the-github-app-is-created-from-a-manifest.md)). A platform administrator registers it on GitHub from a manifest; its credentials are sealed in the new table `github_app_registrations` (created empty by the migration). Nothing to do for a deployment whose settings name the App: they still win. To use it, keep `secrets-keks` configured ([the GitHub App](#the-github-app)).
+
 ## Upgrading to 0.27
 
 One permission changes. The API now deletes the objects of a task artifact it erases or purges (an assistant's
@@ -1760,7 +1766,6 @@ task output, S63-24), where 0.26 left them to the bucket's lifecycle rule.
 | What | Why | What to do |
 | :-- | :-- | :-- |
 | `s3:DeleteObject` on the object store's bucket and prefix | The erasure of a person's or a subject's data (S63-16) and the retention purge delete the bytes before the rows. A store that refuses the delete fails the erasure (502, nothing erased) and keeps the expired rows for the next purge pass. | Add the permission to the credentials of `objectStore.secretRef` (an IAM policy, or the MinIO/RustFS policy of the key). A lifecycle rule on the bucket is no longer needed for this, and stays harmless. No migration. |
-| The GitHub App can be created from the console (S70-21, ADR 0161) | A platform administrator registers it on GitHub from a manifest; its credentials are sealed in the new table `github_app_registrations` (created empty by the migration). | Nothing for a deployment whose settings name the App: they still win. To use it, keep `secrets-keks` configured ([the GitHub App](#the-github-app)). |
 
 ## Upgrading to 0.26
 
