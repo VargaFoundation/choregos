@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Choregos API
-  version: 0.27.0
+  version: 0.27.1
   description: |
     The Choregos platform API. The console and the CLI use this API and nothing else.
     Auth: an OIDC session (cookie) or `Authorization: Bearer <api_token>`.
@@ -9517,6 +9517,7 @@ components:
         max_input_tokens: { type: [integer, "null"] }
         supports_tool_calling: { type: boolean, default: true }
         supports_vision: { type: boolean, default: false }
+        supports_reasoning: { type: [boolean, "null"], description: "Whether the gateway says the model reasons; null when it does not say." }
         mode: { type: string, default: chat, description: "What the gateway says the model does; `evaluation` is a decision model (ADR 0121)." }
         internal_price: { type: boolean, default: false }
         source: { type: string, enum: [gateway, manual], default: gateway }
@@ -9540,6 +9541,7 @@ components:
         max_input_tokens: { type: [integer, "null"] }
         supports_tool_calling: { type: boolean, default: true }
         supports_vision: { type: boolean, default: false }
+        supports_reasoning: { type: [boolean, "null"], description: "whether the model reasons before it answers, as the gateway states it; null when it does not say" }
         mode: { type: string, default: chat }
     ModelCatalogueEntry:
       type: object

@@ -6,6 +6,11 @@ Each effect is an activity, under its key (`<action>:<n>`); a transient failure 
 final refusal (`EffetRefuse`, a recorded error type) stops the rest. What had been done is then
 COMPENSATED, in reverse, and the action says what it could not undo. `action-<id>`: one workflow
 per action.
+
+One outcome is neither: an effect that was sent and that nobody knows was executed (`EffectInDoubt`:
+a write through an outpost that was claimed and never answered, ADR 0149 §5). It stops the rest too,
+and nothing is compensated: undoing what came before would act on a state nobody knows. The action
+is closed `in_doubt`, for a person to look at.
 """
 
 from __future__ import annotations
@@ -16,7 +21,7 @@ from typing import Any
 
 from temporalio import workflow
 from temporalio.common import RetryPolicy
-from temporalio.exceptions import ActivityError
+from temporalio.exceptions import ActivityError, ApplicationError
 
 from ..wire_names import both_names, read_key, require_key
 from .activity_names import english_payload_keys, named
@@ -30,14 +35,31 @@ with workflow.unsafe.imports_passed_through():
 #: for the `preuve` signal (recorded wire name) until then. Histories from before this marker had
 #: no effect that asked for it.
 AWAITED_EVIDENCE_PATCH = "preuve-attendue"  # lang: fr-ok — a patch id is never renamed
+#: An effect may end in doubt (S65-14, ADR 0149 §5): the action is then closed `in_doubt` and nothing
+#: is compensated. A history from before this marker that holds such a failure (an activity of this
+#: version answering a workflow task of the previous one, in a rolling upgrade) took the failure
+#: branch: replayed, it takes it again, and the activities themselves compensate nothing and close
+#: the action in doubt.
+IN_DOUBT_PATCH = "action-in-doubt"
+#: The error type `execute_effect` raises for an effect in doubt (`activities.actions.EFFECT_IN_DOUBT`).
+EFFECT_IN_DOUBT = "EffectInDoubt"
 
 
 class MissingEvidence(Exception):  # noqa: N818 - a named refusal: the evidence did not come, or says no
     pass
 
 
+def ended_in_doubt(error: BaseException) -> bool:
+    """The effect was sent and nobody knows whether it was executed: final when the activity says
+    so, or once the retries of an effect that may be delivered again are spent."""
+    cause = error.cause if isinstance(error, ActivityError) else None
+    return isinstance(cause, ApplicationError) and cause.type == EFFECT_IN_DOUBT
+
+
 READ = RetryPolicy(maximum_attempts=5, initial_interval=timedelta(seconds=2))
-#: A transient effect (429, 503, network) is retried; a refusal never is.
+#: A transient effect (429, 503, network) is retried; a refusal never is. An effect in doubt is
+#: retried only when its activity says the same key may be delivered again (it then raises a
+#: retryable `EffectInDoubt`); this policy does not name the type, so that both are possible.
 EFFECT = RetryPolicy(
     maximum_attempts=6,
     initial_interval=timedelta(seconds=5),
@@ -99,6 +121,17 @@ class ActionWorkflow:
                 cause = str(error.cause) if error.cause is not None else str(error)
             else:
                 cause = str(error)
+            if ended_in_doubt(error) and workflow.patched(IN_DOUBT_PATCH):
+                # Neither retried nor compensated (ADR 0149 §5): the effects already done stay done,
+                # and a person reads what was sent.
+                self.state = "in_doubt"
+                await execute_on_its_queue(
+                    named(action_activities.close_action, action_activities.cloturer_l_action),
+                    {"action_id": action_id, "status": "in_doubt", "error": cause},
+                    start_to_close_timeout=timedelta(seconds=30),
+                    retry_policy=READ,
+                )
+                return {"status": "in_doubt", "error": cause, "effects": list(self.done)}
             self.state = "compensating"
             compensations = []
             for position in reversed(self.done):

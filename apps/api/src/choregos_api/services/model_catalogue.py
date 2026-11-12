@@ -69,6 +69,7 @@ def facts_of(model: GatewayModel) -> dict[str, Any]:
         "max_input_tokens": model.max_input_tokens,
         "supports_tool_calling": model.supports_tool_calling,
         "supports_vision": model.supports_vision,
+        "supports_reasoning": model.supports_reasoning,
         "mode": model.mode,
     }
 

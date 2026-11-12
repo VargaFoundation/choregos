@@ -1939,7 +1939,18 @@ export const agents: Agent[] = [
     versions: [
       {
         version: 2,
-        spec: { instructions: "Implement the specification, test first.\nSmall conventional commits.", model: "profile:standard" },
+        spec: {
+          instructions: "Implement the specification, test first.\nSmall conventional commits.",
+          model: "profile:by_size",
+          // Closed on every source: it works with its coding agent's own tools (files, shell, git).
+          tools: { web: [], scripts: "off", catalogue: [], extensions: [] },
+          skills: [],
+          mcp_servers: [],
+          knowledge: [{ slug: "architecture-framework" }],
+          memories: [{ scope: "project", slug: "shared", mode: "write" }],
+          limits: { max_turns: 120, max_minutes: 90 },
+          budget: { run_usd: 12 },
+        },
         checksum: "sha256:2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a",
         created_by: "catalogue:developer@2",
         created_at: iso(60 * 24 * 3),
@@ -2151,6 +2162,8 @@ export const modelCatalogue: ModelCatalogue = {
       max_input_tokens: 200000,
       supports_tool_calling: true,
       supports_vision: false,
+      // The strong model is the one the demo gateway says reasons; it says nothing of the others.
+      supports_reasoning: m.model_name === "platform/strong" ? true : null,
     },
     last_seen_at: iso(60),
     missing_since: null,

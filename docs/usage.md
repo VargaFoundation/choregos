@@ -3207,6 +3207,27 @@ curl -X POST $API/projects/acme:hr/actions/<id>/decision -d '{"decision": "appro
   forbidden operation) stops the action, and what was done is **compensated in reverse** — the
   action says what it could not undo. Parameters are Jinja (sandboxed) over `params` and the results
   of earlier `effects`; a compensation also sees its own effect's `result`.
+- **In doubt**: one effect cannot be made idempotent by the platform, a write through an
+  [outpost](integrations.md#a-tool-server-at-an-outpost-adr-0149), whose server Choregos does not
+  see. It is delivered **at most once**. When an instance of the outpost took the write and its
+  answer never came back, nobody knows whether the server made it: the effect and the action end
+  **`in_doubt`**, a terminal status like `succeeded`, `failed` and `rejected`
+  ([ADR 0149](adr/0149-a-tool-may-live-at-an-outpost.md) §5). Such an action is **never replayed**
+  — no route does it, an agent that repeats the call gets the same action back, in doubt (a tool
+  error `504` whose `code` is `action_in_doubt`) — and **nothing it had done is compensated**: the
+  effects before it stay done, the ones after it did not run. Both would act on a state nobody
+  knows. **What a person does**: read on the action's page which tool was sent, to which outpost
+  and endpoint, which instance took it and when (the journal's effect carries them under
+  `result.in_doubt`, with the digest of the arguments, never the arguments), check the system
+  behind the outpost, and record what they found where the team keeps such records. The action
+  itself stays in doubt: no route closes it by hand. A work item whose transition proposed it
+  waits where it is, as it waits for an approval nobody gave: reading the doubt as a failure would
+  follow `on_fail` and propose the action again, a second delivery of the write. A person moves
+  the work item on. The one exception is a write whose rule says its tool takes the platform's
+  idempotency key (`platform_arguments: ["action_key"]`): after a doubt the effect's own retries
+  deliver it again with the same key, and the action is in doubt only if every delivery was.
+  The event is `choregos.action.failed` with `status: in_doubt` in its data; `GET
+  /projects/{id}/actions?status=in_doubt` lists them.
 - **Proving**: an effect can make the action wait for the proof that it served — the next report
   of a collector, say — until a deadline: the action shows `awaiting_evidence`; a contrary proof, or
   none in time, fails it and compensates what was done.
@@ -3641,14 +3662,17 @@ tokens, with the CSV of exactly what is shown. The organisation's **Spend** page
 as they spend no model token. An assistant's installation page has the same panel, narrowed to the
 assistant (`assistant=<installation id>`: its conversations' turns and its tasks), by model or agent.
 
-The panels read the cost report with a filter: `agent` (its slug), `workflow` (its name), `work_item` and
-`assistant` (an installation's id) narrow it, combined with each other and with `kind`, `since` and `until`; `group_by=run` names each run by
-its work item's key and stage (`PAY-12 · review #2` for a second attempt). The report's `total` carries
+The panels read the cost report with a filter: `agent` (its slug), `workflow` (its name) and `work_item`
+narrow it, combined with each other and with `kind`, `since` and `until`; `group_by=run` names each run by
+its work item's key and stage (`PAY-12 · review #2` for a second attempt). `assistant` (an assistant
+installation's id) narrows it to that assistant's conversation turns and tasks, and `group_by=assistant`
+names each installation by its slug, `—` for what no assistant spent. The report's `total` carries
 `tokens_in`, `tokens_out` and `tokens_cached` next to the money.
 
 ```bash
 curl "$API/orgs/acme/costs?agent=developer&group_by=model"
 curl "$API/projects/$P/costs?workflow=default&group_by=run&since=2026-11-01"
+curl "$API/orgs/acme/costs?group_by=assistant"
 ```
 
 A run's page has a **Context** card: what filled the model's input on the run's last call, section by
@@ -3677,7 +3701,8 @@ with the run's read right.
 | Too many findings from one run | `findings.max_per_run` |
 
 Costs export as CSV from the project overview, grouped by day, stage, model, backend, size,
-kind, agent, workflow, work item or run, and narrowed to one agent, workflow or work item.
+kind, agent, workflow, work item, run or assistant, and narrowed to one agent, workflow, work item or
+assistant.
 
 **Your roles.** The administration overview (Session card) lists your roles by scope instead of
 repeating the organisation: `platform : org_admin` on the community edition (one organisation, whose
