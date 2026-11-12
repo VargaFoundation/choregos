@@ -12,8 +12,9 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from . import __version__
+from . import __version__, theme
 from .a2a import a2a_app
+from .ask import ask
 from .binary_info import binary_info
 from .client import ApiError, Client, NoOrganisationError, Profile
 from .knowledge import knowledge_app
@@ -69,9 +70,19 @@ def _root(
         bool,
         typer.Option("--version", callback=_print_version, is_eager=True, help="Print the version and exit."),
     ] = False,
+    no_color: Annotated[
+        bool,
+        typer.Option(
+            "--no-color", help="No colour, as `NO_COLOR` does: glyphs and words carry every status."
+        ),
+    ] = False,
 ) -> None:
     """Options of `choregos` itself, before any command."""
+    if no_color:
+        theme.MONOCHROME = True
 
+
+app.command("ask")(ask)
 
 # Hidden: the native binaries' smoke test asks the binary what it knows about itself (S62-07).
 app.command("binary-info", hidden=True)(binary_info)
@@ -97,6 +108,12 @@ class TransportSafeClient(Client):
     def stream_sse(self, path: str, **kwargs: Any) -> Any:
         try:
             yield from super().stream_sse(path, **kwargs)
+        except httpx.TransportError as exc:
+            self._unreachable(exc)
+
+    def stream_events(self, method: str, path: str, **kwargs: Any) -> Any:
+        try:
+            yield from super().stream_events(method, path, **kwargs)
         except httpx.TransportError as exc:
             self._unreachable(exc)
 

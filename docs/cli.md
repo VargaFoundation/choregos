@@ -204,6 +204,31 @@ Options:
   --help  Show this message and exit.
 ```
 
+### `choregos ask`
+
+```text
+Usage: choregos ask [OPTIONS] [message]
+
+  Ask an assistant, as one turn of a conversation the platform keeps.
+
+  The answer streams to standard output; the conversation's id, its cost and
+  the writes the assistant proposed (with where to confirm them) go to
+  standard error. Exit code 0 when the turn completed, 1 otherwise.
+
+Arguments:
+  message  what to say; `-` or nothing reads it from standard input
+
+Options:
+  -a, --assistant <str>     the assistant's slug; the only one ready for you
+                            otherwise
+  -c, --conversation <str>  continue this conversation (its id)
+  --continue                continue the assistant's most recent conversation
+  --json                    print one JSON object once the turn ended, nothing
+                            while it runs
+  --org <str>               the organisation; the profile's otherwise
+  --help                    Show this message and exit.
+```
+
 ## `choregos dev`
 
 Development environment
