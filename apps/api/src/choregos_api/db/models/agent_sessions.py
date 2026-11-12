@@ -83,6 +83,8 @@ class AgentSessionRecord(Base, PkMixin, TimestampMixin):
     archived_messages: Mapped[list[dict[str, Any]]] = mapped_column(Json, default=list, server_default="[]")
     #: Set while a turn runs: a second turn is refused until it ends or it lapses (S63-04b).
     turn_lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    #: Set by a cancel that reached a replica other than the one running the turn; the turn polls it (S63-23).
+    turn_cancel_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class AgentSessionEvent(Base, PkMixin):

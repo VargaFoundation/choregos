@@ -31,6 +31,7 @@ from choregos_core.domain import aware
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..config import get_settings
 from ..db.models import (
     AgentSessionEvent,
     AgentSessionRecord,
@@ -68,11 +69,13 @@ from .conversation_signals import memory_written_of
 from .conversation_title import model_title
 from .conversation_turns import (
     claim_turn,
+    clear_cancel_request,
     compress_history,
     forget_turn,
     refuse_if_not_allowed,
     register_turn,
     retention_until,
+    watch_cancel,
 )
 from .model_stream import OnDelta
 from .personal_spaces import personal_space
@@ -175,10 +178,14 @@ async def converse(
     the model's text is handed to it chunk by chunk as the gateway streams it."""
     task = asyncio.ensure_future(_turn(session, record, text, on_delta))
     register_turn(record.id, task)
+    # A cancel may reach another replica: it leaves a flag on the row, which this one polls (S63-23).
+    watcher = None if get_settings().is_sqlite else asyncio.ensure_future(watch_cancel(record.id, task))
     try:
         return await task
     finally:
         forget_turn(record.id, task)
+        if watcher is not None:
+            watcher.cancel()
 
 
 async def _turn(
@@ -301,6 +308,7 @@ async def _end_lease(session: AsyncSession, record: AgentSessionRecord) -> None:
     request) does not keep it locked."""
     record.turn_lease_until = None
     try:
+        await clear_cancel_request(session, record.id)
         await release_connection(session)
     except Exception as failure:  # the lease lapses by itself
         log.warning("conversation.lease_not_released", session_id=record.id, error=type(failure).__name__)
@@ -311,7 +319,6 @@ async def _settle_turn(
 ) -> None:
     """The turn's key ends with the turn: its spend booked with `session_id`, the key revoked. A failure
     here is logged, not raised: the key still dies at its TTL, and the turn's answer is not lost."""
-    from ..config import get_settings
     from .costs import record_cost
     from .model_catalogue import priced_spend
 
