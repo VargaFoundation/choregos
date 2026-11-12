@@ -105,7 +105,7 @@ import { journeyInProgress, journeyFinished, journeyOf } from "./journey";
 import { egressApi } from "./egress";
 import { peopleOps, peopleOpsApi, peopleOpsFixtures } from "./joiners-leavers";
 import mcpCatalogueFile from "./mcp-catalogue.json";
-import { outpostsApi } from "./outposts";
+import { checkOutpostConnector, discoverAtOutpost, outpostsApi, whereItLivesNow } from "./outposts";
 import { pluginsApi, serverConnectorOf } from "./plugins";
 import skillCatalogueFile from "./skill-catalogue.json";
 import { proceduresApi } from "./procedures";
@@ -2447,6 +2447,30 @@ export const connectorTypes: ConnectorType[] = [
     capabilities: ["mcp"],
     secret_fields: [],
   },
+  {
+    // The contract's `McpOutpostConnectorConfig`, closed: an outpost, an alias, a timeout; no URL, no secret (ADR 0149).
+    kind: "mcp",
+    type: "mcp-outpost",
+    display: "MCP server at an outpost",
+    config_schema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["outpost", "endpoint"],
+      properties: {
+        outpost: { type: "string", pattern: "^[a-z0-9][a-z0-9-]{0,62}$", description: "an outpost of the same organisation" },
+        endpoint: { type: "string", pattern: "^[a-z][a-z0-9-]{0,62}$", description: "the alias of an endpoint in that outpost's policy file" },
+        timeout_s: {
+          type: "number",
+          minimum: 1,
+          maximum: 120,
+          default: 30,
+          description: "seconds before a call is abandoned, the wait for an instance to claim it included",
+        },
+      },
+    },
+    capabilities: ["mcp"],
+    secret_fields: [],
+  },
 ];
 
 /**
@@ -2613,6 +2637,39 @@ orgConnectors.push({
 
 // The server of the default plugin `servicenow` (S43-08): an organisation connector named after it, not configured yet.
 orgConnectors.push(serverConnectorOf("servicenow", "0.1.0", "servicenow"));
+
+// Two connectors at an outpost (ADR 0149): one where an instance polls for its alias, one at an outpost
+// nobody enrolled yet. No URL and no secret: the address and the credential are the outpost's.
+orgConnectors.push(
+  {
+    name: "tracker-onsite",
+    kind: "mcp",
+    type: "mcp-outpost",
+    config: { outpost: "factory-floor", endpoint: "tracker", timeout_s: 30 },
+    secret_refs: {},
+    secrets: [],
+    status: "ok",
+    availability: "all_projects",
+    enabled_projects: [],
+    operations: [
+      { name: "search_issues", access: "read", policy: "allowed", groups: [], description: "the issues that match" },
+      { name: "get_issue", access: "read", policy: "allowed", groups: [] },
+      { name: "create_issue", access: "write", policy: "forbidden", groups: [], description: "opens an issue" },
+    ],
+  },
+  {
+    name: "erp-branch",
+    kind: "mcp",
+    type: "mcp-outpost",
+    config: { outpost: "branch-office", endpoint: "erp" },
+    secret_refs: {},
+    secrets: [],
+    status: "unknown",
+    availability: "all_projects",
+    enabled_projects: [],
+    operations: [{ name: "stock_level", access: "read", policy: "allowed", groups: [], description: "what is in stock" }],
+  },
+);
 
 export const projectOperations: ProjectOperation[] = [
   { connector: "entra-acme", operation: "read_user", access: "read", org_policy: "allowed", project_policy: "approval", effective_policy: "approval" },
@@ -3146,6 +3203,20 @@ function agentAccessFixture(agent: string, project: string): AgentAccess {
       { name: "read_file", source: "catalogue", origin: "agent", access: "read" },
       { name: "shell", source: "catalogue", origin: "refused", access: "write", reason: "the project does not open shell" },
       { name: "track_order", source: "connector", origin: "project", access: "read" },
+      // The tools of the connectors at an outpost (ADR 0149 §10): where they live, and whether they answer now.
+      ...orgConnectors
+        .filter((c) => c.type === "mcp-outpost")
+        .flatMap((c) =>
+          (c.operations ?? [])
+            .filter((o) => o.policy !== "forbidden")
+            .map((o) => ({
+              name: `${c.name}__${o.name}`,
+              source: "connector" as const,
+              origin: "agent" as const,
+              access: o.access === "write" ? ("write" as const) : ("read" as const),
+              outpost: whereItLivesNow(c),
+            })),
+        ),
       { name: "fetch", source: "web", origin: "agent" },
     ],
     knowledge: [{ name: "billing-runbooks", origin: "agent" }],
@@ -3751,6 +3822,9 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       rotated_at: maintenant,
       rotated_by: me.email,
     });
+    // A connector at an outpost is judged as the API judges it, at its declaration and at every edit (ADR 0149 §1).
+    if (method === "POST" && !wfName && reqBody.type === "mcp-outpost") checkOutpostConnector(reqBody.config);
+    if (method === "PATCH" && reqBody.config && orgConnectors.find((c) => c.name === wfName)?.type === "mcp-outpost") checkOutpostConnector(reqBody.config);
     if (method === "POST" && !wfName) {
       const cree: OrgConnector = {
         name: reqBody.name ?? "new",
@@ -3890,6 +3964,8 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     return connector as T;
   }
   if (method === "POST" && /^\/orgs\/[^/]+\/connectors\/[^/]+\/discover$/.test(chemin ?? "")) {
+    const atOutpost = orgConnectors.find((c) => c.name === decodeURIComponent((chemin ?? "").split("/")[4] ?? "") && c.type === "mcp-outpost");
+    if (atOutpost) return discoverAtOutpost(atOutpost) as T;
     return { added: ["annuler_commande"], changed: ["order_laptop"], removed: [], unchanged: 1 } as T;
   }
   const catalogueEcrit = /^\/orgs\/[^/]+\/models(?:\/([^/?]+))?$/.exec(chemin ?? "");

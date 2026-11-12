@@ -24,6 +24,7 @@ import hashlib
 import hmac
 import json
 import secrets
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, Final
@@ -307,6 +308,22 @@ async def presence(session: AsyncSession, outpost: Outpost, *, now: datetime | N
             for alias in endpoints or []
         ),
     )
+
+
+async def outposts_by_id(session: AsyncSession, org_id: str, ids: Iterable[str | None]) -> dict[str, Outpost]:
+    """The outposts of one organisation among `ids`, by id, in one read. An id that is not an outpost
+    of that organisation is left out, so whoever reads the answer never names another organisation's
+    (ADR 0149 §10). The registry shows every outpost of the organisation to a session that names none."""
+    wanted = sorted({outpost_id for outpost_id in ids if outpost_id})
+    if not wanted:
+        return {}
+    async with in_outpost_scope(session, None):
+        rows = await session.execute(
+            select(Outpost)
+            .where(Outpost.org_id == org_id, Outpost.id.in_(wanted))
+            .execution_options(populate_existing=True)
+        )
+        return {outpost.id: outpost for outpost in rows.scalars()}
 
 
 async def connectors_of(session: AsyncSession, outpost: Outpost) -> list[str]:

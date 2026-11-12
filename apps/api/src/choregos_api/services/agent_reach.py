@@ -16,12 +16,14 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
 
+from choregos_contracts import OutpostStatus
 from choregos_core import ModelResolutionError, ModelResolver
 from choregos_core.models import BY_SIZE
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..catalogue import catalogue, expand_names, project_tools
+from ..config import get_settings
 from ..db.models import (
     Agent,
     AgentVersion,
@@ -37,15 +39,18 @@ from ..schemas.agents import (
     AgentAccess,
     AgentAccessItem,
     AgentAccessModel,
+    AgentAccessOutpost,
     AgentAccessTool,
     AgentComponent,
     AgentSpec,
     VoiceRuntime,
 )
+from . import outposts as outpost_registry
 from . import web_fetch, web_search
 from .agent_releases import served
 from .broker import BrokerTool, broker_tools, selection_of_spec, tools_of_selection
 from .extension_tools import extension_access, extension_tools
+from .mcp_gateway import OUTPOST_TYPE
 
 ExtensionTools = Callable[
     [AsyncSession, Run, Project, set[str]], Awaitable[dict[str, tuple[str, dict[str, Any]]]]
@@ -320,8 +325,11 @@ async def access_of(
             tools.append(_ok(tool.name, "catalogue", origin("catalogue"), "read"))
         for name, (extension, tool_) in reach.extensions.items():
             tools.append(_ok(name, "extension", origin("extensions"), extension_access(extension, tool_)))
+        located = await _where_connectors_live(session, project, reach.brokered)
         for name, brokered in reach.brokered.items():
-            tools.append(_ok(name, "connector", "agent", brokered.access))
+            entry = _ok(name, "connector", "agent", brokered.access)
+            entry.outpost = located.get(brokered.connector.name)
+            tools.append(entry)
         for flag, name in ((reach.fetch, web_fetch.TOOL_NAME), (reach.search, web_search.TOOL_NAME)):
             if flag:
                 tools.append(_ok(name, "web", origin("web"), "read"))
@@ -346,6 +354,47 @@ async def access_of(
             for m in spec.effective_memories()
         ],
     )
+
+
+async def _where_connectors_live(
+    session: AsyncSession, project: Project, brokered: dict[str, BrokerTool]
+) -> dict[str, AgentAccessOutpost]:
+    """Where the connectors at an outpost live, by connector name (ADR 0149 §10): the outpost, the
+    alias, its status, and whether an instance that serves the alias polled lately.
+
+    The outpost is the one the connector's row routes to, read among the project's organisation's
+    own: a connector that routes to no outpost of it names none, whatever its configuration says. The
+    presence is the route's own (`outposts.presence`), read once per outpost, however many tools of
+    however many connectors live there. A direct connector is not in the answer."""
+    connectors = {
+        tool.connector.name: tool.connector
+        for tool in brokered.values()
+        if tool.connector.type == OUTPOST_TYPE
+    }
+    if not connectors:
+        return {}
+    found = await outpost_registry.outposts_by_id(
+        session, project.org_id, (connector.outpost_id for connector in connectors.values())
+    )
+    # Outposts switched off on the deployment: nothing is handed to one, so none is online.
+    switched_on = get_settings().outposts
+    presences = {
+        outpost_id: await outpost_registry.presence(session, outpost)
+        for outpost_id, outpost in found.items()
+        if switched_on
+    }
+    located: dict[str, AgentAccessOutpost] = {}
+    for name, connector in connectors.items():
+        endpoint = str((connector.config or {}).get("endpoint") or "")
+        outpost = found.get(connector.outpost_id or "")
+        there = presences.get(outpost.id) if outpost is not None else None
+        located[name] = AgentAccessOutpost(
+            name=outpost.slug if outpost is not None else None,
+            endpoint=endpoint,
+            status=OutpostStatus(outpost.status) if outpost is not None else None,
+            online=there is not None and there.serves(endpoint),
+        )
+    return located
 
 
 def _ok(name: str, source: str, origin: str, access: str) -> AgentAccessTool:
