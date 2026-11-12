@@ -25,6 +25,10 @@ def github_app(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
     monkeypatch.setenv(
         "CHOREGOS_GITHUB_APP_PRIVATE_KEY", "-----BEGIN RSA PRIVATE KEY-----\nx\n-----END RSA PRIVATE KEY-----"
     )
+    # The App is read from the settings (ADR 0161), cached per process: read again.
+    from choregos_api.config import reset_settings_cache
+
+    reset_settings_cache()
     requests: list[dict[str, Any]] = []
 
     async def mint(self: Any, client: Any, repo: str, **options: Any) -> InstallationToken:
@@ -57,7 +61,10 @@ async def test_a_run_receives_a_token_limited_to_its_repository(
 async def test_without_an_app_or_outside_github_the_token_is_null(
     client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    from choregos_api.config import reset_settings_cache
+
     monkeypatch.delenv("CHOREGOS_GITHUB_APP_ID", raising=False)
+    reset_settings_cache()
     run_id = await run_with_repository(project, "https://github.com/acme/public.git")
     body = (
         await client.post(f"/api/v1/internal/runs/{run_id}/git-token", headers=run_token_for(run_id))

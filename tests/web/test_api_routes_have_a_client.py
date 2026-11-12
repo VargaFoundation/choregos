@@ -82,6 +82,8 @@ NOT_CALLED_BY_A_CLIENT: dict[str, str] = {
     "/me/connected-accounts/callback": "the source's redirect after a person consented: the browser lands "
     "on it, and the API sends it on to the console's /me/connected-accounts page (S63-18)",
     "/github/setup": "the GitHub App's Setup URL: GitHub redirects the browser there after an installation",
+    "/github/manifest/callback": "the GitHub App manifest's redirect URL: GitHub sends the browser there "
+    "with the conversion code once the App is registered (S67-31, ADR 0161)",
     "/remote-credentials/oauth/callback": "the provider's redirect after an administrator authorised a "
     "remote agent's credential",
     "/orgs/{org}/hosted-sources/{sha256}": "reads an uploaded source zip back for the pipeline that "

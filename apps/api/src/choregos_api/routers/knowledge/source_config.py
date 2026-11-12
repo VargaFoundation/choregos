@@ -14,7 +14,6 @@ from choregos_core.outbound_proxy import OutboundProxyError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...config import get_settings
 from ...db.models import (
     KnowledgeBase,
     KnowledgeSource,
@@ -25,6 +24,7 @@ from ...deps import Me
 from ...errors import conflict, forbidden, not_found, unprocessable
 from ...knowledge.sync import CONNECTED_KINDS, OPTIONALLY_CONNECTED, SOURCE_CONNECTOR_TYPES
 from ...secret_store import resolved_configuration
+from ...services import github_app_credentials
 from ...services.egress import egress_scope, ensure_or_409, knowledge_source_targets, targets_of_connector
 from ...services.github_app import claimed_installation_for, implicit_claim_enabled
 from ...services.outbound_proxy import proxy_scope
@@ -427,10 +427,10 @@ async def checked_github_app(
             "reading a repository through the GitHub App is decided by an administrator of "
             f"{organisation.slug} (the App reads every repository it is installed on): ask one"
         )
-    settings = get_settings()
-    if not (settings.github_app_id and settings.github_app_private_key):
+    if await github_app_credentials.refresh(session) is None:
         raise conflict(
-            "this deployment has no GitHub App (CHOREGOS_GITHUB_APP_ID): name a `documents/git` connector"
+            "this deployment has no GitHub App (CHOREGOS_GITHUB_APP_ID, or one created from the console): "
+            "name a `documents/git` connector"
         )
     owner = repository.split("/", 1)[0]
     if await claimed_installation_for(

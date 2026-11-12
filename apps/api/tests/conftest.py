@@ -43,6 +43,7 @@ async def app(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[A
     from choregos_api.config import reset_settings_cache
     from choregos_api.db import session as db_session
     from choregos_api.main import create_app
+    from choregos_api.services.github_app_credentials import forget_cache as forget_stored_github_app
     from choregos_api.temporal import FakeTemporal, set_temporal
 
     if SUITE_ON_POSTGRES:
@@ -62,6 +63,8 @@ async def app(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[A
     else:
         os.environ["CHOREGOS_DATABASE_URL"] = f"sqlite+aiosqlite:///{tmp_path}/test.db"
     reset_settings_cache()
+    # A GitHub App a previous test registered lives in this process's cache, not in the new database.
+    forget_stored_github_app()
     await db_session.dispose_engine()
     if SUITE_ON_POSTGRES:
         await _fresh_postgres()
@@ -73,6 +76,7 @@ async def app(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[A
     await db_session.dispose_engine()
     set_temporal(None)
     reset_settings_cache()
+    forget_stored_github_app()
 
 
 @pytest.fixture

@@ -13480,5 +13480,156 @@
     ]
    ]
   ]
+ },
+ "github_app_registrations": {
+  "columns": [
+   {
+    "name": "app_id",
+    "type": "String(length=32)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "slug",
+    "type": "String(length=100)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "name",
+    "type": "String(length=100)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "owner_login",
+    "type": "String(length=200)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "owner_type",
+    "type": "String(length=32)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "html_url",
+    "type": "String(length=300)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "public",
+    "type": "Boolean()",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "webhook_active",
+    "type": "Boolean()",
+    "nullable": false,
+    "default": "True",
+    "server_default": null
+   },
+   {
+    "name": "client_id",
+    "type": "String(length=100)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "created_by",
+    "type": "String(length=320)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "ciphertext",
+    "type": "LargeBinary()",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "nonce",
+    "type": "LargeBinary()",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "wrapped_dek",
+    "type": "LargeBinary()",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "dek_nonce",
+    "type": "LargeBinary()",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "kek_id",
+    "type": "String(length=32)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "algorithm",
+    "type": "String(length=16)",
+    "nullable": false,
+    "default": "'A256GCM'",
+    "server_default": null
+   },
+   {
+    "name": "id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": "<function uuid7>",
+    "server_default": null
+   },
+   {
+    "name": "created_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": false,
+    "default": "<function utcnow>",
+    "server_default": "<sqlalchemy.sql.functions.now; now>"
+   },
+   {
+    "name": "updated_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": false,
+    "default": "<function utcnow>",
+    "server_default": "<sqlalchemy.sql.functions.now; now>"
+   }
+  ],
+  "primary_key": [
+   "id"
+  ],
+  "foreign_keys": [],
+  "uniques": [
+   [
+    "uq_github_app_registrations_app_id",
+    [
+     "app_id"
+    ]
+   ]
+  ],
+  "checks": [],
+  "indexes": []
  }
 }

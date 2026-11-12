@@ -1,29 +1,37 @@
 # SPDX-License-Identifier: Apache-2.0
-"""GitHub App installations: discovered, installed from the console, claimed (S40-04, ADR 0073).
+"""The GitHub App: created from a manifest, installed from the console, its installations claimed.
 
-Nobody types an installation id: `GET /orgs/{org}/github` says what the App sees, the install link
-sends the person to github.com and back through the App's Setup URL (`GET /github/setup`), and the
-installation is claimed for the organisation that started the flow.
+Nobody types an installation id (S40-04, ADR 0073): `GET /orgs/{org}/github` says what the App sees, the
+install link sends the person to github.com and back through the App's Setup URL (`GET /github/setup`),
+and the installation is claimed for the organisation that started the flow.
+
+The App itself is the deployment's settings, or one a platform administrator creates from the console
+(S67-31, ADR 0161): `/platform/github-app` says which, `/platform/github-app/manifest` starts GitHub's
+App Manifest flow and `GET /github/manifest/callback` finishes it.
 """
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Literal
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from choregos_adapters.errors import UpstreamError
-from choregos_adapters.github import GitHubAppPort
-from fastapi import APIRouter, Depends, Header, Path, Query, Request
+from choregos_adapters.github import APP_EVENTS, APP_PERMISSIONS, GitHubAppPort
+from fastapi import APIRouter, Depends, Header, Path, Query, Request, Response
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..audit import record
+from ..config import Settings
 from ..db.models import GitHubInstallation, Organization
 from ..db.org_aliases import current_slug
-from ..deps import Config, Db, Me, current_principal
-from ..errors import ApiError, conflict, forbidden, upstream
+from ..deps import Config, Db, Me, current_principal, require_platform_admin
+from ..errors import ApiError, conflict, forbidden, not_found, upstream
 from ..rbac import Permission, Principal
 from ..schemas import (
+    GitHubAppManifestRequest,
+    GitHubAppManifestStart,
+    GitHubAppRegistrationStatus,
     GitHubAppStatus,
     GitHubInstallationDto,
     GitHubInstallLink,
@@ -33,6 +41,8 @@ from ..schemas import (
 )
 from ..schemas.base import PageMeta
 from ..services import github_app as svc
+from ..services import github_app_credentials as credentials
+from ..services import github_app_manifest as manifest
 from ..services.organisations import organisation_by_slug
 
 router = APIRouter(tags=["connectors"])
@@ -100,7 +110,7 @@ async def _status(
 @router.get("/orgs/{org}/github", response_model=GitHubAppStatus, operation_id="getGitHubAppStatus")
 async def get_github_app_status(org: OrgSlug, principal: Me, session: Db) -> GitHubAppStatus:
     organisation = await _authorised(session, principal, org)
-    app = svc.get_github_app()
+    app = await svc.github_app(session)
     await svc.sync_if_stale(session, app)
     return await _status(session, organisation, app)
 
@@ -110,7 +120,7 @@ async def get_github_app_status(org: OrgSlug, principal: Me, session: Db) -> Git
 )
 async def refresh_github_installations(org: OrgSlug, principal: Me, session: Db) -> GitHubAppStatus:
     organisation = await _authorised(session, principal, org)
-    app = svc.get_github_app()
+    app = await svc.github_app(session)
     if app is not None:
         try:
             await svc.sync_installations(session, app)
@@ -133,7 +143,7 @@ async def list_github_repositories(
     page: Annotated[int, Query(ge=1)] = 1,
 ) -> GitHubRepositoryPage:
     organisation = await _authorised(session, principal, org)
-    app = svc.get_github_app()
+    app = await svc.github_app(session)
     if app is None:
         return GitHubRepositoryPage(items=[], meta=PageMeta())
     await svc.sync_if_stale(session, app)
@@ -176,9 +186,12 @@ async def create_github_install_link(
     org: OrgSlug, body: GitHubInstallLinkRequest, principal: Me, session: Db
 ) -> GitHubInstallLink:
     await _authorised(session, principal, org)
-    app = svc.get_github_app()
+    app = await svc.github_app(session)
     if app is None:
-        raise conflict("this deployment has no GitHub App (CHOREGOS_GITHUB_APP_ID and its private key)")
+        raise conflict(
+            "this deployment has no GitHub App: a platform administrator creates one (Administration, "
+            "GitHub App), or the deployment sets CHOREGOS_GITHUB_APP_ID and its private key"
+        )
     try:
         info = await app.app_info()
     except UpstreamError as exc:
@@ -239,7 +252,7 @@ async def github_app_setup(
         raise forbidden("this installation was started by another person")
     # The state was signed before the redirect: a rename in between must not break the install (ADR 0090).
     organisation = await _authorised(session, principal, await current_slug(session, str(claims["org"])))
-    app = svc.get_github_app()
+    app = await svc.github_app(session)
     if app is None:
         raise conflict("this deployment has no GitHub App")
     try:
@@ -264,3 +277,141 @@ async def github_app_setup(
         setup_action=setup_action,
     )
     return RedirectResponse(_with_outcome(str(claims["return_to"]), "claimed"), status_code=302)
+
+
+# ───────────────── the deployment's App, created from a manifest (S67-31, ADR 0161) ─────────────────
+
+
+async def _registration_status(session: AsyncSession, settings: Settings) -> GitHubAppRegistrationStatus:
+    found = await credentials.refresh(session)
+    row = await credentials.stored_registration(session)
+    shown = row if found is None or found.source == "manifest" else None
+    if found is not None:
+        source: Literal["none", "deployment", "manifest"] = found.source
+    else:
+        source = "manifest" if row is not None else "none"
+    return GitHubAppRegistrationStatus(
+        source=source,
+        app_id=found.app_id if found is not None else (row.app_id if row is not None else None),
+        slug=shown.slug if shown else None,
+        name=shown.name if shown else None,
+        owner_login=shown.owner_login if shown else None,
+        owner_type=shown.owner_type if shown else None,
+        html_url=shown.html_url if shown else None,
+        public=shown.public if shown else None,
+        webhook_active=shown.webhook_active if shown else None,
+        created_by=shown.created_by if shown else None,
+        created_at=shown.created_at if shown else None,
+        usable=found is not None,
+        blocked_by=await manifest.blocked_by(session, settings),
+        suggested_name=manifest.suggested_name(settings),
+        permissions=dict(APP_PERMISSIONS),
+        events=list(APP_EVENTS),
+        webhook_url=manifest.webhook_url(settings),
+        callback_url=manifest.callback_url(settings),
+        redirect_url=manifest.redirect_url(settings),
+    )
+
+
+@router.get(
+    "/platform/github-app",
+    response_model=GitHubAppRegistrationStatus,
+    operation_id="getPlatformGitHubApp",
+    tags=["admin"],
+)
+async def get_platform_github_app(
+    session: Db, principal: Me, settings: Config
+) -> GitHubAppRegistrationStatus:
+    """The App this instance acts as and where it comes from; the platform administrator only."""
+    await require_platform_admin(session, principal)
+    return await _registration_status(session, settings)
+
+
+@router.post(
+    "/platform/github-app/manifest",
+    response_model=GitHubAppManifestStart,
+    operation_id="startGitHubAppManifest",
+    tags=["admin"],
+)
+async def start_github_app_manifest(
+    body: GitHubAppManifestRequest, session: Db, principal: Me, settings: Config
+) -> GitHubAppManifestStart:
+    """The manifest and GitHub's registration page the console posts it to (step 1 of 3). Refused
+    (409) when the deployment's settings define the App, an App is already stored, or no key could seal
+    its credentials: checked before the person registers anything on GitHub."""
+    await require_platform_admin(session, principal)
+    await manifest.ensure_creatable(session)
+    state = manifest.sign_state(user=principal.email, public=body.public, webhook_active=body.webhook_active)
+    return GitHubAppManifestStart(
+        action_url=manifest.action_url(body.organization, state),
+        manifest=manifest.build_manifest(
+            settings, name=body.name, public=body.public, webhook_active=body.webhook_active
+        ),
+    )
+
+
+@router.get(
+    "/github/manifest/callback",
+    operation_id="githubAppManifestCallback",
+    status_code=302,
+    response_class=RedirectResponse,
+    tags=["admin"],
+)
+async def github_app_manifest_callback(
+    request: Request,
+    principal: Annotated[Principal | None, Depends(_principal_or_none)],
+    session: Db,
+    settings: Config,
+    code: Annotated[str, Query(min_length=1, max_length=200)],
+    state: Annotated[str, Query(min_length=1)],
+) -> RedirectResponse:
+    """The manifest's `redirect_url`: GitHub sends the browser back here once the App is registered
+    (steps 2 and 3). The state must be the one this instance signed for this person; the code is
+    exchanged for the App's credentials, which are sealed and stored, then the console shows them."""
+    if principal is None:
+        back = f"/api/v1/github/manifest/callback?{request.url.query}"
+        return RedirectResponse(f"/api/v1/auth/login?{urlencode({'redirect_to': back})}", status_code=302)
+    await require_platform_admin(session, principal)
+    claims = manifest.verify_state(state, user=principal.email)
+    try:
+        row = await manifest.register(
+            session,
+            code=code,
+            created_by=principal.email,
+            public=bool(claims.get("p")),
+            webhook_active=bool(claims.get("w", True)),
+        )
+    except UpstreamError as exc:
+        raise upstream("github", str(exc)) from exc
+    await record(
+        session,
+        principal,
+        "github_app.create",
+        org_id=None,
+        target_type="github_app",
+        target_id=row.app_id,
+        slug=row.slug,
+        owner=row.owner_login,
+        public=row.public,
+    )
+    page = f"{settings.public_url.rstrip('/')}{manifest.CONSOLE_PAGE}"
+    return RedirectResponse(f"{page}?{urlencode({'github_app': 'created'})}", status_code=302)
+
+
+@router.delete(
+    "/platform/github-app",
+    status_code=204,
+    operation_id="forgetPlatformGitHubApp",
+    tags=["admin"],
+)
+async def forget_platform_github_app(session: Db, principal: Me) -> Response:
+    """Forget the App registered from a manifest: its credentials are deleted here; the App stays on
+    GitHub, where its owner deletes it. The deployment's settings are not touched (404 without one)."""
+    await require_platform_admin(session, principal)
+    row = await manifest.forget(session)
+    if row is None:
+        raise not_found("GitHub App registered from a manifest", "github-app")
+    await record(
+        session, principal, "github_app.forget", org_id=None, target_type="github_app", target_id=row.app_id
+    )
+    return Response(status_code=204)

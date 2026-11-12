@@ -2801,23 +2801,23 @@
   {
     "id": "connector.scm.github",
     "title": "Use GitHub for branches, pull requests and checks",
-    "version": 1,
+    "version": 2,
     "audience": "project_owner",
     "applies_to": {
       "connector": "scm/github"
     },
     "link": null,
-    "reviewed": "2026-10-19",
+    "reviewed": "2026-11-12",
     "sections": [
       {
         "key": "before",
         "title": "Before you start",
-        "markdown": "- The same **GitHub App** as the tracker (see \"Use GitHub Issues and Projects v2 as the board\"): one App\n  serves both. Its id, private key and webhook secret are platform settings.\n- The repository the agents change. They work on a branch and open a pull request; nothing is pushed to\n  the default branch."
+        "markdown": "- The same **GitHub App** as the tracker (see \"Use GitHub Issues and Projects v2 as the board\"): one App\n  serves both. The person who operates Choregos creates it from the console (*Administration, GitHub\n  App*, from a manifest with the permissions and events below) or sets its id, private key and webhook\n  secret as platform settings.\n- The repository the agents change. They work on a branch and open a pull request; nothing is pushed to\n  the default branch."
       },
       {
         "key": "at",
         "title": "At GitHub",
-        "markdown": "1. Create the App with the **Webhook URL** `https://choregos.example.com/api/v1/webhooks/github`, or reuse the platform's.\n2. **Install** it on the repository: the repository field's **Install on GitHub** button opens GitHub's\n   install page and brings you back. The installation is discovered by the platform: there\n   is no number to copy.\n3. For `merge_queue`, enable a **merge queue** in the repository's branch protection (Settings, Branches).\n   Without one, set `merge_queue` to false."
+        "markdown": "1. Create the App from the console (*Administration, GitHub App*), which sets the **Webhook URL**\n   `https://choregos.example.com/api/v1/webhooks/github` itself, or by hand with that URL; or reuse the platform's.\n2. **Install** it on the repository: the repository field's **Install on GitHub** button opens GitHub's\n   install page and brings you back. The installation is discovered by the platform: there\n   is no number to copy.\n3. For `merge_queue`, enable a **merge queue** in the repository's branch protection (Settings, Branches).\n   Without one, set `merge_queue` to false."
       },
       {
         "key": "permissions",
@@ -2859,6 +2859,10 @@
       {
         "title": "Permissions required for GitHub Apps",
         "url": "https://docs.github.com/en/rest/overview/permissions-required-for-github-apps"
+      },
+      {
+        "title": "Registering a GitHub App from a manifest",
+        "url": "https://docs.github.com/en/apps/sharing-github-apps/registering-a-github-app-from-a-manifest"
       },
       {
         "title": "Managing a merge queue",
@@ -2995,23 +2999,23 @@
   {
     "id": "connector.tracker.github-issues",
     "title": "Use GitHub Issues and Projects v2 as the board",
-    "version": 2,
+    "version": 3,
     "audience": "project_owner",
     "applies_to": {
       "connector": "tracker/github-issues"
     },
     "link": null,
-    "reviewed": "2026-10-19",
+    "reviewed": "2026-11-12",
     "sections": [
       {
         "key": "before",
         "title": "Before you start",
-        "markdown": "- A **GitHub App** for the platform: one per installation of Choregos, never a broad personal token.\n  Its id, private key and webhook secret are platform settings (`github-app-id`,\n  `github-app-private-key`, `github-webhook-secret`), set by the person who installs Choregos.\n  If they are set, skip to \"Install it\".\n- The repository and, for a board, the organisation's Projects v2 number."
+        "markdown": "- A **GitHub App** for the platform: one per installation of Choregos, never a broad personal token.\n  The person who operates Choregos creates it, either from the console (*Administration, GitHub App*:\n  the platform registers it on GitHub from a manifest with the permissions and events below, and keeps\n  its credentials sealed) or by hand as platform settings (`github-app-id`, `github-app-private-key`,\n  `github-webhook-secret`). If the App exists, skip to step 4, \"Install\".\n- The repository and, for a board, the organisation's Projects v2 number."
       },
       {
         "key": "at",
         "title": "At GitHub",
-        "markdown": "1. Organization settings, Developer settings, **GitHub Apps**, **New GitHub App**.\n2. **Webhook URL**: `https://choregos.example.com/api/v1/webhooks/github`. **Webhook secret**: a random string, the same one the\n   platform holds as `github-webhook-secret`. GitHub signs each delivery with it and the platform\n   refuses an unsigned one.\n3. Set the permissions and events below, then create the App and generate a **private key**.\n4. **Install** the App on the repositories Choregos works in, from the console: the repository field's\n   **Install on GitHub** button opens GitHub's install page and brings you back. The installation is\n   discovered by the platform: there is no number to copy. The App's **Setup URL** is the\n   platform's `/api/v1/github/setup`."
+        "markdown": "Skip steps 1 to 3 when the App was created from the console: the manifest set them.\n\n1. Organization settings, Developer settings, **GitHub Apps**, **New GitHub App**.\n2. **Webhook URL**: `https://choregos.example.com/api/v1/webhooks/github`. **Webhook secret**: a random string, the same one the\n   platform holds as `github-webhook-secret`. GitHub signs each delivery with it and the platform\n   refuses an unsigned one.\n3. Set the permissions and events below, then create the App and generate a **private key**.\n4. **Install** the App on the repositories Choregos works in, from the console: the repository field's\n   **Install on GitHub** button opens GitHub's install page and brings you back. The installation is\n   discovered by the platform: there is no number to copy. The App's **Setup URL** is the\n   platform's `/api/v1/github/setup`."
       },
       {
         "key": "permissions",
@@ -3058,6 +3062,10 @@
       {
         "title": "Installing your own GitHub App",
         "url": "https://docs.github.com/en/apps/using-github-apps/installing-your-own-github-app"
+      },
+      {
+        "title": "Registering a GitHub App from a manifest",
+        "url": "https://docs.github.com/en/apps/sharing-github-apps/registering-a-github-app-from-a-manifest"
       }
     ],
     "origin": "shipped"

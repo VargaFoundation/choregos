@@ -63,13 +63,18 @@ def _jira_tracker(cfg: dict[str, Any]) -> Any:
 
 
 def _github_client(config: dict[str, Any]) -> Any:
-    """Builds the GitHub client from the connector's configuration or the environment."""
+    """Builds the GitHub client from the connector's configuration or the deployment's App.
+
+    The deployment's App is its settings (`CHOREGOS_GITHUB_APP_ID` / `_PRIVATE_KEY`), else the App a
+    platform administrator registered from a manifest, which the API's process provider opens from the
+    database (ADR 0161): the private key never travels in a connector's configuration."""
     import os
 
-    from .github import GitHubAppAuth, GitHubClient
+    from .github import GitHubAppAuth, GitHubClient, app_credentials
 
-    app_id = config.get("app_id") or os.environ.get("CHOREGOS_GITHUB_APP_ID", "")
-    private_key = config.get("private_key") or os.environ.get("CHOREGOS_GITHUB_APP_PRIVATE_KEY", "")
+    deployment_id, deployment_key = app_credentials()
+    app_id = config.get("app_id") or deployment_id
+    private_key = config.get("private_key") or deployment_key
     token = config.get("token") or os.environ.get("CHOREGOS_GITHUB_TOKEN", "")
     # `installation_id` is never typed (ADR 0073): the API injects the one this organisation claimed.
     # Without it (a single-organisation instance, a repository outside the claims) the installation

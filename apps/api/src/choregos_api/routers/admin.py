@@ -53,13 +53,19 @@ KNOWN_BACKENDS = [(name, list(capabilities)) for name, capabilities in KNOWN_BAC
 @router.post("/platform/secrets/rewrap", response_model=SecretsRewrap, operation_id="rewrapSecrets")
 async def rewrap_secrets(session: Db, principal: Me) -> SecretsRewrap:
     """After a KEK rotation (the new key first in `CHOREGOS_SECRETS_KEKS`): re-wrap every sealed
-    secret's data key under the active key. The values are never read out nor changed (ADR 0058)."""
+    secret's data key under the active key. The values are never read out nor changed (ADR 0058).
+    The GitHub App registered from a manifest is sealed under the same key and moves with them (ADR 0161)."""
     from ..secret_store import SealedDbSecretStore, SecretStoreUnavailable
+    from ..services import github_app_credentials
 
     await require_platform_admin(session, principal)
+    store = SealedDbSecretStore()
     try:
         async with in_platform_scope(session):
-            rewrapped = await SealedDbSecretStore().rewrap(session)
+            rewrapped = await store.rewrap(session)
+        wrapper = store.key_wrapper()
+        if wrapper is not None:
+            rewrapped += await github_app_credentials.rewrap(session, wrapper)
     except SecretStoreUnavailable as refus:
         raise conflict(str(refus)) from refus
     await record(
