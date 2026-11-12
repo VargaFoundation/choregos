@@ -18,6 +18,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    false,
     text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
@@ -109,6 +110,14 @@ class ConnectorOperation(Base, PkMixin, TimestampMixin):
     #: A JSON Schema every call's arguments must also satisfy, whichever agent calls (S60-06, ADR 0128);
     #: `{project}` is the run's project slug. None: the operation's input schema alone.
     arguments: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
+    #: The arguments the organisation's rule says the platform fills on a governed call (`action_key`,
+    #: `work_item_key`), for a discovered tool, which declares nothing; an operation its type or its
+    #: plugin's server declares takes them from there. Listing `action_key` for a write through an
+    #: outpost says the operation takes the platform's idempotency key (S65-14, ADR 0149 §5-6).
+    platform_arguments: Mapped[list[str] | None] = mapped_column(Json, nullable=True)
+    #: The administrator's explicit statement that an in-doubt outcome is accepted for this write
+    #: through an outpost (ADR 0149 §6).
+    in_doubt_accepted: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
 
 
 class ProjectOperationPolicy(Base, PkMixin, TimestampMixin):

@@ -153,6 +153,20 @@ web-build:  ## Front end production build
 .PHONY: web-ci
 web-ci: web-lint web-typecheck web-test web-build  ## Front end CI
 
+# ───────────────────────── editor extension (ADR 0155) ─────────────────────────
+VSCODE_PNPM ?= corepack pnpm@$(shell python3 -c "import json;print(json.load(open('apps/vscode/package.json'))['packageManager'].split('@')[1])")
+
+.PHONY: vscode-install
+vscode-install:
+	$(VSCODE_PNPM) -C apps/vscode install --frozen-lockfile --prefer-offline
+
+.PHONY: vscode-ci
+vscode-ci: vscode-install  ## Editor extension CI: lint + typecheck + test (coverage floor) + VSIX
+	$(VSCODE_PNPM) -C apps/vscode lint
+	$(VSCODE_PNPM) -C apps/vscode typecheck
+	$(VSCODE_PNPM) -C apps/vscode test
+	$(VSCODE_PNPM) -C apps/vscode package
+
 # ───────────────────────── charts ─────────────────────────
 .PHONY: charts-lint
 charts-lint:  ## helm lint + kubeconform (skipped if helm is missing)

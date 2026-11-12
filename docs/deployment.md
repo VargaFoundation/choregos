@@ -868,6 +868,17 @@ with `global.extraEnv`, for the API and the workers alike.
 
 **The signing key's Secret.** Either you create it and name it:
 
+**Writes through an outpost** are played by the workers, delivered at most once, and may leave their
+action `in_doubt` ([Security](security.md#a-connector-at-an-outpost)). A worker that stops between an
+outpost's claim and the record of its answer loses nothing for fifteen minutes: the retry reads the
+answer where the door stored it. After that the answer is gone and the action ends in doubt rather
+than being sent again. Watch the actions in doubt (`GET /api/v1/projects/{id}/actions?status=in_doubt`,
+or the `choregos.action.failed` events whose `status` is `in_doubt`): a count that rises says the link
+between an outpost and the platform loses answers. Upgrade the API and the workers together before an
+administrator opens a write: a worker of an earlier version places no write through an outpost, and
+the action fails saying so. The upgrade adds two columns to `connector_operations`
+(`20261112_1300_operation_delivery_statements.py`), null and false on every existing row.
+
 ```bash
 openssl genpkey -algorithm ed25519 -out door.pem          # PEM, PKCS#8: CHOREGOS_OUTPOSTS_DOOR_SIGNING_KEY
 kubectl -n <namespace> create secret generic outposts-door-key --from-file signing-key=door.pem

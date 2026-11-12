@@ -114,8 +114,9 @@ class OutpostToolClient:
 
     async def _exchange(self, call: port.Call) -> OutpostAnswer:
         """Place the call, wait for what becomes of it, and return its answer; anything else is a
-        typed refusal. A call that may be asked again is forgotten once it was read; a write is left
-        for whoever makes its result durable (ADR 0148 §11)."""
+        typed refusal. A call that may be asked again is forgotten once it was read, and cancelled
+        when whoever waited for it goes away; a write is left for whoever makes its result durable
+        (ADR 0148 §11), and left waiting when its waiter goes away (ADR 0149 §5)."""
         try:
             call_id = await self._rendezvous.place(call)
         except port.NotAdmitted as refused:
@@ -123,9 +124,13 @@ class OutpostToolClient:
         try:
             outcome = await self._rendezvous.wait(call_id)
         except BaseException:
-            # Whoever waited went away (a request cut short, a task cancelled): the platform says it
-            # stops waiting, so that the instance that holds the call learns it at its next poll.
-            await self._give_up(call_id)
+            # Whoever waited went away (a request cut short, a task cancelled). For a call that may be
+            # asked again the platform says it stops waiting, so that the instance that holds the call
+            # learns it at its next poll. A write is not given up: cancelling it would put a claimed
+            # write in doubt because a worker stopped, and whoever plays its effect again meets this
+            # same call and reads its answer (ADR 0149 §5). Its own time closes it.
+            if call.write_key is None:
+                await self._give_up(call_id)
             raise
         write = outcome.write if outcome is not None else call.write_key is not None
         if not write:
@@ -173,9 +178,19 @@ class OutpostToolClient:
         # A claim and no answer: a lease that ended, an answer that says `unanswered` or does not
         # open, an answer the rendezvous no longer holds. Executed or not, nobody knows.
         if write:
+            if state is OutpostCallState.ANSWERED:
+                # Answered, and nobody recorded the answer before the rendezvous emptied it.
+                happened = (
+                    f"the outpost `{outpost}` answered the write to `{endpoint}` and the platform no longer "
+                    "holds its answer: nobody knows what the write did, and it is never asked again"
+                )
+            else:
+                happened = (
+                    f"the outpost `{outpost}` claimed the write to `{endpoint}` and did not answer in time: "
+                    "nobody knows whether its server executed it, and it is never asked again"
+                )
             raise OutpostInDoubt(
-                f"the outpost `{outpost}` claimed the write to `{endpoint}` and did not answer in time: "
-                "nobody knows whether its server executed it, and it is never asked again",
+                happened,
                 outpost=outpost,
                 endpoint=endpoint,
                 call_id=call_id,

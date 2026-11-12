@@ -18,6 +18,7 @@ from typing import Annotated, Any
 from choregos_adapters.storage import ObjectStoreError
 from choregos_contracts import (
     ARTIFACT_TYPES,
+    ActionStatus,
     Artifact,
     ContextPack,
     EventType,
@@ -1113,7 +1114,10 @@ async def call_tool(
                 check_arguments(brokered[name], body or {})
             except ArgumentsRefused as refusal:
                 raise _arguments_problem(refusal) from refusal
-            code, result_body = 202, await propose_call(session, run, project, brokered[name], body or {})
+            result_body = await propose_call(session, run, project, brokered[name], body or {})
+            # The call found the action it already proposed, approved since and ended in doubt: a claim
+            # that got no answer, not a proposal (ADR 0149 §5).
+            code = 504 if result_body.get("status") == ActionStatus.IN_DOUBT.value else 202
             provider, price_eur = f"mcp:{brokered[name].connector.name}", 0.0
         elif name in brokered and brokered[name].is_write:
             # A write, even an allowed one, is a governed action (#241): done once, journaled,
