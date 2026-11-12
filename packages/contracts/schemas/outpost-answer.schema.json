@@ -22,7 +22,7 @@
         "unanswered",
         "oversized"
       ],
-      "description": "`result`: the server answered. `error`: it answered a JSON-RPC error, so it says it did not do the call. `unanswered`: the call was sent, or begun, and the daemon holds no answer (a timeout at the endpoint, a lost connection, a restart in the middle): executed or not, nobody knows. `oversized`: the server answered and its result is above the outpost's ceiling or the door's cap; it was executed and its result is not sent."
+      "description": "`result`: the server answered. `error`: it answered a JSON-RPC error, so it says it did not do the call. `unanswered`: the call was sent, or begun, and the daemon holds no answer (a timeout at the endpoint, a lost connection, a restart in the middle, a read abandoned because the door cancelled it): executed or not, nobody knows. `oversized`: the server answered and its result is above the outpost's ceiling or the door's cap; it was executed and its result is not sent."
     },
     "result": {
       "type": [
@@ -61,7 +61,7 @@
         "null"
       ],
       "default": null,
-      "description": "What the outpost read from its own server: the tool does not declare itself read-only."
+      "description": "What the outpost read from its own server: the tool does not declare itself read-only. Null for a kind that calls no tool (`list_tools`), and when the outpost did not get that far."
     },
     "replayed": {
       "type": "boolean",
@@ -116,6 +116,9 @@
             "type": "array"
           },
           "result": {
+            "type": "null"
+          },
+          "write": {
             "type": "null"
           }
         }

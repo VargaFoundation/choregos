@@ -39,7 +39,9 @@ environment, where no confinement reaches. A job (ADR 0056) receives the run tok
 - The agent can still read its run's network policy and post network decisions: it could rewrite the
   proxy's counters for its own run (they are cumulative totals, replaced by each post). The audit of
   what the agent reached is therefore as trustworthy as the proxy's next flush, not more. A proxy
-  credential of its own, out of the agent's reach, would close it; not done here.
+  credential of its own, out of the agent's reach, would close it; not done here. Closed by
+  [ADR 0145](0145-the-proxy-reports-with-a-key-the-agent-does-not-hold.md): a report made with the
+  egress token also needs the proxy's own key.
 - Hosted sessions (S41-11) are unchanged: their agent runs in a separate container that never sees
   the runner's environment.
 - One more call per run, before the agent starts.

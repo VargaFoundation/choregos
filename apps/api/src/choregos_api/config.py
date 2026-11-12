@@ -182,6 +182,10 @@ class Settings(BaseSettings):
     run_token_public_key: str = ""
     run_token_issuer: str = "choregos-api"
     run_token_audience: str = "internal"
+    #: The egress proxy's own key (ADR 0145, `CHOREGOS_EGRESS_REPORT_KEY`): a report made with the
+    #: egress token must carry it, so that the agent, which inherits that token, cannot rewrite its
+    #: run's counters. Empty: the egress token alone is accepted, as before, and start-up says so.
+    egress_report_key: str = ""
 
     #: Hosts no run of this deployment may reach, whatever an organisation or a project says (ADR 0070):
     #: a comma-separated list of host patterns (`CHOREGOS_NETWORK_INSTANCE_DENY`).

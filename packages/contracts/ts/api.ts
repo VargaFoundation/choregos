@@ -3433,8 +3433,8 @@ export type OutpostCallState = "pending" | "claimed" | "answered" | "refused" | 
 /** What the instance reported of a call it took to its server. `result`: the server answered. `error`: it answered a JSON-RPC error. `unanswered`: the call was sent, or begun, and the instance holds no answer. `oversized`: the server answered and its result was above a ceiling; it was executed and its result was not sent. */
 export type OutpostAnswerOutcome = "result" | "error" | "unanswered" | "oversized";
 
-/** Why an outpost did not execute a call: a closed list that names a class of refusal and never the rule that produced it (ADR 0147 §10). Whatever the code, the outpost's server did not receive the call. `signature_refused` on a call the platform did hand over says that the outpost's policy file does not pin the key the door signs with (ADR 0148 §13). */
-export type OutpostRefusalCode = "unknown_endpoint" | "tool_not_allowed" | "write_denied" | "payload_too_large" | "busy" | "endpoint_unavailable" | "unsupported_kind" | "signature_refused" | "call_unreadable" | "deadline_passed" | "cancelled";
+/** Why an outpost did not execute a call: a closed list that names a class of refusal and never the rule that produced it (ADR 0147 §10). Whatever the code, the outpost's server did not receive the call. `signature_refused` on a call the platform did hand over says that the outpost's policy file does not pin the key the door signs with (ADR 0148 §13). `cannot_record` says that the outpost could not write its journal or its audit line, and so did not make the call. `busy` also covers a call claimed and never begun because the daemon was stopping or was restarted. */
+export type OutpostRefusalCode = "unknown_endpoint" | "tool_not_allowed" | "write_denied" | "payload_too_large" | "busy" | "endpoint_unavailable" | "cannot_record" | "unsupported_kind" | "signature_refused" | "call_unreadable" | "deadline_passed" | "cancelled";
 
 export type OutpostCreate = {
   /** the name connectors route by and the journal shows (`outpost:<slug>/<alias>`) */
@@ -3558,6 +3558,7 @@ export type OutpostCallRecord = {
   refusal: OutpostRefusalCode | null;
   /** the SHA-256 of the canonical JSON of its arguments, as a `tool.called` event keeps it and as the outpost's own audit log writes it */
   arguments_sha256: string | null;
+  /** the SHA-256 of the canonical JSON of the result, written by whoever opens the answer: the side that placed the call, never the door, which cannot open one. Null for a call nobody opened */
   result_sha256: string | null;
   project: string | null;
   run_id: string | null;
@@ -3583,7 +3584,7 @@ export type McpOutpostConnectorConfig = {
   timeout_s?: number;
 };
 
-/** The 409 body of the refusals that concern an outpost (ADRs 0147 and 0149): an RFC 9457 problem with a `code`. On the outposts' own routes: `outposts_disabled` (the deployment keeps outposts switched off), `outpost_exists`, `outpost_revoked`, `outpost_not_revoked` and `outpost_in_use` (the outpost is not deleted while connectors route to it; `connectors` names them), `instance_not_pending` and `fingerprint_mismatch`. Where a connector is reached through an outpost, the refusals of ADR 0149 §7 that a 409 carries: `outpost_paused` (paused, revoked, or outposts switched off: nothing was written), `outpost_offline` (no active instance claimed the call in time), `outpost_refused` (the outpost's own policy refused; `refusal` is its code) and `outpost_timeout` (a claimed read got no answer in time). Each of these four names the `outpost`. */
+/** The 409 body of the refusals that concern an outpost (ADRs 0147 and 0149): an RFC 9457 problem with a `code`. On the outposts' own routes: `outposts_disabled` (the deployment keeps outposts switched off), `door_key_missing` (outposts are on and the door has no signing key, so no enrolment token can be created: an outpost could pin nothing, ADR 0148 §13), `outpost_exists`, `outpost_revoked`, `outpost_not_revoked` and `outpost_in_use` (the outpost is not deleted while connectors route to it; `connectors` names them), `instance_not_pending` and `fingerprint_mismatch`. Where a connector is reached through an outpost, the refusals of ADR 0149 §7 that a 409 carries: `outpost_paused` (paused, revoked, or outposts switched off: nothing was written), `outpost_offline` (no active instance claimed the call in time), `outpost_refused` (the outpost's own policy refused; `refusal` is its code) and `outpost_timeout` (a claimed read got no answer in time). Each of these four names the `outpost`. */
 export type OutpostConflict = {
   type: string;
   title: string;
@@ -3600,7 +3601,7 @@ export type OutpostConflict = {
     column?: number;
   }>;
   retry_after?: number;
-  code: "outposts_disabled" | "outpost_exists" | "outpost_revoked" | "outpost_not_revoked" | "outpost_in_use" | "instance_not_pending" | "fingerprint_mismatch" | "outpost_paused" | "outpost_offline" | "outpost_refused" | "outpost_timeout";
+  code: "outposts_disabled" | "door_key_missing" | "outpost_exists" | "outpost_revoked" | "outpost_not_revoked" | "outpost_in_use" | "instance_not_pending" | "fingerprint_mismatch" | "outpost_paused" | "outpost_offline" | "outpost_refused" | "outpost_timeout";
   /** the outpost the refusal is about */
   outpost?: string;
   /** the alias the call was for */

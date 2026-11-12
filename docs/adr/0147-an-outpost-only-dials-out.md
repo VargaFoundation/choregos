@@ -88,7 +88,10 @@ Two things have to be separated before deciding.
 5. **Revocation is immediate and moves an epoch.** Revoking an instance, or pausing or revoking the
    outpost, holds from the next request: the door reads the row every time. Each outpost has an epoch that
    a revocation increments, and an answer is accepted only under the epoch its call was claimed in
-   (ADR 0148): nothing in flight from a revoked instance is taken.
+   (ADR 0148): nothing in flight from a revoked instance is taken. A revoked key does not come back: that
+   holds for as long as its outpost exists. Deleting a revoked outpost deletes its instances, and with
+   them the memory of their keys; after a deletion the same key is a new enrolment like any other, with a
+   token and a person's approval against its fingerprint.
 6. **What an outpost protects against, and what it does not.** An outpost checks only what it can verify
    alone, from a policy file the control plane cannot write:
    - who signed the call: the door's keys the file pins (ADR 0148 §13). A call signed by no key of that

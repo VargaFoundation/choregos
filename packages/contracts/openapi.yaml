@@ -2245,11 +2245,14 @@ paths:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Outpost" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
     delete:
       tags: [outposts]
       operationId: deleteOutpost
       description: >-
-        Removes a revoked outpost, with its instances and what is left of its calls. Refused with 409
+        Removes a revoked outpost, with its instances and what is left of its calls, and with the instances
+        the memory of their keys: a key of a deleted outpost is unknown again, and enrols as any new key
+        does, with a token and a person's approval against its fingerprint (ADR 0147 §5). Refused with 409
         `outpost_in_use` while connectors still route to it (`connectors` names them, ADR 0149 §1), and with 409
         `outpost_not_revoked` otherwise: revoking is the one gesture that moves the epoch. `outpost:manage`,
         audited.
@@ -2258,6 +2261,7 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/OutpostConflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/outposts/{slug}/pause:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -2276,6 +2280,7 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/OutpostConflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/outposts/{slug}/resume:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -2291,6 +2296,7 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/OutpostConflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/outposts/{slug}/revoke:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -2307,6 +2313,7 @@ paths:
         "200": { description: Revoked, content: { application/json: { schema: { $ref: "#/components/schemas/Outpost" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/outposts/{slug}/enrolments:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -2320,7 +2327,8 @@ paths:
         it; the instance it enrols is born pending. A stolen token enrols an instance nobody approves. The
         answer also carries what the operator writes in the outpost's policy file: the door's origin and the
         door's keys to pin (ADR 0148 §13).
-        `outpost:manage`, audited. 409 `outposts_disabled`, or `outpost_revoked`.
+        `outpost:manage`, audited. 409 `outposts_disabled`, `outpost_revoked`, or `door_key_missing` when
+        outposts are on and the door has no signing key: there would be no key for the outpost to pin.
       requestBody:
         required: false
         content: { application/json: { schema: { $ref: "#/components/schemas/OutpostEnrolmentCreate" } } }
@@ -2344,6 +2352,7 @@ paths:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/OutpostInstanceList" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/outposts/{slug}/instances/{instance_id}/approve:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -2385,6 +2394,7 @@ paths:
         "200": { description: Revoked, content: { application/json: { schema: { $ref: "#/components/schemas/OutpostInstance" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/outposts/{slug}/calls:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -2404,6 +2414,7 @@ paths:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/OutpostCallPage" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/network-activity:
     parameters: [{ $ref: "#/components/parameters/Org" }]
     get:
@@ -8809,8 +8820,8 @@ components:
         was not sent.
     OutpostRefusalCode:
       type: string
-      enum: [unknown_endpoint, tool_not_allowed, write_denied, payload_too_large, busy, endpoint_unavailable, unsupported_kind, signature_refused, call_unreadable, deadline_passed, cancelled]
-      description: "Why an outpost did not execute a call: a closed list that names a class of refusal and never the rule that produced it (ADR 0147 §10). Whatever the code, the outpost's server did not receive the call. `signature_refused` on a call the platform did hand over says that the outpost's policy file does not pin the key the door signs with (ADR 0148 §13)."
+      enum: [unknown_endpoint, tool_not_allowed, write_denied, payload_too_large, busy, endpoint_unavailable, cannot_record, unsupported_kind, signature_refused, call_unreadable, deadline_passed, cancelled]
+      description: "Why an outpost did not execute a call: a closed list that names a class of refusal and never the rule that produced it (ADR 0147 §10). Whatever the code, the outpost's server did not receive the call. `signature_refused` on a call the platform did hand over says that the outpost's policy file does not pin the key the door signs with (ADR 0148 §13). `cannot_record` says that the outpost could not write its journal or its audit line, and so did not make the call. `busy` also covers a call claimed and never begun because the daemon was stopping or was restarted."
     OutpostCreate:
       type: object
       additionalProperties: false
@@ -8921,7 +8932,7 @@ components:
         is_error: { type: [boolean, "null"], description: "outcome `result`: the server's own result says it is an error" }
         refusal: { oneOf: [{ $ref: "#/components/schemas/OutpostRefusalCode" }, { type: "null" }], description: "why the outpost refused it, for a refused call" }
         arguments_sha256: { type: [string, "null"], description: "the SHA-256 of the canonical JSON of its arguments, as a `tool.called` event keeps it and as the outpost's own audit log writes it" }
-        result_sha256: { type: [string, "null"] }
+        result_sha256: { type: [string, "null"], description: "the SHA-256 of the canonical JSON of the result, written by whoever opens the answer: the side that placed the call, never the door, which cannot open one. Null for a call nobody opened" }
         project: { type: [string, "null"] }
         run_id: { type: [string, "null"] }
         action_id: { type: [string, "null"], description: "the governed action a write belongs to" }
@@ -8953,6 +8964,8 @@ components:
       description: >-
         The 409 body of the refusals that concern an outpost (ADRs 0147 and 0149): an RFC 9457 problem with a
         `code`. On the outposts' own routes: `outposts_disabled` (the deployment keeps outposts switched off),
+        `door_key_missing` (outposts are on and the door has no signing key, so no enrolment token can be
+        created: an outpost could pin nothing, ADR 0148 §13),
         `outpost_exists`, `outpost_revoked`, `outpost_not_revoked` and `outpost_in_use` (the outpost is not
         deleted while connectors route to it; `connectors` names them), `instance_not_pending` and
         `fingerprint_mismatch`. Where a connector is reached through an outpost, the refusals of ADR 0149 §7 that
@@ -8980,7 +8993,7 @@ components:
               line: { type: integer }
               column: { type: integer }
         retry_after: { type: integer }
-        code: { type: string, enum: [outposts_disabled, outpost_exists, outpost_revoked, outpost_not_revoked, outpost_in_use, instance_not_pending, fingerprint_mismatch, outpost_paused, outpost_offline, outpost_refused, outpost_timeout] }
+        code: { type: string, enum: [outposts_disabled, door_key_missing, outpost_exists, outpost_revoked, outpost_not_revoked, outpost_in_use, instance_not_pending, fingerprint_mismatch, outpost_paused, outpost_offline, outpost_refused, outpost_timeout] }
         outpost: { type: string, description: "the outpost the refusal is about" }
         endpoint: { type: string, description: "the alias the call was for" }
         refusal: { $ref: "#/components/schemas/OutpostRefusalCode" }

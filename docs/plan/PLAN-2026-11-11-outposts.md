@@ -133,13 +133,15 @@ when** `test_outpost_door.py` refuses, each with its own case: a replayed sequen
 another method or URL, a stale `iat`, a stale nonce, a revoked instance, a pending instance, an answer to
 another outpost's call (404, never 403), a body above the cap (before parsing), a second concurrent poll
 (conflict and an alert), a daemon below the minimum version (a refusal that names the minimum).
-`test_outpost_rendezvous_postgres.py`: of two claimers one wins; a claimed write is never claimed again;
-an answer under a previous epoch is refused. `test_outpost_long_poll_holds_no_connection.py`: a hundred
-waiting polls hold no pooled connection; a call written is handed over within a second, and still within
-the periodic look when the relay is stopped. `test_outpost_door_conformance.py`: the live routes are the
-contract's, every call the door hands over is signed with its key (ADR 0148 §13), and the contract's
-vectors verify. The boundary test is green with the directory in `DOOR_DIRS` and the four routes in
-`DOOR_ROUTES`, and red when the door imports the broker.
+`test_outpost_rendezvous_postgres.py`: of two claimers one wins; a claimed write is never claimed again; an
+answer under a previous epoch is refused; no call heavier than the contract's bound
+(`max_sealed_call_bytes`) is handed over; a cancel does not interrupt a write: the answer that still comes
+meets `lease_lost` (S65-10b). `test_outpost_long_poll_holds_no_connection.py`: a hundred waiting polls hold
+no pooled connection; a call written is handed over within a second, and still within the periodic look
+when the relay is stopped. `test_outpost_door_conformance.py`: the live routes are the contract's, every
+call the door hands over is signed with its key (ADR 0148 §13), and the contract's vectors verify. The
+boundary test is green with the directory in `DOOR_DIRS` and the four routes in `DOOR_ROUTES`, and red when
+the door imports the broker.
 
 ### S65-13 · feat(api,adapters): a connector reached through an outpost, and its fakes
 
@@ -149,12 +151,14 @@ database by the API as `adapter_wiring.py` does for the lexical memory; a script
 `connector_client`; the typed refusals; the procedure `connector.mcp.mcp-outpost.md`. Depends on S65-12.
 **Accepted when** `apps/api/tests/test_broker_via_outpost.py` shows that the same call through a direct
 connector and through an outpost gives the same bounded result, the same ledger line and the same
-`tool.called` digests; a forbidden operation, an argument outside its grant and an operation under
-approval write no rendezvous row; an offline outpost is a refusal that names it, within the connector's
-timeout, and is not booked; a local refusal is a 422 with its code. Discovery through an outpost adds
-tools born `forbidden`. The gateway's mode `required` does not refuse an `mcp-outpost` connector; a
-declaration with a URL or a secret is a 422. No class extends the MCP client; `make procedures-check` is
-green.
+`tool.called` digests; a forbidden operation, an argument outside its grant and an operation under approval
+write no rendezvous row; a call whose envelope would exceed the contract's bound is refused where it is
+admitted and writes none either; `result_sha256` is written when the answer is opened, by the side that
+placed the call, never by the door (S65-10b); an offline outpost is a refusal that names it, within the
+connector's timeout, and is not booked; a local refusal is a 422 with its code. Discovery through an
+outpost adds tools born `forbidden`. The gateway's mode `required` does not refuse an `mcp-outpost`
+connector; a declaration with a URL or a secret is a 422. No class extends the MCP client; `make
+procedures-check` is green.
 
 ### S65-14 · feat(api,orchestrator): a write is delivered at most once, and may end `in_doubt`
 
@@ -178,11 +182,13 @@ declare read-only under `writes: deny`, an unknown alias and a payload above its
 with a code and a local audit line, the server having received nothing; a call that is unsigned, or signed
 by a key its policy file does not pin, is refused `signature_refused` and logged without its envelope being
 opened (ADR 0148 §13); a daemon killed in the middle of a write and restarted reports the call unanswered
-and does not execute it again; a call id seen twice is answered from the journal; `doctor` fails, one test
-per check, on DNS, the TLS chain behind a private certificate authority, the outbound proxy, clock drift,
-the door, each alias, the policy's validity and `door_keys` that do not parse as keys. No private key
-appears in an output or a log line. `tests/packaging/test_distributables.py` lists the package, and the
-ceiling of `tests/architecture/test_packages_imports_of_the_api.py` does not move.
+and does not execute it again; a call id seen twice is answered from the journal, and a copy of a call
+still under way leaves a `replayed` audit line with no outcome; a call it cannot journal or log is refused
+`cannot_record`, its server having received nothing (S65-10b); `doctor` fails, one test per check, on DNS,
+the TLS chain behind a private certificate authority, the outbound proxy, clock drift, the door, each
+alias, the policy's validity and `door_keys` that do not parse as keys. No private key appears in an output
+or a log line. `tests/packaging/test_distributables.py` lists the package, and the ceiling of
+`tests/architecture/test_packages_imports_of_the_api.py` does not move.
 
 ### S65-16 · feat(charts): the door's own Deployment and route; the chart `choregos-outpost`
 
