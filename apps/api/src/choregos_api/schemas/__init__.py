@@ -212,6 +212,15 @@ from .identity import (
     OrgDto,
     OrgUpdate,
 )
+from .linked_accounts import (
+    ForgeInstanceDto,
+    LinkedAccountDeclare,
+    LinkedAccountDto,
+    LinkedAccountStart,
+    MyLinkedAccounts,
+    TrackerIdentityDto,
+    TrackerIdentityPut,
+)
 from .mcp_gateway import (
     McpGateway,
     McpGatewayAssertion,
@@ -357,7 +366,6 @@ from .tickets import (
     WorkItemPage,
     WorkItemUpdate,
 )
-from .tracker_identities import TrackerIdentityDto, TrackerIdentityPut
 
 __all__ = [
     "A2aDeclaredCost",
@@ -475,6 +483,7 @@ __all__ = [
     "FindingAction",
     "FindingDto",
     "FindingPage",
+    "ForgeInstanceDto",
     "FreezeRequest",
     "GatewayKeyInfo",
     "GatewayModelDto",
@@ -500,6 +509,9 @@ __all__ = [
     "IntegrationsDto",
     "JourneyMove",
     "JourneyStep",
+    "LinkedAccountDeclare",
+    "LinkedAccountDto",
+    "LinkedAccountStart",
     "MachineAccountCreate",
     "MachineAccountDto",
     "MachineTokenCreate",
@@ -541,6 +553,7 @@ __all__ = [
     "ModelMatrixEntry",
     "ModelSyncResult",
     "ModelTiers",
+    "MyLinkedAccounts",
     "OAuthClientDto",
     "OAuthDto",
     "OperationDto",

@@ -203,7 +203,58 @@ export type Membership = {
   role: Role;
 };
 
-/** A member's account on a tracker, by the provider's stable numeric user id. Only GitHub for now: the other trackers come when their deliveries are signed per source. */
+/** A member's account on a code forge (ADR 0154): one per member and instance (`provider`, `base_url`), one member per account on an instance. Only `external_id` is ever matched; the rest is shown. */
+export type LinkedAccount = {
+  id: string;
+  org: string;
+  user_id: string;
+  provider: "github" | "gitlab" | "forgejo";
+  /** the forge instance, e.g. https://github.com */
+  base_url: string;
+  /** the forge's stable numeric user id */
+  external_id: string;
+  /** display only, never matched */
+  login: string;
+  avatar_url?: string | null;
+  profile_url?: string | null;
+  /** the member signed in to the forge; `false`: an administrator declared it */
+  verified: boolean;
+  verified_at?: string | null;
+  /** the `forge_account` connector whose OAuth application proved it */
+  connector?: string | null;
+  created_by?: string | null;
+  created_at: string;
+};
+
+export type LinkedAccountDeclare = {
+  provider: "github" | "gitlab" | "forgejo";
+  /** the instance; by default https://github.com or https://gitlab.com, required for Forgejo */
+  base_url?: string | null;
+  /** the forge's numeric user id, never a login */
+  external_id: string;
+  /** display only */
+  login: string;
+};
+
+/** A forge instance the caller can link an account on. */
+export type ForgeInstance = {
+  org: string;
+  /** the `forge_account` connector's name */
+  instance: string;
+  provider: "github" | "gitlab" | "forgejo";
+  base_url: string;
+};
+
+export type MyLinkedAccounts = {
+  items: Array<LinkedAccount>;
+  instances: Array<ForgeInstance>;
+};
+
+export type LinkedAccountStart = {
+  authorization_url: string;
+};
+
+/** Deprecated (ADR 0154): a member's GitHub link at github.com, as the `tracker-identities` routes answer it. Use `LinkedAccount`. */
 export type TrackerIdentity = {
   tracker: "github";
   /** the provider's numeric user id */
@@ -5893,6 +5944,7 @@ export interface Operations {
   clearOrgConnectorSecret: { method: "DELETE"; path: "/orgs/{org}/connectors/{name}/secrets/{field}"; body: never; response: OrgConnector };
   closeAgentSession: { method: "DELETE"; path: "/orgs/{org}/agent-sessions/{session_id}"; body: never; response: void };
   completeMyAccountConnection: { method: "GET"; path: "/me/connected-accounts/callback"; body: never; response: void };
+  completeMyLinkedAccount: { method: "GET"; path: "/auth/linked-accounts/callback"; body: never; response: void };
   confirmMyConversationAction: { method: "POST"; path: "/me/conversations/{conversation_id}/actions/{action_id}/confirm"; body: never; response: ConversationAction };
   connectCatalogueClient: { method: "POST"; path: "/orgs/{org}/agent-catalogue/{slug}/connect"; body: AgentCatalogueConnect; response: AgentCatalogueConnection };
   connectMyAccount: { method: "POST"; path: "/me/connected-accounts/{connector}/connect"; body: never; response: ConnectedAccountConnect };
@@ -5926,14 +5978,17 @@ export interface Operations {
   decideAssistantKnowledgeUpdate: { method: "POST"; path: "/orgs/{org}/assistants/{slug}/knowledge/updates/{update_id}"; body: KnowledgeUpdateDecision; response: KnowledgeUpdate };
   decideGlobalPendingMemory: { method: "POST"; path: "/orgs/{org}/memories/{slug}/pending"; body: MemoryDecision; response: void };
   decidePendingMemory: { method: "POST"; path: "/projects/{id}/memory/pending"; body: MemoryDecision; response: void };
+  declareMemberLinkedAccount: { method: "POST"; path: "/orgs/{org}/members/{user_id}/linked-accounts"; body: LinkedAccountDeclare; response: LinkedAccount };
   deleteAgent: { method: "DELETE"; path: "/orgs/{org}/agents/{slug}"; body: never; response: void };
   deleteKnowledgeDocument: { method: "DELETE"; path: "/orgs/{org}/knowledge/{slug}/documents/{document_id}"; body: never; response: void };
   deleteKnowledgeSource: { method: "DELETE"; path: "/orgs/{org}/knowledge/{slug}/sources/{source_id}"; body: never; response: void };
   deleteMcpGateway: { method: "DELETE"; path: "/orgs/{org}/mcp-gateway"; body: never; response: void };
+  deleteMemberLinkedAccount: { method: "DELETE"; path: "/orgs/{org}/members/{user_id}/linked-accounts/{account_id}"; body: never; response: void };
   deleteModelCatalogueEntry: { method: "DELETE"; path: "/orgs/{org}/models/{entry_id}"; body: never; response: void };
   deleteMyAssistantMemory: { method: "DELETE"; path: "/me/assistants/{org}/{slug}/memory/{space}"; body: never; response: void };
   deleteMyAssistantSubjectMemory: { method: "DELETE"; path: "/me/assistants/{org}/{slug}/memory/{space}/{subject}"; body: never; response: void };
   deleteMyConversation: { method: "DELETE"; path: "/me/conversations/{conversation_id}"; body: never; response: void };
+  deleteMyLinkedAccount: { method: "DELETE"; path: "/me/linked-accounts/{account_id}"; body: never; response: void };
   deleteMyTaskSubscription: { method: "DELETE"; path: "/me/assistants/{org}/{slug}/tasks/{task}"; body: never; response: void };
   deleteOrgConnector: { method: "DELETE"; path: "/orgs/{org}/connectors/{name}"; body: never; response: void };
   deleteOrgGroup: { method: "DELETE"; path: "/orgs/{org}/groups/{slug}"; body: never; response: void };
@@ -6201,6 +6256,7 @@ export interface Operations {
   listKnowledgeGrants: { method: "GET"; path: "/orgs/{org}/knowledge/{slug}/grants"; body: never; response: KnowledgeGrants };
   listMachineAccounts: { method: "GET"; path: "/projects/{id}/machine-accounts"; body: never; response: Array<MachineAccount> };
   listMcpCatalogue: { method: "GET"; path: "/orgs/{org}/mcp-catalogue"; body: never; response: McpCatalogue };
+  listMemberLinkedAccounts: { method: "GET"; path: "/orgs/{org}/members/{user_id}/linked-accounts"; body: never; response: Array<LinkedAccount> };
   listMembers: { method: "GET"; path: "/orgs/{org}/members"; body: never; response: Array<Membership> };
   listMemories: { method: "GET"; path: "/orgs/{org}/memories"; body: never; response: Array<MemoryStore> };
   listMyAssistants: { method: "GET"; path: "/me/assistants"; body: never; response: MyAssistantList };
@@ -6209,6 +6265,7 @@ export interface Operations {
   listMyConversations: { method: "GET"; path: "/me/conversations"; body: never; response: ConversationPage };
   listMyDelegations: { method: "GET"; path: "/me/delegations"; body: never; response: DelegationList };
   listMyInbox: { method: "GET"; path: "/me/inbox"; body: never; response: InboxList };
+  listMyLinkedAccounts: { method: "GET"; path: "/me/linked-accounts"; body: never; response: MyLinkedAccounts };
   listMySessions: { method: "GET"; path: "/me/sessions"; body: never; response: Array<BrowserSession> };
   listMyTokens: { method: "GET"; path: "/me/tokens"; body: never; response: Array<ApiToken> };
   listOrgActions: { method: "GET"; path: "/orgs/{org}/actions"; body: never; response: Array<Action> };
@@ -6368,6 +6425,7 @@ export interface Operations {
   starAgent: { method: "PUT"; path: "/orgs/{org}/agents/{slug}/star"; body: never; response: AgentSocial };
   startAgentEvaluation: { method: "POST"; path: "/orgs/{org}/agents/{slug}/versions/{version}/evaluations"; body: AgentEvaluationCreate; response: AgentEvaluation };
   startAgentTrial: { method: "POST"; path: "/orgs/{org}/agent-trials"; body: AgentTrialCreate; response: AgentTrial };
+  startMyLinkedAccount: { method: "POST"; path: "/me/linked-accounts/{provider}/start"; body: never; response: LinkedAccountStart };
   stopAgent: { method: "POST"; path: "/orgs/{org}/agents/{slug}/stop"; body: StopRequest; response: AgentStopResult };
   stopAssistant: { method: "POST"; path: "/orgs/{org}/assistants/{slug}/stop"; body: StopRequest; response: AssistantStopResult };
   stopKnowledgeDistillation: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/distill/stop"; body: never; response: KnowledgeBase };

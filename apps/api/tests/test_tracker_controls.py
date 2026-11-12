@@ -333,3 +333,57 @@ async def test_a_principal_for_a_webhook_leaves_the_session_unnarrowed(
         assert scopes == [deps.ALL_ORGS] and not named, "no narrowing and no attribution to this member"
         await deps.principal_for_user(session, user)
         assert scopes[-1] == ["varga"] and named == [user.id]
+
+
+async def test_a_link_as_the_migration_left_it_still_pauses_from_a_signed_comment(
+    client: AsyncClient, project: dict[str, Any], tracker: FakeTracker, signed: None
+) -> None:
+    """S66-03 (ADR 0154): a `tracker_identities` row became a `linked_accounts` row, `github` at
+    `https://github.com`, NOT verified. It keeps working: requiring `verified` is a later switch."""
+    from choregos_api.db.models import LinkedAccount, Organization
+    from choregos_api.db.session import session_scope
+
+    await _routed_item(client, project)
+    added = await client.post(
+        "/api/v1/orgs/varga/members", json={"email": "dev@varga.dev", "role": "developer"}
+    )
+    async with session_scope() as session:
+        org_id = (await session.execute(select(Organization.id))).scalar_one()
+        session.add(
+            LinkedAccount(
+                org_id=org_id,
+                user_id=added.json()["user_id"],
+                provider="github",
+                base_url="https://github.com",
+                external_id="1001",
+                login="devon",
+                verified=False,
+                created_by="admin@varga.dev",
+            )
+        )
+
+    await _comment(client, "c7", "/choregos pause", {"login": "devon", "id": 1001})
+
+    assert [c[2]["by"] for c in _controls()] == ["dev@varga.dev"]
+    assert await _paused() is True
+
+
+async def test_a_link_on_another_forge_instance_is_not_a_github_com_identity(
+    client: AsyncClient, project: dict[str, Any], tracker: FakeTracker, signed: None
+) -> None:
+    """The same numeric id on a GitLab or a GitHub Enterprise instance is another person's account."""
+    await _routed_item(client, project)
+    added = await client.post(
+        "/api/v1/orgs/varga/members", json={"email": "dev@varga.dev", "role": "developer"}
+    )
+    for provider, base_url in (("gitlab", None), ("github", "https://ghe.corp.example")):
+        declared = await client.post(
+            f"/api/v1/orgs/varga/members/{added.json()['user_id']}/linked-accounts",
+            json={"provider": provider, "base_url": base_url, "external_id": "1001", "login": "devon"},
+        )
+        assert declared.status_code == 201, declared.text
+
+    await _comment(client, "c8", "/choregos pause", {"login": "devon", "id": 1001})
+
+    assert not _controls()
+    assert await _paused() is False

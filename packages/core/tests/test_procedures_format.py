@@ -126,6 +126,14 @@ def test_the_oauth_callback_is_the_remote_credentials_route() -> None:
     )
 
 
+def test_the_linked_accounts_callback_is_the_forge_link_route() -> None:
+    """S66-03 (ADR 0154): the redirect URI a forge's OAuth application is registered with."""
+    assert (
+        core.resolve_placeholder("oauth_callback", "linked-accounts", _ctx())
+        == "https://api.example.test/api/v1/auth/linked-accounts/callback"
+    )
+
+
 @pytest.mark.parametrize(
     ("mutation", "needle"),
     [

@@ -1281,6 +1281,212 @@
     "origin": "shipped"
   },
   {
+    "id": "connector.forge_account.forgejo-oauth",
+    "title": "Let members link their Forgejo account",
+    "version": 1,
+    "audience": "org_admin",
+    "applies_to": {
+      "connector": "forge_account/forgejo-oauth"
+    },
+    "link": null,
+    "reviewed": "2026-11-12",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- A Forgejo administrator (for an instance-wide application) or the owner of an organisation on it.\n- Forgejo is self-hosted: its members usually sign in to it through the same identity provider as the\n  platform. Linking proves which Forgejo account is theirs, by its numeric user id.\n- The access token is used for one read of the member's user and dropped."
+      },
+      {
+        "key": "at",
+        "title": "At Forgejo",
+        "markdown": "1. **Site administration**, **Integrations**, **Applications** (or the organisation's **Settings**,\n   **Applications**), **Create a new OAuth2 application**.\n2. **Redirect URIs**: `https://choregos.example.com/api/v1/auth/linked-accounts/callback`. Keep **Confidential client** ticked.\n3. **Create application**, copy the **Client ID** and the **Client secret** (shown once)."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "The platform asks for `read:user` only: it reads the member's own profile, nothing of their\nrepositories or organisations."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "1. Administration, **Connectors**, **Declare**: capability **Member accounts**, type **Forgejo sign-in**.\n2. `base_url`: the instance's address, `https://forge.example` (https only).\n3. `client_id`: the Client ID. `client_secret`: the Client secret, in the password field.\n4. Tick **open the hosts in the egress allowlist**, or open the instance's host yourself."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Open **My account**, **Linked accounts**, **Link** next to Forgejo. After signing in at Forgejo you come\nback to the page and the account shows with a **Verified** badge and your Forgejo login."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- Forgejo says the redirect URI is not registered: it differs from `https://choregos.example.com/api/v1/auth/linked-accounts/callback`.\n- `link_error=forge_refused` after consenting: wrong Client secret, or the application was regenerated.\n- `link_error=instance_unusable`: the connector's `base_url` is not https, or its secret cannot be read.\n- `link_error=taken`: that Forgejo account is already linked to another member of the organisation.\n- A timeout: open the instance's host in the egress allowlist."
+      }
+    ],
+    "values": {
+      "oauth_callback:linked-accounts": "https://choregos.example.com/api/v1/auth/linked-accounts/callback"
+    },
+    "egress": [],
+    "fields": {
+      "base_url": "your Forgejo's address, https://forge.example",
+      "client_id": "the OAuth2 application's Client ID",
+      "client_secret": "the OAuth2 application's Client secret, typed once"
+    },
+    "vendor_docs": [
+      {
+        "title": "Forgejo OAuth2 provider",
+        "url": "https://forgejo.org/docs/latest/user/oauth2-provider/"
+      },
+      {
+        "title": "Forgejo API usage",
+        "url": "https://forgejo.org/docs/latest/user/api-usage/"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
+    "id": "connector.forge_account.github-oauth",
+    "title": "Let members link their GitHub account",
+    "version": 1,
+    "audience": "org_admin",
+    "applies_to": {
+      "connector": "forge_account/github-oauth"
+    },
+    "link": null,
+    "reviewed": "2026-11-12",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- An organisation owner at GitHub (or a person who may create an OAuth app for it).\n- What it is for: each member signs in to GitHub once from **My account** and the platform records\n  their GitHub numeric user id as a **verified** link. The id is what a signed GitHub comment carries\n  when a member pauses, resumes or stops a work item from the issue.\n- The platform reads the member's user once, at the link, and keeps neither the access token nor\n  anything else than the id, the login, the avatar and the profile address."
+      },
+      {
+        "key": "at",
+        "title": "At GitHub",
+        "markdown": "1. Your organisation's settings, **Developer settings**, **OAuth Apps**, **New OAuth App**.\n2. **Homepage URL**: `https://choregos.example.com`. **Authorization callback URL**: `https://choregos.example.com/api/v1/auth/linked-accounts/callback`.\n3. **Register application**, copy the **Client ID**, then **Generate a new client secret** and copy it:\n   it is shown once.\n\nA GitHub App's client id and secret work too (its user authorization uses the same endpoints and the\nsame callback URL). Give that App no repository or organisation permission: the platform only reads\n`/user` with it. Do not reuse the App the platform uses for repositories."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "The platform asks for the `read:user` scope and nothing else: it can read the member's public profile,\nnot their repositories, organisations or e-mail addresses. With a GitHub App the scope is ignored and\nthe App's own permissions apply: keep them empty."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "1. Administration, **Connectors**, **Declare**: capability **Member accounts**, type **GitHub sign-in**.\n2. `base_url`: leave `https://github.com`, or your GitHub Enterprise Server's address.\n3. `client_id`: the Client ID. `client_secret`: the client secret, in the password field.\n4. Tick **open the hosts in the egress allowlist** (or open `github.com` and `api.github.com` yourself)."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Open **My account**, **Linked accounts**, **Link** next to GitHub. After signing in at GitHub you come\nback to the page and the account shows with a **Verified** badge and your GitHub login."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- `link_error=forge_refused` and GitHub showed \"The redirect_uri is not associated with this\n  application\": the callback URL at GitHub differs from `https://choregos.example.com/api/v1/auth/linked-accounts/callback`.\n- `link_error=forge_refused` right after consenting: the client secret is wrong or was regenerated.\n- `link_error=instance_unusable`: the connector's secret cannot be read; type it again.\n- `link_error=taken`: that GitHub account is already linked to another member of the organisation; an\n  administrator removes the other link first.\n- A timeout, or `egress_refused` in the logs: open `github.com` and `api.github.com` in the egress\n  allowlist."
+      }
+    ],
+    "values": {
+      "oauth_callback:linked-accounts": "https://choregos.example.com/api/v1/auth/linked-accounts/callback"
+    },
+    "egress": [
+      "github.com",
+      "api.github.com"
+    ],
+    "fields": {
+      "base_url": "https://github.com, or your GitHub Enterprise Server's address",
+      "client_id": "the OAuth app's Client ID",
+      "client_secret": "a client secret of the OAuth app, typed once"
+    },
+    "vendor_docs": [
+      {
+        "title": "Creating an OAuth app",
+        "url": "https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app"
+      },
+      {
+        "title": "Authorizing OAuth apps",
+        "url": "https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps"
+      },
+      {
+        "title": "Scopes for OAuth apps",
+        "url": "https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/scopes-for-oauth-apps"
+      },
+      {
+        "title": "Generating a user access token for a GitHub App",
+        "url": "https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-a-user-access-token-for-a-github-app"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
+    "id": "connector.forge_account.gitlab-oauth",
+    "title": "Let members link their GitLab account",
+    "version": 1,
+    "audience": "org_admin",
+    "applies_to": {
+      "connector": "forge_account/gitlab-oauth"
+    },
+    "link": null,
+    "reviewed": "2026-11-12",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- A GitLab group owner (for a group application) or an instance administrator (for an instance-wide\n  application on a self-managed GitLab).\n- What it is for: each member signs in to GitLab once from **My account** and the platform records their\n  GitLab numeric user id as a **verified** link. The access token is used for that one read and dropped."
+      },
+      {
+        "key": "at",
+        "title": "At GitLab",
+        "markdown": "1. The group's **Settings**, **Applications** (or, on a self-managed instance, **Admin**, **Applications**),\n   **Add new application**.\n2. **Redirect URI**: `https://choregos.example.com/api/v1/auth/linked-accounts/callback`. Keep **Confidential** ticked.\n3. **Scopes**: tick `read_user` only. **Save application**, copy the **Application ID** and the **Secret**."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "`read_user` reads the member's own profile: id, username, avatar, profile page. It gives no access to\nprojects, groups or the API on the member's behalf beyond that read."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "1. Administration, **Connectors**, **Declare**: capability **Member accounts**, type **GitLab sign-in**.\n2. `base_url`: leave `https://gitlab.com`, or your instance's address (`https://gitlab.example`).\n3. `client_id`: the Application ID. `client_secret`: the Secret, in the password field.\n4. Tick **open the hosts in the egress allowlist**, or open the instance's host yourself."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Open **My account**, **Linked accounts**, **Link** next to GitLab. After signing in at GitLab you come\nback to the page and the account shows with a **Verified** badge and your GitLab username."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- GitLab says \"The redirect URI included is not valid\": the Redirect URI differs from\n  `https://choregos.example.com/api/v1/auth/linked-accounts/callback`.\n- GitLab says \"The requested scope is invalid\": `read_user` is not ticked on the application.\n- `link_error=forge_refused` after consenting: wrong Secret, or the application was renewed.\n- `link_error=taken`: that GitLab account is already linked to another member of the organisation.\n- A timeout: open the instance's host in the egress allowlist."
+      }
+    ],
+    "values": {
+      "oauth_callback:linked-accounts": "https://choregos.example.com/api/v1/auth/linked-accounts/callback"
+    },
+    "egress": [
+      "gitlab.com"
+    ],
+    "fields": {
+      "base_url": "https://gitlab.com, or your self-managed instance's address",
+      "client_id": "the application's Application ID",
+      "client_secret": "the application's Secret, typed once"
+    },
+    "vendor_docs": [
+      {
+        "title": "Configure GitLab as an OAuth 2.0 authentication identity provider",
+        "url": "https://docs.gitlab.com/integration/oauth_provider/"
+      },
+      {
+        "title": "OAuth 2.0 identity provider API",
+        "url": "https://docs.gitlab.com/api/oauth2/"
+      },
+      {
+        "title": "Users API: get the current user",
+        "url": "https://docs.gitlab.com/api/users/"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
     "id": "connector.gateway.direct",
     "title": "Use the direct gateway (development only)",
     "version": 1,

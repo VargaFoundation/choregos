@@ -757,6 +757,18 @@ def _register_documents_and_identity() -> None:
     register("firewall", "pfsense", _SHIPPED_SPECS[("firewall", "pfsense")])(PfSenseFirewall.from_config)
     register("network_policy", "cilium", _SHIPPED_SPECS[("network_policy", "cilium")])(_cilium)
     register("web_server", "nginx", _SHIPPED_SPECS[("web_server", "nginx")])(_nginx)
+    _register_forge_accounts()
+
+
+def _register_forge_accounts() -> None:
+    """A forge's OAuth application (ADR 0154): the factory builds the adapter that proves an account."""
+    from .forge_accounts import KIND, PROVIDERS, connector_type, forge_accounts
+
+    for provider in PROVIDERS:
+        type_name = connector_type(provider)
+        register(KIND, type_name, _SHIPPED_SPECS[(KIND, type_name)])(
+            lambda cfg, provider=provider: forge_accounts(provider, cfg)  # type: ignore[misc]
+        )
 
 
 def _register_mcp_and_notifiers() -> None:

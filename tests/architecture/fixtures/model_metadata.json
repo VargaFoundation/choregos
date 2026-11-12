@@ -7064,6 +7064,179 @@
   ],
   "uniques": []
  },
+ "linked_accounts": {
+  "columns": [
+   {
+    "name": "org_id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "user_id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "provider",
+    "type": "String(length=16)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "base_url",
+    "type": "String(length=255)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "external_id",
+    "type": "String(length=64)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "login",
+    "type": "String(length=255)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "avatar_url",
+    "type": "String(length=1024)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "profile_url",
+    "type": "String(length=1024)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "verified",
+    "type": "Boolean()",
+    "nullable": false,
+    "default": "False",
+    "server_default": "<sqlalchemy.sql.elements.False_ object>"
+   },
+   {
+    "name": "verified_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "connector",
+    "type": "String(length=64)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "created_by",
+    "type": "String(length=320)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": "<function uuid7>",
+    "server_default": null
+   },
+   {
+    "name": "created_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": false,
+    "default": "<function utcnow>",
+    "server_default": "<sqlalchemy.sql.functions.now; now>"
+   },
+   {
+    "name": "updated_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": false,
+    "default": "<function utcnow>",
+    "server_default": "<sqlalchemy.sql.functions.now; now>"
+   }
+  ],
+  "primary_key": [
+   "id"
+  ],
+  "foreign_keys": [
+   [
+    [
+     "org_id"
+    ],
+    [
+     "organizations.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_linked_accounts_org_id_organizations"
+   ],
+   [
+    [
+     "user_id"
+    ],
+    [
+     "users.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_linked_accounts_user_id_users"
+   ]
+  ],
+  "uniques": [
+   [
+    "uq_linked_accounts_external",
+    [
+     "org_id",
+     "provider",
+     "base_url",
+     "external_id"
+    ]
+   ],
+   [
+    "uq_linked_accounts_member",
+    [
+     "org_id",
+     "user_id",
+     "provider",
+     "base_url"
+    ]
+   ]
+  ],
+  "checks": [],
+  "indexes": [
+   [
+    "ix_linked_accounts_org_id",
+    [
+     "linked_accounts.org_id"
+    ],
+    false
+   ],
+   [
+    "ix_linked_accounts_user_id",
+    [
+     "linked_accounts.user_id"
+    ],
+    false
+   ]
+  ]
+ },
  "machine_accounts": {
   "checks": [],
   "columns": [
@@ -11782,135 +11955,6 @@
     [
      "name",
      "version"
-    ]
-   ]
-  ]
- },
- "tracker_identities": {
-  "checks": [],
-  "columns": [
-   {
-    "default": null,
-    "name": "org_id",
-    "nullable": false,
-    "server_default": null,
-    "type": "String(length=36)"
-   },
-   {
-    "default": null,
-    "name": "user_id",
-    "nullable": false,
-    "server_default": null,
-    "type": "String(length=36)"
-   },
-   {
-    "default": null,
-    "name": "tracker",
-    "nullable": false,
-    "server_default": null,
-    "type": "String(length=16)"
-   },
-   {
-    "default": null,
-    "name": "external_id",
-    "nullable": false,
-    "server_default": null,
-    "type": "String(length=64)"
-   },
-   {
-    "default": null,
-    "name": "login",
-    "nullable": false,
-    "server_default": null,
-    "type": "String(length=255)"
-   },
-   {
-    "default": null,
-    "name": "created_by",
-    "nullable": true,
-    "server_default": null,
-    "type": "String(length=320)"
-   },
-   {
-    "default": "<function uuid7>",
-    "name": "id",
-    "nullable": false,
-    "server_default": null,
-    "type": "String(length=36)"
-   },
-   {
-    "default": "<function utcnow>",
-    "name": "created_at",
-    "nullable": false,
-    "server_default": "<sqlalchemy.sql.functions.now; now>",
-    "type": "DateTime(timezone=True)"
-   },
-   {
-    "default": "<function utcnow>",
-    "name": "updated_at",
-    "nullable": false,
-    "server_default": "<sqlalchemy.sql.functions.now; now>",
-    "type": "DateTime(timezone=True)"
-   }
-  ],
-  "foreign_keys": [
-   [
-    [
-     "org_id"
-    ],
-    [
-     "organizations.id"
-    ],
-    "CASCADE",
-    null,
-    "fk_tracker_identities_org_id_organizations"
-   ],
-   [
-    [
-     "user_id"
-    ],
-    [
-     "users.id"
-    ],
-    "CASCADE",
-    null,
-    "fk_tracker_identities_user_id_users"
-   ]
-  ],
-  "indexes": [
-   [
-    "ix_tracker_identities_org_id",
-    [
-     "tracker_identities.org_id"
-    ],
-    false
-   ],
-   [
-    "ix_tracker_identities_user_id",
-    [
-     "tracker_identities.user_id"
-    ],
-    false
-   ]
-  ],
-  "primary_key": [
-   "id"
-  ],
-  "uniques": [
-   [
-    "uq_tracker_identities_external",
-    [
-     "org_id",
-     "tracker",
-     "external_id"
-    ]
-   ],
-   [
-    "uq_tracker_identities_member",
-    [
-     "org_id",
-     "user_id",
-     "tracker"
     ]
    ]
   ]

@@ -21,7 +21,7 @@ from sqlalchemy.exc import IntegrityError
 
 from ..audit import record
 from ..config import get_settings
-from ..db.models import Connector, OrgConnector, Project, TrackerIdentity, User, WebhookDelivery, WorkItem
+from ..db.models import Connector, OrgConnector, Project, User, WebhookDelivery, WorkItem
 from ..deps import PlatformDb, principal_for_user, resolve_project
 from ..errors import ApiError, not_found, unauthorized
 from ..logging import get_logger
@@ -38,6 +38,7 @@ from ..services import (
 )
 from ..services.decision_ledger import ended_issue_reopened, observe_reopening
 from ..services.initiator import initiator
+from ..services.linked_accounts import github_member
 from ..services.recurrence import restart_work_item, says_back_to_work
 from ..services.routing import with_tracker
 from ..services.work_item_controls import apply_control
@@ -188,7 +189,7 @@ CONTROL_VERBS = frozenset({"pause", "resume", "stop"})
 COMMAND_MARKER = "<!-- choregos:command -->"
 
 
-LINK_HINT = "an organisation administrator can link your GitHub account to your member"
+LINK_HINT = "you can link your GitHub account on My account (or an organisation administrator declares it)"
 
 
 async def _control_from_a_signed_comment(
@@ -203,15 +204,8 @@ async def _control_from_a_signed_comment(
     by_id = str(event.payload.get("by_id") or "")
     if event.source != "github" or not get_settings().github_webhook_secret or not by_id:
         return None
-    identity = (
-        await session.execute(
-            select(TrackerIdentity).where(
-                TrackerIdentity.org_id == project.org_id,
-                TrackerIdentity.tracker == "github",
-                TrackerIdentity.external_id == by_id,
-            )
-        )
-    ).scalar_one_or_none()
+    # A github.com link, declared or verified (ADR 0154): requiring `verified` is a later switch.
+    identity = await github_member(session, project.org_id, by_id)
     user = await session.get(User, identity.user_id) if identity is not None else None
     if user is None:
         return None

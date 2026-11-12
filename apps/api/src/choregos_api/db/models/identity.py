@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Identity: organisations, users, memberships, API tokens, browser sessions and tracker identities."""
+"""Identity: organisations, users, memberships, API tokens, browser sessions and linked forge accounts."""
 
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ from sqlalchemy import (
     Integer,
     String,
     UniqueConstraint,
+    false,
     func,
     text,
 )
@@ -183,21 +184,33 @@ class UserSession(Base, PkMixin, TimestampMixin):
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
-class TrackerIdentity(Base, PkMixin, TimestampMixin):
-    """A member's account on a tracker, by the provider's stable numeric user id (S47-14, ADR 0102).
+class LinkedAccount(Base, PkMixin, TimestampMixin):
+    """A member's account on a code forge (ADR 0154; before it, `tracker_identities`, ADR 0102).
 
-    Linked by an organisation administrator (not proven by the member). A login or a display name is
-    never matched: only `external_id`. `login` is shown, nothing more."""
+    One per member and forge instance (`provider` + `base_url`), one member per account on an instance.
+    `verified`: the member proved it by signing in to the forge (OAuth); otherwise an organisation
+    administrator declared it. Only `external_id`, the forge's stable numeric user id, is ever matched:
+    a login, an avatar or a profile URL is shown, nothing more."""
 
-    __tablename__ = "tracker_identities"
+    __tablename__ = "linked_accounts"
     __table_args__ = (
-        UniqueConstraint("org_id", "tracker", "external_id", name="uq_tracker_identities_external"),
-        UniqueConstraint("org_id", "user_id", "tracker", name="uq_tracker_identities_member"),
+        UniqueConstraint("org_id", "provider", "base_url", "external_id", name="uq_linked_accounts_external"),
+        UniqueConstraint("org_id", "user_id", "provider", "base_url", name="uq_linked_accounts_member"),
     )
 
     org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
-    tracker: Mapped[str] = mapped_column(String(16))
+    #: `github`, `gitlab` or `forgejo`.
+    provider: Mapped[str] = mapped_column(String(16))
+    #: The instance, normalised: `https://github.com`, `https://gitlab.example`.
+    base_url: Mapped[str] = mapped_column(String(255))
     external_id: Mapped[str] = mapped_column(String(64))
     login: Mapped[str] = mapped_column(String(255))
+    avatar_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    profile_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    verified: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    #: The organisation connector whose OAuth application proved it; `NULL` for a declared link.
+    connector: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    #: Who wrote the link: the member themself (verified) or the administrator who declared it.
     created_by: Mapped[str | None] = mapped_column(String(320), nullable=True)

@@ -66,7 +66,7 @@ import type {
   NetworkActivity,
   ProjectNetwork,
   Membership,
-  TrackerIdentity,
+  LinkedAccount,
   Memory,
   ProjectPage,
   ReleasePage,
@@ -2965,8 +2965,30 @@ const filedOnTheMock: WorkItemDto[] = [];
 
 /** Fixtures router: reproduces the real API's paths. */
 /** The organisation's ceiling, kept for the time of the page: the admin card writes it, the project's network reads it back (ADR 0070). */
-/** The GitHub links the mock holds, by member id (S47-15). */
-const mockTrackerIdentities = new Map<string, TrackerIdentity>();
+/** The forge accounts the mock holds (ADR 0154): one verified by its member, the others declared. */
+const mockLinkedAccounts: LinkedAccount[] = [
+  {
+    id: "la-1",
+    org: "acme",
+    user_id: "u1",
+    provider: "github",
+    base_url: "https://github.com",
+    external_id: "583231",
+    login: "octocat",
+    avatar_url: null,
+    profile_url: "https://github.com/octocat",
+    verified: true,
+    verified_at: "2026-11-02T09:00:00Z",
+    connector: "github",
+    created_by: "augustin@acme.dev",
+    created_at: "2026-11-02T09:00:00Z",
+  },
+];
+/** The forge instances the mock organisation configured. */
+const mockForgeInstances = [
+  { org: "acme", instance: "github", provider: "github", base_url: "https://github.com" },
+  { org: "acme", instance: "forge", provider: "forgejo", base_url: "https://forge.acme.example" },
+] as const;
 
 let mockCeiling: { ceiling: Record<string, unknown> | null; updated_by?: string; updated_at?: string } = {
   ceiling: { budgets: { ticket_usd: { M: 20 } }, network: { allow_domains: null, deny_domains: [], per_host_per_minute: 60 } },
@@ -3327,35 +3349,57 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       return structuredClone(target) as T;
     }
   }
-  const identityRoute = /^\/orgs\/[^/]+\/members\/([^/]+)\/tracker-identities(?:\/github)?$/.exec(bare);
-  if (identityRoute) {
-    const userId = decodeURIComponent(identityRoute[1] ?? "");
-    if (method === "PUT") {
-      const put = body as { external_id: string; login: string };
-      const taken = [...mockTrackerIdentities.values()].find((i) => i.external_id === put.external_id && i.user_id !== userId);
-      if (taken) {
-        throw new ApiError(409, {
-          title: "Conflict",
-          detail: `GitHub user ${put.external_id} is already linked to another member`,
-        });
+  const memberLinks = /^\/orgs\/([^/]+)\/members\/([^/]+)\/linked-accounts(?:\/([^/]+))?$/.exec(bare);
+  if (memberLinks) {
+    const org = decodeURIComponent(memberLinks[1] ?? "");
+    const userId = decodeURIComponent(memberLinks[2] ?? "");
+    if (method === "POST") {
+      const declared = body as { provider: LinkedAccount["provider"]; base_url?: string | null; external_id: string; login: string };
+      const baseUrl = declared.base_url || (declared.provider === "gitlab" ? "https://gitlab.com" : "https://github.com");
+      const sameInstance = (a: LinkedAccount) => a.org === org && a.provider === declared.provider && a.base_url === baseUrl;
+      if (mockLinkedAccounts.some((a) => sameInstance(a) && a.external_id === declared.external_id && a.user_id !== userId)) {
+        throw new ApiError(409, { title: "Conflict", detail: `this ${declared.provider} user id is already linked to another member` });
       }
-      const saved: TrackerIdentity = {
-        tracker: "github",
-        external_id: put.external_id,
-        login: put.login,
+      const kept = mockLinkedAccounts.findIndex((a) => sameInstance(a) && a.user_id === userId);
+      const saved: LinkedAccount = {
+        id: `la-${Date.now()}`,
+        org,
         user_id: userId,
+        provider: declared.provider,
+        base_url: baseUrl,
+        external_id: declared.external_id,
+        login: declared.login,
+        avatar_url: null,
+        profile_url: null,
+        verified: false,
+        verified_at: null,
+        connector: null,
         created_by: me.email,
         created_at: new Date().toISOString(),
       };
-      mockTrackerIdentities.set(userId, saved);
+      if (kept >= 0) mockLinkedAccounts.splice(kept, 1, saved);
+      else mockLinkedAccounts.push(saved);
       return structuredClone(saved) as T;
     }
     if (method === "DELETE") {
-      mockTrackerIdentities.delete(userId);
+      const at = mockLinkedAccounts.findIndex((a) => a.id === decodeURIComponent(memberLinks[3] ?? ""));
+      if (at >= 0) mockLinkedAccounts.splice(at, 1);
       return undefined as T;
     }
-    const linked = mockTrackerIdentities.get(userId);
-    return structuredClone(linked ? [linked] : []) as T;
+    return structuredClone(mockLinkedAccounts.filter((a) => a.org === org && a.user_id === userId)) as T;
+  }
+  if (method === "GET" && bare === "/me/linked-accounts") {
+    return structuredClone({ items: mockLinkedAccounts.filter((a) => a.user_id === "u1"), instances: [...mockForgeInstances] }) as T;
+  }
+  const myLink = /^\/me\/linked-accounts\/([^/]+)$/.exec(bare);
+  if (method === "DELETE" && myLink) {
+    const at = mockLinkedAccounts.findIndex((a) => a.id === decodeURIComponent(myLink[1] ?? "") && a.user_id === "u1");
+    if (at >= 0) mockLinkedAccounts.splice(at, 1);
+    return undefined as T;
+  }
+  if (method === "POST" && /^\/me\/linked-accounts\/[^/]+\/start$/.test(bare)) {
+    // The demo has no forge to sign in to: the browser comes straight back as the callback would.
+    return { authorization_url: "/account?link_error=forge_unreachable#linked-accounts" } as T;
   }
   if (method === "PATCH" && /^\/orgs\/[^/]+$/.test(bare)) {
     const update = body as { name?: string; slug?: string; currency?: string };
