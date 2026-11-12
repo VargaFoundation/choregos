@@ -2194,6 +2194,23 @@ paths:
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/PlatformIdentity" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
+  /platform/identity/relink:
+    get:
+      tags: [admin]
+      operationId: getRelinkPlan
+      summary: Dry run of a change of identity provider (ADR 0160)
+      description: >-
+        Which accounts a re-link window for `issuer` (default: the configured issuer) moves to the new provider's
+        subject at their first sign-in (`pending`), which it refuses because another account carries the same
+        address, letter case aside (`ambiguous`), and how many the provider already holds (`current`), have no
+        subject yet (`unbound`) or are not the instance provider's (`not_concerned`: development subjects, a
+        tenant's provider's members, machine accounts). Also says whether the deployment's window
+        (`CHOREGOS_OIDC_RELINK_UNTIL`) is open. Changes nothing. The platform administrator only.
+      parameters:
+        - { name: issuer, in: query, required: false, schema: { type: string, maxLength: 512 }, description: "The issuer the plan is for; default: the configured one." }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/RelinkPlan" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
   /platform/gateway/keys:
     get:
       tags: [admin]
@@ -11394,6 +11411,45 @@ components:
       required: [items]
       properties:
         items: { type: array, items: { $ref: "#/components/schemas/PlatformIdentityRow" } }
+    RelinkWindow:
+      type: object
+      description: The re-link window of a change of identity provider (ADR 0160).
+      required: [state, applies]
+      properties:
+        state: { type: string, enum: [open, closed, none], description: "open until `until`; closed once it passed; none when the deployment sets no window." }
+        until: { type: [string, "null"], format: date-time }
+        applies: { type: boolean, description: "The plan's issuer is the configured one: the window applies to the sign-ins the plan describes." }
+    RelinkCounts:
+      type: object
+      required: [pending, ambiguous, current, unbound, not_concerned]
+      properties:
+        pending: { type: integer }
+        ambiguous: { type: integer }
+        current: { type: integer }
+        unbound: { type: integer }
+        not_concerned: { type: integer }
+    RelinkAccount:
+      type: object
+      required: [user_id, email, display_name]
+      properties:
+        user_id: { type: string }
+        email: { type: string }
+        display_name: { type: string }
+        issuer: { type: [string, "null"], description: "The issuer of the account's subject; null when it was bound before issuers were recorded." }
+        last_login_at: { type: [string, "null"], format: date-time }
+        same_address_as: { type: array, items: { type: string }, description: "For an ambiguous account, the other accounts' addresses that are the same, letter case aside." }
+    RelinkPlan:
+      type: object
+      description: What a re-link window for `issuer` does to each account. A dry run, nothing is changed.
+      required: [issuer, configured_issuer, window, counts, pending, ambiguous, generated_at]
+      properties:
+        issuer: { type: string }
+        configured_issuer: { type: string }
+        window: { $ref: "#/components/schemas/RelinkWindow" }
+        counts: { $ref: "#/components/schemas/RelinkCounts" }
+        pending: { type: array, items: { $ref: "#/components/schemas/RelinkAccount" } }
+        ambiguous: { type: array, items: { $ref: "#/components/schemas/RelinkAccount" } }
+        generated_at: { type: string, format: date-time }
     ExecutorInfo:
       type: object
       required: [kind, enabled]

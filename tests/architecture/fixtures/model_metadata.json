@@ -11900,6 +11900,13 @@
    },
    {
     "default": null,
+    "name": "oidc_issuer",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=512)"
+   },
+   {
+    "default": null,
     "name": "email",
     "nullable": false,
     "server_default": null,

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""How people sign in to this instance, read-only.
+"""How people sign in to this instance, read-only, and the plan of a change of provider (ADR 0160).
 
 The instance-level sign-in configuration (OIDC, the MCP door's OAuth, the session, the bootstrap)
 lives in the deployment's settings, not in the database. This route shows it to the platform
@@ -9,12 +9,15 @@ Secrets are never returned: a secret is reported as `set` or `missing`.
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from typing import Annotated
+
+from fastapi import APIRouter, Query
 
 from ..config import Settings
 from ..deps import Config, Db, Me, require_platform_admin
 from ..mcp.oauth import issuer_of
-from ..schemas import PlatformIdentity, PlatformIdentityRow
+from ..schemas import PlatformIdentity, PlatformIdentityRow, RelinkPlan
+from ..services.identity_relink import relink_plan, window_state
 from ..tenant_sign_in import has_resolver
 
 router = APIRouter(tags=["admin"])
@@ -64,6 +67,12 @@ def _rows(settings: Settings) -> list[PlatformIdentityRow]:
             "Discovery document",
             f"{issuer}/.well-known/openid-configuration" if configured else NOT_CONFIGURED,
             "derived",
+        ),
+        row(
+            "oidc.relink_window",
+            "Re-link window for a change of identity provider",
+            _window(settings),
+            src("oidc_relink_until"),
         ),
         row(
             "oidc.default_org",
@@ -132,7 +141,29 @@ def _rows(settings: Settings) -> list[PlatformIdentityRow]:
     return rows
 
 
+def _window(settings: Settings) -> str:
+    until = settings.oidc_relink_until
+    state = window_state(settings)
+    if until is None:
+        return "none"
+    return f"open until {until.isoformat()}" if state == "open" else f"closed since {until.isoformat()}"
+
+
 @router.get("/platform/identity", response_model=PlatformIdentity, operation_id="getPlatformIdentity")
 async def get_platform_identity(session: Db, principal: Me, settings: Config) -> PlatformIdentity:
     await require_platform_admin(session, principal)
     return PlatformIdentity(items=_rows(settings))
+
+
+@router.get("/platform/identity/relink", response_model=RelinkPlan, operation_id="getRelinkPlan")
+async def get_relink_plan(
+    session: Db,
+    principal: Me,
+    settings: Config,
+    issuer: Annotated[str | None, Query(max_length=512)] = None,
+) -> RelinkPlan:
+    """A dry run of a change of identity provider (ADR 0160): which accounts a re-link window for
+    `issuer` (default: the configured one) moves at their first sign-in, which it refuses, which the
+    provider already holds. Changes nothing."""
+    await require_platform_admin(session, principal)
+    return RelinkPlan.model_validate(await relink_plan(session, settings, issuer))

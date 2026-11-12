@@ -5562,6 +5562,45 @@ export type PlatformIdentity = {
   items: Array<PlatformIdentityRow>;
 };
 
+/** The re-link window of a change of identity provider (ADR 0160). */
+export type RelinkWindow = {
+  /** open until `until`; closed once it passed; none when the deployment sets no window. */
+  state: "open" | "closed" | "none";
+  until?: string | null;
+  /** The plan's issuer is the configured one: the window applies to the sign-ins the plan describes. */
+  applies: boolean;
+};
+
+export type RelinkCounts = {
+  pending: number;
+  ambiguous: number;
+  current: number;
+  unbound: number;
+  not_concerned: number;
+};
+
+export type RelinkAccount = {
+  user_id: string;
+  email: string;
+  display_name: string;
+  /** The issuer of the account's subject; null when it was bound before issuers were recorded. */
+  issuer?: string | null;
+  last_login_at?: string | null;
+  /** For an ambiguous account, the other accounts' addresses that are the same, letter case aside. */
+  same_address_as?: Array<string>;
+};
+
+/** What a re-link window for `issuer` does to each account. A dry run, nothing is changed. */
+export type RelinkPlan = {
+  issuer: string;
+  configured_issuer: string;
+  window: RelinkWindow;
+  counts: RelinkCounts;
+  pending: Array<RelinkAccount>;
+  ambiguous: Array<RelinkAccount>;
+  generated_at: string;
+};
+
 export type ExecutorInfo = {
   kind: "tekton" | "k8s_job" | "local_docker" | "aca" | "agent_sandbox";
   enabled: boolean;
@@ -5861,6 +5900,7 @@ export interface Operations {
   getProvisionStatus: { method: "GET"; path: "/projects/{id}/provision"; body: never; response: ProvisionStatus };
   getRelayOutboundProxy: { method: "GET"; path: "/internal/orgs/{org}/outbound-proxy/{kind}"; body: never; response: RelayOutboundProxy };
   getRelease: { method: "GET"; path: "/releases/{id}"; body: never; response: Release };
+  getRelinkPlan: { method: "GET"; path: "/platform/identity/relink"; body: never; response: RelinkPlan };
   getRoutingCalibration: { method: "GET"; path: "/projects/{id}/workflow-routing/calibration"; body: never; response: RoutingCalibration };
   getRun: { method: "GET"; path: "/runs/{id}"; body: never; response: Run };
   getRunAccess: { method: "GET"; path: "/runs/{id}/access"; body: never; response: {

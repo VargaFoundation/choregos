@@ -117,7 +117,10 @@ oidcEndpoints:
 # An existing console account is linked by e-mail only when the provider does not say
 # `email_verified: false` (a provider that omits the claim, such as Entra ID, is accepted).
 oidcRequireEmailVerified: true
-# Temporary switch for an identity provider MIGRATION (ADR 0100): re-links an account bound to
-# another subject when the provider asserts `email_verified: true`. Leave it false otherwise, and turn
-# it off again once every account has signed in through the new provider.
-oidcRelinkVerifiedEmail: false
+# The end of a re-link window, for a CHANGE of the instance's identity provider (ADR 0160): an ISO 8601
+# instant at most 31 days ahead, e.g. "2026-12-01T00:00:00Z". Until then, a sign-in whose address the
+# new provider asserts with `email_verified: true` moves the one account bound to another provider's
+# subject to the new one; afterwards such a sign-in is refused again. Empty: no window. Plan it first
+# with `choregos admin identity relink` (docs/deployment.md, "Changing the identity provider").
+# `oidcRelinkVerifiedEmail`, the switch it replaces, fails the render when true.
+oidcRelinkUntil: ""

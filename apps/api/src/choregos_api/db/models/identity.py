@@ -53,6 +53,9 @@ class User(Base, PkMixin, TimestampMixin):
     __tablename__ = "users"
 
     oidc_sub: Mapped[str | None] = mapped_column(String(255), unique=True, index=True, nullable=True)
+    #: The issuer that gave `oidc_sub`, as configured (no trailing slash), recorded at each sign-in through
+    #: an OIDC provider (ADR 0160). Null for an account bound before it was recorded, or never bound.
+    oidc_issuer: Mapped[str | None] = mapped_column(String(512), nullable=True)
     email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
     display_name: Mapped[str] = mapped_column(String(200), default="")
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

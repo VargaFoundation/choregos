@@ -47,6 +47,7 @@ from ..rbac import Permission
 from ..schemas import ApiTokenCreate, ApiTokenCreated, ApiTokenDto, MeDto, MembershipDto
 from ..security import generate_api_token, read_session, sign_session
 from ..services.api_tokens import api_token_dto, linked_projects
+from ..services.identity_relink import normalised_issuer, relink_candidates
 from ..tenant_sign_in import OidcProvider, SignInHint, TenantSignIn, email_domain, resolve
 
 router = APIRouter(tags=["session"])
@@ -391,32 +392,37 @@ async def _ensure_oidc_user(
     *,
     stored_sub: str | None = None,
     tenant_org_id: str | None = None,
+    issuer: str | None = None,
 ) -> User:
     """The console user for a provider's identity: bound to its `sub`, never to an e-mail alone.
 
     `stored_sub` is the subject as stored (a tenant's is namespaced); it defaults to `info["sub"]`.
     `tenant_org_id` is set by a tenant's provider, whose caller already proved the address domain is
-    the tenant's (ADR 0108).
+    the tenant's (ADR 0108). `issuer` is the provider's (default: the instance's), recorded beside the
+    subject (ADR 0160).
 
     - A returning subject keeps its account. Its e-mail follows the provider, unless the provider
       calls the new address unverified.
     - An account with that e-mail and no subject (or a development one) is linked, unless the
       provider calls the address unverified.
     - An account bound to ANOTHER subject is refused, except for a re-link: by a tenant's provider
-      (the domain is the tenant's), or on the instance when `oidc_relink_verified_email` is on and
-      the provider asserts `email_verified: true` (an identity provider migration). Audited.
+      (the domain is the tenant's), or on the instance while a re-link window is open
+      (`oidc_relink_until`) for the one account bound to another issuer's subject whose address,
+      letter case aside, the provider asserts with `email_verified: true` (ADR 0160). Audited.
     - A new account is not created for an address the provider calls unverified.
     (ADR 0100)
     """
     sub = stored_sub or str(info["sub"])
     email = str(info["email"])
     name = provider_name(info)
+    issued_by = normalised_issuer(issuer or settings.oidc_issuer)
     unverified = settings.oidc_require_email_verified and info.get("email_verified") is False
     by_sub: User | None = (
         await session.execute(select(User).where(User.oidc_sub == sub))
     ).scalar_one_or_none()
     if by_sub is not None:
         by_sub.last_login_at = utcnow()
+        by_sub.oidc_issuer = issued_by
         if name:
             by_sub.display_name = name
         if by_sub.email != email and not unverified:
@@ -431,12 +437,14 @@ async def _ensure_oidc_user(
         if unverified:
             raise unauthorized("the provider says this e-mail is not verified")
         bound_elsewhere = bool(by_email.oidc_sub) and not str(by_email.oidc_sub).startswith("dev|")
-        if bound_elsewhere:
-            relink = tenant_org_id is not None or (
-                settings.oidc_relink_verified_email and info.get("email_verified") is True
+        if bound_elsewhere and tenant_org_id is None:
+            moved = await _relink_in_window(
+                session, info, settings, sub=sub, issuer=issued_by, exact=by_email
             )
-            if not relink:
-                raise unauthorized("this e-mail belongs to another identity at the provider")
+            if moved is None:  # with `exact`, the window moves it or refuses: never nothing
+                raise unauthorized(BOUND_ELSEWHERE)
+            return moved
+        if bound_elsewhere:
             await record(
                 session,
                 None,
@@ -445,23 +453,105 @@ async def _ensure_oidc_user(
                 target_type="user",
                 target_id=by_email.id,
                 previous_sub=by_email.oidc_sub,
+                previous_issuer=by_email.oidc_issuer,
+                issuer=issued_by,
             )
         by_email.oidc_sub = sub
+        by_email.oidc_issuer = issued_by
         by_email.last_login_at = utcnow()
         if name:
             by_email.display_name = name
         return by_email
+    if tenant_org_id is None and not unverified:
+        relinked = await _relink_in_window(session, info, settings, sub=sub, issuer=issued_by, exact=None)
+        if relinked is not None:
+            return relinked
     if unverified:
         raise unauthorized("the provider says this e-mail is not verified")
     user = User(
         email=email,
         display_name=name or email.split("@", maxsplit=1)[0],
         oidc_sub=sub,
+        oidc_issuer=issued_by,
         last_login_at=utcnow(),
     )
     session.add(user)
     await session.flush()
     return user
+
+
+BOUND_ELSEWHERE = "this e-mail belongs to another identity at the provider"
+
+
+async def _relink_in_window(
+    session: Any,
+    info: dict[str, Any],
+    settings: Settings,
+    *,
+    sub: str,
+    issuer: str,
+    exact: User | None,
+) -> User | None:
+    """The re-link of a change of the instance's provider (ADR 0160), or None when it moves nothing.
+
+    `exact` is the account whose address is exactly the provider's, bound to another subject: it is
+    refused unless the window moves it. Without it, an account is re-linked only if the window would
+    move one; otherwise the caller creates a new account, as it always did.
+
+    Moved: while the window is open, when the provider asserts the address with `email_verified: true`,
+    the ONE account bound to another issuer's subject (or to a subject whose issuer was never recorded)
+    with that address, letter case aside. Refused: an account already bound to a subject of this issuer
+    (an account is never moved twice), a tenant's member, a machine account, and two candidates. One
+    transaction: the sign-in's. Audited `user.relink`.
+    """
+    email = str(info["email"])
+    if not settings.relink_window_open():
+        if exact is not None:
+            raise unauthorized(BOUND_ELSEWHERE)
+        return None
+    if info.get("email_verified") is not True:
+        if exact is not None:
+            raise unauthorized(
+                f"{BOUND_ELSEWHERE}, and the provider does not assert the address verified "
+                "(`email_verified`): it is not re-linked"
+            )
+        return None
+    candidates = await relink_candidates(session, email, issuer)
+    if exact is not None and all(candidate.id != exact.id for candidate in candidates):
+        raise unauthorized(BOUND_ELSEWHERE)
+    if not candidates:
+        return None
+    if len(candidates) > 1:
+        logger.warning("oidc.relink_refused", reason="ambiguous", accounts=[c.id for c in candidates])
+        raise unauthorized(
+            "several accounts carry this address (letter case aside): an administrator resolves them "
+            "before either is re-linked (`choregos admin identity relink` lists them)"
+        )
+    (account,) = candidates
+    await record(
+        session,
+        None,
+        "user.relink",
+        org_id=None,
+        target_type="user",
+        target_id=account.id,
+        previous_sub=account.oidc_sub,
+        previous_issuer=account.oidc_issuer,
+        issuer=issuer,
+        window_until=settings.oidc_relink_until.isoformat() if settings.oidc_relink_until else None,
+    )
+    account.oidc_sub = sub
+    account.oidc_issuer = issuer
+    account.last_login_at = utcnow()
+    if account.email != email:
+        taken = (await session.execute(select(User).where(User.email == email))).scalar_one_or_none()
+        if taken is None:
+            account.email = email
+    name = provider_name(info)
+    if name:
+        account.display_name = name
+    await session.flush()
+    return account
 
 
 def roles_from_groups(groups: list[str], default_org: str) -> dict[str, Role]:
@@ -635,6 +725,7 @@ async def _tenant_user(  # noqa: PLR0913 - one sign-in, fact by fact, keyword-on
     settings: Settings,
     oidc: bool = False,
     email_verified: bool | None = None,
+    issuer: str | None = None,
 ) -> User:
     """A sign-in vouched for by a tenant's own provider, confined to that tenant (ADR 0108).
 
@@ -659,7 +750,9 @@ async def _tenant_user(  # noqa: PLR0913 - one sign-in, fact by fact, keyword-on
     stored = f"tenant:{org.id}:{sub}" if sub else None
     if oidc and sub:
         info = {"sub": sub, "email": email, "name": name, "email_verified": email_verified}
-        user = await _ensure_oidc_user(session, info, settings, stored_sub=stored, tenant_org_id=org.id)
+        user = await _ensure_oidc_user(
+            session, info, settings, stored_sub=stored, tenant_org_id=org.id, issuer=issuer
+        )
     else:
         user = await _ensure_user(session, email, name, stored)
     await _map_groups_to_roles(session, user, groups, settings, only_org=org)
@@ -778,6 +871,7 @@ async def callback(
                 settings=settings,
                 oidc=True,
                 email_verified=info.get("email_verified"),
+                issuer=provider.issuer,
             )
         else:
             if sub.startswith(("dev|", "tenant:")):
