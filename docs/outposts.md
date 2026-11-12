@@ -232,14 +232,26 @@ gives the operator's.
 
 Each half is tested against the door's contract (`packages/contracts/outpost-door.yaml`) and against
 a scripted stand-in for the other: the door against a scripted daemon, the daemon against a scripted
-door, and both against the contract's vectors. The connector is tested through the real door, with
-that scripted daemon. Not proven:
+door, and both against the contract's vectors. The real daemon and the real door have also run
+together (S65-19):
 
-- **the real daemon and the real door together**: a tool call end to end is the story S65-19;
-- **anything on a cluster or on a real network**: the two charts are rendered and checked as
-  documents; no route, no proxy, no firewall and no network plugin has been in the path;
-- **that a connection from the platform's network to the outpost's fails** where a network plugin
-  enforces policies, which is the point of the design and what only such a cluster can show;
+- **in one process**, `tests/e2e/test_outpost_tools.py`: an outpost is created, an instance enrolled by
+  the daemon and approved against the fingerprint it printed, a connector's tools discovered through
+  it; then a read, a write whose lease is lost, a stopped daemon, a policy that refuses, a door key
+  the outpost does not pin, a protocol below the door's minimum and a revocation, each compared with
+  what the outpost's own audit log says;
+- **on a test cluster** whose network plugin enforces policies (kind with Calico),
+  `tests/cluster/test_outpost_tools_on_cluster.py`: the platform's API image in one namespace, the
+  outpost's chart and daemon image in another; a read goes through while a connection from the
+  platform's namespace towards the outpost's times out.
+
+Not proven:
+
+- **anything on a real network**: no outbound proxy, no TLS, no firewall and no idle timeout of a
+  real appliance has been in the path; on the test cluster the door is plain HTTP between two
+  namespaces;
+- **the platform's chart on a cluster**: the test cluster runs the API image with settings of its
+  own, not the door's route, hostname or own Deployment as `charts/choregos` renders them;
 - **a rotation of the door's key** with real outposts.
 
-Until S65-19 has run, an outpost is built and tested in parts; it has not been operated.
+An outpost has run end to end on a bench and on a test cluster; it has not been operated.
