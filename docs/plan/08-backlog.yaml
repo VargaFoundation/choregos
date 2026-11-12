@@ -51,6 +51,7 @@ streams:
   S57: "An agent calls its run's tools from a script: the runner relays, the API governs each call (ADR 0122)"
   S63: "Assistants: a plugin ships one, an organisation installs it for an audience, a person converses with their own identity (ADRs 0133-0140)"
   S65: "Outposts: tools that live where the platform cannot reach, behind a place that only dials out (ADRs 0147-0149)"
+  S68: "The editor is a surface of the platform: a code editor extension that converses, shows what runs and what waits, and runs nothing locally (ADR 0155)"
 
 stories:
 
@@ -4945,3 +4946,125 @@ stories:
     size: S
     depends_on: [S67-10, S67-11, S67-12]
     notes: "docs/site/use/terminal.md; docs/cli.md regenerated; tests/docs green."
+
+  # ───────────────────────── S68 — The editor is a surface of the platform (ADR 0155) ─────────────────────────
+  - id: S68-00
+    title: "docs(adr): ADR 0155, the S68 plan, the backlog stories"
+    stream: S68
+    sprint: 0
+    priority: 1
+    size: S
+    depends_on: []
+    notes: "ADR 0155 proposed and indexed; PLAN-2026-11-12-vscode; S68 rows in STATUS."
+  - id: S68-01
+    title: "build(vscode): the extension's scaffold, its typed client and fake API, built in CI"
+    stream: S68
+    sprint: 1
+    priority: 1
+    size: M
+    depends_on: [S68-00]
+    notes: "apps/vscode in strict TypeScript, ESLint, Prettier, Vitest with a coverage floor, esbuild and a VSIX; the client typed by @choregos/contracts; an in-process fake API (JSON and SSE); the vscode CI job uploads the VSIX; make vscode-ci; the bearer goes only to the configured origin."
+  - id: S68-02
+    title: "feat(vscode): the person signs in, through an authentication provider (ADR 0155 §5)"
+    stream: S68
+    sprint: 2
+    priority: 1
+    size: S
+    depends_on: [S68-01]
+    notes: "One account per instance; the person's own `*` token checked with GET /me until ADR 0154 G9; SecretStorage only; a refused or wrongly scoped token makes no session and shows the API's message; sign-out forgets it; the token in no setting, log or error."
+  - id: S68-03
+    title: "feat(vscode): the Live tree and the status line, read-only (ADR 0155 §2-3, §6)"
+    stream: S68
+    sprint: 3
+    priority: 1
+    size: M
+    depends_on: [S68-02]
+    notes: "Activity list then its stream, listed again after a reconnection; icon, word and theme colour per state; elapsed · tokens · cost with '—' for unknown; status bar 'N running · — waiting for you · $X today'; polling fallback said in the view."
+  - id: S68-04
+    title: "feat(vscode): a run's steps, its context, and stopping it"
+    stream: S68
+    sprint: 4
+    priority: 1
+    size: S
+    depends_on: [S68-03]
+    notes: "GET /runs/{id}/events from the last seq, Last-Event-ID on reconnection; context breakdown in the tooltip; Stop run asks a reason, offered only when can_stop; a 409 says the run had ended."
+  - id: S68-05
+    title: "feat(vscode): the conversation panel (ADR 0155 §4)"
+    stream: S68
+    sprint: 4
+    priority: 1
+    size: M
+    depends_on: [S68-03]
+    notes: "A webview view under default-src 'none' and a nonce; conversations listed, resumed, created; streamed answers rendered as text; cancel; Ask about the selection says the text leaves the machine; no token in the page."
+  - id: S68-06
+    title: "feat(vscode): citations and proposed actions in the conversation"
+    stream: S68
+    sprint: 5
+    priority: 1
+    size: S
+    depends_on: [S68-05]
+    notes: "Depends on ADR 0154 G1; a card per pending action with its operation, arguments and diff; Open in the console under an API token; no Confirm button under an API token."
+  - id: S68-07
+    title: "feat(vscode): sign in with a developer-surface session (ADR 0154 §6)"
+    stream: S68
+    sprint: 5
+    priority: 1
+    size: M
+    depends_on: [S68-02]
+    notes: "Depends on ADR 0154 G9; PKCE to the editor's URI, device-code flow otherwise; state and verifier checked; refresh; step_up_required signs in again; revoked on sign-out."
+  - id: S68-08
+    title: "feat(vscode): the Decisions view, answered in one action, signed as the person"
+    stream: S68
+    sprint: 6
+    priority: 1
+    size: M
+    depends_on: [S68-06, S68-07]
+    notes: "Depends on ADR 0154 G8 and G10; the badge equals the pending count; approve, reject with a reason, answer, confirm or refuse, one gesture per item; no decision gesture under an API token."
+  - id: S68-09
+    title: "feat(vscode): Elsewhere"
+    stream: S68
+    sprint: 5
+    priority: 1
+    size: S
+    depends_on: [S68-03]
+    notes: "Other projects' activity, conversations active elsewhere, artefacts delivered (GET /me/inbox)."
+  - id: S68-10
+    title: "feat(vscode): open an artefact, show a diff (ADR 0155 §1)"
+    stream: S68
+    sprint: 5
+    priority: 1
+    size: S
+    depends_on: [S68-03]
+    notes: "Read-only choregos-artifact: documents per revision; vscode.diff between two revisions; Save as only through a save dialog; nothing written in the workspace otherwise."
+  - id: S68-11
+    title: "build(release): the VSIX in the release, signed, served by the instance (ADR 0155 §7)"
+    stream: S68
+    sprint: 7
+    priority: 1
+    size: S
+    depends_on: [S68-01]
+    notes: "choregos-vscode-<version>.vsix with its cosign bundle attached to the release, carried by the API image, served under /downloads/vscode/ beside the CLI."
+  - id: S68-12
+    title: "build(release): publish to Open VSX and the Visual Studio Marketplace"
+    stream: S68
+    sprint: 8
+    priority: 1
+    size: S
+    depends_on: [S68-11]
+    notes: "Blocked on the Varga Foundation's publisher accounts; a tag publishes the release's signed VSIX, never a rebuild."
+  - id: S68-13
+    title: "test(vscode): an extension-host smoke under a virtual display"
+    stream: S68
+    sprint: 4
+    priority: 1
+    size: S
+    depends_on: [S68-03]
+    notes: "@vscode/test-electron under xvfb in the vscode job within ten minutes, or the story records why it was dropped."
+  - id: S68-14
+    title: "docs: the editor in the user documentation"
+    stream: S68
+    sprint: 8
+    priority: 1
+    size: S
+    depends_on: [S68-08, S68-10, S68-11]
+    notes: "Install from the instance, Open VSX or the Marketplace; sign in; the views; what never runs locally; no telemetry."
