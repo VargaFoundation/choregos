@@ -99,7 +99,7 @@ a call and restarted reports that call `unanswered` and does not execute it agai
 taken and not begun is refused, since its server received nothing.
 
 **When the disk refuses a record, nothing is executed on top of it.** The call the record was for
-is refused `busy`; an audit line that could not be written is emitted on the daemon's own log
+is refused `cannot_record`; an audit line that could not be written is emitted on the daemon's own log
 (`audit.line_lost`, digests only); the daemon stops polling, lets the calls in progress finish and
 answer, and exits with code 5. It does not start either when the journal or the audit log cannot
 be opened.

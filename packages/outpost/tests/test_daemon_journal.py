@@ -114,7 +114,10 @@ async def test_a_copy_that_does_not_verify_cannot_have_a_call_under_way_refused(
     assert answer.outcome == "result" and b.arrived == ["create_issue"]
     refusals = [claims["htu"] for verb, claims, _ in b.door.received if verb == "refuse" and claims]
     assert not refusals, "once it has accepted a call, a daemon sends no refusal for a copy of it"
-    assert [line["event"] for line in b.lines(call.id)] == ["received", "executed"]
+    # The copy is said in the audit log, with no outcome to repeat yet (S65-10b): the call is under way.
+    lines = b.lines(call.id)
+    assert [line["event"] for line in lines] == ["received", "replayed", "executed"]
+    assert lines[1].get("outcome") is None and lines[2]["outcome"] == "result"
 
 
 async def test_a_writes_id_is_on_disk_before_the_write_is_executed_and_its_answer_after(
@@ -320,12 +323,12 @@ async def test_a_daemon_that_cannot_record_a_call_does_not_make_it(
         raise OSError(28, "No space left on device")
 
     b.journal._append = refuse  # type: ignore[method-assign]
-    assert await b.door.refused(call.id) == "busy"
+    assert await b.door.refused(call.id) == "cannot_record"
     assert await b.ended() is Exit.CANNOT_RECORD
     assert b.server.received == [], "what cannot be recorded is not made"
     assert [(line["event"], line.get("refusal")) for line in b.lines(call.id)] == [
         ("received", None),
-        ("refused", "busy"),
+        ("refused", "cannot_record"),
     ]
     said = b.logged("outpost.cannot_record")
     assert said and "No space left on device" in said[0]["reason"]
@@ -343,7 +346,7 @@ async def test_a_daemon_that_cannot_write_its_audit_log_does_not_make_the_call(
 
     audit._write = refuse  # type: ignore[method-assign]
     await b.start(audit=audit)
-    assert await b.door.refused(call.id) == "busy"
+    assert await b.door.refused(call.id) == "cannot_record"
     assert await b.ended() is Exit.CANNOT_RECORD
     assert b.server.received == []
     # The line that was lost is not lost in silence: the daemon's own log carries it, digests only.

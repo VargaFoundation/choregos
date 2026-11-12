@@ -53,6 +53,7 @@ from choregos_contracts.outpost import (
     OutpostPollRequest,
     OutpostRefusal,
     OutpostSealedAnswer,
+    max_poll_answer_bytes,
     request_signature_claims,
     request_signature_header,
 )
@@ -67,9 +68,6 @@ _SIGN_AGAIN = (OutpostDoorCode.STALE_NONCE, OutpostDoorCode.REPLAYED_SEQUENCE)
 _SIGNATURES = 3
 #: The most the daemon reads of an answer that is not a poll's: a recorded call, a problem.
 _SMALL_ANSWER = 1 << 20
-#: What a sealed call may weigh in a poll's answer: the largest arguments a policy file allows
-#: (1 MiB), sealed and encoded, with room to spare.
-_PER_CALL = 3 << 20
 CAPABILITIES: list[Any] = ["tools"]
 
 
@@ -328,7 +326,8 @@ class Uplink:
             endpoints=endpoints,
             running=running,
         )
-        limit = _SMALL_ANSWER + capacity * _PER_CALL
+        # What the contract lets a door hand over for this capacity, and not a byte more.
+        limit = max_poll_answer_bytes(capacity)
         document = await self._send("/poll", request.model_dump_json().encode("utf-8"), limit=limit)
         return self._read(OutpostPollAnswer, document)
 

@@ -56,7 +56,6 @@ from choregos_contracts.enums import (
 )
 from choregos_contracts.outpost import (
     MAX_BODY_BYTES,
-    MAX_CONCURRENCY,
     MAX_WAIT_S,
     OutpostAnswer,
     OutpostCall,
@@ -359,12 +358,8 @@ class Daemon:
             log.info("outpost.paused" if answer.stop else "outpost.resumed")
         for call_id in answer.cancel:
             self._cancel(call_id)
-        handed = answer.calls
-        if len(handed) > MAX_CONCURRENCY:
-            # The door hands over 64 calls at most: what is beyond is not the door's.
-            log.error("door.too_many_calls", handed=len(handed), taken=MAX_CONCURRENCY)
-            handed = handed[:MAX_CONCURRENCY]
-        for call in handed:
+        # At most 64 calls, by the contract: an answer that carries more is not read at all (`Uplink`).
+        for call in answer.calls:
             await self._receive(call)
         if answer.protocol.minimum > PROTOCOL:
             self._upgrade_required(answer.protocol)
@@ -422,7 +417,7 @@ class Daemon:
         keep_until = call.deadline.timestamp() if call and call.deadline else now + UNOPENED_KEEP_S
         if not await self._line(OutpostAuditEvent.RECEIVED, handed.id, **facts.line()):
             # What was not recorded as received is not made.
-            self._send(handed.id, code=OutpostRefusalCode.BUSY, until=keep_until)
+            self._send(handed.id, code=OutpostRefusalCode.CANNOT_RECORD, until=keep_until)
             return
         if call is None:
             await self._refuse(handed.id, OutpostRefusalCode.CALL_UNREADABLE, facts, keep_until)
@@ -434,9 +429,9 @@ class Daemon:
         taken = self.journal.take(call.id, keep_until=keep_until, answer_key=call.answer_key, **facts.names())
         if not await self._journalled(taken):
             await self._line(
-                OutpostAuditEvent.REFUSED, call.id, refusal=OutpostRefusalCode.BUSY, **facts.line()
+                OutpostAuditEvent.REFUSED, call.id, refusal=OutpostRefusalCode.CANNOT_RECORD, **facts.line()
             )
-            self._send(call.id, code=OutpostRefusalCode.BUSY, until=keep_until)
+            self._send(call.id, code=OutpostRefusalCode.CANNOT_RECORD, until=keep_until)
             return
         self._phase[call.id] = _CHECKING
         task = asyncio.create_task(self._make(call, facts, keep_until))
@@ -500,6 +495,8 @@ class Daemon:
         facts = Facts.of(entry)
         if entry.under_way:
             if entry.id in self._calls:
+                # A copy of a call that has no answer yet: said, with no outcome to repeat.
+                await self._line(OutpostAuditEvent.REPLAYED, entry.id, **facts.line())
                 log.info("call.already_under_way", call_id=entry.id)
             else:
                 await self._left_in_the_middle(entry, now)
@@ -547,7 +544,7 @@ class Daemon:
             # Recorded before the server is called: a write is never executed on a journal that
             # does not hold its id.
             if not await self._journalled(self.journal.begin(call.id, write=bool(write))):
-                raise _RefusalError(OutpostRefusalCode.BUSY)
+                raise _RefusalError(OutpostRefusalCode.CANNOT_RECORD)
             self._phase[call.id] = _SERVING
             if write:
                 self._writes.add(call.id)

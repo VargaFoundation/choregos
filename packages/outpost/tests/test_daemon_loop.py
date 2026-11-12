@@ -276,15 +276,18 @@ async def test_an_answer_the_door_did_not_take_is_sent_again(tmp_path: Path, dae
 async def test_more_calls_than_the_contract_allows_in_one_answer_are_not_the_doors(
     tmp_path: Path, daemon_log: io.StringIO
 ) -> None:
+    """A poll's answer holds 64 calls at most (S65-10b): one that carries more is not the contract's,
+    so none of it is taken, not even its first call, and the daemon says so and asks again."""
     b = await bench(tmp_path, daemon_log)
     for number in range(70):
         b.door.hand_as_is({"id": f"flood-{number:03d}", "sealed": "A" * 120})
     await b.start()
     await b.door.polled(2)
     await b.stop()
-    said = b.logged("door.too_many_calls")
-    assert said and (said[0]["handed"], said[0]["taken"]) == (70, 64)
-    assert b.lines("flood-063") and not b.lines("flood-064")
+    said = b.logged("door.unreachable")
+    assert said and "not the contract's" in said[0]["reason"]
+    assert not b.lines("flood-000") and not b.lines("flood-063")
+    assert not b.door.refusals, "nothing of an answer that was not read is refused either"
 
 
 async def test_what_the_door_refuses_is_said_and_the_daemon_asks_again(
