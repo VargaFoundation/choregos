@@ -17,8 +17,8 @@ statement is then an open write with neither, which the code of the earlier revi
 (it places no write through an outpost at all).
 
 Revision ID: b3dbe73fff38
-Revises: f9b1d3e5a7c0
-Create Date: 2026-11-12 14:00:00+00:00
+Revises: f1b3d5e7a9c2
+Create Date: 2026-11-12 15:00:00+00:00
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ from alembic import op
 from choregos_api.db.base import Json
 
 revision: str = "b3dbe73fff38"
-down_revision: str | None = "f9b1d3e5a7c0"
+down_revision: str | None = "f1b3d5e7a9c2"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
