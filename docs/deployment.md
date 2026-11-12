@@ -1338,9 +1338,9 @@ to another subject. A provider that says `email_verified: false` never links an 
 is accepted); it also refuses a new account for such an address and keeps a returning account's stored
 address. An account bound to another subject is refused, except that a per-organisation provider re-links
 an address of its own domains (audited `user.relink`), so an organisation can move to its own provider.
-When you **migrate the instance's identity provider** (every subject changes), set
-`choregos-api.oidcRelinkVerifiedEmail: true` so accounts whose address the new provider asserts as
-`email_verified: true` are re-linked, then set it back to `false`. When the token endpoint returns an ID token, its `iss`, `aud` and `nonce` must match the
+Each sign-in records the issuer beside the subject (`users.oidc_issuer`). When you **change the instance's
+identity provider** (every subject changes), accounts follow through a time-boxed re-link window:
+[Changing the identity provider](#changing-the-identity-provider). When the token endpoint returns an ID token, its `iss`, `aud` and `nonce` must match the
 sign-in and its `sub` must equal userinfo's; otherwise the sign-in is refused (401).
 
 Roles come from **groups**, and a group names its organisation:
@@ -1405,6 +1405,96 @@ API itself in `staging` and `prod`, and turned on only by `values/local.yaml`
 
 **API tokens** for the CLI and CI are issued by the person who will use them:
 `POST /me/tokens` (or *Admin → Tokens*), shown once, expiring after 90 days by default.
+
+## Changing the identity provider
+
+An account is bound to its provider's subject (`sub`), and a subject only means something at its issuer.
+When the instance moves to another OIDC provider (another product, another realm, a provider that
+federates the previous one), every person gets a new subject, and without a re-link their first sign-in
+through the new provider finds no account: it is refused ("this e-mail belongs to another identity at the
+provider"), or creates an empty account for an address the instance does not know. The accounts, their
+memberships, the runs, decisions and approvals they recorded and the audit trail would be orphaned.
+
+A **re-link window** moves them ([ADR 0160](adr/0160-a-change-of-identity-provider-re-links-accounts-in-a-time-boxed-window.md)).
+Until `choregos-api.oidcRelinkUntil` (`CHOREGOS_OIDC_RELINK_UNTIL`, an ISO 8601 instant at most 31 days
+ahead, UTC when it names no zone), a sign-in through the instance's provider whose subject is unknown moves
+an account to that subject when:
+
+- the provider asserts the address with `email_verified: true` (an omitted claim is not enough), and
+- exactly **one** account is bound to another issuer's subject (or to a subject whose issuer was never
+  recorded) with that address, letter case aside.
+
+The account keeps its id: everything that names it follows. Its subject and issuer become the new
+provider's, and its address follows the provider's spelling. Each move is audited as `user.relink`, with the
+previous subject and issuer, in the sign-in's own transaction; a second sign-in moves nothing more. The
+window refuses an account already bound to a subject of the new provider (an account is never moved twice),
+two accounts with one address (both, until you resolve them), a tenant's member (its own provider re-links
+it) and a machine account. Once the window is closed, such a sign-in is refused again.
+
+A provider that keeps the subjects (the same realm served under another host name, a realm imported with
+its user ids) needs no window: set the new issuer, and each account follows its subject at its next sign-in.
+
+**Before the day.**
+
+1. At the new provider, register the confidential client with the redirect URI
+   `<apiUrl>/api/v1/auth/callback` (the new `apiUrl` if the instance's host name changes in the same
+   deployment), the scopes `openid profile email groups`, and the same `choregos:<org>:<group>` groups.
+   Make the addresses arrive **verified** and **equal** to the accounts' addresses. A provider that
+   federates the previous one must pass its addresses on as verified (Keycloak: the identity provider's
+   *Trust Email*); a provider that never asserts `email_verified` (Entra ID omits it by default) cannot be
+   the target of a window.
+2. Plan, while the instance still signs in with the old provider:
+
+   ```bash
+   choregos admin identity relink --issuer https://new-idp.example.com/realms/acme
+   ```
+
+   (`--json` gives the whole plan; it is `GET /api/v1/platform/identity/relink?issuer=…`, for the platform
+   administrator, and it changes nothing.) It sorts every account: **to re-link** (moved at its first
+   sign-in), **ambiguous** (refused: another account carries the same address, letter case aside),
+   already on that issuer, **without a subject** (an invitation never used: linked by address at its first
+   sign-in, window or not) and **not concerned** (development subjects, tenants' members, machine
+   accounts). Resolve every ambiguous pair before the day: decide which account is the person's, and give
+   the other one an address nobody uses. There is no console gesture for it yet; in `psql`, as the
+   application role, in one transaction (row-level security needs the platform scope):
+   `BEGIN; SELECT set_config('app.current_orgs', '*', true); UPDATE users SET email =
+   'retired-<id>@invalid' WHERE id = '<id>'; COMMIT;`. Then plan again until `ambiguous` is empty. Check that the addresses listed to re-link are the ones the new provider
+   will assert.
+3. Rehearse it on a non-production instance first, the same way. The proof to look for: `choregos whoami`
+   shows the same user id before and after a person's first sign-in through the new provider, and their
+   runs and approvals are still theirs.
+
+**On the day**, in one deployment:
+
+4. Set `global.oidc.issuer`, `global.oidc.clientId` and the `client-secret` of `global.oidc.secretRef` to
+   the new provider's, and open the window with an end:
+
+   ```yaml
+   choregos-api:
+     oidcRelinkUntil: "2026-12-15T00:00:00Z"   # at most 31 days ahead
+   ```
+
+   A date further than 31 days fails the API's start; the former switch `oidcRelinkVerifiedEmail: true`
+   fails the render.
+5. Check: *Admin → Identity* shows the new issuer and "Re-link window: open until …";
+   `choregos admin identity relink` (no `--issuer`: the configured one) says `re-link window: open`.
+6. People sign in. Each move is in the audit log (`user.relink`); run the plan again to watch the accounts
+   to re-link go down.
+
+**Closing.**
+
+7. When nobody is left to re-link, or at the end you chose, remove `oidcRelinkUntil` (a passed date is
+   already a closed window; removing it keeps the configuration honest). An account still listed to re-link
+   belongs to someone who did not sign in during the window: open another window when they come back, or
+   leave them refused, which is the safe default.
+
+**What does not follow.** API tokens and machine accounts are bound to the account, not to the subject:
+they keep working. A browser session opened before the change lasts until it expires (8 hours at most).
+Tokens issued by the old provider are not accepted by the new one: the MCP door's OAuth clients sign in
+again (when `global.mcp.oauth` uses the console's issuer), and a standing delegation's offline token is
+renewed by its owner. An organisation's own provider (ADR 0108) is not concerned. A person whose address
+changed at the new provider gets a new, empty account at the first sign-in, and the old account stays
+listed to re-link: align the address at the provider before the day.
 
 ## Verifying an installation
 
@@ -1686,6 +1776,17 @@ value>` on the first model call. Nothing said the key had never resolved.
 If the API refuses to start with `réglages non résolus`, fix the source of the secret — the key
 is missing where it is stored, not where it is read.
 
+## Upgrading past 0.27.1
+
+Changes merged after v0.27.1, shipped with the next release.
+
+**The re-link switch becomes a window** (S70-20, [ADR 0160](adr/0160-a-change-of-identity-provider-re-links-accounts-in-a-time-boxed-window.md)).
+`choregos-api.oidcRelinkVerifiedEmail` (`CHOREGOS_OIDC_RELINK_VERIFIED_EMAIL`) is gone: `true` fails the
+render and refuses the API's start, naming `choregos-api.oidcRelinkUntil`, an instant at most 31 days
+ahead ([Changing the identity provider](#changing-the-identity-provider)). A deployment that left it at
+`false`, the default, has nothing to do. A migration adds the nullable column `users.oidc_issuer`, and every
+sign-in through an OIDC provider records its issuer from then on.
+
 ## Upgrading to 0.27
 
 One permission changes. The API now deletes the objects of a task artifact it erases or purges (an assistant's
@@ -1821,7 +1922,8 @@ without discovery needs `choregos-api.oidcEndpoints` (all three endpoints). A co
 bound to the provider's `sub`, and an address the provider reports as `email_verified: false` never
 links, renames or creates an account (`choregos-api.oidcRequireEmailVerified`, default true). To
 migrate the instance's provider, set `choregos-api.oidcRelinkVerifiedEmail: true` temporarily, then
-back to `false`. Accounts created before this change are not migrated.
+back to `false` (replaced after 0.27.1 by a window, `choregos-api.oidcRelinkUntil`: [Changing the
+identity provider](#changing-the-identity-provider)). Accounts created before this change are not migrated.
 
 ### Roles from the identity provider (S47-05)
 An IdP sign-in now removes the organisation roles it granted (`memberships.source` `idp`) and no longer maps; roles

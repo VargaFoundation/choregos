@@ -36,7 +36,9 @@ tokens_app = typer.Typer(help="API tokens")
 machines_app = typer.Typer(help="Applications that call the A2A door under their own name")
 admin_app = typer.Typer(help="Platform administration")
 secrets_app = typer.Typer(help="Sealed connector secrets")
+identity_app = typer.Typer(help="How people sign in to the instance")
 admin_app.add_typer(secrets_app, name="secrets")
+admin_app.add_typer(identity_app, name="identity")
 app.add_typer(orgs_app, name="orgs")
 app.add_typer(tokens_app, name="tokens")
 app.add_typer(machines_app, name="machines")
@@ -189,6 +191,46 @@ def secrets_rewrap() -> None:
     CHOREGOS_SECRETS_KEKS, the API restarted). The values are not read out nor changed."""
     result = client().post("/platform/secrets/rewrap")
     console.print(f"[green]✓[/green] {result['rewrapped']} secret(s) re-wrapped under the active key")
+
+
+@identity_app.command("relink")
+def identity_relink(
+    issuer: Annotated[
+        str | None, typer.Option(help="The new provider's issuer; default: the instance's configured one")
+    ] = None,
+    as_json: Annotated[bool, typer.Option("--json", help="The whole plan as JSON")] = False,
+) -> None:
+    """Plan a change of identity provider (a dry run, ADR 0160): which accounts a re-link window moves to
+    the new provider's subject at their first sign-in, which it refuses (two accounts, one address), and
+    whether the deployment's window (CHOREGOS_OIDC_RELINK_UNTIL) is open. Changes nothing."""
+    plan = client().get("/platform/identity/relink", params={"issuer": issuer} if issuer else None)
+    if as_json:
+        typer.echo(json.dumps(plan, indent=2))
+        return
+    window = plan["window"]
+    console.print(f"issuer of the plan: {plan['issuer']} (configured: {plan['configured_issuer']})")
+    until = f" (until {window['until']})" if window.get("until") else ""
+    applies = "" if window["applies"] else ", for the configured issuer, not this one"
+    console.print(f"re-link window: {window['state']}{until}{applies}")
+    counts = plan["counts"]
+    console.print(
+        f"{counts['pending']} to re-link, {counts['ambiguous']} ambiguous (refused), "
+        f"{counts['current']} already on this issuer, {counts['unbound']} without a subject, "
+        f"{counts['not_concerned']} not concerned"
+    )
+    for key, title in (("ambiguous", "ambiguous: resolve before the window"), ("pending", "to re-link")):
+        if not plan[key]:
+            continue
+        table = Table("e-mail", "name", "bound by", "last sign-in", "same address as", title=title)
+        for account in plan[key]:
+            table.add_row(
+                account["email"],
+                account["display_name"],
+                account.get("issuer") or "(not recorded)",
+                account.get("last_login_at") or "never",
+                ", ".join(account.get("same_address_as") or []),
+            )
+        console.print(table)
 
 
 @tokens_app.command("create")

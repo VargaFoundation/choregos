@@ -135,6 +135,27 @@ Options:
 
 Platform administration
 
+## `choregos admin identity`
+
+How people sign in to the instance
+
+### `choregos admin identity relink`
+
+```text
+Usage: choregos admin identity relink [OPTIONS]
+
+  Plan a change of identity provider (a dry run, ADR 0160): which accounts a
+  re-link window moves to the new provider's subject at their first sign-in,
+  which it refuses (two accounts, one address), and whether the deployment's
+  window (CHOREGOS_OIDC_RELINK_UNTIL) is open. Changes nothing.
+
+Options:
+  --issuer <str>  The new provider's issuer; default: the instance's
+                  configured one
+  --json          The whole plan as JSON
+  --help          Show this message and exit.
+```
+
 ## `choregos admin secrets`
 
 Sealed connector secrets

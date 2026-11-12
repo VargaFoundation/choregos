@@ -238,7 +238,7 @@ spec:
             {{- end }}
             {{- /* A name this chart sets for the API must not also come from global.extraEnv.
                    S47-02/03/04 add their names to this dict. */}}
-            {{- $apiOwned := dict "CHOREGOS_SESSION_SECRET_PREVIOUS" "the session-secret-previous key of global.apiSecretRef" "CHOREGOS_EGRESS_REPORT_KEY" "the egress-report-key key of global.apiSecretRef" "CHOREGOS_TRUSTED_PROXY_CIDRS" "choregos-api.trustedProxyCidrs" "CHOREGOS_TRUSTED_PROXY_HOPS" "choregos-api.trustedProxyHops" "CHOREGOS_CORS_ORIGINS" "choregos-api.corsOrigins (a list)" "CHOREGOS_OIDC_AUTHORIZATION_ENDPOINT" "choregos-api.oidcEndpoints.authorization" "CHOREGOS_OIDC_TOKEN_ENDPOINT" "choregos-api.oidcEndpoints.token" "CHOREGOS_OIDC_USERINFO_ENDPOINT" "choregos-api.oidcEndpoints.userinfo" "CHOREGOS_OIDC_REQUIRE_EMAIL_VERIFIED" "choregos-api.oidcRequireEmailVerified" "CHOREGOS_OIDC_RELINK_VERIFIED_EMAIL" "choregos-api.oidcRelinkVerifiedEmail" "CHOREGOS_INTERNAL_API_GUARD" "choregos-api.internalApiGuard" "CHOREGOS_RUN_DOOR_HOSTS" "choregos-api.runDoor.hostnames" "CHOREGOS_PUBLIC_HOSTS" "choregos-api.publicHostnames" }}
+            {{- $apiOwned := dict "CHOREGOS_SESSION_SECRET_PREVIOUS" "the session-secret-previous key of global.apiSecretRef" "CHOREGOS_EGRESS_REPORT_KEY" "the egress-report-key key of global.apiSecretRef" "CHOREGOS_TRUSTED_PROXY_CIDRS" "choregos-api.trustedProxyCidrs" "CHOREGOS_TRUSTED_PROXY_HOPS" "choregos-api.trustedProxyHops" "CHOREGOS_CORS_ORIGINS" "choregos-api.corsOrigins (a list)" "CHOREGOS_OIDC_AUTHORIZATION_ENDPOINT" "choregos-api.oidcEndpoints.authorization" "CHOREGOS_OIDC_TOKEN_ENDPOINT" "choregos-api.oidcEndpoints.token" "CHOREGOS_OIDC_USERINFO_ENDPOINT" "choregos-api.oidcEndpoints.userinfo" "CHOREGOS_OIDC_REQUIRE_EMAIL_VERIFIED" "choregos-api.oidcRequireEmailVerified" "CHOREGOS_OIDC_RELINK_UNTIL" "choregos-api.oidcRelinkUntil" "CHOREGOS_OIDC_RELINK_VERIFIED_EMAIL" "choregos-api.oidcRelinkUntil (a date: ADR 0160 replaced the switch)" "CHOREGOS_INTERNAL_API_GUARD" "choregos-api.internalApiGuard" "CHOREGOS_RUN_DOOR_HOSTS" "choregos-api.runDoor.hostnames" "CHOREGOS_PUBLIC_HOSTS" "choregos-api.publicHostnames" }}
             {{- if include "choregos.outpostsEnabled" . }}
             {{- range $name := splitList " " (include "choregos.outpostsOwnedEnv" "all") }}
             {{- $_ := set $apiOwned $name "global.outposts (its switch, its quotas, the door's url, signingKey, announcedKeys and ratePerMinute)" }}
@@ -268,8 +268,13 @@ spec:
               value: {{ .Values.global.oidc.defaultOrg | default "" | quote }}
             - name: CHOREGOS_OIDC_REQUIRE_EMAIL_VERIFIED
               value: {{ ternary "true" "false" (.Values.oidcRequireEmailVerified | toString | eq "true") | quote }}
-            - name: CHOREGOS_OIDC_RELINK_VERIFIED_EMAIL
-              value: {{ ternary "true" "false" (.Values.oidcRelinkVerifiedEmail | toString | eq "true") | quote }}
+            {{- if (.Values.oidcRelinkVerifiedEmail | toString | eq "true") }}
+            {{- fail "choregos-api.oidcRelinkVerifiedEmail is replaced by choregos-api.oidcRelinkUntil, the end of a re-link window (an ISO 8601 instant, at most 31 days ahead; ADR 0160): a switch without an end stays open" }}
+            {{- end }}
+            {{- with .Values.oidcRelinkUntil }}
+            - name: CHOREGOS_OIDC_RELINK_UNTIL
+              value: {{ . | toString | quote }}
+            {{- end }}
             {{- $oidcEndpoints := .Values.oidcEndpoints | default dict }}
             {{- $oidcSet := compact (list $oidcEndpoints.authorization $oidcEndpoints.token $oidcEndpoints.userinfo) }}
             {{- if and $oidcSet (ne (len $oidcSet) 3) }}

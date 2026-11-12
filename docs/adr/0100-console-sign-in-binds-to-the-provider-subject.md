@@ -47,6 +47,9 @@ Findings on `origin/main` before this change:
      address it asserts with `email_verified: true`. It is a temporary switch for an identity provider
      migration (every account's subject changes): turn it on, let people sign in, turn it off. A provider
      that omits the claim is not enough.
+     *Amended by [ADR 0160](0160-a-change-of-identity-provider-re-links-accounts-in-a-time-boxed-window.md):
+     the switch is replaced by a window with an end (`CHOREGOS_OIDC_RELINK_UNTIL`), the issuer is recorded
+     beside the subject, an account is moved once, and a plan says beforehand what the window does.*
    The extension path (`terminer_la_connexion`) keeps its previous identity handling and never re-binds.
 3. **The ID token's claims are checked, its signature is not.** `iss` equals the issuer, `aud` contains the
    client id, `nonce` (sent in the login redirect) equals the handshake's when present, and its `sub` equals

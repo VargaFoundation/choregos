@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import ipaddress
 import re
+from datetime import UTC, datetime, timedelta
 from functools import lru_cache
 from typing import Any, Literal
 
@@ -22,6 +23,8 @@ UNRESOLVED_TEMPLATE = ("<no value>", "<nil>")
 DEFAULT_SESSION_SECRET = "dev-session-secret-change-me"
 #: The shortest session secret a deployed instance accepts: a 256-bit HMAC key.
 MIN_SESSION_SECRET_BYTES = 32
+#: The longest re-link window a deployment may open at once (ADR 0160): a window is an event, not a mode.
+OIDC_RELINK_MAX_DAYS = 31
 
 
 #: A hostname as `CHOREGOS_RUN_DOOR_HOSTS` and `CHOREGOS_PUBLIC_HOSTS` take it: no scheme, port or path;
@@ -132,8 +135,13 @@ class Settings(BaseSettings):
     #: An existing account is linked by e-mail only when the provider does not say
     #: `email_verified: false` (Entra omits the claim, so only an explicit false refuses).
     oidc_require_email_verified: bool = True
-    #: Temporary switch for an identity provider MIGRATION (ADR 0100): an account bound to another
-    #: subject is re-linked when the provider asserts `email_verified: true`. Off: it is refused.
+    #: The end of a re-link window, for a change of the instance's identity provider (ADR 0160): until
+    #: this instant, a sign-in whose address the provider asserts with `email_verified: true` re-links the
+    #: one account bound to another provider's subject. Unset: no window, such a sign-in is refused. At
+    #: most `OIDC_RELINK_MAX_DAYS` ahead; a date in the past is a closed window.
+    oidc_relink_until: datetime | None = None
+    #: Replaced by `oidc_relink_until` (ADR 0160): a switch without an end stays open; `true` refuses
+    #: to start.
     oidc_relink_verified_email: bool = False
     #: The MCP door also accepts OAuth tokens issued by the IdP (ADR 0030, RFC 9728): claude.ai and
     #: hosted clients cannot present a `chg_` token. Off by default.
@@ -528,6 +536,32 @@ class Settings(BaseSettings):
                 "opens the API to anyone who reaches /auth/callback. Refused."
             )
         return self
+
+    @model_validator(mode="after")
+    def _the_relink_window_has_an_end(self) -> Settings:
+        """A re-link window is temporary (ADR 0160): it has an end, and the end is near."""
+        if self.oidc_relink_verified_email:
+            raise ValueError(
+                "CHOREGOS_OIDC_RELINK_VERIFIED_EMAIL is replaced by CHOREGOS_OIDC_RELINK_UNTIL, the end of a "
+                "re-link window (an ISO 8601 instant, at most "
+                f"{OIDC_RELINK_MAX_DAYS} days ahead): a switch without an end stays open"
+            )
+        until = self.oidc_relink_until
+        if until is None:
+            return self
+        if until.tzinfo is None:
+            until = self.oidc_relink_until = until.replace(tzinfo=UTC)
+        if until - datetime.now(UTC) > timedelta(days=OIDC_RELINK_MAX_DAYS):
+            raise ValueError(
+                f"CHOREGOS_OIDC_RELINK_UNTIL={until.isoformat()} is more than {OIDC_RELINK_MAX_DAYS} days "
+                "ahead: a re-link window is temporary, open a shorter one and extend it if needed"
+            )
+        return self
+
+    def relink_window_open(self, now: datetime | None = None) -> bool:
+        """Whether a sign-in may re-link an account bound to another provider now (ADR 0160)."""
+        until = self.oidc_relink_until
+        return until is not None and (now or datetime.now(UTC)) < until
 
     @model_validator(mode="after")
     def _oidc_endpoints_all_or_none(self) -> Settings:

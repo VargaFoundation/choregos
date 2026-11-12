@@ -87,3 +87,44 @@ class PlatformIdentityRow(Dto):
 
 class PlatformIdentity(Dto):
     items: list[PlatformIdentityRow]
+
+
+class RelinkWindow(Dto):
+    """The re-link window of a change of identity provider (ADR 0160)."""
+
+    #: `open` until `until`; `closed` once `until` passed; `none` when the deployment sets no window.
+    state: Literal["open", "closed", "none"]
+    until: datetime | None = None
+    #: The plan's issuer is the configured one: the window applies to the sign-ins it describes.
+    applies: bool
+
+
+class RelinkCounts(Dto):
+    pending: int
+    ambiguous: int
+    current: int
+    unbound: int
+    not_concerned: int
+
+
+class RelinkAccount(Dto):
+    user_id: str
+    email: str
+    display_name: str
+    #: The issuer of the account's subject, null when it was bound before issuers were recorded.
+    issuer: str | None = None
+    last_login_at: datetime | None = None
+    #: For an ambiguous account: the other accounts' addresses that are the same, letter case aside.
+    same_address_as: list[str] = Field(default_factory=list)
+
+
+class RelinkPlan(Dto):
+    """What a re-link window for `issuer` does to each account: a dry run, nothing is changed."""
+
+    issuer: str
+    configured_issuer: str
+    window: RelinkWindow
+    counts: RelinkCounts
+    pending: list[RelinkAccount]
+    ambiguous: list[RelinkAccount]
+    generated_at: datetime
