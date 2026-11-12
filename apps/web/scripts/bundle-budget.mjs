@@ -66,6 +66,8 @@ const CHUNKS = join(process.cwd(), ".next", "static", "chunks");
 // 2026-11-14 (S66-42): 2525 -> 2550 kB. A member's profile page (the card, access, work and administration
 // sections), the avatar with its initials fallback and My account's photo upload measure 2529 kB, with no new
 // dependency.
+// 2026-11-14 (S66-23): no change, 2550 kB. The installation page's launch bindings and the conversation's launch card
+// and started work items measure 2533 kB on the rebased branch, no new dependency.
 const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 2550);
 const CHUNK_MAX_KB = Number(process.env.BUNDLE_CHUNK_MAX_KB ?? 600);
 

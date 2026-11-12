@@ -8,6 +8,7 @@ import type {
   Assistant,
   AssistantBind,
   AssistantInstall,
+  AssistantLaunchBind,
   AssistantList,
   AssistantReadPage,
   AssistantReadiness,
@@ -53,6 +54,7 @@ import { API_BASE, ApiError, problemOf, request } from "./api";
 export type {
   Assistant,
   AssistantBinding,
+  AssistantLaunch,
   AssistantReadLine,
   AssistantReadinessItem,
   AssistantStop,
@@ -261,6 +263,12 @@ export const assistantsApi = {
   resume: (org: string, slug: string) => request<Assistant>(`/orgs/${enc(org)}/assistants/${enc(slug)}/resume`, post()),
   bind: (org: string, slug: string, need: string, body: AssistantBind) =>
     request<Assistant>(`/orgs/${enc(org)}/assistants/${enc(slug)}/bindings/${enc(need)}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+  /** Binds a launch to a project's workflow (ADR 0158): the owners', who must also create work items there. */
+  bindLaunch: (org: string, slug: string, launch: string, body: AssistantLaunchBind) =>
+    request<Assistant>(`/orgs/${enc(org)}/assistants/${enc(slug)}/launches/${enc(launch)}`, {
       method: "PUT",
       body: JSON.stringify(body),
     }),

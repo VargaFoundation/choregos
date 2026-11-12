@@ -230,6 +230,38 @@ the `needs` it reads; the person agrees to that exact list. A delegated task nev
 A task that reads only `service` needs takes `delegation: none`. Each task's workflow is validated like
 any workflow.
 
+### Starting a workflow a project already runs
+
+A task runs a workflow your plugin ships. When the organisation already runs the workflow in one of its
+projects, with that project's agents, budget and people, declare a **launch** instead: the assistant may
+propose to start it, and you do not ship it again.
+
+```text
+launches:
+  - name: portfolio_review
+    description: Ask the review team for a portfolio review document, once the person said which portfolio.
+    input_schema:
+      type: object
+      required: [portfolio]
+      properties: { portfolio: { type: string }, review_date: { type: string } }
+    required: true
+```
+
+The manifest names no project: the installation's owners bind each launch to one of their projects and one of
+its workflows, on the installation page (card **Workflows it may start**). They need the right to create work
+items in that project. A required launch left unbound keeps the installation `incomplete`.
+
+`description` is what the agent reads to decide when to propose it. `input_schema` is what it fills from the
+conversation; it becomes the work item's fields, so the bound workflow's `metadata.inputs` must accept it: every
+input the workflow requires is one the launch requires, and a workflow with closed inputs accepts every property
+you declare. Otherwise the binding is refused and says why.
+
+The agent sees `launch__<name>(title, inputs)` and `launch_status`. Calling the first one starts nothing: it
+proposes, and the person confirms in their conversation. The work item is then filed in the bound project in
+their name, and only if they may create work items there. `launch_status` tells the agent what became of it: the
+work item's state and where to read its artefacts. Launches are offered to `prompt` agents. A plugin upgrade
+that drops, changes or adds a launch is followed like a need.
+
 ## 6. Surfaces
 
 ```text
@@ -307,6 +339,8 @@ Each refusal names the file and the path in it.
 - A suite that evaluates another agent than the assistant's, repeats a case name, or names a tool that
   is not a `need__operation` of the assistant.
 - A prompt message that uses an argument the prompt does not declare.
+- A launch declared twice, a launch whose `input_schema` is not a JSON Schema of `type: object`, or a need
+  called `launch` in an assistant that declares launches.
 - A name that is not `snake_case` (needs, operations, memory spaces, knowledge bases, tasks, prompts,
   subject types and keys).
 
