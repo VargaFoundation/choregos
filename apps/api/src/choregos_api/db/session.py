@@ -64,8 +64,9 @@ def _dropped(session: Session) -> None:
 _RELEASABLE = "choregos.releasable"
 #: The transaction-local settings the session's next transaction starts with (`release_connection`).
 _RESUME = "choregos.resume_settings"
-#: The settings `release_connection` carries to the next transaction: the RLS scope and the user it names.
-_CARRIED = ("app.current_orgs", "app.current_user")
+#: The settings `release_connection` carries to the next transaction: the RLS scope, the user it names
+#: and the outpost it names (ADR 0148 §6).
+_CARRIED = ("app.current_orgs", "app.current_user", "app.current_outpost")
 
 
 def allow_release_during_calls(session: AsyncSession) -> None:
@@ -119,13 +120,8 @@ async def outside_the_transaction(session: AsyncSession) -> AsyncIterator[None]:
 async def _carried_settings(session: AsyncSession) -> dict[str, str]:
     if get_settings().is_sqlite:
         return {}
-    values = (
-        await session.execute(
-            text(
-                "SELECT current_setting('app.current_orgs', true), current_setting('app.current_user', true)"
-            )
-        )
-    ).one()
+    read = ", ".join(f"current_setting('{name}', true)" for name in _CARRIED)
+    values = (await session.execute(text(f"SELECT {read}"))).one()
     return {name: str(value) for name, value in zip(_CARRIED, values, strict=True) if value is not None}
 
 
@@ -223,6 +219,44 @@ async def name_the_user(session: AsyncSession, user_id: str | None) -> None:
     if get_settings().is_sqlite:
         return
     await session.execute(text("SELECT set_config('app.current_user', :u, true)"), {"u": user_id or ""})
+
+
+async def name_the_outpost(session: AsyncSession, outpost_id: str | None) -> None:
+    """Set `app.current_outpost` for the RLS of the outposts' tables (ADR 0148 §6), for THE current
+    transaction only.
+
+    The rows that belong to one outpost (its instances, its enrolment tokens, its calls) are visible
+    and writable only to a session that names that outpost, inside an organisation scope that holds
+    it: the second setting narrows the first, it never widens it. `None` names no outpost, which is
+    the default and fails closed: none of those rows. There is no "every outpost" value. A path
+    names the outpost it works for: the door, the one its caller's signature resolves to; the
+    management routes, the one in their URL; the broker, the one its connector routes to
+    (`org_connectors.outpost_id`).
+    """
+    if get_settings().is_sqlite:
+        return
+    await session.execute(
+        text("SELECT set_config('app.current_outpost', :outpost, true)"), {"outpost": outpost_id or ""}
+    )
+
+
+@asynccontextmanager
+async def in_outpost_scope(session: AsyncSession, outpost_id: str) -> AsyncIterator[None]:
+    """For the length of a block, the session names this outpost; what it named before is RESTORED.
+
+    For a request that works on several outposts in turn (the organisation's list), or that goes on
+    after it is done with one. What the block wrote must be flushed before it ends: an `INSERT` or an
+    `UPDATE` sent later would be judged without the outpost named, and refused.
+    """
+    if get_settings().is_sqlite:
+        yield
+        return
+    before = (await session.execute(text("SELECT current_setting('app.current_outpost', true)"))).scalar_one()
+    await name_the_outpost(session, outpost_id)
+    try:
+        yield
+    finally:
+        await name_the_outpost(session, before or None)
 
 
 @asynccontextmanager

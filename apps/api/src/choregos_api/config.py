@@ -48,6 +48,37 @@ class OAuthClient(BaseModel):
 #: The public documentation site (S62 shared contracts), when `CHOREGOS_DOCS_URL` names none.
 DEFAULT_DOCS_URL = "https://docs.varga.foundation/choregos"
 
+#: An origin as `CHOREGOS_OUTPOSTS_DOOR_URL` takes it, and as an outpost's policy file writes its
+#: `control_plane` (`outpost-policy.schema.json`): a scheme and a host, no path, query or user.
+ORIGIN = re.compile(r"https?://[^\s/@?#]+")
+#: A raw 32-byte public key as the outposts' contract writes one: unpadded base64url, one spelling
+#: per key (`choregos_contracts.outpost.PUBLIC_KEY_PATTERN`).
+PUBLIC_KEY = re.compile(r"[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]")
+#: The most keys an outpost's policy file pins (`choregos_contracts.outpost.MAX_DOOR_KEYS`): the key
+#: that signs, and room for a rotation.
+MAX_DOOR_KEYS = 4
+
+
+@lru_cache(maxsize=4)
+def ed25519_public_key(private_pem: str) -> str:
+    """The public half of an Ed25519 private key given as PEM (PKCS#8), written as the outposts'
+    contract writes a key. `ValueError` when the text is not such a key: its content is never quoted."""
+    import base64
+
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    try:
+        key = serialization.load_pem_private_key(private_pem.encode(), password=None)
+    except (ValueError, TypeError) as error:
+        raise ValueError("not a PEM private key") from error
+    if not isinstance(key, Ed25519PrivateKey):
+        raise ValueError(f"an Ed25519 key is expected, not {type(key).__name__}")
+    raw = key.public_key().public_bytes(
+        encoding=serialization.Encoding.Raw, format=serialization.PublicFormat.Raw
+    )
+    return base64.urlsafe_b64encode(raw).decode().rstrip("=")
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="CHOREGOS_", env_file=".env", extra="ignore")
@@ -366,6 +397,27 @@ class Settings(BaseSettings):
     #: routes answer 404 and say where the GitHub release is (S62-08, `routers/cli_downloads.py`).
     cli_dir: str = "/opt/choregos/cli"
 
+    # Outposts (ADRs 0147-0149)
+    #: `CHOREGOS_OUTPOSTS`, `off` by default (ADR 0147 §12). Off, the outposts' door is not mounted and
+    #: creating an outpost or an enrolment token is refused (409 `outposts_disabled`): it is also the
+    #: switch that stops every outpost at once. `on` or `off`, or any spelling of a boolean.
+    outposts: bool = False
+    #: The public origin of the outposts' door (`CHOREGOS_OUTPOSTS_DOOR_URL`, ADR 0148 §8): scheme and
+    #: host, no path (`https://outposts.example.com`). It is what an outpost's operator writes as
+    #: `control_plane` in the policy file, what an enrolment token is returned with, and what the door
+    #: compares a signature's `htu` with. Empty: the deployment declares none.
+    outposts_door_url: str = ""
+    #: The Ed25519 key the door signs every call it hands over with (`CHOREGOS_OUTPOSTS_DOOR_SIGNING_KEY`,
+    #: ADR 0148 §13): a PEM private key (PKCS#8), a secret of the installation. Its public half is the
+    #: first of the `door_keys` an operator pins. Empty: the door can sign nothing, and no enrolment
+    #: token is issued.
+    outposts_door_signing_key: str = ""
+    #: Public keys announced beside the one that signs, for a rotation (ADR 0148 §13), as a JSON list
+    #: (`CHOREGOS_OUTPOSTS_DOOR_ANNOUNCED_KEYS`): the next key before the door signs with it, the former
+    #: one after. Each is the unpadded base64url of 32 raw bytes; three at most, since a policy file
+    #: pins four keys.
+    outposts_door_announced_keys: list[str] = Field(default_factory=list)
+
     # Webhooks
     github_webhook_secret: str = ""
     github_app_id: str = ""
@@ -496,6 +548,41 @@ class Settings(BaseSettings):
         return self
 
     @model_validator(mode="after")
+    def _the_outposts_door_is_well_formed(self) -> Settings:
+        """An origin with a path would never equal a policy file's `control_plane`, and a key that does
+        not parse would leave every outpost refusing every call (`signature_refused`): both are refused
+        here, in every process, rather than found by an operator of an outpost. Safe where the settings
+        are unset."""
+        if self.outposts_door_url and not ORIGIN.fullmatch(self.outposts_door_url):
+            raise ValueError(
+                "CHOREGOS_OUTPOSTS_DOOR_URL is not an origin: a scheme and a host, no path "
+                "(`https://outposts.example.com`)"
+            )
+        announced = self.outposts_door_announced_keys
+        if any(not PUBLIC_KEY.fullmatch(key) for key in announced):
+            raise ValueError(
+                "CHOREGOS_OUTPOSTS_DOOR_ANNOUNCED_KEYS: each entry is a public key, the unpadded "
+                "base64url of its 32 raw bytes"
+            )
+        if len(announced) > MAX_DOOR_KEYS - 1:
+            raise ValueError(
+                f"CHOREGOS_OUTPOSTS_DOOR_ANNOUNCED_KEYS: at most {MAX_DOOR_KEYS - 1} keys beside the one "
+                f"that signs (a policy file pins {MAX_DOOR_KEYS})"
+            )
+        signing = None
+        if self.outposts_door_signing_key:
+            try:
+                signing = ed25519_public_key(self.outposts_door_signing_key)
+            except ValueError as error:
+                raise ValueError(f"CHOREGOS_OUTPOSTS_DOOR_SIGNING_KEY: {error}") from None
+        if len({signing, *announced} - {None}) != len(announced) + (signing is not None):
+            raise ValueError(
+                "CHOREGOS_OUTPOSTS_DOOR_ANNOUNCED_KEYS: a key is announced once, and the key that signs "
+                "is not announced beside itself"
+            )
+        return self
+
+    @model_validator(mode="after")
     def _images_named_by_the_operator(self) -> Settings:
         check_image_map("CHOREGOS_JOB_IMAGES", self.job_images, require_digest=self.require_image_digest)
         check_image_map("CHOREGOS_AGENT_IMAGES", self.agent_images, require_digest=self.require_image_digest)
@@ -541,6 +628,25 @@ class Settings(BaseSettings):
                 "Vérifier la source du secret (Infisical, Helm) avant de redémarrer."  # lang: fr-ok
             )
         return self
+
+    @property
+    def outposts_door_origin(self) -> str | None:
+        """The door's origin as a policy file's `control_plane` names it: scheme and host in lower
+        case, a default port left out. `None` when the deployment declares none."""
+        if not self.outposts_door_url:
+            return None
+        scheme, _, host = self.outposts_door_url.lower().partition("://")
+        default = {"https": ":443", "http": ":80"}[scheme]
+        return f"{scheme}://{host.removesuffix(default)}"
+
+    @property
+    def outposts_door_keys(self) -> list[str]:
+        """The door's public keys an outpost's operator pins (`door_keys`, ADR 0148 §13): the one that
+        signs now first, then the ones announced for a rotation. Empty without a signing key: a
+        door that signs nothing has nothing to pin."""
+        if not self.outposts_door_signing_key:
+            return []
+        return [ed25519_public_key(self.outposts_door_signing_key), *self.outposts_door_announced_keys]
 
     @property
     def bootstrap_admin_emails(self) -> list[str]:

@@ -56,6 +56,9 @@ class Permission(StrEnum):
     ASSISTANT_MANAGE = "assistant:manage"
     ASSISTANT_USE = "assistant:use"
     ASSISTANT_AUDIT = "assistant:audit"
+    #: Create an outpost, issue its enrolment tokens, approve, pause and revoke (ADR 0147 §4): the
+    #: organisation administrator, whose role holds every permission. No other role carries it.
+    OUTPOST_MANAGE = "outpost:manage"
 
 
 ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
@@ -110,9 +113,14 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
 }
 
 
+#: The principal kind of an outpost's instance (ADR 0147 §3): what a request signed with an instance's
+#: key resolves to, at the outposts' door and nowhere else.
+OUTPOST = "outpost"
+
+
 @dataclass(slots=True)
 class Principal:
-    """The identity that acts: a human, an API token, or the system."""
+    """The identity that acts: a human, an API token, the system, or an outpost's instance."""
 
     user_id: str
     email: str
@@ -140,6 +148,10 @@ class Principal:
         return self.org_roles.get(org)
 
     def permissions(self, org: str, project_slug: str | None = None) -> frozenset[Permission]:
+        if self.kind == OUTPOST:
+            # An outpost executes what the platform already decided and starts nothing (ADR 0147 §3):
+            # whatever roles a later change might hand it, it holds no permission.
+            return frozenset()
         role = self.role_for(org, project_slug)
         if role is None:
             return frozenset()
@@ -153,7 +165,20 @@ class Principal:
         return permission in self.permissions(org, project_slug)
 
     def is_platform_admin(self) -> bool:
-        return any(role == Role.ORG_ADMIN for role in self.org_roles.values())
+        return self.kind != OUTPOST and any(role == Role.ORG_ADMIN for role in self.org_roles.values())
 
 
 SYSTEM = Principal(user_id="system", email="system@choregos", display_name="Choregos", kind="system")
+
+
+def outpost_principal(*, outpost_id: str, instance_id: str, display_name: str = "") -> Principal:
+    """The principal of one instance of one outpost (ADR 0147 §3): no membership and no role, so no
+    permission. It is not a user row and holds no session, no API token and no OAuth token, which is
+    all the REST API, the MCP door and the A2A door accept. Only the outposts' door builds one, once
+    it has verified the instance's signature (ADR 0148 §4)."""
+    return Principal(
+        user_id=f"outpost:{outpost_id}:{instance_id}",
+        email="",
+        display_name=display_name or f"outpost instance {instance_id}",
+        kind=OUTPOST,
+    )

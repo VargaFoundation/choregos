@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from typing import Annotated, Any
 
 import jwt
-from choregos_contracts import Role
+from choregos_contracts import SIGNATURE_HEADER, Role
 from choregos_core import utcnow
 from choregos_core.run_closure import run_is_closed
 from fastapi import Depends, Header, Query
@@ -137,6 +137,23 @@ async def principal_for_user(session: AsyncSession, user: User, *, narrow: bool 
     return await _principal_from_user(session, user, narrow=narrow)
 
 
+#: What the REST API, the MCP door and the A2A door answer a request that carries an outpost's signature.
+OUTPOST_REFUSAL = (
+    "an outpost's signature opens the outposts' door only: this request carries one "
+    f"(`{SIGNATURE_HEADER}`), and an outpost holds no session, no API token and no permission"
+)
+
+
+def presents_outpost_signature(request: HTTPConnection) -> bool:
+    """Whether the request says it is an outpost's (ADR 0147 §3).
+
+    A request signed by an instance resolves to a principal of kind `outpost`, and only the outposts'
+    door reads that signature (ADR 0148 §4). The REST API, the MCP door and the A2A door do not verify
+    it: they refuse whatever presents it, before they read a session or a token, so that a request is
+    never an outpost's and a person's at once."""
+    return SIGNATURE_HEADER in request.headers
+
+
 def is_rest_token(token: ApiToken) -> bool:
     """Does this token open the REST API? A token older than scopes (empty list) counts as `*`."""
     return "*" in (token.scopes or ["*"])
@@ -161,6 +178,8 @@ async def current_principal(
     The token and the user are read in PLATFORM scope: `api_tokens` and `users` are under RLS since
     0.11, and we do not yet know who is speaking. `_principal_from_user` narrows afterwards.
     """
+    if presents_outpost_signature(request):
+        raise forbidden(OUTPOST_REFUSAL)
     await limit_to_organisations(session, ALL_ORGS)
     if authorization and authorization.lower().startswith("bearer "):
         raw = authorization.split(" ", 1)[1].strip()

@@ -719,6 +719,52 @@ global:
     cidrs: [203.0.113.0/24]
 ```
 
+## Outposts (ADRs 0147-0149)
+
+An outpost is a place an organisation's administrator enrols, which only dials out to the platform
+([ADR 0147](adr/0147-an-outpost-only-dials-out.md)): the platform never connects to it and stores no
+address of it. Outposts are off unless you turn them on. What is in place is the platform's side of
+the record: the tables, the `outpost:manage` right of the organisation's administrator and the
+management API (`/api/v1/orgs/{org}/outposts…`). The door an outpost dials (`/outposts/v1`,
+[ADR 0148](adr/0148-the-outpost-door-is-a-third-door-with-its-own-contract.md)) and the daemon are not
+served yet: with the switch on, an outpost can be created and an enrolment token issued, and no
+instance can use it until they are.
+
+| Setting | Default | What it does |
+| :-- | :-- | :-- |
+| `CHOREGOS_OUTPOSTS` | `off` | `on`: outposts can be created and enrolment tokens issued. `off`: both are refused (409 `outposts_disabled`), and what exists can still be listed, revoked and deleted. It is the one switch that stops every outpost |
+| `CHOREGOS_OUTPOSTS_DOOR_URL` | empty | the public origin of the outposts' door: a scheme and a host, no path (`https://outposts.example.com`). It is returned with each enrolment token as `control_plane`, which is what the outpost's operator writes in the policy file; a request an outpost signs binds its URL under that origin (`packages/contracts/outpost-door.yaml`). Give the door a hostname of its own: it is the one name an outpost's firewall opens |
+| `CHOREGOS_OUTPOSTS_DOOR_SIGNING_KEY` | empty | **a secret.** The Ed25519 private key (PEM, PKCS#8) the door signs every call it hands over with ([ADR 0148](adr/0148-the-outpost-door-is-a-third-door-with-its-own-contract.md) §13). Only its public half is ever shown. Without it no enrolment token is issued (409 `outposts_disabled`): an outpost makes only calls signed by a key it pins, so an instance enrolled with nothing to pin could never be handed anything |
+| `CHOREGOS_OUTPOSTS_DOOR_ANNOUNCED_KEYS` | `[]` | public keys shown beside the one that signs, for a rotation, as a JSON list; three at most, since a policy file pins four keys. Each is the unpadded base64url of the key's 32 raw bytes |
+
+The chart does not render these settings yet. Pass them with `global.extraEnv`, the signing key by
+`valueFrom.secretKeyRef` and never as a plain `value`.
+
+```bash
+openssl genpkey -algorithm ed25519 -out door.pem          # CHOREGOS_OUTPOSTS_DOOR_SIGNING_KEY
+openssl pkey -in door.pem -pubout -outform DER | tail -c 32 | basenc --base64url | tr -d '='   # its public half
+```
+
+**The keys an operator pins.** `GET /api/v1/orgs/{org}/outposts/{slug}` and the answer that issues an
+enrolment token both carry `door_keys`: the public half of the key that signs, then the announced
+keys. Whoever runs the outpost copies them into the `door_keys` of its policy file, which is the only
+place an outpost reads them from: nothing the platform sends later adds a key to that list or changes
+it. `door_keys` is empty while the deployment has no signing key.
+
+**Rotating the signing key** is an overlap that the operators of outposts take part in, in this order:
+
+1. generate the next key and put its public half in `CHOREGOS_OUTPOSTS_DOOR_ANNOUNCED_KEYS`. The
+   management API now shows both keys; each operator adds the new one to the policy file;
+2. once every outpost pins it, make it `CHOREGOS_OUTPOSTS_DOOR_SIGNING_KEY` and move the former public
+   key to the announced list. By the door's contract, an outpost that did not pin the new key makes
+   none of the calls signed with it and refuses each with `signature_refused`;
+3. when the operators have dropped the former key from their files, remove it from the announced list.
+
+The API refuses to start on a door URL that is not an origin, on a signing key that is not an Ed25519
+private key in PEM, and on an announced key that is not a public key in that spelling, is listed
+twice, is the public half of the signing key, or is a fourth one
+(`apps/api/tests/test_outposts_settings.py`).
+
 ## Extra volumes for the API
 
 `choregos-api.extraVolumes` and `choregos-api.extraVolumeMounts` are appended verbatim to the
