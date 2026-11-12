@@ -1,0 +1,124 @@
+{
+  "name": "choregos",
+  "displayName": "Choregos",
+  "description": "Work through your Choregos platform from the editor: what runs, what it spends, what waits for you. Nothing runs on your machine.",
+  "version": "0.27.0",
+  "publisher": "vargafoundation",
+  "license": "Apache-2.0",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/VargaFoundation/choregos.git",
+    "directory": "apps/vscode"
+  },
+  "homepage": "https://docs.varga.foundation/choregos/",
+  "engines": {
+    "vscode": "^1.96.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "choregos",
+    "agents",
+    "workflows"
+  ],
+  "extensionKind": [
+    "ui",
+    "workspace"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true,
+      "description": "The extension reads nothing from the workspace and runs nothing in it."
+    },
+    "virtualWorkspaces": true
+  },
+  "contributes": {
+    "configuration": {
+      "title": "Choregos",
+      "properties": {
+        "choregos.instanceUrl": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "The address of your Choregos instance, as you open its console (for example `https://choregos.example.com`). The extension calls its API at this origin and nowhere else."
+        },
+        "choregos.organisation": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "The organisation whose work the views show (its slug). Empty: the first organisation you belong to."
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "choregos",
+          "title": "Choregos",
+          "icon": "media/choregos.svg"
+        }
+      ]
+    },
+    "views": {
+      "choregos": [
+        {
+          "id": "choregos.live",
+          "name": "Live"
+        },
+        {
+          "id": "choregos.decisions",
+          "name": "Decisions"
+        },
+        {
+          "id": "choregos.elsewhere",
+          "name": "Elsewhere"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "choregos.live",
+        "contents": "What runs on your Choregos instance appears here.\n[Open settings](command:workbench.action.openSettings?%22choregos%22)"
+      },
+      {
+        "view": "choregos.decisions",
+        "contents": "What waits for you appears here once your instance can say it."
+      },
+      {
+        "view": "choregos.elsewhere",
+        "contents": "Activity outside your focus appears here."
+      }
+    ],
+    "commands": [
+      {
+        "command": "choregos.showLog",
+        "title": "Show log",
+        "category": "Choregos"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "package": "node scripts/build.mjs --production && vsce package --no-dependencies --out dist/choregos-vscode.vsix",
+    "lint": "eslint . --max-warnings 0 && prettier --check .",
+    "format": "prettier --write .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --coverage"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.5",
+    "@types/node": "^22.0.0",
+    "@types/vscode": "1.96.0",
+    "@vitest/coverage-v8": "5.1.0",
+    "@vscode/vsce": "4.1.0",
+    "esbuild": "0.28.2",
+    "eslint": "9.39.5",
+    "prettier": "3.9.10",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.72.2",
+    "vitest": "5.1.0"
+  },
+  "packageManager": "pnpm@12.4.2"
+}
