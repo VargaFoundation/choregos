@@ -4184,6 +4184,8 @@ export type AssistantBinding = {
 };
 
 export type Assistant = {
+  /** the installation's id: what the cost and activity routes' `assistant` filter takes (ADR 0141 §1) */
+  id: string;
   slug: string;
   plugin: string;
   plugin_version: string;
