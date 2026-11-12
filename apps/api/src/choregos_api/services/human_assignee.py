@@ -127,7 +127,7 @@ def decider_verdict(
 
 def refusal(assignee: StepAssignee, *, after_sla: bool) -> str:
     """Why a person may not answer, in words that say who may."""
-    groups = "(identity-provider groups, as of your last sign-in)"
+    groups = "(the organisation's groups, or the identity provider's as of your last sign-in)"
     if assignee.user and assignee.group and not after_sla:
         return (
             f"this step is addressed to `{assignee.user}` first: the group `{assignee.group}` may "

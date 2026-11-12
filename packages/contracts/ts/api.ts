@@ -3672,6 +3672,67 @@ export type McpOutpostConnectorConfig = {
   timeout_s?: number;
 };
 
+/** `internal`: created and edited through this API by an organisation administrator; `scim`: pushed by an identity provider, read-only here (ADR 0152) */
+export type OrgGroupSource = "internal" | "scim";
+
+export type OrgGroupCreate = {
+  /** what a workflow's human actor names (`group: release-captains`) */
+  slug: string;
+  name: string;
+  description?: string | null;
+};
+
+/** Only the fields sent change; `description` null clears it. */
+export type OrgGroupUpdate = {
+  name?: string | null;
+  description?: string | null;
+};
+
+/** A group that belongs to the organisation (ADR 0152). A person in it carries it as `choregos:<org>:<slug>` wherever a group is checked. */
+export type OrgGroup = {
+  slug: string;
+  name: string;
+  description?: string | null;
+  source: OrgGroupSource;
+  /** members of the organisation in the group */
+  member_count: number;
+  created_by?: string | null;
+  created_at: string;
+};
+
+export type OrgGroupList = {
+  items: Array<OrgGroup>;
+};
+
+/** One of the two, naming a member of the organisation. */
+export type OrgGroupMemberAdd = {
+  email?: string | null;
+  user_id?: string | null;
+};
+
+export type OrgGroupMember = {
+  user_id: string;
+  email: string;
+  display_name: string;
+  added_by?: string | null;
+  added_at: string;
+};
+
+export type OrgGroupMemberList = {
+  items: Array<OrgGroupMember>;
+};
+
+/** The 409 body of a refused write on an organisation's group (ADR 0152): `group_exists` (the slug is taken in the organisation) or `group_read_only` (the group comes from the identity provider; `source` says which). */
+export type OrgGroupConflict = {
+  type: string;
+  title: string;
+  status: number;
+  detail?: string;
+  instance?: string;
+  code: "group_exists" | "group_read_only";
+  source?: OrgGroupSource;
+};
+
 /** The 409 body of the refusals that concern an outpost (ADRs 0147 and 0149): an RFC 9457 problem with a `code`. On the outposts' own routes: `outposts_disabled` (the deployment keeps outposts switched off), `door_key_missing` (outposts are on and the door has no signing key, so no enrolment token can be created: an outpost could pin nothing, ADR 0148 §13), `outpost_exists`, `outpost_revoked`, `outpost_not_revoked` and `outpost_in_use` (the outpost is not deleted while connectors route to it; `connectors` names them), `instance_not_pending` and `fingerprint_mismatch`. Where a connector is reached through an outpost, the refusals of ADR 0149 §7 that a 409 carries: `outpost_paused` (paused, revoked, or outposts switched off: nothing was written), `outpost_offline` (no active instance claimed the call in time), `outpost_refused` (the outpost's own policy refused; `refusal` is its code) and `outpost_timeout` (a claimed read got no answer in time). Each of these four names the `outpost`. */
 export type OutpostConflict = {
   type: string;
@@ -5720,6 +5781,7 @@ export interface Operations {
   acknowledgeBudgetAlert: { method: "POST"; path: "/orgs/{org}/budget-alerts/{alert_id}/acknowledge"; body: never; response: BudgetAlert };
   addMember: { method: "POST"; path: "/orgs/{org}/members"; body: MembershipUpsert; response: Membership };
   addModelCatalogueEntry: { method: "POST"; path: "/orgs/{org}/models"; body: ModelCatalogueEntryCreate; response: ModelCatalogueEntry };
+  addOrgGroupMember: { method: "POST"; path: "/orgs/{org}/groups/{slug}/members"; body: OrgGroupMemberAdd; response: OrgGroupMember };
   adoptWorkflow: { method: "POST"; path: "/projects/{id}/workflow-adoptions"; body: WorkflowAdopt; response: WorkflowDef };
   alertmanagerWebhook: { method: "POST"; path: "/webhooks/alertmanager"; body: {
   [key: string]: unknown;
@@ -5777,6 +5839,7 @@ export interface Operations {
   createOrg: { method: "POST"; path: "/orgs"; body: OrgCreate; response: Org };
   createOrgConnector: { method: "POST"; path: "/orgs/{org}/connectors"; body: OrgConnectorCreate; response: OrgConnector };
   createOrgEgressRule: { method: "POST"; path: "/orgs/{org}/egress/rules"; body: EgressRuleCreate; response: EgressRule };
+  createOrgGroup: { method: "POST"; path: "/orgs/{org}/groups"; body: OrgGroupCreate; response: OrgGroup };
   createOutpost: { method: "POST"; path: "/orgs/{org}/outposts"; body: OutpostCreate; response: Outpost };
   createOutpostEnrolment: { method: "POST"; path: "/orgs/{org}/outposts/{slug}/enrolments"; body: OutpostEnrolmentCreate; response: OutpostEnrolmentCreated };
   createProject: { method: "POST"; path: "/orgs/{org}/projects"; body: ProjectCreate; response: Project };
@@ -5802,6 +5865,7 @@ export interface Operations {
   deleteMyConversation: { method: "DELETE"; path: "/me/conversations/{conversation_id}"; body: never; response: void };
   deleteMyTaskSubscription: { method: "DELETE"; path: "/me/assistants/{org}/{slug}/tasks/{task}"; body: never; response: void };
   deleteOrgConnector: { method: "DELETE"; path: "/orgs/{org}/connectors/{name}"; body: never; response: void };
+  deleteOrgGroup: { method: "DELETE"; path: "/orgs/{org}/groups/{slug}"; body: never; response: void };
   deleteOutboundProxy: { method: "DELETE"; path: "/orgs/{org}/outbound-proxy"; body: never; response: void };
   deleteOutpost: { method: "DELETE"; path: "/orgs/{org}/outposts/{slug}"; body: never; response: void };
   deleteProject: { method: "DELETE"; path: "/projects/{id}"; body: never; response: void };
@@ -5889,6 +5953,7 @@ export interface Operations {
   getOrgConnector: { method: "GET"; path: "/orgs/{org}/connectors/{name}"; body: never; response: OrgConnector };
   getOrgCosts: { method: "GET"; path: "/orgs/{org}/costs"; body: never; response: CostReport };
   getOrgEgress: { method: "GET"; path: "/orgs/{org}/egress"; body: never; response: EgressOverview };
+  getOrgGroup: { method: "GET"; path: "/orgs/{org}/groups/{slug}"; body: never; response: OrgGroup };
   getOutboundProxy: { method: "GET"; path: "/orgs/{org}/outbound-proxy"; body: never; response: OutboundProxyState };
   getOutpost: { method: "GET"; path: "/orgs/{org}/outposts/{slug}"; body: never; response: Outpost };
   getPlatformIdentity: { method: "GET"; path: "/platform/identity"; body: never; response: PlatformIdentity };
@@ -6079,6 +6144,8 @@ export interface Operations {
   listOrgAgentCredentials: { method: "GET"; path: "/orgs/{org}/agent-credentials"; body: never; response: Array<AgentCredential> };
   listOrgAgentReleases: { method: "GET"; path: "/orgs/{org}/agent-releases"; body: never; response: Array<AgentRelease> };
   listOrgConnectors: { method: "GET"; path: "/orgs/{org}/connectors"; body: never; response: Array<OrgConnector> };
+  listOrgGroupMembers: { method: "GET"; path: "/orgs/{org}/groups/{slug}/members"; body: never; response: OrgGroupMemberList };
+  listOrgGroups: { method: "GET"; path: "/orgs/{org}/groups"; body: never; response: OrgGroupList };
   listOrgs: { method: "GET"; path: "/orgs"; body: never; response: Array<Org> };
   listOutpostCalls: { method: "GET"; path: "/orgs/{org}/outposts/{slug}/calls"; body: never; response: OutpostCallPage };
   listOutpostInstances: { method: "GET"; path: "/orgs/{org}/outposts/{slug}/instances"; body: never; response: OutpostInstanceList };
@@ -6192,6 +6259,7 @@ export interface Operations {
   remoteCredentialCallback: { method: "GET"; path: "/remote-credentials/oauth/callback"; body: never; response: void };
   removeMachineAccount: { method: "DELETE"; path: "/projects/{id}/machine-accounts/{slug}"; body: never; response: void };
   removeMember: { method: "DELETE"; path: "/orgs/{org}/members/{user_id}"; body: never; response: void };
+  removeOrgGroupMember: { method: "DELETE"; path: "/orgs/{org}/groups/{slug}/members/{user_id}"; body: never; response: void };
   requestOrgEgress: { method: "POST"; path: "/orgs/{org}/egress/requests"; body: EgressRequestCreate; response: EgressRule };
   resolveProjectAgents: { method: "GET"; path: "/projects/{id}/agent-resolution"; body: never; response: Array<AgentResolution> };
   restoreAgentVersion: { method: "POST"; path: "/orgs/{org}/agents/{slug}/versions/{version}/restore"; body: AgentVersionRestore; response: AgentVersion };
@@ -6270,6 +6338,7 @@ export interface Operations {
   updateMyAssistantSubjectMemory: { method: "PATCH"; path: "/me/assistants/{org}/{slug}/memory/{space}/{subject}"; body: MemoryAction; response: MemorySpace };
   updateOrg: { method: "PATCH"; path: "/orgs/{org}"; body: OrgUpdate; response: Org };
   updateOrgConnector: { method: "PATCH"; path: "/orgs/{org}/connectors/{name}"; body: OrgConnectorUpdate; response: OrgConnector };
+  updateOrgGroup: { method: "PATCH"; path: "/orgs/{org}/groups/{slug}"; body: OrgGroupUpdate; response: OrgGroup };
   updateProject: { method: "PATCH"; path: "/projects/{id}"; body: ProjectUpdate; response: Project };
   updateProjectMemory: { method: "PATCH"; path: "/projects/{id}/memories/{slug}"; body: MemoryStorePatch; response: MemoryStore };
   updateTemplate: { method: "PUT"; path: "/templates/{name}"; body: TemplateUpsert; response: TemplateSummary };

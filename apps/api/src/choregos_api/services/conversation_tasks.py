@@ -21,6 +21,7 @@ from ..db.models import AgentSessionRecord, AssistantInstallation, Membership, O
 from ..errors import ApiError
 from ..rbac import Principal
 from . import assistant_tasks, assistants
+from .org_groups import groups_of
 
 TOOL = "run_task"
 
@@ -77,7 +78,7 @@ async def _principal(session: AsyncSession, record: AgentSessionRecord) -> Princ
         email=user.email,
         display_name=user.display_name or "",
         org_roles={organisation.slug: Role(membership.role)},
-        groups=list(user.groups or []),
+        groups=await groups_of(session, user),
     )
 
 

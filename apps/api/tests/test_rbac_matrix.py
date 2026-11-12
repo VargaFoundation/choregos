@@ -51,6 +51,14 @@ def _routes(project_id: str, workflow_yaml: str, policy_yaml: str) -> list[tuple
         ("agent:manage", "POST", "/api/v1/orgs/varga/agent-catalogue/triager/install", {}),
         # Outposts (S65-11, ADR 0147 §4): the organisation administrator's, read or written.
         ("outpost:manage", "GET", "/api/v1/orgs/varga/outposts", None),
+        # The organisation's groups (S66-01, ADR 0152): the administrator writes them, every member reads.
+        (
+            "group:manage",
+            "POST",
+            "/api/v1/orgs/varga/groups",
+            {"slug": "release-captains", "name": "Captains"},
+        ),
+        ("member:read", "GET", "/api/v1/orgs/varga/groups", None),
         # Agent scopes (S39-09, ADR 0061): a personal agent is every working role's, a project's agent
         # its owner's, an organisation agent (`agent:manage`, above) the administrator's.
         (

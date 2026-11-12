@@ -64,6 +64,7 @@ from .assistant_memory import subjects_in
 from .broker import BrokerTool, call
 from .definitions import active_workflow_named, publish_workflow
 from .initiator import initiator
+from .org_groups import groups_of
 from .personal_spaces import personal_space
 from .task_poll import due_objects
 from .tickets import create_work_item, start_work_item
@@ -593,7 +594,7 @@ async def gate(session: AsyncSession, sub: Subscription, now: datetime) -> Gate 
             user_id=user.id,
             email=user.email,
             org_roles={organisation.slug: Role.VIEWER},
-            groups=list(user.groups or []),
+            groups=await groups_of(session, user),
         ),
         Permission.ASSISTANT_USE,
         organisation.slug,

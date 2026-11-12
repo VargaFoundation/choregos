@@ -345,6 +345,18 @@ export type {
   PluginUpgradeResult,
 } from "@choregos/contracts/api";
 
+/** The organisation's own groups (ADR 0152): `internal`, written here, or `scim`, pushed by an identity provider. */
+export type {
+  OrgGroup,
+  OrgGroupCreate,
+  OrgGroupList,
+  OrgGroupMember,
+  OrgGroupMemberAdd,
+  OrgGroupMemberList,
+  OrgGroupSource,
+  OrgGroupUpdate,
+} from "@choregos/contracts/api";
+
 /** Outposts (ADR 0147): places a person enrols, which only dial out, their instances and their calls. */
 export type {
   Outpost,

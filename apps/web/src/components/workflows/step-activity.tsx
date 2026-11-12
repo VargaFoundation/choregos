@@ -83,7 +83,7 @@ export function GroupMembersLine({ projectSlug, group }: { projectSlug: string; 
       <span className={LEGENDE}>In the group</span>
       {members.length === 0 ? (
         <span className="text-retrying-ink">
-          nobody carries <code>{group}</code> (identity-provider groups, as of each member&apos;s last sign-in): a step
+          nobody carries <code>{group}</code> (the organisation&apos;s groups, and the identity provider&apos;s as of each member&apos;s last sign-in): a step
           addressed to it waits for an organisation administrator
         </span>
       ) : (

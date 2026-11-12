@@ -901,6 +901,36 @@ async def test_machine_accounts_stay_in_their_organisation(two_organisations: di
         assert (await session.execute(select(MachineAccount))).scalars().all() == [], "no scope, nothing"
 
 
+async def test_org_groups_and_their_members_stay_in_their_organisation(
+    two_organisations: dict[str, str],
+) -> None:
+    """An organisation's groups and who is in them (ADR 0152): org `a` reads none of `b`'s, writes none
+    into it, and a session with no scope reads nothing."""
+    from choregos_api.db.models import Organization, OrgGroup, OrgGroupMember, User
+    from choregos_api.db.session import session_scope
+    from sqlalchemy.exc import DBAPIError
+
+    async with session_scope(orgs="*") as session:
+        ids = {o.slug: o.id for o in (await session.execute(select(Organization))).scalars()}
+        groups = {}
+        for slug in ("a", "b"):
+            user = User(email=f"captain@{slug}.test", display_name=slug)
+            group = OrgGroup(org_id=ids[slug], slug=f"captains-{slug}", name=slug, source="internal")
+            session.add_all([user, group])
+            await session.flush()
+            groups[slug] = group.id
+            session.add(OrgGroupMember(org_id=ids[slug], group_id=group.id, user_id=user.id))
+    async with session_scope(orgs=["a"]) as session:
+        assert (await session.execute(select(OrgGroup.slug))).scalars().all() == ["captains-a"]
+        assert (await session.execute(select(OrgGroupMember.group_id))).scalars().all() == [groups["a"]]
+    with pytest.raises(DBAPIError):
+        async with session_scope(orgs=["a"]) as session:
+            session.add(OrgGroup(org_id=ids["b"], slug="stolen", name="stolen", source="internal"))
+    async with session_scope() as session:
+        assert (await session.execute(select(OrgGroup))).scalars().all() == [], "no scope, nothing"
+        assert (await session.execute(select(OrgGroupMember))).scalars().all() == [], "no scope, nothing"
+
+
 async def test_assistant_installations_stay_in_their_organisation(
     two_organisations: dict[str, str],
 ) -> None:
