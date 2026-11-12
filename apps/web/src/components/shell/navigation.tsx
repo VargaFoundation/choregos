@@ -27,6 +27,7 @@ import {
   Globe,
   Plug,
   Puzzle,
+  RadioTower,
   ScrollText,
   Server,
   MessagesSquare,
@@ -45,6 +46,7 @@ import Link from "next/link";
 import { useId } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { canManageOutposts } from "@/lib/memberships";
 import { hasReleaseTrain } from "@/lib/release-train";
 import { cn } from "@/lib/cn";
 import { HUE_CLASSES, type Hue } from "@/lib/workflow-hue";
@@ -247,15 +249,24 @@ export function isIdentitySection(section: { icon?: AdminSection["icon"] }): boo
  * scope `platform` is only served to a platform administrator (`/ui/admin-sections`), so an
  * organisation administrator of a shared instance sees the instance group with the core's read-only
  * pages alone.
+ *
+ * Outposts are listed for whoever manages them (`outpost:manage`, the organisation's administrator):
+ * every route behind that page refuses anyone else, so the entry would lead to a refusal.
  */
 export function adminGroups(
   extensionSections: { id: string; title: string; icon?: AdminSection["icon"]; scope?: AdminSection["scope"] }[] = [],
+  can: { outposts?: boolean } = {},
 ): NavGroup[] {
   const page = (href: string, label: string, icon: LucideIcon): NavEntry => ({
     href,
     label,
     icon,
     active: (pathname: string) => pathname === href,
+  });
+  // A page that has pages below it (one outpost): the entry stays the current one there.
+  const pages = (href: string, label: string, icon: LucideIcon): NavEntry => ({
+    ...page(href, label, icon),
+    active: (pathname: string) => pathname === href || pathname.startsWith(`${href}/`),
   });
   const extension = (s: { id: string; title: string; icon?: AdminSection["icon"] }) => page(`/admin/x/${s.id}`, s.title, sectionIcon(s.icon));
   const shown = extensionSections.filter((s) => !isIdentitySection(s));
@@ -271,6 +282,7 @@ export function adminGroups(
         page("/admin/models", "Models", Cpu),
         page("/admin/remote-agents", "Remote agents", Bot),
         page("/admin/egress", "Network", Globe),
+        ...(can.outposts ? [pages("/admin/outposts", "Outposts", RadioTower)] : []),
         page("/admin/identity", "Identity", Fingerprint),
         page("/admin/audit", "Audit", ScrollText),
         ...shown.filter((s) => s.scope !== "platform").map(extension),
@@ -290,6 +302,17 @@ export function adminGroups(
 /** The label of the section a path is in, for the breadcrumbs. */
 export function sectionOf(pathname: string, groups: NavGroup[]): NavEntry | undefined {
   return groups.flatMap((g) => g.entries).find((e) => e.href !== "/inbox" && e.active(pathname));
+}
+
+/**
+ * The steps of an administration page below "Administration": its section, then, on a page below
+ * the section (one outpost), what that page is: an identifier, shown as written.
+ */
+export function adminTrail(pathname: string, section: NavEntry | undefined): BreadcrumbStep[] {
+  if (!section || section.href === "/admin") return [];
+  const below = pathname.slice(section.href.length).split("/").filter(Boolean);
+  if (below.length === 0) return [{ label: section.label }];
+  return [{ href: section.href, label: section.label }, { label: <span data-verbatim>{decodeURIComponent(below[0]!)}</span> }];
 }
 
 /**
@@ -350,7 +373,7 @@ export function projectSection(slug: string, pathname: string): { entry: NavEntr
 /** The groups of the current scope; the queries are those the pages read too (one request each). */
 export function useNavGroups(pathname: string, features?: ProjectFeatures): { scope: Scope; groups: NavGroup[] } {
   const scope = scopeOf(pathname);
-  const { org } = useSession();
+  const { org, me } = useSession();
   const sections = useQuery({
     queryKey: ["admin-sections", org],
     queryFn: () => api.adminSections(org),
@@ -368,7 +391,7 @@ export function useNavGroups(pathname: string, features?: ProjectFeatures): { sc
     scope.kind === "project"
       ? projectGroups(scope.slug, { trains: project.data === undefined || hasReleaseTrain(project.data), ...features })
       : scope.kind === "admin"
-        ? adminGroups(sections.data ?? [])
+        ? adminGroups(sections.data ?? [], { outposts: canManageOutposts(me?.memberships ?? [], org) })
         : orgGroups();
   return { scope, groups };
 }

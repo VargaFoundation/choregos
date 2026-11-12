@@ -2800,6 +2800,53 @@ result is a connector of type `mcp-gateway` with the config `{server}`. **Admini
 *via gateway* with its server name, and declaring an `mcp-gateway` connector there is refused, with a link to
 **Administration**, while the organisation has no gateway or its mode is `off`.
 
+**Outposts.** [ADR 0147](adr/0147-an-outpost-only-dials-out.md): an outpost is a place of the organisation that
+the platform cannot reach, a network behind a firewall for example. A program installed there
+(`choregos-outpost`) opens every connection itself and takes the tool calls routed to it; the platform never
+connects to it and stores no address of it. An organisation whose MCP gateway the platform can reach needs
+none: use the gateway above. Outposts are off unless the deployment turns them on
+([deployment](deployment.md#outposts-adrs-0147-0149)).
+
+**Administration → Outposts** (`/admin/outposts`) is the organisation administrator's: the entry is listed
+for whoever holds `outpost:manage`, and the API refuses anyone else. The page lists the outposts with their
+status, their instances (approved, pending, revoked) and their presence (*Online*, or when one was last seen),
+and creates one from a slug and a name. An outpost's page shows:
+
+- **Instances**, the pending ones first. A pending instance shows the fingerprint of its signing key, and
+  **Approve the instance** stays disabled until you tick that it is the fingerprint `choregos-outpost enrol`
+  printed on the outpost's machine; the request carries the fingerprint you confirmed. Approving needs a
+  recent sign-in: with an older one you are sent to sign in again and come back to the page, where the
+  fingerprint is confirmed again. **Revoke** is final, and says so before it is done;
+- **Enrol an instance**: *Create an enrolment token* shows, once, the token (single use, 15 minutes), when it
+  expires, the door's origin, the keys to pin, the two lines to put in the outpost's policy file
+  (`control_plane` and `door_keys`) and the command to run there;
+- **Keys to pin**: the `door_keys` line again, at any time;
+- **Pause** and **Resume** (a paused outpost says so at the top of its page), **Revoke** (final: every
+  instance is revoked) and **Delete**, which the API refuses while the outpost is not revoked or while
+  connectors still route to it: the refusal is shown as the API wrote it, with the connectors it names;
+- **Recent calls**, newest first, with their state and the code of a refusal. Digests only: the platform
+  keeps no arguments and no result of a call.
+
+A deployment where outposts are off, or whose door has no signing key, says which when a creation or a token
+is refused, in the API's own words.
+
+The same from the CLI ([reference](cli.md)):
+
+```bash
+choregos outposts create factory-floor --display-name "Factory floor"
+choregos outposts list
+choregos outposts show factory-floor              # the door_keys line to pin, again
+choregos outposts token factory-floor             # the token, once, with the policy lines and the enrol command
+choregos outposts instances factory-floor         # ids and fingerprints, pending ones first
+choregos outposts revoke-instance factory-floor <instance>
+choregos outposts pause factory-floor             # then resume, revoke (final) and delete
+choregos outposts calls factory-floor --state refused
+```
+
+`choregos outposts approve <slug> <instance> --fingerprint SHA256:…` exists and is refused: the API takes an
+approval from a person's session that carries a recent sign-in, never from an API token, and the CLI holds a
+token. It prints the API's refusal; approve in the console.
+
 **Network activity.** What the egress proxy and the runner let through or refused is journaled per run;
 `GET /orgs/{org}/network-activity` (`audit:read`: the organisation's administrators and owners) groups
 it by host, layer, decision and reason (`allowed`, `denied`, `rate_limited`, `unreachable`) for the last

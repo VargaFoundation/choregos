@@ -521,6 +521,234 @@ Options:
   --help  Show this message and exit.
 ```
 
+## `choregos outposts`
+
+Outposts: places that only dial out to the platform, and their instances
+
+### `choregos outposts approve`
+
+```text
+Usage: choregos outposts approve [OPTIONS] {slug} {instance}
+
+  Approve a pending instance against the fingerprint its daemon printed.
+
+  The API takes an approval from a person's session that carries a recent
+  sign-in, and refuses an API token (403). The CLI signs in with a token: this
+  command is therefore refused, and prints the API's refusal as it is. Approve
+  the instance in the console, under Administration → Outposts.
+
+Arguments:
+  slug      [required]
+  instance  the instance's id, as `choregos outposts instances` shows it
+            [required]
+
+Options:
+  --fingerprint <str>  the fingerprint `choregos-outpost enrol` printed on the
+                       outpost's machine, as read there  [required]
+  --org <str>          the organisation; the profile's otherwise
+  --help               Show this message and exit.
+```
+
+### `choregos outposts calls`
+
+```text
+Usage: choregos outposts calls [OPTIONS] {slug}
+
+  The recent calls routed to the outpost, newest first: their state and the
+  code of a refusal.
+
+  Digests only: the platform keeps no arguments and no result of a call.
+
+Arguments:
+  slug  [required]
+
+Options:
+  --state <str>   pending, claimed, answered, refused, expired, timed_out or
+                  in_doubt
+  --limit <int>   how many calls to read, 200 at most  [default: 50]
+  --cursor <str>  where the previous page stopped
+  --org <str>     the organisation; the profile's otherwise
+  --help          Show this message and exit.
+```
+
+### `choregos outposts create`
+
+```text
+Usage: choregos outposts create [OPTIONS] {slug}
+
+  Create an outpost of the organisation, with no instance yet.
+
+  An instance comes from an enrolment token (`choregos outposts token`) and a
+  person's approval. Refused while the deployment keeps outposts switched off.
+
+Arguments:
+  slug  [required]
+
+Options:
+  --display-name <str>  what people read; the slug otherwise
+  --org <str>           the organisation; the profile's otherwise
+  --help                Show this message and exit.
+```
+
+### `choregos outposts delete`
+
+```text
+Usage: choregos outposts delete [OPTIONS] {slug}
+
+  Delete a revoked outpost, with its instances and what is left of its calls.
+
+  Refused while connectors still route to it (`choregos outposts show` names
+  them), and while it is not revoked.
+
+Arguments:
+  slug  [required]
+
+Options:
+  --org <str>  the organisation; the profile's otherwise
+  --help       Show this message and exit.
+```
+
+### `choregos outposts instances`
+
+```text
+Usage: choregos outposts instances [OPTIONS] {slug}
+
+  The outpost's instances, pending ones first, each with the fingerprint of
+  its signing key.
+
+Arguments:
+  slug  [required]
+
+Options:
+  --org <str>  the organisation; the profile's otherwise
+  --help       Show this message and exit.
+```
+
+### `choregos outposts list`
+
+```text
+Usage: choregos outposts list [OPTIONS]
+
+  The organisation's outposts: status, instances and presence.
+
+Options:
+  --org <str>  the organisation; the profile's otherwise
+  --help       Show this message and exit.
+```
+
+### `choregos outposts pause`
+
+```text
+Usage: choregos outposts pause [OPTIONS] {slug}
+
+  Pause the outpost: nothing more is handed to it, and what its instances hold
+  may finish.
+
+  This is how a healthy outpost is held or retired; `revoke` answers a key
+  that may be stolen.
+
+Arguments:
+  slug  [required]
+
+Options:
+  --org <str>  the organisation; the profile's otherwise
+  --help       Show this message and exit.
+```
+
+### `choregos outposts resume`
+
+```text
+Usage: choregos outposts resume [OPTIONS] {slug}
+
+  Resume a paused outpost.
+
+Arguments:
+  slug  [required]
+
+Options:
+  --org <str>  the organisation; the profile's otherwise
+  --help       Show this message and exit.
+```
+
+### `choregos outposts revoke`
+
+```text
+Usage: choregos outposts revoke [OPTIONS] {slug}
+
+  Revoke the outpost and every instance of it. This is final.
+
+  Nothing its instances had in flight is taken, and a write among it ends in
+  doubt. Connectors that route to it are refused until they are routed
+  elsewhere.
+
+Arguments:
+  slug  [required]
+
+Options:
+  --org <str>  the organisation; the profile's otherwise
+  --help       Show this message and exit.
+```
+
+### `choregos outposts revoke-instance`
+
+```text
+Usage: choregos outposts revoke-instance [OPTIONS] {slug} {instance}
+
+  Revoke one instance of the outpost, pending or approved. This is final.
+
+  The outpost's epoch moves: nothing in flight at the outpost is taken, from
+  this instance or another. Its key does not come back for as long as the
+  outpost exists.
+
+Arguments:
+  slug      [required]
+  instance  the instance's id, as `choregos outposts instances` shows it
+            [required]
+
+Options:
+  --org <str>  the organisation; the profile's otherwise
+  --help       Show this message and exit.
+```
+
+### `choregos outposts show`
+
+```text
+Usage: choregos outposts show [OPTIONS] {slug}
+
+  One outpost, and the door's keys to pin in its policy file.
+
+Arguments:
+  slug  [required]
+
+Options:
+  --org <str>  the organisation; the profile's otherwise
+  --help       Show this message and exit.
+```
+
+### `choregos outposts token`
+
+```text
+Usage: choregos outposts token [OPTIONS] {slug}
+
+  Issue an enrolment token for one instance of the outpost. The token is shown
+  HERE, once.
+
+  Single use, valid 15 minutes at most. It is printed with what the outpost's
+  operator needs: the lines of the policy file (the door's origin and the
+  door's keys to pin) and the `choregos-outpost enrol` command to run there.
+  The instance it enrols is born pending, and is handed nothing until a person
+  approves it in the console.
+
+Arguments:
+  slug  [required]
+
+Options:
+  --expires-in-minutes <int>  how long the token lives: 1 to 15 minutes, 15 by
+                              default
+  --org <str>                 the organisation; the profile's otherwise
+  --help                      Show this message and exit.
+```
+
 ## `choregos plugin`
 
 Plugins: validate, pack and index them (ADR 0093)

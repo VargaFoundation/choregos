@@ -99,22 +99,7 @@ NOT_CALLED_BY_A_CLIENT: dict[str, str] = {
 }
 
 #: Paths whose console screen is a story still to come: that story removes its entries.
-_OUTPOSTS = (
-    "outposts (S65-10, ADR 0147): contract first; S65-17 gives it `choregos outposts` and the Outposts page, "
-    "and removes this entry"
-)
-NO_CLIENT_YET: dict[str, str] = {
-    "/orgs/{org}/outposts": _OUTPOSTS,
-    "/orgs/{org}/outposts/{slug}": _OUTPOSTS,
-    "/orgs/{org}/outposts/{slug}/pause": _OUTPOSTS,
-    "/orgs/{org}/outposts/{slug}/resume": _OUTPOSTS,
-    "/orgs/{org}/outposts/{slug}/revoke": _OUTPOSTS,
-    "/orgs/{org}/outposts/{slug}/enrolments": _OUTPOSTS,
-    "/orgs/{org}/outposts/{slug}/instances": _OUTPOSTS,
-    "/orgs/{org}/outposts/{slug}/instances/{instance_id}/approve": _OUTPOSTS,
-    "/orgs/{org}/outposts/{slug}/instances/{instance_id}/revoke": _OUTPOSTS,
-    "/orgs/{org}/outposts/{slug}/calls": _OUTPOSTS,
-}
+NO_CLIENT_YET: dict[str, str] = {}
 
 #: Paths the CLI calls and the console must not: an operator's command, not a screen.
 CLI_ONLY: dict[str, str] = {

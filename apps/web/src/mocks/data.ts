@@ -105,6 +105,7 @@ import { journeyInProgress, journeyFinished, journeyOf } from "./journey";
 import { egressApi } from "./egress";
 import { peopleOps, peopleOpsApi, peopleOpsFixtures } from "./joiners-leavers";
 import mcpCatalogueFile from "./mcp-catalogue.json";
+import { outpostsApi } from "./outposts";
 import { pluginsApi, serverConnectorOf } from "./plugins";
 import skillCatalogueFile from "./skill-catalogue.json";
 import { proceduresApi } from "./procedures";
@@ -3250,6 +3251,10 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   if (network !== undefined) return network as T;
   const plugins = pluginsApi(method, bare, body, orgConnectors);
   if (plugins !== undefined) return plugins as T;
+  // The organisation's outposts (ADR 0147): the list, one outpost, its instances and its recent calls.
+  if (/^\/orgs\/[^/]+\/outposts(\/|$)/.test(bare)) {
+    return structuredClone(outpostsApi(method, bare, path.split("?")[1] ?? "", body, orgConnectors, me.email)) as T;
+  }
   const filed = /^\/projects\/([^/]+)\/work-items$/.exec(path.split("?")[0] ?? path);
   if (method === "POST" && filed) {
     // Filing on a project whose tracker is external: the issue is created there, the work item takes its key (ADR 0059).
