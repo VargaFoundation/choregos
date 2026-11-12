@@ -594,7 +594,24 @@ def test_an_answer_is_read_the_same_by_the_schema_and_the_model() -> None:
     unanswered = _json("outpost-answer.unanswered.example.json")
     error = _json("outpost-answer.error.example.json")
     oversized = {"id": result["id"], "outcome": "oversized", "write": True}
-    accepted = [result, tools, unanswered, error, oversized, result | {"tools": None, "error": None}]
+    accepted = [
+        result,
+        tools,
+        unanswered,
+        error,
+        oversized,
+        result | {"tools": None, "error": None},
+        tools | {"write": None},
+    ]
+    # `write` is what the outpost read of the tool it called: a listing calls none (S65-10b).
+    assert "write" not in tools
+    for written in (True, False):
+        assert _both("outpost-answer.schema.json", outpost.OutpostAnswer, tools | {"write": written}) == (
+            False,
+            False,
+        )
+    declared = contracts.load_schema("outpost-answer.schema.json")["properties"]["write"]["description"]
+    assert "Null for a kind that calls no tool (`list_tools`)" in declared
     refused = [
         _without(result, "result"),
         result | {"tools": tools["tools"]},
@@ -620,7 +637,7 @@ def test_an_answer_is_read_the_same_by_the_schema_and_the_model() -> None:
 
 
 def test_an_audit_line_is_read_the_same_by_the_schema_and_the_model() -> None:
-    received, executed, _, refused_line, unsigned = _documents("outpost-audit-log.example.jsonl")
+    received, under_way, executed, _, refused_line, unsigned = _documents("outpost-audit-log.example.jsonl")
     unreadable = {
         "at": "2026-11-12T10:05:00Z",
         "event": "refused",
@@ -630,12 +647,19 @@ def test_an_audit_line_is_read_the_same_by_the_schema_and_the_model() -> None:
     }
     replayed = executed | {"event": "replayed", "outcome": "unanswered"}
     assert unsigned["refusal"] == "signature_refused" and unsigned["signed_by"] is None
+    # A copy of a call that is still under way: the journal holds its id and no answer to replay yet
+    # (S65-10b). An `executed` line still says what was reported.
+    assert under_way == {"at": under_way["at"], "event": "replayed", "call_id": received["call_id"]}
+    assert received["at"] < under_way["at"] < executed["at"]
     accepted = [
         received,
         executed,
         refused_line,
         unreadable,
         replayed,
+        under_way,
+        _without(replayed, "outcome"),
+        replayed | {"outcome": None},
         unsigned,
         _without(unsigned, "signed_by"),
         _without(received, "signed_by"),
@@ -655,7 +679,10 @@ def test_an_audit_line_is_read_the_same_by_the_schema_and_the_model() -> None:
         refused_line | {"outcome": "result"},
         refused_line | {"refusal": "because"},
         _without(executed, "outcome"),
+        executed | {"outcome": None},
         executed | {"refusal": "busy"},
+        under_way | {"refusal": "busy"},
+        replayed | {"refusal": "busy"},
         received | {"outcome": "result"},
         received | {"refusal": "busy"},
         executed | {"arguments": {"title": "x"}},
@@ -853,6 +880,7 @@ def test_the_bounds_of_the_document_are_the_constants() -> None:
     assert bounds["enrolment_ttl_s"] == outpost.ENROLMENT_TTL_S == 15 * 60  # ADR 0147 §4
     assert bounds["max_concurrency"] == outpost.MAX_CONCURRENCY
     assert bounds["max_door_keys"] == outpost.MAX_DOOR_KEYS
+    assert bounds["max_sealed_call_bytes"] == outpost.MAX_SEALED_CALL_BYTES
     assert bounds["max_body_bytes"] == outpost.MAX_BODY_BYTES
     poll = DOOR_SCHEMAS["PollRequest"]["properties"]
     assert poll["wait_s"]["maximum"] == poll["wait_s"]["default"] == outpost.MAX_WAIT_S
@@ -1073,12 +1101,216 @@ def test_what_is_not_signed_cannot_make_a_daemon_call_anything() -> None:
     delivery = DOOR["x-bounds"]["delivery"]
     assert "one decision per call id" in delivery and "journal" in delivery
     assert "`deadline_passed`" in delivery and "replayed" in delivery
-    assert "sends no refusal for a copy" in delivery
+    assert "No refusal is sent for a copy" in delivery
     assert OutpostRefusalCode.DEADLINE_PASSED.value == "deadline_passed"
     # Sealing alone proves no origin, and the document no longer leaves it at that.
     sealing = DOOR["x-sealing"]
     assert "not_proof_of_origin" not in sealing
     assert "proves no origin" in sealing["origin"] and "`x-call-signature`" in sealing["origin"]
+
+
+# ───────────────────────── what building against the contract found (S65-10b) ─────────────────────────
+
+
+def test_the_journal_decides_first_and_the_document_says_which_sentence_wins() -> None:
+    checks, delivery = DOOR["x-call-signature"]["checks"], DOOR["x-bounds"]["delivery"]
+    for text in (checks, delivery):
+        assert "journal decides first, always" in text
+    assert checks.startswith("The journal decides first, always")
+    assert "the journal's sentence wins" in checks
+    # A live entry: its decision stands, and no refusal is sent for the copy.
+    assert "live entry gets what the journal holds, and no refusal is sent for the copy" in checks
+    assert "a call under way gets nothing yet" in delivery
+    # A lapsed entry: `deadline_passed`, without the copy being verified.
+    assert "lapsed entry" in checks and "refused `deadline_passed` without being verified" in checks
+    assert "a copy is refused `deadline_passed` without being verified" in delivery
+    assert "nothing left to protect" in delivery and "`lease_lost`" in delivery
+    # The signature's checks are for an id the journal does not hold, and only for that one.
+    assert checks.index("Only for an id the journal does not hold") < checks.index("pinned keys")
+    assert "An id the journal does not hold is a new call: verified, opened" in delivery
+    # The sentence that said a lapsed read is made again under the same id is gone: it lost.
+    assert "no longer counts" not in delivery
+    assert "another instance, or under a new id" in delivery
+    lapsed = contracts.load_schema("outpost-refusal.schema.json")["properties"]["code"]["description"]
+    assert "met an entry of the journal that had lapsed" in lapsed
+
+
+def test_a_daemon_can_bound_what_a_poll_hands_over() -> None:
+    bounds = DOOR["x-bounds"]
+    assert bounds["max_sealed_call_bytes"] == outpost.MAX_SEALED_CALL_BYTES == 2_097_152
+    assert outpost.MAX_BODY_BYTES["answer"] == outpost.MAX_SEALED_CALL_BYTES  # the same 2 MiB as an answer
+    assert bounds["max_poll_answer_rest_bytes"] == outpost.MAX_POLL_ANSWER_REST_BYTES == 65_536
+    assert bounds["max_running"] == outpost.MAX_RUNNING
+    handed = bounds["handed_over"]
+    assert "64 KiB plus `capacity` times 2 MiB" in handed
+    assert "refused where it is admitted" in handed and "never handed over" in handed
+    answer, sealed = DOOR_SCHEMAS["PollAnswer"]["properties"], DOOR_SCHEMAS["SealedCall"]["properties"]
+    assert sealed["sealed"]["maxLength"] == outpost.MAX_SEALED_CALL_BYTES
+    assert answer["calls"]["maxItems"] == outpost.MAX_CONCURRENCY
+    assert answer["cancel"]["maxItems"] == outpost.MAX_RUNNING
+    assert DOOR_SCHEMAS["PollRequest"]["properties"]["running"]["maxItems"] == outpost.MAX_RUNNING
+    assert answer["cancel"]["items"]["pattern"] == outpost.OUTPOST_ID_PATTERN
+    # What a daemon bounds its reading to, before it parses anything.
+    assert outpost.max_poll_answer_bytes(0) == 65_536
+    assert outpost.max_poll_answer_bytes(7) == 65_536 + 7 * 2_097_152
+    for capacity in (-1, outpost.MAX_CONCURRENCY + 1):
+        with pytest.raises(ValueError, match="0 to 64"):
+            outpost.max_poll_answer_bytes(capacity)
+    # The arithmetic holds: the heaviest answer without a call fits in the 64 KiB, and a call as heavy as
+    # the bound, id and signature included, is still a call the document and the model take.
+    longest_id = "c" * 128
+    rest = _json("outpost-poll-answer.example.json") | {
+        "calls": [],
+        "cancel": [longest_id[:-3] + f"{n:03d}" for n in range(outpost.MAX_RUNNING)],
+    }
+    assert not list(_door("PollAnswer").iter_errors(rest))
+    assert len(json.dumps(rest).encode("utf-8")) <= outpost.MAX_POLL_ANSWER_REST_BYTES
+    handed_call = _json("outpost-poll-answer.example.json")["calls"][0]
+    around = len(json.dumps(handed_call | {"id": longest_id, "sealed": ""}).encode("utf-8")) + 2
+    heaviest = handed_call | {"id": longest_id, "sealed": "A" * (outpost.MAX_SEALED_CALL_BYTES - around)}
+    assert len(json.dumps(heaviest).encode("utf-8")) <= outpost.MAX_SEALED_CALL_BYTES
+    assert not list(_door("SealedCall").iter_errors(heaviest))
+    assert _accepts(outpost.OutpostSealedCall, heaviest)
+    too_heavy = handed_call | {"sealed": "A" * (outpost.MAX_SEALED_CALL_BYTES + 1)}
+    assert list(_door("SealedCall").iter_errors(too_heavy))
+    assert not _accepts(outpost.OutpostSealedCall, too_heavy)
+    # More calls than an instance may hold, or more cancellations than it may report, is not an answer.
+    full = _json("outpost-poll-answer.example.json")
+    for field, most in (("calls", outpost.MAX_CONCURRENCY), ("cancel", outpost.MAX_RUNNING)):
+        over = full | {field: [full[field][0]] * (most + 1)}
+        assert list(_door("PollAnswer").iter_errors(over)), field
+        assert not _accepts(outpost.OutpostPollAnswer, over), field
+
+
+def test_a_cancel_never_interrupts_a_write_that_reached_its_server() -> None:
+    for text in (
+        DOOR["x-bounds"]["cancel"],
+        DOOR_SCHEMAS["PollAnswer"]["properties"]["cancel"]["description"],
+    ):
+        assert "not yet started is refused `cancelled`" in text
+        assert "read in flight is abandoned and answered `unanswered`" in text
+        assert "`lease_lost`" in text
+    assert "A cancel never interrupts a write that has reached its server" in DOOR["x-bounds"]["cancel"]
+    assert "the write finishes, the daemon records its answer and sends it" in DOOR["x-bounds"]["cancel"]
+    outcome = contracts.load_schema("outpost-answer.schema.json")["properties"]["outcome"]["description"]
+    assert "a read abandoned because the door cancelled it" in outcome
+    assert OutpostRefusalCode.CANCELLED.value == "cancelled"
+    assert OutpostAnswerOutcome.UNANSWERED.value == "unanswered"
+    assert outpost.DOOR_STATUS[OutpostDoorCode.LEASE_LOST] == 409
+
+
+def test_what_an_outpost_cannot_record_it_does_not_do() -> None:
+    codes = [code.value for code in OutpostRefusalCode]
+    assert "cannot_record" in codes and len(codes) == 12
+    described = contracts.load_schema("outpost-refusal.schema.json")["properties"]["code"]["description"]
+    assert "`cannot_record`: the outpost could not write its journal or its audit line" in described
+    # `busy` also covers a call claimed and never begun.
+    assert "claimed and never began because it was stopping or was restarted" in described
+    management = API_SCHEMAS["OutpostRefusalCode"]["description"]
+    assert (
+        "`cannot_record`" in management and "`busy` also covers a call claimed and never begun" in management
+    )
+    assert not list(_file("outpost-refusal.schema.json").iter_errors({"code": "cannot_record"}))
+    line = {"at": "2026-11-12T10:05:00Z", "event": "refused", "call_id": "4a1c", "refusal": "cannot_record"}
+    assert _both("outpost-audit-line.schema.json", outpost.OutpostAuditLine, line) == (True, True)
+
+
+def test_a_daemon_numbers_from_its_clock_and_the_door_gives_no_hint() -> None:
+    sequence = DOOR["x-request-signature"]["claims"]["seq"]
+    assert "number from its clock in milliseconds" in sequence
+    assert "never below its last sequence plus one" in sequence
+    assert "64-bit integer" in sequence and "carries no hint" in sequence
+    now = 1_794_477_600_000
+    assert outpost.next_sequence(None, now) == now  # a lost state file: the clock is past every number sent
+    assert outpost.next_sequence(now - 5, now) == now
+    assert outpost.next_sequence(now, now) == now + 1  # two requests in one millisecond
+    assert outpost.next_sequence(now + 40, now) == now + 41  # a clock set back never numbers backwards
+    assert outpost.next_sequence(None, now) > 10**6 * 1000  # above any count of requests made one by one
+    assert outpost.MAX_SEQUENCE == 2**53 - 1 and now < outpost.MAX_SEQUENCE < 2**63
+    for last, clock in ((None, 0), (outpost.MAX_SEQUENCE, now)):
+        with pytest.raises(ValueError, match="whole number"):
+            outpost.next_sequence(last, clock)
+    # `replayed_sequence` says nothing of the number the door holds.
+    problem = set(DOOR_SCHEMAS["DoorProblem"]["properties"])
+    assert not {"seq", "sequence", "last_sequence", "expected_sequence"} & problem
+    assert not {"seq", "sequence", "last_sequence"} & set(outpost.OutpostDoorProblem.model_fields)
+
+
+def test_the_doors_clock_is_information_and_never_corrects_iat() -> None:
+    signature = DOOR["x-request-signature"]
+    assert "by the daemon's own clock" in signature["claims"]["iat"]
+    assert "never corrects `iat` from `server_time`" in signature["claims"]["iat"]
+    clock = signature["server_time"]
+    assert "It is information" in clock and "`doctor`" in clock
+    assert "bring a call's deadline closer, never further" in clock
+    assert "A daemon never corrects `iat` from it" in clock
+
+
+def test_a_revoked_key_does_not_come_back_for_as_long_as_its_outpost_exists() -> None:
+    enrol = DOOR["paths"]["/outposts/v1/enrol"]["post"]["description"]
+    assert "a revoked key does not come back, for as long as its outpost exists" in enrol
+    assert "memory of their keys" in enrol and "a new enrolment like any other" in enrol
+    delete = _management()[("/orgs/{org}/outposts/{slug}", "delete")]["description"]
+    assert "the memory of their keys" in delete and "enrols as any new key does" in delete
+
+
+def test_the_door_cannot_open_an_answer_and_does_not_write_its_digest() -> None:
+    answer = DOOR["paths"]["/outposts/v1/calls/{id}/answer"]["post"]["description"]
+    assert "The door cannot open an answer" in answer and "does not need to open" not in answer
+    assert "The door cannot open it" in DOOR["x-sealing"]["answer"]
+    digest = API_SCHEMAS["OutpostCallRecord"]["properties"]["result_sha256"]
+    assert digest["type"] == ["string", "null"]
+    assert "written by whoever opens the answer" in digest["description"]
+    assert (
+        "never the door" in digest["description"] and "Null for a call nobody opened" in digest["description"]
+    )
+
+
+def test_no_enrolment_token_without_a_key_for_the_outpost_to_pin() -> None:
+    conflict = API_SCHEMAS["OutpostConflict"]
+    assert "door_key_missing" in conflict["properties"]["code"]["enum"]
+    assert "`door_key_missing` (outposts are on and the door has no signing key" in conflict["description"]
+    enrolments = _management()[("/orgs/{org}/outposts/{slug}/enrolments", "post")]
+    assert "`door_key_missing`" in enrolments["description"]
+    assert enrolments["responses"]["409"] == {"$ref": "#/components/responses/OutpostConflict"}
+    # It is why the token's answer always has a key: an empty list is not an answer.
+    assert API_SCHEMAS["OutpostEnrolmentCreated"]["properties"]["door_keys"]["minItems"] == 1
+    # `outposts_disabled` stays what it says.
+    assert "`outposts_disabled` (the deployment keeps outposts switched off)" in conflict["description"]
+    v = _api("OutpostConflict")
+    problem = {"type": "about:blank", "title": "State conflict", "status": 409, "code": "door_key_missing"}
+    assert not list(v.iter_errors(problem))
+
+
+def test_a_path_parameter_with_a_pattern_may_answer_422() -> None:
+    patterned = {
+        name
+        for name, parameter in OPENAPI["components"]["parameters"].items()
+        if parameter.get("in") == "path" and "pattern" in parameter.get("schema", {})
+    }
+    assert {"OutpostSlug", "OutpostInstanceId"} <= patterned
+    checked = 0
+    for (path, verb), operation in _management().items():
+        refs = {
+            p["$ref"].rsplit("/", 1)[-1] for p in OPENAPI["paths"][path].get("parameters", []) if "$ref" in p
+        }
+        if not refs & {"OutpostSlug", "OutpostInstanceId"}:
+            assert path == "/orgs/{org}/outposts", path
+            continue
+        checked += 1
+        assert operation["responses"].get("422") == {"$ref": "#/components/responses/ValidationError"}, (
+            f"{verb} {path}: a slug or an instance id that does not match its pattern is a 422"
+        )
+    assert checked == 10
+
+
+def test_an_instance_id_and_a_token_are_opaque_to_a_daemon() -> None:
+    """ADR 0148 §6: the door reads in them which outpost they are of; a daemon reads nothing in them."""
+    answer = contracts.load_schema("outpost-enrolment-answer.schema.json")["properties"]["instance_id"]
+    request = contracts.load_schema("outpost-enrolment-request.schema.json")["properties"]["token"]
+    for field in (answer, request):
+        assert "Opaque to a daemon" in field["description"] and "ADR 0148 §6" in field["description"]
+    assert answer["pattern"] == outpost.OUTPOST_ID_PATTERN
 
 
 def test_a_key_has_one_spelling() -> None:
@@ -1160,6 +1392,7 @@ MANAGEMENT = {
 }
 CONFLICTS = [
     "outposts_disabled",
+    "door_key_missing",
     "outpost_exists",
     "outpost_revoked",
     "outpost_not_revoked",

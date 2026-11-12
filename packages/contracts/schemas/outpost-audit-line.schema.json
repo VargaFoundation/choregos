@@ -22,7 +22,7 @@
         "refused",
         "replayed"
       ],
-      "description": "`replayed`: a call id the journal already held was answered from it; the server was not called again."
+      "description": "`replayed`: a call id the journal already held got what the journal held; the server was not called again."
     },
     "call_id": {
       "type": "string",
@@ -89,7 +89,7 @@
         null
       ],
       "default": null,
-      "description": "`executed` and `replayed`: what was reported to the door."
+      "description": "`executed`: what was reported to the door. `replayed`: what the journal held for the call; null while the call it repeats is still under way and has no answer to replay yet."
     },
     "refusal": {
       "enum": [
@@ -99,6 +99,7 @@
         "payload_too_large",
         "busy",
         "endpoint_unavailable",
+        "cannot_record",
         "unsupported_kind",
         "signature_refused",
         "call_unreadable",
@@ -195,15 +196,34 @@
       }
     },
     "else": {
-      "required": [
-        "outcome"
-      ],
-      "properties": {
-        "outcome": {
-          "type": "string"
+      "if": {
+        "properties": {
+          "event": {
+            "const": "executed"
+          }
         },
-        "refusal": {
-          "type": "null"
+        "required": [
+          "event"
+        ]
+      },
+      "then": {
+        "required": [
+          "outcome"
+        ],
+        "properties": {
+          "outcome": {
+            "type": "string"
+          },
+          "refusal": {
+            "type": "null"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "refusal": {
+            "type": "null"
+          }
         }
       }
     }

@@ -75,7 +75,7 @@ constrains today:
    An enrolment token enrols one instance, once. A signing key that is still pending at the token's own
    outpost enrols again as the same instance, under a new token: a daemon whose first answer was lost on
    the way keeps its keys. A key that was ever approved or revoked, or that is pending at another outpost,
-   is refused: a revoked key does not come back.
+   is refused: a revoked key does not come back, for as long as its outpost exists (ADR 0147 §5).
 4. **A request is authenticated by a signature that binds it.** Every request after `enrol` carries a
    token signed with the instance's Ed25519 key (EdDSA) that binds the method, the URL, a digest of the
    body, an `iat` at most 60 seconds old, a nonce the server issued and a per-instance sequence number. A
@@ -102,8 +102,14 @@ constrains today:
    fixes the envelope. Sealing hides a call; it does not say who sealed it. That is decision 13.
 6. **One organisation, never all of them.** The door resolves a signature to one instance of one outpost
    of one organisation, then sets `app.current_orgs` to that organisation and `app.current_outpost` to that
-   outpost. It never sets the all-organisations scope the pod-facing routes set. The outposts' tables are
-   under the organisation's forced row-level security, like every tenant table, and their policies also
+   outpost. The door never works under the all-organisations scope the pod-facing routes work under. A
+   caller that has no principal yet, the door holding an enrolment token or a key id, names the outpost
+   first: an enrolment token and an instance's id carry the outpost's id for that. It then reads that
+   outpost's organisation in one statement under the all-organisations scope, the idiom identity resolution
+   already uses, and narrows to that organisation before anything else runs. The outposts' tables are
+   under the organisation's forced row-level security, like every tenant table. `outposts` is the
+   organisation's registry: it is listed under the organisation scope, and shows one row once an outpost is
+   named. The three other tables, `outpost_instances`, `outpost_enrolments` and `outpost_calls`, also
    require the outpost setting, for reading and for writing; it fails closed like the first one: a session
    that names no outpost sees none of their rows, and the platform's own paths name the outpost their
    connector routes to. The door has no route that lists anything, and whatever is not this outpost's
@@ -187,9 +193,11 @@ constrains today:
     - **Replays.** An outpost decides once per call id. Its journal (ADR 0149 §5) holds the first thing it
       decided for an id, to make the call or to refuse it, and every later envelope under that id gets the
       same: a copy that does not verify cannot have a call that is under way refused, and a refused id is
-      never made. A signed call replayed to the same instance is therefore answered from the journal, its
-      server not called, and refused once its deadline is behind; the journal keeps an id at least until
-      then. The outpost judges a deadline by its own clock, because the server's time is not signed.
+      never made. The journal decides first, always, before a signature is verified. A signed call replayed
+      to the same instance therefore gets what the journal holds, its server not called; once its deadline
+      is behind it is refused without being verified, since nothing is left to protect; the journal keeps
+      an id at least until then. The outpost judges a deadline by its own clock, because the server's time
+      is not signed.
     - **What is not signed**: the rest of a poll's answer (the stop flag, the cancellations, the version
       window, the server's time), the enrolment's answer and every problem. Whoever sits on the path can
       stop, starve or mislead a daemon about versions and time, as it can by dropping packets. It cannot
