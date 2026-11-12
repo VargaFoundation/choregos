@@ -10,6 +10,7 @@ no embedder, and the index serves full-text only (and says so).
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import math
 import re
@@ -59,27 +60,58 @@ class FakeEmbedder:
 
 
 class GatewayEmbedder:
-    """`POST /v1/embeddings` on the LiteLLM gateway, with the platform's key."""
+    """`POST /v1/embeddings` on the LiteLLM gateway, with the platform's key.
 
-    def __init__(self, base_url: str, key: str, model: str, *, timeout: float = 60.0) -> None:
+    A batch the gateway times out, rate-limits (429) or fails (5xx) is tried again after
+    `RETRY_DELAYS`: one slow answer must not cost a whole reindex. A 4xx other than 429 (a refused
+    key, a budget exceeded) is not retried: it would only be refused again.
+    """
+
+    #: Seconds to wait before each new try of a batch.
+    RETRY_DELAYS: tuple[float, ...] = (2.0, 8.0)
+
+    def __init__(
+        self,
+        base_url: str,
+        key: str,
+        model: str,
+        *,
+        timeout: float = 60.0,
+        transport: httpx.AsyncBaseTransport | None = None,
+    ) -> None:
         self.base_url = base_url.rstrip("/")
         self.key = key
         self.model = model
         self.timeout = timeout
+        self.transport = transport
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         vectors: list[list[float]] = []
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
+        async with httpx.AsyncClient(timeout=self.timeout, transport=self.transport) as client:
             for start in range(0, len(texts), BATCH):
-                response = await client.post(
-                    f"{self.base_url}/v1/embeddings",
-                    headers={"Authorization": f"Bearer {self.key}"},
-                    json={"model": self.model, "input": texts[start : start + BATCH]},
-                )
-                response.raise_for_status()
+                response = await self._post(client, texts[start : start + BATCH])
                 data = sorted(response.json()["data"], key=lambda item: item["index"])
                 vectors.extend([list(map(float, item["embedding"])) for item in data])
         return vectors
+
+    async def _post(self, client: httpx.AsyncClient, batch: list[str]) -> httpx.Response:
+        for delay in (*self.RETRY_DELAYS, None):
+            try:
+                response = await client.post(
+                    f"{self.base_url}/v1/embeddings",
+                    headers={"Authorization": f"Bearer {self.key}"},
+                    json={"model": self.model, "input": batch},
+                )
+                if delay is not None and (response.status_code == 429 or response.status_code >= 500):
+                    await asyncio.sleep(delay)
+                    continue
+                response.raise_for_status()
+                return response
+            except httpx.TransportError:
+                if delay is None:
+                    raise
+                await asyncio.sleep(delay)
+        raise AssertionError("unreachable: the last try returns or raises")
 
 
 def embedding_model(settings: Settings) -> str:
