@@ -141,12 +141,14 @@ transitions:
     on_reject: addressing_review
   # Held to the merge (ADR 0152): the merge names the commit its own gates judged, so what the
   # earlier steps were asked on the diff is asked again here, on the commit that is merged.
+  # The scope is read there on the work item's whole diff (`over: work_item`), whichever step ran
+  # last: no file under a path the policy forbids.
   - id: t-merge
     from: pr_approved
     to: integrated
     by: platform
     does: merge_pr
-    gates: [ci_green, no_secrets, { name: diff_size_max, params: { files: 60, lines: 3000 } }, docs_updated]
+    gates: [ci_green, no_secrets, { name: diff_size_max, params: { files: 60, lines: 3000 } }, docs_updated, { name: scope_respected, params: { over: work_item } }]
     timeout_hours: 24
     on_fail: { to: fixing_ci, max_attempts: 3, escalate_to: needs_human }
   - id: t-fix-ci

@@ -12,7 +12,13 @@ from choregos_api.db.models import CostLedger, Run
 from choregos_contracts import StageResult
 from choregos_core import GateContext, GateOutcome, evaluate, is_async_gate, matches_any, scan_secrets
 from choregos_core.domain import DiffSummary, PrRef
-from choregos_core.gates import ADR_PATTERN, ALREADY_FIXED_GATE, DIFF_GATES, unchanged_run
+from choregos_core.gates import (
+    ADR_PATTERN,
+    ALREADY_FIXED_GATE,
+    DIFF_GATES,
+    judged_on_a_run,
+    unchanged_run,
+)
 from temporalio import activity
 
 from .base import db, load_work_item, project_bundle, scm_for
@@ -124,7 +130,8 @@ async def evaluate_gates(payload: dict[str, Any]) -> list[dict[str, Any]]:
             calls = [str(m) for m in rows.scalars() if m]
         # The scope is judged on what the RUN wrote, since the commit where it began (S22-11): from
         # the base, it counted the work of the earlier steps. On the dev tenant, on 10/09, the ADR of
-        # study #5 turned red on the Makefile that the framing step had pushed.
+        # study #5 turned red on the Makefile that the framing step had pushed. A declaration that
+        # says `over: work_item` reads the whole diff instead, and no run (ADR 0152).
         run_scope = await _run_diff(scm, repo_config, result, head, gates) if diff is not None else None
         context = GateContext(
             result=result,
@@ -258,9 +265,11 @@ async def _run_diff(
 ) -> list[str] | None:
     """The files the run changed, from the commit where it began to the judged one (`head`); `None`
     when the run does not say (a runner older than S22-11), no commit is judged, or the comparison
-    fails: the work item's diff then holds."""
+    fails: the work item's diff then holds. Read only for a guarantee judged on a run: one declared
+    `over: work_item` reads the work item's whole diff, and nothing of a run (ADR 0152)."""
     start = (result.artifacts.reports.get("start_commit") if result else None) or ""
-    if not start or not any(g["name"] == "scope_respected" for g in gates) or repo_config is None:
+    on_a_run = any(judged_on_a_run(g["name"], g.get("params")) for g in gates)
+    if not start or not on_a_run or repo_config is None:
         return None
     if head is None:  # no commit judged: nothing to measure the run against
         return None
@@ -288,7 +297,7 @@ async def _judge(
     if gate["name"] == "adr_number_free" and diff_obtained:
         already_there = await _default_branch_files(*target, params)
         return evaluate(gate["name"], replace(context, default_branch_files=already_there), params)
-    if gate["name"] == "scope_respected" and run_scope is not None:
+    if run_scope is not None and judged_on_a_run(gate["name"], params):
         return evaluate(gate["name"], replace(context, changed_files=run_scope), params)
     return evaluate(gate["name"], context, params)
 

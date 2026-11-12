@@ -16,7 +16,7 @@ from __future__ import annotations
 import fnmatch
 import json
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -112,11 +112,23 @@ DIFF_GATES: frozenset[str] = frozenset(
     }
 )
 
-#: The diff gates judged on what a RUN wrote since the commit where it began (S22-11), against the
-#: paths that run may write: the others read the work item's whole diff at the judged commit. On a
-#: `system` transition the run is the last step's, so declaring one of these on a merge transition
-#: does not hold it on what is merged (ADR 0152).
+#: The diff gates judged, unless their declaration says otherwise, on what a RUN wrote since the
+#: commit where it began (S22-11), against the paths that run may write: the others read the work
+#: item's whole diff at the judged commit. On a `system` transition the run is the last step's, or
+#: none, so such a declaration holds nothing on what is merged (ADR 0152). `judged_on_a_run` reads a
+#: declaration; a name alone does not say.
 RUN_SCOPED_GATES: frozenset[str] = frozenset({"scope_respected"})
+
+#: The one value of `scope_respected`'s `over` parameter: the work item's whole diff at the judged
+#: commit, and nothing of a run (ADR 0152, decision 13).
+OVER_WORK_ITEM = "work_item"
+
+
+def judged_on_a_run(name: str, params: Mapping[str, Any] | None = None) -> bool:
+    """Whether this declaration of a guarantee is judged on a run's writes: `scope_respected`, unless
+    it says `over: work_item`."""
+    return name in RUN_SCOPED_GATES and (params or {}).get("over") != OVER_WORK_ITEM
+
 
 _REGISTRY: dict[str, GateFn] = {}
 _ASYNC_GATES: set[str] = set()
@@ -183,8 +195,24 @@ def _without_diff(name: str) -> GateOutcome:
 
 @gate("scope_respected", needs=("scm",))
 def _scope_respected(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
+    """The changed files stay out of the paths the policy forbids, and inside the allowed ones.
+
+    Two readings, chosen by the declaration (ADR 0152). Without `over`, the files are a run's — what
+    it wrote since the commit where it began, handed over by the evaluation — and the allowed paths are
+    `paths`, else that run's. With `over: work_item`, the files are the work item's whole diff at the
+    judged commit and nothing of a run is read: the allowed paths are `paths` and only `paths` — a
+    work item's own are rewritten by its steps' results, so they are not what a merge is held to —
+    and without `paths` the forbidden paths alone are held."""
     if not ctx.diff_available:
         return _without_diff("scope_respected")
+    over = params.get("over")
+    if over is not None and over != OVER_WORK_ITEM:
+        return GateOutcome(
+            "scope_respected",
+            False,
+            detail=f"`over: {over}` is not a reading of this guarantee: its only value is `{OVER_WORK_ITEM}`",
+        )
+    whole = over == OVER_WORK_ITEM
     denied = [p for p in ctx.changed_files if matches_any(p, ctx.denied_paths)]
     if denied:
         return GateOutcome(
@@ -193,14 +221,21 @@ def _scope_respected(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
             detail=f"{len(denied)} file(s) under a path the project's policy forbids (scope.deny_paths)",
             annotations=denied,
         )
-    allowed = params.get("paths") or ctx.allowed_paths
+    allowed = params.get("paths") or ([] if whole else ctx.allowed_paths)
     if not allowed:
-        return GateOutcome("scope_respected", True, detail="no allowed paths declared")
+        return GateOutcome(
+            "scope_respected",
+            True,
+            detail="no allowed paths declared on this transition: only the paths the policy forbids are held"
+            if whole
+            else "no allowed paths declared",
+        )
     out = [p for p in ctx.changed_files if not matches_any(p, list(allowed))]
+    kind = "declared" if whole else "allowed"
     return GateOutcome(
         "scope_respected",
         not out,
-        detail="within the allowed paths" if not out else f"{len(out)} file(s) outside the allowed paths",
+        detail=f"within the {kind} paths" if not out else f"{len(out)} file(s) outside the {kind} paths",
         annotations=out,
     )
 
@@ -1033,6 +1068,7 @@ __all__ = [
     "ALREADY_FIXED_GATE",
     "ALREADY_FIXED_UNPROVEN",
     "DIFF_GATES",
+    "OVER_WORK_ITEM",
     "RUN_SCOPED_GATES",
     "GateContext",
     "GateOutcome",
@@ -1040,6 +1076,7 @@ __all__ = [
     "gate",
     "gate_needs",
     "is_async_gate",
+    "judged_on_a_run",
     "known_gates",
     "matches_any",
     "scan_secrets",

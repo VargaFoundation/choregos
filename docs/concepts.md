@@ -291,9 +291,22 @@ same parameters: they are then judged on the commit that is merged, with or with
 workflow the platform ships that merges does so, `no_secrets` on each (a size limit therefore counts
 what the later steps added), and the validator warns about a merge transition that reads no diff
 (`workflow.no_diff_gate_at_merge`). A refusal there follows the transition's `on_fail`, as a red CI
-does. `scope_respected` is the exception: it judges what a run wrote since the commit where it began,
-and on a merge transition that run is the last step's — declared there, it is not a guarantee on
-what is merged, and the shipped workflows do not declare it.
+does.
+
+**`scope_respected` has two readings, and its declaration says which.** Without `over`, it judges
+what a run wrote since the commit where it began, against `paths` or else that run's allowed paths:
+the reading of a step that writes. On a transition the platform takes — opening or merging the pull
+request — no run is the transition's own: the run is the last step's, or none once the interpreter
+was started again, so the validator warns (`workflow.run_scope_on_system_step`). With
+`params: { over: work_item }` it judges the work item's **whole** diff at the judged commit and
+nothing of a run. It refuses any file under a path the policy forbids (`scope.deny_paths`), always,
+and any file outside `paths` when the declaration gives them; it does not read the work item's own
+allowed paths, which a step's result sets and a later one may narrow, and without `paths` it holds
+the forbidden paths alone. `work_item` is the only value of `over`; another is refused
+(`gate.scope_over_unknown`). The shipped workflows declare it on their merge transition: what they
+merge holds no forbidden file, whenever it landed, and a decision record merges nothing but the
+record (`paths: ["docs/adr/**"]`). What is not held to the merge is the work item's allow-list: a
+file outside it, and not forbidden, that lands between two steps is judged by no step's scope.
 
 ## Evidence
 

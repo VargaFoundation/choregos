@@ -738,7 +738,8 @@
      "ci_green",
      "no_secrets",
      "diff_size_max",
-     "docs_updated"
+     "docs_updated",
+     "scope_respected"
     ],
     "via": null,
     "timeout_hours": 24,
@@ -2128,6 +2129,12 @@
      "summary": "the change updates its documentation when it changes anything else",
      "detail": null,
      "asynchronous": false
+    },
+    {
+     "name": "scope_respected",
+     "summary": "the whole change stays out of the paths the policy forbids",
+     "detail": "read on the work item's whole diff, whichever step ran last; no allowed paths are held, only the forbidden ones",
+     "asynchronous": false
     }
    ],
    "on_fail": "On failure it retries up to 3 time(s) from “Fixing the CI”, then goes to “Needs a human”.",
@@ -2135,7 +2142,7 @@
    "timeout_hours": 24,
    "action": null,
    "task": null,
-   "sentence": "From “Pull request approved”, the platform, which merges the pull request moves the item to “Merged” once the CI pipeline is green; no secret leaks into the change; the change stays under the size limit; the change updates its documentation when it changes anything else. On failure it retries up to 3 time(s) from “Fixing the CI”, then goes to “Needs a human”. It times out after 24 h.",
+   "sentence": "From “Pull request approved”, the platform, which merges the pull request moves the item to “Merged” once the CI pipeline is green; no secret leaks into the change; the change stays under the size limit; the change updates its documentation when it changes anything else; the whole change stays out of the paths the policy forbids. On failure it retries up to 3 time(s) from “Fixing the CI”, then goes to “Needs a human”. It times out after 24 h.",
    "agent": null,
    "role": null,
    "model": null,
