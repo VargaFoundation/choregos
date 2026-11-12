@@ -219,7 +219,11 @@ triggers: [{ kind: trigger, subscriber: /attendee/email, idempotency: /event/id 
 `subscriber` is the JSON pointer, in the event, of the email of the person it is for; it is matched against the
 people subscribed to the task. An event that names nobody, several people, or nobody subscribed is refused and
 journaled for the installation's manager, and the same event id never starts the task twice. The sender signs
-the event with a key the manager reads on the installation.
+the event with a key the manager reads on the installation page (card **Task event door**: type the task's name,
+then **Show the URL and key**; the key is a secret, shown again on each click and recorded in the audit log, never
+the key itself). The card **Task events** lists what each event decided, newest first: started, duplicate or
+refused, with a summary and the work item. The card **Microsoft Teams** shows whether the channel is configured and
+its version, seals a new webhook URL and removes it; the URL is never displayed.
 
 A task that reads with a person's identity while they are away needs `delegation: read_only` and lists
 the `needs` it reads; the person agrees to that exact list. A delegated task never calls a write need.

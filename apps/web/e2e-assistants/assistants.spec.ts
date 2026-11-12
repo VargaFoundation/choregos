@@ -95,3 +95,25 @@ test("an owner installs an assistant with the form its config_schema draws", asy
     },
   });
 });
+
+test("an owner reveals a task's event door, reads the events journal and seals a Teams webhook", async ({ page, request }) => {
+  await page.goto("/assistants/manage/coach");
+  await page.getByLabel("Current organisation").selectOption({ label: "Acme" });
+  await expect(page.getByText("The key below is a secret")).toBeVisible();
+  await page.getByLabel("Task", { exact: true }).fill("new_ticket");
+  await page.getByRole("button", { name: "Show the URL and key" }).click();
+  await expect(page.getByTestId("event-key")).toContainText("chev_e2e_secret");
+  await expect(page.getByTestId("event-key")).toContainText("/tasks/new_ticket/events");
+  await expect(page.getByText("run started for ada")).toBeVisible();
+
+  await expect(page.getByText("Not configured")).toBeVisible();
+  await page.getByLabel("Teams webhook URL").fill("https://example.webhook.office.com/secret-path");
+  await page.getByRole("button", { name: "Seal the URL" }).click();
+  await expect(page.getByText(/version 1/)).toBeVisible();
+  await expect(page.locator("body")).not.toContainText("secret-path");
+  const put = (await calls(request)).filter((c) => c.method === "PUT" && c.path.endsWith("/delivery/teams"));
+  expect(put.at(-1)?.body).toEqual({ webhook_url: "https://example.webhook.office.com/secret-path" });
+  await page.getByRole("button", { name: "Remove" }).click();
+  await page.getByRole("button", { name: "Remove" }).last().click();
+  await expect(page.getByText("Not configured")).toBeVisible();
+});
