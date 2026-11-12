@@ -46,6 +46,19 @@ updates:
         patterns: ["*"]
         update-types: ["minor", "patch"]
 
+  # The editor extension (pnpm, ADR 0155). `@types/vscode` is pinned to the oldest editor the manifest
+  # accepts (`engines.vscode`): a newer one would type APIs that editor does not have.
+  - package-ecosystem: npm
+    directory: /apps/vscode
+    schedule:
+      interval: weekly
+    ignore:
+      - dependency-name: "@types/vscode"
+    groups:
+      vscode-minor:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
   # Base images of the five Dockerfiles. A single PR: four share `python:3.12-slim`, the
   # console starts from `node:24`, and moving them out of step with each other makes no sense. An upgrade to
   # a Node version that is not LTS gets closed: the rule is in `docker/README.md`.
