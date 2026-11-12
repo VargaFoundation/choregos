@@ -13,6 +13,11 @@ It is also the Foundry project an agent written for Foundry finds in `FOUNDRY_PR
 is the managed identity `DefaultAzureCredential` finds in `IDENTITY_ENDPOINT`: `GET /msi/token` with
 `X-IDENTITY-HEADER` answers the loopback key as an access token, for any resource, which only this
 listener accepts.
+
+Every model call it forwards is measured (ADR 0141 §4): the sections of the body it parsed, scaled to
+the input tokens the gateway's answer reports — read from the JSON answer, or from the stream's events
+that carry a usage —, recorded as a `context.breakdown` event (`hosted_proxy`). What the platform did not
+write counts as `backend`; an answer without a usage records nothing, the total is never guessed.
 """
 
 from __future__ import annotations
@@ -20,10 +25,12 @@ from __future__ import annotations
 import json
 import re
 import time
+from collections.abc import AsyncIterator, Mapping
 from typing import Any
 
 import httpx
 from choregos_contracts import StageInput
+from choregos_core.context_breakdown import ContextMeter, Hints, prompt_tokens_of
 from choregos_core.hosted import IDENTITY_HEADER, IDENTITY_PATH, LOOPBACK_KEY
 from starlette.applications import Starlette
 from starlette.background import BackgroundTask
@@ -44,10 +51,16 @@ _CONVERSATIONS = re.compile(r"^conversations(/[A-Za-z0-9_-]+(/items(/[A-Za-z0-9_
 _TOKEN_LIFETIME_S = 3600
 #: The request headers that reach the gateway; the container's own credentials never do.
 _FORWARDED = ("content-type", "accept", "anthropic-version", "anthropic-beta", "openai-beta")
+#: The calls whose context is measured: the three shapes of a model call.
+_MEASURED = frozenset({"chat/completions", "responses", "messages"})
+#: The most of a JSON answer read for its usage; past it, the call is not measured.
+_MAX_ANSWER_BYTES = 8 * 1024 * 1024
 
 
 class ModelProxy:
-    def __init__(self, stage_input: StageInput, record: Record, *, transport: Any = None) -> None:
+    def __init__(
+        self, stage_input: StageInput, record: Record, *, transport: Any = None, hints: Hints | None = None
+    ) -> None:
         self.stage_input = stage_input
         self.record = record
         self.http = httpx.AsyncClient(transport=transport, timeout=httpx.Timeout(600, connect=10))
@@ -55,6 +68,13 @@ class ModelProxy:
         self.refused_turns = 0
         #: A gateway budget refusal, word for word (S27-01).
         self.budget_refusal: str | None = None
+        #: The container built the request: what the runner did not write is `backend`.
+        self.context = ContextMeter(
+            record,
+            model=stage_input.model.litellm_model,
+            source="hosted_proxy",
+            hints=hints or Hints(foreign=True, mcp_servers=frozenset(stage_input.tools.mcp)),
+        )
 
     def app(self) -> Starlette:
         return Starlette(
@@ -62,6 +82,7 @@ class ModelProxy:
         )
 
     async def aclose(self) -> None:
+        await self.context.close()
         await self.http.aclose()
 
     async def handle(self, request: Request) -> Response:
@@ -144,13 +165,88 @@ class ModelProxy:
             await answer.aclose()
             self.budget_refusal = self.budget_refusal or gateway_budget_refusal([text])
             return Response(text, status_code=answer.status_code, headers=kept)
+        chunks: AsyncIterator[bytes] = answer.aiter_bytes()
+        if body is not None and path in _MEASURED:
+            # The sections are counted now, from the body the proxy holds; the text is not kept.
+            chunks = self._measured(
+                chunks, self.context.estimate(body), answer.headers.get("content-type", "")
+            )
         # Decoded bytes (`content-encoding` is not passed on), streamed as they come.
         return StreamingResponse(
-            answer.aiter_bytes(),
+            chunks,
             status_code=answer.status_code,
             headers=kept,
             background=BackgroundTask(answer.aclose),
         )
+
+    async def _measured(
+        self, chunks: AsyncIterator[bytes], estimates: Mapping[str, int], content_type: str
+    ) -> AsyncIterator[bytes]:
+        """The answer's bytes, passed on as they come, read on the way for the call's usage."""
+        usage = _UsageReader(streamed="text/event-stream" in content_type)
+        async for chunk in chunks:
+            usage.feed(chunk)
+            yield chunk
+        await self.context.observe_estimates(estimates, usage.found())
+
+
+class _UsageReader:
+    """The usage of an answer, read as it passes: the whole JSON answer, or, in a stream, the last
+    event whose usage says the input tokens (OpenAI's final chunk, Anthropic's `message_start`, the
+    Responses API's `response.completed`). Only one line of a stream is held at a time."""
+
+    def __init__(self, *, streamed: bool) -> None:
+        self.streamed = streamed
+        self.held = bytearray()
+        self.usage: dict[str, Any] | None = None
+        self.overflow = False
+
+    def feed(self, chunk: bytes) -> None:
+        if self.overflow:
+            return
+        self.held += chunk
+        if not self.streamed:
+            if len(self.held) > _MAX_ANSWER_BYTES:
+                self.overflow, self.held = True, bytearray()
+            return
+        *lines, rest = bytes(self.held).split(b"\n")
+        self.held = bytearray(rest)
+        for line in lines:
+            self._line(line)
+
+    def found(self) -> dict[str, Any] | None:
+        if self.overflow:
+            return None
+        if not self.streamed:
+            try:
+                answer = json.loads(bytes(self.held) or b"null")
+            except ValueError:
+                return None
+            return _usage_in(answer)
+        self._line(bytes(self.held))
+        return self.usage
+
+    def _line(self, line: bytes) -> None:
+        line = line.strip()
+        if not line.startswith(b"data:") or b"usage" not in line:
+            return
+        try:
+            event = json.loads(line[5:].strip())
+        except ValueError:
+            return
+        usage = _usage_in(event)
+        if usage is not None:
+            self.usage = usage
+
+
+def _usage_in(event: Any) -> dict[str, Any] | None:
+    """The usage an answer or a stream event carries, when it says the input tokens."""
+    if not isinstance(event, dict):
+        return None
+    for holder in (event, event.get("message"), event.get("response")):
+        if isinstance(holder, dict) and prompt_tokens_of(holder.get("usage")) is not None:
+            return dict(holder["usage"])
+    return None
 
 
 def _key(request: Request) -> str:

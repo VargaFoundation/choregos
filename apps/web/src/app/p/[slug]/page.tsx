@@ -9,6 +9,7 @@ import { percent, usd } from "@/lib/format";
 import { hasReleaseTrain } from "@/lib/release-train";
 import { CrossBackendCard } from "@/components/cross-backend-card";
 import { CostGraph } from "@/components/cost-graph";
+import { TokensAndCostPanel } from "@/components/spend/tokens-panel";
 import type { DoraMetric } from "@/lib/types";
 import { GettingStarted } from "@/components/getting-started";
 import { Card, CostChip, Empty, ErrorNote, ReadState, Label, Stat, StateBadge } from "@/components/ui";
@@ -141,6 +142,9 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
           </>
         )}
       </Card>
+
+      {/* What the project spent, in tokens as in money, by model, agent, workflow and run (S64-07). */}
+      <TokensAndCostPanel project={slug} groups={["model", "agent", "workflow", "run"]} />
 
       <Card eyebrow="Delivery" title="DORA">
         {dora.data === undefined ? (

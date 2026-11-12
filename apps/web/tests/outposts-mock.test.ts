@@ -4,7 +4,18 @@ import { describe, expect, it } from "vitest";
 import { ApiError } from "@/lib/api";
 import { mockApi } from "@/mocks/data";
 import { MOCK_DOOR_KEYS, MOCK_DOOR_ORIGIN } from "@/mocks/outposts";
-import type { Outpost, OutpostCallPage, OutpostEnrolmentCreated, OutpostInstance, OutpostInstanceList, OutpostList } from "@/lib/types";
+import type {
+  AgentAccess,
+  ConnectorDiscovery,
+  ConnectorType,
+  OrgConnector,
+  Outpost,
+  OutpostCallPage,
+  OutpostEnrolmentCreated,
+  OutpostInstance,
+  OutpostInstanceList,
+  OutpostList,
+} from "@/lib/types";
 
 /**
  * The demo's outposts answer as the management API does: the console runs on them in development
@@ -95,5 +106,49 @@ describe("the demo's outposts", () => {
     expect((await refusal(mockApi(`${BASE}/annex`))).status).toBe(404);
     expect((await refusal(mockApi(`${BASE}/annex/instances`))).status).toBe(404);
     expect((await refusal(post(`${BASE}/factory-floor/instances/nobody/revoke`))).status).toBe(404);
+  });
+});
+
+describe("the demo's connectors at an outpost (ADR 0149)", () => {
+  const declare = (name: string, config: Record<string, unknown>) =>
+    post<OrgConnector>("/orgs/acme/connectors", { name, kind: "mcp", type: "mcp-outpost", config });
+
+  it("offers the type with no secret field, and an outpost's connectors are those that route to it", async () => {
+    const types = await mockApi<ConnectorType[]>("/connectors/types");
+    const type = types.find((t) => t.type === "mcp-outpost")!;
+    expect(type.secret_fields).toEqual([]);
+    expect(Object.keys((type.config_schema as { properties: object }).properties)).toEqual(["outpost", "endpoint", "timeout_s"]);
+    const { items } = await mockApi<OutpostList>(BASE);
+    expect(items.find((o) => o.slug === "factory-floor")!.connectors).toEqual(["tracker-onsite"]);
+    const branch = items.find((o) => o.slug === "branch-office")!;
+    expect([branch.status, branch.online, branch.endpoints, branch.connectors]).toEqual(["active", false, [], ["erp-branch"]]);
+  });
+
+  it("refuses a declaration as the API does: an unknown outpost on its field, a paused one with its code", async () => {
+    const unknown = await refusal(declare("nowhere-tools", { outpost: "nowhere", endpoint: "tracker" }));
+    expect([unknown.status, unknown.problem.errors]).toEqual([422, [{ loc: ["body", "config", "outpost"], msg: expect.stringContaining("nowhere") }]]);
+    expect((await refusal(declare("addressed", { outpost: "factory-floor", endpoint: "https://tracker.example.com" }))).status).toBe(422);
+    expect((await refusal(declare("with-url", { outpost: "factory-floor", endpoint: "tracker", url: "https://x.example.com" }))).status).toBe(422);
+    const paused = await refusal(declare("cold-tools", { outpost: "cold-store", endpoint: "sensors" }));
+    expect([paused.status, paused.problem.code, paused.problem.outpost, paused.problem.endpoint]).toEqual([409, "outpost_paused", "cold-store", "sensors"]);
+    const made = await declare("warehouse-onsite", { outpost: "factory-floor", endpoint: "warehouse" });
+    expect(made.type).toBe("mcp-outpost");
+    expect((await mockApi<Outpost>(`${BASE}/factory-floor`)).connectors).toContain("warehouse-onsite");
+  });
+
+  it("discovers through an outpost whose instance serves the alias, and says when none does", async () => {
+    const diff = await post<ConnectorDiscovery>("/orgs/acme/connectors/warehouse-onsite/discover");
+    expect(diff.added).toEqual(["stock_level", "reserve_stock"]);
+    const offline = await refusal(post("/orgs/acme/connectors/erp-branch/discover"));
+    expect([offline.status, offline.problem.code, offline.problem.outpost, offline.problem.endpoint]).toEqual([409, "outpost_offline", "branch-office", "erp"]);
+  });
+
+  it("says on an agent's access where a tool lives: one outpost online, one offline", async () => {
+    const access = await mockApi<AgentAccess>("/orgs/acme/agents/onboarding-coordinator/access?project=billing-api");
+    const where = Object.fromEntries(access.tools.filter((t) => t.outpost).map((t) => [t.name, t.outpost]));
+    expect(where["tracker-onsite__search_issues"]).toEqual({ name: "factory-floor", endpoint: "tracker", status: "active", online: true });
+    expect(where["erp-branch__stock_level"]).toEqual({ name: "branch-office", endpoint: "erp", status: "active", online: false });
+    expect(where["tracker-onsite__create_issue"], "a forbidden operation is not reached").toBeUndefined();
+    expect(access.tools.find((t) => t.name === "track_order")).not.toHaveProperty("outpost");
   });
 });

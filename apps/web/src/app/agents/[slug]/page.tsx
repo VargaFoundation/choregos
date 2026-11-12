@@ -24,6 +24,7 @@ import { AgentDetailsCard } from "@/components/agents/details";
 import { History } from "@/components/agents/history";
 import { BUILD_POLL_MS, buildInProgress, latestRuntime } from "@/components/agents/runtime-row";
 import { TagList } from "@/components/agents/tags";
+import { TokensAndCostPanel } from "@/components/spend/tokens-panel";
 import { CardChangedWarning, RemoteDefinition, a2aOf } from "@/components/remote/remote-definition";
 import { RemoteAgentForm } from "@/components/remote/remote-agent-form";
 import { isMcpClient, clientState, readOnly } from "@/components/agents/registry";
@@ -52,7 +53,8 @@ import { OrgPageHeader } from "@/components/org-page-header";
 import { api } from "@/lib/api";
 import { percent, relative, shortDate, usd } from "@/lib/format";
 import { useSession } from "@/lib/session";
-import type { Agent } from "@/lib/types";
+import type { Agent, AgentStopResult } from "@/lib/types";
+import { StopWithReason } from "@/components/activity/stop";
 
 // The builder is loaded when the Definition tab is opened (S32-01).
 const AgentBuilder = dynamic(() => import("@/components/agents/builder").then((m) => m.AgentBuilder), {
@@ -138,6 +140,7 @@ export default function AgentPage({ params }: { params: Promise<{ slug: string }
           {a.kind !== "external" && <AgentComposition org={org} agent={a} />}
           {a.kind === "remote" && <RemoteDrift org={org} slug={slug} />}
           <AgentStatus org={org} agent={a} />
+          <AgentStop org={org} agent={a} />
           <DeleteAgent org={org} agent={a} onDeleted={() => router.push("/agents")} />
           <p className="flex flex-wrap items-center gap-3 text-sm" data-testid="overview-channels">
             <ChannelBadges agent={a} />
@@ -149,6 +152,8 @@ export default function AgentPage({ params }: { params: Promise<{ slug: string }
             </Card>
           )}
           <AgentMetrics org={org} slug={slug} />
+          {/* The organisation's report narrowed to this agent, in every project (S64-07). */}
+          <TokensAndCostPanel filter={{ agent: slug }} groups={["model", "stage", "workflow", "run"]} />
         </>
       )}
       {onglet === "definition" && <Definition org={org} agent={a} />}
@@ -224,6 +229,65 @@ function AgentStatus({ org, agent }: { org: string; agent: Agent }) {
         </Button>
       )}
       {erreur && <ErrorNote>{erreur}</ErrorNote>}
+    </div>
+  );
+}
+
+/**
+ * Stop the agent (S64-06, ADR 0142 §4): it is suspended first, then its runs in flight in every project
+ * are cancelled, its open sessions closed and its conversation turns cancelled. The answer's counts are
+ * shown, with what could not be stopped now. Resuming is "Reactivate"; nothing restarts on its own.
+ */
+function AgentStop({ org, agent }: { org: string; agent: Agent }) {
+  const client = useQueryClient();
+  const [result, setResult] = useState<AgentStopResult | null>(null);
+  if (agent.status === "revoked") return null;
+  const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+  return (
+    <div className="space-y-2" data-testid="agent-stop">
+      <StopWithReason
+        disabled={agent.can?.manage === false}
+        question={
+          <>
+            Stop this agent? It is <strong>suspended</strong>, so that nothing new starts; then its runs in flight, in every
+            project, are cancelled, its open sessions closed and its conversation turns cancelled. Their work items wait for a
+            person. Reactivating it restarts nothing on its own.
+          </>
+        }
+        confirm="Stop the agent"
+        action={async (reason) => {
+          const answer = await api.stopAgent(org, agent.slug, reason);
+          setResult(answer);
+          await client.invalidateQueries({ queryKey: ["agent", org, agent.slug] });
+          await client.invalidateQueries({ queryKey: ["agents", org] });
+        }}
+      >
+        Stop the agent…
+      </StopWithReason>
+      {result && (
+        <div role="status" className="text-sm" data-testid="agent-stop-result">
+          <p>
+            Suspended. {plural(result.runs_cancelled, "run cancelled", "runs cancelled")},{" "}
+            {plural(result.sessions_closed, "session closed", "sessions closed")},{" "}
+            {plural(result.turns_cancelled, "conversation turn cancelled", "conversation turns cancelled")}.
+          </p>
+          {(result.not_stopped ?? []).length > 0 && (
+            <>
+              <p className="text-warn">Not stopped yet (the reconciliation retries them):</p>
+              <ul className="list-disc pl-5 text-xs text-ink-muted">
+                {(result.not_stopped ?? []).map((item) => (
+                  <li key={`${item.kind}-${item.id}`}>
+                    <span data-verbatim>
+                      {item.kind} {item.id}
+                    </span>
+                    : {item.detail}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

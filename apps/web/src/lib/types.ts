@@ -46,6 +46,11 @@ export type {
   EgressVerdict,
   PlatformChange,
   CostReport,
+  ActivityEntry,
+  ActivityList,
+  AgentStopResult,
+  SpendSoFar,
+  StopRequest,
   CrossBackendArm,
   CrossBackendReport,
   DiffSummary,
@@ -63,6 +68,8 @@ export type {
   HandOff,
   HandOffEvent,
   HumanRequest,
+  HumanRequestAssignee,
+  AssigneeChange,
   Me as MeDto,
   Memory,
   ModelMatrix,
@@ -126,6 +133,8 @@ export type {
   WorkItemJourney,
   JourneyMove,
   JourneyStep,
+  ContextBreakdown,
+  RunContext,
 } from "@choregos/contracts/api";
 
 import type { Operations } from "@choregos/contracts/api";
@@ -210,6 +219,7 @@ export type {
   AgentAccess,
   AgentAccessModel,
   AgentAccessTool,
+  AgentAccessOutpost,
   AgentAccessItem,
   AgentAccessOrigin,
   AgentComponent,
@@ -343,6 +353,7 @@ export type {
   OutpostInstanceList,
   OutpostInstanceStatus,
   OutpostList,
+  OutpostRefusalCode,
   OutpostStatus,
 } from "@choregos/contracts/api";
 

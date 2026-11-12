@@ -151,7 +151,11 @@ and what it can refuse; the walk-through is the procedure
 [Connect an MCP server that lives at an outpost](procedures/connector.mcp.mcp-outpost.md).
 
 - The alias is agreed with the outpost's operator: it is a name in their file, and the platform
-  never learns what is behind it.
+  never learns what is behind it. In the console's connector form the outpost and the alias are
+  chosen from what the organisation's outposts announce; an alias is typed only while no instance
+  of the outpost announces one yet.
+- An agent's access tab names, for each tool reached through an outpost, the outpost and the alias,
+  and says whether it is online now (ADR 0149 §10).
 - The connector may be declared before an instance runs; discovery then answers that the outpost is
   offline.
 - Discovery returns the tools the outpost's policy lets through, each born `forbidden`. An
@@ -220,8 +224,6 @@ gives the operator's.
   what would have to be true first. `tools` is the only capability an instance announces.
 - **A person's identity.** A call reaches the server under the credential the outpost holds for the
   alias. A need that must be called as the person cannot be bound to such a connector.
-- **In the console**: a form of its own for a connector at an outpost, and the outpost with its
-  offline state on an agent's access tab (ADR 0149 §10). Both are the second half of S65-17.
 - **Two details of the deployment**, said in [Deployment](deployment.md#outposts-adrs-0147-0149):
   the door's own process exposes no metrics when it is split out, and the two caps per minute are
   not values of the chart.

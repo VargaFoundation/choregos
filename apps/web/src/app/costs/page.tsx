@@ -12,7 +12,8 @@ import { Card, Empty, ErrorNote, ReadState, Select } from "@/components/ui";
 import { OrgPageHeader } from "@/components/org-page-header";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
-import { type Currency, money, monthStart } from "@/lib/spend";
+import type { CostReport } from "@/lib/types";
+import { type Currency, type Measure, money, monthStart, tokenCount, tokenTotals } from "@/lib/spend";
 
 const PERIODES = [
   { id: "month", label: "This month" },
@@ -29,8 +30,9 @@ function depuis(periode: Periode, now: Date): string {
 
 /**
  * Where the money goes (S29-03): spend over time, this month against its budget with a forecast,
- * the agents, workflows and work items that cost the most, models and tools apart, the tool calls by
- * the door they came through (S57-10), and the CSV of each breakdown. The organisation by default;
+ * the agents, workflows, work items and runs that cost the most, models and tools apart, the tool calls by
+ * the door they came through (S57-10), and the CSV of each breakdown. Each breakdown reads in money or
+ * in tokens (input, output, cached; S64-07). The organisation by default;
  * `?project=<slug>` narrows it to one project.
  */
 function Spend() {
@@ -41,6 +43,8 @@ function Spend() {
   const scope: Scope = { org, project: project };
   const currency: Currency = orgs.find((o) => o.slug === org)?.currency === "USD" ? "USD" : "EUR";
   const [periode, setPeriode] = useState<Periode>("30");
+  // The breakdowns in money or in tokens (S64-07): the same reports, another column read.
+  const [measure, setMeasure] = useState<Measure>("cost");
   // Fixed once per mount: the forecast must not move under the reader's eyes.
   const [now] = useState(() => new Date());
   const filtre = { since: depuis(periode, now) };
@@ -90,6 +94,13 @@ function Spend() {
             ))}
           </Select>
         </label>
+        <label className="space-y-1 text-xs text-ink-muted">
+          <span>Measure</span>
+          <Select aria-label="Measure" className="w-auto" value={measure} onChange={(e) => setMeasure(e.target.value as Measure)}>
+            <option value="cost">Cost</option>
+            <option value="tokens">Tokens</option>
+          </Select>
+        </label>
       </div>
 
       <MonthPanel scope={scope} currency={currency} now={now} />
@@ -114,21 +125,34 @@ function Spend() {
             <p className="mt-3 text-sm" data-testid="period-total">
               Total {money(byDay.data.rows.reduce((s, r) => s + (currency === "USD" ? r.cost_usd : r.cost_eur), 0), currency)}
             </p>
+            <PeriodTokens total={byDay.data.total} />
           </>
         )}
       </Card>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <BreakdownCard scope={scope} currency={currency} title="Top agents" group="agent" filtre={filtre} />
-        <BreakdownCard scope={scope} currency={currency} title="Top workflows" group="workflow" filtre={filtre} />
-        <BreakdownCard scope={scope} currency={currency} title="Top work items" group="work_item" filtre={filtre} />
-        {!project && <BreakdownCard scope={scope} currency={currency} title="Projects" group="project" filtre={filtre} />}
-        <BreakdownCard scope={scope} currency={currency} title="By model" group="model" filtre={{ ...filtre, kind: "model" }} />
+        <BreakdownCard scope={scope} currency={currency} measure={measure} title="Top agents" group="agent" filtre={filtre} />
+        <BreakdownCard scope={scope} currency={currency} measure={measure} title="Top workflows" group="workflow" filtre={filtre} />
+        <BreakdownCard scope={scope} currency={currency} measure={measure} title="Top work items" group="work_item" filtre={filtre} />
+        <BreakdownCard scope={scope} currency={currency} measure={measure} title="Top runs" group="run" filtre={filtre} />
+        {!project && <BreakdownCard scope={scope} currency={currency} measure={measure} title="Projects" group="project" filtre={filtre} />}
+        <BreakdownCard scope={scope} currency={currency} measure={measure} title="By model" group="model" filtre={{ ...filtre, kind: "model" }} />
+        {/* A tool call reads and writes no model token: its card stays in money. */}
         <BreakdownCard scope={scope} currency={currency} title="By tool" group="model" filtre={{ ...filtre, kind: "tool" }} />
         <ToolCallsByDoorCard scope={scope} currency={currency} filtre={filtre} />
-        <BreakdownCard scope={scope} currency={currency} title="Knowledge distillations" group="model" filtre={{ ...filtre, kind: "distill" }} />
+        <BreakdownCard scope={scope} currency={currency} measure={measure} title="Knowledge distillations" group="model" filtre={{ ...filtre, kind: "distill" }} />
       </div>
     </div>
+  );
+}
+
+/** The period's tokens, from the report's totals (ADR 0141 §1): the cached ones are part of the input. */
+function PeriodTokens({ total }: { total: CostReport["total"] }) {
+  const t = tokenTotals(total);
+  return (
+    <p className="mt-1 text-sm text-ink-muted" data-testid="period-tokens">
+      {tokenCount(t.input)} input tokens, of which {tokenCount(t.cached)} cached · {tokenCount(t.output)} output tokens
+    </p>
   );
 }
 

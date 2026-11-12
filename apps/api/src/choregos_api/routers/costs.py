@@ -50,9 +50,18 @@ GROUPS: dict[str, Any] = {
     # The door a tool call came through (S57-06, ADR 0122 §4): `model`, `script`, `job`. A line that
     # does not say (a model call, a distillation, a tool line booked before S57-06) is `—`.
     "origin": CostLedger.origin,
+    # One run (ADR 0141 §1): named by its work item's key and its stage in `_readable_keys`; a line
+    # no run spent (a session, a distillation) is `—`.
+    "run": CostLedger.run_id,
 }
 #: Every grouping, at project and organisation scope alike, and in the CSV.
-GROUP_PATTERN = "^(day|stage|model|backend|size|kind|agent|workflow|work_item|project|origin)$"
+GROUP_PATTERN = "^(day|stage|model|backend|size|kind|agent|workflow|work_item|project|origin|run)$"
+
+#: The filters that narrow a report to one agent, one workflow, one work item (ADR 0141 §1), validated
+#: as the contract declares them.
+AgentFilter = Annotated[str | None, Query(pattern="^[a-z0-9][a-z0-9-]{0,63}$")]
+WorkflowFilter = Annotated[str | None, Query(min_length=1, max_length=64)]
+WorkItemFilter = Annotated[str | None, Query(min_length=1, max_length=128)]
 
 
 def _default_since() -> datetime:
@@ -103,6 +112,10 @@ async def _report(
             cost_usd=round(sum(r.cost_usd for r in report_rows), 6),
             cost_eur=round(sum(r.cost_eur for r in report_rows), 6),
             budget_usd=budget_usd,
+            # The report's tokens, next to its money (ADR 0141 §1): the same rows, summed.
+            tokens_in=sum(r.tokens_in for r in report_rows),
+            tokens_out=sum(r.tokens_out for r in report_rows),
+            tokens_cached=sum(r.tokens_cached for r in report_rows),
         ),
     )
 
@@ -122,8 +135,23 @@ def _period(since: date | None, until: date | None, kind: str | None = None) -> 
     return where
 
 
+def _narrowed(agent: str | None, workflow: str | None, work_item: str | None) -> list[Any]:
+    """Only the lines of one agent (its slug), one workflow (its name), one work item (its id), each
+    read from the ledger's own columns (ADR 0141 §1); combined, a line must match them all."""
+    where: list[Any] = []
+    if agent is not None:
+        where.append(CostLedger.agent_slug == agent)
+    if workflow is not None:
+        where.append(CostLedger.workflow_name == workflow)
+    if work_item is not None:
+        where.append(CostLedger.work_item_id == work_item)
+    return where
+
+
 async def _readable_keys(session: Db, report: CostReport, org_id: str | None) -> CostReport:
-    """A project is named by its slug and a work item by its tracker key, not by their identifiers."""
+    """A project is named by its slug, a work item by its tracker key, and a run by its work item's
+    key and its stage (`B-1 · implement`, `B-1 · implement #2` from the second attempt), not by their
+    identifiers."""
     if report.group_by == "project":
         query = select(Project.id, Project.slug)
         if org_id is not None:
@@ -135,6 +163,19 @@ async def _readable_keys(session: Db, report: CostReport, org_id: str | None) ->
             await session.execute(select(WorkItem.id, WorkItem.tracker_key).where(WorkItem.id.in_(ids)))
         ).all()
         names = {str(r[0]): str(r[1]) for r in rows}
+    elif report.group_by == "run":
+        ids = [r.key for r in report.rows if r.key != "—"]
+        runs = (
+            await session.execute(
+                select(Run.id, WorkItem.tracker_key, Run.stage_role, Run.attempt)
+                .join(WorkItem, WorkItem.id == Run.work_item_id)
+                .where(Run.id.in_(ids))
+            )
+        ).all()
+        names = {
+            str(run_id): f"{key} · {stage}" + (f" #{attempt}" if (attempt or 1) > 1 else "")
+            for run_id, key, stage, attempt in runs
+        }
     else:
         return report
     for row in report.rows:
@@ -143,15 +184,22 @@ async def _readable_keys(session: Db, report: CostReport, org_id: str | None) ->
 
 
 @router.get("/projects/{id}/costs", response_model=CostReport, operation_id="getProjectCosts")
-async def project_costs(
+async def project_costs(  # noqa: PLR0913 - the report's period and filters, as query parameters
     ctx: ProjectCtx,
     session: Db,
     group_by: Annotated[str, Query(pattern=GROUP_PATTERN)] = "day",
     since: Annotated[date | None, Query()] = None,
     until: Annotated[date | None, Query()] = None,
     kind: Annotated[str | None, Query(pattern="^(model|tool|distill)$")] = None,
+    agent: AgentFilter = None,
+    workflow: WorkflowFilter = None,
+    work_item: WorkItemFilter = None,
 ) -> CostReport:
-    where: list[Any] = [CostLedger.project_id == ctx.id, *_period(since, until, kind)]
+    where: list[Any] = [
+        CostLedger.project_id == ctx.id,
+        *_period(since, until, kind),
+        *_narrowed(agent, workflow, work_item),
+    ]
     policy = await effective_policy(session, ctx.id)
     report = await _report(
         session, where=where, group_by=group_by, budget_usd=policy.budgets.daily_project_usd
@@ -163,7 +211,7 @@ async def project_costs(
 
 
 @router.get("/orgs/{org}/costs", response_model=CostReport, operation_id="getOrgCosts")
-async def org_costs(
+async def org_costs(  # noqa: PLR0913 - the report's period and filters, as query parameters
     org: str,
     session: Db,
     principal: Me,
@@ -171,6 +219,9 @@ async def org_costs(
     since: Annotated[date | None, Query()] = None,
     until: Annotated[date | None, Query()] = None,
     kind: Annotated[str | None, Query(pattern="^(model|tool|distill)$")] = None,
+    agent: AgentFilter = None,
+    workflow: WorkflowFilter = None,
+    work_item: WorkItemFilter = None,
 ) -> CostReport:
     organization = (
         await session.execute(select(Organization).where(Organization.slug == org))
@@ -187,6 +238,7 @@ async def org_costs(
     where: list[Any] = [
         or_(CostLedger.project_id.in_(list(project_ids) or [""]), CostLedger.org_id == organization.id),
         *_period(since, until, kind),
+        *_narrowed(agent, workflow, work_item),
     ]
     report = await _report(session, where=where, group_by=group_by)
     report.currency = "USD" if (organization.settings or {}).get("currency") == "USD" else "EUR"
@@ -203,16 +255,29 @@ async def org_costs(
     response_class=Response,
     responses={200: {"content": {"text/csv": {}}, "description": "Cost report as CSV"}},
 )
-async def project_costs_csv(
+async def project_costs_csv(  # noqa: PLR0913 - the report's period and filters, as query parameters
     ctx: ProjectCtx,
     session: Db,
     group_by: Annotated[str, Query(pattern=GROUP_PATTERN)] = "day",
     since: Annotated[date | None, Query()] = None,
     until: Annotated[date | None, Query()] = None,
     kind: Annotated[str | None, Query(pattern="^(model|tool|distill)$")] = None,
+    agent: AgentFilter = None,
+    workflow: WorkflowFilter = None,
+    work_item: WorkItemFilter = None,
 ) -> Response:
     """The same report, as CSV: something to paste into a spreadsheet or an invoice."""
-    report = await project_costs(ctx, session, group_by=group_by, since=since, until=until, kind=kind)
+    report = await project_costs(
+        ctx,
+        session,
+        group_by=group_by,
+        since=since,
+        until=until,
+        kind=kind,
+        agent=agent,
+        workflow=workflow,
+        work_item=work_item,
+    )
     return _csv_response(report, f"couts-{ctx.slug}-{group_by}-{utcnow():%Y%m%d}.csv")
 
 
@@ -222,7 +287,7 @@ async def project_costs_csv(
     response_class=Response,
     responses={200: {"content": {"text/csv": {}}, "description": "Organisation cost report as CSV"}},
 )
-async def org_costs_csv(
+async def org_costs_csv(  # noqa: PLR0913 - the report's period and filters, as query parameters
     org: str,
     session: Db,
     principal: Me,
@@ -230,9 +295,23 @@ async def org_costs_csv(
     since: Annotated[date | None, Query()] = None,
     until: Annotated[date | None, Query()] = None,
     kind: Annotated[str | None, Query(pattern="^(model|tool|distill)$")] = None,
+    agent: AgentFilter = None,
+    workflow: WorkflowFilter = None,
+    work_item: WorkItemFilter = None,
 ) -> Response:
     """The organisation's report, in the grouping the screen shows."""
-    report = await org_costs(org, session, principal, group_by=group_by, since=since, until=until, kind=kind)
+    report = await org_costs(
+        org,
+        session,
+        principal,
+        group_by=group_by,
+        since=since,
+        until=until,
+        kind=kind,
+        agent=agent,
+        workflow=workflow,
+        work_item=work_item,
+    )
     return _csv_response(report, f"couts-{org}-{group_by}-{utcnow():%Y%m%d}.csv")
 
 
@@ -254,9 +333,19 @@ def _csv_response(report: CostReport, filename: str) -> Response:
             ]
         )
     writer.writerow([])
-    writer.writerow(["total", f"{report.total.cost_usd:.6f}", f"{report.total.cost_eur:.6f}"])
-    if report.total.budget_usd is not None:
-        writer.writerow(["budget_quotidien_usd", f"{report.total.budget_usd:.2f}"])
+    total = report.total
+    writer.writerow(
+        [
+            "total",
+            f"{total.cost_usd:.6f}",
+            f"{total.cost_eur:.6f}",
+            total.tokens_in,
+            total.tokens_out,
+            total.tokens_cached,
+        ]
+    )
+    if total.budget_usd is not None:
+        writer.writerow(["budget_quotidien_usd", f"{total.budget_usd:.2f}"])
     return Response(
         # French-speaking Excel reads the semicolon; the BOM keeps it from breaking the accents.
         content="﻿" + buffer.getvalue(),

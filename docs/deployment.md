@@ -1505,6 +1505,17 @@ and each model call made with a run's key becomes `chat <model>` (or `embeddings
 model, the provider's token counts and, on a failure, `error.type`. The run comes from the key's
 metadata, never from the request; a call made with a key that names no run has no span.
 
+The same callback measures what fills an ACP CLI's context (ADR 0141 §4): for a run of `claude-code`,
+`codex`, `gemini-cli`, `goose`, `opencode` or `copilot-cli`, it splits each call's request into the
+parts the runner registered (paragraph digests, never the text) and `backend`, scales them to the
+call's `prompt_tokens`, and posts at most one breakdown per 5 seconds per run to the API's internal
+routes, each signed for its run with the gateway's master key. The embedded LiteLLM gets
+`CHOREGOS_CONTEXT_API_URL` (`global.internalApiUrl` + `/api/v1/internal`) and the NetworkPolicy
+`choregos-litellm-to-api`. An external LiteLLM measures nothing unless it loads the callback and sets
+`CHOREGOS_CONTEXT_API_URL` and `LITELLM_MASTER_KEY` (the same key as the API's
+`CHOREGOS_GATEWAY_MASTER_KEY`) itself; an ACP CLI's run then says "not measurable" until its first
+breakdown.
+
 A run is one trace. Its root is the orchestrator's `invoke_workflow <stage>` span, which lasts as
 long as the wait for the run; the runner's `invoke_agent <backend>` span (the agent's session) and
 the API's `execute_tool <tool>` spans (each call of the tool route — catalogue, plugin, broker,

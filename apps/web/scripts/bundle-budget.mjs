@@ -50,7 +50,10 @@ const CHUNKS = join(process.cwd(), ".next", "static", "chunks");
 // 2026-11-12 (S65-17a): 2400 -> 2425 kB. Main at cb4d94d4c measures 2383 kB; the Outposts pages (the list, and
 // one outpost with its instances and their approval, the enrolment, the keys to pin and the recent calls) and
 // their twelve client operations bring 29 kB: 2412 kB, with no new dependency.
-const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 2425);
+// 2026-11-12 (S64-06, S64-07, S64-08): 2425 -> 2450 kB. S64 adds the Activity screen, the agent's stop and the work
+// item's stop reason (15 kB), the tokens-and-cost panel (5 kB) and the run's Context card (4 kB): about 24 kB on top
+// of main's 2412 kB, with no new dependency.
+const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 2450);
 const CHUNK_MAX_KB = Number(process.env.BUNDLE_CHUNK_MAX_KB ?? 600);
 
 function* files(dir) {

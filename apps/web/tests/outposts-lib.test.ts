@@ -10,10 +10,15 @@ import {
   doorKeysLine,
   enrolCommand,
   INSTANCE_LABEL,
+  outpostConfigProblems,
   policyLines,
   presence,
+  reachability,
   refusalOf,
+  retryIn,
+  routeRefusal,
   stateLabel,
+  timeoutBounds,
 } from "@/lib/outposts";
 import type { Membership } from "@/lib/types";
 
@@ -92,5 +97,68 @@ describe("the API's refusal, read as it is", () => {
     expect(deploymentRefusal(off)).toBe("Outposts are switched off on this deployment");
     expect(deploymentRefusal(noKey)).toBe("The outposts' door has no signing key on this deployment");
     expect(deploymentRefusal(off)).not.toBe(deploymentRefusal(noKey));
+  });
+});
+
+describe("a connector at an outpost (ADR 0149)", () => {
+  it("reads a refusal of its route: the outpost, the alias, the outpost's own code, when to ask again", () => {
+    const refused = refusalOf(
+      new ApiError(409, { detail: "the outpost `factory-floor` refused the call", code: "outpost_refused", outpost: "factory-floor", endpoint: "tracker", refusal: "write_denied" }),
+    );
+    expect(refused).toMatchObject({ code: "outpost_refused", outpost: "factory-floor", endpoint: "tracker", refusal: "write_denied" });
+    expect(routeRefusal(refused)).toBe("The outpost refused the call");
+    const busy = refusalOf(new ApiError(429, { detail: "too many calls", retry_after: 45 }));
+    expect([busy.retryAfter, routeRefusal(busy)]).toEqual([45, "Too many calls to the outpost"]);
+    expect(refusalOf(new ApiError(409, { detail: "x", retry_after: 45 })).retryAfter).toBeUndefined();
+    for (const [code, title] of [
+      ["outpost_paused", "The outpost is handed nothing"],
+      ["outpost_offline", "The outpost is offline"],
+      ["outpost_timeout", "The outpost did not answer in time"],
+    ] as const) {
+      expect(routeRefusal(refusalOf(new ApiError(409, { detail: "x", code })))).toBe(title);
+    }
+    // The refusals of the outposts' own routes are not the route's: shown as the API wrote them.
+    expect(routeRefusal(refusalOf(new ApiError(409, { detail: "x", code: "outpost_in_use" })))).toBeNull();
+    expect(routeRefusal(refusalOf(new Error("down")))).toBeNull();
+  });
+
+  it("reads the fields a 422 names in the configuration, and only those", () => {
+    const named = refusalOf(
+      new ApiError(422, {
+        detail: "not an outpost",
+        errors: [{ loc: ["body", "config", "outpost"], msg: "not an outpost of acme" }, { loc: ["body", "name"], msg: "taken" }, { loc: ["body", "config", "endpoint"] }, "?"],
+      }),
+    );
+    expect(named.fields).toEqual({ outpost: "not an outpost of acme", endpoint: "refused" });
+    expect(refusalOf(new ApiError(422, { detail: "no field" })).fields).toBeUndefined();
+    expect(refusalOf(new ApiError(409, { detail: "x", errors: [{ loc: ["body", "config", "outpost"], msg: "m" }] })).fields).toBeUndefined();
+  });
+
+  it("says when to try again", () => {
+    expect(retryIn(1)).toBe("Try again in 1 second.");
+    expect(retryIn(30)).toBe("Try again in 30 seconds.");
+    expect(retryIn(60)).toBe("Try again in 1 minute.");
+    expect(retryIn(90)).toBe("Try again in 2 minutes.");
+  });
+
+  it("checks an alias and a timeout before the API does, by the type's own bounds", () => {
+    const schema = { properties: { timeout_s: { type: "number", minimum: 1, maximum: 120, default: 30 } } };
+    expect(timeoutBounds(schema)).toEqual({ min: 1, max: 120, fallback: 30 });
+    expect(timeoutBounds(undefined)).toEqual({ min: undefined, max: undefined, fallback: undefined });
+    expect(outpostConfigProblems({ outpost: "factory-floor", endpoint: "tracker", timeout_s: 30 }, schema)).toEqual({});
+    expect(Object.keys(outpostConfigProblems({ endpoint: "https://tracker.example.com/mcp" }, schema))).toEqual(["endpoint"]);
+    expect(Object.keys(outpostConfigProblems({ endpoint: "Tracker" }, schema))).toEqual(["endpoint"]);
+    expect(outpostConfigProblems({ endpoint: "" }, schema)).toEqual({});
+    expect(outpostConfigProblems({ timeout_s: 0 }, schema).timeout_s).toBe("A number of seconds between 1 and 120.");
+    expect(Object.keys(outpostConfigProblems({ timeout_s: Number.NaN }, schema))).toEqual(["timeout_s"]);
+    expect(outpostConfigProblems({ timeout_s: 500 }, {}).timeout_s).toBeUndefined();
+    expect(outpostConfigProblems({ timeout_s: "soon" }, {}).timeout_s).toBe("A number of seconds.");
+  });
+
+  it("says whether a tool at an outpost answers now, and why not when the outpost is handed nothing", () => {
+    expect(reachability({ name: "factory-floor", endpoint: "tracker", status: "active", online: true })).toEqual([{ label: "Online", tone: "ok" }]);
+    expect(reachability({ name: "lab", endpoint: "forge", status: "active", online: false })).toEqual([{ label: "Offline", tone: "warn" }]);
+    expect(reachability({ name: "lab", endpoint: "forge", status: "revoked", online: false }).map((s) => s.label)).toEqual(["Offline", "Revoked"]);
+    expect(reachability({ name: null, endpoint: "forge", status: null, online: false }).map((s) => s.label)).toEqual(["Offline"]);
   });
 });

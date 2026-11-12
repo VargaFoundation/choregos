@@ -290,6 +290,24 @@ def price_from(row: ModelCatalogueRow | None, facts: dict[str, Any] | None) -> P
     return Price(None, None, "none")
 
 
+async def max_input_tokens_of(session: AsyncSession, org_id: str, model: str) -> int | None:
+    """The model's input window as the organisation's catalogue last read it from the gateway, `None`
+    when the catalogue does not know the model or its window (ADR 0141 §3: free space unknown)."""
+    facts = (
+        (
+            await session.execute(
+                select(ModelCatalogueRow.gateway_facts).where(
+                    ModelCatalogueRow.org_id == org_id, ModelCatalogueRow.model_name == model
+                )
+            )
+        )
+        .scalars()
+        .first()
+    )
+    window = (facts or {}).get("max_input_tokens")
+    return window if isinstance(window, int) and window > 0 else None
+
+
 async def price_of(session: AsyncSession, org_id: str, model: str) -> Price:
     """The price of `model` for an organisation: its catalogue row, else (open mode) the gateway's."""
     row = (

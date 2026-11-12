@@ -1432,7 +1432,31 @@ paths:
         content: { application/json: { schema: { $ref: "#/components/schemas/DecisionRequest" } } }
       responses:
         "202": { description: Decision passed on to the workflow, content: { application/json: { schema: { $ref: "#/components/schemas/HumanRequest" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "409": { $ref: "#/components/responses/Conflict" }
+  /work-items/{id}/human-requests/{request_id}/assignee:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+      - { name: request_id, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [work-items]
+      operationId: reassignHumanRequest
+      description: >-
+        An organisation administrator readdresses a waiting human request (ADR 0153): to a person
+        (`user`, a member of the organisation), a group, or both — the person first, the group once
+        the request's SLA has passed. The override is kept on the request and replaces the workflow's
+        actor for this request only; the workflow does not change. Audited as
+        `workitem.request.reassign`, with who it was addressed to before and after, and the reason.
+        403 for anyone but an organisation administrator; 409 once the request is decided.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AssigneeChange" } } }
+      responses:
+        "200": { description: The request, readdressed, content: { application/json: { schema: { $ref: "#/components/schemas/HumanRequest" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /work-items/{id}/actions:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     post:
@@ -1464,6 +1488,37 @@ paths:
       operationId: getRun
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Run" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /runs/{id}/cancel:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    post:
+      tags: [runs]
+      operationId: cancelRun
+      summary: Stop this run now, with a reason (ADR 0142 §2)
+      description: >-
+        Writes the run's result as `cancelled` unless one is written already (first writer wins), cancels
+        its executor, closes its key and books its spend once. The work item then waits for a person; it
+        is not retried. Needs `item:control` on the run's project. Audited as `run.cancel` with the reason.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/StopRequest" } } }
+      responses:
+        "202": { description: Accepted, content: { application/json: { schema: { $ref: "#/components/schemas/Run" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /runs/{id}/context-breakdown:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [runs]
+      operationId: getRunContextBreakdown
+      summary: What fills this run's model context (ADR 0141 §3-6)
+      description: >-
+        The last breakdown measured for the run and the series of its calls' totals. Numbers only, never
+        text. `measurable` is false for a backend the platform cannot see into (`code`, `remote`).
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/RunContext" } } } }
         "404": { $ref: "#/components/responses/NotFound" }
   /runs/{id}/events:
     parameters: [{ $ref: "#/components/parameters/Id" }]
@@ -1826,10 +1881,14 @@ paths:
       tags: [costs]
       operationId: getProjectCosts
       parameters:
-        - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size, kind, agent, workflow, work_item, project, origin], default: day }, description: "origin is the door a tool call came through (model, script, job; S57-06), `—` for a line that does not say (a model call, a tool line booked before S57-06)" }
+        - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size, kind, agent, workflow, work_item, project, origin, run, assistant], default: day }, description: "origin is the door a tool call came through (model, script, job; S57-06), `—` for a line that does not say (a model call, a tool line booked before S57-06)" }
         - { name: since, in: query, schema: { type: string, format: date } }
         - { name: until, in: query, schema: { type: string, format: date } }
         - { name: kind, in: query, schema: { type: string, enum: [model, tool, distill] }, description: "only what models cost, only what tools cost (S29-03), or only what knowledge-base distillations cost (S42-10d)" }
+        - { name: agent, in: query, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,63}$" }, description: "only the lines of this agent (its slug; ADR 0141 §1)" }
+        - { name: workflow, in: query, schema: { type: string, minLength: 1, maxLength: 64 }, description: "only the lines of the work items born in this workflow (its name)" }
+        - { name: work_item, in: query, schema: { type: string, minLength: 1, maxLength: 128 }, description: "only the lines of this work item (its id)" }
+        - { name: assistant, in: query, schema: { type: string, minLength: 1, maxLength: 64 }, description: "only the lines of this assistant installation (its id; ADR 0141 §1): its conversations' turns and its tasks" }
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/CostReport" } } } }
   /projects/{id}/costs.csv:
@@ -1839,10 +1898,14 @@ paths:
       operationId: exportProjectCostsCsv
       summary: The cost report as CSV (`;` separator, UTF-8 BOM)
       parameters:
-        - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size, kind, agent, workflow, work_item, project, origin], default: day } }
+        - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size, kind, agent, workflow, work_item, project, origin, run, assistant], default: day } }
         - { name: since, in: query, schema: { type: string, format: date } }
         - { name: until, in: query, schema: { type: string, format: date } }
         - { name: kind, in: query, schema: { type: string, enum: [model, tool, distill] }, description: "only what models cost, only what tools cost (S29-03), or only what knowledge-base distillations cost (S42-10d)" }
+        - { name: agent, in: query, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,63}$" }, description: "only the lines of this agent (its slug; ADR 0141 §1)" }
+        - { name: workflow, in: query, schema: { type: string, minLength: 1, maxLength: 64 }, description: "only the lines of the work items born in this workflow (its name)" }
+        - { name: work_item, in: query, schema: { type: string, minLength: 1, maxLength: 128 }, description: "only the lines of this work item (its id)" }
+        - { name: assistant, in: query, schema: { type: string, minLength: 1, maxLength: 64 }, description: "only the lines of this assistant installation (its id; ADR 0141 §1): its conversations' turns and its tasks" }
       responses:
         "200": { description: Cost report as CSV, content: { text/csv: { schema: { type: string } } } }
   /projects/{id}/metrics/cross-backend:
@@ -1867,16 +1930,57 @@ paths:
         - { name: until, in: query, schema: { type: string, format: date } }
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/DoraReport" } } } }
+  /orgs/{org}/activity:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    get:
+      tags: [runs]
+      operationId: listOrgActivity
+      summary: What is in flight in the organisation, then what has just finished (ADR 0142 §1)
+      description: >-
+        Runs `queued` or `running`, open agent sessions and conversation turns in flight, newest first, then
+        the entries that ended in the last hour (at most 50). An entry is listed only to whoever may read it.
+      parameters:
+        - { name: project, in: query, schema: { type: string }, description: "a project's slug" }
+        - { name: workflow, in: query, schema: { type: string, minLength: 1, maxLength: 64 } }
+        - { name: agent, in: query, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,63}$" } }
+        - { name: assistant, in: query, schema: { type: string, maxLength: 64 }, description: "an assistant installation's id" }
+        - { name: kind, in: query, schema: { type: string, enum: [run, session, turn] } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ActivityList" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/activity/stream:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    get:
+      tags: [runs]
+      operationId: streamOrgActivity
+      summary: The same entries as they change, as server-sent events (`activity.upsert`, `activity.ended`)
+      parameters:
+        - { name: project, in: query, schema: { type: string } }
+        - { name: workflow, in: query, schema: { type: string, minLength: 1, maxLength: 64 } }
+        - { name: agent, in: query, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,63}$" } }
+        - { name: assistant, in: query, schema: { type: string, maxLength: 64 } }
+        - { name: kind, in: query, schema: { type: string, enum: [run, session, turn] } }
+      responses:
+        "200":
+          description: OK
+          content:
+            text/event-stream: { schema: { type: string } }
+        "403": { $ref: "#/components/responses/Forbidden" }
   /orgs/{org}/costs:
     parameters: [{ $ref: "#/components/parameters/Org" }]
     get:
       tags: [costs]
       operationId: getOrgCosts
       parameters:
-        - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size, kind, agent, workflow, work_item, project, origin], default: day }, description: "agent, workflow and work_item come from the ledger's own columns (S29-01); a project is named by its slug, a work item by its tracker key; origin is the door a tool call came through (model, script, job; S57-06), `—` for a line that does not say (a model call, a tool line booked before S57-06)" }
+        - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size, kind, agent, workflow, work_item, project, origin, run, assistant], default: day }, description: "agent, workflow and work_item come from the ledger's own columns (S29-01); a project is named by its slug, a work item by its tracker key; origin is the door a tool call came through (model, script, job; S57-06), `—` for a line that does not say (a model call, a tool line booked before S57-06)" }
         - { name: since, in: query, schema: { type: string, format: date } }
         - { name: until, in: query, schema: { type: string, format: date } }
         - { name: kind, in: query, schema: { type: string, enum: [model, tool, distill] }, description: "only what models cost, only what tools cost (S29-03), or only what knowledge-base distillations cost (S42-10d)" }
+        - { name: agent, in: query, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,63}$" }, description: "only the lines of this agent (its slug; ADR 0141 §1)" }
+        - { name: workflow, in: query, schema: { type: string, minLength: 1, maxLength: 64 }, description: "only the lines of the work items born in this workflow (its name)" }
+        - { name: work_item, in: query, schema: { type: string, minLength: 1, maxLength: 128 }, description: "only the lines of this work item (its id)" }
+        - { name: assistant, in: query, schema: { type: string, minLength: 1, maxLength: 64 }, description: "only the lines of this assistant installation (its id; ADR 0141 §1): its conversations' turns and its tasks" }
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/CostReport" } } } }
   /orgs/{org}/costs.csv:
@@ -1886,10 +1990,14 @@ paths:
       operationId: exportOrgCostsCsv
       summary: The organisation's cost report as CSV, in any grouping
       parameters:
-        - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size, kind, agent, workflow, work_item, project, origin], default: day } }
+        - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size, kind, agent, workflow, work_item, project, origin, run, assistant], default: day } }
         - { name: since, in: query, schema: { type: string, format: date } }
         - { name: until, in: query, schema: { type: string, format: date } }
         - { name: kind, in: query, schema: { type: string, enum: [model, tool, distill] }, description: "only what models cost, only what tools cost (S29-03), or only what knowledge-base distillations cost (S42-10d)" }
+        - { name: agent, in: query, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,63}$" }, description: "only the lines of this agent (its slug; ADR 0141 §1)" }
+        - { name: workflow, in: query, schema: { type: string, minLength: 1, maxLength: 64 }, description: "only the lines of the work items born in this workflow (its name)" }
+        - { name: work_item, in: query, schema: { type: string, minLength: 1, maxLength: 128 }, description: "only the lines of this work item (its id)" }
+        - { name: assistant, in: query, schema: { type: string, minLength: 1, maxLength: 64 }, description: "only the lines of this assistant installation (its id; ADR 0141 §1): its conversations' turns and its tasks" }
       responses:
         "200": { description: Cost report as CSV, content: { text/csv: { schema: { type: string } } } }
   /orgs/{org}/egress:
@@ -2690,6 +2798,28 @@ paths:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/HostedSource" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/agents/{slug}/stop:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [agents]
+      operationId: stopAgent
+      summary: Suspend this agent and stop what it is doing (ADR 0142 §4)
+      description: >-
+        The agent becomes `suspended` first; then every run of it `queued` or `running`, in every project of
+        the organisation, is cancelled (its work item waits for a person), its open sessions are closed and
+        its conversation turns in flight cancelled. Resuming is `PATCH` with `status: active`; nothing
+        stopped restarts on its own. Needs the right to manage the agent. Audited as `agent.stop`.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/StopRequest" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AgentStopResult" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/agents/{slug}:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -3336,7 +3466,8 @@ paths:
       description: >-
         What one version of the agent reaches in one project, component by component, with the origin of each
         (ADR 0127): the version's own, inherited from the project, the platform's frame, or named by the version and
-        refused, with the reason. Computed by the same function as a run's tool listing.
+        refused, with the reason. Computed by the same function as a run's tool listing. A connector tool reached through
+        an outpost also says where it lives: the outpost, the alias, and whether it is online now (ADR 0149 §10).
       parameters:
         - { name: project, in: query, required: true, schema: { type: string } }
         - { name: version, in: query, required: false, description: "Absent: the version a run of the project takes (pin, channel, production)", schema: { type: integer, minimum: 1 } }
@@ -3980,6 +4111,45 @@ paths:
         "204": { description: Uninstalled }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/assistants/{slug}/stop:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+    post:
+      tags: [agents]
+      operationId: stopAssistant
+      summary: Stop this assistant and the turns its conversations are taking (ADR 0142 §4 bis)
+      description: >-
+        The installation is marked stopped (who, when, why) and reads `suspended` until it is resumed, whatever
+        its readiness says; no new turn starts. Every turn in flight of its conversations is cancelled, on
+        whichever API replica runs it; the conversations stay open to their people. Resuming is
+        `POST .../resume`; nothing stopped restarts on its own. Needs `assistant:manage`. Audited as
+        `assistant.stop`; stopping a stopped assistant cancels what still runs and is audited again.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/StopRequest" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AssistantStopResult" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/assistants/{slug}/resume:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+    post:
+      tags: [agents]
+      operationId: resumeAssistant
+      summary: Resume a stopped assistant (ADR 0142 §4 bis)
+      description: >-
+        Clears `stopped`; the status is derived again (`ready`, `incomplete` or `suspended` as the plugin and the
+        readiness say). Nothing stopped restarts on its own. Needs `assistant:manage`. Audited as
+        `assistant.resume`; 409 when the assistant is not stopped.
+      responses:
+        "200": { description: Resumed, content: { application/json: { schema: { $ref: "#/components/schemas/Assistant" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /orgs/{org}/assistants/{slug}/readiness:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -6690,6 +6860,7 @@ components:
         role: { type: [string, "null"], description: "The role of an agent, job or decision actor." }
         model: { type: [string, "null"], description: "The model or profile of an agent actor, as written (`profile:standard`); the catalogue entry of a decision actor (`platform/decide`)." }
         group: { type: [string, "null"], description: The group of a human actor. }
+        user: { type: [string, "null"], description: "The person a human actor names, by e-mail (ADR 0153): asked first, before the group." }
         sla_hours: { type: [integer, "null"], description: The SLA of a human actor. }
         command: { type: [array, "null"], items: { type: string }, description: The argv of a job actor. }
         image: { type: [string, "null"], description: The image name of a job actor. }
@@ -7895,6 +8066,22 @@ components:
         origin: { $ref: "#/components/schemas/AgentAccessOrigin" }
         access: { type: [string, "null"], enum: [read, write, approval, null] }
         reason: { type: [string, "null"], description: "why a named tool is refused" }
+        outpost: { $ref: "#/components/schemas/AgentAccessOutpost" }
+    AgentAccessOutpost:
+      type: object
+      additionalProperties: false
+      description: >-
+        Where a connector tool reached through an outpost lives (ADR 0149 §10, amending ADR 0127 §6): the outpost,
+        the alias of the endpoint in its policy file, and whether a call made now would be handed to an instance.
+        Present on the tool of an `mcp-outpost` connector and on no other: a tool of a direct connector carries no
+        `outpost` key. Read when the access is asked, never promised: a person reads before a run that a tool its
+        agent names will not answer.
+      required: [name, endpoint, status, online]
+      properties:
+        name: { type: [string, "null"], description: "the outpost's slug; null when the connector routes to no outpost of the organisation (a call is then refused `outpost_paused`). An outpost of another organisation is never named" }
+        endpoint: { type: string, description: "the alias of the endpoint in the outpost's policy file, as the connector names it" }
+        status: { oneOf: [{ $ref: "#/components/schemas/OutpostStatus" }, { type: "null" }], description: "the outpost's status: a call is handed to it only while it is `active`; null when the connector routes to no outpost of the organisation" }
+        online: { type: boolean, description: "an active instance that serves the alias polled within the poll window: the presence the call's own route reads. false when none did (a call fails at once, `outpost_offline`), when the connector routes to no outpost of the organisation, and while outposts are switched off on the deployment" }
     AgentAccessItem:
       type: object
       required: [name, origin]
@@ -9737,6 +9924,7 @@ components:
         audience_groups: { type: array, items: { type: string } }
         channel: { type: string, enum: [stable, candidate] }
         status: { type: string, enum: [incomplete, ready, suspended] }
+        stopped: { oneOf: [{ $ref: "#/components/schemas/AssistantStop" }, { type: "null" }], description: "set while a person has stopped the assistant: its status then reads `suspended`" }
         policy_overrides: { type: object, additionalProperties: true }
         bindings: { type: array, items: { $ref: "#/components/schemas/AssistantBinding" } }
         created_by: { type: [string, "null"] }
@@ -10490,6 +10678,28 @@ components:
         decided_by: { type: [string, "null"] }
         decided_at: { type: [string, "null"], format: date-time }
         decision: { type: [object, "null"], additionalProperties: true }
+        assignee:
+          oneOf:
+            - $ref: "#/components/schemas/HumanRequestAssignee"
+            - type: "null"
+          description: >-
+            Who the request is addressed to (ADR 0153): the workflow's human actor, or an organisation
+            administrator's reassignment. Null when the step names nobody.
+    HumanRequestAssignee:
+      type: object
+      description: Who a waiting request is addressed to — a person, a group, or a person first (ADR 0153).
+      properties:
+        user: { type: [string, "null"], description: "The person, by e-mail, lowercase." }
+        group: { type: [string, "null"], description: "The group, resolved for the project (`{project}` replaced)." }
+        reassigned: { type: boolean, default: false, description: An organisation administrator reassigned the request. }
+    AssigneeChange:
+      type: object
+      required: [reason]
+      description: "A waiting request readdressed (ADR 0153): a person, a group, or both, and why."
+      properties:
+        user: { type: [string, "null"], minLength: 3, maxLength: 254, pattern: "^[^@\\s]+@[^@\\s]+$", description: "A member of the organisation, by e-mail." }
+        group: { type: [string, "null"], minLength: 1, maxLength: 200, description: "A group; `{project}` names the work item's project." }
+        reason: { type: string, minLength: 1, maxLength: 2000, description: Why — kept in the audit log. }
     WorkItemAction:
       type: object
       required: [action]
@@ -10900,6 +11110,140 @@ components:
           type: boolean
           default: false
           description: "whether the person reading may acknowledge it: a project owner or above, on the alert's project for a project alert, on the organisation for an agent alert"
+    StopRequest:
+      type: object
+      required: [reason]
+      additionalProperties: false
+      properties:
+        reason: { type: string, minLength: 1, maxLength: 500, description: "why it is stopped; audited and shown on the work item" }
+    AgentStopResult:
+      type: object
+      required: [slug, status, runs_cancelled, sessions_closed, turns_cancelled]
+      properties:
+        slug: { type: string }
+        status: { type: string, enum: [suspended] }
+        runs_cancelled: { type: integer }
+        sessions_closed: { type: integer }
+        turns_cancelled: { type: integer }
+        not_stopped:
+          type: array
+          description: "what could not be stopped now (an executor that did not answer); the reconciliation retries it"
+          items:
+            type: object
+            required: [kind, id, detail]
+            properties:
+              kind: { type: string, enum: [run, session, turn] }
+              id: { type: string }
+              detail: { type: string }
+    AssistantStopResult:
+      type: object
+      required: [slug, status, turns_cancelled]
+      properties:
+        slug: { type: string }
+        status: { type: string, enum: [suspended] }
+        turns_cancelled: { type: integer, description: "turns in flight whose cancel was requested; each settles at its next model or tool call" }
+        not_stopped:
+          type: array
+          description: "what could not be stopped now; the turn's own lease ends it at the latest"
+          items:
+            type: object
+            required: [kind, id, detail]
+            properties:
+              kind: { type: string, enum: [turn] }
+              id: { type: string }
+              detail: { type: string }
+    AssistantStop:
+      type: object
+      description: "who stopped the assistant, when and why (ADR 0142 §4 bis)"
+      required: [at, by, reason]
+      properties:
+        at: { type: string, format: date-time }
+        by: { type: string }
+        reason: { type: string }
+    ActivityEntry:
+      type: object
+      required: [kind, id, status, started_at, can_stop]
+      properties:
+        kind: { type: string, enum: [run, session, turn] }
+        id: { type: string }
+        status: { type: string, description: "a run's status; `open` or `closed` for a session; `running`, `completed`, `cancelled` or `failed` for a turn" }
+        project_slug: { type: [string, "null"] }
+        work_item_id: { type: [string, "null"] }
+        work_item_key: { type: [string, "null"] }
+        workflow: { type: [string, "null"] }
+        stage_role: { type: [string, "null"] }
+        agent_slug: { type: [string, "null"] }
+        assistant: { type: [string, "null"], description: "the assistant installation's id, for a turn" }
+        model: { type: [string, "null"] }
+        initiated_by: { type: [string, "null"] }
+        started_at: { type: string, format: date-time }
+        ended_at: { type: [string, "null"], format: date-time }
+        last_event: { type: [string, "null"], description: "the type of the last event the entry emitted (a step, a tool call)" }
+        steps: { type: integer, default: 0, description: "events recorded so far" }
+        spend:
+          oneOf: [{ $ref: "#/components/schemas/SpendSoFar" }, { type: "null" }]
+          description: "null when the gateway cannot say (ADR 0141 §2), never zero for unknown"
+        can_stop: { type: boolean, description: "whether the reader may stop it" }
+    SpendSoFar:
+      type: object
+      required: [tokens_in, tokens_out, tokens_cached, cost_usd, read_at]
+      properties:
+        tokens_in: { type: integer }
+        tokens_out: { type: integer }
+        tokens_cached: { type: integer }
+        cost_usd: { type: number }
+        read_at: { type: string, format: date-time, description: "when the gateway was asked; at most every 30 s per run" }
+        booked: { type: boolean, default: false, description: "true once the ledger holds it (the entry has ended)" }
+    ActivityList:
+      type: object
+      required: [in_flight, finished]
+      properties:
+        in_flight: { type: array, items: { $ref: "#/components/schemas/ActivityEntry" } }
+        finished: { type: array, items: { $ref: "#/components/schemas/ActivityEntry" } }
+    ContextBreakdown:
+      type: object
+      required: [call, at, model, prompt_tokens, sections]
+      description: >-
+        One model call's context (ADR 0141 §3): `prompt_tokens` is what the model reported (exact); the
+        sections are estimated and scaled so they sum to it; free space is `max_input_tokens - prompt_tokens`.
+      properties:
+        call: { type: integer, description: "the call's ordinal in the run or the conversation" }
+        at: { type: string, format: date-time }
+        model: { type: string }
+        prompt_tokens: { type: integer }
+        max_input_tokens: { type: [integer, "null"], description: "null when the catalogue does not know the model's window" }
+        source: { type: string, enum: [loop, hosted_proxy, gateway], description: "where it was measured" }
+        sections:
+          type: object
+          description: "tokens per section; absent sections are zero"
+          properties:
+            system: { type: integer }
+            tools.platform: { type: integer }
+            tools.mcp: { type: integer }
+            skills: { type: integer }
+            knowledge: { type: integer }
+            memory: { type: integer }
+            messages: { type: integer }
+            backend: { type: integer, description: "what a third-party CLI or container added that the platform did not write" }
+          additionalProperties: false
+    RunContext:
+      type: object
+      required: [run_id, measurable, series]
+      properties:
+        run_id: { type: string }
+        measurable: { type: boolean }
+        backend: { type: [string, "null"] }
+        latest: { oneOf: [{ $ref: "#/components/schemas/ContextBreakdown" }, { type: "null" }] }
+        series:
+          type: array
+          description: "each kept call's total, oldest first (at most one per 5 s, ADR 0141 §5)"
+          items:
+            type: object
+            required: [call, at, prompt_tokens]
+            properties:
+              call: { type: integer }
+              at: { type: string, format: date-time }
+              prompt_tokens: { type: integer }
     CostReport:
       type: object
       required: [group_by, rows, total]
@@ -10925,6 +11269,9 @@ components:
             cost_usd: { type: number }
             cost_eur: { type: number }
             budget_usd: { type: [number, "null"] }
+            tokens_in: { type: integer, default: 0, description: "the input tokens of the report's lines, summed (ADR 0141 §1)" }
+            tokens_out: { type: integer, default: 0 }
+            tokens_cached: { type: integer, default: 0, description: "the input tokens the model read from its cache, part of tokens_in" }
     MemoryAbGroup:
       type: object
       properties:

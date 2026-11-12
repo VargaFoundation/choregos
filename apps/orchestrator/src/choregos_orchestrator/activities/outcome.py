@@ -23,8 +23,9 @@ from choregos_contracts import EventType, StageInput, StageResult, StageStatus
 from choregos_core import Message, Spend, elapsed_seconds, utcnow
 from choregos_core.decision_ledger import declared_confidences
 from choregos_core.domain import DiffSummary
+from choregos_core.run_stop import stopped_by_a_person
 from choregos_core.unified_diff import unified_diff
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from temporalio import activity
 
@@ -85,8 +86,8 @@ async def collect_spend(payload: dict[str, Any]) -> dict[str, Any]:
 async def book_spend(session: Any, bundle: Any, run: Run, settings: Any) -> dict[str, Any]:
     """`collect_spend` in an open session: a decision step (ADR 0121) books its spend before its
     key is revoked, in the activity that minted it. Counted once (`spend_collected`)."""
-    if run.spend_collected:
-        return {**run.tokens, **await ticket_view(session, bundle, run.work_item_id)}
+    if run.spend_collected or not await _claim_the_spend(session, run):
+        return {**(run.tokens or {}), **await ticket_view(session, bundle, run.work_item_id)}
     spend = Spend()
     if run.gateway_key_id:
         spend = await bundle.adapters.gateway.spend(run.gateway_key_id)
@@ -183,6 +184,22 @@ async def book_spend(session: Any, bundle: Any, run: Run, settings: Any) -> dict
     return {**run.tokens, **await ticket_view(session, bundle, item.id)}
 
 
+async def _claim_the_spend(session: Any, run: Run) -> bool:
+    """Whether this transaction books the run's spend: the flag is set by a conditional update, so
+    two activities that end the same run at once — the interpreter's `collect_spend` and a stop's
+    `cancel_run` (ADR 0142 §2) — book it once. The loser reads what the winner wrote."""
+    claimed = await session.execute(
+        update(Run)
+        .where(Run.id == run.id, Run.spend_collected.is_(False))
+        .values(spend_collected=True)
+        .execution_options(synchronize_session=False)
+    )
+    if claimed.rowcount == 1:
+        return True
+    await session.refresh(run)
+    return False
+
+
 async def close_run_spend(project_id: str, run_id: str) -> None:
     """A run that ends without the interpreter's `collect_spend` (cancelled, its workflow dead):
     its spend is booked and its key revoked all the same (#523). Never raises.
@@ -225,7 +242,10 @@ async def record_run_outcome(payload: dict[str, Any]) -> dict[str, Any]:
         result = StageResult.model_validate(payload["result"])
         if run.result is None:
             run.result = result.model_dump(mode="json", by_alias=True)
-        run.status = "succeeded" if result.status == StageStatus.DONE else "failed"
+        if stopped_by_a_person(result):
+            run.status = "cancelled"  # a person stopped it (ADR 0142 §2): not a failure to learn from
+        else:
+            run.status = "succeeded" if result.status == StageStatus.DONE else "failed"
         run.ended_at = run.ended_at or utcnow()
         item = await load_work_item(session, run.work_item_id)
         outputs = result.outputs
