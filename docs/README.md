@@ -21,6 +21,8 @@ it through a workflow you declare, and every step is bounded, evidenced and audi
 | [Security](security.md) | What stops an agent from doing damage, and what is *not* a wall |
 | [Starting a workflow from outside](starting-a-workflow-from-outside.md) | From an application, a script or another agent: which door to take, and the A2A door step by step |
 | [Integrations](integrations.md) | Connecting Claude Code, Claude Desktop, Cursor, VS Code or any MCP client through the MCP door; the A2A door's reference |
+| [Outposts](outposts.md) | Tools in a network the platform cannot reach: when to want an outpost, and when an organisation's own MCP gateway serves better; what it gives and what it does not |
+| [Running an outpost](outpost-operator.md) | For whoever runs one in their own network: what the daemon does and cannot do, the firewall rule, the policy file, the audit log, upgrades, who answers for what |
 | [CLI reference](cli.md) | Every command, generated from the CLI itself |
 | [Contributing](CONTRIBUTING.md) | One story, one PR; the contract before the code; what CI checks |
 | [ADRs](adr/README.md) | The structural decisions |

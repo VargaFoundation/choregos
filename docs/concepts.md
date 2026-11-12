@@ -310,6 +310,22 @@ addresses are never allowed. An agent that asks for a host its project or organi
 is refused when published, and its run is refused at admission. What each layer can and cannot stop is
 in [security](security.md).
 
+## Outposts
+
+A connector's tools may live in a network the platform cannot connect to. An **outpost** is a place
+of one organisation, enrolled by a person, where a daemon runs that **only dials out**
+([ADR 0147](adr/0147-an-outpost-only-dials-out.md)): it polls the platform for the tool calls routed
+to it, makes them against servers of its own network, and answers. The platform holds an alias,
+never an address or a credential of that side. The outpost holds a policy file the platform cannot
+write, and makes only the calls that file allows and the platform signed.
+
+Where a tool lives changes nothing of what governs its call: the platform decides it before anything
+leaves, and bounds and books the result when it comes back. What moves to the outpost is the tool
+call, not the agent: no prompt, no model key and no run reaches it. An outpost does not give data
+residency, since a tool's result still travels to the platform; and an organisation that already
+exposes its tools through an MCP gateway of its own needs none. Outposts are off unless the
+deployment turns them on, and carry reads only for now: see [Outposts](outposts.md).
+
 ## Findings and trains
 
 An agent that spots a problem **outside its scope** does not fix it: it reports a *finding*,
