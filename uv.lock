@@ -16,6 +16,7 @@ members = [
     "choregos-core",
     "choregos-ontology",
     "choregos-orchestrator",
+    "choregos-outpost",
     "choregos-playbooks",
     "choregos-quant",
     "choregos-runner",
@@ -522,6 +523,39 @@ requires-dist = [
 ]
 
 [[package]]
+name = "choregos-outpost"
+version = "0.26.1"
+source = { editable = "packages/outpost" }
+dependencies = [
+    { name = "choregos-adapters" },
+    { name = "choregos-contracts" },
+    { name = "choregos-core" },
+    { name = "cryptography" },
+    { name = "httpx" },
+    { name = "jsonschema" },
+    { name = "pydantic" },
+    { name = "pyjwt" },
+    { name = "pyyaml" },
+    { name = "structlog" },
+    { name = "typer" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "choregos-adapters", editable = "packages/adapters" },
+    { name = "choregos-contracts", editable = "packages/contracts" },
+    { name = "choregos-core", editable = "packages/core" },
+    { name = "cryptography", specifier = ">=43.0" },
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "jsonschema", specifier = ">=4.23" },
+    { name = "pydantic", specifier = ">=2.9" },
+    { name = "pyjwt", specifier = ">=2.9" },
+    { name = "pyyaml", specifier = ">=6.0" },
+    { name = "structlog", specifier = ">=24.4" },
+    { name = "typer", specifier = ">=0.15" },
+]
+
+[[package]]
 name = "choregos-playbooks"
 version = "0.26.1"
 source = { editable = "packages/playbooks" }
@@ -618,6 +652,7 @@ dependencies = [
     { name = "choregos-core" },
     { name = "choregos-ontology" },
     { name = "choregos-orchestrator" },
+    { name = "choregos-outpost" },
     { name = "choregos-playbooks" },
     { name = "choregos-quant" },
     { name = "choregos-runner" },
@@ -653,6 +688,7 @@ requires-dist = [
     { name = "choregos-core", editable = "packages/core" },
     { name = "choregos-ontology", editable = "packages/ontology" },
     { name = "choregos-orchestrator", editable = "apps/orchestrator" },
+    { name = "choregos-outpost", editable = "packages/outpost" },
     { name = "choregos-playbooks", editable = "packages/playbooks" },
     { name = "choregos-quant", editable = "packages/quant" },
     { name = "choregos-runner", editable = "packages/runner" },
