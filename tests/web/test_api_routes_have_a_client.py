@@ -89,7 +89,7 @@ NOT_CALLED_BY_A_CLIENT: dict[str, str] = {
     "/projects/{id}/workflows/validate": "the project-scoped twin of /workflows/validate, which the console "
     "and the CLI call; its extra actor-group warning is for API callers",
     "/templates/{name}": "platform template authoring by API (getTemplate, updateTemplate), no screen or "
-    "command yet: finding VargaFoundation/choregos#1075",
+    "command yet: finding #1075",
     "/orgs/{org}/aliases/{alias}": "platform administrator's API gesture; its console text lives in the "
     "enterprise repository (S42-14 STATUS row)",
     "/work-items/{id}/artifacts/{ref}": "one revision's metadata, for API callers; the console lists the "

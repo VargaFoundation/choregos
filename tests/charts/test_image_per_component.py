@@ -14,6 +14,7 @@ from typing import Any
 
 import pytest
 import yaml
+from choregos_core.publishing import PUBLISHING
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 CHART = ROOT / "charts" / "choregos"
@@ -54,7 +55,7 @@ def test_the_api_and_the_orchestrator_come_from_the_private_project_the_rest_of_
     for name, refs in images.items():
         if name not in prives:
             assert all(not r.startswith(PRIVE) for r in refs), (name, refs)
-    assert any(r.startswith("ghcr.io/vargafoundation/choregos-web") for refs in images.values() for r in refs)
+    assert any(r.startswith(PUBLISHING.image("choregos-web")) for refs in images.values() for r in refs)
 
 
 def test_the_global_digest_does_not_point_at_an_image_of_another_registry() -> None:
@@ -63,7 +64,7 @@ def test_the_global_digest_does_not_point_at_an_image_of_another_registry() -> N
         for ref in refs:
             if ref.startswith(PRIVE):
                 assert "@sha256" not in ref, f"{name}: the core digest set on an EE image"
-            elif ref.startswith("ghcr.io/vargafoundation/choregos-"):
+            elif ref.startswith(PUBLISHING.image("choregos-")):
                 assert "@sha256:" in ref, f"{name}: the core keeps its digest"
 
 

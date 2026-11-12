@@ -5,7 +5,7 @@
 
 The playbook evals (`choregos_playbooks.evals`) check the rendering of a ROLE; the catalogue's agents
 carry their own instructions, which nothing checked. One case per internal agent, in its plugin's
-`evals/` (ADR 0093 §6: the cases moved with the agents to `VargaFoundation/choregos-agents`):
+`evals/` (ADR 0093 §6: the cases moved with the agents to their repository, `choregos-agents`):
 the instructions rendered as the orchestrator renders them (sandboxed Jinja, the ticket's context
 first, the case's `inputs`) must contain what makes the agent this agent, and none of what it must
 never say. Deterministic: no model, no network. A case turns red when the instructions are emptied

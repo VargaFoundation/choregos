@@ -13,6 +13,7 @@ from typing import Any
 
 import pytest
 import yaml
+from choregos_core.publishing import PUBLISHING
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 CHART = ROOT / "charts" / "choregos"
@@ -22,7 +23,7 @@ pytestmark = pytest.mark.skipif(shutil.which("helm") is None, reason="helm is mi
 ON: dict[str, Any] = {
     "global": {
         "plugins": {
-            "servers": {"enabled": True, "registries": ["ghcr.io/vargafoundation/choregos-agents"]},
+            "servers": {"enabled": True, "registries": [PUBLISHING.image("choregos-agents")]},
         },
         "runner": {"runtimeClass": "gvisor"},
     }
@@ -65,9 +66,7 @@ def test_on_the_api_runs_servers_in_their_namespace_only(tmp_path: pathlib.Path)
     env = _api_env(docs)
     assert env["CHOREGOS_PLUGIN_SERVERS"] == "kubernetes"
     assert env["CHOREGOS_PLUGIN_SERVERS_NAMESPACE"] == "choregos-plugins"
-    assert yaml.safe_load(env["CHOREGOS_PLUGIN_SERVERS_REGISTRIES"]) == [
-        "ghcr.io/vargafoundation/choregos-agents"
-    ]
+    assert yaml.safe_load(env["CHOREGOS_PLUGIN_SERVERS_REGISTRIES"]) == [PUBLISHING.image("choregos-agents")]
     assert env["CHOREGOS_PLUGIN_SERVERS_RUNTIME_CLASS"] == "gvisor", "the runner's RuntimeClass by default"
     assert env["CHOREGOS_PLUGIN_SERVERS_API_NAMESPACE"] == "choregos"
     role = _named(docs, "Role", "choregos-api-plugin-servers")

@@ -102,7 +102,7 @@ def test_the_same_version_downloads_nothing_unless_forced(binary: Path) -> None:
 def test_an_instance_without_a_cli_names_the_release(binary: Path) -> None:
     problem = {
         "code": "no_cli_bundled",
-        "release_url": "https://github.com/VargaFoundation/choregos/releases/tag/v9.9.9",
+        "release_url": "https://github.com/example/choregos/releases/tag/v9.9.9",
     }
     with respx.mock() as mock:
         mock.get(f"{URL}/downloads/cli/manifest.json").mock(return_value=httpx.Response(404, json=problem))

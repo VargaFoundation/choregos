@@ -3,7 +3,7 @@
 
 The review of 2026-10-07 found that software workflows ran IMPLICIT agents; the catalogue made them
 registry agents, ready to install. Since S43-09 the core no longer carries them: they ship as plugins
-of `VargaFoundation/choregos-agents` (`software-delivery`, `netops`, `authoring`, `mcp-clients`,
+of the agents' repository, `choregos-agents` (`software-delivery`, `netops`, `authoring`, `mcp-clients`,
 `requests`), and
 the catalogue is a VIEW over plugins — the deployment's offline directory (the committed
 `plugins/offline/` of this repository, `/opt/choregos/plugins` in the API image), plus, in the API,

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import os
 import pathlib
 from collections.abc import AsyncIterator, Iterator
@@ -11,6 +12,7 @@ from typing import Any
 
 import pytest
 from alembic import command
+from choregos_core.publishing import PUBLISHING
 from httpx import ASGITransport, AsyncClient
 
 # Shared fixtures of the kits: every test module of the directory can use them by name.
@@ -22,7 +24,7 @@ os.environ.setdefault("CHOREGOS_FAKES", "1")
 # The egress allowlist (S39-22) only warns in the suites: the tests that prove it ask for `enforce`.
 os.environ.setdefault("CHOREGOS_EGRESS_MODE", "warn")
 # The registry the test plugins' servers come from (ADR 0096): the tests that prove the allowlist set another.
-os.environ.setdefault("CHOREGOS_PLUGIN_SERVERS_REGISTRIES", '["ghcr.io/vargafoundation/choregos-agents"]')
+os.environ.setdefault("CHOREGOS_PLUGIN_SERVERS_REGISTRIES", json.dumps([PUBLISHING.image("choregos-agents")]))
 os.environ.setdefault("CHOREGOS_DEV_LOGIN_ENABLED", "true")
 os.environ.setdefault("CHOREGOS_DEV_ADMIN_EMAILS", "admin@varga.dev")
 # The suites build prod and https apps, which refuse a short or default session secret at start.

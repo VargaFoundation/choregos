@@ -6,6 +6,7 @@ import { DocsProvider, HelpEntry, LearnMore } from "@/components/docs-link";
 import { PageHeader } from "@/components/page-header";
 import { api } from "@/lib/api";
 import { DEFAULT_DOCS_URL, DOC_SLUGS, DOCS_BY_ROUTE, docsBase, docsSlugFor, docsUrl } from "@/lib/docs";
+import { DOCUMENTATION } from "@/lib/publishing";
 import type { Edition } from "@/lib/types";
 
 const pathname = vi.hoisted(() => ({ current: "/" as string | null }));
@@ -70,7 +71,7 @@ describe("the documentation's pages and the screens that point to them (S62-11)"
     expect(docsBase("https://docs.intranet.example/choregos/")).toBe("https://docs.intranet.example/choregos");
     expect(docsBase("javascript:alert(1)")).toBe(DEFAULT_DOCS_URL);
     expect(docsBase(undefined)).toBe(DEFAULT_DOCS_URL);
-    expect(docsUrl(null, "")).toBe("https://docs.varga.foundation/choregos/");
+    expect(docsUrl(null, "")).toBe(`${DOCUMENTATION}/`);
     expect(docsUrl("http://docs.local", "cli/install")).toBe("http://docs.local/cli/install");
   });
 });
@@ -85,7 +86,7 @@ describe("Help and Learn more", () => {
     vi.mocked(api.edition).mockResolvedValue({ ...EDITION, docs_url: "https://docs.intranet.example/choregos" });
     render(wrap(<HelpEntry />));
     const help = screen.getByRole("link", { name: /^Help/ });
-    expect(help).toHaveAttribute("href", "https://docs.varga.foundation/choregos/");
+    expect(help).toHaveAttribute("href", `${DOCUMENTATION}/`);
     await waitFor(() => expect(help).toHaveAttribute("href", "https://docs.intranet.example/choregos/"));
     expect(help).toHaveAttribute("target", "_blank");
     expect(help).toHaveAccessibleName("Help, documentation, opens in a new tab");
@@ -98,7 +99,7 @@ describe("Help and Learn more", () => {
     vi.mocked(api.edition).mockResolvedValue(EDITION);
     render(wrap(<HelpEntry />));
     await waitFor(() => expect(api.edition).toHaveBeenCalled());
-    expect(screen.getByTestId("help-entry")).toHaveAttribute("href", "https://docs.varga.foundation/choregos/");
+    expect(screen.getByTestId("help-entry")).toHaveAttribute("href", `${DOCUMENTATION}/`);
   });
 
   it("a page's header points to the screen's page; a screen the documentation does not cover has none", async () => {
@@ -121,6 +122,6 @@ describe("Help and Learn more", () => {
     render(wrap(<PageHeader title="A section" as="h2" />));
     expect(screen.queryByTestId("learn-more")).toBeNull();
     render(wrap(<LearnMore />));
-    expect(screen.getByTestId("learn-more")).toHaveAttribute("href", "https://docs.varga.foundation/choregos/build/skills");
+    expect(screen.getByTestId("learn-more")).toHaveAttribute("href", `${DOCUMENTATION}/build/skills`);
   });
 });
