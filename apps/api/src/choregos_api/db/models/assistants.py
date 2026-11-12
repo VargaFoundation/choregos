@@ -17,7 +17,8 @@ class AssistantInstallation(Base, PkMixin, TimestampMixin):
 
     The manifest is never copied: it is read again from the installed plugin (`plugin`, at the digest in
     `manifest_digest`), so an upgrade of the plugin is seen at once. `status` is `incomplete` while the
-    readiness has an item, `ready` when it has none, `suspended` once the plugin is uninstalled.
+    readiness has an item, `ready` when it has none, `suspended` once the plugin is uninstalled or while a
+    person has stopped it (`stopped_at`, ADR 0142 §4 bis), whatever the rest says.
     """
 
     __tablename__ = "assistant_installations"
@@ -44,6 +45,11 @@ class AssistantInstallation(Base, PkMixin, TimestampMixin):
     #: shown it: a key is shown once, a rotation makes a new generation.
     webhook_secret_generation: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     webhook_secret_shown_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    #: Who stopped the assistant, when and why (ADR 0142 §4 bis): set, its status reads `suspended` until
+    #: a resume clears it, whatever the readiness or the plugin say.
+    stopped_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    stopped_by: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    stopped_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
 
 class AssistantToolBinding(Base, PkMixin, TimestampMixin):
