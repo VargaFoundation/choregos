@@ -40,6 +40,11 @@ REDRAW_EVERY_S = 1.0
 DASH = "—"
 
 
+def clock() -> datetime:
+    """Now, in UTC: what elapsed times are measured against (the tests pin it)."""
+    return datetime.now(UTC)
+
+
 @dataclass
 class Board:
     """What the tree shows: the entries in flight and those that ended, by id, kept in the API's order."""
@@ -178,7 +183,7 @@ def _drain(
 
 def render(board: Board, organisation: str, today: float | None, out: Console) -> RenderableType:
     """The tree in its blue frame, what ended below it, the status line last."""
-    now = datetime.now(UTC)
+    now = clock()
     parts: list[RenderableType] = [
         Panel(
             _tree(list(board.in_flight.values()), now, out, "nothing is running"),

@@ -31,6 +31,8 @@ def profile(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(client_module, "CONFIG_PATH", tmp_path / "config.json")
     monkeypatch.setattr(theme, "MONOCHROME", False)
     monkeypatch.setattr(activity, "REDRAW_EVERY_S", 0.01)
+    # Elapsed times are read against a pinned clock: a loaded machine must not move "4m12s".
+    monkeypatch.setattr(activity, "clock", lambda: NOW)
     monkeypatch.setenv("CHOREGOS_API_URL", API)
     monkeypatch.setenv("CHOREGOS_TOKEN", "chg_test")
     monkeypatch.setenv("CHOREGOS_ORG", "acme")
@@ -136,7 +138,7 @@ def test_the_tree_reads_project_work_item_run_with_status_time_tokens_and_cost(p
     assert lines[project + 1].startswith("FIN-12 delivery")
     run = lines[project + 2]
     assert run.startswith("● running implement · coder · sonnet-4.5")
-    assert re.search(r"4m1[2-9]s · 12\.3k in / 800 out · \$0\.84 run run-a1b2c3d4", run), run
+    assert re.search(r"4m12s · 12\.3k in / 800 out · \$0\.84 run run-a1b2c3d4", run), run
     assert "acme · 1 running · — waiting for you · $1.23 today" in _said(result)
 
 
