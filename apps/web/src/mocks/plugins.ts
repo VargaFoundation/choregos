@@ -8,6 +8,7 @@
  * Who is looking: an administrator unless `sessionStorage["choregos.mock.role"]` is `developer`.
  */
 import { ApiError } from "@/lib/api";
+import { PLUGIN_INDEX, PLUGIN_REPOSITORY } from "@/lib/publishing";
 import type {
   InstalledPlugin,
   OrgConnector,
@@ -73,10 +74,10 @@ const CATALOGUE: Record<string, { description: string; publisher: string; server
 export const pluginSources: PluginSource[] = [
   {
     name: "varga",
-    index: "oci://ghcr.io/vargafoundation/choregos-agents/index:stable",
+    index: PLUGIN_INDEX.replace(/:latest$/, ":stable"),
     trust: {
       mode: "keyless",
-      identity: "https://github.com/VargaFoundation/choregos-agents/.*",
+      identity: `${PLUGIN_REPOSITORY}/.*`,
       issuer: "https://token.actions.githubusercontent.com",
       key_fingerprint: null,
     },

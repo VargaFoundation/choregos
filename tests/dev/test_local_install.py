@@ -10,6 +10,7 @@ import pathlib
 from typing import Any
 
 import yaml
+from choregos_core.publishing import PUBLISHING
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 COMPOSE = ROOT / "compose.yaml"
@@ -134,7 +135,7 @@ def test_the_workers_run_agents_as_local_containers() -> None:
     assert "/var/run/docker.sock:/var/run/docker.sock" in worker["volumes"]
     env = _env(worker)
     assert env["CHOREGOS_EXECUTOR_KIND"] == "local_docker"
-    assert env["CHOREGOS_RUNNER_IMAGE"].startswith("ghcr.io/vargafoundation/choregos-runner:")
+    assert env["CHOREGOS_RUNNER_IMAGE"].startswith(PUBLISHING.image("choregos-runner") + ":")
     # The run containers join the network by name: it must not depend on the project name.
     assert compose["networks"]["default"]["name"] == LOCAL_NETWORK
 

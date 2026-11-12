@@ -30,9 +30,10 @@ from typing import Annotated, Any
 
 import httpx
 import typer
+from choregos_core.publishing import PUBLISHING
 from rich.console import Console
 
-RELEASES = "https://github.com/VargaFoundation/choregos/releases"
+RELEASES = PUBLISHING.releases
 #: The variable that silences the version check.
 NO_CHECK_ENV = "CHOREGOS_NO_VERSION_CHECK"
 #: Seconds between two checks of one instance (and so between two warnings).

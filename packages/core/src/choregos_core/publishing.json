@@ -1,0 +1,11 @@
+{
+  "$comment": "The publishing identity of Choregos, defined once (ADR 0156): who publishes it, where its images, charts, source, documentation and plugins live, and where a vulnerability is reported. The code reads it through `choregos_core.publishing`; `apps/web/src/lib/publishing.json` is its copy for the console. The files that cannot read it (charts, policies, workflows, Dockerfiles, documentation) are listed in `tools/publishing_identity.py`, which checks them and rewrites them from this file: change a value here, then run `make publishing-rewrite FROM=<the commit before the change>`. The cosign identities follow from the repositories: GitHub signs as `<repository>/.github/workflows/<file>@<ref>`.",
+  "owner": "VargaFoundation",
+  "registry": "ghcr.io/vargafoundation",
+  "source_repository": "https://github.com/VargaFoundation/choregos",
+  "documentation": "https://docs.varga.foundation/choregos",
+  "security_contact": "security@varga.foundation",
+  "commit_email": "choregos-bot@varga.foundation",
+  "plugin_repository": "https://github.com/VargaFoundation/choregos-agents",
+  "plugin_index": "oci://ghcr.io/vargafoundation/choregos-agents/index:latest"
+}

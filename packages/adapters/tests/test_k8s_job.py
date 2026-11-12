@@ -27,7 +27,7 @@ def _spec() -> StageJobSpec:
         run_id="r-1",
         project_slug="demo",
         namespace="choregos",
-        runner_image="harbor.example/ghcr-proxy/vargafoundation/choregos-runner:0.1.0",
+        runner_image="harbor.example/ghcr-proxy/example/choregos-runner:0.1.0",
         api_url="http://choregos-api:8000",
         run_token="jeton",
     )

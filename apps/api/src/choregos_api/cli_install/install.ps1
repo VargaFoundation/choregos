@@ -23,7 +23,7 @@ function Install-Choregos {
     )
     $ErrorActionPreference = 'Stop'
     $ProgressPreference = 'SilentlyContinue'
-    $releases = 'https://github.com/VargaFoundation/choregos/releases'
+    $releases = '__CHOREGOS_RELEASES__'
     if ($env:CHOREGOS_URL) { $InstanceUrl = $env:CHOREGOS_URL }
     $InstanceUrl = $InstanceUrl.TrimEnd('/')
     if (-not $InstallDir) {

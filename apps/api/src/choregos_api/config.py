@@ -10,6 +10,7 @@ from typing import Any, Literal
 
 from choregos_core.images import check_image_map
 from choregos_core.mcp import RESULT_CEILING_BYTES, RESULT_MAX_BYTES
+from choregos_core.publishing import PUBLISHING
 from pydantic import BaseModel, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -45,8 +46,9 @@ class OAuthClient(BaseModel):
     callback_port: int | None = Field(default=None, ge=1024, le=65535)
 
 
-#: The public documentation site (S62 shared contracts), when `CHOREGOS_DOCS_URL` names none.
-DEFAULT_DOCS_URL = "https://docs.varga.foundation/choregos"
+#: The public documentation site (S62 shared contracts), when `CHOREGOS_DOCS_URL` names none: the
+#: publishing identity's (ADR 0156).
+DEFAULT_DOCS_URL = PUBLISHING.documentation
 
 #: An origin as `CHOREGOS_OUTPOSTS_DOOR_URL` takes it, and as an outpost's policy file writes its
 #: `control_plane` (`outpost-policy.schema.json`): a scheme and a host, no path, query or user.
@@ -272,7 +274,7 @@ class Settings(BaseSettings):
     #: MCP door's `docs_search` and `docs_read`. An absent directory: this build bundles none.
     docs_dir: str = "/opt/choregos/docs"
     #: The public documentation site, for the links those tools give (S62 shared contracts).
-    docs_url: str = "https://docs.varga.foundation/choregos"
+    docs_url: str = DEFAULT_DOCS_URL
     #: Plugin servers (ADR 0096): `kubernetes` runs them in `plugin_servers_namespace` through the API's
     #: Role there; `off` refuses a plugin that brings one (`CHOREGOS_FAKES` runs them in memory).
     plugin_servers: Literal["off", "kubernetes"] = "off"

@@ -16,7 +16,7 @@ from choregos_adapters.plugin_servers import (
     server_manifests,
 )
 
-IMAGE = "ghcr.io/vargafoundation/choregos-agents/hello-mcp@sha256:" + "a" * 64
+IMAGE = "registry.example/choregos-agents/hello-mcp@sha256:" + "a" * 64
 
 
 def _server(**changes: object) -> ServerDeployment:

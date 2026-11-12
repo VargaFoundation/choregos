@@ -6,9 +6,10 @@ import { useState } from "react";
 import { GatewayKeysCard } from "@/components/admin/gateway-keys";
 import { Alert, Button, Card, Code, Empty, ReadState, Field, Input, StateBadge } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
+import { sourceFile } from "@/lib/publishing";
 import type { AgentBackendInfo, ExecutorInfo } from "@/lib/types";
 
-const DOCS = "https://github.com/VargaFoundation/choregos/blob/main/docs";
+const DOCS = sourceFile("docs");
 
 /** What each executor kind is, in one line, and the procedure that sets it up (all five exist in docs/procedures). */
 const EXECUTORS: Record<ExecutorInfo["kind"], string> = {

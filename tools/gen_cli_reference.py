@@ -24,6 +24,8 @@ import sys
 os.environ["TYPER_USE_RICH"] = "0"
 from typing import Any
 
+from choregos_core.publishing import PUBLISHING, SIGNING_ISSUER
+
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 TARGET = ROOT / "docs" / "cli.md"
 SITE_TARGET = ROOT / "docs" / "site" / "cli" / "reference.md"
@@ -52,16 +54,16 @@ size) and a cosign bundle per file (`<file>.sigstore.json`). Download one, check
 PATH:
 
 ```sh
-curl -fsSLO https://github.com/VargaFoundation/choregos/releases/download/v<version>/choregos-linux-x86_64
-curl -fsSLO https://github.com/VargaFoundation/choregos/releases/download/v<version>/SHA256SUMS
+curl -fsSLO __RELEASES__/download/v<version>/choregos-linux-x86_64
+curl -fsSLO __RELEASES__/download/v<version>/SHA256SUMS
 sha256sum --ignore-missing -c SHA256SUMS          # macOS: shasum -a 256 --ignore-missing -c SHA256SUMS
 install -m 0755 choregos-linux-x86_64 ~/.local/bin/choregos
 choregos --version
 ```
 
 `cosign verify-blob --bundle SHA256SUMS.sigstore.json --certificate-identity
-https://github.com/VargaFoundation/choregos/.github/workflows/release.yml@refs/tags/v<version>
---certificate-oidc-issuer https://token.actions.githubusercontent.com SHA256SUMS` proves the sums
+__RELEASE_IDENTITY__
+--certificate-oidc-issuer __ISSUER__ SHA256SUMS` proves the sums
 come from the release workflow. The Windows and macOS files are not yet signed by a platform
 vendor (`docs/plan/BLOCKERS.md`): Windows SmartScreen warns, and a macOS browser download needs
 `xattr -d com.apple.quarantine choregos-macos-arm64` once. The first call unpacks the binary into
@@ -97,6 +99,13 @@ talks to an instance that runs another version, it says so in one line on stderr
 day (`CHOREGOS_NO_VERSION_CHECK=1` silences it).
 
 """
+# The release pages and the release workflow's signing identity come from the publishing identity
+# (ADR 0156): the generated page follows it.
+HEADER = (
+    HEADER.replace("__RELEASES__", PUBLISHING.releases)
+    .replace("__RELEASE_IDENTITY__", PUBLISHING.signing_identity("refs/tags/v<version>"))
+    .replace("__ISSUER__", SIGNING_ISSUER)
+)
 
 SITE_HEADER = """---
 title: CLI reference

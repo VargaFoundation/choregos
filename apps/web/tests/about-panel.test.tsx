@@ -5,6 +5,7 @@ import { TopNav } from "@/app/top-nav";
 import { AboutPanel, aboutSupportText } from "@/components/edition";
 import { Sidebar } from "@/components/shell/sidebar";
 import { api } from "@/lib/api";
+import { SOURCE_REPOSITORY } from "@/lib/publishing";
 import { ThemeProvider } from "@/lib/theme";
 
 vi.mock("next/navigation", () => ({ usePathname: () => "/" }));
@@ -71,10 +72,7 @@ describe("the About panel (S42-12)", () => {
     expect(within(panel).getByText("0123abc4567def890123abc4567def890123abc4")).toBeInTheDocument();
     // No edition to name: none of the enterprise rows.
     for (const row of ["Publisher", "Edition licence", "Edition version"]) expect(within(panel).queryByText(row)).toBeNull();
-    expect(within(panel).getByRole("link", { name: "Source repository" })).toHaveAttribute(
-      "href",
-      "https://github.com/VargaFoundation/choregos",
-    );
+    expect(within(panel).getByRole("link", { name: "Source repository" })).toHaveAttribute("href", SOURCE_REPOSITORY);
     expect(within(panel).getByRole("link", { name: "Documentation" })).toHaveAttribute("href", expect.stringContaining("/docs"));
   });
 

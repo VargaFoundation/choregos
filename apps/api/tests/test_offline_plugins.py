@@ -20,6 +20,7 @@ from typing import Any
 
 import pytest
 import yaml
+from choregos_core.publishing import PUBLISHING
 from httpx import AsyncClient
 from sqlalchemy import select
 
@@ -28,9 +29,9 @@ OFFLINE = ROOT / "plugins" / "offline"
 ORG = "/api/v1/orgs/varga"
 VARGA = {
     "name": "varga",
-    "index": "oci://ghcr.io/vargafoundation/choregos-agents/index:latest",
+    "index": PUBLISHING.plugin_index,
     "trust": {
-        "identity": r"https://github\.com/VargaFoundation/choregos-agents/\.github/workflows/publish\.yml@refs/heads/main",
+        "identity": PUBLISHING.plugin_signing_identity.replace(".", r"\."),
         "issuer": r"https://token\.actions\.githubusercontent\.com",
     },
 }

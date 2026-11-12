@@ -18,13 +18,12 @@ from typing import Any
 
 import pytest
 import yaml
+from choregos_core.publishing import PUBLISHING
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 CHART = ROOT / "charts" / "choregos"
 RUNBOOKS = ROOT / "docs" / "runbooks"
-RUNBOOK_URL = re.compile(
-    r"^https://github\.com/VargaFoundation/choregos/blob/main/(docs/runbooks/[\w.-]+\.md)$"
-)
+RUNBOOK_URL = re.compile(rf"^{re.escape(PUBLISHING.source_file(''))}(docs/runbooks/[\w.-]+\.md)$")
 
 #: Former alert name -> new alert name. `ChoregosBacklogTemporal` was already English and stays.
 RENAMED_ALERTS = {

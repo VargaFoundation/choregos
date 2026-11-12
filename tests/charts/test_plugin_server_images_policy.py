@@ -15,6 +15,7 @@ from typing import Any
 import pytest
 import yaml
 from choregos_adapters.plugin_servers import ServerDeployment, server_manifests
+from choregos_core.publishing import PUBLISHING
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 POLICY = ROOT / "infra" / "policies" / "plugin-servers.yaml"
@@ -64,7 +65,7 @@ def test_the_engine_s_expectations(pod: dict[str, Any], result: str) -> None:
 
 
 def test_the_api_s_own_server_passes() -> None:
-    image = "ghcr.io/vargafoundation/choregos-agents/servicenow-mcp@sha256:" + "0" * 64
+    image = PUBLISHING.image("choregos-agents/servicenow-mcp@sha256:" + "0" * 64)
     d = ServerDeployment("s-1", "choregos-plugins", image, 8080, "/healthz", {"A": "b"}, {})
     deployment = next(o for o in server_manifests(d) if o["kind"] == "Deployment")
     assert _admitted({"spec": deployment["spec"]["template"]["spec"]})

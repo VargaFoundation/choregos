@@ -4,7 +4,7 @@ S60-05 will refuse a new version of an internal agent that leaves a component to
 do so once nothing the platform ships does. Two sources ship internal agents: the templates (their own
 `agents/*.yaml`) and the offline plugins of `plugins/offline/` (the API image's catalogue, ADR 0093).
 
-The offline archives are the signed bytes of `VargaFoundation/choregos-agents`: they move only by
+The offline archives are the signed bytes of the agents' repository: they move only by
 `make plugins-lock`, with the network. Until each is refreshed to the version that declares (the
 `choregos-agents` PR of S60-04), it sits in `PENDING_REFRESH`. That list is a ratchet in both directions:
 an archive that is in it must still be incomplete (so the entry cannot outlive the refresh), and an
