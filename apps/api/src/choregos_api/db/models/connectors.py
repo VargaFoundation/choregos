@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Organisation connectors, operations and policies, GitHub installations, egress rules."""
+"""Organisation connectors, operations and policies, the GitHub App and its installations, egress rules."""
 
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     String,
     Text,
     UniqueConstraint,
@@ -163,6 +164,37 @@ class GitHubInstallation(Base, TimestampMixin):
     claimed_by: Mapped[str | None] = mapped_column(String(320), nullable=True)
     claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class GitHubAppRegistration(Base, PkMixin, TimestampMixin):
+    """The deployment's GitHub App, registered from a manifest by a platform administrator (ADR 0161).
+
+    At most one row: the instance's App when the deployment's settings name none
+    (`CHOREGOS_GITHUB_APP_ID` wins over it). What GitHub publishes about the App is kept in clear; its
+    private key, webhook secret and OAuth client secret are ONE envelope sealed under the deployment's
+    key (ADR 0058), its additional data bound to the platform and to `github-app/<app_id>`, so it opens
+    nowhere else. Platform scope only: no organisation reads it."""
+
+    __tablename__ = "github_app_registrations"
+
+    app_id: Mapped[str] = mapped_column(String(32), unique=True)
+    slug: Mapped[str] = mapped_column(String(100))
+    name: Mapped[str] = mapped_column(String(100))
+    owner_login: Mapped[str] = mapped_column(String(200))
+    #: `Organization` or `User`
+    owner_type: Mapped[str] = mapped_column(String(32))
+    html_url: Mapped[str] = mapped_column(String(300))
+    #: Installable by any account (`true`) or by its owner's account only.
+    public: Mapped[bool] = mapped_column(Boolean)
+    webhook_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    client_id: Mapped[str] = mapped_column(String(100))
+    created_by: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    ciphertext: Mapped[bytes] = mapped_column(LargeBinary)
+    nonce: Mapped[bytes] = mapped_column(LargeBinary)
+    wrapped_dek: Mapped[bytes] = mapped_column(LargeBinary)
+    dek_nonce: Mapped[bytes] = mapped_column(LargeBinary)
+    kek_id: Mapped[str] = mapped_column(String(32))
+    algorithm: Mapped[str] = mapped_column(String(16), default="A256GCM")
 
 
 class OrgEgressRule(Base, PkMixin, TimestampMixin):

@@ -2158,6 +2158,74 @@ paths:
         "200": { description: Re-wrapped, content: { application/json: { schema: { $ref: "#/components/schemas/SecretsRewrap" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
         "409": { $ref: "#/components/responses/Conflict" }
+  /platform/github-app:
+    get:
+      tags: [admin]
+      operationId: getPlatformGitHubApp
+      summary: The GitHub App this instance acts as, and where it comes from
+      description: |
+        `source` is `deployment` when the deployment's settings name the App (`CHOREGOS_GITHUB_APP_ID` and
+        its key: they always win), `manifest` when a platform administrator created it from the console
+        (S70-21, ADR 0161), `none` otherwise. Never a secret: the private key, webhook secret and client
+        secret of a stored App are sealed (ADR 0058). Also what a new App would be asked for (the
+        permissions and events the adapters use) and the URLs derived from this instance, and
+        `blocked_by`, why the console cannot create one now. The platform administrator only.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/GitHubAppRegistrationStatus" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    delete:
+      tags: [admin]
+      operationId: forgetPlatformGitHubApp
+      description: |
+        Forget the App created from a manifest: its credentials are deleted from this instance, the App
+        itself stays on GitHub, where its owner deletes it. Audited (`github_app.forget`). 404 when no App
+        is stored; the deployment's settings are never touched. The platform administrator only.
+      responses:
+        "204": { description: Forgotten }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /platform/github-app/manifest:
+    post:
+      tags: [admin]
+      operationId: startGitHubAppManifest
+      description: |
+        Step 1 of GitHub's App Manifest flow (ADR 0161): the manifest (name, this instance's URLs, the
+        permissions and events the platform uses, `public` as chosen) and GitHub's registration page,
+        with a signed `state` valid one hour. The console POSTs a form to `action_url` whose one field,
+        `manifest`, is the JSON of `manifest`. 409 when the deployment's settings define the App, an App
+        is already stored, or no secrets key (`CHOREGOS_SECRETS_KEKS`) could seal its credentials. The
+        platform administrator only.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/GitHubAppManifestRequest" } } }
+      responses:
+        "200": { description: The form to post to GitHub, content: { application/json: { schema: { $ref: "#/components/schemas/GitHubAppManifestStart" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /github/manifest/callback:
+    get:
+      tags: [admin]
+      operationId: githubAppManifestCallback
+      description: |
+        The manifest's `redirect_url`, steps 2 and 3 (ADR 0161): GitHub sends the browser back with a
+        `code` (one hour, single use) and our `state`. The state must be the one this instance signed for
+        the person of the console session, a platform administrator; the code is exchanged with
+        `POST /app-manifests/{code}/conversions`, the credentials sealed and stored, the creation audited
+        (`github_app.create`), and the browser sent to the console's GitHub App page. Not a JSON endpoint.
+        A browser without a console session is sent to sign in and back here.
+      security:
+        - session: []
+        - {}
+      parameters:
+        - { name: code, in: query, required: true, schema: { type: string, minLength: 1, maxLength: 200 } }
+        - { name: state, in: query, required: true, schema: { type: string, minLength: 1 } }
+      responses:
+        "302": { description: "To the console's GitHub App page (`?github_app=created`), or to sign-in without a session" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "502": { description: "GitHub refused the code (unknown, used or expired) or could not be reached: nothing is stored" }
   /platform/backends:
     get:
       tags: [admin]
@@ -6180,6 +6248,45 @@ components:
         installations:
           type: array
           items: { $ref: "#/components/schemas/GitHubInstallation" }
+    GitHubAppRegistrationStatus:
+      type: object
+      description: The App this instance acts as (S70-21, ADR 0161). No secret.
+      required: [source, usable, suggested_name, permissions, events, webhook_url, callback_url, redirect_url]
+      properties:
+        source: { type: string, enum: [none, deployment, manifest], description: "deployment: the deployment's settings name it (they win); manifest: created from the console; none: no App" }
+        app_id: { type: [string, "null"] }
+        slug: { type: [string, "null"], description: "A stored App's; a deployment's App is read from GitHub elsewhere" }
+        name: { type: [string, "null"] }
+        owner_login: { type: [string, "null"] }
+        owner_type: { type: [string, "null"], description: "Organization or User" }
+        html_url: { type: [string, "null"] }
+        public: { type: [boolean, "null"], description: "Installable by any account (true) or by its owner's account only" }
+        webhook_active: { type: [boolean, "null"] }
+        created_by: { type: [string, "null"] }
+        created_at: { type: [string, "null"], format: date-time }
+        usable: { type: boolean, description: "The App's credentials are available (false for a stored App whose sealing key is gone)" }
+        blocked_by: { type: [string, "null"], description: "Why a new App cannot be created from the console now; null when it can" }
+        suggested_name: { type: string, description: "A name for the App derived from the instance's host (GitHub names are unique, 34 characters at most)" }
+        permissions: { type: object, additionalProperties: { type: string, enum: [read, write] }, description: "What the App is asked for: the adapters' own list, the one the GitHub procedures show" }
+        events: { type: array, items: { type: string }, description: "The webhook events the App subscribes to; installation events are delivered to every App" }
+        webhook_url: { type: string }
+        callback_url: { type: string, description: "Where GitHub sends a person after installing the App (the Setup route)" }
+        redirect_url: { type: string, description: "Where GitHub sends the browser once the App is registered" }
+    GitHubAppManifestRequest:
+      type: object
+      additionalProperties: false
+      required: [name, public]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 34, description: "The App's name on GitHub, unique across GitHub" }
+        organization: { type: [string, "null"], pattern: "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$", description: "The GitHub organisation that owns the App; absent: the personal account of the person who registers it" }
+        public: { type: boolean, description: "Installable by any account (true) or only by its owner's account (false). Required: an explicit choice" }
+        webhook_active: { type: boolean, default: true, description: "GitHub can reach this instance's webhook URL" }
+    GitHubAppManifestStart:
+      type: object
+      required: [action_url, manifest]
+      properties:
+        action_url: { type: string, description: "GitHub's registration page, with the signed state" }
+        manifest: { type: object, additionalProperties: true, description: "The JSON to post as the form field `manifest`" }
     GitHubRepository:
       type: object
       required: [full_name, private, default_branch, installation_id]

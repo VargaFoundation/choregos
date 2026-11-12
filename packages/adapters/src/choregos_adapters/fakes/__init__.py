@@ -15,7 +15,7 @@ from .ci import FakeCi
 from .decisions import FakeDecisionClient
 from .executor import FakeExecutor
 from .gateway import BudgetExceeded, BudgetExceededError, FakeGateway
-from .github_app import FakeGitHubApp
+from .github_app import FakeGitHubApp, FakeManifestConversion
 from .hosted_agent import FakeHostedAgent
 from .memory import FakeMemory
 from .model_server import FakeModelServer
@@ -38,6 +38,7 @@ __all__ = [
     "FakeHostedAgent",
     "FakeImageBuilder",
     "FakeImageVerifier",
+    "FakeManifestConversion",
     "FakeMemory",
     "FakeModelServer",
     "FakeNotifier",

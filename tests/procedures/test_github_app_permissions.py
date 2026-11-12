@@ -35,3 +35,19 @@ def test_the_procedure_lists_the_events_the_platform_parses(proc_id: str) -> Non
     )
     assert line, "the procedure names no events"
     assert tuple(re.findall(r"`([a-z0-9_]+)`", line)) == APP_EVENTS
+
+
+def test_the_deployment_guide_lists_what_the_manifest_asks_for() -> None:
+    """S70-21 (ADR 0161): the page listed four permissions and five events, the adapters used seven and
+    seven; an App made from the page lacked `statuses` and `organization_projects`. The manifest the
+    platform builds takes the constants, and the guide's table is held to them here."""
+    from pathlib import Path
+
+    guide = (Path(__file__).resolve().parents[2] / "docs" / "deployment.md").read_text(encoding="utf-8")
+    section = guide.split("## The GitHub App\n", 1)[1].split("\n## ", 1)[0]
+    permissions = next(line for line in section.splitlines() if line.startswith("| `default_permissions` |"))
+    listed = dict(re.findall(r"`([a-z_]+)` (read|write)", permissions))
+    assert listed == APP_PERMISSIONS
+    events = next(line for line in section.splitlines() if line.startswith("| `default_events` |"))
+    named = events.split("(", 1)[0]
+    assert tuple(re.findall(r"`([a-z0-9_]+)`", named))[1:] == APP_EVENTS

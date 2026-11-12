@@ -799,20 +799,20 @@ async def post_git_token(id: str, session: Db, claims: OpenRunAuth) -> GitToken:
     repository and to `contents: write`; without an App, or outside GitHub, it is null and the run
     clones without.
     """
-    import os
     from datetime import UTC, datetime
 
     import httpx
     from choregos_adapters.github import RUNNER_PERMISSIONS, GitHubAppAuth
 
+    from ..services import github_app_credentials
     from ..services.github_app import claimed_installation_for, implicit_claim_enabled
 
     run, _item, project_row = await _run_and_item(session, id)
     url = str(((run.stage_input or {}).get("repo") or {}).get("url") or "")
     repository = github_repository(url)
-    app_id = os.environ.get("CHOREGOS_GITHUB_APP_ID", "")
-    private_key = os.environ.get("CHOREGOS_GITHUB_APP_PRIVATE_KEY", "")
-    if repository is None or not app_id or not private_key:
+    # The deployment's App: its settings, else the one registered from a manifest (ADR 0161).
+    app = await github_app_credentials.refresh(session)
+    if repository is None or app is None:
         return GitToken(token=None, repository=repository)
     # The installation THIS organisation claimed on the repository's owner, never another's (ADR 0073).
     # Without a claim, a single-organisation instance still discovers it from the repository; with
@@ -822,8 +822,8 @@ async def post_git_token(id: str, session: Db, claims: OpenRunAuth) -> GitToken:
     if claimed is None and not await implicit_claim_enabled(session):
         return GitToken(token=None, repository=repository)
     auth = GitHubAppAuth(
-        app_id=app_id,
-        private_key=private_key,
+        app_id=app.app_id,
+        private_key=app.private_key,
         pinned_installation=claimed.id if claimed else None,
         pinned_account=owner if claimed else None,
     )

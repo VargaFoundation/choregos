@@ -86,7 +86,7 @@ The chart never writes production secrets. It expects them to exist:
 
 | Secret | Keys | Used by |
 | :-- | :-- | :-- |
-| `global.apiSecretRef` (default `choregos-api-secrets`) | `run-token-private-key`, `github-app-id`, `github-app-private-key` | API **and** orchestrator |
+| `global.apiSecretRef` (default `choregos-api-secrets`) | `run-token-private-key`, `github-app-id`, `github-app-private-key` (the last two optional when the App is created from the console, [the GitHub App](#the-github-app)) | API **and** orchestrator |
 | `global.apiSecretRef`, entries `session-secret`, `run-token-public-key`, `github-webhook-secret` | the session signing key (required, see below), the run-token public key (derived from the private one when absent), the GitHub webhook secret | API only |
 | `global.apiSecretRef`, entry `session-secret-previous` (optional) | the previous session key during a rotation, `CHOREGOS_SESSION_SECRET_PREVIOUS`: verification only | API only |
 | `global.apiSecretRef`, entries `github-app-client-id`, `github-app-client-secret` (optional) | the App's OAuth client: needed only to claim an installation when the instance has several organisations ([the GitHub App](#the-github-app)) | API |
@@ -122,7 +122,8 @@ openssl rand -base64 48
 ```
 
 Each value signed with it carries a 256-bit tag bound to its purpose (session, OIDC state, OIDC
-handshake, remote OAuth state and handshake): a value signed for one purpose is refused for another.
+handshake, remote OAuth state and handshake, GitHub App creation state): a value signed for one
+purpose is refused for another.
 The API still reads the session cookies issued by the previous release for one more release; they
 carry a 128-bit tag without a purpose and are accepted as sessions only.
 
@@ -175,17 +176,82 @@ rename its variable or widen the pattern.
 
 ## The GitHub App
 
-One App serves the deployment (`github-app-id`, `github-app-private-key`). Its settings on github.com
-decide whether other companies can use it and whether a console install finds its way back:
+One App serves the deployment: the tracker, the pull requests, the checks and the run's git token go
+through it, and whoever registers it on GitHub owns it. It comes from one of two places, and the first
+wins ([ADR 0161](adr/0161-the-github-app-is-created-from-a-manifest.md)):
+
+1. **The deployment's settings**: `github-app-id` and `github-app-private-key` (with
+   `github-webhook-secret`, and `github-app-client-id` / `github-app-client-secret` for claims on an
+   instance with several organisations) in `global.apiSecretRef`. When they name an App, it is the App.
+2. **An App created from the console** (*Administration → GitHub App*), registered on github.com from a
+   manifest the platform builds and stored sealed in the database. Only when the settings name none.
+
+*Administration → GitHub App* says which one the instance acts as (`GET /api/v1/platform/github-app`).
+
+### Create it from the console (GitHub App Manifest flow)
+
+For a platform administrator, on an instance whose deployment names no App. It needs the secrets key
+(`secrets-keks`, [below](#secrets)): the App's private key, webhook secret and client secret are sealed
+with it, and without it the page refuses before anything is registered on GitHub.
+
+1. *Administration → GitHub App*. Check the name (unique across GitHub, 34 characters at most; the page
+   proposes one from the instance's host).
+2. **Owner**: leave it empty for your personal account, or name a GitHub organisation you are an owner
+   of. The owner owns the App on GitHub: choose the account of whoever operates this instance.
+3. **Who may install it**, a choice with no default: **Private** installs only on the owner's account
+   (enough when every repository belongs to it); **Public** lets any GitHub account install it, as each
+   company using a shared instance does on its own account. The owner can change it later in the App's
+   settings on GitHub.
+4. Untick **GitHub can reach this instance** when GitHub cannot reach `<api_url>` (an instance behind a
+   VPN): the webhook is registered inactive, and installations are still discovered by polling.
+5. **Continue on GitHub**: GitHub shows the App it is about to register; confirm. It sends you back to the
+   console within the hour (`?github_app=created`), and the App is the deployment's App from then on.
+   Another replica of the API learns of it within a minute.
+6. Install it on the repositories from a project's connectors (*Install on GitHub*), as below.
+
+What the platform puts in the manifest, derived from the instance and the adapters, never typed:
+
+| Manifest key | Value |
+| :-- | :-- |
+| `default_permissions` | Repository: `contents` write, `issues` write, `pull_requests` write, `checks` write, `metadata` read, `statuses` read; organisation: `organization_projects` write |
+| `default_events` | `issues`, `issue_comment`, `projects_v2_item`, `pull_request`, `pull_request_review`, `check_suite`, `check_run` (`installation` and `installation_repositories` are delivered to every App; nobody subscribes to them) |
+| `hook_attributes.url` | `<api_url>/api/v1/webhooks/github` |
+| `callback_urls` | `<api_url>/api/v1/github/setup`: where GitHub sends a person after an installation |
+| `request_oauth_on_install` | `true`: the person who installs authorises the App, the proof a claim needs on an instance with several organisations (no Setup URL then: GitHub uses the callback URL) |
+| `redirect_url` | `<api_url>/api/v1/github/manifest/callback`: where GitHub sends the browser once the App is registered |
+| `url` | `<public_url>`, the App's homepage |
+| `public` | as chosen |
+
+The permissions and events are the adapters' own list (`APP_PERMISSIONS`, `APP_EVENTS` in
+`choregos_adapters.github`), the one the GitHub procedures show; a test holds this table to it.
+Add `workflows: write` on GitHub by hand only if agents edit `.github/workflows`.
+
+**What is stored where.** One row of `github_app_registrations`, readable in the platform scope only:
+the App's id, slug, name, owner, address, public flag and client id in clear, and one envelope sealed
+under the active key of `CHOREGOS_SECRETS_KEKS` with the private key, the webhook secret GitHub
+generated and the client secret. Nothing is written to the Kubernetes Secret. Creating and forgetting
+are audited (`github_app.create`, `github_app.forget`).
+
+**Rotating and forgetting.** `choregos admin secrets rewrap` moves the App's envelope to a new key with
+the connector secrets. *Forget this App* deletes the stored credentials; the App stays on GitHub, where
+its owner deletes it (or keeps it and puts its id and a new private key in the deployment's settings,
+which then win). Losing the secrets key loses the App's private key: generate a new one on GitHub and set
+it in the deployment's settings, or forget the App and create another.
+
+### Create it by hand
+
+Register the App on github.com (*Settings → Developer settings → GitHub Apps → New GitHub App*, under the
+account that will own it) with the values of the table above, generate a private key and a webhook secret,
+and put `github-app-id`, `github-app-private-key` and `github-webhook-secret` (and, with the OAuth option,
+`github-app-client-id` / `github-app-client-secret`) in `global.apiSecretRef`:
 
 | Setting | Value |
 | :-- | :-- |
-| Permissions | Repository: Contents, Issues, Pull requests, Checks: read and write; Metadata: read |
-| Events | Issues, Issue comment, Pull request, Pull request review, Check suite, **Installation**, **Installation repositories** |
-| Setup URL | `<public url>/api/v1/github/setup`, with **Redirect on update** ticked. A browser redirect: it works over a VPN |
-| Webhook URL | `<public url>/api/v1/webhooks/github` (needs a host GitHub can reach; discovery does not depend on it) |
+| Permissions and events | As the manifest's table above |
+| Webhook URL | `<api_url>/api/v1/webhooks/github` (needs a host GitHub can reach; discovery does not depend on it) |
 | Where can this GitHub App be installed? | **Any account** if companies other than the App's owner use the deployment (a private App installs only on its owner's account) |
-| Request user authorization (OAuth) during installation | **Tick it before a second organisation exists**, generate a client secret, and give `github-app-client-id` / `github-app-client-secret` to the API |
+| Request user authorization (OAuth) during installation | **Tick it before a second organisation exists**, generate a client secret, and give `github-app-client-id` / `github-app-client-secret` to the API. Its **Callback URL** is `<api_url>/api/v1/github/setup` |
+| Setup URL | Without the OAuth option only: `<api_url>/api/v1/github/setup`, with **Redirect on update** ticked. GitHub offers no Setup URL once the OAuth option is ticked |
 
 The Setup URL is a browser page. A browser that comes back without a console session is sent to sign
 in and then back to it, and an installation started on github.com rather than from the console lands on
@@ -1685,6 +1751,12 @@ value>` on the first model call. Nothing said the key had never resolved.
 
 If the API refuses to start with `réglages non résolus`, fix the source of the secret — the key
 is missing where it is stored, not where it is read.
+
+## Upgrading past 0.27.1
+
+Changes merged after v0.27.1, shipped with the next release.
+
+**The GitHub App can be created from the console** (S70-21, [ADR 0161](adr/0161-the-github-app-is-created-from-a-manifest.md)). A platform administrator registers it on GitHub from a manifest; its credentials are sealed in the new table `github_app_registrations` (created empty by the migration). Nothing to do for a deployment whose settings name the App: they still win. To use it, keep `secrets-keks` configured ([the GitHub App](#the-github-app)).
 
 ## Upgrading to 0.27
 

@@ -29,6 +29,7 @@ from ..schemas import WebhookAck
 from ..security import body_digest, verify_github_signature, verify_shared_secret
 from ..services import (
     WorkItemBirth,
+    github_app_credentials,
     new_work_item,
     received_events,
     record_labels,
@@ -201,7 +202,7 @@ async def _control_from_a_signed_comment(
     organisation. A login, a username or a display name is never matched (ADR 0102). Returns the reply,
     or None when the command is not honoured."""
     by_id = str(event.payload.get("by_id") or "")
-    if event.source != "github" or not get_settings().github_webhook_secret or not by_id:
+    if event.source != "github" or not github_app_credentials.webhook_secret() or not by_id:
         return None
     identity = (
         await session.execute(
@@ -536,12 +537,16 @@ async def github_webhook(
 ) -> WebhookAck:
     body = await request.body()
     settings = get_settings()
-    if not settings.github_webhook_secret:
+    # The App's own secret: the deployment's, or the one GitHub generated for an App registered from a
+    # manifest (ADR 0161).
+    await github_app_credentials.refresh(session)
+    secret = github_app_credentials.webhook_secret(settings)
+    if not secret:
         # Without a secret, the signature was not verified at all: anyone could inject tracker
         # events. Tolerated only where there is no GitHub.
         if settings.deployed:
             raise unauthorized("GitHub webhook not configured: CHOREGOS_GITHUB_WEBHOOK_SECRET is missing")
-    elif not verify_github_signature(settings.github_webhook_secret, body, x_hub_signature_256):
+    elif not verify_github_signature(secret, body, x_hub_signature_256):
         raise unauthorized("invalid HMAC signature")
     if await _already_seen(session, "github", x_github_delivery or body_digest(body), x_github_event, body):
         return WebhookAck(accepted=True, duplicate=True)

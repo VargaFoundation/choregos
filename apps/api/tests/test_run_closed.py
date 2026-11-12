@@ -274,6 +274,10 @@ def github_app(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     monkeypatch.setenv(
         "CHOREGOS_GITHUB_APP_PRIVATE_KEY", "-----BEGIN RSA PRIVATE KEY-----\nx\n-----END RSA PRIVATE KEY-----"
     )
+    # The App is read from the settings (ADR 0161), cached per process: read again.
+    from choregos_api.config import reset_settings_cache
+
+    reset_settings_cache()
     asked: list[str] = []
 
     async def mint(self: Any, client: Any, repo: str, **options: Any) -> InstallationToken:

@@ -392,6 +392,62 @@ export type GitHubAppStatus = {
   installations: Array<GitHubInstallation>;
 };
 
+/** The App this instance acts as (S70-21, ADR 0161). No secret. */
+export type GitHubAppRegistrationStatus = {
+  /** deployment: the deployment's settings name it (they win); manifest: created from the console; none: no App */
+  source: "none" | "deployment" | "manifest";
+  app_id?: string | null;
+  /** A stored App's; a deployment's App is read from GitHub elsewhere */
+  slug?: string | null;
+  name?: string | null;
+  owner_login?: string | null;
+  /** Organization or User */
+  owner_type?: string | null;
+  html_url?: string | null;
+  /** Installable by any account (true) or by its owner's account only */
+  public?: boolean | null;
+  webhook_active?: boolean | null;
+  created_by?: string | null;
+  created_at?: string | null;
+  /** The App's credentials are available (false for a stored App whose sealing key is gone) */
+  usable: boolean;
+  /** Why a new App cannot be created from the console now; null when it can */
+  blocked_by?: string | null;
+  /** A name for the App derived from the instance's host (GitHub names are unique, 34 characters at most) */
+  suggested_name: string;
+  /** What the App is asked for: the adapters' own list, the one the GitHub procedures show */
+  permissions: {
+    [key: string]: "read" | "write";
+  };
+  /** The webhook events the App subscribes to; installation events are delivered to every App */
+  events: Array<string>;
+  webhook_url: string;
+  /** Where GitHub sends a person after installing the App (the Setup route) */
+  callback_url: string;
+  /** Where GitHub sends the browser once the App is registered */
+  redirect_url: string;
+};
+
+export type GitHubAppManifestRequest = {
+  /** The App's name on GitHub, unique across GitHub */
+  name: string;
+  /** The GitHub organisation that owns the App; absent: the personal account of the person who registers it */
+  organization?: string | null;
+  /** Installable by any account (true) or only by its owner's account (false). Required: an explicit choice */
+  public: boolean;
+  /** GitHub can reach this instance's webhook URL */
+  webhook_active?: boolean;
+};
+
+export type GitHubAppManifestStart = {
+  /** GitHub's registration page, with the signed state */
+  action_url: string;
+  /** The JSON to post as the form field `manifest` */
+  manifest: {
+    [key: string]: unknown;
+  };
+};
+
 export type GitHubRepository = {
   /** owner/repo */
   full_name: string;
@@ -5792,6 +5848,7 @@ export interface Operations {
   fireTrigger: { method: "POST"; path: "/projects/{id}/triggers/{name}/fire"; body: {
   [key: string]: unknown;
 }; response: TriggerAck };
+  forgetPlatformGitHubApp: { method: "DELETE"; path: "/platform/github-app"; body: never; response: void };
   forkAgent: { method: "POST"; path: "/orgs/{org}/agents/{slug}/fork"; body: AgentFork; response: Agent };
   freezeTrain: { method: "POST"; path: "/projects/{id}/trains/{env}/freeze"; body: {
   reason: string;
@@ -5832,6 +5889,7 @@ export interface Operations {
   getOrgEgress: { method: "GET"; path: "/orgs/{org}/egress"; body: never; response: EgressOverview };
   getOutboundProxy: { method: "GET"; path: "/orgs/{org}/outbound-proxy"; body: never; response: OutboundProxyState };
   getOutpost: { method: "GET"; path: "/orgs/{org}/outposts/{slug}"; body: never; response: Outpost };
+  getPlatformGitHubApp: { method: "GET"; path: "/platform/github-app"; body: never; response: GitHubAppRegistrationStatus };
   getPlatformIdentity: { method: "GET"; path: "/platform/identity"; body: never; response: PlatformIdentity };
   getPolicy: { method: "GET"; path: "/projects/{id}/policy"; body: never; response: PolicyDef };
   getPolicyCeiling: { method: "GET"; path: "/orgs/{org}/policy-ceiling"; body: never; response: PolicyCeilingState };
@@ -5952,6 +6010,7 @@ export interface Operations {
   getWorkflow: { method: "GET"; path: "/projects/{id}/workflow"; body: never; response: WorkflowDef };
   getWorkflowActivity: { method: "GET"; path: "/projects/{id}/workflows/{name}/activity"; body: never; response: WorkflowActivity };
   getWorkflowRouting: { method: "GET"; path: "/projects/{id}/workflow-routing"; body: never; response: WorkflowRouting };
+  githubAppManifestCallback: { method: "GET"; path: "/github/manifest/callback"; body: never; response: void };
   githubAppSetup: { method: "GET"; path: "/github/setup"; body: never; response: void };
   githubWebhook: { method: "POST"; path: "/webhooks/github"; body: {
   [key: string]: unknown;
@@ -6163,6 +6222,7 @@ export interface Operations {
   shareWorkflow: { method: "POST"; path: "/orgs/{org}/workflow-catalogue"; body: WorkflowShare; response: WorkflowCatalogueEntry };
   startAgentEvaluation: { method: "POST"; path: "/orgs/{org}/agents/{slug}/versions/{version}/evaluations"; body: AgentEvaluationCreate; response: AgentEvaluation };
   startAgentTrial: { method: "POST"; path: "/orgs/{org}/agent-trials"; body: AgentTrialCreate; response: AgentTrial };
+  startGitHubAppManifest: { method: "POST"; path: "/platform/github-app/manifest"; body: GitHubAppManifestRequest; response: GitHubAppManifestStart };
   stopAgent: { method: "POST"; path: "/orgs/{org}/agents/{slug}/stop"; body: StopRequest; response: AgentStopResult };
   stopAssistant: { method: "POST"; path: "/orgs/{org}/assistants/{slug}/stop"; body: StopRequest; response: AssistantStopResult };
   stopKnowledgeDistillation: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/distill/stop"; body: never; response: KnowledgeBase };
