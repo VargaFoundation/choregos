@@ -150,9 +150,11 @@ async def test_a_response_calls_the_model_and_its_tools_with_no_connection_held(
     assert [e["type"] for e in read["events"]] == [
         "session.opened",
         "input.text",
+        "context.breakdown",  # the first call, at once (ADR 0141 §5)
         "prompt.turn",
         "prompt.tool_call",
         "prompt.turn",
+        "context.breakdown",  # the last call, when the response ends
         "response.completed",
     ]
     again = await _ask(client, "And order 43?", session_id=session_id)

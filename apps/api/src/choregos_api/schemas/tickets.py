@@ -430,6 +430,35 @@ class RunLogsDto(Dto):
     captured_at: datetime | None = None
 
 
+class ContextBreakdownDto(Dto):
+    """One model call's context (`ContextBreakdown`, ADR 0141 §3): numbers only. `prompt_tokens` is the
+    model's own count; the sections are estimated and scaled to sum to it."""
+
+    call: int
+    at: datetime
+    model: str
+    prompt_tokens: int
+    max_input_tokens: int | None = None
+    source: Literal["loop", "hosted_proxy", "gateway"] | None = None
+    sections: dict[str, int] = Field(default_factory=dict)
+
+
+class RunContextPoint(Dto):
+    call: int
+    at: datetime
+    prompt_tokens: int
+
+
+class RunContextDto(Dto):
+    """What fills a run's context (`RunContext`): the last breakdown and the series of kept totals."""
+
+    run_id: str
+    measurable: bool
+    backend: str | None = None
+    latest: ContextBreakdownDto | None = None
+    series: list[RunContextPoint] = Field(default_factory=list)
+
+
 class DiffFileDto(Dto):
     path: str
     status: str = "modified"

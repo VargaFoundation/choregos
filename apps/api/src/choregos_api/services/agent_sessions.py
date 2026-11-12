@@ -31,6 +31,8 @@ import httpx
 from choregos_adapters.registry import fakes_enabled
 from choregos_contracts import EventType, ProjectConfig
 from choregos_core import GatewayModel, ModelResolutionError, ModelResolver, Spend, utcnow
+from choregos_core.context_breakdown import EVENT as CONTEXT_BREAKDOWN
+from choregos_core.context_breakdown import ContextMeter
 from choregos_core.domain import aware
 from choregos_core.prompt_loop import LoopOutcome, LoopRequest, LoopTool, run_loop
 from choregos_core.tool_answer import render_text
@@ -573,6 +575,16 @@ async def respond(
     async def on_event(type_: str, payload: dict[str, Any]) -> None:
         await journal(session, record, type_, payload)
 
+    from .model_catalogue import max_input_tokens_of
+
+    # What fills the context, per call (ADR 0141 §3, §5): numbers only, numbered across the session.
+    meter = ContextMeter(
+        on_event,
+        model=record.model,
+        source="loop",
+        max_input_tokens=await max_input_tokens_of(session, record.org_id, record.model),
+        first_call=await _calls_so_far(session, record) + 1,
+    )
     outcome: LoopOutcome | None = None
     error: AgentResponseError | None = None
     try:
@@ -594,10 +606,12 @@ async def respond(
                 complete,
                 call_tool,
                 on_event=on_event,
+                on_call=meter.observe,
             )
         except (_ModelRefused, httpx.HTTPError, ValueError) as exc:
             code = "budget_exceeded" if budget_refusal(str(exc)) else "model_error"
             error = AgentResponseError(code=code, message=str(exc)[:500])
+        await meter.close()
         return await _book_the_response(session, record, response_id, messages, outcome, error)
     except Exception as failure:
         # Calls were made (and the journal may hold their lines) but the response is not booked:
@@ -1030,6 +1044,20 @@ async def journal(
         )
     )
     await session.flush()
+
+
+async def _calls_so_far(session: AsyncSession, record: AgentSessionRecord) -> int:
+    """The ordinal of the session's last measured call: a response's last call is always kept."""
+    last = (
+        await session.execute(
+            select(AgentSessionEvent.payload)
+            .where(AgentSessionEvent.session_id == record.id, AgentSessionEvent.type == CONTEXT_BREAKDOWN)
+            .order_by(AgentSessionEvent.seq.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    call = (last or {}).get("call")
+    return call if isinstance(call, int) else 0
 
 
 async def session_dto(session: AsyncSession, record: AgentSessionRecord, project_slug: str) -> AgentSession:

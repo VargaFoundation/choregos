@@ -45,7 +45,7 @@ from ..db.models import (
 )
 from ..db.models import Finding as FindingRow
 from ..db.session import allow_release_during_calls, outside_the_transaction
-from ..deps import Db, NetworkAuth, OpenNetworkAuth, OpenRunAuth, RunAuth
+from ..deps import Db, GatewayAuth, NetworkAuth, OpenNetworkAuth, OpenRunAuth, RunAuth
 from ..errors import ApiError, conflict, not_found, unprocessable
 from ..logging import get_logger
 from ..object_store import object_store
@@ -85,6 +85,7 @@ from ..services.artifacts import (
 )
 from ..services.artifacts import latest as latest_artifact
 from ..services.budget_alerts import check_after_spend
+from ..services.context_breakdown import MEASURED_BACKENDS, record_gateway_breakdown, registered_parts
 from ..services.costs import dimensions_of
 from ..services.extension_tools import (
     ACCESS_KEY,
@@ -173,6 +174,35 @@ async def post_events(id: str, body: RunEventsBatch, session: Db, claims: RunAut
             last_seq=max(e.seq for e in body.events),
         )
     return {"accepted": written}
+
+
+@router.get("/runs/{id}/context-parts", include_in_schema=False)
+async def get_context_parts(id: str, session: Db, run_id: GatewayAuth) -> dict[str, Any]:
+    """What the run's runner registered of the text it wrote (S64-08b), for the gateway's callback:
+    digests and sizes by section, and the run's MCP servers. Outside the contract: only the gateway's
+    callback calls it, signed for this run."""
+    run = await session.get(Run, run_id)
+    if run is None:
+        raise not_found("Run", run_id)
+    return await registered_parts(session, run.id)
+
+
+@router.post("/runs/{id}/context-breakdown", status_code=status.HTTP_202_ACCEPTED, include_in_schema=False)
+async def post_context_breakdown(
+    id: str, body: dict[str, Any], session: Db, run_id: GatewayAuth
+) -> dict[str, int]:
+    """A breakdown of an ACP CLI's call the gateway's callback kept (ADR 0141 §4): written as the run's
+    `context.breakdown` event, numbers only. A run the platform measures itself (`prompt`, `hosted`)
+    takes none from the gateway: 409. Outside the contract, like `context-parts`."""
+    run = await session.get(Run, run_id)
+    if run is None:
+        raise not_found("Run", run_id)
+    if run.backend in MEASURED_BACKENDS:
+        raise conflict(f"the {run.backend} backend measures its own calls")
+    kept = await record_gateway_breakdown(session, run, body)
+    if kept is None:
+        raise unprocessable("not a context breakdown")
+    return {"accepted": 1}
 
 
 @router.get("/runs/{id}/network", response_model=RunNetwork, operation_id="getRunNetwork")

@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import hmac
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -32,7 +33,14 @@ from .db.session import (
 from .errors import ApiError, forbidden, not_found, run_closed, unauthorized
 from .logging import bind, get_logger
 from .rbac import Permission, Principal
-from .security import RunClaims, hash_api_token, read_session, verify_egress_token, verify_run_token
+from .security import (
+    RunClaims,
+    gateway_context_signature,
+    hash_api_token,
+    read_session,
+    verify_egress_token,
+    verify_run_token,
+)
 
 _run_log = get_logger("choregos.run")
 
@@ -482,6 +490,28 @@ async def open_network_claims(id: str, session: Db, claims: NetworkAuth) -> RunC
 
 
 OpenNetworkAuth = Annotated[RunClaims, Depends(open_network_claims)]
+
+
+async def gateway_run(
+    id: str,
+    session: Db,
+    authorization: Annotated[str | None, Header()] = None,
+) -> str:
+    """The gateway's callback, for ONE run (S64-08b): its bearer is the run id signed with the gateway's
+    master key (`gateway_context_signature`). A run token, an API token or another run's signature is
+    refused; without a master key, every caller is."""
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise unauthorized("missing gateway signature")
+    expected = gateway_context_signature(id)
+    if expected is None or not hmac.compare_digest(authorization.split(" ", 1)[1].strip(), expected):
+        raise forbidden("invalid gateway signature for this run")
+    bind(run_id=id)
+    # Signed for ONE run: the scope is the run id, checked above, not an organisation.
+    await limit_to_organisations(session, ALL_ORGS)
+    return id
+
+
+GatewayAuth = Annotated[str, Depends(gateway_run)]
 
 
 @dataclass(slots=True)

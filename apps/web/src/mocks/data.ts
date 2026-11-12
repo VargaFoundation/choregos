@@ -72,6 +72,7 @@ import type {
   RunEventDto,
   Artifact,
   RunLogs,
+  RunContext,
   HandOff,
   TimelineEntry,
   TrainStatus,
@@ -662,6 +663,37 @@ export const runAccess = {
       refusals: 1,
       reasons: ["outside the allowed paths: use report_finding or request_scope_change"],
     },
+  ],
+};
+
+/** What fills the run's context (`/runs/{id}/context-breakdown`, ADR 0141 §6): numbers only. */
+export const runContext: RunContext = {
+  run_id: "r-billing-api-123-implement-1",
+  measurable: true,
+  backend: "prompt",
+  latest: {
+    call: 14,
+    at: iso(1),
+    model: "platform/standard",
+    prompt_tokens: 61_480,
+    max_input_tokens: 200_000,
+    source: "loop",
+    sections: {
+      system: 2_140,
+      "tools.platform": 1_310,
+      "tools.mcp": 18_920,
+      skills: 860,
+      knowledge: 12_400,
+      memory: 0,
+      messages: 25_850,
+      backend: 0,
+    },
+  },
+  series: [
+    { call: 1, at: iso(9), prompt_tokens: 22_310 },
+    { call: 6, at: iso(6), prompt_tokens: 38_900 },
+    { call: 11, at: iso(3), prompt_tokens: 52_770 },
+    { call: 14, at: iso(1), prompt_tokens: 61_480 },
   ],
 };
 
@@ -4189,6 +4221,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/runs\/[^/]+\/logs$/, runLogsLive],
     [/^\/runs\/[^/]+\/access$/, runAccess],
     [/^\/runs\/[^/]+\/diff$/, runDiff],
+    [/^\/runs\/[^/]+\/context-breakdown$/, runContext],
     [/^\/runs\/trial-run-1$/, trialRun],
     [/^\/runs\/[^/]+$/, runs[2]],
     [/^\/audit$/, { items: [], meta: { has_more: false } }],

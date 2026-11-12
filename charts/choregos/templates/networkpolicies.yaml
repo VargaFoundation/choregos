@@ -130,6 +130,24 @@ spec:
     - to: [{ podSelector: { matchLabels: { app.kubernetes.io/name: choregos-egress } } }]
       ports: [{ protocol: TCP, port: {{ $egressPort }} }]
     {{- end }}
+{{- if .Values.global.gateway.embedded }}
+---
+# S64-08b: the embedded LiteLLM's callback posts the ACP CLIs' context breakdowns to the API's internal
+# routes, signed per run; the API pods and that port only.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: choregos-litellm-to-api
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: choregos-litellm
+  policyTypes: ["Egress"]
+  egress:
+    - to: [{ podSelector: { matchLabels: { app.kubernetes.io/name: choregos-api } } }]
+      ports: [{ protocol: TCP, port: {{ $apiPort }} }]
+{{- end }}
 {{- if $e.enabled }}
 ---
 apiVersion: networking.k8s.io/v1
