@@ -6,7 +6,7 @@ install link sends the person to github.com and back through the App's Setup URL
 and the installation is claimed for the organisation that started the flow.
 
 The App itself is the deployment's settings, or one a platform administrator creates from the console
-(S67-31, ADR 0161): `/platform/github-app` says which, `/platform/github-app/manifest` starts GitHub's
+(S70-21, ADR 0161): `/platform/github-app` says which, `/platform/github-app/manifest` starts GitHub's
 App Manifest flow and `GET /github/manifest/callback` finishes it.
 """
 
@@ -279,7 +279,7 @@ async def github_app_setup(
     return RedirectResponse(_with_outcome(str(claims["return_to"]), "claimed"), status_code=302)
 
 
-# ───────────────── the deployment's App, created from a manifest (S67-31, ADR 0161) ─────────────────
+# ───────────────── the deployment's App, created from a manifest (S70-21, ADR 0161) ─────────────────
 
 
 async def _registration_status(session: AsyncSession, settings: Settings) -> GitHubAppRegistrationStatus:

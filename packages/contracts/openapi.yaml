@@ -2166,7 +2166,7 @@ paths:
       description: |
         `source` is `deployment` when the deployment's settings name the App (`CHOREGOS_GITHUB_APP_ID` and
         its key: they always win), `manifest` when a platform administrator created it from the console
-        (S67-31, ADR 0161), `none` otherwise. Never a secret: the private key, webhook secret and client
+        (S70-21, ADR 0161), `none` otherwise. Never a secret: the private key, webhook secret and client
         secret of a stored App are sealed (ADR 0058). Also what a new App would be asked for (the
         permissions and events the adapters use) and the URLs derived from this instance, and
         `blocked_by`, why the console cannot create one now. The platform administrator only.
@@ -6250,7 +6250,7 @@ components:
           items: { $ref: "#/components/schemas/GitHubInstallation" }
     GitHubAppRegistrationStatus:
       type: object
-      description: The App this instance acts as (S67-31, ADR 0161). No secret.
+      description: The App this instance acts as (S70-21, ADR 0161). No secret.
       required: [source, usable, suggested_name, permissions, events, webhook_url, callback_url, redirect_url]
       properties:
         source: { type: string, enum: [none, deployment, manifest], description: "deployment: the deployment's settings name it (they win); manifest: created from the console; none: no App" }

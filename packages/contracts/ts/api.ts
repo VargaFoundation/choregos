@@ -392,7 +392,7 @@ export type GitHubAppStatus = {
   installations: Array<GitHubInstallation>;
 };
 
-/** The App this instance acts as (S67-31, ADR 0161). No secret. */
+/** The App this instance acts as (S70-21, ADR 0161). No secret. */
 export type GitHubAppRegistrationStatus = {
   /** deployment: the deployment's settings name it (they win); manifest: created from the console; none: no App */
   source: "none" | "deployment" | "manifest";

@@ -29,7 +29,7 @@ export function postManifest(actionUrl: string, manifest: Record<string, unknown
 }
 
 /**
- * The instance's GitHub App (S67-31, ADR 0161): the one the deployment's settings name, or the one a
+ * The instance's GitHub App (S70-21, ADR 0161): the one the deployment's settings name, or the one a
  * platform administrator creates here from a manifest, sealed in the database. Public or private is a
  * choice made here, never a default.
  */

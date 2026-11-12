@@ -51,7 +51,7 @@ class GitHubInstallLink(Dto):
     url: str
 
 
-# ───────────────── the deployment's App, registered from a manifest (S67-31, ADR 0161) ─────────────────
+# ───────────────── the deployment's App, registered from a manifest (S70-21, ADR 0161) ─────────────────
 
 
 class GitHubAppRegistrationStatus(Dto):

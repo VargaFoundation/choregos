@@ -38,7 +38,7 @@ def test_the_procedure_lists_the_events_the_platform_parses(proc_id: str) -> Non
 
 
 def test_the_deployment_guide_lists_what_the_manifest_asks_for() -> None:
-    """S67-31 (ADR 0161): the page listed four permissions and five events, the adapters used seven and
+    """S70-21 (ADR 0161): the page listed four permissions and five events, the adapters used seven and
     seven; an App made from the page lacked `statuses` and `organization_projects`. The manifest the
     platform builds takes the constants, and the guide's table is held to them here."""
     from pathlib import Path

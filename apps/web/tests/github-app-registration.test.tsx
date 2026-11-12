@@ -29,7 +29,7 @@ function wrap(node: React.ReactNode) {
   return render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>{node}</QueryClientProvider>);
 }
 
-describe("the instance's GitHub App, created from a manifest (S67-31)", () => {
+describe("the instance's GitHub App, created from a manifest (S70-21)", () => {
   let submit: ReturnType<typeof vi.spyOn>;
   beforeEach(() => {
     submit = vi.spyOn(HTMLFormElement.prototype, "submit").mockImplementation(() => undefined);

@@ -1,4 +1,4 @@
-"""The deployment's GitHub App, created from a manifest (S67-31, ADR 0161).
+"""The deployment's GitHub App, created from a manifest (S70-21, ADR 0161).
 
 GitHub's App Manifest flow: the console posts a manifest the platform built, GitHub registers the App
 and sends the browser back with a one-hour code, and the platform exchanges it for the App's

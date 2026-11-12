@@ -1,6 +1,6 @@
 # 0161 — The GitHub App is created from a manifest, by the instance's operator
 
-- **Status**: proposed, 2026-11-12; S67-31 implements it
+- **Status**: proposed, 2026-11-12; S70-21 implements it
 - **Concerns**: `routers/github_app.py` (`/platform/github-app`, `/platform/github-app/manifest`,
   `/github/manifest/callback`), `services/github_app_credentials.py`, `services/github_app_manifest.py`,
   the table `github_app_registrations`, the readers of the App (`services/github_app.py`,

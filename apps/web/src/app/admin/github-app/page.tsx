@@ -7,7 +7,7 @@ import { GitHubAppRegistration } from "@/components/admin/github-app-registratio
 import { Lead } from "@/components/ui";
 
 /**
- * The instance's GitHub App (S67-31, ADR 0161): which one the platform acts as, and, when the deployment
+ * The instance's GitHub App (S70-21, ADR 0161): which one the platform acts as, and, when the deployment
  * names none, its creation from a manifest. GitHub sends the browser back here with `?github_app=created`.
  */
 export default function GitHubAppPage() {

@@ -2166,7 +2166,7 @@ export function usableModelsOf(path: string): UsableModel[] {
     }));
 }
 
-/** The demo instance's GitHub App (S67-31): none yet, so the page shows the creation form. */
+/** The demo instance's GitHub App (S70-21): none yet, so the page shows the creation form. */
 export const platformGitHubApp: GitHubAppRegistrationStatus = {
   source: "none",
   usable: false,
