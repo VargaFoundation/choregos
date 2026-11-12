@@ -21,8 +21,11 @@ from . import outpost_route as route
 from .outpost_daemon import Daemon
 from .outpost_route import ALIAS, CONNECTOR, ORG, RUN
 
-#: Seconds the connector of these tests waits: a lost lease is in doubt after this long.
-TIMEOUT_S = 1
+#: Seconds the connector of these tests waits once it is prepared: a lost lease is in doubt after this
+#: long, and a call nobody claims is offline after it. Long enough for a loaded CI runner to hand a
+#: call over to the scripted instance, short enough that a test that waits for it stays quick. The
+#: discovery itself is made under the route kit's `SETUP_TIMEOUT_S`.
+TIMEOUT_S = 4
 READS = ("search_issues", "get_issue")
 #: An in-doubt outcome is accepted for the operation, explicitly.
 ACCEPTED = {"in_doubt_accepted": True}
@@ -91,10 +94,11 @@ async def prepared(
     and a run of an agent that names the connector."""
     daemon = await daemon_kit.approved(client)
     await route.seen(client, daemon, fake)
-    await route.declare(client, timeout_s=TIMEOUT_S)
+    await route.declare(client)
     async with route.serving(client, daemon, fake):
         discovered = await client.post(f"{ORG}/connectors/{CONNECTOR}/discover")
         assert discovered.status_code == 200, discovered.text
+    await route.set_timeout(client, TIMEOUT_S)
     for name in READS:
         assert (await route.open_operation(client, name)).status_code == 200
     for name, statement in (opened or {}).items():
