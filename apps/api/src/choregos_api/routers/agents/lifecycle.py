@@ -387,6 +387,6 @@ async def stop_agent(org: str, slug: Slug, body: StopRequest, session: Db, princ
         slug=agent.slug,
         runs_cancelled=len(stop.runs_cancelled),
         sessions_closed=len(stop.sessions_closed),
-        turns_cancelled=stop.turns_cancelled,
+        turns_cancelled=len(stop.turns_cancelled),
         not_stopped=[AgentNotStopped(kind=n.kind, id=n.id, detail=n.detail) for n in stop.not_stopped],
     )

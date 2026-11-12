@@ -6,9 +6,10 @@ The manifest is never copied into the installation: it is read again from the in
 what the organisation decided: the config, the owner and audience groups, the channel, the policy
 overrides and, per need, the connector it is bound to.
 
-`status` is derived, then stored for the listings that read it in SQL: `suspended` while the plugin is not
-installed (uninstalling a plugin suspends its assistants, installing it again resumes them), `incomplete`
-while the readiness has an item, `ready` otherwise.
+`status` is derived, then stored for the listings that read it in SQL: `suspended` while a person has
+stopped the assistant (`stopped_at`, ADR 0142 §4 bis: read first, so that no derivation undoes a stop) or
+while the plugin is not installed (uninstalling a plugin suspends its assistants, installing it again
+resumes them), `incomplete` while the readiness has an item, `ready` otherwise.
 
 Rights are decided by the permissions `assistant:manage`, `assistant:use` and `assistant:audit`
 (`assistant_access.holds`, S63-15) and nowhere else.
@@ -39,6 +40,7 @@ from ..schemas.assistants import (
     AssistantInstall,
     AssistantReadiness,
     AssistantReadinessItem,
+    AssistantStop,
     AssistantUpdate,
 )
 from . import assistant_embed, offered_knowledge, plugin_files
@@ -379,7 +381,8 @@ async def upgrade_plugin_bindings(
 async def refresh(
     session: AsyncSession, row: AssistantInstallation
 ) -> tuple[str, list[AssistantReadinessItem]]:
-    """The live status and readiness; the row follows (and the plugin's version with it)."""
+    """The live status and readiness; the row follows (and the plugin's version with it). A stopped
+    installation reads `suspended` whatever the readiness says: only a resume clears a stop."""
     plugin_row = await plugin_files.installed_row(session, row.org_id, row.plugin)
     items = await readiness_items(session, row)
     if plugin_row is None:
@@ -387,6 +390,8 @@ async def refresh(
     else:
         status = READY if not items else INCOMPLETE
         row.plugin_version, row.manifest_digest = plugin_row.version, plugin_row.digest
+    if row.stopped_at is not None:
+        status = SUSPENDED
     if row.status != status:
         row.status = status
     await session.flush()
@@ -396,6 +401,12 @@ async def refresh(
 async def readiness(session: AsyncSession, row: AssistantInstallation) -> AssistantReadiness:
     status, items = await refresh(session, row)
     return AssistantReadiness(status=status, items=items)
+
+
+def stopped_of(row: AssistantInstallation) -> AssistantStop | None:
+    if row.stopped_at is None:
+        return None
+    return AssistantStop(at=row.stopped_at, by=row.stopped_by or "", reason=row.stopped_reason or "")
 
 
 async def to_dto(session: AsyncSession, row: AssistantInstallation) -> Assistant:
@@ -424,6 +435,7 @@ async def to_dto(session: AsyncSession, row: AssistantInstallation) -> Assistant
         audience_groups=list(row.audience_groups),
         channel=row.channel,
         status=row.status,
+        stopped=stopped_of(row),
         policy_overrides=dict(row.policy_overrides),
         bindings=bindings,
         created_by=row.created_by,
