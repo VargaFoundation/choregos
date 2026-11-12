@@ -9,8 +9,8 @@ inserts stay under the organisation's policy alone. Every existing agent's owner
 The downgrade drops the three tables and loses who watches and stars what.
 
 Revision ID: a2c4e6f8b0d1
-Revises: f9b1d3e5a7c0
-Create Date: 2026-11-12 13:00:00+00:00
+Revises: f1b3d5e7a9c2
+Create Date: 2026-11-12 15:00:00+00:00
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ from alembic import op
 from choregos_api.db.base import Json, utcnow, uuid7
 
 revision: str = "a2c4e6f8b0d1"
-down_revision: str | None = "f9b1d3e5a7c0"
+down_revision: str | None = "f1b3d5e7a9c2"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
