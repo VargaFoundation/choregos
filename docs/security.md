@@ -758,7 +758,9 @@ what the person who runs an outpost is told is in [Running an outpost](outpost-o
 - **It does not vouch for the outpost.** A result is what an approved instance says its server
   answered. The platform bounds it, screens it and treats it as any tool's result.
 - **None of it has run on a real network yet.** The daemon and the door are each tested against the
-  door's contract and against a scripted stand-in for the other; the end-to-end proof is S65-19.
+  door's contract and against a scripted stand-in for the other, and together end to end (S65-19): in
+  one process, and on a test cluster where the outpost chart's NetworkPolicy drops a connection
+  opened from the platform's namespace towards the outpost's.
 
 ## Secrets
 
