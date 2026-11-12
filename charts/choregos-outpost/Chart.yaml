@@ -1,0 +1,14 @@
+apiVersion: v2
+name: choregos-outpost
+description: >-
+  The Choregos outpost daemon: what an outpost's operator installs in their own cluster. It only
+  dials out, to one hostname, and makes the calls its own policy file allows.
+type: application
+version: 0.27.0
+appVersion: "0.27.0"
+home: https://github.com/VargaFoundation/choregos
+sources:
+  - https://github.com/VargaFoundation/choregos
+maintainers:
+  - name: Varga Foundation
+keywords: [agents, outpost, mcp]

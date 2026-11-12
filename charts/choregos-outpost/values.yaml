@@ -1,0 +1,168 @@
+# The values of one outpost (ADR 0147): the daemon `choregos-outpost`, installed by whoever runs the
+# outpost, in THEIR cluster. Nothing here comes from the platform and nothing is shared with its chart:
+# the policy, the addresses and the credentials below are yours, and the platform never reads them.
+#
+# A complete example: `values/example.yaml`. The chart's own page: `README.md`.
+
+nameOverride: ""
+fullnameOverride: ""
+
+image:
+  registry: ghcr.io/vargafoundation
+  repository: choregos-outpost
+  # Empty: this chart's appVersion.
+  tag: ""
+  # `sha256:…`: the image is then pulled by this digest and the tag is not read. Pin it. The daemon is
+  # never upgraded for you: you choose when, after you verified the image's signature (ADR 0147 §9).
+  digest: ""
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+# One instance of the outpost per replica (ADR 0147 §2). Each has its own identity (two key pairs it
+# makes itself) and its own journal of call ids, on a volume of its own: this is a StatefulSet with a
+# claim per replica, and a second pod never starts on another's volume. Each instance is enrolled
+# with a token of its own and approved on its own (see `enrolment`).
+replicas: 1
+
+# The claim of each instance: its keys, its journal, and its audit log. It must outlive the pod: an
+# instance that loses it has lost its identity, and is a new instance to enrol and approve.
+persistence:
+  size: 1Gi
+  # Empty: the cluster's default StorageClass.
+  storageClass: ""
+  accessModes: [ReadWriteOnce]
+
+# The policy file (ADR 0147 §6), rendered into a ConfigMap and read by the daemon when it starts: a
+# change restarts the pods. Its fields are the policy file's own
+# (`outpost-policy.schema.json` of the platform's contracts), written as the console prints them.
+policy:
+  # REQUIRED. The door's origin: scheme and host, no path. The console gives it with an enrolment token.
+  control_plane: ""
+  # REQUIRED. The door's public keys this outpost obeys, one to four, as the console prints them: a
+  # call signed by no key of this list is not made (ADR 0148 §13). Nothing the platform sends changes
+  # this list: during a rotation you add the next key here, and remove the former one after.
+  door_keys: []
+  # Calls in progress at once, all endpoints together (1 to 64); beyond it a call is refused `busy`.
+  concurrency: 4
+  # The outpost's own audit log (ADR 0147 §8), one JSON line per call received, made or refused. Its
+  # directory is on the instance's claim, beside the state: it outlives the pod, and the daemon does
+  # not rotate it.
+  audit:
+    file: /var/log/choregos-outpost/audit.jsonl
+  # The MCP servers this outpost may call, each under the alias a connector of the platform names.
+  # Deny by default: an alias that is not here, a tool outside `tools`, a write where `writes` is not
+  # `allow` are refused by the daemon, and the server receives nothing.
+  endpoints: {}
+  #  tracker:
+  #    url: http://tracker-mcp.tools.svc:8080/mcp     # known to this outpost only
+  #    tools: ["search_*", "get_*", "create_issue"]   # `*` stands for any run of characters
+  #    writes: deny                                   # deny | allow
+  #    timeout_s: 30                                  # 1 to 300
+  #    max_payload_kb: 256                            # 1 to 1024
+  #    # The credential that opens the server: a Secret of this namespace that YOU create, mounted
+  #    # read-only. The chart writes the policy's `auth.from_file` with the path of the mounted key;
+  #    # the value itself is never in these values nor in the ConfigMap. Without `auth`, the server
+  #    # is called without a credential.
+  #    auth:
+  #      header: Authorization                        # `Authorization` sends `Bearer` and the content
+  #      secretName: tracker-mcp-token
+  #      secretKey: token
+  #    # Chart only, never written to the policy file: where the server's pods are, for the
+  #    # NetworkPolicy. Read from the URL when left out: the namespace of
+  #    # `<service>.<namespace>.svc` (this namespace when the host names none) and the URL's port.
+  #    # `port` is the PODS' port, when the Service maps another; `cidrs` is for a server outside
+  #    # the cluster, which a NetworkPolicy cannot name.
+  #    network:
+  #      namespace: tools
+  #      podLabels: { app.kubernetes.io/name: tracker-mcp }
+  #      port: 8080
+  #      cidrs: []
+
+# Enrolment (ADR 0147 §4). An instance enrols once, with a single-use token the console issues for
+# 15 minutes. Put the token in a Secret of this namespace:
+#   kubectl create secret generic <name> --from-literal=token=<the token>
+# An init container presents it when the instance has no identity yet, and does nothing when it has
+# one. The instance is then pending until a person approves it in the console against the
+# fingerprint the enrolment prints. Once enrolled, the token is spent and the Secret can be deleted.
+# Each further replica needs a fresh token: put it in the same Secret, the replica that waits takes it.
+enrolment:
+  # Empty: `<the release's full name>-enrolment`.
+  existingSecret: ""
+  key: token
+
+# The outbound proxy towards the door (`CHOREGOS_OUTPOST_PROXY`). It carries the connection to the
+# door only: the endpoints are called directly.
+proxy:
+  # A URL without credentials (`http://proxy.example.com:3128`).
+  url: ""
+  # A proxy that asks for a user and a password: its whole URL in a Secret, never in `url`.
+  existingSecret: ""
+  key: url
+
+# An authority to trust besides the system's (`CHOREGOS_OUTPOST_CA_FILE`): an inspecting proxy's, a
+# private one. Certificate verification is never switched off. One of the two, with its key.
+ca:
+  configMap: ""
+  secret: ""
+  key: ca.crt
+
+logLevel: INFO
+
+# Seconds the calls in progress have to finish when the daemon is told to stop
+# (`CHOREGOS_OUTPOST_GRACE_S`). A write that has begun is left to finish, since stopping the request
+# would not undo it. The pod is given longer: the render refuses a `terminationGracePeriodSeconds`
+# that is not above it.
+graceSeconds: 20
+terminationGracePeriodSeconds: 30
+
+resources:
+  requests: { cpu: 50m, memory: 128Mi }
+  limits: { cpu: 500m, memory: 256Mi }
+
+podAnnotations: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+# A sandboxed runtime for the daemon's pods (gVisor, Kata), where the cluster has one.
+runtimeClassName: ""
+
+# What the daemon's pods may reach: DNS, the door, the servers its endpoints name, and nothing else.
+# Nothing may reach them: an outpost dials out, and listens on nothing (ADR 0147 §1).
+networkPolicy:
+  enabled: true
+  dns:
+    namespace: kube-system
+    # A node-local DNS cache, outside any namespace.
+    cidrs: []
+  # The way to the door. A NetworkPolicy cannot name a host: without `cidrs`, the door's port is
+  # opened to every PUBLIC address (private ranges excluded). Give the door's addresses to narrow it.
+  # Behind an outbound proxy, the way to the door is the proxy: give ITS addresses, or its namespace
+  # when it runs in this cluster; the port is then the proxy's.
+  controlPlane:
+    cidrs: []
+    # Empty: the port of `proxy.url` when there is one, else of `policy.control_plane`.
+    port: ""
+    namespace: ""
+    podLabels: {}
+  # Further egress rules of the daemon's pods, verbatim (`NetworkPolicyEgressRule`).
+  extraEgress: []
+
+# MCP servers YOU choose to run beside the daemon (ADR 0149 §9). The platform deploys nothing here and
+# sends no secret: each entry is an image you picked, run as a Deployment locked down like the
+# daemon, behind a Service named `<the release's full name>-<name>` that admits the daemon's pods
+# and nobody else. Point an endpoint of the policy at it. Off by default.
+servers: []
+#  - name: tracker
+#    image: registry.example.com/tools/tracker-mcp@sha256:…
+#    port: 8080
+#    # Optional: an HTTP path the server answers 200 at; a TCP probe otherwise.
+#    healthPath: /healthz
+#    replicas: 1
+#    env: { LOG_LEVEL: info }
+#    # Secrets of this namespace whose keys become the server's environment: its credentials.
+#    envFromSecrets: [tracker-mcp-env]
+#    # The user the image runs as; the pod refuses to start as root.
+#    runAsUser: 65532
+#    resources: {}
+#    # What the server itself may reach, as NetworkPolicy egress rules. None by default, DNS included.
+#    egress: []

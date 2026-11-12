@@ -336,15 +336,19 @@ jobs:
         # `tools/bump_version.py`, and the repository always tells the truth. A tag that does not
         # match the files stops the release here.
         run: uv run python tools/bump_version.py "${GITHUB_REF_NAME#v}" --check
-      - name: publish the chart as OCI
+      - name: publish the charts as OCI
         env:
           HELM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ACTOR: ${{ github.repository_owner }}
         run: |
           version="${GITHUB_REF_NAME#v}"
           helm package charts/choregos --version "$version" --app-version "$version"
+          # The chart an outpost's operator installs in their own cluster (ADR 0147): a chart of its
+          # own, published beside the platform's at the same version.
+          helm package charts/choregos-outpost --version "$version" --app-version "$version"
           echo "$HELM_TOKEN" | helm registry login ghcr.io -u "$ACTOR" --password-stdin
           helm push "choregos-$version.tgz" oci://ghcr.io/vargafoundation/charts
+          helm push "choregos-outpost-$version.tgz" oci://ghcr.io/vargafoundation/charts
 
   pypi:
     # `choregos-agent-sdk` and the `choregos-contracts` it depends on (ADR 0063). OFF until the two

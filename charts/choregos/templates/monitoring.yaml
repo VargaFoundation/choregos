@@ -47,4 +47,7 @@ spec:
     - name: choregos.platform
       rules:
 {{ include "choregos.alertRules" . | indent 8 }}
+{{- if include "choregos.outpostsEnabled" . }}
+{{ include "choregos.outpostsAlertRules" . | indent 8 }}
+{{- end }}
 {{- end }}

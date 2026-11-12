@@ -161,6 +161,12 @@ charts-lint:  ## helm lint + kubeconform (skipped if helm is missing)
 	@command -v kubeconform >/dev/null 2>&1 \
 		&& helm template choregos charts/choregos --set choregos-orchestrator.runner.skipOperatorCheck=true | kubeconform -strict -ignore-missing-schemas -summary \
 		|| echo "kubeconform is missing — schema validation skipped"
+	@# The outpost's chart (S65-16), beside the platform's: it renders nothing without a policy, so it
+	@# is linted and validated on its complete example.
+	helm lint charts/choregos-outpost -f charts/choregos-outpost/values/example.yaml
+	@if command -v kubeconform >/dev/null 2>&1; then \
+	  helm template outpost charts/choregos-outpost -f charts/choregos-outpost/values/example.yaml | kubeconform -strict -ignore-missing-schemas -summary; \
+	else echo "kubeconform is missing — schema validation skipped"; fi
 
 .PHONY: charts-test
 charts-test:  ## helm unittest

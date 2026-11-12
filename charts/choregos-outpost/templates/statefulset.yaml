@@ -1,0 +1,168 @@
+{{- $fullname := include "choregos-outpost.fullname" . }}
+{{- $policy := include "choregos-outpost.policy" . }}
+{{- $state := include "choregos-outpost.stateDir" . }}
+{{- $config := include "choregos-outpost.configDir" . }}
+{{- $auditDir := dir .Values.policy.audit.file }}
+{{- $auditOnItsOwn := not (or (eq $auditDir $state) (hasPrefix (printf "%s/" $state) $auditDir)) }}
+{{- $ca := .Values.ca | default dict }}
+{{- $enrolment := .Values.enrolment | default dict }}
+{{- $grace := int .Values.graceSeconds }}
+{{- $termination := int .Values.terminationGracePeriodSeconds }}
+{{- if le $termination $grace }}
+{{- fail (printf "terminationGracePeriodSeconds=%d is not above graceSeconds=%d: the daemon lets the calls in progress finish for graceSeconds, and a write that has begun is left to finish. Give the pod longer than that, or the kubelet kills it in the middle of one." $termination $grace) }}
+{{- end }}
+{{- /* The endpoints' credentials: one projected volume, each Secret's key under its alias. */}}
+{{- $credentials := list }}
+{{- range $alias, $endpoint := (.Values.policy.endpoints | default dict) }}
+{{- with $endpoint.auth }}
+{{- $credentials = append $credentials (dict "secret" (dict "name" .secretName "items" (list (dict "key" .secretKey "path" (printf "%s/%s" $alias .secretKey))))) }}
+{{- end }}
+{{- end }}
+{{- /*
+One instance of the outpost per pod, and one volume per instance (ADR 0147 §2, ADR 0149 §5): the
+keys an instance made, the journal that keeps a write from being made twice, and the audit log. A
+StatefulSet with a claim template gives each replica its own claim, which follows it across
+restarts and is never another pod's: a daemon refuses to start on a journal another one holds
+(`journal/lock`), and two daemons on one identity is what the door takes for a stolen key. A rolling
+update replaces one pod at a time, each on its own volume.
+
+`serviceName` names no Service on purpose, and this chart renders none for the daemon: nothing
+dials an outpost (ADR 0147 §1), and the daemon listens on nothing, which is also why it has no probe.
+*/ -}}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ $fullname }}
+  labels: {{- include "choregos-outpost.labels" . | nindent 4 }}
+    app.kubernetes.io/component: daemon
+spec:
+  serviceName: {{ $fullname }}
+  replicas: {{ int .Values.replicas }}
+  selector:
+    matchLabels: {{- include "choregos-outpost.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "choregos-outpost.selectorLabels" . | nindent 8 }}
+      annotations:
+        # The daemon reads its policy when it starts and never again: a change restarts the pods.
+        checksum/policy: {{ $policy | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ $fullname }}
+      # Locked down as a plugin server's pod is (ADR 0096 §2): no token of the cluster, no service
+      # links, not root, a read-only root filesystem, no capability, the default seccomp profile.
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- range . }}
+        - name: {{ . }}
+        {{- end }}
+      {{- end }}
+      {{- with .Values.runtimeClassName }}
+      runtimeClassName: {{ . }}
+      {{- end }}
+      # Longer than the daemon gives the calls in progress (`graceSeconds`).
+      terminationGracePeriodSeconds: {{ $termination }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        # Set the volume's group once, not at every start: the kubelet's pass makes every file
+        # group-writable, and the daemon refuses a private key its group can write.
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile: { type: RuntimeDefault }
+      initContainers:
+        # Enrols the instance once (ADR 0147 §4): only when it has no identity yet. It prints the
+        # fingerprint a person compares in the console before approving the instance.
+        - name: enrol
+          image: {{ include "choregos-outpost.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              {{- include "choregos-outpost.enrolScript" . | nindent 14 }}
+          securityContext: {{- include "choregos-outpost.containerSecurityContext" . | nindent 12 }}
+          env:
+            {{- include "choregos-outpost.env" . | nindent 12 }}
+            - { name: ENROLMENT_TOKEN_FILE, value: {{ printf "%s/enrolment/%s" $config ($enrolment.key | default "token") | quote }} }
+          resources: {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - { name: data, mountPath: {{ $state }}, subPath: state }
+            - { name: policy, mountPath: {{ $config }}/policy, readOnly: true }
+            # The token is this container's only: the daemon that runs afterwards never sees it.
+            - { name: enrolment, mountPath: {{ $config }}/enrolment, readOnly: true }
+            {{- if or $ca.configMap $ca.secret }}
+            - { name: ca, mountPath: {{ $config }}/ca, readOnly: true }
+            {{- end }}
+      containers:
+        - name: outpost
+          image: {{ include "choregos-outpost.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          # The image's entrypoint is the daemon. `run` ends with a code that says why: 3 (the door no
+          # longer serves this daemon's protocol) and 4 (revoked) restart in a loop on purpose.
+          args: ["run"]
+          securityContext: {{- include "choregos-outpost.containerSecurityContext" . | nindent 12 }}
+          env:
+            {{- include "choregos-outpost.env" . | nindent 12 }}
+          resources: {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            # The only two writable places: the state (the keys, the journal) and the audit log.
+            - { name: data, mountPath: {{ $state }}, subPath: state }
+            {{- if $auditOnItsOwn }}
+            - { name: data, mountPath: {{ $auditDir }}, subPath: audit }
+            {{- end }}
+            - { name: policy, mountPath: {{ $config }}/policy, readOnly: true }
+            {{- if $credentials }}
+            - { name: credentials, mountPath: {{ $config }}/credentials, readOnly: true }
+            {{- end }}
+            {{- if or $ca.configMap $ca.secret }}
+            - { name: ca, mountPath: {{ $config }}/ca, readOnly: true }
+            {{- end }}
+      volumes:
+        - name: policy
+          configMap: { name: {{ $fullname }}-policy }
+        # Optional: once the instance is enrolled the token is spent, and its Secret can be deleted.
+        - name: enrolment
+          secret:
+            secretName: {{ include "choregos-outpost.enrolmentSecret" . }}
+            optional: true
+            defaultMode: 0440
+        {{- if $credentials }}
+        # The endpoints' credentials, from the Secrets the operator names: files, never values.
+        - name: credentials
+          projected:
+            defaultMode: 0440
+            sources: {{- toYaml $credentials | nindent 14 }}
+        {{- end }}
+        {{- if $ca.configMap }}
+        - name: ca
+          configMap: { name: {{ $ca.configMap }} }
+        {{- else if $ca.secret }}
+        - name: ca
+          secret: { secretName: {{ $ca.secret }}, defaultMode: 0440 }
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity: {{- toYaml . | nindent 8 }}
+      {{- end }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels: {{- include "choregos-outpost.selectorLabels" . | nindent 10 }}
+      spec:
+        accessModes: {{- toYaml .Values.persistence.accessModes | nindent 10 }}
+        {{- with .Values.persistence.storageClass }}
+        storageClassName: {{ . }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.persistence.size }}

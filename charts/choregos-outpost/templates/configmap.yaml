@@ -1,0 +1,14 @@
+{{- /*
+The policy file (ADR 0147 §6): what the daemon checks alone, from a file the platform cannot write.
+It holds addresses and paths, never a credential: `auth.from_file` names a file a Secret is mounted
+at. The daemon reads it when it starts; the StatefulSet carries its checksum, so a change restarts
+the pods.
+*/ -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "choregos-outpost.fullname" . }}-policy
+  labels: {{- include "choregos-outpost.labels" . | nindent 4 }}
+data:
+  policy.yaml: |
+    {{- include "choregos-outpost.policy" . | nindent 4 }}

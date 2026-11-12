@@ -163,11 +163,14 @@ class PostgresRelay:
     """One `LISTEN` connection per replica, which republishes into the local bus. Reconnects on its own.
 
     The connection can carry other channels beside the events' (`listen_also`): a wake-up is not a
-    platform event, and `_receive` drops what does not parse as one (ADR 0148 §7)."""
+    platform event, and `_receive` drops what does not parse as one (ADR 0148 §7). A process that has
+    no subscriber to wake (the outposts' door served alone, ADR 0148 §8) passes `events=False` and
+    listens on those other channels only."""
 
-    def __init__(self, dsn: str) -> None:
+    def __init__(self, dsn: str, *, events: bool = True) -> None:
         self.dsn = dsn.replace("postgresql+asyncpg://", "postgresql://")
         self._task: asyncio.Task[None] | None = None
+        self._events = events
         self.received = 0
         self._also: dict[str, Callable[[str], None]] = {}
         #: Set while the connection listens, cleared when it is lost: a test waits for it.
@@ -211,10 +214,15 @@ class PostgresRelay:
                 lost = asyncio.Event()
                 conn.add_termination_listener(lambda _conn, lost=lost: lost.set())
                 try:
-                    await conn.add_listener(CHANNEL, self._receive)
+                    if self._events:
+                        await conn.add_listener(CHANNEL, self._receive)
                     for channel in self._also:
                         await conn.add_listener(channel, self._hear)
-                    logger.info("PostgreSQL event relay attached", channel=CHANNEL, also=sorted(self._also))
+                    logger.info(
+                        "PostgreSQL event relay attached",
+                        channel=CHANNEL if self._events else None,
+                        also=sorted(self._also),
+                    )
                     self.attached.set()
                     wait = 1.0
                     while not lost.is_set():
