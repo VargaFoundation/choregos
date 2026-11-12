@@ -459,7 +459,11 @@ def _outputs_present(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     )
 
 
-#: The states of an action that will not move again.
+#: The states of an action that settle the transition that proposed it. `in_doubt` (ADR 0149 §5) is
+#: not one of them, although the action will not move again by itself: nobody knows whether its write
+#: was made, and a failure would follow `on_fail`, whose retry proposes the action again under a new
+#: attempt, a second delivery of the write. The transition waits, as it waits for an approval nobody
+#: gave yet, until a person has looked.
 ACTION_SETTLED = frozenset({"succeeded", "failed", "rejected"})
 
 
@@ -467,8 +471,8 @@ ACTION_SETTLED = frozenset({"succeeded", "failed", "rejected"})
 def _action_succeeded(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     """The transition's governed action SUCCEEDED: each of its effects done, confirmed (ADR 0035).
 
-    Rejected, failed (and then compensated), it blocks; proposed, awaiting a decision or
-    running, it waits. A transition without an action has nothing to judge: the validator refuses it.
+    Rejected, failed (and then compensated), it blocks; proposed, awaiting a decision, running or
+    in doubt, it waits. A transition without an action has nothing to judge: the validator refuses it.
     """
     status = ctx.action_status
     if status is None or status not in ACTION_SETTLED:

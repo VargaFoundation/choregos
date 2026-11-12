@@ -157,6 +157,22 @@ def test_action_succeeded_waits_then_rules(status: str | None, passes: bool, wai
     assert (verdict.passed, verdict.pending) == (passes, waits)
 
 
+def test_an_action_in_doubt_does_not_settle_its_transition_which_waits() -> None:
+    """ADR 0149 §5: an action in doubt is never replayed. Read as a failure it would follow `on_fail`,
+    whose retry proposes the action again under a new attempt: a second delivery of a write nobody
+    knows was made. So the transition's guarantee waits, and the work item stays where it is."""
+    from choregos_core.gates import ACTION_SETTLED
+
+    assert "in_doubt" not in ACTION_SETTLED
+    verdict = evaluate("action_succeeded", GateContext(action_status="in_doubt"))
+    assert (verdict.passed, verdict.pending, verdict.blocking) == (False, True, False)
+    assert "in_doubt" in verdict.detail
+    workflow, _ = _arrival()
+    transition = workflow.transitions[0]
+    waits = WorkflowEngine(workflow).after_action(transition, "in_doubt", [], 1)
+    assert (waits.next_state, waits.retried, waits.escalated) == ("prepare", False, False)
+
+
 def test_the_process_view_says_the_action_its_date_and_its_implicit_guarantee() -> None:
     workflow, _ = _arrival()
     step = to_process(workflow)[0]

@@ -42,7 +42,7 @@ from ..schemas import (
     SecretValue,
 )
 from ..secret_store import secret_states
-from ..services import plugin_servers
+from ..services import outpost_writes, plugin_servers
 from ..services.argument_grants import refuse_constraint
 from ..services.catalogue_rights import (
     SELECTED_PROJECTS,
@@ -554,7 +554,8 @@ async def delete_org_connector(org: str, name: Name, session: Db, principal: Me)
 async def update_operation(
     org: str, name: Name, operation: str, body: OperationPatch, session: Db, principal: Me
 ) -> OperationDto:
-    """An operation's policy, groups and price: the organisation's decision."""
+    """An operation's policy, groups and price, and what the organisation states of how it is
+    delivered: the organisation's decision."""
     require_connector_admin(principal, org)
     organisation = await organisation_by_slug(session, org)
     instance = await _instance(session, organisation, name)
@@ -574,24 +575,19 @@ async def update_operation(
                 f"{name}/{operation} is approved by a person, always (its type declares it): "
                 "`approval` or `forbidden` only"
             )
-    if (
-        body.policy in ("allowed", "approval")
-        and op_row.access == "write"
-        and instance.kind == "mcp"
-        and instance.type == OUTPOST_TYPE
-    ):
-        # ADR 0149 §5-6, ADR 0101: a write through an outpost is opened only under the rule that it is
-        # delivered at most once (an idempotency key the operation takes, or an in-doubt outcome
-        # accepted for it). The platform does not carry that rule yet, so it does not open the write:
-        # a guarantee it cannot give is not implied by silence.
-        raise unprocessable(
-            f"{name}/{operation} is a write of a connector reached through an outpost. Such a write is "
-            "opened only under the rule that it is delivered at most once (ADR 0149 §6): the operation "
-            "takes the platform's idempotency key, or an in-doubt outcome is accepted for it. This version "
-            "of the platform does not carry that rule yet: the operation stays `forbidden`; a read of the "
-            "same connector is opened like any other",
-            [{"loc": ["body", "policy"], "msg": "a write through an outpost is not opened yet"}],
-        )
+    # ADR 0149 §5-6, ADR 0101: a write through an outpost is delivered at most once and may end in
+    # doubt, a guarantee that is not implied by silence. It is open only while its rule says that the
+    # operation takes the platform's idempotency key, or that an in-doubt outcome is accepted for it.
+    outpost_writes.state(
+        instance,
+        op_row,
+        policy=body.policy,
+        written={
+            field: getattr(body, field)
+            for field in outpost_writes.STATEMENTS
+            if field in body.model_fields_set
+        },
+    )
     if body.policy is not None:
         op_row.policy = body.policy
     if body.groups is not None:
@@ -742,6 +738,10 @@ async def discover_operations(org: str, name: Name, session: Db, principal: Me) 
                 input_digest,
                 access_kind,
             )
+            # What the organisation stated of its delivery was said of the operation that was: an
+            # idempotency key the tool may no longer take, a doubt accepted for another write. Whoever
+            # opens it again says it again (ADR 0149 §6).
+            operation.platform_arguments, operation.in_doubt_accepted = None, False
             operation.input_schema = tool.input_schema
             operation.description = tool.description or operation.description
             diff.changed.append(tool.name)

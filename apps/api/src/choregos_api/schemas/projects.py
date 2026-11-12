@@ -197,6 +197,9 @@ class TemplateUpsert(Dto):
 # ───────────── organisation connectors and policy per operation (ADR 0034) ─────────────
 
 OperationPolicy = Literal["allowed", "approval", "forbidden"]
+#: An argument the platform fills, never the agent: the list a plugin server's operation declares
+#: (`plugin-server.schema.json`), and the one an organisation's rule states for a discovered tool.
+PlatformArgument = Literal["action_key", "work_item_key"]
 
 
 class OperationDto(Dto):
@@ -216,6 +219,16 @@ class OperationDto(Dto):
     #: a JSON Schema every call's arguments must also satisfy, whichever agent calls; `{project}` is the
     #: run's project slug (S60-06, ADR 0128)
     arguments: dict[str, Any] | None = None
+    #: the arguments the organisation's rule says the platform fills, for a discovered tool; listing
+    #: `action_key` for a write through an outpost says it takes the idempotency key (ADR 0149 §6)
+    platform_arguments: list[PlatformArgument] = Field(default_factory=list)
+    #: an in-doubt outcome is accepted for this write through an outpost, explicitly (ADR 0149 §6)
+    in_doubt_accepted: bool = False
+
+    @field_validator("platform_arguments", mode="before")
+    @classmethod
+    def _none_stated(cls, value: Any) -> Any:
+        return value or []
 
 
 class OrgConnectorServer(Dto):
@@ -303,6 +316,17 @@ class OperationPatch(Dto):
     #: null (sent) clears it; absent leaves it; refused when it is not a schema the platform reads or
     #: names an argument the operation does not have (S60-06, ADR 0128)
     arguments: dict[str, Any] | None = None
+    #: null or empty (sent) clears them; absent leaves them (S65-14, ADR 0149 §6)
+    platform_arguments: list[PlatformArgument] | None = None
+    #: null or false (sent) withdraws it; absent leaves it (S65-14, ADR 0149 §6)
+    in_doubt_accepted: bool | None = None
+
+    @field_validator("platform_arguments")
+    @classmethod
+    def _each_once(cls, value: list[str] | None) -> list[str] | None:
+        if value is not None and len(set(value)) != len(value):
+            raise ValueError("a platform argument is listed once")
+        return value
 
 
 class ProjectOperationDto(Dto):
