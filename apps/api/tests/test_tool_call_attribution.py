@@ -308,6 +308,11 @@ async def test_the_three_doors_are_three_groups_of_the_cost_reports(
         assert {line.split(";")[0] for line in lines[1:5]} == {"model", "script", "job", "—"}, lines
 
 
+#: Contract-first (ADR 0001): groupings the contract declares before the API accepts them, each with the
+#: story that implements it. An entry the API accepts must be removed from here.
+GROUPINGS_AHEAD_OF_THE_API: dict[str, str] = {"assistant": "S64-09b"}
+
+
 def test_the_contract_lists_the_groupings_the_api_accepts() -> None:
     import re
 
@@ -324,7 +329,10 @@ def test_the_contract_lists_the_groupings_the_api_accepts() -> None:
         "/orgs/{org}/costs.csv",
     ):
         (group_by,) = [p for p in paths[route]["get"]["parameters"] if p.get("name") == "group_by"]
-        assert group_by["schema"]["enum"] == accepted.group(1).split("|"), route
+        declared = [g for g in group_by["schema"]["enum"] if g not in GROUPINGS_AHEAD_OF_THE_API]
+        assert declared == accepted.group(1).split("|"), route
+    served = sorted(set(GROUPINGS_AHEAD_OF_THE_API) & set(accepted.group(1).split("|")))
+    assert not served, f"accepted now, remove from GROUPINGS_AHEAD_OF_THE_API: {served}"
     assert "origin" in costs.GROUPS
 
 

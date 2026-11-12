@@ -72,6 +72,7 @@ import type {
   RunEventDto,
   Artifact,
   RunLogs,
+  RunContext,
   HandOff,
   TimelineEntry,
   TrainStatus,
@@ -103,6 +104,7 @@ import type {
 import { readSandboxNetwork } from "@/lib/policy-network";
 import { journeyInProgress, journeyFinished, journeyOf } from "./journey";
 import { egressApi } from "./egress";
+import { activityApi } from "./activity";
 import { peopleOps, peopleOpsApi, peopleOpsFixtures } from "./joiners-leavers";
 import mcpCatalogueFile from "./mcp-catalogue.json";
 import { checkOutpostConnector, discoverAtOutpost, outpostsApi, whereItLivesNow } from "./outposts";
@@ -666,6 +668,37 @@ export const runAccess = {
   ],
 };
 
+/** What fills the run's context (`/runs/{id}/context-breakdown`, ADR 0141 §6): numbers only. */
+export const runContext: RunContext = {
+  run_id: "r-billing-api-123-implement-1",
+  measurable: true,
+  backend: "prompt",
+  latest: {
+    call: 14,
+    at: iso(1),
+    model: "platform/standard",
+    prompt_tokens: 61_480,
+    max_input_tokens: 200_000,
+    source: "loop",
+    sections: {
+      system: 2_140,
+      "tools.platform": 1_310,
+      "tools.mcp": 18_920,
+      skills: 860,
+      knowledge: 12_400,
+      memory: 0,
+      messages: 25_850,
+      backend: 0,
+    },
+  },
+  series: [
+    { call: 1, at: iso(9), prompt_tokens: 22_310 },
+    { call: 6, at: iso(6), prompt_tokens: 38_900 },
+    { call: 11, at: iso(3), prompt_tokens: 52_770 },
+    { call: 14, at: iso(1), prompt_tokens: 61_480 },
+  ],
+};
+
 /** What the run changed (`/runs/{id}/diff`). */
 export const runDiff = {
   base: "main",
@@ -1114,13 +1147,15 @@ type MockLine = {
   workflow: string;
   item: string;
   project: string;
+  /** The stage the line was spent in; a run is named by its work item key and stage (ADR 0141 §1). */
+  stage: string;
   /** The door a tool call came through (S57-06): a model line has none, nor a tool line booked before. */
   origin?: "model" | "script" | "job";
 };
 const FX_EUR = 0.92;
 export const mockLedger: MockLine[] = Array.from({ length: 45 }, (_, i) => i).flatMap((daysAgo) => [
-  { daysAgo, usd: 1.5 + (daysAgo % 5) * 0.4, kind: "model" as const, model: "claude-sonnet", agent: "coordinator", workflow: "delivery", item: "BILL-12", project: "billing-api" },
-  { daysAgo, usd: 0.8 + (daysAgo % 3) * 0.3, kind: "model" as const, model: "claude-haiku", agent: "reviewer", workflow: "delivery", item: "BILL-14", project: "billing-api" },
+  { daysAgo, usd: 1.5 + (daysAgo % 5) * 0.4, kind: "model" as const, model: "claude-sonnet", agent: "coordinator", workflow: "delivery", item: "BILL-12", project: "billing-api", stage: "implement" },
+  { daysAgo, usd: 0.8 + (daysAgo % 3) * 0.3, kind: "model" as const, model: "claude-haiku", agent: "reviewer", workflow: "delivery", item: "BILL-14", project: "billing-api", stage: "review" },
   ...(daysAgo % 4 === 0
     ? [
         {
@@ -1132,13 +1167,14 @@ export const mockLedger: MockLine[] = Array.from({ length: 45 }, (_, i) => i).fl
           workflow: "onboarding",
           item: "HR-3",
           project: "checkout-web",
+          stage: "implement",
           // The last weeks' calls say their door, half of them from a script; the older ones predate it.
           ...(daysAgo < 32 ? { origin: daysAgo % 8 === 0 ? ("script" as const) : ("model" as const) } : {}),
         },
       ]
     : []),
   ...(daysAgo % 6 === 0
-    ? [{ daysAgo, usd: 0.6, kind: "model" as const, model: "claude-sonnet", agent: null, workflow: "delivery", item: "BILL-12", project: "checkout-web" }]
+    ? [{ daysAgo, usd: 0.6, kind: "model" as const, model: "claude-sonnet", agent: null, workflow: "delivery", item: "BILL-12", project: "checkout-web", stage: "triage" }]
     : []),
 ]);
 
@@ -1148,6 +1184,10 @@ export function mockCostReport(path: string): CostReport {
   const project = /^\/projects\/([^/]+)\/costs/.exec(path.split("?")[0] ?? "")?.[1]?.split(":").at(-1);
   const since = query.get("since");
   const kind = query.get("kind");
+  // The narrowing filters (ADR 0141 §1): one agent, one workflow, one work item, combinable.
+  const agent = query.get("agent");
+  const workflowName = query.get("workflow");
+  const workItem = query.get("work_item");
   const day = (daysAgo: number) => new Date(now.getTime() - daysAgo * 86_400_000).toISOString().slice(0, 10);
   const key = (line: MockLine): string => {
     switch (group) {
@@ -1158,17 +1198,25 @@ export function mockCostReport(path: string): CostReport {
       case "model": return line.model;
       case "kind": return line.kind;
       case "origin": return line.origin ?? "—";
+      case "stage": return line.stage;
+      case "run": return `${line.item} · ${line.stage}`;
       default: return day(line.daysAgo);
     }
   };
   const rows = new Map<string, CostReport["rows"][number]>();
   for (const line of mockLedger) {
     if ((since && day(line.daysAgo) < since) || (kind && line.kind !== kind) || (project && line.project !== project)) continue;
+    if ((agent && line.agent !== agent) || (workflowName && line.workflow !== workflowName) || (workItem && line.item !== workItem)) continue;
     const k = key(line);
     const row = rows.get(k) ?? { key: k, cost_usd: 0, cost_eur: 0, tokens_in: 0, tokens_out: 0, tokens_cached: 0, runs: 0 };
     row.cost_usd = Math.round((row.cost_usd + line.usd) * 1e6) / 1e6;
     row.cost_eur = Math.round(row.cost_usd * FX_EUR * 1e6) / 1e6;
     row.runs = (row.runs ?? 0) + 1;
+    // A model line reads and writes tokens in proportion to its cost; a tool call spends none.
+    const read = line.kind === "model" ? Math.round(line.usd * 40_000) : 0;
+    row.tokens_in = (row.tokens_in ?? 0) + read;
+    row.tokens_out = (row.tokens_out ?? 0) + Math.round(read / 10);
+    row.tokens_cached = (row.tokens_cached ?? 0) + Math.round(read * 0.4);
     rows.set(k, row);
   }
   const list = [...rows.values()].sort((a, b) => a.key.localeCompare(b.key));
@@ -1180,6 +1228,9 @@ export function mockCostReport(path: string): CostReport {
       cost_usd: Math.round(list.reduce((s, r) => s + r.cost_usd, 0) * 1e6) / 1e6,
       cost_eur: Math.round(list.reduce((s, r) => s + r.cost_eur, 0) * 1e6) / 1e6,
       budget_usd: 150,
+      tokens_in: list.reduce((s, r) => s + (r.tokens_in ?? 0), 0),
+      tokens_out: list.reduce((s, r) => s + (r.tokens_out ?? 0), 0),
+      tokens_cached: list.reduce((s, r) => s + (r.tokens_cached ?? 0), 0),
     },
   };
 }
@@ -3320,6 +3371,9 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   if (channels !== undefined) return structuredClone(channels) as T;
   const network = egressApi(method, path.split("?")[0] ?? path, body);
   if (network !== undefined) return network as T;
+  // What is running, and stopping it (S64-06): the list, a run's cancel, an agent's stop.
+  const activity = activityApi(method, path, body);
+  if (activity !== undefined) return activity as T;
   const plugins = pluginsApi(method, bare, body, orgConnectors);
   if (plugins !== undefined) return plugins as T;
   // The organisation's outposts (ADR 0147): the list, one outpost, its instances and its recent calls.
@@ -4289,6 +4343,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/runs\/[^/]+\/logs$/, runLogsLive],
     [/^\/runs\/[^/]+\/access$/, runAccess],
     [/^\/runs\/[^/]+\/diff$/, runDiff],
+    [/^\/runs\/[^/]+\/context-breakdown$/, runContext],
     [/^\/runs\/trial-run-1$/, trialRun],
     [/^\/runs\/[^/]+$/, runs[2]],
     [/^\/audit$/, { items: [], meta: { has_more: false } }],

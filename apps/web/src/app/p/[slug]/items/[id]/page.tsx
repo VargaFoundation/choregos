@@ -27,6 +27,7 @@ import { libelleDeCode, relative, shortDate, tokens, usd } from "@/lib/format";
 import { RISK_LEVELS, SIZE_LEVELS } from "@/lib/levels";
 import type { WorkItemJourney } from "@/lib/types";
 import { ConfirmedGesture } from "@/components/confirmed-gesture";
+import { StopWithReason } from "@/components/activity/stop";
 import { AgentProposal } from "@/components/agent-proposal";
 import { ArtifactFacts } from "@/components/artifact-value";
 import { Artifacts } from "@/components/artifacts";
@@ -123,14 +124,15 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
           >
             {data.paused ? "Resume" : "Pause"}
           </Button>
-          <ConfirmedGesture
-            tonDuBouton="danger"
+          {/* The stop asks why (ADR 0142 §3, §5): the reason is audited and cancels the run in flight with it. */}
+          <StopWithReason
             question="Stop this ticket? Its run is cancelled and it leaves the workflow — it does not resume, it has to be filed again."
-            confirmer="Stop the ticket"
-            action={() => control("stop")}
-          >
-            Stop
-          </ConfirmedGesture>
+            confirm="Stop the ticket"
+            action={async (reason) => {
+              await api.stopWorkItem(id, reason);
+              await queryClient.invalidateQueries({ queryKey: ["item", id] });
+            }}
+          />
           <ChangeWorkflow
             slug={slug}
             itemId={id}

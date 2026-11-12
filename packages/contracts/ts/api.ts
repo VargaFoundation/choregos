@@ -4194,6 +4194,8 @@ export type Assistant = {
   audience_groups: Array<string>;
   channel: "stable" | "candidate";
   status: "incomplete" | "ready" | "suspended";
+  /** set while a person has stopped the assistant: its status then reads `suspended` */
+  stopped?: AssistantStop | null;
   policy_overrides: {
     [key: string]: unknown;
   };
@@ -5281,6 +5283,126 @@ export type BudgetAlert = {
   can_acknowledge?: boolean;
 };
 
+export type StopRequest = {
+  /** why it is stopped; audited and shown on the work item */
+  reason: string;
+};
+
+export type AgentStopResult = {
+  slug: string;
+  status: "suspended";
+  runs_cancelled: number;
+  sessions_closed: number;
+  turns_cancelled: number;
+  /** what could not be stopped now (an executor that did not answer); the reconciliation retries it */
+  not_stopped?: Array<{
+    kind: "run" | "session" | "turn";
+    id: string;
+    detail: string;
+  }>;
+};
+
+export type AssistantStopResult = {
+  slug: string;
+  status: "suspended";
+  /** turns in flight whose cancel was requested; each settles at its next model or tool call */
+  turns_cancelled: number;
+  /** what could not be stopped now; the turn's own lease ends it at the latest */
+  not_stopped?: Array<{
+    kind: "turn";
+    id: string;
+    detail: string;
+  }>;
+};
+
+/** who stopped the assistant, when and why (ADR 0142 §4 bis) */
+export type AssistantStop = {
+  at: string;
+  by: string;
+  reason: string;
+};
+
+export type ActivityEntry = {
+  kind: "run" | "session" | "turn";
+  id: string;
+  /** a run's status; `open` or `closed` for a session; `running`, `completed`, `cancelled` or `failed` for a turn */
+  status: string;
+  project_slug?: string | null;
+  work_item_id?: string | null;
+  work_item_key?: string | null;
+  workflow?: string | null;
+  stage_role?: string | null;
+  agent_slug?: string | null;
+  /** the assistant installation's id, for a turn */
+  assistant?: string | null;
+  model?: string | null;
+  initiated_by?: string | null;
+  started_at: string;
+  ended_at?: string | null;
+  /** the type of the last event the entry emitted (a step, a tool call) */
+  last_event?: string | null;
+  /** events recorded so far */
+  steps?: number;
+  /** null when the gateway cannot say (ADR 0141 §2), never zero for unknown */
+  spend?: SpendSoFar | null;
+  /** whether the reader may stop it */
+  can_stop: boolean;
+};
+
+export type SpendSoFar = {
+  tokens_in: number;
+  tokens_out: number;
+  tokens_cached: number;
+  cost_usd: number;
+  /** when the gateway was asked; at most every 30 s per run */
+  read_at: string;
+  /** true once the ledger holds it (the entry has ended) */
+  booked?: boolean;
+};
+
+export type ActivityList = {
+  in_flight: Array<ActivityEntry>;
+  finished: Array<ActivityEntry>;
+};
+
+/** One model call's context (ADR 0141 §3): `prompt_tokens` is what the model reported (exact); the sections are estimated and scaled so they sum to it; free space is `max_input_tokens - prompt_tokens`. */
+export type ContextBreakdown = {
+  /** the call's ordinal in the run or the conversation */
+  call: number;
+  at: string;
+  model: string;
+  prompt_tokens: number;
+  /** null when the catalogue does not know the model's window */
+  max_input_tokens?: number | null;
+  /** where it was measured */
+  source?: "loop" | "hosted_proxy" | "gateway";
+  /** tokens per section; absent sections are zero */
+  sections: {
+    system?: number;
+    "tools.platform"?: number;
+    "tools.mcp"?: number;
+    skills?: number;
+    knowledge?: number;
+    memory?: number;
+    messages?: number;
+    /** what a third-party CLI or container added that the platform did not write */
+    backend?: number;
+  };
+};
+
+export type RunContext = {
+  run_id: string;
+  measurable: boolean;
+  backend?: string | null;
+  latest?: ContextBreakdown | null;
+  /** each kept call's total, oldest first (at most one per 5 s, ADR 0141 §5) */
+  series: Array<{
+    call: number;
+    at: string;
+    prompt_tokens: number;
+  }>;
+};
+
 export type CostReport = {
   group_by: string;
   currency?: string;
@@ -5297,6 +5419,11 @@ export type CostReport = {
     cost_usd?: number;
     cost_eur?: number;
     budget_usd?: number | null;
+    /** the input tokens of the report's lines, summed (ADR 0141 §1) */
+    tokens_in?: number;
+    tokens_out?: number;
+    /** the input tokens the model read from its cache, part of tokens_in */
+    tokens_cached?: number;
   };
 };
 
@@ -5535,6 +5662,7 @@ export interface Operations {
   result_max_bytes?: number;
 } };
   cancelMyConversationTurn: { method: "POST"; path: "/me/conversations/{conversation_id}/cancel"; body: never; response: ConversationSummary };
+  cancelRun: { method: "POST"; path: "/runs/{id}/cancel"; body: StopRequest; response: Run };
   changeAgentLifecycle: { method: "POST"; path: "/orgs/{org}/agents/{slug}/lifecycle"; body: AgentLifecycleChange; response: AgentLifecycleResult };
   changeAgentScope: { method: "POST"; path: "/orgs/{org}/agents/{slug}/scope"; body: AgentScopeChange; response: Agent };
   checkOrgEgress: { method: "POST"; path: "/orgs/{org}/egress/check"; body: EgressCheck; response: EgressCheckResult };
@@ -5744,6 +5872,7 @@ export interface Operations {
   ref?: string;
 } };
   getRunContext: { method: "GET"; path: "/internal/runs/{id}/context"; body: never; response: ContextPack };
+  getRunContextBreakdown: { method: "GET"; path: "/runs/{id}/context-breakdown"; body: never; response: RunContext };
   getRunDiff: { method: "GET"; path: "/runs/{id}/diff"; body: never; response: DiffSummary };
   getRunEvents: { method: "GET"; path: "/runs/{id}/events"; body: never; response: Array<RunEvent> };
   getRunInput: { method: "GET"; path: "/internal/runs/{id}/input"; body: never; response: StageInput };
@@ -5855,6 +5984,7 @@ export interface Operations {
   listMySessions: { method: "GET"; path: "/me/sessions"; body: never; response: Array<BrowserSession> };
   listMyTokens: { method: "GET"; path: "/me/tokens"; body: never; response: Array<ApiToken> };
   listOrgActions: { method: "GET"; path: "/orgs/{org}/actions"; body: never; response: Array<Action> };
+  listOrgActivity: { method: "GET"; path: "/orgs/{org}/activity"; body: never; response: ActivityList };
   listOrgAgentCredentials: { method: "GET"; path: "/orgs/{org}/agent-credentials"; body: never; response: Array<AgentCredential> };
   listOrgAgentReleases: { method: "GET"; path: "/orgs/{org}/agent-releases"; body: never; response: Array<AgentRelease> };
   listOrgConnectors: { method: "GET"; path: "/orgs/{org}/connectors"; body: never; response: Array<OrgConnector> };
@@ -5972,6 +6102,7 @@ export interface Operations {
   resolveProjectAgents: { method: "GET"; path: "/projects/{id}/agent-resolution"; body: never; response: Array<AgentResolution> };
   restoreAgentVersion: { method: "POST"; path: "/orgs/{org}/agents/{slug}/versions/{version}/restore"; body: AgentVersionRestore; response: AgentVersion };
   restoreWorkflowVersion: { method: "POST"; path: "/projects/{id}/workflows/{name}/versions/{version}/restore"; body: never; response: WorkflowDef };
+  resumeAssistant: { method: "POST"; path: "/orgs/{org}/assistants/{slug}/resume"; body: never; response: Assistant };
   resumeOutpost: { method: "POST"; path: "/orgs/{org}/outposts/{slug}/resume"; body: never; response: Outpost };
   revealAssistantWebhookSecret: { method: "POST"; path: "/orgs/{org}/assistants/{slug}/webhook-secret"; body: WebhookSecretRequest; response: WebhookSecret };
   revealTaskEventKey: { method: "POST"; path: "/orgs/{org}/assistants/{slug}/tasks/{task}/event-key"; body: never; response: TaskEventKey };
@@ -6001,7 +6132,10 @@ export interface Operations {
   shareWorkflow: { method: "POST"; path: "/orgs/{org}/workflow-catalogue"; body: WorkflowShare; response: WorkflowCatalogueEntry };
   startAgentEvaluation: { method: "POST"; path: "/orgs/{org}/agents/{slug}/versions/{version}/evaluations"; body: AgentEvaluationCreate; response: AgentEvaluation };
   startAgentTrial: { method: "POST"; path: "/orgs/{org}/agent-trials"; body: AgentTrialCreate; response: AgentTrial };
+  stopAgent: { method: "POST"; path: "/orgs/{org}/agents/{slug}/stop"; body: StopRequest; response: AgentStopResult };
+  stopAssistant: { method: "POST"; path: "/orgs/{org}/assistants/{slug}/stop"; body: StopRequest; response: AssistantStopResult };
   stopKnowledgeDistillation: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/distill/stop"; body: never; response: KnowledgeBase };
+  streamOrgActivity: { method: "GET"; path: "/orgs/{org}/activity/stream"; body: never; response: void };
   streamProjectEvents: { method: "GET"; path: "/projects/{id}/events/stream"; body: never; response: void };
   streamWorkItemEvents: { method: "GET"; path: "/work-items/{id}/events/stream"; body: never; response: void };
   suspendProject: { method: "POST"; path: "/projects/{id}/suspend"; body: never; response: Project };

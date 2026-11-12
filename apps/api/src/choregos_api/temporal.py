@@ -76,6 +76,11 @@ def provisioning_id(project_slug: str) -> str:
     return f"prov-{project_slug}"
 
 
+def run_cancellation_id(run_id: str) -> str:
+    """One cancellation per run (ADR 0142 §2): a second stop of the same run starts nothing."""
+    return f"run-cancel-{run_id}"
+
+
 #: How long a read waits for a workflow query before answering "unknown" (S26-01). A train whose
 #: history is long to replay can hold a query for tens of seconds, then fail with "query task not
 #: found, or already expired"; a status page must not wait for that.
@@ -104,6 +109,11 @@ class TemporalGateway(Protocol):
     async def start_hosted_build(self, workflow_id: str, payload: dict[str, Any]) -> str: ...
     async def start_session_pod(self, workflow_id: str, payload: dict[str, Any]) -> str: ...
     async def start_knowledge_distill(self, workflow_id: str, payload: dict[str, Any]) -> str: ...
+    async def start_run_cancellation(self, workflow_id: str, payload: dict[str, Any]) -> str:
+        """Stop a run on its executor, archive its logs, close its key and book its spend once:
+        `RunCancellation` in the orchestrator, the `cancel_run` activity (ADR 0142 §2)."""
+        ...
+
     async def cancel(self, workflow_id: str) -> None: ...
     async def describe(self, workflow_id: str) -> WorkflowState | None: ...
 
@@ -237,6 +247,10 @@ class FakeTemporal:
         self.started.setdefault(workflow_id, payload)  # one pod per session
         return workflow_id
 
+    async def start_run_cancellation(self, workflow_id: str, payload: dict[str, Any]) -> str:
+        self.started.setdefault(workflow_id, payload)  # `run-cancel-<run>`: a single start
+        return workflow_id
+
     async def cancel(self, workflow_id: str) -> None:
         self.cancelled.append(workflow_id)
 
@@ -339,6 +353,10 @@ class RealTemporal:
     async def start_session_pod(self, workflow_id: str, payload: dict[str, Any]) -> str:
         """A hosted session's pod (S41-11): `AgentSessionPod` in the orchestrator."""
         return await self._start("AgentSessionPod", workflow_id, payload)
+
+    async def start_run_cancellation(self, workflow_id: str, payload: dict[str, Any]) -> str:
+        """A run a person stopped (ADR 0142 §2): `RunCancellation` in the orchestrator."""
+        return await self._start("RunCancellation", workflow_id, payload)
 
     async def signal(self, workflow_id: str, name: str, payload: Any) -> None:
         client = await self.client()

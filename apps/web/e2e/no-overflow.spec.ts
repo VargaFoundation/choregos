@@ -55,6 +55,7 @@ const PAGES = [
   "/skills",
   "/skills/library",
   "/costs",
+  "/activity",
   "/skills/onboarding-procedure",
   "/integrations",
   "/integrations/claude-code",

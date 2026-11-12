@@ -14,6 +14,7 @@ from httpx import AsyncClient
 
 GROUPS = [
     "day", "stage", "model", "backend", "size", "kind", "agent", "workflow", "work_item", "project", "origin",
+    "run",
 ]  # fmt: skip
 
 

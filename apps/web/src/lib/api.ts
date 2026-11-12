@@ -9,7 +9,10 @@ import { type CliManifest, MANIFEST_PATH } from "./cli-download";
 import { clearEmbedToken, embedHeaders, isFrameSession } from "./embed-token";
 import type {
   Action,
+  ActivityList,
   Agent,
+  AgentStopResult,
+  StopRequest,
   ConnectorDiscovery,
   ConnectorOperation,
   OperationPatch,
@@ -226,6 +229,7 @@ import type {
   Conversation,
   ConversationAction,
   ConversationActionList,
+  RunContext,
 } from "./types";
 
 export const API_BASE = "/api/v1";
@@ -544,6 +548,12 @@ export const api = {
     request<Agent>(`/orgs/${org}/agents/${slug}/scope`, { method: "POST", body: JSON.stringify(body) }),
   updateAgent: (org: string, slug: string, body: AgentPatch) =>
     request<Agent>(`/orgs/${org}/agents/${slug}`, { method: "PATCH", body: JSON.stringify(body) }),
+  /**
+   * Suspends the agent, then cancels its runs in flight in every project, closes its open sessions and
+   * cancels its conversation turns (ADR 0142 §4); the answer counts what was stopped and what could not be.
+   */
+  stopAgent: (org: string, slug: string, reason: string) =>
+    request<AgentStopResult>(`/orgs/${org}/agents/${slug}/stop`, { method: "POST", body: JSON.stringify({ reason } satisfies StopRequest) }),
   /** Deletes an agent that never served; 409 with the reasons otherwise (retire it instead). */
   deleteAgent: (org: string, slug: string) => request<void>(`/orgs/${org}/agents/${slug}`, { method: "DELETE" }),
   /** Its life (S32-04): activate a draft, deprecate, retire — retiring runs its checklist. */
@@ -1174,12 +1184,29 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ action: "reroute", workflow, ...(reason ? { reason } : {}) }),
     }),
+  /** Stops a work item with a reason (ADR 0142 §3): its run in flight is cancelled with the same reason. */
+  stopWorkItem: (id: string, reason: string) =>
+    request<unknown>(`/work-items/${id}/actions`, { method: "POST", body: JSON.stringify({ action: "stop", reason }) }),
 
   runs: (itemId: string) => request<Run[]>(`/work-items/${itemId}/runs`),
   run: (runId: string) => request<Run>(`/runs/${runId}`),
+  /**
+   * Stops one run now, with a reason (ADR 0142 §2): its work item then waits for a person. 409 when the
+   * run has already ended (how it ended is in the problem); 403 without `item:control` on its project.
+   */
+  cancelRun: (runId: string, reason: string) =>
+    request<Run>(`/runs/${encodeURIComponent(runId)}/cancel`, { method: "POST", body: JSON.stringify({ reason } satisfies StopRequest) }),
+  /** What is in flight in the organisation, newest first, then what ended in the last hour (ADR 0142 §1). */
+  activity: (org: string, filter: ActivityFilter = {}) =>
+    request<ActivityList>(`/orgs/${encodeURIComponent(org)}/activity${query(compact(filter))}`),
+  /** The same entries as they change (SSE), with the same filter: the path `useLiveRefresh` listens to. */
+  activityStreamPath: (org: string, filter: ActivityFilter = {}) =>
+    `/orgs/${encodeURIComponent(org)}/activity/stream${query(compact(filter))}`,
   runEvents: (runId: string, afterSeq?: number) =>
     request<RunEventDto[]>(`/runs/${runId}/events${query(afterSeq ? { after_seq: String(afterSeq) } : undefined)}`),
   runDiff: (runId: string) => request<DiffSummary>(`/runs/${runId}/diff`),
+  /** What fills the run's model context: the last call's sections and the series of totals (ADR 0141 §6). */
+  runContext: (runId: string) => request<RunContext>(`/runs/${runId}/context-breakdown`),
 
   releases: (id: string, env?: string) => request<ReleasePage>(`/projects/${qualify(id)}/releases${query(env ? { env } : undefined)}`),
   train: (id: string, env: string) => request<TrainStatus>(`/projects/${qualify(id)}/trains/${env}`),
@@ -1246,7 +1273,7 @@ export const api = {
 
   costs: (id: string, groupBy = "day", filtre: CostFilter = {}) =>
     request<CostReport>(`/projects/${qualify(id)}/costs${query({ group_by: groupBy, ...compact(filtre) })}`),
-  /** The organisation's spend, in any grouping (S29-02): `since`, `until` (YYYY-MM-DD) and `kind` filter it. */
+  /** The organisation's spend, in any grouping (S29-02): `since`, `until` (YYYY-MM-DD), `kind`, `agent`, `workflow` and `work_item` filter it. */
   orgCosts: (org: string, groupBy = "day", filtre: CostFilter = {}) =>
     request<CostReport>(`/orgs/${org}/costs${query({ group_by: groupBy, ...compact(filtre) })}`),
   /** The budgets that crossed 80 or 100 % (S29-04): the inbox lists the open ones. */
@@ -1295,7 +1322,28 @@ export type BuiltinAgentQuery = {
   max_minutes?: number | null;
 };
 
-export type CostFilter = { since?: string; until?: string; kind?: "model" | "tool" | "distill" };
+/** What the Activity list is narrowed to (ADR 0142 §1): a project's slug, a workflow, an agent, an assistant installation, a kind. */
+export type ActivityFilter = {
+  project?: string;
+  workflow?: string;
+  agent?: string;
+  assistant?: string;
+  kind?: "run" | "session" | "turn";
+};
+
+/**
+ * What a spend report is narrowed to (ADR 0141 §1): a period, a kind of line, and one agent (its slug),
+ * one workflow (its name) or one work item (its id), combinable. The same filter goes to the JSON
+ * report and to its CSV.
+ */
+export type CostFilter = {
+  since?: string;
+  until?: string;
+  kind?: "model" | "tool" | "distill";
+  agent?: string;
+  workflow?: string;
+  work_item?: string;
+};
 
 function compact(filtre: Record<string, string | undefined>): Record<string, string> {
   return Object.fromEntries(Object.entries(filtre).filter(([, v]) => v)) as Record<string, string>;

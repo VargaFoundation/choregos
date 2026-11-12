@@ -46,6 +46,11 @@ export type {
   EgressVerdict,
   PlatformChange,
   CostReport,
+  ActivityEntry,
+  ActivityList,
+  AgentStopResult,
+  SpendSoFar,
+  StopRequest,
   CrossBackendArm,
   CrossBackendReport,
   DiffSummary,
@@ -126,6 +131,8 @@ export type {
   WorkItemJourney,
   JourneyMove,
   JourneyStep,
+  ContextBreakdown,
+  RunContext,
 } from "@choregos/contracts/api";
 
 import type { Operations } from "@choregos/contracts/api";

@@ -73,6 +73,14 @@ STILL_ANSWERS = {
     ("POST", "/internal/runs/{id}/result"),
 }
 
+#: The gateway's callback (S64-08b, ADR 0141 §4): signed with the gateway's master key for one run, never
+#: with the run's token, so a process that outlived its run cannot call them. A call the gateway saw
+#: before the run's key was closed is still counted, numbers only, as a journal is.
+GATEWAY_CALLBACK = {
+    ("GET", "/internal/runs/{id}/context-parts"),
+    ("POST", "/internal/runs/{id}/context-breakdown"),
+}
+
 EVENTS = {"events": [{"seq": 1, "type": "session/update", "payload": {"text": "still here"}}]}
 DECISIONS = {
     "decisions": [
@@ -400,7 +408,7 @@ def test_every_route_of_the_run_api_is_closed_with_its_run_or_is_a_journal() -> 
             continue
         for method in route.methods - {"HEAD"}:  # type: ignore[attr-defined]
             (guarded if guards & _dependencies(route) else unguarded).add((method, path))
-    assert unguarded == STILL_ANSWERS
+    assert unguarded == STILL_ANSWERS | GATEWAY_CALLBACK
     assert guarded == {(method, f"/internal/runs/{{id}}{route}") for method, route, _, _ in REFUSED}, (
         "a guarded route this file does not call: add it to REFUSED"
     )

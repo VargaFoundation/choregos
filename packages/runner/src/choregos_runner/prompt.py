@@ -6,6 +6,9 @@ tools are the run's MCP servers (`choregos`, `memory`), each call judged by the 
 ACP permission request, and four of the runner's: `read_file` and `list_files` over the workspace,
 read-only; `write_output` for the step's declared deliverables; `submit_result` for the result, which
 is validated as an agent's `result.json` is and refused back to the model when it does not hold.
+
+Every model call is measured (ADR 0141 §3): its sections, scaled to the `prompt_tokens` the model
+reported, are recorded as `context.breakdown` events — numbers only, at most one per 5 seconds.
 """
 
 from __future__ import annotations
@@ -21,6 +24,7 @@ from typing import Any
 import httpx
 from choregos_adapters.mcp.client import McpClient
 from choregos_contracts import StageInput, StageResult
+from choregos_core.context_breakdown import ContextMeter, Hints
 from choregos_core.egress import use_policy
 from choregos_core.mcp import RESULT_CEILING_BYTES
 from choregos_core.prompt_loop import LoopOutcome, LoopRequest, LoopTool, run_loop
@@ -315,7 +319,7 @@ class PromptRun:
         return f"{why}. Call `submit_result` with the step's status, summary and outputs."
 
 
-async def run_prompt(
+async def run_prompt(  # noqa: PLR0913 - the step, its transports and its hints
     stage_input: StageInput,
     workspace: Path,
     task: str,
@@ -325,23 +329,32 @@ async def run_prompt(
     model_transport: httpx.AsyncBaseTransport | None = None,
     mcp_transport: httpx.AsyncBaseTransport | None = None,
     timeout_s: float,
+    hints: Hints | None = None,
 ) -> PromptStep:
-    """Runs the loop on `task` and says how it ended."""
+    """Runs the loop on `task` and says how it ended. `hints` names the parts of `task` the runner
+    wrote (the playbook, the skills, the knowledge), which the context breakdown counts apart."""
     run = PromptRun(
         stage_input, workspace, record, guards, model_transport=model_transport, mcp_transport=mcp_transport
     )
     with use_policy(step_policy(stage_input), origin="prompt"):
-        return await _run(run, stage_input, task, record, timeout_s)
+        return await _run(run, stage_input, task, record, timeout_s, hints)
 
 
 async def _run(
-    run: PromptRun, stage_input: StageInput, task: str, record: Record, timeout_s: float
+    run: PromptRun,
+    stage_input: StageInput,
+    task: str,
+    record: Record,
+    timeout_s: float,
+    hints: Hints | None = None,
 ) -> PromptStep:
     call = stage_input.prompt
     tools = await run.tools()
     step = PromptStep(tools=[tool.name for tool in tools])
     await record("prompt.started", {"model": stage_input.model.litellm_model, "tools": step.tools})
     reminders: list[int] = []
+    # The runner does not know the model's window: the API fills `max_input_tokens` from its catalogue.
+    meter = ContextMeter(record, model=stage_input.model.litellm_model, source="loop", hints=hints)
 
     async def on_final(text: str) -> str | None:
         return await run.on_final(text, reminders)
@@ -363,6 +376,7 @@ async def _run(
                 on_event=record,
                 on_final=on_final,
                 stop_when=lambda: run.submitted is not None,
+                on_call=meter.observe,
             ),
             timeout=timeout_s,
         )
@@ -371,6 +385,9 @@ async def _run(
     except (ModelCallError, httpx.HTTPError) as exc:
         step.refused = gateway_budget_refusal([str(exc)])
         step.reason, step.error = "model_error", str(exc)[:500]
+    finally:
+        # The last call, and the largest of the window still open, are kept whatever ended the loop.
+        await meter.close()
     step.result = run.submitted
     step.denials = run.guards.denials
     if step.result is None and step.error is None:

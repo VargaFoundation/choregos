@@ -13,7 +13,7 @@ export interface ProprietesDeConfirmation {
   confirmer: string;
   ton?: Ton;
   /** A reason to type (abandoning a train); `requise` forbids running without it. */
-  reason?: { label: string; required?: boolean };
+  reason?: { label: string; required?: boolean; maxLength?: number };
   /** The gesture itself. An error stays displayed here, and the confirmation stays open. */
   action: (reason: string) => Promise<unknown>;
   onDone?: () => void;
@@ -66,7 +66,8 @@ export function Confirmation({ question, confirmer, ton = "danger", reason, acti
     }
   }
 
-  const blocked = occupe || Boolean(reason?.required && !texte.trim());
+  const tooLong = reason?.maxLength !== undefined && texte.trim().length > reason.maxLength;
+  const blocked = occupe || tooLong || Boolean(reason?.required && !texte.trim());
   return (
     <div
       ref={zone}
@@ -84,6 +85,7 @@ export function Confirmation({ question, confirmer, ton = "danger", reason, acti
           </span>
           <Input
             value={texte}
+            maxLength={reason.maxLength}
             onChange={(event) => setTexte(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === "Enter" && !blocked) void run();

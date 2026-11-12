@@ -40,7 +40,9 @@ API_SRC = ROOT / "apps" / "api" / "src"
 MACHINE_ONLY_ROUTES: dict[str, str] = {
     "/webhooks/*": "a forge, a tracker, a pipeline, a deployer, Alertmanager or a plugin's server posts "
     "its signed events",
-    "/internal/*": "a runner or an agent session calls it from its pod, with its run token",
+    "/internal/*": "a runner or an agent session calls it from its pod, with its run token; the gateway's "
+    "callback reads a run's registered parts and posts its context breakdowns, signed for that run "
+    "(S64-08b, outside the contract)",
     "/mcp": "the MCP door (ADR 0030): an external MCP client calls the organisation's tools over "
     "JSON-RPC; outside the contract",
     "/mcp/projects/{project}": "the MCP door narrowed to one project, for the same clients; outside the "
@@ -99,7 +101,10 @@ NOT_CALLED_BY_A_CLIENT: dict[str, str] = {
 }
 
 #: Paths whose console screen is a story still to come: that story removes its entries.
-NO_CLIENT_YET: dict[str, str] = {}
+NO_CLIENT_YET: dict[str, str] = {
+    "/orgs/{org}/assistants/{slug}/stop": "S64-09d, the assistant page's Stop (ADR 0142 §4 bis)",
+    "/orgs/{org}/assistants/{slug}/resume": "S64-09d, the assistant page's Resume (ADR 0142 §4 bis)",
+}
 
 #: Paths the CLI calls and the console must not: an operator's command, not a screen.
 CLI_ONLY: dict[str, str] = {

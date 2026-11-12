@@ -6,6 +6,7 @@ import { use, useState } from "react";
 import { RunActivityView } from "@/components/run-activity";
 import { RunScriptsCard } from "@/components/run-scripts";
 import { ContextReductionCard } from "@/components/context-reduction";
+import { RunContextCard } from "@/components/context-breakdown";
 import { LiveLog } from "@/components/live-log";
 import { AgentPlanView } from "@/components/agent-plan";
 import { Provenance } from "@/components/provenance";
@@ -52,6 +53,12 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
   // What the agent touched, folded from the journal: a run's 200 raw events
   // are not readable, and a journal nobody reads is not an audit.
   const access = useQuery({ queryKey: ["run-access", id], queryFn: () => api.runAccess(id) });
+  // What fills the model's context, call after call (ADR 0141 §6): refreshed while the run goes on.
+  const context = useQuery({
+    queryKey: ["run-context", id],
+    queryFn: () => api.runContext(id),
+    refetchInterval: run.data?.status === "running" ? 10_000 : false,
+  });
   const transcript = useQuery({
     queryKey: ["run-transcript", id],
     queryFn: () => api.transcript(id),
@@ -181,6 +188,8 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
       )}
 
       <Guarantees events={events} />
+
+      <RunContextCard context={context.data} />
 
       <ContextReductionCard reduction={contextReductionOf(events)} />
 
