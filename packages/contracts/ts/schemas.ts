@@ -367,7 +367,7 @@ export type OutpostAnswerError = {
 export type OutpostAnswer = {
   /** The call's id. */
   id: string;
-  /** `result`: the server answered. `error`: it answered a JSON-RPC error, so it says it did not do the call. `unanswered`: the call was sent, or begun, and the daemon holds no answer (a timeout at the endpoint, a lost connection, a restart in the middle): executed or not, nobody knows. `oversized`: the server answered and its result is above the outpost's ceiling or the door's cap; it was executed and its result is not sent. */
+  /** `result`: the server answered. `error`: it answered a JSON-RPC error, so it says it did not do the call. `unanswered`: the call was sent, or begun, and the daemon holds no answer (a timeout at the endpoint, a lost connection, a restart in the middle, a read abandoned because the door cancelled it): executed or not, nobody knows. `oversized`: the server answered and its result is above the outpost's ceiling or the door's cap; it was executed and its result is not sent. */
   outcome: "result" | "error" | "unanswered" | "oversized";
   /** `call_tool`, outcome `result`: the server's result as it answered it (`content`, `structuredContent`, `isError`), untouched. */
   result?: {
@@ -376,7 +376,7 @@ export type OutpostAnswer = {
   /** `list_tools`, outcome `result`: the tools the server lists and the outpost's policy lets through. */
   tools?: Array<OutpostAnswerTool> | null;
   error?: null | OutpostAnswerError;
-  /** What the outpost read from its own server: the tool does not declare itself read-only. */
+  /** What the outpost read from its own server: the tool does not declare itself read-only. Null for a kind that calls no tool (`list_tools`), and when the outpost did not get that far. */
   write?: boolean | null;
   /** The answer comes from the daemon's journal of call ids: the server was not called again (ADR 0149 §5). */
   replayed?: boolean;
@@ -407,7 +407,7 @@ export type OutpostAuditLineAsserted = {
 /** One line of the outpost's own audit log (ADR 0147 §8), a file of JSON lines: one line when an assignment is received, one when it is executed, refused or answered from the journal. It is the operator's record, independent of the platform's, so that the two can be compared. It holds digests, never arguments or results. A call refused for its signature has one line, which says nothing of what the envelope held: it was not opened. */
 export type OutpostAuditLine = {
   at: string;
-  /** `replayed`: a call id the journal already held was answered from it; the server was not called again. */
+  /** `replayed`: a call id the journal already held got what the journal held; the server was not called again. */
   event: "received" | "executed" | "refused" | "replayed";
   call_id: string;
   /** The pinned key (`door_keys`) that verified the call's signature; null on the line of a call refused `signature_refused`, which no pinned key verified. */
@@ -420,10 +420,10 @@ export type OutpostAuditLine = {
   arguments_sha256?: string | null;
   /** What the outpost read from its own server; null when it did not get that far. */
   write?: boolean | null;
-  /** `executed` and `replayed`: what was reported to the door. */
+  /** `executed`: what was reported to the door. `replayed`: what the journal held for the call; null while the call it repeats is still under way and has no answer to replay yet. */
   outcome?: "result" | "error" | "unanswered" | "oversized" | null;
   /** `refused`: why. */
-  refusal?: "unknown_endpoint" | "tool_not_allowed" | "write_denied" | "payload_too_large" | "busy" | "endpoint_unavailable" | "unsupported_kind" | "signature_refused" | "call_unreadable" | "deadline_passed" | "cancelled" | null;
+  refusal?: "unknown_endpoint" | "tool_not_allowed" | "write_denied" | "payload_too_large" | "busy" | "endpoint_unavailable" | "cannot_record" | "unsupported_kind" | "signature_refused" | "call_unreadable" | "deadline_passed" | "cancelled" | null;
   duration_ms?: number | null;
   asserted?: OutpostAuditLineAsserted;
 };
@@ -481,7 +481,7 @@ export type OutpostEnrolmentAnswerWindow = {
 
 /** The door's answer to an enrolment (ADR 0147 §4): a pending instance, handed nothing until a person approves it by comparing its fingerprint. A daemon ignores a field it does not know. */
 export type OutpostEnrolmentAnswer = {
-  /** The `kid` of every later signature of this instance. */
+  /** The `kid` of every later signature of this instance. Opaque to a daemon; the door reads in it which outpost the instance is of, before it knows anything else (ADR 0148 §6). */
   instance_id: string;
   /** The organisation the token belonged to, for the operator to check. */
   organisation: string;
@@ -498,7 +498,7 @@ export type OutpostEnrolmentAnswer = {
 export type OutpostEnrolmentRequest = {
   /** The protocol the daemon speaks: 1 for this contract. */
   protocol: number;
-  /** The enrolment token a person created for one outpost: single use, valid 15 minutes at most. */
+  /** The enrolment token a person created for one outpost: single use, valid 15 minutes at most. Opaque to a daemon; the door reads in it which outpost it is for (ADR 0148 §6). */
   token: string;
   /** Ed25519, raw 32 bytes, base64url without padding: verifies every later request of this instance. */
   signing_key: string;
@@ -558,8 +558,8 @@ export type OutpostPolicy = {
 
 /** Why an outpost did not execute a call it received: the body of the door's `refuse` verb. A code from a closed list and nothing else (ADR 0148 §9): it names a class of refusal and never the rule that produced it (ADR 0147 §10). Whatever the code, the endpoint's server did not receive the call. */
 export type OutpostRefusal = {
-  /** `unknown_endpoint`: the policy file has no endpoint under this alias. `tool_not_allowed`: the tool is outside the endpoint's patterns. `write_denied`: the endpoint denies writes and its server does not declare the tool read-only. `payload_too_large`: the arguments weigh more than the endpoint's ceiling. `busy`: the concurrency ceiling is reached, or the outpost is stopping. `endpoint_unavailable`: the outpost could not reach or open its own server, and sent it nothing. `unsupported_kind`: the daemon does not know this kind of call. `signature_refused`: the call is not signed by a key the outpost's policy file pins, or its signature binds another call, another instance or another envelope; the envelope was not opened. `call_unreadable`: the envelope does not open with this instance's key, or what it holds is not a call. `deadline_passed`: the deadline had passed before the outpost could start. `cancelled`: the door cancelled the call before the outpost started it. */
-  code: "unknown_endpoint" | "tool_not_allowed" | "write_denied" | "payload_too_large" | "busy" | "endpoint_unavailable" | "unsupported_kind" | "signature_refused" | "call_unreadable" | "deadline_passed" | "cancelled";
+  /** `unknown_endpoint`: the policy file has no endpoint under this alias. `tool_not_allowed`: the tool is outside the endpoint's patterns. `write_denied`: the endpoint denies writes and its server does not declare the tool read-only. `payload_too_large`: the arguments weigh more than the endpoint's ceiling. `busy`: the concurrency ceiling is reached, or the outpost is stopping; it also covers a call the daemon claimed and never began because it was stopping or was restarted. `endpoint_unavailable`: the outpost could not reach or open its own server, and sent it nothing. `cannot_record`: the outpost could not write its journal or its audit line, so it did not make the call. `unsupported_kind`: the daemon does not know this kind of call. `signature_refused`: the call is not signed by a key the outpost's policy file pins, or its signature binds another call, another instance or another envelope; the envelope was not opened. `call_unreadable`: the envelope does not open with this instance's key, or what it holds is not a call. `deadline_passed`: the deadline had passed before the outpost could start, or the call's id met an entry of the journal that had lapsed. `cancelled`: the door cancelled the call before the outpost started it. */
+  code: "unknown_endpoint" | "tool_not_allowed" | "write_denied" | "payload_too_large" | "busy" | "endpoint_unavailable" | "cannot_record" | "unsupported_kind" | "signature_refused" | "call_unreadable" | "deadline_passed" | "cancelled";
 };
 
 export type PluginEvalsNeedles = Array<string>;
