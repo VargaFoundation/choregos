@@ -66,9 +66,30 @@ function Install-Choregos {
         Write-Host "Downloading choregos $($manifest.version) (windows/x86_64) from $InstanceUrl"
         $downloaded = Join-Path $work 'choregos.exe'
         Invoke-WebRequest -UseBasicParsing -Uri "$InstanceUrl/downloads/cli/$name" -OutFile $downloaded
-        $actual = (Get-FileHash -Algorithm SHA256 -Path $downloaded).Hash.ToLowerInvariant()
+        # A managed Windows may refuse an executable that is new and not yet signed: Defender's attack
+        # surface reduction rule 01443614-CD74-433A-B99E-2ECDC07BFC25 blocks files that do not meet a
+        # prevalence, age or trusted-list criterion (event 1121 in Microsoft-Windows-Windows
+        # Defender/Operational). Windows PowerShell 5.1 meets it here, reading the file; PowerShell 7
+        # when it runs it. Installing it would leave a command that never runs.
+        $refused = "On a managed Windows this is usually Defender's attack surface reduction rule for executables that are not yet widespread or signed (event 1121 in Microsoft-Windows-Windows Defender/Operational). Ask your IT administrator for an exclusion of $InstallDir, or install the CLI from its Python packages: $releases. Nothing was installed."
+        try {
+            $actual = (Get-FileHash -Algorithm SHA256 -Path $downloaded -ErrorAction Stop).Hash.ToLowerInvariant()
+        } catch {
+            throw "choregos install: Windows refused access to the downloaded choregos.exe ($($_.Exception.Message)). $refused"
+        }
         if ($actual -ne $expected) {
             throw "choregos install: checksum mismatch for ${name}: expected $expected, got $actual; nothing was installed"
+        }
+
+        # Run it once before it replaces anything (see $refused).
+        try {
+            $ran = & $downloaded --version 2>&1 | Out-String
+            $code = $LASTEXITCODE
+        } catch {
+            throw "choregos install: Windows refused to run the downloaded choregos.exe ($($_.Exception.Message)). $refused"
+        }
+        if ($code -ne 0) {
+            throw "choregos install: the downloaded choregos.exe exited with $code on --version ($($ran.Trim())); nothing was installed"
         }
 
         # A running choregos.exe cannot be overwritten, but it can be renamed: the old one steps

@@ -460,6 +460,12 @@ def test_install_ps1_stays_within_windows_powershell_5_1(tmp_path: Path) -> None
     assert "Join-Path $env:LOCALAPPDATA 'Programs\\choregos'" in code
     assert "[Environment]::SetEnvironmentVariable('Path'" in code and "'User')" in code
     assert "choregos-windows-x86_64.exe" in code
+    # The downloaded binary runs once before it replaces anything: a managed Windows may refuse to
+    # start it (Defender ASR, found on a real machine on 2026-11-12), and nothing is installed then.
+    assert code.index("& $downloaded --version") < code.index(
+        "New-Item -ItemType Directory -Force -Path $InstallDir"
+    )
+    assert "Nothing was installed." in code
     # A running choregos.exe is renamed aside before the new one takes its name.
     assert code.index("-Destination $aside") < code.index(
         "Move-Item -LiteralPath $downloaded -Destination $target"

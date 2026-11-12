@@ -121,6 +121,7 @@ reads `CHOREGOS_API_URL`, `CHOREGOS_TOKEN` and `CHOREGOS_ORG`, which suits a CI 
 | `403` on every command | an MCP or A2A token in the profile | the CLI needs a full-access (`*`) token |
 | `no organisation` | neither `--org`, the profile nor `CHOREGOS_ORG` names one | `choregos login --org acme`, or `choregos orgs list` |
 | the digest does not match | an incomplete or altered download | download again; do not run the file |
+| `Windows refused to run` (or `refused access to`) `the downloaded choregos.exe` | a managed Windows: Defender's attack surface reduction blocks an executable that is new and not yet widespread or signed | ask your IT administrator for an exclusion of the install folder, or install [from the GitHub release](#from-the-github-release) |
 
 ## Go further
 
