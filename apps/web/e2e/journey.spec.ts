@@ -477,10 +477,10 @@ test("an agent made from the form runs on a sample under a capped budget, and a 
   await expect(page.getByTestId("history").getByRole("listitem")).toHaveCount(1);
 });
 
-test("an agent's page is in tabs: overview, definition, history, lifecycle, runs, access (S30-05, S40-12)", async ({ page }) => {
+test("an agent's page is in tabs: overview, definition, history, forks, lifecycle, runs, access (S30-05, S40-12)", async ({ page }) => {
   await page.goto("/agents/onboarding-coordinator");
   const tabs = page.getByRole("navigation", { name: "Sections of Onboarding coordinator" });
-  await expect(tabs.getByRole("link")).toHaveText(["Overview", "Definition", "History", "Lifecycle", "Runs", "Access"]);
+  await expect(tabs.getByRole("link")).toHaveText(["Overview", "Definition", "History", "Forks", "Lifecycle", "Runs", "Access"]);
   await expect(tabs.getByRole("link", { name: "Overview" })).toHaveAttribute("aria-current", "page");
   await expect(page.getByTestId("measures")).toBeVisible();
   await expect(page.getByTestId("version")).toHaveCount(0);

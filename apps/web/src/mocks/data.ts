@@ -7,6 +7,7 @@
  * API, which is what section 3.4 of the plan asks for.
  */
 import devComplex from "./dev-complex.json";
+import { agentSocialApi } from "./agent-social";
 import { agentReleasesApi, applyPolicy, decorateAgent, savedRevision, touchAgent } from "./agent-releases";
 import type {
   Action,
@@ -3394,6 +3395,8 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   if (typeof window !== "undefined") (window as unknown as { __mockAgents?: Agent[] }).__mockAgents = agents;
   const channels = agentReleasesApi(method, path.split("?")[0] ?? path, path.split("?")[1] ?? "", body, agents, me.email);
   if (channels !== undefined) return structuredClone(channels) as T;
+  const social = agentSocialApi(method, path.split("?")[0] ?? path, body, agents, me.email);
+  if (social !== undefined) return structuredClone(social) as T;
   const network = egressApi(method, path.split("?")[0] ?? path, body);
   if (network !== undefined) return network as T;
   // What is running, and stopping it (S64-06): the list, a run's cancel, an agent's stop.
@@ -4171,7 +4174,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   if (/^\/orgs\/[^/]+\/agents$/.test(route ?? "")) {
     // Every tag given (AND), as the API filters (S40-10).
     const wanted = new URLSearchParams(path.split("?")[1] ?? "").getAll("tag");
-    return structuredClone(agents.filter((a) => wanted.every((t) => (a.tags ?? []).includes(t)))) as T;
+    return structuredClone(agents.filter((a) => wanted.every((t) => (a.tags ?? []).includes(t))).map(decorateAgent)) as T;
   }
   const projectOrg = /^\/projects\/([^/]+)\/org-connectors$/.exec(route ?? "");
   if (projectOrg) {

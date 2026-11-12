@@ -2663,6 +2663,8 @@ paths:
         - { name: scope, in: query, required: false, schema: { type: string, enum: [platform, org, project, personal] } }
         - { name: project, in: query, required: false, schema: { type: string }, description: "a project's slug: only the agents that project owns" }
         - { name: tag, in: query, required: false, style: form, explode: true, schema: { type: array, items: { type: string } }, description: "repeatable: only the agents carrying every tag given (AND, S40-10); applied after visibility, so a tag never reveals an agent the caller cannot see" }
+        - { name: starred, in: query, required: false, schema: { type: boolean, default: false }, description: "only the agents the caller starred (ADR 0152)" }
+        - { name: sort, in: query, required: false, schema: { type: string, enum: [name, stars], default: name }, description: "`stars`: the most starred first (ADR 0152)" }
       responses:
         "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Agent" } } } } }
     post:
@@ -2678,6 +2680,94 @@ paths:
         "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Agent" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
         "409": { $ref: "#/components/responses/EgressRequired" }
+  /orgs/{org}/agents/{slug}/forks:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [agents]
+      operationId: listAgentForks
+      description: The forks of this agent the caller may see (ADR 0152) — scope, owner, the version copied, the latest version and whether the fork diverged. A fork the caller cannot see is not listed and not counted.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AgentForkList" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/agents/{slug}/watch:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    put:
+      tags: [agents]
+      operationId: watchAgent
+      description: Watch this agent (ADR 0152) — its releases, forks and lifecycle changes reach the caller's agent notifications. `level` `releases` keeps only the releases. Idempotent; audited as `agent.watch`. A person's gesture; the system and an outpost have none.
+      requestBody:
+        required: false
+        content: { application/json: { schema: { $ref: "#/components/schemas/AgentWatchPut" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AgentSocial" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [agents]
+      operationId: unwatchAgent
+      description: Stop watching this agent. Idempotent; audited as `agent.unwatch`.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AgentSocial" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/agents/{slug}/star:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    put:
+      tags: [agents]
+      operationId: starAgent
+      description: Star this agent (ADR 0152). Idempotent; audited as `agent.star`. A person's gesture; the system and an outpost have none.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AgentSocial" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [agents]
+      operationId: unstarAgent
+      description: Remove the caller's star. Idempotent; audited as `agent.unstar`.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AgentSocial" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/agent-notifications:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    get:
+      tags: [agents]
+      operationId: listAgentNotifications
+      description: What happened to the agents the caller watches (ADR 0152), newest first. An item about an agent or a fork the caller can no longer see is neither listed nor counted.
+      parameters:
+        - { name: unread, in: query, schema: { type: boolean, default: false } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200 } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AgentNotificationList" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /orgs/{org}/agent-notifications/read:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    post:
+      tags: [agents]
+      operationId: readAllAgentNotifications
+      description: Mark every agent notification of the caller as read.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AgentNotificationsRead" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /orgs/{org}/agent-notifications/{item_id}/read:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: item_id, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [agents]
+      operationId: readAgentNotification
+      description: Mark one agent notification of the caller as read.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AgentNotificationsRead" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /orgs/{org}/agent-drafts:
     parameters: [{ $ref: "#/components/parameters/Org" }]
     post:
@@ -7847,6 +7937,64 @@ components:
         candidate_since: { type: [string, "null"], format: date-time }
         release_policy: { $ref: "#/components/schemas/AgentReleasePolicy" }
         pending_release: { oneOf: [{ $ref: "#/components/schemas/AgentRelease" }, { type: "null" }], description: the release waiting for approval, if any }
+        social: { $ref: "#/components/schemas/AgentSocial" }
+    AgentSocial:
+      type: object
+      description: The counters of an agent and what the caller does with it (ADR 0152). `forks` counts the forks the caller may see.
+      properties:
+        watchers: { type: integer, default: 0 }
+        stars: { type: integer, default: 0 }
+        forks: { type: integer, default: 0 }
+        watching: { type: [string, "null"], enum: [all, releases, null], description: the caller's watch level, null when not watching }
+        starred_by_me: { type: boolean, default: false }
+    AgentWatchPut:
+      type: object
+      properties:
+        level: { type: string, enum: [all, releases], default: all }
+    AgentForkEntry:
+      type: object
+      required: [slug, display_name, scope, latest_version]
+      properties:
+        slug: { type: string }
+        display_name: { type: string }
+        scope: { type: string, enum: [platform, org, project, personal] }
+        project: { type: [string, "null"] }
+        owner: { type: [string, "null"] }
+        created_at: { type: [string, "null"], format: date-time }
+        forked_from_version: { type: [integer, "null"], description: the version of the source this fork copied }
+        latest_version: { type: integer }
+        diverged: { type: boolean, default: false, description: its own versions go past the first, which is the copy }
+        lifecycle: { type: string, enum: [draft, active, deprecated, retired], default: active }
+    AgentForkList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/AgentForkEntry" } }
+    AgentNotification:
+      type: object
+      required: [id, kind, agent, created_at]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [version_published, production_moved, candidate_started, candidate_promoted, candidate_withdrawn, rolled_back, forked, lifecycle_changed] }
+        agent: { type: string }
+        fork: { type: [string, "null"], description: the fork a `forked` item names }
+        actor: { type: [string, "null"] }
+        version: { type: [integer, "null"] }
+        previous_version: { type: [integer, "null"] }
+        detail: { type: [string, "null"], description: "what the move was (`promote`, `rollback`, `publish`) or the lifecycle reached" }
+        created_at: { type: string, format: date-time }
+        read_at: { type: [string, "null"], format: date-time }
+    AgentNotificationList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/AgentNotification" } }
+        unread: { type: integer, default: 0, description: unread items the caller may still read }
+    AgentNotificationsRead:
+      type: object
+      required: [updated]
+      properties:
+        updated: { type: integer }
     AgentReleaseDecision:
       type: object
       required: [decision]

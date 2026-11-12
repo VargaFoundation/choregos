@@ -42,6 +42,11 @@ import type {
   AgentDraft,
   AgentDraftRequest,
   AgentFork,
+  AgentForkList,
+  AgentSocial,
+  AgentWatchPut,
+  AgentNotificationList,
+  AgentNotificationsRead,
   AgentScopeChange,
   RemoteAgentDiscovery,
   RemoteCredential,
@@ -545,6 +550,21 @@ export const api = {
   /** A fork: a new agent in the scope asked, whose v1 copies a version of the source (ADR 0061). */
   forkAgent: (org: string, slug: string, body: AgentFork) =>
     request<Agent>(`/orgs/${org}/agents/${slug}/fork`, { method: "POST", body: JSON.stringify(body) }),
+  /** The forks of an agent the caller may see (ADR 0152). */
+  agentForks: (org: string, slug: string) => request<AgentForkList>(`/orgs/${org}/agents/${slug}/forks`),
+  /** Watch an agent: `all` its activity, or its `releases` only (ADR 0152). */
+  watchAgent: (org: string, slug: string, level: AgentWatchPut["level"] = "all") =>
+    request<AgentSocial>(`/orgs/${org}/agents/${slug}/watch`, { method: "PUT", body: JSON.stringify({ level }) }),
+  unwatchAgent: (org: string, slug: string) => request<AgentSocial>(`/orgs/${org}/agents/${slug}/watch`, { method: "DELETE" }),
+  starAgent: (org: string, slug: string) => request<AgentSocial>(`/orgs/${org}/agents/${slug}/star`, { method: "PUT" }),
+  unstarAgent: (org: string, slug: string) => request<AgentSocial>(`/orgs/${org}/agents/${slug}/star`, { method: "DELETE" }),
+  /** What happened to the agents the caller watches, the ones they may still read (ADR 0152). */
+  agentNotifications: (org: string, unread = false) =>
+    request<AgentNotificationList>(`/orgs/${org}/agent-notifications${unread ? "?unread=true" : ""}`),
+  readAgentNotification: (org: string, id: string) =>
+    request<AgentNotificationsRead>(`/orgs/${org}/agent-notifications/${id}/read`, { method: "POST" }),
+  readAllAgentNotifications: (org: string) =>
+    request<AgentNotificationsRead>(`/orgs/${org}/agent-notifications/read`, { method: "POST" }),
   /** Move an agent to another scope (promote a personal or project agent); the server decides who may. */
   changeAgentScope: (org: string, slug: string, body: AgentScopeChange) =>
     request<Agent>(`/orgs/${org}/agents/${slug}/scope`, { method: "POST", body: JSON.stringify(body) }),

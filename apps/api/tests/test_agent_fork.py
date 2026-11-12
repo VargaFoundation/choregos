@@ -60,9 +60,10 @@ async def test_a_fork_copies_the_version_byte_for_byte_and_records_its_origin(
     assert fork["can"]["publish"] is True, "the project owner owns the fork"
 
     await as_user(client, ADMIN)
-    assert (await client.get(f"{ORG}/agents/developer")).json() == source_before, (
-        "the source is never modified"
-    )
+    # `social` counts the forks (ADR 0152): that one counter moves, nothing of the source does.
+    after = (await client.get(f"{ORG}/agents/developer")).json()
+    assert after.pop("social")["forks"] == source_before.pop("social")["forks"] + 1
+    assert after == source_before, "the source is never modified"
     # nothing else is inherited: no pin, no metrics, no client
     assert (await client.get(f"{ORG}/agents/dev-developer/credentials")).json() == []
 

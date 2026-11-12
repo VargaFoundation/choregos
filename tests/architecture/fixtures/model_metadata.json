@@ -13515,5 +13515,402 @@
     ]
    ]
   ]
+ },
+ "agent_notifications": {
+  "columns": [
+   {
+    "name": "org_id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "user_id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "agent_id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "related_agent_id",
+    "type": "String(length=36)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "kind",
+    "type": "String(length=24)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "actor",
+    "type": "String(length=200)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "detail",
+    "type": "Json()",
+    "nullable": false,
+    "default": "<function dict>",
+    "server_default": null
+   },
+   {
+    "name": "read_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": "<function uuid7>",
+    "server_default": null
+   },
+   {
+    "name": "created_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": false,
+    "default": "<function utcnow>",
+    "server_default": "<sqlalchemy.sql.functions.now; now>"
+   },
+   {
+    "name": "updated_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": false,
+    "default": "<function utcnow>",
+    "server_default": "<sqlalchemy.sql.functions.now; now>"
+   }
+  ],
+  "primary_key": [
+   "id"
+  ],
+  "foreign_keys": [
+   [
+    [
+     "agent_id"
+    ],
+    [
+     "agents.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_agent_notifications_agent_id_agents"
+   ],
+   [
+    [
+     "org_id"
+    ],
+    [
+     "organizations.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_agent_notifications_org_id_organizations"
+   ],
+   [
+    [
+     "related_agent_id"
+    ],
+    [
+     "agents.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_agent_notifications_related_agent_id_agents"
+   ],
+   [
+    [
+     "user_id"
+    ],
+    [
+     "users.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_agent_notifications_user_id_users"
+   ]
+  ],
+  "uniques": [],
+  "checks": [],
+  "indexes": [
+   [
+    "ix_agent_notifications_agent_id",
+    [
+     "agent_notifications.agent_id"
+    ],
+    false
+   ],
+   [
+    "ix_agent_notifications_org_id",
+    [
+     "agent_notifications.org_id"
+    ],
+    false
+   ],
+   [
+    "ix_agent_notifications_user_read",
+    [
+     "agent_notifications.user_id",
+     "agent_notifications.read_at"
+    ],
+    false
+   ]
+  ]
+ },
+ "agent_stars": {
+  "columns": [
+   {
+    "name": "org_id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "agent_id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "user_id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": "<function uuid7>",
+    "server_default": null
+   },
+   {
+    "name": "created_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": false,
+    "default": "<function utcnow>",
+    "server_default": "<sqlalchemy.sql.functions.now; now>"
+   },
+   {
+    "name": "updated_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": false,
+    "default": "<function utcnow>",
+    "server_default": "<sqlalchemy.sql.functions.now; now>"
+   }
+  ],
+  "primary_key": [
+   "id"
+  ],
+  "foreign_keys": [
+   [
+    [
+     "agent_id"
+    ],
+    [
+     "agents.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_agent_stars_agent_id_agents"
+   ],
+   [
+    [
+     "org_id"
+    ],
+    [
+     "organizations.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_agent_stars_org_id_organizations"
+   ],
+   [
+    [
+     "user_id"
+    ],
+    [
+     "users.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_agent_stars_user_id_users"
+   ]
+  ],
+  "uniques": [
+   [
+    "uq_agent_stars_agent_user",
+    [
+     "agent_id",
+     "user_id"
+    ]
+   ]
+  ],
+  "checks": [],
+  "indexes": [
+   [
+    "ix_agent_stars_agent_id",
+    [
+     "agent_stars.agent_id"
+    ],
+    false
+   ],
+   [
+    "ix_agent_stars_org_id",
+    [
+     "agent_stars.org_id"
+    ],
+    false
+   ],
+   [
+    "ix_agent_stars_user_id",
+    [
+     "agent_stars.user_id"
+    ],
+    false
+   ]
+  ]
+ },
+ "agent_watches": {
+  "columns": [
+   {
+    "name": "org_id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "agent_id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "user_id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "level",
+    "type": "String(length=16)",
+    "nullable": false,
+    "default": "'all'",
+    "server_default": "'all'"
+   },
+   {
+    "name": "id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": "<function uuid7>",
+    "server_default": null
+   },
+   {
+    "name": "created_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": false,
+    "default": "<function utcnow>",
+    "server_default": "<sqlalchemy.sql.functions.now; now>"
+   },
+   {
+    "name": "updated_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": false,
+    "default": "<function utcnow>",
+    "server_default": "<sqlalchemy.sql.functions.now; now>"
+   }
+  ],
+  "primary_key": [
+   "id"
+  ],
+  "foreign_keys": [
+   [
+    [
+     "agent_id"
+    ],
+    [
+     "agents.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_agent_watches_agent_id_agents"
+   ],
+   [
+    [
+     "org_id"
+    ],
+    [
+     "organizations.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_agent_watches_org_id_organizations"
+   ],
+   [
+    [
+     "user_id"
+    ],
+    [
+     "users.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_agent_watches_user_id_users"
+   ]
+  ],
+  "uniques": [
+   [
+    "uq_agent_watches_agent_user",
+    [
+     "agent_id",
+     "user_id"
+    ]
+   ]
+  ],
+  "checks": [],
+  "indexes": [
+   [
+    "ix_agent_watches_agent_id",
+    [
+     "agent_watches.agent_id"
+    ],
+    false
+   ],
+   [
+    "ix_agent_watches_org_id",
+    [
+     "agent_watches.org_id"
+    ],
+    false
+   ],
+   [
+    "ix_agent_watches_user_id",
+    [
+     "agent_watches.user_id"
+    ],
+    false
+   ]
+  ]
  }
 }
