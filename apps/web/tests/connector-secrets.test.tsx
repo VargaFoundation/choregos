@@ -52,11 +52,11 @@ const jira = {
 } as unknown as ConnectorType;
 
 const declared: OrgConnector = {
-  name: "diametral-sharepoint",
+  name: "globex-sharepoint",
   kind: "documents",
   type: "sharepoint",
   config: { tenant_id: "acme" },
-  secret_refs: { client_secret: "store:connector/diametral-sharepoint/client_secret" },
+  secret_refs: { client_secret: "store:connector/globex-sharepoint/client_secret" },
   secrets: [{ field: "client_secret", source: "store", version: 1, rotated_at: WHEN, rotated_by: "lea@acme.dev" }],
   status: "ok",
   operations: [],
@@ -82,7 +82,7 @@ describe("admin connectors: secrets are typed once (S39-06d)", () => {
     api.orgConnectors.mockResolvedValue([]);
     wrap(<OrgConnectorsPage />);
     await screen.findByRole("option", { name: /SharePoint/ });
-    fireEvent.change(screen.getByPlaceholderText("entra-acme"), { target: { value: "diametral-sharepoint" } });
+    fireEvent.change(screen.getByPlaceholderText("entra-acme"), { target: { value: "globex-sharepoint" } });
     fireEvent.change(screen.getByRole("combobox"), { target: { value: "documents/sharepoint" } });
     const input = await screen.findByLabelText("client secret value");
     expect(input).toHaveAttribute("type", "password");
@@ -113,7 +113,7 @@ describe("admin connectors: secrets are typed once (S39-06d)", () => {
 
   it("shows a declared connector's secret as set and rotated, and replaces it", async () => {
     wrap(<OrgConnectorsPage />);
-    const panel = await screen.findByTestId("secrets-diametral-sharepoint");
+    const panel = await screen.findByTestId("secrets-globex-sharepoint");
     expect(within(panel).getByTestId("secret-state-client_secret")).toHaveTextContent(
       "set · rotated 3 days ago by lea@acme.dev",
     );
@@ -121,22 +121,22 @@ describe("admin connectors: secrets are typed once (S39-06d)", () => {
     fireEvent.change(within(panel).getByLabelText("client secret value"), { target: { value: VALUE } });
     fireEvent.click(within(panel).getByRole("button", { name: "Save" }));
     await waitFor(() =>
-      expect(api.setOrgConnectorSecret).toHaveBeenCalledWith("acme", "diametral-sharepoint", "client_secret", VALUE),
+      expect(api.setOrgConnectorSecret).toHaveBeenCalledWith("acme", "globex-sharepoint", "client_secret", VALUE),
     );
     expect(document.body.innerHTML).not.toContain(VALUE);
   });
 
   it("clears a secret, and edits the settings without touching it", async () => {
     wrap(<OrgConnectorsPage />);
-    const panel = await screen.findByTestId("secrets-diametral-sharepoint");
+    const panel = await screen.findByTestId("secrets-globex-sharepoint");
     fireEvent.click(within(panel).getByRole("button", { name: "Clear" }));
     await waitFor(() =>
-      expect(api.clearOrgConnectorSecret).toHaveBeenCalledWith("acme", "diametral-sharepoint", "client_secret"),
+      expect(api.clearOrgConnectorSecret).toHaveBeenCalledWith("acme", "globex-sharepoint", "client_secret"),
     );
     fireEvent.click(within(panel).getByRole("button", { name: "Edit settings" }));
     fireEvent.click(within(panel).getByRole("button", { name: "Save settings" }));
     await waitFor(() =>
-      expect(api.updateOrgConnector).toHaveBeenCalledWith("acme", "diametral-sharepoint", { config: { tenant_id: "acme" } }),
+      expect(api.updateOrgConnector).toHaveBeenCalledWith("acme", "globex-sharepoint", { config: { tenant_id: "acme" } }),
     );
   });
 });

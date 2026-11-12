@@ -2,7 +2,7 @@
 
 The list asked each installed plugin's source for its newest version: one index pull and signature check
 per plugin, at every listing. A source the deployment cannot reach answered after 20 s, and the list of
-four such plugins took 80 s on Diametral's dev and prod, past the ingress's minute: a 504. A remote
+four such plugins took 80 s on an operator's dev and prod, past the ingress's minute: a 504. A remote
 source's index is now read once per ten minutes, an unreadable one included, and the list is answered
 from what is already known.
 """

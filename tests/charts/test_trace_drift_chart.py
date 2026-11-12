@@ -81,7 +81,7 @@ def _namespace_of(rule: dict[str, Any]) -> str:
 
 
 def test_the_policies_open_tracing_where_the_endpoints_live() -> None:
-    """S40-20e: a platform whose Tempo is not in `monitoring` (the Diametral dev cluster: `tempo`)."""
+    """S40-20e: a platform whose Tempo is not in `monitoring` (one operator's dev cluster: `tempo`)."""
     docs = _docs(
         "global.tracing.otlpEndpoint=http://tempo.tempo.svc.cluster.local:4318",
         "global.tracing.tempoUrl=http://tempo.tempo.svc.cluster.local:3200",

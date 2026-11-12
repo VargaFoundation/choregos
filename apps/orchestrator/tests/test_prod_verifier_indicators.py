@@ -47,9 +47,7 @@ def tool_catalogue(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Any:
 
 
 def _config(tools: list[str]) -> ProjectConfig:
-    return ProjectConfig(
-        slug="sandbox-dev", org="diametral", tools=tools, dod={"facts": {"smoke_ok": "true"}}
-    )
+    return ProjectConfig(slug="sandbox-dev", org="globex", tools=tools, dod={"facts": {"smoke_ok": "true"}})
 
 
 def _verifier(mcp_servers: list[dict[str, Any]] | None = None, tools: dict[str, Any] | None = None) -> Any:
@@ -68,7 +66,7 @@ def _verifier(mcp_servers: list[dict[str, Any]] | None = None, tools: dict[str, 
 def _prompt(config: ProjectConfig, agent: Any) -> str:
     plan = SimpleNamespace(inputs=[], playbook=None, role="verify_prod")
     item = SimpleNamespace(
-        tracker_key="DiametralGroup/choregos-sandbox-dev#4",
+        tracker_key="globex/choregos-sandbox-dev#4",
         title="Total ignores credit notes",
         body_snapshot="",
         documents={},

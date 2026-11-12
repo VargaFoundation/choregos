@@ -43,4 +43,4 @@ def test_the_web_sets_no_default_organisation() -> None:
 
 
 def test_a_value_that_never_existed_does_not_come_back() -> None:
-    assert "NEXT_PUBLIC_DEFAULT_ORG" not in _env_du_web("global.defaultOrg=diametral")
+    assert "NEXT_PUBLIC_DEFAULT_ORG" not in _env_du_web("global.defaultOrg=globex")

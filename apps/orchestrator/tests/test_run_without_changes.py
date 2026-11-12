@@ -1,6 +1,6 @@
 """A run that changed nothing is judged on an EMPTY diff, not refused as "diff unavailable" (#536).
 
-On the dev tenant, `DiametralGroup/choregos-sandbox-dev#18` (`dev-simple`): the bug was already fixed
+On the dev tenant, `globex/choregos-sandbox-dev#18` (`dev-simple`): the bug was already fixed
 on `main`, the implement agent changed nothing and pushed no branch, the SCM answered 404 on the
 comparison, and `scope_respected` / `no_secrets` / `diff_size_max` refused three attempts in a row.
 """

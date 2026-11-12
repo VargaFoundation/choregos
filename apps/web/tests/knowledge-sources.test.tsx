@@ -148,15 +148,15 @@ describe("the sources of a base (S33-04)", () => {
 
   it("offers only the documents/sharepoint connectors, as a list to pick from", async () => {
     vi.mocked(api.orgConnectors).mockResolvedValue([
-      connector("diametral", "documents", "sharepoint"),
+      connector("globex", "documents", "sharepoint"),
       connector("entra-acme", "identity", "entra"),
       connector("wiki", "documents", "confluence"),
     ]);
     adding();
-    await screen.findByRole("option", { name: "diametral" });
+    await screen.findByRole("option", { name: "globex" });
     const list = screen.getByLabelText("documents connector");
     expect(list.tagName).toBe("SELECT");
-    expect([...list.querySelectorAll("option")].map((o) => o.textContent)).toEqual(["documents connector…", "diametral"]);
+    expect([...list.querySelectorAll("option")].map((o) => o.textContent)).toEqual(["documents connector…", "globex"]);
   });
 
   it("says so, with a link to declare one, when the organisation has none", async () => {
@@ -274,13 +274,13 @@ describe("the sources of a base (S33-04)", () => {
   it("adds a Confluence space or page tree through its connector (S39-20)", async () => {
     vi.mocked(api.createKnowledgeSource).mockResolvedValue(source);
     vi.mocked(api.orgConnectors).mockResolvedValue([
-      connector("diametral", "documents", "sharepoint"),
+      connector("globex", "documents", "sharepoint"),
       connector("wiki", "documents", "confluence"),
     ]);
     adding();
     fireEvent.change(screen.getByLabelText("source kind"), { target: { value: "confluence" } });
     await screen.findByRole("option", { name: "wiki" });
-    expect(screen.queryByRole("option", { name: "diametral" })).toBeNull();
+    expect(screen.queryByRole("option", { name: "globex" })).toBeNull();
     expect(screen.queryByLabelText("site or drive id")).toBeNull();
     fireEvent.change(screen.getByLabelText("documents connector"), { target: { value: "wiki" } });
     fireEvent.change(screen.getByLabelText("space key"), { target: { value: "ENG" } });

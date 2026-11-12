@@ -72,7 +72,7 @@ test("an owner installs an assistant with the form its config_schema draws", asy
   await page.getByLabel("Plugin").selectOption("coaching");
   await page.getByLabel("Assistant").selectOption("one-on-one-coach");
   // The defaults are in, the required field without one is asked for, the list of URLs is typed as a URL list.
-  await expect(page.getByLabel(/company name/i)).toHaveValue("Diametral");
+  await expect(page.getByLabel(/company name/i)).toHaveValue("Globex");
   await page.getByLabel(/hr contact/i).fill("hr@acme.test");
   await page.getByLabel(/embed origins/i).fill("https://scorecard.example.org, https://hr.example.org");
   // A oneOf of constants is a choice, a nullable integer a number field, a list of `$ref`'d objects an item list.
@@ -86,7 +86,7 @@ test("an owner installs an assistant with the form its config_schema draws", asy
     plugin: "coaching",
     assistant: "one-on-one-coach",
     config: {
-      company_name: "Diametral",
+      company_name: "Globex",
       hr_contact: "hr@acme.test",
       embed_origins: ["https://scorecard.example.org", "https://hr.example.org"],
       tone: "direct",

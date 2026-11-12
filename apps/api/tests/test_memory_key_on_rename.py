@@ -43,7 +43,7 @@ async def platform_admin(admin: str) -> Any:
 def test_the_key_is_the_slug_until_a_rename_pins_it() -> None:
     assert memory_key(SimpleNamespace(slug="varga", settings=None)) == "varga"
     assert memory_key(SimpleNamespace(slug="varga", settings={})) == "varga"
-    assert memory_key(SimpleNamespace(slug="diametral", settings={"memory_key": "varga"})) == "varga"
+    assert memory_key(SimpleNamespace(slug="globex", settings={"memory_key": "varga"})) == "varga"
     assert memory_key(SimpleNamespace(slug="x", settings={"memory_key": ""})) == "x"
 
 
@@ -64,11 +64,11 @@ async def test_a_global_memory_survives_a_rename_and_a_second_one(
     )
     assert await _seed_and_search(client, memory, "varga") == ["Pin TLS 1.2."]
 
-    renamed = await client.patch(f"{ORGS}/varga", json={"slug": "diametral", "name": "Diametral"})
+    renamed = await client.patch(f"{ORGS}/varga", json={"slug": "globex", "name": "Globex"})
     assert renamed.status_code == 200, renamed.text
-    assert await _seed_and_search(client, memory, "diametral") == ["Pin TLS 1.2."], "the memory followed"
+    assert await _seed_and_search(client, memory, "globex") == ["Pin TLS 1.2."], "the memory followed"
 
-    again = await client.patch(f"{ORGS}/diametral", json={"slug": "dia"})
+    again = await client.patch(f"{ORGS}/globex", json={"slug": "dia"})
     assert again.status_code == 200, again.text
     assert await _seed_and_search(client, memory, "dia") == ["Pin TLS 1.2."]
     assert set(memory.facts) == {"org:varga#memory:lessons"}, "nothing was ever written under another key"
@@ -105,6 +105,6 @@ async def test_an_old_slug_kept_as_a_memory_key_is_not_free(
     client: AsyncClient, admin: str, platform_admin: None, memory: FakeMemory
 ) -> None:
     """Else a new organisation named `varga` would read the renamed one's memories."""
-    assert (await client.patch(f"{ORGS}/varga", json={"slug": "diametral"})).status_code == 200
+    assert (await client.patch(f"{ORGS}/varga", json={"slug": "globex"})).status_code == 200
     taken = await client.post(ORGS, json={"slug": "varga", "name": "Another"})
     assert taken.status_code == 409, taken.text

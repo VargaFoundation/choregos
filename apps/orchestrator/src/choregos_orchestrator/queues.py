@@ -8,7 +8,7 @@ Temporal client, the API and the database. So the table described a split that n
 Temporal schedules on the *workflow's* queue when the call does not name one, and the
 `orchestrator` queue registers everything. The three specialised workers received nothing.
 
-It is not only an inefficiency. At Diametral, access to the Kubernetes API is opened by a Cilium
+It is not only an inefficiency. On one operator's platform, access to the Kubernetes API is opened by a Cilium
 policy aimed at `choregos/queue: executor`, the queue that, according to this table, creates the
 Jobs. With `start_run` actually running on `orchestrator`, the Job creation left from a pod with
 no egress right and timed out with `ConnectTimeout`: a run stuck in `queued`, a ticket in failure.

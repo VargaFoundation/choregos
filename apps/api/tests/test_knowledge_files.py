@@ -168,7 +168,7 @@ def _workbook() -> bytes:
     assert sheet is not None
     sheet.title = "Revenue"
     sheet.append(["Entity", "Revenue", "Margin", "Closed", None, "Note"])
-    sheet.append(["Diametral Group", 1234567.891, 0.1234, datetime.date(2025, 3, 1), None, "a | b"])
+    sheet.append(["Globex Corporation", 1234567.891, 0.1234, datetime.date(2025, 3, 1), None, "a | b"])
     sheet.append(["Doubled", "=B2*2", None, None, None, None])
     sheet["B2"].number_format = "#,##0.00"
     sheet["C2"].number_format = "0.0%"
@@ -195,7 +195,7 @@ def test_a_workbook_reads_as_figures_not_as_a_dataframe() -> None:
         "## Scratch (hidden)",
     ]
     # Numbers as the sheet shows them; the formula gives the value Excel saved; a pipe is escaped.
-    assert "| Diametral Group | 1,234,567.89 | 12.3% | 2025-03-01 |  | a \\| b |" in markdown
+    assert "| Globex Corporation | 1,234,567.89 | 12.3% | 2025-03-01 |  | a \\| b |" in markdown
     assert "| Doubled | 2,469,136 |" in markdown
     assert "| Rent | 1200 |" in markdown
 

@@ -11,7 +11,7 @@ const SHOTS = process.env.GITHUB_SHOTS;
 test("configure the scm GitHub connector without ever seeing an installation id", async ({ page }) => {
   await page.goto("/p/dev/settings/connections");
   const scm = page.getByTestId("connector-kind-scm");
-  await expect(scm.getByTestId("github-via")).toHaveText("via the Choregos App on DiametralGroup");
+  await expect(scm.getByTestId("github-via")).toHaveText("via the Choregos App on globex");
   await scm.getByRole("button", { name: "Edit" }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByTestId("github-repo-field")).toBeVisible();

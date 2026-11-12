@@ -9,7 +9,7 @@ const VALUE = "client-secret-AAAA-1111";
 
 test("declare a SharePoint connector with a typed secret, then replace it", async ({ page }) => {
   await page.goto("/admin/connectors");
-  await page.getByPlaceholder("entra-acme").fill("diametral-sharepoint");
+  await page.getByPlaceholder("entra-acme").fill("globex-sharepoint");
   await page.locator("label:has(span:text-is('Type')) select").selectOption({ label: "SharePoint / OneDrive — documents" });
   await page.getByLabel("tenant id").fill("acme");
   await page.getByLabel("client id").fill("choregos-kb");
@@ -19,7 +19,7 @@ test("declare a SharePoint connector with a typed secret, then replace it", asyn
   await page.getByRole("button", { name: "Declare" }).click();
 
   // It is declared, its secret is "set", and the value is nowhere in the page.
-  const panel = page.getByTestId("secrets-diametral-sharepoint");
+  const panel = page.getByTestId("secrets-globex-sharepoint");
   await expect(panel.getByTestId("secret-state-client_secret")).toContainText("set · rotated");
   expect(await page.content()).not.toContain(VALUE);
 

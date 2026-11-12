@@ -1,7 +1,7 @@
 """A delivered work item closes its tracker issue, naming its release (S22-28).
 
 Nothing anywhere closed an issue: `close_out` mirrored the terminal state and stopped there. On the
-dev tenant, `DiametralGroup/choregos-sandbox-dev#4` and `#6` went to production with the train
+dev tenant, `globex/choregos-sandbox-dev#4` and `#6` went to production with the train
 (`R-2026.10.10-1`, `R-2026.10.10-2`) and their GitHub issues stayed open.
 """
 

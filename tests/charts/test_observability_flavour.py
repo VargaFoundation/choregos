@@ -1,6 +1,6 @@
 """Does the chart know how to talk to the observability platform that hosts it?
 
-On 2026-09-26, Diametral's dev tenant had been running for an hour with a `ServiceMonitor`
+On 2026-09-26, an operator's dev tenant had been running for an hour with a `ServiceMonitor`
 and a `PrometheusRule` present in its namespace -- and **not one series collected, not one
 alert evaluated**. The platform runs on VictoriaMetrics: its operator does not watch the
 `monitoring.coreos.com` types. The objects were inert, and an inert object is worse than an
