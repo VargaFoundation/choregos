@@ -74,7 +74,9 @@ test("revoking is said to be final before it is done, and a deletion shows the A
   const summary = page.getByTestId("outpost-summary");
   await summary.getByRole("button", { name: "Delete" }).click();
   await summary.getByRole("button", { name: "Delete the outpost" }).click();
-  await expect(summary.getByRole("alert")).toContainText("is active: revoke it first");
+  // A connector of the demo routes to it (ADR 0149): the API refuses that first, and names it.
+  await expect(summary.getByRole("alert")).toContainText("still has connectors that route to it");
+  await expect(summary.getByRole("alert")).toContainText("tracker-onsite");
   await summary.getByRole("button", { name: "Cancel" }).click();
 
   await summary.getByRole("button", { name: "Revoke" }).click();
@@ -96,4 +98,47 @@ test("the recent calls read as states and refusal codes, never as a payload", as
   await expect(table.getByRole("row")).toHaveCount(3);
   await expect(table).toContainText("tool_not_allowed");
   await expect(table).not.toContainText("Answered");
+});
+
+test("a connector at an outpost: the outpost and its alias are chosen, and the request carries no URL and no secret", async ({ page }) => {
+  await page.goto("/admin/connectors");
+  await expect(page.getByTestId("route-tracker-onsite")).toContainText("at outpost: factory-floor/tracker");
+  const form = page.locator("#declare");
+  await form.getByPlaceholder("entra-acme").fill("warehouse-plant");
+  await form.getByLabel("Type").selectOption("mcp/mcp-outpost");
+  const fields = form.getByTestId("outpost-connector-fields");
+  await expect(fields).toContainText("No URL and no secret");
+  await fields.getByLabel("Outpost").selectOption("factory-floor");
+  await expect(fields.getByLabel("Endpoint").locator("option")).toHaveText(["—", "tracker", "warehouse"]);
+  await fields.getByLabel("Endpoint").selectOption("warehouse");
+  await form.getByRole("button", { name: "Declare" }).click();
+  await expect(page.getByTestId("connector-warehouse-plant")).toContainText("at outpost: factory-floor/warehouse");
+  const [sent] = await writes(page, /\/orgs\/acme\/connectors$/);
+  expect(sent?.body).toEqual({ name: "warehouse-plant", type: "mcp-outpost", kind: "mcp", config: { outpost: "factory-floor", endpoint: "warehouse" } });
+});
+
+test("discovering where nobody polls says the outpost is offline; an outpost that announces no alias yet lets it be typed", async ({ page }) => {
+  await page.goto("/admin/connectors");
+  const card = page.getByTestId("connector-erp-branch");
+  await card.getByRole("button", { name: "Discover" }).click();
+  const refusal = card.getByTestId("outpost-route-refusal");
+  await expect(refusal).toContainText("The outpost is offline");
+  await expect(refusal).toContainText("outpost_offline");
+  await expect(refusal).toContainText("Alias erp");
+  const form = page.locator("#declare");
+  await form.getByLabel("Type").selectOption("mcp/mcp-outpost");
+  const fields = form.getByTestId("outpost-connector-fields");
+  await fields.getByLabel("Outpost").selectOption("branch-office");
+  await expect(fields).toContainText("No instance of branch-office announces an endpoint yet");
+  await expect(fields.getByLabel("Endpoint")).toBeEditable();
+});
+
+test("an agent's access tab says where a tool lives, and that one outpost is online and the other offline", async ({ page }) => {
+  await page.goto("/agents/onboarding-coordinator?tab=access");
+  const online = page.getByTestId("tool-connector-tracker-onsite__search_issues").getByTestId("tool-outpost");
+  await expect(online).toContainText("At the outpost factory-floor, alias tracker");
+  await expect(online).toContainText("Online");
+  const offline = page.getByTestId("tool-connector-erp-branch__stock_level").getByTestId("tool-outpost");
+  await expect(offline).toContainText("At the outpost branch-office, alias erp");
+  await expect(offline).toContainText("Offline");
 });

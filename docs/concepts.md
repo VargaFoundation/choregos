@@ -99,7 +99,9 @@ before the ADR runs as it did. The project only tightens; it never widens a vers
 allowed is not offered, and calling it answers 404 like an unknown tool. The platform's own tools (the
 frame) are always there. `GET /orgs/{org}/agents/{slug}/access?project=` shows the result with an origin
 for each item (`agent`, `project`, `frame`, `refused` and why), and which parts the version still
-inherits. The run and that page read the same function.
+inherits. The run and that page read the same function. A tool that lives at an outpost also says where:
+the outpost, the alias, and whether it is online now, so that a tool that will not answer is seen before a
+run ([ADR 0149](adr/0149-a-tool-may-live-at-an-outpost.md) §10).
 
 ## Agent kinds and runtimes
 

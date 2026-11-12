@@ -188,6 +188,7 @@ import type {
   OutpostInstanceApprove,
   OutpostInstanceList,
   OutpostList,
+  OutpostRefusalCode,
   NetworkActivity,
   ProjectNetwork,
   ProjectDto,
@@ -275,6 +276,12 @@ export type Problem = {
   connectors?: string[];
   /** The outpost a 409 of `OutpostConflict` concerns (ADR 0147), when it names one. */
   outpost?: string;
+  /** The alias a refusal of a connector at an outpost was for (ADR 0149 §7). */
+  endpoint?: string;
+  /** `outpost_refused`: the outpost's own code for why it did not make the call (ADR 0147 §10). */
+  refusal?: OutpostRefusalCode;
+  /** Seconds before asking again, on a 429 (an outpost's quota at discovery, ADR 0148 §10). */
+  retry_after?: number;
 };
 
 export class ApiError extends Error {

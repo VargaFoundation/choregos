@@ -210,6 +210,7 @@ export type {
   AgentAccess,
   AgentAccessModel,
   AgentAccessTool,
+  AgentAccessOutpost,
   AgentAccessItem,
   AgentAccessOrigin,
   AgentComponent,
@@ -343,6 +344,7 @@ export type {
   OutpostInstanceList,
   OutpostInstanceStatus,
   OutpostList,
+  OutpostRefusalCode,
   OutpostStatus,
 } from "@choregos/contracts/api";
 

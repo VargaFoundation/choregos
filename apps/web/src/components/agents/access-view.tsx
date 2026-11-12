@@ -6,7 +6,8 @@ import { usePathname, useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { Alert, Badge, Card, Empty, ErrorNote, Field, LEGENDE, ReadState, Select } from "@/components/ui";
 import { api } from "@/lib/api";
-import type { AgentAccess, AgentAccessItem, AgentAccessOrigin, AgentAccessTool, AgentComponent } from "@/lib/types";
+import { reachability } from "@/lib/outposts";
+import type { AgentAccess, AgentAccessItem, AgentAccessOrigin, AgentAccessOutpost, AgentAccessTool, AgentComponent } from "@/lib/types";
 
 /**
  * What an agent reaches in one project, in the five components of its definition (ADR 0127, S60-03):
@@ -50,6 +51,32 @@ function Why({ reason }: { reason?: string | null }) {
   return reason ? <span className="block text-xs text-ink-muted">{reason}</span> : null;
 }
 
+/**
+ * Where a connector tool reached through an outpost lives (ADR 0149 §10): the outpost and the alias, and
+ * whether it would answer now. Offline, a call fails at once: the person reads it before a run.
+ */
+function AtOutpost({ outpost }: { outpost: AgentAccessOutpost }) {
+  return (
+    <span className="flex basis-full flex-wrap items-baseline gap-x-2 text-xs text-ink-muted" data-testid="tool-outpost">
+      <span>
+        {outpost.name ? (
+          <>
+            At the outpost <code data-verbatim>{outpost.name}</code>
+          </>
+        ) : (
+          "At no outpost of the organisation"
+        )}
+        , alias <code data-verbatim>{outpost.endpoint}</code>
+      </span>
+      {reachability(outpost).map((said) => (
+        <Badge key={said.label} tone={said.tone} variant="plain">
+          {said.label}
+        </Badge>
+      ))}
+    </span>
+  );
+}
+
 function ToolRow({ tool }: { tool: AgentAccessTool }) {
   return (
     <li className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm" data-testid={`tool-${tool.source}-${tool.name}`}>
@@ -57,6 +84,7 @@ function ToolRow({ tool }: { tool: AgentAccessTool }) {
       <OriginBadge origin={tool.origin} />
       {tool.access && <span className="text-xs text-ink-muted">{tool.access}</span>}
       <Why reason={tool.reason} />
+      {tool.outpost && <AtOutpost outpost={tool.outpost} />}
     </li>
   );
 }

@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
  * The demo's outposts (ADR 0147), answering as the management API does: one outpost in service with
- * an approved instance and one that waits for approval, one paused, their recent calls as digests,
- * and the API's own refusals (a slug taken, a fingerprint that differs, an outpost that is not
- * revoked or still in use).
+ * an approved instance and one that waits for approval, one paused, one created and never enrolled,
+ * their recent calls as digests, and the API's own refusals (a slug taken, a fingerprint that differs,
+ * an outpost that is not revoked or still in use). The connectors at an outpost (ADR 0149) are the
+ * organisation's of type `mcp-outpost`: declaring, editing and discovering one meets the refusals of
+ * its route, and an agent's access says where its tools live.
  *
  * Nothing dials in here: there is no daemon in a demo. So that the enrolment can be followed to its
  * end, an instance "enrols" by itself a moment after a token is issued: it is there, pending, the next
@@ -11,6 +13,7 @@
  */
 import { ApiError } from "@/lib/api";
 import type {
+  AgentAccessOutpost,
   OrgConnector,
   Outpost,
   OutpostCallPage,
@@ -75,6 +78,18 @@ const outposts: Stored[] = [
     epoch: 0,
     created_by: "augustin@acme.dev",
     created_at: iso(60 * 24 * 3),
+    enrolling: false,
+  },
+  {
+    // Created before its operator installed anything: no instance, so it announces no endpoint yet.
+    id: drawn("branch-office", 32, HEX),
+    slug: "branch-office",
+    display_name: "Branch office",
+    status: "active",
+    capabilities: ["tools"],
+    epoch: 0,
+    created_by: "augustin@acme.dev",
+    created_at: iso(60 * 6),
     enrolling: false,
   },
 ];
@@ -318,6 +333,91 @@ function page(outpost: Stored, query: string): OutpostCallPage {
   const items = all.slice(offset, offset + limit);
   const more = offset + limit < all.length;
   return { items, meta: { next_cursor: more ? String(offset + limit) : null, has_more: more } };
+}
+
+// ─── connectors at an outpost (ADR 0149) ───
+
+const ALIAS = /^[a-z][a-z0-9-]{0,62}$/;
+/** The tools the demo's servers declare read-only; every other one is a write. */
+const READS = new Set(["search_issues", "get_issue", "stock_level"]);
+
+function routeRefusal(code: string, detail: string, outpost: string, endpoint: string, extra: Record<string, unknown> = {}): ApiError {
+  return conflict(code, detail, { outpost, endpoint, ...extra });
+}
+
+/**
+ * A declaration or an edit of a connector at an outpost, judged as the API judges it: an outpost of the
+ * organisation enabled for tools (a 422 that names `body.config.outpost`), an alias, never an address
+ * (a 422), and an outpost that is handed calls (a 409 `outpost_paused`). An instance need not be there.
+ */
+export function checkOutpostConnector(config: Record<string, unknown> | undefined): void {
+  const named = String(config?.outpost ?? "");
+  const endpoint = String(config?.endpoint ?? "");
+  const extra = Object.keys(config ?? {}).filter((key) => !["outpost", "endpoint", "timeout_s"].includes(key));
+  if (extra.length > 0)
+    throw new ApiError(422, {
+      title: "Unprocessable entity",
+      detail: `${extra.map((key) => `\`${key}\``).join(", ")} has no place in an \`mcp-outpost\` connector: it stores only \`outpost\`, \`endpoint\` and \`timeout_s\``,
+    });
+  if (!ALIAS.test(endpoint))
+    throw new ApiError(422, { title: "Unprocessable entity", detail: "`endpoint` is the alias of an endpoint in the outpost's policy file, never an address" });
+  const outpost = outposts.find((o) => o.slug === named);
+  if (!outpost || !outpost.capabilities.includes("tools")) {
+    const detail = outpost ? `the outpost \`${named}\` is not enabled for tools: it serves no connector` : `\`${named}\` is not an outpost of acme: an administrator creates it first`;
+    throw new ApiError(422, { title: "Unprocessable entity", detail, errors: [{ loc: ["body", "config", "outpost"], msg: detail }] });
+  }
+  if (outpost.status !== "active") {
+    const resumed = outpost.status === "paused" ? "an administrator resumes it" : "that is final";
+    throw routeRefusal("outpost_paused", `the outpost \`${outpost.slug}\` is ${outpost.status}: it is handed nothing (${resumed})`, outpost.slug, endpoint);
+  }
+}
+
+/** Whether an instance that serves the alias polled lately: the presence the route reads. */
+function serves(outpost: Stored, endpoint: string): boolean {
+  return seenNow(outpost).some((i) => i.status === "active" && i.online && i.endpoints.includes(endpoint));
+}
+
+/**
+ * Discovery through an outpost: the route's refusals first (paused, offline), then the tools of the
+ * alias, each born closed. The demo's servers answer for the aliases its instances announce.
+ */
+export function discoverAtOutpost(connector: OrgConnector): { added: string[]; changed: string[]; removed: string[]; unchanged: number } {
+  const named = String(connector.config?.outpost ?? "");
+  const endpoint = String(connector.config?.endpoint ?? "");
+  const outpost = outposts.find((o) => o.slug === named);
+  if (!outpost || outpost.status !== "active") {
+    const detail = outpost
+      ? `the outpost \`${outpost.slug}\` is ${outpost.status}: it is handed nothing`
+      : `\`${connector.name}\` names the outpost \`${named}\`, which its organisation does not have`;
+    throw routeRefusal("outpost_paused", detail, named, endpoint);
+  }
+  if (!serves(outpost, endpoint)) {
+    const online = seenNow(outpost).some((i) => i.online);
+    const missing = online ? `no instance of it that serves \`${endpoint}\`` : "no instance of it";
+    throw routeRefusal(
+      "outpost_offline",
+      `the outpost \`${outpost.slug}\` is offline: ${missing} polled within the poll window, and nothing reached its server`,
+      outpost.slug,
+      endpoint,
+    );
+  }
+  const known = new Set((connector.operations ?? []).map((o) => o.name));
+  const tools = endpoint === "warehouse" ? ["stock_level", "reserve_stock"] : ["search_issues", "get_issue", "create_issue"];
+  for (const tool of tools) {
+    if (!known.has(tool)) (connector.operations ??= []).push({ name: tool, access: READS.has(tool) ? "read" : "write", policy: "forbidden", groups: [] });
+  }
+  return { added: tools.filter((tool) => !known.has(tool)), changed: [], removed: [], unchanged: tools.filter((tool) => known.has(tool)).length };
+}
+
+/**
+ * Where a connector at an outpost lives, as an agent's access says it (ADR 0149 §10): the outpost it
+ * routes to, its alias, its status, and whether an instance that serves the alias polled lately.
+ */
+export function whereItLivesNow(connector: OrgConnector): AgentAccessOutpost {
+  const endpoint = String(connector.config?.endpoint ?? "");
+  const outpost = outposts.find((o) => o.slug === connector.config?.outpost);
+  if (!outpost) return { name: null, endpoint, status: null, online: false };
+  return { name: outpost.slug, endpoint, status: outpost.status, online: serves(outpost, endpoint) };
 }
 
 /** The twelve management routes of `/orgs/{org}/outposts…`; `undefined` for any other path. */
