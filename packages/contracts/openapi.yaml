@@ -1432,7 +1432,31 @@ paths:
         content: { application/json: { schema: { $ref: "#/components/schemas/DecisionRequest" } } }
       responses:
         "202": { description: Decision passed on to the workflow, content: { application/json: { schema: { $ref: "#/components/schemas/HumanRequest" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "409": { $ref: "#/components/responses/Conflict" }
+  /work-items/{id}/human-requests/{request_id}/assignee:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+      - { name: request_id, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [work-items]
+      operationId: reassignHumanRequest
+      description: >-
+        An organisation administrator readdresses a waiting human request (ADR 0153): to a person
+        (`user`, a member of the organisation), a group, or both — the person first, the group once
+        the request's SLA has passed. The override is kept on the request and replaces the workflow's
+        actor for this request only; the workflow does not change. Audited as
+        `workitem.request.reassign`, with who it was addressed to before and after, and the reason.
+        403 for anyone but an organisation administrator; 409 once the request is decided.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AssigneeChange" } } }
+      responses:
+        "200": { description: The request, readdressed, content: { application/json: { schema: { $ref: "#/components/schemas/HumanRequest" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /work-items/{id}/actions:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     post:
@@ -6836,6 +6860,7 @@ components:
         role: { type: [string, "null"], description: "The role of an agent, job or decision actor." }
         model: { type: [string, "null"], description: "The model or profile of an agent actor, as written (`profile:standard`); the catalogue entry of a decision actor (`platform/decide`)." }
         group: { type: [string, "null"], description: The group of a human actor. }
+        user: { type: [string, "null"], description: "The person a human actor names, by e-mail (ADR 0153): asked first, before the group." }
         sla_hours: { type: [integer, "null"], description: The SLA of a human actor. }
         command: { type: [array, "null"], items: { type: string }, description: The argv of a job actor. }
         image: { type: [string, "null"], description: The image name of a job actor. }
@@ -10653,6 +10678,28 @@ components:
         decided_by: { type: [string, "null"] }
         decided_at: { type: [string, "null"], format: date-time }
         decision: { type: [object, "null"], additionalProperties: true }
+        assignee:
+          oneOf:
+            - $ref: "#/components/schemas/HumanRequestAssignee"
+            - type: "null"
+          description: >-
+            Who the request is addressed to (ADR 0153): the workflow's human actor, or an organisation
+            administrator's reassignment. Null when the step names nobody.
+    HumanRequestAssignee:
+      type: object
+      description: Who a waiting request is addressed to — a person, a group, or a person first (ADR 0153).
+      properties:
+        user: { type: [string, "null"], description: "The person, by e-mail, lowercase." }
+        group: { type: [string, "null"], description: "The group, resolved for the project (`{project}` replaced)." }
+        reassigned: { type: boolean, default: false, description: An organisation administrator reassigned the request. }
+    AssigneeChange:
+      type: object
+      required: [reason]
+      description: "A waiting request readdressed (ADR 0153): a person, a group, or both, and why."
+      properties:
+        user: { type: [string, "null"], minLength: 3, maxLength: 254, pattern: "^[^@\\s]+@[^@\\s]+$", description: "A member of the organisation, by e-mail." }
+        group: { type: [string, "null"], minLength: 1, maxLength: 200, description: "A group; `{project}` names the work item's project." }
+        reason: { type: string, minLength: 1, maxLength: 2000, description: Why — kept in the audit log. }
     WorkItemAction:
       type: object
       required: [action]

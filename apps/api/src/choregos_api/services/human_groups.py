@@ -56,7 +56,7 @@ async def group_of_the_step(session: AsyncSession, item: WorkItem, transition_id
     for transition in workflow.transitions:
         if transition.key == transition_id:
             actor = workflow.actor_of(transition)
-            if isinstance(actor, HumanActor) and actor.group.strip():
+            if isinstance(actor, HumanActor) and actor.group and actor.group.strip():
                 slug = (
                     await session.execute(select(Project.slug).where(Project.id == item.project_id))
                 ).scalar_one_or_none()
@@ -101,7 +101,7 @@ def unknown_group_warnings(
     without one, a per-project group counts as known when some project's group matches it (S59-01)."""
     issues = []
     for actor_id, actor in workflow.actors.items():
-        if not isinstance(actor, HumanActor) or not actor.group.strip():
+        if not isinstance(actor, HumanActor) or not actor.group or not actor.group.strip():
             continue
         group = group_for(actor.group, project_slug)
         if (group in known) if project_slug else matches_some(group, known):

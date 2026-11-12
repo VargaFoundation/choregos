@@ -3571,9 +3571,18 @@ workflow, one agent or one kind (runs, sessions); a project's *Activity* entry o
 narrowed to it (`/activity?project=<slug>`). The list follows what happens live. You see only the
 entries of the projects you can read.
 
+Conversation **turns** are listed too (`kind=turn`): one entry per conversation, `running` while a turn
+is in flight, then `completed`, `cancelled` or `failed` for an hour once it ended, with its agent, its
+model, its assistant (the installation's id) and its tokens and cost so far. A turn is seen by the
+person whose conversation it is, who may stop it, and by whoever audits its assistant
+(`assistant:audit`: its owners, the administrator, the privacy officers), who sees that it runs and what
+it spends, never what is said. The `assistant` filter (an installation's id) keeps only that assistant's
+turns.
+
 ```bash
 curl "$API/orgs/acme/activity?project=billing&agent=developer"   # {"in_flight": [...], "finished": [...]}
 curl -N "$API/orgs/acme/activity/stream?kind=run"                  # the same entries, as server-sent events
+curl "$API/orgs/acme/activity?kind=turn&assistant=$INSTALLATION_ID"  # one assistant's turns
 ```
 
 Every stop asks **why** (1 to 500 characters), and the reason is audited with who asked
@@ -3594,13 +3603,27 @@ Every stop asks **why** (1 to 500 characters), and the reason is audited with wh
   person) and its open sessions are closed. The answer counts what was stopped and lists what could not
   be stopped yet, which the reconciliation retries. *Reactivate* resumes the agent and restarts nothing
   on its own. Stopping an agent that is already suspended stops what is still running and is audited
-  again.
+  again. The turns in flight of its conversations, whoever's they are, are cancelled as for an
+  assistant (below); the conversations themselves are not closed.
 - **Stop an assistant** (*Stop the assistant…* on its installation page, or
-  `POST /orgs/{org}/assistants/{slug}/stop`; `assistant:manage`). The installation reads `suspended`
-  until it is resumed, whatever its readiness says, so no new turn starts; every turn its conversations
-  are taking is cancelled at its next model or tool call, its spend booked. The conversations stay open
-  to their people. The answer counts the turns cancelled. While it is stopped, the page says who stopped
-  it, when and why, and offers **Resume** (`POST .../resume`), which restarts nothing on its own.
+  `POST /orgs/{org}/assistants/{slug}/stop` with `{"reason": "..."}`;
+  `assistant:manage`: the organisation's administrator and the assistant's owner groups). The assistant
+  is marked stopped (who, when, why: `stopped` on the assistant) and reads `suspended` until it is
+  resumed, whatever its readiness says, so no new turn starts. Every turn its conversations are taking
+  is cancelled at its next model or tool call, on whichever API replica runs it: its spend is booked
+  once and its key revoked, as when its person cancels it. The conversations stay open: their people
+  read them meanwhile and continue them once the assistant is resumed. The answer counts the turns
+  cancelled (`turns_cancelled`). **Resume** with `POST /orgs/{org}/assistants/{slug}/resume`: the stop
+  is cleared, the status is derived again (`ready` when nothing is missing), and nothing stopped
+  restarts on its own (the page shows who stopped it, when and why, and its **Resume** button); resuming an assistant that is not stopped answers `409`. Both are audited
+  (`assistant.stop` with the reason, `assistant.resume`). Stopping a stopped assistant keeps the first
+  stop, cancels what still runs and is audited again.
+
+```bash
+curl -X POST "$API/orgs/acme/assistants/coach/stop" -d '{"reason": "quotes a stale price list"}'
+# {"slug": "coach", "status": "suspended", "turns_cancelled": 2, "not_stopped": []}
+curl -X POST "$API/orgs/acme/assistants/coach/resume"    # the assistant, `ready` again
+```
 
 A conversation turn on the Activity screen says its assistant and the person whose conversation it is;
 it has no Stop of its own: its assistant's stop (or its agent's) is the stop. A click on the assistant,

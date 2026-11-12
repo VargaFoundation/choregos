@@ -2395,6 +2395,27 @@
     "type": "DateTime(timezone=True)"
    },
    {
+    "default": null,
+    "name": "stopped_at",
+    "nullable": true,
+    "server_default": null,
+    "type": "DateTime(timezone=True)"
+   },
+   {
+    "default": null,
+    "name": "stopped_by",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=320)"
+   },
+   {
+    "default": null,
+    "name": "stopped_reason",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=500)"
+   },
+   {
     "default": "<function uuid7>",
     "name": "id",
     "nullable": false,
@@ -5608,6 +5629,13 @@
    {
     "default": null,
     "name": "decision",
+    "nullable": true,
+    "server_default": null,
+    "type": "Json()"
+   },
+   {
+    "default": null,
+    "name": "assignee",
     "nullable": true,
     "server_default": null,
     "type": "Json()"

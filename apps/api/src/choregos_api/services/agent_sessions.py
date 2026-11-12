@@ -534,7 +534,10 @@ async def respond(
     #: What the response asked for, said when its booking fails after the calls were made.
     made = {"model_calls": 0, "tool_calls": 0}
 
+    from .conversation_turns import cancel_if_requested
+
     async def complete(body: dict[str, Any]) -> dict[str, Any]:
+        await cancel_if_requested(session, record)  # a turn asked to stop ends before its next call
         # Up to 300 s: the request's transaction does not wait for it on a pooled connection.
         async with (
             outside_the_transaction(session),
@@ -567,6 +570,7 @@ async def respond(
     identities = await identities_of(session, record, spec)
 
     async def call_tool(name: str, arguments: dict[str, Any]) -> str:
+        await cancel_if_requested(session, record)
         made["tool_calls"] += 1
         if extras.serves(name):
             return await extras.call(session, name, arguments)

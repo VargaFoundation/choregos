@@ -31,6 +31,7 @@ from ..db.models import (
 from ..errors import upstream
 from ..rbac import Principal
 from ..schemas import (
+    HumanRequestAssignee,
     HumanRequestDto,
     ReleaseDto,
     ReleaseItemDto,
@@ -49,6 +50,7 @@ from ..temporal import get_temporal, interpreter_id
 from .costs import estimate_cost
 from .definitions import work_item_workflow, workflow_model
 from .events import persist_event
+from .human_assignee import StepAssignee, actor_of_the_step, assignee_from_actor, assignee_of_row
 from .initiator import of_principal
 from .routing import WorkItemBirth, new_work_item, verify_birth
 from .work_item_repository import repository_view
@@ -151,7 +153,10 @@ async def tool_connectors_of(session: AsyncSession, run: Run, project: Project) 
     return sorted(seen.values(), key=lambda c: c.name)
 
 
-def human_request_dto(row: HumanRequest) -> HumanRequestDto:
+def human_request_dto(row: HumanRequest, assignee: StepAssignee | None = None) -> HumanRequestDto:
+    """The request as the API shows it; `assignee` is who the workflow addresses it to, replaced by an
+    administrator's reassignment when the row carries one (ADR 0153)."""
+    who = assignee_of_row(row) or assignee
     return HumanRequestDto(
         id=row.id,
         work_item_id=row.work_item_id,
@@ -163,6 +168,7 @@ def human_request_dto(row: HumanRequest) -> HumanRequestDto:
         decided_by=row.decided_by,
         decided_at=row.decided_at,
         decision=row.decision,
+        assignee=HumanRequestAssignee(**who.as_dict()) if who else None,
     )
 
 
@@ -223,7 +229,14 @@ async def work_item_dto(
         failure=WorkflowFailure(**item.failure) if item.failure else None,
         paused=item.paused,
         current_run=run_summary(current) if current else None,
-        pending_request=human_request_dto(pending) if pending else None,
+        pending_request=(
+            human_request_dto(
+                pending,
+                assignee_from_actor(actor_of_the_step(workflow, pending.transition_id), project.slug),
+            )
+            if pending
+            else None
+        ),
         pr_url=item.pr_url,
         repository=repository,
         repository_fixed=repository_fixed,
