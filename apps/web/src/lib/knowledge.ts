@@ -123,7 +123,7 @@ export const CREDENTIAL_HEADER = /auth|cookie|token|key|secret|session|password|
 /** The configuration a source form sends, by kind. */
 export function sourceConfig(
   kind: "sharepoint" | "confluence" | "web" | "git",
-  fields: { site: string; folder: string; url: string; ref: string; paths: string; space?: string; pageId?: string; attachments?: boolean; exclude?: string; descendants?: boolean; pageOnly?: boolean; depth?: string; maxPages?: string; documents?: boolean; headers?: string },
+  fields: { site: string; folder: string; url: string; ref: string; paths: string; space?: string; pageId?: string; attachments?: boolean; exclude?: string; descendants?: boolean; pageOnly?: boolean; depth?: string; maxPages?: string; documents?: boolean; headers?: string; githubApp?: boolean },
 ): Record<string, unknown> {
   if (kind === "confluence") {
     const ids = pageIdsOf(fields.pageId ?? "");
@@ -159,8 +159,28 @@ export function sourceConfig(
     url: fields.url.trim(),
     ref: fields.ref.trim() || "main",
     paths: fields.paths.split(",").map((p) => p.trim()).filter(Boolean),
+    ...(fields.githubApp ? { github_app: true } : {}),
   };
 }
+
+/** True for an https github.com repository address: the only one the GitHub App can read. */
+export function isGithubUrl(url: string): boolean {
+  try {
+    const u = new URL(url.trim());
+    return u.protocol === "https:" && u.hostname.toLowerCase() === "github.com";
+  } catch {
+    return false;
+  }
+}
+
+/** The App is offered for a git source on github.com, to an organisation administrator, and not behind a connector. */
+export function githubAppOffered(kind: string, url: string, admin: boolean, connector?: string | null): boolean {
+  return admin && !connector && kind === "git" && isGithubUrl(url);
+}
+
+export const GITHUB_APP_LABEL = "Read through the GitHub App";
+export const GITHUB_APP_HELP =
+  "The App reads with a one-hour, read-only token, and only repositories of an installation this organisation claimed (Settings, Connections).";
 
 const FAILURES: Record<string, string> = {
   too_large: "the base is too large to read in one distillation: leave the biggest documents out",

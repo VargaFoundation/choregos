@@ -8,7 +8,7 @@ import type { KnowledgeSource, OrgConnector } from "@/lib/types";
 
 vi.mock("@/lib/api", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/api")>();
-  return { ...real, api: { ...real.api, orgConnectors: vi.fn(), createKnowledgeSource: vi.fn(), updateKnowledgeSource: vi.fn(), syncKnowledgeBase: vi.fn(), syncKnowledgeSource: vi.fn(), deleteKnowledgeSource: vi.fn() } };
+  return { ...real, api: { ...real.api, me: vi.fn(), orgConnectors: vi.fn(), createKnowledgeSource: vi.fn(), updateKnowledgeSource: vi.fn(), syncKnowledgeBase: vi.fn(), syncKnowledgeSource: vi.fn(), deleteKnowledgeSource: vi.fn() } };
 });
 
 const source: KnowledgeSource = {
@@ -473,5 +473,105 @@ describe("a readable sources card", () => {
     expect(screen.getByTestId("knowledge-sources")).toHaveTextContent("Architecture site");
     expect(screen.queryByRole("button", { name: "Add a source" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Sync now" })).toBeNull();
+  });
+});
+
+describe("reading a git source through the GitHub App", () => {
+  const meAs = (role: string) =>
+    vi.mocked(api.me).mockResolvedValue({ memberships: [{ org: "varga", project_slug: null, role }] } as never);
+  const gitSource = { ...source, id: "src-git", kind: "git", connector: null, config: { url: "https://github.com/acme/docs", ref: "main", paths: ["*.md"] } } as KnowledgeSource;
+  const fillGit = (url: string) => {
+    fireEvent.change(screen.getByLabelText("source kind"), { target: { value: "git" } });
+    fireEvent.change(screen.getByLabelText("url"), { target: { value: url } });
+  };
+
+  beforeEach(() => {
+    vi.mocked(api.orgConnectors).mockResolvedValue([]);
+    vi.mocked(api.createKnowledgeSource).mockReset().mockResolvedValue(source);
+    vi.mocked(api.updateKnowledgeSource).mockReset().mockResolvedValue(source);
+  });
+
+  it("offers the box to an organisation administrator, for a github.com git source only", async () => {
+    meAs("org_admin");
+    adding();
+    fillGit("https://github.com/acme/docs");
+    expect(await screen.findByLabelText("Read through the GitHub App")).toBeInTheDocument();
+    expect(screen.getByText(/one-hour, read-only token/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("url"), { target: { value: "https://gitlab.com/acme/docs" } });
+    expect(screen.queryByLabelText("Read through the GitHub App")).toBeNull();
+    fireEvent.change(screen.getByLabelText("source kind"), { target: { value: "web" } });
+    expect(screen.queryByLabelText("Read through the GitHub App")).toBeNull();
+  });
+
+  it("does not offer it to a member who is not an organisation administrator", async () => {
+    meAs("editor");
+    adding();
+    fillGit("https://github.com/acme/docs");
+    await waitFor(() => expect(api.me).toHaveBeenCalled());
+    expect(screen.queryByLabelText("Read through the GitHub App")).toBeNull();
+  });
+
+  it("sends github_app: true on create when ticked, and nothing when not", async () => {
+    meAs("org_admin");
+    adding();
+    fillGit("https://github.com/acme/docs");
+    fireEvent.click(await screen.findByLabelText("Read through the GitHub App"));
+    fireEvent.click(screen.getByRole("button", { name: "Add source" }));
+    await waitFor(() =>
+      expect(api.createKnowledgeSource).toHaveBeenCalledWith(
+        "varga", "framework",
+        expect.objectContaining({ config: expect.objectContaining({ url: "https://github.com/acme/docs", github_app: true }) }),
+      ),
+    );
+  });
+
+  it("shows the API's 409 when the organisation claimed no installation", async () => {
+    meAs("org_admin");
+    vi.mocked(api.createKnowledgeSource).mockRejectedValue(new Error("no GitHub App installation claimed on acme: Settings, Connections"));
+    adding();
+    fillGit("https://github.com/acme/docs");
+    fireEvent.click(await screen.findByLabelText("Read through the GitHub App"));
+    fireEvent.click(screen.getByRole("button", { name: "Add source" }));
+    expect(await screen.findByText(/Settings, Connections/)).toBeInTheDocument();
+  });
+
+  it("sets and unsets the flag on patch, and says nothing when it did not change", async () => {
+    meAs("org_admin");
+    view([gitSource]);
+    fireEvent.click(screen.getByRole("button", { name: "Edit refresh" }));
+    fireEvent.click(await screen.findByLabelText("Read through the GitHub App"));
+    fireEvent.click(screen.getByRole("button", { name: "Save refresh" }));
+    await waitFor(() =>
+      expect(api.updateKnowledgeSource).toHaveBeenCalledWith("varga", "framework", "src-git", expect.objectContaining({ config: { ...gitSource.config, github_app: true } })),
+    );
+  });
+
+  it("sends github_app: false when a ticked source is unticked; untouched sends no config", async () => {
+    meAs("org_admin");
+    const on = { ...gitSource, config: { ...gitSource.config, github_app: true } } as KnowledgeSource;
+    view([on]);
+    fireEvent.click(screen.getByRole("button", { name: "Edit refresh" }));
+    const box = await screen.findByLabelText("Read through the GitHub App");
+    expect(box).toBeChecked();
+    fireEvent.click(box);
+    fireEvent.click(screen.getByRole("button", { name: "Save refresh" }));
+    await waitFor(() =>
+      expect(api.updateKnowledgeSource).toHaveBeenCalledWith("varga", "framework", "src-git", expect.objectContaining({ config: expect.objectContaining({ github_app: false }) })),
+    );
+    vi.mocked(api.updateKnowledgeSource).mockClear();
+    fireEvent.click(screen.getByRole("button", { name: "Edit refresh" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Save refresh" }));
+    await waitFor(() => expect(api.updateKnowledgeSource).toHaveBeenCalled());
+    expect(vi.mocked(api.updateKnowledgeSource).mock.calls[0]![3]).not.toHaveProperty("config");
+  });
+
+  it("shows the API's 403 when a patch is refused", async () => {
+    meAs("org_admin");
+    vi.mocked(api.updateKnowledgeSource).mockRejectedValue(new Error("only an organisation administrator may read through the GitHub App"));
+    view([gitSource]);
+    fireEvent.click(screen.getByRole("button", { name: "Edit refresh" }));
+    fireEvent.click(await screen.findByLabelText("Read through the GitHub App"));
+    fireEvent.click(screen.getByRole("button", { name: "Save refresh" }));
+    expect(await screen.findByText(/only an organisation administrator/)).toBeInTheDocument();
   });
 });
