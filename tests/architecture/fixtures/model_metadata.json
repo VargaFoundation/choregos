@@ -3295,6 +3295,20 @@
     "type": "Json()"
    },
    {
+    "default": null,
+    "name": "platform_arguments",
+    "nullable": true,
+    "server_default": null,
+    "type": "Json()"
+   },
+   {
+    "default": "False",
+    "name": "in_doubt_accepted",
+    "nullable": false,
+    "server_default": "<sqlalchemy.sql.elements.False_ object>",
+    "type": "Boolean()"
+   },
+   {
     "default": "<function uuid7>",
     "name": "id",
     "nullable": false,

@@ -604,15 +604,44 @@ apply to it; the outpost's own ceilings and the door's quotas do.
 | `outpost_refused` | the outpost's own policy refused; `refusal` is its code (`tool_not_allowed`, `write_denied`, `unknown_endpoint`…) | no |
 | `outpost_not_admitted` | a quota of calls in flight or per minute is reached, or the call is too large to cross the door | no |
 | `outpost_timeout` | an instance took the read and its server did not answer in time | yes: it may have been executed |
+| `action_in_doubt` | an instance took the **write** and never answered: its action ended `in_doubt` | yes: it may have been executed, and it is never sent again |
 
 At declaration and at discovery the same refusals are a 409 that carries the code (a quota is a 429).
 A call that reached no server is not booked.
 
+**A write is delivered at most once, and may end in doubt** (ADR 0149 §5-6). Choregos does not see
+the outpost's server: once an instance has taken a write, an answer that never comes back leaves one
+thing unknown, whether the server made it. So:
+
+- the write is sent once. Whatever is retried finds that first call and reads what became of it;
+- a write no instance took reached no server: the action retries it and it is delivered when the
+  outpost is back (then fails, saying why, if the outpost stays away);
+- a write an instance took and never answered ends the action **`in_doubt`**: it is not sent again
+  and nothing the action had done is undone
+  ([Usage](usage.md#4-bis-governed-actions), "In doubt", says what a person then does).
+
+That is weaker than what a direct connector gives, so it is never implied. A write operation of an
+`mcp-outpost` connector is set to `allowed` or `approval` only when its rule says one of two things,
+in the same request or before it (`PATCH /orgs/{org}/connectors/{name}/operations/{operation}`):
+
+| The rule says | Meaning | After a doubt |
+|:--|:--|:--|
+| `"platform_arguments": ["action_key"]` | the tool has an argument `action_key` and makes a call harmless when it arrives twice with the same key. Choregos fills it (the same for one action and call, whatever an agent wrote there) | the write is delivered again with the same key; the action is in doubt only if every delivery was |
+| `"in_doubt_accepted": true` | an in-doubt outcome is accepted for this tool, explicitly | the action ends `in_doubt` |
+
+A request that says neither is a 422 that names both fields, and so is one that would withdraw the
+last of the two from a write that is open. `platform_arguments` is the list a plugin's server
+declares for its own operations ([Plugins](plugins.md)); here the organisation states it for a
+discovered tool, which declares nothing, and it is refused for a tool whose input schema has no such
+argument. A tool whose schema changes is closed again and loses both statements. Choregos does not
+verify that a server honours the key: the statement is the administrator's.
+
 **Limits of this version.**
 
-- **Reads only.** A write through an outpost is opened only under the rule that it is delivered at
-  most once (ADR 0149 §5-6); until the platform carries that rule, a write operation of an
-  `mcp-outpost` connector cannot be set to `allowed` or `approval`.
+- **No form for the two statements yet.** They are set through the API; the console shows an
+  action in doubt, and its connector form does not offer the statements.
+- **An action in doubt is not closed in Choregos.** A person checks the system behind the outpost
+  and records what they found elsewhere.
 - **The connector's own identity only.** The call reaches the server under the credential the
   outpost holds for the alias. A need that must be called as the person cannot be bound to such a
   connector.

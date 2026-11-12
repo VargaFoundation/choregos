@@ -7,6 +7,11 @@ account looks it up first, adding to a group counts "already a member" as a succ
 in the request that approves the action: the `ActionWorkflow` plays it, under its key, and
 compensates it backwards if a later one fails.
 
+One effect cannot be made idempotent by the platform: a write through an outpost (ADR 0149 §5),
+whose server the platform does not see. It is delivered at most once, under its effect's key, and
+when the instance that claimed it never answers it ends IN DOUBT (`EffectInDoubt`): neither a
+refusal nor a failure to retry, never compensated automatically.
+
 The core ships `connector.call`, an operation of an organisation connector (ADR 0034), and `check`
 (alias `verifier`), a control with no effect outside; an extension declares its own. An effect's
 parameters are rendered in isolated Jinja, with those of the action (`params`) and the results of
@@ -20,14 +25,14 @@ The French names this module had before 0.21 (`effets.py`, `declarer_un_effet`..
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .db.models import Action, ConnectorOperation, OrgConnector, Project
-from .services.mcp_gateway import RouteRefusal, route_of
+from .services.mcp_gateway import Route, RouteRefusal, route_of
 from .services.platform_network import PlatformNetworkRefused, enforce_connector_call
 
 
@@ -36,11 +41,41 @@ class EffectRefused(Exception):  # noqa: N818 - a final refusal, answered as it 
     operation, a missing parameter): the action fails and compensates."""
 
 
+class EffectInDoubt(Exception):  # noqa: N818 - an outcome, neither a refusal nor a failure
+    """The effect was sent and nobody knows whether it was executed (ADR 0149 §5): a write through an
+    outpost that an instance claimed and never answered. The effect and its action end `in_doubt`:
+    never attempted again, and nothing the action had done is compensated automatically, since both
+    would act on a state nobody knows.
+
+    `sent` is what a person is shown: where it went, who claimed it and when, the digest of what it
+    carried. `again` is the one exception: the operation takes the platform's idempotency key, so the
+    effect's own retries may deliver it again with the same key."""
+
+    def __init__(self, message: str, *, sent: dict[str, Any], again: bool = False) -> None:
+        super().__init__(message)
+        self.sent = sent
+        self.again = again
+
+
+#: What an effect asks to be done once its outcome is durable, in the transaction that records it.
+Settle = Callable[[AsyncSession], Awaitable[None]]
+
+
 @dataclass(frozen=True)
 class EffectContext:
     session: AsyncSession
     action: Action
     project: Project
+    #: The key the effect is played under (`<action id>:<position>`; a compensation's is derived
+    #: from its effect's): what a write through an outpost is placed once under (ADR 0149 §5). None
+    #: when nothing that journals an effect plays it: such a write is then not placed at all.
+    key: str | None = None
+    #: What earlier attempts of this effect sent and never saw answered, one entry per delivery.
+    doubts: tuple[dict[str, Any], ...] = ()
+    #: What the effect leaves to whoever plays it: run once the effect's outcome is durable (its
+    #: result recorded `done`, or its doubt recorded), in that same transaction. An effect that
+    #: holds its answer elsewhere until then registers here what empties it (ADR 0148 §11).
+    once_durable: list[Settle] = field(default_factory=list)
 
 
 Execute = Callable[[EffectContext, dict[str, Any]], Awaitable[dict[str, Any]]]
@@ -115,9 +150,10 @@ async def _connector_call(ctx: EffectContext, params: dict[str, Any]) -> dict[st
         return await _call_the_connector(ctx, params)
 
 
-async def _within_the_network_bounds(ctx: EffectContext, instance: OrgConnector, label: str) -> None:
+async def _within_the_network_bounds(ctx: EffectContext, instance: OrgConnector, label: str) -> Route:
     """The organisation's network bounds are read again at the moment of the call (ADR 0070): they
-    may have been tightened since the action was approved. A refusal is final, the action compensates."""
+    may have been tightened since the action was approved. A refusal is final, the action compensates.
+    Returns how the connector is reached."""
     # ADR 0105, ADR 0149: the route first (mode `required`, `off`, no gateway; an outpost that is paused
     # or revoked: final), then the host it reaches, when it reaches one.
     try:
@@ -130,17 +166,14 @@ async def _within_the_network_bounds(ctx: EffectContext, instance: OrgConnector,
         )
     except PlatformNetworkRefused as refusal:
         raise EffectRefused(f"{label} : {refusal.message()}") from refusal
+    return route
 
 
 async def _call_the_connector(ctx: EffectContext, params: dict[str, Any]) -> dict[str, Any]:
     """`connector.call`: an operation of an organisation connector, key resolved HERE.
 
     The action was approved: an `approval` operation therefore runs; a `forbidden` one does not."""
-    import httpx
-    from choregos_adapters.errors import AdapterError, UpstreamError
-    from choregos_adapters.mcp import McpError
     from choregos_contracts import ActionStatus
-    from choregos_core.egress import EgressRefusedError
 
     name, operation = str(params.get("connector", "")), str(params.get("operation", ""))
     arguments = dict(params.get("arguments") or {})
@@ -165,13 +198,29 @@ async def _call_the_connector(ctx: EffectContext, params: dict[str, Any]) -> dic
             )
         )
     ).scalar_one_or_none()
-    from .services.connectors import policy_for_project
-    from .services.mcp_gateway import connector_client
-    from .services.mcp_gateway_identity import identity_of_action
+    if row is None:
+        raise EffectRefused(f"{name}/{operation} is forbidden to this project, or unknown")
+    try:
+        delivery = await _decided(ctx, instance, row, arguments)
+    except EffectRefused as refused:
+        await _unless_a_delivery_is_out(ctx, instance, row, refused)
+        raise
+    return await _reach_the_server(ctx, instance, row, arguments, delivery)
 
+
+async def _decided(
+    ctx: EffectContext, instance: OrgConnector, row: ConnectorOperation, arguments: dict[str, Any]
+) -> Any:
+    """Everything that decides the call, read again at the moment it would leave: the project's
+    policy, the argument schema, what the platform fills, the network bounds and the route, and for a
+    write through an outpost the rule it is delivered under. Returns how such a write is delivered
+    (`None` for any other call); `arguments` leaves with what the platform filled."""
+    from .services.connectors import policy_for_project
+
+    name, operation = instance.name, row.name
     # The PROJECT's: the organisation's, tightened by the project, bounded by its groups. An approved
     # action plays an `approval` operation; an operation this project forbids itself, never.
-    if row is None or await policy_for_project(ctx.session, ctx.project, name, operation) == "forbidden":
+    if await policy_for_project(ctx.session, ctx.project, name, operation) == "forbidden":
         raise EffectRefused(f"{name}/{operation} is forbidden to this project, or unknown")
     if row.input_schema:
         import jsonschema
@@ -180,17 +229,66 @@ async def _call_the_connector(ctx: EffectContext, params: dict[str, Any]) -> dic
             jsonschema.validate(arguments, row.input_schema)
         except jsonschema.ValidationError as exc:
             raise EffectRefused(f"{name}/{operation} : {exc.message}") from exc
-    arguments.update(await _platform_arguments(ctx, instance, operation, arguments))
-    await _within_the_network_bounds(ctx, instance, f"{name}/{operation}")
+    arguments.update(await _platform_arguments(ctx, instance, operation, arguments, row.platform_arguments))
+    route = await _within_the_network_bounds(ctx, instance, f"{name}/{operation}")
+    return _delivery_through_an_outpost(ctx, instance, row) if route.via_outpost else None
+
+
+async def _unless_a_delivery_is_out(
+    ctx: EffectContext, instance: OrgConnector, row: ConnectorOperation, refused: EffectRefused
+) -> None:
+    """A write through an outpost, played again, is refused before it leaves: its outpost was
+    paused, its operation closed, since the attempt before it. If that attempt's delivery was claimed
+    and this effect never recorded what became of it, the effect did not fail: the write may have
+    been made, and failing would compensate what the action had done around it. It ends in doubt
+    (ADR 0149 §5). A delivery nobody claimed reached no server: the refusal stands."""
+    from .services import outpost_writes
+    from .services.outpost_route import claimed_write
+
+    delivery = outpost_writes.Delivery.of(instance, row, effect_key=ctx.key, doubts=len(ctx.doubts))
+    # Only a write through an outpost is ever placed under an effect's key: nothing else is found.
+    sent = await claimed_write(ctx.session, instance, delivery.key) if delivery.key is not None else None
+    if sent is None:
+        return
+    raise EffectInDoubt(
+        f"{refused}. An earlier attempt of this write was claimed by an instance of the outpost, and what "
+        "became of it was never recorded: nobody knows whether it was made, and it is never asked again",
+        sent=sent,
+    ) from refused
+
+
+async def _reach_the_server(
+    ctx: EffectContext,
+    instance: OrgConnector,
+    row: ConnectorOperation,
+    arguments: dict[str, Any],
+    delivery: Any,
+) -> dict[str, Any]:
+    """The call itself, once everything that decides it is decided, and what each way it can fail is
+    for the action: a final refusal, a failure Temporal retries, or a doubt."""
+    import httpx
+    from choregos_adapters.errors import AdapterError, UpstreamError
+    from choregos_adapters.mcp import McpError
+    from choregos_adapters.outpost import OutpostInDoubt, OutpostNotAdmitted, OutpostOffline, port
+    from choregos_core.egress import EgressRefusedError
+
+    from .services.mcp_gateway import connector_client
+    from .services.mcp_gateway_identity import identity_of_action
+
+    name, operation = instance.name, row.name
     try:
         # A gateway connector (ADR 0105) goes through the gateway, signed with the action's identity and
         # its approvers; a connector at an outpost (ADR 0149), through that outpost's rendezvous; a
         # plugin's server (ADR 0096), its Service; any other, its type's adapter. A `GatewayRefusal` and
-        # an outpost's refusal are `AdapterError`s: the clause below makes each a final refusal, no retry.
+        # an outpost's refusal are `AdapterError`s: the last clause below makes each a final refusal,
+        # no retry. A write through an outpost is the exception, three times (ADR 0149 §5): it carries
+        # the key it is placed once under; a write nobody claimed is retried; one that was claimed and
+        # never answered is in doubt.
         client: Any = await connector_client(
             ctx.session,
             instance,
             lambda: identity_of_action(ctx.session, ctx.action, ctx.project, instance, operation),
+            effect_key=delivery.key if delivery is not None else None,
         )
         if hasattr(client, "call_tool"):
             result = await client.call_tool(operation, arguments)
@@ -201,6 +299,24 @@ async def _call_the_connector(ctx: EffectContext, params: dict[str, Any]) -> dic
             structure = result.get("structuredContent")
             return dict(structure) if isinstance(structure, dict) else dict(result)
         return dict(await client.execute(operation, arguments))
+    except OutpostInDoubt as doubt:
+        from .services.outpost_writes import sent
+
+        # Neither a refusal nor a retry: executed or not, nobody knows. Only an operation that takes
+        # the platform's idempotency key may be delivered again, with the same key.
+        raise EffectInDoubt(
+            f"{name}/{operation} : {doubt}",
+            sent=sent(doubt, operation, arguments),
+            again=delivery is not None and delivery.again,
+        ) from doubt
+    except (OutpostOffline, OutpostNotAdmitted) as unclaimed:
+        # No instance claimed the write, or a quota of the door kept it out for now: it reached no
+        # server. Only such a write is retried, by the effect's own policy, and delivered for the first
+        # time when the outpost is back. A read fails fast, and a call the door cannot carry is final.
+        passes = isinstance(unclaimed, OutpostOffline) or unclaimed.reason in port.BUSY
+        if delivery is not None and passes:
+            raise
+        raise EffectRefused(f"{name}/{operation} : {unclaimed}") from unclaimed
     except UpstreamError as failure:
         code = failure.status_code or 0
         if code in {0, 429} or code >= 500:
@@ -218,31 +334,62 @@ async def _call_the_connector(ctx: EffectContext, params: dict[str, Any]) -> dic
         raise EffectRefused(f"{name}/{operation} : {refusal}") from refusal
 
 
+def _delivery_through_an_outpost(ctx: EffectContext, instance: OrgConnector, row: ConnectorOperation) -> Any:
+    """How this attempt delivers a write through an outpost (ADR 0149 §5-6), `None` for a read.
+
+    The rule is read again here, as the policy is: a write whose row was opened under neither
+    statement (edited behind the API) is delivered by nobody. The key is the effect's: when nothing
+    that journals an effect plays it there is none, and the route places no write that carries none."""
+    from .services import outpost_writes
+    from .services.outpost_route import forgetting_write
+
+    if not outpost_writes.is_write(instance, row):
+        return None
+    if not outpost_writes.said(instance, row):
+        raise EffectRefused(
+            f"{instance.name}/{row.name} is a write through an outpost whose rule says neither that it "
+            "takes the platform's idempotency key (`platform_arguments`) nor that an in-doubt outcome "
+            "is accepted for it (`in_doubt_accepted`): it is not delivered (ADR 0149 §6)"
+        )
+    delivery = outpost_writes.Delivery.of(instance, row, effect_key=ctx.key, doubts=len(ctx.doubts))
+    if delivery.key is not None:
+        # The answer waits at the rendezvous until this effect's outcome is durable: a retry that comes
+        # before reads it there. Whoever records the outcome empties it, in the same transaction.
+        ctx.once_durable.append(forgetting_write(instance, delivery.key))
+    return delivery
+
+
 async def _platform_arguments(
-    ctx: EffectContext, instance: OrgConnector, operation: str, arguments: dict[str, Any]
+    ctx: EffectContext,
+    instance: OrgConnector,
+    operation: str,
+    arguments: dict[str, Any],
+    stated_by_the_rule: list[str] | None = None,
 ) -> dict[str, Any]:
-    """What the operation's type asks the PLATFORM to fill (ADR 0052), after the agent's arguments
-    were checked against the schema — an agent cannot pass them, the schema closes them:
-    - `action_key`: the action and the call, hashed — the same on every retry, another for another call;
+    """What the PLATFORM fills (ADR 0052), after the agent's arguments were checked against the
+    schema: what the operation's type or its plugin's server declares and, for a discovered tool, what
+    the organisation's rule states (`stated_by_the_rule`, ADR 0149 §6). An agent does not choose them:
+    - `action_key`: the action and the call, hashed — the same on every retry and at every delivery,
+      another for another call;
     - `work_item_key`: the work item the action belongs to, when it has one."""
     import hashlib
     import json
 
-    from .services.connectors import declared_operation
+    from .services.outpost_writes import platform_arguments_of
 
-    declared = declared_operation(instance, operation)
-    if declared is None or not declared.platform_arguments:
+    names = platform_arguments_of(instance, operation, stated_by_the_rule)
+    if not names:
         return {}
     # The platform's, never the agent's: what an agent wrote under these names is dropped first.
-    for name in declared.platform_arguments:
+    for name in names:
         arguments.pop(name, None)
     filled: dict[str, Any] = {}
-    if "action_key" in declared.platform_arguments:
+    if "action_key" in names:
         canonical = json.dumps(arguments, sort_keys=True, ensure_ascii=False, default=str)
         filled["action_key"] = hashlib.sha256(
             f"{ctx.action.id}:{operation}:{canonical}".encode()
         ).hexdigest()[:24]
-    if "work_item_key" in declared.platform_arguments and ctx.action.work_item_id:
+    if "work_item_key" in names and ctx.action.work_item_id:
         from .db.models import WorkItem
 
         item = await ctx.session.get(WorkItem, ctx.action.work_item_id)

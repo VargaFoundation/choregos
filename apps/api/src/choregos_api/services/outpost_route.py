@@ -18,7 +18,10 @@ What is here:
 - `tool_client`: the factory the platform registers for the type (`adapter_wiring`), and `client`,
   what the one seam of connector calls (`mcp_gateway.connector_client`) builds with it;
 - `tool_error` and `problem`: what each typed refusal is for whoever called a tool, and for
-  whoever declares or discovers a connector.
+  whoever declares or discovers a connector;
+- `forgetting_write` and `claimed_write`: what the governed effect that plays a write needs of the
+  rendezvous beside the call itself (S65-14): emptying the answer once its result is recorded, and
+  learning that an earlier attempt's delivery was claimed.
 
 This module calls the rendezvous; the door's package never imports it (ADR 0148 §12).
 """
@@ -28,6 +31,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
+from datetime import UTC
 from typing import Any, Final
 
 import choregos_adapters
@@ -56,6 +60,7 @@ from ..db.models import (
     Organization,
     OrgConnector,
     Outpost,
+    OutpostCall,
     Project,
 )
 from ..db.session import in_outpost_scope, release_connection
@@ -213,6 +218,74 @@ def write_call_id(connector: OrgConnector, effect_key: str) -> str:
     effect that plays it (ADR 0149 §5). The same effect, retried, is the same call; whoever makes
     its result durable empties the row under the same id (`rendezvous.forget`)."""
     return rendezvous.call_id_of(connector.id, effect_key)
+
+
+def forgetting_write(connector: OrgConnector, write_key: str) -> Callable[[AsyncSession], Awaitable[None]]:
+    """What empties the rendezvous of a write once whoever played it has made its outcome durable
+    (ADR 0148 §11, ADR 0149 §5): the sealed answer and the private half of its answer key.
+
+    The returned function writes in the session it is given and does not commit: called in the
+    transaction that records the outcome, the answer goes when that record is kept, and stays for a
+    retry to read if the record is lost. Until then a retry of the same effect meets the first call
+    and reads its answer; afterwards it never comes back here, since its own record answers it.
+
+    Everything it needs of the connector is read now: the session the connector was read in may be
+    over, and rolled back, by the time the outcome is recorded. The in-memory rendezvous of
+    `CHOREGOS_FAKES` has no row to empty."""
+    outpost_id, call_id, in_memory = connector.outpost_id, write_call_id(connector, write_key), faked()
+
+    async def forget(session: AsyncSession) -> None:
+        if not in_memory and outpost_id:
+            await rendezvous.forget(session, outpost_id, call_id)
+
+    return forget
+
+
+#: A write an instance claimed, whatever became of it since: it may have reached the outpost's server.
+_MAY_HAVE_BEEN_MADE: Final = frozenset(
+    {OutpostCallState.CLAIMED.value, OutpostCallState.ANSWERED.value, OutpostCallState.IN_DOUBT.value}
+)
+
+
+async def claimed_write(
+    session: AsyncSession, connector: OrgConnector, write_key: str
+) -> dict[str, Any] | None:
+    """What the rendezvous holds of a write placed under this key that an instance claimed: where it
+    went, who claimed it and when, the digest of what it carried. `None` when there is none: never
+    placed, placed and claimed by nobody, or refused by the outpost's own policy, so that it reached
+    no server.
+
+    It places nothing and asks nothing of the outpost's state: a paused or revoked outpost is handed
+    nothing more, and what an instance of it already took is still on its row. It is how the effect
+    that plays a write again learns, when the retry is refused before it leaves, that the attempt
+    before it may have been made (ADR 0149 §5)."""
+    if faked() or not connector.outpost_id:
+        return None
+    async with in_outpost_scope(session, connector.outpost_id):
+        call = (
+            await session.execute(
+                select(OutpostCall)
+                .where(
+                    OutpostCall.outpost_id == connector.outpost_id,
+                    OutpostCall.id == write_call_id(connector, write_key),
+                )
+                .execution_options(populate_existing=True)
+            )
+        ).scalar_one_or_none()
+    if call is None or call.state not in _MAY_HAVE_BEEN_MADE:
+        return None
+    claimed_at = call.claimed_at
+    if claimed_at is not None and claimed_at.tzinfo is None:
+        claimed_at = claimed_at.replace(tzinfo=UTC)  # SQLite returns naive datetimes
+    return {
+        "outpost": str((connector.config or {}).get("outpost") or ""),
+        "endpoint": call.endpoint,
+        "operation": call.tool,
+        "call_id": call.id,
+        "instance_id": call.instance_id,
+        "claimed_at": claimed_at.isoformat() if claimed_at is not None else None,
+        "arguments_sha256": call.arguments_sha256,
+    }
 
 
 def _keyless_write(connector: OrgConnector, call: port.Call) -> port.NotAdmitted:
@@ -604,9 +677,11 @@ __all__ = [
     "OutpostRoute",
     "Placing",
     "asserted_names",
+    "claimed_write",
     "client",
     "declared_outpost",
     "faked",
+    "forgetting_write",
     "problem",
     "rendezvous_of",
     "route",

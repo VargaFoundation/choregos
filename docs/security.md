@@ -683,10 +683,47 @@ transport of a tool call and nothing of what governs it.
 - **Whose identity.** The credential the outpost holds for the alias, and no other. No person's
   token travels to an outpost: the type declares no identity mode, a need that must be called as the
   person cannot be bound to it, and a direct build of its client with a person's token builds nothing.
-- **Writes.** Not opened in this version: a write through an outpost must be delivered at most once
-  and may end in doubt (ADR 0149 §5-6), and the platform does not open a write under a guarantee it
-  does not carry yet (ADR 0101). The rendezvous itself places no write without the key of the governed
-  effect that plays it.
+- **Writes are delivered at most once, and may end in doubt** (ADR 0149 §5-6;
+  `services/outpost_writes.py`, `apps/api/tests/test_write_via_outpost.py`). The platform does not
+  see the outpost's server, so it cannot make a write there idempotent as it does elsewhere.
+  - **One delivery.** A write is placed under an id derived from the key of the governed effect
+    that plays it, and the table holds an id once: a retried effect, two attempts in flight or a
+    task Temporal delivers twice meet the first call and read what became of it. The rendezvous
+    places no write that carries no such key. A compensation is a call of its own, under its
+    effect's key.
+  - **A write nobody claimed reached no server**: only that one is retried, by the effect's own
+    policy, and delivered when the outpost is back.
+  - **A worker that stops does not manufacture a doubt.** Whoever waits for a read and goes away
+    cancels it; a write is left waiting, the instance still answers it, and the effect played again
+    by another worker reads that answer. Conversely, an effect played again that is refused before
+    it leaves (the outpost was paused, the operation closed) while an instance had claimed the
+    delivery of the attempt before it does not fail: it ends in doubt, with the call that was
+    claimed. Failing would compensate what the action had done around a write that may have been
+    made.
+  - **A claimed write whose answer never comes is `in_doubt`**, on the effect and on the action.
+    It is terminal. Nothing replays it: the effect is not attempted again, the action is not
+    executable by any route, and the agent that repeats the call is handed the same action. Nothing
+    is compensated automatically, the effects done before it included: both would act on a state
+    nobody knows. A workflow written before the status existed asks for a compensation and a
+    failure; the activities answer for the action as it is and do neither. What a person is shown is
+    where the write went, which instance took it and when, and the digest of its arguments, never
+    the arguments.
+  - **A person closes the doubt outside the platform.** They check the system behind the outpost and
+    record what they found where the team keeps such records. No route changes the status of an
+    action in doubt: the count of such actions is the measure to watch, and a flaky link between
+    claim and answer raises it.
+  - **Not implied by silence** (ADR 0101). A write of a connector at an outpost is opened only when
+    its rule says that the tool takes the platform's idempotency key (`platform_arguments` lists
+    `action_key`; the write may then be delivered again with the same key, and it is the server
+    that makes the second delivery harmless) or that an in-doubt outcome is accepted
+    (`in_doubt_accepted`). A rule that says neither is a 422 that names both, withdrawing the last
+    of the two from an open write is refused, a tool whose schema drifts loses both with its policy,
+    and the effect reads the rule again before anything leaves. The platform does not check that a
+    server honours the key it says it takes: that statement is the administrator's.
+  - **After the answer is recorded, the rendezvous keeps nothing of it.** The sealed answer waits
+    on its row until the effect's result is durable, and is emptied in that same transaction. An
+    answer nobody recorded is emptied after fifteen minutes; a retry that comes later finds a
+    delivered write whose answer is gone, and ends in doubt instead of delivering it again.
 - **The network bounds.** The platform opens no connection for such a call, so the organisation's
   allowed hosts, its deny list and its per-host rate have no host to judge: the alias is a name in the
   outpost's policy file, never read as one. The call is bounded by the outpost's own ceilings and by

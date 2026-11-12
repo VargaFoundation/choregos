@@ -9,6 +9,8 @@ const TON: Record<string, "neutral" | "accent" | "ok" | "warn" | "danger"> = {
   succeeded: "ok",
   rejected: "neutral",
   failed: "danger",
+  // Sent, and nobody knows whether it was executed (ADR 0149): not a failure, a person looks.
+  in_doubt: "warn",
   done: "ok",
   started: "accent",
   compensated: "warn",
