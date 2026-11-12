@@ -339,6 +339,12 @@ class WorkItemAction(Dto):
     top_up_usd: float | None = Field(default=None, gt=0)
 
 
+class StopRequest(Dto):
+    """A stop and why (ADR 0142): the reason is audited and shown on the work item."""
+
+    reason: str = Field(min_length=1, max_length=500)
+
+
 class ToolConnector(Dto):
     """An organisation connector a run's agent may call, and the account it calls as (ADR 0107)."""
 

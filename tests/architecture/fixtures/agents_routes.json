@@ -140,6 +140,13 @@
     "operation_id": "changeAgentScope"
   },
   {
+    "path": "/orgs/{org}/agents/{slug}/stop",
+    "methods": [
+      "POST"
+    ],
+    "operation_id": "stopAgent"
+  },
+  {
     "path": "/projects/{id}/agents",
     "methods": [
       "GET"

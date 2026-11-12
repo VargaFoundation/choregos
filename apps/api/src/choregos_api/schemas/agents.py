@@ -1546,6 +1546,26 @@ class AgentLifecycleResult(Dto):
     forced: bool = False
 
 
+class AgentNotStopped(Dto):
+    """What an agent's stop could not stop now (ADR 0142 §4); the reconciliation retries a run."""
+
+    kind: Literal["run", "session", "turn"]
+    id: str
+    detail: str
+
+
+class AgentStopResult(Dto):
+    """What stopping an agent did (`POST /orgs/{org}/agents/{slug}/stop`, ADR 0142 §4)."""
+
+    slug: str
+    status: Literal["suspended"] = "suspended"
+    runs_cancelled: int
+    sessions_closed: int
+    #: Conversation turns are not cancelled yet (S63, then S64-09): always 0.
+    turns_cancelled: int = 0
+    not_stopped: list[AgentNotStopped] = Field(default_factory=list)
+
+
 class AgentOwnerChange(Dto):
     """The new owner, a member of the organisation; the agent keeps its credentials."""
 
