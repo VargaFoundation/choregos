@@ -4316,6 +4316,12 @@ export type ConversationAction = {
   summary: string;
   /** `governed`: a console approval, decided as a governed action named in `result.action`. */
   status: "proposed" | "confirmed" | "executed" | "refused" | "expired" | "governed";
+  /** `write`: a write need's operation (`need`, `operation`). `launch` (ADR 0158): the start of a project's workflow; `need` is the launch's name, `operation` is `start`, `arguments` are `{title, inputs}` and `target` names the project and the workflow; once executed, `result` holds `work_item_id`, `work_item_key`, `project`, `workflow` and `url`. */
+  kind?: "write" | "launch";
+  /** For a launch: `{project, workflow}`, the binding at the time of the proposal. */
+  target?: {
+    [key: string]: unknown;
+  } | null;
   result?: {
     [key: string]: unknown;
   } | null;
@@ -4346,6 +4352,31 @@ export type AssistantBinding = {
   enabled: boolean;
 };
 
+export type AssistantLaunchBind = {
+  /** The slug of a project of the organisation (not a personal space). */
+  project: string;
+  /** The name of one of the project's active workflows. */
+  workflow: string;
+  enabled?: boolean;
+};
+
+/** A launch the manifest declares (ADR 0158), with its binding when it has one. */
+export type AssistantLaunch = {
+  name: string;
+  description: string;
+  required: boolean;
+  input_schema?: {
+    [key: string]: unknown;
+  };
+  /** The bound project's slug; null while unbound. */
+  project?: string | null;
+  /** The bound workflow's name; null while unbound. */
+  workflow?: string | null;
+  /** False while unbound or switched off. */
+  enabled: boolean;
+  bound_by?: string | null;
+};
+
 export type Assistant = {
   /** the installation's id: what the cost and activity routes' `assistant` filter takes (ADR 0141 §1) */
   id: string;
@@ -4367,6 +4398,8 @@ export type Assistant = {
     [key: string]: unknown;
   };
   bindings: Array<AssistantBinding>;
+  /** The workflows the assistant may propose to start, and where each is bound (ADR 0158). */
+  launches?: Array<AssistantLaunch>;
   created_by?: string | null;
   created_at: string;
 };
@@ -4705,8 +4738,10 @@ export type AssistantConversationOpen = {
 };
 
 export type AssistantReadinessItem = {
-  kind: "assistant_missing" | "config_missing" | "need_unbound" | "need_not_served" | "identity_unsupported";
+  kind: "assistant_missing" | "config_missing" | "need_unbound" | "need_not_served" | "identity_unsupported" | "launch_unbound" | "launch_workflow_missing" | "launch_inputs_mismatch";
   need?: string | null;
+  /** The launch, for the `launch_*` kinds (ADR 0158). */
+  launch?: string | null;
   /** The configuration key, for `config_missing`. */
   key?: string | null;
   message: string;
@@ -5872,6 +5907,7 @@ export interface Operations {
   authLogin: { method: "GET"; path: "/auth/login"; body: never; response: void };
   authLogout: { method: "POST"; path: "/auth/logout"; body: never; response: void };
   authorizeRemoteCredential: { method: "POST"; path: "/orgs/{org}/remote-credentials/{name}/authorize"; body: never; response: RemoteCredentialAuthorization };
+  bindAssistantLaunch: { method: "PUT"; path: "/orgs/{org}/assistants/{slug}/launches/{launch}"; body: AssistantLaunchBind; response: Assistant };
   bindAssistantNeed: { method: "PUT"; path: "/orgs/{org}/assistants/{slug}/bindings/{need}"; body: AssistantBind; response: Assistant };
   callAgentSessionTool: { method: "POST"; path: "/internal/agent-sessions/{id}/tools/{name}"; body: AgentSessionToolCall; response: AgentSessionToolAnswer };
   callRunTool: { method: "POST"; path: "/internal/runs/{id}/tools/{name}"; body: {

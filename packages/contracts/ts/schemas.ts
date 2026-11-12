@@ -107,6 +107,19 @@ export type AssistantTrigger = unknown & unknown & unknown;
 
 export type AssistantTask = unknown;
 
+/** a workflow the assistant may PROPOSE to start (ADR 0158): bound at install, by reference, to a project and one of its active workflows; the manifest names neither */
+export type AssistantLaunch = {
+  name: AssistantSnake;
+  /** what the agent reads to decide when to propose it */
+  description: string;
+  /** a JSON Schema (2020-12) of `type: object`: the inputs the assistant fills from the conversation, given to the work item as its fields */
+  input_schema: {
+    type: "object";
+  };
+  /** false: the installation's owners may leave it unbound or switch it off */
+  required?: boolean;
+};
+
 export type AssistantPrompt = {
   name: AssistantSnake;
   description?: string;
@@ -121,7 +134,7 @@ export type AssistantPrompt = {
 
 export type AssistantMoney = number;
 
-/** An assistant a plugin ships (`contents.assistants`, ADR 0133): a wrapper around one of the plugin's prompt or hosted agents that declares its configuration, audience, the tools it needs and the identity each is called under, its memory spaces, the knowledge it offers, its background tasks, its surfaces and its policy. What a schema cannot say (the agent exists and its runtime, `{{ config.x }}` keys, the agent's tools match the needs, a subject's resolver, a delegated task reads only, the files named exist) is checked by `choregos plugin validate`. */
+/** An assistant a plugin ships (`contents.assistants`, ADR 0133): a wrapper around one of the plugin's prompt or hosted agents that declares its configuration, audience, the tools it needs and the identity each is called under, its memory spaces, the knowledge it offers, its background tasks, the workflows it may propose to start, its surfaces and its policy. What a schema cannot say (the agent exists and its runtime, `{{ config.x }}` keys, the agent's tools match the needs, a subject's resolver, a delegated task reads only, the files named exist, launch names unique and no need called `launch`) is checked by `choregos plugin validate`. */
 export type Assistant = unknown;
 
 export type ContextPackMemory = {
