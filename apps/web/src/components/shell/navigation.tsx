@@ -2,6 +2,7 @@
 "use client";
 
 import {
+  Activity,
   ArrowLeft,
   Bell,
   BookOpen,
@@ -68,6 +69,8 @@ export const NAV: { href: string; label: string; icone: LucideIcon }[] = [
   { href: "/library/plugins", label: "Plugins", icone: Puzzle },
   { href: "/assistants", label: "Assistants", icone: MessagesSquare },
   { href: "/inbox", label: "Inbox", icone: Inbox },
+  // What is running now, and stopping it (S64-06, ADR 0142 §1).
+  { href: "/activity", label: "Activity", icone: Activity },
   { href: "/integrations", label: "Integrations", icone: Plug },
   { href: "/costs", label: "Spend", icone: Wallet },
   { href: "/admin", label: "Admin", icone: Settings },
@@ -86,7 +89,7 @@ export const GROUP_HUES = { work: 1, define: 2, configure: 7 } as const satisfie
 
 /** The entries, grouped: the work, what agents use, the organisation (S40-08). */
 export const GROUPS: { titre: string; hue: Hue; entrees: string[] }[] = [
-  { titre: "Work", hue: GROUP_HUES.work, entrees: ["/", "/assistants", "/inbox"] },
+  { titre: "Work", hue: GROUP_HUES.work, entrees: ["/", "/assistants", "/inbox", "/activity"] },
   { titre: "Library", hue: GROUP_HUES.define, entrees: ["/agents", "/skills", "/knowledge", "/memories", "/library/mcp-servers", "/library/connectors", "/library/plugins"] },
   { titre: "Organisation", hue: GROUP_HUES.configure, entrees: ["/integrations", "/costs", "/admin"] },
 ];
@@ -171,6 +174,14 @@ export function projectGroups(slug: string, features: ProjectFeatures = {}): Nav
         // A ticket and its runs belong to the board (S23-12).
         section("/board", "Board", SquareKanban, ["/items", "/runs"]),
         { ...section("/inbox", "Inbox", Inbox), counts: true },
+        // The organisation's Activity narrowed to the project (S64-06): one screen, not a route per
+        // project, which cost the bundle a second copy of the screen's chunks.
+        {
+          href: `/activity?project=${encodeURIComponent(slug)}`,
+          label: "Activity",
+          icon: Activity,
+          active: () => false,
+        },
         ...(trains ? [section("/trains", "Trains", TrainFront)] : []),
         section("/findings", "Findings", TriangleAlert),
       ],

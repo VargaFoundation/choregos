@@ -44,7 +44,11 @@ const CHUNKS = join(process.cwd(), ".next", "static", "chunks");
 // to 2339 kB, with no new dependency.
 // 2026-11-11 (S63 waves E and F): 2350 -> 2375 kB. The memory export and owners' memory, the action's diff, the
 // richer configuration forms and the embedded token bring 2350 kB (shared JSX already folded): no headroom left.
-const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 2375);
+// 2026-11-11 (S64-06, S64-07, S64-08): 2375 -> 2400 kB. Main measures 2350 kB with the assistants. S64-06 adds the
+// Activity screen, the agent's stop and the work item's stop reason (15 kB; the project's Activity entry links to
+// `/activity?project=` instead of a second route, which saved 8 kB), S64-07's tokens-and-cost panel 5 kB and
+// S64-08's run Context card 4 kB: about 2374 kB together. No new dependency in any of them.
+const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 2400);
 const CHUNK_MAX_KB = Number(process.env.BUNDLE_CHUNK_MAX_KB ?? 600);
 
 function* files(dir) {

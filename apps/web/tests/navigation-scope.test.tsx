@@ -57,7 +57,7 @@ describe("the sidebar switches scope", () => {
 
   it("inside a project, lists its sections in three groups, and no organisation entry", async () => {
     const bar = sidebar("/p/billing-api/board");
-    expect(labels(within(bar).getByRole("list", { name: "Work" }))).toEqual(["Overview", "Board", "Inbox", "Trains", "Findings"]);
+    expect(labels(within(bar).getByRole("list", { name: "Work" }))).toEqual(["Overview", "Board", "Inbox", "Activity", "Trains", "Findings"]);
     expect(labels(within(bar).getByRole("list", { name: "Define" }))).toEqual(["Workflows", "Agents", "Knowledge", "Actions", "Memory"]);
     expect(labels(within(bar).getByRole("list", { name: "Configure" }))).toEqual(["Integrations", "Members", "Settings"]);
     expect(within(bar).queryByRole("link", { name: "Skills" })).toBeNull();

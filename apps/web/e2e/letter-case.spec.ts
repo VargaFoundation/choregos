@@ -42,6 +42,7 @@ const PAGES = [
   "/skills",
   "/skills/library",
   "/costs",
+  "/activity",
   "/skills/onboarding-procedure",
   "/knowledge",
   "/memories",

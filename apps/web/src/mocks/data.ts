@@ -102,6 +102,7 @@ import type {
 import { readSandboxNetwork } from "@/lib/policy-network";
 import { journeyInProgress, journeyFinished, journeyOf } from "./journey";
 import { egressApi } from "./egress";
+import { activityApi } from "./activity";
 import { peopleOps, peopleOpsApi, peopleOpsFixtures } from "./joiners-leavers";
 import mcpCatalogueFile from "./mcp-catalogue.json";
 import { pluginsApi, serverConnectorOf } from "./plugins";
@@ -3238,6 +3239,9 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   if (channels !== undefined) return structuredClone(channels) as T;
   const network = egressApi(method, path.split("?")[0] ?? path, body);
   if (network !== undefined) return network as T;
+  // What is running, and stopping it (S64-06): the list, a run's cancel, an agent's stop.
+  const activity = activityApi(method, path, body);
+  if (activity !== undefined) return activity as T;
   const plugins = pluginsApi(method, bare, body, orgConnectors);
   if (plugins !== undefined) return plugins as T;
   const filed = /^\/projects\/([^/]+)\/work-items$/.exec(path.split("?")[0] ?? path);
