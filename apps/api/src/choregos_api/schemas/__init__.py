@@ -300,6 +300,7 @@ from .remote import (
 )
 from .tickets import (
     ArtifactRef,
+    AssigneeChange,
     CiLogs,
     ContextBreakdownDto,
     CostEstimate,
@@ -309,6 +310,7 @@ from .tickets import (
     GitToken,
     HandOff,
     HandOffEvent,
+    HumanRequestAssignee,
     HumanRequestDto,
     JourneyMove,
     JourneyStep,
@@ -412,6 +414,7 @@ __all__ = [
     "ApiTokenDto",
     "ApproveRequest",
     "ArtifactRef",
+    "AssigneeChange",
     "AuditEntry",
     "AuditPage",
     "BrowserSessionDto",
@@ -472,6 +475,7 @@ __all__ = [
     "HostedRuntime",
     "HostedSourceDto",
     "HostedZipSource",
+    "HumanRequestAssignee",
     "HumanRequestDto",
     "ImplicitAgent",
     "IntegrationsDto",

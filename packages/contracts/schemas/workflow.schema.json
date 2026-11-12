@@ -231,8 +231,7 @@
     "humanActor": {
       "type": "object",
       "required": [
-        "type",
-        "group"
+        "type"
       ],
       "additionalProperties": false,
       "properties": {
@@ -240,7 +239,15 @@
           "const": "human"
         },
         "group": {
-          "type": "string"
+          "type": "string",
+          "description": "the group that answers the step; optional when `user` names a person (ADR 0153)"
+        },
+        "user": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 254,
+          "pattern": "^[^@\\s]+@[^@\\s]+$",
+          "description": "a person who answers the step, by e-mail (ADR 0153); with `group`, the person is asked first and the group may answer once the SLA has passed"
         },
         "sla_hours": {
           "type": "integer",
@@ -249,6 +256,18 @@
         "escalate_to": {
           "type": "string"
         }
+      },
+      "if": {
+        "not": {
+          "required": [
+            "group"
+          ]
+        }
+      },
+      "then": {
+        "required": [
+          "user"
+        ]
       }
     },
     "systemActor": {

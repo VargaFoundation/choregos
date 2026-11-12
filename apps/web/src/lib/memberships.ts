@@ -95,3 +95,14 @@ export function canManageOutposts(
 ): boolean {
   return memberships.some((m) => m.org === org && !m.project_slug && m.role === "org_admin");
 }
+
+/**
+ * Whether the person may reassign a waiting human request (ADR 0153): the organisation's
+ * administrator only. The API stays the judge; this only decides whether the ticket offers the gesture.
+ */
+export function canReassignRequests(
+  memberships: Array<Pick<Membership, "org" | "project_slug" | "role">>,
+  org: string,
+): boolean {
+  return memberships.some((m) => m.org === org && !m.project_slug && m.role === "org_admin");
+}

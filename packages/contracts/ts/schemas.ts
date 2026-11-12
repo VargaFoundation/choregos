@@ -1732,7 +1732,10 @@ export type WorkflowAgentActor = {
 
 export type WorkflowHumanActor = {
   type: "human";
-  group: string;
+  /** the group that answers the step; optional when `user` names a person (ADR 0153) */
+  group?: string;
+  /** a person who answers the step, by e-mail (ADR 0153); with `group`, the person is asked first and the group may answer once the SLA has passed */
+  user?: string;
   sla_hours?: number;
   escalate_to?: string;
 };

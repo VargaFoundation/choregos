@@ -77,6 +77,15 @@ class RunSummary(Dto):
     started_at: datetime | None = None
 
 
+class HumanRequestAssignee(Dto):
+    """Who a waiting request is addressed to (ADR 0153): a person, a group, or a person first."""
+
+    user: str | None = None
+    group: str | None = None
+    #: An organisation administrator reassigned the request: the workflow's actor no longer answers it.
+    reassigned: bool = False
+
+
 class HumanRequestDto(Dto):
     id: str
     work_item_id: str | None = None
@@ -88,6 +97,16 @@ class HumanRequestDto(Dto):
     decided_by: str | None = None
     decided_at: datetime | None = None
     decision: dict[str, Any] | None = None
+    assignee: HumanRequestAssignee | None = None
+
+
+class AssigneeChange(Dto):
+    """`POST /work-items/{id}/human-requests/{request_id}/assignee` (ADR 0153): a person, a group, or
+    both (the person first, the group once the SLA has passed), and why."""
+
+    user: str | None = Field(default=None, min_length=3, max_length=254, pattern=r"^[^@\s]+@[^@\s]+$")
+    group: str | None = Field(default=None, min_length=1, max_length=200)
+    reason: str = Field(min_length=1, max_length=2000)
 
 
 class WorkflowFailure(Dto):

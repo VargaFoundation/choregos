@@ -68,6 +68,8 @@ export type {
   HandOff,
   HandOffEvent,
   HumanRequest,
+  HumanRequestAssignee,
+  AssigneeChange,
   Me as MeDto,
   Memory,
   ModelMatrix,
