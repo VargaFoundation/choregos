@@ -16,8 +16,8 @@ from httpx import ASGITransport, AsyncClient
 
 from .conftest import login, without_postgres
 from .kits.conversations import ME, _events, _open, _record, _say
+from .kits.slow_model import _slow
 from .test_agent_sessions import Upstream, _agent, _key_rows, _ledger, upstream  # noqa: F401
-from .test_conversation_limits import _slow
 
 pytestmark = without_postgres
 

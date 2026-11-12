@@ -22,7 +22,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 
 from .kits.assistant_install import ORG
-from .test_assistant_tasks import (  # noqa: F401
+from .kits.assistant_tasks import (  # noqa: F401
     TASKS,
     _installation_id,
     _pass,
