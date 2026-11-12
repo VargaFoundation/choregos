@@ -205,7 +205,7 @@ async def test_without_a_door_signing_key_no_enrolment_token_is_issued(
     kit.configure(monkeypatch, outposts="on", outposts_door_url=ORIGIN)
     outpost = await kit.create(client)
     assert outpost["door_keys"] == [], "empty while the deployment's door has no key"
-    refused = _refused(await client.post(f"{ONE}/enrolments"), "outposts_disabled")
+    refused = _refused(await client.post(f"{ONE}/enrolments"), "door_key_missing")
     assert "CHOREGOS_OUTPOSTS_DOOR_SIGNING_KEY" in refused["detail"]
     assert await kit.rows_of(SLUG, OutpostEnrolment) == []
     assert await kit.audit_rows("outpost.enrol") == []

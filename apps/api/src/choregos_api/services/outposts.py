@@ -496,7 +496,7 @@ async def create_enrolment(
         # An outpost makes only calls signed by a key its policy file pins (ADR 0148 §13): with no key
         # to pin, an instance enrolled now could never be handed anything.
         raise refusal(
-            "outposts_disabled",
+            "door_key_missing",
             "the outposts' door has no signing key on this deployment "
             "(`CHOREGOS_OUTPOSTS_DOOR_SIGNING_KEY`): there is no key to pin, so no instance is enrolled",
         )
