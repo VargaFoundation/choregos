@@ -60,6 +60,7 @@ class AssistantStop(Dto):
 
 
 class Assistant(Dto):
+    id: str
     slug: str
     plugin: str
     plugin_version: str

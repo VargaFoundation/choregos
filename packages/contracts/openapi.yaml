@@ -9912,8 +9912,9 @@ components:
         enabled: { type: boolean }
     Assistant:
       type: object
-      required: [slug, plugin, plugin_version, assistant_name, config, owner_groups, audience_groups, channel, status, policy_overrides, bindings, created_at]
+      required: [id, slug, plugin, plugin_version, assistant_name, config, owner_groups, audience_groups, channel, status, policy_overrides, bindings, created_at]
       properties:
+        id: { type: string, readOnly: true, description: "the installation's id: what the cost and activity routes' `assistant` filter takes (ADR 0141 §1)" }
         slug: { type: string }
         plugin: { type: string }
         plugin_version: { type: string }
