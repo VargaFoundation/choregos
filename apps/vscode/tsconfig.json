@@ -19,5 +19,5 @@
       "@choregos/contracts/*": ["../../packages/contracts/ts/*"]
     }
   },
-  "include": ["src/**/*.ts", "tests/**/*.ts", "vitest.config.ts"]
+  "include": ["src/**/*.ts", "tests/**/*.ts", "vitest.config.mts"]
 }
