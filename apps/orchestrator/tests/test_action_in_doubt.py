@@ -84,11 +84,29 @@ def world() -> Iterator[World]:
             raise seen.then
         return {"delivered": len(ctx.doubts) + 1}
 
+    async def overtaken(ctx: Any, _params: dict[str, Any]) -> dict[str, Any]:
+        """Wakes after another attempt of the same effect recorded it done and emptied the answer
+        with that record: what is left at the rendezvous is an answer that is gone."""
+        from choregos_api.db.models import ActionEffect
+        from sqlalchemy import update
+
+        seen.done.append("overtaken")
+        await ctx.session.execute(
+            update(ActionEffect)
+            .where(ActionEffect.key == ctx.key)
+            .values(status="done", result={"key": "OPS-7"})
+        )
+        await ctx.session.commit()
+        raise EffectInDoubt(
+            "the outpost answered the write and the platform no longer holds its answer", sent=dict(SENT)
+        )
+
     for name, function in (
         ("test.create", create),
         ("test.undo", undo),
         ("test.doubt", doubt),
         ("test.again", again),
+        ("test.overtaken", overtaken),
     ):
         effects.declare_effect(name, function)
     yield seen
@@ -96,6 +114,7 @@ def world() -> Iterator[World]:
 
 
 CREATE = {"effect": "test.create", "with": {}, "compensate": {"effect": "test.undo", "with": {}}}
+OVERTAKEN = {"effect": "test.overtaken", "with": {}}
 DOUBT = {"effect": "test.doubt", "with": {}, "compensate": {"effect": "test.undo", "with": {}}}
 AGAIN = {"effect": "test.again", "with": {}}
 
@@ -296,6 +315,23 @@ async def test_the_activities_alone_compensate_nothing_and_close_in_doubt(
     kinds = [(kind, data.get("status")) for kind, data in await _events(action_id)]
     assert ("choregos.action.failed", "in_doubt") in kinds
     assert not [kind for kind, _ in kinds if kind.endswith("effect_compensated")]
+
+
+async def test_an_attempt_overtaken_by_the_one_that_recorded_the_effect_keeps_it_done(
+    setup: Fixture, world: World
+) -> None:
+    """Two attempts of one write wait on the same call (an attempt Temporal gave up on may still be
+    waiting when the next begins). The one that records the effect done empties the answer in the
+    same transaction; the other wakes to an answer that is gone. That is not a doubt: the recorded
+    outcome stands and is what this attempt returns, instead of being overwritten `in_doubt`."""
+    from choregos_orchestrator.activities.actions import execute_effect
+
+    action_id = await _action(setup, [OVERTAKEN])
+    played = await execute_effect({"action_id": action_id, "position": 0})
+    assert played["result"] == {"key": "OPS-7"} and played["replayed"] is True, played
+    _, effects = await _state(action_id)
+    assert [(row.status, row.result) for row in effects] == [("done", {"key": "OPS-7"})]
+    assert world.settled == [], "the attempt that recorded the outcome emptied the answer, not this one"
 
 
 async def test_an_action_that_failed_or_succeeded_closes_as_it_always_did(

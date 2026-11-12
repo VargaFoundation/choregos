@@ -16,9 +16,9 @@ operation's rule says one of two things, and both are said on the operation's ow
 statement is then an open write with neither, which the code of the earlier revision never delivers
 (it places no write through an outpost at all).
 
-Revision ID: f9b1d3e5a7c0
-Revises: e8a0c2d4f6b9
-Create Date: 2026-11-12 13:00:00+00:00
+Revision ID: b3dbe73fff38
+Revises: f9b1d3e5a7c0
+Create Date: 2026-11-12 14:00:00+00:00
 """
 
 from __future__ import annotations
@@ -30,8 +30,8 @@ from alembic import op
 
 from choregos_api.db.base import Json
 
-revision: str = "f9b1d3e5a7c0"
-down_revision: str | None = "e8a0c2d4f6b9"
+revision: str = "b3dbe73fff38"
+down_revision: str | None = "f9b1d3e5a7c0"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

@@ -157,7 +157,11 @@ async def execute_effect(payload: dict[str, Any]) -> dict[str, Any]:
     except EffectInDoubt as doubt:
         # Neither a refusal nor a failure: recorded with what was sent, before anything is said to
         # the workflow. Retried only when the effect says the same key may be delivered again.
-        await _note_doubt(key, doubt, doubts, once_durable)
+        recorded = await _note_doubt(key, doubt, doubts, once_durable)
+        if recorded is not None:
+            # Another attempt of this effect recorded its outcome while this one waited, and emptied the
+            # answer with that record: this attempt read an answer already kept, not a doubt.
+            return {"key": key, "replayed": True, "result": recorded["result"]}
         raise ApplicationError(str(doubt), type=EFFECT_IN_DOUBT, non_retryable=not doubt.again) from doubt
     except EffectRefused as refused:
         await _note_failure(key, str(refused))
@@ -213,15 +217,23 @@ def _may_be_sent_again(row: ActionEffect | None) -> bool:
 
 async def _note_doubt(
     key: str, doubt: EffectInDoubt, before: list[dict[str, Any]], once_durable: list[Any]
-) -> None:
+) -> dict[str, Any] | None:
     """Record that the effect is in doubt, with every delivery that was sent and never answered:
-    what a person is shown (ADR 0149 §5). What the effect kept elsewhere goes with this record."""
+    what a person is shown (ADR 0149 §5). What the effect kept elsewhere goes with this record.
+
+    Unless another attempt of the same effect recorded it done first: an attempt Temporal gave up on
+    may still be waiting when the next begins, and the one that records the outcome empties the answer
+    in the same transaction, so the other wakes to an answer that is gone. The record stands, and its
+    result is returned (`{"result": ...}`) instead of a doubt that would overwrite it."""
     async with db() as session:
         row = (await session.execute(select(ActionEffect).where(ActionEffect.key == key))).scalar_one()
+        if row.status == "done":
+            return {"result": row.result}
         row.status, row.error = IN_DOUBT, str(doubt)[:2000]
         row.result = {"in_doubt": [*before, dict(doubt.sent)], "again": doubt.again}
         for settle in once_durable:
             await settle(session)
+    return None
 
 
 async def _in_doubt(session: Any, action_id: str) -> ActionEffect | None:
