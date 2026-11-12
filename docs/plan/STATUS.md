@@ -1052,6 +1052,21 @@ that follows from it. Rule since that day: nothing is ✅ without a test that fa
 | S67-11 | S67 | ⬜ | — | feat(cli): artefacts, list, download, open, compare. Not started. |
 | S67-12 | S67 | ⬜ | — | feat(runner,api,cli): sub-agents are nodes of the tree (ADR 0154 §5). Not started. |
 | S67-13 | S67 | ⬜ | — | docs: the terminal in the user documentation. Not started. |
+| S68-00 | S68 | 🟡 | — | [ADR 0155](../adr/0155-the-editor-is-a-surface-of-the-platform.md) proposed (the editor is a developer surface of ADR 0154: native views for the live tree, the decisions and *Elsewhere*, one locked-down webview for the conversation, an authentication provider, the VSIX shipped with the platform and served by the instance, no telemetry), [PLAN-2026-11-12-vscode](PLAN-2026-11-12-vscode.md), the S68 stories in the backlog. **Proves**: nothing in code; the routes the editor reads are cited from the contract on `main`, and the ones it waits for are ADR 0154's gaps. **Does not prove**: any of the decisions; ADR 0154 is not on `main` yet, so the ADR names it without a link; the colour of *queued* (grey here, blue in ADR 0154 §9) is still to agree |
+| S68-01 | S68 | ⬜ | — | build(vscode): the extension's scaffold, its typed client and fake API, built in CI |
+| S68-02 | S68 | ⬜ | — | feat(vscode): the person signs in, through an authentication provider (ADR 0155 §5) |
+| S68-03 | S68 | ⬜ | — | feat(vscode): the Live tree and the status line, read-only (ADR 0155 §2-3, §6) |
+| S68-04 | S68 | ⬜ | — | feat(vscode): a run's steps, its context, and stopping it |
+| S68-05 | S68 | ⬜ | — | feat(vscode): the conversation panel (ADR 0155 §4) |
+| S68-06 | S68 | ⬜ | — | feat(vscode): citations and proposed actions in the conversation (depends on ADR 0154 G1) |
+| S68-07 | S68 | ⬜ | — | feat(vscode): sign in with a developer-surface session (depends on ADR 0154 G9) |
+| S68-08 | S68 | ⬜ | — | feat(vscode): the Decisions view, answered in one action, signed as the person (depends on ADR 0154 G8, G10) |
+| S68-09 | S68 | ⬜ | — | feat(vscode): Elsewhere |
+| S68-10 | S68 | ⬜ | — | feat(vscode): open an artefact, show a diff |
+| S68-11 | S68 | ⬜ | — | build(release): the VSIX in the release, signed, served by the instance |
+| S68-12 | S68 | ⬜ | — | build(release): publish to Open VSX and the Visual Studio Marketplace (blocked on the publisher accounts) |
+| S68-13 | S68 | ⬜ | — | test(vscode): an extension-host smoke under a virtual display |
+| S68-14 | S68 | ⬜ | — | docs: the editor in the user documentation |
 
 
 
