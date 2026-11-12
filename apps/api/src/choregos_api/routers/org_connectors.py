@@ -71,10 +71,18 @@ from ..services.connectors import (
     verify_secrets,
 )
 from ..services.egress import egress_gate_for_connector, egress_scope
-from ..services.mcp_gateway import check_declaration, connector_client, route_of
-from ..services.mcp_gateway_identity import CallIdentity, GatewayRefusal, identity_of_person
+from ..services.mcp_gateway import (
+    OUTPOST_TYPE,
+    RouteRefusal,
+    check_declaration,
+    connector_client,
+    route_of,
+    route_problem,
+)
+from ..services.mcp_gateway_identity import CallIdentity, identity_of_person
 from ..services.org_connector_access import require_connector_admin
 from ..services.organisations import organisation_by_slug
+from ..services.outpost_route import declared_outpost
 from ..services.platform_network import (
     PlatformNetworkRefused,
     check_connector_declaration,
@@ -240,6 +248,14 @@ async def declare_org_connector(
         store_prefix=prefix,
     )
     store = require_store(body.secret_values)
+    # ADR 0149 §1: a connector at an outpost is routed to an outpost of the same organisation, which
+    # its row then references: it is how the platform's paths name the outpost before they touch its
+    # rows, and why an outpost that still has connectors is not deleted.
+    outpost = (
+        await declared_outpost(session, organisation, config, name)
+        if kind == "mcp" and type_name == OUTPOST_TYPE
+        else None
+    )
     await check_connector_declaration(session, organisation.id, body.config, body.name)
     await egress_gate_for_connector(
         session,
@@ -269,6 +285,7 @@ async def declare_org_connector(
         created_by=principal.email,
         catalogue_entry=catalogue_entry,
         availability=body.availability,
+        outpost_id=outpost.id if outpost is not None else None,
     )
     session.add(instance)
     await session.flush()
@@ -373,6 +390,11 @@ async def update_org_connector(
         store_prefix=prefix,
     )
     store = require_store(values)
+    routed_to = instance.outpost_id
+    if body.config is not None and instance.kind == "mcp" and instance.type == OUTPOST_TYPE:
+        # An edit routes the connector to the outpost its new configuration names, under the rules of
+        # its declaration (ADR 0149 §1).
+        routed_to = (await declared_outpost(session, organisation, config, name)).id
     await check_connector_declaration(session, organisation.id, config, name)
     if body.config is not None and server is None:
         await egress_gate_for_connector(
@@ -383,6 +405,7 @@ async def update_org_connector(
     metas = await put_values(session, store, organisation.id, prefix, values, principal.email)
     cleared = await drop_replaced_store_values(session, store, organisation.id, before, after)
     instance.config = config
+    instance.outpost_id = routed_to
     instance.secret_refs = after or None
     instance.status = "unknown"
     if body.availability is not None and body.availability != instance.availability:
@@ -551,6 +574,24 @@ async def update_operation(
                 f"{name}/{operation} is approved by a person, always (its type declares it): "
                 "`approval` or `forbidden` only"
             )
+    if (
+        body.policy in ("allowed", "approval")
+        and op_row.access == "write"
+        and instance.kind == "mcp"
+        and instance.type == OUTPOST_TYPE
+    ):
+        # ADR 0149 §5-6, ADR 0101: a write through an outpost is opened only under the rule that it is
+        # delivered at most once (an idempotency key the operation takes, or an in-doubt outcome
+        # accepted for it). The platform does not carry that rule yet, so it does not open the write:
+        # a guarantee it cannot give is not implied by silence.
+        raise unprocessable(
+            f"{name}/{operation} is a write of a connector reached through an outpost. Such a write is "
+            "opened only under the rule that it is delivered at most once (ADR 0149 §6): the operation "
+            "takes the platform's idempotency key, or an in-doubt outcome is accepted for it. This version "
+            "of the platform does not carry that rule yet: the operation stays `forbidden`; a read of the "
+            "same connector is opened like any other",
+            [{"loc": ["body", "policy"], "msg": "a write through an outpost is not opened yet"}],
+        )
     if body.policy is not None:
         op_row.policy = body.policy
     if body.groups is not None:
@@ -616,12 +657,12 @@ async def discover_operations(org: str, name: Name, session: Db, principal: Me) 
     require_connector_admin(principal, org)
     organisation = await organisation_by_slug(session, org)
     instance = await _instance(session, organisation, name)
-    # ADR 0105: the route is judged before anything leaves; a refusal is a 409 and never marks the
-    # connector `error` (the connector is fine, its route is not).
+    # ADR 0105, ADR 0149 §7: the route is judged before anything leaves; a refusal is a 409 and never
+    # marks the connector `error` (the connector is fine, its route is not).
     try:
         route = await route_of(session, instance)
-    except GatewayRefusal as refused:
-        raise conflict(str(refused), extra={"code": refused.code}) from refused
+    except RouteRefusal as refused:
+        raise route_problem(refused) from refused
     try:
         await enforce_connector_call(session, instance, polite=False, host=route.host)
     except PlatformNetworkRefused as refused:
@@ -635,8 +676,10 @@ async def discover_operations(org: str, name: Name, session: Db, principal: Me) 
             raise unprocessable(f"`{instance.type}` does not discover its operations: its type declares them")
         async with egress_scope(session, organisation, "api", f"org-connector:{name}"):
             tools = await list_tools_fn()
-    except GatewayRefusal as refused:  # a lost assertion key: refused, the connector is not `error`
-        raise conflict(str(refused), extra={"code": refused.code}) from refused
+    except RouteRefusal as refused:
+        # A lost assertion key; an outpost that is offline, that refused or that did not answer in time:
+        # refused, and the connector is not `error`.
+        raise route_problem(refused) from refused
     except (McpError, SecretNotFound, httpx.HTTPError) as failure:
         instance.status, instance.last_check_at = "error", utcnow()
         instance.last_error = redact(str(failure))[:1000]

@@ -3085,6 +3085,49 @@
   },
   {
     "capabilities": [
+      "mcp"
+    ],
+    "config_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "endpoint": {
+          "description": "the alias of an endpoint in that outpost's policy file",
+          "pattern": "^[a-z][a-z0-9-]{0,62}$",
+          "type": "string"
+        },
+        "outpost": {
+          "description": "an outpost of the same organisation",
+          "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+          "type": "string"
+        },
+        "timeout_s": {
+          "default": 30,
+          "description": "seconds before a call is abandoned, the wait for an instance to claim it included",
+          "maximum": 120,
+          "minimum": 1,
+          "type": "number"
+        }
+      },
+      "required": [
+        "outpost",
+        "endpoint"
+      ],
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "MCP server at an outpost",
+    "has_check_config": true,
+    "has_egress": true,
+    "has_factory": true,
+    "kind": "mcp",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [],
+    "type": "mcp-outpost"
+  },
+  {
+    "capabilities": [
       "notify"
     ],
     "config_schema": {

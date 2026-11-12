@@ -731,11 +731,12 @@ An outpost is a place an organisation's administrator enrols, which only dials o
 ([ADR 0147](adr/0147-an-outpost-only-dials-out.md)): the platform never connects to it and stores no
 address of it. Outposts are off unless you turn them on. What is in place is the platform's side of
 the record (the tables, the `outpost:manage` right of the organisation's administrator and the
-management API, `/api/v1/orgs/{org}/outposts…`) and the door an outpost dials (`/outposts/v1`,
+management API, `/api/v1/orgs/{org}/outposts…`), the door an outpost dials (`/outposts/v1`,
 [ADR 0148](adr/0148-the-outpost-door-is-a-third-door-with-its-own-contract.md)): an instance enrols
-there, is approved by a person, and polls. The daemon is a separate package with a chart of its own
-(below), and no connector routes a call to an outpost yet: until one does, an instance that polls is
-handed nothing.
+there, is approved by a person, and polls; and the connector type that routes a tool call to one
+(`mcp-outpost`, [ADR 0149](adr/0149-a-tool-may-live-at-an-outpost.md);
+[Integrations](integrations.md#a-tool-server-at-an-outpost-adr-0149)). The daemon is a separate package
+with a chart of its own (below).
 
 | Setting | Default | What it does |
 | :-- | :-- | :-- |
@@ -746,6 +747,8 @@ handed nothing.
 | `CHOREGOS_OUTPOSTS_DOOR_RATE_PER_MINUTE` | `1200` | the most requests one instance sends the door in a minute, counted in memory and per replica: beyond it the door answers 429 `rate_limited` with `retry_after`. `0` lifts the limit. It bounds an instance that authenticated; requests that carry no valid signature are bounded at the entrance, by source |
 | `CHOREGOS_OUTPOSTS_CALLS_IN_FLIGHT_PER_OUTPOST` | `128` | the most calls one outpost has in flight (placed, and not yet answered, refused or out of time). One more is refused where it is admitted, before anything is written |
 | `CHOREGOS_OUTPOSTS_CALLS_IN_FLIGHT_PER_ORGANISATION` | `512` | the same bound over all the outposts of one organisation |
+| `CHOREGOS_OUTPOSTS_CALLS_PER_MINUTE_PER_OUTPOST` | `600` | the most calls one outpost is handed in a minute: the calls placed in the last sixty seconds, counted from their rows where the next one is admitted, so every replica reads the same number. One more is refused before anything is written, and the caller is told to come back (a tool error `outpost_not_admitted`, 429) |
+| `CHOREGOS_OUTPOSTS_CALLS_PER_MINUTE_PER_ORGANISATION` | `2400` | the same bound over all the outposts of one organisation |
 
 **With the chart.** `global.outposts` renders these settings, the door's route and, if you ask for it,
 the door's own Deployment. Nothing of it is rendered while `global.outposts.enabled` is false, which
@@ -782,6 +785,15 @@ global:
 `global.extraEnv` may not set one of these variables once `global.outposts.enabled` is true: the
 render fails and names it. While it is false, an installation that passed them through
 `global.extraEnv` (the way before this chart rendered them) renders as before.
+
+**The workers read the switch too.** A governed action's effect that calls a connector at an outpost
+is played by the orchestrator, which places the call itself: with the switch off there, such an effect
+is refused `outpost_paused`. The chart gives the switch and the quotas of calls in flight to every
+worker for that reason (and the workers already hold `CHOREGOS_SECRETS_KEKS`). The workers hold no
+`LISTEN` connection: a call a worker placed is read at its next look, up to 10 seconds after the
+outpost answered. The two caps per minute (`CHOREGOS_OUTPOSTS_CALLS_PER_MINUTE_PER_OUTPOST`, 600, and
+`CHOREGOS_OUTPOSTS_CALLS_PER_MINUTE_PER_ORGANISATION`, 2400) are not values of the chart yet: set them
+with `global.extraEnv`, for the API and the workers alike.
 
 **The signing key's Secret.** Either you create it and name it:
 

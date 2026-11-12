@@ -163,7 +163,15 @@ constrains today:
    bounded and stored as data, never interpreted.
 10. **Quotas and switches.** Calls in flight and calls per minute are capped per outpost and per
     organisation, where a call is admitted, in the line of ADR 0027: a noisy neighbour is bounded at
-    admission and by quota, not by a queue or a pool per organisation. There is a switch per outpost
+    admission and by quota, not by a queue or a pool per organisation. Both are counted from the calls'
+    own rows, in the transaction that places the next call and under the lock that serialises an
+    organisation's placements: the API has no shared store (`rate_limit.py`), and a count kept in one
+    replica's memory would let each replica admit the whole cap. A call is in flight until it is
+    answered, refused or out of time; it counts in the minute for sixty seconds from the moment it is
+    placed, whatever becomes of it, and a call placed again under its id (no instance ever claimed
+    it) is counted from the moment it is placed again. The table keeps a row per call, so the minute
+    is read through an index of its own (`outpost_id`, `created_at`).
+    There is a switch per outpost
     (`pause`: nothing more is handed to it, and the poll's stop flag tells its instances) and a global one
     (`CHOREGOS_OUTPOSTS`, ADR 0147 §12).
 11. **Secrets at rest.** A call's row holds references and digests. Its arguments wait for their claim

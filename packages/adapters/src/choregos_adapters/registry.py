@@ -345,7 +345,13 @@ def available(kind: ConnectorKind | str) -> list[str]:
 #: (`FakePluginTrackerServer`, the transport the API injects), so the profile mapping is what runs.
 #: The Teams notifier (S63-25) stays itself too: under fakes it posts its real card to `FakeTeamsWebhook`,
 #: so the guarded transport and the egress allowlist are what run.
-BUILT_UNDER_FAKES: frozenset[tuple[str, str]] = frozenset({("tracker", "plugin"), ("notify", "teams")})
+#: A connector at an outpost (S65-13, ADR 0149) stays itself as well: its client opens no connection, it
+#: places a call at a rendezvous only the platform supplies, and it is the platform that hands it the
+#: scriptable `FakeOutpost` where it has no door to meet an outpost at. Built as the fake `mcp` client,
+#: it would call the fake MCP server directly, as if the outpost were not there.
+BUILT_UNDER_FAKES: frozenset[tuple[str, str]] = frozenset(
+    {("tracker", "plugin"), ("notify", "teams"), ("mcp", "mcp-outpost")}
+)
 
 
 def build(kind: ConnectorKind | str, type_name: str, config: dict[str, Any] | None = None) -> Any:

@@ -259,6 +259,56 @@ async def _instances(session: AsyncSession, outpost: Outpost) -> list[OutpostIns
         return sorted(rows, key=lambda i: (_INSTANCE_ORDER.get(i.status, 9), i.id))
 
 
+@dataclass(frozen=True, slots=True)
+class Presence:
+    """Whether an outpost is there to take a call, as the last polls of its instances say.
+
+    It is read, never promised: an instance that stopped polling is still counted for the length of
+    the poll window, and a call routed to it then waits for a claim that does not come. What reads it
+    (the connector's route, S65-13; an agent's access tab, ADR 0149 §10) says "offline" from it."""
+
+    #: An active instance polled within the poll window.
+    online: bool
+    #: The aliases the online instances serve, among those that announce `tools`: names only.
+    endpoints: frozenset[str]
+
+    def serves(self, endpoint: str) -> bool:
+        """An instance that polled lately would be handed a call for this alias."""
+        return endpoint in self.endpoints
+
+
+async def presence(session: AsyncSession, outpost: Outpost, *, now: datetime | None = None) -> Presence:
+    """The outpost's presence now. Columns are read, not rows the session may already hold: what a
+    poll wrote a moment ago, in another session, is what counts. The outpost is named here."""
+    now = now or utcnow()
+    floor = now - timedelta(seconds=POLL_WINDOW_S)
+    tools = OutpostCapability.TOOLS.value
+    async with in_outpost_scope(session, outpost.id):
+        rows = await session.execute(
+            select(
+                OutpostInstance.last_seen_at, OutpostInstance.capabilities, OutpostInstance.endpoints
+            ).where(
+                OutpostInstance.outpost_id == outpost.id,
+                OutpostInstance.status == OutpostInstanceStatus.ACTIVE.value,
+                OutpostInstance.last_seen_at.is_not(None),
+            )
+        )
+        seen = [
+            (capabilities, endpoints)
+            for at, capabilities, endpoints in rows
+            if at is not None and _aware(at) >= floor
+        ]
+    return Presence(
+        online=bool(seen),
+        endpoints=frozenset(
+            str(alias)
+            for capabilities, endpoints in seen
+            if tools in (capabilities or [])
+            for alias in endpoints or []
+        ),
+    )
+
+
 async def connectors_of(session: AsyncSession, outpost: Outpost) -> list[str]:
     """The connectors that route to this outpost, by name (`org_connectors.outpost_id`)."""
     return sorted(
@@ -852,6 +902,7 @@ __all__ = [
     "Enrolled",
     "EnrolmentAdmission",
     "EnrolmentRefused",
+    "Presence",
     "admit_enrolment",
     "approve_instance",
     "call_records",
@@ -869,6 +920,7 @@ __all__ = [
     "outpost_id_of_instance",
     "outpost_id_of_token",
     "pause_outpost",
+    "presence",
     "refusal",
     "require_manage",
     "require_person",

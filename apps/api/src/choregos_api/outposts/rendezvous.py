@@ -79,7 +79,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
 from pydantic import ValidationError
-from sqlalchemy import func, select, text, update
+from sqlalchemy import func, or_, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -365,6 +365,8 @@ PAUSED: Final = "paused"
 REVOKED: Final = "revoked"
 OUTPOST_QUOTA: Final = "outpost_quota"
 ORGANISATION_QUOTA: Final = "organisation_quota"
+OUTPOST_RATE: Final = "outpost_rate"
+ORGANISATION_RATE: Final = "organisation_rate"
 TOO_LARGE: Final = "too_large"
 ID_TAKEN: Final = "id_taken"
 
@@ -379,13 +381,22 @@ class NotAdmitted(Exception):  # noqa: N818 - a decision at admission, not a fai
         self.reason = reason
 
 
+#: The length of the minute calls are counted over: the last sixty seconds, whenever a call is placed.
+RATE_WINDOW_S: Final = 60
+
+
 @dataclass(frozen=True, slots=True)
 class Quota:
-    """Calls in flight, bounded where a call is admitted (ADR 0148 §10, in the line of ADR 0027): a
-    call counts from the moment it is placed until it is answered, refused or out of time."""
+    """Calls in flight and calls per minute, bounded where a call is admitted (ADR 0148 §10, in the
+    line of ADR 0027). A call is in flight from the moment it is placed until it is answered, refused
+    or out of time. It counts in the minute from the moment it is placed, for sixty seconds, whatever
+    becomes of it: the rows are what is counted, so every replica reads the same number. `None`
+    lifts a cap per minute."""
 
     per_outpost: int
     per_organisation: int
+    per_minute_per_outpost: int | None = None
+    per_minute_per_organisation: int | None = None
 
     @classmethod
     def of_the_deployment(cls) -> Quota:
@@ -393,7 +404,13 @@ class Quota:
         return cls(
             per_outpost=settings.outposts_calls_in_flight_per_outpost,
             per_organisation=settings.outposts_calls_in_flight_per_organisation,
+            per_minute_per_outpost=settings.outposts_calls_per_minute_per_outpost,
+            per_minute_per_organisation=settings.outposts_calls_per_minute_per_organisation,
         )
+
+    @property
+    def per_minute(self) -> bool:
+        return self.per_minute_per_outpost is not None or self.per_minute_per_organisation is not None
 
 
 @dataclass(frozen=True, slots=True)
@@ -421,25 +438,62 @@ def _lock_scope(org_id: str) -> str:
     return f"outpost_calls:{org_id}"
 
 
-async def _in_flight(session: AsyncSession, org_id: str) -> dict[str, int]:
-    """The calls each outpost of an organisation has in flight. A session that names an outpost sees
-    that outpost's calls only, so the registry is read with none named and each outpost is named in
-    turn; what the session named before is restored."""
+async def _counted(
+    session: AsyncSession, org_id: str, since: datetime | None
+) -> tuple[dict[str, int], dict[str, int]]:
+    """The calls each outpost of an organisation has in flight, and those placed at each since
+    `since` (none is counted when it is `None`). A session that names an outpost sees that outpost's
+    calls only, so the registry is read with none named and each outpost is named in turn; what the
+    session named before is restored."""
     held: dict[str, int] = {}
+    placed: dict[str, int] = {}
+    waiting = OutpostCall.state.in_(_WAITING)
     async with in_outpost_scope(session, None):
         outposts = list((await session.execute(select(Outpost.id).where(Outpost.org_id == org_id))).scalars())
         for outpost_id in outposts:
             async with in_outpost_scope(session, outpost_id):
-                held[outpost_id] = int(
-                    (
-                        await session.execute(
-                            select(func.count())
-                            .select_from(OutpostCall)
-                            .where(OutpostCall.outpost_id == outpost_id, OutpostCall.state.in_(_WAITING))
+                if since is None:
+                    counts = select(func.count()).where(OutpostCall.outpost_id == outpost_id, waiting)
+                    held[outpost_id] = int((await session.execute(counts)).scalar_one())
+                    continue
+                lately = OutpostCall.created_at > since
+                in_flight, in_the_minute = (
+                    await session.execute(
+                        select(func.count().filter(waiting), func.count().filter(lately)).where(
+                            OutpostCall.outpost_id == outpost_id, or_(waiting, lately)
                         )
-                    ).scalar_one()
-                )
-    return held
+                    )
+                ).one()
+                held[outpost_id], placed[outpost_id] = int(in_flight), int(in_the_minute)
+    return held, placed
+
+
+def _refuse_beyond_the_quota(
+    outpost: Outpost, quota: Quota, held: dict[str, int], placed: dict[str, int]
+) -> None:
+    """`NotAdmitted` when one more call would pass a cap: calls in flight first, then calls in the
+    last minute, the outpost's before the organisation's."""
+    if held.get(outpost.id, 0) >= quota.per_outpost:
+        raise NotAdmitted(
+            OUTPOST_QUOTA,
+            f"the outpost `{outpost.slug}` already has {quota.per_outpost} calls in flight",
+        )
+    if sum(held.values()) >= quota.per_organisation:
+        raise NotAdmitted(
+            ORGANISATION_QUOTA,
+            f"the organisation's outposts already have {quota.per_organisation} calls in flight",
+        )
+    per_outpost, per_organisation = quota.per_minute_per_outpost, quota.per_minute_per_organisation
+    if per_outpost is not None and placed.get(outpost.id, 0) >= per_outpost:
+        raise NotAdmitted(
+            OUTPOST_RATE,
+            f"the outpost `{outpost.slug}` was already handed {per_outpost} calls in the last minute",
+        )
+    if per_organisation is not None and sum(placed.values()) >= per_organisation:
+        raise NotAdmitted(
+            ORGANISATION_RATE,
+            f"the organisation's outposts were already handed {per_organisation} calls in the last minute",
+        )
 
 
 #: What a session holds while it places: the transaction that took the organisation's lock.
@@ -518,7 +572,7 @@ async def place(  # noqa: PLR0913 - one call is these facts, keyword-only
     The arguments wait sealed under the deployment's key wrapper (`SecretStoreUnavailable` without
     one), and so does the private half of a key made for this call's answer. `NotAdmitted` when the
     call is not taken: outposts switched off, the outpost paused or revoked, a quota of calls in
-    flight reached, a call too large to cross the door, an id that is another call's."""
+    flight or per minute reached, a call too large to cross the door, an id that is another call's."""
     settings = get_settings()
     if not settings.outposts:
         raise NotAdmitted(SWITCHED_OFF, "outposts are switched off on this deployment (`CHOREGOS_OUTPOSTS`)")
@@ -558,17 +612,9 @@ async def place(  # noqa: PLR0913 - one call is these facts, keyword-only
             if not (call.state == _EXPIRED and call.claimed_at is None and call.recorded is None):
                 return Placed(id=call.id, state=OutpostCallState(call.state), created=False)
 
-    held = await _in_flight(session, outpost.org_id)
-    if held.get(outpost.id, 0) >= quota.per_outpost:
-        raise NotAdmitted(
-            OUTPOST_QUOTA,
-            f"the outpost `{outpost.slug}` already has {quota.per_outpost} calls in flight",
-        )
-    if sum(held.values()) >= quota.per_organisation:
-        raise NotAdmitted(
-            ORGANISATION_QUOTA,
-            f"the organisation's outposts already have {quota.per_organisation} calls in flight",
-        )
+    since = now - timedelta(seconds=RATE_WINDOW_S) if quota.per_minute else None
+    held, placed = await _counted(session, outpost.org_id, since)
+    _refuse_beyond_the_quota(outpost, quota, held, placed)
 
     again = call is not None
     expires_at = now + timedelta(seconds=timeout_s)
@@ -590,6 +636,9 @@ async def place(  # noqa: PLR0913 - one call is these facts, keyword-only
             action_id=action_id,
         )
     call.state = _PENDING
+    # When it was placed: what the cap per minute counts, and the order instances are handed calls in.
+    # A call placed again under its id (no instance ever claimed it) is placed now.
+    call.created_at = now
     call.expires_at = expires_at
     call.finished_at = None
     call.asserted = names or None
@@ -1131,8 +1180,11 @@ __all__ = [
     "LOOK_S",
     "MAX_SEALED_CALL_BYTES",
     "ORGANISATION_QUOTA",
+    "ORGANISATION_RATE",
     "OUTPOST_QUOTA",
+    "OUTPOST_RATE",
     "PAUSED",
+    "RATE_WINDOW_S",
     "REVOKED",
     "SWITCHED_OFF",
     "TOO_LARGE",

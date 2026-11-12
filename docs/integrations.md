@@ -565,6 +565,62 @@ namespace; `services/plugin_servers.py`) is not an upstream. It is never reached
 and `required` mode does not refuse it. See [Servers](plugins.md#servers) and
 [Plugin servers](deployment.md#plugin-servers).
 
+## A tool server at an outpost (ADR 0149)
+
+Some servers live where nothing outside may connect: a production network, an internal tracker or
+forge, a database behind a firewall whose rule is "no inbound". If your organisation already exposes
+them through its own MCP gateway, use the section above: it needs nothing more. Otherwise an
+**outpost** is installed inside that network ([ADR 0147](adr/0147-an-outpost-only-dials-out.md)): a
+daemon that only dials out to Choregos and makes the calls it is handed. A connector of type
+`mcp-outpost` is how an organisation uses a server through one
+([ADR 0149](adr/0149-a-tool-may-live-at-an-outpost.md)).
+
+**What it is declared with.** An outpost's name, the alias of an endpoint in that outpost's policy
+file, and a timeout (`McpOutpostConnectorConfig` in `packages/contracts/openapi.yaml`). No URL and no
+secret: the address and the credential are the outpost's and exist in its file only. A declaration
+that carries either is a 422, and so is the name of an outpost the organisation does not have. The
+walk-through is the procedure
+[Connect an MCP server that lives at an outpost](procedures/connector.mcp.mcp-outpost.md).
+
+**What changes for agents, and what does not.** An agent names the same tools as before. The agent's
+selection, the operation's policy and groups, its argument schema, the grants that bind its
+arguments, the approval, the result cap and the injection guard apply as for a direct connector
+(`services/broker.py`): they are decided before a call leaves, and what the platform refuses writes
+nothing an outpost could claim. A call is booked in the cost ledger under `mcp:<connector>` and its
+`tool.called` event carries the same digests. What changes is the transport: instead of an HTTP call,
+the call waits in the platform's database until an instance of the outpost claims it at its next poll
+(`services/outpost_route.py`), sealed to that instance and signed by the door. The outpost is told
+who the call is made for, as names it may log and decides nothing on; it reads from its own server
+whether a tool writes. Each call is a line of the network activity under `outpost:<name>/<alias>`:
+the platform opened no connection, so the organisation's allowed hosts and per-host rate do not
+apply to it; the outpost's own ceilings and the door's quotas do.
+
+**What it can refuse**, each a tool error that names the outpost, never a crash:
+
+| Code | When | Booked |
+| :-- | :-- | :-- |
+| `outpost_paused` | the outpost is paused or revoked, or outposts are switched off | no |
+| `outpost_offline` | no instance that serves the alias polled in the last minute, or none took the call within the connector's timeout | no |
+| `outpost_refused` | the outpost's own policy refused; `refusal` is its code (`tool_not_allowed`, `write_denied`, `unknown_endpoint`…) | no |
+| `outpost_not_admitted` | a quota of calls in flight or per minute is reached, or the call is too large to cross the door | no |
+| `outpost_timeout` | an instance took the read and its server did not answer in time | yes: it may have been executed |
+
+At declaration and at discovery the same refusals are a 409 that carries the code (a quota is a 429).
+A call that reached no server is not booked.
+
+**Limits of this version.**
+
+- **Reads only.** A write through an outpost is opened only under the rule that it is delivered at
+  most once (ADR 0149 §5-6); until the platform carries that rule, a write operation of an
+  `mcp-outpost` connector cannot be set to `allowed` or `approval`.
+- **The connector's own identity only.** The call reaches the server under the credential the
+  outpost holds for the alias. A need that must be called as the person cannot be bound to such a
+  connector.
+- **Mode `required` of the MCP gateway does not refuse it** (ADR 0149 §8): through an outpost
+  Choregos holds no upstream credential and opens no upstream connection.
+- **An outpost does not keep data where it is.** A tool's result travels to Choregos, is bounded and
+  screened there, and is read by a model.
+
 ## Limits
 
 - 120 calls a minute per token, per API replica (HTTP 429 with `Retry-After` beyond).
