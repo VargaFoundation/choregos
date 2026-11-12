@@ -71,3 +71,13 @@ def test_a_monochrome_console_renders_no_style_at_all(monkeypatch: pytest.Monkey
     target.print("[bold]bold[/bold]", theme.badge(theme.FAILED, target))
     assert "\x1b[" not in stream.getvalue()
     assert target.color_system is None
+
+
+def test_queued_is_grey_and_never_reads_as_running() -> None:
+    """The mock-up of 2026-11-12: a queued entry is grey and an outline, distinct from running."""
+    from choregos_cli import theme
+
+    assert theme.QUEUED.style == "bright_black"
+    assert theme.QUEUED.glyph == "○"
+    assert theme.QUEUED.style != theme.RUNNING.style
+    assert theme.QUEUED.glyph != theme.RUNNING.glyph
