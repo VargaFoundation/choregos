@@ -582,8 +582,8 @@ row-level policy.
   like a session's.
 - **Erasure by user.** `DELETE /api/v1/me/assistants/{org}/{slug}` removes the caller's conversations and
   memories in that installation, their standing delegations (revoked first), task subscriptions, the artifacts of
-  their task runs (the work item stays as the trace; the bytes of a file artifact stay in the object store, which
-  has no delete) and their connected accounts at the connectors the installation binds with `user_consent`
+  their task runs (the work item stays as the trace; the bytes of a file artifact are deleted from the object store first, the row after: a store
+  that refuses fails the erasure with a 502 and nothing is erased, the person asks again) and their connected accounts at the connectors the installation binds with `user_consent`
   (revoked at the source when it offers it), and is written in the audit log. The person's journal lines stay as
   the accountability record (ADR 0133 point 6 lists no deletion of it) but lose who: their `user_id` becomes
   `erased-user:<random>`, one token per erasure, not derived from the id.

@@ -426,8 +426,23 @@ async def test_the_reads_journal_stays_in_its_organisation_on_postgresql(pg_app:
 # ───────────────────────── tasks, accounts and delegations (E3) ─────────────────────────
 
 
-async def _task_artifact(email: str, installation_id: str, key: str, *, name: str = "brief") -> str:
-    """A task work item in the person's personal space with one artifact; the work item's id."""
+@pytest.fixture
+def store() -> Iterator[Any]:
+    """A fresh in-memory object store, the platform's for the test (S63-24)."""
+    from choregos_adapters.fakes.storage import FakeObjectStore
+    from choregos_api.object_store import use_object_store
+
+    fake = FakeObjectStore()
+    use_object_store(fake)
+    yield fake
+    use_object_store(None)
+
+
+async def _task_artifact(
+    email: str, installation_id: str, key: str, *, name: str = "brief", file_bytes: Any = None
+) -> str:
+    """A task work item in the person's personal space with one artifact; the work item's id. With
+    `file_bytes`, a FILE artifact whose bytes are in the object store (`store` fixture)."""
     from choregos_api.db.models import ArtifactRecord, Organization, User, WorkItem
     from choregos_api.db.session import session_scope
     from choregos_api.services.personal_spaces import personal_space
@@ -445,11 +460,16 @@ async def _task_artifact(email: str, installation_id: str, key: str, *, name: st
         )
         session.add(item)
         await session.flush()
+        file_key = f"orgs/{organisation.id}/work-items/{item.id}/artifacts/{name}/0" if file_bytes else None
+        if file_key:
+            from choregos_api.object_store import object_store
+
+            await object_store().put(file_key, file_bytes, "application/pdf")
         session.add(
             ArtifactRecord(
                 org_id=organisation.id, work_item_id=item.id, name=name, version=1, type="report",
-                kind="inline", media_type="text/markdown", digest="sha256:0", size=3, content="abc",
-                run_id="r",
+                kind="file" if file_key else "inline", media_type="text/markdown", digest="sha256:0",
+                size=3, content=None if file_key else "abc", storage_key=file_key, run_id="r",
             )
         )  # fmt: skip
         return item.id
@@ -771,3 +791,110 @@ async def test_an_erasure_by_user_keeps_the_journal_lines_but_pseudonymises_the_
     assert len({r.user_id for r in ours}) == 1, "the lines still read as one person's"
     assert [r.operation for r in ours] == ["get_quote", "search_news"], "what was read is intact"
     assert any(r.user_id == "colleague-id" for r in rows), "the colleague's line is untouched"
+
+
+# ───────────────────────── the bytes of a FILE artifact (S63-24) ─────────────────────────
+
+
+async def test_an_erasure_by_user_deletes_the_bytes_of_their_file_artifacts_and_keeps_the_colleagues(
+    client: AsyncClient, admin: str, upstream: Upstream, offline: Path, store: Any
+) -> None:
+    from choregos_api.db.models import User
+    from choregos_api.db.session import session_scope
+
+    installation = await _assistant(client)
+    async with session_scope(orgs="*") as session:
+        session.add(User(email="colleague@varga.dev", display_name="c", oidc_sub="c"))
+    mine = await _task_artifact("admin@varga.dev", installation, "TASK-mine", file_bytes=b"%PDF-mine")
+    theirs = await _task_artifact(
+        "colleague@varga.dev", installation, "TASK-theirs", file_bytes=b"%PDF-theirs"
+    )
+    assert len(store.objects) == 2
+
+    store.fail_next("store down")  # the first delete is refused: nothing is erased
+    refused = await client.delete(ME)
+    assert refused.status_code == 502, refused.text
+    assert await _artifacts() == ["TASK-mine", "TASK-theirs"], "a row is never deleted ahead of its bytes"
+
+    gone = await client.delete(ME)
+    assert gone.status_code == 200, gone.text
+    assert gone.json()["others"]["task_artifacts"] == 1
+    assert [k for k in store.objects if f"/{mine}/" in k] == [], "the bytes are gone from the store"
+    assert [k for k in store.objects if f"/{theirs}/" in k] != [], "the colleague's bytes stay"
+    assert await _artifacts() == ["TASK-theirs"]
+
+
+async def test_an_erasure_by_subject_deletes_the_bytes_of_the_file_artifacts_it_erases(
+    client: AsyncClient, admin: str, upstream: Upstream, offline: Path, store: Any
+) -> None:
+    from choregos_api.db.models import AssistantRead, Organization, User
+    from choregos_api.db.session import session_scope
+
+    installation = await _assistant(client)
+    about = await _task_artifact("admin@varga.dev", installation, "TASK-about", file_bytes=b"%PDF-a")
+    other = await _task_artifact("admin@varga.dev", installation, "TASK-other", file_bytes=b"%PDF-o")
+    async with session_scope(orgs="*") as session:
+        me = (await session.execute(select(User).where(User.email == "admin@varga.dev"))).scalar_one()
+        org = (await session.execute(select(Organization))).scalar_one()
+        session.add(
+            AssistantRead(
+                org_id=org.id, installation_id=installation, user_id=me.id, work_item_key="TASK-about",
+                need="market_data", operation="market_data__get_quote", subject_type=SUBJECT["type"],
+                subject_key=SUBJECT["key"], at=utcnow(),
+            )
+        )  # fmt: skip
+    erased = await client.post(
+        f"{ORG}/assistants/investment-assistant/erasure", json={**BY_SUBJECT, "mode": "erase"}
+    )
+    assert erased.status_code == 200, erased.text
+    assert [k for k in store.objects if f"/{about}/" in k] == []
+    assert [k for k in store.objects if f"/{other}/" in k] != []
+
+
+async def test_the_purge_deletes_the_bytes_of_expired_file_artifacts_and_retries_a_refused_one(
+    client: AsyncClient, admin: str, upstream: Upstream, offline: Path, store: Any
+) -> None:
+    from choregos_api.db.models import ArtifactRecord
+    from choregos_api.db.session import session_scope
+    from choregos_api.services.assistant_retention import purge_once
+
+    installation = await _assistant(client)
+    old = await _task_artifact("admin@varga.dev", installation, "TASK-old", file_bytes=b"%PDF-old")
+    fresh = await _task_artifact("admin@varga.dev", installation, "TASK-fresh", file_bytes=b"%PDF-new")
+    async with session_scope(orgs="*") as session:
+        for artifact in (
+            await session.execute(select(ArtifactRecord).where(ArtifactRecord.work_item_id == old))
+        ).scalars():
+            artifact.created_at = utcnow() - timedelta(days=60)
+    store.fail_next("store down")
+    async with session_scope(orgs="*") as session:
+        assert (await purge_once(session))["task_artifacts"] == 0, "refused: the row stays"
+    assert await _artifacts() == ["TASK-fresh", "TASK-old"]
+    assert [k for k in store.objects if f"/{old}/" in k] != [], "bytes and row stay together"
+
+    async with session_scope(orgs="*") as session:
+        assert (await purge_once(session))["task_artifacts"] == 1, "the next pass retries"
+    assert await _artifacts() == ["TASK-fresh"]
+    assert [k for k in store.objects if f"/{old}/" in k] == []
+    assert [k for k in store.objects if f"/{fresh}/" in k] != []
+
+
+async def test_a_missing_object_does_not_fail_the_purge(
+    client: AsyncClient, admin: str, upstream: Upstream, offline: Path, store: Any
+) -> None:
+    from choregos_api.db.models import ArtifactRecord
+    from choregos_api.db.session import session_scope
+    from choregos_api.services.assistant_retention import purge_once
+
+    installation = await _assistant(client)
+    old = await _task_artifact("admin@varga.dev", installation, "TASK-old", file_bytes=b"%PDF-old")
+    for key in list(store.objects):
+        store.forget(key)  # the object is already gone (a lifecycle rule, an earlier pass)
+    async with session_scope(orgs="*") as session:
+        for artifact in (
+            await session.execute(select(ArtifactRecord).where(ArtifactRecord.work_item_id == old))
+        ).scalars():
+            artifact.created_at = utcnow() - timedelta(days=60)
+    async with session_scope(orgs="*") as session:
+        assert (await purge_once(session))["task_artifacts"] == 1
+    assert await _artifacts() == []
