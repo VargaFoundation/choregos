@@ -62,6 +62,31 @@ async def test_an_unbound_required_need_is_incomplete_and_binding_it_makes_it_re
     assert (await client.get(f"{ORG}/assistants")).json()["items"][0]["status"] == "ready"
 
 
+async def test_an_assistant_says_the_installation_id_its_spend_and_activity_are_filtered_by(
+    client: AsyncClient,
+    org: str,
+    offline: Path,  # noqa: F811
+) -> None:
+    """The cost and activity routes' `assistant` filter takes the installation's id (ADR 0141 §1): the
+    assistant says it, the same in the list and alone (issue #1657)."""
+    from choregos_api.db.models import AssistantInstallation
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import select
+
+    await _plugin(client)
+    installed = await _install(client)
+    assert installed.status_code == 201, installed.text
+    async with session_scope() as session:
+        row_id = (
+            await session.execute(
+                select(AssistantInstallation.id).where(AssistantInstallation.slug == "investment-assistant")
+            )
+        ).scalar_one()
+    assert installed.json()["id"] == row_id
+    assert (await client.get(f"{ORG}/assistants/investment-assistant")).json()["id"] == row_id
+    assert (await client.get(f"{ORG}/assistants")).json()["items"][0]["id"] == row_id
+
+
 async def test_a_connector_that_does_not_serve_the_operation_is_refused(
     client: AsyncClient,
     org: str,

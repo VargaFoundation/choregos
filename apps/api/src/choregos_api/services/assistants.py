@@ -414,6 +414,7 @@ async def to_dto(session: AsyncSession, row: AssistantInstallation) -> Assistant
         for b, c in await _bindings(session, row)
     ]
     return Assistant(
+        id=row.id,
         slug=row.slug,
         plugin=row.plugin,
         plugin_version=row.plugin_version,
