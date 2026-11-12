@@ -47,7 +47,7 @@ function LinkedAccountRow({
   const forge = instanceLabel(account.provider, account.base_url);
   const facts = [
     showOrg ? account.org : null,
-    `id ${account.external_id}`,
+    `ID ${account.external_id}`,
     account.verified && account.verified_at
       ? `verified ${shortDate(account.verified_at)}`
       : account.created_by
