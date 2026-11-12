@@ -129,6 +129,8 @@ import type {
   GitHubInstallLinkRequest,
   GitHubRepositoryPage,
   HandOff,
+  HumanRequest,
+  AssigneeChange,
   Membership,
   MembershipUpsert,
   TrackerIdentity,
@@ -1174,6 +1176,15 @@ export const api = {
     request<unknown>(`/work-items/${id}/decisions`, { method: "POST", body: JSON.stringify(body) }),
   action: (id: string, action: string) =>
     request<unknown>(`/work-items/${id}/actions`, { method: "POST", body: JSON.stringify({ action }) }),
+  /**
+   * Readdresses a waiting request to a person, a group, or both (ADR 0153): an organisation
+   * administrator's gesture, audited with the reason. 422 for a person outside the organisation.
+   */
+  reassign: (id: string, requestId: string, body: AssigneeChange) =>
+    request<HumanRequest>(`/work-items/${id}/human-requests/${encodeURIComponent(requestId)}/assignee`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   /**
    * Moves a work item to another active workflow of its project, at that workflow's initial state
    * (ADR 0123, S52-11). Refused (409) while a run is in progress, once the item ended and to its own

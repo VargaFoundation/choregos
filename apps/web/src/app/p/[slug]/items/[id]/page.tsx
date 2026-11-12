@@ -40,6 +40,7 @@ import { ChangeWorkflow } from "@/components/ticket/change-workflow";
 import { NextStepBanner } from "@/components/ticket/next-step-banner";
 import { TargetRepository } from "@/components/ticket/target-repository";
 import { LongText, RequestCard } from "@/components/ticket/request-card";
+import { RequestAssignee } from "@/components/ticket/request-assignee";
 import { runOutcome } from "@/components/ticket/run-outcome";
 import { keyNames, useLiveRefresh } from "@/lib/live";
 import { WorkflowChip } from "@/components/workflow-chip";
@@ -194,6 +195,13 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
                   <LongText text={String(data.pending_request.payload?.question ?? data.pending_request.payload?.summary)} />
                 </div>
               ) : null}
+              {/* Who answers (ADR 0153): a person, a group, or a person first; an administrator reassigns. */}
+              <RequestAssignee
+                slug={slug}
+                itemId={id}
+                request={data.pending_request}
+                onDone={() => queryClient.invalidateQueries({ queryKey: ["item", id] })}
+              />
               {/* What the agent proposes is read here, before deciding, not in the Artifacts card below. */}
               <div className="mb-3">
                 <AgentProposal slug={slug} runs={runs.data} prUrl={data.pr_url} />
