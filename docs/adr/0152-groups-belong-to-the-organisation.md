@@ -2,7 +2,7 @@
 
 - **Status**: proposed, 2026-11-12
 - **Concerns**: the tables `org_groups` and `org_group_members`
-  (`apps/api/src/choregos_api/db/models/identity.py`, migration `20261112_1400_org_groups.py`), the routes
+  (`apps/api/src/choregos_api/db/models/identity.py`, migration `20261112_1500_org_groups.py`), the routes
   `/orgs/{org}/groups…` (`routers/org_groups.py`), `services/org_groups.py`, the principal
   (`deps.py`, `_principal_from_user`), `services/human_groups.py` (`groups_known_in`, `members_of_group`),
   the permission `group:manage` (`rbac.py`), the console's **Groups** page; builds on
