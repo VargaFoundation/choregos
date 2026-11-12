@@ -330,7 +330,23 @@ class RealTemporal:
         return await self._start("AgentTrial", workflow_id, payload)
 
     async def start_provisioning(self, workflow_id: str, payload: dict[str, Any]) -> str:
-        return await self._start("ProjectProvisioning", workflow_id, payload)
+        """A project's provisioning, again after a run that ended. `prov-<slug>` is one id per project:
+        under `_start`'s policy (a new run only after a FAILED one) a second "provision" on a project
+        whose first run succeeded was refused by Temporal, read as "already started", and the request
+        still wrote `provisioning` / `running` — the project stayed there for good (production,
+        `a2a-smoke`, 2026-11-12). A run still going is joined, not restarted."""
+        from temporalio.common import WorkflowIDConflictPolicy, WorkflowIDReusePolicy
+
+        client = await self.client()
+        handle = await client.start_workflow(
+            "ProjectProvisioning",
+            payload,
+            id=workflow_id,
+            task_queue=self.task_queue,
+            id_reuse_policy=WorkflowIDReusePolicy.ALLOW_DUPLICATE,
+            id_conflict_policy=WorkflowIDConflictPolicy.USE_EXISTING,
+        )
+        return str(handle.id)
 
     async def start_knowledge_sync(self, workflow_id: str, payload: dict[str, Any]) -> str:
         return await self._start("KnowledgeSync", workflow_id, payload)
