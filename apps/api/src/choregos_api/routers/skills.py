@@ -23,6 +23,7 @@ from ..deps import Config, Db, Me
 from ..errors import conflict, forbidden, not_found, unprocessable
 from ..rbac import Permission
 from ..schemas import (
+    SkillApproval,
     SkillCandidate,
     SkillDto,
     SkillFiles,
@@ -467,6 +468,9 @@ async def check_skill_update(
 
 # ───────────────────────────── the second reviewer (S32-06, ADR 0050) ─────────────────────────────
 
+#: The fewest characters a forced approval's reason may have.
+FORCE_REASON_MIN = 10
+
 
 @router.post(
     "/orgs/{org}/skills/{slug}/versions/{version}/approve",
@@ -474,9 +478,14 @@ async def check_skill_update(
     operation_id="approveSkillVersion",
 )
 async def approve_skill_version(
-    org: str, slug: Slug, version: int, session: Db, principal: Me
+    org: str, slug: Slug, version: int, session: Db, principal: Me, body: SkillApproval | None = None
 ) -> SkillVersionDto:
-    """A high-risk version becomes usable: an administrator who is NOT its importer read it."""
+    """A high-risk version becomes usable: an administrator who is NOT its importer read it.
+
+    The importer may force it (`force` and a written `reason`), when no second administrator can
+    read it in time; the audit event says it was forced, and why (ADR 0050 amendment).
+    """
+    body = body or SkillApproval()
     if not principal.can(Permission.AGENT_MANAGE, org):
         raise forbidden("approving a skill version needs the org_admin role")
     organisation = await organisation_by_slug(session, org)
@@ -490,14 +499,23 @@ async def approve_skill_version(
         raise not_found("Skill version", f"{slug}@{version}")
     if row.review_status != "pending_review":
         raise conflict(f"`{slug}` v{version} is not waiting for a review")
-    sole_admin = False
+    sole_admin = forced = False
+    reason = (body.reason or "").strip()
     if row.created_by and row.created_by.lower() == principal.email.lower():
         # The organisation's only administrator has no second person to ask (ADR 0050 amendment).
         sole_admin = await is_sole_admin(session, organisation.id, principal)
-        if not sole_admin:
+        if not sole_admin and not body.force:
             raise forbidden(
-                f"`{slug}` v{version} was imported by you: a second person approves a high-risk version"
+                f"`{slug}` v{version} was imported by you: a second person approves a high-risk version, "
+                "or you force it with a reason (`force`, `reason`), and the audit says so"
             )
+        if not sole_admin:
+            if len(reason) < FORCE_REASON_MIN:
+                raise unprocessable(
+                    "forcing the approval of your own version needs a reason "
+                    f"of {FORCE_REASON_MIN} characters at least"
+                )
+            forced = True
     row.review_status = "approved"
     row.reviewed_by = principal.email
     row.reviewed_at = datetime.now(UTC)
@@ -513,5 +531,6 @@ async def approve_skill_version(
         risk=row.risk,
         imported_by=row.created_by,
         **({"sole_admin": True} if sole_admin else {}),
+        **({"forced": True, "reason": reason} if forced else {}),
     )
     return skill_version_dto(row, files=True)

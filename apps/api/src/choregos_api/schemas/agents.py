@@ -1165,6 +1165,17 @@ class ProjectAgentDto(Dto):
     warning: str | None = None
 
 
+class SkillApproval(Dto):
+    """The body of an approval, optional: `force` lets the importer approve their own version.
+
+    Forcing needs a written `reason` (10 characters at least) and is audited as such; an
+    administrator who is not the importer never needs it.
+    """
+
+    force: bool = False
+    reason: str | None = Field(default=None, max_length=1000)
+
+
 class SkillFiles(Dto):
     """The files of a skill version: relative path -> text."""
 

@@ -4082,7 +4082,10 @@ paths:
     post:
       tags: [agents]
       operationId: approveSkillVersion
-      description: Approves a high-risk version waiting for review (ADR 0050); `agent:manage`, and not by the person who imported it (403). Audited as `skill.approve`.
+      description: Approves a high-risk version waiting for review (ADR 0050); `agent:manage`, and not by the person who imported it (403) unless they are the organisation's only administrator, or they force it with a reason (`force`, `reason` of 10 characters at least, else 422). Audited as `skill.approve`, with `sole_admin` or `forced` and `reason`.
+      requestBody:
+        required: false
+        content: { application/json: { schema: { $ref: "#/components/schemas/SkillApproval" } } }
       responses:
         "200": { description: Approved, content: { application/json: { schema: { $ref: "#/components/schemas/SkillVersion" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -7812,6 +7815,13 @@ components:
         overrides: { $ref: "#/components/schemas/AgentOverrides" }
         effective: { $ref: "#/components/schemas/AgentSpec" }
         warning: { type: [string, "null"], description: said when the agent is deprecated }
+    SkillApproval:
+      type: object
+      additionalProperties: false
+      description: "Optional body of an approval: the importer forces the approval of their own version, with a written reason the audit keeps (ADR 0050 amendment)."
+      properties:
+        force: { type: boolean, default: false }
+        reason: { type: [string, "null"], maxLength: 1000 }
     SkillFiles:
       type: object
       required: [files]
