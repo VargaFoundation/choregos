@@ -525,9 +525,9 @@ async def notify_owners(
 async def tell_owners(
     session: AsyncSession, row: AssistantInstallation, title: str, body: str, context: dict[str, Any]
 ) -> int:
-    """One message to every owner of `row` (members of an owner group) through its `email` notifier, and one card
-    to its `teams` channel. Nothing configured, nothing sent. Returns the number of owners told by e-mail plus one
-    when the Teams card went; a failing channel never fails the upgrade."""
+    """One message to every owner of `row` (members of an owner group) through its `email` notifier, and
+    one card to its `teams` channel. Nothing configured, nothing sent. Returns the number of owners told by
+    e-mail plus one when the Teams card went; a failing channel never fails the upgrade."""
     from choregos_core.domain import Message
 
     from .egress import egress_scope_for_org
