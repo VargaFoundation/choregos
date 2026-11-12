@@ -1,6 +1,6 @@
 [project]
 name = "choregos-outpost"
-version = "0.26.2"
+version = "0.27.0"
 description = "The daemon an outpost's operator installs: it only dials out, and makes the calls its own policy allows"
 requires-python = ">=3.12,<3.13"
 license = { text = "Apache-2.0" }
