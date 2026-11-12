@@ -20,7 +20,7 @@ column, and with them every outpost, instance, token and call; connectors of the
 their reference.
 
 Revision ID: c6e8a0b2d4f7
-Revises: a7f7c0f0e0d7
+Revises: b1a1c0f0e0d1
 Create Date: 2026-11-12 10:00:00+00:00
 """
 
@@ -35,7 +35,7 @@ from alembic import op
 from choregos_api.db.base import Json
 
 revision: str = "c6e8a0b2d4f7"
-down_revision: str | None = "a7f7c0f0e0d7"
+down_revision: str | None = "b1a1c0f0e0d1"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

@@ -432,6 +432,9 @@ jobs:
           # The decision model behind LiteLLM (ADR 0121, S52-02): its checkpoint is baked in.
           - image: laya
             file: docker/laya.Dockerfile
+          # The daemon an outpost's operator runs in their own network (ADR 0147, S65-15).
+          - image: outpost
+            file: docker/outpost.Dockerfile
     steps:
       - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v4

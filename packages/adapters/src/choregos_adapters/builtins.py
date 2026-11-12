@@ -18,7 +18,7 @@ import choregos_adapters as _package
 from .errors import AdapterError, ConfigurationError
 from .families import FAMILIES as _FAMILIES
 from .http.pool import strategy_of
-from .registry import register
+from .registry import fakes_enabled, register
 from .specs import (
     _GATEWAY_ONLY_PLATFORM,
     _SHIPPED_SPECS,
@@ -176,6 +176,23 @@ def _mcp_client(cfg: dict[str, Any]) -> Any:
         timeout_s=float(cfg.get("timeout_s", 30)),
         user_agent=str(cfg.get("user_agent", "")),
     )
+
+
+def _teams_notifier(cfg: dict[str, Any]) -> Any:
+    """The Teams webhook notifier. Under `CHOREGOS_FAKES=1` it is the real notifier (card, guarded transport,
+    egress allowlist) over the process-wide `FakeTeamsWebhook`, never a network call."""
+    from .notify.teams import TeamsNotifier
+
+    url = cfg.get("webhook_url")
+    if not isinstance(url, str) or not url:
+        raise AdapterError("a Teams notifier needs its `webhook_url` (a sealed secret of the installation)")
+    if fakes_enabled():
+        from .fakes.teams import FakeTeamsWebhook
+
+        if _package.FAKE_TEAMS is None:
+            _package.FAKE_TEAMS = FakeTeamsWebhook()
+        return TeamsNotifier(webhook_url=url, transport=_package.FAKE_TEAMS.transport())
+    return TeamsNotifier(webhook_url=url)
 
 
 def _mcp_gateway_client(cfg: dict[str, Any]) -> Any:
@@ -731,6 +748,7 @@ def _register_mcp_and_notifiers() -> None:
             public_url=cfg.get("public_url", _env("CHOREGOS_PUBLIC_URL", "")),
         )
     )
+    register("notify", "teams", _SHIPPED_SPECS[("notify", "teams")])(_teams_notifier)
     register("notify", "email", _SHIPPED_SPECS[("notify", "email")])(
         lambda cfg: EmailNotifier(
             host=str(cfg["host"]),

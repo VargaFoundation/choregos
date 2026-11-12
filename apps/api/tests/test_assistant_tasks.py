@@ -14,175 +14,40 @@ import hashlib
 import hmac
 import json
 import re
-import shutil
-from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import httpx
-import pytest
 from choregos_adapters.fakes.notify import FakeNotifier
 from choregos_api.services.task_poll import condition_holds, due_objects, object_keys, resolve, when_holds
-from httpx import ASGITransport, AsyncClient
+from httpx import AsyncClient
 from sqlalchemy import select
 
-from .conftest import login
 from .kits.assistant_install import (
-    FIXTURE,
-    MARKET,
-    NEWS,
     ORG,
-    _bind,
-    _connector,
-    _install,
     _member,
-    _plugin,
+)
+from .kits.assistant_tasks import (  # noqa: F401
+    AUDIENCE,
+    ME,
+    MONDAY,
+    TASK_BLOCK,
+    TASKS,
+    WORKFLOW,
+    _as,
+    _installation_id,
+    _pass,
+    _produce,
+    _ready,
+    _runs,
+    _subscriber,
+    as_admin,
+    at,
+    markets,
+    offline,
 )
 from .test_agent_sessions import Upstream, upstream  # noqa: F401
-
-AUDIENCE = "investors"
-ME = "/api/v1/me"
-TASKS = f"{ME}/assistants/varga/investment-assistant/tasks"
-WORKFLOW = """apiVersion: choregos/v1
-kind: Workflow
-metadata: {name: morning-brief, version: 1}
-actors:
-  me: {type: human, group: investors}
-states:
-  brief: {display: Brief, kind: wait}
-  done: {display: Done, terminal: true}
-transitions:
-  - {id: t-done, from: brief, to: done, by: me}
-"""
-TASK_BLOCK = """tasks:
-  - name: morning_brief
-    workflow: workflows/morning-brief.yaml
-    triggers: [{ kind: on_demand }, { kind: schedule, cron: "30 7 * * 1-5", user_timezone: true }]
-    delegation: none
-    needs: [news]
-    deliver: [inbox, email, webhook]
-  - name: delegated_brief
-    workflow: workflows/morning-brief.yaml
-    triggers: [{ kind: schedule, cron: "30 7 * * 1-5", user_timezone: true }, { kind: on_demand }]
-    delegation: read_only
-    needs: [brokerage]
-    deliver: [inbox]
-  - name: threshold_alert
-    workflow: workflows/morning-brief.yaml
-    triggers:
-      - kind: poll
-        cron: "*/15 9-17 * * 1-5"
-        operation: market_data__get_quote
-        when: { /events/*/change_pct: { abs_gte: 3 } }
-        idempotency: /events/*/id
-    delegation: none
-    deliver: [inbox]
-"""
-MONDAY = (2030, 1, 7)
-
-
-def at(hour: int, minute: int = 0) -> datetime:
-    return datetime(*MONDAY, hour, minute, tzinfo=UTC)
-
-
-@pytest.fixture
-def offline(tmp_path: Path) -> Iterator[Path]:
-    from choregos_api.services.plugin_supply import OfflineDirectory, use_plugin_supply
-
-    root = tmp_path / "plugins"
-    target = root / "investment-assistant" / "0.1.0"
-    shutil.copytree(FIXTURE, target)
-    manifest = target / "assistants" / "investment-assistant.yaml"
-    text = manifest.read_text(encoding="utf-8")
-    start, end = text.index("tasks:\n"), text.index("surfaces:\n")
-    manifest.write_text(text[:start] + TASK_BLOCK + text[end:], encoding="utf-8")
-    (target / "workflows" / "morning-brief.yaml").write_text(WORKFLOW, encoding="utf-8")
-    use_plugin_supply(OfflineDirectory(root))
-    yield root
-    use_plugin_supply(None)
-
-
-@pytest.fixture
-def markets(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
-    import choregos_adapters
-    from choregos_adapters.fakes.mcp import FakeMcpServer
-
-    tools = [
-        {
-            "name": n,
-            "description": n,
-            "annotations": {"readOnlyHint": True},
-            "inputSchema": {"type": "object"},
-        }
-        for n in MARKET
-    ]
-    server = FakeMcpServer(tools=tools, token="markets-key")
-    monkeypatch.setattr(choregos_adapters, "FAKE_MCP", server)
-    monkeypatch.setenv("CONNECTOR_TEST_MARKETS_KEY", "markets-key")
-    yield server
-
-
-async def _ready(client: AsyncClient) -> None:
-    await _plugin(client)
-    await _connector("news-feed", NEWS)
-    installed = await _install(client, audience_groups=[AUDIENCE])
-    assert installed.status_code == 201, installed.text
-    await _bind(client, "news", "news-feed")
-    body = {
-        "name": "markets",
-        "type": "mcp",
-        "config": {"url": "https://markets.test/mcp"},
-        "secret_refs": {"token": "env:CONNECTOR_TEST_MARKETS_KEY"},
-    }
-    assert (await client.post(f"{ORG}/connectors", json=body)).status_code == 201
-    assert (await client.post(f"{ORG}/connectors/markets/discover")).status_code == 200
-    for operation in MARKET:
-        opened = await client.patch(
-            f"{ORG}/connectors/markets/operations/{operation}", json={"policy": "allowed"}
-        )
-        assert opened.status_code == 200, opened.text
-    ready = await _bind(client, "market_data", "markets")
-    assert ready.json()["status"] == "ready", ready.text
-
-
-async def _as(app: Any, email: str) -> AsyncClient:
-    person = AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
-    await login(person, email)
-    return person
-
-
-async def _subscriber(client: AsyncClient, app: Any, email: str) -> AsyncClient:
-    await _member(client, email, [AUDIENCE])
-    return await _as(app, email)
-
-
-async def _runs(email: str | None = None) -> list[Any]:
-    """The task work items, with the owner of the personal space they are in."""
-    from choregos_api.db.models import Project, User, WorkItem
-    from choregos_api.db.session import session_scope
-
-    async with session_scope(orgs="*") as session:
-        query = (
-            select(WorkItem, User.email)
-            .join(Project, Project.id == WorkItem.project_id)
-            .join(User, User.id == Project.owner_user_id)
-            .where(Project.kind == "personal")
-            .order_by(WorkItem.tracker_key)
-        )
-        rows = (await session.execute(query)).all()
-        found = [(item, owner) for item, owner in rows if (item.documents or {}).get("task")]
-        for item, _ in found:
-            session.expunge(item)
-        return [(i, o) for i, o in found if email is None or o == email]
-
-
-async def _pass(now: datetime) -> dict[str, str]:
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.assistant_tasks import run_due
-
-    async with session_scope(orgs="*") as session:
-        return await run_due(session, now)
 
 
 def _keys(runs: list[Any]) -> list[str]:
@@ -193,7 +58,11 @@ def _keys(runs: list[Any]) -> list[str]:
 
 
 async def test_each_subscriber_runs_at_their_own_local_hour_once(
-    client: AsyncClient, org: str, app: Any, offline: Path, markets: Any
+    client: AsyncClient,
+    org: str,
+    app: Any,
+    offline: Path,  # noqa: F811
+    markets: Any,  # noqa: F811
 ) -> None:
     await _ready(client)
     paris = await _subscriber(client, app, "paris@varga.dev")
@@ -225,7 +94,11 @@ async def test_each_subscriber_runs_at_their_own_local_hour_once(
 
 
 async def test_a_window_that_passed_before_subscribing_does_not_run(
-    client: AsyncClient, org: str, app: Any, offline: Path, markets: Any
+    client: AsyncClient,
+    org: str,
+    app: Any,
+    offline: Path,  # noqa: F811
+    markets: Any,  # noqa: F811
 ) -> None:
     from choregos_api.db.session import session_scope
     from choregos_api.schemas.tasks import TaskSubscriptionPut
@@ -260,7 +133,11 @@ async def test_a_window_that_passed_before_subscribing_does_not_run(
 
 
 async def test_a_poll_starts_one_run_per_object_and_never_the_same_object_twice(
-    client: AsyncClient, org: str, app: Any, offline: Path, markets: Any
+    client: AsyncClient,
+    org: str,
+    app: Any,
+    offline: Path,  # noqa: F811
+    markets: Any,  # noqa: F811
 ) -> None:
     from choregos_api.db.models import TaskSubscription
     from choregos_api.db.session import session_scope
@@ -299,7 +176,11 @@ async def test_a_poll_starts_one_run_per_object_and_never_the_same_object_twice(
 
 
 async def test_a_poll_whose_read_fails_starts_nothing_and_says_why(
-    client: AsyncClient, org: str, app: Any, offline: Path, markets: Any
+    client: AsyncClient,
+    org: str,
+    app: Any,
+    offline: Path,  # noqa: F811
+    markets: Any,  # noqa: F811
 ) -> None:
     await _ready(client)
     person = await _subscriber(client, app, "poller@varga.dev")
@@ -343,7 +224,11 @@ def test_the_pointers_and_conditions() -> None:
 
 
 async def test_a_delegated_task_is_subscribed_but_its_scheduled_run_is_refused(
-    client: AsyncClient, org: str, app: Any, offline: Path, markets: Any
+    client: AsyncClient,
+    org: str,
+    app: Any,
+    offline: Path,  # noqa: F811
+    markets: Any,  # noqa: F811
 ) -> None:
     await _ready(client)
     person = await _subscriber(client, app, "delegate@varga.dev")
@@ -364,31 +249,12 @@ async def test_a_delegated_task_is_subscribed_but_its_scheduled_run_is_refused(
 # ───────────────────────── inbox and delivery ─────────────────────────
 
 
-async def _produce(work_item_id: str, **outputs: Any) -> None:
-    """What the workflow's step leaves: a run and its artifacts."""
-    from choregos_api.db.models import Project, Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.artifacts import record_inline_outputs
-
-    async with session_scope(orgs="*") as session:
-        item = await session.get(WorkItem, work_item_id)
-        assert item is not None
-        run = Run(
-            id=f"run-{work_item_id[:8]}",
-            work_item_id=item.id,
-            project_id=item.project_id,
-            stage_role="brief",
-            status="succeeded",
-        )
-        session.add(run)
-        await session.flush()
-        project = await session.get(Project, item.project_id)
-        assert project is not None
-        await record_inline_outputs(session, org_id=project.org_id, item=item, run=run, outputs=outputs)
-
-
 async def test_the_artifact_is_in_the_subscribers_inbox_and_nobody_elses(
-    client: AsyncClient, org: str, app: Any, offline: Path, markets: Any
+    client: AsyncClient,
+    org: str,
+    app: Any,
+    offline: Path,  # noqa: F811
+    markets: Any,  # noqa: F811
 ) -> None:
     await _ready(client)
     mine = await _subscriber(client, app, "mine@varga.dev")
@@ -410,7 +276,11 @@ async def test_the_artifact_is_in_the_subscribers_inbox_and_nobody_elses(
 
 
 async def test_the_other_channels_send_each_artifact_once(
-    client: AsyncClient, org: str, app: Any, offline: Path, markets: Any
+    client: AsyncClient,
+    org: str,
+    app: Any,
+    offline: Path,  # noqa: F811
+    markets: Any,  # noqa: F811
 ) -> None:
     from choregos_api.db.session import session_scope
     from choregos_api.services.remote_agents import set_a2a_transport
@@ -465,7 +335,11 @@ async def test_the_other_channels_send_each_artifact_once(
 
 
 async def test_a_channel_nobody_configured_is_recorded_not_silent(
-    client: AsyncClient, org: str, app: Any, offline: Path, markets: Any
+    client: AsyncClient,
+    org: str,
+    app: Any,
+    offline: Path,  # noqa: F811
+    markets: Any,  # noqa: F811
 ) -> None:
     from choregos_api.db.session import session_scope
     from choregos_api.services.task_delivery import deliver_pending
@@ -482,23 +356,15 @@ async def test_a_channel_nobody_configured_is_recorded_not_silent(
     assert (await mine.get(f"{ME}/inbox")).json()["items"][0]["name"] == "brief", "the inbox needs no channel"
 
 
-async def as_admin(client: AsyncClient) -> None:
-    await login(client, "admin@varga.dev")
-
-
-async def _installation_id() -> str:
-    from choregos_api.db.models import AssistantInstallation
-    from choregos_api.db.session import session_scope
-
-    async with session_scope(orgs="*") as session:
-        return (await session.execute(select(AssistantInstallation.id))).scalar_one()
-
-
 # ───────────────────────── the subscription itself ─────────────────────────
 
 
 async def test_the_subscription_rules(
-    client: AsyncClient, org: str, app: Any, offline: Path, markets: Any
+    client: AsyncClient,
+    org: str,
+    app: Any,
+    offline: Path,  # noqa: F811
+    markets: Any,  # noqa: F811
 ) -> None:
     await _ready(client)
     await _member(client, "outsider@varga.dev", ["somebody-else"])
@@ -536,7 +402,11 @@ async def test_the_subscription_rules(
 
 
 async def test_a_run_is_refused_when_the_subscribers_month_is_spent(
-    client: AsyncClient, org: str, app: Any, offline: Path, markets: Any
+    client: AsyncClient,
+    org: str,
+    app: Any,
+    offline: Path,  # noqa: F811
+    markets: Any,  # noqa: F811
 ) -> None:
     from choregos_api.db.models import CostLedger, Organization, User
     from choregos_api.db.session import session_scope
@@ -574,7 +444,11 @@ async def test_a_run_is_refused_when_the_subscribers_month_is_spent(
 
 
 async def test_the_spend_of_a_task_run_is_attributed_to_the_installation_and_stops_the_next_run(
-    client: AsyncClient, org: str, app: Any, offline: Path, markets: Any
+    client: AsyncClient,
+    org: str,
+    app: Any,
+    offline: Path,  # noqa: F811
+    markets: Any,  # noqa: F811
 ) -> None:
     from choregos_api.db.models import CostLedger, Project, Run, User, WorkItem
     from choregos_api.db.session import session_scope
@@ -622,7 +496,11 @@ async def test_the_spend_of_a_task_run_is_attributed_to_the_installation_and_sto
 
 
 async def test_the_webhook_key_is_shown_once_to_a_manager_and_rotates(
-    client: AsyncClient, org: str, app: Any, offline: Path, markets: Any
+    client: AsyncClient,
+    org: str,
+    app: Any,
+    offline: Path,  # noqa: F811
+    markets: Any,  # noqa: F811
 ) -> None:
     from choregos_api.db.session import session_scope
     from choregos_api.services.remote_agents import set_a2a_transport
@@ -677,7 +555,11 @@ async def test_the_webhook_key_is_shown_once_to_a_manager_and_rotates(
 
 
 async def test_a_conversation_is_offered_run_task_which_starts_the_task_as_the_person(
-    client: AsyncClient, org: str, app: Any, offline: Path, markets: Any
+    client: AsyncClient,
+    org: str,
+    app: Any,
+    offline: Path,  # noqa: F811
+    markets: Any,  # noqa: F811
 ) -> None:
     from choregos_api.db.models import AgentSessionRecord, AssistantInstallation
     from choregos_api.db.session import session_scope
@@ -722,8 +604,8 @@ async def test_run_task_is_called_by_the_model_in_a_turn_and_starts_the_task_as_
     client: AsyncClient,
     org: str,
     app: Any,
-    offline: Path,
-    markets: Any,
+    offline: Path,  # noqa: F811
+    markets: Any,  # noqa: F811
     upstream: Upstream,  # noqa: F811
 ) -> None:
     """A scripted model calls `run_task` in a full turn of `POST .../messages`: the tool is offered to the
@@ -762,7 +644,11 @@ async def _journal() -> list[Any]:
 
 
 async def test_the_reads_of_a_poll_are_journaled_with_the_task_and_the_work_item_once_it_exists(
-    client: AsyncClient, org: str, app: Any, offline: Path, markets: Any
+    client: AsyncClient,
+    org: str,
+    app: Any,
+    offline: Path,  # noqa: F811
+    markets: Any,  # noqa: F811
 ) -> None:
     await _ready(client)
     person = await _subscriber(client, app, "poller@varga.dev")

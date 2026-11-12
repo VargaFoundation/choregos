@@ -106,6 +106,7 @@
  "uuid7",
  "TaskSubscription",
  "Delegation",
+ "TaskEvent",
  "Outpost",
  "OutpostCall",
  "OutpostEnrolment",

@@ -203,10 +203,11 @@ policies-test:  ## The Kyverno engine judges infra/policies against infra/polici
 # `--target` is not optional on `api.Dockerfile`: without it, Docker builds the last stage of
 # the file, which is `worker`.
 .PHONY: images
-images:  ## Build the platform's five images locally (tag `:dev`)
+images:  ## Build the platform's five images and the outpost daemon's locally (tag `:dev`)
 	docker build -f docker/api.Dockerfile    --target api    -t choregos-api:dev .
 	docker build -f docker/api.Dockerfile    --target worker -t choregos-orchestrator:dev .
 	docker build -f docker/tools.Dockerfile                  -t choregos-tools:dev .
+	docker build -f docker/outpost.Dockerfile                -t choregos-outpost:dev .
 	docker build -f docker/web.Dockerfile                    -t choregos-web:dev .
 	docker build -f docker/runner.Dockerfile                 -t choregos-runner:dev .
 

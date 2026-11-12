@@ -255,7 +255,7 @@ policy:
    a need marked `subject_resolver: true` otherwise);
 6. `audience.personal_data: true` without `policy.conversation.retention_days` and an `erasure` mode;
 7. a task that calls a write need, or that reads with the person's identity while it runs without them (a
-   schedule, a poll) and has no `delegation: read_only`; a delegated task lists the needs it reads
+   schedule, a poll, an event) and has no `delegation: read_only`; a delegated task lists the needs it reads
    (`needs`), which the person sees when they agree;
 8. a name (`need`, operations, `memory`, `knowledge`, `tasks`, prompts) that is not English `snake_case`
    (a double underscore separates a need from its operation and is refused in a name).
@@ -289,8 +289,25 @@ now with `POST …/run`. Nothing changes in the Temporal workflows: the schedule
   conversation of the installation is offered the same through ONE tool, `run_task(task)`, whose `task` is one of
   the manifest's on-demand tasks (`conversation_tasks`): it starts the task as the conversation's owner, with
   no delegation, under the click's budget and readiness checks, and tells the agent the work item's key (proved
-  through a full model turn). The **`trigger`** kind (an external event starting a run) stays for later: ADR 0137
-  point 2 defers it, so this is a deferral the ADR already made, not a departure.
+  through a full model turn).
+- **`trigger`** (S63-21): an event of [ADR 0113](adr/0113-a-workflow-starts-from-a-trigger.md) starts the task
+  in the personal space of the person it names. The task declares
+  `{ kind: trigger, subscriber: /attendee/email, idempotency: /event/id }`: `subscriber` is the JSON pointer, in
+  the event's payload, of the subscriber's EMAIL; `idempotency` (optional) the pointer of the event's identifier.
+  A system posts the event to `POST /webhooks/assistants/{org}/{slug}/tasks/{task}/events` with
+  `X-Choregos-Signature: sha256=<HMAC-SHA256 of the body>`; the key and the URL are shown to whoever manages the
+  installation by `POST /orgs/{org}/assistants/{slug}/tasks/{task}/event-key` (derived from the installation's
+  webhook key and the task: rotating the webhook key changes it, another task's key opens nothing). The person
+  subscribes with `PUT …/tasks/{task}` `{ "kind": "trigger" }` (no cron). Routing never guesses: the pointer must
+  designate exactly one text; it is matched, case-insensitively, against the people with an ENABLED `trigger`
+  subscription to this task. No pointer, a value that is not text, several people (a `*`), nobody subscribed or two
+  accounts that match are refused (422) and journaled; so is an event the subscriber's gate refuses (409: the
+  audience, the standing delegation of a `read_only` task, the budget: the very rules of a schedule and a
+  poll, the reason in `last_refusal`). The event id is the payload's value at `idempotency`, else the
+  `Idempotency-Key` header, else the body's digest, and keys the work item: a replay answers `duplicate` and starts
+  nothing, even on another replica; a refused event keeps no dedup, so the corrected one goes through. The journal
+  (`task_events`, `GET /orgs/{org}/assistants/{slug}/task-events` for the manager) records the decision, the event
+  id and the work item, never the payload or the address. The scheduler never runs this kind.
 - **Delegation**: a task with `delegation: read_only` can be subscribed, but its scheduled and polled runs are
   refused, the reason in `last_refusal`, unless the subscriber's standing delegation holds
   ([security](security.md#the-standing-delegation-adr-0137-points-3-4)). The steps of the run's workflow read
@@ -306,9 +323,19 @@ now with `POST …/run`. Nothing changes in the Temporal workflows: the schedule
 - **Delivery**: the run's artifacts are listed by `GET /me/inbox` (always). `email` and `teams` go through a
   notifier, `webhook` is an HMAC-signed POST (`X-Choregos-Signature: t=…,v1=…`, as the A2A push notifications)
   to the installation's `policy_overrides.delivery.webhook.url`; each is sent once per artifact revision and a
-  channel nobody configured is recorded as `not_configured` in the work item. No Teams adapter ships: the
-  `teams` channel works through whichever notifier the installation's `policy_overrides.delivery.teams`
-  (`{type, config}`) names. The webhook's signing key is shown ONCE to whoever manages the installation:
+  channel nobody configured is recorded as `not_configured` in the work item. `email` goes through whichever
+  notifier `policy_overrides.delivery.email` (`{type, config}`) names. `teams` (S63-25) posts an Adaptive Card to a
+  Microsoft Teams incoming webhook or Workflows URL: the manager seals the URL with
+  `PUT /orgs/{org}/assistants/{slug}/delivery/teams` `{ "webhook_url": … }` (`assistant:manage`; `https` without
+  credentials, else 422), which stores it in the organisation's secret store as
+  `assistant/<slug>/delivery/teams` and points `delivery.teams` at it (`{type: teams, secret_refs}`); `GET` says
+  whether it is configured and `DELETE` forgets it. The URL is the credential: it is never returned, never in the
+  audit log, a log line or an error, and the call is made under the organisation's egress allowlist, so an
+  administrator opens the URL's host in `/admin/egress` first (until then the card is not sent and the ledger says
+  `egress refused`, retried at the next pass). The card carries the task, the artifact and the work item; the same
+  channel receives the owners' notice of a plugin upgrade that left knowledge proposals (one card for the
+  installation, besides the e-mail to each owner). Under `CHOREGOS_FAKES=1` the notifier posts its real card to
+  `FakeTeamsWebhook`. The webhook's signing key is shown ONCE to whoever manages the installation:
   `POST /orgs/{org}/assistants/{slug}/webhook-secret` (`assistant:manage`) returns it, a second call is 409
   unless `{"rotate": true}` makes a new generation (the console's installation page has the two buttons); each
   showing is audited, never the key.
@@ -376,6 +403,20 @@ Four more rules keep the owners' decisions:
 Installing the plugin makes its assistants available; installing an assistant (S63-02) makes one of them an
 object of the organisation, for an audience. The manifest is never copied: it is read again from the
 installed plugin, so a plugin upgrade is seen at once.
+
+**Upgrading the plugin moves the bindings (S63-22).** The upgrade compares each installation's manifest with
+the new one, need by need:
+
+| The upgrade | The binding | The readiness |
+| --- | --- | --- |
+| drops a need | disabled and kept, for the audit | nothing is asked of it |
+| adds a need | none | a required one is `need_unbound` |
+| changes a need's operations, `access`, `identity` or approval floor | checked again against the connector: it follows the manifest when it fits, it is disabled when it does not | a disabled required binding shows why (`need_not_served`, `identity_unsupported`) |
+| flips `required` | unchanged | recomputed |
+
+The change is audited (`assistant.upgrade`) and the owners are told through the installation's `email`
+notifier, as they are of knowledge proposals; an upgrade that changes no need says nothing. A binding the
+upgrade disabled is enabled again by binding the need (`PUT …/bindings/{need}`) once the connector fits.
 
 ```
 POST  /api/v1/orgs/{org}/assistants      {"plugin": "investment-assistant", "assistant": "investment-assistant",
@@ -582,8 +623,8 @@ row-level policy.
   like a session's.
 - **Erasure by user.** `DELETE /api/v1/me/assistants/{org}/{slug}` removes the caller's conversations and
   memories in that installation, their standing delegations (revoked first), task subscriptions, the artifacts of
-  their task runs (the work item stays as the trace; the bytes of a file artifact stay in the object store, which
-  has no delete) and their connected accounts at the connectors the installation binds with `user_consent`
+  their task runs (the work item stays as the trace; the bytes of a file artifact are deleted from the object store first, the row after: a store
+  that refuses fails the erasure with a 502 and nothing is erased, the person asks again) and their connected accounts at the connectors the installation binds with `user_consent`
   (revoked at the source when it offers it), and is written in the audit log. The person's journal lines stay as
   the accountability record (ADR 0133 point 6 lists no deletion of it) but lose who: their `user_id` becomes
   `erased-user:<random>`, one token per erasure, not derived from the id.

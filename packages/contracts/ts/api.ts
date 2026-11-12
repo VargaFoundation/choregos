@@ -4370,7 +4370,7 @@ export type MyAssistantList = {
 };
 
 export type TaskSubscriptionPut = {
-  kind?: "on_demand" | "schedule" | "poll";
+  kind?: "on_demand" | "schedule" | "poll" | "trigger";
   cron?: string | null;
   /** An IANA time zone, e.g. Europe/Paris. */
   timezone?: string | null;
@@ -4378,7 +4378,7 @@ export type TaskSubscriptionPut = {
 };
 
 export type TaskTrigger = {
-  kind: "on_demand" | "schedule" | "poll";
+  kind: "on_demand" | "schedule" | "poll" | "trigger";
   cron?: string | null;
   timezone?: string;
 };
@@ -4452,6 +4452,42 @@ export type Delegation = {
 
 export type DelegationList = {
   items: Array<Delegation>;
+};
+
+export type TaskEventAck = {
+  accepted: boolean;
+  outcome: "started" | "duplicate";
+  work_item_key?: string | null;
+};
+
+export type TaskEventKey = {
+  url: string;
+  secret: string;
+  generation: number;
+};
+
+export type TaskEventLine = {
+  task: string;
+  event_id: string;
+  outcome: "started" | "duplicate" | "refused";
+  summary: string;
+  work_item_key?: string | null;
+  received_at: string;
+};
+
+export type TaskEventList = {
+  items: Array<TaskEventLine>;
+};
+
+export type TeamsDeliveryPut = {
+  /** The credential itself: an https URL, sealed and never shown again. */
+  webhook_url: string;
+};
+
+export type TeamsDelivery = {
+  configured: boolean;
+  version?: number | null;
+  updated_at?: string | null;
 };
 
 export type WebhookSecretRequest = {
@@ -5525,6 +5561,7 @@ export interface Operations {
   deleteOutboundProxy: { method: "DELETE"; path: "/orgs/{org}/outbound-proxy"; body: never; response: void };
   deleteOutpost: { method: "DELETE"; path: "/orgs/{org}/outposts/{slug}"; body: never; response: void };
   deleteProject: { method: "DELETE"; path: "/projects/{id}"; body: never; response: void };
+  deleteTeamsDelivery: { method: "DELETE"; path: "/orgs/{org}/assistants/{slug}/delivery/teams"; body: never; response: void };
   deleteTrackerIdentity: { method: "DELETE"; path: "/orgs/{org}/members/{user_id}/tracker-identities/{tracker}"; body: never; response: void };
   departTrain: { method: "POST"; path: "/projects/{id}/trains/{env}/depart"; body: never; response: void };
   describeBuiltinAgent: { method: "GET"; path: "/projects/{id}/builtin-agent"; body: never; response: BuiltinAgent };
@@ -5717,6 +5754,7 @@ export interface Operations {
   getSkillSources: { method: "GET"; path: "/orgs/{org}/skill-sources"; body: never; response: SkillSources };
   getSkillVersion: { method: "GET"; path: "/orgs/{org}/skills/{slug}/versions/{version}"; body: never; response: SkillVersion };
   getStepCalibration: { method: "GET"; path: "/projects/{id}/workflows/{name}/steps/{step}/calibration"; body: never; response: StepCalibration };
+  getTeamsDelivery: { method: "GET"; path: "/orgs/{org}/assistants/{slug}/delivery/teams"; body: never; response: TeamsDelivery };
   getTemplate: { method: "GET"; path: "/templates/{name}"; body: never; response: TemplateDetail };
   getTrainStatus: { method: "GET"; path: "/projects/{id}/trains/{env}"; body: never; response: TrainStatus };
   getWorkItem: { method: "GET"; path: "/work-items/{id}"; body: never; response: WorkItem };
@@ -5816,6 +5854,7 @@ export interface Operations {
   listRuns: { method: "GET"; path: "/work-items/{id}/runs"; body: never; response: Array<Run> };
   listSkillCatalogue: { method: "GET"; path: "/orgs/{org}/skill-catalogue"; body: never; response: SkillCatalogue };
   listSkills: { method: "GET"; path: "/orgs/{org}/skills"; body: never; response: Array<Skill> };
+  listTaskEvents: { method: "GET"; path: "/orgs/{org}/assistants/{slug}/task-events"; body: never; response: TaskEventList };
   listTemplates: { method: "GET"; path: "/templates"; body: never; response: Array<TemplateSummary> };
   listTrackerIdentities: { method: "GET"; path: "/orgs/{org}/members/{user_id}/tracker-identities"; body: never; response: Array<TrackerIdentity> };
   listTriggers: { method: "GET"; path: "/projects/{id}/triggers"; body: never; response: Array<Trigger> };
@@ -5884,6 +5923,7 @@ export interface Operations {
   putProjectModels: { method: "PUT"; path: "/projects/{id}/models"; body: ProjectModels; response: ProjectModels };
   putRunOutput: { method: "PUT"; path: "/internal/runs/{id}/outputs/{name}"; body: void; response: Artifact };
   putSkillSources: { method: "PUT"; path: "/orgs/{org}/skill-sources"; body: SkillSources; response: SkillSources };
+  putTeamsDelivery: { method: "PUT"; path: "/orgs/{org}/assistants/{slug}/delivery/teams"; body: TeamsDeliveryPut; response: TeamsDelivery };
   putWorkflow: { method: "PUT"; path: "/projects/{id}/workflow"; body: WorkflowPut; response: WorkflowDef };
   putWorkflowRouting: { method: "PUT"; path: "/projects/{id}/workflow-routing"; body: WorkflowRouting; response: WorkflowRouting };
   readyz: { method: "GET"; path: "/readyz"; body: never; response: void };
@@ -5907,6 +5947,7 @@ export interface Operations {
   restoreWorkflowVersion: { method: "POST"; path: "/projects/{id}/workflows/{name}/versions/{version}/restore"; body: never; response: WorkflowDef };
   resumeOutpost: { method: "POST"; path: "/orgs/{org}/outposts/{slug}/resume"; body: never; response: Outpost };
   revealAssistantWebhookSecret: { method: "POST"; path: "/orgs/{org}/assistants/{slug}/webhook-secret"; body: WebhookSecretRequest; response: WebhookSecret };
+  revealTaskEventKey: { method: "POST"; path: "/orgs/{org}/assistants/{slug}/tasks/{task}/event-key"; body: never; response: TaskEventKey };
   revokeMachineToken: { method: "DELETE"; path: "/projects/{id}/machine-accounts/{slug}/tokens/{token_id}"; body: never; response: void };
   revokeMyDelegation: { method: "DELETE"; path: "/me/delegations/{delegation_id}"; body: never; response: void };
   revokeMyToken: { method: "DELETE"; path: "/me/tokens/{id}"; body: never; response: void };
@@ -5940,6 +5981,9 @@ export interface Operations {
   syncKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/sync"; body: never; response: KnowledgeBase };
   syncKnowledgeSource: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/sources/{source_id}/sync"; body: never; response: KnowledgeSource };
   syncModelCatalogue: { method: "POST"; path: "/orgs/{org}/models/sync"; body: never; response: ModelSyncResult };
+  taskEventWebhook: { method: "POST"; path: "/webhooks/assistants/{org}/{slug}/tasks/{task}/events"; body: {
+  [key: string]: unknown;
+}; response: TaskEventAck };
   tektonWebhook: { method: "POST"; path: "/webhooks/tekton"; body: {
   [key: string]: unknown;
 }; response: WebhookAck };

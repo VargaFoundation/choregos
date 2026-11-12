@@ -45,6 +45,11 @@ const mocks = vi.hoisted(() => ({
   eraseSubject: vi.fn(),
   feedbackCandidates: vi.fn(),
   webhookSecret: vi.fn(),
+  taskEventKey: vi.fn(),
+  taskEvents: vi.fn(),
+  teamsDelivery: vi.fn(),
+  putTeamsDelivery: vi.fn(),
+  deleteTeamsDelivery: vi.fn(),
   acceptCandidate: vi.fn(),
   dismissCandidate: vi.fn(),
 }));
@@ -107,6 +112,8 @@ beforeEach(() => {
   mocks.knowledgeUpdates.mockResolvedValue({ items: [] });
   mocks.reads.mockResolvedValue({ items: [], meta: { has_more: false } });
   mocks.feedbackCandidates.mockResolvedValue([]);
+  mocks.taskEvents.mockResolvedValue({ items: [] });
+  mocks.teamsDelivery.mockResolvedValue({ configured: false, version: null, updated_at: null });
 });
 
 describe("installing an assistant", () => {
@@ -267,6 +274,62 @@ describe("one installation, for its owners", () => {
     fireEvent.click(screen.getByRole("button", { name: "Rotate the key" }));
     expect(await screen.findByText("chtask_second")).toBeInTheDocument();
     expect(mocks.webhookSecret).toHaveBeenLastCalledWith("varga", "invest", true);
+  });
+
+  it("reveals the URL and key of a trigger task's event door on each click, with a secret warning and a copy", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    mocks.taskEventKey
+      .mockResolvedValueOnce({ url: "https://api.test/hook/new_ticket/events", secret: "chev_one", generation: 2 })
+      .mockRejectedValueOnce(new Error("task has no trigger"));
+    wrap(<InstallationDetail slug="invest" />);
+    expect(await screen.findByText(/The key below is a secret/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Task"), { target: { value: "new_ticket" } });
+    fireEvent.click(screen.getByRole("button", { name: "Show the URL and key" }));
+    expect(await screen.findByText("chev_one")).toBeInTheDocument();
+    expect(screen.getByText("https://api.test/hook/new_ticket/events")).toBeInTheDocument();
+    expect(mocks.taskEventKey).toHaveBeenLastCalledWith("varga", "invest", "new_ticket");
+    fireEvent.click(screen.getByRole("button", { name: "Copy the key" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith("chev_one"));
+    fireEvent.click(screen.getByRole("button", { name: "Show the URL and key" }));
+    expect(await screen.findByText("task has no trigger")).toBeInTheDocument();
+    expect(screen.queryByText("chev_one")).not.toBeInTheDocument();
+  });
+
+  it("lists the task events: outcome, summary, work item, time", async () => {
+    mocks.taskEvents.mockResolvedValue({
+      items: [
+        { task: "new_ticket", event_id: "e2", outcome: "refused", summary: "no subscriber", work_item_key: null, received_at: "2026-11-11T09:00:00Z" },
+        { task: "new_ticket", event_id: "e1", outcome: "started", summary: "run started", work_item_key: "WI-7", received_at: "2026-11-11T08:00:00Z" },
+      ],
+    });
+    wrap(<InstallationDetail slug="invest" />);
+    expect(await screen.findByText("no subscriber")).toBeInTheDocument();
+    expect(screen.getByText("refused")).toBeInTheDocument();
+    expect(screen.getByText("started")).toBeInTheDocument();
+    expect(screen.getByText("WI-7")).toBeInTheDocument();
+    const rows = screen.getAllByRole("row");
+    expect(rows[1]).toHaveTextContent("no subscriber");
+  });
+
+  it("seals a Teams webhook without ever showing it, and removes it", async () => {
+    mocks.teamsDelivery.mockResolvedValueOnce({ configured: false, version: null, updated_at: null });
+    mocks.putTeamsDelivery.mockResolvedValue({ configured: true, version: 1, updated_at: "2026-11-11T08:00:00Z" });
+    mocks.deleteTeamsDelivery.mockResolvedValue(undefined);
+    wrap(<InstallationDetail slug="invest" />);
+    expect(await screen.findByText("Not configured")).toBeInTheDocument();
+    mocks.teamsDelivery.mockResolvedValue({ configured: true, version: 1, updated_at: "2026-11-11T08:00:00Z" });
+    fireEvent.change(screen.getByLabelText("Teams webhook URL"), { target: { value: "https://example.webhook.office.com/abc" } });
+    fireEvent.click(screen.getByRole("button", { name: "Seal the URL" }));
+    await waitFor(() => expect(mocks.putTeamsDelivery).toHaveBeenCalledWith("varga", "invest", "https://example.webhook.office.com/abc"));
+    expect(await screen.findByText(/version 1/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Teams webhook URL")).toHaveValue("");
+    expect(document.body.textContent).not.toContain("example.webhook.office.com");
+    mocks.teamsDelivery.mockResolvedValue({ configured: false, version: null, updated_at: null });
+    fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Remove" }));
+    await waitFor(() => expect(mocks.deleteTeamsDelivery).toHaveBeenCalledWith("varga", "invest"));
+    expect(await screen.findByText("Not configured")).toBeInTheDocument();
   });
 
   it("sets the approval of a write need once bound, and shows a refused binding", async () => {

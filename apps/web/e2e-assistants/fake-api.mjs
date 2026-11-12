@@ -6,6 +6,7 @@
 import { createServer } from "node:http";
 
 const calls = [];
+let teams = { configured: false, version: null, updated_at: null };
 const json = (res, status, body) => {
   res.writeHead(status, { "Content-Type": "application/json" });
   res.end(JSON.stringify(body));
@@ -116,6 +117,32 @@ createServer(async (req, res) => {
   }
   if (path === "/me/assistants/acme/coach/memory/preferred_sources") return json(res, 200, memory);
   if (path === "/orgs/acme/agent-sessions/c1/feedback") return json(res, 201, { id: "fb1", rating: payload?.rating });
+  // The installation page of `acme/coach` (S63-26): its event door, its journal, its Teams channel.
+  if (path === "/orgs/acme/assistants/coach") {
+    return json(res, 200, { ...coach, plugin: "coaching", plugin_version: "1.0.0", assistant_name: "one-on-one-coach", config: {}, owner_groups: [], audience_groups: [], channel: "stable", policy_overrides: {}, bindings: [], created_at: "2026-11-10T08:00:00Z" });
+  }
+  if (path === "/orgs/acme/assistants/coach/readiness") return json(res, 200, { status: "ready", items: [] });
+  if (path === "/orgs/acme/assistants/coach/knowledge/updates") return json(res, 200, { items: [] });
+  if (path === "/orgs/acme/assistants/coach/reads") return json(res, 200, { items: [], meta: { has_more: false } });
+  if (path === "/orgs/acme/connectors") return json(res, 200, []);
+  if (path === "/orgs/acme/agents") return json(res, 200, []);
+  if (path === "/orgs/acme/assistants/coach/tasks/new_ticket/event-key") {
+    return json(res, 200, { url: "https://choregos.test/webhooks/assistants/acme/coach/tasks/new_ticket/events", secret: "chev_e2e_secret", generation: 1 });
+  }
+  if (path === "/orgs/acme/assistants/coach/task-events") {
+    return json(res, 200, {
+      items: [{ task: "new_ticket", event_id: "e1", outcome: "started", summary: "run started for ada", work_item_key: "WI-7", received_at: "2026-11-11T08:00:00Z" }],
+    });
+  }
+  if (path === "/orgs/acme/assistants/coach/delivery/teams") {
+    if (req.method === "PUT") teams = { configured: true, version: (teams.version ?? 0) + 1, updated_at: "2026-11-11T08:00:00Z" };
+    if (req.method === "DELETE") {
+      teams = { configured: false, version: null, updated_at: null };
+      res.writeHead(204);
+      return res.end();
+    }
+    return json(res, 200, teams);
+  }
   if (path === "/orgs/acme/assistants") {
     if (req.method === "POST") return json(res, 201, { ...coach, slug: "coach", plugin: "coaching", plugin_version: "1.0.0", channel: "stable" });
     return json(res, 200, { items: [] });

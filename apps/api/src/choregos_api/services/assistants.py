@@ -209,15 +209,28 @@ async def readiness_items(session: AsyncSession, row: AssistantInstallation) -> 
         binding, connector = bound[need]
         if not binding.enabled:
             if tool.get("required", True):  # an optional need may be switched off, a required one may not
-                items.append(
-                    AssistantReadinessItem(
-                        kind="need_unbound",
-                        need=need,
-                        message=f"the required need `{need}` is switched off",
-                        fix_by="owners",
-                        groups=owners,
+                misfit = await binding_problems(session, connector, tool)
+                if misfit:  # switched off by an upgrade the connector no longer fits (S63-22)
+                    items.extend(
+                        AssistantReadinessItem(
+                            kind=problem.kind,
+                            need=need,
+                            message=f"{problem.message}: bind it again once the connector fits",
+                            fix_by="org_admin",
+                            groups=[],
+                        )
+                        for problem in misfit
                     )
-                )
+                else:
+                    items.append(
+                        AssistantReadinessItem(
+                            kind="need_unbound",
+                            need=need,
+                            message=f"the required need `{need}` is switched off",
+                            fix_by="owners",
+                            groups=owners,
+                        )
+                    )
             continue
         for problem in await binding_problems(session, connector, tool):
             items.append(
@@ -231,6 +244,136 @@ async def readiness_items(session: AsyncSession, row: AssistantInstallation) -> 
                 )
             )
     return items
+
+
+# -- an upgrade of the plugin changes the needs (S63-22) -------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class NeedChange:
+    """What an upgrade did to one need of an installation."""
+
+    need: str
+    kind: str  # removed | added | rebound | disabled | required_changed
+    message: str
+
+
+def _is_required(tool: dict[str, Any]) -> bool:
+    return bool(tool.get("required", True))
+
+
+def _required_change(need: str, tool: dict[str, Any]) -> NeedChange:
+    now = "required" if _is_required(tool) else "optional"
+    return NeedChange(need, "required_changed", f"`{need}` is now {now}")
+
+
+async def upgrade_bindings(
+    session: AsyncSession, row: AssistantInstallation, previous: dict[str, Any] | None
+) -> list[NeedChange]:
+    """Brings the bindings of `row` in line with the manifest its plugin now ships (`previous`: the one it
+    had). A need the manifest dropped has its binding disabled and kept (the audit trail); a binding whose
+    need changed is checked again against the connector (operations served, same access, identity
+    supported): it follows the manifest when it fits and is disabled, with a readiness item, when it does
+    not; a need added stays unbound, listed in the readiness; a `required` flag that moved is reported, the
+    readiness being computed from the manifest."""
+    document = await manifest(session, row)
+    if document is None:
+        return []
+    tools = {str(t["need"]): t for t in _tools(document)}
+    before = {str(t["need"]): t for t in _tools(previous or {})}
+    changes: list[NeedChange] = []
+    bound = await _bindings(session, row)
+    for binding, connector in bound:
+        tool = tools.get(binding.need)
+        if tool is None:
+            if binding.enabled:
+                binding.enabled = False
+                changes.append(
+                    NeedChange(
+                        binding.need, "removed", f"`{binding.need}` is no longer a need: its binding is off"
+                    )
+                )
+            continue
+        if binding.enabled:
+            problems = await binding_problems(session, connector, tool)
+            if problems:
+                binding.enabled = False
+                changes.append(
+                    NeedChange(
+                        binding.need,
+                        "disabled",
+                        f"`{binding.need}` changed, `{connector.name}` no longer fits: its binding is off: "
+                        + "; ".join(p.message for p in problems),
+                    )
+                )
+            else:
+                operations, identity = [str(o) for o in tool["operations"]], str(tool["identity"])
+                try:
+                    approval = _approval_of_binding(tool, binding.approval, binding.need)
+                except Exception:  # the owners' choice is below the new floor, or the need became a read
+                    approval = str(tool["approval"]) if tool.get("approval") is not None else None
+                if (operations, identity, approval) != (
+                    list(binding.operations),
+                    binding.identity,
+                    binding.approval,
+                ):
+                    binding.operations, binding.identity, binding.approval = operations, identity, approval
+                    changes.append(
+                        NeedChange(
+                            binding.need,
+                            "rebound",
+                            f"`{binding.need}` changed: `{connector.name}` still fits it",
+                        )
+                    )
+        old = before.get(binding.need)
+        if old is not None and _is_required(old) != _is_required(tool):
+            changes.append(_required_change(binding.need, tool))
+    bound_needs = {b.need for b, _ in bound}
+    for need, tool in tools.items():
+        if need in bound_needs:
+            continue
+        if need not in before:
+            kind = "required" if _is_required(tool) else "optional"
+            changes.append(NeedChange(need, "added", f"`{need}` is a new {kind} need, not bound yet"))
+        elif _is_required(before[need]) != _is_required(tool):
+            changes.append(_required_change(need, tool))
+    await session.flush()
+    return changes
+
+
+async def upgrade_plugin_bindings(
+    session: AsyncSession,
+    org_id: str,
+    plugin: str,
+    previous: dict[str, dict[str, Any] | None],
+    principal: Principal,
+) -> dict[str, list[NeedChange]]:
+    """`upgrade_bindings` for every installation of an assistant of `plugin` (`previous`: its old manifest by
+    installation slug, read before the upgrade); audited, and the owners told through the installation's
+    email notifier when a need changed. Returns what changed, by installation."""
+    done: dict[str, list[NeedChange]] = {}
+    for row in await installations(session, org_id):
+        if row.plugin != plugin:
+            continue
+        changes = await upgrade_bindings(session, row, previous.get(row.slug))
+        _, items = await refresh(session, row)
+        if not changes:
+            continue
+        done[row.slug] = changes
+        await record(session, principal, "assistant.upgrade", org_id=org_id, target_type="assistant",
+                     target_id=row.slug, version=row.plugin_version,
+                     changes=[{"need": c.need, "kind": c.kind} for c in changes],
+                     readiness=[i.kind for i in items])  # fmt: skip
+        lines = [f"- {c.message}" for c in changes] + [f"- to do: {i.message}" for i in items]
+        await offered_knowledge.tell_owners(
+            session,
+            row,
+            f"{row.slug}: version {row.plugin_version} changed what it needs",
+            f"The upgrade of the plugin to {row.plugin_version} changed the needs of `{row.slug}`:\n"
+            + "\n".join(lines),
+            {"installation": row.slug, "version": row.plugin_version},
+        )
+    return done
 
 
 async def refresh(
@@ -388,6 +531,10 @@ async def uninstall(
     for binding, _ in await _bindings(session, row):
         await session.delete(binding)
     await session.flush()
+    from ..secret_store import get_secret_store
+    from .task_delivery import teams_secret_name
+
+    await get_secret_store().delete(session, org_id, teams_secret_name(row.slug))  # its sealed Teams URL
     await session.delete(row)
     await session.flush()
     await record(session, principal, "assistant.uninstall", org_id=org_id, target_type="assistant",

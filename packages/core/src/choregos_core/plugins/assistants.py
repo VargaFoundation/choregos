@@ -13,7 +13,7 @@ against the plugin the assistant ships in:
    operation of that need (a pattern is refused: an assistant's tools are a closed list);
 5. a `user_subject` memory has a resolver: `none` (a public subject), a need marked `subject_resolver`,
    or, unnamed, at least one such need;
-7. a task reads only `access: read` needs, and one that runs without the person (a schedule, a poll)
+7. a task reads only `access: read` needs, and one that runs without the person (a schedule, a poll, an event)
    reads their identity's needs only under `delegation: read_only` (ADR 0137);
 
 plus: names unique within their list, a prompt's `{argument}` placeholders declared, and every file the
@@ -193,6 +193,12 @@ def _tasks(doc: dict[str, Any], ref: str, needs: dict[str, dict[str, Any]], prob
         for position, name in enumerate(task.get("needs") or []):
             _task_need(f"{ref}:tasks/{index}/needs/{position}", str(name), delegated, needs, problems)
         for position, trigger in enumerate(task["triggers"]):
+            pointer = trigger.get("idempotency")
+            if trigger.get("kind") == "trigger" and isinstance(pointer, str) and not pointer.startswith("/"):
+                problems.append(
+                    f"{ref}:tasks/{index}/triggers/{position}/idempotency: `{pointer}` is not a JSON "
+                    "pointer (it starts with `/`)"
+                )
             operation = trigger.get("operation")
             if not isinstance(operation, str):
                 continue

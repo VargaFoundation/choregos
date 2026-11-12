@@ -1457,6 +1457,13 @@
     "type": "DateTime(timezone=True)"
    },
    {
+    "default": null,
+    "name": "turn_cancel_requested_at",
+    "nullable": true,
+    "server_default": null,
+    "type": "DateTime(timezone=True)"
+   },
+   {
     "default": "<function uuid7>",
     "name": "id",
     "nullable": false,
@@ -12461,6 +12468,144 @@
      "name",
      "version"
     ]
+   ]
+  ]
+ },
+ "task_events": {
+  "columns": [
+   {
+    "name": "org_id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "installation_id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "task",
+    "type": "String(length=63)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "user_id",
+    "type": "String(length=36)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "event_id",
+    "type": "String(length=255)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "outcome",
+    "type": "String(length=16)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "summary",
+    "type": "String(length=300)",
+    "nullable": false,
+    "default": "''",
+    "server_default": null
+   },
+   {
+    "name": "work_item_key",
+    "type": "String(length=255)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "received_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": "<function uuid7>",
+    "server_default": null
+   }
+  ],
+  "primary_key": [
+   "id"
+  ],
+  "foreign_keys": [
+   [
+    [
+     "installation_id"
+    ],
+    [
+     "assistant_installations.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_task_events_installation_id_assistant_installations"
+   ],
+   [
+    [
+     "org_id"
+    ],
+    [
+     "organizations.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_task_events_org_id_organizations"
+   ],
+   [
+    [
+     "user_id"
+    ],
+    [
+     "users.id"
+    ],
+    "SET NULL",
+    null,
+    "fk_task_events_user_id_users"
+   ]
+  ],
+  "uniques": [],
+  "checks": [],
+  "indexes": [
+   [
+    "ix_task_events_installation_id",
+    [
+     "task_events.installation_id"
+    ],
+    false
+   ],
+   [
+    "ix_task_events_installation_received",
+    [
+     "task_events.installation_id",
+     "task_events.received_at"
+    ],
+    false
+   ],
+   [
+    "ix_task_events_org_id",
+    [
+     "task_events.org_id"
+    ],
+    false
    ]
   ]
  },
