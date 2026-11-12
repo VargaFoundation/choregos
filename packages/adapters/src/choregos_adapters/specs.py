@@ -43,6 +43,75 @@ def _firecrawl_egress(config: dict[str, Any]) -> list[tuple[str, int]]:
     return [found] if found else []
 
 
+#: The `auth_scheme` of a direct `mcp` connector whose token the platform fetches with the client
+#: credentials grant (RFC 6749 §4.4), from `token_url`, with `client_id` and the sealed `client_secret`.
+OAUTH_CLIENT_CREDENTIALS = "oauth_client_credentials"
+MCP_AUTH_SCHEMES = ("bearer", "basic", OAUTH_CLIENT_CREDENTIALS)
+#: The configuration of `oauth_client_credentials`; none of it means anything to another scheme.
+_OAUTH_FIELDS = ("token_url", "client_id", "scope", "audience")
+
+
+def _check_token_url(url: Any) -> None:
+    """The token endpoint receives the client secret: an https address with a host, no user-info and no
+    fragment (plain http only under CHOREGOS_FAKES, as for every other token endpoint the platform calls)."""
+    from urllib.parse import urlsplit
+
+    from .registry import fakes_enabled
+
+    if not isinstance(url, str) or not url.strip():
+        raise ConfigurationError("`oauth_client_credentials` needs `token_url`: the OAuth token endpoint")
+    try:
+        parts = urlsplit(url.strip())
+        parts.port  # noqa: B018 - raises ValueError on a port out of range
+    except ValueError as invalid:
+        raise ConfigurationError("`token_url` is not a valid address") from invalid
+    schemes = {"https", "http"} if fakes_enabled() else {"https"}
+    if parts.scheme not in schemes or not parts.hostname:
+        raise ConfigurationError(
+            "`token_url` must be an https address with a host: it receives the client secret"
+        )
+    if parts.username is not None or parts.password is not None or parts.fragment:
+        raise ConfigurationError("`token_url` must carry neither credentials nor a fragment")
+
+
+def _mcp_check(config: dict[str, Any]) -> None:
+    """A direct MCP server's authentication: a known scheme, and for `oauth_client_credentials` a token
+    endpoint and a client id (the secret is sealed, never in the configuration)."""
+    scheme = config.get("auth_scheme", "bearer")
+    if scheme not in MCP_AUTH_SCHEMES:
+        raise ConfigurationError(f"unknown MCP auth scheme `{scheme}`: one of {', '.join(MCP_AUTH_SCHEMES)}")
+    if scheme != OAUTH_CLIENT_CREDENTIALS:
+        stray = [name for name in _OAUTH_FIELDS if config.get(name) not in (None, "")]
+        if stray:
+            raise ConfigurationError(
+                f"{', '.join(f'`{name}`' for name in stray)} belong to the `{OAUTH_CLIENT_CREDENTIALS}` "
+                "auth scheme"
+            )
+        return
+    _check_token_url(config.get("token_url"))
+    client_id = config.get("client_id")
+    if not isinstance(client_id, str) or not client_id.strip():
+        raise ConfigurationError(
+            "`oauth_client_credentials` needs `client_id`: the OAuth client's identifier"
+        )
+    for name in ("scope", "audience"):
+        if config.get(name) is not None and not isinstance(config.get(name), str):
+            raise ConfigurationError(f"`{name}` is a string")
+
+
+def _mcp_egress(config: dict[str, Any]) -> list[tuple[str, int]]:
+    """The server's host and, with `oauth_client_credentials`, the token endpoint's: the platform calls
+    both, so the organisation opens both (ADR 0066)."""
+    from choregos_core.egress import host_port_of, hosts_of_config
+
+    hosts = hosts_of_config(config)
+    if config.get("auth_scheme") == OAUTH_CLIENT_CREDENTIALS:
+        found = host_port_of(config.get("token_url"))
+        if found and found not in hosts:
+            hosts.append(found)
+    return hosts
+
+
 #: The `mcp-gateway` connector type: a server the organisation's MCP gateway names (ADR 0105).
 MCP_GATEWAY_TYPE = "mcp-gateway"
 GATEWAY_SERVER_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
@@ -812,9 +881,11 @@ _SHIPPED_SPECS: dict[tuple[str, str], ConnectorTypeSpec] = {
                 "url": {"type": "string", "description": "the server's MCP endpoint, https"},
                 "auth_scheme": {
                     "type": "string",
-                    "enum": ["bearer", "basic"],
+                    "enum": list(MCP_AUTH_SCHEMES),
                     "default": "bearer",
-                    "description": "how the token is sent: Bearer, or Basic base64(username:token)",
+                    "description": "how the server is signed in to: the token as Bearer, Basic "
+                    "base64(username:token), or `oauth_client_credentials`: a short-lived token the "
+                    "platform fetches from `token_url` with `client_id` and `client_secret`",
                 },
                 "username": {"type": "string", "description": "the account, for `basic` (an email)"},
                 "auth_header": {
@@ -823,11 +894,30 @@ _SHIPPED_SPECS: dict[tuple[str, str], ConnectorTypeSpec] = {
                     "description": "the header the token travels in: `Authorization` sends a Bearer, "
                     "another name (`X-API-Key`) sends the raw token",
                 },
+                "token_url": {
+                    "type": "string",
+                    "description": "the OAuth token endpoint, https, for `oauth_client_credentials`",
+                },
+                "client_id": {
+                    "type": "string",
+                    "description": "the OAuth client's identifier, for `oauth_client_credentials`",
+                },
+                "scope": {
+                    "type": "string",
+                    "description": "the scopes asked for, space-separated, for `oauth_client_credentials`",
+                },
+                "audience": {
+                    "type": "string",
+                    "description": "the audience asked for, when the token endpoint needs one",
+                },
                 "timeout_s": {"type": "number", "default": 30},
             },
             ("url",),
         ),
-        ("token",),
+        # `token` for bearer and basic; `client_secret` for `oauth_client_credentials`.
+        ("token", "client_secret"),
+        egress=_mcp_egress,
+        check_config=_mcp_check,
     ),
     ("mcp", "mcp-gateway"): ConnectorTypeSpec(
         "MCP server through the organisation's MCP gateway",

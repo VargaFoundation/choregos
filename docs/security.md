@@ -746,6 +746,15 @@ what the person who runs an outpost is told is in [Running an outpost](outpost-o
   only, or the key would follow a new URL. On a single-organisation
   install its administrator is the platform administrator, so nothing changes there. Before S39-06b,
   a role allowed to write a connector could point a secret field at a platform variable.
+- **An MCP connector's OAuth client** (`auth_scheme: oauth_client_credentials`). Its `client_secret` is a
+  secret field like a token: typed and sealed, or referenced by a platform administrator, never in
+  `config`. The access token it buys is fetched by the platform (API and workers), kept in that process's
+  memory until 30 seconds before it expires, and sent only to the connector's server: never to a run,
+  never in a log line, an audit row, an answer or an error, and both values are registered for
+  redaction (`choregos_adapters/mcp/client_credentials.py`). The token endpoint receives the secret,
+  so it is `https` only and its host passes the organisation's egress list and network ceiling like
+  the server's. As with a token and its URL, an administrator who moves `token_url` sends the sealed
+  secret to the new host on the next call: the move is theirs, and the new host must be opened first.
 - External Secrets Operator ↔ the provider's vault; one hand-made `ClusterSecretStore`.
 - Git token minted **per run**, repository scope, 1 h TTL, injected in memory. It travels in
   `-c http.extraHeader`, command by command, never in `.git/config` nor on disk (S22-07).

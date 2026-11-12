@@ -26,8 +26,10 @@ from .specs import (
     _SHIPPED_SPECS,
     MCP_GATEWAY_TYPE,
     MCP_OUTPOST_TYPE,
+    OAUTH_CLIENT_CREDENTIALS,
     _check_plugin_tracker,
     _gateway_server_check,
+    _mcp_check,
     _mcp_outpost_check,
 )
 
@@ -157,15 +159,56 @@ def _fake_mcp_client(cfg: dict[str, Any]) -> Any:
         return _gateway_client(cfg, transport=fake_mcp_gateway().transport())
     if "server" in cfg:
         raise AdapterError(_GATEWAY_ONLY_PLATFORM)
+    url = cfg.get("url", "http://fake-mcp.test/mcp")
     return McpClient(
-        cfg.get("url", "http://fake-mcp.test/mcp"),
-        token=cfg.get("token", ""),
-        auth_scheme=cfg.get("auth_scheme", "bearer"),
-        username=cfg.get("username", ""),
-        auth_header=cfg.get("auth_header", "Authorization"),
+        url,
+        **_mcp_auth(cfg, url, token_transport=_fake_oauth_transport),
         transport=_current_fake_mcp().transport(),
         user_agent=str(cfg.get("user_agent", "")),
     )
+
+
+def _fake_oauth_transport() -> Any:
+    """Under CHOREGOS_FAKES=1, an `oauth_client_credentials` connector asks the fake OAuth provider."""
+    from .fakes.oauth_provider import current_fake_oauth_provider
+
+    return current_fake_oauth_provider().transport()
+
+
+def _mcp_auth(
+    cfg: dict[str, Any], url: str, *, token_transport: Callable[[], Any] | None = None
+) -> dict[str, Any]:
+    """How a direct `mcp` connector signs its requests: its token as Bearer, Basic or a named header, or,
+    with `oauth_client_credentials`, a token the platform fetches from `token_url` with the client's id
+    and sealed secret, cached until shortly before it expires and renewed after a 401. The static
+    `token` is not sent then: the connector has one credential, the client's."""
+    if cfg.get("auth_scheme") != OAUTH_CLIENT_CREDENTIALS:
+        return {
+            "token": cfg.get("token", ""),
+            "auth_scheme": cfg.get("auth_scheme", "bearer"),
+            "username": cfg.get("username", ""),
+            "auth_header": cfg.get("auth_header", "Authorization"),
+        }
+    from .mcp.client_credentials import CONNECTOR_TOKENS, ClientCredentials
+
+    _mcp_check(cfg)
+    secret = cfg.get("client_secret")
+    if not isinstance(secret, str) or not secret:
+        raise AdapterError(
+            "an `oauth_client_credentials` MCP connector needs its `client_secret`: an administrator "
+            "types it on the connector, where it is sealed"
+        )
+    credentials = ClientCredentials(
+        token_url=str(cfg["token_url"]),
+        client_id=str(cfg["client_id"]),
+        client_secret=secret,
+        scope=cfg.get("scope") or None,
+        audience=cfg.get("audience") or None,
+    )
+    provider = CONNECTOR_TOKENS.provider(
+        credentials, transport=token_transport, timeout_s=float(cfg.get("timeout_s", 30)), partition=url
+    )
+    return {"headers_provider": provider}
 
 
 def _mcp_client(cfg: dict[str, Any]) -> Any:
@@ -173,10 +216,7 @@ def _mcp_client(cfg: dict[str, Any]) -> Any:
 
     return McpClient(
         cfg["url"],
-        token=cfg.get("token", ""),
-        auth_scheme=cfg.get("auth_scheme", "bearer"),
-        username=cfg.get("username", ""),
-        auth_header=cfg.get("auth_header", "Authorization"),
+        **_mcp_auth(cfg, cfg["url"]),
         timeout_s=float(cfg.get("timeout_s", 30)),
         user_agent=str(cfg.get("user_agent", "")),
     )

@@ -3002,6 +3002,10 @@
     ],
     "config_schema": {
       "properties": {
+        "audience": {
+          "description": "the audience asked for, when the token endpoint needs one",
+          "type": "string"
+        },
         "auth_header": {
           "default": "Authorization",
           "description": "the header the token travels in: `Authorization` sends a Bearer, another name (`X-API-Key`) sends the raw token",
@@ -3009,16 +3013,29 @@
         },
         "auth_scheme": {
           "default": "bearer",
-          "description": "how the token is sent: Bearer, or Basic base64(username:token)",
+          "description": "how the server is signed in to: the token as Bearer, Basic base64(username:token), or `oauth_client_credentials`: a short-lived token the platform fetches from `token_url` with `client_id` and `client_secret`",
           "enum": [
             "bearer",
-            "basic"
+            "basic",
+            "oauth_client_credentials"
           ],
+          "type": "string"
+        },
+        "client_id": {
+          "description": "the OAuth client's identifier, for `oauth_client_credentials`",
+          "type": "string"
+        },
+        "scope": {
+          "description": "the scopes asked for, space-separated, for `oauth_client_credentials`",
           "type": "string"
         },
         "timeout_s": {
           "default": 30,
           "type": "number"
+        },
+        "token_url": {
+          "description": "the OAuth token endpoint, https, for `oauth_client_credentials`",
+          "type": "string"
         },
         "url": {
           "description": "the server's MCP endpoint, https",
@@ -3037,14 +3054,15 @@
     "deprecated": false,
     "dev_only": false,
     "display": "MCP server (Streamable HTTP)",
-    "has_check_config": false,
-    "has_egress": false,
+    "has_check_config": true,
+    "has_egress": true,
     "has_factory": true,
     "kind": "mcp",
     "operations": [],
     "pooled_fields": [],
     "secret_fields": [
-      "token"
+      "token",
+      "client_secret"
     ],
     "type": "mcp"
   },

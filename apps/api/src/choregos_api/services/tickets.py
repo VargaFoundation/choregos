@@ -142,7 +142,8 @@ async def tool_connectors_of(session: AsyncSession, run: Run, project: Project) 
         if connector.name in seen:
             continue
         config = dict(connector.config or {})
-        # An MCP connector sends its token as a Bearer unless it says `basic` (S39-10e).
+        # An MCP connector sends its token as a Bearer unless it says `basic` (S39-10e), or signs in with
+        # a token the platform fetches (`oauth_client_credentials`, whose account is the client id).
         scheme = (config.get("auth_scheme") or "bearer") if connector.kind == "mcp" else None
         seen[connector.name] = ToolConnector(
             name=connector.name,

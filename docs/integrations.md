@@ -419,8 +419,56 @@ curl -X POST $API/orgs/acme/connectors -d '{"kind": "mcp", "name": "rovo", "type
    network, the platform team may also need to open the host (the modal shows the change).
 4. *Discover* the connector, then open the tools the agents need: a new tool is born closed.
 
-`auth_scheme` is `bearer` (the default, unchanged) or `basic`; `basic` needs `username`. The
-server allows about 1 000 calls per hour on Standard and Premium plans.
+`auth_scheme` is `bearer` (the default, unchanged), `basic` or `oauth_client_credentials` (next
+section); `basic` needs `username`. The server allows about 1 000 calls per hour on Standard and
+Premium plans.
+
+## An MCP server that only accepts short-lived OAuth tokens
+
+An enterprise MCP server often sits behind its organisation's identity provider and accepts no static
+key: a machine signs in with the OAuth 2.0 **client credentials** grant ([RFC 6749
+§4.4](https://www.rfc-editor.org/rfc/rfc6749#section-4.4)) and receives a token that lives a few minutes.
+Declare it as a direct `mcp` connector with `auth_scheme: oauth_client_credentials`:
+
+```bash
+curl -X POST $API/orgs/acme/connectors -d '{"kind": "mcp", "name": "data", "type": "mcp",
+  "config": {"url": "https://data.example.com/mcp", "auth_scheme": "oauth_client_credentials",
+             "token_url": "https://login.example.com/oauth2/token", "client_id": "choregos-reader",
+             "scope": "mcp:read"},
+  "secret_values": {"client_secret": "typed once, sealed"}, "allow_egress": true}'
+```
+
+| Field | Meaning |
+| :-- | :-- |
+| `token_url` | The token endpoint, `https` (plain `http` only under `CHOREGOS_FAKES`): it receives the client secret. No user-info, no fragment. |
+| `client_id` | The OAuth client's identifier. It is what the run page shows as the account the connector calls as. |
+| `client_secret` | A secret field: typed once in `secret_values` (sealed, ADR 0058) or referenced in `secret_refs` by a platform administrator. Never in `config`. |
+| `scope`, `audience` | Sent with the token request only when filled in: the scopes the server expects, and the audience some providers require. |
+
+What the platform does with it (`choregos_adapters/mcp/client_credentials.py`):
+
+- **The broker holds the token.** The platform asks the token endpoint for a token
+  (`grant_type=client_credentials`, the client authenticated with HTTP Basic) and sends it to the
+  server as `Authorization: Bearer`. The token and the client secret never reach a run, an agent, a
+  log line, an audit row, an API answer or an error message.
+- **Cached, then renewed.** A token is reused until 30 seconds before the `expires_in` it came with
+  (300 seconds when the endpoint gives none). When the server answers `401` (the token was revoked or
+  the clocks disagree), the platform fetches a new token and sends the request again, **once**; a
+  second `401` is an error, never a loop. A new client secret never reuses the former one's token.
+- **Both hosts are governed.** The token endpoint's host is held to the organisation's network policy
+  exactly like the server's: it is one of the hosts the declaration opens in the egress allowlist
+  ([ADR 0066](adr/0066-the-organisation-egress-allowlist.md)), the organisation's network ceiling may
+  refuse it at declaration (422, ADR 0070), and every token request goes through the guarded transport,
+  so a token endpoint whose host was closed since is refused before anything leaves.
+- **Refusals say what failed.** A token endpoint that gives no token is a named error
+  (`TokenRefused`): *the token endpoint `<host>` refused the OAuth client `<client_id>` (HTTP 401,
+  invalid_client)*, with the host, the client and the OAuth error code, never the secret or the
+  endpoint's body. Discovery answers
+  `502` with it and marks the connector `error`; a tool call returns it as a tool error.
+
+The [organisation's MCP gateway](#your-organisations-mcp-gateway-adr-0105) signs in the same way when
+its sign-in is `oauth_client_credentials`: both use the same token code and the same refusals. A person's own token (ADR 0135)
+still wins over the connector's client: a call made as the person never fetches the client's token.
 
 ## A remote agent: Atlassian Rovo over A2A
 

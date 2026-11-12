@@ -128,6 +128,11 @@ async def check_connector_declaration(
     session: AsyncSession, org_id: str, config: Mapping[str, Any] | None, name: str
 ) -> None:
     await check_platform_host(session, org_id, connector_host(config), f"connector `{name}`")
+    # An MCP connector signed in with `oauth_client_credentials` also has the platform call its token
+    # endpoint: that host is bounded like the server's.
+    token_url = (config or {}).get("token_url")
+    if isinstance(token_url, str):
+        await check_platform_host(session, org_id, token_url, f"the token endpoint of connector `{name}`")
 
 
 def refusal_error(refused: PlatformNetworkRefused) -> ApiError:

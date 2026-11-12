@@ -1815,13 +1815,13 @@
   {
     "id": "connector.mcp.mcp",
     "title": "Connect an MCP server",
-    "version": 1,
+    "version": 2,
     "audience": "org_admin",
     "applies_to": {
       "connector": "mcp/mcp"
     },
     "link": null,
-    "reviewed": "2026-10-16",
+    "reviewed": "2026-11-12",
     "sections": [
       {
         "key": "before",
@@ -1831,7 +1831,7 @@
       {
         "key": "at",
         "title": "At the vendor",
-        "markdown": "Create the credential in the vendor's own settings: an API token, a service account key, or a personal\naccess token. The catalogue entry for a known server says where. Prefer a token of a dedicated account\nwhose rights are exactly what the agents should have, and the narrowest scopes the vendor offers."
+        "markdown": "Create the credential in the vendor's own settings: an API token, a service account key, or a personal\naccess token. The catalogue entry for a known server says where. Prefer a token of a dedicated account\nwhose rights are exactly what the agents should have, and the narrowest scopes the vendor offers.\n\nA server that only accepts short-lived OAuth tokens (an enterprise MCP server behind its identity\nprovider) needs an **OAuth client** allowed the `client_credentials` grant instead: its identifier, its\nsecret, the token endpoint's address, and the scope or audience the server expects in its tokens."
       },
       {
         "key": "permissions",
@@ -1841,33 +1841,43 @@
       {
         "key": "in_choregos",
         "title": "In Choregos",
-        "markdown": "1. Administration, **Connectors**, **Declare**: capability **MCP**, type **MCP server**, a lowercase name.\n2. `url`: the endpoint.\n3. `auth_scheme`: `bearer` (the default) sends `Authorization: Bearer <token>`. `basic` sends\n   `Authorization: Basic base64(username:token)`; it needs `username`, usually an email.\n4. `token`: paste it in the password field. It is sealed and shown once; **Replace** rotates it.\n5. Press **Discover**, then open the operations the agents need, one by one."
+        "markdown": "1. Administration, **Connectors**, **Declare**: capability **MCP**, type **MCP server**, a lowercase name.\n2. `url`: the endpoint.\n3. `auth_scheme`: `bearer` (the default) sends `Authorization: Bearer <token>`. `basic` sends\n   `Authorization: Basic base64(username:token)`; it needs `username`, usually an email.\n   `oauth_client_credentials` has the platform fetch a token from `token_url` with `client_id` and\n   `client_secret`, keep it until shortly before it expires, and fetch a new one when the server\n   answers 401; `scope` and `audience` are sent only when filled in.\n4. `token` (bearer, basic) or `client_secret` (oauth_client_credentials): paste it in the password\n   field. It is sealed and shown once; **Replace** rotates it. Neither the secret nor a token ever\n   reaches an agent: the platform signs each call itself.\n5. Allow the hosts the connector reaches when asked: the server's, and with\n   `oauth_client_credentials` the token endpoint's.\n6. Press **Discover**, then open the operations the agents need, one by one."
       },
       {
         "key": "test",
         "title": "Test it",
-        "markdown": "**Discover** asks the server for its tools. A list of tools proves the URL, the scheme and the token."
+        "markdown": "**Discover** asks the server for its tools. A list of tools proves the URL, the scheme and the token\n(with `oauth_client_credentials`: the token endpoint, the client and its secret too)."
       },
       {
         "key": "fails",
         "title": "When it fails",
-        "markdown": "- `401` or `403`: the token is wrong, expired, or sent with the wrong scheme (Bearer versus Basic).\n- `406 Not Acceptable`: the server wants an `Accept: application/json, text/event-stream` header and\n  rejected the request; check that the URL is the Streamable HTTP endpoint and not an SSE one.\n- A timeout or a connection refused: the egress allowlist does not open the server's host.\n- \"No tools\", or only a few: discovery has not run, or the token's scopes are too narrow for the server\n  to list more."
+        "markdown": "- `401` or `403`: the token is wrong, expired, or sent with the wrong scheme (Bearer versus Basic).\n- \"the token endpoint `<host>` refused the OAuth client\": the client id or secret is wrong, the client\n  is not allowed the `client_credentials` grant, or the scope is refused; the OAuth error code follows\n  (`invalid_client`, `unauthorized_client`, `invalid_scope`).\n- \"egress refused\" naming the token endpoint's host: the organisation has not opened it.\n- `406 Not Acceptable`: the server wants an `Accept: application/json, text/event-stream` header and\n  rejected the request; check that the URL is the Streamable HTTP endpoint and not an SSE one.\n- A timeout or a connection refused: the egress allowlist does not open the server's host.\n- \"No tools\", or only a few: discovery has not run, or the token's scopes are too narrow for the server\n  to list more."
       }
     ],
     "values": {},
     "egress": [
-      "the server's host"
+      "the server's host",
+      "the token endpoint's host, with oauth_client_credentials"
     ],
     "fields": {
       "url": "the server's Streamable HTTP endpoint, https",
-      "auth_scheme": "bearer, or basic (username plus token)",
+      "auth_scheme": "bearer, basic (username plus token), or oauth_client_credentials",
       "username": "the account, for basic",
-      "token": "the token or key the vendor gave you, typed once"
+      "token": "the token or key the vendor gave you, typed once (bearer and basic)",
+      "token_url": "the OAuth token endpoint, https (oauth_client_credentials)",
+      "client_id": "the OAuth client's identifier (oauth_client_credentials)",
+      "client_secret": "the OAuth client's secret, typed once (oauth_client_credentials)",
+      "scope": "the scopes to ask for, space-separated, when the server needs them",
+      "audience": "the audience to ask for, when the token endpoint needs one"
     },
     "vendor_docs": [
       {
         "title": "MCP specification: transports (Streamable HTTP)",
         "url": "https://modelcontextprotocol.io/specification/2025-06-18/basic/transports"
+      },
+      {
+        "title": "RFC 6749 §4.4: Client Credentials Grant",
+        "url": "https://www.rfc-editor.org/rfc/rfc6749#section-4.4"
       }
     ],
     "origin": "shipped"
@@ -2040,7 +2050,8 @@
       "url": "https://mcp.atlassian.com/v2/mcp",
       "auth_scheme": "basic for a personal API token, bearer for a service account API key",
       "username": "the account's email, for basic",
-      "token": "the API token or key, typed once"
+      "token": "the API token or key, typed once",
+      "client_secret": "not used: Rovo takes an API token, not an OAuth client"
     },
     "vendor_docs": [
       {
