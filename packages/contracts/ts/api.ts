@@ -4166,7 +4166,7 @@ export type MyAssistantList = {
 };
 
 export type TaskSubscriptionPut = {
-  kind?: "on_demand" | "schedule" | "poll";
+  kind?: "on_demand" | "schedule" | "poll" | "trigger";
   cron?: string | null;
   /** An IANA time zone, e.g. Europe/Paris. */
   timezone?: string | null;
@@ -4174,7 +4174,7 @@ export type TaskSubscriptionPut = {
 };
 
 export type TaskTrigger = {
-  kind: "on_demand" | "schedule" | "poll";
+  kind: "on_demand" | "schedule" | "poll" | "trigger";
   cron?: string | null;
   timezone?: string;
 };
@@ -4248,6 +4248,31 @@ export type Delegation = {
 
 export type DelegationList = {
   items: Array<Delegation>;
+};
+
+export type TaskEventAck = {
+  accepted: boolean;
+  outcome: "started" | "duplicate";
+  work_item_key?: string | null;
+};
+
+export type TaskEventKey = {
+  url: string;
+  secret: string;
+  generation: number;
+};
+
+export type TaskEventLine = {
+  task: string;
+  event_id: string;
+  outcome: "started" | "duplicate" | "refused";
+  summary: string;
+  work_item_key?: string | null;
+  received_at: string;
+};
+
+export type TaskEventList = {
+  items: Array<TaskEventLine>;
 };
 
 export type WebhookSecretRequest = {
@@ -5604,6 +5629,7 @@ export interface Operations {
   listRuns: { method: "GET"; path: "/work-items/{id}/runs"; body: never; response: Array<Run> };
   listSkillCatalogue: { method: "GET"; path: "/orgs/{org}/skill-catalogue"; body: never; response: SkillCatalogue };
   listSkills: { method: "GET"; path: "/orgs/{org}/skills"; body: never; response: Array<Skill> };
+  listTaskEvents: { method: "GET"; path: "/orgs/{org}/assistants/{slug}/task-events"; body: never; response: TaskEventList };
   listTemplates: { method: "GET"; path: "/templates"; body: never; response: Array<TemplateSummary> };
   listTrackerIdentities: { method: "GET"; path: "/orgs/{org}/members/{user_id}/tracker-identities"; body: never; response: Array<TrackerIdentity> };
   listTriggers: { method: "GET"; path: "/projects/{id}/triggers"; body: never; response: Array<Trigger> };
@@ -5693,6 +5719,7 @@ export interface Operations {
   restoreAgentVersion: { method: "POST"; path: "/orgs/{org}/agents/{slug}/versions/{version}/restore"; body: AgentVersionRestore; response: AgentVersion };
   restoreWorkflowVersion: { method: "POST"; path: "/projects/{id}/workflows/{name}/versions/{version}/restore"; body: never; response: WorkflowDef };
   revealAssistantWebhookSecret: { method: "POST"; path: "/orgs/{org}/assistants/{slug}/webhook-secret"; body: WebhookSecretRequest; response: WebhookSecret };
+  revealTaskEventKey: { method: "POST"; path: "/orgs/{org}/assistants/{slug}/tasks/{task}/event-key"; body: never; response: TaskEventKey };
   revokeMachineToken: { method: "DELETE"; path: "/projects/{id}/machine-accounts/{slug}/tokens/{token_id}"; body: never; response: void };
   revokeMyDelegation: { method: "DELETE"; path: "/me/delegations/{delegation_id}"; body: never; response: void };
   revokeMyToken: { method: "DELETE"; path: "/me/tokens/{id}"; body: never; response: void };
@@ -5724,6 +5751,9 @@ export interface Operations {
   syncKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/sync"; body: never; response: KnowledgeBase };
   syncKnowledgeSource: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/sources/{source_id}/sync"; body: never; response: KnowledgeSource };
   syncModelCatalogue: { method: "POST"; path: "/orgs/{org}/models/sync"; body: never; response: ModelSyncResult };
+  taskEventWebhook: { method: "POST"; path: "/webhooks/assistants/{org}/{slug}/tasks/{task}/events"; body: {
+  [key: string]: unknown;
+}; response: TaskEventAck };
   tektonWebhook: { method: "POST"; path: "/webhooks/tekton"; body: {
   [key: string]: unknown;
 }; response: WebhookAck };

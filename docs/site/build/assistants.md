@@ -195,9 +195,18 @@ tasks:
 ```
 
 A task runs a workflow of the plugin, in the subscriber's personal space. A trigger is `on_demand`,
-`schedule` (a cron in the person's time zone) or `poll` (a cron that calls one read operation and starts
-the workflow only when a condition on its result holds). `deliver` is `inbox`, `email`, `teams` or
-`webhook`.
+`schedule` (a cron in the person's time zone), `poll` (a cron that calls one read operation and starts
+the workflow only when a condition on its result holds) or `trigger` (a system sends an event for one
+person). `deliver` is `inbox`, `email`, `teams` or `webhook`.
+
+```text
+triggers: [{ kind: trigger, subscriber: /attendee/email, idempotency: /event/id }]
+```
+
+`subscriber` is the JSON pointer, in the event, of the email of the person it is for; it is matched against the
+people subscribed to the task. An event that names nobody, several people, or nobody subscribed is refused and
+journaled for the installation's manager, and the same event id never starts the task twice. The sender signs
+the event with a key the manager reads on the installation.
 
 A task that reads with a person's identity while they are away needs `delegation: read_only` and lists
 the `needs` it reads; the person agrees to that exact list. A delegated task never calls a write need.
@@ -275,7 +284,8 @@ Each refusal names the file and the path in it.
   that is not `owner_only`; a subject resolver that is not a need marked `subject_resolver: true`.
 - `personal_data: true` without a conversation retention and an erasure mode.
 - A task that names a need or an operation the assistant does not declare, or a `read_only` task without
-  its `needs`; a poll without `cron`, `operation` and `when`.
+  its `needs`; a poll without `cron`, `operation` and `when`; a
+  `trigger` without a `subscriber` pointer.
 - A workflow, seed folder, or suite file that is not in the plugin, or a workflow that is not valid.
 - A suite that evaluates another agent than the assistant's, repeats a case name, or names a tool that
   is not a `need__operation` of the assistant.

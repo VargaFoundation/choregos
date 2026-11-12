@@ -105,5 +105,6 @@
  "utcnow",
  "uuid7",
  "TaskSubscription",
- "Delegation"
+ "Delegation",
+ "TaskEvent"
 ]

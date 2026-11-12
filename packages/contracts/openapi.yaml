@@ -3767,6 +3767,63 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+  /orgs/{org}/assistants/{slug}/tasks/{task}/event-key:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+      - { name: task, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [agents]
+      operationId: revealTaskEventKey
+      description: >-
+        The URL and the HMAC key of a `trigger` task's event door (S63-21, ADR 0137 point 2), for whoever manages the
+        installation (`assistant:manage`). The key is derived from the installation's webhook key and the task. Each
+        showing is in the audit log, never the key. 404 when the task has no `trigger`.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/TaskEventKey" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/assistants/{slug}/task-events:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+      - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 200, default: 100 } }
+    get:
+      tags: [agents]
+      operationId: listTaskEvents
+      description: >-
+        The journal of the events the installation's `trigger` tasks received (S63-21), newest first, refused ones
+        included, for whoever manages the installation: what was decided, never a payload or an address.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/TaskEventList" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /webhooks/assistants/{org}/{slug}/tasks/{task}/events:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,63}$" } }
+      - { name: task, in: path, required: true, schema: { type: string, pattern: "^[a-z][a-z0-9_]{0,62}$" } }
+      - { name: Idempotency-Key, in: header, required: false, schema: { type: string } }
+      - { name: X-Choregos-Signature, in: header, required: true, schema: { type: string }, description: "`sha256=<hex>`: the HMAC-SHA256 of the body under the task's event key." }
+    post:
+      tags: [webhooks]
+      security: []
+      operationId: taskEventWebhook
+      summary: A system posts an event for one person, which starts their task
+      description: >-
+        The door of a task declared with a `trigger` (S63-21, ADR 0137 point 2). The trigger's `subscriber` pointer
+        names, in the JSON payload, the email of the subscriber; the task starts in that person's personal space under
+        the gate of a schedule (audience, delegation, budget). One run per event id (the trigger's `idempotency`
+        pointer, else `Idempotency-Key`, else the body's digest): a replay answers `duplicate`. An event that names no
+        subscriber, several, or nobody subscribed is a 422, one the subscriber's gate refuses a 409; both are journaled.
+      requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
+      responses:
+        "202": { description: Accepted, content: { application/json: { schema: { $ref: "#/components/schemas/TaskEventAck" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: The subscriber's gate refuses the run, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+        "413": { description: The body is over 256 KiB }
+        "422": { description: The event names no subscriber, several, or nobody subscribed, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
   /orgs/{org}/assistants/{slug}/knowledge/updates:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -9370,7 +9427,7 @@ components:
     TaskSubscriptionPut:
       type: object
       properties:
-        kind: { type: string, enum: [on_demand, schedule, poll], default: schedule }
+        kind: { type: string, enum: [on_demand, schedule, poll, trigger], default: schedule }
         cron: { type: [string, "null"], maxLength: 128 }
         timezone: { type: [string, "null"], maxLength: 64, description: "An IANA time zone, e.g. Europe/Paris." }
         enabled: { type: boolean, default: true }
@@ -9378,7 +9435,7 @@ components:
       type: object
       required: [kind]
       properties:
-        kind: { type: string, enum: [on_demand, schedule, poll] }
+        kind: { type: string, enum: [on_demand, schedule, poll, trigger] }
         cron: { type: [string, "null"] }
         timezone: { type: string, default: UTC }
     TaskSubscription:
@@ -9457,6 +9514,35 @@ components:
       required: [items]
       properties:
         items: { type: array, items: { $ref: "#/components/schemas/Delegation" } }
+    TaskEventAck:
+      type: object
+      required: [accepted, outcome]
+      properties:
+        accepted: { type: boolean }
+        outcome: { type: string, enum: [started, duplicate] }
+        work_item_key: { type: [string, "null"] }
+    TaskEventKey:
+      type: object
+      required: [url, secret, generation]
+      properties:
+        url: { type: string }
+        secret: { type: string }
+        generation: { type: integer }
+    TaskEventLine:
+      type: object
+      required: [task, event_id, outcome, summary, received_at]
+      properties:
+        task: { type: string }
+        event_id: { type: string }
+        outcome: { type: string, enum: [started, duplicate, refused] }
+        summary: { type: string }
+        work_item_key: { type: [string, "null"] }
+        received_at: { type: string, format: date-time }
+    TaskEventList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/TaskEventLine" } }
     WebhookSecretRequest:
       type: object
       properties:

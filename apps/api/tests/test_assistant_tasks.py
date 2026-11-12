@@ -78,6 +78,18 @@ TASK_BLOCK = """tasks:
         idempotency: /events/*/id
     delegation: none
     deliver: [inbox]
+  - name: meeting_prep
+    workflow: workflows/morning-brief.yaml
+    triggers: [{ kind: trigger, subscriber: /attendee/email, idempotency: /event/id }]
+    delegation: none
+    needs: [news]
+    deliver: [inbox]
+  - name: delegated_event
+    workflow: workflows/morning-brief.yaml
+    triggers: [{ kind: trigger, subscriber: /who/* }]
+    delegation: read_only
+    needs: [brokerage]
+    deliver: [inbox]
 """
 MONDAY = (2030, 1, 7)
 
