@@ -183,6 +183,27 @@ Options:
   --help         Show this message and exit.
 ```
 
+### `choregos activity`
+
+```text
+Usage: choregos activity [OPTIONS]
+
+  What runs in the organisation, as a tree: project, work item, run, with
+  status, time, tokens and cost.
+
+  Read-only. `--watch` follows the activity stream; elapsed times move every
+  second.
+
+Options:
+  -w, --watch       keep the tree live until the stream ends or Ctrl-C
+  --project <str>   only this project (its slug)
+  --workflow <str>  only the work items born in this workflow
+  --agent <str>     only this agent (its slug)
+  --kind <str>      run, session or turn
+  --org <str>       the organisation; the profile's otherwise
+  --help            Show this message and exit.
+```
+
 ## `choregos admin`
 
 Platform administration
