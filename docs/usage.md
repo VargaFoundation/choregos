@@ -3595,6 +3595,16 @@ Every stop asks **why** (1 to 500 characters), and the reason is audited with wh
   be stopped yet, which the reconciliation retries. *Reactivate* resumes the agent and restarts nothing
   on its own. Stopping an agent that is already suspended stops what is still running and is audited
   again.
+- **Stop an assistant** (*Stop the assistant…* on its installation page, or
+  `POST /orgs/{org}/assistants/{slug}/stop`; `assistant:manage`). The installation reads `suspended`
+  until it is resumed, whatever its readiness says, so no new turn starts; every turn its conversations
+  are taking is cancelled at its next model or tool call, its spend booked. The conversations stay open
+  to their people. The answer counts the turns cancelled. While it is stopped, the page says who stopped
+  it, when and why, and offers **Resume** (`POST .../resume`), which restarts nothing on its own.
+
+A conversation turn on the Activity screen says its assistant and the person whose conversation it is;
+it has no Stop of its own: its assistant's stop (or its agent's) is the stop. A click on the assistant,
+or `/activity?assistant=<installation id>`, keeps only that assistant's turns.
 
 ### Tokens, and what fills the context
 
@@ -3604,11 +3614,12 @@ the project's overview, on a workflow's *Tokens and cost* tab and on an agent's 
 project): its totals give the input tokens, the part of them read from the model's cache, and the output
 tokens, next to the cost; one grouping at a time (by model, stage, agent, workflow or run), in money or in
 tokens, with the CSV of exactly what is shown. The organisation's **Spend** page (`/costs`) has the same
-*Measure* switch for each breakdown, and adds *Top runs*; tool calls stay in money, as they spend no
-model token.
+*Measure* switch for each breakdown, and adds *Top runs* and *Top assistants*; tool calls stay in money,
+as they spend no model token. An assistant's installation page has the same panel, narrowed to the
+assistant (`assistant=<installation id>`: its conversations' turns and its tasks), by model or agent.
 
-The panels read the cost report with a filter: `agent` (its slug), `workflow` (its name) and `work_item`
-narrow it, combined with each other and with `kind`, `since` and `until`; `group_by=run` names each run by
+The panels read the cost report with a filter: `agent` (its slug), `workflow` (its name), `work_item` and
+`assistant` (an installation's id) narrow it, combined with each other and with `kind`, `since` and `until`; `group_by=run` names each run by
 its work item's key and stage (`PAY-12 · review #2` for a second attempt). The report's `total` carries
 `tokens_in`, `tokens_out` and `tokens_cached` next to the money.
 

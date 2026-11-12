@@ -12,12 +12,15 @@ import { useSession } from "@/lib/session";
 
 /**
  * What is running in the organisation, and what has just finished (S64-06, ADR 0142 §1). The whole
- * organisation by default; `?project=<slug>` narrows it to one project.
+ * organisation by default; `?project=<slug>` narrows it to one project, `?assistant=<installation id>`
+ * to one assistant's conversation turns (S64-09d).
  */
 function Activity() {
   const { org } = useSession();
   const router = useRouter();
-  const project = useSearchParams().get("project");
+  const params = useSearchParams();
+  const project = params.get("project");
+  const assistant = params.get("assistant");
   const projects = useQuery({ queryKey: ["projects", org], queryFn: () => api.projects(org) });
   return (
     <div className="space-y-6">
@@ -42,7 +45,7 @@ function Activity() {
           ))}
         </Select>
       </label>
-      <ActivityView key={project ?? ""} org={org} project={project} />
+      <ActivityView key={`${project ?? ""}|${assistant ?? ""}`} org={org} project={project} assistant={assistant} />
     </div>
   );
 }

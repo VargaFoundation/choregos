@@ -11,6 +11,7 @@ import type {
   AssistantList,
   AssistantReadPage,
   AssistantReadiness,
+  AssistantStopResult,
   AssistantUpdate,
   ConnectedAccountConnect,
   ConnectedAccountList,
@@ -36,6 +37,7 @@ import type {
   MyAssistantList,
   PluginAssistantList,
   SubjectErasure,
+  StopRequest,
   SubjectErasureRequest,
   TaskEventKey,
   TaskEventList,
@@ -53,6 +55,8 @@ export type {
   AssistantBinding,
   AssistantReadLine,
   AssistantReadinessItem,
+  AssistantStop,
+  AssistantStopResult,
   ConnectedAccount,
   Conversation,
   ConversationAction,
@@ -250,6 +254,11 @@ export const assistantsApi = {
     request<void>(`/orgs/${enc(org)}/assistants/${enc(slug)}`, { method: "DELETE" }),
   readiness: (org: string, slug: string) =>
     request<AssistantReadiness>(`/orgs/${enc(org)}/assistants/${enc(slug)}/readiness`),
+  /** Stops the assistant and the turns its conversations are taking, with a reason (ADR 0142 §4 bis). */
+  stop: (org: string, slug: string, reason: string) =>
+    request<AssistantStopResult>(`/orgs/${enc(org)}/assistants/${enc(slug)}/stop`, post({ reason } satisfies StopRequest)),
+  /** Clears the stop: the status is derived again, and nothing stopped restarts on its own. */
+  resume: (org: string, slug: string) => request<Assistant>(`/orgs/${enc(org)}/assistants/${enc(slug)}/resume`, post()),
   bind: (org: string, slug: string, need: string, body: AssistantBind) =>
     request<Assistant>(`/orgs/${enc(org)}/assistants/${enc(slug)}/bindings/${enc(need)}`, {
       method: "PUT",

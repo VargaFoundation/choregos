@@ -43,3 +43,15 @@ export function connectLinksOf(text: string, extra: { connect_url?: string }[] =
 export function isProposed(status: string): boolean {
   return status === "proposed";
 }
+
+/**
+ * The installation's id, which the cost report's and the Activity list's `assistant` filters take
+ * (ADR 0141 §1), or `null` when the answer does not say it.
+ *
+ * TODO(contract) #1657: `Assistant` carries the slug, not the id; read when the API sends it, so that a
+ * page that cannot narrow says so rather than show the organisation's whole spend as the assistant's.
+ */
+export function installationId(assistant: { slug: string }): string | null {
+  const id = (assistant as { id?: unknown }).id;
+  return typeof id === "string" && id !== "" ? id : null;
+}

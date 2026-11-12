@@ -11,7 +11,7 @@ import { type Currency, type Measure, money, tokenCount, tokenTotals } from "@/l
 import { BreakdownTable, csvUrl, fetchReport, reportKey, type Scope } from "./breakdown";
 
 /** The groupings a tokens-and-cost panel may offer, as the cost report names them (ADR 0141 §1). */
-export type PanelGroup = "model" | "stage" | "agent" | "workflow" | "run";
+export type PanelGroup = "model" | "stage" | "agent" | "workflow" | "run" | "assistant";
 
 const GROUP_LABELS: Record<PanelGroup, string> = {
   model: "By model",
@@ -19,6 +19,7 @@ const GROUP_LABELS: Record<PanelGroup, string> = {
   agent: "By agent",
   workflow: "By workflow",
   run: "By run",
+  assistant: "By assistant",
 };
 
 const MEASURES: Array<{ id: Measure; label: string }> = [
@@ -28,7 +29,8 @@ const MEASURES: Array<{ id: Measure; label: string }> = [
 
 /**
  * Tokens and cost (S64-07, ADR 0141 §1): the same cost report every spend screen reads, narrowed to
- * what the page is about — a project, one of its workflows, an agent — over the last `days` days.
+ * what the page is about — a project, one of its workflows, an agent, an assistant (S64-09d) — over the
+ * last `days` days.
  * Its totals say the input, output and cached tokens next to the money; one grouping at a time,
  * in money or in tokens; the CSV is exactly the grouping and the filter shown. The money is in
  * dollars by default, as on every project, work item and agent screen (S23-10: the currency of
@@ -43,8 +45,8 @@ export function TokensAndCostPanel({
 }: {
   /** A project's slug, or `null` for the organisation's report. */
   project?: string | null;
-  /** The page's own filter: `{ workflow }`, `{ agent }`, nothing for a project. */
-  filter?: Pick<CostFilter, "agent" | "workflow" | "work_item">;
+  /** The page's own filter: `{ workflow }`, `{ agent }`, `{ assistant }` (an installation id), nothing for a project. */
+  filter?: Pick<CostFilter, "agent" | "workflow" | "work_item" | "assistant">;
   groups: PanelGroup[];
   days?: number;
   currency?: Currency;

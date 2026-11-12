@@ -104,7 +104,7 @@ import type {
 import { readSandboxNetwork } from "@/lib/policy-network";
 import { journeyInProgress, journeyFinished, journeyOf } from "./journey";
 import { egressApi } from "./egress";
-import { activityApi } from "./activity";
+import { MOCK_INSTALLATIONS, activityApi } from "./activity";
 import { peopleOps, peopleOpsApi, peopleOpsFixtures } from "./joiners-leavers";
 import mcpCatalogueFile from "./mcp-catalogue.json";
 import { checkOutpostConnector, discoverAtOutpost, outpostsApi, whereItLivesNow } from "./outposts";
@@ -1151,6 +1151,8 @@ type MockLine = {
   stage: string;
   /** The door a tool call came through (S57-06): a model line has none, nor a tool line booked before. */
   origin?: "model" | "script" | "job";
+  /** The assistant installation (its id) whose conversation turn spent it (ADR 0141 §1, S64-09). */
+  assistant?: string;
 };
 const FX_EUR = 0.92;
 export const mockLedger: MockLine[] = Array.from({ length: 45 }, (_, i) => i).flatMap((daysAgo) => [
@@ -1176,6 +1178,13 @@ export const mockLedger: MockLine[] = Array.from({ length: 45 }, (_, i) => i).fl
   ...(daysAgo % 6 === 0
     ? [{ daysAgo, usd: 0.6, kind: "model" as const, model: "claude-sonnet", agent: null, workflow: "delivery", item: "BILL-12", project: "checkout-web", stage: "triage" }]
     : []),
+  // The assistants' conversation turns (S64-09): in their people's personal spaces, no workflow, no work item.
+  ...(daysAgo % 2 === 0
+    ? [{ daysAgo, usd: 0.3, kind: "model" as const, model: "claude-haiku", agent: "concierge-agent", workflow: "—", item: "—", project: "—", stage: "—", assistant: "inst-concierge" }]
+    : []),
+  ...(daysAgo % 5 === 0
+    ? [{ daysAgo, usd: 0.7, kind: "model" as const, model: "claude-sonnet", agent: "analyst-agent", workflow: "—", item: "—", project: "—", stage: "—", assistant: "inst-analyst" }]
+    : []),
 ]);
 
 export function mockCostReport(path: string): CostReport {
@@ -1184,10 +1193,11 @@ export function mockCostReport(path: string): CostReport {
   const project = /^\/projects\/([^/]+)\/costs/.exec(path.split("?")[0] ?? "")?.[1]?.split(":").at(-1);
   const since = query.get("since");
   const kind = query.get("kind");
-  // The narrowing filters (ADR 0141 §1): one agent, one workflow, one work item, combinable.
+  // The narrowing filters (ADR 0141 §1): one agent, one workflow, one work item, one assistant, combinable.
   const agent = query.get("agent");
   const workflowName = query.get("workflow");
   const workItem = query.get("work_item");
+  const assistant = query.get("assistant");
   const day = (daysAgo: number) => new Date(now.getTime() - daysAgo * 86_400_000).toISOString().slice(0, 10);
   const key = (line: MockLine): string => {
     switch (group) {
@@ -1199,7 +1209,8 @@ export function mockCostReport(path: string): CostReport {
       case "kind": return line.kind;
       case "origin": return line.origin ?? "—";
       case "stage": return line.stage;
-      case "run": return `${line.item} · ${line.stage}`;
+      case "run": return line.item === "—" ? "—" : `${line.item} · ${line.stage}`;
+      case "assistant": return line.assistant ? (MOCK_INSTALLATIONS[line.assistant] ?? line.assistant) : "—";
       default: return day(line.daysAgo);
     }
   };
@@ -1207,6 +1218,7 @@ export function mockCostReport(path: string): CostReport {
   for (const line of mockLedger) {
     if ((since && day(line.daysAgo) < since) || (kind && line.kind !== kind) || (project && line.project !== project)) continue;
     if ((agent && line.agent !== agent) || (workflowName && line.workflow !== workflowName) || (workItem && line.item !== workItem)) continue;
+    if (assistant && line.assistant !== assistant) continue;
     const k = key(line);
     const row = rows.get(k) ?? { key: k, cost_usd: 0, cost_eur: 0, tokens_in: 0, tokens_out: 0, tokens_cached: 0, runs: 0 };
     row.cost_usd = Math.round((row.cost_usd + line.usd) * 1e6) / 1e6;

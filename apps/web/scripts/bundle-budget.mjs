@@ -53,7 +53,10 @@ const CHUNKS = join(process.cwd(), ".next", "static", "chunks");
 // 2026-11-12 (S64-06, S64-07, S64-08): 2425 -> 2450 kB. S64 adds the Activity screen, the agent's stop and the work
 // item's stop reason (15 kB), the tokens-and-cost panel (5 kB) and the run's Context card (4 kB): about 24 kB on top
 // of main's 2412 kB, with no new dependency.
-const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 2450);
+// 2026-11-12 (S64-09d): 2450 -> 2475 kB. The assistant's Stop, Resume and Tokens and cost panel on its installation
+// page, and a conversation turn's assistant and owner on the Activity screen, take the console to 2451 kB, with no
+// new dependency.
+const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 2475);
 const CHUNK_MAX_KB = Number(process.env.BUNDLE_CHUNK_MAX_KB ?? 600);
 
 function* files(dir) {
