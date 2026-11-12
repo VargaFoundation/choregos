@@ -2389,6 +2389,19 @@ export type AgentAccessTool = {
   access?: "read" | "write" | "approval" | null;
   /** why a named tool is refused */
   reason?: string | null;
+  outpost?: AgentAccessOutpost;
+};
+
+/** Where a connector tool reached through an outpost lives (ADR 0149 §10, amending ADR 0127 §6): the outpost, the alias of the endpoint in its policy file, and whether a call made now would be handed to an instance. Present on the tool of an `mcp-outpost` connector and on no other: a tool of a direct connector carries no `outpost` key. Read when the access is asked, never promised: a person reads before a run that a tool its agent names will not answer. */
+export type AgentAccessOutpost = {
+  /** the outpost's slug; null when the connector routes to no outpost of the organisation (a call is then refused `outpost_paused`). An outpost of another organisation is never named */
+  name: string | null;
+  /** the alias of the endpoint in the outpost's policy file, as the connector names it */
+  endpoint: string;
+  /** the outpost's status: a call is handed to it only while it is `active`; null when the connector routes to no outpost of the organisation */
+  status: OutpostStatus | null;
+  /** an active instance that serves the alias polled within the poll window: the presence the call's own route reads. false when none did (a call fails at once, `outpost_offline`), when the connector routes to no outpost of the organisation, and while outposts are switched off on the deployment */
+  online: boolean;
 };
 
 export type AgentAccessItem = {
