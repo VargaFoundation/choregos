@@ -428,7 +428,12 @@ paths:
     post:
       tags: [connectors]
       operationId: createOrgConnector
-      description: An instance starts with the operations its type declares — a read allowed, a write subject to approval. The organisation's administrator only.
+      description: >-
+        An instance starts with the operations its type declares — a read allowed, a write subject to approval. The
+        organisation's administrator only. A connector of type `mcp-outpost` names an outpost of the organisation
+        and an endpoint alias (`McpOutpostConnectorConfig`, ADR 0149 §1): a configuration that carries a URL or a
+        secret, or names no outpost of the organisation, is a 422; an outpost that is paused or revoked, or outposts
+        switched off, is a 409 `outpost_paused` and nothing is declared.
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/OrgConnectorCreate" } } }
@@ -436,8 +441,8 @@ paths:
         "201": { description: Declared, content: { application/json: { schema: { $ref: "#/components/schemas/OrgConnector" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
         "409":
-          description: "State conflict: a host to open (egress_required) or the organisation's MCP gateway (gateway_required, gateway_not_configured)"
-          content: { application/problem+json: { schema: { oneOf: [{ $ref: "#/components/schemas/EgressRequired" }, { $ref: "#/components/schemas/McpGatewayConflict" }] } } }
+          description: "State conflict: a host to open (egress_required), the organisation's MCP gateway (gateway_required, gateway_not_configured) or the outpost a connector is reached through (a code of `OutpostConflict`, ADR 0149 §7)"
+          content: { application/problem+json: { schema: { oneOf: [{ $ref: "#/components/schemas/EgressRequired" }, { $ref: "#/components/schemas/McpGatewayConflict" }, { $ref: "#/components/schemas/OutpostConflict" }] } } }
         "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/connectors/{name}:
     parameters:
@@ -452,7 +457,12 @@ paths:
     patch:
       tags: [connectors]
       operationId: updateOrgConnector
-      description: Edit the configuration and the secrets of a declared connector. `secret_refs` and `secret_values` merge into the connector's; the operations are not touched. The organisation's administrator only.
+      description: >-
+        Edit the configuration and the secrets of a declared connector. `secret_refs` and `secret_values` merge into
+        the connector's; the operations are not touched. The organisation's administrator only. A connector of type
+        `mcp-outpost` is routed to the outpost its new configuration names, under the rules of its declaration
+        (ADR 0149 §1): a 422 for an outpost the organisation does not have, a 409 `outpost_paused` for one that is
+        paused or revoked.
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/OrgConnectorUpdate" } } }
@@ -460,7 +470,9 @@ paths:
         "200": { description: Updated, content: { application/json: { schema: { $ref: "#/components/schemas/OrgConnector" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
-        "409": { $ref: "#/components/responses/EgressRequired" }
+        "409":
+          description: "State conflict: a host to open (egress_required) or the outpost the connector is reached through (a code of `OutpostConflict`, ADR 0149 §7)"
+          content: { application/problem+json: { schema: { oneOf: [{ $ref: "#/components/schemas/EgressRequired" }, { $ref: "#/components/schemas/OutpostConflict" }] } } }
         "422": { $ref: "#/components/responses/ValidationError" }
     delete:
       tags: [connectors]
@@ -506,12 +518,19 @@ paths:
         closes the operation again, a removed tool disappears (ADR 0034). A connector that goes through the
         organisation's MCP gateway is asked through it (ADR 0105); a gateway refusal (409 `gateway_required`,
         `gateway_not_configured` or `gateway_assertion_key_missing`) does not mark the connector in error, and never
-        concerns a plugin's server (ADR 0096).
+        concerns a plugin's server (ADR 0096). A connector reached through an outpost is asked through it (ADR 0149):
+        the tools are those the outpost's policy lets through, and a refusal of that route is a 409 that names the
+        outpost and does not mark the connector in error either: `outpost_paused`, `outpost_offline` (no instance
+        of the outpost claimed the listing in time), `outpost_refused` (with the outpost's own `refusal` code) or
+        `outpost_timeout`. A listing the outposts' quotas do not admit (ADR 0148 §10) is a 429.
       responses:
         "200": { description: The diff, content: { application/json: { schema: { $ref: "#/components/schemas/ConnectorDiscovery" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
-        "409": { $ref: "#/components/responses/McpGatewayConflict" }
+        "409":
+          description: "State conflict on the route the connector is reached through: the organisation's MCP gateway (a code of `McpGatewayConflict`, ADR 0105) or an outpost (`outpost_paused`, `outpost_offline`, `outpost_refused`, `outpost_timeout`, ADR 0149 §7)"
+          content: { application/problem+json: { schema: { oneOf: [{ $ref: "#/components/schemas/McpGatewayConflict" }, { $ref: "#/components/schemas/OutpostConflict" }] } } }
         "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { description: "The outpost, or the organisation's outposts together, already have as many calls in flight or in the last minute as the deployment admits (`Retry-After`)", content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
         "502": { description: "The server did not answer, or refused the connector's key" }
   /orgs/{org}/mcp-catalogue:
     parameters: [{ $ref: "#/components/parameters/Org" }]
@@ -596,7 +615,13 @@ paths:
     patch:
       tags: [connectors]
       operationId: updateConnectorOperation
-      description: An operation's policy, project groups and price — the decision of the organisation's administrator (the second lock of ADR 0014).
+      description: >-
+        An operation's policy, project groups and price — the decision of the organisation's administrator (the
+        second lock of ADR 0014). 422 for a policy the operation cannot take: `allowed` for an operation its type
+        declares approved by a person, always (ADR 0052); and `allowed` or `approval` for a WRITE operation of a
+        connector reached through an outpost (type `mcp-outpost`), which stays `forbidden`: a write through an
+        outpost is opened only under the rule that it is delivered at most once (ADR 0149 §5-6, ADR 0101), and that
+        rule arrives with S65-14. A read of such a connector is opened like any other.
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/OperationPatch" } } }
@@ -604,6 +629,7 @@ paths:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ConnectorOperation" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /projects/{id}/operations:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
