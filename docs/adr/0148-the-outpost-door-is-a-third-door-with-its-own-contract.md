@@ -85,7 +85,10 @@ constrains today:
      signing key whose fingerprint a person compares (ADR 0147 §4). Without it, a proxy on the path could
      swap the sealing key under a fingerprint that still matches, and read every call.
    - The nonce is issued by the server and needs no stored state: an authenticated timestamp the door can
-     check alone (the server-provided nonce of RFC 9449 §8).
+     check alone (the server-provided nonce of RFC 9449 §8). The key that authenticates it is derived
+     from the door's signing key (13): the door holds no further secret, and every replica that holds
+     the one agrees on the other. It rotates with that key: a nonce issued under the former one is
+     refused once, with a fresh one, and the daemon signs again.
    - The sequence is kept on the instance's row. A request whose sequence is not above the row's is a
      replay, at whichever replica it arrives.
    - *Rejected: mutual TLS.* An organisation's outbound proxy often terminates TLS to inspect it; a client
@@ -148,9 +151,13 @@ constrains today:
     (`CHOREGOS_OUTPOSTS`, ADR 0147 §12).
 11. **Secrets at rest.** A call's row holds references and digests. Its arguments wait for their claim
     encrypted under the key wrapper of ADR 0103 and are deleted when the call completes; the digests of the
-    arguments and of the answer stay, as a `tool.called` event keeps digests and no payload. Nothing of the
-    outpost's side is stored, because there is nothing to store: the platform has no URL and no credential
-    of it (ADR 0147 §7).
+    arguments and of the answer stay, as a `tool.called` event keeps digests and no payload. An answer
+    waits for whoever placed the call as the outpost sealed it (5): the door stores the envelope on the
+    call's row and does not open it. The key it is sealed to is made for that one call when the call is
+    placed; its private half waits under the same key wrapper, beside the arguments, and the door never
+    opens it. Both are emptied once the caller has read the answer, and fifteen minutes after the call
+    ended at the latest. Nothing of the outpost's side is stored, because there is nothing to store: the
+    platform has no URL and no credential of it (ADR 0147 §7).
 12. **Why this door does not make Choregos a gateway** (amends ADR 0105 §1). ADR 0105 says the doors
     offer no passthrough. A door that hands calls to another network could become one; it does not, under
     three conditions, each of which is a test:
@@ -230,8 +237,10 @@ constrains today:
   (S65-12), a chart change (S65-16). `"/outposts/v1/*"` joins `MACHINE_ONLY_ROUTES`.
 - `PostgresRelay` republishes only what parses as a platform event, on one channel (`events.py`,
   `_receive`). Waking a poll therefore needs an event type in the event contract or a second channel on
-  the same connection; S65-12 chooses, and the notification carries ids only. On SQLite there is no relay
-  (`main.py`): the periodic look is what serves a local bench.
+  the same connection. S65-12 took the second channel (`choregos_outpost_calls`, `listen_also`), which
+  changes no contract; the notification carries ids only: an outpost's for its polls, an outpost's and a
+  call's for whoever placed that call. On SQLite there is no relay (`main.py`): the periodic look is
+  what serves a local bench.
 - A compatibility window is a promise to operators: the door keeps serving the previous version's
   daemons, and its conformance test plays their fixtures.
 - An inspecting proxy still sees who talks, when and how much. The operator's guide says so.

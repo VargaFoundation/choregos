@@ -597,6 +597,71 @@ process (API, workers): nothing is shared.
   `mcp-gateway`) are revoked when it moves or is deleted; a rule merged with another origin keeps its
   other families.
 
+## The outposts' door
+
+An outpost is a place an organisation's administrator enrols, which only dials out
+([ADR 0147](adr/0147-an-outpost-only-dials-out.md)). The door it dials, `/outposts/v1`, is a third
+door of the API beside `/mcp` and `/a2a`
+([ADR 0148](adr/0148-the-outpost-door-is-a-third-door-with-its-own-contract.md)); its contract is
+`packages/contracts/outpost-door.yaml`. It is not mounted unless `CHOREGOS_OUTPOSTS` is on
+([Deployment](deployment.md#outposts-adrs-0147-0149)). This is what it changes for security. Nothing
+routes a call to an outpost yet: the connector that does is a later change, so today the door enrols,
+authenticates and waits.
+
+**Who is at the door.** No session, no API token and no OAuth token opens it, and the signature that
+opens it opens no other door: the REST API, the MCP door and the A2A door answer 403 to whatever
+presents `Outpost-Signature`. Every request is signed with the Ed25519 key the instance enrolled; the
+signature binds the method, the URL under the door's public origin, the SHA-256 of the body as sent, an
+`iat` within 60 seconds, a nonce the door issued and a sequence the instance raises. A request is
+answered for the first check that fails, in the contract's order (`apps/api/src/choregos_api/outposts/auth.py`).
+
+- *A replay.* The last sequence the door took is on the instance's row, on 64 bits: a request whose
+  sequence is not above it is refused at whichever replica it arrives. The API has no shared store, by
+  decision, and a row is what the replicas share. The nonce is an authenticated timestamp the door
+  checks alone and keeps for 300 seconds; it proves freshness, the sequence refuses the replay.
+- *A proxy on the path.* An organisation's outbound proxy often terminates TLS. It reads ids, sizes and
+  timing; it does not read a call or its answer, which are sealed end to end; it cannot hand the
+  outpost a call of its own, because every call is signed by the door with a key the outpost's own
+  policy file pins; and it cannot swap a key at enrolment, because the enrolment is signed with the key
+  it enrols. It can stop, starve or mislead a daemon about versions and time, as it can by dropping
+  packets.
+- *A stolen key.* An instance holds one poll at a time. A second poll while one waits is refused
+  (409 `poll_conflict`) and raises an alert: the audit event `outpost.poll_conflict` of the
+  organisation, once a minute at most for an instance, which `/metrics` counts as
+  `choregos_outpost_poll_conflicts_total`. Revoking the instance holds from its next request and moves
+  the outpost's epoch: nothing it had in flight is taken.
+- *A hostile outpost.* A body above its verb's cap is refused before it is parsed, on the bytes
+  received; an instance's requests are rate-limited (429 with `retry_after`); a lease lasts 300 seconds
+  at most, whatever the daemon asks for; an answer is taken only from the instance that claimed the
+  call, under the epoch of the claim, before the deadline, once; a refusal is a code from a closed
+  list. The door does not open an answer: it stores the envelope for whoever placed the call, who
+  treats one that does not open as no answer.
+- *Another organisation's outpost.* The door resolves a signature to one instance of one outpost of one
+  organisation and never works under the all-organisations scope. The outposts' tables are under forced
+  row-level security that also requires the session to name the outpost: whatever is not this outpost's
+  answers 404, never 403 (`apps/api/tests/test_outpost_rendezvous_postgres.py`).
+
+**What is at rest.** A call's row holds references and digests. Its arguments wait for their claim
+sealed under the deployment's key wrapper (`CHOREGOS_SECRETS_KEKS`, ADR 0103), with the private half of
+a key made for that one call's answer; both are emptied when the call completes, and a sealed answer
+nobody came to read is emptied after 15 minutes. Nothing of the outpost's side is stored: the platform
+has no address and no credential of it.
+
+**The door's own secret** is its signing key (`CHOREGOS_OUTPOSTS_DOOR_SIGNING_KEY`). Whoever holds it
+can sign calls that the outposts which pin it will make, within what each outpost's policy allows. The
+key that authenticates the nonces is derived from it, so replicas agree with no further secret; after a
+rotation a daemon's nonce is stale once, and the refusal that says so carries a fresh one.
+
+**Why this door does not make Choregos a gateway** (ADR 0148 §12): it serves assignments and never MCP,
+it has no route that names a connector or a server, and it imports no broker module. Each of the three
+is a test (`tests/licences/test_mcp_gateway_boundary.py`).
+
+**What it does not give.** Data residency: a tool's result travels to the control plane like any
+other. Protection against whoever holds the control plane and its signing key: an outpost bounds what
+can be asked of it, it does not remove it. A limit on requests that carry no valid signature: each
+costs the door one lookup, and bounding them by source is the entrance's (the door has a hostname of
+its own for that).
+
 ## Secrets
 
 - Never in Git, never in an image, never in a workspace.

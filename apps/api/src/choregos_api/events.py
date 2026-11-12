@@ -21,7 +21,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 from collections import defaultdict, deque
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import AsyncIterator, Callable, Iterator
 from typing import Any
 
 from choregos_contracts import ChoregosEvent, EventType
@@ -160,12 +160,23 @@ async def broadcast(session: Any, event: ChoregosEvent) -> None:
 
 
 class PostgresRelay:
-    """One `LISTEN` connection per replica, which republishes into the local bus. Reconnects on its own."""
+    """One `LISTEN` connection per replica, which republishes into the local bus. Reconnects on its own.
+
+    The connection can carry other channels beside the events' (`listen_also`): a wake-up is not a
+    platform event, and `_receive` drops what does not parse as one (ADR 0148 §7)."""
 
     def __init__(self, dsn: str) -> None:
         self.dsn = dsn.replace("postgresql+asyncpg://", "postgresql://")
         self._task: asyncio.Task[None] | None = None
         self.received = 0
+        self._also: dict[str, Callable[[str], None]] = {}
+        #: Set while the connection listens, cleared when it is lost: a test waits for it.
+        self.attached = asyncio.Event()
+
+    def listen_also(self, channel: str, heard: Callable[[str], None]) -> None:
+        """Hand `heard` the payload of every notification on `channel`, from the same connection.
+        Called before `start`. What the payload means is its owner's: nothing is parsed here."""
+        self._also[channel] = heard
 
     def start(self) -> None:
         self._task = asyncio.create_task(self._loop())
@@ -185,6 +196,9 @@ class PostgresRelay:
         self.received += 1
         _bus.publish(event)
 
+    def _hear(self, _conn: Any, _pid: int, channel: str, payload: str) -> None:
+        self._also[channel](payload)
+
     async def _loop(self) -> None:
         import asyncpg
 
@@ -198,7 +212,10 @@ class PostgresRelay:
                 conn.add_termination_listener(lambda _conn, lost=lost: lost.set())
                 try:
                     await conn.add_listener(CHANNEL, self._receive)
-                    logger.info("PostgreSQL event relay attached", channel=CHANNEL)
+                    for channel in self._also:
+                        await conn.add_listener(channel, self._hear)
+                    logger.info("PostgreSQL event relay attached", channel=CHANNEL, also=sorted(self._also))
+                    self.attached.set()
                     wait = 1.0
                     while not lost.is_set():
                         with contextlib.suppress(TimeoutError):
@@ -207,6 +224,7 @@ class PostgresRelay:
                             await conn.execute("SELECT 1")  # a connection dead without a word
                     raise ConnectionError("the LISTEN connection was closed by the server")
                 finally:
+                    self.attached.clear()
                     with contextlib.suppress(Exception):
                         await conn.close()
             except asyncio.CancelledError:

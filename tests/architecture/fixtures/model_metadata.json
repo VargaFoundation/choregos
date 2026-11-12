@@ -12705,6 +12705,13 @@
    },
    {
     "default": null,
+    "name": "expires_at",
+    "nullable": true,
+    "server_default": null,
+    "type": "DateTime(timezone=True)"
+   },
+   {
+    "default": null,
     "name": "finished_at",
     "nullable": true,
     "server_default": null,
@@ -12828,6 +12835,62 @@
     "nullable": true,
     "server_default": null,
     "type": "String(length=32)"
+   },
+   {
+    "default": null,
+    "name": "asserted",
+    "nullable": true,
+    "server_default": null,
+    "type": "Json()"
+   },
+   {
+    "default": null,
+    "name": "answer_key",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=43)"
+   },
+   {
+    "default": null,
+    "name": "answer_key_ciphertext",
+    "nullable": true,
+    "server_default": null,
+    "type": "LargeBinary()"
+   },
+   {
+    "default": null,
+    "name": "answer_key_nonce",
+    "nullable": true,
+    "server_default": null,
+    "type": "LargeBinary()"
+   },
+   {
+    "default": null,
+    "name": "answer_key_wrapped_dek",
+    "nullable": true,
+    "server_default": null,
+    "type": "LargeBinary()"
+   },
+   {
+    "default": null,
+    "name": "answer_key_dek_nonce",
+    "nullable": true,
+    "server_default": null,
+    "type": "LargeBinary()"
+   },
+   {
+    "default": null,
+    "name": "answer_key_kek_id",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=32)"
+   },
+   {
+    "default": null,
+    "name": "answer_sealed",
+    "nullable": true,
+    "server_default": null,
+    "type": "Text()"
    },
    {
     "default": "<function utcnow>",
@@ -13167,6 +13230,27 @@
    {
     "default": null,
     "name": "last_seen_at",
+    "nullable": true,
+    "server_default": null,
+    "type": "DateTime(timezone=True)"
+   },
+   {
+    "default": null,
+    "name": "poll_holder",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=32)"
+   },
+   {
+    "default": null,
+    "name": "poll_expires_at",
+    "nullable": true,
+    "server_default": null,
+    "type": "DateTime(timezone=True)"
+   },
+   {
+    "default": null,
+    "name": "poll_conflict_at",
     "nullable": true,
     "server_default": null,
     "type": "DateTime(timezone=True)"
