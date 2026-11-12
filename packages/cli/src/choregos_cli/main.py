@@ -17,6 +17,7 @@ from .a2a import a2a_app
 from .binary_info import binary_info
 from .client import ApiError, Client, NoOrganisationError, Profile
 from .knowledge import knowledge_app
+from .outposts import outposts_app
 from .plugins import plugin_app
 from .self_update import self_app
 
@@ -39,6 +40,7 @@ admin_app.add_typer(secrets_app, name="secrets")
 app.add_typer(orgs_app, name="orgs")
 app.add_typer(tokens_app, name="tokens")
 app.add_typer(machines_app, name="machines")
+app.add_typer(outposts_app, name="outposts")
 app.add_typer(admin_app, name="admin")
 app.add_typer(projects_app, name="projects")
 app.add_typer(items_app, name="items")

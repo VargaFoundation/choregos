@@ -55,6 +55,8 @@ const PAGES = [
   "/library/connectors",
   "/library/plugins",
   "/admin/members",
+  "/admin/outposts",
+  "/admin/outposts/factory-floor",
   "/admin/audit",
   "/admin/platform",
   "/admin/edition",

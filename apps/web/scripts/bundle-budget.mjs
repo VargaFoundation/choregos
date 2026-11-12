@@ -47,7 +47,10 @@ const CHUNKS = join(process.cwd(), ".next", "static", "chunks");
 // 2026-11-11 (S62-11): 2375 -> 2400 kB. The A2A page of Integrations (four steps, the snippet builder and its
 // name list), the Help entry and the "Learn more" links add 19 kB: 2369 kB with the assistants, no new
 // dependency. S62-08's CLI page, written the same day, adds 6 kB more: the two together would sit at 2375.
-const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 2400);
+// 2026-11-12 (S65-17a): 2400 -> 2425 kB. Main at cb4d94d4c measures 2383 kB; the Outposts pages (the list, and
+// one outpost with its instances and their approval, the enrolment, the keys to pin and the recent calls) and
+// their twelve client operations bring 29 kB: 2412 kB, with no new dependency.
+const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 2425);
 const CHUNK_MAX_KB = Number(process.env.BUNDLE_CHUNK_MAX_KB ?? 600);
 
 function* files(dir) {
