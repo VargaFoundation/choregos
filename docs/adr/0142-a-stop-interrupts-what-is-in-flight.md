@@ -60,8 +60,27 @@ An operator cannot answer "what is running right now, and for whom", nor stop it
    Resuming is the existing `PATCH ... {status: "active"}`; nothing stopped is restarted on its own.
    Right: `Action.MANAGE` on the agent (`agent_governance.decide`), the decision that already guards a
    status change in `PATCH /orgs/{org}/agents/{slug}`.
+4 bis. **Stopping an assistant stops its conversations' turns** (S64-09, written once S63 was on `main`).
+   `POST /orgs/{org}/assistants/{slug}/stop` with a required `reason`:
+   - the installation keeps who stopped it, when and why (`stopped`), and its status reads `suspended`
+     while it is stopped, whatever its readiness or its plugin say: the status is derived (S63-02), and
+     a stop that the next derivation could undo would not be a stop. No new turn starts;
+   - every turn in flight of its conversations is cancelled. A turn runs in the API process that took
+     it, and an organisation may run several: the stop writes a cancel request on the conversation's row
+     (`cancel_requested_at`), which the turn reads between its model and tool calls, whichever replica
+     runs it, and cancels the turn at once when it runs in the same process. A cancelled turn settles as
+     a person's cancel does today: its spend booked, its key revoked, the conversation left open;
+   - the conversations themselves are not closed: they belong to their people (ADR 0134), who read
+     them while the assistant is stopped and continue them once it is resumed;
+   - the answer counts the turns cancelled and lists what could not be stopped now.
+   Resuming is `POST /orgs/{org}/assistants/{slug}/resume`, which clears `stopped`; the status is derived
+   again, and nothing stopped restarts on its own. Right: `assistant:manage` (S63-15), the right that
+   already configures the installation. Audited as `assistant.stop` and `assistant.resume`.
+   An agent's stop (§4) cancels, the same way, the turns in flight of the conversations whose agent it
+   is, in every person's space: the stop reads which conversations have a turn in flight (their ids, not
+   their content) under the organisation's scope, personal spaces included.
 5. **Every stop is audited, with its reason.** `run.cancel`, `workitem.stop` (unchanged),
-   `agent.stop`, each with the reason and the counts; a stop from the tracker remains refused (0102).
+   `agent.stop`, `assistant.stop`, each with the reason and the counts; a stop from the tracker remains refused (0102).
 6. **Idempotent.** Cancelling a run that is already cancelled or ended answers `409` with how it ended and
    changes nothing; stopping a suspended agent stops what is still in flight and audits again; the
    workflow's history replays (`tests/replay/`), the new interpreter path is behind `workflow.patched`.

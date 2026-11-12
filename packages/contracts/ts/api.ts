@@ -3963,6 +3963,8 @@ export type Assistant = {
   audience_groups: Array<string>;
   channel: "stable" | "candidate";
   status: "incomplete" | "ready" | "suspended";
+  /** set while a person has stopped the assistant: its status then reads `suspended` */
+  stopped?: AssistantStop | null;
   policy_overrides: {
     [key: string]: unknown;
   };
@@ -5033,6 +5035,26 @@ export type AgentStopResult = {
   }>;
 };
 
+export type AssistantStopResult = {
+  slug: string;
+  status: "suspended";
+  /** turns in flight whose cancel was requested; each settles at its next model or tool call */
+  turns_cancelled: number;
+  /** what could not be stopped now; the turn's own lease ends it at the latest */
+  not_stopped?: Array<{
+    kind: "turn";
+    id: string;
+    detail: string;
+  }>;
+};
+
+/** who stopped the assistant, when and why (ADR 0142 §4 bis) */
+export type AssistantStop = {
+  at: string;
+  by: string;
+  reason: string;
+};
+
 export type ActivityEntry = {
   kind: "run" | "session" | "turn";
   id: string;
@@ -5798,6 +5820,7 @@ export interface Operations {
   resolveProjectAgents: { method: "GET"; path: "/projects/{id}/agent-resolution"; body: never; response: Array<AgentResolution> };
   restoreAgentVersion: { method: "POST"; path: "/orgs/{org}/agents/{slug}/versions/{version}/restore"; body: AgentVersionRestore; response: AgentVersion };
   restoreWorkflowVersion: { method: "POST"; path: "/projects/{id}/workflows/{name}/versions/{version}/restore"; body: never; response: WorkflowDef };
+  resumeAssistant: { method: "POST"; path: "/orgs/{org}/assistants/{slug}/resume"; body: never; response: Assistant };
   revealAssistantWebhookSecret: { method: "POST"; path: "/orgs/{org}/assistants/{slug}/webhook-secret"; body: WebhookSecretRequest; response: WebhookSecret };
   revokeMachineToken: { method: "DELETE"; path: "/projects/{id}/machine-accounts/{slug}/tokens/{token_id}"; body: never; response: void };
   revokeMyDelegation: { method: "DELETE"; path: "/me/delegations/{delegation_id}"; body: never; response: void };
@@ -5824,6 +5847,7 @@ export interface Operations {
   startAgentEvaluation: { method: "POST"; path: "/orgs/{org}/agents/{slug}/versions/{version}/evaluations"; body: AgentEvaluationCreate; response: AgentEvaluation };
   startAgentTrial: { method: "POST"; path: "/orgs/{org}/agent-trials"; body: AgentTrialCreate; response: AgentTrial };
   stopAgent: { method: "POST"; path: "/orgs/{org}/agents/{slug}/stop"; body: StopRequest; response: AgentStopResult };
+  stopAssistant: { method: "POST"; path: "/orgs/{org}/assistants/{slug}/stop"; body: StopRequest; response: AssistantStopResult };
   stopKnowledgeDistillation: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/distill/stop"; body: never; response: KnowledgeBase };
   streamOrgActivity: { method: "GET"; path: "/orgs/{org}/activity/stream"; body: never; response: void };
   streamProjectEvents: { method: "GET"; path: "/projects/{id}/events/stream"; body: never; response: void };

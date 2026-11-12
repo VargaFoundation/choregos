@@ -31,7 +31,7 @@ Status words: **exists** (in the code), **missing**, **broken** (exists and is w
 ## 1. Stories
 
 Order of the pull requests: S64-00, S64-01, then S64-02, S64-03, S64-05 in parallel, then S64-04, S64-06,
-S64-07, S64-08; S64-09 waits for S63-15 on `main`; S64-10 last.
+S64-07, S64-08; S64-09a to S64-09d once S63 is on `main` (it is since #1560); S64-10 last.
 
 ### S64-00 · docs(adr): ADRs 0141 and 0142, this plan, the backlog stories
 
@@ -101,11 +101,23 @@ tool names); the LiteLLM callback counts each call's request and attributes the 
 to `backend`. **Accepted when** a recorded Claude Code request splits into the registered parts plus
 `backend`, and a CLI request with nothing recognised is all `backend`, never an error.
 
-### S64-09 · feat(api,web): an assistant's tokens and stopping an assistant (ADR 0141 §1, ADR 0142 §4)
+### S64-09 · an assistant's tokens and stopping an assistant (ADR 0141 §1, ADR 0142 §4 bis)
 
-Filter and grouping `assistant` on the ledger's `installation_id`; conversation turns in the activity list;
-stopping an installation suspends it and cancels its turns in flight. Depends on S63-15 and S63-04b on
-`main`.
+Written once S63 was on `main` (#1560), in four pull requests:
+
+- **S64-09a** · contract(openapi): the cost filter and grouping `assistant`; `POST /orgs/{org}/assistants/{slug}/stop`
+  and `/resume`; `Assistant.stopped`; ADR 0142 §4 bis.
+- **S64-09b** · feat(api): the report narrowed to an installation (`installation_id`) and grouped by it, named by
+  its slug. **Accepted when** a report filtered by `assistant=a` counts none of assistant `b`'s lines.
+- **S64-09c** · feat(api): stopping an installation marks it stopped (a migration: who, when, why), and its derived
+  status reads that first; every turn in flight of its conversations gets a cancel request on the conversation's
+  row, read by the turn between its model and tool calls, so a turn on another API replica stops too; the
+  activity list shows turns (`kind=turn`, the `assistant` filter); an agent's stop cancels the turns of its
+  conversations. **Accepted when** after the stop a new turn is refused, a turn in flight on a fake model ends
+  at its next call with its spend booked once, the conversation stays open, a resumed assistant is `ready`
+  again, the next readiness derivation does not undo a stop, and a caller without `assistant:manage` gets 403.
+- **S64-09d** · feat(web): the assistant page's Tokens and cost panel, Stop and Resume; the Activity screen's
+  assistant filter and turn entries.
 
 ### S64-10 · docs: the Activity and Costs pages of the user documentation
 

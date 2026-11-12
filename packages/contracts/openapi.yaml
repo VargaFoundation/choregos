@@ -1821,13 +1821,14 @@ paths:
       tags: [costs]
       operationId: getProjectCosts
       parameters:
-        - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size, kind, agent, workflow, work_item, project, origin, run], default: day }, description: "origin is the door a tool call came through (model, script, job; S57-06), `—` for a line that does not say (a model call, a tool line booked before S57-06)" }
+        - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size, kind, agent, workflow, work_item, project, origin, run, assistant], default: day }, description: "origin is the door a tool call came through (model, script, job; S57-06), `—` for a line that does not say (a model call, a tool line booked before S57-06)" }
         - { name: since, in: query, schema: { type: string, format: date } }
         - { name: until, in: query, schema: { type: string, format: date } }
         - { name: kind, in: query, schema: { type: string, enum: [model, tool, distill] }, description: "only what models cost, only what tools cost (S29-03), or only what knowledge-base distillations cost (S42-10d)" }
         - { name: agent, in: query, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,63}$" }, description: "only the lines of this agent (its slug; ADR 0141 §1)" }
         - { name: workflow, in: query, schema: { type: string, minLength: 1, maxLength: 64 }, description: "only the lines of the work items born in this workflow (its name)" }
         - { name: work_item, in: query, schema: { type: string, minLength: 1, maxLength: 128 }, description: "only the lines of this work item (its id)" }
+        - { name: assistant, in: query, schema: { type: string, minLength: 1, maxLength: 64 }, description: "only the lines of this assistant installation (its id; ADR 0141 §1): its conversations' turns and its tasks" }
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/CostReport" } } } }
   /projects/{id}/costs.csv:
@@ -1837,13 +1838,14 @@ paths:
       operationId: exportProjectCostsCsv
       summary: The cost report as CSV (`;` separator, UTF-8 BOM)
       parameters:
-        - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size, kind, agent, workflow, work_item, project, origin, run], default: day } }
+        - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size, kind, agent, workflow, work_item, project, origin, run, assistant], default: day } }
         - { name: since, in: query, schema: { type: string, format: date } }
         - { name: until, in: query, schema: { type: string, format: date } }
         - { name: kind, in: query, schema: { type: string, enum: [model, tool, distill] }, description: "only what models cost, only what tools cost (S29-03), or only what knowledge-base distillations cost (S42-10d)" }
         - { name: agent, in: query, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,63}$" }, description: "only the lines of this agent (its slug; ADR 0141 §1)" }
         - { name: workflow, in: query, schema: { type: string, minLength: 1, maxLength: 64 }, description: "only the lines of the work items born in this workflow (its name)" }
         - { name: work_item, in: query, schema: { type: string, minLength: 1, maxLength: 128 }, description: "only the lines of this work item (its id)" }
+        - { name: assistant, in: query, schema: { type: string, minLength: 1, maxLength: 64 }, description: "only the lines of this assistant installation (its id; ADR 0141 §1): its conversations' turns and its tasks" }
       responses:
         "200": { description: Cost report as CSV, content: { text/csv: { schema: { type: string } } } }
   /projects/{id}/metrics/cross-backend:
@@ -1911,13 +1913,14 @@ paths:
       tags: [costs]
       operationId: getOrgCosts
       parameters:
-        - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size, kind, agent, workflow, work_item, project, origin, run], default: day }, description: "agent, workflow and work_item come from the ledger's own columns (S29-01); a project is named by its slug, a work item by its tracker key; origin is the door a tool call came through (model, script, job; S57-06), `—` for a line that does not say (a model call, a tool line booked before S57-06)" }
+        - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size, kind, agent, workflow, work_item, project, origin, run, assistant], default: day }, description: "agent, workflow and work_item come from the ledger's own columns (S29-01); a project is named by its slug, a work item by its tracker key; origin is the door a tool call came through (model, script, job; S57-06), `—` for a line that does not say (a model call, a tool line booked before S57-06)" }
         - { name: since, in: query, schema: { type: string, format: date } }
         - { name: until, in: query, schema: { type: string, format: date } }
         - { name: kind, in: query, schema: { type: string, enum: [model, tool, distill] }, description: "only what models cost, only what tools cost (S29-03), or only what knowledge-base distillations cost (S42-10d)" }
         - { name: agent, in: query, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,63}$" }, description: "only the lines of this agent (its slug; ADR 0141 §1)" }
         - { name: workflow, in: query, schema: { type: string, minLength: 1, maxLength: 64 }, description: "only the lines of the work items born in this workflow (its name)" }
         - { name: work_item, in: query, schema: { type: string, minLength: 1, maxLength: 128 }, description: "only the lines of this work item (its id)" }
+        - { name: assistant, in: query, schema: { type: string, minLength: 1, maxLength: 64 }, description: "only the lines of this assistant installation (its id; ADR 0141 §1): its conversations' turns and its tasks" }
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/CostReport" } } } }
   /orgs/{org}/costs.csv:
@@ -1927,13 +1930,14 @@ paths:
       operationId: exportOrgCostsCsv
       summary: The organisation's cost report as CSV, in any grouping
       parameters:
-        - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size, kind, agent, workflow, work_item, project, origin, run], default: day } }
+        - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size, kind, agent, workflow, work_item, project, origin, run, assistant], default: day } }
         - { name: since, in: query, schema: { type: string, format: date } }
         - { name: until, in: query, schema: { type: string, format: date } }
         - { name: kind, in: query, schema: { type: string, enum: [model, tool, distill] }, description: "only what models cost, only what tools cost (S29-03), or only what knowledge-base distillations cost (S42-10d)" }
         - { name: agent, in: query, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,63}$" }, description: "only the lines of this agent (its slug; ADR 0141 §1)" }
         - { name: workflow, in: query, schema: { type: string, minLength: 1, maxLength: 64 }, description: "only the lines of the work items born in this workflow (its name)" }
         - { name: work_item, in: query, schema: { type: string, minLength: 1, maxLength: 128 }, description: "only the lines of this work item (its id)" }
+        - { name: assistant, in: query, schema: { type: string, minLength: 1, maxLength: 64 }, description: "only the lines of this assistant installation (its id; ADR 0141 §1): its conversations' turns and its tasks" }
       responses:
         "200": { description: Cost report as CSV, content: { text/csv: { schema: { type: string } } } }
   /orgs/{org}/egress:
@@ -3835,6 +3839,45 @@ paths:
         "204": { description: Uninstalled }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/assistants/{slug}/stop:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+    post:
+      tags: [agents]
+      operationId: stopAssistant
+      summary: Stop this assistant and the turns its conversations are taking (ADR 0142 §4 bis)
+      description: >-
+        The installation is marked stopped (who, when, why) and reads `suspended` until it is resumed, whatever
+        its readiness says; no new turn starts. Every turn in flight of its conversations is cancelled, on
+        whichever API replica runs it; the conversations stay open to their people. Resuming is
+        `POST .../resume`; nothing stopped restarts on its own. Needs `assistant:manage`. Audited as
+        `assistant.stop`; stopping a stopped assistant cancels what still runs and is audited again.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/StopRequest" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AssistantStopResult" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/assistants/{slug}/resume:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+    post:
+      tags: [agents]
+      operationId: resumeAssistant
+      summary: Resume a stopped assistant (ADR 0142 §4 bis)
+      description: >-
+        Clears `stopped`; the status is derived again (`ready`, `incomplete` or `suspended` as the plugin and the
+        readiness say). Nothing stopped restarts on its own. Needs `assistant:manage`. Audited as
+        `assistant.resume`; 409 when the assistant is not stopped.
+      responses:
+        "200": { description: Resumed, content: { application/json: { schema: { $ref: "#/components/schemas/Assistant" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /orgs/{org}/assistants/{slug}/readiness:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -9254,6 +9297,7 @@ components:
         audience_groups: { type: array, items: { type: string } }
         channel: { type: string, enum: [stable, candidate] }
         status: { type: string, enum: [incomplete, ready, suspended] }
+        stopped: { oneOf: [{ $ref: "#/components/schemas/AssistantStop" }, { type: "null" }], description: "set while a person has stopped the assistant: its status then reads `suspended`" }
         policy_overrides: { type: object, additionalProperties: true }
         bindings: { type: array, items: { $ref: "#/components/schemas/AssistantBinding" } }
         created_by: { type: [string, "null"] }
@@ -10401,6 +10445,31 @@ components:
               kind: { type: string, enum: [run, session, turn] }
               id: { type: string }
               detail: { type: string }
+    AssistantStopResult:
+      type: object
+      required: [slug, status, turns_cancelled]
+      properties:
+        slug: { type: string }
+        status: { type: string, enum: [suspended] }
+        turns_cancelled: { type: integer, description: "turns in flight whose cancel was requested; each settles at its next model or tool call" }
+        not_stopped:
+          type: array
+          description: "what could not be stopped now; the turn's own lease ends it at the latest"
+          items:
+            type: object
+            required: [kind, id, detail]
+            properties:
+              kind: { type: string, enum: [turn] }
+              id: { type: string }
+              detail: { type: string }
+    AssistantStop:
+      type: object
+      description: "who stopped the assistant, when and why (ADR 0142 §4 bis)"
+      required: [at, by, reason]
+      properties:
+        at: { type: string, format: date-time }
+        by: { type: string }
+        reason: { type: string }
     ActivityEntry:
       type: object
       required: [kind, id, status, started_at, can_stop]
