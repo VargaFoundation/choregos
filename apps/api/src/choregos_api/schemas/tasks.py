@@ -10,7 +10,7 @@ from pydantic import Field
 
 from .base import Dto
 
-TriggerKind = Literal["on_demand", "schedule", "poll"]
+TriggerKind = Literal["on_demand", "schedule", "poll", "trigger"]
 
 
 class TaskSubscriptionPut(Dto):
@@ -80,3 +80,35 @@ class WebhookSecret(Dto):
     secret: str
     generation: int
     shown_at: datetime
+
+
+class TaskEventAck(Dto):
+    """What the door of a task's events did with one event."""
+
+    accepted: bool
+    outcome: Literal["started", "duplicate"]
+    work_item_key: str | None = None
+
+
+class TaskEventKey(Dto):
+    """The key and the URL of a task's event door, for whoever manages the installation: the sender signs
+    the body with the key (`X-Choregos-Signature: sha256=<HMAC-SHA256 of the body>`)."""
+
+    url: str
+    secret: str
+    generation: int
+
+
+class TaskEventLine(Dto):
+    """One line of the journal of a task's events: what was decided, never the payload."""
+
+    task: str
+    event_id: str
+    outcome: Literal["started", "duplicate", "refused"]
+    summary: str
+    work_item_key: str | None = None
+    received_at: datetime
+
+
+class TaskEventList(Dto):
+    items: list[TaskEventLine]

@@ -349,3 +349,20 @@ def test_the_fixture_workflows_are_valid_workflows() -> None:
         workflow, report = parse_workflow_file(FIXTURE / "workflows" / f"{name}.yaml")
         assert report.valid
         assert workflow.metadata.name == name
+
+
+def test_a_trigger_task_names_its_subscriber_by_a_json_pointer(plugin: Path) -> None:
+    """S63-21: the `trigger` kind needs a `subscriber` pointer, takes no cron or operation, and its
+    idempotency is a pointer too."""
+    event = {"kind": "trigger", "subscriber": "/attendee/email", "idempotency": "/event/id"}
+    _edit(plugin / ASSISTANT, lambda d: d["tasks"][0].update(triggers=[event]))
+    assert load_directory(plugin).assistants
+    for bad in (
+        {"kind": "trigger"},
+        {"kind": "trigger", "subscriber": "attendee/email"},
+        {"kind": "trigger", "subscriber": "/a", "cron": "0 8 * * *"},
+    ):
+        _edit(plugin / ASSISTANT, lambda d, bad=bad: d["tasks"][0].update(triggers=[bad]))
+        assert _problems(plugin), bad
+    _edit(plugin / ASSISTANT, lambda d: d["tasks"][0].update(triggers=[{**event, "idempotency": "event/id"}]))
+    assert any("is not a JSON pointer" in p for p in _problems(plugin))

@@ -93,7 +93,12 @@ NOT_CALLED_BY_A_CLIENT: dict[str, str] = {
 }
 
 #: Paths whose console screen is a story still to come: that story removes its entries.
-NO_CLIENT_YET: dict[str, str] = {}
+NO_CLIENT_YET: dict[str, str] = {
+    "/orgs/{org}/assistants/{slug}/tasks/{task}/event-key": "the key of a `trigger` task's event door "
+    "(S63-21): an API gesture of the installation's manager until the installation page shows it",
+    "/orgs/{org}/assistants/{slug}/task-events": "the journal of the events a `trigger` task received "
+    "(S63-21): read by API until the installation page lists it",
+}
 
 #: Paths the CLI calls and the console must not: an operator's command, not a screen.
 CLI_ONLY: dict[str, str] = {

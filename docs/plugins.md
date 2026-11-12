@@ -255,7 +255,7 @@ policy:
    a need marked `subject_resolver: true` otherwise);
 6. `audience.personal_data: true` without `policy.conversation.retention_days` and an `erasure` mode;
 7. a task that calls a write need, or that reads with the person's identity while it runs without them (a
-   schedule, a poll) and has no `delegation: read_only`; a delegated task lists the needs it reads
+   schedule, a poll, an event) and has no `delegation: read_only`; a delegated task lists the needs it reads
    (`needs`), which the person sees when they agree;
 8. a name (`need`, operations, `memory`, `knowledge`, `tasks`, prompts) that is not English `snake_case`
    (a double underscore separates a need from its operation and is refused in a name).
@@ -289,8 +289,25 @@ now with `POST …/run`. Nothing changes in the Temporal workflows: the schedule
   conversation of the installation is offered the same through ONE tool, `run_task(task)`, whose `task` is one of
   the manifest's on-demand tasks (`conversation_tasks`): it starts the task as the conversation's owner, with
   no delegation, under the click's budget and readiness checks, and tells the agent the work item's key (proved
-  through a full model turn). The **`trigger`** kind (an external event starting a run) stays for later: ADR 0137
-  point 2 defers it, so this is a deferral the ADR already made, not a departure.
+  through a full model turn).
+- **`trigger`** (S63-21): an event of [ADR 0113](adr/0113-a-workflow-starts-from-a-trigger.md) starts the task
+  in the personal space of the person it names. The task declares
+  `{ kind: trigger, subscriber: /attendee/email, idempotency: /event/id }`: `subscriber` is the JSON pointer, in
+  the event's payload, of the subscriber's EMAIL; `idempotency` (optional) the pointer of the event's identifier.
+  A system posts the event to `POST /webhooks/assistants/{org}/{slug}/tasks/{task}/events` with
+  `X-Choregos-Signature: sha256=<HMAC-SHA256 of the body>`; the key and the URL are shown to whoever manages the
+  installation by `POST /orgs/{org}/assistants/{slug}/tasks/{task}/event-key` (derived from the installation's
+  webhook key and the task: rotating the webhook key changes it, another task's key opens nothing). The person
+  subscribes with `PUT …/tasks/{task}` `{ "kind": "trigger" }` (no cron). Routing never guesses: the pointer must
+  designate exactly one text; it is matched, case-insensitively, against the people with an ENABLED `trigger`
+  subscription to this task. No pointer, a value that is not text, several people (a `*`), nobody subscribed or two
+  accounts that match are refused (422) and journaled; so is an event the subscriber's gate refuses (409: the
+  audience, the standing delegation of a `read_only` task, the budget: the very rules of a schedule and a
+  poll, the reason in `last_refusal`). The event id is the payload's value at `idempotency`, else the
+  `Idempotency-Key` header, else the body's digest, and keys the work item: a replay answers `duplicate` and starts
+  nothing, even on another replica; a refused event keeps no dedup, so the corrected one goes through. The journal
+  (`task_events`, `GET /orgs/{org}/assistants/{slug}/task-events` for the manager) records the decision, the event
+  id and the work item, never the payload or the address. The scheduler never runs this kind.
 - **Delegation**: a task with `delegation: read_only` can be subscribed, but its scheduled and polled runs are
   refused, the reason in `last_refusal`, unless the subscriber's standing delegation holds
   ([security](security.md#the-standing-delegation-adr-0137-points-3-4)). The steps of the run's workflow read
