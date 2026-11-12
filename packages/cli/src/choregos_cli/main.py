@@ -14,6 +14,7 @@ from rich.table import Table
 
 from . import __version__, theme
 from .a2a import a2a_app
+from .activity import activity
 from .ask import ask
 from .binary_info import binary_info
 from .client import ApiError, Client, NoOrganisationError, Profile
@@ -83,6 +84,7 @@ def _root(
 
 
 app.command("ask")(ask)
+app.command("activity")(activity)
 
 # Hidden: the native binaries' smoke test asks the binary what it knows about itself (S62-07).
 app.command("binary-info", hidden=True)(binary_info)
