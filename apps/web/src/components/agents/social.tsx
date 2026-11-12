@@ -185,7 +185,7 @@ export function WatchedAgentsCard({ org }: { org: string }) {
         <ul className="space-y-2">
           {items.data.items.map((item) => (
             <li key={item.id} className="flex flex-wrap items-center gap-2 border-t border-line pt-2 text-sm" data-testid={`agent-news-${item.id}`}>
-              {item.read_at == null && <Badge tone="accent">new</Badge>}
+              {item.read_at == null && <Badge tone="accent">New</Badge>}
               <Link href={`/agents/${item.agent}`} className="font-medium hover:underline">
                 {item.agent}
               </Link>
