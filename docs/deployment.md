@@ -738,6 +738,11 @@ there, is approved by a person, and polls; and the connector type that routes a 
 [Integrations](integrations.md#a-tool-server-at-an-outpost-adr-0149)). The daemon is a separate package
 with a chart of its own (below).
 
+This section holds the settings and the values. When to want an outpost, and when an organisation's
+own MCP gateway serves better; what an outpost gives and what it does not; and each gesture of its
+life, from the enrolment to the rotation of the door's key, are in [Outposts](outposts.md). The
+guide for whoever runs an outpost in their own network is [Running an outpost](outpost-operator.md).
+
 | Setting | Default | What it does |
 | :-- | :-- | :-- |
 | `CHOREGOS_OUTPOSTS` | `off` | `on`: the door is mounted, outposts can be created and enrolment tokens issued. `off`: the door is not served at all (a daemon meets a plain 404), creating an outpost or a token is refused (409 `outposts_disabled`), and what exists can still be listed, revoked and deleted. It is the one switch that stops every outpost. Read when the API starts: changing it takes a restart |
@@ -940,7 +945,9 @@ beside the platform's (`oci://ghcr.io/vargafoundation/charts/choregos-outpost`).
 of this one and shares no value with it: its page is `charts/choregos-outpost/README.md`, and a
 complete example is `charts/choregos-outpost/values/example.yaml`. What you hand its operator is
 what the management API returns with an enrolment token: the door's origin (`policy.control_plane`),
-the door's keys (`policy.door_keys`), and the token itself.
+the door's keys (`policy.door_keys`), and the token itself. Hand them
+[Running an outpost](outpost-operator.md) with it: that page is written for them, and says first
+that an outpost does not give data residency.
 
 | Value | Default | What it does |
 | :-- | :-- | :-- |

@@ -695,6 +695,34 @@ transport of a tool call and nothing of what governs it.
 - **A refusal is typed**, names the outpost and is never a crash; one that reached no server is not
   booked ([Integrations](integrations.md#a-tool-server-at-an-outpost-adr-0149)).
 
+## What an outpost protects against, and what it does not
+
+For whoever decides whether to rely on one. The whole picture is in [Outposts](outposts.md), and
+what the person who runs an outpost is told is in [Running an outpost](outpost-operator.md).
+
+- **It protects a network's map and its credentials.** The platform holds an alias: no address and
+  no credential of the outpost's side, at rest or on the way. A compromised control plane learns
+  neither.
+- **A compromised control plane can ask for what the local policy allows, and no more.** Whoever
+  holds the control plane, or the door's signing key, can have an outpost make the calls its own
+  policy file allows: at the aliases it lists, for the tools their patterns let through, and a write
+  only where the file says `allow`, judged from what the outpost's own server declares. They cannot
+  add an alias, widen a pattern or pin another key, because nothing the door sends changes that
+  file; and they cannot send the outpost anything to run, because no message of the door makes the
+  daemon download or execute anything. An outpost is therefore as exposed as its policy is wide.
+- **A party on the path reads and forges nothing that matters.** An outbound proxy that terminates
+  TLS reads ids, sizes and timing: calls and answers are sealed end to end, and every call is signed
+  by the door with a key the outpost pins. It can still stop, starve or mislead a daemon about
+  versions and time.
+- **It does not give data residency.** Arguments and results cross the door. A result is bounded
+  and screened at the platform, read by a model through the model gateway, and kept where the
+  platform keeps what a tool returned. A result that must not leave the outpost's network must not
+  be a tool's answer.
+- **It does not vouch for the outpost.** A result is what an approved instance says its server
+  answered. The platform bounds it, screens it and treats it as any tool's result.
+- **None of it has run on a real network yet.** The daemon and the door are each tested against the
+  door's contract and against a scripted stand-in for the other; the end-to-end proof is S65-19.
+
 ## Secrets
 
 - Never in Git, never in an image, never in a workspace.
