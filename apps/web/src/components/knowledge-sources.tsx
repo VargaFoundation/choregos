@@ -17,6 +17,9 @@ import {
   CREDENTIAL_HEADER,
   draftOf,
   firstUsableKind,
+  GITHUB_APP_HELP,
+  GITHUB_APP_LABEL,
+  githubAppOffered,
   headersOf,
   nextSyncLabel,
   refreshBody,
@@ -29,6 +32,7 @@ import {
   type SourceKind,
 } from "@/lib/knowledge";
 import { orgConnectorHref } from "@/lib/connector-link";
+import { isOrgAdmin } from "@/lib/plugins";
 import type { KnowledgeSource, OrgConnector } from "@/lib/types";
 
 type Kind = SourceKind;
@@ -132,9 +136,14 @@ export function KnowledgeSources({
   const [pageOnly, setPageOnly] = useState(false);
   const [documents, setDocuments] = useState(false);
   const [subPages, setSubPages] = useState(true);
+  const [githubApp, setGithubApp] = useState(false);
+  const [editApp, setEditApp] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const guard = useEgressGuard();
   // A connected source picks one of the organisation's `documents/<kind>` connectors: never typed.
+  const me = useQuery({ queryKey: ["me"], queryFn: () => api.me(), retry: false });
+  // Only an organisation administrator may set the flag; the API stays the judge (403/409 are shown as they come).
+  const admin = isOrgAdmin(me.data ?? null, org);
   const connectors = useQuery({ queryKey: ["org-connectors", org], queryFn: () => api.orgConnectors(org) });
   const kind: Kind = picked ?? firstUsableKind(connectors.data);
   const pickable = (connectors.data ?? []).filter((c) => c.kind === "documents" && c.type === kind);
@@ -163,6 +172,7 @@ export function KnowledgeSources({
     setPageOnly(false);
     setDocuments(false);
     setSubPages(true);
+    setGithubApp(false);
   }
   return (
     <Card
@@ -226,6 +236,7 @@ export function KnowledgeSources({
                           onClick={() => {
                             setDraft(draftOf(source));
                             setApplyAll(false);
+                            setEditApp(source.config?.github_app === true);
                             setEditing(editing === source.id ? null : source.id);
                           }}
                         >
@@ -261,13 +272,22 @@ export function KnowledgeSources({
                       onSubmit={(event) => {
                         event.preventDefault();
                         const targets = applyAll ? sources : [source];
+                        const offered = githubAppOffered(source.kind, String(source.config?.url ?? ""), admin, source.connector);
+                        const appChanged = offered && editApp !== (source.config?.github_app === true);
                         void act(async () => {
-                          for (const target of targets) await api.updateKnowledgeSource(org, slug, target.id, refreshBody(draft));
+                          for (const target of targets) {
+                            // The flag is the edited source's own: never copied to the others.
+                            const config = appChanged && target.id === source.id ? { config: { ...source.config, github_app: editApp } } : {};
+                            await api.updateKnowledgeSource(org, slug, target.id, { ...refreshBody(draft), ...config });
+                          }
                           setEditing(null);
                         });
                       }}
                     >
                       <RefreshFields value={draft} onChange={setDraft} />
+                      {githubAppOffered(source.kind, String(source.config?.url ?? ""), admin, source.connector) && (
+                        <GithubAppField checked={editApp} onChange={setEditApp} />
+                      )}
                       <label className="flex items-center gap-1 text-xs">
                         <input type="checkbox" checked={applyAll} onChange={(e) => setApplyAll(e.target.checked)} />
                         apply to all sources
@@ -300,7 +320,7 @@ export function KnowledgeSources({
                     kind,
                     name: fields.name || KIND[kind],
                     connector: CONNECTED.includes(kind) ? fields.connector : OPTIONALLY_CONNECTED.includes(kind) ? fields.connector.trim() || null : null,
-                    config: sourceConfig(kind, { ...fields, attachments, pageOnly, documents, descendants: subPages }),
+                    config: sourceConfig(kind, { ...fields, attachments, pageOnly, documents, descendants: subPages, githubApp: githubAppOffered(kind, fields.url, admin, fields.connector) && githubApp }),
                     ...refreshBody(refresh),
                     ...egressFlag(allow),
                   }),
@@ -458,6 +478,7 @@ export function KnowledgeSources({
                   </option>
                 ))}
               </Select>
+              {githubAppOffered(kind, fields.url, admin, fields.connector) && <GithubAppField checked={githubApp} onChange={setGithubApp} />}
             </>
           )}
           <RefreshFields value={refresh} onChange={setRefresh} />
@@ -479,6 +500,19 @@ export function KnowledgeSources({
         {error && <ErrorNote>{error}</ErrorNote>}
       </div>
     </Card>
+  );
+}
+
+/** The GitHub App checkbox of a git source, with what it does. */
+function GithubAppField({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <div className="space-y-1 sm:col-span-3" data-testid="github-app-field">
+      <label className="flex items-center gap-2 text-xs">
+        <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+        {GITHUB_APP_LABEL}
+      </label>
+      <p className="text-xs text-ink-muted">{GITHUB_APP_HELP}</p>
+    </div>
   );
 }
 
