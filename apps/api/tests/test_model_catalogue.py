@@ -162,7 +162,12 @@ async def test_the_catalogue_says_whether_a_model_reasons_only_when_the_gateway_
     client: AsyncClient, admin: str, gateway: Scripted
 ) -> None:
     gateway.models[:] = [
-        GatewayModel(model_name="platform/strong", litellm_model="openai/o5", provider="openai", supports_reasoning=True),
+        GatewayModel(
+            model_name="platform/strong",
+            litellm_model="openai/o5",
+            provider="openai",
+            supports_reasoning=True,
+        ),
         GatewayModel(model_name="platform/standard", litellm_model="openai/gpt-5-mini", provider="openai"),
     ]
     await client.post(f"{BASE}/sync")

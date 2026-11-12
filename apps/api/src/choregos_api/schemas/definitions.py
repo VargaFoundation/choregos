@@ -242,6 +242,7 @@ class GatewayModelDto(Dto):
     max_input_tokens: int | None = None
     supports_tool_calling: bool = True
     supports_vision: bool = False
+    supports_reasoning: bool | None = None
     mode: str = "chat"
     internal_price: bool = False
     source: Literal["gateway", "manual"] = "gateway"

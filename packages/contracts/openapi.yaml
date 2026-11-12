@@ -9517,6 +9517,7 @@ components:
         max_input_tokens: { type: [integer, "null"] }
         supports_tool_calling: { type: boolean, default: true }
         supports_vision: { type: boolean, default: false }
+        supports_reasoning: { type: [boolean, "null"], description: "Whether the gateway says the model reasons; null when it does not say." }
         mode: { type: string, default: chat, description: "What the gateway says the model does; `evaluation` is a decision model (ADR 0121)." }
         internal_price: { type: boolean, default: false }
         source: { type: string, enum: [gateway, manual], default: gateway }
