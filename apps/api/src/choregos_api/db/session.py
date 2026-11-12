@@ -241,12 +241,14 @@ async def name_the_outpost(session: AsyncSession, outpost_id: str | None) -> Non
 
 
 @asynccontextmanager
-async def in_outpost_scope(session: AsyncSession, outpost_id: str) -> AsyncIterator[None]:
+async def in_outpost_scope(session: AsyncSession, outpost_id: str | None) -> AsyncIterator[None]:
     """For the length of a block, the session names this outpost; what it named before is RESTORED.
 
     For a request that works on several outposts in turn (the organisation's list), or that goes on
     after it is done with one. What the block wrote must be flushed before it ends: an `INSERT` or an
-    `UPDATE` sent later would be judged without the outpost named, and refused.
+    `UPDATE` sent later would be judged without the outpost named, and refused. `None` names no
+    outpost for the block: what a session that already names one needs to read its organisation's
+    registry, which shows one row to a session that names an outpost.
     """
     if get_settings().is_sqlite:
         yield

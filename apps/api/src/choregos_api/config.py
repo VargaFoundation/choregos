@@ -421,6 +421,17 @@ class Settings(BaseSettings):
     #: one after. Each is the unpadded base64url of 32 raw bytes; three at most, since a policy file
     #: pins four keys.
     outposts_door_announced_keys: list[str] = Field(default_factory=list)
+    #: The most requests one instance sends the door in a minute, counted per replica
+    #: (`CHOREGOS_OUTPOSTS_DOOR_RATE_PER_MINUTE`, ADR 0148 §9): beyond it the door answers 429
+    #: `rate_limited` with `retry_after`. A poll, an answer and a refusal each count for one; 0 lifts
+    #: the limit.
+    outposts_door_rate_per_minute: int = Field(default=1200, ge=0)
+    #: The most calls an outpost, and all the outposts of an organisation, have in flight at once
+    #: (`CHOREGOS_OUTPOSTS_CALLS_IN_FLIGHT_PER_OUTPOST`, `…_PER_ORGANISATION`, ADR 0148 §10): a call
+    #: counts from the moment it is placed until it is answered, refused or out of time, and one more
+    #: is refused where it is admitted, before anything is written.
+    outposts_calls_in_flight_per_outpost: int = Field(default=128, ge=1)
+    outposts_calls_in_flight_per_organisation: int = Field(default=512, ge=1)
 
     # Webhooks
     github_webhook_secret: str = ""

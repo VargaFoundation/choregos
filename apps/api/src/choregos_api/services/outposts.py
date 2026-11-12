@@ -2,9 +2,9 @@
 """Outposts: the platform's records of them and what moves those records (ADRs 0147, 0148).
 
 Two callers. The management routes (`routers/outposts.py`) act for a person who holds
-`outpost:manage`. The outposts' door acts for an instance: `enrol` is the one function here it calls
-before it knows who is speaking, and `scope_to_outpost` is how a request that names an instance gets
-its scope.
+`outpost:manage`. The outposts' door (`outposts/`) acts for an instance: `admit_enrolment` and `enrol`
+are what it calls before it knows who is speaking, and `scope_to_outpost` is how a request that names
+an instance gets its scope.
 
 Row-level security (ADR 0148 §6). `outposts` is the organisation's registry: its administrator lists
 it under the organisation's scope alone, and a session that names an outpost sees that one row only.
@@ -95,6 +95,9 @@ APPROVAL_STEP_UP_MINUTES: Final = 10
 ENROLMENT_TOKEN_PREFIX: Final = "choe_"  # noqa: S105 - a prefix, not a secret
 #: How many of an outpost's calls its list reads back, newest first.
 RECENT_CALLS: Final = 1000
+#: The audit event the door raises when a second poll arrives under a key that already has one
+#: waiting (ADR 0148 §7): what a stolen key looks like. `/metrics` counts them.
+POLL_CONFLICT: Final = "outpost.poll_conflict"
 
 _ACTIVE, _PAUSED, _REVOKED = (
     OutpostStatus.ACTIVE.value,
@@ -666,6 +669,56 @@ class Enrolled:
     again: bool
 
 
+@dataclass(frozen=True, slots=True)
+class EnrolmentAdmission:
+    """An enrolment the door may go on with: the token is one of this outpost's, unused and in time,
+    and the signing key is no instance of it, or one that is still pending."""
+
+    outpost: Outpost
+    #: The organisation's current slug.
+    organisation: str
+    enrolment: OutpostEnrolment
+    #: The pending instance this signing key already is at this outpost, if any.
+    known: OutpostInstance | None
+
+
+async def admit_enrolment(session: AsyncSession, token: str, signing_key: str) -> EnrolmentAdmission:
+    """Whether a token and a signing key may enrol, without using the token up.
+
+    The door's contract answers a request for the first check that fails, and puts the token where
+    the instance would be: before the rate, the protocol and the body's schema. So the door asks
+    this first, with what it read of a body it has not judged yet, and `enrol` asks it again when it
+    writes. The session has no scope yet: this gives it the token's own (`scope_to_outpost`).
+
+    `EnrolmentRefused` as `enrol` raises it. A key enrolled at another outpost is not seen here: under
+    row-level security the session reads this outpost's instances only, and the unique index refuses
+    that key when the row is written."""
+    invalid = EnrolmentRefused(OutpostDoorCode.INVALID_ENROLMENT_TOKEN)
+    outpost_id = outpost_id_of_token(token)
+    scope = await scope_to_outpost(session, outpost_id) if outpost_id else None
+    if scope is None:
+        raise invalid
+    outpost, organisation = scope
+    if outpost.status == _REVOKED:
+        raise invalid
+    enrolment = (
+        await session.execute(
+            select(OutpostEnrolment).where(
+                OutpostEnrolment.outpost_id == outpost.id,
+                OutpostEnrolment.token_digest == token_digest(token),
+            )
+        )
+    ).scalar_one_or_none()
+    if enrolment is None or enrolment.used_at is not None or _aware(enrolment.expires_at) <= utcnow():
+        raise invalid
+    known = (
+        await session.execute(select(OutpostInstance).where(OutpostInstance.signing_key == signing_key))
+    ).scalar_one_or_none()
+    if known is not None and (known.outpost_id != outpost.id or known.status != _PENDING):
+        raise EnrolmentRefused(OutpostDoorCode.KEY_ALREADY_ENROLLED)
+    return EnrolmentAdmission(outpost=outpost, organisation=organisation, enrolment=enrolment, known=known)
+
+
 async def enrol(session: AsyncSession, request: OutpostEnrolmentRequest) -> Enrolled:
     """Consume an enrolment token: the instance is born `pending` (ADR 0147 §4).
 
@@ -679,33 +732,10 @@ async def enrol(session: AsyncSession, request: OutpostEnrolmentRequest) -> Enro
     instance is written, so a refused enrolment leaves it as it was."""
     invalid = EnrolmentRefused(OutpostDoorCode.INVALID_ENROLMENT_TOKEN)
     taken = EnrolmentRefused(OutpostDoorCode.KEY_ALREADY_ENROLLED)
-    outpost_id = outpost_id_of_token(request.token)
-    scope = await scope_to_outpost(session, outpost_id) if outpost_id else None
-    if scope is None:
-        raise invalid
-    outpost, organisation = scope
-    if outpost.status == _REVOKED:
-        raise invalid
-    enrolment = (
-        await session.execute(
-            select(OutpostEnrolment).where(
-                OutpostEnrolment.outpost_id == outpost.id,
-                OutpostEnrolment.token_digest == token_digest(request.token),
-            )
-        )
-    ).scalar_one_or_none()
+    admitted = await admit_enrolment(session, request.token, request.signing_key)
+    outpost, organisation = admitted.outpost, admitted.organisation
+    enrolment, known = admitted.enrolment, admitted.known
     now = utcnow()
-    if enrolment is None or enrolment.used_at is not None or _aware(enrolment.expires_at) <= now:
-        raise invalid
-    # Under row-level security this sees the outpost's own instances only. A key enrolled at another
-    # outpost is refused by the unique index when the row is written, below.
-    known = (
-        await session.execute(
-            select(OutpostInstance).where(OutpostInstance.signing_key == request.signing_key)
-        )
-    ).scalar_one_or_none()
-    if known is not None and (known.outpost_id != outpost.id or known.status != _PENDING):
-        raise taken
     instance = known or OutpostInstance(
         id=_new_instance_id(outpost),
         org_id=outpost.org_id,
@@ -817,9 +847,12 @@ def clear_call_arguments(call: OutpostCall) -> None:
 __all__ = [
     "APPROVAL_STEP_UP_MINUTES",
     "ENROLMENT_TOKEN_PREFIX",
+    "POLL_CONFLICT",
     "POLL_WINDOW_S",
     "Enrolled",
+    "EnrolmentAdmission",
     "EnrolmentRefused",
+    "admit_enrolment",
     "approve_instance",
     "call_records",
     "clear_call_arguments",

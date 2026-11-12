@@ -9,8 +9,11 @@ four parts:
 
   * no vendor name in what ships (a vendor dependency would arrive as an SDK import, a `*_URL` setting,
     a header or a host name, not as an `import` of a gateway);
-  * the inbound MCP door and the A2A door never import what reaches an organisation's connectors
-    (the broker, the MCP client, the gateway services, a platform-run plugin server);
+  * the inbound MCP door, the A2A door and the outposts' door never import what reaches an
+    organisation's connectors (the broker, the MCP client, the gateway services, a platform-run plugin
+    server); the outposts' door hands calls to another network and is no passthrough for that, under the
+    three conditions of ADR 0148 §12, each checked here: it serves assignments and never MCP, it has no
+    route that names a connector or a server, it imports no broker module;
   * nothing the API serves forwards to, merges or names a third-party MCP server: no route that selects an
     upstream, no catch-all, no virtual server, no raw listener that is not a known forward proxy, no
     subclass of the MCP client that is not the platform-run plugin servers' own;
@@ -78,8 +81,9 @@ VENDOR = re.compile(
     re.IGNORECASE,
 )
 
-#: The inbound MCP door (ADR 0030) and the A2A door (ADR 0078).
-DOOR_DIRS = ("apps/api/src/choregos_api/mcp", "apps/api/src/choregos_api/a2a")
+#: The inbound MCP door (ADR 0030), the A2A door (ADR 0078) and the outposts' door (ADR 0148).
+OUTPOSTS_DOOR = "apps/api/src/choregos_api/outposts"
+DOOR_DIRS = ("apps/api/src/choregos_api/mcp", "apps/api/src/choregos_api/a2a", OUTPOSTS_DOOR)
 
 #: What reaches an organisation's connectors: the broker, the MCP client, the gateway services. A door
 #: serves Choregos's own tools and workflows; if it imported one of these it would forward a call.
@@ -162,7 +166,22 @@ DOOR_ROUTES = {
             "GET /a2a/orgs/{org}/.well-known/agent-card.json",
         }
     ),
+    # The outposts' door (ADR 0148 §3, §12): four verbs, the ones of `packages/contracts/outpost-door.yaml`.
+    # It serves assignments, never MCP; its one path parameter is a call's `{id}`, never a connector or a
+    # server. A fifth route is a verb every daemon in the field must learn, and a contract change first.
+    OUTPOSTS_DOOR: frozenset(
+        {
+            "POST /outposts/v1/enrol",
+            "POST /outposts/v1/poll",
+            "POST /outposts/v1/calls/{id}/answer",
+            "POST /outposts/v1/calls/{id}/refuse",
+        }
+    ),
 }
+
+#: What MCP is made of on the wire. The outposts' door carries none of it: no JSON-RPC, no tool listing and
+#: no tool call a third party could use to reach a server through the platform (ADR 0148 §12).
+MCP_ON_THE_WIRE = re.compile(r"jsonrpc|tools/list|tools/call|choregos_core\.mcp|choregos_adapters\.mcp")
 
 #: The door's parameters still have French names until the English rename of the MCP door (plan story
 #: S45-14); the freeze reads them under their English names. A rename to any other name changes the freeze,
@@ -475,6 +494,35 @@ def test_the_mcp_and_a2a_doors_never_reach_an_organisation_connector() -> None:
         "Choregos's own tools and workflows; forwarding a call to another MCP server is what a gateway does, "
         "and Choregos consumes one, it never is one (ADR 0105)."
     )
+
+
+def test_the_outposts_door_serves_assignments_and_never_mcp() -> None:
+    """ADR 0148 §12, first condition: nothing in the door's package speaks MCP. Its caller is the place
+    where the server lives; it is handed calls and answers them, it lists and calls nothing."""
+    files = _python_files(OUTPOSTS_DOOR)
+    assert len(files) >= 4, f"only {len(files)} files found: the outposts' door has moved"
+    speaks = {
+        path.relative_to(ROOT).as_posix(): sorted(set(MCP_ON_THE_WIRE.findall(path.read_text("utf-8"))))
+        for path in files
+        if MCP_ON_THE_WIRE.search(path.read_text("utf-8"))
+    }
+    assert not speaks, (
+        f"the outposts' door speaks MCP: {speaks}. It serves assignments, rows of `outpost_calls` sealed to "
+        "the instance that claims them, and never a tool listing, a tool call or JSON-RPC (ADR 0148 §12)."
+    )
+    assert MCP_ON_THE_WIRE.search('{"jsonrpc": "2.0", "method": "tools/call"}'), "the pattern sees MCP"
+    assert MCP_ON_THE_WIRE.search("from choregos_core.mcp import ok")
+    # Second condition: one path parameter, a call's `{id}`; no route names a connector or a server.
+    parameters = {name for route in DOOR_ROUTES[OUTPOSTS_DOOR] for name, _ in PATH_PARAMETER.findall(route)}
+    assert parameters == {"id"}, f"the outposts' door takes other path parameters: {sorted(parameters)}"
+    # Third condition, in its own lines: what a door that imported the broker would look like.
+    door = "choregos_api.outposts.door"
+    assert forbidden_imports("from ..services import broker", door) == ["choregos_api.services.broker"]
+    assert forbidden_imports("from ..services.mcp_gateway import connector_client", door) == [
+        "choregos_api.services.mcp_gateway"
+    ]
+    assert forbidden_imports("from choregos_adapters import sealing", door) == []
+    assert forbidden_imports("from ..services import outposts", door) == []
 
 
 def test_the_services_package_re_exports_nothing_that_reaches_an_organisation_connector() -> None:
@@ -976,12 +1024,30 @@ with open(out, "w", encoding="utf-8") as file:
 """
 
 
+def _outposts_switched_on() -> dict[str, str]:
+    """The settings of a deployment whose operator turned outposts on. The key is made here: none is
+    written in this file."""
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    signing_key = Ed25519PrivateKey.generate().private_bytes(
+        serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()
+    )
+    return {
+        "CHOREGOS_OUTPOSTS": "on",
+        "CHOREGOS_OUTPOSTS_DOOR_URL": "https://outposts.example.com",
+        "CHOREGOS_OUTPOSTS_DOOR_SIGNING_KEY": signing_key.decode(),
+    }
+
+
 @functools.cache
 def _probe() -> dict[str, Any]:
     doors = [_module_of(path)[0] for path in _python_files(*DOOR_DIRS)]
     with tempfile.TemporaryDirectory() as directory:
         out = pathlib.Path(directory) / "probe.json"
-        environment = {**os.environ, "CHOREGOS_FAKES": "1"}
+        # The outposts' door is mounted only when `CHOREGOS_OUTPOSTS` is on, with its origin and a signing
+        # key: the probe turns it on, so that its live routes are frozen with the others'.
+        environment = {**os.environ, "CHOREGOS_FAKES": "1", **_outposts_switched_on()}
         done = subprocess.run(
             [sys.executable, "-c", _PROBE, json.dumps(doors), json.dumps(RUNTIME_PACKAGES), str(out)],
             cwd=ROOT,
@@ -1009,6 +1075,7 @@ def test_the_doors_import_nothing_that_reaches_an_organisation_connector() -> No
     """The doors' whole import closure, not their own lines: a re-export anywhere on the way is seen."""
     closure = _probe()["closure"]
     assert "choregos_api.mcp.transport" in closure, "the probe no longer imports the doors"
+    assert "choregos_api.outposts.rendezvous" in closure, "the probe no longer imports the outposts' door"
     forbidden = FORBIDDEN_MODULES | PLUGIN_SERVER_SURFACE
     reached = [module for module in closure if _is_forbidden(module, forbidden)]
     assert not reached, (

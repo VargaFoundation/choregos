@@ -10,6 +10,7 @@ Nothing of an outpost's side is stored: no address, no credential, no private ke
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import (
     BigInteger,
@@ -20,6 +21,7 @@ from sqlalchemy import (
     Integer,
     LargeBinary,
     String,
+    Text,
     UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column
@@ -83,6 +85,15 @@ class OutpostInstance(Base, TimestampMixin):
     #: 64 bits: the contract allows 1 to 2^53 - 1, and a daemon raises it to its clock in milliseconds.
     sequence: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    #: The one poll this instance has waiting (ADR 0148 §7): a token only that poll knows, and when the
+    #: slot lapses by itself. It is on the row because the replicas share nothing else: a second poll
+    #: meets it at whichever replica it arrives. Emptied when the poll answers or its client goes away;
+    #: a replica that dies leaves it to lapse.
+    poll_holder: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    poll_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    #: When a second poll under this key last raised an alert: one a minute at most, however many
+    #: conflicts a stolen key or a daemon in a loop produces.
+    poll_conflict_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     enrolled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     approved_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -117,7 +128,12 @@ class OutpostCall(Base, TimestampMixin):
     when the call completes; the digests stay (ADR 0148 §11). The primary key is the call's id: a
     write's is derived from its effect's key, so a retried effect meets the first row (ADR 0149 §5).
     One row is also the one record of what the door took for the call (`recorded` and the three
-    columns beside it): recorded once, read back by every later copy of the same answer."""
+    columns beside it): recorded once, read back by every later copy of the same answer.
+
+    An answer crosses the door sealed to a key made for this one call (`answer_key`): the door keeps
+    the envelope as it came (`answer_sealed`) for whoever placed the call, and the private half of
+    that key waits beside the arguments, under the same key wrapper (`answer_key_*`). Both are
+    emptied once the caller has read the answer."""
 
     __tablename__ = "outpost_calls"
     __table_args__ = (Index("ix_outpost_calls_outpost_state", "outpost_id", "state"),)
@@ -146,6 +162,9 @@ class OutpostCall(Base, TimestampMixin):
     epoch: Mapped[int | None] = mapped_column(Integer, nullable=True)
     claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     deadline: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    #: When the platform stops waiting for it: unclaimed by then it is `expired`, and a lease never
+    #: outlives it (`deadline` is the sooner of it and 300 seconds after the claim).
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     #: What the door recorded for this call, once: `answer` or `refusal` (the `recorded` of the door's
     #: `CallAck`), from which instance, under which epoch of the outpost, and when. It is written by
@@ -175,3 +194,16 @@ class OutpostCall(Base, TimestampMixin):
     arguments_wrapped_dek: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     arguments_dek_nonce: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     arguments_kek_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    #: Who the platform says the call is made for (`OutpostAssertedNames`, ADR 0149 §3): names the
+    #: outpost may log and decides nothing on. Emptied with the arguments.
+    asserted: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
+    #: The X25519 key the answer is sealed to, public half: it travels inside the sealed call.
+    answer_key: Mapped[str | None] = mapped_column(String(43), nullable=True)
+    #: Its private half, in the envelope of `org_secrets` like the arguments. The door never opens it.
+    answer_key_ciphertext: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    answer_key_nonce: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    answer_key_wrapped_dek: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    answer_key_dek_nonce: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    answer_key_kek_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    #: The answer as it crossed the door, still sealed: the door stores it and does not open it.
+    answer_sealed: Mapped[str | None] = mapped_column(Text, nullable=True)

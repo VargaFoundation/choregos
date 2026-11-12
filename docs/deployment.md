@@ -730,18 +730,21 @@ global:
 An outpost is a place an organisation's administrator enrols, which only dials out to the platform
 ([ADR 0147](adr/0147-an-outpost-only-dials-out.md)): the platform never connects to it and stores no
 address of it. Outposts are off unless you turn them on. What is in place is the platform's side of
-the record: the tables, the `outpost:manage` right of the organisation's administrator and the
-management API (`/api/v1/orgs/{org}/outposts…`). The door an outpost dials (`/outposts/v1`,
-[ADR 0148](adr/0148-the-outpost-door-is-a-third-door-with-its-own-contract.md)) and the daemon are not
-served yet: with the switch on, an outpost can be created and an enrolment token issued, and no
-instance can use it until they are.
+the record (the tables, the `outpost:manage` right of the organisation's administrator and the
+management API, `/api/v1/orgs/{org}/outposts…`) and the door an outpost dials (`/outposts/v1`,
+[ADR 0148](adr/0148-the-outpost-door-is-a-third-door-with-its-own-contract.md)): an instance enrols
+there, is approved by a person, and polls. The daemon is a separate package, and no connector routes a
+call to an outpost yet: until one does, an instance that polls is handed nothing.
 
 | Setting | Default | What it does |
 | :-- | :-- | :-- |
-| `CHOREGOS_OUTPOSTS` | `off` | `on`: outposts can be created and enrolment tokens issued. `off`: both are refused (409 `outposts_disabled`), and what exists can still be listed, revoked and deleted. It is the one switch that stops every outpost |
+| `CHOREGOS_OUTPOSTS` | `off` | `on`: the door is mounted, outposts can be created and enrolment tokens issued. `off`: the door is not served at all (a daemon meets a plain 404), creating an outpost or a token is refused (409 `outposts_disabled`), and what exists can still be listed, revoked and deleted. It is the one switch that stops every outpost. Read when the API starts: changing it takes a restart |
 | `CHOREGOS_OUTPOSTS_DOOR_URL` | empty | the public origin of the outposts' door: a scheme and a host, no path (`https://outposts.example.com`). It is returned with each enrolment token as `control_plane`, which is what the outpost's operator writes in the policy file; a request an outpost signs binds its URL under that origin (`packages/contracts/outpost-door.yaml`). Give the door a hostname of its own: it is the one name an outpost's firewall opens |
 | `CHOREGOS_OUTPOSTS_DOOR_SIGNING_KEY` | empty | **a secret.** The Ed25519 private key (PEM, PKCS#8) the door signs every call it hands over with ([ADR 0148](adr/0148-the-outpost-door-is-a-third-door-with-its-own-contract.md) §13). Only its public half is ever shown. Without it no enrolment token is issued (409 `door_key_missing`): an outpost makes only calls signed by a key it pins, so an instance enrolled with nothing to pin could never be handed anything |
 | `CHOREGOS_OUTPOSTS_DOOR_ANNOUNCED_KEYS` | `[]` | public keys shown beside the one that signs, for a rotation, as a JSON list; three at most, since a policy file pins four keys. Each is the unpadded base64url of the key's 32 raw bytes |
+| `CHOREGOS_OUTPOSTS_DOOR_RATE_PER_MINUTE` | `1200` | the most requests one instance sends the door in a minute, counted in memory and per replica: beyond it the door answers 429 `rate_limited` with `retry_after`. `0` lifts the limit. It bounds an instance that authenticated; requests that carry no valid signature are bounded at the entrance, by source |
+| `CHOREGOS_OUTPOSTS_CALLS_IN_FLIGHT_PER_OUTPOST` | `128` | the most calls one outpost has in flight (placed, and not yet answered, refused or out of time). One more is refused where it is admitted, before anything is written |
+| `CHOREGOS_OUTPOSTS_CALLS_IN_FLIGHT_PER_ORGANISATION` | `512` | the same bound over all the outposts of one organisation |
 
 The chart does not render these settings yet. Pass them with `global.extraEnv`, the signing key by
 `valueFrom.secretKeyRef` and never as a plain `value`.
@@ -769,7 +772,48 @@ it. `door_keys` is empty while the deployment has no signing key.
 The API refuses to start on a door URL that is not an origin, on a signing key that is not an Ed25519
 private key in PEM, and on an announced key that is not a public key in that spelling, is listed
 twice, is the public half of the signing key, or is a fourth one
-(`apps/api/tests/test_outposts_settings.py`).
+(`apps/api/tests/test_outposts_settings.py`). With `CHOREGOS_OUTPOSTS` on it also refuses to start
+without `CHOREGOS_OUTPOSTS_DOOR_URL` or without `CHOREGOS_OUTPOSTS_DOOR_SIGNING_KEY`, naming the one
+that is missing: a door could not compare the URL a request signs without the first, and no outpost
+would make a call it handed over without the second (`apps/api/tests/test_outpost_door.py`).
+
+**The door.** `/outposts/v1` is served at the root of the API, beside `/mcp` and `/a2a` and outside
+`/api/v1` and the OpenAPI document: four `POST` routes, `enrol`, `poll`, `calls/{id}/answer` and
+`calls/{id}/refuse` (`packages/contracts/outpost-door.yaml`). What whoever runs the platform has to
+arrange for it:
+
+- **A hostname of its own**, the one `CHOREGOS_OUTPOSTS_DOOR_URL` names, routed to `/outposts` and to
+  nothing else. It is the one name an outpost's firewall opens (port 443, outbound), and the one you can
+  rate-limit or restrict by source apart from the console's. The door compares the URL each request
+  signs with that origin, never with the `Host` header: behind a proxy that rewrites the host, nothing
+  changes. The chart does not render this route yet.
+- **Long requests.** A poll waits up to 25 seconds before it answers with nothing. Give the route an
+  idle timeout above that (30 seconds or more), and do not buffer the answer. While a poll waits it
+  holds no database connection: a hundred waiting instances cost a hundred open requests and no pool
+  (`apps/api/tests/test_outpost_long_poll_holds_no_connection.py`).
+- **What the process that serves the door needs**: the database, as every API process; the signing
+  key; `CHOREGOS_SECRETS_KEKS` (or the key wrapper your edition supplies), with which a call's arguments
+  wait at rest until an instance claims them, and without which no call can be placed; and, on
+  PostgreSQL, the `LISTEN` connection every replica already holds, which now also carries the
+  outposts' wake-ups (channel `choregos_outpost_calls`, ids only). Where that connection is down, a
+  poll still finds a call at its next look, 5 to 10 seconds later.
+- **One poll per instance.** The slot is on the instance's row and is given back when the poll answers
+  or its client goes away. If a replica is killed, the slots of the polls it held lapse within 30
+  seconds; until then those instances read 409 `poll_conflict` with `retry_after`, and each raises one
+  alert (below). Stop replicas gracefully.
+
+**The alert to wire.** A second poll under a key that already has one waiting is what a stolen key
+looks like. The door refuses it and writes the audit event `outpost.poll_conflict` in the
+organisation's audit log, once a minute at most for an instance, under the actor kind `outpost`.
+`/metrics` counts those events per organisation as `choregos_outpost_poll_conflicts_total{org}`: alert
+on its increase, and answer by revoking the instance
+(`POST /api/v1/orgs/{org}/outposts/{slug}/instances/{instance_id}/revoke`), which holds from its next
+request. The chart ships no rule for it yet.
+
+**Rotating the signing key also rotates the nonces.** The key that authenticates the door's nonces is
+derived from the signing key. After a rotation a daemon's next request is refused once
+(401 `stale_nonce`) with a fresh nonce, and it signs again: nothing to do. While replicas with the
+former and the new key run side by side, a daemon may be refused a few times in a row.
 
 ## Extra volumes for the API
 

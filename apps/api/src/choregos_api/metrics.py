@@ -59,6 +59,7 @@ NAMES = frozenset(
         "choregos_memory_pending",
         "choregos_context_pack_empty_total",
         "choregos_edition_info",
+        "choregos_outpost_poll_conflicts_total",
     }
 )
 
@@ -115,6 +116,7 @@ class Snapshot:
         self.denials: dict[str, float] = {}
         self.memory_pending = 0.0
         self.context_pack_empty: dict[str, float] = {}
+        self.outpost_poll_conflicts: dict[str, float] = {}
         self.refreshed_at: float | None = None
 
 
@@ -211,6 +213,14 @@ class PlatformCollector(Collector):
         for project, v in s.context_pack_empty.items():
             g.add_metric([project], v)
         yield g
+        g = GaugeMetricFamily(
+            "choregos_outpost_poll_conflicts_total",
+            "Alerts raised for a second poll under one outpost instance's key (ADR 0148)",
+            labels=["org"],
+        )
+        for org, v in s.outpost_poll_conflicts.items():
+            g.add_metric([org], v)
+        yield g
 
 
 registry.register(PlatformCollector())
@@ -222,9 +232,20 @@ def expose() -> bytes:
 
 async def refresh() -> Snapshot:
     """Recomputes the snapshot from the database. One pass: about ten bounded queries."""
-    from .db.models import CostLedger, MemoryFact, Project, Release, Run, RunEvent, WorkItem
+    from .db.models import (
+        AuditLog,
+        CostLedger,
+        MemoryFact,
+        Organization,
+        Project,
+        Release,
+        Run,
+        RunEvent,
+        WorkItem,
+    )
     from .db.session import session_scope
     from .services import effective_policy, first_pass_merge_rate
+    from .services.outposts import POLL_CONFLICT
 
     now = utcnow()
     fresh = Snapshot()
@@ -312,6 +333,17 @@ async def refresh() -> Snapshot:
             if pack is not None and not (pack.get("facts") or pack.get("items") or pack.get("snippets")):
                 empty[slug.get(str(pid), "?")] += 1
         fresh.context_pack_empty = {k: float(v) for k, v in empty.items()}
+
+        # What an alert rule reads: the door raises one audit event for a second poll under a key that
+        # already has one waiting, which is what a stolen key looks like (ADR 0148 §7).
+        conflicts = await session.execute(
+            select(Organization.slug, func.count())
+            .select_from(AuditLog)
+            .join(Organization, Organization.id == AuditLog.org_id)
+            .where(AuditLog.action == POLL_CONFLICT)
+            .group_by(Organization.slug)
+        )
+        fresh.outpost_poll_conflicts = {str(org): float(n) for org, n in conflicts.all()}
 
     fresh.train_frozen, fresh.train_status = await _trains(list(slug.values()))
     fresh.refreshed_at = now.timestamp()
