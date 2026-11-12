@@ -362,16 +362,19 @@ jobs:
       # The default executor (agent_sandbox, ADR 0072) refuses to render without its operator in the
       # cluster's API versions: an offline rendering skips that check, nothing else.
       - run: helm lint charts/choregos --set choregos-orchestrator.runner.skipOperatorCheck=true
+      # The outpost's chart (S65-16) renders nothing without a policy: linted on its complete example.
+      - run: helm lint charts/choregos-outpost -f charts/choregos-outpost/values/example.yaml
       - name: render the four environments (local = the bundled dependencies)
         run: |
           for env in local dev staging prod; do
             helm template choregos charts/choregos -f charts/choregos/values/$env.yaml --set choregos-orchestrator.runner.skipOperatorCheck=true > /tmp/$env.yaml
           done
+          helm template outpost charts/choregos-outpost -f charts/choregos-outpost/values/example.yaml > /tmp/outpost.yaml
       - name: kubeconform
         run: |
           curl -sSLo kubeconform.tar.gz https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz
           tar xf kubeconform.tar.gz
-          ./kubeconform -strict -ignore-missing-schemas -summary /tmp/prod.yaml
+          ./kubeconform -strict -ignore-missing-schemas -summary /tmp/prod.yaml /tmp/outpost.yaml
       - name: helm unittest
         run: |
           # Pinned version: the plugin tracks Helm closely — `platformHooks` in its

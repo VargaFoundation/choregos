@@ -179,6 +179,14 @@ DOOR_ROUTES = {
     ),
 }
 
+#: What a door's directory declares beside the routes of its door: the two probes of the process that serves
+#: the outposts' door alone (ADR 0148 §8, `outposts/alone.py`, S65-16). They are what a kubelet asks of that
+#: process, not verbs of the door: in no contract, under no `/outposts` path, without a parameter, and no
+#: route of the chart leads to them from outside. The API's application does not serve them from that
+#: directory (its `/healthz` and `/readyz` are `main.py`'s), so the live freeze holds the door to its four
+#: verbs; `apps/api/tests/test_outpost_door_alone.py` freezes what the process that serves it alone answers.
+SERVED_ALONE = {OUTPOSTS_DOOR: frozenset({"GET /healthz", "GET /readyz"})}
+
 #: What MCP is made of on the wire. The outposts' door carries none of it: no JSON-RPC, no tool listing and
 #: no tool call a third party could use to reach a server through the platform (ADR 0148 §12).
 MCP_ON_THE_WIRE = re.compile(r"jsonrpc|tools/list|tools/call|choregos_core\.mcp|choregos_adapters\.mcp")
@@ -515,6 +523,9 @@ def test_the_outposts_door_serves_assignments_and_never_mcp() -> None:
     # Second condition: one path parameter, a call's `{id}`; no route names a connector or a server.
     parameters = {name for route in DOOR_ROUTES[OUTPOSTS_DOOR] for name, _ in PATH_PARAMETER.findall(route)}
     assert parameters == {"id"}, f"the outposts' door takes other path parameters: {sorted(parameters)}"
+    # What its directory declares for the process that serves it alone stays a probe: a `GET` of one
+    # segment with no parameter, outside the door's own path.
+    assert all(re.fullmatch(r"GET /[a-z]+", probe) for probe in SERVED_ALONE[OUTPOSTS_DOOR])
     # Third condition, in its own lines: what a door that imported the broker would look like.
     door = "choregos_api.outposts.door"
     assert forbidden_imports("from ..services import broker", door) == ["choregos_api.services.broker"]
@@ -896,7 +907,7 @@ def test_no_route_selects_a_third_party_mcp_server() -> None:
 def test_the_doors_and_the_broker_keep_their_routes() -> None:
     routes = _api_routes()
     for directory, door in DOOR_ROUTES.items():
-        expected = frozen_routes(door)
+        expected = frozen_routes(door | SERVED_ALONE.get(directory, frozenset()))
         found = frozen_routes(
             route for file, listed in routes.items() if file.startswith(f"{directory}/") for route in listed
         )

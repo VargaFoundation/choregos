@@ -19,11 +19,12 @@ spec:
   # Not the runner pods, not the egress proxy, not the builder: a runner is untrusted code and must
   # not reach PostgreSQL or Temporal (ADR 0070), and the builder runs an author's `pip install`; each
   # has its own policy. They share this namespace when the executor is `agent_sandbox`.
+  {{- $outpostsDoor := and (include "choregos.outpostsEnabled" .) (eq (toString ((.Values.global.outposts | default dict).door | default dict).dedicated) "true") }}
   podSelector:
     matchExpressions:
       - key: app.kubernetes.io/name
         operator: NotIn
-        values: [choregos-runner, choregos-egress, choregos-buildkitd]
+        values: [choregos-runner, choregos-egress, choregos-buildkitd{{ if $outpostsDoor }}, choregos-outposts-door{{ end }}]
   policyTypes: ["Egress"]
   egress:
     - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kube-system } } }]
@@ -160,6 +161,39 @@ spec:
         {{- range ($e.ports | default (list 443 80)) }}
         - { protocol: TCP, port: {{ . }} }
         {{- end }}
+{{- end }}
+{{- if $outpostsDoor }}
+---
+# The outposts' door, split out (ADR 0148 §8). It takes requests from the entrance and reaches the
+# database, and nothing else: not Temporal, not the model gateway, not the memory, not a plugin's
+# server. Its pods are left out of `choregos-allow-platform` for that, and out of
+# `choregos-allow-ingress` (they do not carry `part-of: choregos`).
+# No rule, here or anywhere in this chart, leads to an outpost: an outpost dials out (ADR 0147 §1).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: choregos-outposts-door-net
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: choregos-outposts-door
+  policyTypes: ["Ingress", "Egress"]
+  ingress:
+    # The entrance the door's route is attached to (`choregos-api.ingress.gatewayNamespace`).
+    - from: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: {{ ($api.ingress | default dict).gatewayNamespace | default "gateway" }} } } }]
+      ports: [{ protocol: TCP, port: 8000 }]
+  egress:
+    - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kube-system } } }]
+      ports: [{ protocol: UDP, port: 53 }, { protocol: TCP, port: 53 }]
+    {{- if .Values.global.database.embedded }}
+    - to: [{ podSelector: { matchLabels: { app.kubernetes.io/name: choregos-postgresql } } }]
+      ports: [{ protocol: TCP, port: 5432 }]
+    {{- else }}
+    # The database, in the namespace `choregos-allow-platform` opens for the API.
+    - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: choregos-data } } }]
+      ports: [{ protocol: TCP, port: {{ int (.Values.global.database.port | default 5432) }} }]
+    {{- end }}
 {{- end }}
 ---
 apiVersion: networking.k8s.io/v1

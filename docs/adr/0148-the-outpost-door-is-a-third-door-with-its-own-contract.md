@@ -139,6 +139,23 @@ constrains today:
    an operator deploys, and the egress proxy, which the chart renders
    (`charts/choregos/templates/egress.yaml`). Neither holds a database credential; this Deployment does,
    and that is new. Where the door is not split out, the API serves it.
+   - **What the process that serves the door alone is** (`python -m choregos_api.outposts`, S65-16). It
+     mounts the four verbs and two probes of its own, listens for the wake-ups (7) and for no platform
+     event, loads the edition's extensions, because the key wrapper of decision 11 may be one of theirs,
+     and imports no other route of the API: it is part of the door's package, under the same boundary
+     (12). It holds the database, the door's signing key and the key wrapper's keys, and no other
+     secret of the platform; it does not receive what the deployment hands every other process
+     (connector secrets by reference live there).
+   - **The sweep stays in the API.** Closing what ran out of time at outposts nobody polls any more
+     lists every outpost under the platform's scope, which the door never takes (6). The API runs it
+     whether or not the door is split out; the process that serves the door alone never does. A poll
+     still closes what ran out of time at its own outpost, under that outpost's scope.
+   - **Stopping.** Told to stop, that process accepts nothing more and lets the polls it holds end by
+     themselves: the longest wait a poll may ask for and the margin of its slot, 30 seconds. Past that
+     it cancels what is left, and a cancelled poll gives its slot back. Its pod is given longer.
+   - **A name of its own, strictly.** The chart refuses a door hostname that is also the console's,
+     the API's or a run door's: what it would share with them is their routes, their rate limit and
+     their source restrictions.
 9. **Bounds a hostile outpost meets.** A body above the cap is refused before it is parsed, as the MCP
    door refuses one above 1 MiB (ADR 0030 §2). A lease has a maximum lifetime, whatever the daemon asks
    for. An answer is accepted only from the instance that claimed the call, under the epoch it was claimed
@@ -244,7 +261,10 @@ constrains today:
 - A compatibility window is a promise to operators: the door keeps serving the previous version's
   daemons, and its conformance test plays their fixtures.
 - An inspecting proxy still sees who talks, when and how much. The operator's guide says so.
-- The door holds one more secret of the installation, its signing key (13): the chart generates it
-  (S65-16). Rotating it is an overlap the operators of outposts take part in: the next key is shown, they
-  pin it, and only then does the door sign with it.
+- The door holds one more secret of the installation, its signing key (13). The chart takes the Secret
+  an operator names, or draws a key once (S65-16): read back at every upgrade, immutable, and kept when
+  the release is uninstalled, so that neither an upgrade nor a renderer that cannot read the cluster
+  changes the key every outpost pins. Rotating it is an overlap the operators of outposts take part in:
+  the next key is shown, they pin it, and only then does the door sign with it; with the chart, the next
+  key is a second Secret, never a change of the first.
 - This record proves nothing: it is the decision and its guard.

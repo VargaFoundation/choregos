@@ -98,6 +98,11 @@ proj-{slug}-runners
 {{- if $gw.internalHosts }}
 {{- $poses = append $poses "CHOREGOS_MCP_GATEWAY_INTERNAL_HOSTS" }}
 {{- end }}
+{{- /* Before S65-16 the outposts' settings went through `extraEnv` too: still accepted while
+       `global.outposts.enabled` is false, refused once the chart sets them. */}}
+{{- if include "choregos.outpostsEnabled" . }}
+{{- $poses = concat $poses (splitList " " (include "choregos.outpostsOwnedEnv" "common")) }}
+{{- end }}
 {{- range (.Values.global.extraEnv | default list) }}
 {{- if has .name $poses }}
 {{- fail (printf "global.extraEnv: %s is already set by the chart; two values for the same name, Kubernetes would keep the last one without saying anything" .name) }}
@@ -202,6 +207,33 @@ proj-{slug}-runners
   value: {{ .Values.global.database.pool.maxOverflow | quote }}
 - name: CHOREGOS_DB_POOL_TIMEOUT_S
   value: {{ .Values.global.database.pool.timeoutSeconds | quote }}
+{{- include "choregos.databaseEnv" . }}
+{{- with (.Values.global.secrets | default dict).envPattern }}
+- name: CHOREGOS_SECRET_ENV_PATTERN
+  value: {{ . | quote }}
+{{- end }}
+{{- if include "choregos.outpostsEnabled" . }}
+{{- /* Outposts (ADR 0147 §12): the switch and the quotas of calls in flight, for whoever places a
+       call: the API for a read, the workers for a governed write (ADR 0149 §4-5). */}}
+{{ include "choregos.outpostsEnv" . }}
+{{- end }}
+{{- range (.Values.global.extraEnv | default list) }}
+- name: {{ .name }}
+{{- if hasKey . "valueFrom" }}
+  valueFrom:
+    {{- toYaml .valueFrom | nindent 4 }}
+{{- else }}
+  value: {{ .value | quote }}
+{{- end }}
+{{- end }}
+{{- end -}}
+
+{{/*
+Where the database is, as a process reads it (`CHOREGOS_DATABASE_URL`). Its own template: the
+outposts' door served alone (`templates/outposts-door.yaml`) takes it without the rest of
+`choregos.commonEnv`.
+*/}}
+{{- define "choregos.databaseEnv" -}}
 {{- with (include "choregos.databasePasswordSecret" .) }}
 {{- /* The password comes from a secret laid down by an operator (Zalando: `password` key),
        the URL is composed here — Kubernetes expands `$(VAR)` of a variable declared earlier. */}}
@@ -221,19 +253,100 @@ proj-{slug}-runners
       name: {{ .Values.global.database.secretRef }}
       key: url
 {{- end }}
-{{- with (.Values.global.secrets | default dict).envPattern }}
-- name: CHOREGOS_SECRET_ENV_PATTERN
-  value: {{ . | quote }}
-{{- end }}
-{{- range (.Values.global.extraEnv | default list) }}
-- name: {{ .name }}
-{{- if hasKey . "valueFrom" }}
-  valueFrom:
-    {{- toYaml .valueFrom | nindent 4 }}
-{{- else }}
-  value: {{ .value | quote }}
-{{- end }}
-{{- end }}
+{{- end -}}
+
+{{/*
+Outposts (ADRs 0147-0149). `global.outposts` is read by the API's subchart, by the workers' and by
+this chart's own templates: these helpers give them one answer.
+
+`choregos.outpostsEnabled`: "true" when the switch is on, empty otherwise.
+*/}}
+{{- define "choregos.outpostsEnabled" -}}
+{{- if eq (toString (.Values.global.outposts | default dict).enabled) "true" -}}
+true
+{{- end -}}
+{{- end -}}
+
+{{/*
+The door's public origin (`CHOREGOS_OUTPOSTS_DOOR_URL`): `door.url`, else `https://` and the first of
+the door's hostnames. The API refuses to start with outposts on and no origin, and on one that has
+a path: the render refuses first, and names the value.
+*/}}
+{{- define "choregos.outpostsDoorUrl" -}}
+{{- $door := (.Values.global.outposts | default dict).door | default dict -}}
+{{- $hosts := compact ($door.hostnames | default list) -}}
+{{- $url := $door.url | default "" -}}
+{{- if and (not $url) (not $hosts) -}}
+{{- fail "global.outposts.enabled=true needs the door's public origin: set global.outposts.door.hostnames (the door's own hostnames; the origin is https://<the first one>) or global.outposts.door.url (https://outposts.example.com). An outpost signs the URL it calls, and the API refuses to start without the origin it compares it with (CHOREGOS_OUTPOSTS_DOOR_URL)." -}}
+{{- end -}}
+{{- if not $url -}}{{- $url = printf "https://%s" (first $hosts) -}}{{- end -}}
+{{- if not (regexMatch "^https?://[^\\s/@?#]+$" $url) -}}
+{{- fail (printf "global.outposts.door.url: %q is not an origin: a scheme and a host, no path (https://outposts.example.com). The API refuses to start on it." $url) -}}
+{{- end -}}
+{{- $url -}}
+{{- end -}}
+
+{{/*
+The Secret that holds the door's signing key: the one the operator names, else the one this chart
+draws once and keeps (`templates/outposts-door.yaml`).
+*/}}
+{{- define "choregos.outpostsDoorKeySecret" -}}
+{{- $key := ((.Values.global.outposts | default dict).door | default dict).signingKey | default dict -}}
+{{- $key.existingSecret | default (printf "%s-outposts-door" .Release.Name) -}}
+{{- end -}}
+
+{{/*
+What whoever places a call through an outpost reads: the switch, and the two quotas of calls in
+flight (`outposts/rendezvous.py`, `place`). Part of `choregos.commonEnv` when outposts are on.
+*/}}
+{{- define "choregos.outpostsEnv" -}}
+{{- $flight := (.Values.global.outposts | default dict).callsInFlight | default dict -}}
+- name: CHOREGOS_OUTPOSTS
+  value: "on"
+- name: CHOREGOS_OUTPOSTS_CALLS_IN_FLIGHT_PER_OUTPOST
+  value: {{ int64 ($flight.perOutpost | default 128) | quote }}
+- name: CHOREGOS_OUTPOSTS_CALLS_IN_FLIGHT_PER_ORGANISATION
+  value: {{ int64 ($flight.perOrganisation | default 512) | quote }}
+{{- end -}}
+
+{{/*
+What the processes that serve the door or answer for it read, and no other: the API (it serves the
+door unless it is split out, and it shows the keys to pin with an outpost and its enrolment token)
+and the door's own Deployment. Never the workers: they sign no call. The signing key is read from
+its Secret by reference, and is not optional: a door that could sign nothing would hand nothing over.
+*/}}
+{{- define "choregos.outpostsDoorEnv" -}}
+{{- $door := (.Values.global.outposts | default dict).door | default dict -}}
+{{- $key := $door.signingKey | default dict -}}
+{{- $announced := $door.announcedKeys | default list -}}
+{{- range $announced -}}
+{{- if not (regexMatch "^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$" (toString .)) -}}
+{{- fail (printf "global.outposts.door.announcedKeys: %q is not a public key: the unpadded base64url of its 32 raw bytes (43 characters), as the management API shows the door's keys. The API refuses to start on it." (toString .)) -}}
+{{- end -}}
+{{- end -}}
+{{- if gt (len $announced) 3 -}}
+{{- fail "global.outposts.door.announcedKeys: at most three keys beside the one that signs (an outpost's policy file pins four). The API refuses to start on more." -}}
+{{- end -}}
+{{- if ne (len (uniq $announced)) (len $announced) -}}
+{{- fail "global.outposts.door.announcedKeys: a key is announced once. The API refuses to start on a key listed twice." -}}
+{{- end -}}
+- name: CHOREGOS_OUTPOSTS_DOOR_URL
+  value: {{ include "choregos.outpostsDoorUrl" . | quote }}
+- name: CHOREGOS_OUTPOSTS_DOOR_SIGNING_KEY
+  valueFrom: { secretKeyRef: { name: {{ include "choregos.outpostsDoorKeySecret" . }}, key: {{ $key.key | default "signing-key" }} } }
+- name: CHOREGOS_OUTPOSTS_DOOR_ANNOUNCED_KEYS
+  value: {{ toJson $announced | quote }}
+- name: CHOREGOS_OUTPOSTS_DOOR_RATE_PER_MINUTE
+  value: {{ if hasKey $door "ratePerMinute" }}{{ int64 $door.ratePerMinute | quote }}{{ else }}"1200"{{ end }}
+{{- end -}}
+
+{{/*
+The names the two templates above set: `global.extraEnv` may not set them a second time while
+outposts are on. `only` = "all" (what the API receives) or "common" (what every process receives).
+*/}}
+{{- define "choregos.outpostsOwnedEnv" -}}
+CHOREGOS_OUTPOSTS CHOREGOS_OUTPOSTS_CALLS_IN_FLIGHT_PER_OUTPOST CHOREGOS_OUTPOSTS_CALLS_IN_FLIGHT_PER_ORGANISATION
+{{- if eq . "all" }} CHOREGOS_OUTPOSTS_DOOR_URL CHOREGOS_OUTPOSTS_DOOR_SIGNING_KEY CHOREGOS_OUTPOSTS_DOOR_ANNOUNCED_KEYS CHOREGOS_OUTPOSTS_DOOR_RATE_PER_MINUTE{{ end }}
 {{- end -}}
 
 {{/*
@@ -390,6 +503,21 @@ names; the `legacy_alertname` label that carried their former names was removed 
   annotations:
     summary: "A release train has been frozen for 2 hours"
     runbook_url: "https://github.com/VargaFoundation/choregos/blob/main/docs/runbooks/train-frozen.md"
+{{- end }}
+
+{{/*
+The rule of the outposts' door (ADR 0148 §7), rendered with the others while outposts are on. A
+second poll under a key that already has one waiting is refused by the door, which writes one audit
+event a minute at most for the instance; `/metrics` counts those events per organisation. Its own
+template: `choregos.alertRules` stays plain YAML, which a test reads as such.
+*/}}
+{{- define "choregos.outpostsAlertRules" -}}
+- alert: ChoregosOutpostPollConflict
+  expr: max by (org) (increase(choregos_outpost_poll_conflicts_total[15m])) > 0
+  labels: { severity: critical }
+  annotations:
+    summary: "A second poll arrived under an outpost instance's key: two holders of one key is what a stolen key looks like"
+    description: "Organisation {{ "{{" }} $labels.org {{ "}}" }}: the door refused the second poll (409 poll_conflict) and wrote `outpost.poll_conflict` in the organisation's audit log, which names the instance. A daemon restarted while its former poll still held the slot raises it too. If the key may be held twice, revoke the instance: its signature opens nothing from its next request."
 {{- end }}
 
 {{/*

@@ -1,0 +1,41 @@
+# A complete outpost, for `helm lint` and as a starting point. Names are examples; the key below is
+# the public example of the platform's contracts (`outpost-policy.example.yaml`), not a door's.
+image:
+  digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+
+policy:
+  control_plane: https://outposts.example.com
+  door_keys: ["3k9fZti-P3Z9Du9RmNmJm-pNxgUQSHfGN_bx7DmXwNw"]
+  concurrency: 8
+  audit:
+    file: /var/log/choregos-outpost/audit.jsonl
+  endpoints:
+    tracker:
+      url: http://tracker-mcp.tools.svc:8080/mcp
+      tools: ["search_*", "get_*", "create_issue"]
+      writes: allow
+      timeout_s: 60
+      max_payload_kb: 512
+      auth:
+        header: Authorization
+        secretName: tracker-mcp-token
+        secretKey: token
+    wiki:
+      url: http://example-outpost-wiki:8080/mcp
+      tools: ["search_pages"]
+
+enrolment:
+  existingSecret: outpost-enrolment
+
+fullnameOverride: example-outpost
+
+networkPolicy:
+  controlPlane:
+    cidrs: ["203.0.113.10/32"]
+
+servers:
+  - name: wiki
+    image: registry.example.com/tools/wiki-mcp@sha256:1111111111111111111111111111111111111111111111111111111111111111
+    port: 8080
+    healthPath: /healthz
+    envFromSecrets: [wiki-mcp-env]

@@ -1,0 +1,130 @@
+# The outposts' door (S65-16, ADR 0148 §8 and §13): off, nothing; on, the API is told, and the door is
+# routed under a hostname of its own, to the API or to the Deployment that serves it alone.
+#
+# The full guard is `tests/charts/test_outpost_door_routed.py`, which renders the chart for real and
+# reads the door's settings back with the API's own code. `signingKey.existingSecret` is set below so
+# that the template renders the route first: without it the chart draws a key, in a Secret of its own.
+suite: outposts
+templates:
+  - charts/choregos-api/templates/deployment.yaml
+  - templates/outposts-door.yaml
+# Offline rendering: the default executor (agent_sandbox, ADR 0072) refuses to render without its
+# operator among the cluster's API versions, which a unit test does not have.
+set:
+  choregos-orchestrator.runner.skipOperatorCheck: true
+tests:
+  - it: by default the API is not told to serve the door, and nothing of the door is rendered
+    asserts:
+      - template: charts/choregos-api/templates/deployment.yaml
+        notContains:
+          path: spec.template.spec.containers[0].env
+          content: { name: CHOREGOS_OUTPOSTS, value: "on" }
+      - template: templates/outposts-door.yaml
+        hasDocuments:
+          count: 0
+
+  - it: enabled, the API serves the door under its origin and reads its key from a Secret, never in clear text
+    template: charts/choregos-api/templates/deployment.yaml
+    set:
+      global.outposts.enabled: true
+      global.outposts.door.hostnames: [outposts.example.com]
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: CHOREGOS_OUTPOSTS, value: "on" }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: CHOREGOS_OUTPOSTS_DOOR_URL, value: "https://outposts.example.com" }
+      - equal:
+          path: spec.template.spec.containers[0].env[?(@.name=="CHOREGOS_OUTPOSTS_DOOR_SIGNING_KEY")].valueFrom.secretKeyRef.key
+          value: signing-key
+      - notMatchRegex:
+          path: spec.template.spec.containers[0].env[?(@.name=="CHOREGOS_OUTPOSTS_DOOR_SIGNING_KEY")].value
+          pattern: ".+"
+
+  - it: enabled without an origin, the rendering stops and names the value
+    # Where the API would be told its origin: the same refusal stops the door's own template.
+    template: charts/choregos-api/templates/deployment.yaml
+    set:
+      global.outposts.enabled: true
+    asserts:
+      - failedTemplate:
+          errorPattern: "global.outposts.door.hostnames"
+
+  - it: a door hostname that is also the console's stops the rendering
+    template: templates/outposts-door.yaml
+    set:
+      global.outposts.enabled: true
+      global.outposts.door.hostnames: [app.choregos.local]
+    asserts:
+      - failedTemplate:
+          errorPattern: "choregos-web.ingress.hostnames"
+
+  - it: the route serves /outposts under the door's hostnames only, towards the API
+    template: templates/outposts-door.yaml
+    set:
+      global.outposts.enabled: true
+      global.outposts.door.hostnames: [outposts.example.com]
+      global.outposts.door.signingKey.existingSecret: outposts-door-key
+    asserts:
+      - hasDocuments:
+          count: 1
+      - isKind:
+          of: HTTPRoute
+      - equal:
+          path: spec.hostnames
+          value: [outposts.example.com]
+      - equal:
+          path: spec.rules[0].matches
+          value: [{ path: { type: PathPrefix, value: /outposts } }]
+      - equal:
+          path: spec.rules[0].backendRefs[0].name
+          value: choregos-api
+
+  - it: without Gateway API, the door exits through an Ingress of its own
+    template: templates/outposts-door.yaml
+    set:
+      global.outposts.enabled: true
+      global.outposts.door.hostnames: [outposts.example.com]
+      global.outposts.door.signingKey.existingSecret: outposts-door-key
+      choregos-api.ingress.kind: ingress
+    asserts:
+      - isKind:
+          of: Ingress
+      - equal:
+          path: spec.rules[0].host
+          value: outposts.example.com
+      - equal:
+          path: spec.rules[0].http.paths[0].path
+          value: /outposts
+      - lengthEqual:
+          path: spec.rules[0].http.paths
+          count: 1
+
+  - it: dedicated, a Deployment serves the door alone and the route leads to it
+    template: templates/outposts-door.yaml
+    set:
+      global.outposts.enabled: true
+      global.outposts.door.hostnames: [outposts.example.com]
+      global.outposts.door.signingKey.existingSecret: outposts-door-key
+      global.outposts.door.dedicated: true
+    asserts:
+      - documentIndex: 0
+        equal:
+          path: spec.rules[0].backendRefs[0].name
+          value: choregos-outposts-door
+      - documentIndex: 1
+        isKind:
+          of: Deployment
+      - documentIndex: 1
+        equal:
+          path: spec.template.spec.containers[0].command
+          value: ["python", "-m", "choregos_api.outposts"]
+      - documentIndex: 1
+        equal:
+          path: spec.template.spec.automountServiceAccountToken
+          value: false
+      - documentIndex: 1
+        contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: CHOREGOS_DB_POOL_SIZE, value: "5" }
