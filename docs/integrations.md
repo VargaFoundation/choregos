@@ -600,8 +600,8 @@ apply to it; the outpost's own ceilings and the door's quotas do.
 | Code | When | Booked |
 | :-- | :-- | :-- |
 | `outpost_paused` | the outpost is paused or revoked, or outposts are switched off | no |
-| `outpost_offline` | no instance that serves the alias polled in the last minute, or none took the call within the connector's timeout | no |
-| `outpost_refused` | the outpost's own policy refused; `refusal` is its code (`tool_not_allowed`, `write_denied`, `unknown_endpoint`…) | no |
+| `outpost_offline` | no instance that serves the alias polled in the last minute, or none took the call within the connector's timeout. An instance announces its policy file's aliases at every poll: an alias the file does not hold is answered this way | no |
+| `outpost_refused` | the outpost's own policy refused; `refusal` is its code (`tool_not_allowed`, `write_denied`, `endpoint_unavailable`…) | no |
 | `outpost_not_admitted` | a quota of calls in flight or per minute is reached, or the call is too large to cross the door | no |
 | `outpost_timeout` | an instance took the read and its server did not answer in time | yes: it may have been executed |
 | `action_in_doubt` | an instance took the **write** and never answered: its action ended `in_doubt` | yes: it may have been executed, and it is never sent again |

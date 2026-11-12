@@ -248,7 +248,7 @@ server receives no call:
 | `call_unreadable` | the call does not open with this instance's key, or is not a call |
 | `unsupported_kind` | a kind of call this daemon does not know (a later protocol's) |
 | `deadline_passed` | the call's deadline is behind, by this machine's clock |
-| `unknown_endpoint` | the file holds no such alias |
+| `unknown_endpoint` | the file holds no such alias. The daemon announces its aliases at every poll and the platform hands it calls for those only, so this one is seldom met: a call for an alias your file does not hold is refused on the platform's side (`outpost_offline`) and never reaches you |
 | `tool_not_allowed` | the tool is outside the alias's patterns |
 | `payload_too_large` | the arguments weigh more than `max_payload_kb` |
 | `busy` | `concurrency` is reached, or the daemon is stopping, or it was restarted before it began the call |

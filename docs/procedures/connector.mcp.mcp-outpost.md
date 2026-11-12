@@ -2,7 +2,7 @@
 
 # Connect an MCP server that lives at an outpost
 
-For an organisation administrator. Procedure `connector.mcp.mcp-outpost`, version 2, reviewed 2026-11-12 against the vendor's own pages.
+For an organisation administrator. Procedure `connector.mcp.mcp-outpost`, version 3, reviewed 2026-11-12 against the vendor's own pages.
 
 ## Before you start
 
@@ -73,9 +73,11 @@ the outpost is polling, that its policy file has the alias, and that the outpost
 - `409 outpost_paused`: the outpost is paused or revoked, or outposts are switched off on this
   deployment. Nothing was sent.
 - `409 outpost_offline`: no instance of the outpost that serves this alias polled lately, or none
-  took the call in time. Check that the daemon runs and that `choregos-outpost doctor` passes.
+  took the call in time. An instance announces the aliases of its policy file at every poll, so an
+  alias the file does not hold, or no longer holds, is answered this way too. Check that the daemon
+  runs, that `choregos-outpost doctor` passes, and that the alias is the one in its file.
 - `409 outpost_refused`: the outpost's own policy refused, and its `refusal` says which kind:
-  `unknown_endpoint` (the policy file has no such alias), `tool_not_allowed`, `write_denied`,
+  `tool_not_allowed`, `write_denied`,
   `endpoint_unavailable` (the outpost cannot reach or open its server), `signature_refused` (the
   policy file does not pin the key the platform's door signs with).
 - `409 outpost_timeout`: an instance took the call and its server did not answer in time. Raise the
