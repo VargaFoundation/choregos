@@ -81,6 +81,7 @@ from .knowledge import (
     MemoryStore,
 )
 from .offered_knowledge import KnowledgeSeedTombstone
+from .outposts import Outpost, OutpostCall, OutpostEnrolment, OutpostInstance
 from .plugins import OrgPlugin, OrgPluginApproval, OrgPluginFile
 from .projects import Connector, ModelProfileRow, OrgWorkflow, PolicyDef, Project, Template, WorkflowDef
 from .releases import Deployment, Release
@@ -148,6 +149,10 @@ ALL_TABLES = [
     OrgPlugin,
     OrgPluginFile,
     OrgPluginApproval,
+    Outpost,
+    OutpostInstance,
+    OutpostEnrolment,
+    OutpostCall,
 ]
 
 
@@ -244,6 +249,10 @@ __all__ = [
     "OrgSlugAlias",
     "OrgWorkflow",
     "Organization",
+    "Outpost",
+    "OutpostCall",
+    "OutpostEnrolment",
+    "OutpostInstance",
     "PkMixin",
     "PolicyDef",
     "Project",

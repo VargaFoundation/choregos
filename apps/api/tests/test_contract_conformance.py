@@ -10,33 +10,8 @@ PREFIX = "/api/v1"
 
 # Contract-first (ADR 0001): operations the contract declares before the API serves them. Each entry
 # names the story that implements it; an entry the API does serve must be removed from here.
-CONTRACT_ONLY: dict[str, str] = {
-    # Outposts (S65-10, ADR 0147): the management routes are S65-11's, which removes these entries.
-    "listOutposts": "S65-11",
-    "createOutpost": "S65-11",
-    "getOutpost": "S65-11",
-    "deleteOutpost": "S65-11",
-    "pauseOutpost": "S65-11",
-    "resumeOutpost": "S65-11",
-    "revokeOutpost": "S65-11",
-    "createOutpostEnrolment": "S65-11",
-    "listOutpostInstances": "S65-11",
-    "approveOutpostInstance": "S65-11",
-    "revokeOutpostInstance": "S65-11",
-    "listOutpostCalls": "S65-11",
-}
-CONTRACT_ONLY_PATHS: set[str] = {
-    "/orgs/{org}/outposts",
-    "/orgs/{org}/outposts/{slug}",
-    "/orgs/{org}/outposts/{slug}/pause",
-    "/orgs/{org}/outposts/{slug}/resume",
-    "/orgs/{org}/outposts/{slug}/revoke",
-    "/orgs/{org}/outposts/{slug}/enrolments",
-    "/orgs/{org}/outposts/{slug}/instances",
-    "/orgs/{org}/outposts/{slug}/instances/{instance_id}/approve",
-    "/orgs/{org}/outposts/{slug}/instances/{instance_id}/revoke",
-    "/orgs/{org}/outposts/{slug}/calls",
-}
+CONTRACT_ONLY: dict[str, str] = {}
+CONTRACT_ONLY_PATHS: set[str] = set()
 
 
 def _app_paths(spec: dict[str, Any]) -> set[str]:

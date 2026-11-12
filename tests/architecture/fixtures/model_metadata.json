@@ -8634,6 +8634,13 @@
     "type": "Json()"
    },
    {
+    "default": null,
+    "name": "outpost_id",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
     "default": "<function uuid7>",
     "name": "id",
     "nullable": false,
@@ -8666,6 +8673,17 @@
     "CASCADE",
     null,
     "fk_org_connectors_org_id_organizations"
+   ],
+   [
+    [
+     "outpost_id"
+    ],
+    [
+     "outposts.id"
+    ],
+    "RESTRICT",
+    null,
+    "fk_org_connectors_outpost_id_outposts"
    ]
   ],
   "indexes": [
@@ -8673,6 +8691,13 @@
     "ix_org_connectors_org_id",
     [
      "org_connectors.org_id"
+    ],
+    false
+   ],
+   [
+    "ix_org_connectors_outpost_id",
+    [
+     "org_connectors.outpost_id"
     ],
     false
    ]
@@ -12581,6 +12606,779 @@
      "task_events.org_id"
     ],
     false
+   ]
+  ]
+ },
+ "outpost_calls": {
+  "checks": [],
+  "columns": [
+   {
+    "default": null,
+    "name": "id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=128)"
+   },
+   {
+    "default": null,
+    "name": "org_id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": null,
+    "name": "outpost_id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": null,
+    "name": "connector_id",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": null,
+    "name": "kind",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=32)"
+   },
+   {
+    "default": "'pending'",
+    "name": "state",
+    "nullable": false,
+    "server_default": "'pending'",
+    "type": "String(length=16)"
+   },
+   {
+    "default": null,
+    "name": "endpoint",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=63)"
+   },
+   {
+    "default": null,
+    "name": "tool",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=128)"
+   },
+   {
+    "default": "False",
+    "name": "write",
+    "nullable": false,
+    "server_default": null,
+    "type": "Boolean()"
+   },
+   {
+    "default": null,
+    "name": "instance_id",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=64)"
+   },
+   {
+    "default": null,
+    "name": "epoch",
+    "nullable": true,
+    "server_default": null,
+    "type": "Integer()"
+   },
+   {
+    "default": null,
+    "name": "claimed_at",
+    "nullable": true,
+    "server_default": null,
+    "type": "DateTime(timezone=True)"
+   },
+   {
+    "default": null,
+    "name": "deadline",
+    "nullable": true,
+    "server_default": null,
+    "type": "DateTime(timezone=True)"
+   },
+   {
+    "default": null,
+    "name": "finished_at",
+    "nullable": true,
+    "server_default": null,
+    "type": "DateTime(timezone=True)"
+   },
+   {
+    "default": null,
+    "name": "recorded",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=8)"
+   },
+   {
+    "default": null,
+    "name": "recorded_by",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=64)"
+   },
+   {
+    "default": null,
+    "name": "recorded_epoch",
+    "nullable": true,
+    "server_default": null,
+    "type": "Integer()"
+   },
+   {
+    "default": null,
+    "name": "recorded_at",
+    "nullable": true,
+    "server_default": null,
+    "type": "DateTime(timezone=True)"
+   },
+   {
+    "default": null,
+    "name": "outcome",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=16)"
+   },
+   {
+    "default": null,
+    "name": "is_error",
+    "nullable": true,
+    "server_default": null,
+    "type": "Boolean()"
+   },
+   {
+    "default": null,
+    "name": "refusal",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=32)"
+   },
+   {
+    "default": null,
+    "name": "arguments_sha256",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=64)"
+   },
+   {
+    "default": null,
+    "name": "result_sha256",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=64)"
+   },
+   {
+    "default": null,
+    "name": "project_id",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": null,
+    "name": "run_id",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=200)"
+   },
+   {
+    "default": null,
+    "name": "action_id",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": null,
+    "name": "arguments_ciphertext",
+    "nullable": true,
+    "server_default": null,
+    "type": "LargeBinary()"
+   },
+   {
+    "default": null,
+    "name": "arguments_nonce",
+    "nullable": true,
+    "server_default": null,
+    "type": "LargeBinary()"
+   },
+   {
+    "default": null,
+    "name": "arguments_wrapped_dek",
+    "nullable": true,
+    "server_default": null,
+    "type": "LargeBinary()"
+   },
+   {
+    "default": null,
+    "name": "arguments_dek_nonce",
+    "nullable": true,
+    "server_default": null,
+    "type": "LargeBinary()"
+   },
+   {
+    "default": null,
+    "name": "arguments_kek_id",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=32)"
+   },
+   {
+    "default": "<function utcnow>",
+    "name": "created_at",
+    "nullable": false,
+    "server_default": "<sqlalchemy.sql.functions.now; now>",
+    "type": "DateTime(timezone=True)"
+   },
+   {
+    "default": "<function utcnow>",
+    "name": "updated_at",
+    "nullable": false,
+    "server_default": "<sqlalchemy.sql.functions.now; now>",
+    "type": "DateTime(timezone=True)"
+   }
+  ],
+  "foreign_keys": [
+   [
+    [
+     "connector_id"
+    ],
+    [
+     "org_connectors.id"
+    ],
+    "SET NULL",
+    null,
+    "fk_outpost_calls_connector_id_org_connectors"
+   ],
+   [
+    [
+     "instance_id"
+    ],
+    [
+     "outpost_instances.id"
+    ],
+    "SET NULL",
+    null,
+    "fk_outpost_calls_instance_id_outpost_instances"
+   ],
+   [
+    [
+     "org_id"
+    ],
+    [
+     "organizations.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_outpost_calls_org_id_organizations"
+   ],
+   [
+    [
+     "outpost_id"
+    ],
+    [
+     "outposts.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_outpost_calls_outpost_id_outposts"
+   ],
+   [
+    [
+     "project_id"
+    ],
+    [
+     "projects.id"
+    ],
+    "SET NULL",
+    null,
+    "fk_outpost_calls_project_id_projects"
+   ]
+  ],
+  "indexes": [
+   [
+    "ix_outpost_calls_connector_id",
+    [
+     "outpost_calls.connector_id"
+    ],
+    false
+   ],
+   [
+    "ix_outpost_calls_instance_id",
+    [
+     "outpost_calls.instance_id"
+    ],
+    false
+   ],
+   [
+    "ix_outpost_calls_org_id",
+    [
+     "outpost_calls.org_id"
+    ],
+    false
+   ],
+   [
+    "ix_outpost_calls_outpost_state",
+    [
+     "outpost_calls.outpost_id",
+     "outpost_calls.state"
+    ],
+    false
+   ],
+   [
+    "ix_outpost_calls_project_id",
+    [
+     "outpost_calls.project_id"
+    ],
+    false
+   ]
+  ],
+  "primary_key": [
+   "id"
+  ],
+  "uniques": []
+ },
+ "outpost_enrolments": {
+  "checks": [],
+  "columns": [
+   {
+    "default": null,
+    "name": "org_id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": null,
+    "name": "outpost_id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": null,
+    "name": "token_digest",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=64)"
+   },
+   {
+    "default": null,
+    "name": "expires_at",
+    "nullable": false,
+    "server_default": null,
+    "type": "DateTime(timezone=True)"
+   },
+   {
+    "default": null,
+    "name": "used_at",
+    "nullable": true,
+    "server_default": null,
+    "type": "DateTime(timezone=True)"
+   },
+   {
+    "default": null,
+    "name": "instance_id",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=64)"
+   },
+   {
+    "default": null,
+    "name": "created_by",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=200)"
+   },
+   {
+    "default": "<function uuid7>",
+    "name": "id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": "<function utcnow>",
+    "name": "created_at",
+    "nullable": false,
+    "server_default": "<sqlalchemy.sql.functions.now; now>",
+    "type": "DateTime(timezone=True)"
+   },
+   {
+    "default": "<function utcnow>",
+    "name": "updated_at",
+    "nullable": false,
+    "server_default": "<sqlalchemy.sql.functions.now; now>",
+    "type": "DateTime(timezone=True)"
+   }
+  ],
+  "foreign_keys": [
+   [
+    [
+     "org_id"
+    ],
+    [
+     "organizations.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_outpost_enrolments_org_id_organizations"
+   ],
+   [
+    [
+     "outpost_id"
+    ],
+    [
+     "outposts.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_outpost_enrolments_outpost_id_outposts"
+   ]
+  ],
+  "indexes": [
+   [
+    "ix_outpost_enrolments_org_id",
+    [
+     "outpost_enrolments.org_id"
+    ],
+    false
+   ],
+   [
+    "ix_outpost_enrolments_outpost_id",
+    [
+     "outpost_enrolments.outpost_id"
+    ],
+    false
+   ]
+  ],
+  "primary_key": [
+   "id"
+  ],
+  "uniques": [
+   [
+    "uq_outpost_enrolments_token_digest",
+    [
+     "token_digest"
+    ]
+   ]
+  ]
+ },
+ "outpost_instances": {
+  "checks": [],
+  "columns": [
+   {
+    "default": null,
+    "name": "id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=64)"
+   },
+   {
+    "default": null,
+    "name": "org_id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": null,
+    "name": "outpost_id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": "'pending'",
+    "name": "status",
+    "nullable": false,
+    "server_default": "'pending'",
+    "type": "String(length=16)"
+   },
+   {
+    "default": null,
+    "name": "signing_key",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=43)"
+   },
+   {
+    "default": null,
+    "name": "sealing_key",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=43)"
+   },
+   {
+    "default": null,
+    "name": "fingerprint",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=50)"
+   },
+   {
+    "default": "<function dict>",
+    "name": "facts",
+    "nullable": false,
+    "server_default": null,
+    "type": "Json()"
+   },
+   {
+    "default": null,
+    "name": "daemon_version",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=64)"
+   },
+   {
+    "default": "1",
+    "name": "protocol",
+    "nullable": false,
+    "server_default": "'1'",
+    "type": "Integer()"
+   },
+   {
+    "default": "<function list>",
+    "name": "capabilities",
+    "nullable": false,
+    "server_default": null,
+    "type": "Json()"
+   },
+   {
+    "default": "<function list>",
+    "name": "endpoints",
+    "nullable": false,
+    "server_default": null,
+    "type": "Json()"
+   },
+   {
+    "default": "0",
+    "name": "sequence",
+    "nullable": false,
+    "server_default": "'0'",
+    "type": "BigInteger()"
+   },
+   {
+    "default": null,
+    "name": "last_seen_at",
+    "nullable": true,
+    "server_default": null,
+    "type": "DateTime(timezone=True)"
+   },
+   {
+    "default": "<function utcnow>",
+    "name": "enrolled_at",
+    "nullable": false,
+    "server_default": null,
+    "type": "DateTime(timezone=True)"
+   },
+   {
+    "default": null,
+    "name": "approved_by",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=200)"
+   },
+   {
+    "default": null,
+    "name": "approved_at",
+    "nullable": true,
+    "server_default": null,
+    "type": "DateTime(timezone=True)"
+   },
+   {
+    "default": null,
+    "name": "revoked_by",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=200)"
+   },
+   {
+    "default": null,
+    "name": "revoked_at",
+    "nullable": true,
+    "server_default": null,
+    "type": "DateTime(timezone=True)"
+   },
+   {
+    "default": "<function utcnow>",
+    "name": "created_at",
+    "nullable": false,
+    "server_default": "<sqlalchemy.sql.functions.now; now>",
+    "type": "DateTime(timezone=True)"
+   },
+   {
+    "default": "<function utcnow>",
+    "name": "updated_at",
+    "nullable": false,
+    "server_default": "<sqlalchemy.sql.functions.now; now>",
+    "type": "DateTime(timezone=True)"
+   }
+  ],
+  "foreign_keys": [
+   [
+    [
+     "org_id"
+    ],
+    [
+     "organizations.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_outpost_instances_org_id_organizations"
+   ],
+   [
+    [
+     "outpost_id"
+    ],
+    [
+     "outposts.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_outpost_instances_outpost_id_outposts"
+   ]
+  ],
+  "indexes": [
+   [
+    "ix_outpost_instances_org_id",
+    [
+     "outpost_instances.org_id"
+    ],
+    false
+   ],
+   [
+    "ix_outpost_instances_outpost_id",
+    [
+     "outpost_instances.outpost_id"
+    ],
+    false
+   ]
+  ],
+  "primary_key": [
+   "id"
+  ],
+  "uniques": [
+   [
+    "uq_outpost_instances_signing_key",
+    [
+     "signing_key"
+    ]
+   ]
+  ]
+ },
+ "outposts": {
+  "checks": [],
+  "columns": [
+   {
+    "default": null,
+    "name": "org_id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": null,
+    "name": "slug",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=63)"
+   },
+   {
+    "default": null,
+    "name": "display_name",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=200)"
+   },
+   {
+    "default": "'active'",
+    "name": "status",
+    "nullable": false,
+    "server_default": "'active'",
+    "type": "String(length=16)"
+   },
+   {
+    "default": "<function list>",
+    "name": "capabilities",
+    "nullable": false,
+    "server_default": null,
+    "type": "Json()"
+   },
+   {
+    "default": "0",
+    "name": "epoch",
+    "nullable": false,
+    "server_default": "'0'",
+    "type": "Integer()"
+   },
+   {
+    "default": null,
+    "name": "created_by",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=200)"
+   },
+   {
+    "default": "<function uuid7>",
+    "name": "id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": "<function utcnow>",
+    "name": "created_at",
+    "nullable": false,
+    "server_default": "<sqlalchemy.sql.functions.now; now>",
+    "type": "DateTime(timezone=True)"
+   },
+   {
+    "default": "<function utcnow>",
+    "name": "updated_at",
+    "nullable": false,
+    "server_default": "<sqlalchemy.sql.functions.now; now>",
+    "type": "DateTime(timezone=True)"
+   }
+  ],
+  "foreign_keys": [
+   [
+    [
+     "org_id"
+    ],
+    [
+     "organizations.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_outposts_org_id_organizations"
+   ]
+  ],
+  "indexes": [
+   [
+    "ix_outposts_org_id",
+    [
+     "outposts.org_id"
+    ],
+    false
+   ]
+  ],
+  "primary_key": [
+   "id"
+  ],
+  "uniques": [
+   [
+    "uq_outposts_org_slug",
+    [
+     "org_id",
+     "slug"
+    ]
    ]
   ]
  }
