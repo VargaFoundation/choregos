@@ -366,3 +366,46 @@ def test_a_trigger_task_names_its_subscriber_by_a_json_pointer(plugin: Path) -> 
         assert _problems(plugin), bad
     _edit(plugin / ASSISTANT, lambda d: d["tasks"][0].update(triggers=[{**event, "idempotency": "event/id"}]))
     assert any("is not a JSON pointer" in p for p in _problems(plugin))
+
+
+# -- a knowledge need bound at install (ADR 0159) ------------------------------------------------------------
+
+BIND = {"name": "house_research", "bind": {"description": "The house's research notes.", "required": False}}
+
+
+def test_a_knowledge_binding_need_loads_and_names_no_file(plugin: Path) -> None:
+    before = set(load_directory(plugin).files)
+    _edit(plugin / ASSISTANT, lambda d: d["knowledge"].append(dict(BIND)))
+    loaded = load_directory(plugin)
+    assert loaded.assistants["investment-assistant"]["knowledge"][1] == BIND
+    assert set(loaded.files) == before
+
+
+@pytest.mark.parametrize(
+    "item",
+    [
+        {"name": "house_research", "seed": "knowledge/investment-policy", "bind": {"description": "x"}},
+        {"name": "house_research", "bind": {"description": "x"}, "serving_mode": "index"},
+        {"name": "house_research", "bind": {"description": "x"}, "upstream": "follow"},
+        {"name": "house_research"},
+        {"name": "house_research", "bind": {"required": True}},
+        {"name": "house_research", "bind": {"description": "x", "copy": True}},
+    ],
+    ids=[
+        "seed-and-bind",
+        "bind-with-serving-mode",
+        "bind-with-upstream",
+        "neither",
+        "no-description",
+        "unknown",
+    ],
+)
+def test_a_knowledge_item_is_a_seed_or_a_binding_need_never_both(plugin: Path, item: dict[str, Any]) -> None:
+    _edit(plugin / ASSISTANT, lambda d: d["knowledge"].append(item))
+    problems = _problems(plugin)
+    assert any(p.startswith(f"{ASSISTANT}:knowledge/1") for p in problems), problems
+
+
+def test_a_binding_need_shares_the_names_of_the_seeds(plugin: Path) -> None:
+    _edit(plugin / ASSISTANT, lambda d: d["knowledge"].append({**BIND, "name": "investment_policy"}))
+    assert _problems(plugin) == [f"{ASSISTANT}:knowledge/1/name: `investment_policy` is declared twice"]

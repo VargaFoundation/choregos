@@ -146,7 +146,8 @@
     },
     "knowledge": {
       "type": "object",
-      "required": ["name", "seed"],
+      "description": "knowledge the assistant offers: a `seed` the installation copies (ADR 0138), or a `bind` need the installation binds to existing bases of the organisation, by reference (ADR 0159); exactly one of the two",
+      "required": ["name"],
       "additionalProperties": false,
       "properties": {
         "name": { "$ref": "#/$defs/snake" },
@@ -154,8 +155,39 @@
           "$ref": "#/$defs/path",
           "description": "a KnowledgeBase directory of the plugin (`knowledge.yaml` and its `corpus/`)"
         },
-        "serving_mode": { "enum": ["index", "files"], "default": "index" },
-        "upstream": { "enum": ["follow", "propose_updates", "frozen"], "default": "propose_updates" }
+        "serving_mode": { "enum": ["index", "files"], "default": "index", "description": "a seed's only" },
+        "upstream": {
+          "enum": ["follow", "propose_updates", "frozen"],
+          "default": "propose_updates",
+          "description": "a seed's only"
+        },
+        "bind": { "$ref": "#/$defs/knowledge_bind" }
+      },
+      "oneOf": [
+        { "required": ["seed"], "not": { "required": ["bind"] } },
+        {
+          "required": ["bind"],
+          "not": { "anyOf": [{ "required": ["seed"] }, { "required": ["serving_mode"] }, { "required": ["upstream"] }] }
+        }
+      ]
+    },
+    "knowledge_bind": {
+      "type": "object",
+      "description": "a need the installation binds to one or more existing knowledge bases of the organisation (ADR 0159): no copy, the base keeps its owners, rights and sources, and a person reads it in a conversation only when they may read the base",
+      "required": ["description"],
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000,
+          "description": "what the organisation should bind, in the author's words"
+        },
+        "required": {
+          "type": "boolean",
+          "default": true,
+          "description": "true: the installation is incomplete until the need is bound"
+        }
       }
     },
     "trigger": {

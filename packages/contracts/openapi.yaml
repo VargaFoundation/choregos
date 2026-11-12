@@ -4501,8 +4501,9 @@ paths:
       description: >-
         Installs an assistant of an installed plugin (ADR 0133): the manifest is read from the installed plugin, the
         `config` is checked against its `config_schema` (a missing required key is a readiness item, any other
-        violation a 422). The installation is `incomplete` until every required need is bound. Organisation
-        administrator only; audited as `assistant.install`.
+        violation a 422). The installation is `incomplete` until every required need is bound. `knowledge_bindings`
+        binds knowledge needs at once, under the rules of `bindAssistantKnowledge`. Organisation administrator only;
+        audited as `assistant.install`.
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/AssistantInstall" } } }
@@ -4794,6 +4795,30 @@ paths:
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/AssistantLaunchBind" } } }
+      responses:
+        "200": { description: Bound, content: { application/json: { schema: { $ref: "#/components/schemas/Assistant" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/assistants/{slug}/knowledge-bindings/{name}:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+      - { name: name, in: path, required: true, schema: { type: string, pattern: "^[a-z][a-z0-9]*(_[a-z0-9]+)*$" } }
+    put:
+      tags: [agents]
+      operationId: bindAssistantKnowledge
+      description: >-
+        Binds a knowledge need of the assistant (`knowledge[].bind`) to existing knowledge bases of the organisation,
+        by reference (ADR 0159): nothing is copied, each base keeps its owners, rights and sources. The list replaces
+        the previous one and the call is idempotent. Every base added must be `active` and readable by the caller
+        (ADR 0081); a base the caller may not read and one that does not exist get the same 422, and nothing changes.
+        Keeping or removing a base needs no right on it. In a conversation, a bound base is searched only when the
+        person may read it at that turn. An organisation administrator or a member of the owner groups; audited as
+        `assistant.knowledge.bind`.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AssistantKnowledgeBind" } } }
       responses:
         "200": { description: Bound, content: { application/json: { schema: { $ref: "#/components/schemas/Assistant" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -10647,6 +10672,12 @@ components:
         owner_groups: { type: array, items: { type: string, minLength: 1, maxLength: 255 } }
         audience_groups: { type: array, items: { type: string, minLength: 1, maxLength: 255 } }
         channel: { type: string, enum: [stable, candidate], default: stable }
+        knowledge_bindings:
+          type: object
+          description: >-
+            The knowledge needs (`knowledge[].bind`) bound at install, each to existing knowledge bases of the
+            organisation by their slugs (ADR 0159), as `PUT .../knowledge-bindings/{name}` takes them.
+          additionalProperties: { type: array, maxItems: 20, uniqueItems: true, items: { type: string } }
     AssistantUpdate:
       type: object
       properties:
@@ -10746,8 +10777,27 @@ components:
         policy_overrides: { type: object, additionalProperties: true }
         bindings: { type: array, items: { $ref: "#/components/schemas/AssistantBinding" } }
         launches: { type: array, items: { $ref: "#/components/schemas/AssistantLaunch" }, description: "The workflows the assistant may propose to start, and where each is bound (ADR 0158)." }
+        knowledge_bindings: { type: array, items: { $ref: "#/components/schemas/AssistantKnowledgeBinding" }, description: "The knowledge needs that are bound, and to which bases (ADR 0159)." }
         created_by: { type: [string, "null"] }
         created_at: { type: string, format: date-time }
+    AssistantKnowledgeBind:
+      type: object
+      required: [bases]
+      additionalProperties: false
+      properties:
+        bases:
+          type: array
+          maxItems: 20
+          uniqueItems: true
+          items: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" }
+          description: The slugs of the knowledge bases the need is bound to, the whole list; empty unbinds it.
+    AssistantKnowledgeBinding:
+      type: object
+      required: [name, bases, enabled]
+      properties:
+        name: { type: string, description: "The knowledge need's name in the manifest." }
+        bases: { type: array, items: { type: string }, description: "The slugs of the bound bases." }
+        enabled: { type: boolean, description: "False once a plugin upgrade dropped the need: kept, never served." }
     AssistantReadLine:
       type: object
       required: [id, user_id, need, operation, at]
@@ -10924,6 +10974,13 @@ components:
         identity: { type: string, enum: [service, user_exchange, user_consent] }
         access: { type: string }
         required: { type: boolean }
+    AssistantKnowledgeNeed:
+      type: object
+      required: [name, description, required]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        required: { type: boolean }
     AssistantTaskDecl:
       type: object
       required: [name, delegation, schedulable]
@@ -10941,6 +10998,7 @@ components:
         config_schema: { type: [object, "null"], additionalProperties: true }
         suggested_groups: { type: array, items: { type: string } }
         needs: { type: array, items: { $ref: "#/components/schemas/AssistantNeed" } }
+        knowledge_needs: { type: array, items: { $ref: "#/components/schemas/AssistantKnowledgeNeed" }, description: "The knowledge the installation binds to the organisation's bases (ADR 0159); seeds are not listed." }
         memory_spaces: { type: array, items: { $ref: "#/components/schemas/AssistantMemorySpace" }, description: "Every declared space, the installation's own included (the owners' page); a person's page never lists an installation space." }
     PluginAssistantList:
       type: object
@@ -11102,8 +11160,8 @@ components:
       type: object
       required: [kind, message, fix_by, groups]
       properties:
-        kind: { type: string, enum: [assistant_missing, config_missing, need_unbound, need_not_served, identity_unsupported, launch_unbound, launch_workflow_missing, launch_inputs_mismatch] }
-        need: { type: [string, "null"] }
+        kind: { type: string, enum: [assistant_missing, config_missing, need_unbound, need_not_served, identity_unsupported, launch_unbound, launch_workflow_missing, launch_inputs_mismatch, knowledge_unbound] }
+        need: { type: [string, "null"], description: "The tool need, or for `knowledge_unbound` the knowledge need's name." }
         launch: { type: [string, "null"], description: "The launch, for the `launch_*` kinds (ADR 0158)." }
         key: { type: [string, "null"], description: "The configuration key, for `config_missing`." }
         message: { type: string }
