@@ -1457,6 +1457,13 @@
     "type": "DateTime(timezone=True)"
    },
    {
+    "default": null,
+    "name": "turn_cancel_requested_at",
+    "nullable": true,
+    "server_default": null,
+    "type": "DateTime(timezone=True)"
+   },
+   {
     "default": "<function uuid7>",
     "name": "id",
     "nullable": false,

@@ -192,7 +192,7 @@ async def cancel_my_conversation_turn(
     conversation_id: str, session: Db, principal: Me
 ) -> ConversationSummary:
     record = await _mine(session, principal, conversation_id)
-    if not await cancel_turn(conversation_id):
+    if not await cancel_turn(conversation_id, session):
         raise conflict(f"no turn of conversation {conversation_id} is running")
     await session.refresh(record)
     return (await with_assistant(session, [record], [summary_of(record)]))[0]
