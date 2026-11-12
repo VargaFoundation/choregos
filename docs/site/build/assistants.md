@@ -207,7 +207,10 @@ tasks:
 A task runs a workflow of the plugin, in the subscriber's personal space. A trigger is `on_demand`,
 `schedule` (a cron in the person's time zone), `poll` (a cron that calls one read operation and starts
 the workflow only when a condition on its result holds) or `trigger` (a system sends an event for one
-person). `deliver` is `inbox`, `email`, `teams` or `webhook`.
+person). `deliver` is `inbox`, `email`, `teams` or `webhook`. `teams` posts a message card to a Microsoft Teams
+incoming webhook or Workflows URL that the installation's manager seals once; the same channel hears the
+installation's owners notices. The URL is never shown again, and the organisation opens its host in the
+egress allowlist first.
 
 ```text
 triggers: [{ kind: trigger, subscriber: /attendee/email, idempotency: /event/id }]

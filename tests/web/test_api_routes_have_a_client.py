@@ -98,6 +98,8 @@ NO_CLIENT_YET: dict[str, str] = {
     "(S63-21): an API gesture of the installation's manager until the installation page shows it",
     "/orgs/{org}/assistants/{slug}/task-events": "the journal of the events a `trigger` task received "
     "(S63-21): read by API until the installation page lists it",
+    "/orgs/{org}/assistants/{slug}/delivery/teams": "seals the Teams webhook of an installation's "
+    "deliveries (S63-25): an API gesture of its manager until the installation page has a field for it",
 }
 
 #: Paths the CLI calls and the console must not: an operator's command, not a screen.

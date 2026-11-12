@@ -37,9 +37,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..audit import record as audit
 from ..config import get_settings
 from ..db.models import ArtifactRecord, AssistantInstallation, Organization, Project, User, WorkItem
-from ..errors import conflict
+from ..errors import conflict, unprocessable
 from ..rbac import Principal
-from ..schemas.tasks import InboxItem, WebhookSecret
+from ..schemas.tasks import InboxItem, TeamsDelivery, WebhookSecret
 from .personal_spaces import PERSONAL
 
 log = structlog.get_logger("choregos.task_delivery")
@@ -63,7 +63,12 @@ def set_notifier_factory(factory: NotifierFactory | None) -> None:
         _factory.append(factory)
 
 
-def notifier_for(row: AssistantInstallation, channel: str) -> Notifier | None:
+def notifier_for(
+    row: AssistantInstallation, channel: str, secrets: dict[str, Any] | None = None
+) -> Notifier | None:
+    """The notifier of a channel of the installation: `policy_overrides.delivery.<channel>` is
+    `{type, config, secret_refs}`. `secrets` are the configuration's secret fields already resolved
+    (`notifier_in` reads them); a type that needs one (`teams`) is not built without it."""
     if _factory:
         return _factory[0](row, channel)
     configured = ((row.policy_overrides or {}).get("delivery") or {}).get(channel)
@@ -71,8 +76,115 @@ def notifier_for(row: AssistantInstallation, channel: str) -> Notifier | None:
         return None
     from choregos_adapters import build
 
-    notifier: Notifier = build("notify", str(configured["type"]), dict(configured.get("config") or {}))
+    config = {**dict(configured.get("config") or {}), **(secrets or {})}
+    notifier: Notifier = build("notify", str(configured["type"]), config)
     return notifier
+
+
+def teams_secret_name(slug: str) -> str:
+    """Where the installation's Teams webhook URL is sealed in the organisation's secret store."""
+    return f"assistant/{slug}/delivery/teams"
+
+
+async def notifier_in(session: AsyncSession, row: AssistantInstallation, channel: str) -> Notifier | None:
+    """`notifier_for` with the secret fields of the configuration read from the sealed store (the Teams
+    webhook URL, `store:` references only). A secret that cannot be read raises: the delivery is recorded
+    as failed and retried, never skipped as if it were not configured."""
+    if _factory:
+        return _factory[0](row, channel)
+    configured = ((row.policy_overrides or {}).get("delivery") or {}).get(channel)
+    if not isinstance(configured, dict) or not configured.get("type"):
+        return None
+    refs = dict(configured.get("secret_refs") or {})
+    resolved: dict[str, Any] = {}
+    if refs:
+        from ..secret_store import resolved_configuration
+
+        resolved = await resolved_configuration(
+            session, row.org_id, "notify", str(configured["type"]), dict(configured.get("config") or {}), refs
+        )
+    return notifier_for(row, channel, resolved)
+
+
+async def teams_state(session: AsyncSession, row: AssistantInstallation) -> TeamsDelivery:
+    """Whether the installation delivers to Teams, and the version of the sealed URL: never the URL."""
+    from ..secret_store import get_secret_store
+
+    configured = (((row.policy_overrides or {}).get("delivery") or {}).get("teams") or {}).get("type")
+    name = teams_secret_name(row.slug)
+    meta = (await get_secret_store().meta(session, row.org_id, [name])).get(name) if configured else None
+    return TeamsDelivery(
+        configured=bool(configured and meta is not None),
+        version=meta.version if meta is not None else None,
+        updated_at=meta.rotated_at if meta is not None else None,
+    )
+
+
+async def set_teams_webhook(
+    session: AsyncSession, principal: Principal, org: str, row: AssistantInstallation, url: str
+) -> TeamsDelivery:
+    """Seals the Teams webhook / Workflows URL of the installation in the organisation's store and points
+    `policy_overrides.delivery.teams` at it. The URL is validated (https, no credentials), remembered by the
+    log redaction, never returned and never audited."""
+    from choregos_adapters.errors import AdapterError
+    from choregos_adapters.notify.teams import check_webhook_url
+    from choregos_core.redaction import remember_secret
+
+    from ..secret_store import NO_KEY_MESSAGE, SecretStoreUnavailable, get_secret_store, store_ref
+
+    try:
+        clean = check_webhook_url(url)
+    except AdapterError as refusal:
+        raise unprocessable(str(refusal)) from None
+    remember_secret(clean)
+    store = get_secret_store()
+    if not store.available():
+        raise conflict(NO_KEY_MESSAGE)
+    name = teams_secret_name(row.slug)
+    try:
+        await store.put(session, row.org_id, name, clean, principal.email)
+    except SecretStoreUnavailable as exc:
+        raise conflict(str(exc)) from exc
+    overrides = dict(row.policy_overrides or {})
+    delivery = dict(overrides.get("delivery") or {})
+    delivery["teams"] = {"type": "teams", "config": {}, "secret_refs": {"webhook_url": store_ref(name)}}
+    overrides["delivery"] = delivery
+    row.policy_overrides = overrides
+    await session.flush()
+    await audit(
+        session,
+        principal,
+        "assistant.delivery.teams.set",
+        org_id=row.org_id,
+        target_type="assistant",
+        target_id=row.id,
+        organisation=org,
+    )
+    return await teams_state(session, row)
+
+
+async def clear_teams_webhook(
+    session: AsyncSession, principal: Principal, org: str, row: AssistantInstallation
+) -> None:
+    """Forgets the Teams channel: the sealed URL is deleted and the configuration removed."""
+    from ..secret_store import get_secret_store
+
+    await get_secret_store().delete(session, row.org_id, teams_secret_name(row.slug))
+    overrides = dict(row.policy_overrides or {})
+    delivery = dict(overrides.get("delivery") or {})
+    if delivery.pop("teams", None) is not None:
+        overrides["delivery"] = delivery
+        row.policy_overrides = overrides
+    await session.flush()
+    await audit(
+        session,
+        principal,
+        "assistant.delivery.teams.cleared",
+        org_id=row.org_id,
+        target_type="assistant",
+        target_id=row.id,
+        organisation=org,
+    )
 
 
 def webhook_secret(installation_id: str, generation: int = 0) -> str:
@@ -236,17 +348,21 @@ async def _send(
         }
         await _post(session, organisation, url, body, headers)
         return
-    notifier = notifier_for(row, channel)
+    from .egress import egress_scope
+
+    notifier = await notifier_in(session, row, channel)
     if notifier is None:
         raise LookupError("not_configured")
-    await notifier.send(
-        user.email,
-        Message(
-            title=f"{task.get('task')}: {artifact.name}",
-            body=_text(artifact),
-            context={"task": str(task.get("task")), "artifact": artifact.name, "work_item": item.id},
-        ),
-    )
+    # The organisation's allowlist decides which hosts a notifier may reach, as for the webhook channel.
+    async with egress_scope(session, organisation, "api", "assistant.task"):
+        await notifier.send(
+            user.email,
+            Message(
+                title=f"{task.get('task')}: {artifact.name}",
+                body=_text(artifact),
+                context={"task": str(task.get("task")), "artifact": artifact.name, "work_item": item.id},
+            ),
+        )
 
 
 async def deliver_pending(session: AsyncSession) -> int:

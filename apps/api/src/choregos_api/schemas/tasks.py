@@ -112,3 +112,17 @@ class TaskEventLine(Dto):
 
 class TaskEventList(Dto):
     items: list[TaskEventLine]
+
+
+class TeamsDeliveryPut(Dto):
+    """The Teams incoming webhook or Workflows URL: the credential itself, sealed and never shown again."""
+
+    webhook_url: str = Field(min_length=12, max_length=2048)
+
+
+class TeamsDelivery(Dto):
+    """Whether the installation delivers to Teams; never the URL."""
+
+    configured: bool
+    version: int | None = None
+    updated_at: datetime | None = None

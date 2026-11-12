@@ -5,7 +5,7 @@ A journal under forced RLS on the organisation: the door of an installation's ta
 organisation's managers read it. The downgrade drops the table and loses the journal.
 
 Revision ID: b1a1c0f0e0d1
-Revises: a7f7c0f0e0d7
+Revises: b3a3c0f0e0d3
 Create Date: 2026-11-12 10:00:00+00:00
 """
 
@@ -17,7 +17,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "b1a1c0f0e0d1"
-down_revision: str | None = "a7f7c0f0e0d7"
+down_revision: str | None = "b3a3c0f0e0d3"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

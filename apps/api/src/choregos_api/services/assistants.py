@@ -531,6 +531,10 @@ async def uninstall(
     for binding, _ in await _bindings(session, row):
         await session.delete(binding)
     await session.flush()
+    from ..secret_store import get_secret_store
+    from .task_delivery import teams_secret_name
+
+    await get_secret_store().delete(session, org_id, teams_secret_name(row.slug))  # its sealed Teams URL
     await session.delete(row)
     await session.flush()
     await record(session, principal, "assistant.uninstall", org_id=org_id, target_type="assistant",

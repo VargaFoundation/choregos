@@ -3824,6 +3824,43 @@ paths:
         "409": { description: The subscriber's gate refuses the run, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
         "413": { description: The body is over 256 KiB }
         "422": { description: The event names no subscriber, several, or nobody subscribed, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+  /orgs/{org}/assistants/{slug}/delivery/teams:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+    get:
+      tags: [agents]
+      operationId: getTeamsDelivery
+      description: >-
+        Whether the installation delivers task outputs and owner notices to Microsoft Teams (S63-25), for whoever
+        manages it (`assistant:manage`): configured or not, the version of the sealed URL, never the URL.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/TeamsDelivery" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [agents]
+      operationId: putTeamsDelivery
+      description: >-
+        Seals the Teams incoming webhook or Workflows URL of the installation in the organisation's secret store and
+        points its `teams` delivery at it (S63-25). The URL is a credential: it must be `https` without credentials in
+        it (422), is never returned, logged or audited, and the organisation's egress allowlist decides whether its
+        host may be called. 409 when the secret store has no key.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/TeamsDeliveryPut" } } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/TeamsDelivery" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { description: The URL is not an https URL without credentials, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+    delete:
+      tags: [agents]
+      operationId: deleteTeamsDelivery
+      description: Forgets the Teams channel of the installation, deleting the sealed URL.
+      responses:
+        "204": { description: Deleted }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /orgs/{org}/assistants/{slug}/knowledge/updates:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -9553,6 +9590,18 @@ components:
       required: [items]
       properties:
         items: { type: array, items: { $ref: "#/components/schemas/TaskEventLine" } }
+    TeamsDeliveryPut:
+      type: object
+      required: [webhook_url]
+      properties:
+        webhook_url: { type: string, minLength: 12, maxLength: 2048, description: "The credential itself: an https URL, sealed and never shown again." }
+    TeamsDelivery:
+      type: object
+      required: [configured]
+      properties:
+        configured: { type: boolean }
+        version: { type: [integer, "null"] }
+        updated_at: { type: [string, "null"], format: date-time }
     WebhookSecretRequest:
       type: object
       properties:
