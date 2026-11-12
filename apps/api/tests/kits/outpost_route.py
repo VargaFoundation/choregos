@@ -34,6 +34,10 @@ RUN = "run-outpost-1"
 BASE = f"/api/v1/internal/runs/{RUN}/tools"
 #: Seconds a connector of these tests waits: long enough for a poll, short enough to wait out.
 TIMEOUT_S = 2
+#: The connector's timeout for everything a test does not measure: discovery, the calls that are
+#: served. A loaded CI runner does not hand a call over, make it and answer it within `TIMEOUT_S`, and
+#: a test that is not about the timeout must not fail on one.
+SETUP_TIMEOUT_S = 30
 
 TOOLS: list[dict[str, Any]] = [
     {
@@ -81,21 +85,28 @@ async def serving(
     does not poll; a call whose lease the fake loses is taken and never answered."""
     stop = asyncio.Event()
 
+    async def one_round() -> None:
+        if fake.offline:
+            return
+        for call in await daemon.calls(client, endpoints=fake.aliases, capacity=8):
+            made = await fake.make(call)
+            if made.refusal is not None:
+                sent = await daemon.refuse(client, call["id"], made.refusal)
+            elif made.answer is not None:
+                sent = await daemon.answer(client, call, **made.answer)
+            else:
+                continue
+            # A call the platform stopped waiting for meets `lease_lost`: the door's answer.
+            assert sent.status_code in (200, 409), sent.text
+
     async def instance() -> None:
         while not stop.is_set():
-            if not fake.offline:
-                for call in await daemon.calls(client, endpoints=fake.aliases, capacity=8):
-                    made = await fake.make(call)
-                    if made.refusal is not None:
-                        sent = await daemon.refuse(client, call["id"], made.refusal)
-                    elif made.answer is not None:
-                        sent = await daemon.answer(client, call, **made.answer)
-                    else:
-                        continue
-                    # A call the platform stopped waiting for meets `lease_lost`: the door's answer.
-                    assert sent.status_code in (200, 409), sent.text
+            await one_round()
             await asyncio.sleep(every)
 
+    # The instance has polled once when the block starts: it is online for what the block does
+    # first, however slowly the task that keeps it polling gets its turn.
+    await one_round()
     task = asyncio.create_task(instance())
     try:
         yield
@@ -114,7 +125,7 @@ async def seen(client: AsyncClient, daemon: Daemon, fake: FakeOutpost) -> None:
 async def declare(
     client: AsyncClient, name: str = CONNECTOR, *, expect: int = 201, **config: Any
 ) -> dict[str, Any]:
-    body = {"outpost": SLUG, "endpoint": ALIAS, "timeout_s": TIMEOUT_S} | config
+    body = {"outpost": SLUG, "endpoint": ALIAS, "timeout_s": SETUP_TIMEOUT_S} | config
     declared = await client.post(
         f"{ORG}/connectors", json={"name": name, "type": "mcp-outpost", "config": body}
     )
@@ -168,22 +179,33 @@ async def prepared(
     fake: FakeOutpost,
     *,
     opened: tuple[str, ...] = ("search_issues", "get_issue"),
-    timeout_s: int = TIMEOUT_S,
+    timeout_s: int = SETUP_TIMEOUT_S,
 ) -> tuple[Daemon, dict[str, str]]:
     """An outpost with one approved instance that polled, a connector declared at it, its tools
-    discovered through it and its reads opened, and a run of an agent that names it. `timeout_s` is
-    the connector's: short by default, for the tests that wait for it to pass; a test that makes
-    several calls at once on a loaded machine asks for more."""
+    discovered through it and its reads opened, and a run of an agent that names it. The discovery is
+    made under `SETUP_TIMEOUT_S`; `timeout_s` is the connector's once it is prepared: a test that
+    measures the timeout asks for `TIMEOUT_S`."""
     daemon = await daemon_kit.approved(client)
     await seen(client, daemon, fake)
-    await declare(client, timeout_s=timeout_s)
+    await declare(client)
     async with serving(client, daemon, fake):
         discovered = await client.post(f"{ORG}/connectors/{CONNECTOR}/discover")
         assert discovered.status_code == 200, discovered.text
     for operation in opened:
         done = await open_operation(client, operation)
         assert done.status_code == 200, done.text
+    if timeout_s != SETUP_TIMEOUT_S:
+        await set_timeout(client, timeout_s)
     return daemon, await agent_and_run(client, project, [CONNECTOR])
+
+
+async def set_timeout(client: AsyncClient, seconds: int, name: str = CONNECTOR) -> None:
+    """The connector's timeout from now on, through the route that edits a connector."""
+    edited = await client.patch(
+        f"{ORG}/connectors/{name}",
+        json={"config": {"outpost": SLUG, "endpoint": ALIAS, "timeout_s": seconds}},
+    )
+    assert edited.status_code == 200, edited.text
 
 
 # ───────────────────────── what a call left behind ─────────────────────────

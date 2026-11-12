@@ -283,7 +283,7 @@ async def test_a_call_nobody_claims_in_time_is_offline_within_the_connectors_tim
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
     fake = route.outpost()
-    _daemon, headers = await route.prepared(client, project, fake)
+    _daemon, headers = await route.prepared(client, project, fake, timeout_s=TIMEOUT_S)
     # The instance polled a moment ago, and polls no more: the call is placed, and waits.
     started = time.monotonic()
     answer = await _search(client, headers)
@@ -398,7 +398,7 @@ async def test_a_claimed_read_that_gets_no_answer_times_out_and_is_booked(
 ) -> None:
     served = route.server()
     fake = route.outpost(served)
-    daemon, headers = await route.prepared(client, project, fake)
+    daemon, headers = await route.prepared(client, project, fake, timeout_s=TIMEOUT_S)
     fake.lose_lease()
     async with route.serving(client, daemon, fake):
         started = time.monotonic()
@@ -412,6 +412,7 @@ async def test_a_claimed_read_that_gets_no_answer_times_out_and_is_booked(
     assert len(await route.ledger()) == 1
     assert (HOST, "broker", "unreachable", "outpost_timeout", 1) in await route.journal()
     # A read may be asked again: a new call, a new row, an answer.
+    await route.set_timeout(client, route.SETUP_TIMEOUT_S)
     async with route.serving(client, daemon, fake):
         assert (await _search(client, headers))["status_code"] == 200
     assert [row.state for row in _tool_calls(await route.calls())] == ["timed_out", "answered"]
@@ -983,7 +984,7 @@ async def test_a_write_nobody_claimed_reached_no_server_and_may_be_placed_again(
     served = route.server(structured={"create_issue": {"key": "OPS-7"}})
     fake = route.outpost(served)
     fake.writes_allowed.add(ALIAS)
-    daemon, _headers = await route.prepared(client, project, fake)
+    daemon, _headers = await route.prepared(client, project, fake, timeout_s=TIMEOUT_S)
 
     async def write() -> Any:
         scope, tools = await _write_client(project["id"], "a-1:0")
@@ -1010,6 +1011,7 @@ async def test_a_write_nobody_claimed_reached_no_server_and_may_be_placed_again(
     assert (row.state, row.created_at) == ("expired", first_placed), "the row was not placed again"
     assert served.calls == []
     # The outpost is back: the same call, placed again under the same id, delivered once.
+    await route.set_timeout(client, route.SETUP_TIMEOUT_S)
     async with route.serving(client, daemon, fake):
         assert (await write())["structuredContent"] == {"key": "OPS-7"}
     (row,) = _tool_calls(await route.calls())

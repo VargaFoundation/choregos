@@ -135,7 +135,7 @@ async def test_a_call_that_waits_for_an_outpost_holds_no_connection_and_no_trans
     from choregos_api.outposts import rendezvous
 
     fake = route.outpost()
-    _daemon, headers = await route.prepared(client, project, fake)
+    _daemon, headers = await route.prepared(client, project, fake, timeout_s=TIMEOUT_S)
     monkeypatch.setattr(rendezvous, "LOOK_S", (60.0, 60.0))  # one look, then only the wait
     started = time.monotonic()
     calling = asyncio.create_task(client.post(SEARCH, headers=headers, json={"query": "door"}))
@@ -198,9 +198,7 @@ async def test_two_calls_of_one_run_at_once_are_counted_on_one_line_of_the_journ
     """The journal has one line per run, host and decision. Two calls of one run to one alias that
     end together both find none and both write it: one loses, and counts itself on the other's."""
     fake = route.outpost()
-    # Four calls at once through one scripted daemon that makes them one after the other: the
-    # connector's two seconds are not what this test is about, and are not enough on a loaded runner.
-    daemon, headers = await route.prepared(client, project, fake, timeout_s=30)
+    daemon, headers = await route.prepared(client, project, fake)
     async with route.serving(client, daemon, fake):
         answers = await asyncio.gather(
             *(client.post(SEARCH, headers=headers, json={"query": f"door {n}"}) for n in range(4))
