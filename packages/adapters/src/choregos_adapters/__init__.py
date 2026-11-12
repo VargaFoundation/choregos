@@ -97,6 +97,7 @@ FAKE_MCP_GATEWAY: Any = None  # the fake MCP gateway, whose fallback is always t
 FAKE_ENTRA: Any = None  # the fake Graph
 FAKE_MARKETDATA: Any = None  # the fake of the `marketdata` family
 FAKE_WEB_SEARCH: Any = None  # the fake of the `web_search` family
+FAKE_TEAMS: Any = None  # the fake Teams webhook (S63-25)
 #: The netops fakes (ADR 0052): one pfSense, one cluster, one recorded Hubble trace, one GitOps repository.
 FAKE_NETOPS: dict[str, Any] = {}
 #: The fakes of the business families, one per family.

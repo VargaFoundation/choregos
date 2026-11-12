@@ -108,6 +108,10 @@
   "type": "slack"
  },
  {
+  "kind": "notify",
+  "type": "teams"
+ },
+ {
   "kind": "runtime",
   "type": "aca"
  },

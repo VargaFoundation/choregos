@@ -197,7 +197,9 @@ tasks:
 A task runs a workflow of the plugin, in the subscriber's personal space. A trigger is `on_demand`,
 `schedule` (a cron in the person's time zone) or `poll` (a cron that calls one read operation and starts
 the workflow only when a condition on its result holds). `deliver` is `inbox`, `email`, `teams` or
-`webhook`.
+`webhook`. `teams` posts a message card to a Microsoft Teams incoming webhook or Workflows URL that the
+installation's manager seals once; the same channel hears the installation's owners notices. The URL is never
+shown again, and the organisation opens its host in the egress allowlist first.
 
 A task that reads with a person's identity while they are away needs `delegation: read_only` and lists
 the `needs` it reads; the person agrees to that exact list. A delegated task never calls a write need.

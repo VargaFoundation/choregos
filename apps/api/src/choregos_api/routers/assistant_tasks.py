@@ -21,12 +21,20 @@ from ..schemas.tasks import (
     TaskSubscription,
     TaskSubscriptionPut,
     TaskTrigger,
+    TeamsDelivery,
+    TeamsDeliveryPut,
     WebhookSecret,
     WebhookSecretRequest,
 )
 from ..services import assistant_tasks, assistants
 from ..services.organisations import organisation_by_slug
-from ..services.task_delivery import inbox, reveal_webhook_secret
+from ..services.task_delivery import (
+    clear_teams_webhook,
+    inbox,
+    reveal_webhook_secret,
+    set_teams_webhook,
+    teams_state,
+)
 
 router = APIRouter(tags=["agents"])
 
@@ -106,3 +114,38 @@ async def webhook_secret(
     return await reveal_webhook_secret(
         session, principal, org, row, rotate=body.rotate if body is not None else False
     )
+
+
+# -- the Teams channel of an installation's deliveries (S63-25) ---------------------------------------
+
+TEAMS_DELIVERY = "/orgs/{org}/assistants/{slug}/delivery/teams"
+
+
+async def _managed(org: str, slug: str, session: Any, principal: Any) -> Any:
+    organisation = await organisation_by_slug(session, org)
+    row = await assistants.installation(session, organisation.id, slug)
+    assistants.require_manager(principal, org, row)
+    return row
+
+
+@router.get(TEAMS_DELIVERY, response_model=TeamsDelivery, operation_id="getTeamsDelivery")
+async def get_teams_delivery(org: str, slug: Slug, session: Db, principal: Me) -> TeamsDelivery:
+    """Whether the installation delivers task outputs and owner notices to Teams (`assistant:manage`)."""
+    return await teams_state(session, await _managed(org, slug, session, principal))
+
+
+@router.put(TEAMS_DELIVERY, response_model=TeamsDelivery, operation_id="putTeamsDelivery")
+async def put_teams_delivery(
+    org: str, slug: Slug, body: TeamsDeliveryPut, session: Db, principal: Me
+) -> TeamsDelivery:
+    """Seals the Teams incoming webhook or Workflows URL of the installation (`assistant:manage`). The URL is
+    a credential: 422 unless it is `https` without credentials in it, never returned, never logged, and the
+    organisation's egress allowlist decides whether its host may be called. 409 when the store has no key."""
+    row = await _managed(org, slug, session, principal)
+    return await set_teams_webhook(session, principal, org, row, body.webhook_url)
+
+
+@router.delete(TEAMS_DELIVERY, status_code=status.HTTP_204_NO_CONTENT, operation_id="deleteTeamsDelivery")
+async def delete_teams_delivery(org: str, slug: Slug, session: Db, principal: Me) -> Response:
+    await clear_teams_webhook(session, principal, org, await _managed(org, slug, session, principal))
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

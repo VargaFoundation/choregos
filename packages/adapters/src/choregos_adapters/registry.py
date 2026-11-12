@@ -343,7 +343,9 @@ def available(kind: ConnectorKind | str) -> list[str]:
 #: Types that stay themselves under `CHOREGOS_FAKES`: their fake is what they call, not the adapter. A
 #: plugin tracker (S43-07) under fakes talks to the in-memory server of the tracker profile
 #: (`FakePluginTrackerServer`, the transport the API injects), so the profile mapping is what runs.
-BUILT_UNDER_FAKES: frozenset[tuple[str, str]] = frozenset({("tracker", "plugin")})
+#: The Teams notifier (S63-25) stays itself too: under fakes it posts its real card to `FakeTeamsWebhook`,
+#: so the guarded transport and the egress allowlist are what run.
+BUILT_UNDER_FAKES: frozenset[tuple[str, str]] = frozenset({("tracker", "plugin"), ("notify", "teams")})
 
 
 def build(kind: ConnectorKind | str, type_name: str, config: dict[str, Any] | None = None) -> Any:

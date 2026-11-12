@@ -509,34 +509,46 @@ async def upgrade_plugin(
 async def notify_owners(
     session: AsyncSession, row: AssistantInstallation, version: str, proposed: list[str]
 ) -> int:
-    """Tells the owners, through the installation's `email` notifier (the one of its task deliveries), that an
-    upgrade left proposals waiting. Nothing configured, nothing sent: the proposals stay listed in the owners'
-    route. Returns the number of owners told; a failing channel never fails the upgrade."""
+    """Tells the owners that an upgrade left proposals waiting: each owner by the installation's `email`
+    notifier (the one of its task deliveries), and the installation's `teams` channel once, as one card.
+    Nothing configured, nothing sent: the proposals stay listed in the owners' route. Returns the number of
+    owners told by e-mail plus one when the Teams card went; a failing channel never fails the upgrade."""
     from choregos_core.domain import Message
 
-    from .task_delivery import notifier_for
+    from .egress import egress_scope_for_org
+    from .task_delivery import notifier_in
 
-    notifier = notifier_for(row, "email")
+    title = f"{row.slug}: {len(proposed)} knowledge update(s) to decide"
+    body = (
+        f"Version {version} of the plugin proposes changes to the knowledge of `{row.slug}`:\n"
+        + "\n".join(f"- {p}" for p in proposed)
+    )
+    context = {"installation": row.slug, "version": version}
+    told = 0
+    teams = None
+    try:
+        teams = await notifier_in(session, row, "teams")
+    except Exception as failure:  # a sealed URL that cannot be read must not undo the upgrade
+        log.warning("assistant.knowledge.notify_failed", installation=row.slug, error=str(failure)[:200])
+    if teams is not None:
+        try:
+            async with egress_scope_for_org(session, row.org_id, "api", "assistant.owner_notice"):
+                await teams.send("", Message(title=title, body=body, context=context))
+            told += 1
+        except Exception as failure:
+            log.warning("assistant.knowledge.notify_failed", installation=row.slug, error=str(failure)[:200])
+    notifier = await notifier_in(session, row, "email")
     if notifier is None or not row.owner_groups:
-        return 0
+        return told
     found = await session.execute(
         select(User)
         .join(Membership, Membership.user_id == User.id)
         .where(Membership.org_id == row.org_id, Membership.project_id.is_(None))
     )
     owners = sorted({u.email for u in found.scalars() if set(u.groups or []) & set(row.owner_groups)})
-    told = 0
     for email in owners:
         try:
-            await notifier.send(
-                email,
-                Message(
-                    title=f"{row.slug}: {len(proposed)} knowledge update(s) to decide",
-                    body=f"Version {version} of the plugin proposes changes to the knowledge of "
-                    f"`{row.slug}`:\n" + "\n".join(f"- {p}" for p in proposed),
-                    context={"installation": row.slug, "version": version},
-                ),
-            )
+            await notifier.send(email, Message(title=title, body=body, context=context))
             told += 1
         except Exception as failure:  # a channel that fails must not undo the upgrade
             log.warning("assistant.knowledge.notify_failed", installation=row.slug, error=str(failure)[:200])

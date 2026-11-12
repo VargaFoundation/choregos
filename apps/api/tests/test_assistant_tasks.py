@@ -61,7 +61,7 @@ TASK_BLOCK = """tasks:
     triggers: [{ kind: on_demand }, { kind: schedule, cron: "30 7 * * 1-5", user_timezone: true }]
     delegation: none
     needs: [news]
-    deliver: [inbox, email, webhook]
+    deliver: [inbox, email, webhook, teams]
   - name: delegated_brief
     workflow: workflows/morning-brief.yaml
     triggers: [{ kind: schedule, cron: "30 7 * * 1-5", user_timezone: true }, { kind: on_demand }]

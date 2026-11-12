@@ -4250,6 +4250,17 @@ export type DelegationList = {
   items: Array<Delegation>;
 };
 
+export type TeamsDeliveryPut = {
+  /** The credential itself: an https URL, sealed and never shown again. */
+  webhook_url: string;
+};
+
+export type TeamsDelivery = {
+  configured: boolean;
+  version?: number | null;
+  updated_at?: string | null;
+};
+
 export type WebhookSecretRequest = {
   /** Make a new key instead of refusing a second showing. */
   rotate?: boolean;
@@ -5317,6 +5328,7 @@ export interface Operations {
   deleteOrgConnector: { method: "DELETE"; path: "/orgs/{org}/connectors/{name}"; body: never; response: void };
   deleteOutboundProxy: { method: "DELETE"; path: "/orgs/{org}/outbound-proxy"; body: never; response: void };
   deleteProject: { method: "DELETE"; path: "/projects/{id}"; body: never; response: void };
+  deleteTeamsDelivery: { method: "DELETE"; path: "/orgs/{org}/assistants/{slug}/delivery/teams"; body: never; response: void };
   deleteTrackerIdentity: { method: "DELETE"; path: "/orgs/{org}/members/{user_id}/tracker-identities/{tracker}"; body: never; response: void };
   departTrain: { method: "POST"; path: "/projects/{id}/trains/{env}/depart"; body: never; response: void };
   describeBuiltinAgent: { method: "GET"; path: "/projects/{id}/builtin-agent"; body: never; response: BuiltinAgent };
@@ -5508,6 +5520,7 @@ export interface Operations {
   getSkillSources: { method: "GET"; path: "/orgs/{org}/skill-sources"; body: never; response: SkillSources };
   getSkillVersion: { method: "GET"; path: "/orgs/{org}/skills/{slug}/versions/{version}"; body: never; response: SkillVersion };
   getStepCalibration: { method: "GET"; path: "/projects/{id}/workflows/{name}/steps/{step}/calibration"; body: never; response: StepCalibration };
+  getTeamsDelivery: { method: "GET"; path: "/orgs/{org}/assistants/{slug}/delivery/teams"; body: never; response: TeamsDelivery };
   getTemplate: { method: "GET"; path: "/templates/{name}"; body: never; response: TemplateDetail };
   getTrainStatus: { method: "GET"; path: "/projects/{id}/trains/{env}"; body: never; response: TrainStatus };
   getWorkItem: { method: "GET"; path: "/work-items/{id}"; body: never; response: WorkItem };
@@ -5671,6 +5684,7 @@ export interface Operations {
   putProjectModels: { method: "PUT"; path: "/projects/{id}/models"; body: ProjectModels; response: ProjectModels };
   putRunOutput: { method: "PUT"; path: "/internal/runs/{id}/outputs/{name}"; body: void; response: Artifact };
   putSkillSources: { method: "PUT"; path: "/orgs/{org}/skill-sources"; body: SkillSources; response: SkillSources };
+  putTeamsDelivery: { method: "PUT"; path: "/orgs/{org}/assistants/{slug}/delivery/teams"; body: TeamsDeliveryPut; response: TeamsDelivery };
   putWorkflow: { method: "PUT"; path: "/projects/{id}/workflow"; body: WorkflowPut; response: WorkflowDef };
   putWorkflowRouting: { method: "PUT"; path: "/projects/{id}/workflow-routing"; body: WorkflowRouting; response: WorkflowRouting };
   readyz: { method: "GET"; path: "/readyz"; body: never; response: void };

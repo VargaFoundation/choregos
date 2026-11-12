@@ -306,9 +306,19 @@ now with `POST …/run`. Nothing changes in the Temporal workflows: the schedule
 - **Delivery**: the run's artifacts are listed by `GET /me/inbox` (always). `email` and `teams` go through a
   notifier, `webhook` is an HMAC-signed POST (`X-Choregos-Signature: t=…,v1=…`, as the A2A push notifications)
   to the installation's `policy_overrides.delivery.webhook.url`; each is sent once per artifact revision and a
-  channel nobody configured is recorded as `not_configured` in the work item. No Teams adapter ships: the
-  `teams` channel works through whichever notifier the installation's `policy_overrides.delivery.teams`
-  (`{type, config}`) names. The webhook's signing key is shown ONCE to whoever manages the installation:
+  channel nobody configured is recorded as `not_configured` in the work item. `email` goes through whichever
+  notifier `policy_overrides.delivery.email` (`{type, config}`) names. `teams` (S63-25) posts an Adaptive Card to a
+  Microsoft Teams incoming webhook or Workflows URL: the manager seals the URL with
+  `PUT /orgs/{org}/assistants/{slug}/delivery/teams` `{ "webhook_url": … }` (`assistant:manage`; `https` without
+  credentials, else 422), which stores it in the organisation's secret store as
+  `assistant/<slug>/delivery/teams` and points `delivery.teams` at it (`{type: teams, secret_refs}`); `GET` says
+  whether it is configured and `DELETE` forgets it. The URL is the credential: it is never returned, never in the
+  audit log, a log line or an error, and the call is made under the organisation's egress allowlist, so an
+  administrator opens the URL's host in `/admin/egress` first (until then the card is not sent and the ledger says
+  `egress refused`, retried at the next pass). The card carries the task, the artifact and the work item; the same
+  channel receives the owners' notice of a plugin upgrade that left knowledge proposals (one card for the
+  installation, besides the e-mail to each owner). Under `CHOREGOS_FAKES=1` the notifier posts its real card to
+  `FakeTeamsWebhook`. The webhook's signing key is shown ONCE to whoever manages the installation:
   `POST /orgs/{org}/assistants/{slug}/webhook-secret` (`assistant:manage`) returns it, a second call is 409
   unless `{"rotate": true}` makes a new generation (the console's installation page has the two buttons); each
   showing is audited, never the key.
