@@ -5068,3 +5068,28 @@ stories:
     size: S
     depends_on: [S68-08, S68-10, S68-11]
     notes: "Install from the instance, Open VSX or the Marketplace; sign in; the views; what never runs locally; no telemetry."
+  # ───────────── S66 — an assistant reads the organisation's knowledge bases by reference (ADR 0159) ─────────────
+  - id: S66-10
+    title: "docs(adr): ADR 0159, an assistant's knowledge need bound to the organisation's bases by reference"
+    stream: S66
+    sprint: 1
+    priority: 1
+    size: S
+    depends_on: []
+    notes: "The product owner's amendment of 2026-11-12 to ADR 0138; these stories."
+  - id: S66-11
+    title: "contract(schemas,openapi): a knowledge need bound at install (ADR 0159)"
+    stream: S66
+    sprint: 1
+    priority: 1
+    size: S
+    depends_on: [S66-10]
+    notes: "assistant.schema.json accepts `bind` instead of `seed` (exactly one, `serving_mode` and `upstream` a seed's only) and `choregos plugin validate` refuses each mix with its JSON path; the install body, the binding route, the readiness kind `knowledge_unbound`, the installation's `knowledge_bindings` and the plugin assistant's `knowledge_needs`; make contracts; the route has its console client."
+  - id: S66-12
+    title: "feat(api,web): bind an assistant's knowledge need to the organisation's bases (ADR 0159)"
+    stream: S66
+    sprint: 2
+    priority: 1
+    size: M
+    depends_on: [S66-11]
+    notes: "A required unbound need is incomplete and binding it makes it ready; a base the binder cannot read and a missing one are the same 422; nothing is copied; the conversation searches the bound base and cites it by its slug; a person outside the base's readers gets nothing of it and the next turn follows a grant; an upgrade that drops, adds or renames a bound need follows S63-22; the console's installation page binds it."
