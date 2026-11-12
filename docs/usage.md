@@ -534,18 +534,27 @@ declare on the merge transition the guarantees that must hold on what is merged.
     to: integrated
     by: ci
     does: merge_pr
-    gates: [ci_green, no_secrets, { name: diff_size_max, params: { files: 60 } }]
+    gates:
+      - ci_green
+      - no_secrets
+      - { name: diff_size_max, params: { files: 60 } }
+      - { name: scope_respected, params: { over: work_item } }
     timeout_hours: 48
     on_fail: { to: in_progress, max_attempts: 3, escalate_to: needs_human }
 ```
 
 `no_secrets`, `diff_size_max`, `docs_updated`, `markdown_sections` and `adr_number_free` read the work
 item's whole diff at that commit, whichever step ran last: use the parameters of the step that first
-asked them (a size limit then counts what the later steps added). `scope_respected` is different: it
-judges what a run wrote since the commit where it began, and on a merge transition that run is the
-last step's, so it is not a guarantee on what is merged and has no place there. A refusal follows the
-transition's `on_fail`, once the pull request's pending checks have answered. The validator warns
-about a transition that merges and reads no diff (`workflow.no_diff_gate_at_merge`).
+asked them (a size limit then counts what the later steps added). `scope_respected` says which change
+it reads. As a step declares it, it judges what that step's run wrote; on a transition the platform
+takes there is no such run, and the validator warns (`workflow.run_scope_on_system_step`). With
+`over: work_item` it judges the whole diff and no run: every file under a path the policy forbids
+(`scope.deny_paths`) is refused, and every file outside `paths` when you give them
+(`params: { over: work_item, paths: ["docs/adr/**"] }`). It does not read the work item's own allowed
+paths — a step sets them and a later one may narrow them — so without `paths` only the forbidden ones
+are held: name in `paths` what the workflow may merge, or forbid in the policy what it may not. A
+refusal follows the transition's `on_fail`, once the pull request's pending checks have answered. The
+validator warns about a transition that merges and reads no diff (`workflow.no_diff_gate_at_merge`).
 
 **A pull request can be opened as a draft.** By default `does: open_pr` opens the pull request ready
 for review. `pull_request: { draft: true }` on the same transition opens it as a draft:
@@ -2680,7 +2689,10 @@ reverts one a shell made anyway, and `scope_respected` fails on a change under a
 allowed path is declared. No scope change grants one. The step's own files, `.choregos/result.json` and
 `.choregos/outputs/`, stay writable under a denied `.choregos/**`. The default list is
 `.choregos/**`, `.github/workflows/**` and `charts/**`: a project whose agents change its charts lists
-its own.
+its own. On a transition the platform takes, `scope_respected` with `over: work_item` holds the same
+paths on the work item's whole diff ([ADR 0152](adr/0152-what-is-merged-is-what-was-judged.md)): the
+shipped workflows declare it on their merge transition, so a file under a denied path is not merged
+whoever committed it, a person on the pull request included.
 
 **An organisation sets a ceiling that every project policy may only tighten**
 (`PUT /orgs/{org}/policy-ceiling`, `org_admin`; **policy ceiling** on the admin page):

@@ -1,8 +1,9 @@
 """The workflows the repository ships that merge a pull request, and a way to walk any of them.
 
 Every one is played the same way: the fake executor answers each agent step with what its transition
-declares, a person approves whatever waits for one, and the pull request is green and approved as soon
-as it is opened. What the branch holds is scripted on `FakeScm`, whose branches have commits.
+declares — and with the commit where its run began, as the runner does —, a person approves whatever
+waits for one, and the pull request is green and approved as soon as it is opened. What the branch
+holds is scripted on `FakeScm`, whose branches have commits.
 """
 
 from __future__ import annotations
@@ -55,6 +56,9 @@ CODE = [
 RECORD = [("docs/adr/0001-credits.md", 17, 0, ADR)]
 #: The file of a commit nobody judged: inside the allowed paths, and carrying a secret.
 STRAY = ("src/orders/settings.py", 1, 0, f'@@ -0,0 +1 @@\n+ACCESS_KEY = "{SECRET}"')
+#: The file of another: under a path the fixture project's policy forbids (the `solo` preset's
+#: `scope.deny_paths`), whatever the allowed paths say.
+DENIED = (".github/workflows/release.yml", 12, 0, "@@ -0,0 +1,12 @@\n+on: push")
 
 #: What an agent answers for the outputs the gates read; any other declared output gets a sentence.
 ANSWERS: dict[str, Any] = {"size": "M", "risk": "low", "verdict": "approve", "allowed_paths": ALLOWED}
@@ -82,6 +86,38 @@ class Shipped:
     @property
     def branch(self) -> list[tuple[Any, ...]]:
         return list(RECORD if self.writes_a_record else CODE)
+
+    @property
+    def opening(self) -> Any:
+        """The transition that opens the pull request."""
+        from choregos_contracts.workflow import transition_effect
+
+        return next(t for t in self.workflow.transitions if transition_effect(t) == "open_pr")
+
+    @property
+    def scoped_steps(self) -> list[Any]:
+        """The steps whose scope is judged on their own run's writes, in the order they are written."""
+        from choregos_core.gates import judged_on_a_run
+
+        return [
+            transition
+            for transition in self.workflow.transitions
+            if any(judged_on_a_run(gate.name, gate.params) for gate in transition.gates)
+        ]
+
+    @property
+    def scope_guard(self) -> Any:
+        """The first transition, from the opening of the pull request on, that reads the scope over the
+        work item's whole diff: the merge, or the opening itself where the workflow asks it there."""
+        from choregos_core.gates import OVER_WORK_ITEM
+
+        def whole(transition: Any) -> bool:
+            return any(
+                g.name == "scope_respected" and g.params.get("over") == OVER_WORK_ITEM
+                for g in transition.gates
+            )
+
+        return self.opening if whole(self.opening) else self.merge
 
 
 def _merge_of(workflow: Any) -> Any | None:
@@ -132,13 +168,16 @@ async def pin(setup: Fixture, shipped: Shipped) -> None:
     setup.adapters.scm.set_diff(REPOSITORY, "main", BRANCH, shipped.branch)
 
 
-def any_agent(stage_input: Any) -> Any:
-    """What any agent step answers: each output its transition declares, and an approving verdict."""
+def answer(stage_input: Any, began_at: str) -> Any:
+    """What any agent step answers: each output its transition declares, an approving verdict, and —
+    as the runner reports it — the commit where its run began."""
     transition = stage_input.transition
     outputs = {name: ANSWERS.get(name, f"{name} of {transition.id}") for name in transition.outputs}
-    return stage_result(
+    result = stage_result(
         f"{transition.id} done", outputs={"verdict": "approve", **outputs}, artifacts={"branch": BRANCH}
     )
+    result.artifacts.reports["start_commit"] = began_at
+    return result
 
 
 async def work_item(setup: Fixture) -> Any:
@@ -228,26 +267,41 @@ async def walked(
     shipped: Shipped,
     *,
     lands: list[tuple[Any, ...]] | None = None,
+    after_step: str | None = None,
     green: bool = True,
 ) -> AsyncIterator[Walk]:
     """The work item walked through `shipped` by a real interpreter, up to wherever it rests.
 
     The pull request is green and approved the moment it is opened (`green`). With `lands`, a commit
     nobody judged lands on the branch right then — after the gates of every step that wrote, before
-    the merge transition is entered — and the branch holds `lands` from there on."""
+    the merge transition is entered — and the branch holds `lands` from there on. With `after_step`
+    it lands earlier: once that step's gates have ruled, before the next agent step begins, so that
+    every later run starts from a branch that already holds it."""
     from choregos_api.temporal import interpreter_id
     from choregos_orchestrator.activities.scm import open_pull_request
     from temporalio import activity
 
+    scm = setup.adapters.scm
     walk = Walk(handle=None)
+    played: list[str] = []
+
+    def land() -> None:
+        if lands is not None and not walk.landed:
+            walk.landed.append(scm.push(REPOSITORY, BRANCH, lands))
+
+    def any_agent(stage_input: Any) -> Any:
+        if after_step is not None and played and played[-1] == after_step:
+            land()
+        played.append(stage_input.transition.id)
+        return answer(stage_input, scm.heads[(REPOSITORY, BRANCH)])
 
     @activity.defn(name="open_pull_request")
     async def opened_then_a_commit_lands(payload: dict[str, Any]) -> dict[str, Any]:
         opened = await open_pull_request(payload)
         if green:
             approve_the_pull_request(setup)
-        if lands is not None and not walk.landed:
-            walk.landed.append(setup.adapters.scm.push(REPOSITORY, BRANCH, lands))
+        if after_step is None:
+            land()
         return opened
 
     await pin(setup, shipped)

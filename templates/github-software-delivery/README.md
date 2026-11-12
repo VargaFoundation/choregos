@@ -73,9 +73,13 @@ diff: `no_secrets` in all three, the size limit of the implementation in `dev-si
 `dev-complex` (it now counts what the later steps added), `docs_updated` in `dev-complex`, the
 record's sections and its `accepted` status in `study`. A commit that lands on the branch before the
 merge is read by them; a refusal goes where a red CI goes (the CI fixer, or the architect for a
-study), then to a person. The allowed paths are checked on what each agent step wrote, not at the
-merge: keep closed on GitHub the paths that must stay so (rulesets, code owners). A project born from
-an earlier version keeps it until the file is published again (readiness item `workflow-template`).
+study), then to a person. The scope is read there over the whole change (`scope_respected` with
+`over: work_item`): no file under a path the policy forbids (`.choregos/`, `.github/workflows/`,
+`deploy/`) is merged, whichever step or person wrote it, and a study merges nothing outside
+`docs/adr/`. A work item's allowed paths are still checked on what each agent step wrote, not at the
+merge: forbid in the policy, or close on GitHub (rulesets, code owners), the other paths that must
+stay closed. A project born from an earlier version keeps it until the file is published again
+(readiness item `workflow-template`).
 
 ## Before the first work item
 

@@ -60,8 +60,10 @@ state named by `escalate_to`, where a person takes over.
 The platform merges the commit that the gates of the merging transition judged, and no other. A gate
 on an earlier step judged the branch as it stood then: to have `no_secrets`, `diff_size_max` or
 `docs_updated` hold on what is merged, declare them on the transition that merges as well. The
-workflows of the library do. `scope_respected` checks what one agent step wrote, so it belongs on the
-steps that write, not on the merge.
+workflows of the library do. `scope_respected` checks what one agent step wrote: on the transition
+that merges, write `{ name: scope_respected, params: { over: work_item } }`, which checks the whole
+change instead — nothing under a path the project's policy forbids, and nothing outside `paths` if
+you add them.
 
 ## Adopt a workflow from the library
 
@@ -149,7 +151,7 @@ transitions:
     to: merged
     by: platform
     does: merge_pr
-    gates: [ci_green, no_secrets]
+    gates: [ci_green, no_secrets, { name: scope_respected, params: { over: work_item } }]
     on_fail: { to: approved, max_attempts: 2, escalate_to: needs_human }
   - id: t-abandon
     from: needs_human

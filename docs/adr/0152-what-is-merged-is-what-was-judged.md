@@ -1,10 +1,12 @@
 # 0152 — What is merged is what was judged
 
-- **Status**: proposed, 2026-11-11; S65-05 implements decisions 1 to 8, S65-07 decisions 9 to 12
+- **Status**: proposed, 2026-11-11; S65-05 implements decisions 1 to 8, S65-07 decisions 9 to 13
 - **Concerns**: `activities/gates.py` (`evaluate_gates`), `activities/scm.py` (`enqueue_merge`), the
   `ScmAdapter` protocol (`head_of`, `enqueue_merge`, `capabilities`), the GitHub and GitLab SCM adapters,
   `FakeScm`; the merge transition of every shipped workflow that merges (`choregos_core/dsl/templates/`,
-  `templates/*/workflows/`), the validator's warning `workflow.no_diff_gate_at_merge`; builds on
+  `templates/*/workflows/`), the `over` parameter of `scope_respected`, the validator's
+  `workflow.no_diff_gate_at_merge`, `workflow.run_scope_on_system_step` and `gate.scope_over_unknown`;
+  builds on
   [ADR 0008](0008-idempotence-and-run-id.md), [ADR 0031](0031-several-workflows-per-project.md),
   [ADR 0101](0101-governance-the-platform-does-not-enforce-is-refused.md) and
   [ADR 0124](0124-a-project-may-hold-several-repositories-a-work-item-works-on-one.md)
@@ -69,25 +71,58 @@ guarantees do not run by themselves.
    once it was started again or carried its history over — the verdict is the same, and it is about
    the commit the merge names. Templates change; the DSL and the interpreter do not.
 10. **`no_secrets` is on every shipped merge transition**, the two decision-record workflows
-    included, though they asked it of no step: their writing steps are held to `docs/adr/**` by
-    `scope_respected`, which decision 11 does not carry to the merge. A merge is where the platform
-    writes to the default branch; `no_secrets` takes no parameter and assumes nothing about the trade,
-    so it is the one guarantee every shipped merge can hold, and no other is added that a workflow did
-    not ask for.
-11. **`scope_respected` is not declared at the merge.** It is a guarantee about a run (S22-11): it
-    judges what that run wrote since the commit where it began, against the paths that run may write
-    (`_run_diff`, `Run.allowed_paths`). At a merge transition the run is the last step's. A file that
-    landed before that step began is not among its writes; a refusal sends the work item back to a
-    step whose run begins later, and the next verdict no longer reads the file; without a run, the
-    same branch is judged on its whole diff. A verdict that depends on which step ran last, and on
-    whether the interpreter still knows it, is not a guarantee on what is merged, and declaring it
-    there would say that it is. The core names these guarantees (`RUN_SCOPED_GATES`). Holding the
-    scope to the merge needs the guarantee to read the work item's diff at a `system` transition,
-    which is a change to what a gate means: its own decision.
+    included, though they asked it of no step. A merge is where the platform writes to the default
+    branch; `no_secrets` takes no parameter and assumes nothing about the trade, so it is the one
+    guarantee every shipped merge can hold, and no other is added that a workflow did not ask for.
+11. **`scope_respected`, as the steps declare it, is a guarantee about a run, and no merge declares
+    it that way.** It judges what that run wrote since the commit where it began (S22-11), against
+    the paths that run may write (`_run_diff`, `Run.allowed_paths`). At a merge transition the run is
+    the last step's. A file that landed before that step began is not among its writes; a refusal
+    sends the work item back to a step whose run begins later, and the next verdict no longer reads
+    the file; without a run, the same branch is judged on its whole diff. A verdict that depends on
+    which step ran last, and on whether the interpreter still knows it, is not a guarantee on what is
+    merged, and declaring it there would say that it is. The core names these guarantees
+    (`RUN_SCOPED_GATES`). Decision 13 gives the scope the reading a merge can hold.
 12. **A workflow written by an organisation holds what it declares.** The validator warns about a
     transition that merges and carries no guarantee read on the whole diff
-    (`workflow.no_diff_gate_at_merge`; a run-scoped one does not count). It is a warning: a workflow
+    (`workflow.no_diff_gate_at_merge`; one judged on a run does not count). It is a warning: a workflow
     may rely on the forge's required checks alone, and says so by leaving it.
+13. **`scope_respected` has a second reading, over the work item.** With `over: work_item`, its only
+    value, the guarantee judges the work item's whole diff at the judged commit — the diff
+    `no_secrets` reads at that evaluation — and nothing of a run: no start commit, no run's paths,
+    whether the evaluation was handed a run or not. So the verdict of a transition the platform
+    takes no longer changes with what the interpreter remembers. Without `over` the guarantee is
+    what it was. Read over the work item, it refuses:
+    - any changed file under a path the policy forbids (`scope.deny_paths`), always;
+    - any changed file outside `paths`, when the declaration gives them.
+
+    It does **not** read the work item's own allowed paths. They are not a fact the platform owns:
+    a step's result sets them (`outputs.allowed_paths`) and a granted scope change extends them. They
+    can therefore be narrower than what earlier steps legitimately wrote — in `governed-delivery` the
+    architect's decision record is written, and approved by people, before the specification sets
+    them — and they are no more certain than the step that last set them. Read at the merge they
+    would refuse real work, or hold less than they seem to. Without `paths`, only the forbidden paths
+    are held, and the verdict says so. A diff that cannot be read refuses, as for every diff
+    guarantee.
+
+    The fifteen shipped workflows declare it on their merge transition. A workflow whose steps are
+    all held to the same `paths` declares them there: the two decision-record workflows merge nothing
+    outside `docs/adr/**`. `advanced` asked a scope of the transition that opens its pull request:
+    the platform takes it, so it reads the whole diff there, and what the release notes step wrote
+    is now judged on that step. No workflow takes another version: nothing was published between
+    decision 9 and this one.
+
+    The validator follows the declaration, not the name: such a declaration counts as a guarantee
+    held on the diff (decision 12); an `over` that is not `work_item` is an error
+    (`gate.scope_over_unknown`); and a `scope_respected` judged on a run, on a transition a `system`
+    actor takes, is warned about (`workflow.run_scope_on_system_step`) — the run is the last step's or
+    none, so the verdict is about neither the transition nor the work item.
+
+    `check_scope_violations`, the activity that compares the whole diff with the work item's allowed
+    paths and the forbidden ones, has no caller in any workflow and none in the replayed histories.
+    Its forbidden-path half is what the guarantee now does; its allowed-path half is the reading this
+    decision declines. It is kept because an activity is registered under a name a running history
+    could carry: removing one is its own change.
 
 ## Alternatives rejected
 
@@ -105,6 +140,16 @@ guarantees do not run by themselves.
   again where the merge transition carries no diff guarantee.
 - **Running an earlier step's diff guarantees again at the merge transition.** Gates a transition does
   not declare would decide it: a change to what the DSL means, to be decided on its own.
+- **Reading the work item's allowed paths at the merge**, where the declaration gives no `paths`. It
+  is what a reader expects of "the scope", and it is what the run's reading falls back to. But the
+  platform does not own them (decision 13): a merge held to them refuses a governed delivery for the
+  record its architects approved. An allow-list for a merge has to be the platform's first.
+- **A new guarantee for the whole-diff scope**, under another name. Two names for one promise, and
+  every existing workflow would have had to learn the second; a parameter keeps one guarantee and
+  makes the declaration say which change it reads.
+- **Making every `scope_respected` on a `system` transition read the whole diff.** It changes what a
+  workflow already published means without a word in its document; the warning asks its author
+  instead.
 - **A direct merge only, never auto-merge.** A repository that requires a merge queue could no longer
   be merged.
 
@@ -117,13 +162,25 @@ guarantees do not run by themselves.
   entered, and its own gates are then the ones that judge the new head. The shipped workflows declare
   theirs there (decision 9); a workflow an organisation wrote holds them only if it does the same, and
   the validator says when it declares none.
-- **The scope is the exception.** In every workflow, shipped or not, `scope_respected` holds on what
-  the judged run wrote and no further: a commit that lands between two steps, or before the merge, is
-  read by `no_secrets` and the other whole-diff guarantees of the merge transition, not by the scope.
-  The policy's forbidden paths (`scope.deny_paths`) are read by the same guarantee, on the same writes.
-  A repository that must keep paths closed to such a commit relies on its forge (protected paths, code
-  owners, required reviews) until the scope is held to the merge, which decision 11 leaves to a
-  decision of its own.
+- **The scope is held to the merge as far as the platform owns it.** What a shipped workflow merges
+  holds no file under a path the policy forbids, whichever step wrote it and whenever it landed, and
+  a decision record merges nothing but the record. A file that lands between two steps is read at the
+  merge even though every later run starts from a branch that already holds it.
+- **What remains is the work item's allowed paths.** They are held on what each run wrote, as before,
+  and no further: a file that lands between two steps or before the merge, outside them and outside
+  the forbidden paths, is merged if no other guarantee refuses it. Holding them to the merge needs
+  them to be the platform's — who may set them, and whether a later step may narrow or widen them —
+  which is a decision of its own. Until then a repository that must keep other paths closed forbids
+  them in its policy, or relies on its forge (protected paths, code owners, required reviews).
+- **A forbidden path is forbidden to the work item, whoever writes.** A person's commit on the pull
+  request under such a path is refused by the platform's merge like any other; the person merges it
+  by hand, or elsewhere.
+- **A decision record that carries anything else stops at the merge.** A file an earlier step pushed
+  outside `docs/adr/**` — no step's scope read it, the framing and research steps declare none — used
+  to be merged with the record. It now sends the study back to the architect, who cannot take it out
+  under its own scope, and then to a person.
+- The `choregos/scope` check-run of a merge transition marks the commit it read, with the files it
+  refused.
 - **A size limit now counts everything that is merged.** `diff_size_max` on the merge transition reads
   the work item's whole diff with the bound the implementation step was given: what later steps add
   (documentation, a review's changes, a CI fix) counts against it, where it used to be read once, after

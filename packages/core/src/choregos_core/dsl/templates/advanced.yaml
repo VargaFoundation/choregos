@@ -107,12 +107,15 @@ transitions:
     to: notes_written
     by: scribe
     outputs: [release_notes_markdown]
+    gates: [scope_respected]
     on_fail: { to: agent_review, max_attempts: 2, escalate_to: needs_human }
+  # The platform opens the pull request: no run is this transition's own, so its scope is read on the
+  # work item's whole diff (`over: work_item`); what the release notes step wrote is judged on that step.
   - id: t-open-pr
     from: notes_written
     to: pr_open
     by: ci
-    gates: [evidence_present, scope_respected]
+    gates: [evidence_present, { name: scope_respected, params: { over: work_item } }]
     on_fail: { to: notes_written, max_attempts: 2, escalate_to: needs_human }
     does: open_pr
   # The repairer starts from the state where `t-merge` sends a red CI: from `pr_open`, it was
@@ -125,11 +128,13 @@ transitions:
     on_fail: { to: fixing_ci, max_attempts: 2, escalate_to: needs_human }
   # Held to the merge (ADR 0152): the merge names the commit its own gates judged, so what the
   # earlier steps were asked on the diff is asked again here, on the commit that is merged.
+  # The scope is read there on the work item's whole diff (`over: work_item`), whichever step ran
+  # last: no file under a path the policy forbids.
   - id: t-merge
     from: pr_open
     to: merged
     by: ci
-    gates: [ci_green, review_approved, scans_ok, no_secrets, { name: diff_size_max, params: { files: 60, lines: 3000 } }]
+    gates: [ci_green, review_approved, scans_ok, no_secrets, { name: diff_size_max, params: { files: 60, lines: 3000 } }, { name: scope_respected, params: { over: work_item } }]
     timeout_hours: 48
     on_fail: { to: fixing_ci, max_attempts: 3, escalate_to: needs_human }
     does: merge_pr
