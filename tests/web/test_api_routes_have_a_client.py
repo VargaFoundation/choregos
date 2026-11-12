@@ -101,10 +101,7 @@ NOT_CALLED_BY_A_CLIENT: dict[str, str] = {
 }
 
 #: Paths whose console screen is a story still to come: that story removes its entries.
-NO_CLIENT_YET: dict[str, str] = {
-    "/orgs/{org}/assistants/{slug}/stop": "S64-09d, the assistant page's Stop (ADR 0142 §4 bis)",
-    "/orgs/{org}/assistants/{slug}/resume": "S64-09d, the assistant page's Resume (ADR 0142 §4 bis)",
-}
+NO_CLIENT_YET: dict[str, str] = {}
 
 #: Paths the CLI calls and the console must not: an operator's command, not a screen.
 CLI_ONLY: dict[str, str] = {

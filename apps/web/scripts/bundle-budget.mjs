@@ -55,7 +55,10 @@ const CHUNKS = join(process.cwd(), ".next", "static", "chunks");
 // of main's 2412 kB, with no new dependency.
 // 2026-11-12 (S60-07b): 2450 -> 2475 kB. The Composition card now resolves the model, groups the tools by origin and
 // links knowledge, skills and memories (a few kB of component and two small libs): 2456 kB, no new dependency.
-const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 2475);
+// 2026-11-12 (S64-09d): 2475 -> 2500 kB. The assistant's Stop, Resume and Tokens and cost panel on its installation
+// page, and a conversation turn's assistant and owner on the Activity screen, measured 2451 kB on a main at 2426 kB
+// (about 25 kB), on top of S60-07b's 2456 kB; no new dependency.
+const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 2500);
 const CHUNK_MAX_KB = Number(process.env.BUNDLE_CHUNK_MAX_KB ?? 600);
 
 function* files(dir) {

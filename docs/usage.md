@@ -3626,7 +3626,8 @@ Every stop asks **why** (1 to 500 characters), and the reason is audited with wh
   on its own. Stopping an agent that is already suspended stops what is still running and is audited
   again. The turns in flight of its conversations, whoever's they are, are cancelled as for an
   assistant (below); the conversations themselves are not closed.
-- **Stop an assistant** (`POST /orgs/{org}/assistants/{slug}/stop` with `{"reason": "..."}`;
+- **Stop an assistant** (*Stop the assistant…* on its installation page, or
+  `POST /orgs/{org}/assistants/{slug}/stop` with `{"reason": "..."}`;
   `assistant:manage`: the organisation's administrator and the assistant's owner groups). The assistant
   is marked stopped (who, when, why: `stopped` on the assistant) and reads `suspended` until it is
   resumed, whatever its readiness says, so no new turn starts. Every turn its conversations are taking
@@ -3635,7 +3636,7 @@ Every stop asks **why** (1 to 500 characters), and the reason is audited with wh
   read them meanwhile and continue them once the assistant is resumed. The answer counts the turns
   cancelled (`turns_cancelled`). **Resume** with `POST /orgs/{org}/assistants/{slug}/resume`: the stop
   is cleared, the status is derived again (`ready` when nothing is missing), and nothing stopped
-  restarts on its own; resuming an assistant that is not stopped answers `409`. Both are audited
+  restarts on its own (the page shows who stopped it, when and why, and its **Resume** button); resuming an assistant that is not stopped answers `409`. Both are audited
   (`assistant.stop` with the reason, `assistant.resume`). Stopping a stopped assistant keeps the first
   stop, cancels what still runs and is audited again.
 
@@ -3645,6 +3646,10 @@ curl -X POST "$API/orgs/acme/assistants/coach/stop" -d '{"reason": "quotes a sta
 curl -X POST "$API/orgs/acme/assistants/coach/resume"    # the assistant, `ready` again
 ```
 
+A conversation turn on the Activity screen says its assistant and the person whose conversation it is;
+it has no Stop of its own: its assistant's stop (or its agent's) is the stop. A click on the assistant,
+or `/activity?assistant=<installation id>`, keeps only that assistant's turns.
+
 ### Tokens, and what fills the context
 
 Spend is read in **tokens** as well as money
@@ -3653,8 +3658,9 @@ the project's overview, on a workflow's *Tokens and cost* tab and on an agent's 
 project): its totals give the input tokens, the part of them read from the model's cache, and the output
 tokens, next to the cost; one grouping at a time (by model, stage, agent, workflow or run), in money or in
 tokens, with the CSV of exactly what is shown. The organisation's **Spend** page (`/costs`) has the same
-*Measure* switch for each breakdown, and adds *Top runs*; tool calls stay in money, as they spend no
-model token.
+*Measure* switch for each breakdown, and adds *Top runs* and *Top assistants*; tool calls stay in money,
+as they spend no model token. An assistant's installation page has the same panel, narrowed to the
+assistant (`assistant=<installation id>`: its conversations' turns and its tasks), by model or agent.
 
 The panels read the cost report with a filter: `agent` (its slug), `workflow` (its name) and `work_item`
 narrow it, combined with each other and with `kind`, `since` and `until`; `group_by=run` names each run by

@@ -1284,7 +1284,7 @@ export const api = {
 
   costs: (id: string, groupBy = "day", filtre: CostFilter = {}) =>
     request<CostReport>(`/projects/${qualify(id)}/costs${query({ group_by: groupBy, ...compact(filtre) })}`),
-  /** The organisation's spend, in any grouping (S29-02): `since`, `until` (YYYY-MM-DD), `kind`, `agent`, `workflow` and `work_item` filter it. */
+  /** The organisation's spend, in any grouping (S29-02): `since`, `until` (YYYY-MM-DD), `kind`, `agent`, `workflow`, `work_item` and `assistant` filter it. */
   orgCosts: (org: string, groupBy = "day", filtre: CostFilter = {}) =>
     request<CostReport>(`/orgs/${org}/costs${query({ group_by: groupBy, ...compact(filtre) })}`),
   /** The budgets that crossed 80 or 100 % (S29-04): the inbox lists the open ones. */
@@ -1344,8 +1344,8 @@ export type ActivityFilter = {
 
 /**
  * What a spend report is narrowed to (ADR 0141 §1): a period, a kind of line, and one agent (its slug),
- * one workflow (its name) or one work item (its id), combinable. The same filter goes to the JSON
- * report and to its CSV.
+ * one workflow (its name), one work item (its id) or one assistant installation (its id), combinable.
+ * The same filter goes to the JSON report and to its CSV.
  */
 export type CostFilter = {
   since?: string;
@@ -1354,6 +1354,7 @@ export type CostFilter = {
   agent?: string;
   workflow?: string;
   work_item?: string;
+  assistant?: string;
 };
 
 function compact(filtre: Record<string, string | undefined>): Record<string, string> {

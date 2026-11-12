@@ -144,7 +144,7 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
       </Card>
 
       {/* What the project spent, in tokens as in money, by model, agent, workflow and run (S64-07). */}
-      <TokensAndCostPanel project={slug} groups={["model", "agent", "workflow", "run"]} />
+      <TokensAndCostPanel project={slug} groups={["model", "agent", "workflow", "run", "assistant"]} />
 
       <Card eyebrow="Delivery" title="DORA">
         {dora.data === undefined ? (
