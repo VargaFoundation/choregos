@@ -3609,12 +3609,15 @@ model token.
 
 The panels read the cost report with a filter: `agent` (its slug), `workflow` (its name) and `work_item`
 narrow it, combined with each other and with `kind`, `since` and `until`; `group_by=run` names each run by
-its work item's key and stage (`PAY-12 · review #2` for a second attempt). The report's `total` carries
+its work item's key and stage (`PAY-12 · review #2` for a second attempt). `assistant` (an assistant
+installation's id) narrows it to that assistant's conversation turns and tasks, and `group_by=assistant`
+names each installation by its slug, `—` for what no assistant spent. The report's `total` carries
 `tokens_in`, `tokens_out` and `tokens_cached` next to the money.
 
 ```bash
 curl "$API/orgs/acme/costs?agent=developer&group_by=model"
 curl "$API/projects/$P/costs?workflow=default&group_by=run&since=2026-11-01"
+curl "$API/orgs/acme/costs?group_by=assistant"
 ```
 
 A run's page has a **Context** card: what filled the model's input on the run's last call, section by
@@ -3643,7 +3646,8 @@ with the run's read right.
 | Too many findings from one run | `findings.max_per_run` |
 
 Costs export as CSV from the project overview, grouped by day, stage, model, backend, size,
-kind, agent, workflow, work item or run, and narrowed to one agent, workflow or work item.
+kind, agent, workflow, work item, run or assistant, and narrowed to one agent, workflow, work item or
+assistant.
 
 **Your roles.** The administration overview (Session card) lists your roles by scope instead of
 repeating the organisation: `platform : org_admin` on the community edition (one organisation, whose
