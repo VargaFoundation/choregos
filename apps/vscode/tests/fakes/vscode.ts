@@ -84,6 +84,24 @@ export class FakeOutputChannel {
   }
 }
 
+export class FakeStatusBarItem {
+  text = "";
+  tooltip: string | undefined;
+  command: string | undefined;
+  name: string | undefined;
+  visible = false;
+  constructor(readonly id: string) {}
+  show(): void {
+    this.visible = true;
+  }
+  hide(): void {
+    this.visible = false;
+  }
+  dispose(): void {
+    fake.statusItems.delete(this.id);
+  }
+}
+
 export interface FakeTreeView {
   id: string;
   provider: unknown;
@@ -110,6 +128,7 @@ export const fake = {
   commands: new Map<string, (...args: unknown[]) => unknown>(),
   executed: [] as { id: string; args: unknown[] }[],
   treeViews: new Map<string, FakeTreeView>(),
+  statusItems: new Map<string, FakeStatusBarItem>(),
   outputs: new Map<string, FakeOutputChannel>(),
   settings: new Map<string, unknown>(),
   authProviders: new Map<string, { label: string; provider: AuthenticationProvider }>(),
@@ -122,6 +141,7 @@ export const fake = {
     this.commands.clear();
     this.executed = [];
     this.treeViews.clear();
+    this.statusItems.clear();
     this.outputs.clear();
     this.settings.clear();
     this.authProviders.clear();
@@ -138,6 +158,11 @@ export const fake = {
 };
 
 export const window = {
+  createStatusBarItem(id: string): FakeStatusBarItem {
+    const item = new FakeStatusBarItem(id);
+    fake.statusItems.set(id, item);
+    return item;
+  },
   showInputBox(options: Record<string, unknown>): Promise<string | undefined> {
     fake.inputBoxes.push(options);
     return Promise.resolve(fake.inputs.shift());

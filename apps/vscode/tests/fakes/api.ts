@@ -38,6 +38,8 @@ export class StreamController {
     this.connections += 1;
     this.response = response;
     response.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache" });
+    // The platform's stream answers at once (sse-starlette): headers go before the first event.
+    response.flushHeaders();
     for (const chunk of this.backlog.splice(0)) response.write(chunk);
     this.openedResolve?.();
     if (this.ended) this.close();

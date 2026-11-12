@@ -83,12 +83,13 @@ export class ChoregosClient {
   async *stream(
     path: string,
     query?: Query,
-    options: { signal?: AbortSignal; lastEventId?: string } = {},
+    options: { signal?: AbortSignal; lastEventId?: string; opened?: () => void } = {},
   ): AsyncGenerator<ServerSentEvent> {
     const headers: Record<string, string> = { accept: "text/event-stream" };
     if (options.lastEventId) headers["last-event-id"] = options.lastEventId;
     const response = await this.send("GET", path, query, undefined, headers, options.signal);
     if (!response.body) throw new ClientRefusal(`${path} answered without a body`);
+    options.opened?.();
     yield* readEvents(response.body);
   }
 

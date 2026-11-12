@@ -51,7 +51,7 @@ def test_the_gate_waits_for_it() -> None:
 
 
 def test_the_suite_has_a_coverage_floor_and_the_lint_checks_formatting() -> None:
-    config = (APP / "vitest.config.ts").read_text(encoding="utf-8")
+    config = (APP / "vitest.config.mts").read_text(encoding="utf-8")
     scripts = json.loads((APP / "package.json").read_text(encoding="utf-8"))["scripts"]
     assert "thresholds" in config
     assert "--coverage" in scripts["test"]
