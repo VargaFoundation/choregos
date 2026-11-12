@@ -102,6 +102,10 @@ class ConversationAction(Base, PkMixin, TimestampMixin):
     confirmed_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
     confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     executed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    #: `write` (a write need's operation) or `launch` (the start of a project's workflow, ADR 0158).
+    kind: Mapped[str] = mapped_column(String(16), default="write", server_default="write")
+    #: For a launch, the binding when it was proposed: `{project_id, project, workflow}`.
+    target: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
 
 
 class ConnectedAccount(Base, PkMixin, TimestampMixin):

@@ -534,6 +534,62 @@ owners raised the approval is refused at confirmation with `approval_console`. A
 source receives the account's access token); without a connected account the confirmation is refused
 `account_not_connected` and nothing reaches the source.
 
+#### Starting a project's workflow from a conversation
+
+An assistant may propose to start a workflow a project of the organisation already runs, without declaring
+it again in the plugin ([ADR 0158](adr/0158-an-assistant-may-propose-to-start-a-project-s-workflow.md)). The
+manifest declares **launches** and names no project:
+
+```yaml
+launches:
+  - name: portfolio_review
+    description: Ask the review team for a portfolio review document, once the person said which portfolio.
+    input_schema:            # what the assistant fills from the conversation: the work item's fields
+      type: object
+      required: [portfolio]
+      properties: { portfolio: { type: string }, review_date: { type: string } }
+    required: true           # default; an optional launch may stay unbound or be switched off
+```
+
+`choregos plugin validate` refuses a launch name declared twice, an `input_schema` that is not a JSON Schema of
+`type: object`, and a need called `launch` beside launches (their tools are `launch__<name>`).
+
+**Binding.** The installation binds each launch, by reference, to a team's project and the name of one of its
+active workflows:
+
+```
+PUT /api/v1/orgs/{org}/assistants/{slug}/launches/{launch}   {"project": "reviews", "workflow": "review"}
+```
+
+It needs `assistant:manage` on the installation **and** `item:control` in the project (a developer of the
+project or above): 403 otherwise. A personal space, a project without an active workflow of that name, and a
+workflow whose `metadata.inputs` cannot take what the launch fills (an input it requires that the launch does
+not require, a property its closed inputs refuse) are 422 and nothing changes. Audited `assistant.launch.bind`.
+Nothing of the workflow is copied: the work item is born under the project's active version at confirmation.
+A required launch unbound or switched off is the readiness item `launch_unbound`; a bound workflow the project no
+longer has, or whose inputs stopped fitting, is `launch_workflow_missing` or `launch_inputs_mismatch`, for the
+owners to fix. Deleting the project unbinds the launch. A plugin upgrade treats launches as it treats needs:
+dropped, the binding is switched off and kept; changed, it is checked again and switched off when it no longer
+fits; added, it is unbound; the owners are told by the same notice.
+
+**In a conversation** a bound, enabled launch is offered as `launch__<name>(title, inputs)`. Calling it starts
+nothing: inputs the `input_schema` refuses are answered to the agent, a person who may not create work items in
+the project is told so and nothing is stored, otherwise a pending action of `kind: launch` is stored
+(`need` = the launch, `operation` = `start`, `target` = the project and workflow at that time), listed and
+decided like a write (`GET /me/conversations/{id}/actions`, `.../confirm`, `.../refuse`; the door's
+`pending_actions` with their `confirm_url`; expired after 24 hours). Confirming re-reads the binding (`409
+launch_rebound` when it now points elsewhere) and the confirming person's own rights (`403 launch_forbidden`
+without `item:control` in the project); nothing is created in either case. The work item is then filed through
+the same path as `POST /projects/{id}/work-items`, the person as reporter and initiator (`person:<email>`), under
+the bound workflow, the inputs as its fields (422 when the workflow refuses them), the project's tracker, budget
+and journal applying. The action becomes `executed`, `result` naming `work_item_id`, `work_item_key`, `project`,
+`workflow` and the console `url`; it is audited `assistant.launch.confirm`. `launch_status(action_id?)` tells
+the agent what each launch of the conversation became: the work item's key, title, state, whether it ended, and
+its artefacts (name, version, type, how it is shown, the address of its content, never the content), read with
+the person's current rights. Both tools write a line of the reads journal (`propose`, `status`). Launches are
+offered to `prompt` agents, like inline writes; a message pushed into the conversation when the work item moves
+is left out.
+
 ### Who may use an assistant, and what it may spend
 
 Three permissions (S63-15), decided in one place (`services/assistant_access.py`) from the groups the

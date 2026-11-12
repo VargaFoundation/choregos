@@ -2472,6 +2472,151 @@
    ]
   ]
  },
+ "assistant_launch_bindings": {
+  "columns": [
+   {
+    "name": "org_id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "installation_id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "launch",
+    "type": "String(length=63)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "project_id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "workflow",
+    "type": "String(length=64)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "enabled",
+    "type": "Boolean()",
+    "nullable": false,
+    "default": "True",
+    "server_default": "<sqlalchemy.sql.elements.True_ object>"
+   },
+   {
+    "name": "bound_by",
+    "type": "String(length=320)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": "<function uuid7>",
+    "server_default": null
+   },
+   {
+    "name": "created_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": false,
+    "default": "<function utcnow>",
+    "server_default": "<sqlalchemy.sql.functions.now; now>"
+   },
+   {
+    "name": "updated_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": false,
+    "default": "<function utcnow>",
+    "server_default": "<sqlalchemy.sql.functions.now; now>"
+   }
+  ],
+  "primary_key": [
+   "id"
+  ],
+  "foreign_keys": [
+   [
+    [
+     "installation_id"
+    ],
+    [
+     "assistant_installations.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_assistant_launch_bindings_installation_id_assistant_installations"
+   ],
+   [
+    [
+     "org_id"
+    ],
+    [
+     "organizations.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_assistant_launch_bindings_org_id_organizations"
+   ],
+   [
+    [
+     "project_id"
+    ],
+    [
+     "projects.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_assistant_launch_bindings_project_id_projects"
+   ]
+  ],
+  "uniques": [
+   [
+    "uq_assistant_launch_bindings_launch",
+    [
+     "installation_id",
+     "launch"
+    ]
+   ]
+  ],
+  "checks": [],
+  "indexes": [
+   [
+    "ix_assistant_launch_bindings_installation_id",
+    [
+     "assistant_launch_bindings.installation_id"
+    ],
+    false
+   ],
+   [
+    "ix_assistant_launch_bindings_org_id",
+    [
+     "assistant_launch_bindings.org_id"
+    ],
+    false
+   ],
+   [
+    "ix_assistant_launch_bindings_project_id",
+    [
+     "assistant_launch_bindings.project_id"
+    ],
+    false
+   ]
+  ]
+ },
  "assistant_reads": {
   "checks": [],
   "columns": [
@@ -3528,120 +3673,136 @@
   ]
  },
  "conversation_actions": {
-  "checks": [],
   "columns": [
    {
-    "default": null,
     "name": "org_id",
+    "type": "String(length=36)",
     "nullable": false,
-    "server_default": null,
-    "type": "String(length=36)"
+    "default": null,
+    "server_default": null
    },
    {
-    "default": null,
     "name": "conversation_id",
+    "type": "String(length=36)",
     "nullable": false,
-    "server_default": null,
-    "type": "String(length=36)"
+    "default": null,
+    "server_default": null
    },
    {
-    "default": null,
     "name": "user_id",
+    "type": "String(length=200)",
     "nullable": false,
-    "server_default": null,
-    "type": "String(length=200)"
+    "default": null,
+    "server_default": null
    },
    {
-    "default": null,
     "name": "need",
+    "type": "String(length=63)",
     "nullable": false,
-    "server_default": null,
-    "type": "String(length=63)"
+    "default": null,
+    "server_default": null
    },
    {
-    "default": null,
     "name": "operation",
+    "type": "String(length=128)",
     "nullable": false,
-    "server_default": null,
-    "type": "String(length=128)"
+    "default": null,
+    "server_default": null
    },
    {
-    "default": "<function dict>",
     "name": "arguments",
+    "type": "Json()",
     "nullable": false,
-    "server_default": null,
-    "type": "Json()"
+    "default": "<function dict>",
+    "server_default": null
    },
    {
-    "default": null,
     "name": "summary",
+    "type": "Text()",
     "nullable": false,
-    "server_default": null,
-    "type": "Text()"
+    "default": null,
+    "server_default": null
    },
    {
-    "default": "'proposed'",
     "name": "status",
+    "type": "String(length=16)",
     "nullable": false,
-    "server_default": null,
-    "type": "String(length=16)"
+    "default": "'proposed'",
+    "server_default": null
    },
    {
-    "default": null,
     "name": "result",
+    "type": "Json()",
     "nullable": true,
-    "server_default": null,
-    "type": "Json()"
+    "default": null,
+    "server_default": null
    },
    {
-    "default": null,
     "name": "diff",
+    "type": "Json()",
     "nullable": true,
-    "server_default": null,
-    "type": "Json()"
+    "default": null,
+    "server_default": null
    },
    {
-    "default": null,
     "name": "confirmed_by",
+    "type": "String(length=200)",
     "nullable": true,
-    "server_default": null,
-    "type": "String(length=200)"
+    "default": null,
+    "server_default": null
    },
    {
-    "default": null,
     "name": "confirmed_at",
+    "type": "DateTime(timezone=True)",
     "nullable": true,
-    "server_default": null,
-    "type": "DateTime(timezone=True)"
-   },
-   {
     "default": null,
+    "server_default": null
+   },
+   {
     "name": "executed_at",
+    "type": "DateTime(timezone=True)",
     "nullable": true,
-    "server_default": null,
-    "type": "DateTime(timezone=True)"
+    "default": null,
+    "server_default": null
    },
    {
-    "default": "<function uuid7>",
+    "name": "kind",
+    "type": "String(length=16)",
+    "nullable": false,
+    "default": "'write'",
+    "server_default": "'write'"
+   },
+   {
+    "name": "target",
+    "type": "Json()",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
     "name": "id",
+    "type": "String(length=36)",
     "nullable": false,
-    "server_default": null,
-    "type": "String(length=36)"
+    "default": "<function uuid7>",
+    "server_default": null
    },
    {
-    "default": "<function utcnow>",
     "name": "created_at",
+    "type": "DateTime(timezone=True)",
     "nullable": false,
-    "server_default": "<sqlalchemy.sql.functions.now; now>",
-    "type": "DateTime(timezone=True)"
+    "default": "<function utcnow>",
+    "server_default": "<sqlalchemy.sql.functions.now; now>"
    },
    {
-    "default": "<function utcnow>",
     "name": "updated_at",
+    "type": "DateTime(timezone=True)",
     "nullable": false,
-    "server_default": "<sqlalchemy.sql.functions.now; now>",
-    "type": "DateTime(timezone=True)"
+    "default": "<function utcnow>",
+    "server_default": "<sqlalchemy.sql.functions.now; now>"
    }
+  ],
+  "primary_key": [
+   "id"
   ],
   "foreign_keys": [
    [
@@ -3667,6 +3828,8 @@
     "fk_conversation_actions_org_id_organizations"
    ]
   ],
+  "uniques": [],
+  "checks": [],
   "indexes": [
    [
     "ix_conversation_actions_conversation_id",
@@ -3689,11 +3852,7 @@
     ],
     false
    ]
-  ],
-  "primary_key": [
-   "id"
-  ],
-  "uniques": []
+  ]
  },
  "conversation_feedback": {
   "checks": [],

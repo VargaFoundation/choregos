@@ -38,12 +38,13 @@ from ..schemas.assistants import (
     AssistantBind,
     AssistantBinding,
     AssistantInstall,
+    AssistantLaunchBind,
     AssistantReadiness,
     AssistantReadinessItem,
     AssistantStop,
     AssistantUpdate,
 )
-from . import assistant_embed, offered_knowledge, plugin_files
+from . import assistant_embed, assistant_launches, offered_knowledge, plugin_files
 from .assistant_access import holds
 from .connector_identity import supports_identity
 
@@ -245,6 +246,8 @@ async def readiness_items(session: AsyncSession, row: AssistantInstallation) -> 
                     groups=[],
                 )
             )
+    # ADR 0158: a required launch unbound, or a bound workflow that no longer serves it.
+    items.extend(await assistant_launches.readiness_items(session, row, document, owners))
     return items
 
 
@@ -339,6 +342,10 @@ async def upgrade_bindings(
             changes.append(NeedChange(need, "added", f"`{need}` is a new {kind} need, not bound yet"))
         elif _is_required(before[need]) != _is_required(tool):
             changes.append(_required_change(need, tool))
+    # ADR 0158: the launches follow the same path.
+    changes.extend(
+        NeedChange(*change) for change in await assistant_launches.upgrade(session, row, document, previous)
+    )
     await session.flush()
     return changes
 
@@ -439,6 +446,7 @@ async def to_dto(session: AsyncSession, row: AssistantInstallation) -> Assistant
         stopped=stopped_of(row),
         policy_overrides=dict(row.policy_overrides),
         bindings=bindings,
+        launches=await assistant_launches.to_dtos(session, row, document),
         created_by=row.created_by,
         created_at=row.created_at,
     )
@@ -624,4 +632,23 @@ async def bind(
     await refresh(session, row)
     await record(session, principal, "assistant.bind", org_id=org_id, target_type="assistant",
                  target_id=row.slug, need=need, connector=connector.name, enabled=body.enabled)  # fmt: skip
+    return row
+
+
+async def bind_launch(
+    session: AsyncSession,
+    org_id: str,
+    org: str,
+    row: AssistantInstallation,
+    launch: str,
+    body: AssistantLaunchBind,
+    principal: Principal,
+) -> AssistantInstallation:
+    """Binds a launch to a project's workflow: `assistant:manage` here, `item:control` in its project."""
+    require_manager(principal, org, row)
+    document = await manifest(session, row)
+    if document is None:
+        raise unprocessable(f"the plugin `{row.plugin}` no longer ships the assistant `{row.assistant_name}`")
+    await assistant_launches.bind(session, org_id, org, row, document, launch, body, principal)
+    await refresh(session, row)
     return row

@@ -4,7 +4,8 @@ stop and resume (S64-09c, ADR 0142 §4 bis).
 
 Installing, uninstalling and changing the owners are the organisation administrator's; configuring and
 binding, stopping and resuming are the administrator's and the owner groups' (`assistant:manage`, decided by
-`services.assistant_access`). The manifest is read from the installed plugin, never sent by the client.
+`services.assistant_access`); binding a launch also needs the right to create work items in its project
+(ADR 0158). The manifest is read from the installed plugin, never sent by the client.
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ from ..schemas.assistants import (
     Assistant,
     AssistantBind,
     AssistantInstall,
+    AssistantLaunchBind,
     AssistantList,
     AssistantReadiness,
     AssistantStopResult,
@@ -145,4 +147,20 @@ async def resume_assistant(org: str, slug: Slug, session: Db, principal: Me) -> 
     row = await service.installation(session, organisation.id, slug)
     service.require_manager(principal, org, row)
     await resume_the_assistant(session, principal, row)
+    return await service.to_dto(session, row)
+
+
+@router.put(
+    "/orgs/{org}/assistants/{slug}/launches/{launch}",
+    response_model=Assistant,
+    operation_id="bindAssistantLaunch",
+)
+async def bind_launch(
+    org: str, slug: Slug, launch: Need, body: AssistantLaunchBind, session: Db, principal: Me
+) -> Assistant:
+    """Binds a launch to a project's workflow (ADR 0158): `assistant:manage` on the installation and
+    `item:control` in the project."""
+    organisation = await organisation_by_slug(session, org)
+    row = await service.installation(session, organisation.id, slug)
+    row = await service.bind_launch(session, organisation.id, org, row, launch, body, principal)
     return await service.to_dto(session, row)
