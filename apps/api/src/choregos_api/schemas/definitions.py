@@ -308,6 +308,8 @@ class ModelGatewayFacts(Dto):
     max_input_tokens: int | None = None
     supports_tool_calling: bool = True
     supports_vision: bool = False
+    #: Whether the model reasons before it answers; `None` when the gateway never said.
+    supports_reasoning: bool | None = None
     mode: str = "chat"
 
 

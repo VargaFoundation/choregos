@@ -181,6 +181,25 @@ async def test_litellm_a_realtime_model_carries_its_audio_and_cached_prices() ->
 
 
 @respx.mock
+async def test_litellm_reasoning_is_read_only_when_the_gateway_states_it() -> None:
+    respx.get(f"{LITELLM}/model/info").mock(
+        return_value=Response(
+            200,
+            json={
+                "data": [
+                    {"model_name": "a", "litellm_params": {"model": "openai/o5"}, "model_info": {"supports_reasoning": True}},
+                    {"model_name": "b", "litellm_params": {"model": "openai/x"}, "model_info": {"supports_reasoning": False}},
+                    {"model_name": "c", "litellm_params": {"model": "openai/y"}, "model_info": {"supports_reasoning": None}},
+                    {"model_name": "d", "litellm_params": {"model": "openai/z"}, "model_info": {}},
+                ]
+            },
+        )
+    )
+    models = await LiteLlmGateway(LITELLM, "sk").list_models()
+    assert [m.supports_reasoning for m in models] == [True, False, None, None]
+
+
+@respx.mock
 async def test_litellm_an_unknown_tool_calling_capability_is_not_a_denial() -> None:
     """What the dev tenant's LiteLLM answers for its `openai/choregos-*` aliases (S22-42)."""
     respx.get(f"{LITELLM}/model/info").mock(

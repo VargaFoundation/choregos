@@ -344,6 +344,7 @@ async def usable_models(
                     max_input_tokens=m.max_input_tokens,
                     supports_tool_calling=m.supports_tool_calling,
                     supports_vision=m.supports_vision,
+                    supports_reasoning=m.supports_reasoning,
                 )
         except Exception:  # the catalogue alone still answers
             live = {}

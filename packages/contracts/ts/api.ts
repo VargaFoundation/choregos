@@ -3833,6 +3833,8 @@ export type ModelGatewayFacts = {
   max_input_tokens?: number | null;
   supports_tool_calling?: boolean;
   supports_vision?: boolean;
+  /** whether the model reasons before it answers, as the gateway states it; null when it does not say */
+  supports_reasoning?: boolean | null;
   mode?: string;
 };
 

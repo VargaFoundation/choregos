@@ -158,6 +158,19 @@ async def test_the_catalogue_exposes_the_upstream_model_and_context_window_of_ea
     assert (facts["provider"], facts["supports_vision"]) == ("anthropic", True)
 
 
+async def test_the_catalogue_says_whether_a_model_reasons_only_when_the_gateway_said_it(
+    client: AsyncClient, admin: str, gateway: Scripted
+) -> None:
+    gateway.models[:] = [
+        GatewayModel(model_name="platform/strong", litellm_model="openai/o5", provider="openai", supports_reasoning=True),
+        GatewayModel(model_name="platform/standard", litellm_model="openai/gpt-5-mini", provider="openai"),
+    ]
+    await client.post(f"{BASE}/sync")
+    entries = await _entries(client)
+    assert entries["platform/strong"]["gateway"]["supports_reasoning"] is True
+    assert entries["platform/standard"]["gateway"]["supports_reasoning"] is None
+
+
 async def test_a_model_gone_from_the_gateway_is_marked_and_keeps_its_settings(
     client: AsyncClient, admin: str, gateway: Scripted
 ) -> None:

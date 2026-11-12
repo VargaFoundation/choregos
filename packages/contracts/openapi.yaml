@@ -9540,6 +9540,7 @@ components:
         max_input_tokens: { type: [integer, "null"] }
         supports_tool_calling: { type: boolean, default: true }
         supports_vision: { type: boolean, default: false }
+        supports_reasoning: { type: [boolean, "null"], description: "whether the model reasons before it answers, as the gateway states it; null when it does not say" }
         mode: { type: string, default: chat }
     ModelCatalogueEntry:
       type: object
