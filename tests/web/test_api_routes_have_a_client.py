@@ -112,7 +112,6 @@ NOT_CALLED_BY_A_CLIENT: dict[str, str] = {
 NO_CLIENT_YET: dict[str, str] = {
     "/orgs/{org}/outposts/{slug}/enrolments/{enrolment_id}": "cancelling an enrolment token: the contract "
     "declares it first (ADR 0001), S65-24 serves it and gives it its command and its button",
-    "/work-items/{id}/human-requests/{request_id}/draft": "S65-22, Discard (ADR 0162 §7)",
 }
 
 #: Paths the CLI calls and the console must not: an operator's command, not a screen.
