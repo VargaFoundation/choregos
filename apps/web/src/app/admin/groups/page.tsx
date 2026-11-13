@@ -7,7 +7,7 @@ import { canManageGroups } from "@/lib/memberships";
 import { useSession } from "@/lib/session";
 
 /**
- * The organisation's groups (ADR 0152): every member reads them, the administrator creates and fills
+ * The organisation's groups (ADR 0160): every member reads them, the administrator creates and fills
  * the `internal` ones. A group the identity provider pushes is shown read-only.
  */
 export default function GroupsPage() {

@@ -2,7 +2,7 @@
 """A human actor's `group` is enforced where a person answers (ADR 0044, ADR 0052).
 
 A workflow names who may answer a step: `actors.<id>: {type: human, group: release-captains}`. The
-group is the identity provider's or the organisation's own (ADR 0152), as the principal carries it.
+group is the identity provider's or the organisation's own (ADR 0160), as the principal carries it.
 Two rules:
 
 - **the decider belongs to the group**, on top of the rank (`ITEM_DECIDE`): a project owner outside
@@ -79,7 +79,7 @@ async def groups_known_in(session: AsyncSession, org_id: str) -> set[str]:
     """The groups the identity provider has sent for the organisation's members at their sign-ins, as
     the organisation names them (a `choregos:<slug>:<group>` of this organisation counts as `<group>`;
     the slug is read now, it can change), and the organisation's own groups that have a member
-    (ADR 0152): an empty group is carried by nobody either."""
+    (ADR 0160): an empty group is carried by nobody either."""
     org_slug = (
         await session.execute(select(Organization.slug).where(Organization.id == org_id))
     ).scalar_one_or_none()
@@ -127,7 +127,7 @@ async def members_of_group(
     session: AsyncSession, org_id: str, org_slug: str, project_id: str, group: str
 ) -> list[tuple[User, bool]]:
     """The organisation's members who carry `group` (as of their last sign-in, or as a member of the
-    organisation's own group, ADR 0152), each with whether they may answer a step of this project: the
+    organisation's own group, ADR 0160), each with whether they may answer a step of this project: the
     group is necessary, not sufficient — `item:decide` comes from a role in the organisation or on the
     project (ADR 0044)."""
     from ..rbac import ROLE_PERMISSIONS, Permission

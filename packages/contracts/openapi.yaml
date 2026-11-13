@@ -2354,7 +2354,7 @@ paths:
       tags: [groups]
       operationId: listOrgGroups
       description: >-
-        The organisation's own groups (ADR 0152), each with its source (`internal`, created here; `scim`, pushed
+        The organisation's own groups (ADR 0160), each with its source (`internal`, created here; `scim`, pushed
         by an identity provider) and how many members of the organisation it holds. Every member of the
         organisation reads them (a role in it or on one of its projects). The identity provider's `groups` claim
         is not listed here: it still counts where a group is checked, as before.
@@ -5993,7 +5993,7 @@ components:
       description: "State conflict on the organisation's MCP gateway (ADR 0105): `code` is `gateway_in_use` (with `connectors`), `gateway_required`, `gateway_not_configured` or `gateway_assertion_key_missing`."
       content: { application/problem+json: { schema: { $ref: "#/components/schemas/McpGatewayConflict" } } }
     OrgGroupConflict:
-      description: "State conflict on an organisation's group (ADR 0152): `code` is `group_exists` or `group_read_only`."
+      description: "State conflict on an organisation's group (ADR 0160): `code` is `group_exists` or `group_read_only`."
       content: { application/problem+json: { schema: { $ref: "#/components/schemas/OrgGroupConflict" } } }
     OutpostConflict:
       description: "State conflict that concerns an outpost (ADRs 0147 and 0149): `code` says which, among the codes of `OutpostConflict`."
@@ -9557,7 +9557,7 @@ components:
     OrgGroupSource:
       type: string
       enum: [internal, scim]
-      description: "`internal`: created and edited through this API by an organisation administrator; `scim`: pushed by an identity provider, read-only here (ADR 0152)"
+      description: "`internal`: created and edited through this API by an organisation administrator; `scim`: pushed by an identity provider, read-only here (ADR 0160)"
     OrgGroupCreate:
       type: object
       additionalProperties: false
@@ -9576,7 +9576,7 @@ components:
     OrgGroup:
       type: object
       additionalProperties: false
-      description: "A group that belongs to the organisation (ADR 0152). A person in it carries it as `choregos:<org>:<slug>` wherever a group is checked."
+      description: "A group that belongs to the organisation (ADR 0160). A person in it carries it as `choregos:<org>:<slug>` wherever a group is checked."
       required: [slug, name, source, member_count, created_at]
       properties:
         slug: { type: string }
@@ -9617,7 +9617,7 @@ components:
         items: { type: array, items: { $ref: "#/components/schemas/OrgGroupMember" } }
     OrgGroupConflict:
       type: object
-      description: "The 409 body of a refused write on an organisation's group (ADR 0152): `group_exists` (the slug is taken in the organisation) or `group_read_only` (the group comes from the identity provider; `source` says which)."
+      description: "The 409 body of a refused write on an organisation's group (ADR 0160): `group_exists` (the slug is taken in the organisation) or `group_read_only` (the group comes from the identity provider; `source` says which)."
       required: [type, title, status, code]
       properties:
         type: { type: string }

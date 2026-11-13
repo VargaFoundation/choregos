@@ -14,7 +14,7 @@ import { SourceBadge } from "./source-badge";
 const message = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause));
 
 /**
- * One group of the organisation (ADR 0152): what it is, who is in it, and, for an `internal` group and an
+ * One group of the organisation (ADR 0160): what it is, who is in it, and, for an `internal` group and an
  * administrator, the gestures that change it. A group the identity provider pushes is read-only here:
  * it is changed where it comes from, and the page says so.
  */

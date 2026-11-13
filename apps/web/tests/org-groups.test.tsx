@@ -85,7 +85,7 @@ beforeEach(() => {
   session.memberships = ADMIN;
 });
 
-describe("the Groups page (ADR 0152)", () => {
+describe("the Groups page (ADR 0160)", () => {
   it("lists each group with its source and how many members it holds", async () => {
     vi.mocked(api.orgGroups).mockResolvedValue({
       items: [group(), group({ slug: "platform-team", name: "Platform team", source: "scim", member_count: 4, description: null })],

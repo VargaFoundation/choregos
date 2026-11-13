@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""An organisation's groups (ADR 0152): the bodies of `/orgs/{org}/groups…`."""
+"""An organisation's groups (ADR 0160): the bodies of `/orgs/{org}/groups…`."""
 
 from __future__ import annotations
 

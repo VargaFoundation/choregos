@@ -51,7 +51,7 @@ def _routes(project_id: str, workflow_yaml: str, policy_yaml: str) -> list[tuple
         ("agent:manage", "POST", "/api/v1/orgs/varga/agent-catalogue/triager/install", {}),
         # Outposts (S65-11, ADR 0147 §4): the organisation administrator's, read or written.
         ("outpost:manage", "GET", "/api/v1/orgs/varga/outposts", None),
-        # The organisation's groups (S66-01, ADR 0152): the administrator writes them, every member reads.
+        # The organisation's groups (S66-40, ADR 0160): the administrator writes them, every member reads.
         (
             "group:manage",
             "POST",

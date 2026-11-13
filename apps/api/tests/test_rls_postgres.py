@@ -904,7 +904,7 @@ async def test_machine_accounts_stay_in_their_organisation(two_organisations: di
 async def test_org_groups_and_their_members_stay_in_their_organisation(
     two_organisations: dict[str, str],
 ) -> None:
-    """An organisation's groups and who is in them (ADR 0152): org `a` reads none of `b`'s, writes none
+    """An organisation's groups and who is in them (ADR 0160): org `a` reads none of `b`'s, writes none
     into it, and a session with no scope reads nothing."""
     from choregos_api.db.models import Organization, OrgGroup, OrgGroupMember, User
     from choregos_api.db.session import session_scope

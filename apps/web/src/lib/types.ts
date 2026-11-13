@@ -345,7 +345,7 @@ export type {
   PluginUpgradeResult,
 } from "@choregos/contracts/api";
 
-/** The organisation's own groups (ADR 0152): `internal`, written here, or `scim`, pushed by an identity provider. */
+/** The organisation's own groups (ADR 0160): `internal`, written here, or `scim`, pushed by an identity provider. */
 export type {
   OrgGroup,
   OrgGroupCreate,

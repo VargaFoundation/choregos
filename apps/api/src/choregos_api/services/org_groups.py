@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""An organisation's groups (ADR 0152): first-class groups, each with exactly one source.
+"""An organisation's groups (ADR 0160): first-class groups, each with exactly one source.
 
 - `internal`: created and edited through the API by an organisation administrator (`group:manage`);
 - `scim`: pushed by an identity provider through `upsert_external_group`, which the core serves on no
@@ -352,7 +352,7 @@ async def upsert_external_group(
     actor: str,
 ) -> OrgGroup:
     """Creates or updates the `scim` group the identity provider knows as `external_id`, and replaces
-    its members with `members_user_ids` (ADR 0152).
+    its members with `members_user_ids` (ADR 0160).
 
     The core serves this on no route: an edition that speaks SCIM calls it. The group is found by its
     `external_id` in the organisation, so a renamed group keeps its row and its members' history.

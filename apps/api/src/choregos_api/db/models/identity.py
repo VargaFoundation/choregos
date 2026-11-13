@@ -102,7 +102,7 @@ class MachineAccount(Base, PkMixin, TimestampMixin):
 
 
 class OrgGroup(Base, PkMixin, TimestampMixin):
-    """A group of people that belongs to an organisation (ADR 0152), with exactly one source.
+    """A group of people that belongs to an organisation (ADR 0160), with exactly one source.
 
     `internal`: created and edited in the console by an organisation administrator. `scim`: pushed by
     an identity provider (`external_id` is its identifier there), read-only through the core API. The
@@ -125,14 +125,14 @@ class OrgGroup(Base, PkMixin, TimestampMixin):
     slug: Mapped[str] = mapped_column(String(63))
     name: Mapped[str] = mapped_column(String(200))
     description: Mapped[str | None] = mapped_column(String(2000), nullable=True)
-    #: `internal` or `scim`: who may change the group (ADR 0152).
+    #: `internal` or `scim`: who may change the group (ADR 0160).
     source: Mapped[str] = mapped_column(String(16), default="internal")
     external_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_by: Mapped[str | None] = mapped_column(String(320), nullable=True)
 
 
 class OrgGroupMember(Base, PkMixin):
-    """One person in one organisation group (ADR 0152)."""
+    """One person in one organisation group (ADR 0160)."""
 
     __tablename__ = "org_group_members"
     __table_args__ = (UniqueConstraint("group_id", "user_id", name="uq_org_group_members_group_user"),)

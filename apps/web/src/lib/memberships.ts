@@ -108,7 +108,7 @@ export function canReassignRequests(
 }
 
 /**
- * Whether the person writes the organisation's groups: the API's `group:manage` (ADR 0152), the
+ * Whether the person writes the organisation's groups: the API's `group:manage` (ADR 0160), the
  * organisation administrator's. Every member reads them; the API stays the judge.
  */
 export function canManageGroups(

@@ -1,4 +1,4 @@
-"""An organisation's own groups (S66-01, ADR 0152): read by its members, written by its administrator,
+"""An organisation's own groups (S66-40, ADR 0160): read by its members, written by its administrator,
 `internal` or `scim` (read-only here), merged into what a person carries, so that a member of the
 internal group `release-captains` answers a step addressed to it without the identity provider's claim.
 """

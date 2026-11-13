@@ -2,7 +2,7 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-/** The console's client of the organisation's groups (ADR 0152): the eight operations of the contract, each at its path. */
+/** The console's client of the organisation's groups (ADR 0160): the eight operations of the contract, each at its path. */
 function answering(status = 200, body: unknown = {}) {
   const fetched = vi.fn(async (_url: string, _init?: RequestInit) => new Response(status === 204 ? null : JSON.stringify(body), { status }));
   vi.stubGlobal("fetch", fetched);

@@ -14,7 +14,7 @@ import { SourceBadge } from "./source-badge";
 export const GROUP_SLUG = /^[a-z][a-z0-9-]{1,62}$/;
 
 /**
- * The organisation's own groups (ADR 0152): each with its source and how many members it holds. Every
+ * The organisation's own groups (ADR 0160): each with its source and how many members it holds. Every
  * member of the organisation reads them; the administrator creates `internal` ones here. A group the
  * identity provider pushes (`scim`) is listed too, read-only.
  */

@@ -1,12 +1,12 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Groups that belong to the organisation: `org_groups`, `org_group_members` (S66-01, ADR 0152)
+"""Groups that belong to the organisation: `org_groups`, `org_group_members` (S66-40, ADR 0160)
 
 An organisation's groups, each with one source (`internal` or `scim`), and who is in each. Both tables
 are under forced RLS like `machine_accounts`. The downgrade drops both tables and loses the groups and
 their members; the identity provider's groups (`users.groups`) are not touched.
 
 Revision ID: d4a6c8e0f2b5
-Revises: b3dbe73fff38
+Revises: a2c4e6f8b0d1
 Create Date: 2026-11-12 14:00:00+00:00
 """
 
@@ -18,7 +18,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "d4a6c8e0f2b5"
-down_revision: str | None = "b3dbe73fff38"
+down_revision: str | None = "a2c4e6f8b0d1"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

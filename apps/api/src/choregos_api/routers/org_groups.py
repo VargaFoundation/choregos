@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""An organisation's groups (ADR 0152): read by every member, written by the administrator.
+"""An organisation's groups (ADR 0160): read by every member, written by the administrator.
 
 A group is `internal` (created and edited here) or `scim` (pushed by an identity provider through
 `services.org_groups.upsert_external_group`, which no route of the core serves): every write on a

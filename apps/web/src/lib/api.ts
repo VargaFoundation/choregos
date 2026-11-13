@@ -919,7 +919,7 @@ export const api = {
       body: JSON.stringify(body),
     }),
   /**
-   * The organisation's own groups (ADR 0152). Every member reads them; the administrator writes the
+   * The organisation's own groups (ADR 0160). Every member reads them; the administrator writes the
    * `internal` ones (`group:manage`). A `scim` group is the identity provider's: a write answers 409
    * `group_read_only`.
    */

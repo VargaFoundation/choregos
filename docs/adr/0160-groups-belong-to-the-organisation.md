@@ -1,4 +1,4 @@
-# 0152 — Groups belong to the organisation
+# 0160 — Groups belong to the organisation
 
 - **Status**: proposed, 2026-11-12
 - **Concerns**: the tables `org_groups` and `org_group_members`

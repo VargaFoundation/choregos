@@ -128,7 +128,7 @@ async def _principal_from_user(session: AsyncSession, user: User, *, narrow: boo
         org_roles=org_roles,
         project_roles=project_roles,
         # The identity provider's claim, then the organisation's own groups as
-        # `choregos:<org>:<group>` (ADR 0152): one more query, in the platform scope set above.
+        # `choregos:<org>:<group>` (ADR 0160): one more query, in the platform scope set above.
         groups=await groups_of(session, user),
     )
     # THIS request's session sees only the principal's organisations: this is where RLS arms,

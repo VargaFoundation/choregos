@@ -3672,7 +3672,7 @@ export type McpOutpostConnectorConfig = {
   timeout_s?: number;
 };
 
-/** `internal`: created and edited through this API by an organisation administrator; `scim`: pushed by an identity provider, read-only here (ADR 0152) */
+/** `internal`: created and edited through this API by an organisation administrator; `scim`: pushed by an identity provider, read-only here (ADR 0160) */
 export type OrgGroupSource = "internal" | "scim";
 
 export type OrgGroupCreate = {
@@ -3688,7 +3688,7 @@ export type OrgGroupUpdate = {
   description?: string | null;
 };
 
-/** A group that belongs to the organisation (ADR 0152). A person in it carries it as `choregos:<org>:<slug>` wherever a group is checked. */
+/** A group that belongs to the organisation (ADR 0160). A person in it carries it as `choregos:<org>:<slug>` wherever a group is checked. */
 export type OrgGroup = {
   slug: string;
   name: string;
@@ -3722,7 +3722,7 @@ export type OrgGroupMemberList = {
   items: Array<OrgGroupMember>;
 };
 
-/** The 409 body of a refused write on an organisation's group (ADR 0152): `group_exists` (the slug is taken in the organisation) or `group_read_only` (the group comes from the identity provider; `source` says which). */
+/** The 409 body of a refused write on an organisation's group (ADR 0160): `group_exists` (the slug is taken in the organisation) or `group_read_only` (the group comes from the identity provider; `source` says which). */
 export type OrgGroupConflict = {
   type: string;
   title: string;
