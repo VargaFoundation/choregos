@@ -49,9 +49,11 @@ and `2025-03-26`.
 | `get_work_item` | a work item's state, recent timeline and pending decision, with its link | `mcp:read` |
 | `summarize_run` | one agent run: stage, backend, model, status, cost, summary | `mcp:read` |
 | `list_pending_decisions` | what waits for a person, with the link where it is decided | `mcp:read` |
+| `get_pending_decision` | what waits for **your** decision: the list, or one request's full context (question, form, work item, the draft already made, its link) | `mcp:read` |
 | `docs_search` | this documentation, in the version the instance runs: ranked pages with their slug, link and a snippet | `mcp:read` |
 | `docs_read` | one page of it as Markdown, by slug, or one of its sections; a long page comes in parts | `mcp:read` |
 | `create_work_item` | opens a work item in a project | `mcp:write` and the right to control work items |
+| `draft_decision` | deposits a draft of the decision of a request waiting for you; it decides nothing, you take or discard it in the console | `mcp:write` and the right to decide work items |
 
 A tool you may not use is not announced, and calling it answers like an unknown tool.
 
