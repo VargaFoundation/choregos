@@ -288,13 +288,19 @@ async def _journal(session: Any, run: Run, outcomes: list[GateOutcome]) -> None:
     could say WHICH guarantees had run nor what they had answered, and the product's central promise
     was invisible (state of play of 2026-09-24). The run's journal is what the page already shows;
     the verdicts take their place there.
+
+    Numbered after the highest line, at 1 at least (S65-28, finding #1608). The verdicts are judged
+    once the run's process has finished, and the runner posts its last line (`run.result`) before it
+    posts its result: the numbers after the highest are no longer the runner's to take. A journal that
+    holds only the platform's lines from before the run (`memory.skipped`, numbered below 0) does not
+    pull a verdict down to 0, a number a run may still send.
     """
     from choregos_api.db.models import RunEvent
     from choregos_core import utcnow
     from sqlalchemy import func, select
 
     last = (await session.execute(select(func.max(RunEvent.seq)).where(RunEvent.run_id == run.id))).scalar()
-    seq = int(last or 0)
+    seq = max(int(last or 0), 0)
     for outcome in outcomes:
         seq += 1
         session.add(

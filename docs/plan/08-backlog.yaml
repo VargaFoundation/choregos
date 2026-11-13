@@ -4841,6 +4841,14 @@ stories:
     size: S
     depends_on: [S65-14]
     notes: "scope_to_outpost narrowed the session in a finally: after a cancellation in the middle of its read (a worker stopping while it waits for a write) the narrowing ran on an invalidated connection and its PendingRollbackError hid the cancellation. Narrowed on the way out only; a deterministic test fails without it."
+  - id: S65-28
+    title: "fix(orchestrator): a skipped memory takes a number a run cannot take, and the runner's first lines are kept (finding #1608)"
+    stream: S65
+    sprint: 8
+    priority: 1
+    size: S
+    depends_on: [S65-01]
+    notes: "memory.skipped, written before the run starts, is numbered below 0 (below any line already there, a batch in its order, each memory once) instead of from 1, where it took the runner's first numbers and the door dropped the runner's first lines; gate.outcome, written once the run's process has finished, follows the highest line and never takes 0; a run prepared with one skipped memory whose runner posts lines 1 to 3 shows four lines through the console's route; activities only, nothing under workflows/, no contract change (RunEvent.seq is an integer with no minimum; RunEventIn keeps minimum 0)."
   # ───────────── S67 — the terminal is a surface of the platform (ADR 0154) ─────────────
   - id: S67-00
     title: "docs(adr): ADR 0154, the terminal is a surface of the platform; the S67 plan"
