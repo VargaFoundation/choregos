@@ -7,7 +7,9 @@ relay, for ever (a replayed broker call finds the action and starts nothing). Ev
 relay; starting `action-<id>` twice starts it once, so the replicas need no lock.
 
 What it does not do: start an action still `pending_approval`, or restart one already `running` —
-`load_action` moved it there, its workflow is Temporal's to retry.
+`load_action` moved it there, its workflow is Temporal's to retry. An action a person settled after a
+doubt (S65-26) is `approved` again although its first run completed: that one is restarted under the
+same id, the only start that reuses it.
 """
 
 from __future__ import annotations
@@ -42,19 +44,24 @@ async def start_approved_actions(*, grace: timedelta = GRACE, batch: int = BATCH
         stranded = list(
             (
                 await session.execute(
-                    select(Action.id)
+                    select(Action.id, Action.result)
                     .where(
                         Action.status == ActionStatus.APPROVED.value, Action.updated_at <= utcnow() - grace
                     )
                     .order_by(Action.updated_at)
                     .limit(batch)
                 )
-            ).scalars()
+            ).all()
         )
     started: list[str] = []
-    for action_id in stranded:
+    for action_id, result in stranded:
+        gateway = get_temporal()
+        # An action that was closed in doubt and settled since (S65-26): its first run completed, and
+        # only a restart reuses the id. Any other approved action is started, never restarted.
+        settled = isinstance(result, dict) and bool(result.get("in_doubt"))
+        begin = gateway.restart_action if settled else gateway.start_action
         try:
-            await get_temporal().start_action(workflow_id(action_id), {"action_id": action_id})
+            await begin(workflow_id(action_id), {"action_id": action_id})
         except Exception as error:
             logger.warning(
                 "action.relay.failed", action=action_id, error=f"{type(error).__name__}: {error}"[:300]

@@ -221,12 +221,15 @@ class ActionEffect(Base, PkMixin, TimestampMixin):
     key: Mapped[str] = mapped_column(String(128), unique=True)
     effect: Mapped[str] = mapped_column(String(128))
     params: Mapped[dict[str, Any]] = mapped_column(Json, default=dict)
-    #: started | done | compensated | compensation_failed
+    #: started | done | compensated | compensation_failed | in_doubt | not_made
     status: Mapped[str] = mapped_column(String(24), default="started")
     attempts: Mapped[int] = mapped_column(Integer, default=0)
     result: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    #: What a person recorded once the effect was in doubt (S65-26, ADR 0149 §5): the outcome, who,
+    #: when, their note and stated result, and the doubt's evidence (`in_doubt`). Null otherwise.
+    settlement: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
 
 
 class HandOffReceipt(Base, PkMixin, TimestampMixin):

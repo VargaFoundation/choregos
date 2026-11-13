@@ -644,8 +644,9 @@ verify that a server honours the key: the statement is the administrator's.
 
 **Limits of this version.**
 
-- **An action in doubt is not closed in Choregos.** A person checks the system behind the outpost
-  and records what they found elsewhere.
+- **An action in doubt waits for a person.** Nothing replays it by itself: a person checks the
+  system behind the outpost and settles it on the action's page (`settleAction`, S65-26): made, it
+  resumes after the write; not made, it fails and compensates what came before.
 - **The connector's own identity only.** The call reaches the server under the credential the
   outpost holds for the alias. A need that must be called as the person cannot be bound to such a
   connector.

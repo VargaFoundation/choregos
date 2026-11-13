@@ -701,16 +701,22 @@ transport of a tool call and nothing of what governs it.
     claimed. Failing would compensate what the action had done around a write that may have been
     made.
   - **A claimed write whose answer never comes is `in_doubt`**, on the effect and on the action.
-    It is terminal. Nothing replays it: the effect is not attempted again, the action is not
-    executable by any route, and the agent that repeats the call is handed the same action. Nothing
+    The platform stops there. Nothing replays it by itself: the effect is not attempted again, the
+    action is not executable until a person settles it, and the agent that repeats the call is
+    handed the same action. Nothing
     is compensated automatically, the effects done before it included: both would act on a state
     nobody knows. A workflow written before the status existed asks for a compensation and a
     failure; the activities answer for the action as it is and do neither. What a person is shown is
     where the write went, which instance took it and when, and the digest of its arguments, never
     the arguments.
-  - **A person closes the doubt outside the platform.** They check the system behind the outpost and
-    record what they found where the team keeps such records. No route changes the status of an
-    action in doubt: the count of such actions is the measure to watch, and a flaky link between
+  - **A person settles the doubt** (S65-26). They check the system behind the outpost and record on
+    the action that the write was made (the effect becomes `done` with the result they state, and
+    the action resumes after it) or not made (the effect becomes `not_made`, never attempted, and
+    the action fails and compensates what came before). The route is guarded as an approval is: a
+    human session with a recent sign-in (`step_up_required`), an approver's rank and group, and the
+    separation of duties; an API token or an MCP client never settles. It is audited
+    (`action.settle`) and evented (`choregos.action.settled`); the effect keeps what was sent beside
+    the settlement. The count of actions in doubt is the measure to watch, and a flaky link between
     claim and answer raises it.
   - **Not implied by silence** (ADR 0101). A write of a connector at an outpost is opened only when
     its rule says that the tool takes the platform's idempotency key (`platform_arguments` lists

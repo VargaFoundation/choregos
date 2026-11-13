@@ -102,6 +102,10 @@ class TemporalGateway(Protocol):
     async def start_train(self, workflow_id: str, payload: dict[str, Any]) -> str: ...
     async def start_provisioning(self, workflow_id: str, payload: dict[str, Any]) -> str: ...
     async def start_action(self, workflow_id: str, payload: dict[str, Any]) -> str: ...
+    async def restart_action(self, workflow_id: str, payload: dict[str, Any]) -> str:
+        """`action-<id>` again after a run that completed: an action a person settled (S65-26)."""
+        ...
+
     async def start_trial(self, workflow_id: str, payload: dict[str, Any]) -> str: ...
     async def start_knowledge_sync(self, workflow_id: str, payload: dict[str, Any]) -> str: ...
     async def start_reconciliation(self, workflow_id: str, payload: dict[str, Any]) -> str: ...
@@ -145,6 +149,8 @@ class FakeTemporal:
     start_calls: list[str] = field(default_factory=list)
     #: every new pass of an ended work item (`restart_interpreter`, C1), in order
     restarted: list[str] = field(default_factory=list)
+    #: every `restart_action` call, in order: an action settled after a doubt runs its workflow again
+    action_restarts: list[str] = field(default_factory=list)
 
     async def start_interpreter(self, workflow_id: str, payload: dict[str, Any]) -> str:
         self.started.setdefault(workflow_id, payload)  # deterministic ID => idempotent start
@@ -195,6 +201,12 @@ class FakeTemporal:
 
     async def start_action(self, workflow_id: str, payload: dict[str, Any]) -> str:
         self.started.setdefault(workflow_id, payload)  # `action-<id>`: a single start
+        return workflow_id
+
+    async def restart_action(self, workflow_id: str, payload: dict[str, Any]) -> str:
+        """`ALLOW_DUPLICATE`, as the real one: the id's next run, after a settlement (S65-26)."""
+        self.started[workflow_id] = payload
+        self.action_restarts.append(workflow_id)
         return workflow_id
 
     async def start_trial(self, workflow_id: str, payload: dict[str, Any]) -> str:
@@ -324,6 +336,27 @@ class RealTemporal:
 
     async def start_action(self, workflow_id: str, payload: dict[str, Any]) -> str:
         return await self._start("ActionWorkflow", workflow_id, payload)
+
+    async def restart_action(self, workflow_id: str, payload: dict[str, Any]) -> str:
+        """`action-<id>` again after a run that COMPLETED (S65-26): an action in doubt closes its run
+        normally, and a person who settles it makes it `approved` again for a new run of the same id.
+        `start_action`'s policy (a new run only after a FAILED one, so that a replica's late start of a
+        finished action starts nothing) refuses that start and reads the refusal as "already started".
+        Here the id is reused, and a run still going is joined, never doubled. A late duplicate of this
+        start after the new run ended starts a run that does nothing: `load_action` runs nothing for an
+        action that is not approved (ADR 0085)."""
+        from temporalio.common import WorkflowIDConflictPolicy, WorkflowIDReusePolicy
+
+        client = await self.client()
+        handle = await client.start_workflow(
+            "ActionWorkflow",
+            payload,
+            id=workflow_id,
+            task_queue=self.task_queue,
+            id_reuse_policy=WorkflowIDReusePolicy.ALLOW_DUPLICATE,
+            id_conflict_policy=WorkflowIDConflictPolicy.USE_EXISTING,
+        )
+        return str(handle.id)
 
     async def start_trial(self, workflow_id: str, payload: dict[str, Any]) -> str:
         """A draft agent version, tried once (S32-03): `AgentTrial` in the orchestrator."""

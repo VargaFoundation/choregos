@@ -965,6 +965,20 @@ export const api = {
   removeOrgGroupMember: (org: string, slug: string, userId: string) =>
     request<void>(`/orgs/${org}/groups/${encodeURIComponent(slug)}/members/${encodeURIComponent(userId)}`, { method: "DELETE" }),
   /**
+   * A person records what they found of an action in doubt (S65-26, ADR 0149 §5): `made` resumes it,
+   * `not_made` fails it and compensates what came before. Guarded as an approval: a 401
+   * `step_up_required` goes back through the IdP and returns to the action's page.
+   */
+  settleAction: (
+    id: string,
+    actionId: string,
+    body: { outcome: "made" | "not_made"; note: string; result?: Record<string, unknown> | null },
+  ) =>
+    request<Action>(`/projects/${qualify(id)}/actions/${actionId}/settlement`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  /**
    * The organisation's outposts (ADR 0147): places a person enrols, which only dial out. Every route is
    * `outpost:manage`, the organisation administrator's. The platform stores no address and no
    * credential of an outpost's side, so none is ever here.

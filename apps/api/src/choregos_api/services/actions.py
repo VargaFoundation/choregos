@@ -26,7 +26,7 @@ from ..audit import record
 from ..db.models import Action, ActionEffect, Agent, Project, User, WorkItem
 from ..errors import ApiError, conflict, forbidden, unprocessable
 from ..freshness import authentication_age, require_fresh_authentication
-from ..schemas.actions import ActionCreate, ActionDto, ActionEffectDto, ApprovalSpec
+from ..schemas.actions import ActionCreate, ActionDto, ActionEffectDto, ActionSettlementBody, ApprovalSpec
 from .events import persist_event
 from .human_groups import groups_for_org
 
@@ -211,7 +211,7 @@ async def propose_for_transition(
     return proposed
 
 
-def start_once_committed(session: AsyncSession, action: Action) -> None:
+def start_once_committed(session: AsyncSession, action: Action, *, again: bool = False) -> None:
     """The approved action leaves for Temporal once its approval is COMMITTED, not before (ADR 0085).
 
     Started inside the transaction, a workflow outlived a commit that failed: it ran the effects of
@@ -226,7 +226,10 @@ def start_once_committed(session: AsyncSession, action: Action) -> None:
     action.temporal_wf_id = workflow_id_of(action_id)
 
     async def start() -> None:
-        await get_temporal().start_action(workflow_id_of(action_id), {"action_id": action_id})
+        gateway = get_temporal()
+        # A settled action's first run completed (S65-26): only a restart reuses its id.
+        begin = gateway.restart_action if again else gateway.start_action
+        await begin(workflow_id_of(action_id), {"action_id": action_id})
 
     after_commit(session, start)
 
@@ -307,6 +310,50 @@ async def _agent_owner(session: AsyncSession, proposed_by: dict[str, Any], org_i
     return owner.email.lower() if owner is not None else None
 
 
+async def _one_of_its_approvers(
+    session: AsyncSession,
+    project: Project,
+    org_slug: str,
+    action: Action,
+    principal: Any,
+    gesture: str,
+    verb: str,
+) -> None:
+    """The rank, the groups and the separation of duties of the action's rule: who may approve it, and
+    who may settle it once it is in doubt (S65-26). `gesture` and `verb` name the refusal."""
+    approval = action.approval or {}
+    approvers = approval.get("approvers") or [{"role": "project_owner", "min": 1}]
+    my_rank = rank(principal, org_slug, project.slug)
+    high_enough = [a for a in approvers if my_rank >= RANKS.get(str(a.get("role") or "project_owner"), 3)]
+    if not high_enough:
+        raise forbidden(f"{gesture} this action needs an approver's rank")
+    # A group named by the rule (ADR 0052) is a second condition, not an alternative: a project owner
+    # outside `netops-approvers` does not approve a firewall rule. The groups are the identity
+    # provider's, as of the decider's last sign-in through it.
+    my_groups = groups_for_org(principal.groups, org_slug)
+    # A rule written `{project}-maintainers` (a workflow's action, S59-11) names this project's group.
+    from choregos_core.dsl.groups import group_for
+
+    def group_of(rule: dict[str, Any]) -> str:
+        return group_for(str(rule["group"]), project.slug)
+
+    if not any(not a.get("group") or group_of(a) in my_groups for a in high_enough):
+        groups = sorted({group_of(a) for a in high_enough if a.get("group")})
+        raise forbidden(
+            f"{gesture} this action needs membership of the group {' or '.join(groups)} "
+            "(identity-provider groups, as of your last sign-in)"
+        )
+    if approval.get("separation_of_duties", True):
+        proposed_by = action.proposed_by or {}
+        me = principal.email.lower()
+        if (proposed_by.get("kind") == "user" and str(proposed_by.get("id", "")).lower() == me) or (
+            await _agent_owner(session, proposed_by, project.org_id)
+        ) == me:
+            raise unprocessable(
+                f"separation of duties: whoever proposes (or owns the agent that proposes) does not {verb}"
+            )
+
+
 async def decide(
     session: AsyncSession,
     project: Project,
@@ -332,35 +379,7 @@ async def decide(
         raise conflict(f"the action is already {action.status}")
     approval = action.approval or {}
     approvers = approval.get("approvers") or [{"role": "project_owner", "min": 1}]
-    my_rank = rank(principal, org_slug, project.slug)
-    high_enough = [a for a in approvers if my_rank >= RANKS.get(str(a.get("role") or "project_owner"), 3)]
-    if not high_enough:
-        raise forbidden("deciding this action needs an approver's rank")
-    # A group named by the rule (ADR 0052) is a second condition, not an alternative: a project owner
-    # outside `netops-approvers` does not approve a firewall rule. The groups are the identity
-    # provider's, as of the decider's last sign-in through it.
-    my_groups = groups_for_org(principal.groups, org_slug)
-    # A rule written `{project}-maintainers` (a workflow's action, S59-11) names this project's group.
-    from choregos_core.dsl.groups import group_for
-
-    def group_of(rule: dict[str, Any]) -> str:
-        return group_for(str(rule["group"]), project.slug)
-
-    if not any(not a.get("group") or group_of(a) in my_groups for a in high_enough):
-        groups = sorted({group_of(a) for a in high_enough if a.get("group")})
-        raise forbidden(
-            f"deciding this action needs membership of the group {' or '.join(groups)} "
-            "(the organisation's groups, or the identity provider's as of your last sign-in)"
-        )
-    if approval.get("separation_of_duties", True):
-        proposed_by = action.proposed_by or {}
-        me = principal.email.lower()
-        if (proposed_by.get("kind") == "user" and str(proposed_by.get("id", "")).lower() == me) or (
-            await _agent_owner(session, proposed_by, project.org_id)
-        ) == me:
-            raise unprocessable(
-                "separation of duties: whoever proposes (or owns the agent that proposes) does not decide"
-            )
+    await _one_of_its_approvers(session, project, org_slug, action, principal, "deciding", "decide")
     if any(d.get("by", "").lower() == principal.email.lower() for d in action.decisions or []):
         raise conflict("you have already decided this action")
     # `step_up_minutes` absent (`None`): the rule demands no recent authentication, which an
@@ -436,6 +455,150 @@ async def dto(session: AsyncSession, action: Action) -> ActionDto:
     ).scalars()
     result = ActionDto.model_validate(action)
     result.journal = [ActionEffectDto.model_validate(e) for e in journal]
+    result.settlement = next((e.settlement for e in result.journal if e.settlement is not None), None)
     project = await session.get(Project, action.project_id)
     result.project_slug = project.slug if project is not None else None
     return result
+
+
+#: The 409 codes of a settlement (`settleAction`).
+NOT_IN_DOUBT = "action_not_in_doubt"
+ALREADY_SETTLED = "action_already_settled"
+#: The most a stated result may weigh, as JSON.
+SETTLED_RESULT_MAX_BYTES = 16 * 1024
+
+
+async def settle(
+    session: AsyncSession,
+    project: Project,
+    org_slug: str,
+    action_id: str,
+    body: ActionSettlementBody,
+    principal: Any,
+) -> Action:
+    """A person records what they found of an action in doubt (S65-26, ADR 0149 §5).
+
+    The write was sent through an outpost and its answer never came: the platform does nothing more
+    by itself. Whoever may approve the action may settle it, under the same four guards (a human
+    session, an approver's rank and group, a recent authentication, the separation of duties): what
+    they record decides whether the rest of an approved action runs, or what it did is undone.
+
+    - `made`: the effect is `done`, with the result they state; the action is `approved` again and
+      its `ActionWorkflow` runs once more (`start_once_committed`, a restart of the same id): the
+      effects already done are
+      answered from the journal, the ones after it are played, and a later failure compensates as
+      for any action, the settled effect included.
+    - `not_made`: the effect is `not_made`, an effect `execute_effect` never attempts again; the
+      action is `approved` again and its workflow meets that refusal at once: what was done before
+      it is compensated backwards and the action ends `failed`.
+
+    The doubt's evidence moves with the settlement onto the effect's row. Nothing runs here: the
+    workflow leaves after the commit, and the relay starts it if that start is lost."""
+    import json
+
+    from choregos_contracts import SettlementOutcome
+
+    if principal.kind != "user" or principal.authenticated_at is None:
+        raise forbidden("a settlement is made in a human session (decision_requires_session)")
+    outcome = SettlementOutcome(body.outcome)
+    if outcome is SettlementOutcome.NOT_MADE and body.result is not None:
+        raise unprocessable(
+            "a write that was not made returned nothing: `result` goes with `made` only",
+            errors=[{"loc": ["body", "result"], "msg": "with `made` only", "code": "result_with_not_made"}],
+        )
+    if body.result is not None and len(json.dumps(body.result, default=str)) > SETTLED_RESULT_MAX_BYTES:
+        raise unprocessable(
+            f"the stated result weighs more than {SETTLED_RESULT_MAX_BYTES // 1024} KiB as JSON",
+            errors=[{"loc": ["body", "result"], "msg": "too large", "code": "result_too_large"}],
+        )
+    action = (
+        await session.execute(
+            select(Action).where(Action.id == action_id, Action.project_id == project.id).with_for_update()
+        )
+    ).scalar_one_or_none()
+    if action is None:
+        raise ApiError(404, "Action not found", action_id)
+    # Guarded before anything is said of the action's state: a second request is guarded as the first.
+    await _one_of_its_approvers(session, project, org_slug, action, principal, "settling", "settle")
+    freshness = (action.approval or {}).get("step_up_minutes", 10)
+    age = (
+        require_fresh_authentication(principal, int(freshness))
+        if freshness is not None
+        else authentication_age(principal)
+    )
+    effects = list(
+        (
+            await session.execute(
+                select(ActionEffect)
+                .where(ActionEffect.action_id == action.id)
+                .order_by(ActionEffect.position)
+                .with_for_update()
+            )
+        ).scalars()
+    )
+    settled = next((e for e in effects if e.settlement is not None), None)
+    if settled is not None:
+        # Settled already: the same outcome again changes nothing (a second click, a retried request);
+        # the other one is a conflict a person resolves, never a second settlement.
+        if (settled.settlement or {}).get("outcome") == outcome.value:
+            return action
+        raise conflict(
+            f"this action was already settled `{(settled.settlement or {}).get('outcome')}` by "
+            f"{(settled.settlement or {}).get('by')}",
+            extra={"code": ALREADY_SETTLED},
+        )
+    doubted = next((e for e in effects if e.status == ActionStatus.IN_DOUBT.value), None)
+    if action.status != ActionStatus.IN_DOUBT.value or doubted is None:
+        raise conflict(f"the action is {action.status}, not in doubt", extra={"code": NOT_IN_DOUBT})
+    now = utcnow()
+    record_of_it = {
+        "position": doubted.position,
+        "outcome": outcome.value,
+        "by": principal.email,
+        "at": now.isoformat(),
+        "note": body.note,
+        "result": body.result if outcome is SettlementOutcome.MADE else None,
+        "auth_age_seconds": age,
+        "in_doubt": list((doubted.result or {}).get("in_doubt") or []),
+    }
+    doubted.settlement = record_of_it
+    doubted.finished_at = now
+    if outcome is SettlementOutcome.MADE:
+        doubted.status, doubted.result, doubted.error = "done", dict(body.result or {}), None
+    else:
+        doubted.status, doubted.result = "not_made", None
+        doubted.error = f"not made, as {principal.email} recorded: {body.note}"[:2000]
+    # Compare-and-set, as a decision: of two settlements at once only one moves the action.
+    moved = await session.execute(
+        update(Action)
+        .where(Action.id == action.id, Action.status == ActionStatus.IN_DOUBT.value)
+        .values(status=ActionStatus.APPROVED.value, error=None, finished_at=None, updated_at=now)
+        .execution_options(synchronize_session=False)
+    )
+    if moved.rowcount != 1:  # type: ignore[attr-defined]
+        raise conflict("another settlement has just been made", extra={"code": ALREADY_SETTLED})
+    await session.refresh(action)
+    await record(
+        session,
+        principal,
+        "action.settle",
+        org_id=project.org_id,
+        target_type="action",
+        target_id=action.id,
+        outcome=outcome.value,
+        position=doubted.position,
+        auth_age_seconds=age,
+    )
+    await persist_event(
+        session,
+        EventType.ACTION_SETTLED,
+        project_id=project.id,
+        work_item_id=action.work_item_id,
+        project_slug=project.slug,
+        subject=action.id,
+        outcome=outcome.value,
+        position=doubted.position,
+        by=principal.email,
+    )
+    start_once_committed(session, action, again=True)
+    return action
