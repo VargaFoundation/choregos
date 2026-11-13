@@ -57,6 +57,12 @@ and `2025-03-26`.
 
 A tool you may not use is not announced, and calling it answers like an unknown tool.
 
+**Your client prepares, you decide.** `get_pending_decision` and `draft_decision` let your client read
+what waits for your decision and fill a draft of it: an answer, a reason, a task's values. The draft
+decides nothing. On the work item, the awaited decision shows it with the client that made it;
+**Take** fills the form, you check it and decide, or **Discard** removes it. Another person's request
+answers like one that does not exist.
+
 `docs_search` and `docs_read` serve the pages you are reading, from the instance itself: an assistant
 connected to the door answers how Choregos works from the documentation of the version installed,
 with no access to the internet. An instance built without the documentation answers that it carries
