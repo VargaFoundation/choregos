@@ -726,6 +726,39 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/ValidationError" }
+  /projects/{id}/actions/{action_id}/settlement:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+      - { name: action_id, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [actions]
+      operationId: settleAction
+      description: >-
+        A person records what they found in the system an action in doubt wrote to (ADR 0149 §5): the write that
+        was sent and never answered was `made`, or `not_made`. Guarded as an approval of the action is: a human
+        session (an API token or an MCP client never settles: 403), the rank, and the group when the rule names one,
+        of one of the action's approvers, a recent authentication under the action's `step_up_minutes` (401
+        `step_up_required`), and whoever proposed the action, or owns the agent that did, does not settle it unless
+        its rule waives the separation of duties (422). `made`: the effect in doubt is recorded `done`, with the
+        `result` the person states (none: an empty one), and the action resumes: it is `approved` again and its
+        `ActionWorkflow` runs once more, answering from the journal the effects already done, playing those after
+        it, and ending `succeeded`, or, if a later one fails, compensating backwards as any action does. `not_made`:
+        the effect is recorded `not_made` and is never attempted again; the action takes its failure path: what it
+        had done before the effect is compensated backwards and it ends `failed`. Either way the work item that
+        waits for the action is told when it ends, and nothing runs within this request. The effect's journal keeps
+        what was sent (`settlement.in_doubt`). Settling again with the same outcome answers the action as it is and
+        records nothing; 409 `action_already_settled` for the other outcome, `action_not_in_doubt` for an action
+        that is not in doubt and was never settled. 422 for an empty note, or a `result` with `not_made`.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/ActionSettlementRequest" } } }
+      responses:
+        "200": { description: "Settled (or already settled with this outcome): the action and its journal", content: { application/json: { schema: { $ref: "#/components/schemas/Action" } } } }
+        "401": { description: "Authentication too old: `errors[0].error` is `step_up_required`" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: "State conflict: `code` is `action_not_in_doubt` or `action_already_settled`", content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /projects/{id}/workflow:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -6052,7 +6085,7 @@ components:
               line: { type: integer }
               column: { type: integer }
         retry_after: { type: integer }
-        code: { type: string, description: "A machine code on some 409s: `stale_base` (from an agent publication, or from `updateProject`), `no_change`, `eval_failed` (S40-12)" }
+        code: { type: string, description: "A machine code on some 409s: `stale_base` (from an agent publication, or from `updateProject`), `no_change`, `eval_failed` (S40-12), `action_not_in_doubt` and `action_already_settled` (`settleAction`)" }
         latest_version: { type: integer, description: "On `stale_base` and `no_change`: the agent's latest version" }
         latest_revision: { type: string, description: "On `stale_base` from `updateProject`: the project's current `config_revision`" }
         latest_author: { type: [string, "null"], description: "On `stale_base`: who published the latest version" }
@@ -6660,11 +6693,12 @@ components:
         position: { type: integer }
         key: { type: string }
         effect: { type: string }
-        status: { type: string, enum: [started, done, compensated, compensation_failed, in_doubt], description: "`in_doubt`: the effect was sent and nobody knows whether it was executed (a write through an outpost that was claimed and never answered, ADR 0149 §5). It is not attempted again and not compensated" }
+        status: { type: string, enum: [started, done, compensated, compensation_failed, in_doubt, not_made], description: "`in_doubt`: the effect was sent and nobody knows whether it was executed (a write through an outpost that was claimed and never answered, ADR 0149 §5). It is not attempted again and not compensated until a person settles it (`settleAction`): `made` records it `done`, `not_made` records it `not_made`, an effect never attempted again and never compensated, since it did nothing" }
         attempts: { type: integer }
         result: { type: [object, "null"], additionalProperties: true, description: "what a done effect returned. For an effect `in_doubt`, `in_doubt` lists what was sent and never answered, one entry per delivery (`outpost`, `endpoint`, `operation`, `call_id`, `instance_id`, `claimed_at`, `arguments_sha256`), and `again` says whether the effect's own retries may deliver it again: true only for an operation that takes the platform's idempotency key" }
         error: { type: [string, "null"] }
         finished_at: { type: [string, "null"], format: date-time }
+        settlement: { oneOf: [{ $ref: "#/components/schemas/ActionSettlement" }, { type: "null" }], description: "what a person recorded of this effect once it was in doubt; null for an effect that never was" }
     Action:
       type: object
       required: [id, origin, kind, title, status]
@@ -6680,7 +6714,7 @@ components:
         proposed_by: { type: object, additionalProperties: true }
         approval: { type: object, additionalProperties: true }
         decisions: { type: array, items: { type: object, additionalProperties: true } }
-        status: { type: string, enum: [pending_approval, rejected, approved, running, awaiting_evidence, succeeded, failed, in_doubt], description: "`in_doubt` is terminal, like `succeeded`, `failed` and `rejected`: one of the action's effects was sent and nobody knows whether it was executed (ADR 0149 §5). The action is never replayed, by no route, and nothing it had done is compensated automatically: a person checks the system the write was for. The journal says which effect, and what was sent" }
+        status: { type: string, enum: [pending_approval, rejected, approved, running, awaiting_evidence, succeeded, failed, in_doubt], description: "`in_doubt` ends what the platform does by itself, like `succeeded`, `failed` and `rejected`: one of the action's effects was sent and nobody knows whether it was executed (ADR 0149 §5). Nothing replays it and nothing it had done is compensated automatically. Only a person moves it on: they check the system the write was for and settle the action (`settleAction`), which makes it `approved` again, to end `succeeded` or `failed`. The journal says which effect, and what was sent" }
         result: { type: [object, "null"], additionalProperties: true }
         error: { type: [string, "null"] }
         temporal_wf_id: { type: [string, "null"] }
@@ -6690,6 +6724,33 @@ components:
         created_at: { type: [string, "null"], format: date-time }
         finished_at: { type: [string, "null"], format: date-time }
         journal: { type: array, items: { $ref: "#/components/schemas/ActionEffect" } }
+        settlement: { oneOf: [{ $ref: "#/components/schemas/ActionSettlement" }, { type: "null" }], description: "what a person recorded once the action was in doubt (`settleAction`): the same record as on the effect it concerns. Null for an action that was never settled" }
+    ActionSettlementRequest:
+      type: object
+      required: [outcome, note]
+      additionalProperties: false
+      description: What a person found in the system an action in doubt wrote to (ADR 0149 §5).
+      properties:
+        outcome: { $ref: "#/components/schemas/SettlementOutcome" }
+        note: { type: string, minLength: 1, maxLength: 2000, description: "what the person checked, and where: a settlement always says it" }
+        result: { type: [object, "null"], additionalProperties: true, description: "with `made` only (422 otherwise): what the write returned, as the person read it in the system, recorded as the effect's result for the effects after it to cite (`effects[<position>]`). None: an empty result. At most 16 KiB as JSON" }
+    SettlementOutcome:
+      type: string
+      enum: [made, not_made]
+      description: "`made`: the write is in the system, and the action resumes after it. `not_made`: it is not, and the action fails, compensating what it had done before it"
+    ActionSettlement:
+      type: object
+      required: [position, outcome, by, at, note, in_doubt]
+      description: What a person recorded of an effect in doubt, and the doubt's evidence, kept with it.
+      properties:
+        position: { type: integer, description: "the effect in doubt that was settled" }
+        outcome: { $ref: "#/components/schemas/SettlementOutcome" }
+        by: { type: string, description: "who settled it (their e-mail)" }
+        at: { type: string, format: date-time }
+        note: { type: string }
+        result: { type: [object, "null"], additionalProperties: true, description: "the result the person stated, with `made`" }
+        auth_age_seconds: { type: [integer, "null"], description: "how old their authentication was, as on a decision" }
+        in_doubt: { type: array, items: { type: object, additionalProperties: true }, description: "what was sent and never answered, one entry per delivery, as the effect in doubt held it (`outpost`, `endpoint`, `operation`, `call_id`, `instance_id`, `claimed_at`, `arguments_sha256`)" }
     ReadinessFix:
       type: object
       required: [by]

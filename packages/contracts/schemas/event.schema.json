@@ -28,7 +28,8 @@
         "choregos.project.provisioning.failed",
         "choregos.security.injection_suspected", "choregos.tool.called", "choregos.network.denied",
         "choregos.action.proposed", "choregos.action.decided", "choregos.action.effect_done",
-        "choregos.action.effect_compensated", "choregos.action.succeeded", "choregos.action.failed"
+        "choregos.action.effect_compensated", "choregos.action.succeeded", "choregos.action.failed",
+        "choregos.action.settled"
       ]
     },
     "subject": { "type": ["string", "null"] },
