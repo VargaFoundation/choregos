@@ -12,6 +12,7 @@ from sqlalchemy import select
 from ...audit import record
 from ...db.models import (
     Agent,
+    AgentStar,
     AgentVersion,
 )
 from ...deps import Db, Me
@@ -42,6 +43,7 @@ from ...services.agent_governance import (
 from ...services.agent_releases import (
     after_publish,
 )
+from ...services.agent_social import auto_watch
 from ...services.agent_views import agent_dto
 from ...services.agents import (
     digest,
@@ -74,6 +76,8 @@ async def list_agents(
     scope: Annotated[Literal["platform", "org", "project", "personal"] | None, Query()] = None,
     project: Annotated[str | None, Query()] = None,
     tag: Annotated[list[str] | None, Query(description="every tag given (AND)")] = None,
+    starred: Annotated[bool, Query(description="only the agents the caller has starred")] = False,
+    sort: Annotated[Literal["name", "stars"], Query()] = "name",
 ) -> list[AgentDto]:
     """The agents the caller may see (ADR 0061), optionally of one scope or one project, and carrying
     every tag given (S40-10; applied after visibility, so a tag never reveals an invisible agent)."""
@@ -88,11 +92,19 @@ async def list_agents(
         agent_query = agent_query.where(
             Agent.project_id == (await project_in_org(session, organisation, project)).id
         )
+    if starred:
+        # Never reveals an invisible agent: the star only narrows what the visibility clause allows.
+        agent_query = agent_query.where(
+            Agent.id.in_(select(AgentStar.agent_id).where(AgentStar.user_id == principal.user_id))
+        )
     agents = (await session.execute(agent_query.order_by(Agent.slug))).scalars()
     wanted = set(tag or [])
-    return [
+    dtos = [
         await agent_dto(session, agent, principal, org) for agent in agents if wanted <= set(agent.tags or [])
     ]
+    if sort == "stars":  # most starred first, ties by slug (the order the rows came in)
+        dtos.sort(key=lambda dto: -dto.social.stars)
+    return dtos
 
 
 @router.post(
@@ -166,6 +178,8 @@ async def create_agent(
     )
     await session.flush()
     await after_publish(session, principal, agent, 1, principal.email)
+    if principal.kind == "user":
+        await auto_watch(session, agent)
     await record(
         session,
         principal,

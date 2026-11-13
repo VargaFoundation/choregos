@@ -2169,6 +2169,65 @@ export type Agent = {
   release_policy?: AgentReleasePolicy;
   /** the release waiting for approval */
   pending_release?: AgentRelease | null;
+  social?: AgentSocial;
+};
+
+/** The counters of an agent and what the caller does with it (ADR 0152). `forks` counts the forks the caller may see. */
+export type AgentSocial = {
+  watchers?: number;
+  stars?: number;
+  forks?: number;
+  /** the caller's watch level */
+  watching?: "all" | "releases" | null;
+  starred_by_me?: boolean;
+};
+
+export type AgentWatchPut = {
+  level?: "all" | "releases";
+};
+
+export type AgentForkEntry = {
+  slug: string;
+  display_name: string;
+  scope: "platform" | "org" | "project" | "personal";
+  project?: string | null;
+  owner?: string | null;
+  created_at?: string | null;
+  /** the version of the source this fork copied */
+  forked_from_version?: number | null;
+  latest_version: number;
+  /** its own versions go past the first */
+  diverged?: boolean;
+  lifecycle?: "draft" | "active" | "deprecated" | "retired";
+};
+
+export type AgentForkList = {
+  items: Array<AgentForkEntry>;
+};
+
+export type AgentNotification = {
+  id: string;
+  kind: "version_published" | "production_moved" | "candidate_started" | "candidate_promoted" | "candidate_withdrawn" | "rolled_back" | "forked" | "lifecycle_changed";
+  agent: string;
+  /** the fork a `forked` item names */
+  fork?: string | null;
+  actor?: string | null;
+  version?: number | null;
+  previous_version?: number | null;
+  /** what the move was (`promote`, `rollback`, `publish`) or the lifecycle reached */
+  detail?: string | null;
+  created_at: string;
+  read_at?: string | null;
+};
+
+export type AgentNotificationList = {
+  items: Array<AgentNotification>;
+  /** unread items the caller may still read */
+  unread?: number;
+};
+
+export type AgentNotificationsRead = {
+  updated: number;
 };
 
 export type AgentReleaseDecision = {
@@ -5977,8 +6036,10 @@ export interface Operations {
   listAgentCredentials: { method: "GET"; path: "/orgs/{org}/agents/{slug}/credentials"; body: never; response: Array<AgentCredential> };
   listAgentEvaluations: { method: "GET"; path: "/orgs/{org}/agents/{slug}/versions/{version}/evaluations"; body: never; response: Array<AgentEvaluation> };
   listAgentFeedbackCandidates: { method: "GET"; path: "/orgs/{org}/agents/{slug}/feedback-candidates"; body: never; response: Array<ConversationCandidate> };
+  listAgentForks: { method: "GET"; path: "/orgs/{org}/agents/{slug}/forks"; body: never; response: AgentForkList };
   listAgentImages: { method: "GET"; path: "/platform/agent-images"; body: never; response: Array<AgentImageInfo> };
   listAgentMetrics: { method: "GET"; path: "/orgs/{org}/agent-metrics"; body: never; response: Array<AgentMetricsSummary> };
+  listAgentNotifications: { method: "GET"; path: "/orgs/{org}/agent-notifications"; body: never; response: AgentNotificationList };
   listAgentReleases: { method: "GET"; path: "/orgs/{org}/agents/{slug}/releases"; body: never; response: Array<AgentRelease> };
   listAgentRuns: { method: "GET"; path: "/orgs/{org}/agents/{slug}/runs"; body: never; response: Array<Run> };
   listAgentSessionTools: { method: "GET"; path: "/internal/agent-sessions/{id}/tools"; body: never; response: AgentSessionTools };
@@ -6113,6 +6174,8 @@ export interface Operations {
   putTeamsDelivery: { method: "PUT"; path: "/orgs/{org}/assistants/{slug}/delivery/teams"; body: TeamsDeliveryPut; response: TeamsDelivery };
   putWorkflow: { method: "PUT"; path: "/projects/{id}/workflow"; body: WorkflowPut; response: WorkflowDef };
   putWorkflowRouting: { method: "PUT"; path: "/projects/{id}/workflow-routing"; body: WorkflowRouting; response: WorkflowRouting };
+  readAgentNotification: { method: "POST"; path: "/orgs/{org}/agent-notifications/{item_id}/read"; body: never; response: AgentNotificationsRead };
+  readAllAgentNotifications: { method: "POST"; path: "/orgs/{org}/agent-notifications/read"; body: never; response: AgentNotificationsRead };
   readyz: { method: "GET"; path: "/readyz"; body: never; response: void };
   reassignHumanRequest: { method: "POST"; path: "/work-items/{id}/human-requests/{request_id}/assignee"; body: AssigneeChange; response: HumanRequest };
   refreshGitHubInstallations: { method: "POST"; path: "/orgs/{org}/github/refresh"; body: never; response: GitHubAppStatus };
@@ -6161,6 +6224,7 @@ export interface Operations {
   setProjectAgentChannel: { method: "PUT"; path: "/projects/{id}/agent-channel"; body: ProjectAgentChannel; response: ProjectAgentChannel };
   setTrackerIdentity: { method: "PUT"; path: "/orgs/{org}/members/{user_id}/tracker-identities/{tracker}"; body: TrackerIdentityPut; response: TrackerIdentity };
   shareWorkflow: { method: "POST"; path: "/orgs/{org}/workflow-catalogue"; body: WorkflowShare; response: WorkflowCatalogueEntry };
+  starAgent: { method: "PUT"; path: "/orgs/{org}/agents/{slug}/star"; body: never; response: AgentSocial };
   startAgentEvaluation: { method: "POST"; path: "/orgs/{org}/agents/{slug}/versions/{version}/evaluations"; body: AgentEvaluationCreate; response: AgentEvaluation };
   startAgentTrial: { method: "POST"; path: "/orgs/{org}/agent-trials"; body: AgentTrialCreate; response: AgentTrial };
   stopAgent: { method: "POST"; path: "/orgs/{org}/agents/{slug}/stop"; body: StopRequest; response: AgentStopResult };
@@ -6192,6 +6256,8 @@ export interface Operations {
   uninstallAssistant: { method: "DELETE"; path: "/orgs/{org}/assistants/{slug}"; body: never; response: void };
   uninstallPlugin: { method: "DELETE"; path: "/orgs/{org}/plugins/{name}"; body: never; response: PluginUninstallResult };
   unpinProjectAgent: { method: "DELETE"; path: "/projects/{id}/agents/{slug}"; body: never; response: void };
+  unstarAgent: { method: "DELETE"; path: "/orgs/{org}/agents/{slug}/star"; body: never; response: AgentSocial };
+  unwatchAgent: { method: "DELETE"; path: "/orgs/{org}/agents/{slug}/watch"; body: never; response: AgentSocial };
   updateAgent: { method: "PATCH"; path: "/orgs/{org}/agents/{slug}"; body: AgentPatch; response: Agent };
   updateAssistant: { method: "PATCH"; path: "/orgs/{org}/assistants/{slug}"; body: AssistantUpdate; response: Assistant };
   updateAssistantInstallationMemory: { method: "PATCH"; path: "/orgs/{org}/assistants/{slug}/memory/{space}"; body: MemoryAction; response: MemorySpace };
@@ -6213,6 +6279,7 @@ export interface Operations {
   uploadKnowledgeDocument: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/documents"; body: void; response: KnowledgeDocument };
   validateProjectWorkflow: { method: "POST"; path: "/projects/{id}/workflows/validate"; body: WorkflowValidateRequest; response: WorkflowValidation };
   validateWorkflow: { method: "POST"; path: "/workflows/validate"; body: WorkflowValidateRequest; response: WorkflowValidation };
+  watchAgent: { method: "PUT"; path: "/orgs/{org}/agents/{slug}/watch"; body: AgentWatchPut; response: AgentSocial };
 }
 
 export type OperationId = keyof Operations;

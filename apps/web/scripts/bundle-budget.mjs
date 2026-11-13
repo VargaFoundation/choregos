@@ -58,6 +58,8 @@ const CHUNKS = join(process.cwd(), ".next", "static", "chunks");
 // 2026-11-12 (S64-09d): 2475 -> 2500 kB. The assistant's Stop, Resume and Tokens and cost panel on its installation
 // page, and a conversation turn's assistant and owner on the Activity screen, measured 2451 kB on a main at 2426 kB
 // (about 25 kB), on top of S60-07b's 2456 kB; no new dependency.
+// 2026-11-12 (agent forks, watch, stars; ADR 0152): no change, 2500 kB. The social bar, the Forks tab and the inbox card
+// add about 20 kB to main's 2451 kB (2483 kB measured on the rebased branch).
 const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 2500);
 const CHUNK_MAX_KB = Number(process.env.BUNDLE_CHUNK_MAX_KB ?? 600);
 

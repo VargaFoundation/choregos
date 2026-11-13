@@ -6,6 +6,17 @@ One module per domain, re-exported: `choregos_api.schemas.X` stays the address o
 
 from __future__ import annotations
 
+from .agent_social import (
+    AgentForkDto,
+    AgentForkList,
+    AgentNotificationDto,
+    AgentNotificationKind,
+    AgentNotificationList,
+    AgentNotificationsRead,
+    AgentSocial,
+    AgentWatchPut,
+    WatchLevel,
+)
 from .agents import (
     A2aDeclaredCost,
     A2aPinnedCard,
@@ -376,6 +387,8 @@ __all__ = [
     "AgentExposedProject",
     "AgentExposure",
     "AgentFork",
+    "AgentForkDto",
+    "AgentForkList",
     "AgentImageInfo",
     "AgentLifecycleChange",
     "AgentLifecycleResult",
@@ -383,6 +396,10 @@ __all__ = [
     "AgentMetrics",
     "AgentMetricsSummary",
     "AgentNotStopped",
+    "AgentNotificationDto",
+    "AgentNotificationKind",
+    "AgentNotificationList",
+    "AgentNotificationsRead",
     "AgentOverrides",
     "AgentOwnerChange",
     "AgentPatch",
@@ -399,6 +416,7 @@ __all__ = [
     "AgentRuntime",
     "AgentSampleInput",
     "AgentScopeChange",
+    "AgentSocial",
     "AgentSpec",
     "AgentStableGates",
     "AgentStopResult",
@@ -409,6 +427,7 @@ __all__ = [
     "AgentVersionMetrics",
     "AgentVersionPublish",
     "AgentVersionRestore",
+    "AgentWatchPut",
     "ApiTokenCreate",
     "ApiTokenCreated",
     "ApiTokenDto",
@@ -647,6 +666,7 @@ __all__ = [
     "VendorDocDto",
     "VoiceAudio",
     "VoiceRuntime",
+    "WatchLevel",
     "WebhookAck",
     "WorkItemAction",
     "WorkItemCreate",

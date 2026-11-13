@@ -36,6 +36,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..base import Base, Json, PkMixin, TimestampMixin, utcnow, uuid7
 from .agent_sessions import AgentSessionEvent, AgentSessionRecord, ConversationFeedback
+from .agent_social import AgentNotification, AgentStar, AgentWatch
 from .agents import (
     Agent,
     AgentCredential,
@@ -182,10 +183,13 @@ __all__ = [
     "Agent",
     "AgentCredential",
     "AgentEvaluation",
+    "AgentNotification",
     "AgentRelease",
     "AgentSessionEvent",
     "AgentSessionRecord",
+    "AgentStar",
     "AgentVersion",
+    "AgentWatch",
     "Any",
     "ApiToken",
     "ArtifactRecord",
