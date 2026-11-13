@@ -6,7 +6,7 @@ are under forced RLS like `machine_accounts`. The downgrade drops both tables an
 their members; the identity provider's groups (`users.groups`) are not touched.
 
 Revision ID: d4a6c8e0f2b5
-Revises: f1b3d5e7a9c2
+Revises: b3dbe73fff38
 Create Date: 2026-11-12 14:00:00+00:00
 """
 
@@ -18,7 +18,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "d4a6c8e0f2b5"
-down_revision: str | None = "f1b3d5e7a9c2"
+down_revision: str | None = "b3dbe73fff38"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
