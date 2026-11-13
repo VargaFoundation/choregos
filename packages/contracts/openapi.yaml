@@ -1490,6 +1490,25 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/ValidationError" }
+  /work-items/{id}/human-requests/{request_id}/draft:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+      - { name: request_id, in: path, required: true, schema: { type: string } }
+    delete:
+      tags: [work-items]
+      operationId: discardDecisionDraft
+      description: >-
+        Discard the draft a person's client deposited for a waiting request through the MCP door
+        (ADR 0162 point 7). Allowed to whoever may answer the request (the rights of `postDecision`:
+        the rank, and the addressee rules of ADR 0153, an organisation administrator included). Audited
+        as `workitem.decision.draft.discard`. Taking a draft has no route: the console fills the
+        decision's form with it, and the person decides with `postDecision`. 404 when the request has
+        no draft; 409 once it is decided.
+      responses:
+        "204": { description: Draft discarded }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /work-items/{id}/actions:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     post:
@@ -10897,6 +10916,56 @@ components:
           description: >-
             Who the request is addressed to (ADR 0153): the workflow's human actor, or an organisation
             administrator's reassignment. Null when the step names nobody.
+        draft:
+          oneOf:
+            - $ref: "#/components/schemas/DecisionDraft"
+            - type: "null"
+          description: >-
+            What a person's client prepared for this request through the MCP door (ADR 0162): a
+            proposal, never a decision. Null when none was deposited, or once it is discarded.
+    DecisionDraft:
+      type: object
+      required: [kind, summary, by, via, at]
+      description: >-
+        A draft of a person's decision, deposited by their client through the MCP door's
+        `draft_decision` (ADR 0162 points 4-5). It decides nothing: the person takes it into the
+        decision's form, or discards it. It never attests and never grants paths.
+      properties:
+        kind:
+          type: string
+          enum: [approve, reject, answer, complete]
+          description: >-
+            What the client proposes: `approve` or `reject` for an approval or a scope change,
+            `answer` for a question, `complete` or `reject` for a task.
+        answer: { type: [string, "null"], maxLength: 20000 }
+        reason: { type: [string, "null"], maxLength: 2000 }
+        values:
+          type: [object, "null"]
+          additionalProperties: true
+          description: >-
+            A task's values, checked against its form when drafted; required fields may be left for
+            the person to fill.
+        note:
+          type: [string, "null"]
+          maxLength: 2000
+          description: Why the client proposes this — written by the client, shown as data.
+        summary: { type: string, description: The platform's one-line reading of the draft. }
+        by: { type: string, description: "The person whose client deposited it, by e-mail." }
+        via: { $ref: "#/components/schemas/DecisionDraftVia" }
+        at: { type: string, format: date-time }
+    DecisionDraftVia:
+      type: object
+      required: [door]
+      description: Through what the draft came (ADR 0162 point 4).
+      properties:
+        door: { type: string, enum: [mcp] }
+        client:
+          type: [string, "null"]
+          description: The client — the name of the token it used, or its OAuth client id.
+        agent:
+          type: [string, "null"]
+          description: The external agent the client embodies, when it is attached to one (ADR 0033).
+        user_agent: { type: [string, "null"], maxLength: 100 }
     HumanRequestAssignee:
       type: object
       description: Who a waiting request is addressed to — a person, a group, or a person first (ADR 0153).

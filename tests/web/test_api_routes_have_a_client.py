@@ -104,6 +104,7 @@ NOT_CALLED_BY_A_CLIENT: dict[str, str] = {
 NO_CLIENT_YET: dict[str, str] = {
     "/projects/{id}/actions/{action_id}/settlement": "S65-26: the contract comes first (ADR 0001); the "
     "action page's settle form arrives with the implementation, which removes this entry",
+    "/work-items/{id}/human-requests/{request_id}/draft": "S65-22, Discard (ADR 0162 §7)",
 }
 
 #: Paths the CLI calls and the console must not: an operator's command, not a screen.
