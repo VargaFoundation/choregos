@@ -165,7 +165,7 @@ export type Problem = {
     column?: number;
   }>;
   retry_after?: number;
-  /** A machine code on some 409s: `stale_base` (from an agent publication, or from `updateProject`), `no_change`, `eval_failed` (S40-12) */
+  /** A machine code on some 409s: `stale_base` (from an agent publication, or from `updateProject`), `no_change`, `eval_failed` (S40-12), `action_not_in_doubt` and `action_already_settled` (`settleAction`) */
   code?: string;
   /** On `stale_base` and `no_change`: the agent's latest version */
   latest_version?: number;
@@ -866,8 +866,8 @@ export type ActionEffect = {
   position: number;
   key: string;
   effect: string;
-  /** `in_doubt`: the effect was sent and nobody knows whether it was executed (a write through an outpost that was claimed and never answered, ADR 0149 §5). It is not attempted again and not compensated */
-  status: "started" | "done" | "compensated" | "compensation_failed" | "in_doubt";
+  /** `in_doubt`: the effect was sent and nobody knows whether it was executed (a write through an outpost that was claimed and never answered, ADR 0149 §5). It is not attempted again and not compensated until a person settles it (`settleAction`): `made` records it `done`, `not_made` records it `not_made`, an effect never attempted again and never compensated, since it did nothing */
+  status: "started" | "done" | "compensated" | "compensation_failed" | "in_doubt" | "not_made";
   attempts?: number;
   /** what a done effect returned. For an effect `in_doubt`, `in_doubt` lists what was sent and never answered, one entry per delivery (`outpost`, `endpoint`, `operation`, `call_id`, `instance_id`, `claimed_at`, `arguments_sha256`), and `again` says whether the effect's own retries may deliver it again: true only for an operation that takes the platform's idempotency key */
   result?: {
@@ -875,6 +875,8 @@ export type ActionEffect = {
   } | null;
   error?: string | null;
   finished_at?: string | null;
+  /** what a person recorded of this effect once it was in doubt; null for an effect that never was */
+  settlement?: ActionSettlement | null;
 };
 
 /** A governed action (ADR 0035) and the log of its effects. */
@@ -899,7 +901,7 @@ export type Action = {
   decisions?: Array<{
     [key: string]: unknown;
   }>;
-  /** `in_doubt` is terminal, like `succeeded`, `failed` and `rejected`: one of the action's effects was sent and nobody knows whether it was executed (ADR 0149 §5). The action is never replayed, by no route, and nothing it had done is compensated automatically: a person checks the system the write was for. The journal says which effect, and what was sent */
+  /** `in_doubt` ends what the platform does by itself, like `succeeded`, `failed` and `rejected`: one of the action's effects was sent and nobody knows whether it was executed (ADR 0149 §5). Nothing replays it and nothing it had done is compensated automatically. Only a person moves it on: they check the system the write was for and settle the action (`settleAction`), which makes it `approved` again, to end `succeeded` or `failed`. The journal says which effect, and what was sent */
   status: "pending_approval" | "rejected" | "approved" | "running" | "awaiting_evidence" | "succeeded" | "failed" | "in_doubt";
   result?: {
     [key: string]: unknown;
@@ -912,6 +914,43 @@ export type Action = {
   created_at?: string | null;
   finished_at?: string | null;
   journal?: Array<ActionEffect>;
+  /** what a person recorded once the action was in doubt (`settleAction`): the same record as on the effect it concerns. Null for an action that was never settled */
+  settlement?: ActionSettlement | null;
+};
+
+/** What a person found in the system an action in doubt wrote to (ADR 0149 §5). */
+export type ActionSettlementRequest = {
+  outcome: SettlementOutcome;
+  /** what the person checked, and where: a settlement always says it */
+  note: string;
+  /** with `made` only (422 otherwise): what the write returned, as the person read it in the system, recorded as the effect's result for the effects after it to cite (`effects[<position>]`). None: an empty result. At most 16 KiB as JSON */
+  result?: {
+    [key: string]: unknown;
+  } | null;
+};
+
+/** `made`: the write is in the system, and the action resumes after it. `not_made`: it is not, and the action fails, compensating what it had done before it */
+export type SettlementOutcome = "made" | "not_made";
+
+/** What a person recorded of an effect in doubt, and the doubt's evidence, kept with it. */
+export type ActionSettlement = {
+  /** the effect in doubt that was settled */
+  position: number;
+  outcome: SettlementOutcome;
+  /** who settled it (their e-mail) */
+  by: string;
+  at: string;
+  note: string;
+  /** the result the person stated, with `made` */
+  result?: {
+    [key: string]: unknown;
+  } | null;
+  /** how old their authentication was, as on a decision */
+  auth_age_seconds?: number | null;
+  /** what was sent and never answered, one entry per delivery, as the effect in doubt held it (`outpost`, `endpoint`, `operation`, `call_id`, `instance_id`, `claimed_at`, `arguments_sha256`) */
+  in_doubt: Array<{
+    [key: string]: unknown;
+  }>;
 };
 
 export type ReadinessFix = {
@@ -6160,6 +6199,7 @@ export interface Operations {
   setOrgConnectorSecret: { method: "PUT"; path: "/orgs/{org}/connectors/{name}/secrets/{field}"; body: SecretValue; response: OrgConnector };
   setProjectAgentChannel: { method: "PUT"; path: "/projects/{id}/agent-channel"; body: ProjectAgentChannel; response: ProjectAgentChannel };
   setTrackerIdentity: { method: "PUT"; path: "/orgs/{org}/members/{user_id}/tracker-identities/{tracker}"; body: TrackerIdentityPut; response: TrackerIdentity };
+  settleAction: { method: "POST"; path: "/projects/{id}/actions/{action_id}/settlement"; body: ActionSettlementRequest; response: Action };
   shareWorkflow: { method: "POST"; path: "/orgs/{org}/workflow-catalogue"; body: WorkflowShare; response: WorkflowCatalogueEntry };
   startAgentEvaluation: { method: "POST"; path: "/orgs/{org}/agents/{slug}/versions/{version}/evaluations"; body: AgentEvaluationCreate; response: AgentEvaluation };
   startAgentTrial: { method: "POST"; path: "/orgs/{org}/agent-trials"; body: AgentTrialCreate; response: AgentTrial };

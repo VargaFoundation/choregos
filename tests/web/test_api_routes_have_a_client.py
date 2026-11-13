@@ -101,7 +101,10 @@ NOT_CALLED_BY_A_CLIENT: dict[str, str] = {
 }
 
 #: Paths whose console screen is a story still to come: that story removes its entries.
-NO_CLIENT_YET: dict[str, str] = {}
+NO_CLIENT_YET: dict[str, str] = {
+    "/projects/{id}/actions/{action_id}/settlement": "S65-26: the contract comes first (ADR 0001); the "
+    "action page's settle form arrives with the implementation, which removes this entry",
+}
 
 #: Paths the CLI calls and the console must not: an operator's command, not a screen.
 CLI_ONLY: dict[str, str] = {
