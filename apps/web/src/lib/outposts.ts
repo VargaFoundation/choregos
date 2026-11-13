@@ -12,11 +12,15 @@ import { ApiError } from "./api";
 import { libelleDeCode, relative, toSentenceCase } from "./format";
 import type {
   AgentAccessOutpost,
+  ConnectorOperation,
+  OperationPatch,
+  OrgConnector,
   OutpostCallRecord,
   OutpostCallState,
   OutpostInstanceStatus,
   OutpostRefusalCode,
   OutpostStatus,
+  PlatformArgument,
 } from "./types";
 
 /** Where the daemon reads its policy unless told otherwise (`choregos-outpost --policy`). */
@@ -203,6 +207,74 @@ export function outpostConfigProblems(config: Record<string, unknown>, schema: u
     problems.timeout_s = `A number of seconds${min !== undefined && max !== undefined ? ` between ${min} and ${max}` : ""}.`;
   }
   return problems;
+}
+
+// ─── how a write at an outpost is delivered (ADR 0149 §5-6) ───
+
+/** The platform argument that is an idempotency key: listing it is the first statement. */
+export const IDEMPOTENCY_KEY: PlatformArgument = "action_key";
+/** The two fields of an operation's rule either of which opens a write through an outpost. */
+export const DELIVERY_STATEMENTS = ["platform_arguments", "in_doubt_accepted"] as const;
+export type DeliveryStatement = (typeof DELIVERY_STATEMENTS)[number];
+
+/** What an administrator ticks: the operation takes the key, an in-doubt outcome is accepted. */
+export interface DeliveryDraft {
+  key: boolean;
+  accepted: boolean;
+}
+
+/**
+ * A write through an outpost: the only operation whose rule carries the two statements. The API refuses
+ * `in_doubt_accepted` for anything else, and `platform_arguments` for a read (`outpost_writes.stated`).
+ */
+export function isOutpostWrite(connector: Pick<OrgConnector, "kind" | "type">, operation: Pick<ConnectorOperation, "access">): boolean {
+  return connector.kind === "mcp" && connector.type === OUTPOST_CONNECTOR_TYPE && operation.access !== "read";
+}
+
+/** The two statements as the operation's rule holds them now. */
+export function deliveryOf(operation: Pick<ConnectorOperation, "platform_arguments" | "in_doubt_accepted">): DeliveryDraft {
+  return { key: (operation.platform_arguments ?? []).includes(IDEMPOTENCY_KEY), accepted: operation.in_doubt_accepted === true };
+}
+
+/**
+ * Whether the tool's input schema has an `action_key` argument: the API refuses a key the server would
+ * never read ("the platform cannot hand it one").
+ */
+export function hasKeyArgument(operation: Pick<ConnectorOperation, "input_schema">): boolean {
+  const properties = (operation.input_schema as { properties?: unknown } | null | undefined)?.properties;
+  return typeof properties === "object" && properties !== null && IDEMPOTENCY_KEY in properties;
+}
+
+/**
+ * The part of an `OperationPatch` that carries what changed between the rule and the draft, and nothing
+ * else: `platform_arguments` is the rule's list with `action_key` added or taken out (an empty list
+ * clears it), `in_doubt_accepted` true or null (null withdraws it).
+ */
+export function deliveryPatch(
+  operation: Pick<ConnectorOperation, "platform_arguments" | "in_doubt_accepted">,
+  draft: DeliveryDraft,
+): Pick<OperationPatch, DeliveryStatement> {
+  const now = deliveryOf(operation);
+  const patch: Pick<OperationPatch, DeliveryStatement> = {};
+  if (draft.key !== now.key) {
+    const others = (operation.platform_arguments ?? []).filter((name) => name !== IDEMPOTENCY_KEY);
+    patch.platform_arguments = draft.key ? [...others, IDEMPOTENCY_KEY].sort() : others;
+  }
+  if (draft.accepted !== now.accepted) patch.in_doubt_accepted = draft.accepted ? true : null;
+  return patch;
+}
+
+/** The statements a 422 names (`loc: ["body", "platform_arguments" | "in_doubt_accepted"]`), each with the API's words. */
+export function statementRefusals(cause: unknown): Partial<Record<DeliveryStatement, string>> {
+  if (!(cause instanceof ApiError) || cause.status !== 422) return {};
+  const named: Partial<Record<DeliveryStatement, string>> = {};
+  for (const error of cause.problem.errors ?? []) {
+    const { loc, msg } = (error ?? {}) as { loc?: unknown; msg?: unknown };
+    if (!Array.isArray(loc) || loc[0] !== "body") continue;
+    const field = DELIVERY_STATEMENTS.find((name) => name === loc[1]);
+    if (field) named[field] = typeof msg === "string" ? msg : "refused";
+  }
+  return named;
 }
 
 /**

@@ -1933,13 +1933,13 @@
   {
     "id": "connector.mcp.mcp-outpost",
     "title": "Connect an MCP server that lives at an outpost",
-    "version": 3,
+    "version": 4,
     "audience": "org_admin",
     "applies_to": {
       "connector": "mcp/mcp-outpost"
     },
     "link": null,
-    "reviewed": "2026-11-12",
+    "reviewed": "2026-11-14",
     "sections": [
       {
         "key": "before",
@@ -1959,7 +1959,7 @@
       {
         "key": "in_choregos",
         "title": "In Choregos",
-        "markdown": "1. Administration, **Connectors**, **Declare**: capability **MCP**, type **MCP server at an\n   outpost**, a lowercase name.\n2. `outpost`: the outpost's name. `endpoint`: the alias from its policy file. There is no URL and no\n   token to give.\n3. `timeout_s`: optional. It bounds the whole call: the wait for an instance of the outpost to take\n   it, then the server's answer.\n4. Press **Discover**, then open the read operations the agents need, one by one.\n5. To open a write, set its policy together with one of the two statements of its rule (the API's\n   `updateConnectorOperation`): `{\"policy\": \"approval\", \"platform_arguments\": [\"action_key\"]}` for a\n   tool that takes the key, or `{\"policy\": \"approval\", \"in_doubt_accepted\": true}`."
+        "markdown": "1. Administration, **Connectors**, **Declare**: capability **MCP**, type **MCP server at an\n   outpost**, a lowercase name.\n2. `outpost`: the outpost's name. `endpoint`: the alias from its policy file. There is no URL and no\n   token to give.\n3. `timeout_s`: optional. It bounds the whole call: the wait for an instance of the outpost to take\n   it, then the server's answer.\n4. Press **Discover**, then open the read operations the agents need, one by one.\n5. To open a write, tick one of the two statements under it, **How it is delivered**: *It takes the\n   platform's idempotency key* (offered only when the tool has an `action_key` argument) or *An\n   in-doubt outcome is accepted for it, explicitly*. Then set its policy: the statement leaves with\n   it, in the same request. **Set**, under the statements, sends them alone. Through the API it is\n   `updateConnectorOperation`: `{\"policy\": \"approval\", \"platform_arguments\": [\"action_key\"]}` or\n   `{\"policy\": \"approval\", \"in_doubt_accepted\": true}`."
       },
       {
         "key": "test",

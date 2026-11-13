@@ -14,6 +14,8 @@
 import { ApiError } from "@/lib/api";
 import type {
   AgentAccessOutpost,
+  ConnectorOperation,
+  OperationPatch,
   OrgConnector,
   Outpost,
   OutpostCallPage,
@@ -404,9 +406,70 @@ export function discoverAtOutpost(connector: OrgConnector): { added: string[]; c
   const known = new Set((connector.operations ?? []).map((o) => o.name));
   const tools = endpoint === "warehouse" ? ["stock_level", "reserve_stock"] : ["search_issues", "get_issue", "create_issue"];
   for (const tool of tools) {
-    if (!known.has(tool)) (connector.operations ??= []).push({ name: tool, access: READS.has(tool) ? "read" : "write", policy: "forbidden", groups: [] });
+    if (!known.has(tool))
+      (connector.operations ??= []).push({ name: tool, access: READS.has(tool) ? "read" : "write", policy: "forbidden", groups: [], input_schema: toolSchema(tool) });
   }
   return { added: tools.filter((tool) => !known.has(tool)), changed: [], removed: [], unchanged: tools.filter((tool) => known.has(tool)).length };
+}
+
+/** The input schema of the demo's tools at an outpost: `create_issue` takes the platform's idempotency key. */
+export function toolSchema(tool: string): Record<string, unknown> {
+  const properties: Record<string, unknown> = { title: { type: "string" } };
+  if (tool === "create_issue") properties.action_key = { type: "string", description: "an idempotency key" };
+  return { type: "object", properties };
+}
+
+function unprocessable(detail: string, errors: Array<{ loc: string[]; msg: string }>): ApiError {
+  return new ApiError(422, { title: "Unprocessable entity", detail, errors });
+}
+
+/**
+ * A change of an operation's rule at an outpost, judged as the API judges it (`outpost_writes.stated`,
+ * ADR 0149 §6) on the rule as the change would leave it, then applied: `in_doubt_accepted` for a write
+ * only, `platform_arguments` for a write whose input schema has each argument, and a write left open
+ * under neither statement is a 422 that names both. Absent leaves a statement; null, false or an empty
+ * list withdraws it.
+ */
+export function changeOperationAtOutpost(connector: OrgConnector, name: string, body: OperationPatch): ConnectorOperation {
+  const operation = (connector.operations ?? []).find((o) => o.name === name);
+  if (!operation) throw new ApiError(404, { title: "Not found", detail: `\`${connector.name}\` has no operation \`${name}\`` });
+  const where = `${connector.name}/${name}`;
+  const write = operation.access !== "read";
+  const platform = "platform_arguments" in body ? [...new Set(body.platform_arguments ?? [])].sort() : [...(operation.platform_arguments ?? [])];
+  const accepted = "in_doubt_accepted" in body ? body.in_doubt_accepted === true : operation.in_doubt_accepted === true;
+  const policy = body.policy ?? operation.policy;
+  const touches = "platform_arguments" in body || "in_doubt_accepted" in body;
+  if (touches || policy === "allowed" || policy === "approval") {
+    if (accepted && !write) {
+      const msg = "an in-doubt outcome exists for a write of a connector reached through an outpost and for nothing else: there is nothing to accept here";
+      throw unprocessable(`${where}: ${msg}`, [{ loc: ["body", "in_doubt_accepted"], msg }]);
+    }
+    if (platform.length > 0) {
+      if (!write) {
+        const msg = "the platform fills its arguments on a governed write: a read takes none";
+        throw unprocessable(`${where}: ${msg}`, [{ loc: ["body", "platform_arguments"], msg }]);
+      }
+      const has = Object.keys((operation.input_schema as { properties?: Record<string, unknown> } | null | undefined)?.properties ?? {});
+      const missing = platform.filter((argument) => !has.includes(argument));
+      if (missing.length > 0) {
+        const msg = `the operation has no argument ${missing.map((m) => `\`${m}\``).join(", ")} (its input schema declares: ${has.sort().join(", ") || "none"}): the platform cannot hand it one`;
+        throw unprocessable(`${where}: ${msg}`, [{ loc: ["body", "platform_arguments"], msg }]);
+      }
+    }
+    if ((policy === "allowed" || policy === "approval") && write && !platform.includes("action_key") && !accepted) {
+      const said = "a write through an outpost says how it is delivered: this, or the other";
+      throw unprocessable(
+        `${where} is a write of a connector reached through an outpost. Such a write is delivered at most once: when the instance that claimed it never answers, nobody knows whether the outpost's server executed it. It is opened only when its rule says one of two things, and it says neither: \`platform_arguments\` lists \`action_key\` (the operation takes the platform's idempotency key, and may be delivered again with the same key), or \`in_doubt_accepted\` is true (an action that calls it may end \`in_doubt\`: never replayed, never compensated automatically). The operation stays as it was`,
+        [
+          { loc: ["body", "platform_arguments"], msg: said },
+          { loc: ["body", "in_doubt_accepted"], msg: said },
+        ],
+      );
+    }
+  }
+  if ("platform_arguments" in body) operation.platform_arguments = platform as ConnectorOperation["platform_arguments"];
+  if ("in_doubt_accepted" in body) operation.in_doubt_accepted = accepted;
+  return operation;
 }
 
 /**

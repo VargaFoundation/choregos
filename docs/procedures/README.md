@@ -31,7 +31,7 @@ One procedure per connector type, knowledge source kind, MCP-door client and ext
 | [Use Yahoo Finance for daily market data](connector.marketdata.yahoo.md) | a project owner | `marketdata/yahoo` | 2026-10-16 |
 | [Connect an MCP server](connector.mcp.mcp.md) | an organisation administrator | `mcp/mcp` | 2026-10-16 |
 | [Connect an MCP server through your organisation's MCP gateway](connector.mcp.mcp-gateway.md) | an organisation administrator | `mcp/mcp-gateway` | 2026-10-27 |
-| [Connect an MCP server that lives at an outpost](connector.mcp.mcp-outpost.md) | an organisation administrator | `mcp/mcp-outpost` | 2026-11-12 |
+| [Connect an MCP server that lives at an outpost](connector.mcp.mcp-outpost.md) | an organisation administrator | `mcp/mcp-outpost` | 2026-11-14 |
 | [Connect Atlassian's Rovo MCP Server](connector.mcp.mcp.atlassian-rovo.md) | an organisation administrator | `mcp/mcp` (preset `atlassian-rovo`) | 2026-10-28 |
 | [The demo device management (demonstration only)](connector.mdm.demo.md) | anyone | `mdm/demo` | 2026-10-16 |
 | [Connect Ecphoria, the platform's memory](connector.memory.ecphoria.md) | the person who operates the platform | `memory/ecphoria` | 2026-10-16 |
