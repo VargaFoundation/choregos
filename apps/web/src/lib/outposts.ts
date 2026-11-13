@@ -18,6 +18,7 @@ import type {
   OutpostCallRecord,
   OutpostCallState,
   OutpostInstanceStatus,
+  OutpostList,
   OutpostRefusalCode,
   OutpostStatus,
   PlatformArgument,
@@ -145,6 +146,35 @@ export function deploymentRefusal(refusal: OutpostRefusal): string | null {
   if (refusal.code === "door_key_missing") return "The outposts' door has no signing key on this deployment";
   return null;
 }
+
+/**
+ * What the deployment would refuse, said before anyone tries (S65-24): the list of outposts carries
+ * whether outposts are switched on and whether the door has a signing key. Each is the sentence the
+ * console shows in place of a gesture that would only be refused, or `null` when nothing stands in its
+ * way. Unknown facts (the list not read yet) refuse nothing: the API still has the last word.
+ */
+export function deploymentReadiness(list: Pick<OutpostList, "enabled" | "door_signing_key"> | undefined): {
+  create: string | null;
+  enrol: string | null;
+} {
+  if (!list) return { create: null, enrol: null };
+  const off = list.enabled
+    ? null
+    : "Outposts are switched off on this deployment (CHOREGOS_OUTPOSTS): nothing is created and no token issued until its operator turns them on. What exists can still be read, revoked and deleted.";
+  const keyless = list.door_signing_key
+    ? null
+    : "The outposts' door has no signing key on this deployment: there is no key to pin, so no enrolment token is issued until its operator sets one.";
+  return { create: off, enrol: off ?? keyless };
+}
+
+/**
+ * The refusals of a gesture on an outpost's records that are not a mistake to correct but a rule to
+ * know: which one, in a few words above the API's own sentence. `null` for any other refusal.
+ */
+export const GESTURE_REFUSAL: Record<string, string> = {
+  approval_requires_session: "An instance is approved in a person's session",
+  enrolment_used: "This token already enrolled an instance",
+};
 
 /**
  * The refusals a connector reached through an outpost meets where it is declared, edited or discovered

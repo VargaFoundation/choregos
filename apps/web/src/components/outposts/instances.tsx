@@ -137,6 +137,7 @@ function PendingInstance({
           It says of itself, unchecked: <span data-verbatim>{said}</span>
         </p>
       )}
+      <EnrolledWith instance={instance} />
       <div>
         <Label>Fingerprint of its signing key</Label>
         <code className="block break-all font-mono text-sm" data-testid="instance-fingerprint">
@@ -176,13 +177,28 @@ function PendingInstance({
           </div>
           <p id={`${id}-rule`} className="text-xs text-ink-muted">
             Approve only what you compared: a fingerprint that differs is an instance nobody should approve, so revoke it.
-            Approving needs a recent sign-in; if yours is too old you are asked to sign in again, then to confirm the
-            fingerprint again on this page.
+            Approving needs a sign-in less than {instance.approval_step_up_minutes} minutes old; if yours is older you are
+            asked to sign in again, then to confirm the fingerprint again on this page.
           </p>
         </>
       )}
       {refusal && <RefusalNote refusal={refusal} />}
     </li>
+  );
+}
+
+/** The token an instance enrolled with, and who issued it: what tells two pending instances apart besides what they say. */
+function EnrolledWith({ instance }: { instance: OutpostInstance }) {
+  if (!instance.enrolment_id) return null;
+  return (
+    <p className="text-xs text-ink-muted" data-testid="instance-enrolled-with">
+      Enrolled with the token <span className="font-mono" data-verbatim>{instance.enrolment_id}</span>
+      {instance.enrolled_by && (
+        <>
+          , issued by <span data-verbatim>{instance.enrolled_by}</span>
+        </>
+      )}
+    </p>
   );
 }
 

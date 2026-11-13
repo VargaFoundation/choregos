@@ -110,6 +110,21 @@ class OutpostEnrolmentCreated(Dto):
     door_keys: Annotated[list[str], Field(min_length=1)]
 
 
+class OutpostEnrolmentDto(Dto):
+    """An enrolment token that can still enrol an instance: never the token, whose digest is all that
+    is kept."""
+
+    id: str
+    expires_at: datetime
+    #: Who issued it.
+    created_by: str | None
+    created_at: datetime
+
+
+class OutpostEnrolmentList(Dto):
+    items: list[OutpostEnrolmentDto]
+
+
 class OutpostInstanceDto(Dto):
     """One copy of the daemon. Only public data."""
 

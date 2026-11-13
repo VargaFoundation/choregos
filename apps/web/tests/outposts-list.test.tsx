@@ -131,6 +131,34 @@ describe("the Outposts page (ADR 0147)", () => {
     expect(screen.getByRole("button", { name: "Create the outpost" })).toBeEnabled();
   });
 
+  it("says before anyone tries that outposts are switched off, and offers no creation (S65-24)", async () => {
+    vi.mocked(api.outposts).mockResolvedValue({ items: [outpost()], enabled: false, door_signing_key: true });
+    view();
+    const said = await screen.findByTestId("outposts-deployment-readiness");
+    expect(said).toHaveTextContent("Outposts are switched off");
+    expect(said).toHaveTextContent("What exists can still be read, revoked and deleted");
+    fireEvent.change(screen.getByLabelText("Slug"), { target: { value: "cold-store" } });
+    expect(screen.getByRole("button", { name: "Create the outpost" })).toBeDisabled();
+    expect(api.createOutpost).not.toHaveBeenCalled();
+  });
+
+  it("says before anyone tries that no token can be issued, and still lets an outpost be created (S65-24)", async () => {
+    vi.mocked(api.outposts).mockResolvedValue({ items: [], enabled: true, door_signing_key: false });
+    view();
+    const said = await screen.findByTestId("outposts-deployment-readiness");
+    expect(said).toHaveTextContent("No enrolment token can be issued");
+    expect(said).toHaveTextContent("no signing key");
+    fireEvent.change(screen.getByLabelText("Slug"), { target: { value: "cold-store" } });
+    expect(screen.getByRole("button", { name: "Create the outpost" })).toBeEnabled();
+  });
+
+  it("says nothing of the deployment when it is ready", async () => {
+    vi.mocked(api.outposts).mockResolvedValue({ items: [outpost()], enabled: true, door_signing_key: true });
+    view();
+    await screen.findByTestId("outpost-factory-floor");
+    expect(screen.queryByTestId("outposts-deployment-readiness")).toBeNull();
+  });
+
   it("a slug that is taken is the API's refusal, shown as an error", async () => {
     vi.mocked(api.outposts).mockResolvedValue({ items: [outpost()], enabled: true, door_signing_key: true });
     vi.mocked(api.createOutpost).mockRejectedValue(new ApiError(409, { detail: "`factory-floor` is already an outpost of acme", code: "outpost_exists" }));

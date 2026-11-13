@@ -402,3 +402,36 @@ async def test_calls_shows_states_and_refusal_codes_and_no_payload(
     assert [row[0] for row in rows(second)] == ["search_issues"] and "--cursor" not in second.output
     wrong = await cli(token_holder, "calls", SLUG, "--state", "lost")
     assert wrong.exit_code == 1 and "422" in wrong.output
+
+
+async def test_tokens_are_listed_cancelled_and_said_against_the_real_routes(
+    client: AsyncClient, token_holder: AsyncClient, door: kit.Door, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """S65-24 (#1630): what can still enrol is listed, a token is cancelled, an instance names its
+    token, and the list says what would refuse a creation."""
+    assert (await cli(token_holder, "create", SLUG)).exit_code == 0
+    issued = await cli(token_holder, "token", SLUG)
+    assert issued.exit_code == 0, issued.output
+    enrolment = re.search(r"enrolment token (\S+) for", issued.output)
+    assert enrolment, issued.output
+    token_id = enrolment.group(1)
+    assert f"choregos outposts cancel-token {SLUG} {token_id}" in said(issued)
+    listed = await cli(token_holder, "tokens", SLUG)
+    assert listed.exit_code == 0 and token_id in listed.output, listed.output
+
+    cancelled = await cli(token_holder, "cancel-token", SLUG, token_id)
+    assert cancelled.exit_code == 0, cancelled.output
+    assert f"no token of `{SLUG}` can still enrol" in (await cli(token_holder, "tokens", SLUG)).output
+    assert "404" in said(await cli(token_holder, "cancel-token", SLUG, token_id))
+
+    used = (await client.post(f"{ROUTES}/{SLUG}/enrolments")).json()
+    instance = (await kit.enrol(used["token"])).instance.id
+    refused = await cli(token_holder, "cancel-token", SLUG, used["id"])
+    assert refused.exit_code == 1
+    assert "409 — this enrolment token already enrolled an instance" in said(refused)
+    shown = await cli(token_holder, "instances", SLUG)
+    assert f"with token {used['id']} issued by" in said(shown) and instance in shown.output
+
+    kit.configure(monkeypatch, outposts="off")
+    off = await cli(token_holder, "list")
+    assert off.exit_code == 0 and "Outposts are switched off on this deployment" in said(off)

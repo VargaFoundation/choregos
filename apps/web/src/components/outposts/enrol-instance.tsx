@@ -3,7 +3,8 @@
 
 import { useState } from "react";
 import { Extrait } from "@/components/integrations/panel";
-import { Button, Card, Code } from "@/components/ui";
+import { ConfirmedGesture } from "@/components/confirmed-gesture";
+import { Alert, Button, Card, Code } from "@/components/ui";
 import { api } from "@/lib/api";
 import { relative, shortDate } from "@/lib/format";
 import { enrolCommand, POLICY_FILE, policyLines, refusalOf, type OutpostRefusal } from "@/lib/outposts";
@@ -19,11 +20,14 @@ import { RefusalNote } from "./refusal";
 export function EnrolInstance({
   org,
   slug,
+  unavailable = null,
   onIssued,
   onDone,
 }: {
   org: string;
   slug: string;
+  /** Why the deployment would refuse a token (switched off, no signing key), said in place of the button. */
+  unavailable?: string | null;
   /** A token is on screen: an instance is about to appear. */
   onIssued?: () => void;
   onDone?: () => void;
@@ -53,8 +57,15 @@ export function EnrolInstance({
           enrols with a token that works once and lives 15 minutes, and is handed nothing until you approve it against its
           fingerprint.
         </p>
+        {!issued && unavailable && (
+          <div data-testid="outpost-enrol-unavailable">
+            <Alert tone="warn" title="No enrolment token can be issued">
+              {unavailable}
+            </Alert>
+          </div>
+        )}
         {!issued && (
-          <Button tone="primary" onClick={() => void issue()} disabled={busy}>
+          <Button tone="primary" onClick={() => void issue()} disabled={busy || unavailable !== null}>
             {busy ? "Creating the token…" : "Create an enrolment token"}
           </Button>
         )}
@@ -107,15 +118,33 @@ export function EnrolInstance({
               3. The command prints the fingerprint of the instance&apos;s signing key. The instance then appears above as
               pending: approve it only if the fingerprint shown there is the one that was printed.
             </p>
-            <Button
-              size="sm"
-              onClick={() => {
-                setIssued(null);
-                onDone?.();
-              }}
-            >
-              Done, hide the token
-            </Button>
+            <div className="flex flex-wrap items-start gap-2">
+              <Button
+                size="sm"
+                onClick={() => {
+                  setIssued(null);
+                  onDone?.();
+                }}
+              >
+                Done, hide the token
+              </Button>
+              <ConfirmedGesture
+                tonDuBouton="danger"
+                question="Cancel this token? It enrols nothing from now on. A token that already enrolled an instance is not cancelled: revoke that instance instead."
+                confirmer="Yes, cancel the token"
+                action={async () => {
+                  try {
+                    await api.cancelOutpostEnrolment(org, slug, issued.id);
+                  } catch (cause) {
+                    throw new Error(refusalOf(cause).detail);
+                  }
+                  setIssued(null);
+                  onDone?.();
+                }}
+              >
+                Cancel the token
+              </ConfirmedGesture>
+            </div>
           </div>
         )}
       </div>

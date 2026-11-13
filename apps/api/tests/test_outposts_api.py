@@ -22,6 +22,7 @@ from httpx import ASGITransport, AsyncClient
 from jsonschema import Draft202012Validator
 from sqlalchemy import select
 
+from .kits import outpost_daemon as daemon_kit
 from .kits import outposts as kit
 from .kits.outposts import BASE, ORIGIN
 
@@ -207,6 +208,9 @@ async def test_without_a_door_signing_key_no_enrolment_token_is_issued(
     kit.configure(monkeypatch, outposts="on", outposts_door_url=ORIGIN)
     outpost = await kit.create(client)
     assert outpost["door_keys"] == [], "empty while the deployment's door has no key"
+    # Said before anyone tries (S65-24, #1630 row 1): on, but no key to pin.
+    listing = (await client.get(BASE)).json()
+    assert (listing["enabled"], listing["door_signing_key"]) == (True, False)
     refused = _refused(await client.post(f"{ONE}/enrolments"), "door_key_missing")
     assert "CHOREGOS_OUTPOSTS_DOOR_SIGNING_KEY" in refused["detail"]
     assert await kit.rows_of(SLUG, OutpostEnrolment) == []
@@ -470,6 +474,9 @@ async def test_a_token_cannot_approve(client: AsyncClient, app: Any, admin: str,
         assert (await machine.get(f"{ONE}/instances")).status_code == 200, "the token does manage outposts"
         refused = await machine.post(f"{ONE}/instances/{instance}/approve", json={"fingerprint": fingerprint})
         assert refused.status_code == 403 and "person's session" in refused.text, refused.text
+        # A code a client tells from a refusal of rights, which has none (S65-24, #1630 row 3).
+        assert refused.json()["code"] == "approval_requires_session"
+        assert "approval_requires_session" not in refused.json()["detail"]
     (still,) = (await client.get(f"{ONE}/instances")).json()["items"]
     assert still["status"] == "pending" and await kit.audit_rows("outpost.approve") == []
 
@@ -487,6 +494,12 @@ async def test_an_approval_needs_a_recent_authentication(
     monkeypatch.setattr(freshness.time, "time", lambda: later)
     old = await client.post(f"{ONE}/instances/{instance}/approve", json={"fingerprint": fingerprint})
     assert old.status_code == 401 and old.json()["errors"][0]["error"] == "step_up_required", old.text
+    # Worded for an approval, with the window the instance announces (S65-24, #1630 row 4).
+    (pending,) = (await client.get(f"{ONE}/instances")).json()["items"]
+    window = pending["approval_step_up_minutes"]
+    assert window == 10 and old.json()["detail"].startswith(
+        f"approving an outpost instance needs an authentication less than {window} min old"
+    )
     monkeypatch.undo()
     (still,) = (await client.get(f"{ONE}/instances")).json()["items"]
     assert still["status"] == "pending"
@@ -974,3 +987,128 @@ def test_an_enrolment_token_is_one_the_doors_contract_accepts() -> None:
     for unreadable in ("", "short", "Z" * 64, "0192f0c0-1111-7222-8333-444455556666"):
         assert service.outpost_id_of_instance(unreadable) is None
         assert service.outpost_id_of_token(unreadable) is None
+
+
+# ───────────────────────── S65-24: what a client no longer guesses (#1630) ─────────────────────────
+
+
+async def test_the_list_says_the_deployment_is_ready_and_an_outpost_says_its_doors_origin(
+    client: AsyncClient, admin: str, door: kit.Door, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Rows 1 and 2: the facts that refuse a creation or a token, and the line above `door_keys`."""
+    await kit.create(client)
+    listing = (await client.get(BASE)).json()
+    _valid("OutpostList", listing)
+    assert (listing["enabled"], listing["door_signing_key"]) == (True, True)
+    (outpost,) = listing["items"]
+    assert (
+        outpost["control_plane"] == ORIGIN == (await client.post(f"{ONE}/enrolments")).json()["control_plane"]
+    )
+    kit.configure(monkeypatch, outposts="off", outposts_door_url="")
+    listing = (await client.get(BASE)).json()
+    assert (listing["enabled"], listing["door_signing_key"]) == (False, True)
+    assert listing["items"][0]["control_plane"] is None, "a deployment that declares no origin"
+    _refused(await client.post(BASE, json={"slug": "another"}), "outposts_disabled")
+
+
+async def test_the_tokens_that_can_still_enrol_are_listed_without_the_token(
+    client: AsyncClient, admin: str, door: kit.Door
+) -> None:
+    """Row 5: listed newest first, unused and in time only, never their plaintext."""
+    from choregos_api.db.models import OutpostEnrolment
+
+    await kit.create(client)
+    first = (await client.post(f"{ONE}/enrolments")).json()
+    second = (await client.post(f"{ONE}/enrolments", json={"expires_in_minutes": 5})).json()
+    used = (await client.post(f"{ONE}/enrolments")).json()
+    await kit.enrol(used["token"])
+    expired = (await client.post(f"{ONE}/enrolments")).json()
+    await daemon_kit.change(
+        OutpostEnrolment, expired["id"], SLUG, expires_at=datetime.now(UTC) - timedelta(seconds=1)
+    )
+    listed = await client.get(f"{ONE}/enrolments")
+    assert listed.status_code == 200, listed.text
+    body = listed.json()
+    _valid("OutpostEnrolmentList", body)
+    assert [token["id"] for token in body["items"]] == [second["id"], first["id"]]
+    assert body["items"][0]["created_by"] == admin
+    assert body["items"][0]["expires_at"] == second["expires_at"]
+    for token in (first, second, used, expired):
+        assert token["token"] not in listed.text, "a token is shown once"
+    assert (await client.get(f"{BASE}/nowhere/enrolments")).status_code == 404
+
+
+async def test_a_token_that_enrolled_nothing_is_cancelled_and_enrols_nothing_after(
+    client: AsyncClient, admin: str, door: kit.Door
+) -> None:
+    """Row 5: a token pasted in the wrong place need not live its fifteen minutes."""
+    from choregos_api.services.outposts import EnrolmentRefused
+
+    await kit.create(client)
+    issued = (await client.post(f"{ONE}/enrolments")).json()
+    cancelled = await client.delete(f"{ONE}/enrolments/{issued['id']}")
+    assert cancelled.status_code == 204, cancelled.text
+    assert (await client.get(f"{ONE}/enrolments")).json()["items"] == []
+    with pytest.raises(EnrolmentRefused) as refused:
+        await kit.enrol(issued["token"])
+    assert refused.value.code is OutpostDoorCode.INVALID_ENROLMENT_TOKEN
+    (entry,) = await kit.audit_rows("outpost.enrolment_cancel")
+    assert (entry.actor_kind, entry.target_type, entry.target_id) == (
+        "user",
+        "outpost_enrolment",
+        issued["id"],
+    )
+    assert entry.payload == {"outpost": SLUG}
+    # Once gone, it is unknown; an id of no token, or another outpost's, is a 404.
+    assert (await client.delete(f"{ONE}/enrolments/{issued['id']}")).status_code == 404
+    await kit.create(client, "cold-store")
+    elsewhere = (await client.post(f"{BASE}/cold-store/enrolments")).json()
+    assert (await client.delete(f"{ONE}/enrolments/{elsewhere['id']}")).status_code == 404
+    assert (await client.delete(f"{ONE}/enrolments/not%20an%20id")).status_code == 422
+    assert (await kit.enrol(elsewhere["token"])).outpost.slug == "cold-store", "the other one is whole"
+
+
+async def test_a_token_that_enrolled_an_instance_is_not_cancelled(
+    client: AsyncClient, admin: str, door: kit.Door
+) -> None:
+    """Row 5: what it made is an instance, revoked on its own route."""
+    await kit.create(client)
+    issued = (await client.post(f"{ONE}/enrolments")).json()
+    enrolled = await kit.enrol(issued["token"])
+    refused = _refused(await client.delete(f"{ONE}/enrolments/{issued['id']}"), "enrolment_used")
+    assert enrolled.instance.id in refused["detail"] and refused["outpost"] == SLUG
+    assert await kit.audit_rows("outpost.enrolment_cancel") == []
+
+
+async def test_an_instance_names_the_token_it_enrolled_with_and_who_issued_it(
+    client: AsyncClient, admin: str, door: kit.Door
+) -> None:
+    """Row 6: two pending instances differ by more than what they declare themselves; a pending key
+    that enrolled again names its last token."""
+    await kit.create(client)
+    first = (await client.post(f"{ONE}/enrolments")).json()
+    second = (await client.post(f"{ONE}/enrolments")).json()
+    key = kit.signing_key()
+    one = (await kit.enrol(first["token"], signing_key=key)).instance.id
+    other = (await kit.enrol(second["token"])).instance.id
+    shown = {i["id"]: i for i in (await client.get(f"{ONE}/instances")).json()["items"]}
+    assert (shown[one]["enrolment_id"], shown[other]["enrolment_id"]) == (first["id"], second["id"])
+    assert shown[one]["enrolled_by"] == shown[other]["enrolled_by"] == admin
+    again = (await client.post(f"{ONE}/enrolments")).json()
+    assert (await kit.enrol(again["token"], signing_key=key)).instance.id == one
+    (renewed,) = [i for i in (await client.get(f"{ONE}/instances")).json()["items"] if i["id"] == one]
+    assert renewed["enrolment_id"] == again["id"]
+    approved = await client.post(
+        f"{ONE}/instances/{one}/approve", json={"fingerprint": renewed["fingerprint"]}
+    )
+    assert approved.json()["enrolment_id"] == again["id"], "the approval's answer says it too"
+
+
+async def test_the_calls_window_is_the_one_the_contract_states(client: AsyncClient, admin: str) -> None:
+    """Row 7: the list reads the newest 1000 calls; the contract says so."""
+    from choregos_api.services import outposts as service
+
+    described = " ".join(
+        contracts.load_openapi()["paths"]["/orgs/{org}/outposts/{slug}/calls"]["get"]["description"].split()
+    )
+    assert service.RECENT_CALLS == 1000 and f"the newest {service.RECENT_CALLS} calls" in described

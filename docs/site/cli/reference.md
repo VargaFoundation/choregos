@@ -603,7 +603,9 @@ Usage: choregos outposts calls [OPTIONS] {slug}
   The recent calls routed to the outpost, newest first: their state and the
   code of a refusal.
 
-  Digests only: the platform keeps no arguments and no result of a call.
+  Digests only: the platform keeps no arguments and no result of a call. The
+  API reads the newest 1000 calls of the outpost and pages within them: the
+  last page is the end of that window.
 
 Arguments:
   slug  [required]
@@ -615,6 +617,28 @@ Options:
   --cursor <str>  where the previous page stopped
   --org <str>     the organisation; the profile's otherwise
   --help          Show this message and exit.
+```
+
+### `choregos outposts cancel-token`
+
+```text
+Usage: choregos outposts cancel-token [OPTIONS] {slug} {enrolment}
+
+  Cancel an enrolment token that enrolled nothing: from now on it enrols no
+  instance.
+
+  A token that already enrolled an instance is not cancelled (409
+  `enrolment_used`): revoke that instance instead (`choregos outposts revoke-
+  instance`).
+
+Arguments:
+  slug       [required]
+  enrolment  the token's id, as `choregos outposts tokens` shows it
+             [required]
+
+Options:
+  --org <str>  the organisation; the profile's otherwise
+  --help       Show this message and exit.
 ```
 
 ### `choregos outposts create`
@@ -793,6 +817,25 @@ Options:
                               default
   --org <str>                 the organisation; the profile's otherwise
   --help                      Show this message and exit.
+```
+
+### `choregos outposts tokens`
+
+```text
+Usage: choregos outposts tokens [OPTIONS] {slug}
+
+  The enrolment tokens of the outpost that can still enrol an instance, newest
+  first.
+
+  Never a token itself: the platform keeps its digest only. An instance names
+  the token it enrolled with (`choregos outposts instances`).
+
+Arguments:
+  slug  [required]
+
+Options:
+  --org <str>  the organisation; the profile's otherwise
+  --help       Show this message and exit.
 ```
 
 ## `choregos plugin`

@@ -2821,29 +2821,34 @@ and creates one from a slug and a name. An outpost's page shows:
 
 - **Instances**, the pending ones first. A pending instance shows the fingerprint of its signing key, and
   **Approve the instance** stays disabled until you tick that it is the fingerprint `choregos-outpost enrol`
-  printed on the outpost's machine; the request carries the fingerprint you confirmed. Approving needs a
-  recent sign-in: with an older one you are sent to sign in again and come back to the page, where the
-  fingerprint is confirmed again. **Revoke** is final, and says so before it is done;
+  printed on the outpost's machine; the request carries the fingerprint you confirmed. It also names the
+  enrolment token it enrolled with and who issued it. Approving needs a sign-in less than ten minutes old,
+  which the instance says before the click: with an older one you are sent to sign in again and come back to
+  the page, where the fingerprint is confirmed again. **Revoke** is final, and says so before it is done;
 - **Enrol an instance**: *Create an enrolment token* shows, once, the token (single use, 15 minutes), when it
   expires, the door's origin, the keys to pin, the two lines to put in the outpost's policy file
-  (`control_plane` and `door_keys`) and the command to run there;
-- **Keys to pin**: the `door_keys` line again, at any time;
+  (`control_plane` and `door_keys`) and the command to run there. *Cancel the token* there, or later under
+  **Open enrolment tokens** (the tokens that can still enrol, never their value), makes it enrol nothing;
+- **Keys to pin**: the `control_plane` and `door_keys` lines again, at any time;
 - **Pause** and **Resume** (a paused outpost says so at the top of its page), **Revoke** (final: every
   instance is revoked) and **Delete**, which the API refuses while the outpost is not revoked or while
   connectors still route to it: the refusal is shown as the API wrote it, with the connectors it names;
 - **Recent calls**, newest first, with their state and the code of a refusal. Digests only: the platform
-  keeps no arguments and no result of a call.
+  keeps no arguments and no result of a call. The list reads the newest 1000 calls, and says so where it ends.
 
-A deployment where outposts are off, or whose door has no signing key, says which when a creation or a token
-is refused, in the API's own words.
+A deployment where outposts are off, or whose door has no signing key, says which before anyone tries: the
+list page says it at the top and does not offer a creation while outposts are off, and an outpost's page
+offers no token. A refusal that comes anyway is shown in the API's own words.
 
 The same from the CLI ([reference](cli.md)):
 
 ```bash
 choregos outposts create factory-floor --display-name "Factory floor"
 choregos outposts list
-choregos outposts show factory-floor              # the door_keys line to pin, again
+choregos outposts show factory-floor              # the control_plane and door_keys lines to pin, again
 choregos outposts token factory-floor             # the token, once, with the policy lines and the enrol command
+choregos outposts tokens factory-floor            # the tokens that can still enrol, never their value
+choregos outposts cancel-token factory-floor <id> # that token enrols nothing from now on
 choregos outposts instances factory-floor         # ids and fingerprints, pending ones first
 choregos outposts revoke-instance factory-floor <instance>
 choregos outposts pause factory-floor             # then resume, revoke (final) and delete
@@ -2852,7 +2857,7 @@ choregos outposts calls factory-floor --state refused
 
 `choregos outposts approve <slug> <instance> --fingerprint SHA256:…` exists and is refused: the API takes an
 approval from a person's session that carries a recent sign-in, never from an API token, and the CLI holds a
-token. It prints the API's refusal; approve in the console.
+token. It prints the API's refusal with its code, `approval_requires_session`, and where to approve instead.
 
 **A connector at an outpost** ([ADR 0149](adr/0149-a-tool-may-live-at-an-outpost.md)). In **Administration →
 Connectors**, *Declare a connector* with the type *MCP server at an outpost* asks for three things, and for no

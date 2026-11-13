@@ -5,9 +5,9 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Badge, Button, Card, Empty, Field, Input, Lead, ReadState, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
+import { Alert, Badge, Button, Card, Empty, Field, Input, Lead, ReadState, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
 import { api } from "@/lib/api";
-import { OUTPOST_TONE, presence, refusalOf, stateLabel, type OutpostRefusal } from "@/lib/outposts";
+import { deploymentReadiness, OUTPOST_TONE, presence, refusalOf, stateLabel, type OutpostRefusal } from "@/lib/outposts";
 import type { Outpost } from "@/lib/types";
 import { RefusalNote } from "./refusal";
 
@@ -22,6 +22,9 @@ const SLUG = /^[a-z0-9][a-z0-9-]{0,62}$/;
 export function OutpostsList({ org }: { org: string }) {
   const outposts = useQuery({ queryKey: ["outposts", org], queryFn: () => api.outposts(org) });
   const items = outposts.data?.items ?? [];
+  // What the deployment would refuse, said before anyone tries (S65-24).
+  const readiness = deploymentReadiness(outposts.data);
+  const unready = readiness.create ?? readiness.enrol;
   return (
     <div className="space-y-4">
       <Lead>
@@ -30,6 +33,13 @@ export function OutpostsList({ org }: { org: string }) {
         platform never connects to it. An organisation that already runs an MCP gateway the platform can reach needs none.
       </Lead>
       <ReadState lecture={outposts} quoi="the outposts" />
+      {unready && (
+        <div data-testid="outposts-deployment-readiness">
+          <Alert tone="warn" title={readiness.create ? "Outposts are switched off" : "No enrolment token can be issued"}>
+            {unready}
+          </Alert>
+        </div>
+      )}
       {outposts.data && items.length === 0 && (
         <Empty title="No outpost yet">Create one below, then enrol its first instance with a token.</Empty>
       )}
@@ -54,7 +64,7 @@ export function OutpostsList({ org }: { org: string }) {
           </Table>
         </Card>
       )}
-      <NewOutpost org={org} />
+      <NewOutpost org={org} switchedOff={readiness.create !== null} />
     </div>
   );
 }
@@ -100,7 +110,7 @@ function OutpostRow({ outpost }: { outpost: Outpost }) {
 }
 
 /** A new outpost has no instance: its page is where the first one is enrolled, so the creation leads there. */
-function NewOutpost({ org }: { org: string }) {
+function NewOutpost({ org, switchedOff }: { org: string; switchedOff: boolean }) {
   const client = useQueryClient();
   const router = useRouter();
   const [slug, setSlug] = useState("");
@@ -143,7 +153,7 @@ function NewOutpost({ org }: { org: string }) {
             {(props) => <Input {...props} value={name} onChange={(event) => setName(event.target.value)} autoComplete="off" maxLength={200} />}
           </Field>
         </div>
-        <Button tone="primary" type="submit" disabled={!SLUG.test(slug) || busy}>
+        <Button tone="primary" type="submit" disabled={!SLUG.test(slug) || busy || switchedOff}>
           Create the outpost
         </Button>
         {refusal && <RefusalNote refusal={refusal} />}

@@ -25,15 +25,18 @@ def authentication_age(principal: Any, now: float | None = None) -> int | None:
     return int(now if now is not None else time.time()) - int(authenticated_at)
 
 
-def require_fresh_authentication(principal: Any, minutes: int, now: float | None = None) -> int:
-    """Returns the age of the authentication; 401 `step_up_required` beyond `minutes`."""
+def require_fresh_authentication(
+    principal: Any, minutes: int, now: float | None = None, *, gesture: str = "this decision"
+) -> int:
+    """Returns the age of the authentication; 401 `step_up_required` beyond `minutes`. `gesture` names
+    what asks for it, as the problem's sentence says it ("approving an instance", S65-24)."""
     age = authentication_age(principal, now)
     if age is None or age > minutes * 60:
         since = "an unknown time" if age is None else f"{age // 60} min"
         raise ApiError(
             401,
             "Authentication too old",
-            f"this decision needs an authentication less than {minutes} min old; yours is {since} old",
+            f"{gesture} needs an authentication less than {minutes} min old; yours is {since} old",
             errors=[{"error": "step_up_required", "reauth": REAUTH}],
         )
     return age

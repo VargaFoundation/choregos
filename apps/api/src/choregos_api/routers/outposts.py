@@ -31,6 +31,7 @@ from ..schemas.outposts import (
     OutpostDto,
     OutpostEnrolmentCreate,
     OutpostEnrolmentCreated,
+    OutpostEnrolmentList,
     OutpostInstanceApprove,
     OutpostInstanceDto,
     OutpostInstanceList,
@@ -43,6 +44,7 @@ router = APIRouter(tags=["outposts"])
 
 Slug = Annotated[str, Path(pattern=OUTPOST_SLUG_PATTERN)]
 InstanceId = Annotated[str, Path(pattern=OUTPOST_ID_PATTERN)]
+EnrolmentId = Annotated[str, Path(pattern=OUTPOST_ID_PATTERN)]
 
 
 async def _managed(session: AsyncSession, principal: Principal, org: str) -> Organization:
@@ -194,6 +196,42 @@ async def create_outpost_enrolment(
         expires_at=created.expires_at.isoformat(),
     )
     return created
+
+
+@router.get(
+    "/orgs/{org}/outposts/{slug}/enrolments",
+    response_model=OutpostEnrolmentList,
+    operation_id="listOutpostEnrolments",
+)
+async def list_outpost_enrolments(org: str, slug: Slug, session: Db, principal: Me) -> OutpostEnrolmentList:
+    """The tokens that can still enrol an instance, newest first: never a token."""
+    organisation = await _managed(session, principal, org)
+    outpost = await service.outpost_by_slug(session, organisation, slug)
+    return OutpostEnrolmentList(items=await service.list_enrolments(session, outpost))
+
+
+@router.delete(
+    "/orgs/{org}/outposts/{slug}/enrolments/{enrolment_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    operation_id="cancelOutpostEnrolment",
+)
+async def cancel_outpost_enrolment(
+    org: str, slug: Slug, enrolment_id: EnrolmentId, session: Db, principal: Me
+) -> Response:
+    """Cancels a token that enrolled nothing: it enrols no instance from then on (S65-24)."""
+    organisation = await _managed(session, principal, org)
+    outpost = await service.outpost_by_slug(session, organisation, slug)
+    await service.cancel_enrolment(session, outpost, enrolment_id)
+    await record(
+        session,
+        principal,
+        "outpost.enrolment_cancel",
+        org_id=organisation.id,
+        target_type="outpost_enrolment",
+        target_id=enrolment_id,
+        outpost=slug,
+    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get(

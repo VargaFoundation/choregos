@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import OutpostPage from "@/app/admin/outposts/[slug]/page";
 import { api, ApiError } from "@/lib/api";
 import { shortDate } from "@/lib/format";
-import type { Outpost, OutpostCallRecord, OutpostEnrolmentCreated, OutpostInstance } from "@/lib/types";
+import type { Outpost, OutpostCallRecord, OutpostEnrolment, OutpostEnrolmentCreated, OutpostInstance, OutpostList } from "@/lib/types";
 
 const push = vi.hoisted(() => vi.fn());
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
@@ -17,8 +17,11 @@ vi.mock("@/lib/api", async (importOriginal) => {
     ...real,
     api: {
       ...real.api,
+      outposts: vi.fn(),
       outpost: vi.fn(),
       outpostInstances: vi.fn(),
+      outpostEnrolments: vi.fn(),
+      cancelOutpostEnrolment: vi.fn(),
       outpostCalls: vi.fn(),
       pauseOutpost: vi.fn(),
       resumeOutpost: vi.fn(),
@@ -143,7 +146,17 @@ async function view(slug = "factory-floor") {
   return rendered;
 }
 
-function given(state: { outpost?: Outpost; instances?: OutpostInstance[]; calls?: OutpostCallRecord[] } = {}) {
+function given(
+  state: {
+    outpost?: Outpost;
+    instances?: OutpostInstance[];
+    calls?: OutpostCallRecord[];
+    tokens?: OutpostEnrolment[];
+    deployment?: Pick<OutpostList, "enabled" | "door_signing_key">;
+  } = {},
+) {
+  vi.mocked(api.outposts).mockResolvedValue({ items: [], enabled: true, door_signing_key: true, ...state.deployment });
+  vi.mocked(api.outpostEnrolments).mockResolvedValue({ items: state.tokens ?? [] });
   vi.mocked(api.outpost).mockResolvedValue(state.outpost ?? outpost());
   vi.mocked(api.outpostInstances).mockResolvedValue({ items: state.instances ?? [instance(), approved()] });
   vi.mocked(api.outpostCalls).mockResolvedValue(page(state.calls ?? []));
@@ -275,7 +288,8 @@ describe("a pending instance is approved against its fingerprint (ADR 0147 §4)"
     vi.mocked(api.approveOutpostInstance).mockRejectedValue(new ApiError(409, { detail: words, code: "fingerprint_mismatch" }));
     await view();
     const block = await pendingBlock();
-    expect(approve(block)).toHaveAccessibleDescription(/Approving needs a recent sign-in/);
+    // The window comes from the instance, said before the click (S65-24, #1630 row 4).
+    expect(approve(block)).toHaveAccessibleDescription(/Approving needs a sign-in less than 10 minutes old/);
     fireEvent.click(block.getByRole("checkbox"));
     fireEvent.click(approve(block));
     const refusal = await block.findByTestId("outposts-refusal");
@@ -487,7 +501,10 @@ describe("enrolling an instance (ADR 0147 §4, ADR 0148 §13)", () => {
   it("the keys to pin are shown again on the outpost's page, as the policy file's line", async () => {
     given();
     await view();
-    expect((await screen.findByTestId("outpost-door-keys-line")).textContent).toBe(`door_keys: ["${KEYS[0]}", "${KEYS[1]}"]`);
+    // The door's origin comes with the outpost, on the line above the keys (S65-24, #1630 row 2).
+    expect((await screen.findByTestId("outpost-door-keys-line")).textContent).toBe(
+      `control_plane: https://outposts.example.com\ndoor_keys: ["${KEYS[0]}", "${KEYS[1]}"]`,
+    );
   });
 });
 
@@ -557,5 +574,97 @@ describe("the recent calls routed to an outpost (ADR 0148 §11)", () => {
     await view();
     const card = within(await screen.findByTestId("outpost-calls"));
     expect(await card.findByRole("alert")).toHaveTextContent("managed by its administrator");
+  });
+});
+
+describe("what the page no longer guesses (S65-24, #1630)", () => {
+  const open = (changes: Partial<OutpostEnrolment> = {}): OutpostEnrolment => ({
+    id: "enrolment-2",
+    expires_at: "2026-11-12T10:12:00Z",
+    created_by: "ada@example.com",
+    created_at: "2026-11-12T09:57:00Z",
+    ...changes,
+  });
+
+  it("says before anyone tries that no token can be issued, and offers none", async () => {
+    given({ deployment: { enabled: true, door_signing_key: false }, instances: [] });
+    await view();
+    const said = await screen.findByTestId("outpost-enrol-unavailable");
+    expect(said).toHaveTextContent("no signing key");
+    expect(screen.getByRole("button", { name: "Create an enrolment token" })).toBeDisabled();
+    expect(api.createOutpostEnrolment).not.toHaveBeenCalled();
+  });
+
+  it("switched off, it says that rather than the missing key", async () => {
+    given({ deployment: { enabled: false, door_signing_key: false }, instances: [] });
+    await view();
+    const said = await screen.findByTestId("outpost-enrol-unavailable");
+    expect(said).toHaveTextContent("switched off");
+    expect(said).not.toHaveTextContent("signing key");
+  });
+
+  it("lists the tokens that can still enrol, never the token, and cancels one", async () => {
+    given({ tokens: [open()] });
+    vi.mocked(api.cancelOutpostEnrolment).mockResolvedValue(undefined);
+    await view();
+    const row = within(await screen.findByTestId("open-token-enrolment-2"));
+    expect(row.getByText("enrolment-2")).toBeInTheDocument();
+    expect(row.getByText("ada@example.com")).toBeInTheDocument();
+    vi.mocked(api.outpostEnrolments).mockResolvedValue({ items: [] });
+    fireEvent.click(row.getByRole("button", { name: "Cancel" }));
+    fireEvent.click(await row.findByRole("button", { name: "Yes, cancel the token" }));
+    await waitFor(() => expect(api.cancelOutpostEnrolment).toHaveBeenCalledWith("acme", "factory-floor", "enrolment-2"));
+    await waitFor(() => expect(screen.queryByTestId("outpost-open-tokens")).toBeNull());
+  });
+
+  it("a token just issued is cancelled where it is shown", async () => {
+    given({ instances: [] });
+    vi.mocked(api.createOutpostEnrolment).mockResolvedValue(issued());
+    vi.mocked(api.cancelOutpostEnrolment).mockResolvedValue(undefined);
+    await view();
+    fireEvent.click(await screen.findByRole("button", { name: "Create an enrolment token" }));
+    const shown = within(await screen.findByTestId("outpost-enrolment"));
+    fireEvent.click(shown.getByRole("button", { name: "Cancel the token" }));
+    fireEvent.click(await shown.findByRole("button", { name: "Yes, cancel the token" }));
+    await waitFor(() => expect(api.cancelOutpostEnrolment).toHaveBeenCalledWith("acme", "factory-floor", "enrolment-1"));
+    await waitFor(() => expect(screen.queryByTestId("outpost-enrolment")).toBeNull());
+  });
+
+  it("a token that enrolled an instance is not cancelled, and the page says why", async () => {
+    given({ tokens: [open()] });
+    vi.mocked(api.cancelOutpostEnrolment).mockRejectedValue(
+      new ApiError(409, { detail: "this enrolment token already enrolled an instance: revoke that instance instead", code: "enrolment_used" }),
+    );
+    await view();
+    const row = within(await screen.findByTestId("open-token-enrolment-2"));
+    fireEvent.click(row.getByRole("button", { name: "Cancel" }));
+    fireEvent.click(await row.findByRole("button", { name: "Yes, cancel the token" }));
+    expect(await row.findByText(/revoke that instance instead/)).toBeInTheDocument();
+  });
+
+  it("a pending instance names the token it enrolled with and who issued it", async () => {
+    given();
+    await view();
+    const block = await pendingBlock();
+    expect(block.getByTestId("instance-enrolled-with")).toHaveTextContent("Enrolled with the token enrolment-1, issued by ada@example.com");
+  });
+
+  it("a token's refusal to approve is told apart from a refusal of rights by its code", async () => {
+    given();
+    vi.mocked(api.approveOutpostInstance).mockRejectedValue(
+      new ApiError(403, { detail: "an instance is approved in a person's session, not with an API token", code: "approval_requires_session" }),
+    );
+    await view();
+    const block = await pendingBlock();
+    fireEvent.click(block.getByRole("checkbox"));
+    fireEvent.click(approve(block));
+    const said = await block.findByTestId("outposts-gesture-refusal");
+    expect(said).toHaveTextContent("An instance is approved in a person's session");
+  });
+
+  it("the end of the calls is the end of the window the API reads", async () => {
+    given({ calls: [call()] });
+    await view();
+    expect(await screen.findByTestId("outpost-calls-window")).toHaveTextContent("the newest 1000 calls");
   });
 });

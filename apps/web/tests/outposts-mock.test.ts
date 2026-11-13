@@ -13,6 +13,7 @@ import type {
   Outpost,
   OutpostCallPage,
   OutpostEnrolmentCreated,
+  OutpostEnrolmentList,
   OutpostInstance,
   OutpostInstanceList,
   OutpostList,
@@ -82,6 +83,26 @@ describe("the demo's outposts", () => {
     expect([approved.status, approved.approved_by, approved.online]).toEqual(["active", "augustin@acme.dev", true]);
     expect((await refusal(post(approve, { fingerprint: pending!.fingerprint }))).problem.code).toBe("instance_not_pending");
     expect((await mockApi<Outpost>(`${BASE}/loading-dock`)).online).toBe(true);
+  });
+
+  it("lists the tokens that can still enrol, cancels one, and refuses to cancel one that enrolled (S65-24)", async () => {
+    await post<Outpost>(BASE, { slug: "side-gate" });
+    const tokens = `${BASE}/side-gate/enrolments`;
+    const listed = await mockApi<OutpostList>(BASE);
+    expect([listed.enabled, listed.door_signing_key]).toEqual([true, true]);
+    const first = await post<OutpostEnrolmentCreated>(tokens, {});
+    const open = await mockApi<OutpostEnrolmentList>(tokens);
+    expect(open.items.map((token) => token.id)).toEqual([first.id]);
+    expect(JSON.stringify(open)).not.toContain(first.token);
+    await mockApi(`${tokens}/${first.id}`, { method: "DELETE" });
+    expect((await mockApi<OutpostEnrolmentList>(tokens)).items).toEqual([]);
+    expect((await mockApi<OutpostInstanceList>(`${BASE}/side-gate/instances`)).items).toEqual([]);
+    expect((await refusal(mockApi(`${tokens}/${first.id}`, { method: "DELETE" }))).status).toBe(404);
+
+    const second = await post<OutpostEnrolmentCreated>(tokens, {});
+    const [enrolled] = (await mockApi<OutpostInstanceList>(`${BASE}/side-gate/instances`)).items;
+    expect([enrolled!.enrolment_id, enrolled!.enrolled_by]).toEqual([second.id, "augustin@acme.dev"]);
+    expect((await refusal(mockApi(`${tokens}/${second.id}`, { method: "DELETE" }))).problem.code).toBe("enrolment_used");
   });
 
   it("pauses, resumes, revokes for good, and deletes only what is revoked", async () => {
