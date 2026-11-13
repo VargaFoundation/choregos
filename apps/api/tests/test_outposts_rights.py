@@ -39,6 +39,8 @@ def _routes(instance: str) -> list[tuple[str, str, str, Any]]:
         ("pauseOutpost", "POST", f"{ONE}/pause", None),
         ("resumeOutpost", "POST", f"{ONE}/resume", None),
         ("createOutpostEnrolment", "POST", f"{ONE}/enrolments", None),
+        ("listOutpostEnrolments", "GET", f"{ONE}/enrolments", None),
+        ("cancelOutpostEnrolment", "DELETE", f"{ONE}/enrolments/{instance}", None),
         ("listOutpostInstances", "GET", f"{ONE}/instances", None),
         ("approveOutpostInstance", "POST", f"{ONE}/instances/{instance}/approve", FINGERPRINT),
         ("revokeOutpostInstance", "POST", f"{ONE}/instances/{instance}/revoke", None),
@@ -71,12 +73,7 @@ def test_outpost_manage_is_the_organisation_administrators_and_no_other_roles() 
     assert holders == {Role.ORG_ADMIN}
 
 
-#: Declared by the contract before the API serves them (ADR 0001): S65-24 serves them, tests them here
-#: and empties this.
-NOT_SERVED_YET = {"listOutpostEnrolments", "cancelOutpostEnrolment"}
-
-
-def test_the_routes_under_test_are_the_contracts_twelve() -> None:
+def test_the_routes_under_test_are_the_contracts_fourteen() -> None:
     declared = {
         operation["operationId"]
         for path, verbs in contracts.load_openapi()["paths"].items()
@@ -84,8 +81,7 @@ def test_the_routes_under_test_are_the_contracts_twelve() -> None:
         for operation in verbs.values()
         if isinstance(operation, dict) and "operationId" in operation
     }
-    assert len(declared - NOT_SERVED_YET) == 12
-    assert declared - NOT_SERVED_YET == {name for name, *_ in _routes("0" * 64)}
+    assert len(declared) == 14 and declared == {name for name, *_ in _routes("0" * 64)}
 
 
 @pytest.mark.parametrize("role", NOT_ADMINISTRATORS, ids=[str(role) for role in NOT_ADMINISTRATORS])

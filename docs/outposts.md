@@ -127,17 +127,29 @@ An organisation's administrator does this (the right is `outpost:manage`), in **
 Outposts** or with `choregos outposts`. [Usage](usage.md#4-write-the-policy) describes the page and
 the commands, under "Outposts"; the [CLI reference](cli.md) has each command.
 
+Before anyone tries, the page and `choregos outposts list` say whether the deployment would refuse:
+outposts switched off (`CHOREGOS_OUTPOSTS`), so that nothing is created and no token issued, or a door
+without a signing key, so that no token is issued. Both come from the list of outposts (`enabled`,
+`door_signing_key`), not from a refusal.
+
 1. **Create the outpost**: a slug and a name. It has no instance yet.
 2. **Issue an enrolment token** for one instance. It is shown once, with what the outpost's operator
    needs: the door's origin, the door's keys to pin (`door_keys`) and the command to run. A token
-   enrols one instance, once, and lives fifteen minutes at most.
+   enrols one instance, once, and lives fifteen minutes at most. The tokens that can still enrol are
+   listed on the outpost's page and by `choregos outposts tokens <slug>`, never with their value, and
+   one pasted in the wrong place is cancelled there or with `choregos outposts cancel-token <slug>
+   <id>`: from then on it enrols nothing. A token that already enrolled an instance is not cancelled
+   (`enrolment_used`): revoke that instance instead.
 3. **The operator enrols the instance** on their side ([their guide](outpost-operator.md#enrolment)).
    The daemon makes its keys, presents the token and prints the **fingerprint** of its signing key.
    The instance is born *pending* and is handed nothing.
 4. **A person approves it** in the console, by comparing the fingerprint shown there with the one the
-   daemon printed. The approval is taken from a person's session that carries a recent sign-in,
-   never from an API token: the CLI's `approve` is refused by design. A stolen enrolment token
-   therefore enrols an instance nobody approves.
+   daemon printed. Each instance also names the token it enrolled with and who issued it, which
+   tells two pending instances apart. The approval is taken from a person's session whose sign-in is
+   less than ten minutes old (`approval_step_up_minutes` on the instance; the console says it before
+   the click, and an older session is sent to sign in again), never from an API token: the CLI's
+   `approve` is refused by design, with the code `approval_requires_session`. A stolen enrolment
+   token therefore enrols an instance nobody approves.
 
 Each further instance of an outpost (availability, a rolling upgrade) takes a token of its own and
 is approved on its own.
@@ -167,13 +179,15 @@ and what it can refuse; the walk-through is the procedure
 - **Administration → Outposts**, the outpost's page, *Recent calls*; or
   `choregos outposts calls <slug>`, with `--state refused` for the refusals. Each call has its state
   and, for a refusal, the outpost's code. Digests only: the platform keeps no arguments and no result
-  of a call there ([Usage](usage.md#4-write-the-policy)).
+  of a call there ([Usage](usage.md#4-write-the-policy)). The list reads the newest 1000 calls of the
+  outpost and pages within them: its last page is the end of that window, not of the outpost's
+  history.
 - **The network activity** of the organisation: a line per call of a project, under
   `outpost:<name>/<alias>`, `allowed`, `denied`, `rate_limited` or `unreachable`.
 - **The cost ledger and the run's events**, as for any connector. A call that reached no server is
   not booked.
 - **The organisation's audit log**: who created, paused, resumed, revoked or deleted an outpost, who
-  issued a token and who approved an instance; and `outpost.poll_conflict`, the event behind the
+  issued or cancelled a token (`outpost.enrolment_cancel`) and who approved an instance; and `outpost.poll_conflict`, the event behind the
   alert.
 - **The outpost's own audit log**, which its operator keeps: a record of the same calls, independent
   of the platform's. The two can be compared by call id and by the digest of the arguments

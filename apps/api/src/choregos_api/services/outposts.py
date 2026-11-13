@@ -44,7 +44,7 @@ from choregos_contracts import (
     fingerprint_of,
 )
 from choregos_core import utcnow
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -70,6 +70,7 @@ from ..schemas.outposts import (
     OutpostDto,
     OutpostEnrolmentCreate,
     OutpostEnrolmentCreated,
+    OutpostEnrolmentDto,
     OutpostInstanceCounts,
     OutpostInstanceDto,
 )
@@ -94,8 +95,12 @@ APPROVAL_STEP_UP_MINUTES: Final = 10
 #: What an enrolment token starts with. The 32 characters after it are its outpost's id: the door has
 #: to name the outpost before row-level security lets it read the token's row.
 ENROLMENT_TOKEN_PREFIX: Final = "choe_"  # noqa: S105 - a prefix, not a secret
-#: How many of an outpost's calls its list reads back, newest first.
+#: How many of an outpost's calls its list reads back, newest first: the window the contract states
+#: (`listOutpostCalls`), within which the cursor pages.
 RECENT_CALLS: Final = 1000
+#: The code of the 403 an approval answers a caller that is not a person's session (S65-24): what a
+#: client tells from a refusal of rights, which carries no code.
+APPROVAL_REQUIRES_SESSION: Final = "approval_requires_session"
 #: The audit event the door raises when a second poll arrives under a key that already has one
 #: waiting (ADR 0148 §7): what a stolen key looks like. `/metrics` counts them.
 POLL_CONFLICT: Final = "outpost.poll_conflict"
@@ -144,10 +149,13 @@ def require_person(principal: Principal) -> None:
     `decide` puts on a decision: a token cannot approve (403), and a session that is too old is sent
     to authenticate again (401 `step_up_required`)."""
     if principal.kind != "user" or principal.authenticated_at is None:
-        raise forbidden(
-            "an instance is approved in a person's session, not with an API token (approval_requires_session)"
+        raise ApiError(
+            403,
+            "Forbidden",
+            "an instance is approved in a person's session, not with an API token",
+            extra={"code": APPROVAL_REQUIRES_SESSION},
         )
-    require_fresh_authentication(principal, APPROVAL_STEP_UP_MINUTES)
+    require_fresh_authentication(principal, APPROVAL_STEP_UP_MINUTES, gesture="approving an outpost instance")
 
 
 def _disabled() -> ApiError:
@@ -620,6 +628,71 @@ async def create_enrolment(
         control_plane=settings.outposts_door_origin,
         door_keys=door_keys,
     )
+
+
+async def list_enrolments(session: AsyncSession, outpost: Outpost) -> list[OutpostEnrolmentDto]:
+    """The tokens of this outpost that can still enrol an instance: unused and not expired, newest
+    first. Never a token: its digest is all the platform keeps (S65-24)."""
+    now = utcnow()
+    async with in_outpost_scope(session, outpost.id):
+        rows = await session.execute(
+            select(OutpostEnrolment)
+            .where(
+                OutpostEnrolment.outpost_id == outpost.id,
+                OutpostEnrolment.used_at.is_(None),
+                OutpostEnrolment.expires_at > now,
+            )
+            .order_by(OutpostEnrolment.created_at.desc(), OutpostEnrolment.id.desc())
+        )
+        open_tokens = list(rows.scalars())
+    return [
+        OutpostEnrolmentDto(
+            id=enrolment.id,
+            expires_at=_aware(enrolment.expires_at),
+            created_by=enrolment.created_by,
+            created_at=_aware(enrolment.created_at),
+        )
+        for enrolment in open_tokens
+    ]
+
+
+async def cancel_enrolment(session: AsyncSession, outpost: Outpost, enrolment_id: str) -> None:
+    """Cancel a token that enrolled nothing: its row goes, and the token is from then on as unknown as
+    any other (S65-24). An expired one goes the same way. One that enrolled an instance is a 409
+    `enrolment_used`: what it made is an instance, revoked on its own route.
+
+    The row is deleted only while it is unused, in one statement: of a cancellation and an enrolment
+    that arrive together, one wins, and an enrolment that loses is refused as a used token is."""
+    async with in_outpost_scope(session, outpost.id):
+        enrolment = (
+            await session.execute(
+                select(OutpostEnrolment).where(
+                    OutpostEnrolment.outpost_id == outpost.id, OutpostEnrolment.id == enrolment_id
+                )
+            )
+        ).scalar_one_or_none()
+        if enrolment is None:
+            raise not_found("Outpost enrolment", enrolment_id)
+        used = refusal(
+            "enrolment_used",
+            "this enrolment token already enrolled an instance: revoke that instance instead"
+            + (f" (`{enrolment.instance_id}`)" if enrolment.instance_id else ""),
+            outpost.slug,
+        )
+        if enrolment.used_at is not None:
+            raise used
+        gone = await session.execute(
+            delete(OutpostEnrolment)
+            .where(
+                OutpostEnrolment.outpost_id == outpost.id,
+                OutpostEnrolment.id == enrolment.id,
+                OutpostEnrolment.used_at.is_(None),
+            )
+            .execution_options(synchronize_session=False)
+        )
+        if gone.rowcount != 1:  # type: ignore[attr-defined]
+            raise used  # used by an enrolment since it was read
+        session.expunge(enrolment)
 
 
 async def approve_instance(
