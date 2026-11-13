@@ -46,8 +46,9 @@ What crosses the door, each way:
 | About a call | its result, sealed; or the code of a refusal, which names a class of refusal and never the rule | the audit line you keep of it |
 | About the instance | its two public keys, its version, when it last polled; at enrolment its host name and its platform, unless you say `--no-facts` | its two private keys |
 
-What comes in with a call: the alias, the tool's name, the arguments, a deadline, and the names the
-platform asserts about who the call is made for (below). No prompt, no model key, no source code and
+What comes in with a call: the alias, the tool's name, the arguments, a deadline (to the millisecond,
+judged by this machine's clock: keep it on time), and the names the platform asserts about who the call
+is made for (below). No prompt, no model key, no source code and
 no run token ever reaches an outpost.
 
 ## What the daemon does, and what it cannot do
@@ -307,7 +308,9 @@ What else to know:
   the token up.
 - If the answer was lost on the way, ask for a new token and enrol again: while the instance is
   still pending at the same outpost, it keeps its keys and is the same instance. A key that was
-  approved or revoked, or that is pending at another outpost, is refused.
+  approved or revoked, or that is an instance of another outpost, is refused
+  (`key_already_enrolled`); the latter only once the rest of the request was found good, since the
+  door sees one outpost's instances at a time.
 - You may start `run` before the approval. The daemon logs `outpost.pending` once, with the
   fingerprint, asks again every 30 seconds at most, and is served as soon as it is approved, without
   a restart.

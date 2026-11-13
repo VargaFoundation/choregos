@@ -808,10 +808,17 @@ async def admit_enrolment(session: AsyncSession, token: str, signing_key: str) -
     ).scalar_one_or_none()
     if enrolment is None or enrolment.used_at is not None or _aware(enrolment.expires_at) <= utcnow():
         raise invalid
+    # This outpost's instances only, said in the clause as row-level security says it on PostgreSQL:
+    # a key of another outpost is found by the unique index when the instance is written, after the
+    # rate, the protocol and the schema, on every database alike (the door's contract, S65-23).
     known = (
-        await session.execute(select(OutpostInstance).where(OutpostInstance.signing_key == signing_key))
+        await session.execute(
+            select(OutpostInstance).where(
+                OutpostInstance.outpost_id == outpost.id, OutpostInstance.signing_key == signing_key
+            )
+        )
     ).scalar_one_or_none()
-    if known is not None and (known.outpost_id != outpost.id or known.status != _PENDING):
+    if known is not None and known.status != _PENDING:
         raise EnrolmentRefused(OutpostDoorCode.KEY_ALREADY_ENROLLED)
     return EnrolmentAdmission(outpost=outpost, organisation=organisation, enrolment=enrolment, known=known)
 
