@@ -217,18 +217,20 @@ async def scope_to_outpost(session: AsyncSession, outpost_id: str) -> tuple[Outp
     await name_the_outpost(session, outpost_id)
     found: tuple[Outpost, str] | None = None
     await limit_to_organisations(session, ALL_ORGS)
-    try:
-        row = (
-            await session.execute(
-                select(Outpost, Organization.slug)
-                .join(Organization, Organization.id == Outpost.org_id)
-                .where(Outpost.id == outpost_id)
-            )
-        ).first()
-        if row is not None:
-            found = (row[0], str(row[1]))
-    finally:
-        await limit_to_organisations(session, [found[1]] if found else None)
+    # Narrowed on the way out, never in a `finally`: a statement that failed, or that a cancellation
+    # interrupted, leaves a transaction nobody may use, and the wide scope dies with it (it is
+    # transaction-local). A second statement there would only raise again, and its error would hide
+    # the first: a worker stopped while it waited saw `PendingRollbackError` instead of its cancellation.
+    row = (
+        await session.execute(
+            select(Outpost, Organization.slug)
+            .join(Organization, Organization.id == Outpost.org_id)
+            .where(Outpost.id == outpost_id)
+        )
+    ).first()
+    if row is not None:
+        found = (row[0], str(row[1]))
+    await limit_to_organisations(session, [found[1]] if found else None)
     return found
 
 
