@@ -90,6 +90,8 @@ NOT_CALLED_BY_A_CLIENT: dict[str, str] = {
     "/users/{user_id}/avatar": "a person's photo (ADR 0162), read by the browser as an <img> source from the "
     "`avatar_url` the API answers; no client builds its path",
     "/github/setup": "the GitHub App's Setup URL: GitHub redirects the browser there after an installation",
+    "/github/manifest/callback": "the GitHub App manifest's redirect URL: GitHub sends the browser there "
+    "with the conversion code once the App is registered (S70-21, ADR 0167)",
     "/remote-credentials/oauth/callback": "the provider's redirect after an administrator authorised a "
     "remote agent's credential",
     "/orgs/{org}/hosted-sources/{sha256}": "reads an uploaded source zip back for the pipeline that "

@@ -33,6 +33,7 @@ from ..db.models import GitHubInstallation, Organization
 from ..db.session import in_platform_scope
 from ..errors import conflict, forbidden, unprocessable
 from ..logging import get_logger
+from . import github_app_credentials as credentials
 
 logger = get_logger("choregos.github_app")
 
@@ -48,24 +49,29 @@ _real: dict[tuple[str, str, str, str], GitHubApp] = {}
 
 
 def get_github_app() -> GitHubAppPort | None:
-    """The deployment's App, or `None` when it has none. Fakes: the scriptable `FakeGitHubApp`,
-    absent until a test sets `configured`."""
+    """The deployment's App, or `None` when it has none: its settings, else the App registered from a
+    manifest as this process last read it (`github_app` refreshes that first). Fakes: the scriptable
+    `FakeGitHubApp`, absent until a test sets `configured` or an App is registered."""
+    found = credentials.current()
     if fakes_enabled():
         fake = FakeGitHubApp.shared()
-        return fake if fake.configured else None
-    settings = get_settings()
-    key = (
-        settings.github_app_id,
-        settings.github_app_private_key,
-        settings.github_app_client_id,
-        settings.github_app_client_secret,
-    )
-    if not key[0] or not key[1]:
+        # A stored App configures the fake (the demo of the manifest flow); the deployment's
+        # variables never did under the fakes, and still do not.
+        stored = found is not None and found.source == "manifest"
+        return fake if fake.configured or stored else None
+    if found is None:
         return None
+    key = (found.app_id, found.private_key, found.client_id, found.client_secret)
     if key not in _real:
         _real.clear()  # one App per process: a changed credential replaces the client
         _real[key] = GitHubApp(app_id=key[0], private_key=key[1], client_id=key[2], client_secret=key[3])
     return _real[key]
+
+
+async def github_app(session: AsyncSession) -> GitHubAppPort | None:
+    """`get_github_app()` after the stored App was read again if this process's copy is stale."""
+    await credentials.refresh(session)
+    return get_github_app()
 
 
 def owner_of(repo: str) -> str | None:
@@ -374,6 +380,8 @@ async def pin_installation(
     must refuse (`put_connector`, a multi-organisation instance) check beforehand."""
     if (kind, type_) not in GITHUB_TYPES:
         return config
+    # The adapter about to be built reads the App through the process provider: keep it current.
+    await credentials.refresh(session)
     owner = owner_of(str(config.get("repo") or ""))
     clean = {k: v for k, v in config.items() if k != "installation_id"}
     if owner is None:
@@ -395,7 +403,7 @@ async def checked_config(
     if (kind, type_) not in GITHUB_TYPES or clean.get("api_url"):
         return clean
     owner = owner_of(str(clean.get("repo") or ""))
-    app = get_github_app()
+    app = await github_app(session)
     if owner is None or app is None:
         return clean
     if await installation_for_owner(session, org_id, owner, app) is not None:
@@ -421,7 +429,7 @@ async def pin_for_runtime(
     if (kind, type_) not in GITHUB_TYPES or "installation_id" in pinned or pinned.get("api_url"):
         return pinned
     owner = owner_of(str(pinned.get("repo") or ""))
-    if owner is None or get_github_app() is None or await implicit_claim_enabled(session):
+    if owner is None or await github_app(session) is None or await implicit_claim_enabled(session):
         return pinned
     from choregos_adapters.errors import ConfigurationError
 

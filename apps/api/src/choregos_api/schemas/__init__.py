@@ -186,6 +186,9 @@ from .delivery import (
     TrainStatusDto,
 )
 from .github_app import (
+    GitHubAppManifestRequest,
+    GitHubAppManifestStart,
+    GitHubAppRegistrationStatus,
     GitHubAppStatus,
     GitHubInstallationDto,
     GitHubInstallLink,
@@ -497,6 +500,9 @@ __all__ = [
     "FreezeRequest",
     "GatewayKeyInfo",
     "GatewayModelDto",
+    "GitHubAppManifestRequest",
+    "GitHubAppManifestStart",
+    "GitHubAppRegistrationStatus",
     "GitHubAppStatus",
     "GitHubInstallLink",
     "GitHubInstallLinkRequest",

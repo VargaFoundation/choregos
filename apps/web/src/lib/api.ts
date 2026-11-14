@@ -129,6 +129,9 @@ import type {
   ModelCuratePreview,
   ModelSyncResult,
   UsableModel,
+  GitHubAppManifestRequest,
+  GitHubAppManifestStart,
+  GitHubAppRegistrationStatus,
   GitHubAppStatus,
   GitHubInstallLink,
   GitHubInstallLinkRequest,
@@ -1119,6 +1122,13 @@ export const api = {
     request<GitHubRepositoryPage>(`/orgs/${org}/github/repositories${q ? `?q=${encodeURIComponent(q)}` : ""}`),
   githubInstallLink: (org: string, body: GitHubInstallLinkRequest) =>
     request<GitHubInstallLink>(`/orgs/${org}/github/install-link`, { method: "POST", body: JSON.stringify(body) }),
+  /** The instance's GitHub App and where it comes from: the deployment's settings or the console (S70-21, ADR 0167). */
+  platformGitHubApp: () => request<GitHubAppRegistrationStatus>("/platform/github-app"),
+  /** Step 1 of GitHub's App Manifest flow: the form the console posts to github.com. */
+  startGitHubAppManifest: (body: GitHubAppManifestRequest) =>
+    request<GitHubAppManifestStart>("/platform/github-app/manifest", { method: "POST", body: JSON.stringify(body) }),
+  /** Forget the App created from the console (it stays on GitHub). */
+  forgetPlatformGitHubApp: () => request<void>("/platform/github-app", { method: "DELETE" }),
 
   workflow: (id: string) => request<WorkflowDef>(`/projects/${qualify(id)}/workflow`),
   putWorkflow: (id: string, yaml: string) =>
