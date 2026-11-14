@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = "==3.12.*"
 resolution-markers = [
     "sys_platform == 'win32'",
@@ -347,7 +347,7 @@ requires-dist = [
     { name = "agent-client-protocol", specifier = "==0.12.1" },
     { name = "choregos-contracts", editable = "packages/contracts" },
     { name = "mcp", specifier = ">=1.20" },
-    { name = "openai", specifier = "==3.46.0" },
+    { name = "openai", specifier = "==3.49.0" },
 ]
 
 [[package]]
@@ -831,7 +831,7 @@ wheels = [
 
 [[package]]
 name = "datamodel-code-generator"
-version = "0.90.0"
+version = "0.93.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "argcomplete" },
@@ -844,9 +844,9 @@ dependencies = [
     { name = "pyyaml" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/0a/d9/6b98e436cc7869262df7710f53bdb91fe641c3f06f159e45d94f9efe37f8/datamodel_code_generator-0.90.0.tar.gz", hash = "sha256:53869907ee63fd11801d29779c91a5542d67c11b578f071d3a9dd53111d13930", size = 8876038, upload-time = "2026-11-06T06:53:21.103Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/3e/4f/1d89232ee9d78d44a6cc463c4648861045b36f5c75b5942fb1a67848468a/datamodel_code_generator-0.93.0.tar.gz", hash = "sha256:00d992fc6e7d852b909374193eb3aae0bf9ae55ae2e62f034c5f3836a0b6bc0a", size = 9535469, upload-time = "2026-11-11T07:51:57.475Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/04/c6/e529a9889286bd59bea0a27d635e9b96e1ac8d88fce95302ef71fa436ff3/datamodel_code_generator-0.90.0-py3-none-any.whl", hash = "sha256:a24faf1691a5b8f2ced4078fec6889567a924959c6500aa9e585455a9fe21710", size = 2293088, upload-time = "2026-11-06T06:53:18.982Z" },
+    { url = "https://files.pythonhosted.org/packages/40/c3/3fa4bf22aa4e0afcee1930e24611b2366c09f76e6d1406f5da7102816f1d/datamodel_code_generator-0.93.0-py3-none-any.whl", hash = "sha256:d4074c2bb818799067e4b76517846405cd89243aa163741b341003c4d286eeb6", size = 2444040, upload-time = "2026-11-11T07:51:55.433Z" },
 ]
 
 [[package]]
@@ -1537,7 +1537,7 @@ wheels = [
 
 [[package]]
 name = "openai"
-version = "3.46.0"
+version = "3.49.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
@@ -1547,9 +1547,9 @@ dependencies = [
     { name = "sniffio" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/34/b6/23cddcb571d6eafe7b4bb58c7e0a068076121b7b001b776179994cca6a03/openai-3.46.0.tar.gz", hash = "sha256:fb34cd8cab6809ad0aa8dc42493fa622aaa87c814fd8e67a6fb3fa1f1e5d952d", size = 2408622, upload-time = "2026-11-05T00:55:55.463Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/83/8f/adc3e9f7077c16a2417eebb219df2f5933f4fa532fab143c6bbb1c287c67/openai-3.49.0.tar.gz", hash = "sha256:44badf2bea9bcd643dafa0bc4d5a109a14395889219fd68b8560322288196e96", size = 2410883, upload-time = "2026-11-10T06:47:55.206Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/f4/63/454e6faad68ac903e7669932db8d0a91c95dfca829ec9476e52045b17684/openai-3.46.0-py3-none-any.whl", hash = "sha256:7b650117e9bf539029bf880c2eff94a26f281394f6572284efa5d068d4b1c98e", size = 2438918, upload-time = "2026-11-05T00:55:53.301Z" },
+    { url = "https://files.pythonhosted.org/packages/fe/45/de8fbd25a1ca0a46f9641604a7cb991123daa7f292c27625223d685d9bac/openai-3.49.0-py3-none-any.whl", hash = "sha256:3977754792115027ba80ae16996ba3366478b5b228e1ab58e2660bd7ac8c3d78", size = 2442112, upload-time = "2026-11-10T06:47:52.422Z" },
 ]
 
 [[package]]
@@ -2373,17 +2373,18 @@ wheels = [
 
 [[package]]
 name = "typer"
-version = "0.28.0"
+version = "0.29.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "annotated-doc" },
     { name = "colorama", marker = "sys_platform == 'win32'" },
+    { name = "pydantic" },
     { name = "rich" },
     { name = "shellingham" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ad/8f/21021859316f44289101638dc74d82e13d722d8533e4b8708a3ab7c8461a/typer-0.28.0.tar.gz", hash = "sha256:69ab84ef79fd601cff071bbd2566d855ecadfd93adbc4b3360b9924359bdd857", size = 205415, upload-time = "2026-11-06T08:37:19.779Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ed/db/401793a0d5345409a28de2c571d4ef8bea9a08700c20ea7f7b6af3b050d2/typer-0.29.0.tar.gz", hash = "sha256:6871960a1603fba66af2ff751be48a6735af6480a67660afaf2fab2f7e008ed4", size = 206371, upload-time = "2026-11-09T18:48:12.751Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/19/98/8ef60c7cd773dbab9d276a4c7bff505913a25b61acd8a9ef01ceeb70f554/typer-0.28.0-py3-none-any.whl", hash = "sha256:afd18929180b706c5e9a239f53c3c8136903553c0c2d460598bbaa924191d4ab", size = 123253, upload-time = "2026-11-06T08:37:18.611Z" },
+    { url = "https://files.pythonhosted.org/packages/c1/3d/cc08d3cb257764101c71c47f18e2f547782d013928edc877f155cb99229d/typer-0.29.0-py3-none-any.whl", hash = "sha256:b3c3de6e06a848274dc7bd56a433499e9cf25fa1d40aa3ba4eccfec4e1624c7b", size = 121058, upload-time = "2026-11-09T18:48:11.665Z" },
 ]
 
 [[package]]
