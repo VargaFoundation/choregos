@@ -286,18 +286,19 @@ async def propose_call(
         ) from refused
     # The same call is the same action (#1379, ADR 0035), as for an allowed write: a model retrying or a
     # script run again (ADR 0122) finds its proposal instead of putting a second one before a person.
+    from choregos_contracts import ActionStatus
+
     from ..db.models import Action
 
     action_id = call_id(run.id, tool.name, arguments)
     action = await session.get(Action, action_id)
     if action is None:
         action = await _propose_tool_action(session, run, project, tool, arguments, action_id)
-    return {
-        "action": action.id,
-        "status": action.status,
-        "message": "proposed: a person approves it in the console before anything is done",
-        "decision_path": f"/p/{project.slug}/actions/{action.id}",
-    }
+    if action.status == ActionStatus.IN_DOUBT.value:
+        # The same call is the same action, whatever became of it: one that ended in doubt is said
+        # so, and repeating the call proposes nothing new (ADR 0149 §5).
+        return _in_doubt(project, action)
+    return _pending(project, action)
 
 
 async def _propose_tool_action(
@@ -466,7 +467,13 @@ async def write_through_action(
         await release_connection(session)
         await get_temporal().start_action(temporal_action_id(action.id), {"action_id": action.id})
     deadline = time.monotonic() + get_settings().courtier_attente_ecriture_s
-    finished = {ActionStatus.SUCCEEDED.value, ActionStatus.FAILED.value, ActionStatus.REJECTED.value}
+    in_doubt = ActionStatus.IN_DOUBT.value
+    finished = {
+        ActionStatus.SUCCEEDED.value,
+        ActionStatus.FAILED.value,
+        ActionStatus.REJECTED.value,
+        in_doubt,
+    }
     # A call that found its action already there read it in the request's transaction: that one ends
     # before the wait too.
     async with outside_the_transaction(session):
@@ -487,6 +494,11 @@ async def write_through_action(
         # a 422 would tell the agent that an effect that happened did not.
         result = await _action_result(session, action)
         return 200, bounded_result(result, tool.operation.result_max_bytes), created
+    if action.status == in_doubt:
+        # Sent, and nobody knows whether it was executed: a claim that got no answer (504), booked
+        # like any call that may have reached its server. The agent that repeats the call finds this
+        # action again and is told the same: nothing replays it.
+        return 504, _in_doubt(project, action), created
     if action.status in finished:
         refusal = {"error": action.error or f"action {action.status}", "action": action.id}
         return 422, refusal, created
@@ -510,6 +522,26 @@ def _pending(project: Project, action: Any) -> dict[str, Any]:
         "action": action.id,
         "status": action.status,
         "message": "proposed: a person approves it in the console before anything is done",
+        "decision_path": f"/p/{project.slug}/actions/{action.id}",
+    }
+
+
+#: What an agent is told of an action one of whose effects was sent and never answered (ADR 0149 §5),
+#: the first time and every time it repeats the call.
+IN_DOUBT_MESSAGE = (
+    "the write was sent and its answer never came: nobody knows whether it was executed. It is not "
+    "replayed and nothing was undone; repeating the call returns this same action. A person checks "
+    "the system the write was for"
+)
+
+
+def _in_doubt(project: Project, action: Any) -> dict[str, Any]:
+    return {
+        "error": action.error or IN_DOUBT_MESSAGE,
+        "code": "action_in_doubt",
+        "action": action.id,
+        "status": action.status,
+        "message": IN_DOUBT_MESSAGE,
         "decision_path": f"/p/{project.slug}/actions/{action.id}",
     }
 

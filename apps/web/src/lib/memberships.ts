@@ -106,3 +106,14 @@ export function canReassignRequests(
 ): boolean {
   return memberships.some((m) => m.org === org && !m.project_slug && m.role === "org_admin");
 }
+
+/**
+ * Whether the person writes the organisation's groups: the API's `group:manage` (ADR 0160), the
+ * organisation administrator's. Every member reads them; the API stays the judge.
+ */
+export function canManageGroups(
+  memberships: Array<Pick<Membership, "org" | "project_slug" | "role">>,
+  org: string,
+): boolean {
+  return memberships.some((m) => m.org === org && !m.project_slug && m.role === "org_admin");
+}

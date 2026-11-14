@@ -7,6 +7,7 @@ import { projectGroups } from "@/components/shell/navigation";
 import { ActivityView } from "@/components/activity/activity-view";
 import { elapsedMs, entryLabel, formatElapsed, spendSoFar, statusKind } from "@/lib/activity";
 import { api, ApiError } from "@/lib/api";
+import { assistantsApi } from "@/lib/assistants-api";
 import type { ActivityEntry } from "@/lib/types";
 import { activityApi, resetActivity } from "@/mocks/activity";
 
@@ -21,6 +22,10 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => search.current,
   usePathname: () => "/activity",
 }));
+vi.mock("@/lib/assistants-api", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@/lib/assistants-api")>();
+  return { ...real, assistantsApi: { ...real.assistantsApi, installations: vi.fn() } };
+});
 vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "acme", orgs: [{ slug: "acme" }], me: null }) }));
 vi.mock("@/lib/api", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/api")>();
@@ -76,6 +81,8 @@ beforeEach(() => {
   vi.mocked(api.agents).mockResolvedValue([{ slug: "coordinator" }, { slug: "reviewer" }] as never);
   vi.mocked(api.projects).mockResolvedValue({ items: [{ slug: "billing-api" }], meta: { has_more: false } } as never);
   vi.mocked(api.runEvents).mockResolvedValue([]);
+  // A reader who manages no assistant: a turn's assistant is said by its id.
+  vi.mocked(assistantsApi.installations).mockRejectedValue(new ApiError(403, { title: "Forbidden" }));
 });
 
 describe("an entry, in words", () => {
@@ -117,10 +124,10 @@ describe("the Activity screen", () => {
     const inFlight = await screen.findByTestId("in-flight");
     const finished = screen.getByTestId("finished");
     expect(inFlight.compareDocumentPosition(finished) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(within(inFlight).getByRole("heading", { name: "In flight (3)" })).toBeInTheDocument();
+    expect(within(inFlight).getByRole("heading", { name: "In flight (4)" })).toBeInTheDocument();
     expect(within(finished).getByRole("heading", { name: "Finished (2)" })).toBeInTheDocument();
     const rows = within(inFlight).getAllByTestId("activity-entry");
-    expect(rows.map((r) => r.getAttribute("data-entry"))).toEqual(["r3", "r-checkout-review", "s-7f3a91c2"]);
+    expect(rows.map((r) => r.getAttribute("data-entry"))).toEqual(["r3", "r-checkout-review", "s-7f3a91c2", "t-0c41d9e7"]);
     // A running run: its label, agent, model, tokens and cost so far, its status.
     const running = rows[0]!;
     expect(running).toHaveTextContent("BILL-42 · implement");
@@ -154,7 +161,7 @@ describe("the Activity screen", () => {
       fireEvent.click(confirm);
     });
     expect(api.cancelRun).toHaveBeenCalledWith("r3", "it is rewriting the wrong module");
-    await waitFor(() => expect(screen.getByRole("heading", { name: "In flight (2)" })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("heading", { name: "In flight (3)" })).toBeInTheDocument());
     const finished = screen.getByTestId("finished");
     expect(within(finished).getAllByTestId("activity-entry")[0]).toHaveAttribute("data-entry", "r3");
     expect(within(finished).getAllByTestId("activity-entry")[0]).toHaveTextContent("Cancelled");
@@ -196,6 +203,66 @@ describe("the Activity screen", () => {
     await waitFor(() =>
       expect(api.activity).toHaveBeenLastCalledWith("acme", { agent: "reviewer", workflow: "delivery", assistant: "inst-1" }),
     );
+  });
+
+  it("shows a conversation turn: its label, its agent, its assistant, the conversation's owner, no stop of its own", async () => {
+    await show(<ActivityPage />);
+    const inFlight = await screen.findByTestId("in-flight");
+    const turn = within(inFlight).getAllByTestId("activity-entry").find((r) => r.getAttribute("data-entry") === "t-0c41d9e7")!;
+    expect(turn).toHaveTextContent("Conversation turn t-0c41d");
+    expect(turn).toHaveTextContent("concierge-agent");
+    // A reader who manages no assistant reads its installation id; the owner is the conversation's.
+    expect(within(turn).getByTestId("turn-of")).toHaveTextContent("of inst-concierge, for nina@acme.dev");
+    expect(within(turn).getByTestId("spend-tokens")).toHaveTextContent("8 k in · 640 out");
+    // The assistant's stop, on its page, is the stop: a turn has none here.
+    expect(within(turn).queryByRole("button", { name: "Stop" })).toBeNull();
+    expect(within(turn).queryByRole("button", { name: /^Steps of/ })).toBeNull();
+  });
+
+  it("names a turn's assistant from the installations the reader manages, and narrows to it on a click", async () => {
+    vi.mocked(assistantsApi.installations).mockResolvedValue({
+      items: [{ slug: "concierge", display_name: "Concierge", id: "inst-concierge" }],
+    } as never);
+    await show(<ActivityPage />);
+    const turn = (await screen.findAllByTestId("activity-entry")).find((r) => r.getAttribute("data-entry") === "t-0c41d9e7")!;
+    const name = await within(turn).findByRole("button", { name: "Only the turns of Concierge" });
+    await act(async () => {
+      fireEvent.click(name);
+    });
+    await waitFor(() => expect(api.activity).toHaveBeenLastCalledWith("acme", { assistant: "inst-concierge" }));
+    expect(await screen.findByRole("heading", { name: "In flight (1)" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Assistant" })).toHaveValue("inst-concierge");
+  });
+
+  it("is narrowed to one assistant's turns by `?assistant=`, and the turns by kind", async () => {
+    search.current = new URLSearchParams({ assistant: "inst-concierge" });
+    await show(<ActivityPage />);
+    expect(await screen.findByRole("heading", { name: "In flight (1)" })).toBeInTheDocument();
+    expect(api.activity).toHaveBeenCalledWith("acme", { assistant: "inst-concierge" });
+    expect(screen.getAllByTestId("activity-entry").map((r) => r.getAttribute("data-entry"))).toEqual(["t-0c41d9e7"]);
+    search.current = new URLSearchParams();
+    await show(<ActivityPage />);
+    await screen.findByTestId("in-flight");
+    await act(async () => {
+      fireEvent.change(screen.getByRole("combobox", { name: "Kind" }), { target: { value: "turn" } });
+    });
+    await waitFor(() => expect(api.activity).toHaveBeenLastCalledWith("acme", { kind: "turn" }));
+    expect(await screen.findByRole("heading", { name: "In flight (1)" })).toBeInTheDocument();
+  });
+
+  it("the demo stops an assistant's turns with a reason, and resumes only a stopped assistant", () => {
+    expect(() => activityApi("POST", "/orgs/acme/assistants/concierge/resume", undefined)).toThrow(/not stopped/);
+    expect(() => activityApi("POST", "/orgs/acme/assistants/concierge/stop", { reason: "" })).toThrow(/1 to 500/);
+    expect(activityApi("POST", "/orgs/acme/assistants/concierge/stop", { reason: "it quotes stale prices" })).toEqual({
+      slug: "concierge",
+      status: "suspended",
+      turns_cancelled: 1,
+      not_stopped: [],
+    });
+    const list = activityApi("GET", "/orgs/acme/activity?kind=turn", undefined) as { in_flight: ActivityEntry[]; finished: ActivityEntry[] };
+    expect(list.in_flight).toEqual([]);
+    expect(list.finished[0]).toMatchObject({ id: "t-0c41d9e7", status: "cancelled" });
+    expect(activityApi("POST", "/orgs/acme/assistants/concierge/resume", undefined)).toMatchObject({ slug: "concierge", stopped: null });
   });
 
   it("is narrowed to a project by `?project=` and by the project's own section", async () => {

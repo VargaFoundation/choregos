@@ -65,6 +65,9 @@ DERIVED: tuple[str, ...] = (
     "integrations/claude-code/.claude-plugin/plugin.json",
     "packages/agent-sdk/README.md",
     "packages/agent-sdk/pyproject.toml",
+    # The editor extension: marketplace metadata and its readme (ADR 0155).
+    "apps/vscode/README.md",
+    "apps/vscode/package.json",
     # Where the images are pushed and signed, and the upstream-only jobs.
     ".github/dependabot.yml",
     ".github/workflows/ci.yml",
@@ -324,6 +327,7 @@ def rewrite(
             mapping.setdefault(before, after)
     owners = [s for key, value in old.items() if is_owner(key) for s in spellings(value)]
     pattern = _pattern(mapping, ignore_case=False, owners=owners)
+    old_owner, new_owner = old.get("owner", ""), new.get("owner", "")
     changed: list[str] = []
     canonical = (root / CANONICAL).read_text(encoding="utf-8")
     for copy in COPIES:
@@ -334,6 +338,13 @@ def rewrite(
         path = root / name
         text = path.read_text(encoding="utf-8")
         updated = pattern.sub(lambda match: mapping[match.group(0)], text)
+        if name.endswith("package.json") and old_owner and new_owner:
+            # An editor extension's marketplace publisher is the owner's name, lowercased (ADR 0155).
+            updated = re.sub(
+                r'("publisher"\s*:\s*")' + re.escape(old_owner.lower()) + '"',
+                lambda match: match.group(1) + new_owner.lower() + '"',
+                updated,
+            )
         if updated != text:
             path.write_text(updated, encoding="utf-8")
             changed.append(name)

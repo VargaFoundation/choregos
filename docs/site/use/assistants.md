@@ -49,6 +49,10 @@ The assistant is asked to cite what it uses from its knowledge. The badges under
 documents. A figure that comes from a source should carry its date. If an answer has neither, ask the
 assistant where it comes from, and treat it as unchecked.
 
+Some of an assistant's knowledge may be your organisation's own knowledge bases, which its owners pointed
+it at. The assistant answers you from such a base only if you may read that base yourself: a colleague with
+access to it may get a fuller answer than you. Ask the base's owners for access, not the assistant's.
+
 ### Thumbs and feedback
 
 Under the last answer, press the thumb up (**Good answer**) or the thumb down (**Bad answer**). A text
@@ -68,6 +72,22 @@ change**.
 Only you, the person who owns the conversation, can decide. The write is made with your identity, and
 the source decides whether you are allowed to make it. A proposal that nobody decides within 24 hours
 expires.
+
+## Confirm a workflow the assistant proposes to start
+
+Some assistants may start a workflow one of your organisation's projects runs, such as asking a team for a
+document. The assistant never starts it by itself: a card **The assistant proposes to start a workflow**
+appears, naming the workflow and the project, with the title and the inputs it would give.
+
+1. Read the card.
+2. Press **Confirm** to file the work item, or **Refuse**.
+
+The work item is filed in your name, in that project: you are its reporter, and it follows the project's
+rules, approvals and budget like any work item there. You need the right to create work items in the project
+(the developer role there, or above); without it, the confirmation is refused and nothing is filed. Once
+started, the work item is listed under **Started from this conversation**, with a link to it, and you can
+ask the assistant where it stands. From claude.ai or another MCP client, the answer carries a link to confirm
+in the console.
 
 ## What the assistant remembers
 
@@ -147,6 +167,8 @@ not need a delegation.
 | The badge says `suspended` | its plugin is uninstalled | same |
 | **An account is not connected** | the assistant needs your account at a source | press the **Connect** button, then ask again |
 | A write card is gone | nobody decided within 24 hours | ask again |
+| **You may not create work items** when you confirm a workflow | you have no developer role in its project | ask the project's owner for the role, or someone who has it |
+| The workflow is **now bound elsewhere** when you confirm | the owners changed where it starts since the proposal | ask the assistant again |
 | The last run of a task was refused | it needed a delegation you have not given or that is suspended | **Review and agree**, or **Agree again** |
 | A turn is refused before it starts | a budget is spent (the conversation's, yours for the month, or the installation's) | wait for the next month, or ask the owners |
 

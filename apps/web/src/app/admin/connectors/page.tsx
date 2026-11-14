@@ -10,6 +10,7 @@ import { discoverySummary } from "@/components/discovery";
 import { egressFlag, useEgressGuard } from "@/components/egress/egress-provider";
 import { Glossary } from "@/components/glossary";
 import { OutpostConnectorFields } from "@/components/outposts/connector-fields";
+import { OperationStatements, type StatementRefusal } from "@/components/outposts/operation-statements";
 import { RefusalNote } from "@/components/outposts/refusal";
 import { ProcedurePanel } from "@/components/procedures/procedure-panel";
 import { dataHandlingProblems } from "@/lib/data-handling";
@@ -25,7 +26,18 @@ import {
 } from "@/components/secret-field";
 import { Badge, Button, Card, Empty, ErrorNote, Input, Select } from "@/components/ui";
 import { api } from "@/lib/api";
-import { OUTPOST_CONNECTOR_TYPE, outpostConfigProblems, refusalOf, routeRefusal, type OutpostRefusal } from "@/lib/outposts";
+import {
+  OUTPOST_CONNECTOR_TYPE,
+  deliveryOf,
+  deliveryPatch,
+  isOutpostWrite,
+  outpostConfigProblems,
+  refusalOf,
+  routeRefusal,
+  statementRefusals,
+  type DeliveryDraft,
+  type OutpostRefusal,
+} from "@/lib/outposts";
 import { connectorTarget, presetOfMcpUrl } from "@/lib/procedures";
 import { useSession } from "@/lib/session";
 import { kindLabel, isOrgDeclarable } from "@/lib/connector-kinds";
@@ -300,7 +312,13 @@ function Instance({
             </thead>
             <tbody>
               {(instance.operations ?? []).map((operation) => (
-                <Operation key={operation.name} org={org} connecteur={instance.name} operation={operation} />
+                <Operation
+                  key={operation.name}
+                  org={org}
+                  connecteur={instance.name}
+                  operation={operation}
+                  atOutpost={isOutpostWrite(instance, operation)}
+                />
               ))}
             </tbody>
           </table>
@@ -461,20 +479,49 @@ function ExistingOrNew({
   return <SecretField field={field} state={state} onSave={save} onClear={clear} />;
 }
 
-function Operation({ org, connecteur, operation }: { org: string; connecteur: string; operation: ConnectorOperation }) {
+/**
+ * One operation's rule: its policy, project groups, approver group and result cap. A write of a connector
+ * at an outpost (`atOutpost`) also says how it is delivered (ADR 0149 §6): the two statements are drafted
+ * on a row of their own, leave with the policy that opens the write or alone, and the API's refusal of a
+ * rule that says neither is shown there, on the statements it names.
+ */
+function Operation({
+  org,
+  connecteur,
+  operation,
+  atOutpost = false,
+}: {
+  org: string;
+  connecteur: string;
+  operation: ConnectorOperation;
+  atOutpost?: boolean;
+}) {
   const client = useQueryClient();
   const [groupes, setGroupes] = useState((operation.groups ?? []).join(", "));
   const [approbateurs, setApprobateurs] = useState(operation.approver_group ?? "");
   const [erreur, setErreur] = useState<string | null>(null);
   const [assouplir, setAssouplir] = useState<OperationPatch["policy"] | null>(null);
   const [cap, setCap] = useState(operation.result_max_bytes?.toString() ?? "");
+  const stored = deliveryOf(operation);
+  const [draft, setDraft] = useState<DeliveryDraft>(stored);
+  const [refused, setRefused] = useState<StatementRefusal | null>(null);
+  /** What a change of the rule says of the delivery: the statements drafted (none but at an outpost, where they are shown). */
+  const statements = deliveryPatch(operation, draft);
+  /** A refusal that names a statement is shown on the statements; `withDetail` false when another place shows the sentence. */
+  function heard(cause: unknown, withDetail: boolean): boolean {
+    const fields = atOutpost ? statementRefusals(cause) : {};
+    if (Object.keys(fields).length === 0) return false;
+    setRefused({ detail: withDetail && cause instanceof Error ? cause.message : null, fields });
+    return true;
+  }
   async function changer(body: OperationPatch) {
     setErreur(null);
+    setRefused(null);
     try {
       await api.updateConnectorOperation(org, connecteur, operation.name, body);
       await client.invalidateQueries({ queryKey: ["org-connectors", org] });
     } catch (cause) {
-      setErreur(cause instanceof Error ? cause.message : "refused");
+      if (!heard(cause, true)) setErreur(cause instanceof Error ? cause.message : "refused");
     }
   }
   const lus = groupes
@@ -482,6 +529,7 @@ function Operation({ org, connecteur, operation }: { org: string; connecteur: st
     .map((g) => g.trim())
     .filter(Boolean);
   return (
+    <>
     <tr className="border-t border-line">
       <td className="py-2">
         <code>{operation.name}</code>
@@ -530,7 +578,15 @@ function Operation({ org, connecteur, operation }: { org: string; connecteur: st
               question={`Loosen ${operation.name} to ${assouplir}? ${WHAT_IT_ALLOWS[assouplir as keyof typeof WHAT_IT_ALLOWS] ?? ""}, in every project it applies to.`}
               confirmer={`Set ${assouplir}`}
               action={async () => {
-                await api.updateConnectorOperation(org, connecteur, operation.name, { policy: assouplir });
+                setRefused(null);
+                try {
+                  // A write at an outpost opens with the statements drafted for it, in the same request.
+                  await api.updateConnectorOperation(org, connecteur, operation.name, { policy: assouplir, ...statements });
+                } catch (cause) {
+                  // The sentence stays in the confirmation; the statements it names say so where they are.
+                  heard(cause, false);
+                  throw cause;
+                }
                 await client.invalidateQueries({ queryKey: ["org-connectors", org] });
               }}
               onDone={() => setAssouplir(null)}
@@ -601,6 +657,22 @@ function Operation({ org, connecteur, operation }: { org: string; connecteur: st
         />
       </td>
     </tr>
+    {atOutpost && (
+      <tr>
+        <td colSpan={6} className="pb-2">
+          <OperationStatements
+            id={`delivery-${connecteur}-${operation.name}`}
+            operation={operation}
+            draft={draft}
+            stored={stored}
+            refused={refused}
+            onChange={setDraft}
+            onSave={() => void changer(statements)}
+          />
+        </td>
+      </tr>
+    )}
+    </>
   );
 }
 

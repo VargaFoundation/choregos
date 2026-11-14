@@ -61,6 +61,7 @@ from ..services.artifacts import (
     revision,
     to_contract,
 )
+from ..services.decision_drafts import compared, may_answer
 from ..services.human_assignee import (
     StepAssignee,
     assignee_of_the_request,
@@ -450,6 +451,8 @@ async def post_decision(id: str, body: DecisionRequest, session: Db, principal: 
         by=principal.email,
         **({"fields": sorted(values), "attestation": attested_sentence} if is_task else {}),
     )
+    # Whether the person decided what their client drafted (ADR 0163 point 7): how often a draft is taken.
+    drafted = compared(request_row.draft, body.kind, body.model_dump(mode="json"))
     await record(
         session,
         principal,
@@ -458,8 +461,50 @@ async def post_decision(id: str, body: DecisionRequest, session: Db, principal: 
         target_type="work_item",
         target_id=item.id,
         kind=body.kind,
+        **({"draft": drafted} if drafted else {}),
     )
     return human_request_dto(request_row)
+
+
+@router.delete(
+    "/work-items/{id}/human-requests/{request_id}/draft",
+    status_code=status.HTTP_204_NO_CONTENT,
+    operation_id="discardDecisionDraft",
+)
+async def discard_decision_draft(id: str, request_id: str, session: Db, principal: Me) -> Response:
+    """Discard the draft a person's client deposited through the MCP door (ADR 0163 point 7). Whoever may
+    answer the request may discard it: the decision route's rank and addressee rules, an organisation
+    administrator included. Audited; a decided request is a 409, a request without a draft a 404."""
+    item, project = await _load(session, id, principal)
+    _, org_slug = await resolve_project(session, project.id)
+    row = (
+        await session.execute(
+            select(HumanRequest).where(HumanRequest.id == request_id, HumanRequest.work_item_id == item.id)
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        raise not_found("Human request", request_id)
+    if await may_answer(session, principal, item, project, org_slug, row) == "refused":
+        raise forbidden("discarding a draft needs the right to answer this request")
+    if row.decided_at is not None:
+        raise conflict("this request has already been decided")
+    if not row.draft:
+        raise not_found("Draft", request_id)
+    draft = dict(row.draft)
+    row.draft = None
+    await record(
+        session,
+        principal,
+        "workitem.decision.draft.discard",
+        org_id=project.org_id,
+        target_type="work_item",
+        target_id=item.id,
+        request_id=row.id,
+        kind=draft.get("kind"),
+        drafted_by=draft.get("by"),
+        via=draft.get("via"),
+    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post(
