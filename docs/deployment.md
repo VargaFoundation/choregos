@@ -1686,6 +1686,26 @@ value>` on the first model call. Nothing said the key had never resolved.
 If the API refuses to start with `réglages non résolus`, fix the source of the secret — the key
 is missing where it is stored, not where it is read.
 
+## Upgrading past 0.27.3
+
+A workflow may no longer name an agent of kind `external` — a client of the MCP door — as a step's actor
+([ADR 0163](adr/0163-a-client-prepares-a-person-s-decision-the-person-decides.md) §1, S65-20). Such a
+workflow ran the client's version as if the platform ran it. After the upgrade its next publication is
+refused (422), and a run of it fails before it starts with the agent named; name a person for the step
+instead. Look for one before upgrading:
+
+```sql
+SELECT p.slug AS project, w.name AS workflow, w.version, a.slug AS agent
+FROM workflow_defs w
+JOIN projects p ON p.id = w.project_id
+JOIN LATERAL jsonb_each(w.json::jsonb -> 'actors') AS actor(name, spec) ON true
+JOIN agents a ON a.org_id = p.org_id AND a.kind = 'external'
+  AND a.slug = split_part(actor.spec ->> 'agent', '@', 1)
+WHERE w.is_active;
+```
+
+No row: nothing to do. The rule needs no migration.
+
 ## Upgrading to 0.27
 
 One permission changes. The API now deletes the objects of a task artifact it erases or purges (an assistant's
