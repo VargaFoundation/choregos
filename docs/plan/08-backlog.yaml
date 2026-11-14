@@ -4857,6 +4857,14 @@ stories:
     size: S
     depends_on: [S65-01]
     notes: "A logger cached at first use holds the processors list it was created with; capture_logs fills the current list in place; configure_logging, called again by a later lifespan in the same worker, brought a new list, so every logger cached before it printed JSON past the capture (test_run_closed_when_the_wait_ends [cancel fails]). configure_logging now keeps the list instance and replaces its contents; the root conftest puts structlog's configuration back after every test, the same list included; apps/api/tests/test_logs_captured_after_a_second_configuration.py, each half red without it."
+  - id: S65-30
+    title: "fix(runner): a live agent that runs out of time in its turn ends as a timeout, its turn cancelled (finding #1707)"
+    stream: S65
+    sprint: 8
+    priority: 2
+    size: S
+    depends_on: [S65-21a]
+    notes: "AcpClient.request turned the prompt's TimeoutError into an AgentUnreachableError (#111), so prompt's except TimeoutError never ran: a live agent past its time ended unreachable, never cancelled, and test_prompt_timeout_cancels_session raced a 1 ms timeout against a fast fake agent. request raises AgentSilentError (an AgentUnreachableError that says whether the process was alive); prompt cancels a live agent and returns stop_reason timeout; a dead agent stays unreachable. The fake agent's until_cancelled turn holds until session/cancel, so the test never races."
   - id: S65-29
     title: "fix(api): a look at an outpost's call that a cancellation interrupts stays a cancellation"
     stream: S65
