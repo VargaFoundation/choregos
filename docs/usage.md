@@ -3824,7 +3824,9 @@ answer carries a *Connect* link. *Memory, accounts and tasks* (one page per assi
 administrator installs an assistant from an installed plugin: the configuration form is drawn from the
 assistant's `config_schema`, then the audience groups, owner groups and channel. An installation's page
 sets the budgets, binds each need to a connector (the readiness list says what still blocks it and who may
-fix it), decides the knowledge updates the plugin proposes (accept, merge with edits, refuse, with the
+fix it), binds each knowledge need to knowledge bases of the organisation the owner may read (card *Knowledge
+from the organisation*; nothing is copied, and a person is answered from a base only when they may read it,
+ADR 0159), decides the knowledge updates the plugin proposes (accept, merge with edits, refuse, with the
 diff), reads the reads journal, exports or erases what the assistant holds about a subject, and lists the
 feedback candidates a thumb down proposed to the agent's owners.
 

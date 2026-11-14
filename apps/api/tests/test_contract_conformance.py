@@ -13,12 +13,10 @@ PREFIX = "/api/v1"
 CONTRACT_ONLY: dict[str, str] = {
     "settleAction": "S65-26",
     "discardDecisionDraft": "S65-21",
-    "bindAssistantKnowledge": "S66-12",
 }
 CONTRACT_ONLY_PATHS: set[str] = {
     "/projects/{id}/actions/{action_id}/settlement",
     "/work-items/{id}/human-requests/{request_id}/draft",
-    "/orgs/{org}/assistants/{slug}/knowledge-bindings/{name}",
 }
 
 

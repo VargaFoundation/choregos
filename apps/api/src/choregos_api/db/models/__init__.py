@@ -48,7 +48,13 @@ from .agents import (
 )
 from .assistant_launches import AssistantLaunchBinding
 from .assistant_reads import AssistantRead
-from .assistants import AssistantInstallation, AssistantToolBinding, ConnectedAccount, ConversationAction
+from .assistants import (
+    AssistantInstallation,
+    AssistantKnowledgeBinding,
+    AssistantToolBinding,
+    ConnectedAccount,
+    ConversationAction,
+)
 from .audit import AuditLog, NetworkDecision
 from .connectors import (
     ConnectorOperation,
@@ -149,6 +155,7 @@ ALL_TABLES = [
     SkillVersion,
     AgentCredential,
     KnowledgeBase,
+    AssistantKnowledgeBinding,
     KnowledgeDocument,
     KnowledgeSeedTombstone,
     KnowledgeUpdateProposal,
@@ -201,6 +208,7 @@ __all__ = [
     "ApiToken",
     "ArtifactRecord",
     "AssistantInstallation",
+    "AssistantKnowledgeBinding",
     "AssistantLaunchBinding",
     "AssistantRead",
     "AssistantToolBinding",

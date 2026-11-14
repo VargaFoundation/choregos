@@ -179,11 +179,12 @@ memory:
   `subject_resolver: true` returned it in that conversation, or if the subject says `resolver: none`
   (a public thing). The model never opens a subject by naming it.
 
-## 4. Knowledge seeds
+## 4. Knowledge: seeds and bound bases
 
 ```text
 knowledge:
   - { name: investment_policy, seed: knowledge/investment-policy, serving_mode: index, upstream: propose_updates }
+  - { name: house_research, bind: { description: "The house's own research notes.", required: true } }
 ```
 
 The seed is a folder of your plugin with a `knowledge.yaml` (a `KnowledgeBase` manifest, as in
@@ -191,6 +192,13 @@ The seed is a folder of your plugin with a `knowledge.yaml` (a `KnowledgeBase` m
 knowledge base of the organisation, which its owners then edit. `upstream` says what a plugin upgrade
 does to the copy: `follow`, `propose_updates` or `frozen`. An upgrade never deletes a document, and a
 document the owners changed is proposed, never overwritten.
+
+A `bind` item ships nothing: it asks the organisation to point the assistant at knowledge bases it already
+keeps. Whoever installs the assistant binds it to one or more of their bases, which stay theirs: same owners,
+same rights, same sources, nothing copied. A person is answered from a bound base only when they may read
+it, so two people may get different answers; write the `description` so the owners know what to bind. A
+required binding need keeps the installation incomplete until it is bound. An item is a seed or a binding
+need, never both.
 
 ## 5. Tasks
 
@@ -347,8 +355,9 @@ Each refusal names the file and the path in it.
 ## Go further
 
 - Install it and bind its needs: sidebar **Assistants**, then **Manage installations** (organisation
-  administrators). The full contract is in the [plugins reference](../../plugins.md#assistants).
+  administrators); its knowledge needs on the card **Knowledge from the organisation** of the installation. The full contract is in the [plugins reference](../../plugins.md#assistants).
 - [Use an assistant](../use/assistants.md), as the people you ship it to see it.
 - [Connect it to claude.ai or embed it](../integrate/assistants.md).
-- The decisions: [ADR 0133](../../adr/0133-a-plugin-ships-an-assistant-an-organisation-installs-it-for-an-audience.md)
-  and [ADR 0140](../../adr/0140-conversation-evals-and-user-feedback.md).
+- The decisions: [ADR 0133](../../adr/0133-a-plugin-ships-an-assistant-an-organisation-installs-it-for-an-audience.md),
+  [ADR 0140](../../adr/0140-conversation-evals-and-user-feedback.md) and, for bound knowledge,
+  [ADR 0159](../../adr/0159-an-assistant-may-read-the-organisation-s-knowledge-bases-by-reference.md).

@@ -234,6 +234,7 @@ memory:
       kind: facts, writes: agent_proposes }
 knowledge:
   - { name: investment_policy, seed: knowledge/investment-policy }
+  - { name: house_research, bind: { description: "The house's research notes.", required: true } }
 tasks:
   - { name: morning_brief, workflow: workflows/morning-brief.yaml, delegation: read_only,
       needs: [market_data], triggers: [{ kind: schedule, cron: "30 7 * * 1-5", user_timezone: true }] }
@@ -259,6 +260,11 @@ policy:
    (`needs`), which the person sees when they agree;
 8. a name (`need`, operations, `memory`, `knowledge`, `tasks`, prompts) that is not English `snake_case`
    (a double underscore separates a need from its operation and is refused in a name).
+
+A `knowledge` item is exactly one of a seed (`seed`, with `serving_mode` and `upstream`) or a binding need
+(`bind: {description, required}`, [ADR 0159](adr/0159-an-assistant-may-read-the-organisation-s-knowledge-bases-by-reference.md)):
+the schema refuses both, neither, and a binding need with `serving_mode` or `upstream`. A binding need names no
+file.
 
 Names are unique within their list, a prompt's `{argument}` placeholders are its arguments, and every file
 the assistant names ships with the plugin: each knowledge seed (a directory holding a `knowledge.yaml` in
@@ -355,6 +361,38 @@ name, even when the person reads it through the knowledge routes, and a `knowled
 document is refused. Each passage is framed as data with its document id, title, path and version
 (`source_version`, else the content digest), and the agent's instructions tell it to cite
 `[document, version]`.
+
+The bases bound to the installation's knowledge needs are offered too (below), with one difference: each is
+offered at a turn only when the person of the conversation may read it at that moment.
+
+#### Knowledge bound by reference
+
+A knowledge need (`knowledge: [{name, bind: {description, required}}]`, S66-12,
+[ADR 0159](adr/0159-an-assistant-may-read-the-organisation-s-knowledge-bases-by-reference.md)) is bound to
+existing knowledge bases of the organisation, by reference: one `assistant_knowledge_bindings` row per base,
+nothing copied, and the base keeps its owners, grants, reach, sources and serving mode.
+
+- **Binding.** At install, `knowledge_bindings: {name: [base slug, ...]}` in the body of
+  `POST /orgs/{org}/assistants`; later, `PUT /orgs/{org}/assistants/{slug}/knowledge-bindings/{name}` with
+  `{"bases": [...]}`, the whole list (empty unbinds; 20 at most; idempotent), by an organisation administrator
+  or a member of the owner groups. Every base added must be `active` and readable by the caller (ADR 0081);
+  a base the caller may not read and one that does not exist get the same 422 (`` `x` is not a knowledge base of
+  <org> you may read ``), and nothing changes. Keeping a base another owner bound, or removing one, needs no
+  right on it. Audited as `assistant.knowledge.bind` with the bases added and removed. The installation's
+  `knowledge_bindings` lists every bound base's slug to its managers; `GET /orgs/{org}/plugins/{name}/assistants`
+  lists each assistant's `knowledge_needs`. The console's installation page has a card for it.
+- **Reading.** At each turn, a bound base is offered only when the conversation's person may read it now
+  (`knowledge.access.visible_to` with the base's grants, the person's roles and groups read from the
+  database). A base they may not read is dropped from that turn: not named in the tools, not searchable, not
+  readable by id. A grant, a group joined or a base restricted takes effect at the next turn. A disabled
+  binding or an archived base is never offered. Passages, documents read and citations name their base.
+- **Readiness.** A `required` need with no enabled binding to an active base is a readiness item
+  `knowledge_unbound` (the owners fix it); an optional one is not a gap.
+- **Upgrades.** A need the new version drops (or turns into a seed) has its bindings disabled and kept; one it
+  adds is unbound (a readiness item when required); a `required` flag that moved is reported. A rename is a
+  drop and an add. The owners are told with the tool needs' changes (`knowledge_removed`, `knowledge_added`,
+  `knowledge_required_changed` in the `assistant.upgrade` audit event). Binding a need that came back enables
+  its bindings again.
 
 #### Offered knowledge: a copy, an origin, proposed updates
 

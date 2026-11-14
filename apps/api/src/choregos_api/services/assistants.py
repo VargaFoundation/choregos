@@ -38,13 +38,20 @@ from ..schemas.assistants import (
     AssistantBind,
     AssistantBinding,
     AssistantInstall,
+    AssistantKnowledgeBind,
     AssistantLaunchBind,
     AssistantReadiness,
     AssistantReadinessItem,
     AssistantStop,
     AssistantUpdate,
 )
-from . import assistant_embed, assistant_launches, offered_knowledge, plugin_files
+from . import (
+    assistant_embed,
+    assistant_knowledge_bindings,
+    assistant_launches,
+    offered_knowledge,
+    plugin_files,
+)
 from .assistant_access import holds
 from .connector_identity import supports_identity
 
@@ -248,6 +255,8 @@ async def readiness_items(session: AsyncSession, row: AssistantInstallation) -> 
             )
     # ADR 0158: a required launch unbound, or a bound workflow that no longer serves it.
     items.extend(await assistant_launches.readiness_items(session, row, document, owners))
+    # A required knowledge need bound to no active base (ADR 0159 point 5).
+    items.extend(await assistant_knowledge_bindings.readiness_items(session, row, document))
     return items
 
 
@@ -259,7 +268,9 @@ class NeedChange:
     """What an upgrade did to one need of an installation."""
 
     need: str
-    kind: str  # removed | added | rebound | disabled | required_changed
+    #: removed | added | rebound | disabled | required_changed, and for a knowledge need (ADR 0159)
+    #: knowledge_removed | knowledge_added | knowledge_required_changed
+    kind: str
     message: str
 
 
@@ -345,6 +356,12 @@ async def upgrade_bindings(
     # ADR 0158: the launches follow the same path.
     changes.extend(
         NeedChange(*change) for change in await assistant_launches.upgrade(session, row, document, previous)
+    )
+    changes.extend(
+        NeedChange(need, kind, message)
+        for need, kind, message in await assistant_knowledge_bindings.upgrade(
+            session, row, document, previous
+        )
     )
     await session.flush()
     return changes
@@ -447,6 +464,7 @@ async def to_dto(session: AsyncSession, row: AssistantInstallation) -> Assistant
         policy_overrides=dict(row.policy_overrides),
         bindings=bindings,
         launches=await assistant_launches.to_dtos(session, row, document),
+        knowledge_bindings=await assistant_knowledge_bindings.bindings_of(session, row),
         created_by=row.created_by,
         created_at=row.created_at,
     )
@@ -508,6 +526,8 @@ async def install(
     await offered_knowledge.copy_seeds(
         session, row, document, plugin_row, await plugin_files.plugin_root(session, plugin_row), principal
     )
+    for name, bases in body.knowledge_bindings.items():  # ADR 0159: by reference, under the same rules
+        await assistant_knowledge_bindings.bind(session, org, row, document, name, bases, principal)
     await refresh(session, row)
     await record(session, principal, "assistant.install", org_id=org_id, target_type="assistant",
                  target_id=slug, plugin=plugin_row.name, version=plugin_row.version)  # fmt: skip
@@ -650,5 +670,23 @@ async def bind_launch(
     if document is None:
         raise unprocessable(f"the plugin `{row.plugin}` no longer ships the assistant `{row.assistant_name}`")
     await assistant_launches.bind(session, org_id, org, row, document, launch, body, principal)
+    await refresh(session, row)
+    return row
+
+
+async def bind_knowledge(
+    session: AsyncSession,
+    org: str,
+    row: AssistantInstallation,
+    name: str,
+    body: AssistantKnowledgeBind,
+    principal: Principal,
+) -> AssistantInstallation:
+    """Binds a knowledge need to the organisation's bases, by reference (ADR 0159): the whole list."""
+    require_manager(principal, org, row)
+    document = await manifest(session, row)
+    if document is None:
+        raise unprocessable(f"the plugin `{row.plugin}` no longer ships the assistant `{row.assistant_name}`")
+    await assistant_knowledge_bindings.bind(session, org, row, document, name, body.bases, principal)
     await refresh(session, row)
     return row

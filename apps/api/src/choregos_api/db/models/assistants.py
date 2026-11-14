@@ -72,6 +72,32 @@ class AssistantToolBinding(Base, PkMixin, TimestampMixin):
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
 
 
+class AssistantKnowledgeBinding(Base, PkMixin, TimestampMixin):
+    """A knowledge need of an installation (`knowledge[].bind`), bound to one existing base of the
+    organisation, by reference (ADR 0159): one row per base. Nothing of the base is copied or changed; a
+    conversation reads it only at a turn whose person may read the base (ADR 0081)."""
+
+    __tablename__ = "assistant_knowledge_bindings"
+    __table_args__ = (
+        UniqueConstraint(
+            "installation_id", "name", "knowledge_base_id", name="uq_assistant_knowledge_bindings_base"
+        ),
+    )
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    installation_id: Mapped[str] = mapped_column(
+        ForeignKey("assistant_installations.id", ondelete="CASCADE"), index=True
+    )
+    #: The knowledge need's name in the manifest.
+    name: Mapped[str] = mapped_column(String(63))
+    knowledge_base_id: Mapped[str] = mapped_column(
+        ForeignKey("knowledge_bases.id", ondelete="CASCADE"), index=True
+    )
+    #: False once a plugin upgrade dropped the need (S63-22): kept for the audit trail, never served.
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
+    bound_by: Mapped[str | None] = mapped_column(String(320), nullable=True)
+
+
 class ConversationAction(Base, PkMixin, TimestampMixin):
     """A write the assistant proposed in a conversation and the person has not yet decided (ADR 0139 point 5).
 
