@@ -4809,6 +4809,14 @@ stories:
     size: M
     depends_on: [S65-11]
     notes: "Every management route has a client; docs/cli.md regenerated; a pending instance is approved only with its fingerprint confirmed; a paused outpost says so; the access tab names the outpost and its offline state (that part after S65-13); the console and the CLI print the door_keys to pin, and resume and delete have their client."
+  - id: S65-17c
+    title: "feat(web): the console states how a write at an outpost is delivered (ADR 0149 §6)"
+    stream: S65
+    sprint: 7
+    priority: 1
+    size: S
+    depends_on: [S65-14, S65-17]
+    notes: "Administration -> Connectors: under each write of an mcp-outpost connector, and nowhere else, the two statements of its rule (takes the platform's idempotency key: platform_arguments action_key, offered only when the tool's input schema has that argument; an in-doubt outcome accepted, explicitly: in_doubt_accepted). They leave with the policy that opens the write, in the same request, or alone; withdrawn with an empty list and null; the API's 422 shown with its sentence and on each statement it names. The demo judges the rule as the API does. The docs' caveat that the console cannot set them is gone."
   - id: S65-18
     title: "docs: outposts for whoever operates the platform, and for whoever runs one (ADR 0147)"
     stream: S65

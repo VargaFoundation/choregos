@@ -629,6 +629,12 @@ in the same request or before it (`PATCH /orgs/{org}/connectors/{name}/operation
 | `"platform_arguments": ["action_key"]` | the tool has an argument `action_key` and makes a call harmless when it arrives twice with the same key. Choregos fills it (the same for one action and call, whatever an agent wrote there) | the write is delivered again with the same key; the action is in doubt only if every delivery was |
 | `"in_doubt_accepted": true` | an in-doubt outcome is accepted for this tool, explicitly | the action ends `in_doubt` |
 
+In the console, **Administration → Connectors** shows the two statements under each write of a
+connector at an outpost (**How it is delivered**), and nowhere else: the first is offered only when
+the tool's input schema has an `action_key` argument. What is ticked leaves with the policy that
+opens the write, in the same request, or alone with **Set**; the API's refusal is shown with its own
+words, on each statement it names.
+
 A request that says neither is a 422 that names both fields, and so is one that would withdraw the
 last of the two from a write that is open. `platform_arguments` is the list a plugin's server
 declares for its own operations ([Plugins](plugins.md)); here the organisation states it for a
@@ -638,8 +644,6 @@ verify that a server honours the key: the statement is the administrator's.
 
 **Limits of this version.**
 
-- **No form for the two statements yet.** They are set through the API; the console shows an
-  action in doubt, and its connector form does not offer the statements.
 - **An action in doubt is not closed in Choregos.** A person checks the system behind the outpost
   and records what they found elsewhere.
 - **The connector's own identity only.** The call reaches the server under the credential the

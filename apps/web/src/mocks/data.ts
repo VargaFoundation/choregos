@@ -33,6 +33,7 @@ import type {
   McpCatalogue,
   McpCatalogueEntry,
   McpCatalogueInstall,
+  OperationPatch,
   OrgConnector,
   SkillCatalogue,
   SkillCatalogueEntry,
@@ -108,7 +109,7 @@ import { egressApi } from "./egress";
 import { MOCK_INSTALLATIONS, activityApi } from "./activity";
 import { peopleOps, peopleOpsApi, peopleOpsFixtures } from "./joiners-leavers";
 import mcpCatalogueFile from "./mcp-catalogue.json";
-import { checkOutpostConnector, discoverAtOutpost, outpostsApi, whereItLivesNow } from "./outposts";
+import { changeOperationAtOutpost, checkOutpostConnector, discoverAtOutpost, outpostsApi, toolSchema, whereItLivesNow } from "./outposts";
 import { pluginsApi, serverConnectorOf } from "./plugins";
 import skillCatalogueFile from "./skill-catalogue.json";
 import { proceduresApi } from "./procedures";
@@ -2731,7 +2732,7 @@ orgConnectors.push(
     operations: [
       { name: "search_issues", access: "read", policy: "allowed", groups: [], description: "the issues that match" },
       { name: "get_issue", access: "read", policy: "allowed", groups: [] },
-      { name: "create_issue", access: "write", policy: "forbidden", groups: [], description: "opens an issue" },
+      { name: "create_issue", access: "write", policy: "forbidden", groups: [], description: "opens an issue", input_schema: toolSchema("create_issue") },
     ],
   },
   {
@@ -3882,6 +3883,22 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       decisions: [{ by: me.email, decision: reqBody.decision, reason: reqBody.reason ?? null, at: new Date().toISOString() }],
       temporal_wf_id: `action-${action.id}`,
     } as T;
+  }
+  // An operation's rule (`updateConnectorOperation`): applied as the API applies it, and at an outpost the
+  // two statements of a write judged first, as the API judges them (ADR 0149 §6).
+  const operationRule = /^\/orgs\/[^/]+\/connectors\/([^/]+)\/operations\/([^/]+)$/.exec(chemin ?? "");
+  if (method === "PATCH" && operationRule) {
+    const connector = orgConnectors.find((c) => c.name === decodeURIComponent(operationRule[1]!));
+    const name = decodeURIComponent(operationRule[2]!);
+    const operation = connector?.operations?.find((o) => o.name === name);
+    if (!connector || !operation) throw new ApiError(404, { title: "Not found", detail: `no operation \`${name}\`` });
+    const patch = JSON.parse(String(init.body ?? "{}")) as OperationPatch;
+    if (connector.type === "mcp-outpost") changeOperationAtOutpost(connector, name, patch);
+    if (patch.policy) operation.policy = patch.policy;
+    if ("groups" in patch) operation.groups = patch.groups ?? [];
+    if ("approver_group" in patch) operation.approver_group = patch.approver_group ?? null;
+    if ("result_max_bytes" in patch) operation.result_max_bytes = patch.result_max_bytes ?? null;
+    return structuredClone(operation) as T;
   }
   // Connector secrets (ADR 0058): the mock keeps what the console may know — set, version, who — and,
   // like the API, never a value.

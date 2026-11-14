@@ -2875,6 +2875,16 @@ serves the alias polled within the poll window), `outpost_refused` (the outpost'
 code, such as `unknown_endpoint`) and `outpost_timeout`: each is shown with its code, the outpost, the alias and
 the outpost's own words. When the outposts' quotas refuse a discovery, the 429 says when to try again.
 
+**Opening a write at an outpost** (S65-17c, [ADR 0149](adr/0149-a-tool-may-live-at-an-outpost.md) §6). Each
+discovered tool is born `forbidden`. Under each write of such a connector, and under nothing else, **How it is
+delivered** holds the two statements of its rule: *It takes the platform's idempotency key* (`action_key`,
+offered only when the tool's input schema has that argument) and *An in-doubt outcome is accepted for it,
+explicitly*. Silence opens nothing: setting the write's policy to `allowed` or `approval` sends the statement
+ticked with it, in the same request, and a request that says neither is refused with a 422 that names both.
+**Set** sends the statements alone (one stated while the write is closed opens it later). Unticking the last
+statement of an open write is refused too. The API's sentence is shown, and its words under each statement it
+names.
+
 **Where a tool lives, before a run.** An agent's **Access** tab names, for each tool of a connector at an
 outpost, the outpost and the alias, and says *Online* or *Offline*: online when an instance that serves the
 alias polled within the poll window, the presence the call's own route reads. An offline tool's call fails at

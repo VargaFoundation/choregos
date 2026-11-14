@@ -2,7 +2,7 @@
 
 # Connect an MCP server that lives at an outpost
 
-For an organisation administrator. Procedure `connector.mcp.mcp-outpost`, version 3, reviewed 2026-11-12 against the vendor's own pages.
+For an organisation administrator. Procedure `connector.mcp.mcp-outpost`, version 4, reviewed 2026-11-14 against the vendor's own pages.
 
 ## Before you start
 
@@ -57,9 +57,12 @@ outpost decides alone what that alias reaches.
 3. `timeout_s`: optional. It bounds the whole call: the wait for an instance of the outpost to take
    it, then the server's answer.
 4. Press **Discover**, then open the read operations the agents need, one by one.
-5. To open a write, set its policy together with one of the two statements of its rule (the API's
-   `updateConnectorOperation`): `{"policy": "approval", "platform_arguments": ["action_key"]}` for a
-   tool that takes the key, or `{"policy": "approval", "in_doubt_accepted": true}`.
+5. To open a write, tick one of the two statements under it, **How it is delivered**: *It takes the
+   platform's idempotency key* (offered only when the tool has an `action_key` argument) or *An
+   in-doubt outcome is accepted for it, explicitly*. Then set its policy: the statement leaves with
+   it, in the same request. **Set**, under the statements, sends them alone. Through the API it is
+   `updateConnectorOperation`: `{"policy": "approval", "platform_arguments": ["action_key"]}` or
+   `{"policy": "approval", "in_doubt_accepted": true}`.
 
 ## Test it
 
