@@ -23,6 +23,13 @@ from choregos_adapters import account_of
             "vincent@acme.example",
         ),
         ("tracker", "plugin", {"plugin": "acme-tracker", "server": "issues"}, "acme-tracker/issues"),
+        # An OAuth client signs in with its id, which is an identifier, not a secret (RFC 6749 §2.2).
+        (
+            "mcp",
+            "mcp",
+            {"auth_scheme": "oauth_client_credentials", "client_id": "choregos-reader", "client_secret": "s"},
+            "choregos-reader",
+        ),
         # Nothing in the configuration names the account: the console names the credential instead.
         ("tracker", "github-issues", {"repo": "acme/app"}, None),
         (

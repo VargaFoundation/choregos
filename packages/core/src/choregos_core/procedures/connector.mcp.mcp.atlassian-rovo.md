@@ -15,6 +15,7 @@ fields:
   auth_scheme: "basic for a personal API token, bearer for a service account API key"
   username: "the account's email, for basic"
   token: "the API token or key, typed once"
+  client_secret: "not used: Rovo takes an API token, not an OAuth client"
 ---
 
 ## Before you start

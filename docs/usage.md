@@ -230,7 +230,10 @@ later hardening by the organisation always overrides.
 **An MCP server** is a connector of type `mcp`: its URL, and its key by reference
 (`secret_refs: {"token": "env:CONNECTOR_SUPPLIER_KEY"}`); the token is sent as a Bearer by default, or as
 `Basic base64(username:token)` with `auth_scheme: basic` and a `username`
-([Atlassian's Rovo MCP Server](integrations.md#atlassians-rovo-mcp-server-as-a-connector)). It declares no operation — they are
+([Atlassian's Rovo MCP Server](integrations.md#atlassians-rovo-mcp-server-as-a-connector)). A server that
+only takes short-lived OAuth tokens is declared with `auth_scheme: oauth_client_credentials`, a
+`token_url`, a `client_id` and a sealed `client_secret`: the platform fetches the token, caches it and
+renews it ([the details](integrations.md#an-mcp-server-that-only-accepts-short-lived-oauth-tokens)). It declares no operation — they are
 **discovered**: `POST /orgs/{org}/connectors/{name}/discover` (or *discover* in the console) runs
 `initialize` and `tools/list` over Streamable HTTP — JSON or SSE answers, the session the server
 gives, every page of the list — and returns the diff. **A new tool is born closed**

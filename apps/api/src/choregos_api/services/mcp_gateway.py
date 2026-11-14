@@ -14,10 +14,8 @@ points inside the cluster unless the operator lists that host (`mcp_gateway_inte
 
 from __future__ import annotations
 
-import hashlib
 import ipaddress
 import re
-import time
 from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any, ClassVar, Final
@@ -26,8 +24,7 @@ from urllib.parse import quote, urlsplit
 import choregos_adapters
 import httpx
 from choregos_adapters import build, fakes_enabled
-from choregos_adapters.http.egress import guarded
-from choregos_adapters.mcp import McpError
+from choregos_adapters.mcp import ClientCredentials, TokenCache
 from choregos_adapters.outpost import OutpostRefusal
 from choregos_core.redaction import remember_secret
 from choregos_core.secrets import SecretNotFound
@@ -55,9 +52,6 @@ GATEWAY_TYPE = "mcp-gateway"
 #: The type of a connector reached through an outpost (ADR 0149): `services/outpost_route.py`.
 OUTPOST_TYPE = "mcp-outpost"
 ORIGIN = "mcp-gateway"
-#: A cached OAuth token is renewed this long before it expires.
-TOKEN_SKEW_S = 30
-DEFAULT_TOKEN_TTL_S = 300
 PRIVATE_SUFFIXES = (".svc", ".svc.cluster.local", ".cluster.local", ".local", ".internal")
 #: The placeholder an endpoint carries for the server's name.
 SERVER_PLACEHOLDER = "{server}"
@@ -65,7 +59,8 @@ _HOST_NAME = re.compile(r"^[a-z0-9]([a-z0-9._-]*[a-z0-9])?$")
 _NEEDS_SECRET = ("bearer", "header", "oauth_client_credentials")
 
 Provider = Callable[[bool], Awaitable[dict[str, str]]]
-_TOKENS: dict[str, tuple[str, float]] = {}
+#: The gateway's OAuth tokens, by organisation (ADR 0105).
+_TOKENS = TokenCache(label="the MCP gateway's token endpoint")
 _token_transport: httpx.AsyncBaseTransport | None = None
 
 
@@ -321,57 +316,23 @@ def _transport() -> httpx.AsyncBaseTransport | None:
     return None
 
 
-def _digest(text: str) -> str:
-    return hashlib.sha256(text.encode()).hexdigest()
-
-
 async def _oauth_token(org_id: str, setting: GatewaySetting, client_secret: str, refresh: bool) -> str:
-    """The client-credentials token, cached until shortly before it expires. The request goes through
-    the guarded transport: it is checked against the organisation's egress list like any other."""
+    """The client-credentials token, cached until shortly before it expires (the shared
+    `choregos_adapters.mcp.client_credentials`, which a direct `mcp` connector uses too). The request goes
+    through the guarded transport: it is checked against the organisation's egress list like any other."""
     auth = setting.auth
-    key = _digest(
-        "|".join(
-            [
-                org_id,
-                auth.token_url or "",
-                auth.client_id or "",
-                auth.scope or "",
-                auth.resource or "",
-                auth.token_audience or "",
-                _digest(client_secret),
-            ]
-        )
-    )
-    cached = _TOKENS.get(key)
-    if cached is not None and not refresh and cached[1] > time.monotonic():
-        return cached[0]
     parts = urlsplit(setting.endpoint.replace(SERVER_PLACEHOLDER, "x"))
-    form = {"grant_type": "client_credentials"}
-    if auth.scope:
-        form["scope"] = auth.scope
-    form["resource"] = auth.resource or f"{parts.scheme}://{parts.netloc}"
-    if auth.token_audience:
-        form["audience"] = auth.token_audience
-    async with httpx.AsyncClient(transport=guarded(_transport()), timeout=setting.timeout_s) as http:
-        response = await http.post(
-            auth.token_url or "", data=form, auth=httpx.BasicAuth(auth.client_id or "", client_secret)
-        )
-    body: Any = None
-    if response.status_code == 200:
-        try:
-            body = response.json()
-        except ValueError:
-            body = None
-    token = body.get("access_token") if isinstance(body, dict) else None
-    if not isinstance(token, str) or not token:
-        raise McpError(
-            f"the MCP gateway's token endpoint refused the client (HTTP {response.status_code})",
-            response.status_code,
-        )
-    remember_secret(token)
-    lifetime = body.get("expires_in") if isinstance(body.get("expires_in"), int | float) else None
-    _TOKENS[key] = (token, time.monotonic() + (lifetime or DEFAULT_TOKEN_TTL_S) - TOKEN_SKEW_S)
-    return token
+    credentials = ClientCredentials(
+        token_url=auth.token_url or "",
+        client_id=auth.client_id or "",
+        client_secret=client_secret,
+        scope=auth.scope,
+        audience=auth.token_audience,
+        resource=auth.resource or f"{parts.scheme}://{parts.netloc}",
+    )
+    return await _TOKENS.token(
+        credentials, refresh=refresh, transport=_transport(), timeout_s=setting.timeout_s, partition=org_id
+    )
 
 
 # ───────────────────────────── the client ─────────────────────────────
