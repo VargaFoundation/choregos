@@ -7,6 +7,7 @@
 import type {
   Assistant,
   AssistantBind,
+  AssistantKnowledgeBind,
   AssistantInstall,
   AssistantLaunchBind,
   AssistantList,
@@ -55,6 +56,8 @@ export type {
   Assistant,
   AssistantBinding,
   AssistantLaunch,
+  AssistantKnowledgeBinding,
+  AssistantKnowledgeNeed,
   AssistantReadLine,
   AssistantReadinessItem,
   AssistantStop,
@@ -269,6 +272,12 @@ export const assistantsApi = {
   /** Binds a launch to a project's workflow (ADR 0158): the owners', who must also create work items there. */
   bindLaunch: (org: string, slug: string, launch: string, body: AssistantLaunchBind) =>
     request<Assistant>(`/orgs/${enc(org)}/assistants/${enc(slug)}/launches/${enc(launch)}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+  /** Binds a knowledge need to the organisation's bases, by reference (ADR 0159): the whole list. */
+  bindKnowledge: (org: string, slug: string, name: string, body: AssistantKnowledgeBind) =>
+    request<Assistant>(`/orgs/${enc(org)}/assistants/${enc(slug)}/knowledge-bindings/${enc(name)}`, {
       method: "PUT",
       body: JSON.stringify(body),
     }),

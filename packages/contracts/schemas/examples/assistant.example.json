@@ -140,6 +140,13 @@
       "seed": "knowledge/investment-policy",
       "serving_mode": "index",
       "upstream": "propose_updates"
+    },
+    {
+      "name": "house_research",
+      "bind": {
+        "description": "The house's own research notes on the instruments it covers.",
+        "required": false
+      }
     }
   ],
   "tasks": [

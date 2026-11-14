@@ -4450,6 +4450,10 @@ export type AssistantInstall = {
   owner_groups?: Array<string>;
   audience_groups?: Array<string>;
   channel?: "stable" | "candidate";
+  /** The knowledge needs (`knowledge[].bind`) bound at install, each to existing knowledge bases of the organisation by their slugs (ADR 0159), as `PUT .../knowledge-bindings/{name}` takes them. */
+  knowledge_bindings?: {
+    [key: string]: Array<string>;
+  };
 };
 
 export type AssistantUpdate = {
@@ -4563,8 +4567,24 @@ export type Assistant = {
   bindings: Array<AssistantBinding>;
   /** The workflows the assistant may propose to start, and where each is bound (ADR 0158). */
   launches?: Array<AssistantLaunch>;
+  /** The knowledge needs that are bound, and to which bases (ADR 0159). */
+  knowledge_bindings?: Array<AssistantKnowledgeBinding>;
   created_by?: string | null;
   created_at: string;
+};
+
+export type AssistantKnowledgeBind = {
+  /** The slugs of the knowledge bases the need is bound to, the whole list; empty unbinds it. */
+  bases: Array<string>;
+};
+
+export type AssistantKnowledgeBinding = {
+  /** The knowledge need's name in the manifest. */
+  name: string;
+  /** The slugs of the bound bases. */
+  bases: Array<string>;
+  /** False once a plugin upgrade dropped the need: kept, never served. */
+  enabled: boolean;
 };
 
 export type AssistantReadLine = {
@@ -4734,6 +4754,12 @@ export type AssistantNeed = {
   required: boolean;
 };
 
+export type AssistantKnowledgeNeed = {
+  name: string;
+  description: string;
+  required: boolean;
+};
+
 export type AssistantTaskDecl = {
   name: string;
   delegation: "none" | "read_only";
@@ -4749,6 +4775,8 @@ export type PluginAssistant = {
   } | null;
   suggested_groups: Array<string>;
   needs: Array<AssistantNeed>;
+  /** The knowledge the installation binds to the organisation's bases (ADR 0159); seeds are not listed. */
+  knowledge_needs?: Array<AssistantKnowledgeNeed>;
   /** Every declared space, the installation's own included (the owners' page); a person's page never lists an installation space. */
   memory_spaces?: Array<AssistantMemorySpace>;
 };
@@ -4901,7 +4929,8 @@ export type AssistantConversationOpen = {
 };
 
 export type AssistantReadinessItem = {
-  kind: "assistant_missing" | "config_missing" | "need_unbound" | "need_not_served" | "identity_unsupported" | "launch_unbound" | "launch_workflow_missing" | "launch_inputs_mismatch";
+  kind: "assistant_missing" | "config_missing" | "need_unbound" | "need_not_served" | "identity_unsupported" | "launch_unbound" | "launch_workflow_missing" | "launch_inputs_mismatch" | "knowledge_unbound";
+  /** The tool need, or for `knowledge_unbound` the knowledge need's name. */
   need?: string | null;
   /** The launch, for the `launch_*` kinds (ADR 0158). */
   launch?: string | null;
@@ -6070,6 +6099,7 @@ export interface Operations {
   authLogin: { method: "GET"; path: "/auth/login"; body: never; response: void };
   authLogout: { method: "POST"; path: "/auth/logout"; body: never; response: void };
   authorizeRemoteCredential: { method: "POST"; path: "/orgs/{org}/remote-credentials/{name}/authorize"; body: never; response: RemoteCredentialAuthorization };
+  bindAssistantKnowledge: { method: "PUT"; path: "/orgs/{org}/assistants/{slug}/knowledge-bindings/{name}"; body: AssistantKnowledgeBind; response: Assistant };
   bindAssistantLaunch: { method: "PUT"; path: "/orgs/{org}/assistants/{slug}/launches/{launch}"; body: AssistantLaunchBind; response: Assistant };
   bindAssistantNeed: { method: "PUT"; path: "/orgs/{org}/assistants/{slug}/bindings/{need}"; body: AssistantBind; response: Assistant };
   callAgentSessionTool: { method: "POST"; path: "/internal/agent-sessions/{id}/tools/{name}"; body: AgentSessionToolCall; response: AgentSessionToolAnswer };

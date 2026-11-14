@@ -95,12 +95,15 @@ export type AssistantSubject = {
 
 export type AssistantMemory = unknown & unknown & unknown;
 
-export type AssistantKnowledge = {
-  name: AssistantSnake;
-  /** a KnowledgeBase directory of the plugin (`knowledge.yaml` and its `corpus/`) */
-  seed: AssistantPath;
-  serving_mode?: "index" | "files";
-  upstream?: "follow" | "propose_updates" | "frozen";
+/** knowledge the assistant offers: a `seed` the installation copies (ADR 0138), or a `bind` need the installation binds to existing bases of the organisation, by reference (ADR 0159); exactly one of the two */
+export type AssistantKnowledge = unknown | unknown;
+
+/** a need the installation binds to one or more existing knowledge bases of the organisation (ADR 0159): no copy, the base keeps its owners, rights and sources, and a person reads it in a conversation only when they may read the base */
+export type AssistantKnowledgeBind = {
+  /** what the organisation should bind, in the author's words */
+  description: string;
+  /** true: the installation is incomplete until the need is bound */
+  required?: boolean;
 };
 
 export type AssistantTrigger = unknown & unknown & unknown;

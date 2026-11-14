@@ -18,8 +18,9 @@ against the plugin the assistant ships in:
 
 plus: names unique within their list, a prompt's `{argument}` placeholders declared, a launch's `input_schema`
 a valid JSON Schema and no need called `launch` beside launches (ADR 0158: their tools are `launch__<name>`),
-and every file the
-assistant names (a knowledge seed with its `knowledge.yaml`, a task's workflow, an eval suite) present.
+and every file the assistant names (a knowledge seed with its `knowledge.yaml`, a task's workflow, an eval
+suite) present. A knowledge item that is a binding need (`bind`, ADR 0159) names no file: the installation
+binds it to the organisation's bases, and the schema keeps it apart from a seed.
 An eval suite is also read: the loader holds it to `conversation-evals.schema.json`, and `check_suite` to
 the assistant's tools (ADR 0140). Each problem names the file and the JSON path of the field.
 """
@@ -272,6 +273,8 @@ def _files(doc: dict[str, Any], ref: str, root: Path, target: Any, problems: lis
         if path is not None and not path.is_file():
             problems.append(f"{ref}:evals/{index}: `{suite}` is not a file of the plugin")
     for index, base in enumerate(_mappings(doc.get("knowledge"))):
+        if "seed" not in base:  # a binding need names no file: the installation binds it (ADR 0159)
+            continue
         path = target(root, base["seed"], problems)
         if path is not None and not (path / SEED_MANIFEST).is_file():
             problems.append(
