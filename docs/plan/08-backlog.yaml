@@ -4833,6 +4833,22 @@ stories:
     size: S
     depends_on: [S65-14, S65-16, S65-17, S65-18]
     notes: "On fakes: create, enrol, approve, run, declare, discover, one bounded result and one ledger line; daemon stopped, the call fails fast and names the outpost; alias removed, refused and logged locally; lost lease, in_doubt and one call received. On a cluster that enforces network policies: the read succeeds while a connection into the outpost's namespace times out."
+  - id: S65-23
+    title: "fix(api,outposts): what building the door found, settled in the contract and the door (#1628, #1641)"
+    stream: S65
+    sprint: 8
+    priority: 2
+    size: S
+    depends_on: [S65-19]
+    notes: "The vectors' instance id is illustrative and an instance id opaque; seq has one bound, 1 to 2^53 - 1, and the door refuses one above it; Outpost-Nonce is declared on enrol's 401 and 409; a key enrolled at another outpost is found at write, after the rate, the protocol and the schema; the per-minute cap of ADR 0148 §10 is the one S65-13 built; a call's deadline is written to the millisecond, so a call claimed at .999 with a one-second timeout reaches a daemon with close to a second left."
+  - id: S65-24
+    title: "feat(api,cli,web): the outposts' management API stops making clients guess (#1630)"
+    stream: S65
+    sprint: 8
+    priority: 2
+    size: M
+    depends_on: [S65-17]
+    notes: "listOutposts says whether outposts are on and whether the door has a signing key; an outpost carries control_plane; an approval refused to a token has the code approval_requires_session, its 401 speaks of an approval and the window is on the instance; enrolment tokens are listed and cancelled (enrolment_used for one that enrolled); an instance names its enrolment token and who issued it; the calls' 1000-call window is said; the CLI and the console use each of them."
   - id: S65-29
     title: "fix(api): a look at an outpost's call that a cancellation interrupts stays a cancellation"
     stream: S65

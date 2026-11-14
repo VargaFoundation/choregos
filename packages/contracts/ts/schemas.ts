@@ -482,7 +482,7 @@ export type OutpostCall = {
   arguments?: {
     [key: string]: unknown;
   } | null;
-  /** The door takes no answer after it, and the outpost makes no call after it; nothing a daemon sends moves it. A daemon judges it by its own clock: `server_time` is not signed, and may bring a deadline closer, never push it away. */
+  /** The door takes no answer after it, and the outpost makes no call after it; nothing a daemon sends moves it. A daemon judges it by its own clock: `server_time` is not signed, and may bring a deadline closer, never push it away. An RFC 3339 date-time that may carry a fraction of a second: the door writes it to the millisecond, never rounded past the lease it keeps, so that a call claimed late in its second does not reach the outpost up to a second short. */
   deadline?: string | null;
   /** The X25519 public key the answer is sealed to (raw, base64url without padding). It travels inside the envelope, where no proxy can rewrite it. */
   answer_key?: string | null;

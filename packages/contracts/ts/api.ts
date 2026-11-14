@@ -165,7 +165,7 @@ export type Problem = {
     column?: number;
   }>;
   retry_after?: number;
-  /** A machine code on some 409s: `stale_base` (from an agent publication, or from `updateProject`), `no_change`, `eval_failed` (S40-12), `action_not_in_doubt` and `action_already_settled` (`settleAction`) */
+  /** A machine code on some 409s: `stale_base` (from an agent publication, or from `updateProject`), `no_change`, `eval_failed` (S40-12), `action_not_in_doubt` and `action_already_settled` (`settleAction`); on the 403 of `approveOutpostInstance`, `approval_requires_session` */
   code?: string;
   /** On `stale_base` and `no_change`: the agent's latest version */
   latest_version?: number;
@@ -3758,6 +3758,8 @@ export type Outpost = {
   endpoints: Array<string>;
   /** the `mcp-outpost` connectors that route to it; it is not deleted while one remains */
   connectors: Array<string>;
+  /** the door's origin, as the outpost's policy file names it (`control_plane`): the line above `door_keys` in that file. The deployment's, the same for every outpost; null when it declares none */
+  control_plane: string | null;
   /** the door's public signing keys an operator pins in the outpost's policy file (`door_keys`), which is the only place an outpost reads them from (ADR 0148 §13): the first is the one that signs now, the others are announced for a rotation. Public keys, each the unpadded base64url of 32 raw bytes; empty while the deployment has no door */
   door_keys: Array<string>;
   created_by: string | null;
@@ -3766,6 +3768,10 @@ export type Outpost = {
 
 export type OutpostList = {
   items: Array<Outpost>;
+  /** the deployment keeps outposts switched on (`CHOREGOS_OUTPOSTS`, ADR 0147 §12); off, `createOutpost` and `createOutpostEnrolment` answer 409 `outposts_disabled`, and what exists can still be read, revoked and removed */
+  enabled: boolean;
+  /** the outposts' door has a signing key (`CHOREGOS_OUTPOSTS_DOOR_SIGNING_KEY`); without one there is no key to pin, and `createOutpostEnrolment` answers 409 `door_key_missing` (ADR 0148 §13) */
+  door_signing_key: boolean;
 };
 
 export type OutpostEnrolmentCreate = {
@@ -3782,6 +3788,20 @@ export type OutpostEnrolmentCreated = {
   control_plane: string | null;
   /** the door's public signing keys to pin in the outpost's policy file (`door_keys`) before the daemon starts: the first is the one that signs now, the others are announced for a rotation. The console and the CLI print them beside the enrolment command; no answer of the door itself carries them (ADR 0148 §13) */
   door_keys: Array<string>;
+};
+
+/** An enrolment token that can still enrol an instance, as the platform keeps it: never the token, whose digest is all that is kept. */
+export type OutpostEnrolment = {
+  /** the `id` its creation answered, which `cancelOutpostEnrolment` takes */
+  id: string;
+  expires_at: string;
+  /** who issued it */
+  created_by: string | null;
+  created_at: string;
+};
+
+export type OutpostEnrolmentList = {
+  items: Array<OutpostEnrolment>;
 };
 
 /** One copy of the daemon `choregos-outpost`, with keys made on the spot (ADR 0147 §2). Only public data: the platform never holds a private key of an instance. */
@@ -3802,7 +3822,13 @@ export type OutpostInstance = {
   facts: {
     [key: string]: string;
   };
+  /** the enrolment token it enrolled with (the `id` of `OutpostEnrolmentCreated`), the last one when a pending key enrolled again under a new token: what tells two pending instances apart besides what they declare themselves */
+  enrolment_id: string | null;
+  /** who issued that token */
+  enrolled_by: string | null;
   enrolled_at: string;
+  /** how recent the sign-in of a person who approves a pending instance must be, in minutes: older, the approval is a 401 `step_up_required`. The deployment's, the same for every instance */
+  approval_step_up_minutes: number;
   approved_by: string | null;
   approved_at: string | null;
   revoked_by: string | null;
@@ -3935,7 +3961,7 @@ export type OrgGroupConflict = {
   source?: OrgGroupSource;
 };
 
-/** The 409 body of the refusals that concern an outpost (ADRs 0147 and 0149): an RFC 9457 problem with a `code`. On the outposts' own routes: `outposts_disabled` (the deployment keeps outposts switched off), `door_key_missing` (outposts are on and the door has no signing key, so no enrolment token can be created: an outpost could pin nothing, ADR 0148 §13), `outpost_exists`, `outpost_revoked`, `outpost_not_revoked` and `outpost_in_use` (the outpost is not deleted while connectors route to it; `connectors` names them), `instance_not_pending` and `fingerprint_mismatch`. Where a connector is reached through an outpost, the refusals of ADR 0149 §7 that a 409 carries: `outpost_paused` (paused, revoked, or outposts switched off: nothing was written), `outpost_offline` (no active instance claimed the call in time), `outpost_refused` (the outpost's own policy refused; `refusal` is its code) and `outpost_timeout` (a claimed read got no answer in time). Each of these four names the `outpost`. */
+/** The 409 body of the refusals that concern an outpost (ADRs 0147 and 0149): an RFC 9457 problem with a `code`. On the outposts' own routes: `outposts_disabled` (the deployment keeps outposts switched off), `door_key_missing` (outposts are on and the door has no signing key, so no enrolment token can be created: an outpost could pin nothing, ADR 0148 §13), `outpost_exists`, `outpost_revoked`, `outpost_not_revoked` and `outpost_in_use` (the outpost is not deleted while connectors route to it; `connectors` names them), `instance_not_pending`, `fingerprint_mismatch` and `enrolment_used` (an enrolment token that already enrolled an instance is not cancelled: the instance is revoked instead). Where a connector is reached through an outpost, the refusals of ADR 0149 §7 that a 409 carries: `outpost_paused` (paused, revoked, or outposts switched off: nothing was written), `outpost_offline` (no active instance claimed the call in time), `outpost_refused` (the outpost's own policy refused; `refusal` is its code) and `outpost_timeout` (a claimed read got no answer in time). Each of these four names the `outpost`. */
 export type OutpostConflict = {
   type: string;
   title: string;
@@ -3952,7 +3978,7 @@ export type OutpostConflict = {
     column?: number;
   }>;
   retry_after?: number;
-  code: "outposts_disabled" | "door_key_missing" | "outpost_exists" | "outpost_revoked" | "outpost_not_revoked" | "outpost_in_use" | "instance_not_pending" | "fingerprint_mismatch" | "outpost_paused" | "outpost_offline" | "outpost_refused" | "outpost_timeout";
+  code: "outposts_disabled" | "door_key_missing" | "outpost_exists" | "outpost_revoked" | "outpost_not_revoked" | "outpost_in_use" | "instance_not_pending" | "fingerprint_mismatch" | "enrolment_used" | "outpost_paused" | "outpost_offline" | "outpost_refused" | "outpost_timeout";
   /** the outpost the refusal is about */
   outpost?: string;
   /** the alias the call was for */
@@ -6113,6 +6139,7 @@ export interface Operations {
   result_max_bytes?: number;
 } };
   cancelMyConversationTurn: { method: "POST"; path: "/me/conversations/{conversation_id}/cancel"; body: never; response: ConversationSummary };
+  cancelOutpostEnrolment: { method: "DELETE"; path: "/orgs/{org}/outposts/{slug}/enrolments/{enrolment_id}"; body: never; response: void };
   cancelRun: { method: "POST"; path: "/runs/{id}/cancel"; body: StopRequest; response: Run };
   changeAgentLifecycle: { method: "POST"; path: "/orgs/{org}/agents/{slug}/lifecycle"; body: AgentLifecycleChange; response: AgentLifecycleResult };
   changeAgentScope: { method: "POST"; path: "/orgs/{org}/agents/{slug}/scope"; body: AgentScopeChange; response: Agent };
@@ -6458,6 +6485,7 @@ export interface Operations {
   listOrgGroups: { method: "GET"; path: "/orgs/{org}/groups"; body: never; response: OrgGroupList };
   listOrgs: { method: "GET"; path: "/orgs"; body: never; response: Array<Org> };
   listOutpostCalls: { method: "GET"; path: "/orgs/{org}/outposts/{slug}/calls"; body: never; response: OutpostCallPage };
+  listOutpostEnrolments: { method: "GET"; path: "/orgs/{org}/outposts/{slug}/enrolments"; body: never; response: OutpostEnrolmentList };
   listOutpostInstances: { method: "GET"; path: "/orgs/{org}/outposts/{slug}/instances"; body: never; response: OutpostInstanceList };
   listOutposts: { method: "GET"; path: "/orgs/{org}/outposts"; body: never; response: OutpostList };
   listPendingMemory: { method: "GET"; path: "/projects/{id}/memory/pending"; body: never; response: Array<Memory> };
