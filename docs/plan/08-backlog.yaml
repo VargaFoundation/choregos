@@ -4833,6 +4833,14 @@ stories:
     size: S
     depends_on: [S65-14, S65-16, S65-17, S65-18]
     notes: "On fakes: create, enrol, approve, run, declare, discover, one bounded result and one ledger line; daemon stopped, the call fails fast and names the outpost; alias removed, refused and logged locally; lost lease, in_doubt and one call received. On a cluster that enforces network policies: the read succeeds while a connection into the outpost's namespace times out."
+  - id: S65-29
+    title: "fix(api): a look at an outpost's call that a cancellation interrupts stays a cancellation"
+    stream: S65
+    sprint: 7
+    priority: 1
+    size: S
+    depends_on: [S65-14]
+    notes: "scope_to_outpost narrowed the session in a finally: after a cancellation in the middle of its read (a worker stopping while it waits for a write) the narrowing ran on an invalidated connection and its PendingRollbackError hid the cancellation. Narrowed on the way out only; a deterministic test fails without it."
   # ───────────── S67 — the terminal is a surface of the platform (ADR 0154) ─────────────
   - id: S67-00
     title: "docs(adr): ADR 0154, the terminal is a surface of the platform; the S67 plan"
