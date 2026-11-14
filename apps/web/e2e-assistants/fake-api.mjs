@@ -84,7 +84,7 @@ const shipped = {
         type: "object",
         required: ["company_name", "hr_contact"],
         properties: {
-          company_name: { type: "string", default: "Diametral" },
+          company_name: { type: "string", default: "Globex" },
           hr_contact: { type: "string", description: "Who to refer sensitive matters to" },
           embed_origins: { type: "array", items: { type: "string", format: "uri" }, default: ["https://scorecard.example.org"] },
           tone: { oneOf: [{ const: "warm", title: "Warm" }, { const: "direct", title: "Direct" }] },

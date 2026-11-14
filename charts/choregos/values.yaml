@@ -552,7 +552,7 @@ global:
 
 choregos-api:
   enabled: true
-  # Ex. : [{ip: "172.16.3.2", hostnames: ["sso.shared.diametral.com"]}]
+  # Ex. : [{ip: "172.16.3.2", hostnames: ["sso.example.com"]}]
   hostAliases: []
   replicaCount: 2
   image:
