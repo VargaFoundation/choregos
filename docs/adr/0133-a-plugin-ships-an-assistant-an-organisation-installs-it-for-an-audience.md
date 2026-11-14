@@ -105,3 +105,27 @@ platform has:
   /orgs/{org}/assistants/{slug}/readiness` show, with who may fix each item.
 - What a source lets a person read is still decided by the source (ADR 0135): the installation decides who
   may talk to the assistant, never what it may read about someone.
+
+## Amendment (2026-11-14, S63-27): the instructions are rendered for the conversation
+
+Found on the pilot of a one-on-one assistant (issue #1737): point 3 checked `{{ config.<key> }}` at
+validation, but nothing rendered it at conversation time; the template reached the model with its braces.
+Hence:
+
+- A conversation of an installation sends its agent's instructions **rendered**, in a sandbox, with two
+  variables only: `config`, the installation's values over the `default` of each top-level property of
+  `config_schema`; and `preferences`, the caller's profile memory of the assistant (the active documents of
+  its `scope: user, kind: profile` spaces, merged in the manifest's order; ADR 0136 point 2). `preferences`
+  is empty when there is none, and when the personal space's policy says `memory.enabled: false` (ADR 0136
+  point 5).
+- No sample reaches a conversation: a key with no value renders empty, the publication samples (`ticket`
+  and the others) are not variables there, and `{{ config.items }}` reads the key `items`, never a method.
+- Rendered when the conversation opens, and again when an idle conversation is resumed: a config (or a
+  profile) changed meanwhile reaches the conversations already open at their next resume, journaled
+  `conversation.instructions_rendered`. Between two turns of an open conversation the instructions stay as
+  they were: the model is not handed a changing system message mid-exchange.
+- Instructions that do not render refuse the conversation (409 `Assistant unavailable`): the template is
+  never sent instead.
+- `preferences` is a variable of a published version's check (`SAMPLE_VARIABLES`): any key reads as a
+  sample, as `config` does. `choregos plugin validate` does not check a `preferences.<key>` against the
+  profile's schema.

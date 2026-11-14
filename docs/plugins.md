@@ -261,6 +261,14 @@ policy:
 8. a name (`need`, operations, `memory`, `knowledge`, `tasks`, prompts) that is not English `snake_case`
    (a double underscore separates a need from its operation and is refused in a name).
 
+The agent's instructions are a template: a conversation sends them rendered with `config` (the installation's
+values over `config_schema`'s defaults) and `preferences` (the person's `scope: user, kind: profile` memory of
+the assistant, empty when there is none or under `memory.enabled: false`). A key with no value renders empty,
+so a template reads `{% if preferences.brief_length %}...{% endif %}` or `{{ preferences.brief_length or
+"standard" }}`. A version is checked with samples for both; `preferences.<key>` is not checked against the
+profile's schema ([ADR 0133](adr/0133-a-plugin-ships-an-assistant-an-organisation-installs-it-for-an-audience.md),
+amendment of S63-27).
+
 A `knowledge` item is exactly one of a seed (`seed`, with `serving_mode` and `upstream`) or a binding need
 (`bind: {description, required}`, [ADR 0159](adr/0159-an-assistant-may-read-the-organisation-s-knowledge-bases-by-reference.md)):
 the schema refuses both, neither, and a binding need with `serving_mode` or `upstream`. A binding need names no
