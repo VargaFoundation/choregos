@@ -12378,6 +12378,34 @@
     "type": "DateTime(timezone=True)"
    },
    {
+    "default": null,
+    "name": "given_name",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=200)"
+   },
+   {
+    "default": null,
+    "name": "family_name",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=200)"
+   },
+   {
+    "default": null,
+    "name": "job_title",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=200)"
+   },
+   {
+    "default": null,
+    "name": "department",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=200)"
+   },
+   {
     "default": "<function uuid7>",
     "name": "id",
     "nullable": false,
@@ -14349,5 +14377,70 @@
     false
    ]
   ]
+ },
+ "user_avatars": {
+  "checks": [],
+  "columns": [
+   {
+    "default": null,
+    "name": "user_id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": null,
+    "name": "content_type",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=32)"
+   },
+   {
+    "default": null,
+    "name": "digest",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=64)"
+   },
+   {
+    "default": null,
+    "name": "content",
+    "nullable": false,
+    "server_default": null,
+    "type": "LargeBinary()"
+   },
+   {
+    "default": "<function utcnow>",
+    "name": "created_at",
+    "nullable": false,
+    "server_default": "<sqlalchemy.sql.functions.now; now>",
+    "type": "DateTime(timezone=True)"
+   },
+   {
+    "default": "<function utcnow>",
+    "name": "updated_at",
+    "nullable": false,
+    "server_default": "<sqlalchemy.sql.functions.now; now>",
+    "type": "DateTime(timezone=True)"
+   }
+  ],
+  "foreign_keys": [
+   [
+    [
+     "user_id"
+    ],
+    [
+     "users.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_user_avatars_user_id_users"
+   ]
+  ],
+  "indexes": [],
+  "primary_key": [
+   "user_id"
+  ],
+  "uniques": []
  }
 }

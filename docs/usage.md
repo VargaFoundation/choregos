@@ -3421,6 +3421,26 @@ always was); requiring `verified` is a later switch. The routes of S47-14
 (`/orgs/{org}/members/{user_id}/tracker-identities/github`) still answer, deprecated: they read and write the
 member's github.com link.
 
+### A member's profile
+
+Each member has a page (ADR 0162): **Administration**, **Members**, then the member's address, or **My
+account**, **View my profile** (`GET /orgs/{org}/members/{user_id}/profile`). Every member of the
+organisation sees a colleague's card: their photo or initials, given and family name, job title, department,
+address, status, organisation and project roles, and groups with where each comes from (internal, SCIM, the
+identity provider). An organisation administrator, and the person themself, also see how the account came
+(identity provider sign-in, provisioned, added by an administrator), the last sign-in, the open sessions, and
+their work in the team projects the reader sees: the human requests waiting on them (addressed to them, or to a
+group they are in), their recent decisions, the runs of the work items they started, and what their assistant
+conversations and tasks cost this month. An administrator alone sees their API tokens count and the audit
+events that name them, and the page of someone who left the organisation.
+
+The names, job title and department come from the identity provider at each sign-in: the claims `given_name`,
+`family_name`, `job_title` (or `jobTitle`) and `department`; a tenant's own provider may name other job title
+and department claims. A photo is one the person uploads on **My account** (PNG, JPEG or WebP, at most 2 MiB,
+32 to 4096 pixels a side): the platform re-encodes it as a 512-pixel square without its metadata and serves it
+from its own address, to the members of an organisation the person belongs to. A `picture` claim from the
+provider is never fetched.
+
 ### Work items on a schedule
 
 With `tracker: internal`, a project can open work items by itself (S38-11):

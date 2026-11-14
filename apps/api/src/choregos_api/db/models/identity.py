@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Identity: organisations, users, memberships, API tokens, browser sessions and linked forge accounts."""
+"""Identity: organisations, users, their photos, memberships, API tokens, browser sessions and linked forge
+accounts."""
 
 from __future__ import annotations
 
@@ -12,6 +13,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     String,
     UniqueConstraint,
     false,
@@ -66,6 +68,29 @@ class User(Base, PkMixin, TimestampMixin):
     #: A session cookie without a session id (opened before ADR 0130) issued before this instant is
     #: refused: "sign out my other sessions" reaches the cookies no row records.
     sessions_not_before: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    #: What the identity provider says of the person (ADR 0162), as of their last sign-in through it: the
+    #: standard OIDC claims `given_name` and `family_name`, and a job title and a department when it sends
+    #: them. Each sign-in that carries a claim replaces it; one that does not leaves it.
+    given_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    family_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    job_title: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    department: Mapped[str | None] = mapped_column(String(200), nullable=True)
+
+
+class UserAvatar(Base, TimestampMixin):
+    """A person's photo (ADR 0162): one they uploaded, re-encoded as WebP, served same-origin.
+
+    One per person, in the database like a knowledge document's bytes: a few dozen kilobytes, read only by
+    `GET /users/{id}/avatar`. Under the RLS of `users`: visible to the person and to whoever sees them. A
+    `picture` claim of the identity provider is never fetched, so no row comes from anywhere else."""
+
+    __tablename__ = "user_avatars"
+
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    content_type: Mapped[str] = mapped_column(String(32))
+    #: The SHA-256 of the stored bytes: the `ETag`, and the version in the console's `avatar_url`.
+    digest: Mapped[str] = mapped_column(String(64))
+    content: Mapped[bytes] = mapped_column(LargeBinary, deferred=True)
 
 
 class Membership(Base, PkMixin, TimestampMixin):

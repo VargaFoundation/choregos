@@ -63,7 +63,10 @@ const CHUNKS = join(process.cwd(), ".next", "static", "chunks");
 // 2026-11-14 (S66-41): 2500 -> 2525 kB. The linked accounts (the member's card on My account, the members list with
 // verified and declared links, the declare form and the three forge types' icons) measure 2503 kB on main at 2483 kB,
 // with no new dependency.
-const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 2525);
+// 2026-11-14 (S66-42): 2525 -> 2550 kB. A member's profile page (the card, access, work and administration
+// sections), the avatar with its initials fallback and My account's photo upload measure 2529 kB, with no new
+// dependency.
+const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 2550);
 const CHUNK_MAX_KB = Number(process.env.BUNDLE_CHUNK_MAX_KB ?? 600);
 
 function* files(dir) {

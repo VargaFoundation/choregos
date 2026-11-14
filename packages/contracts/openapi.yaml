@@ -2869,6 +2869,27 @@ paths:
         "204": { description: Removed }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/members/{user_id}/profile:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: user_id, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [admin]
+      operationId: getMemberProfile
+      description: >-
+        One member's profile page in one read (ADR 0162). Any member of the organisation reads the basic card
+        (`view: basic`): names, job title, department, e-mail, photo, status, organisation and project roles,
+        groups. An organisation administrator (`member:manage`) and the person themself read the full profile
+        (`view: full`): how the account came, the last sign-in, the open sessions, and their work (the human
+        requests waiting on them, their recent decisions, the runs of the work items they started, their
+        assistant spend this month). The `administration` section (API tokens count, recent audit events where
+        they are the actor or the target) is an administrator's only. An administrator also reads a former
+        member (`status: former`) the organisation's audit log knows. 403 for a caller outside the
+        organisation, 404 for a person who is not (or, for a non-administrator, no longer) a member.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/MemberProfile" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /orgs/{org}/agents:
     parameters: [{ $ref: "#/components/parameters/Org" }]
     get:
@@ -3459,6 +3480,52 @@ paths:
         "303": { description: Linked or refused; redirects to the console }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "422": { $ref: "#/components/responses/ValidationError" }
+  /me/avatar:
+    put:
+      tags: [session]
+      operationId: putMyAvatar
+      description: >-
+        The caller's photo (ADR 0162): one PNG, JPEG or WebP file in the multipart field `file`, at most 2 MiB and
+        between 32 and 4096 pixels a side. It is decoded and re-encoded as a square WebP of at most 512 pixels (no
+        metadata kept), stored in the database and served by `getUserAvatar`. Replaces the previous one. 413 for
+        a larger file, 415 for another type, 422 for a file that does not decode or whose size is out of bounds.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        "200": { description: Stored, content: { application/json: { schema: { $ref: "#/components/schemas/Avatar" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "413": { description: Larger than 2 MiB }
+        "415": { description: Not a PNG, JPEG or WebP image }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      tags: [session]
+      operationId: deleteMyAvatar
+      description: Removes the caller's photo; the console shows their initials again.
+      responses:
+        "204": { description: Removed }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /users/{user_id}/avatar:
+    parameters:
+      - { name: user_id, in: path, required: true, schema: { type: string } }
+      - { name: v, in: query, required: false, schema: { type: string }, description: "the version the console writes in `avatar_url`, for its cache" }
+    get:
+      tags: [session]
+      operationId: getUserAvatar
+      description: >-
+        A person's photo, same-origin (the console's `img-src 'self'`): the caller themself, or a member of an
+        organisation they share. 404 for anyone else, and when there is no photo. The photo is only ever one the
+        person uploaded: a `picture` claim of the identity provider is never fetched.
+      responses:
+        "200": { description: The photo, content: { image/webp: { schema: { type: string, format: binary } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /me/assistants/{org}/{slug}/memory-export:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -6383,6 +6450,11 @@ components:
         display_name: { type: string }
         oidc_sub: { type: string }
         last_login_at: { type: [string, "null"], format: date-time }
+        given_name: { type: [string, "null"], description: "from the identity provider's `given_name` claim, at the last sign-in (ADR 0162)" }
+        family_name: { type: [string, "null"], description: "from the identity provider's `family_name` claim" }
+        job_title: { type: [string, "null"], description: "from the identity provider's job title claim, when it sends one" }
+        department: { type: [string, "null"], description: "from the identity provider's department claim, when it sends one" }
+        avatar_url: { type: [string, "null"], description: "the person's photo, same-origin (`getUserAvatar`); null without one" }
         memberships: { type: array, items: { $ref: "#/components/schemas/Membership" } }
     Membership:
       type: object
@@ -6442,6 +6514,111 @@ components:
       required: [authorization_url]
       properties:
         authorization_url: { type: string }
+    Avatar:
+      type: object
+      required: [avatar_url]
+      properties:
+        avatar_url: { type: string, description: "same-origin, versioned: `/api/v1/users/{id}/avatar?v=…`" }
+    MemberProfile:
+      type: object
+      description: >-
+        One member's profile (ADR 0162). `view: basic` carries the card every member of the organisation reads;
+        `view: full` adds the account, the sessions and the work (an administrator, or the person themself).
+        `administration` is set for an administrator only.
+      required: [user_id, org, view, status, display_name, email, project_roles, groups]
+      properties:
+        user_id: { type: string }
+        org: { type: string }
+        view: { type: string, enum: [basic, full] }
+        status: { type: string, enum: [active, former], description: "`former`: no role in the organisation or its projects any more" }
+        display_name: { type: string }
+        given_name: { type: [string, "null"] }
+        family_name: { type: [string, "null"] }
+        job_title: { type: [string, "null"] }
+        department: { type: [string, "null"] }
+        email: { type: string }
+        avatar_url: { type: [string, "null"] }
+        org_role: { oneOf: [{ $ref: "#/components/schemas/Role" }, { type: "null" }], description: "null: project roles only, or a former member" }
+        project_roles: { type: array, items: { $ref: "#/components/schemas/MemberProjectRole" } }
+        groups: { type: array, items: { $ref: "#/components/schemas/MemberGroup" } }
+        origin: { type: [string, "null"], enum: [identity_provider, provisioned, manual, null], description: "how the account came; full view only" }
+        last_login_at: { type: [string, "null"], format: date-time }
+        sessions: { oneOf: [{ $ref: "#/components/schemas/MemberSessions" }, { type: "null" }] }
+        work: { oneOf: [{ $ref: "#/components/schemas/MemberWork" }, { type: "null" }] }
+        administration: { oneOf: [{ $ref: "#/components/schemas/MemberAdministration" }, { type: "null" }] }
+    MemberProjectRole:
+      type: object
+      required: [project_slug, project_name, role]
+      properties:
+        project_slug: { type: string }
+        project_name: { type: string }
+        role: { $ref: "#/components/schemas/Role" }
+    MemberGroup:
+      type: object
+      required: [slug, name, source]
+      properties:
+        slug: { type: string }
+        name: { type: string }
+        source: { type: string, enum: [internal, scim, identity_provider], description: "an organisation group (ADR 0160), or the identity provider's `groups` claim as of the last sign-in" }
+    MemberSessions:
+      type: object
+      required: [open]
+      properties:
+        open: { type: integer, minimum: 0, description: "browser sessions neither ended nor expired (ADR 0130)" }
+        last_activity_at: { type: [string, "null"], format: date-time }
+    MemberWork:
+      type: object
+      description: In the organisation's team projects the caller reads; a personal space is never shown.
+      required: [pending_requests, decisions, runs]
+      properties:
+        pending_requests: { type: array, items: { $ref: "#/components/schemas/MemberPendingRequest" } }
+        decisions: { type: array, items: { $ref: "#/components/schemas/MemberDecision" } }
+        runs: { type: array, items: { $ref: "#/components/schemas/MemberRun" } }
+        spend_month_usd: { type: [number, "null"], description: "what the person's assistant conversations and tasks cost in this organisation since the first of the month (the ledger lines that name them)" }
+    MemberPendingRequest:
+      type: object
+      required: [id, work_item_id, work_item_key, work_item_title, project_slug, kind, requested_at, via]
+      properties:
+        id: { type: string }
+        work_item_id: { type: string }
+        work_item_key: { type: string }
+        work_item_title: { type: string }
+        project_slug: { type: string }
+        kind: { type: string }
+        requested_at: { type: string, format: date-time }
+        due_at: { type: [string, "null"], format: date-time }
+        via: { type: string, enum: [person, group], description: "addressed to them, or to a group they are in" }
+        group: { type: [string, "null"] }
+    MemberDecision:
+      type: object
+      required: [request_id, work_item_id, work_item_key, work_item_title, project_slug, kind, decided_at]
+      properties:
+        request_id: { type: string }
+        work_item_id: { type: string }
+        work_item_key: { type: string }
+        work_item_title: { type: string }
+        project_slug: { type: string }
+        kind: { type: string }
+        approved: { type: [boolean, "null"] }
+        decided_at: { type: string, format: date-time }
+    MemberRun:
+      type: object
+      required: [id, work_item_id, work_item_key, project_slug, stage_role, status, cost_usd]
+      properties:
+        id: { type: string }
+        work_item_id: { type: string }
+        work_item_key: { type: string }
+        project_slug: { type: string }
+        stage_role: { type: string }
+        status: { type: string }
+        started_at: { type: [string, "null"], format: date-time }
+        cost_usd: { type: number }
+    MemberAdministration:
+      type: object
+      required: [api_tokens, audit]
+      properties:
+        api_tokens: { type: integer, minimum: 0, description: "the person's API tokens that have not expired; never a token" }
+        audit: { type: array, items: { $ref: "#/components/schemas/AuditEntry" }, description: "the organisation's recent audit events where they are the actor or the target" }
     TrackerIdentity:
       type: object
       description: >-

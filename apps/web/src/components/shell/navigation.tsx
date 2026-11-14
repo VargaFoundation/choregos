@@ -289,7 +289,7 @@ export function adminGroups(
       hue: GROUP_HUES.configure,
       entries: [
         page("/admin", "Overview", LayoutDashboard),
-        page("/admin/members", "Members", Users),
+        pages("/admin/members", "Members", Users),
         pages("/admin/groups", "Groups", UsersRound),
         page("/admin/connectors", "Installed connectors", Plug),
         page("/admin/models", "Models", Cpu),
@@ -325,6 +325,8 @@ export function adminTrail(pathname: string, section: NavEntry | undefined): Bre
   if (!section || section.href === "/admin") return [];
   const below = pathname.slice(section.href.length).split("/").filter(Boolean);
   if (below.length === 0) return [{ label: section.label }];
+  // A member's page is named by an opaque id: the trail says what it is, the page says whose (ADR 0162).
+  if (section.href === "/admin/members") return [{ href: section.href, label: section.label }, { label: "Profile" }];
   return [{ href: section.href, label: section.label }, { label: <span data-verbatim>{decodeURIComponent(below[0]!)}</span> }];
 }
 

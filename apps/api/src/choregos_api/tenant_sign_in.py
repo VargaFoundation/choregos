@@ -62,7 +62,9 @@ class OidcProvider:
     (a provider that omits the claim, such as Entra ID, is accepted). `groups_claim` names the
     userinfo claim that carries the groups. `groups_map`, when set, translates the provider's group
     values (an Entra ID group id, say) into the core's group names (`org-admins`, `developers`…);
-    a value it does not list is dropped. The extension checks the names it maps to.
+    a value it does not list is dropped. The extension checks the names it maps to. `job_title_claim` and
+    `department_claim` name the userinfo claims copied onto the person at each sign-in (ADR 0162), with
+    `given_name` and `family_name`.
     """
 
     issuer: str
@@ -75,6 +77,8 @@ class OidcProvider:
     require_email_verified: bool = True
     groups_claim: str = "groups"
     groups_map: dict[str, str] = field(default_factory=dict)
+    job_title_claim: str = "job_title"
+    department_claim: str = "department"
 
     def mapped_groups(self, claimed: Any) -> list[str]:
         """The groups the provider claims, as the core's group names."""

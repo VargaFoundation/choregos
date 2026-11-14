@@ -246,6 +246,7 @@ from .measures import (
     MemoryDto,
     MemoryReimport,
 )
+from .member_profiles import AvatarDto, MemberProfileDto
 from .memory import (
     MemoryStoreCreate,
     MemoryStoreDto,
@@ -444,6 +445,7 @@ __all__ = [
     "AssigneeChange",
     "AuditEntry",
     "AuditPage",
+    "AvatarDto",
     "BrowserSessionDto",
     "BudgetAlertDto",
     "BuiltinAgent",
@@ -529,6 +531,7 @@ __all__ = [
     "McpGatewayTest",
     "McpGatewayTestRequest",
     "MeDto",
+    "MemberProfileDto",
     "MembershipDto",
     "MembershipUpsert",
     "MemoryAbGroup",

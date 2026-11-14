@@ -14,8 +14,9 @@ const EMPTY = { provider: "github" as ForgeProvider, baseUrl: "", id: "", login:
 /**
  * A member's linked forge accounts, as an organisation administrator manages them (ADR 0161): the list with
  * its Verified and Declared badges, and the form that declares one by numeric id — stored NOT verified.
+ * `readOnly`: the list alone, for the member reading their own profile (they link from My account).
  */
-export function MemberLinkedAccounts({ org, userId }: { org: string; userId: string }) {
+export function MemberLinkedAccounts({ org, userId, readOnly = false }: { org: string; userId: string; readOnly?: boolean }) {
   const client = useQueryClient();
   const key = ["member-linked-accounts", org, userId];
   const accounts = useQuery({ queryKey: key, queryFn: () => api.memberLinkedAccounts(org, userId) });
@@ -51,59 +52,63 @@ export function MemberLinkedAccounts({ org, userId }: { org: string; userId: str
       <LinkedAccountList
         accounts={accounts.data ?? []}
         label="Linked accounts of this member"
-        onRemove={(account) => act(() => api.deleteMemberLinkedAccount(org, userId, account.id))}
+        onRemove={readOnly ? undefined : (account) => act(() => api.deleteMemberLinkedAccount(org, userId, account.id))}
       />
       {accounts.isSuccess && (accounts.data ?? []).length === 0 && <p className="text-xs text-ink-muted">No linked account.</p>}
-      <div className="flex flex-wrap items-end gap-2">
-        <label className="flex min-w-0 flex-col gap-1">
-          <span className="text-xs text-ink-muted">Forge</span>
-          <Select
-            value={draft.provider}
-            onChange={(event) => setDraft({ ...draft, provider: event.target.value as ForgeProvider })}
-            className="w-auto"
-          >
-            {PROVIDERS.map((provider) => (
-              <option key={provider} value={provider}>
-                {PROVIDER_LABELS[provider]}
-              </option>
-            ))}
-          </Select>
-        </label>
-        <label className="flex min-w-0 flex-col gap-1">
-          <span className="text-xs text-ink-muted">Instance</span>
-          <Input
-            value={draft.baseUrl}
-            placeholder={DEFAULT_INSTANCES[draft.provider] ?? "https://forge.example"}
-            onChange={(event) => setDraft({ ...draft, baseUrl: event.target.value })}
-            className="w-auto"
-          />
-        </label>
-        <label className="flex min-w-0 flex-col gap-1">
-          <span className="text-xs text-ink-muted">Login</span>
-          <Input value={draft.login} onChange={(event) => setDraft({ ...draft, login: event.target.value })} className="w-auto" />
-        </label>
-        <label className="flex min-w-0 flex-col gap-1">
-          <span className="text-xs text-ink-muted">User id</span>
-          <Input
-            inputMode="numeric"
-            value={draft.id}
-            onChange={(event) => setDraft({ ...draft, id: event.target.value.replace(/\D/g, "") })}
-            className="w-auto"
-          />
-        </label>
-        <Button
-          size="sm"
-          tone="primary"
-          disabled={!draft.login.trim() || !draft.id || (needsInstance && !draft.baseUrl.trim())}
-          onClick={() => void declare()}
-        >
-          Declare
-        </Button>
-      </div>
-      <p className="text-xs text-ink-muted">
-        A declared account is shown as not verified: the member proves it by linking it from My account. The id is
-        the forge&apos;s numeric user id, never the login.
-      </p>
+      {!readOnly && (
+        <>
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="flex min-w-0 flex-col gap-1">
+              <span className="text-xs text-ink-muted">Forge</span>
+              <Select
+                value={draft.provider}
+                onChange={(event) => setDraft({ ...draft, provider: event.target.value as ForgeProvider })}
+                className="w-auto"
+              >
+                {PROVIDERS.map((provider) => (
+                  <option key={provider} value={provider}>
+                    {PROVIDER_LABELS[provider]}
+                  </option>
+                ))}
+              </Select>
+            </label>
+            <label className="flex min-w-0 flex-col gap-1">
+              <span className="text-xs text-ink-muted">Instance</span>
+              <Input
+                value={draft.baseUrl}
+                placeholder={DEFAULT_INSTANCES[draft.provider] ?? "https://forge.example"}
+                onChange={(event) => setDraft({ ...draft, baseUrl: event.target.value })}
+                className="w-auto"
+              />
+            </label>
+            <label className="flex min-w-0 flex-col gap-1">
+              <span className="text-xs text-ink-muted">Login</span>
+              <Input value={draft.login} onChange={(event) => setDraft({ ...draft, login: event.target.value })} className="w-auto" />
+            </label>
+            <label className="flex min-w-0 flex-col gap-1">
+              <span className="text-xs text-ink-muted">User id</span>
+              <Input
+                inputMode="numeric"
+                value={draft.id}
+                onChange={(event) => setDraft({ ...draft, id: event.target.value.replace(/\D/g, "") })}
+                className="w-auto"
+              />
+            </label>
+            <Button
+              size="sm"
+              tone="primary"
+              disabled={!draft.login.trim() || !draft.id || (needsInstance && !draft.baseUrl.trim())}
+              onClick={() => void declare()}
+            >
+              Declare
+            </Button>
+          </div>
+          <p className="text-xs text-ink-muted">
+            A declared account is shown as not verified: the member proves it by linking it from My account. The id is
+            the forge&apos;s numeric user id, never the login.
+          </p>
+        </>
+      )}
       {error && <ErrorNote>{error}</ErrorNote>}
     </div>
   );

@@ -67,6 +67,7 @@ import type {
   ProjectNetwork,
   Membership,
   LinkedAccount,
+  MemberProfile,
   Memory,
   ProjectPage,
   ReleasePage,
@@ -2965,6 +2966,97 @@ const filedOnTheMock: WorkItemDto[] = [];
 
 /** Fixtures router: reproduces the real API's paths. */
 /** The organisation's ceiling, kept for the time of the page: the admin card writes it, the project's network reads it back (ADR 0070). */
+/** The demo's photo: a drawn circle, since the demo stores no upload (ADR 0162). */
+const MOCK_AVATAR =
+  "data:image/svg+xml;utf8," +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" fill="#5b7cfa"/><circle cx="32" cy="26" r="12" fill="#fff"/><rect x="14" y="42" width="36" height="22" rx="11" fill="#fff"/></svg>',
+  );
+
+/** One member's profile as the API composes it (ADR 0162): the whole of it, the demo's person being an administrator. */
+function mockMemberProfile(org: string, userId: string): MemberProfile {
+  const rows = memberships.filter((m) => m.user_id === userId);
+  if (rows.length === 0) throw new ApiError(404, { title: "Not Found", detail: `Member ${userId} not found` });
+  const email = rows[0]!.email ?? "";
+  const local = email.split("@")[0] ?? email;
+  const self = userId === me.id;
+  return {
+    user_id: userId,
+    org,
+    view: "full",
+    status: "active",
+    display_name: self ? me.display_name : local.charAt(0).toUpperCase() + local.slice(1),
+    given_name: self ? "Augustin" : null,
+    family_name: self ? "Varga" : null,
+    job_title: self ? "Head of platform" : null,
+    department: self ? "Engineering" : null,
+    email,
+    avatar_url: self ? (me.avatar_url ?? null) : null,
+    org_role: rows.find((m) => !m.project_slug)?.role ?? null,
+    project_roles: rows
+      .filter((m) => m.project_slug)
+      .map((m) => ({
+        project_slug: m.project_slug!,
+        project_name: projects.items.find((p) => p.slug === m.project_slug)?.name ?? m.project_slug!,
+        role: m.role,
+      })),
+    groups: [
+      { slug: "platform-team", name: "Platform team", source: "internal" },
+      { slug: "release-captains", name: "release-captains", source: "identity_provider" },
+    ],
+    origin: self ? "identity_provider" : "manual",
+    last_login_at: iso(90),
+    sessions: { open: self ? 2 : 1, last_activity_at: iso(4) },
+    work: {
+      pending_requests: [
+        {
+          id: "hr-1",
+          work_item_id: "w2",
+          work_item_key: "acme/billing-api#124",
+          work_item_title: "Export invoices as PDF",
+          project_slug: "billing-api",
+          kind: "approval",
+          requested_at: iso(55),
+          due_at: null,
+          via: "group",
+          group: "release-captains",
+        },
+      ],
+      decisions: [
+        {
+          request_id: "hr-0",
+          work_item_id: "w3",
+          work_item_key: "acme/billing-api#125",
+          work_item_title: "Fix the rounding of discounts",
+          project_slug: "billing-api",
+          kind: "approval",
+          approved: true,
+          decided_at: iso(60 * 26),
+        },
+      ],
+      runs: [
+        {
+          id: "r3",
+          work_item_id: "w1",
+          work_item_key: "acme/billing-api#123",
+          project_slug: "billing-api",
+          stage_role: "implement",
+          status: "running",
+          started_at: iso(70),
+          cost_usd: 2.74,
+        },
+      ],
+      spend_month_usd: 12.4,
+    },
+    administration: {
+      api_tokens: 2,
+      audit: [
+        { id: "a-1", actor_id: me.id, actor_kind: "user", action: "member.add", target_type: "user", target_id: userId, payload: {}, ts: iso(60 * 24 * 12) },
+      ],
+    },
+  };
+}
+
 /** The forge accounts the mock holds (ADR 0161): one verified by its member, the others declared. */
 const mockLinkedAccounts: LinkedAccount[] = [
   {
@@ -3348,6 +3440,15 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       target.disabled_reason = update.enabled ? null : (update.disabled_reason ?? null);
       return structuredClone(target) as T;
     }
+  }
+  const profileRoute = /^\/orgs\/([^/]+)\/members\/([^/]+)\/profile$/.exec(bare);
+  if (method === "GET" && profileRoute) {
+    return mockMemberProfile(decodeURIComponent(profileRoute[1] ?? ""), decodeURIComponent(profileRoute[2] ?? "")) as T;
+  }
+  if (bare === "/me/avatar") {
+    // The demo stores no file: a drawn photo stands in for the one uploaded (a `data:` image, allowed by the CSP).
+    me.avatar_url = method === "PUT" ? MOCK_AVATAR : null;
+    return (method === "PUT" ? { avatar_url: MOCK_AVATAR } : undefined) as T;
   }
   const memberLinks = /^\/orgs\/([^/]+)\/members\/([^/]+)\/linked-accounts(?:\/([^/]+))?$/.exec(bare);
   if (memberLinks) {
