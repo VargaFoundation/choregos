@@ -69,6 +69,7 @@ from .identity import (
     OrgGroupMember,
     OrgSlugAlias,
     User,
+    UserAvatar,
     UserSession,
 )
 from .knowledge import (
@@ -285,6 +286,7 @@ __all__ = [
     "TriggerToken",
     "UniqueConstraint",
     "User",
+    "UserAvatar",
     "UserSession",
     "WebhookDelivery",
     "WorkItem",

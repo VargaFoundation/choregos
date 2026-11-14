@@ -109,6 +109,9 @@ describe("my account, your roles", () => {
     const profile = screen.getByRole("heading", { name: "Profile" }).closest("section")!;
     expect(within(profile).getByText("Vincent Devillers")).toBeTruthy();
     expect(within(profile).getByText("v@example.test")).toBeTruthy();
+    // The photo is uploaded here (ADR 0162): initials until there is one.
+    expect(within(profile).getByTestId("avatar-initials").textContent).toBe("VD");
+    expect(within(profile).getByRole("button", { name: "Upload a photo" })).toBeTruthy();
     const preferences = screen.getByRole("heading", { name: "Preferences" }).closest("section")!;
     expect(within(preferences).getByRole("radio", { name: "Light" })).toBeTruthy();
     const tokens = screen.getByRole("heading", { name: "Access tokens" }).closest("section")!;

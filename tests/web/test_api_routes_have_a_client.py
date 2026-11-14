@@ -87,6 +87,8 @@ NOT_CALLED_BY_A_CLIENT: dict[str, str] = {
     "against S47-14; the console reads the member's linked accounts",
     "/orgs/{org}/members/{user_id}/tracker-identities/{tracker}": "deprecated by ADR 0161 for the callers "
     "written against S47-14; the console declares and removes linked accounts",
+    "/users/{user_id}/avatar": "a person's photo (ADR 0162), read by the browser as an <img> source from the "
+    "`avatar_url` the API answers; no client builds its path",
     "/github/setup": "the GitHub App's Setup URL: GitHub redirects the browser there after an installation",
     "/remote-credentials/oauth/callback": "the provider's redirect after an administrator authorised a "
     "remote agent's credential",

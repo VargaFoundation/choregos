@@ -192,6 +192,16 @@ export type Me = {
   display_name: string;
   oidc_sub?: string;
   last_login_at?: string | null;
+  /** from the identity provider's `given_name` claim, at the last sign-in (ADR 0162) */
+  given_name?: string | null;
+  /** from the identity provider's `family_name` claim */
+  family_name?: string | null;
+  /** from the identity provider's job title claim, when it sends one */
+  job_title?: string | null;
+  /** from the identity provider's department claim, when it sends one */
+  department?: string | null;
+  /** the person's photo, same-origin (`getUserAvatar`); null without one */
+  avatar_url?: string | null;
   memberships: Array<Membership>;
 };
 
@@ -252,6 +262,108 @@ export type MyLinkedAccounts = {
 
 export type LinkedAccountStart = {
   authorization_url: string;
+};
+
+export type Avatar = {
+  /** same-origin, versioned: `/api/v1/users/{id}/avatar?v=…` */
+  avatar_url: string;
+};
+
+/** One member's profile (ADR 0162). `view: basic` carries the card every member of the organisation reads; `view: full` adds the account, the sessions and the work (an administrator, or the person themself). `administration` is set for an administrator only. */
+export type MemberProfile = {
+  user_id: string;
+  org: string;
+  view: "basic" | "full";
+  /** `former`: no role in the organisation or its projects any more */
+  status: "active" | "former";
+  display_name: string;
+  given_name?: string | null;
+  family_name?: string | null;
+  job_title?: string | null;
+  department?: string | null;
+  email: string;
+  avatar_url?: string | null;
+  /** null: project roles only, or a former member */
+  org_role?: Role | null;
+  project_roles: Array<MemberProjectRole>;
+  groups: Array<MemberGroup>;
+  /** how the account came; full view only */
+  origin?: "identity_provider" | "provisioned" | "manual" | null;
+  last_login_at?: string | null;
+  sessions?: MemberSessions | null;
+  work?: MemberWork | null;
+  administration?: MemberAdministration | null;
+};
+
+export type MemberProjectRole = {
+  project_slug: string;
+  project_name: string;
+  role: Role;
+};
+
+export type MemberGroup = {
+  slug: string;
+  name: string;
+  /** an organisation group (ADR 0160), or the identity provider's `groups` claim as of the last sign-in */
+  source: "internal" | "scim" | "identity_provider";
+};
+
+export type MemberSessions = {
+  /** browser sessions neither ended nor expired (ADR 0130) */
+  open: number;
+  last_activity_at?: string | null;
+};
+
+/** In the organisation's team projects the caller reads; a personal space is never shown. */
+export type MemberWork = {
+  pending_requests: Array<MemberPendingRequest>;
+  decisions: Array<MemberDecision>;
+  runs: Array<MemberRun>;
+  /** what the person's assistant conversations and tasks cost in this organisation since the first of the month (the ledger lines that name them) */
+  spend_month_usd?: number | null;
+};
+
+export type MemberPendingRequest = {
+  id: string;
+  work_item_id: string;
+  work_item_key: string;
+  work_item_title: string;
+  project_slug: string;
+  kind: string;
+  requested_at: string;
+  due_at?: string | null;
+  /** addressed to them, or to a group they are in */
+  via: "person" | "group";
+  group?: string | null;
+};
+
+export type MemberDecision = {
+  request_id: string;
+  work_item_id: string;
+  work_item_key: string;
+  work_item_title: string;
+  project_slug: string;
+  kind: string;
+  approved?: boolean | null;
+  decided_at: string;
+};
+
+export type MemberRun = {
+  id: string;
+  work_item_id: string;
+  work_item_key: string;
+  project_slug: string;
+  stage_role: string;
+  status: string;
+  started_at?: string | null;
+  cost_usd: number;
+};
+
+export type MemberAdministration = {
+  /** the person's API tokens that have not expired; never a token */
+  api_tokens: number;
+  /** the organisation's recent audit events where they are the actor or the target */
+  audit: Array<AuditEntry>;
 };
 
 /** Deprecated (ADR 0161): a member's GitHub link at github.com, as the `tracker-identities` routes answer it. Use `LinkedAccount`. */
@@ -6023,6 +6135,7 @@ export interface Operations {
   deleteModelCatalogueEntry: { method: "DELETE"; path: "/orgs/{org}/models/{entry_id}"; body: never; response: void };
   deleteMyAssistantMemory: { method: "DELETE"; path: "/me/assistants/{org}/{slug}/memory/{space}"; body: never; response: void };
   deleteMyAssistantSubjectMemory: { method: "DELETE"; path: "/me/assistants/{org}/{slug}/memory/{space}/{subject}"; body: never; response: void };
+  deleteMyAvatar: { method: "DELETE"; path: "/me/avatar"; body: never; response: void };
   deleteMyConversation: { method: "DELETE"; path: "/me/conversations/{conversation_id}"; body: never; response: void };
   deleteMyLinkedAccount: { method: "DELETE"; path: "/me/linked-accounts/{account_id}"; body: never; response: void };
   deleteMyTaskSubscription: { method: "DELETE"; path: "/me/assistants/{org}/{slug}/tasks/{task}"; body: never; response: void };
@@ -6103,6 +6216,7 @@ export interface Operations {
   getMcpGateway: { method: "GET"; path: "/orgs/{org}/mcp-gateway"; body: never; response: McpGatewayState };
   getMcpGatewayJwks: { method: "GET"; path: "/orgs/{org}/mcp-gateway/jwks.json"; body: never; response: JsonWebKeySet };
   getMe: { method: "GET"; path: "/me"; body: never; response: Me };
+  getMemberProfile: { method: "GET"; path: "/orgs/{org}/members/{user_id}/profile"; body: never; response: MemberProfile };
   getMemory: { method: "GET"; path: "/orgs/{org}/memories/{slug}"; body: never; response: MemoryStore };
   getMemoryAbReport: { method: "GET"; path: "/orgs/{org}/memory/ab-report"; body: never; response: MemoryAbReport };
   getModelCatalogue: { method: "GET"; path: "/orgs/{org}/models"; body: never; response: ModelCatalogue };
@@ -6230,6 +6344,7 @@ export interface Operations {
   getTeamsDelivery: { method: "GET"; path: "/orgs/{org}/assistants/{slug}/delivery/teams"; body: never; response: TeamsDelivery };
   getTemplate: { method: "GET"; path: "/templates/{name}"; body: never; response: TemplateDetail };
   getTrainStatus: { method: "GET"; path: "/projects/{id}/trains/{env}"; body: never; response: TrainStatus };
+  getUserAvatar: { method: "GET"; path: "/users/{user_id}/avatar"; body: never; response: void };
   getWorkItem: { method: "GET"; path: "/work-items/{id}"; body: never; response: WorkItem };
   getWorkItemArtifact: { method: "GET"; path: "/work-items/{id}/artifacts/{ref}"; body: never; response: Artifact };
   getWorkItemArtifactContent: { method: "GET"; path: "/work-items/{id}/artifacts/{ref}/content"; body: never; response: void };
@@ -6395,6 +6510,7 @@ export interface Operations {
   putKnowledgeGrants: { method: "PUT"; path: "/orgs/{org}/knowledge/{slug}/grants"; body: KnowledgeGrantsPut; response: KnowledgeGrants };
   putMcpGateway: { method: "PUT"; path: "/orgs/{org}/mcp-gateway"; body: McpGatewayPut; response: McpGatewayState };
   putModelCatalogueSettings: { method: "PUT"; path: "/orgs/{org}/models/settings"; body: ModelCatalogueSettings; response: ModelCatalogueSettings };
+  putMyAvatar: { method: "PUT"; path: "/me/avatar"; body: void; response: Avatar };
   putMyTaskSubscription: { method: "PUT"; path: "/me/assistants/{org}/{slug}/tasks/{task}"; body: TaskSubscriptionPut; response: TaskSubscription };
   putNamedWorkflow: { method: "PUT"; path: "/projects/{id}/workflows/{name}"; body: WorkflowPut; response: WorkflowDef };
   putOutboundProxy: { method: "PUT"; path: "/orgs/{org}/outbound-proxy"; body: OutboundProxyPut; response: OutboundProxyState };

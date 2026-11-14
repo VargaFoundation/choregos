@@ -142,6 +142,8 @@ import type {
   LinkedAccountDeclare,
   LinkedAccountStart,
   MyLinkedAccounts,
+  Avatar,
+  MemberProfile,
   Org,
   OrgCreate,
   OrgUpdate,
@@ -528,6 +530,9 @@ export const api = {
     request<void>(`/orgs/${org}/members/${encodeURIComponent(userId)}/linked-accounts/${encodeURIComponent(accountId)}`, {
       method: "DELETE",
     }),
+  /** One member's profile page in one read (ADR 0162): the basic card for a member, everything for an administrator. */
+  memberProfile: (org: string, userId: string) =>
+    request<MemberProfile>(`/orgs/${org}/members/${encodeURIComponent(userId)}/profile`),
   /** The administration sections that extensions declare, filtered by the API (ADR 0032). */
   adminSections: (org: string) => request<AdminSection[]>(`/ui/admin-sections?org=${encodeURIComponent(org)}`),
   /**
@@ -838,6 +843,13 @@ export const api = {
     ),
   deleteMyLinkedAccount: (accountId: string) =>
     request<void>(`/me/linked-accounts/${encodeURIComponent(accountId)}`, { method: "DELETE" }),
+  /** My photo (ADR 0162): one PNG, JPEG or WebP file; the API re-encodes it and answers where it is served. */
+  putMyAvatar: (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return request<Avatar>("/me/avatar", { method: "PUT", body: form });
+  },
+  deleteMyAvatar: () => request<void>("/me/avatar", { method: "DELETE" }),
   endSession: (id: string) => request<void>(`/me/sessions/${encodeURIComponent(id)}`, { method: "DELETE" }),
   endOtherSessions: () => request<EndedSessions>("/me/sessions/end-others", { method: "POST" }),
   templates: () => request<TemplateSummary[]>("/templates"),
