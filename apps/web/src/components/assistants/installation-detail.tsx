@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { groupsOf } from "@/components/assistants/install-assistant";
 import { TaskEventJournal, TaskEventKeyCard, TeamsDeliveryCard } from "@/components/assistants/installation-task-events";
+import { InstallationLaunches } from "@/components/assistants/installation-launches";
 import { InstallationMemory } from "@/components/assistants/installation-memory";
 import { InstallationSpend, InstallationStop } from "@/components/assistants/installation-stop";
 import { ConfirmedGesture } from "@/components/confirmed-gesture";
@@ -565,6 +566,7 @@ export function InstallationDetail({ slug }: { slug: string }) {
           <Settings key={data.created_at + JSON.stringify(data.config)} org={org} slug={slug} assistant={data} schema={(manifest?.config_schema ?? null) as JsonSchema | null} />
           <Bindings org={org} slug={slug} assistant={data} needs={manifest?.needs ?? []} />
           <InstallationSpend assistant={data} />
+          <InstallationLaunches org={org} slug={slug} assistant={data} />
           <InstallationMemory
             org={org}
             slug={slug}

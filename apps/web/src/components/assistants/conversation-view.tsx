@@ -105,9 +105,19 @@ function ActionCard({ action, conversation, onDecided }: { action: ConversationA
       setError(cause instanceof Error ? cause.message : "Refused");
     }
   }
+  // ADR 0158: a launch starts a project's workflow, in the person's name, once they confirm.
+  const launch = action.kind === "launch";
+  const target = (action.target ?? {}) as { project?: string; workflow?: string };
   return (
-    <Card padding="sm" title="The assistant wants to act" eyebrow={`${action.need} · ${action.operation}`}>
+    <Card
+      padding="sm"
+      title={launch ? "The assistant proposes to start a workflow" : "The assistant wants to act"}
+      eyebrow={launch ? `${target.workflow ?? ""} · ${target.project ?? ""}` : `${action.need} · ${action.operation}`}
+    >
       <p className="text-sm">{action.summary}</p>
+      {launch && (
+        <p className="mt-1 text-xs text-ink-muted">Confirming files the work item in your name, if you may create work items in this project.</p>
+      )}
       <pre className="mt-2 overflow-x-auto rounded bg-surface-muted p-2 text-xs">{JSON.stringify(action.arguments, null, 2)}</pre>
       <ActionDiff diff={action.diff} />
       {error && <ErrorNote>{error}</ErrorNote>}
@@ -203,6 +213,7 @@ export function ConversationView({ id, assistant }: { id: string; assistant?: st
   const messages = conversation.data?.messages ?? [];
   const lastAnswer = messages.map((m) => m.role).lastIndexOf("assistant");
   const waiting = (actions.data?.items ?? []).filter((a) => a.status === "proposed");
+  const started = (actions.data?.items ?? []).filter((a) => a.kind === "launch" && a.status === "executed" && a.result);
   return (
     <div className="space-y-6">
       <OrgPageHeader
@@ -242,6 +253,23 @@ export function ConversationView({ id, assistant }: { id: string; assistant?: st
       {waiting.map((a) => (
         <ActionCard key={a.id} action={a} conversation={id} onDecided={() => void actions.refetch()} />
       ))}
+      {started.length > 0 && (
+        <Card padding="sm" title="Started from this conversation">
+          <ul className="space-y-1 text-sm">
+            {started.map((a) => {
+              const result = a.result as { project?: string; work_item_id?: string; work_item_key?: string; workflow?: string };
+              return (
+                <li key={a.id}>
+                  <Link href={`/p/${result.project}/items/${result.work_item_id}`}>{result.work_item_key}</Link>{" "}
+                  <span className="text-ink-muted">
+                    {result.workflow} · {result.project}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
+      )}
       {known && <MemoryProposals org={known.org} slug={known.slug} spaces={(known.memory_spaces ?? []).map((s) => s.name)} />}
       <form
         className="space-y-2"
