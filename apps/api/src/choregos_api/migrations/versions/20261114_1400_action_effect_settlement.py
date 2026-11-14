@@ -13,8 +13,8 @@ drops the column; an effect settled `made` stays `done`, one settled `not_made` 
 which the earlier revision reads as an effect neither done nor in doubt.
 
 Revision ID: 4e0fe4b219c6
-Revises: c7e2a9d4f1b6
-Create Date: 2026-11-14 11:00:00+00:00
+Revises: 5455f59749bd
+Create Date: 2026-11-14 14:00:00+00:00
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ from alembic import op
 from choregos_api.db.base import Json
 
 revision: str = "4e0fe4b219c6"
-down_revision: str | None = "c7e2a9d4f1b6"
+down_revision: str | None = "5455f59749bd"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
