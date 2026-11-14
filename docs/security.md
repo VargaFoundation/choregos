@@ -48,6 +48,48 @@ organisations must assume **a member of one will try to read another**.
 | an application acting under a person's name, or outliving its purpose | a machine account (ADR 0131) belongs to one project and is a `kind: machine` principal, which every gate asking for a person refuses; its tokens open the A2A door only, are bound to the project and expire within 365 days; it has no group, so no approval rule can name it, and the door takes no decision; the OAuth path refuses it; removing it ends its tokens at once | what the application does with a token it holds: a stolen token acts within the project's opted-in workflows until it is revoked or expires |
 | a process that outlives its run (a cancel that failed, a pod slow to die, a queued pod that starts late) writing as that run | when the orchestrator stops waiting it closes the run's row first — a terminal status, the end date and the result the workflow is told, committed before the executor is asked to cancel, whatever the cancel then does; a closed run's API answers 409 `run_closed` on every route but its two append-only journals (`events`, `network/decisions`) and `POST …/result`, whose idempotent answer changes neither the run nor its work item; a closed run has no network, and the runner refused at its first call exits with 0 ([ADR 0143](adr/0143-a-run-that-ended-stays-ended.md)) | `choregos_core/run_closure.py`, `activities/execution.py`, `deps.py` (`OpenRunAuth`), `apps/api/tests/test_run_closed.py`, `apps/api/tests/test_run_closed_postgres.py`, `apps/orchestrator/tests/test_run_closed_when_the_wait_ends.py` |
 
+## What a coding agent can run
+
+The console's agent page lists the runtime's built-in tools (files, shell, git, search). This is
+what is **enforced** around them and what is only a **best-effort filter**, as of 0.27.2
+(audit of production, 2026-11-14). Read it with
+[ADR 0146](adr/0146-the-runner-and-the-agent-do-not-share-a-container.md), which is the plan to
+close the gaps below.
+
+**Enforced (a wall, whatever the agent does):**
+
+- the run's pod: non-root, every capability dropped, seccomp, no service-account token (so no
+  Kubernetes credential), required by the Kyverno policies; under gVisor where the deployment sets
+  `runner.runtimeClass`;
+- the network: the pod's NetworkPolicies and the per-run egress proxy for host, port and connection
+  rate (see [Egress](#egress-three-layers-and-what-is-not-guarded));
+- the model: a capped, per-run gateway key;
+- what leaves the run: the diff is checked after the run (scope, secrets, gates) and the runner runs
+  the tests itself.
+
+**Best-effort (a net, not a wall):**
+
+- the runner's guardrails (`deny_commands`, dangerous patterns, `deny_paths`): they judge ACP
+  permission requests. A shell command a backend runs without asking is not judged. Measured on
+  production, runs under opencode ask for permission rarely (6 requests over 104 runs);
+- the opencode backend writes no permission or deny configuration (only `opencode.json`), unlike
+  Claude Code, whose settings carry the policy's `deny_commands`;
+- the commands themselves are **recorded** in the run's events, which is an audit, not a block.
+
+**Known gaps, until [ADR 0146](adr/0146-the-runner-and-the-agent-do-not-share-a-container.md) lands:**
+
+- the runner and the agent share one container and one user id. The agent can read the runner's
+  `/proc/<pid>/environ`, so the run token, the git token (`contents: write`, one hour) and the egress
+  report key are within its reach, and it can modify the runner's code under `/app`;
+- Landlock (ADR 0094) does not exist under gVisor: the run journals `agent.confinement: best_effort`
+  with `landlock_abi: 0`, and the confinement of the agent's writes and ports does not apply (all 104
+  production runs audited);
+- the container's root filesystem is not read-only.
+
+Treat an agent's shell as able to act with the run's own credentials for the life of the run. The
+blast radius is the run's repository, its capped model key and its network routes, not the cluster
+or another organisation.
+
 ## What is *not* a wall, and is said so
 
 - **The origin guard is a browser's wall only.** A request without `Origin` and `Sec-Fetch-Site` (a CLI) passes, and bearer tokens are not cookie-bound.
