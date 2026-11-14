@@ -5074,6 +5074,38 @@ export type HumanRequest = {
   } | null;
   /** Who the request is addressed to (ADR 0153): the workflow's human actor, or an organisation administrator's reassignment. Null when the step names nobody. */
   assignee?: HumanRequestAssignee | null;
+  /** What a person's client prepared for this request through the MCP door (ADR 0162): a proposal, never a decision. Null when none was deposited, or once it is discarded. */
+  draft?: DecisionDraft | null;
+};
+
+/** A draft of a person's decision, deposited by their client through the MCP door's `draft_decision` (ADR 0162 points 4-5). It decides nothing: the person takes it into the decision's form, or discards it. It never attests and never grants paths. */
+export type DecisionDraft = {
+  /** What the client proposes: `approve` or `reject` for an approval or a scope change, `answer` for a question, `complete` or `reject` for a task. */
+  kind: "approve" | "reject" | "answer" | "complete";
+  answer?: string | null;
+  reason?: string | null;
+  /** A task's values, checked against its form when drafted; required fields may be left for the person to fill. */
+  values?: {
+    [key: string]: unknown;
+  } | null;
+  /** Why the client proposes this — written by the client, shown as data. */
+  note?: string | null;
+  /** The platform's one-line reading of the draft. */
+  summary: string;
+  /** The person whose client deposited it, by e-mail. */
+  by: string;
+  via: DecisionDraftVia;
+  at: string;
+};
+
+/** Through what the draft came (ADR 0162 point 4). */
+export type DecisionDraftVia = {
+  door: "mcp";
+  /** The client — the name of the token it used, or its OAuth client id. */
+  client?: string | null;
+  /** The external agent the client embodies, when it is attached to one (ADR 0033). */
+  agent?: string | null;
+  user_agent?: string | null;
 };
 
 /** Who a waiting request is addressed to — a person, a group, or a person first (ADR 0153). */
@@ -5914,6 +5946,7 @@ export interface Operations {
   describeBuiltinAgent: { method: "GET"; path: "/projects/{id}/builtin-agent"; body: never; response: BuiltinAgent };
   detachAgentCredential: { method: "DELETE"; path: "/orgs/{org}/agents/{slug}/credentials/{credential_id}"; body: never; response: void };
   disableOrgConnector: { method: "DELETE"; path: "/projects/{id}/org-connectors/{connector}/enablement"; body: never; response: void };
+  discardDecisionDraft: { method: "DELETE"; path: "/work-items/{id}/human-requests/{request_id}/draft"; body: never; response: void };
   disconnectMyAccount: { method: "DELETE"; path: "/me/connected-accounts/{connector}"; body: never; response: void };
   discoverConnectorOperations: { method: "POST"; path: "/orgs/{org}/connectors/{name}/discover"; body: never; response: ConnectorDiscovery };
   discoverRemoteAgent: { method: "POST"; path: "/orgs/{org}/agents/discover"; body: RemoteAgentDiscover; response: RemoteAgentDiscovery };
