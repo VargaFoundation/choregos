@@ -5272,11 +5272,11 @@ export type HumanRequest = {
   } | null;
   /** Who the request is addressed to (ADR 0153): the workflow's human actor, or an organisation administrator's reassignment. Null when the step names nobody. */
   assignee?: HumanRequestAssignee | null;
-  /** What a person's client prepared for this request through the MCP door (ADR 0162): a proposal, never a decision. Null when none was deposited, or once it is discarded. */
+  /** What a person's client prepared for this request through the MCP door (ADR 0163): a proposal, never a decision. Null when none was deposited, or once it is discarded. */
   draft?: DecisionDraft | null;
 };
 
-/** A draft of a person's decision, deposited by their client through the MCP door's `draft_decision` (ADR 0162 points 4-5). It decides nothing: the person takes it into the decision's form, or discards it. It never attests and never grants paths. */
+/** A draft of a person's decision, deposited by their client through the MCP door's `draft_decision` (ADR 0163 points 4-5). It decides nothing: the person takes it into the decision's form, or discards it. It never attests and never grants paths. */
 export type DecisionDraft = {
   /** What the client proposes: `approve` or `reject` for an approval or a scope change, `answer` for a question, `complete` or `reject` for a task. */
   kind: "approve" | "reject" | "answer" | "complete";
@@ -5296,7 +5296,7 @@ export type DecisionDraft = {
   at: string;
 };
 
-/** Through what the draft came (ADR 0162 point 4). */
+/** Through what the draft came (ADR 0163 point 4). */
 export type DecisionDraftVia = {
   door: "mcp";
   /** The client — the name of the token it used, or its OAuth client id. */
