@@ -936,3 +936,24 @@ def test_the_primary_is_named_after_its_url_and_a_branch_takes_its_repository_s_
     assert config.branch_for("PLAT-7") == "choregos/PLAT-7", "the primary's prefix, as before"
     assert config.branch_for("PLAT-7", repo=diamctl) == "fix/PLAT-7"
     assert ProjectConfig.model_validate({"slug": "p", "org": "o"}).repository_names() == []
+
+
+@pytest.mark.parametrize(
+    ("tool", "valid"),
+    [
+        ("market_data__get_quote", True),
+        ("launch__portfolio_review", True),
+        ("launch_status", True),
+        ("launch_statuses", False),
+        ("get_quote", False),
+    ],
+)
+def test_a_suite_names_a_need_operation_or_a_launch_tool(tool: str, valid: bool) -> None:
+    """ADR 0158: a launch gives the agent `launch__<name>` and `launch_status`; a suite may name both, in an
+    assertion and in the fakes' answers, and still refuses any other name without `__` (#1726)."""
+    suite = _load("conversation-evals.example.json")
+    case = suite["cases"][0]
+    case["assert"] = {"must_call": [{"tool": tool, "before": "any"}]}
+    case["tool_results"] = {tool: {"ok": True}}
+    errors = list(_validator("conversation-evals.schema.json").iter_errors(suite))
+    assert (not errors) is valid, [e.message for e in errors]
