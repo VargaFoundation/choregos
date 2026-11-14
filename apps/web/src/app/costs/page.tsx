@@ -30,7 +30,7 @@ function depuis(periode: Periode, now: Date): string {
 
 /**
  * Where the money goes (S29-03): spend over time, this month against its budget with a forecast,
- * the agents, workflows, work items and runs that cost the most, models and tools apart, the tool calls by
+ * the agents, workflows, work items, runs and assistants that cost the most, models and tools apart, the tool calls by
  * the door they came through (S57-10), and the CSV of each breakdown. Each breakdown reads in money or
  * in tokens (input, output, cached; S64-07). The organisation by default;
  * `?project=<slug>` narrows it to one project.
@@ -135,6 +135,7 @@ function Spend() {
         <BreakdownCard scope={scope} currency={currency} measure={measure} title="Top workflows" group="workflow" filtre={filtre} />
         <BreakdownCard scope={scope} currency={currency} measure={measure} title="Top work items" group="work_item" filtre={filtre} />
         <BreakdownCard scope={scope} currency={currency} measure={measure} title="Top runs" group="run" filtre={filtre} />
+        <BreakdownCard scope={scope} currency={currency} measure={measure} title="Top assistants" group="assistant" filtre={filtre} />
         {!project && <BreakdownCard scope={scope} currency={currency} measure={measure} title="Projects" group="project" filtre={filtre} />}
         <BreakdownCard scope={scope} currency={currency} measure={measure} title="By model" group="model" filtre={{ ...filtre, kind: "model" }} />
         {/* A tool call reads and writes no model token: its card stays in money. */}

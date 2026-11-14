@@ -73,11 +73,30 @@ class AgentActor(Strict):
         return self.playbook or str(self.role)
 
 
+#: A person, by the e-mail address the platform knows them by; matched without regard to case.
+PersonEmail = Annotated[str, Field(min_length=3, max_length=254, pattern=r"^[^@\s]+@[^@\s]+$")]
+
+
 class HumanActor(Strict):
+    """A person answers the step (ADR 0044, ADR 0153): a group, a person, or a person first.
+
+    `group` alone: a member of the group answers. `user` alone: that person answers. Both: the person
+    is asked first, and once the step's SLA (`sla_hours`, 24 h by default) has passed the group may
+    answer too. An organisation administrator may always answer, and that override is audited. An
+    absent `user` is left out of the stored spec, so a group-only workflow keeps its digest.
+    """
+
     type: Literal[ActorType.HUMAN] = ActorType.HUMAN
-    group: str
+    group: str | None = None
+    user: PersonEmail | None = None
     sla_hours: int | None = Field(default=None, ge=1)
     escalate_to: str | None = None
+
+    @model_validator(mode="after")
+    def _someone_answers(self) -> HumanActor:
+        if self.group is None and self.user is None:
+            raise ValueError("a human actor names who answers: a `group`, a `user` (an e-mail), or both")
+        return self
 
 
 class SystemActor(Strict):

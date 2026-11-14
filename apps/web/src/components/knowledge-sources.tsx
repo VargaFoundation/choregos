@@ -74,6 +74,13 @@ function SourceConnector({
   unreadable: boolean;
 }) {
   const name = source.connector;
+  if (!name && source.config?.github_app === true) {
+    return (
+      <span className="text-xs text-ink-muted" data-testid={`source-connector-${source.id}`}>
+        through the platform&apos;s GitHub App: private repositories too
+      </span>
+    );
+  }
   if (!name) {
     const what = source.kind === "web" ? "the public web" : "a public repository";
     return (

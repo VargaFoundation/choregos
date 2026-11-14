@@ -23,6 +23,7 @@ from pydantic import (
     model_validator,
 )
 
+from .agent_social import AgentSocial
 from .base import Dto
 from .identity import ApiTokenCreated
 
@@ -1129,6 +1130,8 @@ class AgentDto(Dto):
     release_policy: AgentReleasePolicy = Field(default_factory=AgentReleasePolicy)
     #: The release waiting for approval, if any (S40-02b).
     pending_release: AgentReleaseDto | None = None
+    #: Watchers, stars and forks, and what the caller does with it (ADR 0152).
+    social: AgentSocial = Field(default_factory=AgentSocial)
 
 
 class AgentOverrides(Dto):
@@ -1589,7 +1592,7 @@ class AgentStopResult(Dto):
     status: Literal["suspended"] = "suspended"
     runs_cancelled: int
     sessions_closed: int
-    #: Conversation turns are not cancelled yet (S63, then S64-09): always 0.
+    #: Conversation turns in flight whose cancel was requested (ADR 0142 §4 bis).
     turns_cancelled: int = 0
     not_stopped: list[AgentNotStopped] = Field(default_factory=list)
 

@@ -3,8 +3,8 @@ id: connector.mcp.mcp-outpost
 title: Connect an MCP server that lives at an outpost
 applies_to: {connector: mcp/mcp-outpost}
 audience: org_admin
-version: 1
-reviewed: 2026-11-12
+version: 4
+reviewed: 2026-11-14
 vendor_docs:
   - {title: "MCP specification: transports (Streamable HTTP)", url: "https://modelcontextprotocol.io/specification/2025-06-18/basic/transports"}
 egress: ["none: Choregos opens no connection for it; the outpost calls the server from inside its own network"]
@@ -47,9 +47,15 @@ outpost decides alone what that alias reaches.
   Choregos can widen it. Prefer an account whose rights are exactly what the agents should have.
 - Tools are **born closed**: after discovery each tool is `forbidden` until an administrator opens
   it. A read can be `allowed`.
-- **A write cannot be opened yet.** A write through an outpost is opened only under the rule that it
-  is delivered at most once, and this version of the platform does not carry that rule: a write
-  operation of this connector stays `forbidden`.
+- **A write is delivered at most once, and may end in doubt.** Choregos does not see the outpost's
+  server: when an instance took a write and its answer never comes back, nobody knows whether the
+  server made it. Choregos then never sends it again and undoes nothing by itself: the action stops
+  as `in doubt`, for a person to check. So a write is opened only when its rule says one of two
+  things, and the request that says neither is refused:
+  - **the tool takes Choregos's idempotency key**: it has an argument named `action_key` and makes
+    the same call harmless when it arrives twice with the same key. Choregos fills the key, and after
+    a doubt it sends the write again with it;
+  - **an in-doubt outcome is accepted** for this tool, explicitly.
 - A project sees only the tools its groups are opened to, and can only tighten them.
 
 ## In Choregos
@@ -61,6 +67,12 @@ outpost decides alone what that alias reaches.
 3. `timeout_s`: optional. It bounds the whole call: the wait for an instance of the outpost to take
    it, then the server's answer.
 4. Press **Discover**, then open the read operations the agents need, one by one.
+5. To open a write, tick one of the two statements under it, **How it is delivered**: *It takes the
+   platform's idempotency key* (offered only when the tool has an `action_key` argument) or *An
+   in-doubt outcome is accepted for it, explicitly*. Then set its policy: the statement leaves with
+   it, in the same request. **Set**, under the statements, sends them alone. Through the API it is
+   `updateConnectorOperation`: `{"policy": "approval", "platform_arguments": ["action_key"]}` or
+   `{"policy": "approval", "in_doubt_accepted": true}`.
 
 ## Test it
 
@@ -74,11 +86,19 @@ the outpost is polling, that its policy file has the alias, and that the outpost
 - `409 outpost_paused`: the outpost is paused or revoked, or outposts are switched off on this
   deployment. Nothing was sent.
 - `409 outpost_offline`: no instance of the outpost that serves this alias polled lately, or none
-  took the call in time. Check that the daemon runs and that `choregos-outpost doctor` passes.
+  took the call in time. An instance announces the aliases of its policy file at every poll, so an
+  alias the file does not hold, or no longer holds, is answered this way too. Check that the daemon
+  runs, that `choregos-outpost doctor` passes, and that the alias is the one in its file.
 - `409 outpost_refused`: the outpost's own policy refused, and its `refusal` says which kind:
-  `unknown_endpoint` (the policy file has no such alias), `tool_not_allowed`, `write_denied`,
+  `tool_not_allowed`, `write_denied`,
   `endpoint_unavailable` (the outpost cannot reach or open its server), `signature_refused` (the
   policy file does not pin the key the platform's door signs with).
 - `409 outpost_timeout`: an instance took the call and its server did not answer in time. Raise the
   timeout here and in the outpost's policy file.
+- `422` when a write is opened: its rule says neither that the tool takes the idempotency key nor
+  that an in-doubt outcome is accepted; or it names `action_key` for a tool that has no such argument.
+- An action **in doubt**: an instance took the write and never answered. Nothing replays it and
+  nothing was undone. Look at the system behind the outpost to see whether the write was made (the
+  action's page says which tool, which instance and when), then note what you found where your team
+  keeps such records: the action itself stays in doubt.
 - "No tools", or only a few: the patterns of the alias let no more through.

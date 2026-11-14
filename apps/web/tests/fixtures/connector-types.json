@@ -40,6 +40,18 @@
   "type": "pfsense"
  },
  {
+  "kind": "forge_account",
+  "type": "forgejo-oauth"
+ },
+ {
+  "kind": "forge_account",
+  "type": "github-oauth"
+ },
+ {
+  "kind": "forge_account",
+  "type": "gitlab-oauth"
+ },
+ {
   "kind": "gateway",
   "type": "direct"
  },

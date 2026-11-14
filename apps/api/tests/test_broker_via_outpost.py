@@ -798,27 +798,10 @@ async def test_a_refusal_of_the_route_is_final_for_an_effect(
         await _effect(project["id"], "get_issue", {})
 
 
-# ───────────────────────── writes: opened by no path, delivered at most once ─────────────────────────
-
-
-async def test_a_write_through_an_outpost_cannot_be_opened_yet(
-    client: AsyncClient, project: dict[str, Any]
-) -> None:
-    """Until a write can be delivered at most once and may end in doubt (ADR 0149 §5-6), a write
-    operation of an `mcp-outpost` connector stays `forbidden`: neither `allowed` nor `approval`."""
-    fake = route.outpost()
-    await route.prepared(client, project, fake)
-    for policy in ("allowed", "approval"):
-        refused = await route.open_operation(client, "create_issue", policy)
-        assert refused.status_code == 422, refused.text
-        detail = refused.json()["detail"]
-        assert "at most once" in detail and "ADR 0149" in detail and "outpost" in detail, detail
-    operations = (await client.get(f"{ORG}/connectors/{CONNECTOR}")).json()["operations"]
-    assert {op["name"]: op["policy"] for op in operations}["create_issue"] == "forbidden"
-    # What does not open it still applies to it: a write may be closed, priced, bounded.
-    assert (await route.open_operation(client, "create_issue", "forbidden")).status_code == 200
-    # A read of the same connector is opened like any other, either way.
-    assert (await route.open_operation(client, "get_issue", "approval")).status_code == 200
+# ───────────────────────── writes: placed once, under the effect's key ─────────────────────────
+#
+# What the client and the seam do with a write. The rule under which one is opened, the effect that
+# passes its key and the action that may end in doubt are S65-14's (`test_write_via_outpost.py`).
 
 
 async def test_a_direct_connectors_write_is_opened_as_before(
@@ -837,22 +820,26 @@ async def test_a_direct_connectors_write_is_opened_as_before(
 
 
 async def _open_behind_the_api(operation: str) -> None:
-    """A row edited behind the API: what the route must not trust."""
+    """A row edited behind the API: what the route must not trust. It states that an in-doubt
+    outcome is accepted, as the API asks of whoever opens a write (S65-14): what is left to refuse
+    it is the route alone."""
     from choregos_api.db.models import ConnectorOperation
     from choregos_api.db.session import session_scope
     from sqlalchemy import update
 
     async with session_scope() as session:
         await session.execute(
-            update(ConnectorOperation).where(ConnectorOperation.name == operation).values(policy="allowed")
+            update(ConnectorOperation)
+            .where(ConnectorOperation.name == operation)
+            .values(policy="allowed", in_doubt_accepted=True)
         )
 
 
 async def test_a_write_that_carries_no_key_is_not_placed(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    """The second lock: a write whose row was opened behind the API reaches the route, which places
-    no write without the key of the effect that plays it."""
+    """The lock of the route: a write reaches it without the key of a governed effect (an effect
+    played by nothing that journals it, a client built by hand), and it places none."""
     from choregos_api.effects import EffectRefused
 
     served = route.server()

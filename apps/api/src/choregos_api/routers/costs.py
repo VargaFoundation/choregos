@@ -16,7 +16,17 @@ from choregos_core.tool_ledger import IN_FLIGHT
 from fastapi import APIRouter, Query, Response
 from sqlalchemy import func, or_, select
 
-from ..db.models import CostLedger, Deployment, Finding, Organization, Project, Release, Run, WorkItem
+from ..db.models import (
+    AssistantInstallation,
+    CostLedger,
+    Deployment,
+    Finding,
+    Organization,
+    Project,
+    Release,
+    Run,
+    WorkItem,
+)
 from ..deps import Db, Me, ProjectCtx
 from ..errors import forbidden, not_found
 from ..rbac import Permission
@@ -53,15 +63,19 @@ GROUPS: dict[str, Any] = {
     # One run (ADR 0141 §1): named by its work item's key and its stage in `_readable_keys`; a line
     # no run spent (a session, a distillation) is `—`.
     "run": CostLedger.run_id,
+    # One assistant installation (ADR 0141 §1): its conversations' turns and its tasks, named by the
+    # installation's slug in `_readable_keys`; a line no assistant spent is `—`.
+    "assistant": CostLedger.installation_id,
 }
 #: Every grouping, at project and organisation scope alike, and in the CSV.
-GROUP_PATTERN = "^(day|stage|model|backend|size|kind|agent|workflow|work_item|project|origin|run)$"
+GROUP_PATTERN = "^(day|stage|model|backend|size|kind|agent|workflow|work_item|project|origin|run|assistant)$"
 
-#: The filters that narrow a report to one agent, one workflow, one work item (ADR 0141 §1), validated
-#: as the contract declares them.
+#: The filters that narrow a report to one agent, one workflow, one work item, one assistant installation
+#: (ADR 0141 §1), validated as the contract declares them.
 AgentFilter = Annotated[str | None, Query(pattern="^[a-z0-9][a-z0-9-]{0,63}$")]
 WorkflowFilter = Annotated[str | None, Query(min_length=1, max_length=64)]
 WorkItemFilter = Annotated[str | None, Query(min_length=1, max_length=128)]
+AssistantFilter = Annotated[str | None, Query(min_length=1, max_length=64)]
 
 
 def _default_since() -> datetime:
@@ -135,9 +149,12 @@ def _period(since: date | None, until: date | None, kind: str | None = None) -> 
     return where
 
 
-def _narrowed(agent: str | None, workflow: str | None, work_item: str | None) -> list[Any]:
-    """Only the lines of one agent (its slug), one workflow (its name), one work item (its id), each
-    read from the ledger's own columns (ADR 0141 §1); combined, a line must match them all."""
+def _narrowed(
+    agent: str | None, workflow: str | None, work_item: str | None, assistant: str | None
+) -> list[Any]:
+    """Only the lines of one agent (its slug), one workflow (its name), one work item (its id), one
+    assistant installation (its id), each read from the ledger's own columns (ADR 0141 §1); combined,
+    a line must match them all."""
     where: list[Any] = []
     if agent is not None:
         where.append(CostLedger.agent_slug == agent)
@@ -145,13 +162,15 @@ def _narrowed(agent: str | None, workflow: str | None, work_item: str | None) ->
         where.append(CostLedger.workflow_name == workflow)
     if work_item is not None:
         where.append(CostLedger.work_item_id == work_item)
+    if assistant is not None:
+        where.append(CostLedger.installation_id == assistant)
     return where
 
 
 async def _readable_keys(session: Db, report: CostReport, org_id: str | None) -> CostReport:
-    """A project is named by its slug, a work item by its tracker key, and a run by its work item's
-    key and its stage (`B-1 · implement`, `B-1 · implement #2` from the second attempt), not by their
-    identifiers."""
+    """A project is named by its slug, a work item by its tracker key, a run by its work item's key and
+    its stage (`B-1 · implement`, `B-1 · implement #2` from the second attempt), and an assistant by its
+    installation's slug, not by their identifiers."""
     if report.group_by == "project":
         query = select(Project.id, Project.slug)
         if org_id is not None:
@@ -176,6 +195,16 @@ async def _readable_keys(session: Db, report: CostReport, org_id: str | None) ->
             str(run_id): f"{key} · {stage}" + (f" #{attempt}" if (attempt or 1) > 1 else "")
             for run_id, key, stage, attempt in runs
         }
+    elif report.group_by == "assistant":
+        ids = [r.key for r in report.rows if r.key != "—"]
+        rows = (
+            await session.execute(
+                select(AssistantInstallation.id, AssistantInstallation.slug).where(
+                    AssistantInstallation.id.in_(ids)
+                )
+            )
+        ).all()
+        names = {str(r[0]): str(r[1]) for r in rows}
     else:
         return report
     for row in report.rows:
@@ -194,11 +223,12 @@ async def project_costs(  # noqa: PLR0913 - the report's period and filters, as 
     agent: AgentFilter = None,
     workflow: WorkflowFilter = None,
     work_item: WorkItemFilter = None,
+    assistant: AssistantFilter = None,
 ) -> CostReport:
     where: list[Any] = [
         CostLedger.project_id == ctx.id,
         *_period(since, until, kind),
-        *_narrowed(agent, workflow, work_item),
+        *_narrowed(agent, workflow, work_item, assistant),
     ]
     policy = await effective_policy(session, ctx.id)
     report = await _report(
@@ -222,6 +252,7 @@ async def org_costs(  # noqa: PLR0913 - the report's period and filters, as quer
     agent: AgentFilter = None,
     workflow: WorkflowFilter = None,
     work_item: WorkItemFilter = None,
+    assistant: AssistantFilter = None,
 ) -> CostReport:
     organization = (
         await session.execute(select(Organization).where(Organization.slug == org))
@@ -238,7 +269,7 @@ async def org_costs(  # noqa: PLR0913 - the report's period and filters, as quer
     where: list[Any] = [
         or_(CostLedger.project_id.in_(list(project_ids) or [""]), CostLedger.org_id == organization.id),
         *_period(since, until, kind),
-        *_narrowed(agent, workflow, work_item),
+        *_narrowed(agent, workflow, work_item, assistant),
     ]
     report = await _report(session, where=where, group_by=group_by)
     report.currency = "USD" if (organization.settings or {}).get("currency") == "USD" else "EUR"
@@ -265,6 +296,7 @@ async def project_costs_csv(  # noqa: PLR0913 - the report's period and filters,
     agent: AgentFilter = None,
     workflow: WorkflowFilter = None,
     work_item: WorkItemFilter = None,
+    assistant: AssistantFilter = None,
 ) -> Response:
     """The same report, as CSV: something to paste into a spreadsheet or an invoice."""
     report = await project_costs(
@@ -277,6 +309,7 @@ async def project_costs_csv(  # noqa: PLR0913 - the report's period and filters,
         agent=agent,
         workflow=workflow,
         work_item=work_item,
+        assistant=assistant,
     )
     return _csv_response(report, f"couts-{ctx.slug}-{group_by}-{utcnow():%Y%m%d}.csv")
 
@@ -298,6 +331,7 @@ async def org_costs_csv(  # noqa: PLR0913 - the report's period and filters, as 
     agent: AgentFilter = None,
     workflow: WorkflowFilter = None,
     work_item: WorkItemFilter = None,
+    assistant: AssistantFilter = None,
 ) -> Response:
     """The organisation's report, in the grouping the screen shows."""
     report = await org_costs(
@@ -311,6 +345,7 @@ async def org_costs_csv(  # noqa: PLR0913 - the report's period and filters, as 
         agent=agent,
         workflow=workflow,
         work_item=work_item,
+        assistant=assistant,
     )
     return _csv_response(report, f"couts-{org}-{group_by}-{utcnow():%Y%m%d}.csv")
 

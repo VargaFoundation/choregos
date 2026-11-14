@@ -234,6 +234,7 @@ memory:
       kind: facts, writes: agent_proposes }
 knowledge:
   - { name: investment_policy, seed: knowledge/investment-policy }
+  - { name: house_research, bind: { description: "The house's research notes.", required: true } }
 tasks:
   - { name: morning_brief, workflow: workflows/morning-brief.yaml, delegation: read_only,
       needs: [market_data], triggers: [{ kind: schedule, cron: "30 7 * * 1-5", user_timezone: true }] }
@@ -259,6 +260,11 @@ policy:
    (`needs`), which the person sees when they agree;
 8. a name (`need`, operations, `memory`, `knowledge`, `tasks`, prompts) that is not English `snake_case`
    (a double underscore separates a need from its operation and is refused in a name).
+
+A `knowledge` item is exactly one of a seed (`seed`, with `serving_mode` and `upstream`) or a binding need
+(`bind: {description, required}`, [ADR 0159](adr/0159-an-assistant-may-read-the-organisation-s-knowledge-bases-by-reference.md)):
+the schema refuses both, neither, and a binding need with `serving_mode` or `upstream`. A binding need names no
+file.
 
 Names are unique within their list, a prompt's `{argument}` placeholders are its arguments, and every file
 the assistant names ships with the plugin: each knowledge seed (a directory holding a `knowledge.yaml` in
@@ -355,6 +361,38 @@ name, even when the person reads it through the knowledge routes, and a `knowled
 document is refused. Each passage is framed as data with its document id, title, path and version
 (`source_version`, else the content digest), and the agent's instructions tell it to cite
 `[document, version]`.
+
+The bases bound to the installation's knowledge needs are offered too (below), with one difference: each is
+offered at a turn only when the person of the conversation may read it at that moment.
+
+#### Knowledge bound by reference
+
+A knowledge need (`knowledge: [{name, bind: {description, required}}]`, S66-12,
+[ADR 0159](adr/0159-an-assistant-may-read-the-organisation-s-knowledge-bases-by-reference.md)) is bound to
+existing knowledge bases of the organisation, by reference: one `assistant_knowledge_bindings` row per base,
+nothing copied, and the base keeps its owners, grants, reach, sources and serving mode.
+
+- **Binding.** At install, `knowledge_bindings: {name: [base slug, ...]}` in the body of
+  `POST /orgs/{org}/assistants`; later, `PUT /orgs/{org}/assistants/{slug}/knowledge-bindings/{name}` with
+  `{"bases": [...]}`, the whole list (empty unbinds; 20 at most; idempotent), by an organisation administrator
+  or a member of the owner groups. Every base added must be `active` and readable by the caller (ADR 0081);
+  a base the caller may not read and one that does not exist get the same 422 (`` `x` is not a knowledge base of
+  <org> you may read ``), and nothing changes. Keeping a base another owner bound, or removing one, needs no
+  right on it. Audited as `assistant.knowledge.bind` with the bases added and removed. The installation's
+  `knowledge_bindings` lists every bound base's slug to its managers; `GET /orgs/{org}/plugins/{name}/assistants`
+  lists each assistant's `knowledge_needs`. The console's installation page has a card for it.
+- **Reading.** At each turn, a bound base is offered only when the conversation's person may read it now
+  (`knowledge.access.visible_to` with the base's grants, the person's roles and groups read from the
+  database). A base they may not read is dropped from that turn: not named in the tools, not searchable, not
+  readable by id. A grant, a group joined or a base restricted takes effect at the next turn. A disabled
+  binding or an archived base is never offered. Passages, documents read and citations name their base.
+- **Readiness.** A `required` need with no enabled binding to an active base is a readiness item
+  `knowledge_unbound` (the owners fix it); an optional one is not a gap.
+- **Upgrades.** A need the new version drops (or turns into a seed) has its bindings disabled and kept; one it
+  adds is unbound (a readiness item when required); a `required` flag that moved is reported. A rename is a
+  drop and an add. The owners are told with the tool needs' changes (`knowledge_removed`, `knowledge_added`,
+  `knowledge_required_changed` in the `assistant.upgrade` audit event). Binding a need that came back enables
+  its bindings again.
 
 #### Offered knowledge: a copy, an origin, proposed updates
 
@@ -533,6 +571,62 @@ owners raised the approval is refused at confirmation with `approval_console`. A
 `approval: inline` is offered and executed like a `user_exchange` one, but under the person's connected account (the
 source receives the account's access token); without a connected account the confirmation is refused
 `account_not_connected` and nothing reaches the source.
+
+#### Starting a project's workflow from a conversation
+
+An assistant may propose to start a workflow a project of the organisation already runs, without declaring
+it again in the plugin ([ADR 0158](adr/0158-an-assistant-may-propose-to-start-a-project-s-workflow.md)). The
+manifest declares **launches** and names no project:
+
+```yaml
+launches:
+  - name: portfolio_review
+    description: Ask the review team for a portfolio review document, once the person said which portfolio.
+    input_schema:            # what the assistant fills from the conversation: the work item's fields
+      type: object
+      required: [portfolio]
+      properties: { portfolio: { type: string }, review_date: { type: string } }
+    required: true           # default; an optional launch may stay unbound or be switched off
+```
+
+`choregos plugin validate` refuses a launch name declared twice, an `input_schema` that is not a JSON Schema of
+`type: object`, and a need called `launch` beside launches (their tools are `launch__<name>`).
+
+**Binding.** The installation binds each launch, by reference, to a team's project and the name of one of its
+active workflows:
+
+```
+PUT /api/v1/orgs/{org}/assistants/{slug}/launches/{launch}   {"project": "reviews", "workflow": "review"}
+```
+
+It needs `assistant:manage` on the installation **and** `item:control` in the project (a developer of the
+project or above): 403 otherwise. A personal space, a project without an active workflow of that name, and a
+workflow whose `metadata.inputs` cannot take what the launch fills (an input it requires that the launch does
+not require, a property its closed inputs refuse) are 422 and nothing changes. Audited `assistant.launch.bind`.
+Nothing of the workflow is copied: the work item is born under the project's active version at confirmation.
+A required launch unbound or switched off is the readiness item `launch_unbound`; a bound workflow the project no
+longer has, or whose inputs stopped fitting, is `launch_workflow_missing` or `launch_inputs_mismatch`, for the
+owners to fix. Deleting the project unbinds the launch. A plugin upgrade treats launches as it treats needs:
+dropped, the binding is switched off and kept; changed, it is checked again and switched off when it no longer
+fits; added, it is unbound; the owners are told by the same notice.
+
+**In a conversation** a bound, enabled launch is offered as `launch__<name>(title, inputs)`. Calling it starts
+nothing: inputs the `input_schema` refuses are answered to the agent, a person who may not create work items in
+the project is told so and nothing is stored, otherwise a pending action of `kind: launch` is stored
+(`need` = the launch, `operation` = `start`, `target` = the project and workflow at that time), listed and
+decided like a write (`GET /me/conversations/{id}/actions`, `.../confirm`, `.../refuse`; the door's
+`pending_actions` with their `confirm_url`; expired after 24 hours). Confirming re-reads the binding (`409
+launch_rebound` when it now points elsewhere) and the confirming person's own rights (`403 launch_forbidden`
+without `item:control` in the project); nothing is created in either case. The work item is then filed through
+the same path as `POST /projects/{id}/work-items`, the person as reporter and initiator (`person:<email>`), under
+the bound workflow, the inputs as its fields (422 when the workflow refuses them), the project's tracker, budget
+and journal applying. The action becomes `executed`, `result` naming `work_item_id`, `work_item_key`, `project`,
+`workflow` and the console `url`; it is audited `assistant.launch.confirm`. `launch_status(action_id?)` tells
+the agent what each launch of the conversation became: the work item's key, title, state, whether it ended, and
+its artefacts (name, version, type, how it is shown, the address of its content, never the content), read with
+the person's current rights. Both tools write a line of the reads journal (`propose`, `status`). Launches are
+offered to `prompt` agents, like inline writes; a message pushed into the conversation when the work item moves
+is left out.
 
 ### Who may use an assistant, and what it may spend
 

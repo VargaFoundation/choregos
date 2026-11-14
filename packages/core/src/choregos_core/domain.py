@@ -398,6 +398,8 @@ class GatewayModel(Model):
     max_input_tokens: int | None = None
     supports_tool_calling: bool = True
     supports_vision: bool = False
+    #: Whether the model reasons before it answers, as the gateway says; `None` when it does not say.
+    supports_reasoning: bool | None = None
     #: What the gateway says the model does (`chat`, `embedding`, ...); LiteLLM lists a decision model
     #: (Jev, Laya) as `evaluation` (ADR 0121).
     mode: str = "chat"
