@@ -5960,6 +5960,13 @@
     "type": "Json()"
    },
    {
+    "default": null,
+    "name": "draft",
+    "nullable": true,
+    "server_default": null,
+    "type": "Json()"
+   },
+   {
     "default": "<function uuid7>",
     "name": "id",
     "nullable": false,

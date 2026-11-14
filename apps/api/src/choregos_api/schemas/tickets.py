@@ -86,6 +86,31 @@ class HumanRequestAssignee(Dto):
     reassigned: bool = False
 
 
+class DecisionDraftVia(Dto):
+    """Through what a draft came (ADR 0163 point 4)."""
+
+    door: Literal["mcp"] = "mcp"
+    #: The client: the name of the token it used, or its OAuth client id.
+    client: str | None = None
+    #: The external agent the client embodies, when it is attached to one (ADR 0033).
+    agent: str | None = None
+    user_agent: str | None = None
+
+
+class DecisionDraft(Dto):
+    """A draft of a person's decision, deposited by their client through the MCP door (ADR 0163)."""
+
+    kind: Literal["approve", "reject", "answer", "complete"]
+    answer: str | None = None
+    reason: str | None = None
+    values: dict[str, Any] | None = None
+    note: str | None = None
+    summary: str
+    by: str
+    via: DecisionDraftVia
+    at: datetime
+
+
 class HumanRequestDto(Dto):
     id: str
     work_item_id: str | None = None
@@ -98,6 +123,8 @@ class HumanRequestDto(Dto):
     decided_at: datetime | None = None
     decision: dict[str, Any] | None = None
     assignee: HumanRequestAssignee | None = None
+    #: What a person's client prepared through the MCP door (ADR 0163); never a decision.
+    draft: DecisionDraft | None = None
 
 
 class AssigneeChange(Dto):

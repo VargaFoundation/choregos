@@ -160,6 +160,7 @@ async def _serve(
         project=project,
         org=org,
         console=settings.public_url.rstrip("/"),
+        user_agent=(request.headers.get("user-agent") or "")[:100] or None,
     )
     if requested_assistant is not None and not await _pin_assistant(ctx, requested_assistant):
         return _http_refusal(404, f"assistant `{requested_assistant}` not found")

@@ -25,6 +25,9 @@ RESERVED_TOOLS = frozenset(
         "get_work_item",
         "summarize_run",
         "list_pending_decisions",
+        # A person's client prepares their decision (ADR 0163).
+        "get_pending_decision",
+        "draft_decision",
         # The documentation the image carries (S62-10, ADR 0150).
         "docs_search",
         "docs_read",
