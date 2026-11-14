@@ -1267,6 +1267,12 @@ export const api = {
    * Readdresses a waiting request to a person, a group, or both (ADR 0153): an organisation
    * administrator's gesture, audited with the reason. 422 for a person outside the organisation.
    */
+  /**
+   * Discards the draft a person's client deposited through the MCP door (ADR 0163 §7): for whoever may answer
+   * the request, audited. Taking a draft has no route: the form is filled, and the person decides.
+   */
+  discardDraft: (id: string, requestId: string) =>
+    request<void>(`/work-items/${id}/human-requests/${encodeURIComponent(requestId)}/draft`, { method: "DELETE" }),
   reassign: (id: string, requestId: string, body: AssigneeChange) =>
     request<HumanRequest>(`/work-items/${id}/human-requests/${encodeURIComponent(requestId)}/assignee`, {
       method: "POST",

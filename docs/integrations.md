@@ -28,7 +28,9 @@ and `2025-03-26`.
 | `get_work_item` | A work item's state, recent timeline and pending decision, with its link | `mcp:read` |
 | `summarize_run` | One agent run: stage, backend, model, status, cost, summary | `mcp:read` |
 | `list_pending_decisions` | What waits for a person, with the link where it is decided | `mcp:read` |
+| `get_pending_decision` | What waits for **your** decision: the list, or one request's full context (question, form, work item, existing draft, link) | `mcp:read` |
 | `create_work_item` | Opens a work item in a project (in its tracker first when external, ADR 0059) | `mcp:write` and the right to control work items |
+| `draft_decision` | Deposits a draft of the decision of a request waiting for you; it decides nothing (see below) | `mcp:write` and the right to decide work items |
 | `docs_search` | Searches this platform's user documentation: ranked pages with title, slug, public URL and a snippet | `mcp:read` |
 | `docs_read` | One documentation page as Markdown, by slug, or one of its sections by heading anchor; a long page comes in parts (`offset`) | `mcp:read` |
 
@@ -43,6 +45,31 @@ without internet. The links they give point to the public site, `CHOREGOS_DOCS_U
 project or not; they are audited (`mcp.call`) and rate limited like the other reads. A build without
 documentation answers so, with the public URL. Ask *"how do gates work in Choregos?"*: the client
 should call `docs_search`, then `docs_read`.
+
+### Your client prepares your decision (ADR 0163)
+
+A step of a workflow is carried by a person, never by your client: a workflow that names an agent of kind
+`external` is refused ([ADR 0163](adr/0163-a-client-prepares-a-person-s-decision-the-person-decides.md) §1).
+What your client may do is **prepare** the decisions that wait for you:
+
+1. `get_pending_decision` lists the requests you may answer yourself — addressed to you, to a group of
+   yours that may answer, or to anyone of your rank when the step names nobody, on work items you can read,
+   in projects where you may decide (an administrator's override does not count). With a `work_item`, it
+   returns what the request asks: the question, a task's form and the sentence it makes you attest, the
+   work item's body and fields, the draft already made, and the console link.
+2. `draft_decision` deposits a draft: `approve` or `reject` (with a `reason`) for an approval or a scope
+   change, `answer` (with the `answer`) for a question, `complete` (with the form's `values`, possibly
+   partial) or `reject` for a task, and a `note` saying why. The values are checked against the task's
+   form. A draft never attests. One draft per request: a new one replaces it.
+3. Nothing is decided: the request keeps waiting. The answer carries `pending_actions: [{id, summary,
+   confirm_url}]`, like an assistant's proposals; `confirm_url` opens the work item's awaited decision.
+   There you see the draft, which client made it (the token's name or the OAuth client, and the external
+   agent it acts as) and its note; **Take** fills the decision's form — you still check it, tick the
+   attestation and press the decision's button — and **Discard** removes it.
+
+Another person's request answers like a request that does not exist. A draft counts in your 50 writes a
+day and is audited (`workitem.decision.draft`; a discard `workitem.decision.draft.discard`); the decision's
+audit says whether it was the draft's (`draft: same` or `changed`).
 
 ### Assistants (ADR 0139)
 
