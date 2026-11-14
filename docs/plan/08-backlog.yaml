@@ -4849,6 +4849,14 @@ stories:
     size: M
     depends_on: [S65-17]
     notes: "listOutposts says whether outposts are on and whether the door has a signing key; an outpost carries control_plane; an approval refused to a token has the code approval_requires_session, its 401 speaks of an approval and the window is on the instance; enrolment tokens are listed and cancelled (enrolment_used for one that enrolled); an instance names its enrolment token and who issued it; the calls' 1000-call window is said; the CLI and the console use each of them."
+  - id: S65-32
+    title: "fix(api): a logger cached at first use stays within reach of capture_logs (finding #1717)"
+    stream: S65
+    sprint: 8
+    priority: 2
+    size: S
+    depends_on: [S65-01]
+    notes: "A logger cached at first use holds the processors list it was created with; capture_logs fills the current list in place; configure_logging, called again by a later lifespan in the same worker, brought a new list, so every logger cached before it printed JSON past the capture (test_run_closed_when_the_wait_ends [cancel fails]). configure_logging now keeps the list instance and replaces its contents; the root conftest puts structlog's configuration back after every test, the same list included; apps/api/tests/test_logs_captured_after_a_second_configuration.py, each half red without it."
   - id: S65-29
     title: "fix(api): a look at an outpost's call that a cancellation interrupts stays a cancellation"
     stream: S65

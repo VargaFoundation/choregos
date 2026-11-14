@@ -40,8 +40,14 @@ def configure_logging(level: str = "INFO", json_logs: bool = True) -> None:
         redact_known_secrets,
     ]
     processors.append(structlog.processors.JSONRenderer() if json_logs else structlog.dev.ConsoleRenderer())
+    # The list instance is kept, its contents replaced. A logger cached at first use holds the list
+    # it was created with: a second configuration in one process (a second lifespan, a test suite)
+    # that brought a new list would leave every cached logger on the old chain, out of reach of the
+    # new one and of `structlog.testing.capture_logs`, which fills the current list in place (#1717).
+    kept: list[Any] = structlog.get_config()["processors"]
+    kept[:] = processors
     structlog.configure(
-        processors=processors,
+        processors=kept,
         wrapper_class=structlog.make_filtering_bound_logger(getattr(logging, level.upper(), logging.INFO)),
         logger_factory=structlog.PrintLoggerFactory(),
         cache_logger_on_first_use=True,
