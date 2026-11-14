@@ -274,6 +274,10 @@ from .platform import (
     GatewayKeyInfo,
     PlatformIdentity,
     PlatformIdentityRow,
+    RelinkAccount,
+    RelinkCounts,
+    RelinkPlan,
+    RelinkWindow,
     WebhookAck,
 )
 from .procedures import ProcedureDto, ProcedureSection, ProcedureSummary, VendorDocDto
@@ -619,6 +623,10 @@ __all__ = [
     "ReleaseItemDto",
     "ReleasePage",
     "ReliabilityBin",
+    "RelinkAccount",
+    "RelinkCounts",
+    "RelinkPlan",
+    "RelinkWindow",
     "RemoteAgentDiscover",
     "RemoteAgentDiscovery",
     "RemoteCardSummary",
