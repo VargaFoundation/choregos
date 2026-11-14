@@ -12,7 +12,7 @@ import { LinkedAccountList } from "./linked-account-list";
 /** Where the browser goes: a seam the tests replace. */
 export const navigation = { assign: (url: string) => window.location.assign(url) };
 
-/** What the callback said, from `?linked=` or `?link_error=` (ADR 0154). */
+/** What the callback said, from `?linked=` or `?link_error=` (ADR 0161). */
 function outcomeOf(search: string): { ok: boolean; text: string } | null {
   const params = new URLSearchParams(search);
   const linked = params.get("linked");
@@ -23,7 +23,7 @@ function outcomeOf(search: string): { ok: boolean; text: string } | null {
 }
 
 /**
- * My accounts on code forges (ADR 0154): each one I proved by signing in to the forge, or an administrator
+ * My accounts on code forges (ADR 0161): each one I proved by signing in to the forge, or an administrator
  * declared; a Link button per forge my organisations configured. The forge sends the browser back to the
  * API, which comes back here with the outcome.
  */

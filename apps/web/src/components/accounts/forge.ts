@@ -22,7 +22,7 @@ export function instanceLabel(provider: ForgeProvider, baseUrl: string): string 
   return `${name} · ${baseUrl.replace(/^https?:\/\//, "")}`;
 }
 
-/** What the callback's `?link_error=` means, in words (ADR 0154). */
+/** What the callback's `?link_error=` means, in words (ADR 0161). */
 export const LINK_ERRORS: Record<string, string> = {
   handshake: "The link expired or was started in another session: start again.",
   denied: "The forge did not authorise the link.",

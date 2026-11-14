@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""A member's accounts on code forges (ADR 0154): linked by the member and proven, or declared.
+"""A member's accounts on code forges (ADR 0161): linked by the member and proven, or declared.
 
 An organisation administrator configures a forge's OAuth application as an organisation connector of kind
 `forge_account` (`github-oauth`, `gitlab-oauth`, `forgejo-oauth`): its `base_url`, its `client_id`, its
@@ -421,5 +421,5 @@ async def remove(
 async def github_member(session: AsyncSession, org_id: str, external_id: str) -> LinkedAccount | None:
     """The link a signed github.com comment's numeric author id names in the organisation, if any.
 
-    Declared and verified links both answer, as before ADR 0154: requiring `verified` is a later switch."""
+    Declared and verified links both answer, as before ADR 0161: requiring `verified` is a later switch."""
     return await _holder(session, org_id, "github", GITHUB_COM, external_id)

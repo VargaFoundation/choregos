@@ -185,7 +185,7 @@ class UserSession(Base, PkMixin, TimestampMixin):
 
 
 class LinkedAccount(Base, PkMixin, TimestampMixin):
-    """A member's account on a code forge (ADR 0154; before it, `tracker_identities`, ADR 0102).
+    """A member's account on a code forge (ADR 0161; before it, `tracker_identities`, ADR 0102).
 
     One per member and forge instance (`provider` + `base_url`), one member per account on an instance.
     `verified`: the member proved it by signing in to the forge (OAuth); otherwise an organisation

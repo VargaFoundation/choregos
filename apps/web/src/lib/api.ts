@@ -515,7 +515,7 @@ export const api = {
     request<void>(`/orgs/${org}/members/${encodeURIComponent(userId)}${project ? `?project=${encodeURIComponent(project)}` : ""}`, {
       method: "DELETE",
     }),
-  /** A member's accounts on code forges (ADR 0154): verified by the member, or declared by an administrator. */
+  /** A member's accounts on code forges (ADR 0161): verified by the member, or declared by an administrator. */
   memberLinkedAccounts: (org: string, userId: string) =>
     request<LinkedAccount[]>(`/orgs/${org}/members/${encodeURIComponent(userId)}/linked-accounts`),
   /** An administrator declares a member's account: stored NOT verified. */
@@ -828,7 +828,7 @@ export const api = {
     request<ApiTokenCreated>("/me/tokens", { method: "POST", body: JSON.stringify(body) }),
   revokeToken: (id: string) => request<void>(`/me/tokens/${id}`, { method: "DELETE" }),
   mySessions: () => request<BrowserSession[]>("/me/sessions"),
-  /** My accounts on code forges, and the instances I can link one on (ADR 0154). */
+  /** My accounts on code forges, and the instances I can link one on (ADR 0161). */
   myLinkedAccounts: () => request<MyLinkedAccounts>("/me/linked-accounts"),
   /** Starts linking my account on an instance: the forge's authorization URL, to open in this browser. */
   startMyLinkedAccount: (provider: LinkedAccount["provider"], org: string, instance: string) =>

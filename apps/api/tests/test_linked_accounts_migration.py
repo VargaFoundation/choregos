@@ -1,4 +1,4 @@
-"""`tracker_identities` becomes `linked_accounts` (S66-03, ADR 0154): every link is copied, unverified.
+"""`tracker_identities` becomes `linked_accounts` (S66-41, ADR 0161): every link is copied, unverified.
 
 The GitHub links an administrator declared (ADR 0102) become `github` links at `https://github.com`, NOT
 verified, with their id, author and timestamps; the downgrade brings them back. Checked on SQLite and, when

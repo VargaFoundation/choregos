@@ -1,12 +1,12 @@
 # SPDX-License-Identifier: Apache-2.0
-"""A member's accounts on code forges (S66-03, ADR 0154): linked by the member and proven, or declared.
+"""A member's accounts on code forges (S66-41, ADR 0161): linked by the member and proven, or declared.
 
 - The member: `GET /me/linked-accounts` (their links and where they can add one), `POST
   /me/linked-accounts/{provider}/start` (the forge's authorization URL), the forge's redirect to
   `GET /auth/linked-accounts/callback`, and `DELETE /me/linked-accounts/{id}`.
 - An organisation administrator: a member's links, a declared link (NOT verified), its removal. The member
   reads their own links on the same route.
-- Deprecated (ADR 0154): the `tracker-identities` routes of S47-14, a GitHub link at github.com.
+- Deprecated (ADR 0161): the `tracker-identities` routes of S47-14, a GitHub link at github.com.
 
 No route returns a token: the forge's access token is used once, to read the user, and dropped.
 """
@@ -245,7 +245,7 @@ async def delete_my_linked_account(account_id: AccountId, session: Db, principal
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-# Deprecated (ADR 0154): the S47-14 routes, a GitHub link at github.com. Kept for the callers written
+# Deprecated (ADR 0161): the S47-14 routes, a GitHub link at github.com. Kept for the callers written
 # against them; the console uses the routes above.
 
 

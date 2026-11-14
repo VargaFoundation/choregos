@@ -46,7 +46,7 @@ const BRAND_OF_TYPE: Record<string, Brand> = {
   github: "github",
   "gitlab-issues": "gitlab",
   gitlab: "gitlab",
-  // A forge's sign-in, through which a member links their account (ADR 0154).
+  // A forge's sign-in, through which a member links their account (ADR 0161).
   "github-oauth": "github",
   "gitlab-oauth": "gitlab",
   jira: "jira",

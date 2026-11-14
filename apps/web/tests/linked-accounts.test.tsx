@@ -6,7 +6,7 @@ import { MyLinkedAccountsCard, navigation } from "@/components/accounts/my-linke
 import { api, ApiError } from "@/lib/api";
 import type { LinkedAccount } from "@/lib/types";
 
-/** A member's accounts on code forges (S66-03, ADR 0154): linked by the member, or declared. */
+/** A member's accounts on code forges (S66-41, ADR 0161): linked by the member, or declared. */
 vi.mock("@/lib/api", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/api")>();
   return {

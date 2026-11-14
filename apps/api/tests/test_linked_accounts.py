@@ -1,4 +1,4 @@
-"""A member links their own forge account, proven by the forge's OAuth sign-in (S66-03, ADR 0154).
+"""A member links their own forge account, proven by the forge's OAuth sign-in (S66-41, ADR 0161).
 
 An organisation administrator configures a forge's OAuth application as a `forge_account` connector; a
 member starts the link (a state signed for them and their session, a PKCE verifier in a cookie only the

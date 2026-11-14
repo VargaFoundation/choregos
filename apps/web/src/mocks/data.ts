@@ -2965,7 +2965,7 @@ const filedOnTheMock: WorkItemDto[] = [];
 
 /** Fixtures router: reproduces the real API's paths. */
 /** The organisation's ceiling, kept for the time of the page: the admin card writes it, the project's network reads it back (ADR 0070). */
-/** The forge accounts the mock holds (ADR 0154): one verified by its member, the others declared. */
+/** The forge accounts the mock holds (ADR 0161): one verified by its member, the others declared. */
 const mockLinkedAccounts: LinkedAccount[] = [
   {
     id: "la-1",

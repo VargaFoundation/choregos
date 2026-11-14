@@ -8,7 +8,7 @@ import type { LinkedAccount } from "@/lib/types";
 import { instanceLabel } from "./forge";
 
 /**
- * A list of linked forge accounts (ADR 0154): the forge, the login and its profile, and whether the member
+ * A list of linked forge accounts (ADR 0161): the forge, the login and its profile, and whether the member
  * proved it (Verified) or an administrator declared it (Declared). The console draws the avatar from the
  * login: it loads no image from a forge. Reused by My account, the members' administration and, later, a
  * member's profile.

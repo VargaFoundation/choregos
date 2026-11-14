@@ -12,7 +12,7 @@ const PROVIDERS = Object.keys(PROVIDER_LABELS) as ForgeProvider[];
 const EMPTY = { provider: "github" as ForgeProvider, baseUrl: "", id: "", login: "" };
 
 /**
- * A member's linked forge accounts, as an organisation administrator manages them (ADR 0154): the list with
+ * A member's linked forge accounts, as an organisation administrator manages them (ADR 0161): the list with
  * its Verified and Declared badges, and the form that declares one by numeric id — stored NOT verified.
  */
 export function MemberLinkedAccounts({ org, userId }: { org: string; userId: string }) {

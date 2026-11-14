@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """A scriptable fake forge (ADR 0005): the OAuth 2.0 sign-in and the `/user` read of GitHub, GitLab and
-Forgejo, in memory (ADR 0154).
+Forgejo, in memory (ADR 0161).
 
 - `authorize(url, login)` plays the person signing in to the forge in their browser: it checks the
   authorization request (client, redirect URI, `response_type=code`, PKCE `S256`, the provider's scope) and

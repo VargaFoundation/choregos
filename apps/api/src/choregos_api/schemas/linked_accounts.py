@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""A member's accounts on code forges (ADR 0154; S47-14 and ADR 0102 before it). Never a token."""
+"""A member's accounts on code forges (ADR 0161; S47-14 and ADR 0102 before it). Never a token."""
 
 from __future__ import annotations
 
@@ -70,7 +70,7 @@ class LinkedAccountStart(Dto):
 
 
 class TrackerIdentityDto(Dto):
-    """Deprecated (ADR 0154): a GitHub link at github.com, as the `tracker-identities` routes answer it."""
+    """Deprecated (ADR 0161): a GitHub link at github.com, as the `tracker-identities` routes answer it."""
 
     tracker: Literal["github"]
     external_id: str

@@ -338,7 +338,7 @@ async def test_a_principal_for_a_webhook_leaves_the_session_unnarrowed(
 async def test_a_link_as_the_migration_left_it_still_pauses_from_a_signed_comment(
     client: AsyncClient, project: dict[str, Any], tracker: FakeTracker, signed: None
 ) -> None:
-    """S66-03 (ADR 0154): a `tracker_identities` row became a `linked_accounts` row, `github` at
+    """S66-41 (ADR 0161): a `tracker_identities` row became a `linked_accounts` row, `github` at
     `https://github.com`, NOT verified. It keeps working: requiring `verified` is a later switch."""
     from choregos_api.db.models import LinkedAccount, Organization
     from choregos_api.db.session import session_scope

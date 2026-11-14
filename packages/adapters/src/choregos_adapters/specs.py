@@ -598,7 +598,7 @@ _SHIPPED_SPECS: dict[tuple[str, str], ConnectorTypeSpec] = {
             for name, access, description, schema in _OPERATIONS_ENTRA
         ),
     ),
-    # A forge's OAuth application, through which a member proves their own account (ADR 0154). No
+    # A forge's OAuth application, through which a member proves their own account (ADR 0161). No
     # operation: an agent calls nothing through it; the platform reads the signed-in person's user once.
     **{
         (_FORGE_KIND, _forge_type(provider)): ConnectorTypeSpec(

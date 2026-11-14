@@ -3403,7 +3403,7 @@ choregos runs tail <run-id>        # live ACP log over SSE
 
 ### Linked accounts
 
-A member links their own accounts on code forges (ADR 0154): **My account**, **Linked accounts**, **Link**
+A member links their own accounts on code forges (ADR 0161): **My account**, **Linked accounts**, **Link**
 next to a forge their organisation configured. The browser signs in at the forge (OAuth 2.0, authorization
 code with PKCE, a scope that only reads the user: `read:user` on GitHub and Forgejo, `read_user` on GitLab)
 and comes back with the account recorded as **Verified**: the forge's numeric user id, its login and its

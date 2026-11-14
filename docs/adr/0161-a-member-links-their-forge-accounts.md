@@ -1,6 +1,6 @@
-# 0154 — A member links their forge accounts, and proves them
+# 0161 — A member links their forge accounts, and proves them
 
-- **Status**: proposed, 2026-11-12; S66-03 implements it
+- **Status**: proposed, 2026-11-12; S66-41 implements it
 - **Concerns**: `apps/api` (`linked_accounts` table, `routers/linked_accounts.py`,
   `services/linked_accounts.py`, the signed-comment path of `routers/webhooks.py`),
   `packages/adapters` (`forge_accounts`, the `forge_account` connector kind), `packages/contracts`,

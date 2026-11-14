@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Linked accounts: `tracker_identities` becomes `linked_accounts` (S66-03, ADR 0154)
+"""Linked accounts: `tracker_identities` becomes `linked_accounts` (S66-41, ADR 0161)
 
 A member's account on a code forge, by provider and instance (`provider`, `base_url`), with what the forge
 says of it (`login`, `avatar_url`, `profile_url`) and whether the member proved it (`verified`,
@@ -11,7 +11,7 @@ The downgrade copies back the `github` links of `https://github.com`, verified o
 rest: GitLab and Forgejo links, and GitHub Enterprise ones, did not exist before.
 
 Revision ID: c7e2a9d4f1b6
-Revises: f9b1d3e5a7c0
+Revises: d4a6c8e0f2b5
 Create Date: 2026-11-12 14:00:00+00:00
 """
 
@@ -23,7 +23,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "c7e2a9d4f1b6"
-down_revision: str | None = "f9b1d3e5a7c0"
+down_revision: str | None = "d4a6c8e0f2b5"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

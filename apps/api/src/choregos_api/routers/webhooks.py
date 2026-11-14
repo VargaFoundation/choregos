@@ -204,7 +204,7 @@ async def _control_from_a_signed_comment(
     by_id = str(event.payload.get("by_id") or "")
     if event.source != "github" or not get_settings().github_webhook_secret or not by_id:
         return None
-    # A github.com link, declared or verified (ADR 0154): requiring `verified` is a later switch.
+    # A github.com link, declared or verified (ADR 0161): requiring `verified` is a later switch.
     identity = await github_member(session, project.org_id, by_id)
     user = await session.get(User, identity.user_id) if identity is not None else None
     if user is None:

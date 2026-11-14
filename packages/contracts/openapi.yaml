@@ -2789,7 +2789,7 @@ paths:
       tags: [admin]
       operationId: listTrackerIdentities
       deprecated: true
-      description: "Deprecated (ADR 0154): use `listMemberLinkedAccounts`. The member's GitHub link at github.com, declared or verified (S47-14, ADR 0102). `org_admin` only."
+      description: "Deprecated (ADR 0161): use `listMemberLinkedAccounts`. The member's GitHub link at github.com, declared or verified (S47-14, ADR 0102). `org_admin` only."
       responses:
         "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/TrackerIdentity" } } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -2804,7 +2804,7 @@ paths:
       operationId: setTrackerIdentity
       deprecated: true
       description: >-
-        Deprecated (ADR 0154): use `declareMemberLinkedAccount`. Link the member to their account on the tracker by the provider's numeric user id (S47-14, ADR 0102).
+        Deprecated (ADR 0161): use `declareMemberLinkedAccount`. Link the member to their account on the tracker by the provider's numeric user id (S47-14, ADR 0102).
         Asserted by an organisation administrator: nothing proves the member owns the account. A
         `/choregos pause|resume|stop` comment is honoured only from a signed GitHub delivery by this id.
         Replaces the member's previous link on that tracker. 409 when the id is linked to another member.
@@ -2821,7 +2821,7 @@ paths:
       tags: [admin]
       operationId: deleteTrackerIdentity
       deprecated: true
-      description: "Deprecated (ADR 0154): use `deleteMemberLinkedAccount`. Remove the member's GitHub link at github.com; their comments on the tracker are no longer honoured."
+      description: "Deprecated (ADR 0161): use `deleteMemberLinkedAccount`. Remove the member's GitHub link at github.com; their comments on the tracker are no longer honoured."
       responses:
         "204": { description: Removed }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -2834,7 +2834,7 @@ paths:
     get:
       tags: [admin]
       operationId: listMemberLinkedAccounts
-      description: "The member's accounts on code forges (ADR 0154): verified (the member signed in to the forge) or declared by an administrator. An `org_admin`, or the member themself."
+      description: "The member's accounts on code forges (ADR 0161): verified (the member signed in to the forge) or declared by an administrator. An `org_admin`, or the member themself."
       responses:
         "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/LinkedAccount" } } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -2844,7 +2844,7 @@ paths:
       operationId: declareMemberLinkedAccount
       description: >-
         An organisation administrator declares the member's account on a forge instance by its numeric user id
-        (ADR 0154, ADR 0102): stored and shown NOT verified, and it replaces the member's link on that instance.
+        (ADR 0161, ADR 0102): stored and shown NOT verified, and it replaces the member's link on that instance.
         A link the member proved for the same account stays verified. 409 when the account is linked to another
         member; 422 for a login in place of an id, a Forgejo account without `base_url`, or a non-https instance.
       requestBody:
@@ -3411,7 +3411,7 @@ paths:
     get:
       tags: [session]
       operationId: listMyLinkedAccounts
-      description: "The caller's accounts on code forges, in each of their organisations (ADR 0154), and the forge instances they can link one on (the organisations' `forge_account` connectors). Never a token."
+      description: "The caller's accounts on code forges, in each of their organisations (ADR 0161), and the forge instances they can link one on (the organisations' `forge_account` connectors). Never a token."
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/MyLinkedAccounts" } } } }
         "401": { $ref: "#/components/responses/Unauthorized" }
@@ -3423,7 +3423,7 @@ paths:
     post:
       tags: [session]
       operationId: startMyLinkedAccount
-      description: "Starts the link (ADR 0154): returns the forge's authorization URL (authorization code, PKCE S256, the provider's read-the-user scope, a `state` signed for the caller and their session) and sets the handshake cookie, sent back to the callback only, that holds the verifier. 404 when the instance is not one of the organisation's or not of this provider."
+      description: "Starts the link (ADR 0161): returns the forge's authorization URL (authorization code, PKCE S256, the provider's read-the-user scope, a `state` signed for the caller and their session) and sets the handshake cookie, sent back to the callback only, that holds the verifier. 404 when the instance is not one of the organisation's or not of this provider."
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/LinkedAccountStart" } } } }
         "401": { $ref: "#/components/responses/Unauthorized" }
@@ -3445,7 +3445,7 @@ paths:
       tags: [session]
       operationId: completeMyLinkedAccount
       description: >-
-        Where the forge sends the member's browser back (ADR 0154). Checks the signed `state` against the caller,
+        Where the forge sends the member's browser back (ADR 0161). Checks the signed `state` against the caller,
         their session and the handshake cookie, exchanges the code with the PKCE verifier under the organisation's
         egress allowlist, reads the forge's user and records it as a VERIFIED link (the access token is dropped).
         Always answers 303 to the console's My account: `?linked=<provider>`, or `?link_error=` `handshake`,
@@ -6361,7 +6361,7 @@ components:
     LinkedAccount:
       type: object
       description: >-
-        A member's account on a code forge (ADR 0154): one per member and instance (`provider`, `base_url`), one
+        A member's account on a code forge (ADR 0161): one per member and instance (`provider`, `base_url`), one
         member per account on an instance. Only `external_id` is ever matched; the rest is shown.
       required: [id, org, user_id, provider, base_url, external_id, login, verified, created_at]
       properties:
@@ -6410,7 +6410,7 @@ components:
     TrackerIdentity:
       type: object
       description: >-
-        Deprecated (ADR 0154): a member's GitHub link at github.com, as the `tracker-identities` routes answer
+        Deprecated (ADR 0161): a member's GitHub link at github.com, as the `tracker-identities` routes answer
         it. Use `LinkedAccount`.
       required: [tracker, external_id, login, user_id, created_by, created_at]
       properties:

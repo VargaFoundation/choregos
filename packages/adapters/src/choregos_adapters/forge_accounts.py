@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""A member's account on a code forge, proven through the forge's own OAuth 2.0 sign-in (ADR 0154).
+"""A member's account on a code forge, proven through the forge's own OAuth 2.0 sign-in (ADR 0161).
 
 Three providers, one shape: the authorization URL the person's browser is sent to, the exchange of the
 code the forge hands back (authorization code with PKCE `S256`), and the read of the forge's user behind
@@ -29,7 +29,7 @@ from .http.egress import guarded
 
 Provider = Literal["github", "gitlab", "forgejo"]
 PROVIDERS: Final[tuple[Provider, ...]] = ("github", "gitlab", "forgejo")
-#: The connector kind whose instances hold a forge's OAuth application (ADR 0154).
+#: The connector kind whose instances hold a forge's OAuth application (ADR 0161).
 KIND: Final = "forge_account"
 GITHUB_COM: Final = "https://github.com"
 GITLAB_COM: Final = "https://gitlab.com"

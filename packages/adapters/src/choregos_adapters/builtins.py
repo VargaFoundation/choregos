@@ -761,7 +761,7 @@ def _register_documents_and_identity() -> None:
 
 
 def _register_forge_accounts() -> None:
-    """A forge's OAuth application (ADR 0154): the factory builds the adapter that proves an account."""
+    """A forge's OAuth application (ADR 0161): the factory builds the adapter that proves an account."""
     from .forge_accounts import KIND, PROVIDERS, connector_type, forge_accounts
 
     for provider in PROVIDERS:

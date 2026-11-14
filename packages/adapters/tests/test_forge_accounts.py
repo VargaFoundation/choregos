@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""A member's forge account, proven through the forge's OAuth sign-in (ADR 0154): GitHub, GitLab, Forgejo.
+"""A member's forge account, proven through the forge's OAuth sign-in (ADR 0161): GitHub, GitLab, Forgejo.
 
 The authorization URL asks for the one scope that reads the user and carries PKCE `S256`; the code is
 exchanged with the verifier and the client secret; the user read is the forge's numeric id, in each

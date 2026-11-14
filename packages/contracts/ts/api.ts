@@ -203,7 +203,7 @@ export type Membership = {
   role: Role;
 };
 
-/** A member's account on a code forge (ADR 0154): one per member and instance (`provider`, `base_url`), one member per account on an instance. Only `external_id` is ever matched; the rest is shown. */
+/** A member's account on a code forge (ADR 0161): one per member and instance (`provider`, `base_url`), one member per account on an instance. Only `external_id` is ever matched; the rest is shown. */
 export type LinkedAccount = {
   id: string;
   org: string;
@@ -254,7 +254,7 @@ export type LinkedAccountStart = {
   authorization_url: string;
 };
 
-/** Deprecated (ADR 0154): a member's GitHub link at github.com, as the `tracker-identities` routes answer it. Use `LinkedAccount`. */
+/** Deprecated (ADR 0161): a member's GitHub link at github.com, as the `tracker-identities` routes answer it. Use `LinkedAccount`. */
 export type TrackerIdentity = {
   tracker: "github";
   /** the provider's numeric user id */
