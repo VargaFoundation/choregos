@@ -10,6 +10,8 @@ import { CALL_STATES, CALL_TONE, callSubject, stateLabel } from "@/lib/outposts"
 import type { OutpostCallRecord, OutpostCallState } from "@/lib/types";
 
 const PAGE = 50;
+/** How many of an outpost's calls the API reads back, newest first: the window its pages end in (S65-24). */
+const RECENT_CALLS = 1000;
 
 /** A digest is compared, never read: its first characters, and the whole of it on hover. */
 function Digest({ value }: { value: string | null }) {
@@ -136,6 +138,11 @@ export function OutpostCalls({ org, slug }: { org: string; slug: string }) {
             {pages.isFetchingNextPage ? "Reading…" : "Older calls"}
           </Button>
         </div>
+      )}
+      {calls.length > 0 && !pages.hasNextPage && (
+        <p className="mt-3 text-xs text-ink-muted" data-testid="outpost-calls-window">
+          The list reads the newest {RECENT_CALLS} calls of the outpost: an older one is not shown here.
+        </p>
       )}
     </Card>
   );

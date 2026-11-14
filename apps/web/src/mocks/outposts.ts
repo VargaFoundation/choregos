@@ -20,7 +20,9 @@ import type {
   Outpost,
   OutpostCallPage,
   OutpostCallRecord,
+  OutpostEnrolment,
   OutpostEnrolmentCreated,
+  OutpostEnrolmentList,
   OutpostInstance,
   OutpostInstanceList,
   OutpostList,
@@ -55,9 +57,12 @@ export const MOCK_DOOR_KEYS = [publicKey("door, signing"), publicKey("door, anno
 type Stored = Pick<Outpost, "slug" | "display_name" | "status" | "capabilities" | "epoch" | "created_by" | "created_at"> & {
   /** Its id, as the instances' ids start with it. */
   id: string;
-  /** A token was issued: an instance enrols at the next read of the instances. */
+  /** A token was issued: an instance enrols with it at the next read of the instances. */
   enrolling: boolean;
 };
+
+/** The tokens issued and not used, by outpost: what `listOutpostEnrolments` reads and a cancellation removes. */
+const openTokens: Record<string, OutpostEnrolment[]> = {};
 
 const outposts: Stored[] = [
   {
@@ -311,13 +316,16 @@ const ORDER = { pending: 0, active: 1, revoked: 2 } as const;
 
 function listed(outpost: Stored): OutpostInstance[] {
   const own = (instances[outpost.slug] ??= []);
-  if (outpost.enrolling) {
+  const used = outpost.enrolling ? (openTokens[outpost.slug] ?? []).shift() : undefined;
+  outpost.enrolling = false;
+  if (used) {
     // The daemon the demo does not have: an instance enrolled with the token that was just issued.
-    outpost.enrolling = false;
     own.push(
       instance(outpost, `enrolled ${own.length}`, {
         facts: { hostname: `outpost-${own.length}.tools.svc`, platform: "linux/amd64" },
         enrolled_at: iso(0),
+        enrolment_id: used.id,
+        enrolled_by: used.created_by,
       }),
     );
   }
@@ -487,7 +495,7 @@ export function whereItLivesNow(connector: OrgConnector): AgentAccessOutpost {
   return { name: outpost.slug, endpoint, status: outpost.status, online: serves(outpost, endpoint) };
 }
 
-/** The twelve management routes of `/orgs/{org}/outposts…`; `undefined` for any other path. */
+/** The fourteen management routes of `/orgs/{org}/outposts…`; `undefined` for any other path. */
 export function outpostsApi(method: string, bare: string, query: string, body: unknown, connectors: OrgConnector[], actor: string): unknown {
   const route = /^\/orgs\/[^/]+\/outposts(?:\/([^/]+)(?:\/(.+))?)?$/.exec(bare);
   if (!route) return undefined;
@@ -555,6 +563,10 @@ export function outpostsApi(method: string, bare: string, query: string, body: u
     return view(outpost, connectors);
   }
   if (rest === "enrolments") {
+    if (method === "GET") {
+      const open: OutpostEnrolmentList = { items: [...(openTokens[outpost.slug] ?? [])].reverse() };
+      return open;
+    }
     if (outpost.status === "revoked") throw revokedRefusal(outpost);
     outpost.enrolling = true;
     const issued: OutpostEnrolmentCreated = {
@@ -564,7 +576,22 @@ export function outpostsApi(method: string, bare: string, query: string, body: u
       control_plane: MOCK_DOOR_ORIGIN,
       door_keys: MOCK_DOOR_KEYS,
     };
+    (openTokens[outpost.slug] ??= []).push({ id: issued.id, expires_at: issued.expires_at, created_by: actor, created_at: iso(0) });
     return issued;
+  }
+  const cancelled = /^enrolments\/([^/]+)$/.exec(rest);
+  if (cancelled && method === "DELETE") {
+    const id = decodeURIComponent(cancelled[1] ?? "");
+    const open = openTokens[outpost.slug] ?? [];
+    const at = open.findIndex((token) => token.id === id);
+    if (at < 0) {
+      if ((instances[outpost.slug] ?? []).some((i) => i.enrolment_id === id))
+        throw conflict("enrolment_used", "this enrolment token already enrolled an instance: revoke that instance instead", { outpost: outpost.slug });
+      throw new ApiError(404, { title: "Outpost enrolment not found", detail: `Outpost enrolment \`${id}\` does not exist` });
+    }
+    open.splice(at, 1);
+    if (open.length === 0) outpost.enrolling = false;
+    return undefined;
   }
   if (rest === "instances") {
     const list: OutpostInstanceList = { items: listed(outpost) };
