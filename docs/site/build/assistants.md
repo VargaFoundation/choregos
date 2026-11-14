@@ -345,7 +345,7 @@ Each refusal names the file and the path in it.
   `trigger` without a `subscriber` pointer.
 - A workflow, seed folder, or suite file that is not in the plugin, or a workflow that is not valid.
 - A suite that evaluates another agent than the assistant's, repeats a case name, or names a tool that
-  is not a `need__operation` of the assistant.
+  is neither a `need__operation` of the assistant nor the `launch__<name>` of one of its launches.
 - A prompt message that uses an argument the prompt does not declare.
 - A launch declared twice, a launch whose `input_schema` is not a JSON Schema of `type: object`, or a need
   called `launch` in an assistant that declares launches.

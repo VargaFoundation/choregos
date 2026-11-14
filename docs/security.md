@@ -77,7 +77,7 @@ organisations must assume **a member of one will try to read another**.
   Claude Code's own `WebSearch` runs **at the model provider**, outside
   every Choregos network layer: the only lever is to deny the tool (`builtin_web_tools`), and that is
   a setting in the pod, not a wall. The runner's guardrails are a **net**: the agent shares the pod,
-  and a `curl` from Bash is not a URL permission request. On the Diametral tenant the infra's FQDN
+  and a `curl` from Bash is not a URL permission request. On one operator's tenant the infra's FQDN
   policy lets runner pods reach eight hosts directly and its baseline policy lets every pod of the
   namespace reach every other one (PostgreSQL and Temporal included): until infra changes that, the
   Choregos proxy is bypassable for those hosts.

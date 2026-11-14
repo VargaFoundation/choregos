@@ -39,7 +39,7 @@ The mapping is data: `tools/rename_tenant_names.yaml` (`--mapping` for a copy).
 
    ```bash
    uv run python tools/rename_tenant_names.py \
-     --api https://choregos.internal.dev.diametral.com --org varga --token-file ~/choregos-admin-token
+     --api https://choregos.internal.dev.example.com --org varga --token-file ~/choregos-admin-token
    ```
 
 4. The same with `--apply`; add `--allow-open` when the report says workflows were skipped because of

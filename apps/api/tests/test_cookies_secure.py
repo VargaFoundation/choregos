@@ -1,6 +1,6 @@
 """The session and OIDC cookies are `Secure` whenever the deployment is served over HTTPS.
 
-A dev tenant behind a TLS-terminating ingress (`https://agentic.dev.diametral.com`) has
+A dev tenant behind a TLS-terminating ingress (`https://agentic.dev.example.com`) has
 `env=dev`: the cookies used to be `Secure` in staging/prod only, so its session cookie would have
 travelled in clear on any http hop. The URL says what the transport is, the environment does not.
 """

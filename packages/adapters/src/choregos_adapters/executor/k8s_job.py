@@ -76,7 +76,7 @@ class KubernetesJobExecutor:
         self.service_account = service_account
         self.ttl_seconds = ttl_seconds
         # Adjustable: a namespace under a LimitRange refuses the whole pod beyond its per-container
-        # ceiling (4 Gi at a Diametral tenant), without telling the Job why.
+        # ceiling (4 Gi at one operator's tenants), without telling the Job why.
         self.cpu_limit = cpu_limit
         self.memory_limit = memory_limit
         # Secrets injected WHOLE into the agent pod (`envFrom`): git credentials, a backend's

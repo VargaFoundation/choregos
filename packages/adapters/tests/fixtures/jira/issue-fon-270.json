@@ -1,7 +1,7 @@
 {
   "expand": "renderedFields,names,schema,operations,editmeta,changelog,versionedRepresentations",
   "id": "10270",
-  "self": "https://fondation.atlassian.net/rest/api/3/issue/10270",
+  "self": "https://acme.atlassian.net/rest/api/3/issue/10270",
   "key": "FON-270",
   "renderedFields": {
     "description": "<p>Open a project for the Peredur team.</p>"
@@ -66,7 +66,7 @@
     "assignee": null,
     "created": "2026-10-30T09:12:44.000+0100",
     "reporter": {
-      "self": "https://fondation.atlassian.net/rest/api/3/user?accountId=712020:5f1c",
+      "self": "https://acme.atlassian.net/rest/api/3/user?accountId=712020:5f1c",
       "accountId": "712020:5f1c-reporter",
       "displayName": "Camille Martin",
       "active": true,
@@ -74,9 +74,9 @@
       "accountType": "atlassian"
     },
     "creator": {
-      "self": "https://fondation.atlassian.net/rest/api/3/user?accountId=557058:portal",
+      "self": "https://acme.atlassian.net/rest/api/3/user?accountId=557058:portal",
       "accountId": "557058:creator-bot",
-      "emailAddress": "portal-bot@fondation.example",
+      "emailAddress": "portal-bot@acme.example",
       "displayName": "Portal automation",
       "active": true,
       "accountType": "app"
@@ -125,7 +125,7 @@
       ]
     },
     "customfield_10052": {
-      "self": "https://fondation.atlassian.net/rest/api/3/customFieldOption/10100",
+      "self": "https://acme.atlassian.net/rest/api/3/customFieldOption/10100",
       "value": "dev",
       "id": "10100"
     },

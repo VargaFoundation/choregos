@@ -93,3 +93,25 @@ def test_no_need_is_called_launch_beside_launches(plugin: Path) -> None:
         f"{ASSISTANT}:tools: a need may not be called `launch` in an assistant that declares launches "
         "(their tools are `launch__<name>`)"
     ]
+
+
+def _suite_asserts(plugin: Path, tool: str) -> None:
+    def change(doc: dict[str, Any]) -> None:
+        doc["cases"][0]["assert"] = {"must_call": [{"tool": tool, "before": "any"}]}
+
+    _edit(plugin / "evals" / "investment-assistant.yaml", change)
+
+
+def test_a_suite_may_assert_that_the_agent_proposes_a_launch(plugin: Path) -> None:
+    """#1726: the agent is given `launch__<name>`; a suite may gate that it proposes it."""
+    _edit(plugin / ASSISTANT, lambda d: d.update(launches=[LAUNCH]))
+    _suite_asserts(plugin, "launch__portfolio_review")
+    assert (
+        load_directory(plugin).assistants["investment-assistant"]["launches"][0]["name"] == "portfolio_review"
+    )
+
+
+def test_a_suite_may_not_name_a_launch_the_assistant_does_not_declare(plugin: Path) -> None:
+    _edit(plugin / ASSISTANT, lambda d: d.update(launches=[LAUNCH]))
+    _suite_asserts(plugin, "launch__something_else")
+    assert any("`launch__something_else` is not a `need__operation`" in p for p in _problems(plugin))

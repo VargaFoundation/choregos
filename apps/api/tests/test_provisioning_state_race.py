@@ -1,6 +1,6 @@
 """The provisioning state the API writes does not overwrite the one the workflow wrote (S62-13).
 
-Found in production on 2026-11-11: a project from `plugin:diametral-delivery/diametral-project`, whose
+Found in production on 2026-11-11: a project from `plugin:globex-delivery/globex-project`, whose
 template has no provisioning step on that platform, stayed `provisioning` forever. Its workflow ended in
 660 ms and `finish_provisioning` wrote `succeeded` and `active`; the request that started it then committed
 `running` and `provisioning` over them. The fake below finishes the provisioning inside `start`, as a fast

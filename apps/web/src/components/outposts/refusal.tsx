@@ -2,7 +2,7 @@
 "use client";
 
 import { Alert, EngineSentence, ErrorNote } from "@/components/ui";
-import { deploymentRefusal, retryIn, routeRefusal, type OutpostRefusal } from "@/lib/outposts";
+import { deploymentRefusal, GESTURE_REFUSAL, retryIn, routeRefusal, type OutpostRefusal } from "@/lib/outposts";
 
 /**
  * What the API said when it refused a gesture on an outpost, in its own words. A refusal that is
@@ -15,6 +15,7 @@ import { deploymentRefusal, retryIn, routeRefusal, type OutpostRefusal } from "@
 export function RefusalNote({ refusal }: { refusal: OutpostRefusal }) {
   const deployment = deploymentRefusal(refusal);
   const route = routeRefusal(refusal);
+  const gesture = refusal.code ? GESTURE_REFUSAL[refusal.code] : undefined;
   const words = (
     <>
       <EngineSentence text={refusal.detail} />
@@ -30,6 +31,17 @@ export function RefusalNote({ refusal }: { refusal: OutpostRefusal }) {
     return (
       <div data-testid="outposts-deployment-refusal">
         <Alert tone="warn" title={deployment}>
+          {words}
+        </Alert>
+      </div>
+    );
+  }
+  if (gesture) {
+    // A rule of the gesture (a token cannot approve; a used token is not cancelled): told apart from a
+    // refusal of rights by its code (S65-24).
+    return (
+      <div data-testid="outposts-gesture-refusal">
+        <Alert tone="warn" title={gesture}>
           {words}
         </Alert>
       </div>

@@ -71,7 +71,11 @@ def _event_data(raw: str) -> dict[str, Any]:
 
 class ApiError(RuntimeError):
     def __init__(self, status_code: int, problem: dict[str, Any] | str) -> None:
+        #: The problem's machine `code`, when the API gave one: what a command tells refusals apart by.
+        self.code: str | None = None
         if isinstance(problem, dict):
+            code = problem.get("code")
+            self.code = code if isinstance(code, str) else None
             detail = problem.get("detail") or problem.get("title") or str(problem)
             errors = problem.get("errors") or []
             if errors:

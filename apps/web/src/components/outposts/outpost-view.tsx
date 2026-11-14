@@ -9,11 +9,12 @@ import { Extrait } from "@/components/integrations/panel";
 import { Alert, Badge, Button, Card, Code, ReadState } from "@/components/ui";
 import { api } from "@/lib/api";
 import { shortDate } from "@/lib/format";
-import { doorKeysLine, OUTPOST_TONE, POLICY_FILE, presence, refusalOf, stateLabel, type OutpostRefusal } from "@/lib/outposts";
+import { deploymentReadiness, OUTPOST_TONE, POLICY_FILE, policyLines, presence, refusalOf, stateLabel, type OutpostRefusal } from "@/lib/outposts";
 import type { Outpost } from "@/lib/types";
 import { OutpostCalls } from "./calls";
 import { EnrolInstance } from "./enrol-instance";
 import { OutpostInstances } from "./instances";
+import { OpenTokens } from "./open-tokens";
 import { RefusalNote } from "./refusal";
 
 /** While a person waits for the instance they are enrolling, its row is looked for every few seconds. */
@@ -36,9 +37,13 @@ export function OutpostView({ org, slug }: { org: string; slug: string }) {
     queryFn: () => api.outpostInstances(org, slug),
     refetchInterval: waiting ? WAITING_MS : false,
   });
+  // The list says what the deployment would refuse (S65-24): read once, and shared with the list's page.
+  const deployment = useQuery({ queryKey: ["outposts", org], queryFn: () => api.outposts(org) });
+  const readiness = deploymentReadiness(deployment.data);
   const refresh = async () => {
     await client.invalidateQueries({ queryKey: ["outpost", org, slug] });
     await client.invalidateQueries({ queryKey: ["outpost-instances", org, slug] });
+    await client.invalidateQueries({ queryKey: ["outpost-enrolments", org, slug] });
     await client.invalidateQueries({ queryKey: ["outposts", org] });
   };
   const current = outpost.data;
@@ -53,7 +58,19 @@ export function OutpostView({ org, slug }: { org: string; slug: string }) {
           {instances.data && (
             <OutpostInstances org={org} slug={slug} revoked={current.status === "revoked"} instances={instances.data.items} onChange={refresh} />
           )}
-          {current.status !== "revoked" && <EnrolInstance org={org} slug={slug} onIssued={() => setWaiting(true)} onDone={() => setWaiting(false)} />}
+          {current.status !== "revoked" && (
+            <EnrolInstance
+              org={org}
+              slug={slug}
+              unavailable={readiness.enrol}
+              onIssued={() => {
+                setWaiting(true);
+                void client.invalidateQueries({ queryKey: ["outpost-enrolments", org, slug] });
+              }}
+              onDone={() => setWaiting(false)}
+            />
+          )}
+          <OpenTokens org={org} slug={slug} />
           <KeysToPin outpost={current} />
           <OutpostCalls org={org} slug={slug} />
         </>
@@ -209,7 +226,10 @@ function Summary({ org, outpost, onChange }: { org: string; outpost: Outpost; on
   );
 }
 
-/** The door's public keys, as the line of the policy file that pins them: an outpost obeys no other key. */
+/**
+ * The door's origin and public keys, as the lines of the policy file that name and pin them: an outpost
+ * dials no other origin and obeys no other key.
+ */
 function KeysToPin({ outpost }: { outpost: Outpost }) {
   return (
     <Card title="Keys to pin" data-testid="outpost-door-keys">
@@ -225,7 +245,7 @@ function KeysToPin({ outpost }: { outpost: Outpost }) {
             The first key signs now; any other is announced for a rotation and is added before the door signs with it. Nothing
             the platform sends changes that list.
           </p>
-          <Extrait code={doorKeysLine(outpost.door_keys)} testId="outpost-door-keys-line" />
+          <Extrait code={policyLines(outpost.control_plane, outpost.door_keys)} testId="outpost-door-keys-line" />
         </div>
       )}
     </Card>
