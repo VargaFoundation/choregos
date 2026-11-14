@@ -8,8 +8,8 @@ discards it. Null for every existing row.
 A nullable column only: no row rewritten, and nothing of row-level security moves. The downgrade drops it.
 
 Revision ID: 1596f0e2131d
-Revises: cc44662df8d6
-Create Date: 2026-11-14 12:00:00+00:00
+Revises: dcdaeba28e08
+Create Date: 2026-11-14 16:00:00+00:00
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ from alembic import op
 from choregos_api.db.base import Json
 
 revision: str = "1596f0e2131d"
-down_revision: str | None = "cc44662df8d6"
+down_revision: str | None = "dcdaeba28e08"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
