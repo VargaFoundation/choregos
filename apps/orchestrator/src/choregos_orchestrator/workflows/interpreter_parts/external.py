@@ -9,6 +9,7 @@ from datetime import timedelta
 from typing import Any
 
 from temporalio import workflow
+from temporalio.exceptions import ActivityError, is_cancelled_exception
 
 from ..activity_names import english_payload_keys
 from ..scheduling import execute_on_its_queue
@@ -22,7 +23,7 @@ with workflow.unsafe.imports_passed_through():
         record_migration,
     )
 
-from ..interpreter import ESCALATION_CONTEXT_STORED, MIGRATION_BY_DEFINITION
+from ..interpreter import ESCALATION_CONTEXT_STORED, MIGRATION_BY_DEFINITION, STATUS_COMMENT_BEST_EFFORT
 from .base import InterpreterBase
 from .helpers import _MIGRATION, DEFAULT_RETRY, InterpreterInput
 
@@ -165,9 +166,25 @@ class ExternalMixin(InterpreterBase):
             start_to_close_timeout=timedelta(minutes=1),
             retry_policy=DEFAULT_RETRY,
         )
-        await execute_on_its_queue(
-            tracker_activities.update_status_comment,
-            {"project_id": params.project_id, "work_item_id": params.work_item_id},
-            start_to_close_timeout=timedelta(minutes=2),
-            retry_policy=DEFAULT_RETRY,
-        )
+        # `mirror_state` stays blocking: it writes the work item's state in the same transaction as
+        # the board, and a state the platform did not record is not one to go on from.
+        try:
+            await execute_on_its_queue(
+                tracker_activities.update_status_comment,
+                {"project_id": params.project_id, "work_item_id": params.work_item_id},
+                start_to_close_timeout=timedelta(minutes=2),
+                retry_policy=DEFAULT_RETRY,
+            )
+        except ActivityError as error:
+            if is_cancelled_exception(error) or not workflow.patched(STATUS_COMMENT_BEST_EFFORT):
+                raise
+            # Only a mirror of what the platform holds: the next `_mirror` rewrites it whole.
+            workflow.logger.warning(
+                "status comment not updated, the work item goes on",
+                extra={
+                    "project": params.project_slug,
+                    "work_item": params.work_item_id,
+                    "state": self.state,
+                    "error": str(error.cause or error),
+                },
+            )
