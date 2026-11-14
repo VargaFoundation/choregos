@@ -24,7 +24,7 @@ def minted(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
     monkeypatch.setenv(
         "CHOREGOS_GITHUB_APP_PRIVATE_KEY", "-----BEGIN RSA PRIVATE KEY-----\nx\n-----END RSA PRIVATE KEY-----"
     )
-    # The App is read from the settings (ADR 0161), cached per process: read again.
+    # The App is read from the settings (ADR 0164), cached per process: read again.
     from choregos_api.config import reset_settings_cache
 
     reset_settings_cache()

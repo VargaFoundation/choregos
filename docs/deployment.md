@@ -178,7 +178,7 @@ rename its variable or widen the pattern.
 
 One App serves the deployment: the tracker, the pull requests, the checks and the run's git token go
 through it, and whoever registers it on GitHub owns it. It comes from one of two places, and the first
-wins ([ADR 0161](adr/0161-the-github-app-is-created-from-a-manifest.md)):
+wins ([ADR 0164](adr/0164-the-github-app-is-created-from-a-manifest.md)):
 
 1. **The deployment's settings**: `github-app-id` and `github-app-private-key` (with
    `github-webhook-secret`, and `github-app-client-id` / `github-app-client-secret` for claims on an
@@ -1752,11 +1752,27 @@ value>` on the first model call. Nothing said the key had never resolved.
 If the API refuses to start with `réglages non résolus`, fix the source of the secret — the key
 is missing where it is stored, not where it is read.
 
-## Upgrading past 0.27.1
+## Upgrading past 0.27.3
 
-Changes merged after v0.27.1, shipped with the next release.
+A workflow may no longer name an agent of kind `external` — a client of the MCP door — as a step's actor
+([ADR 0163](adr/0163-a-client-prepares-a-person-s-decision-the-person-decides.md) §1, S65-20). Such a
+workflow ran the client's version as if the platform ran it. After the upgrade its next publication is
+refused (422), and a run of it fails before it starts with the agent named; name a person for the step
+instead. Look for one before upgrading:
 
-**The GitHub App can be created from the console** (S70-21, [ADR 0161](adr/0161-the-github-app-is-created-from-a-manifest.md)). A platform administrator registers it on GitHub from a manifest; its credentials are sealed in the new table `github_app_registrations` (created empty by the migration). Nothing to do for a deployment whose settings name the App: they still win. To use it, keep `secrets-keks` configured ([the GitHub App](#the-github-app)).
+```sql
+SELECT p.slug AS project, w.name AS workflow, w.version, a.slug AS agent
+FROM workflow_defs w
+JOIN projects p ON p.id = w.project_id
+JOIN LATERAL jsonb_each(w.json::jsonb -> 'actors') AS actor(name, spec) ON true
+JOIN agents a ON a.org_id = p.org_id AND a.kind = 'external'
+  AND a.slug = split_part(actor.spec ->> 'agent', '@', 1)
+WHERE w.is_active;
+```
+
+No row: nothing to do. The rule needs no migration.
+
+**The GitHub App can be created from the console** (S70-21, [ADR 0164](adr/0164-the-github-app-is-created-from-a-manifest.md)). A platform administrator registers it on GitHub from a manifest; its credentials are sealed in the new table `github_app_registrations` (created empty by the migration). Nothing to do for a deployment whose settings name the App: they still win. To use it, keep `secrets-keks` configured ([the GitHub App](#the-github-app)).
 
 ## Upgrading to 0.27
 

@@ -810,7 +810,7 @@ async def post_git_token(id: str, session: Db, claims: OpenRunAuth) -> GitToken:
     run, _item, project_row = await _run_and_item(session, id)
     url = str(((run.stage_input or {}).get("repo") or {}).get("url") or "")
     repository = github_repository(url)
-    # The deployment's App: its settings, else the one registered from a manifest (ADR 0161).
+    # The deployment's App: its settings, else the one registered from a manifest (ADR 0164).
     app = await github_app_credentials.refresh(session)
     if repository is None or app is None:
         return GitToken(token=None, repository=repository)

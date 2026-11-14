@@ -42,6 +42,11 @@ import type {
   AgentDraft,
   AgentDraftRequest,
   AgentFork,
+  AgentForkList,
+  AgentSocial,
+  AgentWatchPut,
+  AgentNotificationList,
+  AgentNotificationsRead,
   AgentScopeChange,
   RemoteAgentDiscovery,
   RemoteCredential,
@@ -136,7 +141,12 @@ import type {
   AssigneeChange,
   Membership,
   MembershipUpsert,
-  TrackerIdentity,
+  LinkedAccount,
+  LinkedAccountDeclare,
+  LinkedAccountStart,
+  MyLinkedAccounts,
+  Avatar,
+  MemberProfile,
   Org,
   OrgCreate,
   OrgUpdate,
@@ -186,6 +196,13 @@ import type {
   OutboundProxyPut,
   OutboundProxyState,
   OutboundProxyTest,
+  OrgGroup,
+  OrgGroupCreate,
+  OrgGroupList,
+  OrgGroupMember,
+  OrgGroupMemberAdd,
+  OrgGroupMemberList,
+  OrgGroupUpdate,
   Outpost,
   OutpostCallPage,
   OutpostCallState,
@@ -503,16 +520,22 @@ export const api = {
     request<void>(`/orgs/${org}/members/${encodeURIComponent(userId)}${project ? `?project=${encodeURIComponent(project)}` : ""}`, {
       method: "DELETE",
     }),
-  /** A member's links to their accounts on trackers (S47-14): GitHub only for now. */
-  trackerIdentities: (org: string, userId: string) =>
-    request<TrackerIdentity[]>(`/orgs/${org}/members/${encodeURIComponent(userId)}/tracker-identities`),
-  setTrackerIdentity: (org: string, userId: string, tracker: TrackerIdentity["tracker"], body: { external_id: string; login: string }) =>
-    request<TrackerIdentity>(`/orgs/${org}/members/${encodeURIComponent(userId)}/tracker-identities/${tracker}`, {
-      method: "PUT",
+  /** A member's accounts on code forges (ADR 0161): verified by the member, or declared by an administrator. */
+  memberLinkedAccounts: (org: string, userId: string) =>
+    request<LinkedAccount[]>(`/orgs/${org}/members/${encodeURIComponent(userId)}/linked-accounts`),
+  /** An administrator declares a member's account: stored NOT verified. */
+  declareMemberLinkedAccount: (org: string, userId: string, body: LinkedAccountDeclare) =>
+    request<LinkedAccount>(`/orgs/${org}/members/${encodeURIComponent(userId)}/linked-accounts`, {
+      method: "POST",
       body: JSON.stringify(body),
     }),
-  deleteTrackerIdentity: (org: string, userId: string, tracker: TrackerIdentity["tracker"]) =>
-    request<void>(`/orgs/${org}/members/${encodeURIComponent(userId)}/tracker-identities/${tracker}`, { method: "DELETE" }),
+  deleteMemberLinkedAccount: (org: string, userId: string, accountId: string) =>
+    request<void>(`/orgs/${org}/members/${encodeURIComponent(userId)}/linked-accounts/${encodeURIComponent(accountId)}`, {
+      method: "DELETE",
+    }),
+  /** One member's profile page in one read (ADR 0162): the basic card for a member, everything for an administrator. */
+  memberProfile: (org: string, userId: string) =>
+    request<MemberProfile>(`/orgs/${org}/members/${encodeURIComponent(userId)}/profile`),
   /** The administration sections that extensions declare, filtered by the API (ADR 0032). */
   adminSections: (org: string) => request<AdminSection[]>(`/ui/admin-sections?org=${encodeURIComponent(org)}`),
   /**
@@ -548,6 +571,21 @@ export const api = {
   /** A fork: a new agent in the scope asked, whose v1 copies a version of the source (ADR 0061). */
   forkAgent: (org: string, slug: string, body: AgentFork) =>
     request<Agent>(`/orgs/${org}/agents/${slug}/fork`, { method: "POST", body: JSON.stringify(body) }),
+  /** The forks of an agent the caller may see (ADR 0152). */
+  agentForks: (org: string, slug: string) => request<AgentForkList>(`/orgs/${org}/agents/${slug}/forks`),
+  /** Watch an agent: `all` its activity, or its `releases` only (ADR 0152). */
+  watchAgent: (org: string, slug: string, level: AgentWatchPut["level"] = "all") =>
+    request<AgentSocial>(`/orgs/${org}/agents/${slug}/watch`, { method: "PUT", body: JSON.stringify({ level }) }),
+  unwatchAgent: (org: string, slug: string) => request<AgentSocial>(`/orgs/${org}/agents/${slug}/watch`, { method: "DELETE" }),
+  starAgent: (org: string, slug: string) => request<AgentSocial>(`/orgs/${org}/agents/${slug}/star`, { method: "PUT" }),
+  unstarAgent: (org: string, slug: string) => request<AgentSocial>(`/orgs/${org}/agents/${slug}/star`, { method: "DELETE" }),
+  /** What happened to the agents the caller watches, the ones they may still read (ADR 0152). */
+  agentNotifications: (org: string, unread = false) =>
+    request<AgentNotificationList>(`/orgs/${org}/agent-notifications${unread ? "?unread=true" : ""}`),
+  readAgentNotification: (org: string, id: string) =>
+    request<AgentNotificationsRead>(`/orgs/${org}/agent-notifications/${id}/read`, { method: "POST" }),
+  readAllAgentNotifications: (org: string) =>
+    request<AgentNotificationsRead>(`/orgs/${org}/agent-notifications/read`, { method: "POST" }),
   /** Move an agent to another scope (promote a personal or project agent); the server decides who may. */
   changeAgentScope: (org: string, slug: string, body: AgentScopeChange) =>
     request<Agent>(`/orgs/${org}/agents/${slug}/scope`, { method: "POST", body: JSON.stringify(body) }),
@@ -798,6 +836,23 @@ export const api = {
     request<ApiTokenCreated>("/me/tokens", { method: "POST", body: JSON.stringify(body) }),
   revokeToken: (id: string) => request<void>(`/me/tokens/${id}`, { method: "DELETE" }),
   mySessions: () => request<BrowserSession[]>("/me/sessions"),
+  /** My accounts on code forges, and the instances I can link one on (ADR 0161). */
+  myLinkedAccounts: () => request<MyLinkedAccounts>("/me/linked-accounts"),
+  /** Starts linking my account on an instance: the forge's authorization URL, to open in this browser. */
+  startMyLinkedAccount: (provider: LinkedAccount["provider"], org: string, instance: string) =>
+    request<LinkedAccountStart>(
+      `/me/linked-accounts/${provider}/start?org=${encodeURIComponent(org)}&instance=${encodeURIComponent(instance)}`,
+      { method: "POST" },
+    ),
+  deleteMyLinkedAccount: (accountId: string) =>
+    request<void>(`/me/linked-accounts/${encodeURIComponent(accountId)}`, { method: "DELETE" }),
+  /** My photo (ADR 0162): one PNG, JPEG or WebP file; the API re-encodes it and answers where it is served. */
+  putMyAvatar: (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return request<Avatar>("/me/avatar", { method: "PUT", body: form });
+  },
+  deleteMyAvatar: () => request<void>("/me/avatar", { method: "DELETE" }),
   endSession: (id: string) => request<void>(`/me/sessions/${encodeURIComponent(id)}`, { method: "DELETE" }),
   endOtherSessions: () => request<EndedSessions>("/me/sessions/end-others", { method: "POST" }),
   templates: () => request<TemplateSummary[]>("/templates"),
@@ -891,6 +946,38 @@ export const api = {
   /** An approval requires a recent session: a 401 `step_up_required` goes back through the IdP. */
   decideAction: (id: string, actionId: string, body: { decision: "approve" | "reject"; reason?: string }) =>
     request<Action>(`/projects/${qualify(id)}/actions/${actionId}/decision`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  /**
+   * The organisation's own groups (ADR 0160). Every member reads them; the administrator writes the
+   * `internal` ones (`group:manage`). A `scim` group is the identity provider's: a write answers 409
+   * `group_read_only`.
+   */
+  orgGroups: (org: string) => request<OrgGroupList>(`/orgs/${org}/groups`),
+  createOrgGroup: (org: string, body: OrgGroupCreate) =>
+    request<OrgGroup>(`/orgs/${org}/groups`, { method: "POST", body: JSON.stringify(body) }),
+  orgGroup: (org: string, slug: string) => request<OrgGroup>(`/orgs/${org}/groups/${encodeURIComponent(slug)}`),
+  updateOrgGroup: (org: string, slug: string, body: OrgGroupUpdate) =>
+    request<OrgGroup>(`/orgs/${org}/groups/${encodeURIComponent(slug)}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteOrgGroup: (org: string, slug: string) => request<void>(`/orgs/${org}/groups/${encodeURIComponent(slug)}`, { method: "DELETE" }),
+  orgGroupMembers: (org: string, slug: string) => request<OrgGroupMemberList>(`/orgs/${org}/groups/${encodeURIComponent(slug)}/members`),
+  /** A member of the organisation only: anyone else is a 422. */
+  addOrgGroupMember: (org: string, slug: string, body: OrgGroupMemberAdd) =>
+    request<OrgGroupMember>(`/orgs/${org}/groups/${encodeURIComponent(slug)}/members`, { method: "POST", body: JSON.stringify(body) }),
+  removeOrgGroupMember: (org: string, slug: string, userId: string) =>
+    request<void>(`/orgs/${org}/groups/${encodeURIComponent(slug)}/members/${encodeURIComponent(userId)}`, { method: "DELETE" }),
+  /**
+   * A person records what they found of an action in doubt (S65-26, ADR 0149 §5): `made` resumes it,
+   * `not_made` fails it and compensates what came before. Guarded as an approval: a 401
+   * `step_up_required` goes back through the IdP and returns to the action's page.
+   */
+  settleAction: (
+    id: string,
+    actionId: string,
+    body: { outcome: "made" | "not_made"; note: string; result?: Record<string, unknown> | null },
+  ) =>
+    request<Action>(`/projects/${qualify(id)}/actions/${actionId}/settlement`, {
       method: "POST",
       body: JSON.stringify(body),
     }),
@@ -1029,7 +1116,7 @@ export const api = {
     request<GitHubRepositoryPage>(`/orgs/${org}/github/repositories${q ? `?q=${encodeURIComponent(q)}` : ""}`),
   githubInstallLink: (org: string, body: GitHubInstallLinkRequest) =>
     request<GitHubInstallLink>(`/orgs/${org}/github/install-link`, { method: "POST", body: JSON.stringify(body) }),
-  /** The instance's GitHub App and where it comes from: the deployment's settings or the console (S70-21, ADR 0161). */
+  /** The instance's GitHub App and where it comes from: the deployment's settings or the console (S70-21, ADR 0164). */
   platformGitHubApp: () => request<GitHubAppRegistrationStatus>("/platform/github-app"),
   /** Step 1 of GitHub's App Manifest flow: the form the console posts to github.com. */
   startGitHubAppManifest: (body: GitHubAppManifestRequest) =>
@@ -1190,6 +1277,12 @@ export const api = {
    * Readdresses a waiting request to a person, a group, or both (ADR 0153): an organisation
    * administrator's gesture, audited with the reason. 422 for a person outside the organisation.
    */
+  /**
+   * Discards the draft a person's client deposited through the MCP door (ADR 0163 §7): for whoever may answer
+   * the request, audited. Taking a draft has no route: the form is filled, and the person decides.
+   */
+  discardDraft: (id: string, requestId: string) =>
+    request<void>(`/work-items/${id}/human-requests/${encodeURIComponent(requestId)}/draft`, { method: "DELETE" }),
   reassign: (id: string, requestId: string, body: AssigneeChange) =>
     request<HumanRequest>(`/work-items/${id}/human-requests/${encodeURIComponent(requestId)}/assignee`, {
       method: "POST",
@@ -1294,7 +1387,7 @@ export const api = {
 
   costs: (id: string, groupBy = "day", filtre: CostFilter = {}) =>
     request<CostReport>(`/projects/${qualify(id)}/costs${query({ group_by: groupBy, ...compact(filtre) })}`),
-  /** The organisation's spend, in any grouping (S29-02): `since`, `until` (YYYY-MM-DD), `kind`, `agent`, `workflow` and `work_item` filter it. */
+  /** The organisation's spend, in any grouping (S29-02): `since`, `until` (YYYY-MM-DD), `kind`, `agent`, `workflow`, `work_item` and `assistant` filter it. */
   orgCosts: (org: string, groupBy = "day", filtre: CostFilter = {}) =>
     request<CostReport>(`/orgs/${org}/costs${query({ group_by: groupBy, ...compact(filtre) })}`),
   /** The budgets that crossed 80 or 100 % (S29-04): the inbox lists the open ones. */
@@ -1354,8 +1447,8 @@ export type ActivityFilter = {
 
 /**
  * What a spend report is narrowed to (ADR 0141 §1): a period, a kind of line, and one agent (its slug),
- * one workflow (its name) or one work item (its id), combinable. The same filter goes to the JSON
- * report and to its CSV.
+ * one workflow (its name), one work item (its id) or one assistant installation (its id), combinable.
+ * The same filter goes to the JSON report and to its CSV.
  */
 export type CostFilter = {
   since?: string;
@@ -1364,6 +1457,7 @@ export type CostFilter = {
   agent?: string;
   workflow?: string;
   work_item?: string;
+  assistant?: string;
 };
 
 function compact(filtre: Record<string, string | undefined>): Record<string, string> {

@@ -9,6 +9,11 @@ the assistant answers, so no grant is read here. The tools are served here, in t
 not through the run's internal API. Each passage carries its document id, title, file and version, framed as
 data, so the agent can cite `[document, version]`. An `index` base is searched; a `files` base (no index) is
 read by listing its documents and getting one whole.
+
+Besides its seeded copies, an installation reads the organisation's bases its knowledge needs are bound to
+(ADR 0159), by reference; those are served at a turn only when the conversation's person may read them then
+(`assistant_knowledge_bindings.served_bases`): a base the person may not read is dropped from the turn, so it
+is neither named in the tools nor searchable. Every passage and citation names its base.
 """
 
 from __future__ import annotations
@@ -40,9 +45,13 @@ CITATION_RULE = (
 
 
 async def installation_bases(session: AsyncSession, record: AgentSessionRecord) -> list[KnowledgeBase]:
-    """The active bases of the conversation's installation (`index` and `files`); none for any other one."""
+    """The active bases of the conversation's installation (`index` and `files`), its seeded copies and the
+    bound bases its person may read at this turn; none for any other conversation."""
     if record.kind != "conversation" or not record.installation_id:
         return []
+    from .assistant_knowledge_bindings import served_bases
+
+    bound = await served_bases(session, record)
     rows = await session.execute(
         select(KnowledgeBase)
         .where(
@@ -53,7 +62,9 @@ async def installation_bases(session: AsyncSession, record: AgentSessionRecord) 
         )
         .order_by(KnowledgeBase.slug)
     )
-    return list(rows.scalars())
+    own = list(rows.scalars())
+    seen = {b.id for b in own}
+    return own + [b for b in bound if b.id not in seen]
 
 
 def version_of(document: KnowledgeDocument) -> str:
@@ -198,6 +209,7 @@ async def serve(
     )
     return _framed(
         (document.markdown or "")[:DOCUMENT_CHARS],
+        base=next((b.slug for b in chosen if b.id == document.knowledge_base_id), ""),
         document_id=document.id,
         title=document.title,
         path=document.filename,

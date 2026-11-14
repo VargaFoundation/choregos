@@ -2875,6 +2875,16 @@ serves the alias polled within the poll window), `outpost_refused` (the outpost'
 code, such as `unknown_endpoint`) and `outpost_timeout`: each is shown with its code, the outpost, the alias and
 the outpost's own words. When the outposts' quotas refuse a discovery, the 429 says when to try again.
 
+**Opening a write at an outpost** (S65-17c, [ADR 0149](adr/0149-a-tool-may-live-at-an-outpost.md) §6). Each
+discovered tool is born `forbidden`. Under each write of such a connector, and under nothing else, **How it is
+delivered** holds the two statements of its rule: *It takes the platform's idempotency key* (`action_key`,
+offered only when the tool's input schema has that argument) and *An in-doubt outcome is accepted for it,
+explicitly*. Silence opens nothing: setting the write's policy to `allowed` or `approval` sends the statement
+ticked with it, in the same request, and a request that says neither is refused with a 422 that names both.
+**Set** sends the statements alone (one stated while the write is closed opens it later). Unticking the last
+statement of an open write is refused too. The API's sentence is shown, and its words under each statement it
+names.
+
 **Where a tool lives, before a run.** An agent's **Access** tab names, for each tool of a connector at an
 outpost, the outpost and the alias, and says *Online* or *Offline*: online when an instance that serves the
 alias polled within the poll window, the presence the call's own route reads. An offline tool's call fails at
@@ -3211,19 +3221,29 @@ curl -X POST $API/projects/acme:hr/actions/<id>/decision -d '{"decision": "appro
   [outpost](integrations.md#a-tool-server-at-an-outpost-adr-0149), whose server Choregos does not
   see. It is delivered **at most once**. When an instance of the outpost took the write and its
   answer never came back, nobody knows whether the server made it: the effect and the action end
-  **`in_doubt`**, a terminal status like `succeeded`, `failed` and `rejected`
-  ([ADR 0149](adr/0149-a-tool-may-live-at-an-outpost.md) §5). Such an action is **never replayed**
-  — no route does it, an agent that repeats the call gets the same action back, in doubt (a tool
+  **`in_doubt`**, where the platform stops, as at `succeeded`, `failed` and `rejected`
+  ([ADR 0149](adr/0149-a-tool-may-live-at-an-outpost.md) §5). Such an action is **never replayed
+  by itself** — an agent that repeats the call gets the same action back, in doubt (a tool
   error `504` whose `code` is `action_in_doubt`) — and **nothing it had done is compensated**: the
   effects before it stay done, the ones after it did not run. Both would act on a state nobody
   knows. **What a person does**: read on the action's page which tool was sent, to which outpost
   and endpoint, which instance took it and when (the journal's effect carries them under
   `result.in_doubt`, with the digest of the arguments, never the arguments), check the system
-  behind the outpost, and record what they found where the team keeps such records. The action
-  itself stays in doubt: no route closes it by hand. A work item whose transition proposed it
-  waits where it is, as it waits for an approval nobody gave: reading the doubt as a failure would
-  follow `on_fail` and propose the action again, a second delivery of the write. A person moves
-  the work item on. The one exception is a write whose rule says its tool takes the platform's
+  behind the outpost, and **settle** the action with what they found, on its page (*What a person
+  found*) or with `POST /projects/{id}/actions/{action_id}/settlement` (`outcome`, a `note`, and
+  with `made` the `result` they read there). **Made**: the effect is recorded `done` with that
+  result (the effects after it may cite it), the action is `approved` again and its workflow runs
+  once more: the journal answers what was done, the effects after the write are played, and a
+  later failure compensates as for any action. **Not made**: the effect is recorded `not_made`,
+  never attempted, and the action fails, compensating what it had done before. Settling is guarded
+  as approving is (a recent sign-in in a human session, an approver's rank and group, and whoever
+  proposed the action, or owns the agent that did, does not settle it); the effect keeps what was
+  sent with the settlement; settling again with the same outcome changes nothing, the other is a
+  `409 action_already_settled`. The event is `choregos.action.settled`, the audit line
+  `action.settle`. Until it is settled, a work item whose transition proposed it waits where it
+  is, as it waits for an approval nobody gave: reading the doubt as a failure would follow
+  `on_fail` and propose the action again, a second delivery of the write. Once settled, the
+  action's end (`succeeded` or `failed`) moves the work item on. The one exception is a write whose rule says its tool takes the platform's
   idempotency key (`platform_arguments: ["action_key"]`): after a doubt the effect's own retries
   deliver it again with the same key, and the action is in doubt only if every delivery was.
   The event is `choregos.action.failed` with `status: in_doubt` in its data; `GET
@@ -3375,16 +3395,13 @@ workflow: a decision stays in the console, after a fresh sign-in. Choregos repli
 link to the inbox and records a `tracker.command.redirected` audit entry (ADR 0102).
 
 `/choregos pause`, `resume` and `stop` are honoured in one case only: a GitHub comment, in a delivery
-verified by its HMAC (`CHOREGOS_GITHUB_WEBHOOK_SECRET` is set), by a GitHub account that an
-organisation administrator linked to a member (`PUT /orgs/{org}/members/{user_id}/tracker-identities/github`
-with the account's numeric user id). The command runs with that member's own rights (a developer or
+verified by its HMAC (`CHOREGOS_GITHUB_WEBHOOK_SECRET` is set), by a github.com account linked to a member
+of the project's organisation. The command runs with that member's own rights (a developer or
 above), is audited as `workitem.pause`, `workitem.resume` or `workitem.stop` on the channel `tracker`,
 and Choregos confirms on the ticket. A login is never matched, so a renamed account inherits nothing.
-Find a user id at `https://api.github.com/users/<login>` (the `id` field). Nothing proves that the member
-owns the account: the administrator asserts the link. Jira and GitLab comments, and any delivery that
-carries only the shared secret, are never honoured: a display name or a username is not a stable
-identity. Anyone else gets the console link, with a note that an administrator can link their account.
-A reply that cannot be posted never fails the webhook.
+Jira and GitLab comments, and any delivery that carries only the shared secret, are never honoured: a
+display name or a username is not a stable identity. Anyone else gets the console link, with a note on
+how to link their account. A reply that cannot be posted never fails the webhook.
 
 Moving a card on the tracker board (GitHub Projects, Jira) does not move the work item: the board
 follows Choregos, not the reverse (ADR 0102). Move a work item from the console.
@@ -3393,6 +3410,46 @@ follows Choregos, not the reverse (ADR 0102). Move a work item from the console.
 choregos items list billing-api
 choregos runs tail <run-id>        # live ACP log over SSE
 ```
+
+### Linked accounts
+
+A member links their own accounts on code forges (ADR 0161): **My account**, **Linked accounts**, **Link**
+next to a forge their organisation configured. The browser signs in at the forge (OAuth 2.0, authorization
+code with PKCE, a scope that only reads the user: `read:user` on GitHub and Forgejo, `read_user` on GitLab)
+and comes back with the account recorded as **Verified**: the forge's numeric user id, its login and its
+profile address. The platform keeps no token. An organisation administrator configures each forge as a
+connector of the **Member accounts** capability (`github-oauth`, `gitlab-oauth` for gitlab.com or a
+self-managed instance, `forgejo-oauth`): its address, the OAuth application's client id and secret (sealed),
+and its hosts in the egress allowlist; the setup procedures say what to register at each forge, with the
+callback address `<api_url>/api/v1/auth/linked-accounts/callback`.
+
+An administrator still declares a member's account by its numeric id on **Administration**, **Members**
+(`POST /orgs/{org}/members/{user_id}/linked-accounts`): it is shown as **Declared**, not verified, until the
+member links it themself. One forge account belongs to one member of an organisation, whichever way it was
+linked. Today a declared github.com link is honoured for the signed comments above like a verified one (it
+always was); requiring `verified` is a later switch. The routes of S47-14
+(`/orgs/{org}/members/{user_id}/tracker-identities/github`) still answer, deprecated: they read and write the
+member's github.com link.
+
+### A member's profile
+
+Each member has a page (ADR 0162): **Administration**, **Members**, then the member's address, or **My
+account**, **View my profile** (`GET /orgs/{org}/members/{user_id}/profile`). Every member of the
+organisation sees a colleague's card: their photo or initials, given and family name, job title, department,
+address, status, organisation and project roles, and groups with where each comes from (internal, SCIM, the
+identity provider). An organisation administrator, and the person themself, also see how the account came
+(identity provider sign-in, provisioned, added by an administrator), the last sign-in, the open sessions, and
+their work in the team projects the reader sees: the human requests waiting on them (addressed to them, or to a
+group they are in), their recent decisions, the runs of the work items they started, and what their assistant
+conversations and tasks cost this month. An administrator alone sees their API tokens count and the audit
+events that name them, and the page of someone who left the organisation.
+
+The names, job title and department come from the identity provider at each sign-in: the claims `given_name`,
+`family_name`, `job_title` (or `jobTitle`) and `department`; a tenant's own provider may name other job title
+and department claims. A photo is one the person uploads on **My account** (PNG, JPEG or WebP, at most 2 MiB,
+32 to 4096 pixels a side): the platform re-encodes it as a 512-pixel square without its metadata and serves it
+from its own address, to the members of an organisation the person belongs to. A `picture` claim from the
+provider is never fetched.
 
 ### Work items on a schedule
 
@@ -3626,7 +3683,8 @@ Every stop asks **why** (1 to 500 characters), and the reason is audited with wh
   on its own. Stopping an agent that is already suspended stops what is still running and is audited
   again. The turns in flight of its conversations, whoever's they are, are cancelled as for an
   assistant (below); the conversations themselves are not closed.
-- **Stop an assistant** (`POST /orgs/{org}/assistants/{slug}/stop` with `{"reason": "..."}`;
+- **Stop an assistant** (*Stop the assistant…* on its installation page, or
+  `POST /orgs/{org}/assistants/{slug}/stop` with `{"reason": "..."}`;
   `assistant:manage`: the organisation's administrator and the assistant's owner groups). The assistant
   is marked stopped (who, when, why: `stopped` on the assistant) and reads `suspended` until it is
   resumed, whatever its readiness says, so no new turn starts. Every turn its conversations are taking
@@ -3635,7 +3693,7 @@ Every stop asks **why** (1 to 500 characters), and the reason is audited with wh
   read them meanwhile and continue them once the assistant is resumed. The answer counts the turns
   cancelled (`turns_cancelled`). **Resume** with `POST /orgs/{org}/assistants/{slug}/resume`: the stop
   is cleared, the status is derived again (`ready` when nothing is missing), and nothing stopped
-  restarts on its own; resuming an assistant that is not stopped answers `409`. Both are audited
+  restarts on its own (the page shows who stopped it, when and why, and its **Resume** button); resuming an assistant that is not stopped answers `409`. Both are audited
   (`assistant.stop` with the reason, `assistant.resume`). Stopping a stopped assistant keeps the first
   stop, cancels what still runs and is audited again.
 
@@ -3645,6 +3703,10 @@ curl -X POST "$API/orgs/acme/assistants/coach/stop" -d '{"reason": "quotes a sta
 curl -X POST "$API/orgs/acme/assistants/coach/resume"    # the assistant, `ready` again
 ```
 
+A conversation turn on the Activity screen says its assistant and the person whose conversation it is;
+it has no Stop of its own: its assistant's stop (or its agent's) is the stop. A click on the assistant,
+or `/activity?assistant=<installation id>`, keeps only that assistant's turns.
+
 ### Tokens, and what fills the context
 
 Spend is read in **tokens** as well as money
@@ -3653,17 +3715,21 @@ the project's overview, on a workflow's *Tokens and cost* tab and on an agent's 
 project): its totals give the input tokens, the part of them read from the model's cache, and the output
 tokens, next to the cost; one grouping at a time (by model, stage, agent, workflow or run), in money or in
 tokens, with the CSV of exactly what is shown. The organisation's **Spend** page (`/costs`) has the same
-*Measure* switch for each breakdown, and adds *Top runs*; tool calls stay in money, as they spend no
-model token.
+*Measure* switch for each breakdown, and adds *Top runs* and *Top assistants*; tool calls stay in money,
+as they spend no model token. An assistant's installation page has the same panel, narrowed to the
+assistant (`assistant=<installation id>`: its conversations' turns and its tasks), by model or agent.
 
 The panels read the cost report with a filter: `agent` (its slug), `workflow` (its name) and `work_item`
 narrow it, combined with each other and with `kind`, `since` and `until`; `group_by=run` names each run by
-its work item's key and stage (`PAY-12 · review #2` for a second attempt). The report's `total` carries
+its work item's key and stage (`PAY-12 · review #2` for a second attempt). `assistant` (an assistant
+installation's id) narrows it to that assistant's conversation turns and tasks, and `group_by=assistant`
+names each installation by its slug, `—` for what no assistant spent. The report's `total` carries
 `tokens_in`, `tokens_out` and `tokens_cached` next to the money.
 
 ```bash
 curl "$API/orgs/acme/costs?agent=developer&group_by=model"
 curl "$API/projects/$P/costs?workflow=default&group_by=run&since=2026-11-01"
+curl "$API/orgs/acme/costs?group_by=assistant"
 ```
 
 A run's page has a **Context** card: what filled the model's input on the run's last call, section by
@@ -3692,7 +3758,8 @@ with the run's read right.
 | Too many findings from one run | `findings.max_per_run` |
 
 Costs export as CSV from the project overview, grouped by day, stage, model, backend, size,
-kind, agent, workflow, work item or run, and narrowed to one agent, workflow or work item.
+kind, agent, workflow, work item, run or assistant, and narrowed to one agent, workflow, work item or
+assistant.
 
 **Your roles.** The administration overview (Session card) lists your roles by scope instead of
 repeating the organisation: `platform : org_admin` on the community edition (one organisation, whose
@@ -3767,7 +3834,9 @@ answer carries a *Connect* link. *Memory, accounts and tasks* (one page per assi
 administrator installs an assistant from an installed plugin: the configuration form is drawn from the
 assistant's `config_schema`, then the audience groups, owner groups and channel. An installation's page
 sets the budgets, binds each need to a connector (the readiness list says what still blocks it and who may
-fix it), decides the knowledge updates the plugin proposes (accept, merge with edits, refuse, with the
+fix it), binds each knowledge need to knowledge bases of the organisation the owner may read (card *Knowledge
+from the organisation*; nothing is copied, and a person is answered from a base only when they may read it,
+ADR 0159), decides the knowledge updates the plugin proposes (accept, merge with edits, refuse, with the
 diff), reads the reads journal, exports or erases what the assistant holds about a subject, and lists the
 feedback candidates a thumb down proposed to the agent's owners.
 

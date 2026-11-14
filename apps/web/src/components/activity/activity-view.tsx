@@ -10,6 +10,8 @@ import { RunActivityView } from "@/components/run-activity";
 import { Card, Empty, Input, ReadState, Select, StateBadge } from "@/components/ui";
 import { elapsedMs, entryLabel, formatElapsed, spendSoFar, statusKind } from "@/lib/activity";
 import { api, type ActivityFilter } from "@/lib/api";
+import { installationId } from "@/lib/assistants";
+import { assistantsApi } from "@/lib/assistants-api";
 import { useLiveRefresh } from "@/lib/live";
 import { runActivity } from "@/lib/run-activity";
 import type { ActivityEntry } from "@/lib/types";
@@ -34,10 +36,13 @@ const isActivity = (query: { queryKey: readonly unknown[] }) => query.queryKey[0
  * conversation turns in one list, each with its agent, its model, the time it has run, what it has
  * spent so far and its status; a run opens onto its steps and can be stopped with a reason. The list
  * follows the organisation's activity stream and reads itself again every few seconds when the stream
- * is not open. `project` narrows it to one project (the project's own Activity section).
+ * is not open. `project` narrows it to one project (the project's own Activity section), `assistant` (an
+ * installation id) starts it narrowed to one assistant's conversation turns. A turn says its assistant
+ * and the person whose conversation it is; it has no stop of its own: its assistant's stop, on the
+ * assistant's page, or its agent's, is the stop (ADR 0142 §4 bis).
  */
-export function ActivityView({ org, project }: { org: string; project?: string | null }) {
-  const [filter, setFilter] = useState<Omit<ActivityFilter, "project">>({});
+export function ActivityView({ org, project, assistant }: { org: string; project?: string | null; assistant?: string | null }) {
+  const [filter, setFilter] = useState<Omit<ActivityFilter, "project">>(() => (assistant ? { assistant } : {}));
   const narrowed: ActivityFilter = { ...filter, ...(project ? { project } : {}) };
   const live = useLiveRefresh(api.activityStreamPath(org, narrowed), isActivity, ["activity.upsert", "activity.ended"]);
   const list = useQuery({
@@ -46,6 +51,13 @@ export function ActivityView({ org, project }: { org: string; project?: string |
     refetchInterval: live ? false : ACTIVITY_POLL_MS,
   });
   const agents = useQuery({ queryKey: ["agents", org], queryFn: () => api.agents(org) });
+  // The installations the reader manages name a turn's assistant; a reader who manages none sees its id.
+  const installations = useQuery({ queryKey: ["installations", org], queryFn: () => assistantsApi.installations(org), retry: false });
+  const names = new Map<string, string>();
+  for (const item of installations.data?.items ?? []) {
+    const id = installationId(item);
+    if (id) names.set(id, item.display_name ?? item.slug);
+  }
   const now = useNow();
   const set = (key: keyof typeof filter, value: string) =>
     setFilter((current) => ({ ...current, [key]: value || undefined }));
@@ -70,7 +82,13 @@ export function ActivityView({ org, project }: { org: string; project?: string |
         </label>
         <label className="space-y-1 text-xs text-ink-muted">
           <span>Assistant</span>
-          <Input aria-label="Assistant" className="w-40" value={filter.assistant ?? ""} onChange={(e) => set("assistant", e.target.value.trim())} />
+          <Input
+            aria-label="Assistant"
+            className="w-40"
+            placeholder="Installation id"
+            value={filter.assistant ?? ""}
+            onChange={(e) => set("assistant", e.target.value.trim())}
+          />
         </label>
         <label className="space-y-1 text-xs text-ink-muted">
           <span>Kind</span>
@@ -89,20 +107,38 @@ export function ActivityView({ org, project }: { org: string; project?: string |
         <ReadState lecture={list} quoi="what is running" />
       ) : (
         <>
-          <EntryList title={`In flight (${list.data.in_flight.length})`} entries={list.data.in_flight} now={now} inFlight />
-          <EntryList title={`Finished (${list.data.finished.length})`} entries={list.data.finished} now={now} />
+          <EntryList
+            title={`In flight (${list.data.in_flight.length})`}
+            entries={list.data.in_flight}
+            now={now}
+            names={names}
+            narrow={(id) => set("assistant", id)}
+            inFlight
+          />
+          <EntryList
+            title={`Finished (${list.data.finished.length})`}
+            entries={list.data.finished}
+            now={now}
+            names={names}
+            narrow={(id) => set("assistant", id)}
+          />
         </>
       )}
     </div>
   );
 }
 
+/** How a row names the assistant of a turn, and narrows the list to it. */
+type AssistantNaming = { names: Map<string, string>; narrow: (id: string) => void };
+
 function EntryList({
   title,
   entries,
   now,
+  names,
+  narrow,
   inFlight = false,
-}: {
+}: AssistantNaming & {
   title: string;
   entries: ActivityEntry[];
   now: number;
@@ -117,7 +153,7 @@ function EntryList({
       ) : (
         <ul className="divide-y divide-line border-t border-line">
           {entries.map((entry) => (
-            <EntryRow key={`${entry.kind}-${entry.id}`} entry={entry} now={now} inFlight={inFlight} />
+            <EntryRow key={`${entry.kind}-${entry.id}`} entry={entry} now={now} names={names} narrow={narrow} inFlight={inFlight} />
           ))}
         </ul>
       )}
@@ -125,7 +161,7 @@ function EntryList({
   );
 }
 
-function EntryRow({ entry, now, inFlight }: { entry: ActivityEntry; now: number; inFlight: boolean }) {
+function EntryRow({ entry, now, names, narrow, inFlight }: AssistantNaming & { entry: ActivityEntry; now: number; inFlight: boolean }) {
   const client = useQueryClient();
   const [open, setOpen] = useState(false);
   const spend = spendSoFar(entry);
@@ -159,6 +195,7 @@ function EntryRow({ entry, now, inFlight }: { entry: ActivityEntry; now: number;
             label
           )}
           {entry.project_slug && <span className="ml-2 text-xs font-normal text-ink-muted">{entry.project_slug}</span>}
+          {entry.kind === "turn" && <TurnOf entry={entry} names={names} narrow={narrow} />}
         </span>
         <span className="text-ink-muted" data-verbatim title="Agent">
           {entry.agent_slug ?? "—"}
@@ -196,6 +233,39 @@ function EntryRow({ entry, now, inFlight }: { entry: ActivityEntry; now: number;
         </div>
       )}
     </li>
+  );
+}
+
+/**
+ * Whose a conversation turn is: its assistant, named when the reader manages it (a click narrows the list
+ * to that assistant's turns), and the person whose conversation it is.
+ */
+function TurnOf({ entry, names, narrow }: AssistantNaming & { entry: ActivityEntry }) {
+  const assistant = entry.assistant ?? null;
+  const name = assistant ? (names.get(assistant) ?? assistant) : null;
+  return (
+    <span className="ml-2 text-xs font-normal text-ink-muted" data-testid="turn-of">
+      {name && assistant && (
+        <>
+          of{" "}
+          <button
+            type="button"
+            className="underline-offset-2 hover:text-ink hover:underline"
+            title="Only this assistant's turns"
+            aria-label={`Only the turns of ${name}`}
+            onClick={() => narrow(assistant)}
+            data-verbatim
+          >
+            {name}
+          </button>
+        </>
+      )}
+      {entry.initiated_by && (
+        <>
+          {name ? ", " : ""}for <span data-verbatim>{entry.initiated_by}</span>
+        </>
+      )}
+    </span>
   );
 }
 

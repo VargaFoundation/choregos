@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import Field
 
@@ -15,6 +15,10 @@ SLUG = r"^[a-z0-9][a-z0-9-]{0,62}$"
 NEED = r"^[a-z][a-z0-9]*(_[a-z0-9]+)*$"
 Channel = Literal["stable", "candidate"]
 Status = Literal["incomplete", "ready", "suspended"]
+#: The most bases one knowledge need is bound to (ADR 0159).
+MAX_BOUND_BASES = 20
+BASE_SLUG = r"^[a-z0-9][a-z0-9-]{0,62}$"
+KnowledgeBases = Annotated[list[Annotated[str, Field(pattern=BASE_SLUG)]], Field(max_length=MAX_BOUND_BASES)]
 
 
 class AssistantInstall(Dto):
@@ -25,6 +29,8 @@ class AssistantInstall(Dto):
     owner_groups: list[str] = Field(default_factory=list)
     audience_groups: list[str] = Field(default_factory=list)
     channel: Channel = "stable"
+    #: Knowledge needs bound at install, each to the slugs of existing bases (ADR 0159).
+    knowledge_bindings: dict[str, KnowledgeBases] = Field(default_factory=dict)
 
 
 class AssistantUpdate(Dto):
@@ -40,6 +46,18 @@ class AssistantBind(Dto):
     enabled: bool = True
     #: A write's approval, raised above the manifest's (`inline` to `console`), never below it (S63-10).
     approval: Literal["inline", "console"] | None = None
+
+
+class AssistantKnowledgeBind(Dto):
+    """The whole list of bases a knowledge need is bound to; empty unbinds it (ADR 0159)."""
+
+    bases: KnowledgeBases
+
+
+class AssistantKnowledgeBinding(Dto):
+    name: str
+    bases: list[str]
+    enabled: bool
 
 
 class AssistantBinding(Dto):
@@ -59,6 +77,27 @@ class AssistantStop(Dto):
     reason: str
 
 
+class AssistantLaunchBind(Dto):
+    """Where a launch is bound (ADR 0158): a team's project of the organisation and one of its workflows."""
+
+    project: str = Field(pattern=SLUG)
+    workflow: str = Field(min_length=1, max_length=64)
+    enabled: bool = True
+
+
+class AssistantLaunch(Dto):
+    """A launch the manifest declares, with its binding when it has one (ADR 0158)."""
+
+    name: str
+    description: str
+    required: bool
+    input_schema: dict[str, Any] = Field(default_factory=dict)
+    project: str | None = None
+    workflow: str | None = None
+    enabled: bool
+    bound_by: str | None = None
+
+
 class Assistant(Dto):
     id: str
     slug: str
@@ -75,6 +114,9 @@ class Assistant(Dto):
     stopped: AssistantStop | None = None
     policy_overrides: dict[str, Any]
     bindings: list[AssistantBinding]
+    #: The workflows the assistant may propose to start, and where each is bound (ADR 0158).
+    launches: list[AssistantLaunch] = Field(default_factory=list)
+    knowledge_bindings: list[AssistantKnowledgeBinding] = Field(default_factory=list)
     created_by: str | None = None
     created_at: datetime
 
@@ -101,9 +143,19 @@ class AssistantList(Dto):
 
 class AssistantReadinessItem(Dto):
     kind: Literal[
-        "assistant_missing", "config_missing", "need_unbound", "need_not_served", "identity_unsupported"
+        "assistant_missing",
+        "config_missing",
+        "need_unbound",
+        "need_not_served",
+        "identity_unsupported",
+        "launch_unbound",
+        "launch_workflow_missing",
+        "launch_inputs_mismatch",
+        "knowledge_unbound",
     ]
     need: str | None = None
+    #: The launch, for the `launch_*` kinds (ADR 0158).
+    launch: str | None = None
     key: str | None = None
     message: str
     fix_by: Literal["owners", "org_admin"]

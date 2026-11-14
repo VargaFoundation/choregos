@@ -31,6 +31,7 @@ from ..db.models import (
 from ..errors import upstream
 from ..rbac import Principal
 from ..schemas import (
+    DecisionDraft,
     HumanRequestAssignee,
     HumanRequestDto,
     ReleaseDto,
@@ -169,6 +170,7 @@ def human_request_dto(row: HumanRequest, assignee: StepAssignee | None = None) -
         decided_at=row.decided_at,
         decision=row.decision,
         assignee=HumanRequestAssignee(**who.as_dict()) if who else None,
+        draft=DecisionDraft.model_validate(row.draft) if row.draft else None,
     )
 
 

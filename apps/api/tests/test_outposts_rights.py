@@ -71,6 +71,11 @@ def test_outpost_manage_is_the_organisation_administrators_and_no_other_roles() 
     assert holders == {Role.ORG_ADMIN}
 
 
+#: Declared by the contract before the API serves them (ADR 0001): S65-24 serves them, tests them here
+#: and empties this.
+NOT_SERVED_YET = {"listOutpostEnrolments", "cancelOutpostEnrolment"}
+
+
 def test_the_routes_under_test_are_the_contracts_twelve() -> None:
     declared = {
         operation["operationId"]
@@ -79,7 +84,8 @@ def test_the_routes_under_test_are_the_contracts_twelve() -> None:
         for operation in verbs.values()
         if isinstance(operation, dict) and "operationId" in operation
     }
-    assert len(declared) == 12 and declared == {name for name, *_ in _routes("0" * 64)}
+    assert len(declared - NOT_SERVED_YET) == 12
+    assert declared - NOT_SERVED_YET == {name for name, *_ in _routes("0" * 64)}
 
 
 @pytest.mark.parametrize("role", NOT_ADMINISTRATORS, ids=[str(role) for role in NOT_ADMINISTRATORS])
@@ -172,7 +178,7 @@ async def test_the_rest_api_refuses_a_request_that_carries_an_outposts_signature
         refused = await client.get(path, headers=signed)
         assert refused.status_code == 403 and "outposts' door only" in refused.json()["detail"], refused.text
     created = await client.post(BASE, json={"slug": SLUG}, headers=signed)
-    assert created.status_code == 403 and (await client.get(BASE)).json() == {"items": []}
+    assert created.status_code == 403 and (await client.get(BASE)).json()["items"] == []
 
     client.cookies.clear()
     assert (await client.get(BASE, headers=signed)).status_code == 403, "nor does the signature alone"

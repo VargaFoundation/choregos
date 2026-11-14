@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Where the deployment's GitHub App credentials come from: one place (S70-21, ADR 0161).
+"""Where the deployment's GitHub App credentials come from: one place (S70-21, ADR 0164).
 
 Two sources, in this order:
 

@@ -57,19 +57,24 @@ function Agents() {
   const awaiting = new Set((waiting.data ?? []).map((r) => r.agent));
   const [onlyAwaiting, setOnlyAwaiting] = useState(false);
   const [scope, setScope] = useState<AgentScope | null>(null);
+  // Stars and the caller's own stars (ADR 0152): a sort and a filter on what the server counted.
+  const [onlyStarred, setOnlyStarred] = useState(false);
+  const [byStars, setByStars] = useState(false);
   // A retired agent is gone for good: it stays readable, but out of the way unless asked for.
   const [showRetired, setShowRetired] = useState(false);
   const retired = (agents.data ?? []).filter((a) => a.lifecycle === "retired").length;
   const [drawer, setDrawer] = useState<"catalogue" | null>(catalogue ? "catalogue" : null);
-  const shown = withTags(
+  const withStars = withTags(
     (agents.data ?? []).filter(
       (a) =>
         (scope === null || (a.scope ?? "org") === scope) &&
         (!onlyAwaiting || awaiting.has(a.slug)) &&
+        (!onlyStarred || a.social?.starred_by_me === true) &&
         (showRetired || a.lifecycle !== "retired"),
     ),
     tags,
   );
+  const shown = byStars ? [...withStars].sort((x, y) => (y.social?.stars ?? 0) - (x.social?.stars ?? 0)) : withStars;
   const parAgent = new Map((metrics.data ?? []).map((m) => [m.agent, m]));
   return (
     <div className="space-y-6">
@@ -99,6 +104,24 @@ function Agents() {
               Awaiting approval ({awaiting.size})
             </button>
           )}
+          <button
+            type="button"
+            aria-pressed={onlyStarred}
+            onClick={() => setOnlyStarred(!onlyStarred)}
+            data-testid="starred-chip"
+            className={`rounded-full border px-3 py-1 text-xs ${onlyStarred ? "border-accent-line bg-accent-soft text-accent-strong" : "border-line text-ink-muted hover:bg-surface-muted"}`}
+          >
+            Starred
+          </button>
+          <button
+            type="button"
+            aria-pressed={byStars}
+            onClick={() => setByStars(!byStars)}
+            data-testid="sort-stars"
+            className={`rounded-full border px-3 py-1 text-xs ${byStars ? "border-accent-line bg-accent-soft text-accent-strong" : "border-line text-ink-muted hover:bg-surface-muted"}`}
+          >
+            Most starred first
+          </button>
           {retired > 0 && (
             <button
               type="button"
@@ -143,6 +166,7 @@ function Agents() {
               <TR>
                 <TH>Agent</TH>
                 <TH>Owner</TH>
+                <TH align="right">Watch / Stars / Forks</TH>
                 <TH>Status</TH>
                 <TH>Version</TH>
                 <TH>Production / Testing</TH>
@@ -176,6 +200,9 @@ function Agents() {
                       )}
                     </TD>
                     <TD className="text-xs text-ink-muted">{agent.owner ?? "—"}</TD>
+                    <TD align="right" className="font-mono text-xs" data-testid={`social-${agent.slug}`}>
+                      {agent.social?.watchers ?? 0} / {agent.social?.stars ?? 0} / {agent.social?.forks ?? 0}
+                    </TD>
                     <TD>
                       <Badge tone={agent.status === "active" ? "ok" : "danger"}>{agent.status}</Badge>
                       <LifecycleBadges agent={agent} />

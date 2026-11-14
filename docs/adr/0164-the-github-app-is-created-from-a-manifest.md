@@ -1,4 +1,4 @@
-# 0161 — The GitHub App is created from a manifest, by the instance's operator
+# 0164 — The GitHub App is created from a manifest, by the instance's operator
 
 - **Status**: proposed, 2026-11-12; S70-21 implements it
 - **Concerns**: `routers/github_app.py` (`/platform/github-app`, `/platform/github-app/manifest`,

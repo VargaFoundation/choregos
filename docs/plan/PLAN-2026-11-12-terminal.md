@@ -5,7 +5,7 @@ Source: the product owner's request of 2026-11-12 (*"the CLI becomes the surface
 their approval, the same day, of the workspace's mock-up and of one rule for every developer surface (the
 terminal, and the editor extension of stream S68). Decision: [ADR 0154](../adr/0154-the-terminal-is-a-surface-of-the-platform.md)
 (proposed). Checked against `main` at `36a8cadee`. Stream number: **S67** (S66 is taken by two streams in flight,
-ADR 0152 and ADR 0153).
+ADR 0158 and ADR 0159).
 
 Status words: **exists** (on `main`), **missing**, **branch** (an open pull request).
 

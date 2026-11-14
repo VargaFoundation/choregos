@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""The GitHub App registered from a manifest: `github_app_registrations` (S70-21, ADR 0161)
+"""The GitHub App registered from a manifest: `github_app_registrations` (S70-21, ADR 0164)
 
 A platform administrator creates the deployment's GitHub App from the console (the GitHub App Manifest
 flow); GitHub answers its credentials once. What GitHub publishes about the App is kept in clear, its
@@ -8,7 +8,7 @@ private key, webhook secret and client secret in one envelope sealed under the d
 A new table, nothing rewritten; the downgrade drops it (and the App's credentials with it).
 
 Revision ID: 6dbee3522739
-Revises: b3dbe73fff38
+Revises: f0b2d4e6a8c1
 Create Date: 2026-11-12 17:00:00+00:00
 """
 
@@ -20,7 +20,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "6dbee3522739"
-down_revision: str | None = "b3dbe73fff38"
+down_revision: str | None = "f0b2d4e6a8c1"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

@@ -167,7 +167,7 @@ class GitHubInstallation(Base, TimestampMixin):
 
 
 class GitHubAppRegistration(Base, PkMixin, TimestampMixin):
-    """The deployment's GitHub App, registered from a manifest by a platform administrator (ADR 0161).
+    """The deployment's GitHub App, registered from a manifest by a platform administrator (ADR 0164).
 
     At most one row: the instance's App when the deployment's settings name none
     (`CHOREGOS_GITHUB_APP_ID` wins over it). What GitHub publishes about the App is kept in clear; its

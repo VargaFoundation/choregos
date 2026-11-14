@@ -116,14 +116,12 @@ promises about it. Read on `main` at `9f646fda4`:
      claimed reached no server, and only that one is retried, by the effect's existing policy.
    - **A lost lease on a write ends `in_doubt`.** When a claimed write gets no answer within its lease,
      the platform does not know whether the outpost's server executed it. The effect and its action end
-     in a terminal state `in_doubt`: shown to a person with what was sent (the outpost, the alias, the
-     instance, the operation, the digest of the arguments, when it was claimed) and with what the action
-     had already done. It is never replayed automatically, and nothing the action had done is compensated
-     automatically either: both would act on a state nobody knows. No route replays an `in_doubt` action.
-     An agent that repeats the call finds the same action (`call_id`) and is told it is in doubt.
-     An in-doubt action is closed by no route either: a person checks the system at the outpost and
-     records what they found outside the platform. Recording it on the action (a decision of its own,
-     with its rights and its audit) is not decided here.
+     in a state `in_doubt` where the platform stops: shown to a person with what was sent (the outpost,
+     the alias, the instance, the operation, the digest of the arguments, when it was claimed) and with
+     what the action had already done. It is never replayed automatically, and nothing the action had
+     done is compensated automatically either: both would act on a state nobody knows. No route replays
+     an `in_doubt` action. An agent that repeats the call finds the same action (`call_id`) and is told
+     it is in doubt. Only a person moves it on, by settling it (below).
    - **What ends in doubt, exactly** (S65-14). The effect's journal row takes the status `in_doubt`
      with what was sent, before anything is said to the workflow, and it is not attempted again: a
      task Temporal delivers twice is answered from the row. The workflow closes the action `in_doubt`
@@ -147,6 +145,51 @@ promises about it. Read on `main` at `9f646fda4`:
      for an approval nobody gave. Read as a failure it would follow `on_fail`, whose retry proposes
      the action again under a new attempt, which is a second delivery of the write. A person moves
      the work item on.
+   - **A person settles an action in doubt** (S65-26). What the platform cannot know, a person can:
+     they check the system the write was for and record on the action what they found,
+     `POST /projects/{id}/actions/{action_id}/settlement` with an `outcome` and a `note` (and, with
+     `made`, the `result` they read there).
+     - *Who.* Whoever may approve the action, under the same four guards as the approval (ADR 0035,
+       ADR 0052): a human session with a recent authentication under the action's `step_up_minutes`,
+       the rank of one of its approvers and the group the rule names, and the separation of duties
+       (whoever proposed the action, or owns the agent that did, does not settle it). The settlement
+       is a decision about the action: it decides whether the rest of an approved action runs, or
+       what it did is undone, so it is guarded as the decision that let it run in the first place.
+       An API token, an MCP client and therefore the CLI never settle.
+     - *What is recorded.* On the effect's journal row (`action_effects.settlement`): the outcome, the
+       person, the time, the note, the stated result, the age of their authentication, and the
+       doubt's evidence (what was sent and never answered), moved there from the row's result so that
+       the result becomes what the effect returned. The action reads it back (`Action.settlement`),
+       the audit has `action.settle`, the events `choregos.action.settled`.
+     - *`made`.* The effect is `done` with the stated result (none: empty), which the effects after it
+       cite as they would cite an answer. The action is `approved` again and its `ActionWorkflow`
+       runs once more under the same id: the journal answers the effects already done (an evidence
+       one of them waited for is not asked again), the effects after the write are played, and a
+       later failure compensates backwards as for any action, the settled effect included, since a
+       person established that it was made. The action ends `succeeded` or `failed`.
+     - *`not_made`.* The effect is `not_made`: `execute_effect` meets it as a final refusal and never
+       attempts it, so the workflow takes its failure branch. What the action had done before is
+       compensated backwards, and it ends `failed`. This is the rule a doubt suspended, not a new
+       one: nothing was compensated because undoing what came before would act on a state nobody
+       knew; once a person states the write was not made, the state is known and is the state of
+       any effect that failed. The write is not delivered again: a person who wants it made proposes
+       the action again, under a new decision.
+     - *The work item.* It waited for the action as for an approval; the run that follows the
+       settlement closes the action as any run does and tells the work item that waits for it
+       (`action_settled`), which then follows its success or its `on_fail`.
+     - *Twice.* The action's row and its effects are read locked and moved by a compare-and-set
+       from `in_doubt`. A settlement with the outcome already recorded answers the action as it is
+       and records nothing; the other outcome is a 409 `action_already_settled`; an action that is
+       not in doubt and was never settled, a 409 `action_not_in_doubt`.
+     - *No change under `workflows/`.* The workflow is not resumed: a new run of `action-<id>` is
+       started after the commit, as an approval starts one, and the relay starts it if that start is
+       lost (ADR 0085). For that run to start at all, the action's first run having completed, the
+       start is a restart (`restart_action`, `WorkflowIDReusePolicy.ALLOW_DUPLICATE`, joining a run
+       still going), the one start that reuses an action's id; the relay restarts rather than starts
+       an approved action that was once closed in doubt. Every other start keeps refusing a finished
+       id, so a replica's late start of a finished action still starts nothing; a late duplicate of
+       a restart starts a run that does nothing, since `load_action` runs nothing for an action that
+       is not approved.
    - **The one exception is an operation that declares an idempotency key.** When its rule lists
      `action_key` as a platform argument, the platform fills that key as it does today, and the write may
      be delivered again with the same key: the server, not the platform, makes the second delivery
@@ -299,9 +342,14 @@ promises about it. Read on `main` at `9f646fda4`:
   the replay suite stays green with the histories recorded before it; `action-in-doubt-S65-14` covers
   the branch. No activity result is final for that workflow, so the outcome could not be carried
   without it: a failure is final only through the compensation it must not run.
-- `ActionStatus` gains a terminal status that no route leaves. Until a person can record on the
-  action what they found, an action in doubt stays in doubt, and a work item that waits for one is
-  moved on by a person.
+- `ActionStatus` gains a status where the platform stops, and which only a person's settlement leaves
+  (S65-26): a contract change of its own (`settleAction`, `ActionSettlement`, `SettlementOutcome`,
+  the effect status `not_made` and the event `choregos.action.settled`), one column
+  (`action_effects.settlement`), and a restart that reuses an action's workflow id after a completed
+  run. A
+  settlement `made` that is false runs the rest of the action on a write that was not made; one
+  `not_made` that is false undoes what came before a write that was: the platform records who said
+  it, and checks neither.
 - A plugin's declared floor (ADR 0096 §5: `human_approval` never lowered, an undeclared tool refused)
   does not follow its server to an outpost: there the tools are discovered, and the administrator sets
   each operation's policy.

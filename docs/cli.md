@@ -183,6 +183,27 @@ Options:
   --help         Show this message and exit.
 ```
 
+### `choregos activity`
+
+```text
+Usage: choregos activity [OPTIONS]
+
+  What runs in the organisation, as a tree: project, work item, run, with
+  status, time, tokens and cost.
+
+  Read-only. `--watch` follows the activity stream; elapsed times move every
+  second.
+
+Options:
+  -w, --watch       keep the tree live until the stream ends or Ctrl-C
+  --project <str>   only this project (its slug)
+  --workflow <str>  only the work items born in this workflow
+  --agent <str>     only this agent (its slug)
+  --kind <str>      run, session or turn
+  --org <str>       the organisation; the profile's otherwise
+  --help            Show this message and exit.
+```
+
 ## `choregos admin`
 
 Platform administration
@@ -202,6 +223,31 @@ Usage: choregos admin secrets rewrap [OPTIONS]
 
 Options:
   --help  Show this message and exit.
+```
+
+### `choregos ask`
+
+```text
+Usage: choregos ask [OPTIONS] [message]
+
+  Ask an assistant, as one turn of a conversation the platform keeps.
+
+  The answer streams to standard output; the conversation's id, its cost and
+  the writes the assistant proposed (with where to confirm them) go to
+  standard error. Exit code 0 when the turn completed, 1 otherwise.
+
+Arguments:
+  message  what to say; `-` or nothing reads it from standard input
+
+Options:
+  -a, --assistant <str>     the assistant's slug; the only one ready for you
+                            otherwise
+  -c, --conversation <str>  continue this conversation (its id)
+  --continue                continue the assistant's most recent conversation
+  --json                    print one JSON object once the turn ended, nothing
+                            while it runs
+  --org <str>               the organisation; the profile's otherwise
+  --help                    Show this message and exit.
 ```
 
 ## `choregos dev`

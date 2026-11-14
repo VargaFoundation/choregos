@@ -16,8 +16,11 @@ against the plugin the assistant ships in:
 7. a task reads only `access: read` needs, and one that runs without the person (a schedule, a poll, an event)
    reads their identity's needs only under `delegation: read_only` (ADR 0137);
 
-plus: names unique within their list, a prompt's `{argument}` placeholders declared, and every file the
-assistant names (a knowledge seed with its `knowledge.yaml`, a task's workflow, an eval suite) present.
+plus: names unique within their list, a prompt's `{argument}` placeholders declared, a launch's `input_schema`
+a valid JSON Schema and no need called `launch` beside launches (ADR 0158: their tools are `launch__<name>`),
+and every file the assistant names (a knowledge seed with its `knowledge.yaml`, a task's workflow, an eval
+suite) present. A knowledge item that is a binding need (`bind`, ADR 0159) names no file: the installation
+binds it to the organisation's bases, and the schema keeps it apart from a seed.
 An eval suite is also read: the loader holds it to `conversation-evals.schema.json`, and `check_suite` to
 the assistant's tools (ADR 0140). Each problem names the file and the JSON path of the field.
 """
@@ -27,6 +30,9 @@ from __future__ import annotations
 import re
 from pathlib import Path
 from typing import Any
+
+from jsonschema import Draft202012Validator
+from jsonschema.exceptions import SchemaError
 
 from ..conversation_evals import tools_named
 from ..dsl.parser import parse_workflow
@@ -40,6 +46,8 @@ PROMPT_PLACEHOLDER = re.compile(r"(?<!\{)\{([a-z][a-z0-9_]*)\}(?!\})")
 CONVERSATIONAL_RUNTIMES = ("prompt", "hosted")
 #: A subject that needs no resolver: any well-formed key is accepted (ADR 0136).
 PUBLIC_SUBJECT = "none"
+#: The need name a launch's tools would collide with (`launch__<name>`, ADR 0158).
+LAUNCH_PREFIX = "launch"
 #: The file a knowledge seed holds at its root (the `KnowledgeBase` format templates use).
 SEED_MANIFEST = "knowledge.yaml"
 
@@ -82,6 +90,7 @@ def check(
     _memory_resolvers(doc, ref, needs, problems)
     _tasks(doc, ref, needs, problems)
     _prompts(doc, ref, problems)
+    _launches(doc, ref, needs, problems)
     _files(doc, ref, root, target, problems)
 
 
@@ -104,6 +113,7 @@ def _unique(doc: dict[str, Any], ref: str, problems: list[str]) -> None:
         "memory": _mappings(doc.get("memory")),
         "knowledge": _mappings(doc.get("knowledge")),
         "tasks": _mappings(doc.get("tasks")),
+        "launches": _mappings(doc.get("launches")),
         "surfaces/mcp/prompts": _mappings(((doc.get("surfaces") or {}).get("mcp") or {}).get("prompts")),
     }
     for where, items in lists.items():
@@ -235,6 +245,22 @@ def _prompts(doc: dict[str, Any], ref: str, problems: list[str]) -> None:
             )
 
 
+def _launches(doc: dict[str, Any], ref: str, needs: dict[str, dict[str, Any]], problems: list[str]) -> None:
+    """ADR 0158: a launch's `input_schema` is a JSON Schema the confirmation can validate against, and no need
+    is called `launch`, whose operations would be named like the launches' tools."""
+    launches = _mappings(doc.get("launches"))
+    if launches and LAUNCH_PREFIX in needs:
+        problems.append(
+            f"{ref}:tools: a need may not be called `{LAUNCH_PREFIX}` in an assistant that declares launches "
+            "(their tools are `launch__<name>`)"
+        )
+    for index, launch in enumerate(launches):
+        try:
+            Draft202012Validator.check_schema(launch["input_schema"])
+        except SchemaError as exc:
+            problems.append(f"{ref}:launches/{index}/input_schema: not a valid JSON Schema ({exc.message})")
+
+
 def _files(doc: dict[str, Any], ref: str, root: Path, target: Any, problems: list[str]) -> None:
     for index, task in enumerate(_mappings(doc.get("tasks"))):
         path = target(root, task["workflow"], problems)
@@ -247,6 +273,8 @@ def _files(doc: dict[str, Any], ref: str, root: Path, target: Any, problems: lis
         if path is not None and not path.is_file():
             problems.append(f"{ref}:evals/{index}: `{suite}` is not a file of the plugin")
     for index, base in enumerate(_mappings(doc.get("knowledge"))):
+        if "seed" not in base:  # a binding need names no file: the installation binds it (ADR 0159)
+            continue
         path = target(root, base["seed"], problems)
         if path is not None and not (path / SEED_MANIFEST).is_file():
             problems.append(

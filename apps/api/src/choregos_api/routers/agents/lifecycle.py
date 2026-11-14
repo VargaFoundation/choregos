@@ -54,6 +54,7 @@ from ...services.agent_lifecycle import (
 from ...services.agent_releases import (
     after_publish,
 )
+from ...services.agent_social import auto_watch, notify
 from ...services.agent_stop import stop_agent as stop_the_agent
 from ...services.agent_views import agent_dto, agent_versions
 from ...services.memory_access import check_bindings_at_publish
@@ -144,6 +145,8 @@ async def change_agent_lifecycle(
         unpinned_projects=lifecycle_result.unpinned_projects,
         running_work_items=lifecycle_result.running_work_items,
     )
+    if body.to in {"deprecated", "retired"}:
+        await notify(session, agent, "lifecycle_changed", principal, to=body.to, before=avant)
     lifecycle_result.agent = await agent_dto(session, agent, principal, org)
     return lifecycle_result
 
@@ -205,6 +208,7 @@ async def transfer_agent_ownership(
     previous_owner = await session.get(User, agent.owner_id) if agent.owner_id else None
     agent.owner_id = new_owner.id
     await session.flush()
+    await auto_watch(session, agent, new_owner.id)
     credential_count = (
         await session.execute(
             select(func.count(AgentCredential.id)).where(
@@ -295,6 +299,9 @@ async def fork_agent(org: str, slug: Slug, body: AgentFork, session: Db, princip
     )
     await session.flush()
     await after_publish(session, principal, fork, 1, principal.email)
+    if principal.kind == "user":
+        await auto_watch(session, fork)
+    await notify(session, source, "forked", principal, related=fork, version=copiee.version)
     await record(
         session,
         principal,

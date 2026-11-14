@@ -4,7 +4,7 @@
 
 import { useId, useState } from "react";
 import { api } from "@/lib/api";
-import type { HumanRequest } from "@/lib/types";
+import type { DecisionDraft, HumanRequest } from "@/lib/types";
 import { missingFields, SchemaForm, type JsonSchema } from "./schema-form";
 import { Button, ErrorNote, Input } from "./ui";
 
@@ -12,17 +12,23 @@ export function DecisionBar({
   itemId,
   kind = "approval",
   request,
+  taken,
   onDone,
 }: {
   itemId: string;
   kind?: string;
   /** The pending request: a task carries its form there and what it makes one attest. */
   request?: Pick<HumanRequest, "payload">;
+  /**
+   * A client's draft the person took (ADR 0163): it fills the form, never decides. Remount the bar (a new
+   * `key`) to take it again.
+   */
+  taken?: DecisionDraft | null;
   onDone?: () => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [answer, setAnswer] = useState("");
+  const [answer, setAnswer] = useState(taken?.answer ?? taken?.reason ?? "");
 
   async function send(decision: "approve" | "reject" | "answer") {
     setBusy(true);
@@ -42,11 +48,12 @@ export function DecisionBar({
   }
 
   if (kind === "task") {
-    return <TaskForm itemId={itemId} payload={request?.payload ?? {}} onDone={onDone} />;
+    return <TaskForm itemId={itemId} payload={request?.payload ?? {}} taken={taken} onDone={onDone} />;
   }
 
   return (
     <div className="flex flex-wrap items-end gap-2">
+      {taken && <TakenNote draft={taken} />}
       {kind === "question" ? (
         <>
           <label className="flex min-w-0 flex-1 basis-64 flex-col gap-1">
@@ -94,19 +101,22 @@ export function DecisionBar({
 function TaskForm({
   itemId,
   payload,
+  taken,
   onDone,
 }: {
   itemId: string;
   payload: Record<string, unknown>;
+  taken?: DecisionDraft | null;
   onDone?: () => void;
 }) {
   const base = useId();
   const formulaire = (payload.form ?? {}) as JsonSchema;
   const attest = typeof payload.attest === "string" ? payload.attest : null;
   const instructions = typeof payload.instructions === "string" ? payload.instructions : null;
-  const [valeurs, setValeurs] = useState<Record<string, unknown>>({});
+  const [valeurs, setValeurs] = useState<Record<string, unknown>>(taken?.values ?? {});
+  // A draft never attests: the person ticks it themselves (ADR 0163 §4).
   const [atteste, setAtteste] = useState(false);
-  const [motif, setMotif] = useState("");
+  const [motif, setMotif] = useState(taken?.kind === "reject" ? (taken.reason ?? "") : "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const manquants = missingFields(formulaire, valeurs);
@@ -126,6 +136,7 @@ function TaskForm({
 
   return (
     <div className="space-y-3">
+      {taken && <TakenNote draft={taken} />}
       {instructions && <p className="text-sm">{instructions}</p>}
       <SchemaForm schema={formulaire} value={valeurs} onChange={setValeurs} disabled={busy} />
       {attest && (
@@ -162,5 +173,14 @@ function TaskForm({
       {manquants.length > 0 && <p className="text-xs text-ink-muted">To fill: {manquants.join(", ")}</p>}
       {error && <ErrorNote>{error}</ErrorNote>}
     </div>
+  );
+}
+
+/** What the person took from a client's draft: the form is filled, the decision is still theirs to press. */
+function TakenNote({ draft }: { draft: DecisionDraft }) {
+  return (
+    <p className="basis-full text-xs text-ink-muted" data-testid="draft-taken">
+      Filled from the draft ({draft.kind}). Check it, then decide: nothing is sent until you press a button.
+    </p>
   );
 }

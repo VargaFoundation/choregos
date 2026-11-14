@@ -81,9 +81,17 @@ NOT_CALLED_BY_A_CLIENT: dict[str, str] = {
     "/auth/callback": "the identity provider's redirect after sign-in: the browser lands on it",
     "/me/connected-accounts/callback": "the source's redirect after a person consented: the browser lands "
     "on it, and the API sends it on to the console's /me/connected-accounts page (S63-18)",
+    "/auth/linked-accounts/callback": "the forge's redirect after a member signed in to link their account "
+    "(ADR 0161): the browser lands on it, and the API sends it on to the console's My account page",
+    "/orgs/{org}/members/{user_id}/tracker-identities": "deprecated by ADR 0161 for the callers written "
+    "against S47-14; the console reads the member's linked accounts",
+    "/orgs/{org}/members/{user_id}/tracker-identities/{tracker}": "deprecated by ADR 0161 for the callers "
+    "written against S47-14; the console declares and removes linked accounts",
+    "/users/{user_id}/avatar": "a person's photo (ADR 0162), read by the browser as an <img> source from the "
+    "`avatar_url` the API answers; no client builds its path",
     "/github/setup": "the GitHub App's Setup URL: GitHub redirects the browser there after an installation",
     "/github/manifest/callback": "the GitHub App manifest's redirect URL: GitHub sends the browser there "
-    "with the conversion code once the App is registered (S70-21, ADR 0161)",
+    "with the conversion code once the App is registered (S70-21, ADR 0164)",
     "/remote-credentials/oauth/callback": "the provider's redirect after an administrator authorised a "
     "remote agent's credential",
     "/orgs/{org}/hosted-sources/{sha256}": "reads an uploaded source zip back for the pipeline that "
@@ -104,8 +112,8 @@ NOT_CALLED_BY_A_CLIENT: dict[str, str] = {
 
 #: Paths whose console screen is a story still to come: that story removes its entries.
 NO_CLIENT_YET: dict[str, str] = {
-    "/orgs/{org}/assistants/{slug}/stop": "S64-09d, the assistant page's Stop (ADR 0142 §4 bis)",
-    "/orgs/{org}/assistants/{slug}/resume": "S64-09d, the assistant page's Resume (ADR 0142 §4 bis)",
+    "/orgs/{org}/outposts/{slug}/enrolments/{enrolment_id}": "cancelling an enrolment token: the contract "
+    "declares it first (ADR 0001), S65-24 serves it and gives it its command and its button",
 }
 
 #: Paths the CLI calls and the console must not: an operator's command, not a screen.

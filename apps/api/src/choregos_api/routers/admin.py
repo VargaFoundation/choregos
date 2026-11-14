@@ -54,7 +54,7 @@ KNOWN_BACKENDS = [(name, list(capabilities)) for name, capabilities in KNOWN_BAC
 async def rewrap_secrets(session: Db, principal: Me) -> SecretsRewrap:
     """After a KEK rotation (the new key first in `CHOREGOS_SECRETS_KEKS`): re-wrap every sealed
     secret's data key under the active key. The values are never read out nor changed (ADR 0058).
-    The GitHub App registered from a manifest is sealed under the same key and moves with them (ADR 0161)."""
+    The GitHub App registered from a manifest is sealed under the same key and moves with them (ADR 0164)."""
     from ..secret_store import SealedDbSecretStore, SecretStoreUnavailable
     from ..services import github_app_credentials
 
