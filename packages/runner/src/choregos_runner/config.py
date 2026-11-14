@@ -78,6 +78,18 @@ class RunnerSettings(BaseSettings):
     confinement: Literal["off", "best_effort", "enforce"] = Field(
         default="best_effort", validation_alias="CHOREGOS_RUNNER_CONFINEMENT"
     )
+    #: Where the agent runs (ADR 0146): `process`, a child of the runner in its container (the
+    #: historical shape), or `container`, in a container of the pod of its own, started by the
+    #: launcher there. Under `container` the runner never falls back to a child: with no launcher it
+    #: exits with `AGENT_ISOLATION_UNAVAILABLE`.
+    agent_isolation: Literal["process", "container"] = Field(
+        default="process", validation_alias="CHOREGOS_RUNNER_AGENT_ISOLATION"
+    )
+    #: The launcher's address: the pod's loopback, the namespace the two containers share.
+    launcher_host: str = Field(default="127.0.0.1", validation_alias="CHOREGOS_RUNNER_LAUNCHER_HOST")
+    launcher_port: int = Field(default=8766, validation_alias="CHOREGOS_RUNNER_LAUNCHER_PORT")
+    #: How long the runner waits for the launcher before it ends the run.
+    launcher_wait_seconds: float = Field(default=60.0, validation_alias="CHOREGOS_RUNNER_LAUNCHER_WAIT")
     #: The headroom the runner starts when a run asks for compression (ADR 0055).
     headroom_command: str = "headroom"
 

@@ -334,6 +334,30 @@ async def test_logs_are_the_runner_pod_log() -> None:
     assert [line async for line in executor.logs(_ref("absent"))] == []
 
 
+async def test_every_pod_log_read_names_the_runner_container() -> None:
+    """ADR 0146: with the agent in a container of its own the pod has two, and the API server
+    refuses a log request that does not choose (the assignment key would never be read)."""
+    cluster = FakeSandboxCluster()
+    cluster.warm(1)
+    asked: list[tuple[str, dict[str, Any]]] = []
+    real = cluster.request
+
+    async def recording(method: str, path: str, **kwargs: Any) -> Any:
+        if path.endswith("/log"):
+            asked.append((path, kwargs.get("params") or {}))
+        return await real(method, path, **kwargs)
+
+    cluster.request = recording  # type: ignore[method-assign]
+    executor = _executor(cluster)
+    ref = await executor.start(_spec("r-1"))
+    cluster.reconcile()
+    await executor.status(ref)  # reads the key for the assignment
+    _ = [line async for line in executor.logs(ref)]
+
+    assert len(asked) >= 2, asked
+    assert all(params == {"container": "runner"} for _, params in asked), asked
+
+
 async def test_the_bytes_on_the_wire_never_contain_the_token_or_a_secret() -> None:
     """Sealed to the pod's key (ADR 0053): an eavesdropper on the pod network reads the run id."""
     cluster = FakeSandboxCluster()

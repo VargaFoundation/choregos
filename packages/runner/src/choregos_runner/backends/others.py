@@ -186,6 +186,8 @@ class OpenCodeBackend(Backend):
             "model": f"choregos/{stage_input.model.litellm_model}",
             "mcp": self._mcp_for_opencode(stage_input),
         }
+        if bash_deny := self._bash_deny(stage_input):
+            config["permission"] = {"bash": bash_deny}
         return LaunchPlan(
             command=command,
             # The agent's own `launch.env` comes last, so it can still override these.
@@ -197,6 +199,24 @@ class OpenCodeBackend(Backend):
             },
             mcp_servers=self.mcp_servers(stage_input),
         )
+
+    @staticmethod
+    def _bash_deny(stage_input: StageInput) -> dict[str, str]:
+        """The policy's `deny_commands` as opencode's `permission.bash` rules (ADR 0146).
+
+        Keys checked against `https://opencode.ai/config.json` on 2026-11-14: `permission` is an
+        object whose `bash` is a map of command pattern to `ask|allow|deny`. A pattern is a
+        wildcard over the whole command line, so a bare `kubectl` does not match `kubectl get po`:
+        each entry is denied alone AND as a prefix (`kubectl *`). Without this file opencode
+        consulted none of the policy: the runner's own deny list is only reached on the ACP
+        permission path, which opencode rarely takes. Still a filter, not a wall: a shell can
+        spell the same command another way. The wall is the container (ADR 0146).
+        """
+        rules: dict[str, str] = {"*": "allow"}  # the last matching rule wins: denials come after
+        for command in stage_input.permissions.deny_commands:
+            rules[command] = "deny"
+            rules[f"{command} *"] = "deny"
+        return rules if len(rules) > 1 else {}
 
     @staticmethod
     def _mcp_for_opencode(stage_input: StageInput) -> dict[str, Any]:
