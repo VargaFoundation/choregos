@@ -34,6 +34,7 @@ tags:
   - { name: ui }
   - { name: webhooks }
   - { name: outposts }
+  - { name: groups }
   - { name: internal }
 paths:
   /me:
@@ -2380,6 +2381,124 @@ paths:
       responses:
         "200": { description: The JSON Web Key Set, content: { application/json: { schema: { $ref: "#/components/schemas/JsonWebKeySet" } } } }
         "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/groups:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    get:
+      tags: [groups]
+      operationId: listOrgGroups
+      description: >-
+        The organisation's own groups (ADR 0160), each with its source (`internal`, created here; `scim`, pushed
+        by an identity provider) and how many members of the organisation it holds. Every member of the
+        organisation reads them (a role in it or on one of its projects). The identity provider's `groups` claim
+        is not listed here: it still counts where a group is checked, as before.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/OrgGroupList" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [groups]
+      operationId: createOrgGroup
+      description: >-
+        Creates an `internal` group. `group:manage` (the organisation administrator), audited as `group.create`.
+        409 `group_exists` when the slug is taken in the organisation.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/OrgGroupCreate" } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/OrgGroup" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/OrgGroupConflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/groups/{slug}:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { $ref: "#/components/parameters/OrgGroupSlug" }
+    get:
+      tags: [groups]
+      operationId: getOrgGroup
+      description: One group of the organisation. Every member of the organisation reads it.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/OrgGroup" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    patch:
+      tags: [groups]
+      operationId: updateOrgGroup
+      description: >-
+        Changes an `internal` group's name or description (`description: null` clears it); the slug, which
+        workflows name, does not change. `group:manage`, audited as `group.update`. 409 `group_read_only` on a
+        `scim` group: it is changed at the identity provider.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/OrgGroupUpdate" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/OrgGroup" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/OrgGroupConflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      tags: [groups]
+      operationId: deleteOrgGroup
+      description: >-
+        Removes an `internal` group and who is in it. A workflow that names it warns again (`actor.group_unknown`)
+        unless the identity provider still sends the group. `group:manage`, audited as `group.delete`. 409
+        `group_read_only` on a `scim` group.
+      responses:
+        "204": { description: Removed }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/OrgGroupConflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/groups/{slug}/members:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { $ref: "#/components/parameters/OrgGroupSlug" }
+    get:
+      tags: [groups]
+      operationId: listOrgGroupMembers
+      description: >-
+        Who is in the group: members of the organisation only (someone who leaves the organisation leaves its
+        groups). Every member of the organisation reads it.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/OrgGroupMemberList" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    post:
+      tags: [groups]
+      operationId: addOrgGroupMember
+      description: >-
+        Puts a member of the organisation, named by `email` or `user_id`, in an `internal` group; adding someone
+        already in it changes nothing. 422 when the person is not a member of the organisation.
+        `group:manage`, audited as `group.member.add`. 409 `group_read_only` on a `scim` group.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/OrgGroupMemberAdd" } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/OrgGroupMember" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/OrgGroupConflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/groups/{slug}/members/{user_id}:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { $ref: "#/components/parameters/OrgGroupSlug" }
+      - { name: user_id, in: path, required: true, schema: { type: string } }
+    delete:
+      tags: [groups]
+      operationId: removeOrgGroupMember
+      description: >-
+        Takes a person out of an `internal` group. `group:manage`, audited as `group.member.remove`. 409
+        `group_read_only` on a `scim` group.
+      responses:
+        "204": { description: Removed }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/OrgGroupConflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/outposts:
     parameters: [{ $ref: "#/components/parameters/Org" }]
     get:
@@ -5882,6 +6001,7 @@ components:
       description: a capability; the registry says which ones exist (`GET /connectors/types`, ADR 0034)
       schema: { type: string, pattern: "^[a-z][a-z0-9_]{1,31}$" }
     PluginName: { name: name, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+    OrgGroupSlug: { name: slug, in: path, required: true, schema: { type: string, pattern: "^[a-z][a-z0-9-]{1,62}$" } }
     OutpostSlug: { name: slug, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
     OutpostInstanceId: { name: instance_id, in: path, required: true, schema: { type: string, pattern: "^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$" } }
     Cursor: { name: cursor, in: query, schema: { type: string } }
@@ -5905,6 +6025,9 @@ components:
     McpGatewayConflict:
       description: "State conflict on the organisation's MCP gateway (ADR 0105): `code` is `gateway_in_use` (with `connectors`), `gateway_required`, `gateway_not_configured` or `gateway_assertion_key_missing`."
       content: { application/problem+json: { schema: { $ref: "#/components/schemas/McpGatewayConflict" } } }
+    OrgGroupConflict:
+      description: "State conflict on an organisation's group (ADR 0160): `code` is `group_exists` or `group_read_only`."
+      content: { application/problem+json: { schema: { $ref: "#/components/schemas/OrgGroupConflict" } } }
     OutpostConflict:
       description: "State conflict that concerns an outpost (ADRs 0147 and 0149): `code` says which, among the codes of `OutpostConflict`."
       content: { application/problem+json: { schema: { $ref: "#/components/schemas/OutpostConflict" } } }
@@ -9492,6 +9615,79 @@ components:
         outpost: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$", description: "an outpost of the same organisation" }
         endpoint: { type: string, pattern: "^[a-z][a-z0-9-]{0,62}$", description: "the alias of an endpoint in that outpost's policy file" }
         timeout_s: { type: number, minimum: 1, maximum: 120, default: 30, description: "seconds before a call is abandoned, the wait for an instance to claim it included" }
+    OrgGroupSource:
+      type: string
+      enum: [internal, scim]
+      description: "`internal`: created and edited through this API by an organisation administrator; `scim`: pushed by an identity provider, read-only here (ADR 0160)"
+    OrgGroupCreate:
+      type: object
+      additionalProperties: false
+      required: [slug, name]
+      properties:
+        slug: { type: string, pattern: "^[a-z][a-z0-9-]{1,62}$", description: "what a workflow's human actor names (`group: release-captains`)" }
+        name: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: [string, "null"], maxLength: 2000 }
+    OrgGroupUpdate:
+      type: object
+      additionalProperties: false
+      description: Only the fields sent change; `description` null clears it.
+      properties:
+        name: { type: [string, "null"], minLength: 1, maxLength: 200 }
+        description: { type: [string, "null"], maxLength: 2000 }
+    OrgGroup:
+      type: object
+      additionalProperties: false
+      description: "A group that belongs to the organisation (ADR 0160). A person in it carries it as `choregos:<org>:<slug>` wherever a group is checked."
+      required: [slug, name, source, member_count, created_at]
+      properties:
+        slug: { type: string }
+        name: { type: string }
+        description: { type: [string, "null"] }
+        source: { $ref: "#/components/schemas/OrgGroupSource" }
+        member_count: { type: integer, minimum: 0, description: "members of the organisation in the group" }
+        created_by: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+    OrgGroupList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/OrgGroup" } }
+    OrgGroupMemberAdd:
+      type: object
+      additionalProperties: false
+      description: One of the two, naming a member of the organisation.
+      properties:
+        email: { type: [string, "null"], minLength: 3, maxLength: 320 }
+        user_id: { type: [string, "null"], minLength: 1, maxLength: 36 }
+    OrgGroupMember:
+      type: object
+      additionalProperties: false
+      required: [user_id, email, display_name, added_at]
+      properties:
+        user_id: { type: string }
+        email: { type: string }
+        display_name: { type: string }
+        added_by: { type: [string, "null"] }
+        added_at: { type: string, format: date-time }
+    OrgGroupMemberList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/OrgGroupMember" } }
+    OrgGroupConflict:
+      type: object
+      description: "The 409 body of a refused write on an organisation's group (ADR 0160): `group_exists` (the slug is taken in the organisation) or `group_read_only` (the group comes from the identity provider; `source` says which)."
+      required: [type, title, status, code]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        code: { type: string, enum: [group_exists, group_read_only] }
+        source: { $ref: "#/components/schemas/OrgGroupSource" }
     OutpostConflict:
       type: object
       description: >-

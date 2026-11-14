@@ -350,7 +350,7 @@ async def decide(
         groups = sorted({group_of(a) for a in high_enough if a.get("group")})
         raise forbidden(
             f"deciding this action needs membership of the group {' or '.join(groups)} "
-            "(identity-provider groups, as of your last sign-in)"
+            "(the organisation's groups, or the identity provider's as of your last sign-in)"
         )
     if approval.get("separation_of_duties", True):
         proposed_by = action.proposed_by or {}

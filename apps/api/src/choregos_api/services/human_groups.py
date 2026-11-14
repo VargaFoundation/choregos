@@ -2,7 +2,8 @@
 """A human actor's `group` is enforced where a person answers (ADR 0044, ADR 0052).
 
 A workflow names who may answer a step: `actors.<id>: {type: human, group: release-captains}`. The
-group is the identity provider's, as the principal carries it. Two rules:
+group is the identity provider's or the organisation's own (ADR 0160), as the principal carries it.
+Two rules:
 
 - **the decider belongs to the group**, on top of the rank (`ITEM_DECIDE`): a project owner outside
   `release-captains` cannot answer a step addressed to it;
@@ -27,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..db.models import Membership, Organization, Project, User, WorkItem
 from ..rbac import Principal
 from .definitions import work_item_workflow, workflow_model
+from .org_groups import groups_with_members, table_groups_by_user
 
 
 def groups_for_org(groups: Iterable[Any] | None, org_slug: str) -> set[str]:
@@ -76,7 +78,8 @@ def decider_group_verdict(principal: Principal, org_slug: str, group: str | None
 async def groups_known_in(session: AsyncSession, org_id: str) -> set[str]:
     """The groups the identity provider has sent for the organisation's members at their sign-ins, as
     the organisation names them (a `choregos:<slug>:<group>` of this organisation counts as `<group>`;
-    the slug is read now, it can change)."""
+    the slug is read now, it can change), and the organisation's own groups that have a member
+    (ADR 0160): an empty group is carried by nobody either."""
     org_slug = (
         await session.execute(select(Organization.slug).where(Organization.id == org_id))
     ).scalar_one_or_none()
@@ -90,7 +93,7 @@ async def groups_known_in(session: AsyncSession, org_id: str) -> set[str]:
     known: set[str] = set()
     for groups in rows:
         known |= groups_for_org(groups, org_slug) if org_slug else {str(g) for g in groups or []}
-    return known
+    return known | await groups_with_members(session, org_id)
 
 
 def unknown_group_warnings(
@@ -111,7 +114,7 @@ def unknown_group_warnings(
                 "code": "actor.group_unknown",
                 "message": (
                     f"the group `{group}` of actor `{actor_id}` is carried by nobody in this "
-                    "organisation (identity-provider groups, as of their last sign-in): a step "
+                    "organisation (its groups, and the identity provider's as of their last sign-in): a step "
                     "addressed to it waits until an organisation administrator answers"
                 ),
                 "path": f"/actors/{actor_id}/group",
@@ -123,10 +126,13 @@ def unknown_group_warnings(
 async def members_of_group(
     session: AsyncSession, org_id: str, org_slug: str, project_id: str, group: str
 ) -> list[tuple[User, bool]]:
-    """The organisation's members who carry `group` (as of their last sign-in), each with whether they
-    may answer a step of this project: the group is necessary, not sufficient — `item:decide` comes
-    from a role in the organisation or on the project (ADR 0044)."""
+    """The organisation's members who carry `group` (as of their last sign-in, or as a member of the
+    organisation's own group, ADR 0160), each with whether they may answer a step of this project: the
+    group is necessary, not sufficient — `item:decide` comes from a role in the organisation or on the
+    project (ADR 0044)."""
     from ..rbac import ROLE_PERMISSIONS, Permission
+
+    in_table = await table_groups_by_user(session, org_id)
 
     rows = (
         await session.execute(
@@ -138,7 +144,7 @@ async def members_of_group(
     ).all()
     found: dict[str, tuple[User, bool]] = {}
     for user, membership in rows:
-        if group not in groups_for_org(user.groups, org_slug):
+        if group not in groups_for_org(user.groups, org_slug) and group not in in_table.get(user.id, ()):
             continue
         reaches = membership.project_id in (None, project_id)
         decides = reaches and Permission.ITEM_DECIDE in ROLE_PERMISSIONS.get(

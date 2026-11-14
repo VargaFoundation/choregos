@@ -188,6 +188,13 @@ import type {
   OutboundProxyPut,
   OutboundProxyState,
   OutboundProxyTest,
+  OrgGroup,
+  OrgGroupCreate,
+  OrgGroupList,
+  OrgGroupMember,
+  OrgGroupMemberAdd,
+  OrgGroupMemberList,
+  OrgGroupUpdate,
   Outpost,
   OutpostCallPage,
   OutpostCallState,
@@ -911,6 +918,24 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+  /**
+   * The organisation's own groups (ADR 0160). Every member reads them; the administrator writes the
+   * `internal` ones (`group:manage`). A `scim` group is the identity provider's: a write answers 409
+   * `group_read_only`.
+   */
+  orgGroups: (org: string) => request<OrgGroupList>(`/orgs/${org}/groups`),
+  createOrgGroup: (org: string, body: OrgGroupCreate) =>
+    request<OrgGroup>(`/orgs/${org}/groups`, { method: "POST", body: JSON.stringify(body) }),
+  orgGroup: (org: string, slug: string) => request<OrgGroup>(`/orgs/${org}/groups/${encodeURIComponent(slug)}`),
+  updateOrgGroup: (org: string, slug: string, body: OrgGroupUpdate) =>
+    request<OrgGroup>(`/orgs/${org}/groups/${encodeURIComponent(slug)}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteOrgGroup: (org: string, slug: string) => request<void>(`/orgs/${org}/groups/${encodeURIComponent(slug)}`, { method: "DELETE" }),
+  orgGroupMembers: (org: string, slug: string) => request<OrgGroupMemberList>(`/orgs/${org}/groups/${encodeURIComponent(slug)}/members`),
+  /** A member of the organisation only: anyone else is a 422. */
+  addOrgGroupMember: (org: string, slug: string, body: OrgGroupMemberAdd) =>
+    request<OrgGroupMember>(`/orgs/${org}/groups/${encodeURIComponent(slug)}/members`, { method: "POST", body: JSON.stringify(body) }),
+  removeOrgGroupMember: (org: string, slug: string, userId: string) =>
+    request<void>(`/orgs/${org}/groups/${encodeURIComponent(slug)}/members/${encodeURIComponent(userId)}`, { method: "DELETE" }),
   /**
    * The organisation's outposts (ADR 0147): places a person enrols, which only dial out. Every route is
    * `outpost:manage`, the organisation administrator's. The platform stores no address and no

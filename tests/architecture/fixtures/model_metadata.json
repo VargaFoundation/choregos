@@ -8901,6 +8901,240 @@
   ],
   "uniques": []
  },
+ "org_group_members": {
+  "checks": [],
+  "columns": [
+   {
+    "default": null,
+    "name": "org_id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": null,
+    "name": "group_id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": null,
+    "name": "user_id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": null,
+    "name": "added_by",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=320)"
+   },
+   {
+    "default": "<function utcnow>",
+    "name": "created_at",
+    "nullable": false,
+    "server_default": "<sqlalchemy.sql.functions.now; now>",
+    "type": "DateTime(timezone=True)"
+   },
+   {
+    "default": "<function uuid7>",
+    "name": "id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   }
+  ],
+  "foreign_keys": [
+   [
+    [
+     "group_id"
+    ],
+    [
+     "org_groups.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_org_group_members_group_id_org_groups"
+   ],
+   [
+    [
+     "org_id"
+    ],
+    [
+     "organizations.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_org_group_members_org_id_organizations"
+   ],
+   [
+    [
+     "user_id"
+    ],
+    [
+     "users.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_org_group_members_user_id_users"
+   ]
+  ],
+  "indexes": [
+   [
+    "ix_org_group_members_group_id",
+    [
+     "org_group_members.group_id"
+    ],
+    false
+   ],
+   [
+    "ix_org_group_members_org_id",
+    [
+     "org_group_members.org_id"
+    ],
+    false
+   ],
+   [
+    "ix_org_group_members_user_id",
+    [
+     "org_group_members.user_id"
+    ],
+    false
+   ]
+  ],
+  "primary_key": [
+   "id"
+  ],
+  "uniques": [
+   [
+    "uq_org_group_members_group_user",
+    [
+     "group_id",
+     "user_id"
+    ]
+   ]
+  ]
+ },
+ "org_groups": {
+  "checks": [],
+  "columns": [
+   {
+    "default": null,
+    "name": "org_id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": null,
+    "name": "slug",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=63)"
+   },
+   {
+    "default": null,
+    "name": "name",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=200)"
+   },
+   {
+    "default": null,
+    "name": "description",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=2000)"
+   },
+   {
+    "default": "'internal'",
+    "name": "source",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=16)"
+   },
+   {
+    "default": null,
+    "name": "external_id",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=255)"
+   },
+   {
+    "default": null,
+    "name": "created_by",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=320)"
+   },
+   {
+    "default": "<function uuid7>",
+    "name": "id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": "<function utcnow>",
+    "name": "created_at",
+    "nullable": false,
+    "server_default": "<sqlalchemy.sql.functions.now; now>",
+    "type": "DateTime(timezone=True)"
+   },
+   {
+    "default": "<function utcnow>",
+    "name": "updated_at",
+    "nullable": false,
+    "server_default": "<sqlalchemy.sql.functions.now; now>",
+    "type": "DateTime(timezone=True)"
+   }
+  ],
+  "foreign_keys": [
+   [
+    [
+     "org_id"
+    ],
+    [
+     "organizations.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_org_groups_org_id_organizations"
+   ]
+  ],
+  "indexes": [
+   [
+    "ix_org_groups_org_id",
+    [
+     "org_groups.org_id"
+    ],
+    false
+   ],
+   [
+    "uq_org_groups_org_external_id",
+    [
+     "org_groups.org_id",
+     "org_groups.external_id"
+    ],
+    true
+   ]
+  ],
+  "primary_key": [
+   "id"
+  ],
+  "uniques": [
+   [
+    "uq_org_groups_org_slug",
+    [
+     "org_id",
+     "slug"
+    ]
+   ]
+  ]
+ },
  "org_plugin_approvals": {
   "checks": [],
   "columns": [

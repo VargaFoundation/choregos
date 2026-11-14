@@ -41,6 +41,7 @@ from .security import (
     verify_egress_token,
     verify_run_token,
 )
+from .services.org_groups import groups_of
 
 _run_log = get_logger("choregos.run")
 
@@ -126,7 +127,9 @@ async def _principal_from_user(session: AsyncSession, user: User, *, narrow: boo
         kind="machine" if user.is_service else "user",
         org_roles=org_roles,
         project_roles=project_roles,
-        groups=[str(g) for g in (user.groups or [])],
+        # The identity provider's claim, then the organisation's own groups as
+        # `choregos:<org>:<group>` (ADR 0160): one more query, in the platform scope set above.
+        groups=await groups_of(session, user),
     )
     # THIS request's session sees only the principal's organisations: this is where RLS arms,
     # because this is where we know who is speaking.

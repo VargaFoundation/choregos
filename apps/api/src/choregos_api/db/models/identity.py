@@ -10,10 +10,12 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -97,6 +99,51 @@ class MachineAccount(Base, PkMixin, TimestampMixin):
     created_by: Mapped[str | None] = mapped_column(String(320), nullable=True)
     #: Set when the account ends: the row stays so that the journal still reads, its slug stays taken.
     removed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class OrgGroup(Base, PkMixin, TimestampMixin):
+    """A group of people that belongs to an organisation (ADR 0160), with exactly one source.
+
+    `internal`: created and edited in the console by an organisation administrator. `scim`: pushed by
+    an identity provider (`external_id` is its identifier there), read-only through the core API. The
+    identity provider's `groups` claim (`User.groups`) stays a third source, read as before."""
+
+    __tablename__ = "org_groups"
+    __table_args__ = (
+        UniqueConstraint("org_id", "slug", name="uq_org_groups_org_slug"),
+        Index(
+            "uq_org_groups_org_external_id",
+            "org_id",
+            "external_id",
+            unique=True,
+            postgresql_where=text("external_id IS NOT NULL"),
+            sqlite_where=text("external_id IS NOT NULL"),
+        ),
+    )
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    slug: Mapped[str] = mapped_column(String(63))
+    name: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    #: `internal` or `scim`: who may change the group (ADR 0160).
+    source: Mapped[str] = mapped_column(String(16), default="internal")
+    external_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_by: Mapped[str | None] = mapped_column(String(320), nullable=True)
+
+
+class OrgGroupMember(Base, PkMixin):
+    """One person in one organisation group (ADR 0160)."""
+
+    __tablename__ = "org_group_members"
+    __table_args__ = (UniqueConstraint("group_id", "user_id", name="uq_org_group_members_group_user"),)
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    group_id: Mapped[str] = mapped_column(ForeignKey("org_groups.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    added_by: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), default=utcnow, nullable=False
+    )
 
 
 class ApiToken(Base, PkMixin, TimestampMixin):

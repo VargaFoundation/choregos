@@ -37,6 +37,7 @@ import {
   TrainFront,
   TriangleAlert,
   Users,
+  UsersRound,
   Wallet,
   Workflow,
   Zap,
@@ -289,6 +290,7 @@ export function adminGroups(
       entries: [
         page("/admin", "Overview", LayoutDashboard),
         page("/admin/members", "Members", Users),
+        pages("/admin/groups", "Groups", UsersRound),
         page("/admin/connectors", "Installed connectors", Plug),
         page("/admin/models", "Models", Cpu),
         page("/admin/remote-agents", "Remote agents", Bot),
