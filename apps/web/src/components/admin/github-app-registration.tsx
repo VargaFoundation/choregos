@@ -5,9 +5,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useId, useState } from "react";
 import { Alert, Badge, Button, Card, Code, Field, Input, ReadState } from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
+import { sourceFile } from "@/lib/publishing";
 import type { GitHubAppRegistrationStatus } from "@/lib/types";
 
-const DOCS = "https://github.com/VargaFoundation/choregos/blob/main/docs/deployment.md#the-github-app";
+const DOCS = sourceFile("docs/deployment.md#the-github-app");
 
 /**
  * Step 1 of GitHub's App Manifest flow: a real form POSTed to github.com, whose one field, `manifest`,
