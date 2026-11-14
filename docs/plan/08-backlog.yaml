@@ -4849,6 +4849,14 @@ stories:
     size: M
     depends_on: [S65-17]
     notes: "listOutposts says whether outposts are on and whether the door has a signing key; an outpost carries control_plane; an approval refused to a token has the code approval_requires_session, its 401 speaks of an approval and the window is on the instance; enrolment tokens are listed and cancelled (enrolment_used for one that enrolled); an instance names its enrolment token and who issued it; the calls' 1000-call window is said; the CLI and the console use each of them."
+  - id: S65-33
+    title: "test(api): the outposts' wait tests read the mechanism, not the clock (findings #1710, #1725)"
+    stream: S65
+    sprint: 8
+    priority: 1
+    size: S
+    depends_on: [S65-12, S65-16]
+    notes: "Four wall-clock bounds (1 s, 1 s, 2 s, 1.5 s) were crossed on loaded CI runners with the door right. The wake-up tests push the periodic look a minute away and read the poll's pauses (kits/outpost_daemon.record_pauses: one pause, ended by the wake-up; without a relay every pause runs its course; wait_s 0 takes none), and wait for the poll's first pause instead of sleeping; the answer side reads that the notification was heard. Tests only."
   - id: S65-32
     title: "fix(api): a logger cached at first use stays within reach of capture_logs (finding #1717)"
     stream: S65

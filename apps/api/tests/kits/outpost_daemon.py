@@ -50,6 +50,39 @@ def unb64(text: str) -> bytes:
     return base64.urlsafe_b64decode(text + "=" * (-len(text) % 4))
 
 
+@dataclass
+class Pauses:
+    """The pauses a waiting poll takes between two looks (`door._pause`), as they happen.
+
+    What a test of the wait reads instead of the clock: a shared CI runner can take seconds to run
+    what takes milliseconds here, and a bound on the time measured that load, not the door (#1710,
+    #1725). A poll that answers at once takes no pause; one that waits takes one before every look
+    after the first; a pause ends early when the poll is woken, and runs its course otherwise."""
+
+    #: How many pauses began.
+    began: int = 0
+    #: For each pause that ended, in order: whether it ended because the poll was woken.
+    woken: list[bool] = field(default_factory=list)
+
+
+def record_pauses(monkeypatch: pytest.MonkeyPatch) -> Pauses:
+    """Record every pause of every poll the door serves in this process, from now on."""
+    from choregos_api.outposts import door
+
+    pauses = Pauses()
+    pause = door._pause
+
+    async def recorded(woken: Any, gone: Any, seconds: float) -> None:
+        pauses.began += 1
+        try:
+            await pause(woken, gone, seconds)
+        finally:
+            pauses.woken.append(woken.is_set())
+
+    monkeypatch.setattr(door, "_pause", recorded)
+    return pauses
+
+
 def key_wrapper(monkeypatch: pytest.MonkeyPatch, label: str = KEY_WRAPPER_LABEL) -> None:
     """Give the deployment a key wrapper (ADR 0103): without one no call's arguments are written."""
     from choregos_api.secret_store import ENV_KEKS
