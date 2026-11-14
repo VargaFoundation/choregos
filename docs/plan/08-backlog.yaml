@@ -4865,6 +4865,47 @@ stories:
     size: M
     depends_on: [S65-14]
     notes: "Contract first (settleAction, ActionSettlement, SettlementOutcome, not_made, choregos.action.settled). Guarded as an approval (human session, step-up, approver rank and group, separation of duties); made records the effect done with the stated result and the action runs again from its journal to succeeded; not_made is never attempted and the action fails and compensates what came before; the effect keeps the doubt's evidence; settling twice with the same outcome changes nothing, the other is 409; the run that follows starts under the same workflow id; no change under workflows/; the action page's settle form."
+  - id: S65-20
+    title: "docs(adr),fix(api): ADR 0163, and an external agent never carries a step"
+    stream: S65
+    sprint: 8
+    priority: 1
+    size: S
+    depends_on: []
+    notes: "The outposts plan's lot L2, rebuilt on S63. A test first showed that a workflow naming an `external` agent was published and that resolve_agent handed a run its version; refused at publication (422) and when a run resolves it (AgentUnavailable, after the lifecycle's own refusals); internal and remote agents unchanged; a pin stays allowed; the upgrade notes give the query that finds such a workflow."
+  - id: S65-21a
+    title: "contract(openapi): a draft of a person's decision, and discarding it (ADR 0163)"
+    stream: S65
+    sprint: 8
+    priority: 1
+    size: XS
+    depends_on: [S65-20]
+    notes: "HumanRequest.draft, DecisionDraft, DELETE /work-items/{id}/human-requests/{request_id}/draft (discardDecisionDraft), listed as contract-first until S65-21; make contracts."
+  - id: S65-21b
+    title: "contract(openapi): the decision draft names ADR 0163"
+    stream: S65
+    sprint: 8
+    priority: 1
+    size: XS
+    depends_on: [S65-21a]
+    notes: "Another ADR merged as 0162 while #1697 held the number; the four descriptions merged with S65-21a point at 0163."
+  - id: S65-21
+    title: "feat(api): the MCP door reads a person's waiting request and drafts its decision (ADR 0163)"
+    stream: S65
+    sprint: 8
+    priority: 1
+    size: M
+    depends_on: [S65-20, S65-21a]
+    notes: "get_pending_decision (mcp:read) and draft_decision (mcp:write, item:decide, counted in the day's writes, audited workitem.decision.draft); human_requests.draft (migration); another person's request, a decided one or one of an unreadable project is not found; a draft decides nothing (the request waits, no decision event, no workitem.decision); the discard route and the decision's audit `draft: same|changed`; nothing under workflows/ changes."
+  - id: S65-22
+    title: "feat(web),docs: the draft on the awaited decision, taken or discarded; the door's documentation (ADR 0163)"
+    stream: S65
+    sprint: 8
+    priority: 1
+    size: S
+    depends_on: [S65-21]
+    notes: "The awaited decision shows the draft, who made it and through what, and its note; Take fills the form (the person still decides and attests), Discard calls the route; docs/integrations.md and the MCP page of the user documentation list the two tools."
+  # ───────────── S67 — the terminal is a surface of the platform (ADR 0154) ─────────────
   # ───────────── S67 — the terminal is a surface of the platform (ADR 0154) ─────────────
   - id: S67-00
     title: "docs(adr): ADR 0154, the terminal is a surface of the platform; the S67 plan"

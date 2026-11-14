@@ -22,7 +22,7 @@ from ..deps import _aware
 from ..errors import unprocessable
 from ..schemas import AgentOverrides, AgentSpec, CodeRuntime, HostedImageSource, HostedRuntime
 from ..schemas.agents import grant_name
-from .agent_governance import usable_in_project
+from .agent_governance import carries_no_step, usable_in_project
 from .agent_releases import served
 
 
@@ -220,6 +220,11 @@ async def resolve_agent(
         raise AgentUnavailable(f"agent `{slug}` is a draft: activate it before a run uses it")
     if agent.expires_at is not None and _aware(agent.expires_at) <= utcnow():
         raise AgentUnavailable(f"agent `{slug}` expired on {agent.expires_at:%Y-%m-%d}")
+    # An external agent -- a client of the MCP door -- runs nowhere: without this it would run as an ACP
+    # run of its version (ADR 0163 §1). After the lifecycle, so a retired one still says it is retired.
+    external = carries_no_step(agent.kind, agent.slug)
+    if external is not None:
+        raise AgentUnavailable(external)
     pin = (
         await session.execute(
             select(ProjectAgent).where(
