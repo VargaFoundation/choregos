@@ -59,6 +59,27 @@ class AssistantStop(Dto):
     reason: str
 
 
+class AssistantLaunchBind(Dto):
+    """Where a launch is bound (ADR 0158): a team's project of the organisation and one of its workflows."""
+
+    project: str = Field(pattern=SLUG)
+    workflow: str = Field(min_length=1, max_length=64)
+    enabled: bool = True
+
+
+class AssistantLaunch(Dto):
+    """A launch the manifest declares, with its binding when it has one (ADR 0158)."""
+
+    name: str
+    description: str
+    required: bool
+    input_schema: dict[str, Any] = Field(default_factory=dict)
+    project: str | None = None
+    workflow: str | None = None
+    enabled: bool
+    bound_by: str | None = None
+
+
 class Assistant(Dto):
     id: str
     slug: str
@@ -75,6 +96,8 @@ class Assistant(Dto):
     stopped: AssistantStop | None = None
     policy_overrides: dict[str, Any]
     bindings: list[AssistantBinding]
+    #: The workflows the assistant may propose to start, and where each is bound (ADR 0158).
+    launches: list[AssistantLaunch] = Field(default_factory=list)
     created_by: str | None = None
     created_at: datetime
 
@@ -101,9 +124,18 @@ class AssistantList(Dto):
 
 class AssistantReadinessItem(Dto):
     kind: Literal[
-        "assistant_missing", "config_missing", "need_unbound", "need_not_served", "identity_unsupported"
+        "assistant_missing",
+        "config_missing",
+        "need_unbound",
+        "need_not_served",
+        "identity_unsupported",
+        "launch_unbound",
+        "launch_workflow_missing",
+        "launch_inputs_mismatch",
     ]
     need: str | None = None
+    #: The launch, for the `launch_*` kinds (ADR 0158).
+    launch: str | None = None
     key: str | None = None
     message: str
     fix_by: Literal["owners", "org_admin"]

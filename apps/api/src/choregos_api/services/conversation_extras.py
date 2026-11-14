@@ -25,6 +25,8 @@ class ConversationExtras:
     actions: dict[str, Any] = field(default_factory=dict)
     #: `run_task` (S63-13), when the installation has on-demand tasks.
     tasks: dict[str, LoopTool] = field(default_factory=dict)
+    #: `launch__<name>` and `launch_status` (ADR 0158), when the installation binds launches.
+    launches: dict[str, LoopTool] = field(default_factory=dict)
 
     @property
     def loop_tools(self) -> list[LoopTool]:
@@ -35,6 +37,7 @@ class ConversationExtras:
             + list(self.memory.values())
             + [a.loop_tool() for a in self.actions.values()]
             + list(self.tasks.values())
+            + list(self.launches.values())
         )
 
     def serves(self, name: str) -> bool:
@@ -45,9 +48,14 @@ class ConversationExtras:
             or name in self.memory
             or name in self.actions
             or name in self.tasks
+            or name in self.launches
         )
 
     async def call(self, session: AsyncSession, name: str, arguments: dict[str, Any]) -> str:
+        if name in self.launches:
+            from .conversation_launches import call as launch
+
+            return await launch(session, self.record, name, arguments)
         if name in self.tasks:
             from .conversation_tasks import call as run_task
 
@@ -81,6 +89,9 @@ async def conversation_extras(
     from .conversation_tasks import offered
 
     extras.tasks = await offered(session, record)
+    from .conversation_launches import offered as offered_launches
+
+    extras.launches = await offered_launches(session, record)
     # S63-05: an assistant's conversation reads the knowledge of its installation, and of no other.
     extras.knowledge = list(await installation_bases(session, record))
     if extras.knowledge:

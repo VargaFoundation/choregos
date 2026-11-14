@@ -46,6 +46,7 @@ from .agents import (
     HostedBuildRecord,
     ProjectAgent,
 )
+from .assistant_launches import AssistantLaunchBinding
 from .assistant_reads import AssistantRead
 from .assistants import AssistantInstallation, AssistantToolBinding, ConnectedAccount, ConversationAction
 from .audit import AuditLog, NetworkDecision
@@ -114,6 +115,7 @@ ALL_TABLES = [
     OrgGroupMember,
     AssistantInstallation,
     AssistantRead,
+    AssistantLaunchBinding,
     AssistantToolBinding,
     TaskSubscription,
     TaskEvent,
@@ -198,6 +200,7 @@ __all__ = [
     "ApiToken",
     "ArtifactRecord",
     "AssistantInstallation",
+    "AssistantLaunchBinding",
     "AssistantRead",
     "AssistantToolBinding",
     "AuditLog",
