@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://choregos.dev/schemas/conversation-evals.schema.json",
   "title": "ConversationEvals",
-  "description": "A conversation suite an assistant ships (ADR 0140, ADR 0133): scenarios of user turns, the tool results a source's fake answers, and deterministic assertions on the conversation's journal (the ordered tool calls and the final texts). The assertions are exact and run first; `rubric` is scored by a judge model once the assertions pass; a case fails when any criterion is below its threshold. A tool is named `<need>__<operation>`, as the assistant's `tools` declare it.",
+  "description": "A conversation suite an assistant ships (ADR 0140, ADR 0133): scenarios of user turns, the tool results a source's fake answers, and deterministic assertions on the conversation's journal (the ordered tool calls and the final texts). The assertions are exact and run first; `rubric` is scored by a judge model once the assertions pass; a case fails when any criterion is below its threshold. A tool is named `<need>__<operation>`, as the assistant's `tools` declare it, or is one its launches give the agent: `launch__<name>` and `launch_status` (ADR 0158).",
   "type": "object",
   "required": [
     "kind",
@@ -13,8 +13,8 @@
   "$defs": {
     "tool": {
       "type": "string",
-      "pattern": "^[a-z][a-z0-9_]*__[a-z][a-z0-9_]*$",
-      "description": "`<need>__<operation>`"
+      "pattern": "^([a-z][a-z0-9_]*__[a-z][a-z0-9_]*|launch_status)$",
+      "description": "`<need>__<operation>`, the `launch__<name>` of a launch, or `launch_status` (ADR 0158)"
     },
     "text_match": {
       "description": "a word or phrase (case-insensitive, whole words) or an object with a regular expression",
@@ -231,7 +231,7 @@
           "type": "object",
           "description": "what the sources' fakes answer, by `<need>__<operation>`: a value is the answer of every call, an array is the answers of successive calls (the last one repeats)",
           "propertyNames": {
-            "pattern": "^[a-z][a-z0-9_]*__[a-z][a-z0-9_]*$"
+            "pattern": "^([a-z][a-z0-9_]*__[a-z][a-z0-9_]*|launch_status)$"
           },
           "additionalProperties": true
         },

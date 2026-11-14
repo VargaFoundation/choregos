@@ -176,7 +176,7 @@ export type ContextPack = {
   generated_at?: string;
 };
 
-/** `<need>__<operation>` */
+/** `<need>__<operation>`, the `launch__<name>` of a launch, or `launch_status` (ADR 0158) */
 export type ConversationEvalsTool = string;
 
 /** a word or phrase (case-insensitive, whole words) or an object with a regular expression */
@@ -251,7 +251,7 @@ export type ConversationEvalsCase = {
   }>;
 };
 
-/** A conversation suite an assistant ships (ADR 0140, ADR 0133): scenarios of user turns, the tool results a source's fake answers, and deterministic assertions on the conversation's journal (the ordered tool calls and the final texts). The assertions are exact and run first; `rubric` is scored by a judge model once the assertions pass; a case fails when any criterion is below its threshold. A tool is named `<need>__<operation>`, as the assistant's `tools` declare it. */
+/** A conversation suite an assistant ships (ADR 0140, ADR 0133): scenarios of user turns, the tool results a source's fake answers, and deterministic assertions on the conversation's journal (the ordered tool calls and the final texts). The assertions are exact and run first; `rubric` is scored by a judge model once the assertions pass; a case fails when any criterion is below its threshold. A tool is named `<need>__<operation>`, as the assistant's `tools` declare it, or is one its launches give the agent: `launch__<name>` and `launch_status` (ADR 0158). */
 export type ConversationEvals = {
   kind: "conversation";
   /** the slug of the assistant's agent */
