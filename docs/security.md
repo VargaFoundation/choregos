@@ -326,7 +326,10 @@ The `TOOL_CALLED` event carries `as: person:<subject>` (or `assigned:<connector>
 **What the identity provider must allow.** The exchange client (`CHOREGOS_TOKEN_EXCHANGE_CLIENT_ID` and
 `_SECRET`, `_ENDPOINT`; by default the console's client and token endpoint) needs the realm's standard
 token exchange enabled, permission to exchange towards each source's audience, and refresh tokens at sign-in (the realm's normal ones). Keycloak's standard exchange has no actor token and ignores
-`requested_actor`: `act` is in the issued token only if a protocol mapper adds it. Sources must accept
+`requested_actor`: `act` is in the issued token only if a protocol mapper adds it. Keycloak grants an audience only
+through a client scope that carries it: either a default scope of the exchange client (then every token
+that client is issued carries the source's audience), or an optional one that the request names. Prefer the
+second: set `CHOREGOS_TOKEN_EXCHANGE_SCOPES` (a JSON object, audience to scope) and the exchange sends it. Sources must accept
 tokens of their audience (`iris-mcp`, `insights360-mcp`, ...). Through an MCP gateway the mode is refused.
 
 The dedicated security review of this exchange (ADR 0135) was done on 2026-11-11: see
