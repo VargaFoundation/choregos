@@ -4,10 +4,16 @@
  * last hour. One running run is the reader's to stop, the other is not (`can_stop: false`); the session
  * has no spend the gateway could read (`spend: null`, shown "—"). Stopping a run moves it to the
  * finished entries, cancelled; stopping it again answers 409, as the API does. Stopping an agent
- * cancels its runs in flight and answers the counts.
+ * cancels its runs in flight and answers the counts. A conversation turn of the `concierge` assistant
+ * is in flight too, for its owner: stopping the assistant cancels it and answers how many turns were
+ * cancelled; resuming answers 409 when the assistant is not stopped (S64-09, ADR 0142 §4 bis).
  */
 import { ApiError } from "@/lib/api";
+import type { Assistant, AssistantStopResult } from "@/lib/assistants-api";
 import type { ActivityEntry, ActivityList, AgentStopResult, Run } from "@/lib/types";
+
+/** The demo's assistant installations, by id: a report grouped by assistant names each by its slug. */
+export const MOCK_INSTALLATIONS: Record<string, string> = { "inst-concierge": "concierge", "inst-analyst": "analyst" };
 
 const iso = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
 const spend = (tokensIn: number, tokensOut: number, cost: number, booked = false) => ({
@@ -69,6 +75,21 @@ export function seedActivity(): ActivityList {
         spend: null,
         can_stop: false,
       },
+      {
+        // A turn has no stop of its own: its assistant's stop, or its agent's, is the stop.
+        kind: "turn",
+        id: "t-0c41d9e7",
+        status: "running",
+        agent_slug: "concierge-agent",
+        assistant: "inst-concierge",
+        model: "claude-haiku",
+        initiated_by: "nina@acme.dev",
+        started_at: iso(1),
+        last_event: "tool_call",
+        steps: 3,
+        spend: spend(8_200, 640, 0.02),
+        can_stop: false,
+      },
     ],
     finished: [
       {
@@ -110,11 +131,16 @@ export function seedActivity(): ActivityList {
 }
 
 let state = seedActivity();
+/** Who stopped which assistant (by slug), when and why. */
+let stoppedAssistants = new Map<string, NonNullable<Assistant["stopped"]>>();
 
 /** Back to the seed: a test starts from the same list. */
 export function resetActivity(): void {
   state = seedActivity();
+  stoppedAssistants = new Map();
 }
+
+const installationOf = (slug: string) => Object.entries(MOCK_INSTALLATIONS).find(([, s]) => s === slug)?.[0];
 
 function narrowed(list: ActivityEntry[], query: URLSearchParams): ActivityEntry[] {
   const project = query.get("project");
@@ -134,7 +160,7 @@ function narrowed(list: ActivityEntry[], query: URLSearchParams): ActivityEntry[
 
 function cancel(entry: ActivityEntry, reason: string): void {
   state.in_flight = state.in_flight.filter((e) => e !== entry);
-  state.finished.unshift({ ...entry, status: "cancelled", ended_at: iso(0), last_event: `run.cancelled: ${reason}`, can_stop: false });
+  state.finished.unshift({ ...entry, status: "cancelled", ended_at: iso(0), last_event: `${entry.kind}.cancelled: ${reason}`, can_stop: false });
 }
 
 function reasonOf(body: unknown): string {
@@ -183,6 +209,22 @@ export function activityApi(method: string, path: string, body: unknown): unknow
       turns_cancelled: mine.filter((e) => e.kind === "turn").length,
       not_stopped: [],
     };
+    return result;
+  }
+  const assistant = /^\/orgs\/[^/]+\/assistants\/([^/]+)\/(stop|resume)$/.exec(route);
+  if (method === "POST" && assistant) {
+    const slug = decodeURIComponent(assistant[1]!);
+    const id = installationOf(slug);
+    if (!id) throw new ApiError(404, { title: "Not Found", detail: `no assistant ${slug}` });
+    if (assistant[2] === "resume") {
+      if (!stoppedAssistants.delete(slug)) throw new ApiError(409, { title: "Conflict", detail: "the assistant is not stopped" });
+      return { slug, status: "ready", stopped: null } as unknown as Assistant;
+    }
+    const reason = reasonOf(body);
+    stoppedAssistants.set(slug, { at: iso(0), by: "lea@acme.dev", reason });
+    const turns = state.in_flight.filter((e) => e.kind === "turn" && e.assistant === id);
+    for (const entry of turns) cancel(entry, reason);
+    const result: AssistantStopResult = { slug, status: "suspended", turns_cancelled: turns.length, not_stopped: [] };
     return result;
   }
   return undefined;

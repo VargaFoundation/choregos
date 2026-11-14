@@ -77,15 +77,16 @@ x-request-signature:
       without storing anything (an authenticated timestamp it checks alone, RFC 9449 §8) and takes it for 300
       seconds. It proves freshness; it is not single use.
     seq: >-
-      A whole number, from 1 to 2^53 - 1, that the instance raises with every request it signs. Not in the
-      enrolment's signature. The door keeps the last one it took on the instance's row and refuses a request
+      A whole number, from 1 to 2^53 - 1, that the instance raises with every request it signs: the bound is
+      the claim's, a number every JSON parser reads exactly, and a `seq` outside it is `invalid_signature`.
+      Not in the enrolment's signature. The door keeps the last one it took on the instance's row and refuses a request
       whose `seq` is not above it, at whichever replica it arrives. Gaps are allowed. A request the door refused
       before this check took no sequence; the daemon signs it again under a higher one. Two requests sent at
       once may arrive out of order: the higher sequence wins and the other is signed again. A daemon is
       expected to number from its clock in milliseconds, and never below its last sequence plus one: a
       daemon that lost its state file is then not left behind for good, its clock being past every number
-      it sent. The door keeps a 64-bit integer. A `replayed_sequence` carries no hint of the number the
-      door holds.
+      it sent. How a door stores the number is its own affair. A `replayed_sequence` carries no hint of the
+      number the door holds.
   enrolment_claims: [htm, htu, body_sha256, iat]
   session_claims: [htm, htu, body_sha256, iat, nonce, seq]
   nonce_header: Outpost-Nonce
@@ -109,7 +110,10 @@ x-request-signature:
     (422); then what the verb itself refuses. At `enrol` there is no nonce, sequence or instance: a body in
     which no `signing_key` can be read is a 422 before the signature is looked at, the token is checked where
     the instance would be (401 `invalid_enrolment_token`, 409 `key_already_enrolled`), and a refused
-    enrolment does not use the token up.
+    enrolment does not use the token up. One refusal is found later: a key that is already an instance of
+    another outpost is out of the token's sight (the door reads one outpost's rows at a time, ADR 0148 §6),
+    and the door meets it only when it writes the instance, so that this 409 `key_already_enrolled` comes
+    after the rate, the protocol and the schema.
 
 x-call-signature:
   whose: >-
@@ -256,7 +260,11 @@ x-vectors:
     What a door and a daemon are both built against: signed requests of one instance; the envelope of a call
     and of its answer, with the door's signature of that call; nothing left to chance. Their keys are derived
     from labels written in the files: test material, derivable by anyone, never a key in service. The door's
-    key of the second file is the one the policy example pins.
+    key of the second file is the one the policy example pins. Their instance id is illustrative: an
+    instance id is opaque to a daemon, and each door gives ids of its own shape (this one writes its
+    outpost's id at the head of each, ADR 0148 §6), so no door issues the vectors' own. A door is held to
+    them by taking their instance as one it enrolled, under its own outpost; nothing they sign depends on
+    the id's shape.
   request_signature: ./schemas/examples/outpost-signature.vector.json
   sealing: ./schemas/examples/outpost-sealing.vector.json
 
@@ -301,10 +309,12 @@ paths:
         "401":
           description: The signature or the enrolment token is refused
           x-codes: [invalid_signature, request_mismatch, stale_iat, invalid_enrolment_token]
+          headers: { Outpost-Nonce: { $ref: "#/components/headers/OutpostNonce" } }
           content: { application/problem+json: { schema: { $ref: "#/components/schemas/DoorProblem" } } }
         "409":
-          description: This signing key is already an approved or revoked instance, or pending elsewhere
+          description: This signing key is already an approved or revoked instance, or an instance of another outpost
           x-codes: [key_already_enrolled]
+          headers: { Outpost-Nonce: { $ref: "#/components/headers/OutpostNonce" } }
           content: { application/problem+json: { schema: { $ref: "#/components/schemas/DoorProblem" } } }
         "413": { $ref: "#/components/responses/BodyTooLarge" }
         "422": { $ref: "#/components/responses/InvalidRequest" }

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { Suspense, type ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import SpendPage from "@/app/costs/page";
@@ -192,7 +192,7 @@ describe("each page passes its own filter", () => {
     expect(call?.[2]).not.toHaveProperty("agent");
     expect(call?.[2]).not.toHaveProperty("workflow");
     const groups = within(screen.getByRole("group", { name: "Group by" })).getAllByRole("button").map((b) => b.textContent);
-    expect(groups).toEqual(["By model", "By agent", "By workflow", "By run"]);
+    expect(groups).toEqual(["By model", "By agent", "By workflow", "By run", "By assistant"]);
   });
 
   it("the Costs page gains the run grouping and reads its breakdowns in tokens", async () => {
@@ -208,5 +208,45 @@ describe("each page passes its own filter", () => {
     expect(within(screen.getByTestId("ventilation-agent")).getAllByTestId("row-tokens").length).toBeGreaterThan(0);
     // A tool call spends no model token: its card stays in money.
     expect(screen.getByTestId("ventilation-model-tool")).toHaveAttribute("data-measure", "cost");
+  });
+
+  it("the Costs page groups by assistant, each named by its slug (S64-09d)", async () => {
+    await show(<SpendPage />);
+    const assistants = await screen.findByTestId("ventilation-assistant");
+    expect(assistants).toHaveTextContent("concierge");
+    expect(assistants).toHaveTextContent("analyst");
+    expect(vi.mocked(api.orgCosts).mock.calls.some(([, group]) => group === "assistant")).toBe(true);
+    expect(within(screen.getByRole("heading", { name: "Top assistants" }).closest("section")!).getByRole("link", { name: "CSV" }).getAttribute("href")).toContain(
+      "group_by=assistant",
+    );
+  });
+});
+
+describe("narrowed to one assistant (S64-09d)", () => {
+  it("the mock ledger narrows by assistant installation, and counts none of another's lines", () => {
+    const all = mockCostReport("/orgs/acme/costs?group_by=assistant");
+    const concierge = mockCostReport("/orgs/acme/costs?group_by=model&assistant=inst-concierge");
+    expect(concierge.total.cost_usd).toBeCloseTo(all.rows.find((r) => r.key === "concierge")!.cost_usd);
+    expect(concierge.rows.map((r) => r.key)).toEqual(["claude-haiku"]);
+    expect(mockCostReport("/orgs/acme/costs?group_by=agent&assistant=inst-analyst").rows.map((r) => r.key)).toEqual(["analyst-agent"]);
+    // A project's report holds no conversation turn: they are spent in their people's personal spaces.
+    expect(mockCostReport("/projects/billing-api/costs?group_by=assistant").rows.map((r) => r.key)).toEqual(["—"]);
+  });
+
+  it("the panel's reads and its cache are kept apart per assistant", async () => {
+    await show(
+      <>
+        <TokensAndCostPanel filter={{ assistant: "inst-concierge" }} groups={["model"]} />
+        <TokensAndCostPanel filter={{ assistant: "inst-analyst" }} groups={["model"]} />
+      </>,
+    );
+    await waitFor(() => expect(screen.getAllByTestId("panel-model")).toHaveLength(2));
+    const tables = screen.getAllByTestId("panel-model");
+    expect(tables[0]).toHaveTextContent("claude-haiku");
+    expect(tables[0]).not.toHaveTextContent("claude-sonnet");
+    expect(tables[1]).toHaveTextContent("claude-sonnet");
+    expect(tables[1]).not.toHaveTextContent("claude-haiku");
+    const narrowed = vi.mocked(api.orgCosts).mock.calls.map(([, , f]) => f?.assistant);
+    expect(narrowed).toEqual(expect.arrayContaining(["inst-concierge", "inst-analyst"]));
   });
 });

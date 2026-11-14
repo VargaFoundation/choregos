@@ -59,6 +59,9 @@ class Permission(StrEnum):
     #: Create an outpost, issue its enrolment tokens, approve, pause and revoke (ADR 0147 §4): the
     #: organisation administrator, whose role holds every permission. No other role carries it.
     OUTPOST_MANAGE = "outpost:manage"
+    #: Create, edit and delete the organisation's groups and choose who is in them (ADR 0160): the
+    #: organisation administrator. Every member of the organisation reads them.
+    GROUP_MANAGE = "group:manage"
 
 
 ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {

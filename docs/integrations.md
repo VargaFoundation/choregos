@@ -28,7 +28,9 @@ and `2025-03-26`.
 | `get_work_item` | A work item's state, recent timeline and pending decision, with its link | `mcp:read` |
 | `summarize_run` | One agent run: stage, backend, model, status, cost, summary | `mcp:read` |
 | `list_pending_decisions` | What waits for a person, with the link where it is decided | `mcp:read` |
+| `get_pending_decision` | What waits for **your** decision: the list, or one request's full context (question, form, work item, existing draft, link) | `mcp:read` |
 | `create_work_item` | Opens a work item in a project (in its tracker first when external, ADR 0059) | `mcp:write` and the right to control work items |
+| `draft_decision` | Deposits a draft of the decision of a request waiting for you; it decides nothing (see below) | `mcp:write` and the right to decide work items |
 | `docs_search` | Searches this platform's user documentation: ranked pages with title, slug, public URL and a snippet | `mcp:read` |
 | `docs_read` | One documentation page as Markdown, by slug, or one of its sections by heading anchor; a long page comes in parts (`offset`) | `mcp:read` |
 
@@ -43,6 +45,31 @@ without internet. The links they give point to the public site, `CHOREGOS_DOCS_U
 project or not; they are audited (`mcp.call`) and rate limited like the other reads. A build without
 documentation answers so, with the public URL. Ask *"how do gates work in Choregos?"*: the client
 should call `docs_search`, then `docs_read`.
+
+### Your client prepares your decision (ADR 0163)
+
+A step of a workflow is carried by a person, never by your client: a workflow that names an agent of kind
+`external` is refused ([ADR 0163](adr/0163-a-client-prepares-a-person-s-decision-the-person-decides.md) §1).
+What your client may do is **prepare** the decisions that wait for you:
+
+1. `get_pending_decision` lists the requests you may answer yourself — addressed to you, to a group of
+   yours that may answer, or to anyone of your rank when the step names nobody, on work items you can read,
+   in projects where you may decide (an administrator's override does not count). With a `work_item`, it
+   returns what the request asks: the question, a task's form and the sentence it makes you attest, the
+   work item's body and fields, the draft already made, and the console link.
+2. `draft_decision` deposits a draft: `approve` or `reject` (with a `reason`) for an approval or a scope
+   change, `answer` (with the `answer`) for a question, `complete` (with the form's `values`, possibly
+   partial) or `reject` for a task, and a `note` saying why. The values are checked against the task's
+   form. A draft never attests. One draft per request: a new one replaces it.
+3. Nothing is decided: the request keeps waiting. The answer carries `pending_actions: [{id, summary,
+   confirm_url}]`, like an assistant's proposals; `confirm_url` opens the work item's awaited decision.
+   There you see the draft, which client made it (the token's name or the OAuth client, and the external
+   agent it acts as) and its note; **Take** fills the decision's form — you still check it, tick the
+   attestation and press the decision's button — and **Discard** removes it.
+
+Another person's request answers like a request that does not exist. A draft counts in your 50 writes a
+day and is audited (`workitem.decision.draft`; a discard `workitem.decision.draft.discard`); the decision's
+audit says whether it was the draft's (`draft: same` or `changed`).
 
 ### Assistants (ADR 0139)
 
@@ -648,19 +675,53 @@ apply to it; the outpost's own ceilings and the door's quotas do.
 | Code | When | Booked |
 | :-- | :-- | :-- |
 | `outpost_paused` | the outpost is paused or revoked, or outposts are switched off | no |
-| `outpost_offline` | no instance that serves the alias polled in the last minute, or none took the call within the connector's timeout | no |
-| `outpost_refused` | the outpost's own policy refused; `refusal` is its code (`tool_not_allowed`, `write_denied`, `unknown_endpoint`…) | no |
+| `outpost_offline` | no instance that serves the alias polled in the last minute, or none took the call within the connector's timeout. An instance announces its policy file's aliases at every poll: an alias the file does not hold is answered this way | no |
+| `outpost_refused` | the outpost's own policy refused; `refusal` is its code (`tool_not_allowed`, `write_denied`, `endpoint_unavailable`…) | no |
 | `outpost_not_admitted` | a quota of calls in flight or per minute is reached, or the call is too large to cross the door | no |
 | `outpost_timeout` | an instance took the read and its server did not answer in time | yes: it may have been executed |
+| `action_in_doubt` | an instance took the **write** and never answered: its action ended `in_doubt` | yes: it may have been executed, and it is never sent again |
 
 At declaration and at discovery the same refusals are a 409 that carries the code (a quota is a 429).
 A call that reached no server is not booked.
 
+**A write is delivered at most once, and may end in doubt** (ADR 0149 §5-6). Choregos does not see
+the outpost's server: once an instance has taken a write, an answer that never comes back leaves one
+thing unknown, whether the server made it. So:
+
+- the write is sent once. Whatever is retried finds that first call and reads what became of it;
+- a write no instance took reached no server: the action retries it and it is delivered when the
+  outpost is back (then fails, saying why, if the outpost stays away);
+- a write an instance took and never answered ends the action **`in_doubt`**: it is not sent again
+  and nothing the action had done is undone
+  ([Usage](usage.md#4-bis-governed-actions), "In doubt", says what a person then does).
+
+That is weaker than what a direct connector gives, so it is never implied. A write operation of an
+`mcp-outpost` connector is set to `allowed` or `approval` only when its rule says one of two things,
+in the same request or before it (`PATCH /orgs/{org}/connectors/{name}/operations/{operation}`):
+
+| The rule says | Meaning | After a doubt |
+|:--|:--|:--|
+| `"platform_arguments": ["action_key"]` | the tool has an argument `action_key` and makes a call harmless when it arrives twice with the same key. Choregos fills it (the same for one action and call, whatever an agent wrote there) | the write is delivered again with the same key; the action is in doubt only if every delivery was |
+| `"in_doubt_accepted": true` | an in-doubt outcome is accepted for this tool, explicitly | the action ends `in_doubt` |
+
+In the console, **Administration → Connectors** shows the two statements under each write of a
+connector at an outpost (**How it is delivered**), and nowhere else: the first is offered only when
+the tool's input schema has an `action_key` argument. What is ticked leaves with the policy that
+opens the write, in the same request, or alone with **Set**; the API's refusal is shown with its own
+words, on each statement it names.
+
+A request that says neither is a 422 that names both fields, and so is one that would withdraw the
+last of the two from a write that is open. `platform_arguments` is the list a plugin's server
+declares for its own operations ([Plugins](plugins.md)); here the organisation states it for a
+discovered tool, which declares nothing, and it is refused for a tool whose input schema has no such
+argument. A tool whose schema changes is closed again and loses both statements. Choregos does not
+verify that a server honours the key: the statement is the administrator's.
+
 **Limits of this version.**
 
-- **Reads only.** A write through an outpost is opened only under the rule that it is delivered at
-  most once (ADR 0149 §5-6); until the platform carries that rule, a write operation of an
-  `mcp-outpost` connector cannot be set to `allowed` or `approval`.
+- **An action in doubt waits for a person.** Nothing replays it by itself: a person checks the
+  system behind the outpost and settles it on the action's page (`settleAction`, S65-26): made, it
+  resumes after the write; not made, it fails and compensates what came before.
 - **The connector's own identity only.** The call reaches the server under the credential the
   outpost holds for the alias. A need that must be called as the person cannot be bound to such a
   connector.

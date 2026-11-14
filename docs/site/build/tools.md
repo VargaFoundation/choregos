@@ -177,6 +177,7 @@ with the layer that decided.
 - Bringing an organisation's own MCP gateway:
   [the gateway reference](../../integrations.md#your-organisations-mcp-gateway-adr-0105).
 - Tools in a network the platform cannot reach, for an organisation with no gateway there:
-  [outposts](../../outposts.md). They are off unless your operator turns them on, and carry reads
-  only for now.
+  [outposts](../../outposts.md). They are off unless your operator turns them on; a write
+  through one is delivered at most once, and may end in doubt, which a person settles on the
+  action's page once they have checked the system it was for.
 - [Host: security model](../host/security.md), for what the sandbox and the egress proxy enforce.

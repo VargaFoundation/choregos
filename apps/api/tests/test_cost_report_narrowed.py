@@ -1,9 +1,10 @@
-"""A spend report narrowed to one agent, one workflow, one work item; grouped by run; in tokens (S64-02).
+"""A spend report narrowed to one agent, one workflow, one work item, one assistant; grouped by run and
+by assistant; in tokens (S64-02, S64-09b).
 
-ADR 0141 §1: the cost routes keep their shape and gain the filters `agent`, `workflow` and `work_item`
-(combinable with each other and with `kind`, `since`, `until`), the grouping `run` (named by the run's
-work item key and stage), and the report's tokens in its total. One seeded ledger, at project and
-organisation scope, in JSON and in CSV.
+ADR 0141 §1: the cost routes keep their shape and gain the filters `agent`, `workflow`, `work_item` and
+`assistant` (combinable with each other and with `kind`, `since`, `until`), the groupings `run` (named by
+the run's work item key and stage) and `assistant` (named by the installation's slug), and the report's
+tokens in its total. One seeded ledger, at project and organisation scope, in JSON and in CSV.
 """
 
 from __future__ import annotations
@@ -85,6 +86,56 @@ async def _seed(project_id: str) -> dict[str, str]:
 @pytest.fixture
 async def items(client: AsyncClient, project: dict[str, Any]) -> dict[str, str]:
     return await _seed(project["id"])
+
+
+async def _seed_assistants(project_id: str) -> dict[str, str]:
+    """Two installations of the organisation and their lines: `investor`'s conversation turn and task,
+    `support`'s turn. Each cost is a power of two above the base seed's 31."""
+    from choregos_api.db.models import AssistantInstallation, CostLedger, Organization
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import select
+
+    now = datetime.now(UTC)
+    async with session_scope() as session:
+        varga = select(Organization.id).where(Organization.slug == "varga")
+        org_id = (await session.execute(varga)).scalar_one()
+        investor, support = (
+            AssistantInstallation(org_id=org_id, slug=slug, plugin="p", plugin_version="1",
+                                  manifest_digest="d", assistant_name=slug)
+            for slug in ("investor", "support")
+        )  # fmt: skip
+        session.add_all([investor, support])
+        await session.flush()
+
+        def line(usd: float, tokens: tuple[int, int, int], installation: str, **kw: Any) -> CostLedger:
+            tokens_in, tokens_out, tokens_cached = tokens
+            return CostLedger(
+                project_id=project_id,
+                ts=now,
+                provider="litellm",
+                cost_usd=usd,
+                cost_eur=usd / 2,
+                tokens_in=tokens_in,
+                tokens_out=tokens_out,
+                tokens_cached=tokens_cached,
+                installation_id=installation,
+                **kw,
+            )
+
+        session.add_all(
+            [
+                line(32.0, (3200, 320, 1000), investor.id, kind="model", agent_slug="agent-a"),
+                line(64.0, (6400, 640, 0), investor.id, kind="tool", agent_slug="agent-a"),
+                line(128.0, (12800, 1280, 5000), support.id, kind="model", agent_slug="agent-b"),
+            ]
+        )
+        return {"investor": investor.id, "support": support.id}
+
+
+@pytest.fixture
+async def assistants(items: dict[str, str], project: dict[str, Any]) -> dict[str, str]:
+    """The base seed and the assistants' lines on top of it: the base seed's lines are no assistant's."""
+    return await _seed_assistants(project["id"])
 
 
 def _url(scope: str, project: dict[str, Any], *, csv: bool = False) -> str:
@@ -176,6 +227,9 @@ async def test_the_csv_follows_the_filters(
         {"workflow": "w" * 65},
         {"work_item": ""},
         {"work_item": "i" * 129},
+        {"assistant": ""},
+        {"assistant": "a" * 65},
+        {"group_by": "assistants"},
         {"group_by": "runs"},
     ],
 )
@@ -215,6 +269,93 @@ async def test_the_csv_names_runs_too(
     lines = response.text.lstrip("﻿").splitlines()
     assert lines[0].startswith("run;cout_usd;"), lines[0]
     assert "A-1 · implement #2;4.000000;2.000000;400;40;10;1" in lines, lines
+
+
+# ───────────────────────── the assistant: its filter and its grouping ─────────────────────────
+
+
+@pytest.mark.parametrize("scope", SCOPES)
+async def test_a_report_narrowed_to_an_assistant_counts_none_of_another_assistants_lines(
+    client: AsyncClient, project: dict[str, Any], assistants: dict[str, str], scope: str
+) -> None:
+    investor = await _report(client, scope, project, group_by="assistant", assistant=assistants["investor"])
+    assert _by_key(investor) == {"investor": 96.0}, "support's 128.0, the base seed's 31.0: not investor's"
+    assert investor["total"]["cost_usd"] == 96.0
+    by_kind = await _report(client, scope, project, group_by="kind", assistant=assistants["investor"])
+    assert _by_key(by_kind) == {"model": 32.0, "tool": 64.0}
+    support = await _report(client, scope, project, group_by="model", assistant=assistants["support"])
+    assert support["total"]["cost_usd"] == 128.0
+    nobody = await _report(client, scope, project, assistant="no-such-installation")
+    assert (nobody["rows"], nobody["total"]["cost_usd"]) == ([], 0.0)
+
+
+@pytest.mark.parametrize("scope", SCOPES)
+async def test_the_assistant_filter_combines_with_the_others_and_with_kind(
+    client: AsyncClient, project: dict[str, Any], assistants: dict[str, str], scope: str
+) -> None:
+    tools = await _report(client, scope, project, assistant=assistants["investor"], kind="tool")
+    assert tools["total"]["cost_usd"] == 64.0
+    mine = await _report(client, scope, project, assistant=assistants["investor"], agent="agent-a")
+    assert mine["total"]["cost_usd"] == 96.0, "agent-a's own lines (21.0) are no assistant's"
+    disjoint = await _report(client, scope, project, assistant=assistants["support"], agent="agent-a")
+    assert disjoint["total"]["cost_usd"] == 0.0
+
+
+@pytest.mark.parametrize("scope", SCOPES)
+async def test_an_assistant_grouping_names_each_installation_by_its_slug(
+    client: AsyncClient, project: dict[str, Any], assistants: dict[str, str], scope: str
+) -> None:
+    report = await _report(client, scope, project, group_by="assistant")
+    assert report["group_by"] == "assistant"
+    assert _by_key(report) == {
+        "investor": 96.0,
+        "support": 128.0,
+        "—": 31.0,  # the base seed's lines: no assistant spent them
+    }
+    assert report["total"]["cost_usd"] == 255.0
+    narrowed = await _report(client, scope, project, group_by="assistant", agent="agent-b")
+    assert _by_key(narrowed) == {"support": 128.0, "—": 10.0}
+
+
+async def test_the_csv_follows_the_assistant_filter_and_grouping(
+    client: AsyncClient, project: dict[str, Any], assistants: dict[str, str]
+) -> None:
+    for scope in SCOPES:
+        params = {"group_by": "assistant", "assistant": assistants["support"]}
+        response = await client.get(_url(scope, project, csv=True), params=params)
+        assert response.status_code == 200, response.text
+        lines = response.text.lstrip("﻿").splitlines()
+        assert lines[0].startswith("assistant;cout_usd;"), lines[0]
+        assert "support;128.000000;64.000000;12800;1280;5000;1" in lines, lines
+        assert not any(line.startswith(("investor;", "—;")) for line in lines), lines
+        assert "total;128.000000;64.000000;12800;1280;5000" in lines, lines
+
+
+@pytest.mark.parametrize("scope", SCOPES)
+@pytest.mark.parametrize(
+    ("params", "wanted"),
+    [
+        ({"group_by": "assistant"}, (25500, 2550, 6350)),
+        ({"group_by": "model", "assistant": "investor"}, (9600, 960, 1000)),
+        ({"group_by": "assistant", "kind": "model"}, (18700, 1870, 6340)),
+        ({"group_by": "day", "assistant": "support"}, (12800, 1280, 5000)),
+    ],
+)
+async def test_an_assistants_tokens_in_the_total_are_the_sum_of_the_rows(
+    client: AsyncClient,
+    project: dict[str, Any],
+    assistants: dict[str, str],
+    scope: str,
+    params: dict[str, str],
+    wanted: tuple[int, int, int],
+) -> None:
+    if "assistant" in params:
+        params = {**params, "assistant": assistants[params["assistant"]]}
+    report = await _report(client, scope, project, **params)
+    total = report["total"]
+    for field in ("tokens_in", "tokens_out", "tokens_cached"):
+        assert total[field] == sum(row[field] for row in report["rows"]), field
+    assert (total["tokens_in"], total["tokens_out"], total["tokens_cached"]) == wanted
 
 
 # ───────────────────────── tokens in the total ─────────────────────────

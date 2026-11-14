@@ -52,6 +52,7 @@ const { outpostType, atTheFloor, outpost } = vi.hoisted(() => ({
     instances: { pending: 0, active: 0, revoked: 0 },
     endpoints: [],
     connectors: [],
+    control_plane: null,
     door_keys: [],
     created_by: null,
     created_at: "2026-11-01T00:00:00Z",
@@ -88,7 +89,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(api.orgConnectors).mockResolvedValue([atTheFloor]);
   vi.mocked(api.connectorTypes).mockResolvedValue([outpostType]);
-  vi.mocked(api.outposts).mockResolvedValue({ items: OUTPOSTS });
+  vi.mocked(api.outposts).mockResolvedValue({ items: OUTPOSTS, enabled: true, door_signing_key: true });
   vi.mocked(api.createOrgConnector).mockResolvedValue(atTheFloor);
 });
 
@@ -327,7 +328,7 @@ describe("editing a connector at an outpost", () => {
 
 describe("before any outpost", () => {
   it("leads to Outposts instead of a field to type a name in", async () => {
-    vi.mocked(api.outposts).mockResolvedValue({ items: [] });
+    vi.mocked(api.outposts).mockResolvedValue({ items: [], enabled: true, door_signing_key: true });
     page();
     await screen.findByTestId("connector-tracker-onsite");
     const form = screen.getByRole("button", { name: "Declare" }).closest("form")!;

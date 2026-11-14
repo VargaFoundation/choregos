@@ -77,6 +77,40 @@ class RunSummary(Dto):
     started_at: datetime | None = None
 
 
+class HumanRequestAssignee(Dto):
+    """Who a waiting request is addressed to (ADR 0153): a person, a group, or a person first."""
+
+    user: str | None = None
+    group: str | None = None
+    #: An organisation administrator reassigned the request: the workflow's actor no longer answers it.
+    reassigned: bool = False
+
+
+class DecisionDraftVia(Dto):
+    """Through what a draft came (ADR 0163 point 4)."""
+
+    door: Literal["mcp"] = "mcp"
+    #: The client: the name of the token it used, or its OAuth client id.
+    client: str | None = None
+    #: The external agent the client embodies, when it is attached to one (ADR 0033).
+    agent: str | None = None
+    user_agent: str | None = None
+
+
+class DecisionDraft(Dto):
+    """A draft of a person's decision, deposited by their client through the MCP door (ADR 0163)."""
+
+    kind: Literal["approve", "reject", "answer", "complete"]
+    answer: str | None = None
+    reason: str | None = None
+    values: dict[str, Any] | None = None
+    note: str | None = None
+    summary: str
+    by: str
+    via: DecisionDraftVia
+    at: datetime
+
+
 class HumanRequestDto(Dto):
     id: str
     work_item_id: str | None = None
@@ -88,6 +122,18 @@ class HumanRequestDto(Dto):
     decided_by: str | None = None
     decided_at: datetime | None = None
     decision: dict[str, Any] | None = None
+    assignee: HumanRequestAssignee | None = None
+    #: What a person's client prepared through the MCP door (ADR 0163); never a decision.
+    draft: DecisionDraft | None = None
+
+
+class AssigneeChange(Dto):
+    """`POST /work-items/{id}/human-requests/{request_id}/assignee` (ADR 0153): a person, a group, or
+    both (the person first, the group once the SLA has passed), and why."""
+
+    user: str | None = Field(default=None, min_length=3, max_length=254, pattern=r"^[^@\s]+@[^@\s]+$")
+    group: str | None = Field(default=None, min_length=1, max_length=200)
+    reason: str = Field(min_length=1, max_length=2000)
 
 
 class WorkflowFailure(Dto):

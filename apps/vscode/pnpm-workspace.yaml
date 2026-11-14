@@ -1,0 +1,8 @@
+# pnpm 12 blocks the install scripts of dependencies by default: each one must be allowed by
+# name, here, where the review sees it go by.
+allowBuilds:
+  # Downloads and verifies the platform's native binary: the bundle and vitest depend on it.
+  esbuild: true
+  # `vsce` signs a package for the Marketplace with it; packaging does not run it, and its install
+  # script would download a platform binary for nothing (ADR 0155 §7: the release signs with cosign).
+  "@vscode/vsce-sign": false

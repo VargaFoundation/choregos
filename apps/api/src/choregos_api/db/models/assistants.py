@@ -17,7 +17,8 @@ class AssistantInstallation(Base, PkMixin, TimestampMixin):
 
     The manifest is never copied: it is read again from the installed plugin (`plugin`, at the digest in
     `manifest_digest`), so an upgrade of the plugin is seen at once. `status` is `incomplete` while the
-    readiness has an item, `ready` when it has none, `suspended` once the plugin is uninstalled.
+    readiness has an item, `ready` when it has none, `suspended` once the plugin is uninstalled or while a
+    person has stopped it (`stopped_at`, ADR 0142 §4 bis), whatever the rest says.
     """
 
     __tablename__ = "assistant_installations"
@@ -44,6 +45,11 @@ class AssistantInstallation(Base, PkMixin, TimestampMixin):
     #: shown it: a key is shown once, a rotation makes a new generation.
     webhook_secret_generation: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     webhook_secret_shown_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    #: Who stopped the assistant, when and why (ADR 0142 §4 bis): set, its status reads `suspended` until
+    #: a resume clears it, whatever the readiness or the plugin say.
+    stopped_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    stopped_by: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    stopped_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
 
 class AssistantToolBinding(Base, PkMixin, TimestampMixin):
@@ -64,6 +70,32 @@ class AssistantToolBinding(Base, PkMixin, TimestampMixin):
     approval: Mapped[str | None] = mapped_column(String(16), nullable=True)
     #: False: an optional need the owners switched off.
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
+
+
+class AssistantKnowledgeBinding(Base, PkMixin, TimestampMixin):
+    """A knowledge need of an installation (`knowledge[].bind`), bound to one existing base of the
+    organisation, by reference (ADR 0159): one row per base. Nothing of the base is copied or changed; a
+    conversation reads it only at a turn whose person may read the base (ADR 0081)."""
+
+    __tablename__ = "assistant_knowledge_bindings"
+    __table_args__ = (
+        UniqueConstraint(
+            "installation_id", "name", "knowledge_base_id", name="uq_assistant_knowledge_bindings_base"
+        ),
+    )
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    installation_id: Mapped[str] = mapped_column(
+        ForeignKey("assistant_installations.id", ondelete="CASCADE"), index=True
+    )
+    #: The knowledge need's name in the manifest.
+    name: Mapped[str] = mapped_column(String(63))
+    knowledge_base_id: Mapped[str] = mapped_column(
+        ForeignKey("knowledge_bases.id", ondelete="CASCADE"), index=True
+    )
+    #: False once a plugin upgrade dropped the need (S63-22): kept for the audit trail, never served.
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
+    bound_by: Mapped[str | None] = mapped_column(String(320), nullable=True)
 
 
 class ConversationAction(Base, PkMixin, TimestampMixin):
@@ -96,6 +128,10 @@ class ConversationAction(Base, PkMixin, TimestampMixin):
     confirmed_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
     confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     executed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    #: `write` (a write need's operation) or `launch` (the start of a project's workflow, ADR 0158).
+    kind: Mapped[str] = mapped_column(String(16), default="write", server_default="write")
+    #: For a launch, the binding when it was proposed: `{project_id, project, workflow}`.
+    target: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
 
 
 class ConnectedAccount(Base, PkMixin, TimestampMixin):

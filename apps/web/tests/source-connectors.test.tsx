@@ -63,6 +63,18 @@ describe("a knowledge source says which connector it syncs through", () => {
   });
 });
 
+describe("a git source read through the platform's GitHub App", () => {
+  it("says it reads private repositories, not that the repository is public", async () => {
+    vi.mocked(api.orgConnectors).mockResolvedValue([]);
+    const app = { ...source("c", "git", null), config: { url: "https://github.com/acme/private", github_app: true } } as KnowledgeSource;
+    wrap(<KnowledgeSources org="varga" slug="base" sources={[app, source("d", "git", null)]} onChange={vi.fn()} canEdit={false} />);
+    const tag = await screen.findByTestId("source-connector-c");
+    expect(tag).toHaveTextContent("through the platform's GitHub App: private repositories too");
+    expect(tag).not.toHaveTextContent("public repository");
+    expect(screen.getByTestId("source-connector-d")).toHaveTextContent("no connector: a public repository");
+  });
+});
+
 describe("a memory says which store holds it", () => {
   it("a project's: its memory connector, else the deployment's default", async () => {
     vi.mocked(api.connectors).mockResolvedValue([project("tracker", "jira"), project("memory", "lexical")]);

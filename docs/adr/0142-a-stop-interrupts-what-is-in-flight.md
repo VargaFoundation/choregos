@@ -67,9 +67,10 @@ An operator cannot answer "what is running right now, and for whom", nor stop it
      a stop that the next derivation could undo would not be a stop. No new turn starts;
    - every turn in flight of its conversations is cancelled. A turn runs in the API process that took
      it, and an organisation may run several: the stop writes a cancel request on the conversation's row
-     (`cancel_requested_at`), which the turn reads between its model and tool calls, whichever replica
-     runs it, and cancels the turn at once when it runs in the same process. A cancelled turn settles as
-     a person's cancel does today: its spend booked, its key revoked, the conversation left open;
+     (`turn_cancel_requested_at`, the column S63-23 added), which the turn reads between its model and
+     tool calls, whichever replica runs it, and cancels the turn at once when it runs in the same
+     process. A cancelled turn settles as a person's cancel does today: its spend booked, its key
+     revoked, the conversation left open;
    - the conversations themselves are not closed: they belong to their people (ADR 0134), who read
      them while the assistant is stopped and continue them once it is resumed;
    - the answer counts the turns cancelled and lists what could not be stopped now.

@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = "==3.12.*"
 resolution-markers = [
     "sys_platform == 'win32'",
@@ -308,7 +308,7 @@ wheels = [
 
 [[package]]
 name = "choregos-adapters"
-version = "0.27.0"
+version = "0.27.4"
 source = { editable = "packages/adapters" }
 dependencies = [
     { name = "choregos-core" },
@@ -333,7 +333,7 @@ requires-dist = [
 
 [[package]]
 name = "choregos-agent-sdk"
-version = "0.27.0"
+version = "0.27.4"
 source = { editable = "packages/agent-sdk" }
 dependencies = [
     { name = "agent-client-protocol" },
@@ -352,7 +352,7 @@ requires-dist = [
 
 [[package]]
 name = "choregos-api"
-version = "0.27.0"
+version = "0.27.4"
 source = { editable = "apps/api" }
 dependencies = [
     { name = "aiosqlite" },
@@ -365,6 +365,7 @@ dependencies = [
     { name = "itsdangerous" },
     { name = "markitdown", extra = ["docx", "pdf", "pptx", "xlsx"] },
     { name = "openpyxl" },
+    { name = "pillow" },
     { name = "prometheus-client" },
     { name = "pydantic-settings" },
     { name = "pyjwt", extra = ["crypto"] },
@@ -389,6 +390,7 @@ requires-dist = [
     { name = "itsdangerous", specifier = ">=2.2" },
     { name = "markitdown", extras = ["docx", "pdf", "pptx", "xlsx"], specifier = "==0.1.9" },
     { name = "openpyxl", specifier = "==3.1.5" },
+    { name = "pillow", specifier = ">=13.0" },
     { name = "prometheus-client", specifier = ">=0.21" },
     { name = "pydantic-settings", specifier = ">=2.6" },
     { name = "pyjwt", extras = ["crypto"], specifier = ">=2.9" },
@@ -403,7 +405,7 @@ requires-dist = [
 
 [[package]]
 name = "choregos-cli"
-version = "0.27.0"
+version = "0.27.4"
 source = { editable = "packages/cli" }
 dependencies = [
     { name = "choregos-core" },
@@ -424,7 +426,7 @@ requires-dist = [
 
 [[package]]
 name = "choregos-contracts"
-version = "0.27.0"
+version = "0.27.4"
 source = { editable = "packages/contracts" }
 dependencies = [
     { name = "pydantic" },
@@ -439,7 +441,7 @@ requires-dist = [
 
 [[package]]
 name = "choregos-core"
-version = "0.27.0"
+version = "0.27.4"
 source = { editable = "packages/core" }
 dependencies = [
     { name = "choregos-contracts" },
@@ -471,7 +473,7 @@ provides-extras = ["telemetry"]
 
 [[package]]
 name = "choregos-ontology"
-version = "0.27.0"
+version = "0.27.4"
 source = { editable = "packages/ontology" }
 dependencies = [
     { name = "cel-python" },
@@ -499,7 +501,7 @@ provides-extras = ["service"]
 
 [[package]]
 name = "choregos-orchestrator"
-version = "0.27.0"
+version = "0.27.4"
 source = { editable = "apps/orchestrator" }
 dependencies = [
     { name = "choregos-adapters" },
@@ -524,7 +526,7 @@ requires-dist = [
 
 [[package]]
 name = "choregos-outpost"
-version = "0.27.0"
+version = "0.27.4"
 source = { editable = "packages/outpost" }
 dependencies = [
     { name = "choregos-adapters" },
@@ -557,7 +559,7 @@ requires-dist = [
 
 [[package]]
 name = "choregos-playbooks"
-version = "0.27.0"
+version = "0.27.4"
 source = { editable = "packages/playbooks" }
 dependencies = [
     { name = "jinja2" },
@@ -574,12 +576,12 @@ requires-dist = [
 
 [[package]]
 name = "choregos-quant"
-version = "0.27.0"
+version = "0.27.4"
 source = { editable = "packages/quant" }
 
 [[package]]
 name = "choregos-runner"
-version = "0.27.0"
+version = "0.27.4"
 source = { editable = "packages/runner" }
 dependencies = [
     { name = "choregos-adapters" },
@@ -614,7 +616,7 @@ requires-dist = [
 
 [[package]]
 name = "choregos-tools-mcp"
-version = "0.27.0"
+version = "0.27.4"
 source = { editable = "packages/tools-mcp" }
 dependencies = [
     { name = "choregos-contracts" },
@@ -641,7 +643,7 @@ requires-dist = [
 
 [[package]]
 name = "choregos-workspace"
-version = "0.27.0"
+version = "0.27.4"
 source = { editable = "." }
 dependencies = [
     { name = "choregos-adapters" },

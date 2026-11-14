@@ -30,6 +30,7 @@ jobs:
     outputs:
       python: ${{ steps.filter.outputs.python }}
       web: ${{ steps.filter.outputs.web }}
+      vscode: ${{ steps.filter.outputs.vscode }}
       charts: ${{ steps.filter.outputs.charts }}
       contracts: ${{ steps.filter.outputs.contracts }}
       docker: ${{ steps.filter.outputs.docker }}
@@ -63,6 +64,10 @@ jobs:
               - 'uv.lock'
             web:
               - 'apps/web/**'
+              - 'packages/contracts/ts/**'
+            # The editor extension (ADR 0155) is typed by the same generated contract.
+            vscode:
+              - 'apps/vscode/**'
               - 'packages/contracts/ts/**'
             charts:
               - 'charts/**'
@@ -350,6 +355,30 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: failure()
         with: { name: playwright-report, path: apps/web/playwright-report, retention-days: 7 }
+
+  vscode:
+    # The editor extension (ADR 0155, S68-01): lint (ESLint and Prettier), the strict typecheck against the
+    # generated contract, the unit suite on the fakes with its coverage floor, then the VSIX the editor installs,
+    # kept as a build artefact. Node 24 as the console's job; the bundle targets the editor's own runtime.
+    needs: changes
+    if: needs.changes.outputs.vscode == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run: { working-directory: apps/vscode }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with: { package_json_file: apps/vscode/package.json }
+      - uses: actions/setup-node@v7
+        with: { node-version: 24, cache: pnpm, cache-dependency-path: apps/vscode/pnpm-lock.yaml }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm package
+      - uses: actions/upload-artifact@v7
+        with: { name: choregos-vscode, path: apps/vscode/dist/choregos-vscode.vsix, retention-days: 7 }
 
   charts:
     needs: changes
@@ -1058,7 +1087,7 @@ jobs:
     # 2026-10-05, the hosted runners stopped acquiring jobs, `python` came back
     # `abandoned`, and a PR's gate was green without a single Python test having run. Whatever
     # GitHub invents tomorrow will close the gate too: we enumerate what passes, not what breaks.
-    needs: [changes, python, python-postgres, contracts, web, charts, conformance-backends, images, local-install, hosted-build, hosted-cosign, hosted-admission, hosted-gvisor, hosted-cluster, hosted-foundry, hosted-images, hosted-docker, llm-guard, decisions-live, skill-scanner, web-live, cli-binary, secrets, dco, english]
+    needs: [changes, python, python-postgres, contracts, web, vscode, charts, conformance-backends, images, local-install, hosted-build, hosted-cosign, hosted-admission, hosted-gvisor, hosted-cluster, hosted-foundry, hosted-images, hosted-docker, llm-guard, decisions-live, skill-scanner, web-live, cli-binary, secrets, dco, english]
     if: always()
     runs-on: ubuntu-latest
     steps:
