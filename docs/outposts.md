@@ -208,9 +208,6 @@ gives the operator's.
 
 ## What is not there yet
 
-- **Closing an action in doubt.** No route closes it by hand: a person checks the system behind the
-  outpost and records what they found where the team keeps such records
-  ([Usage](usage.md#4-bis-governed-actions)).
 - **Runs at an outpost.** A whole run executing at an outpost is not decided:
   [ADR 0149](adr/0149-a-tool-may-live-at-an-outpost.md) §12 lists
   what would have to be true first. `tools` is the only capability an instance announces.

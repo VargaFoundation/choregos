@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""A project's governed actions (ADR 0035): propose, read, decide.
+"""A project's governed actions (ADR 0035): propose, read, decide, and settle one in doubt.
 
 Execution never happens here: an approved action goes to Temporal (`ActionWorkflow`), and the
 response leaves the API before any effect. The log of its effects is read with it.
@@ -17,7 +17,7 @@ from ..db.models import Action
 from ..deps import Db, Me, ProjectCtx
 from ..errors import not_found
 from ..rbac import Permission
-from ..schemas.actions import ActionCreate, ActionDecisionBody, ActionDto
+from ..schemas.actions import ActionCreate, ActionDecisionBody, ActionDto, ActionSettlementBody
 from ..services import actions as service
 
 router = APIRouter(tags=["actions"])
@@ -108,4 +108,17 @@ async def decide_action(
     action = await service.decide(
         session, ctx.project, ctx.org_slug, action_id, body.decision, body.reason, ctx.principal
     )
+    return await service.dto(session, action)
+
+
+@router.post(
+    "/projects/{id}/actions/{action_id}/settlement", response_model=ActionDto, operation_id="settleAction"
+)
+async def settle_action(
+    ctx: ProjectCtx, action_id: Ident, body: ActionSettlementBody, session: Db
+) -> ActionDto:
+    """A person records what they found of an action in doubt (ADR 0149 §5, S65-26): the write was
+    `made` (the action resumes after it) or `not_made` (it fails and compensates what came before).
+    Guarded as an approval is; the workflow leaves after the commit, nothing runs within this request."""
+    action = await service.settle(session, ctx.project, ctx.org_slug, action_id, body, ctx.principal)
     return await service.dto(session, action)

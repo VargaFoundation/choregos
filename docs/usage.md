@@ -3221,19 +3221,29 @@ curl -X POST $API/projects/acme:hr/actions/<id>/decision -d '{"decision": "appro
   [outpost](integrations.md#a-tool-server-at-an-outpost-adr-0149), whose server Choregos does not
   see. It is delivered **at most once**. When an instance of the outpost took the write and its
   answer never came back, nobody knows whether the server made it: the effect and the action end
-  **`in_doubt`**, a terminal status like `succeeded`, `failed` and `rejected`
-  ([ADR 0149](adr/0149-a-tool-may-live-at-an-outpost.md) §5). Such an action is **never replayed**
-  — no route does it, an agent that repeats the call gets the same action back, in doubt (a tool
+  **`in_doubt`**, where the platform stops, as at `succeeded`, `failed` and `rejected`
+  ([ADR 0149](adr/0149-a-tool-may-live-at-an-outpost.md) §5). Such an action is **never replayed
+  by itself** — an agent that repeats the call gets the same action back, in doubt (a tool
   error `504` whose `code` is `action_in_doubt`) — and **nothing it had done is compensated**: the
   effects before it stay done, the ones after it did not run. Both would act on a state nobody
   knows. **What a person does**: read on the action's page which tool was sent, to which outpost
   and endpoint, which instance took it and when (the journal's effect carries them under
   `result.in_doubt`, with the digest of the arguments, never the arguments), check the system
-  behind the outpost, and record what they found where the team keeps such records. The action
-  itself stays in doubt: no route closes it by hand. A work item whose transition proposed it
-  waits where it is, as it waits for an approval nobody gave: reading the doubt as a failure would
-  follow `on_fail` and propose the action again, a second delivery of the write. A person moves
-  the work item on. The one exception is a write whose rule says its tool takes the platform's
+  behind the outpost, and **settle** the action with what they found, on its page (*What a person
+  found*) or with `POST /projects/{id}/actions/{action_id}/settlement` (`outcome`, a `note`, and
+  with `made` the `result` they read there). **Made**: the effect is recorded `done` with that
+  result (the effects after it may cite it), the action is `approved` again and its workflow runs
+  once more: the journal answers what was done, the effects after the write are played, and a
+  later failure compensates as for any action. **Not made**: the effect is recorded `not_made`,
+  never attempted, and the action fails, compensating what it had done before. Settling is guarded
+  as approving is (a recent sign-in in a human session, an approver's rank and group, and whoever
+  proposed the action, or owns the agent that did, does not settle it); the effect keeps what was
+  sent with the settlement; settling again with the same outcome changes nothing, the other is a
+  `409 action_already_settled`. The event is `choregos.action.settled`, the audit line
+  `action.settle`. Until it is settled, a work item whose transition proposed it waits where it
+  is, as it waits for an approval nobody gave: reading the doubt as a failure would follow
+  `on_fail` and propose the action again, a second delivery of the write. Once settled, the
+  action's end (`succeeded` or `failed`) moves the work item on. The one exception is a write whose rule says its tool takes the platform's
   idempotency key (`platform_arguments: ["action_key"]`): after a doubt the effect's own retries
   deliver it again with the same key, and the action is in doubt only if every delivery was.
   The event is `choregos.action.failed` with `status: in_doubt` in its data; `GET

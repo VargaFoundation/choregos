@@ -50,6 +50,29 @@ class ActionDecisionBody(Dto):
     reason: str | None = Field(default=None, max_length=2000)
 
 
+class ActionSettlementBody(Dto):
+    """What a person found in the system an action in doubt wrote to (S65-26, ADR 0149 §5)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    outcome: Literal["made", "not_made"]
+    note: str = Field(min_length=1, max_length=2000)
+    #: With `made` only: what the write returned, as the person read it; the effects after it cite it.
+    result: dict[str, Any] | None = None
+
+
+class ActionSettlementDto(Dto):
+    position: int
+    outcome: str
+    by: str
+    at: datetime
+    note: str
+    result: dict[str, Any] | None = None
+    auth_age_seconds: int | None = None
+    #: What was sent and never answered, as the effect in doubt held it.
+    in_doubt: list[dict[str, Any]] = Field(default_factory=list)
+
+
 class ActionEffectDto(Dto):
     position: int
     key: str
@@ -59,6 +82,7 @@ class ActionEffectDto(Dto):
     result: dict[str, Any] | None = None
     error: str | None = None
     finished_at: datetime | None = None
+    settlement: ActionSettlementDto | None = None
 
 
 class ActionDto(Dto):
@@ -84,3 +108,5 @@ class ActionDto(Dto):
     finished_at: datetime | None = None
     #: the effects log, key by key
     journal: list[ActionEffectDto] = Field(default_factory=list)
+    #: what a person recorded once the action was in doubt (S65-26): the same as on its effect
+    settlement: ActionSettlementDto | None = None

@@ -4018,6 +4018,26 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   if (method === "POST" && /^\/orgs\/[^/]+\/skills\/import-git\/preview$/.test(chemin ?? "")) return skillGitPreview as T;
   if (method === "POST" && /^\/orgs\/[^/]+\/skills\/import-git$/.test(chemin ?? "")) return [skills[0]] as T;
   if (method === "POST" && /^\/orgs\/[^/]+\/skills\/[^/]+\/versions\/\d+\/approve$/.test(chemin ?? "")) return skillVersion as T;
+  const settlement = /^\/projects\/[^/]+\/actions\/([^/]+)\/settlement$/.exec(chemin ?? "");
+  if (method === "POST" && settlement) {
+    // As the API: an action in doubt resumes (`approved`), its effect in doubt recorded with what was found.
+    const reqBody = JSON.parse(String(init.body ?? "{}")) as {
+      outcome: "made" | "not_made";
+      note: string;
+      result?: Record<string, unknown> | null;
+    };
+    const action = actions.find((a) => a.id === settlement[1]) ?? actions[0]!;
+    const record = {
+      position: 0,
+      outcome: reqBody.outcome,
+      by: me.email,
+      at: new Date().toISOString(),
+      note: reqBody.note,
+      result: reqBody.outcome === "made" ? (reqBody.result ?? {}) : null,
+      in_doubt: [],
+    };
+    return { ...action, status: "approved", error: null, settlement: record } as T;
+  }
   const decision = /^\/projects\/[^/]+\/actions\/([^/]+)\/decision$/.exec(chemin ?? "");
   if (method === "POST" && decision) {
     const reqBody = JSON.parse(String(init.body ?? "{}")) as { decision: string; reason?: string };

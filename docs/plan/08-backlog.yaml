@@ -4857,6 +4857,14 @@ stories:
     size: S
     depends_on: [S65-10]
     notes: "tools/gen_contracts.py stops writing packages/contracts/ts/index.ts (nine names exported by both modules, TS2308; nothing imported it) and removes a leftover one, --check refusing it; the package exports ./schemas and ./api only; the console's typecheck compiles packages/contracts/ts as its own project, so the web job turns red on a name generated twice; tests/ci/test_contracts_ts_compiled.py."
+  - id: S65-26
+    title: "feat(api,orchestrator,web): a person settles an action in doubt (ADR 0149 §5)"
+    stream: S65
+    sprint: 7
+    priority: 1
+    size: M
+    depends_on: [S65-14]
+    notes: "Contract first (settleAction, ActionSettlement, SettlementOutcome, not_made, choregos.action.settled). Guarded as an approval (human session, step-up, approver rank and group, separation of duties); made records the effect done with the stated result and the action runs again from its journal to succeeded; not_made is never attempted and the action fails and compensates what came before; the effect keeps the doubt's evidence; settling twice with the same outcome changes nothing, the other is 409; the run that follows starts under the same workflow id; no change under workflows/; the action page's settle form."
   # ───────────── S67 — the terminal is a surface of the platform (ADR 0154) ─────────────
   - id: S67-00
     title: "docs(adr): ADR 0154, the terminal is a surface of the platform; the S67 plan"
