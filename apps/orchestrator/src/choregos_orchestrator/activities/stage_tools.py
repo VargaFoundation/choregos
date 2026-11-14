@@ -269,3 +269,46 @@ async def _memory_bindings(session: Any, bundle: Any, agent: Any) -> ResolvedMem
             )
         )
     return ResolvedMemories(resolved, skipped)
+
+
+async def _journal_skipped_memories(session: Any, run_id: str, skipped: list[dict[str, str]]) -> None:
+    """One `memory.skipped` event per unresolved binding, on the run page; once, even if replayed.
+
+    Written before the run starts, under numbers a run cannot take (S65-28, finding #1608). A run's
+    journal keeps one line per number and the first one it receives: the runner numbers its own lines
+    from 1, and the run's door refuses a number below 0. Lines numbered from 1 here took the runner's
+    first numbers, and its first lines were dropped. They take negative numbers instead, below any
+    already there: a batch keeps the order it was skipped in, and the journal, read by number, shows
+    them first, which is when they happened.
+    """
+    if not skipped:
+        return
+    from choregos_api.db.models import RunEvent
+    from choregos_core import utcnow
+    from sqlalchemy import func
+
+    rows = (
+        await session.execute(
+            select(RunEvent.payload).where(RunEvent.run_id == run_id, RunEvent.type == "memory.skipped")
+        )
+    ).scalars()
+    already = {str(payload.get("memory")) for payload in rows}
+    fresh: list[dict[str, str]] = []
+    for entry in skipped:
+        if entry["memory"] not in already:
+            already.add(entry["memory"])
+            fresh.append(entry)
+    if not fresh:
+        return
+    lowest = (
+        await session.execute(
+            select(func.min(RunEvent.seq)).where(RunEvent.run_id == run_id, RunEvent.seq < 0)
+        )
+    ).scalar()
+    first = int(lowest or 0) - len(fresh)
+    for offset, entry in enumerate(fresh):
+        session.add(
+            RunEvent(
+                run_id=run_id, seq=first + offset, type="memory.skipped", payload=dict(entry), ts=utcnow()
+            )
+        )
