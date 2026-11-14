@@ -25,6 +25,7 @@ const outpost = (changes: Partial<Outpost> = {}): Outpost => ({
   instances: { pending: 1, active: 2, revoked: 3 },
   endpoints: ["tracker", "warehouse"],
   connectors: ["tracker-at-the-outpost"],
+  control_plane: null,
   door_keys: [],
   created_by: "ada@example.com",
   created_at: "2026-11-01T09:00:00Z",
@@ -54,6 +55,8 @@ describe("the Outposts page (ADR 0147)", () => {
         outpost({ slug: "cold-store", display_name: "Cold store", status: "paused", online: false, last_seen_at: "2026-11-12T05:00:00Z", instances: { pending: 0, active: 1, revoked: 0 }, endpoints: [], connectors: [] }),
         outpost({ slug: "new-one", display_name: "new-one", online: false, last_seen_at: null, instances: { pending: 0, active: 0, revoked: 0 } }),
       ],
+      enabled: true,
+      door_signing_key: true,
     });
     view();
     const factory = within(await screen.findByTestId("outpost-factory-floor"));
@@ -75,7 +78,7 @@ describe("the Outposts page (ADR 0147)", () => {
   });
 
   it("says there is none yet, and how to start", async () => {
-    vi.mocked(api.outposts).mockResolvedValue({ items: [] });
+    vi.mocked(api.outposts).mockResolvedValue({ items: [], enabled: true, door_signing_key: true });
     view();
     expect(await screen.findByText("No outpost yet")).toBeInTheDocument();
     expect(screen.queryByTestId("outposts")).toBeNull();
@@ -88,7 +91,7 @@ describe("the Outposts page (ADR 0147)", () => {
   });
 
   it("creates an outpost from a slug and a name, and opens its page, where its first instance is enrolled", async () => {
-    vi.mocked(api.outposts).mockResolvedValue({ items: [] });
+    vi.mocked(api.outposts).mockResolvedValue({ items: [], enabled: true, door_signing_key: true });
     vi.mocked(api.createOutpost).mockResolvedValue(outpost({ slug: "cold-store" }));
     view();
     const create = await screen.findByRole("button", { name: "Create the outpost" });
@@ -104,7 +107,7 @@ describe("the Outposts page (ADR 0147)", () => {
   });
 
   it("sends no name when none is given: the API uses the slug", async () => {
-    vi.mocked(api.outposts).mockResolvedValue({ items: [] });
+    vi.mocked(api.outposts).mockResolvedValue({ items: [], enabled: true, door_signing_key: true });
     vi.mocked(api.createOutpost).mockResolvedValue(outpost({ slug: "cold-store" }));
     view();
     fireEvent.change(await screen.findByLabelText("Slug"), { target: { value: "cold-store" } });
@@ -114,7 +117,7 @@ describe("the Outposts page (ADR 0147)", () => {
 
   it("a deployment where outposts are off says so, in the API's own words", async () => {
     const words = "outposts are switched off on this deployment (`CHOREGOS_OUTPOSTS`): its operator turns them on";
-    vi.mocked(api.outposts).mockResolvedValue({ items: [] });
+    vi.mocked(api.outposts).mockResolvedValue({ items: [], enabled: true, door_signing_key: true });
     vi.mocked(api.createOutpost).mockRejectedValue(new ApiError(409, { detail: words, code: "outposts_disabled" }));
     view();
     fireEvent.change(await screen.findByLabelText("Slug"), { target: { value: "cold-store" } });
@@ -129,7 +132,7 @@ describe("the Outposts page (ADR 0147)", () => {
   });
 
   it("a slug that is taken is the API's refusal, shown as an error", async () => {
-    vi.mocked(api.outposts).mockResolvedValue({ items: [outpost()] });
+    vi.mocked(api.outposts).mockResolvedValue({ items: [outpost()], enabled: true, door_signing_key: true });
     vi.mocked(api.createOutpost).mockRejectedValue(new ApiError(409, { detail: "`factory-floor` is already an outpost of acme", code: "outpost_exists" }));
     view();
     fireEvent.change(await screen.findByLabelText("Slug"), { target: { value: "factory-floor" } });

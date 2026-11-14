@@ -83,7 +83,9 @@ Two things have to be separated before deciding.
    comparing the fingerprint shown there with the one the daemon printed, in a session that carries an
    authentication time, the condition `decide` already puts on a decision (`services/actions.py`): a token
    cannot approve. Only then is the instance `active`. A stolen enrolment token therefore enrols an
-   instance nobody approves.
+   instance nobody approves. A token that enrolled nothing yet can be cancelled by the same person (one
+   pasted in the wrong place need not live out its fifteen minutes), and the instance a token enrolled
+   names it, with who issued it (S65-24).
    *Rejected: trust on first use.* The token travels by hand, through a chat or a ticket.
 5. **Revocation is immediate and moves an epoch.** Revoking an instance, or pausing or revoking the
    outpost, holds from the next request: the door reads the row every time. Each outpost has an epoch that

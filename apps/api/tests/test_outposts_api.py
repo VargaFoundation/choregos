@@ -61,7 +61,8 @@ async def test_with_outposts_off_a_creation_is_refused(client: AsyncClient, admi
     assert Settings.model_fields["outposts"].default is False
     refused = _refused(await client.post(BASE, json={"slug": SLUG}), "outposts_disabled")
     assert "CHOREGOS_OUTPOSTS" in refused["detail"]
-    assert (await client.get(BASE)).json() == {"items": []}, "nothing was written"
+    # The list says so before anyone tries (S65-24): switched off, and no key for the door either.
+    assert (await client.get(BASE)).json() == {"items": [], "enabled": False, "door_signing_key": False}
 
 
 async def test_an_administrator_creates_an_outpost_and_reads_it_back(
@@ -82,6 +83,7 @@ async def test_an_administrator_creates_an_outpost_and_reads_it_back(
         "instances": {"pending": 0, "active": 0, "revoked": 0},
         "endpoints": [],
         "connectors": [],
+        "control_plane": ORIGIN,
         "door_keys": door.keys,
         "created_by": admin,
         "created_at": None,
@@ -123,7 +125,7 @@ async def test_a_creation_the_contract_does_not_describe_is_a_422(
 ) -> None:
     """`runs` is reserved (ADR 0149 §12), and nothing of an outpost's side is stored (ADR 0147 §7)."""
     assert (await client.post(BASE, json=body)).status_code == 422
-    assert (await client.get(BASE)).json() == {"items": []}
+    assert (await client.get(BASE)).json()["items"] == []
 
 
 async def test_an_unknown_outpost_is_a_404_on_every_route_that_names_one(
@@ -255,6 +257,7 @@ async def test_an_instance_is_born_pending(client: AsyncClient, admin: str, door
     listed = (await client.get(f"{ONE}/instances")).json()
     _valid("OutpostInstanceList", listed)
     (shown,) = listed["items"]
+    (used,) = await kit.rows_of(SLUG, OutpostEnrolment)
     assert shown | {"enrolled_at": None} == {
         "id": instance.id,
         "status": "pending",
@@ -264,7 +267,10 @@ async def test_an_instance_is_born_pending(client: AsyncClient, admin: str, door
         "capabilities": ["tools"],
         "endpoints": [],
         "facts": {"hostname": "outpost-0"},
+        "enrolment_id": used.id,
+        "enrolled_by": admin,
         "enrolled_at": None,
+        "approval_step_up_minutes": 10,
         "approved_by": None,
         "approved_at": None,
         "revoked_by": None,
@@ -278,7 +284,6 @@ async def test_an_instance_is_born_pending(client: AsyncClient, admin: str, door
     assert outpost["instances"] == {"pending": 1, "active": 0, "revoked": 0}
     assert outpost["online"] is False and outpost["epoch"] == 0, "a pending instance is handed nothing"
 
-    (used,) = await kit.rows_of(SLUG, OutpostEnrolment)
     assert used.used_at is not None and used.instance_id == instance.id
     by_instance = [e for e in await kit.audit_rows("outpost.enrol") if e.target_type == "outpost_instance"]
     (entry,) = by_instance
@@ -612,7 +617,7 @@ async def test_a_revoked_outpost_is_deleted_and_one_that_still_has_connectors_is
         await session.delete(await session.get(OrgConnector, connector))
     assert (await client.delete(ONE)).status_code == 204
     assert (await client.get(ONE)).status_code == 404
-    assert (await client.get(BASE)).json() == {"items": []}
+    assert (await client.get(BASE)).json()["items"] == []
     (entry,) = await kit.audit_rows("outpost.delete")
     assert (entry.target_id, entry.payload) == (row.id, {"outpost": SLUG, "epoch": 1})
 
