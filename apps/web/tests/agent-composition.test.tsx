@@ -160,6 +160,15 @@ describe("AgentComposition", () => {
     expect(screen.getByTestId("composition-harness")).toHaveTextContent("project's coding agent");
   });
 
+  it("describes the shell by what is enforced, with a link to the limits", () => {
+    show(agentOf({ ...COMPLETE, backend: null, tools: { catalogue: [], extensions: [], web: [] } }));
+    const shell = screen.getByTestId("composition-builtin-shell");
+    expect(shell).toHaveTextContent("isolated pod");
+    expect(shell).toHaveTextContent("egress proxy");
+    expect(shell).not.toHaveTextContent("guardrails");
+    expect(within(shell).getByTestId("composition-shell-limits").getAttribute("href")).toMatch(/docs\/security\.md#what-a-coding-agent-can-run$/);
+  });
+
   it("says a prompt agent has no built-in tool", () => {
     show(agentOf({ ...COMPLETE, runtime: { kind: "prompt" } } as AgentSpec));
     expect(screen.getByTestId("composition-builtin-none")).toHaveTextContent("prompt agent");

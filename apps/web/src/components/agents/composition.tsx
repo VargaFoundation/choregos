@@ -14,6 +14,7 @@ import { usd } from "@/lib/format";
 import { harnessOf } from "@/lib/harness";
 import { describe, effectiveBindings, IMPLICIT } from "@/lib/memories";
 import { groupBySize, resolveModel, type ResolvedModel } from "@/lib/model-resolution";
+import { sourceFile } from "@/lib/publishing";
 import { skillHref } from "@/lib/skill-slug";
 import type { Agent, AgentSpec, KnowledgeBase, MemoryStore, ModelCatalogue, Skill } from "@/lib/types";
 import { GROUP_HUES } from "@/components/shell/navigation";
@@ -173,6 +174,20 @@ function ToolsSection({ spec }: { spec: AgentSpec }) {
               {harness.tools.map((tool) => (
                 <li key={tool.id} data-testid={`composition-builtin-${tool.id}`}>
                   <span className="font-medium">{tool.label}</span> <span className="text-ink-muted">{tool.detail}</span>
+                  {tool.id === "shell" && (
+                    <>
+                      {" "}
+                      <a
+                        className="underline"
+                        href={sourceFile("docs/security.md#what-a-coding-agent-can-run")}
+                        target="_blank"
+                        rel="noreferrer"
+                        data-testid="composition-shell-limits"
+                      >
+                        what is enforced and what is not
+                      </a>
+                    </>
+                  )}
                 </li>
               ))}
             </ul>
