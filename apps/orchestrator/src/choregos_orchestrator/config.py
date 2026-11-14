@@ -6,6 +6,7 @@ from __future__ import annotations
 from functools import lru_cache
 
 from choregos_core.images import check_image_map
+from choregos_core.publishing import PUBLISHING
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -43,7 +44,7 @@ class OrchestratorSettings(BaseSettings):
     #: (`templates/github-tekton-argo-k8s/tekton/agent-stage.yaml`), the runner itself everywhere
     #: else (`runner/local_tools.py`, which starts the server if nothing answers).
     tools_mcp_url: str = "http://localhost:7777/mcp"
-    runner_image: str = "ghcr.io/vargafoundation/choregos-runner:1.0.0"
+    runner_image: str = PUBLISHING.image("choregos-runner", "1.0.0")
     #: The images a job step may name (ADR 0056), as JSON in `CHOREGOS_JOB_IMAGES`: name → reference,
     #: pinned by digest. A workflow names an image, never pulls one: the operator decides what runs.
     #: Each is built FROM the runner image — the runner is what runs the job's command.

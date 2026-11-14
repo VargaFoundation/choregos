@@ -3,12 +3,13 @@ id: connector.tracker.github-issues
 title: Use GitHub Issues and Projects v2 as the board
 applies_to: {connector: tracker/github-issues}
 audience: project_owner
-version: 2
-reviewed: 2026-10-19
+version: 3
+reviewed: 2026-11-12
 vendor_docs:
   - {title: "Registering a GitHub App", url: "https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/registering-a-github-app"}
   - {title: "Permissions required for GitHub Apps", url: "https://docs.github.com/en/rest/overview/permissions-required-for-github-apps"}
   - {title: "Installing your own GitHub App", url: "https://docs.github.com/en/apps/using-github-apps/installing-your-own-github-app"}
+  - {title: "Registering a GitHub App from a manifest", url: "https://docs.github.com/en/apps/sharing-github-apps/registering-a-github-app-from-a-manifest"}
 egress: [api.github.com]
 values: ["webhook_url:github"]
 fields:
@@ -21,12 +22,15 @@ fields:
 ## Before you start
 
 - A **GitHub App** for the platform: one per installation of Choregos, never a broad personal token.
-  Its id, private key and webhook secret are platform settings (`github-app-id`,
-  `github-app-private-key`, `github-webhook-secret`), set by the person who installs Choregos.
-  If they are set, skip to "Install it".
+  The person who operates Choregos creates it, either from the console (*Administration, GitHub App*:
+  the platform registers it on GitHub from a manifest with the permissions and events below, and keeps
+  its credentials sealed) or by hand as platform settings (`github-app-id`, `github-app-private-key`,
+  `github-webhook-secret`). If the App exists, skip to step 4, "Install".
 - The repository and, for a board, the organisation's Projects v2 number.
 
 ## At GitHub
+
+Skip steps 1 to 3 when the App was created from the console: the manifest set them.
 
 1. Organization settings, Developer settings, **GitHub Apps**, **New GitHub App**.
 2. **Webhook URL**: `{{webhook_url:github}}`. **Webhook secret**: a random string, the same one the

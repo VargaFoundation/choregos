@@ -88,6 +88,15 @@ plugins-check:  ## No network: the archives of plugins/offline/ are what plugins
 docs-cli:  ## Regenerate docs/cli.md and docs/site/cli/reference.md from the CLI (to commit)
 	$(UV) run python tools/gen_cli_reference.py
 
+# The publishing identity (ADR 0156): one definition, packages/core/src/choregos_core/publishing.json.
+.PHONY: publishing-check publishing-rewrite
+publishing-check:  ## No file spells the publishing identity outside its definition, copy, derived files and history
+	$(UV) run python tools/publishing_identity.py
+
+publishing-rewrite:  ## After editing publishing.json: rewrite the derived files from the identity at FROM (a commit)
+	@test -n "$(FROM)" || { echo "FROM=<the commit whose identity the files still spell>"; exit 2; }
+	$(UV) run python tools/publishing_identity.py --rewrite-from $(FROM)
+
 # The native CLI binary of this machine (S62-07, `tools/cli_binary/`): on Linux in the manylinux_2_28
 # image (docker), as the release builds it; elsewhere with this machine's compiler.
 CLI_BINARY_FLAGS ?= $(if $(filter Linux,$(shell uname -s)),--manylinux,)

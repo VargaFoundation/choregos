@@ -12,6 +12,7 @@ import pathlib
 from typing import Any
 
 import yaml
+from choregos_core.publishing import PUBLISHING
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 NIGHTLY = ROOT / ".github" / "workflows" / "nightly.yml"
@@ -56,7 +57,8 @@ def test_the_live_job_reads_its_required_services_from_the_repository() -> None:
 
 
 def test_the_live_job_does_not_run_on_forks() -> None:
-    assert "github.repository == 'VargaFoundation/choregos'" in str(_jobs()["live"].get("if", ""))
+    upstream = PUBLISHING.source_repository.removeprefix("https://github.com/")
+    assert f"github.repository == '{upstream}'" in str(_jobs()["live"].get("if", ""))
 
 
 def test_the_live_job_passes_every_variable_the_live_tests_require() -> None:

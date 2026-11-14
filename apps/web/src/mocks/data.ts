@@ -13,6 +13,7 @@ import type {
   Action,
   Agent,
   AgentBackendInfo,
+  GitHubAppRegistrationStatus,
   AgentImageInfo,
   RemoteAgentDiscovery,
   RemoteCredential,
@@ -2192,6 +2193,27 @@ export function usableModelsOf(path: string): UsableModel[] {
       tiers: [],
     }));
 }
+
+/** The demo instance's GitHub App (S70-21): none yet, so the page shows the creation form. */
+export const platformGitHubApp: GitHubAppRegistrationStatus = {
+  source: "none",
+  usable: false,
+  blocked_by: null,
+  suggested_name: "Choregos choregos.example.com",
+  permissions: {
+    contents: "write",
+    issues: "write",
+    pull_requests: "write",
+    checks: "write",
+    metadata: "read",
+    organization_projects: "write",
+    statuses: "read",
+  },
+  events: ["issues", "issue_comment", "projects_v2_item", "pull_request", "pull_request_review", "check_suite", "check_run"],
+  webhook_url: "https://choregos.example.com/api/v1/webhooks/github",
+  callback_url: "https://choregos.example.com/api/v1/github/setup",
+  redirect_url: "https://choregos.example.com/api/v1/github/manifest/callback",
+};
 
 export const platformBackends: AgentBackendInfo[] = [
   {
@@ -4423,6 +4445,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   }
   const table: Array<[RegExp, unknown]> = [
     [/^\/me$/, me],
+    [/^\/platform\/github-app$/, platformGitHubApp],
     [/^\/edition$/, {
         edition: "community",
         features: [],

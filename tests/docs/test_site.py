@@ -1,8 +1,8 @@
 """The public user documentation (`docs/site/`) holds to the code (S62-09a).
 
-`docs/site/` is published on https://docs.varga.foundation/choregos/ (the S62 contract fixes its slugs).
-A page written for someone who knows nothing yet is a promise: a screen it names, a command it gives, a
-YAML block it shows must exist and work today. This file turns CI red when a page drifts:
+`docs/site/` is published at the publishing identity's documentation address (the S62 contract fixes
+its slugs). A page written for someone who knows nothing yet is a promise: a screen it names, a command
+it gives, a YAML block it shows must exist and work today. This file turns CI red when a page drifts:
 
 - every slug of the contract has its page, and no page overrides its URL;
 - every relative link resolves, to a file and to a heading;

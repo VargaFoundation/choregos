@@ -38,6 +38,7 @@
  "Float",
  "ForeignKey",
  "GatewayKeyRow",
+ "GitHubAppRegistration",
  "GitHubInstallation",
  "HandOffReceipt",
  "HostedBuildRecord",

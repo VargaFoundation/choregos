@@ -262,7 +262,7 @@ SESSION_PURPOSE = "session"
 LEGACY_TAG_LENGTH = 32
 #: Cookies signed before this release carry a 128-bit tag without a purpose. They are accepted for
 #: `session` only, for one release, so that the upgrade does not sign everyone out. Removal is
-#: tracked in https://github.com/VargaFoundation/choregos/issues/1040.
+#: tracked in issue #1040 of the source repository.
 ACCEPT_LEGACY_SESSION_TAGS = True
 
 

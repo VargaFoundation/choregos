@@ -42,6 +42,7 @@ import {
   Workflow,
   Zap,
   BadgeCheck,
+  GitBranch,
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
@@ -305,6 +306,7 @@ export function adminGroups(
       title: "Instance (all organisations)",
       entries: [
         page("/admin/platform", "Platform", Server),
+        page("/admin/github-app", "GitHub App", GitBranch),
         page("/admin/edition", "Edition", BadgeCheck),
         ...shown.filter((s) => s.scope === "platform").map(extension),
       ],

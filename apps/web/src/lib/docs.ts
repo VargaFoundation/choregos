@@ -8,9 +8,10 @@
  * a link names one of `DOC_SLUGS`, never a page the site may not have, and a test holds every entry of
  * `DOCS_BY_ROUTE` to that list.
  */
+import { DOCUMENTATION } from "./publishing";
 
-/** The public site, when the instance has not said otherwise yet. */
-export const DEFAULT_DOCS_URL = "https://docs.varga.foundation/choregos";
+/** The public site, when the instance has not said otherwise yet: the publishing identity's (ADR 0156). */
+export const DEFAULT_DOCS_URL = DOCUMENTATION;
 
 /** The pages of the documentation (S62 shared contract). `""` is its home. Keep this list the only one. */
 export const DOC_SLUGS = [

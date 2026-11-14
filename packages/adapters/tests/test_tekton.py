@@ -28,7 +28,7 @@ def spec(**kw: object) -> StageJobSpec:
         "run_id": "wi-1-t-implement-1",
         "project_slug": "billing",
         "namespace": NS,
-        "runner_image": "ghcr.io/vargafoundation/choregos-runner:0.3.0",
+        "runner_image": "registry.example/choregos-runner:0.3.0",
         "api_url": "http://choregos-api:8000",
         "run_token": "jeton-de-run",
         "timeout_minutes": 40,

@@ -1,8 +1,8 @@
 """The agent catalogue is a view over plugins (S43-09, ADR 0093 §6).
 
-The 22 agents, 6 clients, 25 eval cases and the skill `madr-4` left the core for the plugins of
-`VargaFoundation/choregos-agents`; the core reads them from its offline directory (`plugins/offline/`,
-pinned by `plugins.lock`), byte for byte what it shipped before.
+The 22 agents, 6 clients, 25 eval cases and the skill `madr-4` left the core for the plugins
+of the agents' repository (`choregos-agents`); the core reads them from its offline directory
+(`plugins/offline/`, pinned by `plugins.lock`), byte for byte what it shipped before.
 """
 
 from __future__ import annotations

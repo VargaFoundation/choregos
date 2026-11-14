@@ -4,6 +4,7 @@
  * for its system, and where the release is when this build bundles no CLI. Pure, so it is tested
  * without a browser; `components/integrations/cli-download.tsx` shows it.
  */
+import { RELEASES } from "./publishing";
 
 export type CliOs = "linux" | "macos" | "windows";
 export type CliArch = "x86_64" | "arm64";
@@ -15,7 +16,7 @@ export type CliManifest = { version: string; files: CliFile[] };
 /** The machine the browser runs on; `arch` is null when the browser does not say. */
 export type BrowserPlatform = { os: CliOs | null; arch: CliArch | null };
 
-export const CLI_RELEASES = "https://github.com/VargaFoundation/choregos/releases";
+export const CLI_RELEASES = RELEASES;
 export const MANIFEST_PATH = "/downloads/cli/manifest.json";
 
 export const OS_LABELS: Record<CliOs, string> = { linux: "Linux", macos: "macOS", windows: "Windows" };

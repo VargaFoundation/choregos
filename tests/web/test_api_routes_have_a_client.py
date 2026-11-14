@@ -90,6 +90,8 @@ NOT_CALLED_BY_A_CLIENT: dict[str, str] = {
     "/users/{user_id}/avatar": "a person's photo (ADR 0162), read by the browser as an <img> source from the "
     "`avatar_url` the API answers; no client builds its path",
     "/github/setup": "the GitHub App's Setup URL: GitHub redirects the browser there after an installation",
+    "/github/manifest/callback": "the GitHub App manifest's redirect URL: GitHub sends the browser there "
+    "with the conversion code once the App is registered (S70-21, ADR 0167)",
     "/remote-credentials/oauth/callback": "the provider's redirect after an administrator authorised a "
     "remote agent's credential",
     "/orgs/{org}/hosted-sources/{sha256}": "reads an uploaded source zip back for the pipeline that "
@@ -97,7 +99,7 @@ NOT_CALLED_BY_A_CLIENT: dict[str, str] = {
     "/projects/{id}/workflows/validate": "the project-scoped twin of /workflows/validate, which the console "
     "and the CLI call; its extra actor-group warning is for API callers",
     "/templates/{name}": "platform template authoring by API (getTemplate, updateTemplate), no screen or "
-    "command yet: finding VargaFoundation/choregos#1075",
+    "command yet: finding #1075",
     "/orgs/{org}/aliases/{alias}": "platform administrator's API gesture; its console text lives in the "
     "enterprise repository (S42-14 STATUS row)",
     "/work-items/{id}/artifacts/{ref}": "one revision's metadata, for API callers; the console lists the "

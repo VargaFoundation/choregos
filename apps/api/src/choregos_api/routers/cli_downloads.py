@@ -31,6 +31,7 @@ from importlib import resources
 from pathlib import Path
 from typing import Annotated, Literal
 
+from choregos_core.publishing import PUBLISHING
 from fastapi import APIRouter, Request, Response, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, StringConstraints, ValidationError
@@ -42,7 +43,7 @@ from ..errors import ApiError
 router = APIRouter(tags=["session"])
 
 #: The release page of a version, where the binaries are attached under the same names.
-RELEASES = "https://github.com/VargaFoundation/choregos/releases"
+RELEASES = PUBLISHING.releases
 MANIFEST = "manifest.json"
 SUMS = "SHA256SUMS"
 #: A file name the manifest may list: one path segment, no leading dot.
@@ -52,6 +53,8 @@ _NAME = r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
 _PLAIN_URL = re.compile(r"https?://[A-Za-z0-9.\-]+(?::[0-9]{1,5})?(?:/[A-Za-z0-9._~\-/%]*)?")
 #: The token each script carries where the instance's URL goes.
 PLACEHOLDER = "__CHOREGOS_INSTANCE_URL__"
+#: The token each script carries where the release pages go (the publishing identity, ADR 0156).
+RELEASES_PLACEHOLDER = "__CHOREGOS_RELEASES__"
 #: The longest manifest read: five entries weigh well under a kilobyte.
 _MANIFEST_MAX_BYTES = 64 * 1024
 
@@ -195,7 +198,7 @@ def render_script(name: Literal["install.sh", "install.ps1"], url: str) -> str:
     if not _PLAIN_URL.fullmatch(url):
         raise ValueError(f"not a plain http(s) URL: {url!r}")
     template = resources.files("choregos_api").joinpath("cli_install", name).read_text(encoding="utf-8")
-    return template.replace(PLACEHOLDER, url)
+    return template.replace(PLACEHOLDER, url).replace(RELEASES_PLACEHOLDER, RELEASES)
 
 
 def _script(name: Literal["install.sh", "install.ps1"]) -> Response:

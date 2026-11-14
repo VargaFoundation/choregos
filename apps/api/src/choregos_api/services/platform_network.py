@@ -32,6 +32,7 @@ from choregos_core import utcnow
 from choregos_core.egress import NetworkBounds
 from choregos_core.network import normalise_host, platform_allowed
 from choregos_core.policy_ceiling import CeilingNetwork
+from choregos_core.publishing import PUBLISHING
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -42,7 +43,8 @@ from ..errors import ApiError, unprocessable
 from .definitions import ceiling_of
 from .network import instance_deny
 
-DEFAULT_CONTACT = "https://github.com/VargaFoundation/choregos"
+#: The contact of the platform's requests when neither the organisation nor the deployment names one.
+DEFAULT_CONTACT = PUBLISHING.source_repository
 #: Configuration keys that hold the address a connector reaches, in the order they are read.
 URL_KEYS = ("url", "base_url", "api_url", "endpoint", "server_url", "host")
 WHERE = "change the organisation's network access on the Administration page, or the connector's address"

@@ -58,6 +58,7 @@ from .assistants import (
 from .audit import AuditLog, NetworkDecision
 from .connectors import (
     ConnectorOperation,
+    GitHubAppRegistration,
     GitHubInstallation,
     OrgConnector,
     OrgConnectorProject,
@@ -234,6 +235,7 @@ __all__ = [
     "Float",
     "ForeignKey",
     "GatewayKeyRow",
+    "GitHubAppRegistration",
     "GitHubInstallation",
     "HandOffReceipt",
     "HostedBuildRecord",

@@ -614,6 +614,23 @@ The edition API (`choregos_api.edition`) and the `Principal` followed in 0.21 (S
 | `reinitialiser` | `reset` <!-- lang: fr-ok --> |
 | `Principal.authentifie_le` (read and write) | `Principal.authenticated_at` <!-- lang: fr-ok --> |
 
+## The publishing identity
+
+Who publishes Choregos and where (the image and chart namespace, the source repository and its
+releases, the documentation site, the security contact, the agent's commit address, the plugins'
+repository and signed index) is defined once, in `packages/core/src/choregos_core/publishing.json`
+([ADR 0156](adr/0156-the-publishing-identity-is-one-file.md)).
+
+- In Python, read `choregos_core.publishing.PUBLISHING` (`PUBLISHING.image("choregos-runner", tag)`,
+  `PUBLISHING.releases`, `PUBLISHING.signing_identity(ref)`, …); in the console, `@/lib/publishing`.
+  Never write one of its values in code: `tests/tools/test_publishing_identity.py` refuses it.
+- A file that cannot read JSON (a chart's values, a policy, a workflow, a Dockerfile, a page of
+  documentation) spells the values out and is listed in `DERIVED` in `tools/publishing_identity.py`.
+- A test that needs a registry or a repository as arbitrary data uses `registry.example` or
+  `github.com/example`, not the project's.
+- To publish elsewhere: edit `publishing.json`, run `make publishing-rewrite FROM=<the commit before the
+  edit>`, read the diff. `make publishing-check` runs the check alone.
+
 ## The English ratchet
 
 Everything new is English ([ADR 0046](adr/0046-english-everywhere.md)), and what is still French

@@ -12,9 +12,9 @@ The configuration (`CHOREGOS_PLUGINS_CONFIG`, a YAML file the chart writes):
 ```yaml
 sources:
   - name: varga
-    index: oci://ghcr.io/vargafoundation/choregos-agents/index:stable   # or https://…/index.yaml
+    index: oci://registry.example/choregos-agents/index:stable   # or https://…/index.yaml
     trust:                       # a keyless identity and issuer (regular expressions, matched whole)…
-      identity: https://github.com/VargaFoundation/choregos-agents/.*
+      identity: https://github.com/example/choregos-agents/.*
       issuer: https://token.actions.githubusercontent.com
       # key: /etc/choregos/plugins/varga.pub   # …or a public key cosign reads
     egress: [pkg-containers.githubusercontent.com]   # hosts beyond the index's own
