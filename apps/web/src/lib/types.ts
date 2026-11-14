@@ -79,6 +79,8 @@ export type {
   HandOffEvent,
   HumanRequest,
   HumanRequestAssignee,
+  DecisionDraft,
+  DecisionDraftVia,
   AssigneeChange,
   Me as MeDto,
   Memory,
