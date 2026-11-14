@@ -233,6 +233,10 @@ class EventType(StrEnum):
     #: (nothing was compensated, ADR 0149 §5). A consumer that reads the type alone reads "not
     #: succeeded", which is true of both.
     ACTION_FAILED = "choregos.action.failed"
+    #: A person recorded what they found of an action in doubt (ADR 0149 §5): its data carries the
+    #: `outcome` (`made` or `not_made`), the effect's `position` and who settled it. The action then
+    #: resumes, and its end is said again by `succeeded` or `failed`.
+    ACTION_SETTLED = "choregos.action.settled"
 
 
 class ActionStatus(StrEnum):
@@ -248,10 +252,20 @@ class ActionStatus(StrEnum):
     SUCCEEDED = "succeeded"
     FAILED = "failed"
     #: One of its effects was sent and nobody knows whether it was executed: a write through an
-    #: outpost that an instance claimed and never answered (ADR 0149 §5). Terminal: it is never
-    #: replayed and nothing it had done is compensated automatically; a person checks the system the
-    #: write was for.
+    #: outpost that an instance claimed and never answered (ADR 0149 §5). The platform does nothing
+    #: more by itself: it is never replayed and nothing it had done is compensated automatically. A
+    #: person checks the system the write was for and settles it (`SettlementOutcome`), which makes
+    #: it `approved` again.
     IN_DOUBT = "in_doubt"
+
+
+class SettlementOutcome(StrEnum):
+    """What a person found of an effect in doubt (ADR 0149 §5)."""
+
+    #: The write is in the system: the effect is `done`, and the action resumes after it.
+    MADE = "made"
+    #: It is not: the effect is `not_made`, and the action fails, compensating what came before.
+    NOT_MADE = "not_made"
 
 
 class ActionOrigin(StrEnum):

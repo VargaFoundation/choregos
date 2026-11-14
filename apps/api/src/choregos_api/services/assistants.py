@@ -6,9 +6,10 @@ The manifest is never copied into the installation: it is read again from the in
 what the organisation decided: the config, the owner and audience groups, the channel, the policy
 overrides and, per need, the connector it is bound to.
 
-`status` is derived, then stored for the listings that read it in SQL: `suspended` while the plugin is not
-installed (uninstalling a plugin suspends its assistants, installing it again resumes them), `incomplete`
-while the readiness has an item, `ready` otherwise.
+`status` is derived, then stored for the listings that read it in SQL: `suspended` while a person has
+stopped the assistant (`stopped_at`, ADR 0142 §4 bis: read first, so that no derivation undoes a stop) or
+while the plugin is not installed (uninstalling a plugin suspends its assistants, installing it again
+resumes them), `incomplete` while the readiness has an item, `ready` otherwise.
 
 Rights are decided by the permissions `assistant:manage`, `assistant:use` and `assistant:audit`
 (`assistant_access.holds`, S63-15) and nowhere else.
@@ -37,11 +38,20 @@ from ..schemas.assistants import (
     AssistantBind,
     AssistantBinding,
     AssistantInstall,
+    AssistantKnowledgeBind,
+    AssistantLaunchBind,
     AssistantReadiness,
     AssistantReadinessItem,
+    AssistantStop,
     AssistantUpdate,
 )
-from . import assistant_embed, offered_knowledge, plugin_files
+from . import (
+    assistant_embed,
+    assistant_knowledge_bindings,
+    assistant_launches,
+    offered_knowledge,
+    plugin_files,
+)
 from .assistant_access import holds
 from .connector_identity import supports_identity
 
@@ -243,6 +253,10 @@ async def readiness_items(session: AsyncSession, row: AssistantInstallation) -> 
                     groups=[],
                 )
             )
+    # ADR 0158: a required launch unbound, or a bound workflow that no longer serves it.
+    items.extend(await assistant_launches.readiness_items(session, row, document, owners))
+    # A required knowledge need bound to no active base (ADR 0159 point 5).
+    items.extend(await assistant_knowledge_bindings.readiness_items(session, row, document))
     return items
 
 
@@ -254,7 +268,9 @@ class NeedChange:
     """What an upgrade did to one need of an installation."""
 
     need: str
-    kind: str  # removed | added | rebound | disabled | required_changed
+    #: removed | added | rebound | disabled | required_changed, and for a knowledge need (ADR 0159)
+    #: knowledge_removed | knowledge_added | knowledge_required_changed
+    kind: str
     message: str
 
 
@@ -337,6 +353,16 @@ async def upgrade_bindings(
             changes.append(NeedChange(need, "added", f"`{need}` is a new {kind} need, not bound yet"))
         elif _is_required(before[need]) != _is_required(tool):
             changes.append(_required_change(need, tool))
+    # ADR 0158: the launches follow the same path.
+    changes.extend(
+        NeedChange(*change) for change in await assistant_launches.upgrade(session, row, document, previous)
+    )
+    changes.extend(
+        NeedChange(need, kind, message)
+        for need, kind, message in await assistant_knowledge_bindings.upgrade(
+            session, row, document, previous
+        )
+    )
     await session.flush()
     return changes
 
@@ -379,7 +405,8 @@ async def upgrade_plugin_bindings(
 async def refresh(
     session: AsyncSession, row: AssistantInstallation
 ) -> tuple[str, list[AssistantReadinessItem]]:
-    """The live status and readiness; the row follows (and the plugin's version with it)."""
+    """The live status and readiness; the row follows (and the plugin's version with it). A stopped
+    installation reads `suspended` whatever the readiness says: only a resume clears a stop."""
     plugin_row = await plugin_files.installed_row(session, row.org_id, row.plugin)
     items = await readiness_items(session, row)
     if plugin_row is None:
@@ -387,6 +414,8 @@ async def refresh(
     else:
         status = READY if not items else INCOMPLETE
         row.plugin_version, row.manifest_digest = plugin_row.version, plugin_row.digest
+    if row.stopped_at is not None:
+        status = SUSPENDED
     if row.status != status:
         row.status = status
     await session.flush()
@@ -396,6 +425,12 @@ async def refresh(
 async def readiness(session: AsyncSession, row: AssistantInstallation) -> AssistantReadiness:
     status, items = await refresh(session, row)
     return AssistantReadiness(status=status, items=items)
+
+
+def stopped_of(row: AssistantInstallation) -> AssistantStop | None:
+    if row.stopped_at is None:
+        return None
+    return AssistantStop(at=row.stopped_at, by=row.stopped_by or "", reason=row.stopped_reason or "")
 
 
 async def to_dto(session: AsyncSession, row: AssistantInstallation) -> Assistant:
@@ -414,6 +449,7 @@ async def to_dto(session: AsyncSession, row: AssistantInstallation) -> Assistant
         for b, c in await _bindings(session, row)
     ]
     return Assistant(
+        id=row.id,
         slug=row.slug,
         plugin=row.plugin,
         plugin_version=row.plugin_version,
@@ -424,8 +460,11 @@ async def to_dto(session: AsyncSession, row: AssistantInstallation) -> Assistant
         audience_groups=list(row.audience_groups),
         channel=row.channel,
         status=row.status,
+        stopped=stopped_of(row),
         policy_overrides=dict(row.policy_overrides),
         bindings=bindings,
+        launches=await assistant_launches.to_dtos(session, row, document),
+        knowledge_bindings=await assistant_knowledge_bindings.bindings_of(session, row),
         created_by=row.created_by,
         created_at=row.created_at,
     )
@@ -487,6 +526,8 @@ async def install(
     await offered_knowledge.copy_seeds(
         session, row, document, plugin_row, await plugin_files.plugin_root(session, plugin_row), principal
     )
+    for name, bases in body.knowledge_bindings.items():  # ADR 0159: by reference, under the same rules
+        await assistant_knowledge_bindings.bind(session, org, row, document, name, bases, principal)
     await refresh(session, row)
     await record(session, principal, "assistant.install", org_id=org_id, target_type="assistant",
                  target_id=slug, plugin=plugin_row.name, version=plugin_row.version)  # fmt: skip
@@ -611,4 +652,41 @@ async def bind(
     await refresh(session, row)
     await record(session, principal, "assistant.bind", org_id=org_id, target_type="assistant",
                  target_id=row.slug, need=need, connector=connector.name, enabled=body.enabled)  # fmt: skip
+    return row
+
+
+async def bind_launch(
+    session: AsyncSession,
+    org_id: str,
+    org: str,
+    row: AssistantInstallation,
+    launch: str,
+    body: AssistantLaunchBind,
+    principal: Principal,
+) -> AssistantInstallation:
+    """Binds a launch to a project's workflow: `assistant:manage` here, `item:control` in its project."""
+    require_manager(principal, org, row)
+    document = await manifest(session, row)
+    if document is None:
+        raise unprocessable(f"the plugin `{row.plugin}` no longer ships the assistant `{row.assistant_name}`")
+    await assistant_launches.bind(session, org_id, org, row, document, launch, body, principal)
+    await refresh(session, row)
+    return row
+
+
+async def bind_knowledge(
+    session: AsyncSession,
+    org: str,
+    row: AssistantInstallation,
+    name: str,
+    body: AssistantKnowledgeBind,
+    principal: Principal,
+) -> AssistantInstallation:
+    """Binds a knowledge need to the organisation's bases, by reference (ADR 0159): the whole list."""
+    require_manager(principal, org, row)
+    document = await manifest(session, row)
+    if document is None:
+        raise unprocessable(f"the plugin `{row.plugin}` no longer ships the assistant `{row.assistant_name}`")
+    await assistant_knowledge_bindings.bind(session, org, row, document, name, body.bases, principal)
+    await refresh(session, row)
     return row

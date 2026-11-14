@@ -25,7 +25,7 @@ import { api } from "@/lib/api";
 import { factsOf, groupArtifacts } from "@/lib/artifacts";
 import { libelleDeCode, relative, shortDate, tokens, usd } from "@/lib/format";
 import { RISK_LEVELS, SIZE_LEVELS } from "@/lib/levels";
-import type { WorkItemJourney } from "@/lib/types";
+import type { DecisionDraft, WorkItemJourney } from "@/lib/types";
 import { ConfirmedGesture } from "@/components/confirmed-gesture";
 import { StopWithReason } from "@/components/activity/stop";
 import { AgentProposal } from "@/components/agent-proposal";
@@ -41,6 +41,7 @@ import { NextStepBanner } from "@/components/ticket/next-step-banner";
 import { TargetRepository } from "@/components/ticket/target-repository";
 import { LongText, RequestCard } from "@/components/ticket/request-card";
 import { RequestAssignee } from "@/components/ticket/request-assignee";
+import { DecisionDraftCard } from "@/components/ticket/decision-draft";
 import { runOutcome } from "@/components/ticket/run-outcome";
 import { keyNames, useLiveRefresh } from "@/lib/live";
 import { WorkflowChip } from "@/components/workflow-chip";
@@ -62,6 +63,8 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
   const [erreurDeControle, setErreurDeControle] = useState<string | null>(null);
   // The artifact a fact of the card asked to open (ADR 0129): the tab is opened by mounting on it.
   const [artifactAsked, setArtifactAsked] = useState<{ name: string; times: number } | null>(null);
+  // A client's draft the person took into the decision's form (ADR 0163); `times` remounts the form.
+  const [taken, setTaken] = useState<{ draft: DecisionDraft | null; times: number }>({ draft: null, times: 0 });
   // Live (S59-08): what happens to the ticket refetches the page, decisions and runs included.
   useLiveRefresh(`/work-items/${encodeURIComponent(id)}/events/stream`, keyNames(id));
   const item = useQuery({ queryKey: ["item", id], queryFn: () => api.workItem(id) });
@@ -206,10 +209,22 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
               <div className="mb-3">
                 <AgentProposal slug={slug} runs={runs.data} prUrl={data.pr_url} />
               </div>
+              {/* What the person's client prepared through the MCP door (ADR 0163): taken or discarded. */}
+              {data.pending_request.draft && (
+                <DecisionDraftCard
+                  itemId={id}
+                  requestId={data.pending_request.id}
+                  draft={data.pending_request.draft}
+                  onTake={(draft) => setTaken({ draft, times: taken.times + 1 })}
+                  onDone={() => queryClient.invalidateQueries({ queryKey: ["item", id] })}
+                />
+              )}
               <DecisionBar
+                key={`${data.pending_request.id}-${taken.times}`}
                 itemId={id}
                 kind={data.pending_request.kind}
                 request={data.pending_request}
+                taken={taken.draft}
                 onDone={() => queryClient.invalidateQueries({ queryKey: ["item", id] })}
               />
             </Card>

@@ -2,7 +2,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { TrackerIdentities } from "@/components/admin/tracker-identities";
+import { MemberLinkedAccounts } from "@/components/accounts/member-linked-accounts";
 import { peopleOf } from "@/components/members";
 import { MembersTable } from "@/components/members-table";
 import { Card } from "@/components/ui";
@@ -12,7 +12,8 @@ import { useSession } from "@/lib/session";
 /**
  * The organisation's members (S30-06): one row per person, their role in the organisation and
  * their projects. The last administrator cannot leave — the API refuses it (409), and the screen says so.
- * An organisation administrator also links each member's GitHub account (S47-15).
+ * An organisation administrator also sees each member's accounts on code forges, verified by the member or
+ * declared, and declares one (ADR 0161).
  */
 export default function MembersPage() {
   const { me, org } = useSession();
@@ -23,12 +24,12 @@ export default function MembersPage() {
     <div className="space-y-4">
       <MembersTable />
       {orgAdmin && people.length > 0 && (
-        <Card title="GitHub accounts">
+        <Card title="Linked accounts">
           <ul className="space-y-4">
             {people.map((person) => (
-              <li key={person.userId} data-testid={`github-${person.email}`}>
+              <li key={person.userId} data-testid={`linked-accounts-${person.email}`}>
                 <p className="mb-1 font-medium">{person.email}</p>
-                <TrackerIdentities org={org} userId={person.userId} />
+                <MemberLinkedAccounts org={org} userId={person.userId} />
               </li>
             ))}
           </ul>

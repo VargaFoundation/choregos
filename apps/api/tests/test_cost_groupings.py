@@ -14,19 +14,27 @@ from httpx import AsyncClient
 
 GROUPS = [
     "day", "stage", "model", "backend", "size", "kind", "agent", "workflow", "work_item", "project", "origin",
-    "run",
+    "run", "assistant",
 ]  # fmt: skip
 
 
 async def _seed(project_id: str) -> None:
-    from choregos_api.db.models import CostLedger, WorkItem
+    from choregos_api.db.models import AssistantInstallation, CostLedger, Organization, WorkItem
     from choregos_api.db.session import session_scope
+    from sqlalchemy import select
 
     now = datetime.now(UTC)
     async with session_scope() as session:
         one = WorkItem(project_id=project_id, tracker_key="B-1", title="One", state="ready")
         two = WorkItem(project_id=project_id, tracker_key="B-2", title="Two", state="ready")
-        session.add_all([one, two])
+        varga = select(Organization.id).where(Organization.slug == "varga")
+        org_id = (await session.execute(varga)).scalar_one()
+        concierge, analyst = (
+            AssistantInstallation(org_id=org_id, slug=slug, plugin="p", plugin_version="1",
+                                  manifest_digest="d", assistant_name=slug)
+            for slug in ("concierge", "analyst")
+        )  # fmt: skip
+        session.add_all([one, two, concierge, analyst])
         await session.flush()
 
         def line(item: Any, usd: float, **kw: Any) -> CostLedger:
@@ -44,9 +52,11 @@ async def _seed(project_id: str) -> None:
         session.add_all(
             [
                 line(one, 4.0, kind="model", model="m-big", backend="claude-code", stage_role="implement",
-                     size="M", agent_slug="coordinator", agent_version=1, workflow_name="delivery"),
+                     size="M", agent_slug="coordinator", agent_version=1, workflow_name="delivery",
+                     installation_id=concierge.id),
                 line(one, 2.0, kind="model", model="m-small", backend="claude-code", stage_role="review",
-                     size="M", agent_slug="reviewer", agent_version=1, workflow_name="delivery"),
+                     size="M", agent_slug="reviewer", agent_version=1, workflow_name="delivery",
+                     installation_id=analyst.id),
                 line(two, 1.0, kind="tool", model="crm_export", stage_role="implement", size="S",
                      agent_slug="coordinator", agent_version=1, workflow_name="onboarding", origin="script"),
                 line(None, 3.0, kind="model", model="m-big", stage_role="plan",
@@ -75,6 +85,8 @@ EXPECTED = {
     "stage": {"implement": 5.0, "review": 2.0},
     # The door of a tool call (S57-06); a model line says none and is `—`.
     "origin": {"script": 1.0},
+    # The installation that spent it, by its slug (S64-09b); a line no assistant spent is `—`.
+    "assistant": {"concierge": 4.0, "analyst": 2.0},
 }
 
 

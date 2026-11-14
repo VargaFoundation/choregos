@@ -22,6 +22,7 @@ export const reportKey = (scope: Scope, group: string, filtre: CostFilter) =>
     filtre.agent ?? "",
     filtre.workflow ?? "",
     filtre.work_item ?? "",
+    filtre.assistant ?? "",
   ] as const;
 
 export function fetchReport(scope: Scope, group: string, filtre: CostFilter) {

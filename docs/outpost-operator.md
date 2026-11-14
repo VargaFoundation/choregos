@@ -16,9 +16,9 @@ is `packages/outpost`, under the Apache 2.0 licence: a program that takes work i
 one you are meant to be able to read.
 
 **Where this stands.** The daemon, the door and the chart are built, and each is tested against the
-door's contract. Nothing has run against a real outpost on a real network yet: the end-to-end proof
-is a story of its own (S65-19). The [last section](#what-is-not-there-and-what-is-not-proven) says
-what that leaves open.
+door's contract. The daemon and the door have run together end to end, in one process and on a test
+cluster (S65-19); nothing has run against a real outpost on a real network yet. The
+[last section](#what-is-not-there-and-what-is-not-proven) says what that leaves open.
 
 ## An outpost does not give data residency
 
@@ -225,11 +225,17 @@ of an alias whose `writes` is `deny`.
 It follows that `writes: deny` is as good as your server's declarations: a server that marks a tool
 read-only while it writes is believed. Behind `deny`, prefer an account that cannot write.
 
-In this version the platform opens no write through an outpost at all
-([below](#what-is-not-there-and-what-is-not-proven)): it hands over only calls to tools it recorded
-as reads when it discovered them. `writes` still matters, because the daemon reads the declaration
-again at each call: if your server no longer declares such a tool read-only, `deny` refuses the call
-and `allow` makes it. `allow` also makes a listing show the tools that write.
+The platform's side has its own lock: it hands a write over only when the organisation's
+administrator opened that operation saying either that the tool takes the platform's idempotency
+key (an argument `action_key` your server uses to make a second delivery harmless) or that an
+in-doubt outcome is accepted. It sends a write **once**: if your daemon took it and its answer never
+reached the platform, the platform's action ends in doubt and is not sent again; with `action_key`,
+a retry may deliver it again under the same key. The daemon's journal answers a call id it has
+already seen from what it recorded, and a daemon restarted in the middle of a write reports it
+`unanswered` and does not make it again ([When the disk refuses a record](#when-the-disk-refuses-a-record)
+says what happens when it cannot record a write before making it). `writes` still decides at your
+end: under `deny`, a write the platform hands over is refused `write_denied` and your server
+receives nothing. `allow` also makes a listing show the tools that write.
 
 ### What the daemon refuses
 
@@ -242,7 +248,7 @@ server receives no call:
 | `call_unreadable` | the call does not open with this instance's key, or is not a call |
 | `unsupported_kind` | a kind of call this daemon does not know (a later protocol's) |
 | `deadline_passed` | the call's deadline is behind, by this machine's clock |
-| `unknown_endpoint` | the file holds no such alias |
+| `unknown_endpoint` | the file holds no such alias. The daemon announces its aliases at every poll and the platform hands it calls for those only, so this one is seldom met: a call for an alias your file does not hold is refused on the platform's side (`outpost_offline`) and never reaches you |
 | `tool_not_allowed` | the tool is outside the alias's patterns |
 | `payload_too_large` | the arguments weigh more than `max_payload_kb` |
 | `busy` | `concurrency` is reached, or the daemon is stopping, or it was restarted before it began the call |
@@ -599,9 +605,11 @@ shared-responsibility statement is theirs to write, outside this repository.
 
 Not there in this version:
 
-- **Writes.** The platform opens a write through an outpost only under the rule that it is delivered
-  at most once, and it does not carry that rule yet: it opens no such write. The daemon's half is
-  there (the journal, `writes`), and has nothing to apply it to.
+- **A way for the platform to know what became of a write in doubt.** The platform sends a write
+  once; when your daemon took it and its answer never came back, the platform's action ends **in
+  doubt** and is never sent again (ADR 0149 §5). Your audit log and the system behind the alias are
+  where the answer is: a person on the platform's side checks it with you. Nothing closes such an
+  action automatically.
 - **Runs.** A whole run executing at an outpost is not decided
   ([ADR 0149](adr/0149-a-tool-may-live-at-an-outpost.md) §12). The daemon announces one capability,
   `tools`.
@@ -612,17 +620,21 @@ Not there in this version:
 - **Metrics, a health endpoint, a rotation of the audit log, a notice before the protocol minimum
   rises.** Each is said where it matters above.
 
+What has run: the daemon and the door together, in one process
+(`tests/e2e/test_outpost_tools.py`), from enrolment to a read, a write left in doubt by a daemon
+stopped in the middle of it, the refusals of a policy and of an unpinned key, and exit codes 3 and 4;
+and on a test cluster with Calico (`tests/cluster/test_outpost_tools_on_cluster.py`), where this
+chart installs a daemon that enrols from its init container and serves a read, while a connection
+opened from the platform's namespace towards the outpost's is dropped by the chart's NetworkPolicy.
+
 Not proven:
 
-- **The daemon and the door together.** Each is tested against the door's contract and against a
-  scripted stand-in for the other. A tool call from the platform to a server behind a real daemon,
-  end to end, is the story S65-19.
 - **Anything on a real network.** No firewall, no outbound proxy that inspects TLS and no idle
-  timeout of a real appliance has been in the path. `doctor` and the daemon are tested against
-  stand-ins for them.
-- **The chart on a cluster.** It is rendered and checked as a document: that a network plugin
-  enforces its NetworkPolicy, and that a volume behaves as the daemon needs, is not shown.
+  timeout of a real appliance has been in the path; on the test cluster the door is plain HTTP.
+  `doctor` and the daemon are tested against stand-ins for them.
+- **The chart beyond one install.** An upgrade, a second replica, a restart on the same claim, a
+  storage class other than kind's and a network plugin other than Calico are not shown.
 - **A rotation of the door's key** with real outposts.
 
-Until S65-19 has run, read this page as what the code is written and tested to do, not as what has
-been operated.
+Read this page as what the code is written and tested to do, on a bench and on a test cluster, not as
+what has been operated.

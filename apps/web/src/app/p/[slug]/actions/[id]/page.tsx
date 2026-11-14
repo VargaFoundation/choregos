@@ -5,7 +5,9 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { use } from "react";
 import { DecisionDAction } from "@/components/actions/decision";
+import { InDoubt } from "@/components/actions/in-doubt";
 import { OntologyDetail } from "@/components/actions/ontology";
+import { SettleInDoubt, Settled, settlementOf } from "@/components/actions/settle";
 import { Status, propose } from "@/components/actions/status";
 import { Card, Empty, ErrorNote, Heading } from "@/components/ui";
 import { api } from "@/lib/api";
@@ -37,6 +39,13 @@ export default function ActionPage({ params }: { params: Promise<{ slug: string;
         {a.created_at ? ` · ${relative(a.created_at)}` : ""}
         {a.justification ? ` — ${a.justification}` : ""}
       </p>
+      <InDoubt action={a} />
+      {(a.status === "in_doubt" || settlementOf(a)) && (
+        <Card title="What a person found">
+          <SettleInDoubt projet={slug} action={a} />
+          <Settled action={a} />
+        </Card>
+      )}
       <OntologyDetail action={a} />
       <Card title="Decision">
         {a.status === "pending_approval" ? (

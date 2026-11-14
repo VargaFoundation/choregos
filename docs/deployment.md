@@ -802,6 +802,17 @@ with `global.extraEnv`, for the API and the workers alike.
 
 **The signing key's Secret.** Either you create it and name it:
 
+**Writes through an outpost** are played by the workers, delivered at most once, and may leave their
+action `in_doubt` ([Security](security.md#a-connector-at-an-outpost)). A worker that stops between an
+outpost's claim and the record of its answer loses nothing for fifteen minutes: the retry reads the
+answer where the door stored it. After that the answer is gone and the action ends in doubt rather
+than being sent again. Watch the actions in doubt (`GET /api/v1/projects/{id}/actions?status=in_doubt`,
+or the `choregos.action.failed` events whose `status` is `in_doubt`): a count that rises says the link
+between an outpost and the platform loses answers. Upgrade the API and the workers together before an
+administrator opens a write: a worker of an earlier version places no write through an outpost, and
+the action fails saying so. The upgrade adds two columns to `connector_operations`
+(`20261112_1300_operation_delivery_statements.py`), null and false on every existing row.
+
 ```bash
 openssl genpkey -algorithm ed25519 -out door.pem          # PEM, PKCS#8: CHOREGOS_OUTPOSTS_DOOR_SIGNING_KEY
 kubectl -n <namespace> create secret generic outposts-door-key --from-file signing-key=door.pem
@@ -1674,6 +1685,26 @@ value>` on the first model call. Nothing said the key had never resolved.
 
 If the API refuses to start with `réglages non résolus`, fix the source of the secret — the key
 is missing where it is stored, not where it is read.
+
+## Upgrading past 0.27.3
+
+A workflow may no longer name an agent of kind `external` — a client of the MCP door — as a step's actor
+([ADR 0163](adr/0163-a-client-prepares-a-person-s-decision-the-person-decides.md) §1, S65-20). Such a
+workflow ran the client's version as if the platform ran it. After the upgrade its next publication is
+refused (422), and a run of it fails before it starts with the agent named; name a person for the step
+instead. Look for one before upgrading:
+
+```sql
+SELECT p.slug AS project, w.name AS workflow, w.version, a.slug AS agent
+FROM workflow_defs w
+JOIN projects p ON p.id = w.project_id
+JOIN LATERAL jsonb_each(w.json::jsonb -> 'actors') AS actor(name, spec) ON true
+JOIN agents a ON a.org_id = p.org_id AND a.kind = 'external'
+  AND a.slug = split_part(actor.spec ->> 'agent', '@', 1)
+WHERE w.is_active;
+```
+
+No row: nothing to do. The rule needs no migration.
 
 ## Upgrading to 0.27
 

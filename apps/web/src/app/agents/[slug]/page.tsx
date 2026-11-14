@@ -17,6 +17,7 @@ import {
   ScopePanel,
   UpstreamBanner,
 } from "@/components/agents/governance";
+import { ForksPanel, SocialBar } from "@/components/agents/social";
 import { AgentAccessCard } from "@/components/agents/access-view";
 import { AgentComposition } from "@/components/agents/composition";
 import { DefinitionView } from "@/components/agents/definition-view";
@@ -66,6 +67,7 @@ const AGENT_TABS = [
   { id: "overview", label: "Overview" },
   { id: "definition", label: "Definition" },
   { id: "history", label: "History" },
+  { id: "forks", label: "Forks" },
   { id: "lifecycle", label: "Lifecycle" },
   { id: "runs", label: "Runs" },
   { id: "access", label: "Access" },
@@ -113,6 +115,7 @@ export default function AgentPage({ params }: { params: Promise<{ slug: string }
       <TagList tags={a.tags} link />
       <ReasonNote agent={a} />
       <UpstreamBanner agent={a} />
+      <SocialBar org={org} agent={a} forksHref={`${pathname}?tab=forks`} />
       {(a.can?.fork_scopes ?? []).length > 0 && (
         <div className="flex flex-wrap items-center gap-2">
           <Button size="sm" onClick={() => setForking(true)}>
@@ -157,6 +160,7 @@ export default function AgentPage({ params }: { params: Promise<{ slug: string }
         </>
       )}
       {onglet === "definition" && <Definition org={org} agent={a} />}
+      {onglet === "forks" && <ForksPanel org={org} agent={a} />}
       {onglet === "history" && <History org={org} agent={a} compare={parseCompare(search.get("compare"))} />}
       {onglet === "lifecycle" && (
         <LifecycleTab org={org} agent={a}>

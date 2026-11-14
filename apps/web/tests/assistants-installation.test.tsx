@@ -1,10 +1,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { InstallAssistant, groupsOf } from "@/components/assistants/install-assistant";
 import { InstallationDetail } from "@/components/assistants/installation-detail";
 import { InstallationsList } from "@/components/assistants/installations-list";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
+import { mockCostReport } from "@/mocks/data";
 
 const push = vi.hoisted(() => vi.fn());
 const roles = vi.hoisted(() => ({ admin: true }));
@@ -23,7 +24,9 @@ vi.mock("@/lib/api", async (importOriginal) => {
       ...real.api,
       plugins: vi.fn(),
       orgConnectors: vi.fn(),
+      knowledgeBases: vi.fn(),
       agents: vi.fn(),
+      orgCosts: vi.fn(),
     },
   };
 });
@@ -39,6 +42,7 @@ const mocks = vi.hoisted(() => ({
   uninstall: vi.fn(),
   readiness: vi.fn(),
   bind: vi.fn(),
+  bindKnowledge: vi.fn(),
   knowledgeUpdates: vi.fn(),
   decideKnowledgeUpdate: vi.fn(),
   reads: vi.fn(),
@@ -52,6 +56,8 @@ const mocks = vi.hoisted(() => ({
   deleteTeamsDelivery: vi.fn(),
   acceptCandidate: vi.fn(),
   dismissCandidate: vi.fn(),
+  stop: vi.fn(),
+  resume: vi.fn(),
 }));
 vi.mock("@/lib/assistants-api", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/assistants-api")>();
@@ -114,6 +120,10 @@ beforeEach(() => {
   mocks.feedbackCandidates.mockResolvedValue([]);
   mocks.taskEvents.mockResolvedValue({ items: [] });
   mocks.teamsDelivery.mockResolvedValue({ configured: false, version: null, updated_at: null });
+  // The organisation's report from the mock ledger, filtered and grouped as the API does (S64-09b).
+  vi.mocked(api.orgCosts).mockImplementation(async (org, group, filtre) =>
+    mockCostReport(`/orgs/${org}/costs?${new URLSearchParams({ group_by: group ?? "day", ...(filtre as Record<string, string>) })}`),
+  );
 });
 
 describe("installing an assistant", () => {
@@ -209,6 +219,48 @@ describe("one installation, for its owners", () => {
     expect(screen.getByText("to fix: the owners")).toBeInTheDocument();
     fireEvent.change(await screen.findByLabelText("Connector for news"), { target: { value: "news-feed" } });
     await waitFor(() => expect(mocks.bind).toHaveBeenCalledWith("varga", "invest", "news", { connector: "news-feed", enabled: true, approval: null }));
+  });
+
+  it("binds a knowledge need to bases the owner reads, keeps one another owner bound, and shows a refusal", async () => {
+    mocks.pluginAssistants.mockResolvedValue({
+      items: [
+        {
+          ...shipped.items[0],
+          knowledge_needs: [{ name: "house_research", description: "The house's research notes.", required: true }],
+        },
+      ],
+    });
+    mocks.installation.mockResolvedValue(
+      installed({ knowledge_bindings: [{ name: "house_research", bases: ["board-notes"], enabled: true }] }),
+    );
+    vi.mocked(api.knowledgeBases).mockResolvedValue([
+      { slug: "house-notes", name: "House notes", scope: "org", serving_mode: "index", status: "active" },
+      { slug: "old-notes", name: "Old notes", scope: "org", serving_mode: "index", status: "archived" },
+    ] as never);
+    mocks.bindKnowledge.mockRejectedValueOnce(new Error("`house-notes` is not a knowledge base of varga you may read"));
+    mocks.bindKnowledge.mockResolvedValue(installed());
+    wrap(<InstallationDetail slug="invest" />);
+    expect(await screen.findByText("The house's research notes.")).toBeInTheDocument();
+    // The base another owner bound stays listed and checked; an archived base is not offered.
+    expect(await screen.findByLabelText("board-notes for house_research")).toBeChecked();
+    expect(screen.queryByLabelText("old-notes for house_research")).not.toBeInTheDocument();
+    fireEvent.click(await screen.findByLabelText("house-notes for house_research"));
+    fireEvent.click(screen.getByRole("button", { name: "Bind house_research" }));
+    expect(await screen.findByText("`house-notes` is not a knowledge base of varga you may read")).toBeInTheDocument();
+    expect(mocks.bindKnowledge).toHaveBeenCalledWith("varga", "invest", "house_research", {
+      bases: ["board-notes", "house-notes"],
+    });
+    fireEvent.click(screen.getByLabelText("board-notes for house_research"));
+    fireEvent.click(screen.getByRole("button", { name: "Bind house_research" }));
+    await waitFor(() =>
+      expect(mocks.bindKnowledge).toHaveBeenLastCalledWith("varga", "invest", "house_research", { bases: ["house-notes"] }),
+    );
+  });
+
+  it("shows no knowledge card for an assistant without a knowledge need", async () => {
+    wrap(<InstallationDetail slug="invest" />);
+    expect(await screen.findByText("need `news` is not bound")).toBeInTheDocument();
+    expect(screen.queryByText("Knowledge from the organisation")).not.toBeInTheDocument();
   });
 
   it("lists the installation's own memory for its owners, decides proposals and adds a fact", async () => {
@@ -513,5 +565,121 @@ describe("one installation, for its owners", () => {
     wrap(<InstallationDetail slug="invest" />);
     await screen.findByText("Settings");
     expect(screen.queryByRole("button", { name: "Uninstall" })).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * The assistant's tokens, its stop and its resume (S64-09d, ADR 0141 §1, ADR 0142 §4 bis), against
+ * mocked answers shaped by the contract (`AssistantStopResult`, `Assistant.stopped`).
+ */
+describe("one installation: its tokens, its stop and its resume", () => {
+  it("narrows the tokens-and-cost panel to the installation, and links to its turns on the Activity screen", async () => {
+    mocks.installation.mockResolvedValue(installed({ id: "inst-concierge" }));
+    wrap(<InstallationDetail slug="invest" />);
+    const panel = await screen.findByTestId("tokens-and-cost");
+    await within(panel).findByTestId("panel-model");
+    // Every read of the panel is narrowed to this installation, and its totals are the installation's alone.
+    const reads = vi.mocked(api.orgCosts).mock.calls;
+    expect(reads.length).toBeGreaterThan(0);
+    expect(reads.every(([, , f]) => f?.assistant === "inst-concierge")).toBe(true);
+    const own = mockCostReport("/orgs/varga/costs?group_by=model&assistant=inst-concierge");
+    const all = mockCostReport("/orgs/varga/costs?group_by=assistant");
+    expect(own.total.cost_usd).toBeCloseTo(all.rows.find((r) => r.key === "concierge")!.cost_usd);
+    expect(own.total.cost_usd).toBeLessThan(all.total.cost_usd!);
+    expect(within(panel).getByTestId("panel-model")).toHaveTextContent("claude-haiku");
+    expect(within(panel).getByTestId("panel-model")).not.toHaveTextContent("claude-sonnet");
+    expect(within(panel).getByRole("link", { name: "CSV" }).getAttribute("href")).toContain("assistant=inst-concierge");
+    fireEvent.click(within(panel).getByRole("button", { name: "By agent" }));
+    expect(await within(panel).findByTestId("panel-agent")).toHaveTextContent("concierge-agent");
+    expect(screen.getByRole("link", { name: "Its conversation turns on the Activity screen" })).toHaveAttribute(
+      "href",
+      "/activity?assistant=inst-concierge",
+    );
+  });
+
+  it("says the spend cannot be narrowed when the answer carries no installation id, and reads no report", async () => {
+    wrap(<InstallationDetail slug="invest" />);
+    expect(await screen.findByTestId("tokens-and-cost-unavailable")).toHaveTextContent("cannot be narrowed yet");
+    expect(screen.queryByTestId("tokens-and-cost")).not.toBeInTheDocument();
+    expect(api.orgCosts).not.toHaveBeenCalled();
+  });
+
+  it("stops with the reason typed, posts it, and shows the turns cancelled and what was not stopped", async () => {
+    const stopped = { at: "2026-11-12T09:30:00Z", by: "lea@varga.dev", reason: "it quotes stale prices" };
+    mocks.stop.mockImplementation(async () => {
+      mocks.installation.mockResolvedValue(installed({ status: "suspended", stopped }));
+      return {
+        slug: "invest",
+        status: "suspended",
+        turns_cancelled: 2,
+        not_stopped: [{ kind: "turn", id: "c-9", detail: "the replica did not answer" }],
+      };
+    });
+    wrap(<InstallationDetail slug="invest" />);
+    const card = await screen.findByTestId("assistant-stop");
+    expect(within(card).queryByRole("button", { name: "Resume" })).not.toBeInTheDocument();
+    fireEvent.click(within(card).getByRole("button", { name: "Stop the assistant…" }));
+    const confirmation = within(card).getByTestId("confirmation");
+    const confirm = within(confirmation).getByRole("button", { name: "Stop the assistant" });
+    // No reason, no stop.
+    expect(confirm).toBeDisabled();
+    expect(within(confirmation).getByRole("textbox")).toHaveAttribute("maxLength", "500");
+    fireEvent.change(within(confirmation).getByRole("textbox"), { target: { value: "  it quotes stale prices " } });
+    await act(async () => {
+      fireEvent.click(confirm);
+    });
+    expect(mocks.stop).toHaveBeenCalledWith("varga", "invest", "it quotes stale prices");
+    const result = await screen.findByTestId("assistant-stop-result");
+    expect(result).toHaveTextContent("Stopped. 2 conversation turns cancelled.");
+    expect(result).toHaveTextContent("turn c-9: the replica did not answer");
+    // The installation read again says who stopped it, when and why, and offers Resume.
+    expect(await screen.findByTestId("assistant-stopped")).toHaveTextContent("Stopped by lea@varga.dev on");
+    expect(screen.getByTestId("assistant-stopped")).toHaveTextContent("it quotes stale prices");
+    expect(screen.getByRole("button", { name: "Resume" })).toBeInTheDocument();
+  });
+
+  it("keeps the confirmation open with the server's message when a stop is refused", async () => {
+    mocks.stop.mockRejectedValue(new ApiError(403, { title: "Forbidden", detail: "stopping an assistant needs assistant:manage" }));
+    wrap(<InstallationDetail slug="invest" />);
+    const card = await screen.findByTestId("assistant-stop");
+    fireEvent.click(within(card).getByRole("button", { name: "Stop the assistant…" }));
+    fireEvent.change(within(card).getByRole("textbox"), { target: { value: "wrong answers" } });
+    await act(async () => {
+      fireEvent.click(within(card).getByRole("button", { name: "Stop the assistant" }));
+    });
+    expect(await within(card).findByRole("alert")).toHaveTextContent("stopping an assistant needs assistant:manage");
+    expect(within(card).getByTestId("confirmation")).toBeInTheDocument();
+    expect(screen.queryByTestId("assistant-stop-result")).not.toBeInTheDocument();
+  });
+
+  it("offers Resume only while the assistant is stopped, and resuming clears the notice", async () => {
+    const stopped = { at: "2026-11-12T09:30:00Z", by: "lea@varga.dev", reason: "it quotes stale prices" };
+    mocks.installation.mockResolvedValue(installed({ status: "suspended", stopped }));
+    mocks.resume.mockImplementation(async () => {
+      const ready = installed({ status: "ready", stopped: null });
+      mocks.installation.mockResolvedValue(ready);
+      return ready;
+    });
+    wrap(<InstallationDetail slug="invest" />);
+    const notice = await screen.findByTestId("assistant-stopped");
+    expect(notice).toHaveTextContent("Stopped by lea@varga.dev on");
+    expect(screen.queryByRole("button", { name: "Stop the assistant…" })).not.toBeInTheDocument();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Resume" }));
+    });
+    expect(mocks.resume).toHaveBeenCalledWith("varga", "invest");
+    await waitFor(() => expect(screen.queryByTestId("assistant-stopped")).not.toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: "Resume" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Stop the assistant…" })).toBeInTheDocument();
+  });
+
+  it("shows a refused resume", async () => {
+    mocks.installation.mockResolvedValue(installed({ status: "suspended", stopped: { at: "2026-11-12T09:30:00Z", by: "lea", reason: "x" } }));
+    mocks.resume.mockRejectedValue(new ApiError(409, { title: "Conflict", detail: "the assistant is not stopped" }));
+    wrap(<InstallationDetail slug="invest" />);
+    await act(async () => {
+      fireEvent.click(await screen.findByRole("button", { name: "Resume" }));
+    });
+    expect(await screen.findByText("the assistant is not stopped")).toBeInTheDocument();
   });
 });

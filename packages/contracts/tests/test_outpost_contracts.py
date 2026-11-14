@@ -1219,7 +1219,9 @@ def test_a_daemon_numbers_from_its_clock_and_the_door_gives_no_hint() -> None:
     sequence = DOOR["x-request-signature"]["claims"]["seq"]
     assert "number from its clock in milliseconds" in sequence
     assert "never below its last sequence plus one" in sequence
-    assert "64-bit integer" in sequence and "carries no hint" in sequence
+    # One bound, the claim's (S65-23): the document no longer says how a door stores the number.
+    assert "a `seq` outside it is `invalid_signature`" in sequence and "carries no hint" in sequence
+    assert "64-bit" not in sequence
     now = 1_794_477_600_000
     assert outpost.next_sequence(None, now) == now  # a lost state file: the clock is past every number sent
     assert outpost.next_sequence(now - 5, now) == now
@@ -1301,7 +1303,7 @@ def test_a_path_parameter_with_a_pattern_may_answer_422() -> None:
         assert operation["responses"].get("422") == {"$ref": "#/components/responses/ValidationError"}, (
             f"{verb} {path}: a slug or an instance id that does not match its pattern is a 422"
         )
-    assert checked == 10
+    assert checked == 12
 
 
 def test_an_instance_id_and_a_token_are_opaque_to_a_daemon() -> None:
@@ -1385,6 +1387,8 @@ MANAGEMENT = {
     ("/orgs/{org}/outposts/{slug}/resume", "post"): "resumeOutpost",
     ("/orgs/{org}/outposts/{slug}/revoke", "post"): "revokeOutpost",
     ("/orgs/{org}/outposts/{slug}/enrolments", "post"): "createOutpostEnrolment",
+    ("/orgs/{org}/outposts/{slug}/enrolments", "get"): "listOutpostEnrolments",
+    ("/orgs/{org}/outposts/{slug}/enrolments/{enrolment_id}", "delete"): "cancelOutpostEnrolment",
     ("/orgs/{org}/outposts/{slug}/instances", "get"): "listOutpostInstances",
     ("/orgs/{org}/outposts/{slug}/instances/{instance_id}/approve", "post"): "approveOutpostInstance",
     ("/orgs/{org}/outposts/{slug}/instances/{instance_id}/revoke", "post"): "revokeOutpostInstance",
@@ -1399,6 +1403,7 @@ CONFLICTS = [
     "outpost_in_use",
     "instance_not_pending",
     "fingerprint_mismatch",
+    "enrolment_used",
     "outpost_paused",
     "outpost_offline",
     "outpost_refused",
@@ -1557,6 +1562,7 @@ def test_outpost_conflicts_name_their_code() -> None:
     answering = sorted(o["operationId"] for o in _management().values() if o["responses"].get("409") == ref)
     assert answering == [
         "approveOutpostInstance",
+        "cancelOutpostEnrolment",
         "createOutpost",
         "createOutpostEnrolment",
         "deleteOutpost",
@@ -1593,3 +1599,125 @@ def test_recent_calls_are_paged_and_filtered_by_state() -> None:
     state = next(p for p in calls["parameters"] if p.get("name") == "state")
     assert state["schema"] == {"$ref": "#/components/schemas/OutpostCallState"}
     assert API_SCHEMAS["OutpostCallPage"]["required"] == ["items", "meta"]
+
+
+# ───────────────────────── what building the door found (S65-23, #1628, #1641) ─────────────────────────
+
+
+def test_the_vectors_instance_id_is_illustrative_and_an_instance_id_is_opaque() -> None:
+    """#1628 row 1: no door issues the vectors' dashed id; the document says the id is opaque and theirs
+    is illustrative, so a door is held to them by taking their instance as one of its own."""
+    vectors = DOOR["x-vectors"]["description"]
+    assert "Their instance id is illustrative" in vectors and "opaque to a daemon" in vectors
+    assert "nothing they sign depends on the id's shape" in vectors
+    signed = _json("outpost-signature.vector.json")
+    assert signed["instance_id"] == _json("outpost-sealing.vector.json")["call"]["instance"]
+
+
+def test_every_refusal_a_daemon_signs_again_after_carries_the_nonce_at_every_verb() -> None:
+    """#1628 row 3: `Outpost-Nonce` goes on 401 and 409 at `enrol` too, as on the other verbs. The
+    statuses that carry it are the same at every verb that answers them."""
+    shared = DOOR["components"]["responses"]
+
+    def carries(answer: dict[str, Any]) -> bool:
+        answer = shared[answer["$ref"].rsplit("/", 1)[-1]] if "$ref" in answer else answer
+        return "Outpost-Nonce" in (answer.get("headers") or {})
+
+    for path, verbs in DOOR["paths"].items():
+        for status, answer in verbs["post"]["responses"].items():
+            if status in {"200", "201", "401", "403", "404", "409"}:
+                assert carries(answer), f"{path} {status} does not declare Outpost-Nonce"
+            else:
+                assert not carries(answer), f"{path} {status}"
+
+
+def test_a_key_enrolled_at_another_outpost_is_found_when_the_instance_is_written() -> None:
+    """#1628 row 4: row-level security hides another outpost's instances, so that refusal comes after
+    the rate, the protocol and the schema; the document says so where it orders the checks."""
+    checks = DOOR["x-request-signature"]["checks"]
+    assert "already an instance of another outpost is out of the token's sight" in " ".join(checks.split())
+    assert "comes after the rate, the protocol and the schema" in " ".join(checks.split())
+    conflict = DOOR["paths"]["/outposts/v1/enrol"]["post"]["responses"]["409"]
+    assert "an instance of another outpost" in conflict["description"]
+
+
+def test_a_calls_deadline_may_carry_a_fraction_of_a_second() -> None:
+    """#1641: the door writes a deadline to the millisecond; the schema and the daemon's model read it."""
+    deadline = contracts.load_schema("outpost-call.schema.json")["properties"]["deadline"]
+    assert deadline["format"] == "date-time" and "to the millisecond" in deadline["description"]
+    listing = _json("outpost-call.list-tools.example.json")
+    assert listing["deadline"].endswith(".250Z")
+    read = outpost.OutpostCall.model_validate(listing)
+    assert read.deadline is not None and read.deadline.microsecond == 250_000
+
+
+# ───────────────────── the management API stops making clients guess (S65-24, #1630) ─────────────────────
+
+
+def test_the_list_says_whether_outposts_are_on_and_whether_the_door_has_a_key() -> None:
+    """#1630 row 1: a client learns both facts before it tries, not from a refusal."""
+    listed = API_SCHEMAS["OutpostList"]
+    assert listed["required"] == ["items", "enabled", "door_signing_key"]
+    assert "`outposts_disabled`" in listed["properties"]["enabled"]["description"]
+    assert "`door_key_missing`" in listed["properties"]["door_signing_key"]["description"]
+    v = _api("OutpostList")
+    assert not list(v.iter_errors({"items": [], "enabled": False, "door_signing_key": False}))
+    assert list(v.iter_errors({"items": []}))
+
+
+def test_an_outpost_carries_the_doors_origin_beside_its_keys() -> None:
+    """#1630 row 2: `control_plane` is the line above `door_keys` in the outpost's policy file."""
+    shown = API_SCHEMAS["Outpost"]
+    assert "control_plane" in shown["required"]
+    assert shown["properties"]["control_plane"]["type"] == ["string", "null"]
+    assert shown["properties"]["control_plane"] == API_SCHEMAS["OutpostEnrolmentCreated"]["properties"][
+        "control_plane"
+    ] | {"description": shown["properties"]["control_plane"]["description"]}
+
+
+def test_an_approval_says_why_it_is_refused_and_how_recent_a_sign_in_it_needs() -> None:
+    """#1630 rows 3 and 4: the 403 of a token has its `code`; the 401 speaks of an approval; the window
+    is on the instance, for the console to say it before the click."""
+    approve = _management()[("/orgs/{org}/outposts/{slug}/instances/{instance_id}/approve", "post")]
+    assert "approval_requires_session" in approve["responses"]["403"]["description"]
+    assert "approval_requires_session" in API_SCHEMAS["Problem"]["properties"]["code"]["description"]
+    step_up = " ".join(approve["responses"]["401"]["description"].split())
+    assert "approving an instance needs a sign-in" in step_up
+    instance = API_SCHEMAS["OutpostInstance"]
+    assert "approval_step_up_minutes" in instance["required"]
+    assert instance["properties"]["approval_step_up_minutes"] == {
+        "type": "integer",
+        "minimum": 1,
+        "description": instance["properties"]["approval_step_up_minutes"]["description"],
+    }
+
+
+def test_an_enrolment_token_is_listed_and_cancelled_never_shown_again() -> None:
+    """#1630 row 5: the tokens that can still enrol are listed without their plaintext, and one is
+    cancelled by the id its creation answered; one that enrolled an instance is not."""
+    listed = _management()[("/orgs/{org}/outposts/{slug}/enrolments", "get")]
+    assert listed["responses"]["200"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/OutpostEnrolmentList"
+    }
+    kept = API_SCHEMAS["OutpostEnrolment"]
+    assert "token" not in kept["properties"] and kept["additionalProperties"] is False
+    cancel = _management()[("/orgs/{org}/outposts/{slug}/enrolments/{enrolment_id}", "delete")]
+    assert set(cancel["responses"]) == {"204", "403", "404", "409", "422"}
+    assert "`enrolment_used`" in cancel["description"]
+    assert OPENAPI["components"]["parameters"]["OutpostEnrolmentId"]["schema"]["pattern"] == (
+        outpost.OUTPOST_ID_PATTERN
+    )
+
+
+def test_an_instance_says_which_token_it_enrolled_with_and_who_issued_it() -> None:
+    """#1630 row 6."""
+    instance = API_SCHEMAS["OutpostInstance"]
+    assert {"enrolment_id", "enrolled_by"} <= set(instance["required"])
+    assert "`OutpostEnrolmentCreated`" in instance["properties"]["enrolment_id"]["description"]
+
+
+def test_the_recent_calls_window_is_said() -> None:
+    """#1630 row 7: a cursor that ends is not read as "no older call"."""
+    calls = _management()[("/orgs/{org}/outposts/{slug}/calls", "get")]
+    said = " ".join(calls["description"].split())
+    assert "the newest 1000 calls" in said and "not that none exists" in said

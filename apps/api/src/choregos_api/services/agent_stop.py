@@ -6,8 +6,10 @@ refuses any run that would start while the rest is stopped ("agent is suspended:
 start"). Then every run of the agent `queued` or `running`, in every project of the organisation, is
 stopped as `POST /runs/{id}/cancel` stops one (`run_cancel.cancel_agent_run`: its work item waits
 for a person, it is not stopped), and its open sessions are closed (`close_session`, reason
-`agent_stopped`). Conversation turns (`cancel_turn`) are not on this branch yet (S63, then S64-09):
-the answer counts none.
+`agent_stopped`). The turns in flight of its conversations, in every person's space, are asked to stop on
+the conversation's row and cancelled at once when they run in this process (`turn_cancels.cancel_turns`,
+ADR 0142 §4 bis, S64-09c); the conversations themselves are not closed: they belong to their people
+(ADR 0134), and an agent's session that is a conversation is not one of the sessions closed here.
 
 Each run and each session is stopped in its own savepoint: one that cannot be stopped now is rolled
 back alone and named in `not_stopped`, the others are kept. A run that ended meanwhile keeps how it
@@ -31,6 +33,7 @@ from ..logging import get_logger
 from ..rbac import Principal
 from .agent_sessions import close_session
 from .run_cancel import IN_FLIGHT, cancel_agent_run
+from .turn_cancels import cancel_turns
 
 logger = get_logger("choregos.agent_stop")
 
@@ -53,8 +56,8 @@ class AgentStop:
 
     runs_cancelled: list[str] = field(default_factory=list)
     sessions_closed: list[str] = field(default_factory=list)
-    #: Conversation turns live on the S63 branch: none is cancelled here until S64-09.
-    turns_cancelled: int = 0
+    #: The conversations whose turn in flight was asked to stop.
+    turns_cancelled: list[str] = field(default_factory=list)
     not_stopped: list[NotStopped] = field(default_factory=list)
 
 
@@ -72,7 +75,7 @@ async def suspend_first(session: AsyncSession, agent: Agent) -> None:
 async def stop_agent(
     session: AsyncSession, principal: Principal, organisation: Organization, agent: Agent, reason: str
 ) -> AgentStop:
-    """Suspend `agent` and stop its runs and sessions, for `principal`, with `reason`.
+    """Suspend `agent` and stop its runs, sessions and conversation turns, for `principal`, with `reason`.
 
     The caller has decided `Action.MANAGE` on the agent and refused a revoked one."""
     previous = agent.status
@@ -82,6 +85,9 @@ async def stop_agent(
         await _stop_run(session, principal, run, reason, stop)
     for open_session in await _open_sessions(session, organisation, agent.slug):
         await _close(session, open_session, stop)
+    # What is stopped so far is committed before a turn settles: it writes the same database.
+    await release_connection(session)
+    stop.turns_cancelled = await cancel_turns(organisation.id, agent_slug=agent.slug)
     await record(
         session,
         principal,
@@ -93,7 +99,7 @@ async def stop_agent(
         before=previous,
         runs_cancelled=len(stop.runs_cancelled),
         sessions_closed=len(stop.sessions_closed),
-        turns_cancelled=stop.turns_cancelled,
+        turns_cancelled=len(stop.turns_cancelled),
         not_stopped=[{"kind": n.kind, "id": n.id, "detail": n.detail} for n in stop.not_stopped],
     )
     return stop
@@ -118,6 +124,7 @@ async def _open_sessions(
         .where(
             AgentSessionRecord.org_id == organisation.id,
             AgentSessionRecord.agent_slug == slug,
+            AgentSessionRecord.kind != "conversation",  # a person's conversation stays open (ADR 0134)
             AgentSessionRecord.status == "open",
         )
         .order_by(AgentSessionRecord.created_at, AgentSessionRecord.id)

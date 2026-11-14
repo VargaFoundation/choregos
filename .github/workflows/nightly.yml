@@ -55,10 +55,11 @@ jobs:
           kubectl apply -n argo-rollouts -f https://github.com/argoproj/argo-rollouts/releases/download/v1.7.2/install.yaml
           kubectl -n argo-rollouts rollout status deploy/argo-rollouts --timeout=300s
       - run: uv sync --frozen
-      - name: API image (the platform stack needs it)
+      - name: API image (the platform stack needs it) and the outpost daemon's (S65-19)
         run: |
           docker build -f docker/api.Dockerfile --target api -t choregos-api:dev .
-          kind load docker-image choregos-api:dev --name choregos
+          docker build -f docker/outpost.Dockerfile -t choregos-outpost:dev .
+          kind load docker-image choregos-api:dev choregos-outpost:dev --name choregos
       - name: egress, restore, manifests, platform, canary, node loss
         env:
           CHOREGOS_CLUSTER_CONTEXT: kind-choregos
