@@ -3673,7 +3673,7 @@ paths:
     get:
       tags: [agents]
       operationId: listMyConversationActions
-      description: The writes the assistant proposed in the conversation, with what became of them (the owner's alone).
+      description: The writes and the launches the assistant proposed in the conversation, with what became of them (the owner's alone).
       responses:
         "200": { description: The actions, oldest first, content: { application/json: { schema: { $ref: "#/components/schemas/ConversationActionList" } } } }
         "401": { $ref: "#/components/responses/Unauthorized" }
@@ -3685,12 +3685,22 @@ paths:
     post:
       tags: [agents]
       operationId: confirmMyConversationAction
-      description: "Executes a proposed inline write through the broker WITH THE PERSON'S identity (the source judges the right to write) and records the result. Only the conversation's owner (404 otherwise). 409 with a `code`: action_executed, action_refused, action_expired, approval_console (the owners raised the need to a console approval), not_available."
+      description: >-
+        Executes a proposed inline write through the broker WITH THE PERSON'S identity (the source judges the right
+        to write) and records the result. A proposed launch (`kind: launch`, ADR 0158) creates the work item in the
+        bound project, under the bound workflow, with the confirming person as its reporter and initiator, through
+        the one creation path; `result` then names the work item. Only the conversation's owner (404 otherwise).
+        409 with a `code`: action_executed, action_refused, action_expired, approval_console (the owners raised the
+        need to a console approval), not_available, launch_rebound (the launch is no longer bound to the proposal's
+        project and workflow). 403 with `code: launch_forbidden`: the person may not create work items in the bound
+        project; nothing is created. 422: the workflow refuses the inputs; nothing is created.
       responses:
         "200": { description: The action, executed or confirmed with the source's error in `result`, content: { application/json: { schema: { $ref: "#/components/schemas/ConversationAction" } } } }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /me/conversations/{conversation_id}/actions/{action_id}/refuse:
     parameters:
       - { name: conversation_id, in: path, required: true, schema: { type: string } }
@@ -4595,6 +4605,31 @@ paths:
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/AssistantBind" } } }
+      responses:
+        "200": { description: Bound, content: { application/json: { schema: { $ref: "#/components/schemas/Assistant" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/assistants/{slug}/launches/{launch}:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+      - { name: launch, in: path, required: true, schema: { type: string, pattern: "^[a-z][a-z0-9]*(_[a-z0-9]+)*$" } }
+    put:
+      tags: [agents]
+      operationId: bindAssistantLaunch
+      description: >-
+        Binds a launch of the assistant (ADR 0158) to an existing project of the organisation and one of its active
+        workflows, by reference: the work item a confirmed proposal creates is born under the project's active
+        version of that workflow at that moment. Needs `assistant:manage` on the installation (an organisation
+        administrator or a member of the owner groups) AND `item:control` in the project (403 otherwise). 422 and
+        nothing changes when the project is a personal space, has no active workflow of that name, or the workflow's
+        `metadata.inputs` cannot accept what the launch fills (a required input the launch's `input_schema` does not
+        declare, a declared property the workflow's closed inputs refuse). `enabled: false` is for an optional
+        launch only. Audited as `assistant.launch.bind`.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AssistantLaunchBind" } } }
       responses:
         "200": { description: Bound, content: { application/json: { schema: { $ref: "#/components/schemas/Assistant" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -10313,6 +10348,19 @@ components:
         arguments: { type: object, additionalProperties: true }
         summary: { type: string }
         status: { type: string, enum: [proposed, confirmed, executed, refused, expired, governed], description: "`governed`: a console approval, decided as a governed action named in `result.action`." }
+        kind:
+          type: string
+          enum: [write, launch]
+          default: write
+          description: >-
+            `write`: a write need's operation (`need`, `operation`). `launch` (ADR 0158): the start of a project's
+            workflow; `need` is the launch's name, `operation` is `start`, `arguments` are `{title, inputs}` and
+            `target` names the project and the workflow; once executed, `result` holds `work_item_id`,
+            `work_item_key`, `project`, `workflow` and `url`.
+        target:
+          type: [object, "null"]
+          additionalProperties: true
+          description: "For a launch: `{project, workflow}`, the binding at the time of the proposal."
         result: { type: [object, "null"], additionalProperties: true }
         diff: { type: [object, "null"], additionalProperties: true, description: "What the source's `<operation>_preview` returned at the proposal, when it serves one." }
         confirmed_by: { type: [string, "null"] }
@@ -10336,6 +10384,26 @@ components:
         identity: { type: string, enum: [service, user_exchange, user_consent] }
         approval: { type: [string, "null"], enum: [none, inline, console, null] }
         enabled: { type: boolean }
+    AssistantLaunchBind:
+      type: object
+      required: [project, workflow]
+      properties:
+        project: { type: string, description: "The slug of a project of the organisation (not a personal space)." }
+        workflow: { type: string, description: "The name of one of the project's active workflows." }
+        enabled: { type: boolean, default: true }
+    AssistantLaunch:
+      type: object
+      description: A launch the manifest declares (ADR 0158), with its binding when it has one.
+      required: [name, description, required, enabled]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        required: { type: boolean }
+        input_schema: { type: object, additionalProperties: true }
+        project: { type: [string, "null"], description: "The bound project's slug; null while unbound." }
+        workflow: { type: [string, "null"], description: "The bound workflow's name; null while unbound." }
+        enabled: { type: boolean, description: "False while unbound or switched off." }
+        bound_by: { type: [string, "null"] }
     Assistant:
       type: object
       required: [id, slug, plugin, plugin_version, assistant_name, config, owner_groups, audience_groups, channel, status, policy_overrides, bindings, created_at]
@@ -10354,6 +10422,7 @@ components:
         stopped: { oneOf: [{ $ref: "#/components/schemas/AssistantStop" }, { type: "null" }], description: "set while a person has stopped the assistant: its status then reads `suspended`" }
         policy_overrides: { type: object, additionalProperties: true }
         bindings: { type: array, items: { $ref: "#/components/schemas/AssistantBinding" } }
+        launches: { type: array, items: { $ref: "#/components/schemas/AssistantLaunch" }, description: "The workflows the assistant may propose to start, and where each is bound (ADR 0158)." }
         created_by: { type: [string, "null"] }
         created_at: { type: string, format: date-time }
     AssistantReadLine:
@@ -10710,8 +10779,9 @@ components:
       type: object
       required: [kind, message, fix_by, groups]
       properties:
-        kind: { type: string, enum: [assistant_missing, config_missing, need_unbound, need_not_served, identity_unsupported] }
+        kind: { type: string, enum: [assistant_missing, config_missing, need_unbound, need_not_served, identity_unsupported, launch_unbound, launch_workflow_missing, launch_inputs_mismatch] }
         need: { type: [string, "null"] }
+        launch: { type: [string, "null"], description: "The launch, for the `launch_*` kinds (ADR 0158)." }
         key: { type: [string, "null"], description: "The configuration key, for `config_missing`." }
         message: { type: string }
         fix_by: { type: string, enum: [owners, org_admin], description: "`owners`: an organisation administrator or a member of `groups`; `org_admin`: the organisation administrator." }

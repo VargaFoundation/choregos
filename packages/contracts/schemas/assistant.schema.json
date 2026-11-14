@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://choregos.dev/schemas/assistant.schema.json",
   "title": "Assistant",
-  "description": "An assistant a plugin ships (`contents.assistants`, ADR 0133): a wrapper around one of the plugin's prompt or hosted agents that declares its configuration, audience, the tools it needs and the identity each is called under, its memory spaces, the knowledge it offers, its background tasks, its surfaces and its policy. What a schema cannot say (the agent exists and its runtime, `{{ config.x }}` keys, the agent's tools match the needs, a subject's resolver, a delegated task reads only, the files named exist) is checked by `choregos plugin validate`.",
+  "description": "An assistant a plugin ships (`contents.assistants`, ADR 0133): a wrapper around one of the plugin's prompt or hosted agents that declares its configuration, audience, the tools it needs and the identity each is called under, its memory spaces, the knowledge it offers, its background tasks, the workflows it may propose to start, its surfaces and its policy. What a schema cannot say (the agent exists and its runtime, `{{ config.x }}` keys, the agent's tools match the needs, a subject's resolver, a delegated task reads only, the files named exist, launch names unique and no need called `launch`) is checked by `choregos plugin validate`.",
   "type": "object",
   "required": ["apiVersion", "kind", "metadata", "agent"],
   "additionalProperties": false,
@@ -238,6 +238,32 @@
         }
       ]
     },
+    "launch": {
+      "type": "object",
+      "required": ["name", "description", "input_schema"],
+      "additionalProperties": false,
+      "description": "a workflow the assistant may PROPOSE to start (ADR 0158): bound at install, by reference, to a project and one of its active workflows; the manifest names neither",
+      "properties": {
+        "name": { "$ref": "#/$defs/snake" },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000,
+          "description": "what the agent reads to decide when to propose it"
+        },
+        "input_schema": {
+          "type": "object",
+          "required": ["type"],
+          "properties": { "type": { "const": "object" } },
+          "description": "a JSON Schema (2020-12) of `type: object`: the inputs the assistant fills from the conversation, given to the work item as its fields"
+        },
+        "required": {
+          "type": "boolean",
+          "default": true,
+          "description": "false: the installation's owners may leave it unbound or switch it off"
+        }
+      }
+    },
     "prompt": {
       "type": "object",
       "required": ["name", "message"],
@@ -330,6 +356,11 @@
     "memory": { "type": "array", "items": { "$ref": "#/$defs/memory" } },
     "knowledge": { "type": "array", "items": { "$ref": "#/$defs/knowledge" } },
     "tasks": { "type": "array", "items": { "$ref": "#/$defs/task" } },
+    "launches": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/launch" },
+      "description": "the workflows the assistant may propose to start in a project of the organisation (ADR 0158); a proposal is confirmed by the person, never started by the assistant"
+    },
     "surfaces": {
       "type": "object",
       "additionalProperties": false,

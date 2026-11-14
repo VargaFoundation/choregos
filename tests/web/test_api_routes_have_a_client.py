@@ -105,6 +105,8 @@ NO_CLIENT_YET: dict[str, str] = {
     "/projects/{id}/actions/{action_id}/settlement": "S65-26: the contract comes first (ADR 0001); the "
     "action page's settle form arrives with the implementation, which removes this entry",
     "/work-items/{id}/human-requests/{request_id}/draft": "S65-22, Discard (ADR 0162 §7)",
+    "/orgs/{org}/assistants/{slug}/launches/{launch}": "S66-21 declares it, S66-22 serves it and S66-23 "
+    "gives it the installation page's launch bindings",
 }
 
 #: Paths the CLI calls and the console must not: an operator's command, not a screen.
