@@ -135,6 +135,22 @@ async def test_a_deadline_that_is_behind_is_judged_by_the_daemons_own_clock(
     assert b.server.received == []
 
 
+async def test_a_deadline_written_to_the_millisecond_is_read_to_the_millisecond(
+    tmp_path: Path, daemon_log: io.StringIO
+) -> None:
+    """#1641 (S65-23): the door writes a deadline with its fraction of a second. Under a second ahead, a
+    deadline cut to the second would already be behind; read to the millisecond, the call is made."""
+    b = await bench(tmp_path, daemon_log)
+    ahead = datetime.now(UTC) + timedelta(milliseconds=900)
+    written = ahead.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+    assert written.endswith("Z") and "." in written
+    call = b.door.submit("tracker", "search_issues", {"query": "x"}, deadline=written)
+    await b.start()
+    assert (await b.door.answered(call.id)).outcome == "result"
+    await b.stop()
+    assert b.server.calls == [("search_issues", {"query": "x"})]
+
+
 async def test_the_doors_time_brings_a_deadline_closer_and_never_pushes_it_away(
     tmp_path: Path, daemon_log: io.StringIO
 ) -> None:

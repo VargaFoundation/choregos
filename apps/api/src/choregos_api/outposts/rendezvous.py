@@ -326,7 +326,11 @@ def _answer_private_key(call: OutpostCall) -> X25519PrivateKey | None:
 
 
 def _moment(moment: datetime) -> str:
-    return _aware(moment).astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    """A deadline as the envelope carries it: RFC 3339 in UTC, to the millisecond (#1641). Cut to the
+    second, a call claimed late in its second would reach the outpost up to a second short of the lease
+    the row keeps, and a one-second timeout with no time left. The fraction is cut, never rounded up:
+    the daemon is never promised a moment past the door's own lease."""
+    return _aware(moment).astimezone(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
 def _plaintext(call: OutpostCall, arguments: dict[str, Any] | None, deadline: datetime) -> dict[str, Any]:

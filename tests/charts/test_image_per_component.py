@@ -18,7 +18,7 @@ from choregos_core.publishing import PUBLISHING
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 CHART = ROOT / "charts" / "choregos"
-PRIVE = "harbor.build.diametral.com/choregos-ee"
+PRIVE = "harbor.example.com/choregos-ee"
 
 pytestmark = pytest.mark.skipif(shutil.which("helm") is None, reason="helm absent")
 

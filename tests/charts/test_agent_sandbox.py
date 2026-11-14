@@ -251,7 +251,7 @@ def test_no_other_policy_reopens_the_sandbox_pods() -> None:
 
 @needs_helm
 def test_a_platform_that_owns_network_policies_can_leave_the_assignment_one_out() -> None:
-    """S35-05 — where an Argo CD AppProject blacklists NetworkPolicy (Diametral's tenants), one
+    """S35-05 — where an Argo CD AppProject blacklists NetworkPolicy (some platforms' tenants), one
     in the chart makes the whole sync fail. The switch drops that one object, and only it."""
     kept = _objects()
     dropped = _objects("choregos-orchestrator.runner.sandbox.assignmentNetworkPolicy=false")

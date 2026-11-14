@@ -19,7 +19,7 @@ function answering(status = 200, body: unknown = {}) {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("the client of the outposts' routes", () => {
-  it("calls each of the twelve operations at its path, with its verb and its body", async () => {
+  it("calls each of the fourteen operations at its path, with its verb and its body", async () => {
     const fetched = answering(200, { items: [], meta: { has_more: false, next_cursor: null } });
     const { api } = await import("@/lib/api");
     const base = "/api/v1/orgs/acme/outposts";
@@ -34,6 +34,8 @@ describe("the client of the outposts' routes", () => {
       [() => api.revokeOutpost("acme", "factory-floor"), "POST", `${one}/revoke`],
       [() => api.createOutpostEnrolment("acme", "factory-floor"), "POST", `${one}/enrolments`, {}],
       [() => api.createOutpostEnrolment("acme", "factory-floor", { expires_in_minutes: 5 }), "POST", `${one}/enrolments`, { expires_in_minutes: 5 }],
+      [() => api.outpostEnrolments("acme", "factory-floor"), "GET", `${one}/enrolments`],
+      [() => api.cancelOutpostEnrolment("acme", "factory-floor", "enr-1"), "DELETE", `${one}/enrolments/enr-1`],
       [() => api.outpostInstances("acme", "factory-floor"), "GET", `${one}/instances`],
       [() => api.approveOutpostInstance("acme", "factory-floor", "i-1", { fingerprint: FINGERPRINT }), "POST", `${instance}/approve`, { fingerprint: FINGERPRINT }],
       [() => api.revokeOutpostInstance("acme", "factory-floor", "i-1"), "POST", `${instance}/revoke`],

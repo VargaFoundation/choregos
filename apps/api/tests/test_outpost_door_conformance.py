@@ -5,11 +5,13 @@ against. Three things are held to it here: the routes the application serves are
 no other; the contract's vectors, which a door and a daemon are both built against, pass through the
 mounted door; and a call the door hands over is signed as the document says, to the byte.
 
-The vectors were not made by this door: their instance id is not one it would have given, and their
-nonce is opaque (`v1.1794477600.example-nonce`). So the door of this test is one that gave them: its
-clock stands at the vectors' `iat`, the MAC it computes for that second is the vectors', and the
-vectors' instance id names the test's outpost. Everything else is the door's own code: the
-signature, what it binds, the window of `iat`, the sequence, the schema, the verb.
+The vectors were not made by this door: their instance id is illustrative, as the contract says
+(`x-vectors`: an instance id is opaque, and each door gives ids of its own shape; S65-23), and their
+nonce is opaque (`v1.1794477600.example-nonce`). So the door of this test is one that gave them, as
+the contract tells a door to be held to them: its clock stands at the vectors' `iat`, the MAC it
+computes for that second is the vectors', and the vectors' instance id names the test's outpost.
+Everything else is the door's own code: the signature, what it binds, the window of `iat`, the
+sequence, the schema, the verb.
 
 The bound on a handed call (`x-bounds.max_sealed_call_bytes`) and the refusal codes, `cannot_record`
 among them (S65-10b), are the contract's own: the door reads both from `choregos_contracts`.
@@ -223,7 +225,10 @@ async def vectors_door(client: AsyncClient, admin: str, monkeypatch: pytest.Monk
                 endpoints=[],
             )
         )
-    # The vectors' id is not one this door gives (its ids start with their outpost's): it names ours.
+    # The vectors' id is illustrative, not one this door gives (its ids start with their outpost's): the
+    # contract holds a door to them by taking their instance as one of its own, under its own outpost.
+    assert "Their instance id is illustrative" in DOOR["x-vectors"]["description"]
+    assert service.outpost_id_of_instance(instance_id) is None
     carried = service.outpost_id_of_instance
     monkeypatch.setattr(
         service, "outpost_id_of_instance", lambda kid: row.id if kid == instance_id else carried(kid)

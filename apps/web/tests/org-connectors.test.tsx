@@ -162,11 +162,11 @@ describe("the connectors, sorted by what they are (S21-04)", () => {
       await screen.findAllByRole("option", { name: /sharepoint/ });
       const name = screen.getByPlaceholderText("entra-acme");
       const declare = screen.getByRole("button", { name: "Declare" });
-      fireEvent.change(name, { target: { value: "Diametral Confluence" } });
+      fireEvent.change(name, { target: { value: "Globex Confluence" } });
       expect(name).toHaveAttribute("aria-invalid", "true");
       expect(name).toHaveAccessibleDescription(/Lowercase letters, digits and dashes/);
       expect(declare).toBeDisabled();
-      fireEvent.change(name, { target: { value: "diametral-confluence" } });
+      fireEvent.change(name, { target: { value: "globex-confluence" } });
       expect(name).toHaveAttribute("aria-invalid", "false");
       expect(declare).toBeEnabled();
     } finally {

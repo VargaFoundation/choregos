@@ -206,6 +206,7 @@ import type {
   OutpostCreate,
   OutpostEnrolmentCreate,
   OutpostEnrolmentCreated,
+  OutpostEnrolmentList,
   OutpostInstance,
   OutpostInstanceApprove,
   OutpostInstanceList,
@@ -996,6 +997,11 @@ export const api = {
   /** An enrolment token for one instance, shown once, with the door's origin and the keys to pin (ADR 0148). */
   createOutpostEnrolment: (org: string, slug: string, body: OutpostEnrolmentCreate = {}) =>
     request<OutpostEnrolmentCreated>(`/orgs/${org}/outposts/${slug}/enrolments`, { method: "POST", body: JSON.stringify(body) }),
+  /** The tokens that can still enrol an instance, newest first: never a token, whose digest is all that is kept. */
+  outpostEnrolments: (org: string, slug: string) => request<OutpostEnrolmentList>(`/orgs/${org}/outposts/${slug}/enrolments`),
+  /** A token that enrolled nothing enrols nothing from then on; one that did is a 409 `enrolment_used`. */
+  cancelOutpostEnrolment: (org: string, slug: string, enrolmentId: string) =>
+    request<void>(`/orgs/${org}/outposts/${slug}/enrolments/${enrolmentId}`, { method: "DELETE" }),
   outpostInstances: (org: string, slug: string) => request<OutpostInstanceList>(`/orgs/${org}/outposts/${slug}/instances`),
   /**
    * A person approves a pending instance by sending the fingerprint they compared. It needs a recent

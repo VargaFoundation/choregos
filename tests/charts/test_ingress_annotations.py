@@ -1,6 +1,6 @@
 """The API and console Ingresses carry the requested annotations.
 
-On Diametral's dev tenant, the NGINX Inc. controller rejected the console Ingress: the API
+On an operator's dev tenant, the NGINX Inc. controller rejected the console Ingress: the API
 had taken the host, and this controller does not allow two Ingresses on the same host ("All hosts
 are taken by other resources"). The console had answered 404 since its installation. This
 controller's remedy is the mergeable Ingress: a master holds the host, the API and the console

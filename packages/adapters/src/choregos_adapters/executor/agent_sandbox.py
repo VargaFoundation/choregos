@@ -18,7 +18,7 @@ assignment. A run goes like this:
 3. The runner runs the stage and exits; the claim reports the pod's end, and is deleted
    `ttl_seconds` later by the controller, taking the sandbox, its volume and (through the owner
    reference) the run's Secret with it. A sandbox is never handed out twice. Until then its
-   volume counts against the namespace's quota: an hour of it filled Diametral's dev tenant
+   volume counts against the namespace's quota: an hour of it filled an operator's dev tenant
    (10 PVCs, 50Gi) after one ticket's six stages, and the next claim found no volume.
 
 `queue`: agent-sandbox v1.0.6 cold-starts a claim when the pool is empty — a claim never

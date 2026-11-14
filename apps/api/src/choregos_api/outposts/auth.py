@@ -59,7 +59,7 @@ from choregos_contracts import (
     OutpostStatus,
     request_signature_header,
 )
-from choregos_contracts.outpost import OUTPOST_ID_PATTERN
+from choregos_contracts.outpost import MAX_SEQUENCE, OUTPOST_ID_PATTERN
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
@@ -82,9 +82,10 @@ from ..services import outposts as service
 #: with the window, and handed nothing.
 PROTOCOL_CURRENT: int = OUTPOST_PROTOCOL
 PROTOCOL_MINIMUM: int = 1
-#: A sequence is a whole number the instance raises; a daemon numbers it from its clock in
-#: milliseconds, and the row keeps it on 64 bits.
-MAX_SEQUENCE: Final = 2**63 - 1
+#: The largest whole number a claim may carry, `iat` included: what a 64-bit column keeps. A `seq` has
+#: the contract's own bound, below it (`MAX_SEQUENCE`, 2^53 - 1, which every JSON parser reads exactly;
+#: S65-23): a daemon numbers its requests from its clock in milliseconds, far below either.
+MAX_WHOLE: Final = 2**63 - 1
 #: The answers that carry a nonce to sign the next request with (`outpost-door.yaml`, the headers of
 #: its answers): every answer that is taken, and every refusal a daemon signs again after.
 NONCE_STATUSES: Final = frozenset({200, 201, 401, 403, 404, 409})
@@ -340,14 +341,15 @@ def _claims(signature: str, signing_key: str, *, session: bool) -> dict[str, Any
     texts = (claims.get("htm"), claims.get("htu"), claims.get("body_sha256"))
     if not all(isinstance(value, str) for value in texts) or not _whole(claims.get("iat")):
         raise _invalid()
-    if session and not (_whole(claims.get("seq")) and claims["seq"] >= 1):
+    if session and not (_whole(claims.get("seq")) and 1 <= claims["seq"] <= MAX_SEQUENCE):
+        # Outside the claim's bound, 1 to 2^53 - 1: malformed, as the contract says (S65-23).
         raise _invalid()
     return claims
 
 
 def _whole(value: object) -> bool:
     """A whole number that fits 64 bits: what a moment and a sequence are, and what the row keeps."""
-    return isinstance(value, int) and not isinstance(value, bool) and -MAX_SEQUENCE <= value <= MAX_SEQUENCE
+    return isinstance(value, int) and not isinstance(value, bool) and -MAX_WHOLE <= value <= MAX_WHOLE
 
 
 def _url(claimed: str) -> str:
@@ -524,7 +526,7 @@ def check_the_door(settings: Settings) -> None:
 
 
 __all__ = [
-    "MAX_SEQUENCE",
+    "MAX_WHOLE",
     "NONCE_STATUSES",
     "PROTOCOL_CURRENT",
     "PROTOCOL_MINIMUM",
