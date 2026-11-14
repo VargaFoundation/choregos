@@ -63,6 +63,7 @@ def _outpost(**changes: Any) -> dict[str, Any]:
         "instances": {"pending": 1, "active": 2, "revoked": 3},
         "endpoints": ["tracker"],
         "connectors": ["tracker-at-the-outpost"],
+        "control_plane": "https://outposts.example.com",
         "door_keys": KEYS,
         "created_by": "ada@example.com",
         "created_at": "2026-11-11T09:00:00Z",
@@ -79,7 +80,10 @@ def _instance(**changes: Any) -> dict[str, Any]:
         "capabilities": ["tools"],
         "endpoints": [],
         "facts": {"platform": "linux/amd64", "hostname": "outpost-0.tools.svc"},
+        "enrolment_id": "enr-1",
+        "enrolled_by": "ada@example.com",
         "enrolled_at": "2026-11-12T09:58:00Z",
+        "approval_step_up_minutes": 10,
         "approved_by": None,
         "approved_at": None,
         "revoked_by": None,
@@ -183,6 +187,14 @@ def test_show_prints_the_keys_to_pin_as_the_policy_files_line() -> None:
     (line,) = [text for text in shown.output.splitlines() if text.startswith("door_keys:")]
     assert yaml.safe_load(line) == {"door_keys": KEYS}
     assert "/etc/choregos-outpost/policy.yaml" in shown.output
+    # The line above it, the door's origin, from the outpost itself (S65-24, #1630 row 2).
+    lines = shown.output.splitlines()
+    assert lines[lines.index(line) - 1] == "control_plane: https://outposts.example.com"
+    no_origin = respx.get(f"{BASE}/cold-store").mock(
+        return_value=Response(200, json=_outpost(slug="cold-store", control_plane=None))
+    )
+    shown = _run("show", "cold-store")
+    assert no_origin.called and "# control_plane: this deployment declares no origin" in shown.output
 
 
 @respx.mock
@@ -372,16 +384,28 @@ def test_the_help_of_approve_says_a_token_cannot_approve(
 
 @respx.mock
 def test_approve_sends_the_fingerprint_given_and_prints_the_apis_refusal_as_it_is() -> None:
-    words = "an instance is approved in a person's session, not with an API token (approval_requires_session)"
+    words = "an instance is approved in a person's session, not with an API token"
     route = respx.post(f"{ONE}/instances/{INSTANCE}/approve").mock(
-        return_value=Response(403, json={"title": "Forbidden", "detail": words, "status": 403})
+        return_value=Response(
+            403,
+            json={"title": "Forbidden", "detail": words, "status": 403, "code": "approval_requires_session"},
+        )
     )
     refused = _run("approve", "factory-floor", INSTANCE, "--fingerprint", FINGERPRINT)
     assert refused.exit_code == 1
     assert json.loads(route.calls[0].request.content) == {"fingerprint": FINGERPRINT}
     assert route.calls[0].request.headers["authorization"] == "Bearer chg_test", "no way around: the token"
-    assert f"403 — {words}" in " ".join(refused.output.split())
+    said = " ".join(refused.output.split())
+    assert f"403 — {words} (approval_requires_session)" in said
+    # Told apart from a refusal of rights by its code, it says where the approval is made (S65-24).
+    assert "approve it in the console (Administration → Outposts → factory-floor)" in said
     assert route.call_count == 1, "refused once, never tried another way"
+    rights = respx.post(f"{BASE}/cold-store/instances/{INSTANCE}/approve").mock(
+        return_value=Response(403, json={"title": "Forbidden", "detail": "managed by its administrator"})
+    )
+    refused = _run("approve", "cold-store", INSTANCE, "--fingerprint", FINGERPRINT)
+    assert rights.called and refused.exit_code == 1
+    assert "403 — managed by its administrator" in refused.output and "console" not in refused.output
 
 
 @respx.mock
@@ -507,3 +531,95 @@ def test_without_an_organisation_nothing_is_called(monkeypatch: pytest.MonkeyPat
         refused = _run("list")
         assert not respx.calls
     assert refused.exit_code == 1 and "no organisation" in refused.output
+
+
+# ───────────────────────── S65-24: what the CLI no longer guesses (#1630) ─────────────────────────
+
+
+@respx.mock
+@pytest.mark.parametrize(
+    ("facts", "said"),
+    [
+        ({"enabled": False, "door_signing_key": False}, "Outposts are switched off on this deployment"),
+        ({"enabled": True, "door_signing_key": False}, "The outposts' door has no signing key"),
+        ({"enabled": True, "door_signing_key": True}, None),
+    ],
+    ids=["off", "no-key", "ready"],
+)
+def test_list_says_what_would_refuse_a_creation_or_a_token(facts: dict[str, bool], said: str | None) -> None:
+    respx.get(BASE).mock(return_value=Response(200, json={"items": [_outpost()]} | facts))
+    shown = _run("list")
+    assert shown.exit_code == 0, shown.output
+    text = " ".join(shown.output.split())
+    for sentence in ("Outposts are switched off on this deployment", "The outposts' door has no signing key"):
+        assert (sentence in text) is (sentence == said), sentence
+
+
+@respx.mock
+def test_token_prints_its_id_and_how_to_cancel_it() -> None:
+    respx.post(f"{ONE}/enrolments").mock(return_value=Response(201, json=_created()))
+    shown = _run("token", "factory-floor")
+    assert shown.exit_code == 0, shown.output
+    assert "enrolment token enr-1 for `factory-floor`" in shown.output
+    assert "choregos outposts cancel-token factory-floor enr-1" in shown.output
+
+
+@respx.mock
+def test_tokens_lists_what_can_still_enrol_and_never_a_token() -> None:
+    route = respx.get(f"{ONE}/enrolments").mock(
+        return_value=Response(
+            200,
+            json={
+                "items": [
+                    {
+                        "id": "enr-2",
+                        "expires_at": "2026-11-12T10:15:00Z",
+                        "created_by": "ada@example.com",
+                        "created_at": "2026-11-12T10:00:00Z",
+                    }
+                ]
+            },
+        )
+    )
+    shown = _run("tokens", "factory-floor")
+    assert route.called and shown.exit_code == 0, shown.output
+    (row,) = [line for line in shown.output.splitlines() if "enr-2" in line]
+    assert "ada@example.com" in row and "2026-11-12T10:15:00Z" in row
+    assert "choregos outposts cancel-token factory-floor <token>" in shown.output
+    route.mock(return_value=Response(200, json={"items": []}))
+    assert "no token of `factory-floor` can still enrol" in _run("tokens", "factory-floor").output
+
+
+@respx.mock
+def test_cancel_token_calls_its_route_and_prints_a_used_tokens_refusal() -> None:
+    route = respx.delete(f"{ONE}/enrolments/enr-1").mock(return_value=Response(204))
+    done = _run("cancel-token", "factory-floor", "enr-1")
+    assert route.called and done.exit_code == 0, done.output
+    assert "enrolment token enr-1 of `factory-floor` cancelled" in done.output
+    words = "this enrolment token already enrolled an instance: revoke that instance instead"
+    respx.delete(f"{ONE}/enrolments/enr-2").mock(
+        return_value=Response(409, json={"title": "Conflict", "detail": words, "code": "enrolment_used"})
+    )
+    refused = _run("cancel-token", "factory-floor", "enr-2")
+    assert refused.exit_code == 1 and f"409 — {words}" in " ".join(refused.output.split())
+
+
+@respx.mock
+def test_instances_names_the_token_each_enrolled_with_and_the_approvals_window() -> None:
+    respx.get(f"{ONE}/instances").mock(return_value=Response(200, json={"items": [_instance()]}))
+    shown = _run("instances", "factory-floor")
+    assert shown.exit_code == 0, shown.output
+    assert "  enrolled 2026-11-12T09:58:00Z with token enr-1 issued by ada@example.com" in shown.output
+    assert "in a session signed in less than 10 min before" in " ".join(shown.output.split())
+
+
+@respx.mock
+def test_calls_says_the_window_it_reads_when_the_pages_end() -> None:
+    respx.get(f"{ONE}/calls").mock(
+        return_value=Response(
+            200, json={"items": [_call()], "meta": {"next_cursor": None, "has_more": False}}
+        )
+    )
+    shown = _run("calls", "factory-floor")
+    assert shown.exit_code == 0, shown.output
+    assert "the list reads the newest 1000 calls of the outpost" in " ".join(shown.output.split())

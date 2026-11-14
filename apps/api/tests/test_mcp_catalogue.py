@@ -262,7 +262,7 @@ async def test_a_site_catalogue_adds_entries_after_the_shipped_one(
         yaml.safe_dump(
             {"entries": [{
                 "id": "insights", "title": "Insights", "description": "Our analytics MCP server.",
-                "publisher": "Diametral", "official": False, "reference": False, "transport": "remote",
+                "publisher": "Globex", "official": False, "reference": False, "transport": "remote",
                 "remote": {"url": "https://mcp.insights.internal.example/mcp", "protocol": "streamable-http"},
                 "auth": "bearer", "egress_hosts": ["mcp.insights.internal.example"], "categories": ["data"],
             }]}

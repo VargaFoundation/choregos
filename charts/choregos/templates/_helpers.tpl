@@ -382,7 +382,7 @@ right — in the parent chart only.
 {{- end -}}
 
 {{- /* The namespace a tracing address points into (`<service>.<namespace>.svc[...]`), so the
-network policies open the collector and Tempo where they actually run (S40-20e: on the Diametral
+network policies open the collector and Tempo where they actually run (S40-20e: on one operator's
 dev cluster Tempo lives in `tempo`). A host that names no namespace keeps `monitoring`, the
 bootstrap's (`infra/bootstrap/otel-collector.yaml`, `tempo.yaml`). */ -}}
 {{- define "choregos.tracingNamespace" -}}

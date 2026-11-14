@@ -104,7 +104,7 @@ describe("the inbox's network access card (S39-22)", () => {
 });
 
 describe("an inbox list the caller may not read", () => {
-  it("is said, and does not hold the other panels on Reading… (agentic.diametral.com, 2026-11-05)", async () => {
+  it("is said, and does not hold the other panels on Reading… (an instance in production, 2026-11-05)", async () => {
     vi.mocked(api.orgEgress).mockResolvedValue(overview([], false));
     vi.mocked(api.budgetAlerts).mockRejectedValueOnce(new Error("reading the budget alerts of acme requires being a member of it"));
     render(

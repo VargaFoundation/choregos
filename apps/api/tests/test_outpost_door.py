@@ -291,6 +291,25 @@ async def test_a_key_that_was_approved_does_not_enrol_again(client: AsyncClient,
     assert first.json()["instance_id"] == again.json()["instance_id"], "a lost answer keeps its keys"
 
 
+async def test_a_key_enrolled_at_another_outpost_is_found_when_the_instance_is_written(
+    client: AsyncClient, admin: str
+) -> None:
+    """#1628 row 4 (S65-23): the token's outpost cannot see another outpost's instances, so a key that is
+    one of them is refused only when the instance is written, after the protocol and the schema, as
+    the contract now says; the refusal carries a nonce, and the token stays whole."""
+    await kit.create(client, SLUG)
+    await kit.create(client, "cold-store")
+    elsewhere = Daemon()
+    assert (await elsewhere.enrol(client, await kit.token_for(client, "cold-store"))).status_code == 201
+    token = await kit.token_for(client, SLUG)
+    invalid = elsewhere.enrolment(token, daemon_version="")
+    refused(await elsewhere.send(client, ENROL, invalid, kid=None), "invalid_request", 422)
+    answer = await elsewhere.enrol(client, token)
+    refused(answer, "key_already_enrolled", 409)
+    assert answer.headers.get(NONCE_HEADER), "a 409 of `enrol` carries a nonce, as the contract declares"
+    assert (await Daemon().enrol(client, token)).status_code == 201, "the token was still whole"
+
+
 # ───────────────────────── the signature, check by check ─────────────────────────
 
 
@@ -449,11 +468,28 @@ async def test_a_replayed_sequence_is_refused(client: AsyncClient, daemon: Daemo
     taken = daemon.sequence
     for seq in (taken, taken - 1, 1):
         refused(await daemon.send(client, POLL, body, seq=seq), "replayed_sequence", 401)
-    # Gaps are allowed; 64 bits, since a daemon numbers its requests from its clock in milliseconds.
-    for seq in (taken + 1, taken + 10_000_000, 2**53, 2**63 - 1):
+    # Gaps are allowed, up to the claim's bound (2^53 - 1): a daemon numbers its requests from its clock in
+    # milliseconds, far below it.
+    for seq in (taken + 1, taken + 10_000_000, 2**53 - 1):
         assert (await daemon.send(client, POLL, body, seq=seq)).status_code == 200, seq
-    assert (await daemon_kit.instance_row(str(daemon.instance_id))).sequence == 2**63 - 1
-    refused(await daemon.send(client, POLL, body, seq=2**63 - 1), "replayed_sequence", 401)
+    assert (await daemon_kit.instance_row(str(daemon.instance_id))).sequence == 2**53 - 1
+    refused(await daemon.send(client, POLL, body, seq=2**53 - 1), "replayed_sequence", 401)
+
+
+async def test_a_sequence_outside_the_claims_bound_is_a_malformed_signature(
+    client: AsyncClient, daemon: Daemon
+) -> None:
+    """One bound, the claim's: 1 to 2^53 - 1, a number every JSON parser reads exactly (S65-23, #1628
+    row 2). Above it, the signature is malformed whatever the row could store, and it takes no
+    sequence."""
+    from choregos_contracts.outpost import MAX_SEQUENCE
+
+    assert MAX_SEQUENCE == 2**53 - 1
+    body = daemon.poll_body()
+    for seq in (2**53, 2**63 - 1, 0, -1):
+        refused(await daemon.send(client, POLL, body, seq=seq), "invalid_signature", 401)
+    assert (await daemon_kit.instance_row(str(daemon.instance_id))).sequence < 2**53
+    assert (await daemon.send(client, POLL, body, seq=2**53 - 1)).status_code == 200
 
 
 async def test_a_sequence_is_taken_once_the_earlier_checks_pass_and_whatever_is_refused_next(
@@ -843,6 +879,30 @@ async def test_a_lease_lasts_300_seconds_at_most_and_nothing_a_daemon_sends_exte
     await daemon_kit.change(OutpostCall, patient.id, expires_at=datetime.now(UTC) + timedelta(hours=1))
     (call,) = await daemon.calls(client, endpoints=["forge"])
     assert datetime.fromisoformat(call["deadline"]) - datetime.now(UTC) <= timedelta(seconds=301)
+
+
+async def test_a_call_claimed_late_in_its_second_reaches_the_daemon_with_its_whole_lease(
+    client: AsyncClient, daemon: Daemon, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#1641 (S65-23): the deadline inside the envelope is written to the millisecond. A call with a
+    one-second timeout, placed and claimed at .999 of a second, reaches a daemon whose clock agrees
+    with the door's with close to one second left; cut to the second, it had a millisecond."""
+    from choregos_api.outposts import door as served
+    from choregos_api.outposts import rendezvous
+
+    second = datetime.now(UTC).replace(microsecond=0) + timedelta(seconds=1)
+    late = second + timedelta(microseconds=999_000)  # .999 of a second, on both clocks
+    monkeypatch.setattr(rendezvous, "utcnow", lambda: late)
+    monkeypatch.setattr(served, "utcnow", lambda: late)
+    placed = await daemon_kit.place(timeout_s=1)
+    (call,) = await daemon.calls(client)
+    deadline = datetime.fromisoformat(call["deadline"])
+    assert call["deadline"].endswith("Z") and call["deadline"][-5] == "."
+    assert deadline - late >= timedelta(milliseconds=999), call["deadline"]
+    # Never past the lease the row keeps: the fraction is cut, not rounded up.
+    row = await daemon_kit.call_row(placed.id)
+    kept = row.deadline if row.deadline.tzinfo else row.deadline.replace(tzinfo=UTC)
+    assert deadline <= kept and kept - deadline < timedelta(milliseconds=1)
 
 
 async def test_a_poll_hands_over_no_more_than_its_capacity_and_only_what_it_announced(
@@ -1443,6 +1503,14 @@ async def test_every_problem_carries_the_nonce_its_status_is_documented_with(
         if carries_the_nonce(answer)
     }
     assert declared == set(auth.NONCE_STATUSES) == {200, 201, 401, 403, 404, 409}
+    # Verb by verb (#1628 row 3): every status of that set a verb answers declares the nonce, `enrol`'s
+    # 401 and 409 included, and the door sends it there.
+    for path, verbs in document["paths"].items():
+        for status, answer in verbs["post"]["responses"].items():
+            assert carries_the_nonce(answer) is (int(status) in auth.NONCE_STATUSES), (path, status)
+    refused_enrolment = await Daemon().enrol(client, "t" * 32)
+    refused(refused_enrolment, "invalid_enrolment_token", 401)
+    assert refused_enrolment.headers.get(NONCE_HEADER)
 
     waiting = await daemon_kit.place()
     pending = await daemon_kit.enrolled(client)

@@ -296,13 +296,16 @@ def _check_workflow(path: Path, ref: str, problems: list[str]) -> None:
 def check_suite(suite: dict[str, Any], ref: str, doc: dict[str, Any], problems: list[str]) -> None:
     """A schema-valid conversation suite `suite`, read from `ref`, against the assistant `doc` that names
     it (ADR 0140): it evaluates the assistant's agent, its case names are unique, and every tool an
-    assertion or a scripted result names is a `need__operation` of the assistant."""
+    assertion or a scripted result names is a `need__operation` of the assistant, or the `launch__<name>` a
+    declared launch gives the agent (ADR 0158). `launch_status` is not one: the suite schema's tool names
+    are `x__y`, and naming it needs a contract change (#1726)."""
     if suite["agent"] != doc["agent"]:
         problems.append(
             f"{ref}:agent: the suite evaluates `{suite['agent']}`, the agent of assistant "
             f"`{doc['metadata']['name']}` is `{doc['agent']}`"
         )
     known = {f"{tool['need']}__{op}" for tool in _mappings(doc.get("tools")) for op in tool["operations"]}
+    known |= {f"launch__{launch['name']}" for launch in _mappings(doc.get("launches"))}
     seen: set[str] = set()
     for index, case in enumerate(suite["cases"]):
         if case["name"] in seen:
@@ -312,5 +315,5 @@ def check_suite(suite: dict[str, Any], ref: str, doc: dict[str, Any], problems: 
             if tool not in known:
                 problems.append(
                     f"{ref}:cases/{index}/{where}: `{tool}` is not a `need__operation` of the "
-                    "assistant's tools"
+                    "assistant's tools nor the tool of one of its launches"
                 )

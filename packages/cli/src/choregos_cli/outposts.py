@@ -19,7 +19,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from .client import Client, NoOrganisationError
+from .client import ApiError, Client, NoOrganisationError
 
 outposts_app = typer.Typer(help="Outposts: places that only dial out to the platform, and their instances")
 console = Console()
@@ -28,6 +28,10 @@ console = Console()
 POLICY_FILE = "/etc/choregos-outpost/policy.yaml"
 #: Where a person approves an instance: the API takes no approval from a token.
 CONSOLE_PAGE = "Administration → Outposts"
+#: The code of the API's 403 when a token tries to approve (S65-24): a refusal of rights has none.
+APPROVAL_REQUIRES_SESSION = "approval_requires_session"
+#: How many of an outpost's calls the API reads back, newest first: the window `calls` pages within.
+RECENT_CALLS = 1000
 
 OrgOption = Annotated[str | None, typer.Option("--org", help="the organisation; the profile's otherwise")]
 InstanceArgument = Annotated[
@@ -80,12 +84,15 @@ def _names(values: list[str] | None) -> str:
     return ", ".join(values or []) or "—"
 
 
-def _print_keys_to_pin(keys: list[str]) -> None:
+def _print_keys_to_pin(keys: list[str], origin: str | None) -> None:
     if not keys:
         _verbatim("No key to pin: the outposts' door has no signing key on this deployment.")
         return
-    _verbatim(f"The door's keys to pin, in the outpost's policy file ({POLICY_FILE} by default):")
+    _verbatim(
+        f"The lines of the outpost's policy file ({POLICY_FILE} by default): the door's origin and its keys:"
+    )
     _verbatim()
+    _verbatim(control_plane_line(origin))
     _verbatim(door_keys_line(keys))
 
 
@@ -116,7 +123,8 @@ def list_(org: OrgOption = None) -> None:
     table = Table(
         "outpost", "name", "status", "approved", "pending", "revoked", "presence", "endpoints", "connectors"
     )
-    for outpost in api.get(f"/orgs/{organisation}/outposts")["items"]:
+    listed = api.get(f"/orgs/{organisation}/outposts")
+    for outpost in listed["items"]:
         instances = outpost["instances"]
         table.add_row(
             outpost["slug"],
@@ -130,6 +138,18 @@ def list_(org: OrgOption = None) -> None:
             _names(outpost.get("connectors")),
         )
     console.print(table)
+    # What would refuse a creation or a token, said before anyone tries (S65-24).
+    if listed.get("enabled") is False:
+        _verbatim(
+            "Outposts are switched off on this deployment (CHOREGOS_OUTPOSTS): no outpost is created and "
+            "no token issued until its operator turns them on. What exists can still be read, revoked and "
+            "deleted."
+        )
+    elif listed.get("door_signing_key") is False:
+        _verbatim(
+            "The outposts' door has no signing key on this deployment (CHOREGOS_OUTPOSTS_DOOR_SIGNING_KEY): "
+            "there is no key to pin, so no enrolment token is issued until its operator sets one."
+        )
 
 
 @outposts_app.command("show")
@@ -151,7 +171,7 @@ def show(slug: str, org: OrgOption = None) -> None:
     _verbatim(f"endpoints announced: {_names(outpost.get('endpoints'))}")
     _verbatim(f"connectors that route to it: {_names(outpost.get('connectors'))}")
     _verbatim()
-    _print_keys_to_pin(list(outpost.get("door_keys") or []))
+    _print_keys_to_pin(list(outpost.get("door_keys") or []), outpost.get("control_plane"))
 
 
 @outposts_app.command("pause")
@@ -218,7 +238,7 @@ def token(
     api, organisation = _target(org)
     body = {} if expires_in_minutes is None else {"expires_in_minutes": expires_in_minutes}
     created = api.post(f"/orgs/{organisation}/outposts/{slug}/enrolments", json=body)
-    _done(f"enrolment token for `{slug}`: single use, expires {created['expires_at']}")
+    _done(f"enrolment token {created['id']} for `{slug}`: single use, expires {created['expires_at']}")
     _verbatim()
     _verbatim("The token, shown once:")
     _verbatim()
@@ -237,6 +257,48 @@ def token(
         "3. `enrol` prints the fingerprint of the instance's signing key. Approve the pending instance in "
         f"the console ({CONSOLE_PAGE} → {slug}) only if the fingerprint shown there is that one."
     )
+    _verbatim()
+    _verbatim(f"Pasted in the wrong place? Cancel it: choregos outposts cancel-token {slug} {created['id']}")
+
+
+@outposts_app.command("tokens")
+def tokens(slug: str, org: OrgOption = None) -> None:
+    """The enrolment tokens of the outpost that can still enrol an instance, newest first.
+
+    Never a token itself: the platform keeps its digest only. An instance names the token it enrolled
+    with (`choregos outposts instances`).
+    """
+    api, organisation = _target(org)
+    listed = api.get(f"/orgs/{organisation}/outposts/{slug}/enrolments")["items"]
+    if not listed:
+        _verbatim(f"no token of `{slug}` can still enrol an instance")
+        return
+    table = Table("token", "issued by", "issued", "expires")
+    for enrolment in listed:
+        table.add_row(
+            enrolment["id"],
+            enrolment.get("created_by") or "—",
+            enrolment["created_at"],
+            enrolment["expires_at"],
+        )
+    console.print(table)
+    _verbatim(f"cancel one: choregos outposts cancel-token {slug} <token>")
+
+
+@outposts_app.command("cancel-token")
+def cancel_token(
+    slug: str,
+    enrolment: Annotated[str, typer.Argument(help="the token's id, as `choregos outposts tokens` shows it")],
+    org: OrgOption = None,
+) -> None:
+    """Cancel an enrolment token that enrolled nothing: from now on it enrols no instance.
+
+    A token that already enrolled an instance is not cancelled (409 `enrolment_used`): revoke that
+    instance instead (`choregos outposts revoke-instance`).
+    """
+    api, organisation = _target(org)
+    api.delete(f"/orgs/{organisation}/outposts/{slug}/enrolments/{enrolment}")
+    _done(f"enrolment token {enrolment} of `{slug}` cancelled: it enrols nothing from now on")
 
 
 @outposts_app.command("instances")
@@ -258,16 +320,24 @@ def instances(slug: str, org: OrgOption = None) -> None:
         )
         _verbatim(f"  endpoints: {_names(instance.get('endpoints'))}")
         _verbatim(f"  what it said of itself: {facts or '—'}")
-        _verbatim(f"  enrolled {instance['enrolled_at']}")
+        token_line = f"  enrolled {instance['enrolled_at']}"
+        if instance.get("enrolment_id"):
+            token_line += f" with token {instance['enrolment_id']}"
+            if instance.get("enrolled_by"):
+                token_line += f" issued by {instance['enrolled_by']}"
+        _verbatim(token_line)
         if instance.get("approved_at"):
             _verbatim(f"  approved {instance['approved_at']} by {instance.get('approved_by') or '—'}")
         if instance.get("revoked_at"):
             _verbatim(f"  revoked {instance['revoked_at']} by {instance.get('revoked_by') or '—'}")
-    if any(instance["status"] == "pending" for instance in listed):
+    pending = [instance for instance in listed if instance["status"] == "pending"]
+    if pending:
+        window = pending[0].get("approval_step_up_minutes")
+        recent = f", in a session signed in less than {window} min before" if window else ""
         _verbatim()
         _verbatim(
             f"A pending instance is approved in the console ({CONSOLE_PAGE} → {slug}), against the "
-            "fingerprint its daemon printed."
+            f"fingerprint its daemon printed{recent}."
         )
 
 
@@ -290,11 +360,23 @@ def approve(
     API token (403). The CLI signs in with a token: this command is therefore refused, and prints the
     API's refusal as it is. Approve the instance in the console, under Administration → Outposts.
     """
+    from . import main
+
     api, organisation = _target(org)
-    approved = api.post(
-        f"/orgs/{organisation}/outposts/{slug}/instances/{instance}/approve",
-        json={"fingerprint": fingerprint},
-    )
+    # The request as the CLI's transport makes it, but with the API's refusal in hand rather than
+    # printed: its code tells a token's refusal from a refusal of rights (S65-24).
+    path = f"/orgs/{organisation}/outposts/{slug}/instances/{instance}/approve"
+    try:
+        if isinstance(api, main.TransportSafeClient):
+            approved = main.TransportSafeClient.request(api, "POST", path, json={"fingerprint": fingerprint})
+        else:
+            approved = Client.request(api, "POST", path, json={"fingerprint": fingerprint})
+    except ApiError as refused:
+        if refused.code != APPROVAL_REQUIRES_SESSION:
+            main.fail(str(refused))
+        # The API's refusal as it is, its code, and where the approval is made instead (S65-24).
+        main.fail(f"{refused} ({refused.code}): approve it in the console ({CONSOLE_PAGE} → {slug})")
+        raise
     _done(
         f"instance {approved['id']} of `{slug}` is {approved['status']}, "
         f"approved by {approved.get('approved_by') or '—'}"
@@ -330,7 +412,8 @@ def calls(
 ) -> None:
     """The recent calls routed to the outpost, newest first: their state and the code of a refusal.
 
-    Digests only: the platform keeps no arguments and no result of a call.
+    Digests only: the platform keeps no arguments and no result of a call. The API reads the newest
+    1000 calls of the outpost and pages within them: the last page is the end of that window.
     """
     api, organisation = _target(org)
     params: dict[str, str] = {"limit": str(limit)}
@@ -339,6 +422,7 @@ def calls(
     if cursor:
         params["cursor"] = cursor
     page = api.get(f"/orgs/{organisation}/outposts/{slug}/calls", params=params)
+    read = len(page["items"])
     table = Table(
         "when", "call", "endpoint", "connector", "state", "outcome", "refusal", "write", "arguments"
     )
@@ -359,3 +443,6 @@ def calls(
     meta = page.get("meta") or {}
     if meta.get("has_more") and meta.get("next_cursor"):
         _verbatim(f"older calls: choregos outposts calls {slug} --cursor {meta['next_cursor']}")
+    elif read or cursor:
+        # The API reads the newest calls only: the end of the pages is the end of that window (S65-24).
+        _verbatim(f"the list reads the newest {RECENT_CALLS} calls of the outpost: older ones are not shown")

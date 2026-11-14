@@ -111,10 +111,7 @@ NOT_CALLED_BY_A_CLIENT: dict[str, str] = {
 }
 
 #: Paths whose console screen is a story still to come: that story removes its entries.
-NO_CLIENT_YET: dict[str, str] = {
-    "/orgs/{org}/outposts/{slug}/enrolments/{enrolment_id}": "cancelling an enrolment token: the contract "
-    "declares it first (ADR 0001), S65-24 serves it and gives it its command and its button",
-}
+NO_CLIENT_YET: dict[str, str] = {}
 
 #: Paths the CLI calls and the console must not: an operator's command, not a screen.
 CLI_ONLY: dict[str, str] = {
