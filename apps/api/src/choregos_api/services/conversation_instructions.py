@@ -8,6 +8,9 @@ rendered, with two variables:
 - `preferences`: the caller's profile memory of the assistant (its `scope: user, kind: profile` spaces,
   merged in the manifest's order); empty when there is none, or when the policy says `memory.enabled: false`.
 
+A plugin's internal agent carries the work item's context before its own instructions (`agent_catalogue`): a
+conversation has no work item, so that block is left out.
+
 They are rendered when the conversation opens, and again when an idle conversation is resumed: an
 installation whose config changed meanwhile reaches the conversations already open at their next resume.
 Instructions that do not render refuse the conversation (409): the template never reaches the model.
@@ -17,6 +20,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from choregos_core.agent_catalogue import without_context
 from choregos_core.instructions import render_conversation_instructions
 from jinja2 import TemplateError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -64,7 +68,9 @@ async def render_for(session: AsyncSession, record: AgentSessionRecord, source: 
     config = config_values(document, dict(installation.config or {}))
     preferences = await preferences_of(session, record)
     try:
-        return render_conversation_instructions(source, config=config, preferences=preferences)
+        return render_conversation_instructions(
+            without_context(source), config=config, preferences=preferences
+        )
     except (TemplateError, TypeError, ValueError) as error:
         raise ApiError(
             409,

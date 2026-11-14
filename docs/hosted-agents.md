@@ -415,7 +415,8 @@ answered 404, and on PostgreSQL a restrictive policy on `agent_sessions` and
 - **An assistant's instructions are rendered.** A conversation of an installation sends its agent's
   instructions rendered with `{{ config.<key> }}` (the installation's values over `config_schema`'s
   defaults) and `{{ preferences.<key> }}` (the caller's `user` profile memory of the assistant; empty
-  under `memory.enabled: false`); a key with no value renders empty. They are rendered at the opening
+  under `memory.enabled: false`); a key with no value renders empty. A plugin agent's work item context
+  (what a run hands it) is left out: a conversation has no work item. They are rendered at the opening
   and again on resume (`conversation.instructions_rendered` when they changed); instructions that do not
   render refuse the conversation, 409 (S63-27, ADR 0133 amendment).
 - **Title.** Written by the model from the first exchange (the person's message and the answer), as one

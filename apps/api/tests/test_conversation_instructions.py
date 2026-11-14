@@ -180,3 +180,19 @@ async def test_a_resumed_conversation_takes_the_installation_config_as_it_is_now
     system = _system(upstream.model.requests[-1][1])
     assert system.startswith("You serve Varga Capital from the equities desk."), system
     assert "conversation.instructions_rendered" in await _events(conversation)
+
+
+async def test_a_plugin_agent_converses_without_the_work_item_context_of_a_run(
+    client: AsyncClient, admin: str, upstream: Upstream, offline: Path
+) -> None:
+    """The plugin's own agent carries the work item's context of a run before its instructions; a
+    conversation has no work item: the block is left out, and its braces never reach the model."""
+    installation = await _assistant(client)
+    conversation = await _open(installation, agent="investment-analyst")
+
+    upstream.model.say("Noted.")
+    await _say(client, conversation, "Hello")
+
+    first = str(upstream.model.requests[0][1]["messages"][0]["content"])
+    assert first.startswith("You help the people of Varga understand markets"), first[:200]
+    assert "## Work item" not in first and "{{" not in first and "{%" not in first

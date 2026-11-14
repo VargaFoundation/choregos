@@ -118,8 +118,11 @@ Hence:
   its `scope: user, kind: profile` spaces, merged in the manifest's order; ADR 0136 point 2). `preferences`
   is empty when there is none, and when the personal space's policy says `memory.enabled: false` (ADR 0136
   point 5).
-- No sample reaches a conversation: a key with no value renders empty, the publication samples (`ticket`
-  and the others) are not variables there, and `{{ config.items }}` reads the key `items`, never a method.
+- A conversation hands the agent no work item: the work item's context that a plugin's internal agent carries
+  before its own instructions (`agent_catalogue/_context.md`) is left out, and a run's variables (`ticket`,
+  `inputs`, ...) are empty there.
+- No sample reaches a conversation: a key with no value renders empty, the publication samples are never used
+  there, and `{{ config.items }}` reads the key `items`, never a method.
 - Rendered when the conversation opens, and again when an idle conversation is resumed: a config (or a
   profile) changed meanwhile reaches the conversations already open at their next resume, journaled
   `conversation.instructions_rendered`. Between two turns of an open conversation the instructions stay as

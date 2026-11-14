@@ -52,3 +52,23 @@ def test_an_empty_preferences_is_falsy_in_a_condition() -> None:
     source = "{% if preferences %}known{% else %}new{% endif %}"
     assert render_conversation_instructions(source, config={}, preferences={}) == "new"
     assert render_conversation_instructions(source, config={}, preferences={"a": 1}) == "known"
+
+
+def test_the_work_item_context_of_a_plugin_agent_is_left_out_of_a_conversation() -> None:
+    from choregos_core.agent_catalogue import entry_of, without_context
+
+    entry = entry_of(
+        {
+            "catalogue": {"version": 1, "role": "r", "summary": "s"},
+            "agent": {"slug": "coach", "spec": {"instructions": "You coach {{ config.company }}."}},
+        }
+    )
+    framed = str(entry.document["spec"]["instructions"])
+    assert framed.startswith("## Work item"), "entry_of puts the run's context first"
+    assert without_context(framed) == "You coach {{ config.company }}."
+    assert without_context("Plain.") == "Plain."
+
+
+def test_a_run_template_renders_empty_in_a_conversation_never_raises() -> None:
+    source = "{{ ticket.key }}{% for name, value in inputs.items() %}{{ name }}{% endfor %}{{ spec }}."
+    assert render_conversation_instructions(source, config={}, preferences={}) == "."

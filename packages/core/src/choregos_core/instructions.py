@@ -10,9 +10,10 @@ The same variables as a playbook: `ticket`, `spec`, `plan_markdown`, `inputs`, `
 `context`, `project`. The frame the agent cannot modify (the output contract, the
 invariants) is added AFTER the rendering, by the orchestrator.
 
-An assistant's conversation (ADR 0133 point 3, S63-27) renders the same instructions with two variables
-only, `config` (the installation's values) and `preferences` (the caller's profile memory of the assistant),
-in a sandbox where a key with no value renders empty: never a sample, never the braces.
+An assistant's conversation (ADR 0133 point 3, S63-27) renders the same instructions with `config` (the
+installation's values) and `preferences` (the caller's profile memory of the assistant), a run's variables
+being empty (there is no work item), in a sandbox where a key with no value renders empty: never a sample,
+never the braces.
 """
 
 from __future__ import annotations
@@ -87,6 +88,19 @@ class _Values:
         return bool(self._data)
 
 
+#: A conversation hands the agent no work item: a run's variables, empty, so that a template written for both
+#: (a plugin agent's work item context, `agent_catalogue.without_context` aside) renders, never as a sample.
+_NO_WORK_ITEM: dict[str, Any] = {
+    "ticket": {"key": "", "title": "", "body": "", "fields": {}},
+    "spec": "",
+    "plan_markdown": "",
+    "inputs": {},
+    "allowed_paths": [],
+    "context": None,
+    "project": None,
+    "production_indicators": [],
+}
+
 _CONVERSATION = SandboxedEnvironment(
     undefined=ChainableUndefined, autoescape=False, keep_trailing_newline=True
 )
@@ -95,9 +109,12 @@ _CONVERSATION = SandboxedEnvironment(
 def render_conversation_instructions(
     source: str, *, config: Mapping[str, Any], preferences: Mapping[str, Any]
 ) -> str:
-    """An assistant's instructions as its conversation sends them (S63-27): `config` and `preferences` only,
-    no sample; a key with no value renders empty. Raises `TemplateError` (`SecurityError` included)."""
-    return _CONVERSATION.from_string(source).render(config=_Values(config), preferences=_Values(preferences))
+    """An assistant's instructions as its conversation sends them (S63-27): `config` and `preferences`, a
+    run's variables empty, no sample; a key with no value renders empty. Raises `TemplateError`
+    (`SecurityError` included)."""
+    return _CONVERSATION.from_string(source).render(
+        {**_NO_WORK_ITEM, "config": _Values(config), "preferences": _Values(preferences)}
+    )
 
 
 def instruction_errors(source: str) -> list[str]:
