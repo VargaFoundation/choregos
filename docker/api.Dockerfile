@@ -75,7 +75,7 @@ RUN uv venv /opt/skillspector --python /usr/local/bin/python3.12 \
 # three CRITICAL CVEs (cilium, grpc, Go stdlib) that the same gate refused (#490). Any bump
 # re-checks the `observe` flags the connector uses. Cross-compiled on the build platform: Go needs
 # no emulation for arm64.
-FROM --platform=${BUILDPLATFORM:-linux/amd64} golang:1.27.3-bookworm@sha256:d9b6a1beb9474adc2a1ce842573639b44b2a0dd49b6669f51d3821baf9ec37c9 AS hubble
+FROM --platform=${BUILDPLATFORM:-linux/amd64} golang:1.27.3-bookworm@sha256:dc0963f32053e4bc451d24d87e3892d42d01021b61f093e98eb95c0352bb84b0 AS hubble
 ARG HUBBLE_VERSION=v1.19.4
 ARG HUBBLE_COMMIT=39037bdd6cb6acb02a241dde33b5ffcf0e8471e2
 ARG TARGETARCH
@@ -98,7 +98,7 @@ FROM scratch AS cli
 # `cosign`, the release binary checked against the release's checksums: the release's binaries are
 # built with Go 1.27.3, but the `ghcr.io/sigstore/cosign/cosign:v3.1.4` image is a separate build,
 # with Go 1.27.1, which links CVE-2026-56857 (measured with `go version`, S41-14c).
-FROM --platform=${BUILDPLATFORM:-linux/amd64} golang:1.27.3-bookworm@sha256:d9b6a1beb9474adc2a1ce842573639b44b2a0dd49b6669f51d3821baf9ec37c9 AS cosign
+FROM --platform=${BUILDPLATFORM:-linux/amd64} golang:1.27.3-bookworm@sha256:dc0963f32053e4bc451d24d87e3892d42d01021b61f093e98eb95c0352bb84b0 AS cosign
 ARG COSIGN_VERSION=v3.1.4
 ARG COSIGN_SHA256_AMD64=424e2c97d0b45fd7a6b608a87f090f35633f4c23ece5f092d48bba11aaf4bbfa
 ARG COSIGN_SHA256_ARM64=ade83b7aac62e131cacfe96d958948b2150cc9efec46a570a2649b8e27dedad2
