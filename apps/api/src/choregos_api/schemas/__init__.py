@@ -6,6 +6,17 @@ One module per domain, re-exported: `choregos_api.schemas.X` stays the address o
 
 from __future__ import annotations
 
+from .agent_social import (
+    AgentForkDto,
+    AgentForkList,
+    AgentNotificationDto,
+    AgentNotificationKind,
+    AgentNotificationList,
+    AgentNotificationsRead,
+    AgentSocial,
+    AgentWatchPut,
+    WatchLevel,
+)
 from .agents import (
     A2aDeclaredCost,
     A2aPinnedCard,
@@ -201,6 +212,15 @@ from .identity import (
     OrgDto,
     OrgUpdate,
 )
+from .linked_accounts import (
+    ForgeInstanceDto,
+    LinkedAccountDeclare,
+    LinkedAccountDto,
+    LinkedAccountStart,
+    MyLinkedAccounts,
+    TrackerIdentityDto,
+    TrackerIdentityPut,
+)
 from .mcp_gateway import (
     McpGateway,
     McpGatewayAssertion,
@@ -226,6 +246,7 @@ from .measures import (
     MemoryDto,
     MemoryReimport,
 )
+from .member_profiles import AvatarDto, MemberProfileDto
 from .memory import (
     MemoryStoreCreate,
     MemoryStoreDto,
@@ -308,6 +329,8 @@ from .tickets import (
     CiLogs,
     ContextBreakdownDto,
     CostEstimate,
+    DecisionDraft,
+    DecisionDraftVia,
     DecisionRequest,
     DiffFileDto,
     DiffSummaryDto,
@@ -350,7 +373,6 @@ from .tickets import (
     WorkItemPage,
     WorkItemUpdate,
 )
-from .tracker_identities import TrackerIdentityDto, TrackerIdentityPut
 
 __all__ = [
     "A2aDeclaredCost",
@@ -380,6 +402,8 @@ __all__ = [
     "AgentExposedProject",
     "AgentExposure",
     "AgentFork",
+    "AgentForkDto",
+    "AgentForkList",
     "AgentImageInfo",
     "AgentLifecycleChange",
     "AgentLifecycleResult",
@@ -387,6 +411,10 @@ __all__ = [
     "AgentMetrics",
     "AgentMetricsSummary",
     "AgentNotStopped",
+    "AgentNotificationDto",
+    "AgentNotificationKind",
+    "AgentNotificationList",
+    "AgentNotificationsRead",
     "AgentOverrides",
     "AgentOwnerChange",
     "AgentPatch",
@@ -403,6 +431,7 @@ __all__ = [
     "AgentRuntime",
     "AgentSampleInput",
     "AgentScopeChange",
+    "AgentSocial",
     "AgentSpec",
     "AgentStableGates",
     "AgentStopResult",
@@ -413,6 +442,7 @@ __all__ = [
     "AgentVersionMetrics",
     "AgentVersionPublish",
     "AgentVersionRestore",
+    "AgentWatchPut",
     "ApiTokenCreate",
     "ApiTokenCreated",
     "ApiTokenDto",
@@ -421,6 +451,7 @@ __all__ = [
     "AssigneeChange",
     "AuditEntry",
     "AuditPage",
+    "AvatarDto",
     "BrowserSessionDto",
     "BudgetAlertDto",
     "BuiltinAgent",
@@ -448,6 +479,8 @@ __all__ = [
     "CostTotal",
     "CrossBackendArm",
     "CrossBackendReport",
+    "DecisionDraft",
+    "DecisionDraftVia",
     "DecisionRequest",
     "DiffFileDto",
     "DiffSummaryDto",
@@ -460,6 +493,7 @@ __all__ = [
     "FindingAction",
     "FindingDto",
     "FindingPage",
+    "ForgeInstanceDto",
     "FreezeRequest",
     "GatewayKeyInfo",
     "GatewayModelDto",
@@ -485,6 +519,9 @@ __all__ = [
     "IntegrationsDto",
     "JourneyMove",
     "JourneyStep",
+    "LinkedAccountDeclare",
+    "LinkedAccountDto",
+    "LinkedAccountStart",
     "MachineAccountCreate",
     "MachineAccountDto",
     "MachineTokenCreate",
@@ -502,6 +539,7 @@ __all__ = [
     "McpGatewayTest",
     "McpGatewayTestRequest",
     "MeDto",
+    "MemberProfileDto",
     "MembershipDto",
     "MembershipUpsert",
     "MemoryAbGroup",
@@ -526,6 +564,7 @@ __all__ = [
     "ModelMatrixEntry",
     "ModelSyncResult",
     "ModelTiers",
+    "MyLinkedAccounts",
     "OAuthClientDto",
     "OAuthDto",
     "OperationDto",
@@ -655,6 +694,7 @@ __all__ = [
     "VendorDocDto",
     "VoiceAudio",
     "VoiceRuntime",
+    "WatchLevel",
     "WebhookAck",
     "WorkItemAction",
     "WorkItemCreate",

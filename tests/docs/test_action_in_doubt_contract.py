@@ -2,7 +2,8 @@
 """An action may end in doubt, and a write at an outpost says how it is delivered (S65-14, ADR 0149 §5-6).
 
 Contract only: what the documents say. A write through an outpost is delivered at most once; when the
-instance that claimed it never answers, its effect and its action end `in_doubt`, a terminal status.
+instance that claimed it never answers, its effect and its action end `in_doubt`, which nothing but a
+person's settlement moves on (S65-26).
 Whoever opens such a write says one of two things in the operation's rule, with the words the contract
 already had for a platform argument, and the refusal of a rule that says neither names both.
 """
@@ -41,12 +42,15 @@ def test_an_action_s_statuses_are_the_enum_s_and_in_doubt_is_one() -> None:
     assert set(declared["enum"]) == {status.value for status in ActionStatus}
     assert ActionStatus.IN_DOUBT.value == "in_doubt"
     said = declared["description"]
-    assert "terminal" in said and "never replayed" in said and "compensated automatically" in said
+    # Nothing the platform does by itself replays it or undoes anything: a person settles it (S65-26).
+    assert "Nothing replays it" in said and "compensated automatically" in said
+    assert "Only a person moves it on" in said and "`settleAction`" in said
 
 
 def test_an_effect_may_be_in_doubt_and_says_what_was_sent() -> None:
     effect = SCHEMAS["ActionEffect"]["properties"]
-    assert effect["status"]["enum"] == ["started", "done", "compensated", "compensation_failed", "in_doubt"]
+    statuses = ["started", "done", "compensated", "compensation_failed", "in_doubt"]
+    assert effect["status"]["enum"][:5] == statuses
     shown = effect["result"]["description"]
     for name in ("outpost", "endpoint", "operation", "call_id", "instance_id", "claimed_at"):
         assert f"`{name}`" in shown, name
@@ -54,7 +58,8 @@ def test_an_effect_may_be_in_doubt_and_says_what_was_sent() -> None:
 
 
 def test_an_action_that_ended_in_doubt_is_said_by_the_existing_terminal_event() -> None:
-    """No event type was added: `choregos.action.failed` carries the status the action ended with."""
+    """No event type was added for the doubt: `choregos.action.failed` carries the status the action
+    ended with. The one type added since says a person settled it (S65-26)."""
     from choregos_contracts.enums import EventType
 
     actions = sorted(kind.value for kind in EventType if kind.value.startswith("choregos.action."))
@@ -64,6 +69,7 @@ def test_an_action_that_ended_in_doubt_is_said_by_the_existing_terminal_event() 
         "choregos.action.effect_done",
         "choregos.action.failed",
         "choregos.action.proposed",
+        "choregos.action.settled",
         "choregos.action.succeeded",
     ]
 

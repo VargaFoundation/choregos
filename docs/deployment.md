@@ -1415,7 +1415,7 @@ through the new provider finds no account: it is refused ("this e-mail belongs t
 provider"), or creates an empty account for an address the instance does not know. The accounts, their
 memberships, the runs, decisions and approvals they recorded and the audit trail would be orphaned.
 
-A **re-link window** moves them ([ADR 0160](adr/0160-a-change-of-identity-provider-re-links-accounts-in-a-time-boxed-window.md)).
+A **re-link window** moves them ([ADR 0164](adr/0164-a-change-of-identity-provider-re-links-accounts-in-a-time-boxed-window.md)).
 Until `choregos-api.oidcRelinkUntil` (`CHOREGOS_OIDC_RELINK_UNTIL`, an ISO 8601 instant at most 31 days
 ahead, UTC when it names no zone), a sign-in through the instance's provider whose subject is unknown moves
 an account to that subject when:
@@ -1776,11 +1776,28 @@ value>` on the first model call. Nothing said the key had never resolved.
 If the API refuses to start with `réglages non résolus`, fix the source of the secret — the key
 is missing where it is stored, not where it is read.
 
-## Upgrading past 0.27.1
+## Upgrading past 0.27.3
 
-Changes merged after v0.27.1, shipped with the next release.
+A workflow may no longer name an agent of kind `external` — a client of the MCP door — as a step's actor
+([ADR 0163](adr/0163-a-client-prepares-a-person-s-decision-the-person-decides.md) §1, S65-20). Such a
+workflow ran the client's version as if the platform ran it. After the upgrade its next publication is
+refused (422), and a run of it fails before it starts with the agent named; name a person for the step
+instead. Look for one before upgrading:
 
-**The re-link switch becomes a window** (S70-20, [ADR 0160](adr/0160-a-change-of-identity-provider-re-links-accounts-in-a-time-boxed-window.md)).
+```sql
+SELECT p.slug AS project, w.name AS workflow, w.version, a.slug AS agent
+FROM workflow_defs w
+JOIN projects p ON p.id = w.project_id
+JOIN LATERAL jsonb_each(w.json::jsonb -> 'actors') AS actor(name, spec) ON true
+JOIN agents a ON a.org_id = p.org_id AND a.kind = 'external'
+  AND a.slug = split_part(actor.spec ->> 'agent', '@', 1)
+WHERE w.is_active;
+```
+
+No row: nothing to do. The rule needs no migration.
+
+
+**The re-link switch becomes a window** (S70-20, [ADR 0164](adr/0164-a-change-of-identity-provider-re-links-accounts-in-a-time-boxed-window.md)).
 `choregos-api.oidcRelinkVerifiedEmail` (`CHOREGOS_OIDC_RELINK_VERIFIED_EMAIL`) is gone: `true` fails the
 render and refuses the API's start, naming `choregos-api.oidcRelinkUntil`, an instant at most 31 days
 ahead ([Changing the identity provider](#changing-the-identity-provider)). A deployment that left it at

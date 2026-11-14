@@ -19,6 +19,7 @@ from fastapi import APIRouter, Path, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..audit import record
+from ..config import get_settings
 from ..db.models import Organization
 from ..deps import Db, Me, Pagination
 from ..freshness import authentication_age
@@ -54,7 +55,12 @@ async def _managed(session: AsyncSession, principal: Principal, org: str) -> Org
 @router.get("/orgs/{org}/outposts", response_model=OutpostList, operation_id="listOutposts")
 async def list_outposts(org: str, session: Db, principal: Me) -> OutpostList:
     organisation = await _managed(session, principal, org)
-    return OutpostList(items=await service.list_outposts(session, organisation))
+    settings = get_settings()
+    return OutpostList(
+        items=await service.list_outposts(session, organisation),
+        enabled=settings.outposts,
+        door_signing_key=bool(settings.outposts_door_signing_key),
+    )
 
 
 @router.post(

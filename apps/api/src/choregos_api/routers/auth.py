@@ -24,6 +24,7 @@ import hashlib
 import json
 import secrets
 import time
+from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 from urllib.parse import quote, urlencode
@@ -48,6 +49,7 @@ from ..schemas import ApiTokenCreate, ApiTokenCreated, ApiTokenDto, MeDto, Membe
 from ..security import generate_api_token, read_session, sign_session
 from ..services.api_tokens import api_token_dto, linked_projects
 from ..services.identity_relink import normalised_issuer, relink_candidates
+from ..services.avatars import avatar_url
 from ..tenant_sign_in import OidcProvider, SignInHint, TenantSignIn, email_domain, resolve
 
 router = APIRouter(tags=["session"])
@@ -86,6 +88,11 @@ async def get_me(session: Db, principal: Me) -> MeDto:
         display_name=user.display_name,
         oidc_sub=user.oidc_sub,
         last_login_at=user.last_login_at,
+        given_name=user.given_name,
+        family_name=user.family_name,
+        job_title=user.job_title,
+        department=user.department,
+        avatar_url=await avatar_url(session, user.id),
         memberships=memberships,
     )
 
@@ -385,6 +392,46 @@ def provider_name(info: dict[str, Any]) -> str:
     return " ".join(part for part in parts if part)[:200]
 
 
+#: The claims a sign-in copies onto the person (ADR 0162), by column: the standard OIDC `given_name` and
+#: `family_name`, and the names identity providers commonly give a job title and a department (Entra ID's
+#: optional claims are `jobTitle` and `department`). A tenant's provider may name its own (`OidcProvider`).
+PROFILE_CLAIMS: dict[str, tuple[str, ...]] = {
+    "given_name": ("given_name",),
+    "family_name": ("family_name",),
+    "job_title": ("job_title", "jobTitle"),
+    "department": ("department",),
+}
+PROFILE_MAX = 200
+
+
+def provider_profile(info: Mapping[str, Any], provider: OidcProvider | None = None) -> dict[str, str]:
+    """What the provider says of the person beyond their name and address, by column: only the claims it
+    sent as a non-empty string. `provider`: a tenant's, which may name its job title and department claims.
+    A `picture` claim is never read: the console shows only a photo the person uploaded (no outbound call
+    to an address a provider chose)."""
+    names = dict(PROFILE_CLAIMS)
+    if provider is not None:
+        names["job_title"] = (provider.job_title_claim,)
+        names["department"] = (provider.department_claim,)
+    profile: dict[str, str] = {}
+    for column, claims in names.items():
+        for claim in claims:
+            value = info.get(claim)
+            if isinstance(value, str) and value.strip():
+                profile[column] = value.strip()[:PROFILE_MAX]
+                break
+    return profile
+
+
+def apply_profile(user: User, profile: Mapping[str, Any] | None) -> None:
+    """Copies the claims a sign-in carried onto the person: each one sent replaces the stored value, one
+    not sent leaves it (a provider that stops sending a claim does not erase what it said)."""
+    for column in PROFILE_CLAIMS:
+        value = (profile or {}).get(column)
+        if isinstance(value, str) and value.strip():
+            setattr(user, column, value.strip()[:PROFILE_MAX])
+
+
 async def _ensure_oidc_user(
     session: Any,
     info: dict[str, Any],
@@ -399,7 +446,7 @@ async def _ensure_oidc_user(
     `stored_sub` is the subject as stored (a tenant's is namespaced); it defaults to `info["sub"]`.
     `tenant_org_id` is set by a tenant's provider, whose caller already proved the address domain is
     the tenant's (ADR 0108). `issuer` is the provider's (default: the instance's), recorded beside the
-    subject (ADR 0160).
+    subject (ADR 0164).
 
     - A returning subject keeps its account. Its e-mail follows the provider, unless the provider
       calls the new address unverified.
@@ -408,7 +455,7 @@ async def _ensure_oidc_user(
     - An account bound to ANOTHER subject is refused, except for a re-link: by a tenant's provider
       (the domain is the tenant's), or on the instance while a re-link window is open
       (`oidc_relink_until`) for the one account bound to another issuer's subject whose address,
-      letter case aside, the provider asserts with `email_verified: true` (ADR 0160). Audited.
+      letter case aside, the provider asserts with `email_verified: true` (ADR 0164). Audited.
     - A new account is not created for an address the provider calls unverified.
     (ADR 0100)
     """
@@ -492,7 +539,7 @@ async def _relink_in_window(
     issuer: str,
     exact: User | None,
 ) -> User | None:
-    """The re-link of a change of the instance's provider (ADR 0160), or None when it moves nothing.
+    """The re-link of a change of the instance's provider (ADR 0164), or None when it moves nothing.
 
     `exact` is the account whose address is exactly the provider's, bound to another subject: it is
     refused unless the window moves it. Without it, an account is re-linked only if the window would
@@ -726,6 +773,7 @@ async def _tenant_user(  # noqa: PLR0913 - one sign-in, fact by fact, keyword-on
     oidc: bool = False,
     email_verified: bool | None = None,
     issuer: str | None = None,
+    profile: Mapping[str, Any] | None = None,
 ) -> User:
     """A sign-in vouched for by a tenant's own provider, confined to that tenant (ADR 0108).
 
@@ -755,6 +803,7 @@ async def _tenant_user(  # noqa: PLR0913 - one sign-in, fact by fact, keyword-on
         )
     else:
         user = await _ensure_user(session, email, name, stored)
+    apply_profile(user, profile)
     await _map_groups_to_roles(session, user, groups, settings, only_org=org)
     return user
 
@@ -872,11 +921,13 @@ async def callback(
                 oidc=True,
                 email_verified=info.get("email_verified"),
                 issuer=provider.issuer,
+                profile=provider_profile(info, provider),
             )
         else:
             if sub.startswith(("dev|", "tenant:")):
                 raise unauthorized("the identity provider gave a subject reserved for another sign-in")
             user = await _ensure_oidc_user(session, info, settings)
+            apply_profile(user, provider_profile(info))
             await _map_groups_to_roles(session, user, list(info.get("groups", [])), settings)
             await _seal_refresh_token(session, user, refresh_token)
 
@@ -975,6 +1026,7 @@ async def terminer_la_connexion(  # noqa: PLR0913 - one sign-in, fact by fact, k
     canal: str,
     settings: Settings | None = None,
     org: str | None = None,
+    profile: Mapping[str, Any] | None = None,
 ) -> RedirectResponse:
     """For an authentication protocol brought by an extension, AFTER it has verified
     the identity (assertion signature, audience, freshness): creates or finds the user,
@@ -985,16 +1037,27 @@ async def terminer_la_connexion(  # noqa: PLR0913 - one sign-in, fact by fact, k
     `org`: the identity comes from that tenant's own provider (a SAML IdP declared through
     `tenant_sign_in`). The sign-in is then confined to the tenant exactly as an OIDC one is
     (ADR 0108): the address domain must be the tenant's, roles land on the tenant only.
+
+    `profile`: what the assertion says of the person beyond their name, by column (`given_name`,
+    `family_name`, `job_title`, `department`, ADR 0162); the protocol maps its own attributes onto them.
     """
     resolved_settings = settings or get_settings()
     if not email:
         raise unauthorized("the IdP did not provide an e-mail")
     if org:
         user = await _tenant_user(
-            session, org, email=email, name=nom, sub=sujet, groups=list(groupes), settings=resolved_settings
+            session,
+            org,
+            email=email,
+            name=nom,
+            sub=sujet,
+            groups=list(groupes),
+            settings=resolved_settings,
+            profile=profile,
         )
     else:
         user = await _ensure_user(session, email, nom, sujet)
+        apply_profile(user, profile)
         await _map_groups_to_roles(session, user, list(groupes), resolved_settings)
     return await ouvrir_la_session(session, user, cible, resolved_settings, canal=canal)
 

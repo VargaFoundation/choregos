@@ -84,6 +84,24 @@ export class FakeOutputChannel {
   }
 }
 
+export class FakeStatusBarItem {
+  text = "";
+  tooltip: string | undefined;
+  command: string | undefined;
+  name: string | undefined;
+  visible = false;
+  constructor(readonly id: string) {}
+  show(): void {
+    this.visible = true;
+  }
+  hide(): void {
+    this.visible = false;
+  }
+  dispose(): void {
+    fake.statusItems.delete(this.id);
+  }
+}
+
 export interface FakeTreeView {
   id: string;
   provider: unknown;
@@ -93,20 +111,74 @@ export interface FakeTreeView {
   dispose(): void;
 }
 
+export class CancellationError extends Error {
+  constructor() {
+    super("Canceled");
+    this.name = "Canceled";
+  }
+}
+
+interface AuthenticationProvider {
+  getSessions(): Promise<unknown[]>;
+  createSession(scopes: string[]): Promise<unknown>;
+  removeSession(id: string): Promise<void>;
+}
+
 export const fake = {
   commands: new Map<string, (...args: unknown[]) => unknown>(),
+  executed: [] as { id: string; args: unknown[] }[],
   treeViews: new Map<string, FakeTreeView>(),
+  statusItems: new Map<string, FakeStatusBarItem>(),
   outputs: new Map<string, FakeOutputChannel>(),
   settings: new Map<string, unknown>(),
+  authProviders: new Map<string, { label: string; provider: AuthenticationProvider }>(),
+  /** What the person types in the next input boxes, in order; `undefined` is Escape. */
+  inputs: [] as (string | undefined)[],
+  inputBoxes: [] as Record<string, unknown>[],
+  messages: [] as { level: "error" | "info" | "warning"; text: string }[],
+  configurationChanged: new EventEmitter<{ affectsConfiguration(section: string): boolean }>(),
   reset(): void {
     this.commands.clear();
+    this.executed = [];
     this.treeViews.clear();
+    this.statusItems.clear();
     this.outputs.clear();
     this.settings.clear();
+    this.authProviders.clear();
+    this.inputs = [];
+    this.inputBoxes = [];
+    this.messages = [];
+    this.configurationChanged = new EventEmitter();
+  },
+  /** The person changes a setting. */
+  set(key: string, value: unknown): void {
+    this.settings.set(key, value);
+    this.configurationChanged.fire({ affectsConfiguration: (section) => key.startsWith(section) });
   },
 };
 
 export const window = {
+  createStatusBarItem(id: string): FakeStatusBarItem {
+    const item = new FakeStatusBarItem(id);
+    fake.statusItems.set(id, item);
+    return item;
+  },
+  showInputBox(options: Record<string, unknown>): Promise<string | undefined> {
+    fake.inputBoxes.push(options);
+    return Promise.resolve(fake.inputs.shift());
+  },
+  showErrorMessage(text: string): Promise<undefined> {
+    fake.messages.push({ level: "error", text });
+    return Promise.resolve(undefined);
+  },
+  showInformationMessage(text: string): Promise<undefined> {
+    fake.messages.push({ level: "info", text });
+    return Promise.resolve(undefined);
+  },
+  showWarningMessage(text: string): Promise<undefined> {
+    fake.messages.push({ level: "warning", text });
+    return Promise.resolve(undefined);
+  },
   createOutputChannel(name: string): FakeOutputChannel {
     const channel = new FakeOutputChannel();
     fake.outputs.set(name, channel);
@@ -130,12 +202,32 @@ export const commands = {
     return new Disposable(() => fake.commands.delete(id));
   },
   executeCommand(id: string, ...args: unknown[]): Promise<unknown> {
+    fake.executed.push({ id, args });
     const handler = fake.commands.get(id);
     return Promise.resolve(handler?.(...args));
   },
 };
 
+export const authentication = {
+  registerAuthenticationProvider(id: string, label: string, provider: AuthenticationProvider): Disposable {
+    fake.authProviders.set(id, { label, provider });
+    return new Disposable(() => fake.authProviders.delete(id));
+  },
+  async getSession(id: string, scopes: string[], options: { createIfNone?: boolean } = {}): Promise<unknown> {
+    const registered = fake.authProviders.get(id);
+    if (!registered) throw new Error(`no authentication provider ${id}`);
+    const [existing] = await registered.provider.getSessions();
+    if (existing || !options.createIfNone) return existing;
+    return registered.provider.createSession(scopes);
+  },
+};
+
 export const workspace = {
+  onDidChangeConfiguration(
+    listener: (event: { affectsConfiguration(section: string): boolean }) => unknown,
+  ): Disposable {
+    return fake.configurationChanged.event(listener);
+  },
   getConfiguration(section: string) {
     return {
       get<T>(key: string, fallback?: T): T | undefined {

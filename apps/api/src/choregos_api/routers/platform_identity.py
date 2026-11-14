@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""How people sign in to this instance, read-only, and the plan of a change of provider (ADR 0160).
+"""How people sign in to this instance, read-only, and the plan of a change of provider (ADR 0164).
 
 The instance-level sign-in configuration (OIDC, the MCP door's OAuth, the session, the bootstrap)
 lives in the deployment's settings, not in the database. This route shows it to the platform
@@ -162,7 +162,7 @@ async def get_relink_plan(
     settings: Config,
     issuer: Annotated[str | None, Query(max_length=512)] = None,
 ) -> RelinkPlan:
-    """A dry run of a change of identity provider (ADR 0160): which accounts a re-link window for
+    """A dry run of a change of identity provider (ADR 0164): which accounts a re-link window for
     `issuer` (default: the configured one) moves at their first sign-in, which it refuses, which the
     provider already holds. Changes nothing."""
     await require_platform_admin(session, principal)

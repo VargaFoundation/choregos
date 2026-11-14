@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""The issuer that gave an account its subject (S70-20, ADR 0160)
+"""The issuer that gave an account its subject (S70-20, ADR 0164)
 
 `users.oidc_sub` is unique, and a subject only means something at the issuer that gave it (OpenID
 Connect Core 1.0 §2). Changing the instance's identity provider changes every subject: a re-link window
@@ -12,7 +12,7 @@ next sign-in records it. The policies of row-level security on `users` are the t
 The downgrade drops the column.
 
 Revision ID: f0b2d4e6a8c1
-Revises: b3dbe73fff38
+Revises: 1596f0e2131d
 Create Date: 2026-11-12 16:00:00+00:00
 """
 
@@ -24,7 +24,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "f0b2d4e6a8c1"
-down_revision: str | None = "b3dbe73fff38"
+down_revision: str | None = "1596f0e2131d"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

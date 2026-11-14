@@ -85,7 +85,7 @@ def test_the_verified_switch_renders_true_or_false_only() -> None:
 
 
 def test_a_relink_window_is_rendered_only_when_it_has_an_end() -> None:
-    """S70-20, ADR 0160: the re-link is a window with an end, never a switch left on."""
+    """S70-20, ADR 0164: the re-link is a window with an end, never a switch left on."""
     assert "CHOREGOS_OIDC_RELINK_UNTIL" not in _api_env()
     assert "CHOREGOS_OIDC_RELINK_VERIFIED_EMAIL" not in _api_env()
     window = _api_env('choregos-api.oidcRelinkUntil="2026-12-01T00:00:00Z"')

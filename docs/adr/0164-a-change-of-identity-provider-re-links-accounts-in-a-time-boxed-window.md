@@ -1,4 +1,4 @@
-# 0160 — A change of identity provider re-links accounts in a time-boxed window
+# 0164 — A change of identity provider re-links accounts in a time-boxed window
 
 - **Status**: proposed, 2026-11-12
 - **Concerns**: `routers.auth` (`_ensure_oidc_user`, `_relink_in_window`), `services.identity_relink`,

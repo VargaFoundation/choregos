@@ -10,7 +10,10 @@ The journal (`action_effects`) is the memory that makes a resume safe:
   idempotent by construction (`declare_effect`);
 - an effect that was sent and never answered is recorded `in_doubt` with what was sent (ADR 0149
   §5): it is not attempted again, nothing the action had done is compensated, and the action is
-  closed `in_doubt`, whatever the workflow that plays it asks for.
+  closed `in_doubt`, whatever the workflow that plays it asks for;
+- a person who settles it (S65-26) records it `done`, with the result they state, or `not_made`, and
+  makes the action `approved` again: its workflow runs once more, the journal answers the effects
+  already done, and a `not_made` effect is a refusal it meets at once, never an attempt.
 """
 
 from __future__ import annotations
@@ -47,6 +50,8 @@ EFFECT_REFUSED = "EffectRefused"
 EFFECT_IN_DOUBT = "EffectInDoubt"
 #: The status of an effect, and of its action, that ended in doubt.
 IN_DOUBT = ActionStatus.IN_DOUBT.value
+#: The status of an effect a person settled as not made (S65-26): never attempted again.
+NOT_MADE = "not_made"
 
 
 async def _load(session: Any, action_id: str) -> tuple[Action, Project]:
@@ -108,7 +113,16 @@ async def execute_effect(payload: dict[str, Any]) -> dict[str, Any]:
         ).scalar_one_or_none()
         if row is not None and row.status == "done":
             # Already done: the recorded response, nothing redone. That is the whole guarantee.
-            return {"key": key, "replayed": True, "result": row.result}
+            return {"key": key, "replayed": True, "result": await _replayed(session, row)}
+        if row is not None and row.status == NOT_MADE:
+            # A person checked the system and recorded that the write was not made (S65-26): the
+            # effect failed, without a call. Final, and the action's failure path compensates what
+            # came before it.
+            raise ApplicationError(
+                row.error or f"the effect {key} was not made, as a person recorded",
+                type=EFFECT_REFUSED,
+                non_retryable=True,
+            )
         doubts = _doubts(row)
         if doubts and not _may_be_sent_again(row):
             # In doubt, and final (ADR 0149 §5): the effect is not attempted again, by a task Temporal
@@ -192,6 +206,30 @@ async def execute_effect(payload: dict[str, Any]) -> dict[str, Any]:
             effect=row.effect,
         )
     return {"key": key, "replayed": False, "result": result}
+
+
+async def _replayed(session: Any, row: ActionEffect) -> Any:
+    """What a done effect answers again. In the run that follows a person's settlement (S65-26) the
+    effects up to the settled one were played, or settled, by the run before: an evidence they asked
+    to wait for was waited for then, and is not asked again."""
+    result = row.result
+    if not isinstance(result, dict) or not set(result) & EVIDENCE_KEYS:
+        return result
+    # Read in Python: a JSON column may hold a JSON `null` where SQL would look for NULL.
+    later = (
+        await session.execute(
+            select(ActionEffect.settlement).where(
+                ActionEffect.action_id == row.action_id, ActionEffect.position >= row.position
+            )
+        )
+    ).scalars()
+    if not any(later):
+        return result
+    return {name: value for name, value in result.items() if name not in EVIDENCE_KEYS}
+
+
+#: The key by which an effect asks to wait for its evidence, under both spellings (S45-03).
+EVIDENCE_KEYS = frozenset({"await_evidence", "attendre_une_preuve"})  # lang: fr-ok
 
 
 async def _note_failure(key: str, error: str) -> None:

@@ -4809,6 +4809,14 @@ stories:
     size: M
     depends_on: [S65-11]
     notes: "Every management route has a client; docs/cli.md regenerated; a pending instance is approved only with its fingerprint confirmed; a paused outpost says so; the access tab names the outpost and its offline state (that part after S65-13); the console and the CLI print the door_keys to pin, and resume and delete have their client."
+  - id: S65-17c
+    title: "feat(web): the console states how a write at an outpost is delivered (ADR 0149 §6)"
+    stream: S65
+    sprint: 7
+    priority: 1
+    size: S
+    depends_on: [S65-14, S65-17]
+    notes: "Administration -> Connectors: under each write of an mcp-outpost connector, and nowhere else, the two statements of its rule (takes the platform's idempotency key: platform_arguments action_key, offered only when the tool's input schema has that argument; an in-doubt outcome accepted, explicitly: in_doubt_accepted). They leave with the policy that opens the write, in the same request, or alone; withdrawn with an empty list and null; the API's 422 shown with its sentence and on each statement it names. The demo judges the rule as the API does. The docs' caveat that the console cannot set them is gone."
   - id: S65-18
     title: "docs: outposts for whoever operates the platform, and for whoever runs one (ADR 0147)"
     stream: S65
@@ -4825,6 +4833,95 @@ stories:
     size: S
     depends_on: [S65-14, S65-16, S65-17, S65-18]
     notes: "On fakes: create, enrol, approve, run, declare, discover, one bounded result and one ledger line; daemon stopped, the call fails fast and names the outpost; alias removed, refused and logged locally; lost lease, in_doubt and one call received. On a cluster that enforces network policies: the read succeeds while a connection into the outpost's namespace times out."
+  - id: S65-23
+    title: "fix(api,outposts): what building the door found, settled in the contract and the door (#1628, #1641)"
+    stream: S65
+    sprint: 8
+    priority: 2
+    size: S
+    depends_on: [S65-19]
+    notes: "The vectors' instance id is illustrative and an instance id opaque; seq has one bound, 1 to 2^53 - 1, and the door refuses one above it; Outpost-Nonce is declared on enrol's 401 and 409; a key enrolled at another outpost is found at write, after the rate, the protocol and the schema; the per-minute cap of ADR 0148 §10 is the one S65-13 built; a call's deadline is written to the millisecond, so a call claimed at .999 with a one-second timeout reaches a daemon with close to a second left."
+  - id: S65-24
+    title: "feat(api,cli,web): the outposts' management API stops making clients guess (#1630)"
+    stream: S65
+    sprint: 8
+    priority: 2
+    size: M
+    depends_on: [S65-17]
+    notes: "listOutposts says whether outposts are on and whether the door has a signing key; an outpost carries control_plane; an approval refused to a token has the code approval_requires_session, its 401 speaks of an approval and the window is on the instance; enrolment tokens are listed and cancelled (enrolment_used for one that enrolled); an instance names its enrolment token and who issued it; the calls' 1000-call window is said; the CLI and the console use each of them."
+  - id: S65-29
+    title: "fix(api): a look at an outpost's call that a cancellation interrupts stays a cancellation"
+    stream: S65
+    sprint: 7
+    priority: 1
+    size: S
+    depends_on: [S65-14]
+    notes: "scope_to_outpost narrowed the session in a finally: after a cancellation in the middle of its read (a worker stopping while it waits for a write) the narrowing ran on an invalidated connection and its PendingRollbackError hid the cancellation. Narrowed on the way out only; a deterministic test fails without it."
+  - id: S65-28
+    title: "fix(orchestrator): a skipped memory takes a number a run cannot take, and the runner's first lines are kept (finding #1608)"
+    stream: S65
+    sprint: 8
+    priority: 1
+    size: S
+    depends_on: [S65-01]
+    notes: "memory.skipped, written before the run starts, is numbered below 0 (below any line already there, a batch in its order, each memory once) instead of from 1, where it took the runner's first numbers and the door dropped the runner's first lines; gate.outcome, written once the run's process has finished, follows the highest line and never takes 0; a run prepared with one skipped memory whose runner posts lines 1 to 3 shows four lines through the console's route; activities only, nothing under workflows/, no contract change (RunEvent.seq is an integer with no minimum; RunEventIn keeps minimum 0)."
+  - id: S65-27
+    title: "fix(contracts): the generated TypeScript contract has no root entry and is compiled in CI (finding #1607)"
+    stream: S65
+    sprint: 8
+    priority: 2
+    size: S
+    depends_on: [S65-10]
+    notes: "tools/gen_contracts.py stops writing packages/contracts/ts/index.ts (nine names exported by both modules, TS2308; nothing imported it) and removes a leftover one, --check refusing it; the package exports ./schemas and ./api only; the console's typecheck compiles packages/contracts/ts as its own project, so the web job turns red on a name generated twice; tests/ci/test_contracts_ts_compiled.py."
+  - id: S65-26
+    title: "feat(api,orchestrator,web): a person settles an action in doubt (ADR 0149 §5)"
+    stream: S65
+    sprint: 7
+    priority: 1
+    size: M
+    depends_on: [S65-14]
+    notes: "Contract first (settleAction, ActionSettlement, SettlementOutcome, not_made, choregos.action.settled). Guarded as an approval (human session, step-up, approver rank and group, separation of duties); made records the effect done with the stated result and the action runs again from its journal to succeeded; not_made is never attempted and the action fails and compensates what came before; the effect keeps the doubt's evidence; settling twice with the same outcome changes nothing, the other is 409; the run that follows starts under the same workflow id; no change under workflows/; the action page's settle form."
+  - id: S65-20
+    title: "docs(adr),fix(api): ADR 0163, and an external agent never carries a step"
+    stream: S65
+    sprint: 8
+    priority: 1
+    size: S
+    depends_on: []
+    notes: "The outposts plan's lot L2, rebuilt on S63. A test first showed that a workflow naming an `external` agent was published and that resolve_agent handed a run its version; refused at publication (422) and when a run resolves it (AgentUnavailable, after the lifecycle's own refusals); internal and remote agents unchanged; a pin stays allowed; the upgrade notes give the query that finds such a workflow."
+  - id: S65-21a
+    title: "contract(openapi): a draft of a person's decision, and discarding it (ADR 0163)"
+    stream: S65
+    sprint: 8
+    priority: 1
+    size: XS
+    depends_on: [S65-20]
+    notes: "HumanRequest.draft, DecisionDraft, DELETE /work-items/{id}/human-requests/{request_id}/draft (discardDecisionDraft), listed as contract-first until S65-21; make contracts."
+  - id: S65-21b
+    title: "contract(openapi): the decision draft names ADR 0163"
+    stream: S65
+    sprint: 8
+    priority: 1
+    size: XS
+    depends_on: [S65-21a]
+    notes: "Another ADR merged as 0162 while #1697 held the number; the four descriptions merged with S65-21a point at 0163."
+  - id: S65-21
+    title: "feat(api): the MCP door reads a person's waiting request and drafts its decision (ADR 0163)"
+    stream: S65
+    sprint: 8
+    priority: 1
+    size: M
+    depends_on: [S65-20, S65-21a]
+    notes: "get_pending_decision (mcp:read) and draft_decision (mcp:write, item:decide, counted in the day's writes, audited workitem.decision.draft); human_requests.draft (migration); another person's request, a decided one or one of an unreadable project is not found; a draft decides nothing (the request waits, no decision event, no workitem.decision); the discard route and the decision's audit `draft: same|changed`; nothing under workflows/ changes."
+  - id: S65-22
+    title: "feat(web),docs: the draft on the awaited decision, taken or discarded; the door's documentation (ADR 0163)"
+    stream: S65
+    sprint: 8
+    priority: 1
+    size: S
+    depends_on: [S65-21]
+    notes: "The awaited decision shows the draft, who made it and through what, and its note; Take fills the form (the person still decides and attests), Discard calls the route; docs/integrations.md and the MCP page of the user documentation list the two tools."
+  # ───────────── S67 — the terminal is a surface of the platform (ADR 0154) ─────────────
   # ───────────── S67 — the terminal is a surface of the platform (ADR 0154) ─────────────
   - id: S67-00
     title: "docs(adr): ADR 0154, the terminal is a surface of the platform; the S67 plan"
@@ -5068,3 +5165,28 @@ stories:
     size: S
     depends_on: [S68-08, S68-10, S68-11]
     notes: "Install from the instance, Open VSX or the Marketplace; sign in; the views; what never runs locally; no telemetry."
+  # ───────────── S66 — an assistant reads the organisation's knowledge bases by reference (ADR 0159) ─────────────
+  - id: S66-10
+    title: "docs(adr): ADR 0159, an assistant's knowledge need bound to the organisation's bases by reference"
+    stream: S66
+    sprint: 1
+    priority: 1
+    size: S
+    depends_on: []
+    notes: "The product owner's amendment of 2026-11-12 to ADR 0138; these stories."
+  - id: S66-11
+    title: "contract(schemas,openapi): a knowledge need bound at install (ADR 0159)"
+    stream: S66
+    sprint: 1
+    priority: 1
+    size: S
+    depends_on: [S66-10]
+    notes: "assistant.schema.json accepts `bind` instead of `seed` (exactly one, `serving_mode` and `upstream` a seed's only) and `choregos plugin validate` refuses each mix with its JSON path; the install body, the binding route, the readiness kind `knowledge_unbound`, the installation's `knowledge_bindings` and the plugin assistant's `knowledge_needs`; make contracts; the route has its console client."
+  - id: S66-12
+    title: "feat(api,web): bind an assistant's knowledge need to the organisation's bases (ADR 0159)"
+    stream: S66
+    sprint: 2
+    priority: 1
+    size: M
+    depends_on: [S66-11]
+    notes: "A required unbound need is incomplete and binding it makes it ready; a base the binder cannot read and a missing one are the same 422; nothing is copied; the conversation searches the bound base and cites it by its slug; a person outside the base's readers gets nothing of it and the next turn follows a grant; an upgrade that drops, adds or renames a bound need follows S63-22; the console's installation page binds it."

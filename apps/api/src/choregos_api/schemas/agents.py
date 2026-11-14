@@ -23,6 +23,7 @@ from pydantic import (
     model_validator,
 )
 
+from .agent_social import AgentSocial
 from .base import Dto
 from .identity import ApiTokenCreated
 
@@ -1129,6 +1130,8 @@ class AgentDto(Dto):
     release_policy: AgentReleasePolicy = Field(default_factory=AgentReleasePolicy)
     #: The release waiting for approval, if any (S40-02b).
     pending_release: AgentReleaseDto | None = None
+    #: Watchers, stars and forks, and what the caller does with it (ADR 0152).
+    social: AgentSocial = Field(default_factory=AgentSocial)
 
 
 class AgentOverrides(Dto):

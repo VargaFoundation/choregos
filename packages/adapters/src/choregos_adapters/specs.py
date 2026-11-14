@@ -16,6 +16,11 @@ from choregos_contracts.outpost import ENDPOINT_ALIAS_PATTERN, OUTPOST_SLUG_PATT
 from .errors import AdapterError, ConfigurationError
 from .families import FAMILIES as _FAMILIES
 from .families import OPERATIONS_MARKETDATA as _OPERATIONS_MARKETDATA
+from .forge_accounts import DEFAULT_BASE_URL as _FORGE_DEFAULTS
+from .forge_accounts import KIND as _FORGE_KIND
+from .forge_accounts import check_config as _forge_check_config
+from .forge_accounts import connector_type as _forge_type
+from .forge_accounts import egress_of as _forge_egress_of
 from .identity.entra import OPERATIONS_ENTRA as _OPERATIONS_ENTRA
 from .netops.cilium import CiliumNetwork as _CiliumNetwork
 from .netops.nginx import NginxConfig as _NginxConfig
@@ -162,6 +167,14 @@ def _object_schema(proprietes: dict[str, Any], requis: tuple[str, ...] = ()) -> 
     if requis:
         schema["required"] = list(requis)
     return schema
+
+
+def _forge_egress(provider: str) -> Any:
+    return lambda config: _forge_egress_of(provider, config)
+
+
+def _forge_check(provider: str) -> Any:
+    return lambda config: _forge_check_config(provider, config)
 
 
 _TEXT: dict[str, Any] = {"type": "string"}
@@ -585,6 +598,36 @@ _SHIPPED_SPECS: dict[tuple[str, str], ConnectorTypeSpec] = {
             for name, access, description, schema in _OPERATIONS_ENTRA
         ),
     ),
+    # A forge's OAuth application, through which a member proves their own account (ADR 0161). No
+    # operation: an agent calls nothing through it; the platform reads the signed-in person's user once.
+    **{
+        (_FORGE_KIND, _forge_type(provider)): ConnectorTypeSpec(
+            display,
+            (_FORGE_KIND,),
+            _object_schema(
+                {
+                    "base_url": (
+                        {"type": "string", "default": _FORGE_DEFAULTS[provider]}
+                        if provider in _FORGE_DEFAULTS
+                        else {
+                            "type": "string",
+                            "description": "the instance's address, https://forge.example",
+                        }
+                    ),
+                    "client_id": {"type": "string", "description": "the OAuth application's client id"},
+                },
+                ("client_id",) if provider in _FORGE_DEFAULTS else ("base_url", "client_id"),
+            ),
+            ("client_secret",),
+            egress=_forge_egress(provider),
+            check_config=_forge_check(provider),
+        )
+        for provider, display in (
+            ("github", "GitHub sign-in (members link their account)"),
+            ("gitlab", "GitLab sign-in (members link their account)"),
+            ("forgejo", "Forgejo sign-in (members link their account)"),
+        )
+    },
     # The business families (S20-04) have no real type yet: `demo` holds them in memory, each
     # process for itself: a demonstration, refused in staging and prod.
     ("mdm", "demo"): ConnectorTypeSpec(

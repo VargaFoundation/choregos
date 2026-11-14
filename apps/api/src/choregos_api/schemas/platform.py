@@ -90,7 +90,7 @@ class PlatformIdentity(Dto):
 
 
 class RelinkWindow(Dto):
-    """The re-link window of a change of identity provider (ADR 0160)."""
+    """The re-link window of a change of identity provider (ADR 0164)."""
 
     #: `open` until `until`; `closed` once `until` passed; `none` when the deployment sets no window.
     state: Literal["open", "closed", "none"]

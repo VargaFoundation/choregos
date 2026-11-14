@@ -1,4 +1,4 @@
-"""Changing the instance's identity provider: a time-boxed re-link window and its plan (S70-20, ADR 0160).
+"""Changing the instance's identity provider: a time-boxed re-link window and its plan (S70-20, ADR 0164).
 
 A new provider gives every person a new subject. While the deployment's window is open
 (`CHOREGOS_OIDC_RELINK_UNTIL`), a person's first sign-in through it moves their account, the same row with

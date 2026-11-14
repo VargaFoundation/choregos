@@ -36,6 +36,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..base import Base, Json, PkMixin, TimestampMixin, utcnow, uuid7
 from .agent_sessions import AgentSessionEvent, AgentSessionRecord, ConversationFeedback
+from .agent_social import AgentNotification, AgentStar, AgentWatch
 from .agents import (
     Agent,
     AgentCredential,
@@ -45,8 +46,15 @@ from .agents import (
     HostedBuildRecord,
     ProjectAgent,
 )
+from .assistant_launches import AssistantLaunchBinding
 from .assistant_reads import AssistantRead
-from .assistants import AssistantInstallation, AssistantToolBinding, ConnectedAccount, ConversationAction
+from .assistants import (
+    AssistantInstallation,
+    AssistantKnowledgeBinding,
+    AssistantToolBinding,
+    ConnectedAccount,
+    ConversationAction,
+)
 from .audit import AuditLog, NetworkDecision
 from .connectors import (
     ConnectorOperation,
@@ -60,12 +68,15 @@ from .costs import BudgetAlert, CostLedger
 from .gateway import BackendRegistryRow, GatewayKeyRow, ModelCatalogueRow
 from .identity import (
     ApiToken,
+    LinkedAccount,
     MachineAccount,
     Membership,
     Organization,
+    OrgGroup,
+    OrgGroupMember,
     OrgSlugAlias,
-    TrackerIdentity,
     User,
+    UserAvatar,
     UserSession,
 )
 from .knowledge import (
@@ -107,8 +118,11 @@ ALL_TABLES = [
     Membership,
     Project,
     MachineAccount,
+    OrgGroup,
+    OrgGroupMember,
     AssistantInstallation,
     AssistantRead,
+    AssistantLaunchBinding,
     AssistantToolBinding,
     TaskSubscription,
     TaskEvent,
@@ -141,6 +155,7 @@ ALL_TABLES = [
     SkillVersion,
     AgentCredential,
     KnowledgeBase,
+    AssistantKnowledgeBinding,
     KnowledgeDocument,
     KnowledgeSeedTombstone,
     KnowledgeUpdateProposal,
@@ -182,14 +197,19 @@ __all__ = [
     "Agent",
     "AgentCredential",
     "AgentEvaluation",
+    "AgentNotification",
     "AgentRelease",
     "AgentSessionEvent",
     "AgentSessionRecord",
+    "AgentStar",
     "AgentVersion",
+    "AgentWatch",
     "Any",
     "ApiToken",
     "ArtifactRecord",
     "AssistantInstallation",
+    "AssistantKnowledgeBinding",
+    "AssistantLaunchBinding",
     "AssistantRead",
     "AssistantToolBinding",
     "AuditLog",
@@ -230,6 +250,7 @@ __all__ = [
     "KnowledgeSource",
     "KnowledgeUpdateProposal",
     "LargeBinary",
+    "LinkedAccount",
     "MachineAccount",
     "Mapped",
     "Membership",
@@ -242,6 +263,8 @@ __all__ = [
     "OrgConnector",
     "OrgConnectorProject",
     "OrgEgressRule",
+    "OrgGroup",
+    "OrgGroupMember",
     "OrgPlugin",
     "OrgPluginApproval",
     "OrgPluginFile",
@@ -271,10 +294,10 @@ __all__ = [
     "Template",
     "Text",
     "TimestampMixin",
-    "TrackerIdentity",
     "TriggerToken",
     "UniqueConstraint",
     "User",
+    "UserAvatar",
     "UserSession",
     "WebhookDelivery",
     "WorkItem",

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Changing the instance's identity provider: the re-link window and its plan (S70-20, ADR 0160).
+"""Changing the instance's identity provider: the re-link window and its plan (S70-20, ADR 0164).
 
 An account is bound to its provider's subject (ADR 0100), and a subject only means something at the
 issuer that gave it. A new provider gives every person a new subject. Each account is moved to its new
@@ -47,7 +47,7 @@ def concerned(user: User) -> bool:
 
 def bound_elsewhere(user: User, issuer: str) -> bool:
     """Concerned, and bound to a subject of another issuer than `issuer` (or of an issuer not recorded:
-    an account bound before ADR 0160)."""
+    an account bound before ADR 0164)."""
     return concerned(user) and user.oidc_issuer != normalised_issuer(issuer)
 
 

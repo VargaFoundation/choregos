@@ -9,6 +9,7 @@ import yaml
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..schemas.assistant_catalogue import (
+    AssistantKnowledgeNeed,
     AssistantMemorySpace,
     AssistantNeed,
     AssistantTaskDecl,
@@ -31,6 +32,19 @@ def needs_of(document: dict[str, Any]) -> list[AssistantNeed]:
         )
         for t in _mappings(document.get("tools"))
         if t.get("need")
+    ]
+
+
+def knowledge_needs_of(document: dict[str, Any]) -> list[AssistantKnowledgeNeed]:
+    """The knowledge needs the installation binds (`knowledge[].bind`, ADR 0159); seeds are left out."""
+    return [
+        AssistantKnowledgeNeed(
+            name=str(k["name"]),
+            description=str(k["bind"].get("description") or ""),
+            required=bool(k["bind"].get("required", True)),
+        )
+        for k in _mappings(document.get("knowledge"))
+        if k.get("name") and isinstance(k.get("bind"), dict)
     ]
 
 
@@ -79,6 +93,7 @@ async def plugin_assistants(session: AsyncSession, org_id: str, plugin: str) -> 
                     str(g) for g in (document.get("audience") or {}).get("suggested_groups") or []
                 ],
                 needs=needs_of(document),
+                knowledge_needs=knowledge_needs_of(document),
                 memory_spaces=memory_spaces_of(document, owners=True),
             )
         )

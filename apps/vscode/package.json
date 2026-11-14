@@ -80,7 +80,7 @@
     "viewsWelcome": [
       {
         "view": "choregos.live",
-        "contents": "What runs on your Choregos instance appears here.\n[Open settings](command:workbench.action.openSettings?%22choregos%22)"
+        "contents": "What runs on your Choregos instance appears here.\n[Sign in](command:choregos.signIn)\n[Open settings](command:workbench.action.openSettings?%22choregos%22)"
       },
       {
         "view": "choregos.decisions",
@@ -92,6 +92,16 @@
       }
     ],
     "commands": [
+      {
+        "command": "choregos.signIn",
+        "title": "Sign in",
+        "category": "Choregos"
+      },
+      {
+        "command": "choregos.signOut",
+        "title": "Sign out",
+        "category": "Choregos"
+      },
       {
         "command": "choregos.showLog",
         "title": "Show log",

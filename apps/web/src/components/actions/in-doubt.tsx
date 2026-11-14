@@ -25,7 +25,7 @@ export function sentInDoubt(action: Action): Sent[] {
 /**
  * An action in doubt (ADR 0149): a write went through an outpost, an instance took it and its answer
  * never came back. Nobody knows whether it was made, so nothing replays it and nothing is undone. The
- * note says what was sent and what a person does next. No route closes such an action by hand.
+ * note says what was sent and what a person does next: settle it (`SettleInDoubt`, S65-26).
  */
 export function InDoubt({ action }: { action: Action }) {
   if (action.status !== "in_doubt") return null;
@@ -60,8 +60,8 @@ export function InDoubt({ action }: { action: Action }) {
         )}
         <p>
           <strong>What to do.</strong> Check the system behind the outpost to see whether the write was made, then
-          record what you found where your team keeps such records (the work item, for instance). This action stays in
-          doubt: nothing replays it, and what you found is not recorded on it.
+          record what you found below. Made, the action resumes after it; not made, it fails and undoes what it had done
+          before. Until then it stays in doubt, and a work item that waits for it waits.
         </p>
       </div>
     </Alert>

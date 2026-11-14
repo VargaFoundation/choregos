@@ -23,7 +23,7 @@ UNRESOLVED_TEMPLATE = ("<no value>", "<nil>")
 DEFAULT_SESSION_SECRET = "dev-session-secret-change-me"
 #: The shortest session secret a deployed instance accepts: a 256-bit HMAC key.
 MIN_SESSION_SECRET_BYTES = 32
-#: The longest re-link window a deployment may open at once (ADR 0160): a window is an event, not a mode.
+#: The longest re-link window a deployment may open at once (ADR 0164): a window is an event, not a mode.
 OIDC_RELINK_MAX_DAYS = 31
 
 
@@ -135,12 +135,12 @@ class Settings(BaseSettings):
     #: An existing account is linked by e-mail only when the provider does not say
     #: `email_verified: false` (Entra omits the claim, so only an explicit false refuses).
     oidc_require_email_verified: bool = True
-    #: The end of a re-link window, for a change of the instance's identity provider (ADR 0160): until
+    #: The end of a re-link window, for a change of the instance's identity provider (ADR 0164): until
     #: this instant, a sign-in whose address the provider asserts with `email_verified: true` re-links the
     #: one account bound to another provider's subject. Unset: no window, such a sign-in is refused. At
     #: most `OIDC_RELINK_MAX_DAYS` ahead; a date in the past is a closed window.
     oidc_relink_until: datetime | None = None
-    #: Replaced by `oidc_relink_until` (ADR 0160): a switch without an end stays open; `true` refuses
+    #: Replaced by `oidc_relink_until` (ADR 0164): a switch without an end stays open; `true` refuses
     #: to start.
     oidc_relink_verified_email: bool = False
     #: The MCP door also accepts OAuth tokens issued by the IdP (ADR 0030, RFC 9728): claude.ai and
@@ -539,7 +539,7 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _the_relink_window_has_an_end(self) -> Settings:
-        """A re-link window is temporary (ADR 0160): it has an end, and the end is near."""
+        """A re-link window is temporary (ADR 0164): it has an end, and the end is near."""
         if self.oidc_relink_verified_email:
             raise ValueError(
                 "CHOREGOS_OIDC_RELINK_VERIFIED_EMAIL is replaced by CHOREGOS_OIDC_RELINK_UNTIL, the end of a "
@@ -559,7 +559,7 @@ class Settings(BaseSettings):
         return self
 
     def relink_window_open(self, now: datetime | None = None) -> bool:
-        """Whether a sign-in may re-link an account bound to another provider now (ADR 0160)."""
+        """Whether a sign-in may re-link an account bound to another provider now (ADR 0164)."""
         until = self.oidc_relink_until
         return until is not None and (now or datetime.now(UTC)) < until
 

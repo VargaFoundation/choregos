@@ -7,6 +7,7 @@
  * API, which is what section 3.4 of the plan asks for.
  */
 import devComplex from "./dev-complex.json";
+import { agentSocialApi } from "./agent-social";
 import { agentReleasesApi, applyPolicy, decorateAgent, savedRevision, touchAgent } from "./agent-releases";
 import type {
   Action,
@@ -32,6 +33,7 @@ import type {
   McpCatalogue,
   McpCatalogueEntry,
   McpCatalogueInstall,
+  OperationPatch,
   OrgConnector,
   SkillCatalogue,
   SkillCatalogueEntry,
@@ -64,7 +66,8 @@ import type {
   NetworkActivity,
   ProjectNetwork,
   Membership,
-  TrackerIdentity,
+  LinkedAccount,
+  MemberProfile,
   Memory,
   ProjectPage,
   ReleasePage,
@@ -104,10 +107,10 @@ import type {
 import { readSandboxNetwork } from "@/lib/policy-network";
 import { journeyInProgress, journeyFinished, journeyOf } from "./journey";
 import { egressApi } from "./egress";
-import { activityApi } from "./activity";
+import { MOCK_INSTALLATIONS, activityApi } from "./activity";
 import { peopleOps, peopleOpsApi, peopleOpsFixtures } from "./joiners-leavers";
 import mcpCatalogueFile from "./mcp-catalogue.json";
-import { checkOutpostConnector, discoverAtOutpost, outpostsApi, whereItLivesNow } from "./outposts";
+import { changeOperationAtOutpost, checkOutpostConnector, discoverAtOutpost, outpostsApi, toolSchema, whereItLivesNow } from "./outposts";
 import { pluginsApi, serverConnectorOf } from "./plugins";
 import skillCatalogueFile from "./skill-catalogue.json";
 import { proceduresApi } from "./procedures";
@@ -1151,6 +1154,8 @@ type MockLine = {
   stage: string;
   /** The door a tool call came through (S57-06): a model line has none, nor a tool line booked before. */
   origin?: "model" | "script" | "job";
+  /** The assistant installation (its id) whose conversation turn spent it (ADR 0141 §1, S64-09). */
+  assistant?: string;
 };
 const FX_EUR = 0.92;
 export const mockLedger: MockLine[] = Array.from({ length: 45 }, (_, i) => i).flatMap((daysAgo) => [
@@ -1176,6 +1181,13 @@ export const mockLedger: MockLine[] = Array.from({ length: 45 }, (_, i) => i).fl
   ...(daysAgo % 6 === 0
     ? [{ daysAgo, usd: 0.6, kind: "model" as const, model: "claude-sonnet", agent: null, workflow: "delivery", item: "BILL-12", project: "checkout-web", stage: "triage" }]
     : []),
+  // The assistants' conversation turns (S64-09): in their people's personal spaces, no workflow, no work item.
+  ...(daysAgo % 2 === 0
+    ? [{ daysAgo, usd: 0.3, kind: "model" as const, model: "claude-haiku", agent: "concierge-agent", workflow: "—", item: "—", project: "—", stage: "—", assistant: "inst-concierge" }]
+    : []),
+  ...(daysAgo % 5 === 0
+    ? [{ daysAgo, usd: 0.7, kind: "model" as const, model: "claude-sonnet", agent: "analyst-agent", workflow: "—", item: "—", project: "—", stage: "—", assistant: "inst-analyst" }]
+    : []),
 ]);
 
 export function mockCostReport(path: string): CostReport {
@@ -1184,10 +1196,11 @@ export function mockCostReport(path: string): CostReport {
   const project = /^\/projects\/([^/]+)\/costs/.exec(path.split("?")[0] ?? "")?.[1]?.split(":").at(-1);
   const since = query.get("since");
   const kind = query.get("kind");
-  // The narrowing filters (ADR 0141 §1): one agent, one workflow, one work item, combinable.
+  // The narrowing filters (ADR 0141 §1): one agent, one workflow, one work item, one assistant, combinable.
   const agent = query.get("agent");
   const workflowName = query.get("workflow");
   const workItem = query.get("work_item");
+  const assistant = query.get("assistant");
   const day = (daysAgo: number) => new Date(now.getTime() - daysAgo * 86_400_000).toISOString().slice(0, 10);
   const key = (line: MockLine): string => {
     switch (group) {
@@ -1199,7 +1212,8 @@ export function mockCostReport(path: string): CostReport {
       case "kind": return line.kind;
       case "origin": return line.origin ?? "—";
       case "stage": return line.stage;
-      case "run": return `${line.item} · ${line.stage}`;
+      case "run": return line.item === "—" ? "—" : `${line.item} · ${line.stage}`;
+      case "assistant": return line.assistant ? (MOCK_INSTALLATIONS[line.assistant] ?? line.assistant) : "—";
       default: return day(line.daysAgo);
     }
   };
@@ -1207,6 +1221,7 @@ export function mockCostReport(path: string): CostReport {
   for (const line of mockLedger) {
     if ((since && day(line.daysAgo) < since) || (kind && line.kind !== kind) || (project && line.project !== project)) continue;
     if ((agent && line.agent !== agent) || (workflowName && line.workflow !== workflowName) || (workItem && line.item !== workItem)) continue;
+    if (assistant && line.assistant !== assistant) continue;
     const k = key(line);
     const row = rows.get(k) ?? { key: k, cost_usd: 0, cost_eur: 0, tokens_in: 0, tokens_out: 0, tokens_cached: 0, runs: 0 };
     row.cost_usd = Math.round((row.cost_usd + line.usd) * 1e6) / 1e6;
@@ -2718,7 +2733,7 @@ orgConnectors.push(
     operations: [
       { name: "search_issues", access: "read", policy: "allowed", groups: [], description: "the issues that match" },
       { name: "get_issue", access: "read", policy: "allowed", groups: [] },
-      { name: "create_issue", access: "write", policy: "forbidden", groups: [], description: "opens an issue" },
+      { name: "create_issue", access: "write", policy: "forbidden", groups: [], description: "opens an issue", input_schema: toolSchema("create_issue") },
     ],
   },
   {
@@ -2951,8 +2966,121 @@ const filedOnTheMock: WorkItemDto[] = [];
 
 /** Fixtures router: reproduces the real API's paths. */
 /** The organisation's ceiling, kept for the time of the page: the admin card writes it, the project's network reads it back (ADR 0070). */
-/** The GitHub links the mock holds, by member id (S47-15). */
-const mockTrackerIdentities = new Map<string, TrackerIdentity>();
+/** The demo's photo: a drawn circle, since the demo stores no upload (ADR 0162). */
+const MOCK_AVATAR =
+  "data:image/svg+xml;utf8," +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" fill="#5b7cfa"/><circle cx="32" cy="26" r="12" fill="#fff"/><rect x="14" y="42" width="36" height="22" rx="11" fill="#fff"/></svg>',
+  );
+
+/** One member's profile as the API composes it (ADR 0162): the whole of it, the demo's person being an administrator. */
+function mockMemberProfile(org: string, userId: string): MemberProfile {
+  const rows = memberships.filter((m) => m.user_id === userId);
+  if (rows.length === 0) throw new ApiError(404, { title: "Not Found", detail: `Member ${userId} not found` });
+  const email = rows[0]!.email ?? "";
+  const local = email.split("@")[0] ?? email;
+  const self = userId === me.id;
+  return {
+    user_id: userId,
+    org,
+    view: "full",
+    status: "active",
+    display_name: self ? me.display_name : local.charAt(0).toUpperCase() + local.slice(1),
+    given_name: self ? "Augustin" : null,
+    family_name: self ? "Varga" : null,
+    job_title: self ? "Head of platform" : null,
+    department: self ? "Engineering" : null,
+    email,
+    avatar_url: self ? (me.avatar_url ?? null) : null,
+    org_role: rows.find((m) => !m.project_slug)?.role ?? null,
+    project_roles: rows
+      .filter((m) => m.project_slug)
+      .map((m) => ({
+        project_slug: m.project_slug!,
+        project_name: projects.items.find((p) => p.slug === m.project_slug)?.name ?? m.project_slug!,
+        role: m.role,
+      })),
+    groups: [
+      { slug: "platform-team", name: "Platform team", source: "internal" },
+      { slug: "release-captains", name: "release-captains", source: "identity_provider" },
+    ],
+    origin: self ? "identity_provider" : "manual",
+    last_login_at: iso(90),
+    sessions: { open: self ? 2 : 1, last_activity_at: iso(4) },
+    work: {
+      pending_requests: [
+        {
+          id: "hr-1",
+          work_item_id: "w2",
+          work_item_key: "acme/billing-api#124",
+          work_item_title: "Export invoices as PDF",
+          project_slug: "billing-api",
+          kind: "approval",
+          requested_at: iso(55),
+          due_at: null,
+          via: "group",
+          group: "release-captains",
+        },
+      ],
+      decisions: [
+        {
+          request_id: "hr-0",
+          work_item_id: "w3",
+          work_item_key: "acme/billing-api#125",
+          work_item_title: "Fix the rounding of discounts",
+          project_slug: "billing-api",
+          kind: "approval",
+          approved: true,
+          decided_at: iso(60 * 26),
+        },
+      ],
+      runs: [
+        {
+          id: "r3",
+          work_item_id: "w1",
+          work_item_key: "acme/billing-api#123",
+          project_slug: "billing-api",
+          stage_role: "implement",
+          status: "running",
+          started_at: iso(70),
+          cost_usd: 2.74,
+        },
+      ],
+      spend_month_usd: 12.4,
+    },
+    administration: {
+      api_tokens: 2,
+      audit: [
+        { id: "a-1", actor_id: me.id, actor_kind: "user", action: "member.add", target_type: "user", target_id: userId, payload: {}, ts: iso(60 * 24 * 12) },
+      ],
+    },
+  };
+}
+
+/** The forge accounts the mock holds (ADR 0161): one verified by its member, the others declared. */
+const mockLinkedAccounts: LinkedAccount[] = [
+  {
+    id: "la-1",
+    org: "acme",
+    user_id: "u1",
+    provider: "github",
+    base_url: "https://github.com",
+    external_id: "583231",
+    login: "octocat",
+    avatar_url: null,
+    profile_url: "https://github.com/octocat",
+    verified: true,
+    verified_at: "2026-11-02T09:00:00Z",
+    connector: "github",
+    created_by: "augustin@acme.dev",
+    created_at: "2026-11-02T09:00:00Z",
+  },
+];
+/** The forge instances the mock organisation configured. */
+const mockForgeInstances = [
+  { org: "acme", instance: "github", provider: "github", base_url: "https://github.com" },
+  { org: "acme", instance: "forge", provider: "forgejo", base_url: "https://forge.acme.example" },
+] as const;
 
 let mockCeiling: { ceiling: Record<string, unknown> | null; updated_by?: string; updated_at?: string } = {
   ceiling: { budgets: { ticket_usd: { M: 20 } }, network: { allow_domains: null, deny_domains: [], per_host_per_minute: 60 } },
@@ -3313,35 +3441,66 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       return structuredClone(target) as T;
     }
   }
-  const identityRoute = /^\/orgs\/[^/]+\/members\/([^/]+)\/tracker-identities(?:\/github)?$/.exec(bare);
-  if (identityRoute) {
-    const userId = decodeURIComponent(identityRoute[1] ?? "");
-    if (method === "PUT") {
-      const put = body as { external_id: string; login: string };
-      const taken = [...mockTrackerIdentities.values()].find((i) => i.external_id === put.external_id && i.user_id !== userId);
-      if (taken) {
-        throw new ApiError(409, {
-          title: "Conflict",
-          detail: `GitHub user ${put.external_id} is already linked to another member`,
-        });
+  const profileRoute = /^\/orgs\/([^/]+)\/members\/([^/]+)\/profile$/.exec(bare);
+  if (method === "GET" && profileRoute) {
+    return mockMemberProfile(decodeURIComponent(profileRoute[1] ?? ""), decodeURIComponent(profileRoute[2] ?? "")) as T;
+  }
+  if (bare === "/me/avatar") {
+    // The demo stores no file: a drawn photo stands in for the one uploaded (a `data:` image, allowed by the CSP).
+    me.avatar_url = method === "PUT" ? MOCK_AVATAR : null;
+    return (method === "PUT" ? { avatar_url: MOCK_AVATAR } : undefined) as T;
+  }
+  const memberLinks = /^\/orgs\/([^/]+)\/members\/([^/]+)\/linked-accounts(?:\/([^/]+))?$/.exec(bare);
+  if (memberLinks) {
+    const org = decodeURIComponent(memberLinks[1] ?? "");
+    const userId = decodeURIComponent(memberLinks[2] ?? "");
+    if (method === "POST") {
+      const declared = body as { provider: LinkedAccount["provider"]; base_url?: string | null; external_id: string; login: string };
+      const baseUrl = declared.base_url || (declared.provider === "gitlab" ? "https://gitlab.com" : "https://github.com");
+      const sameInstance = (a: LinkedAccount) => a.org === org && a.provider === declared.provider && a.base_url === baseUrl;
+      if (mockLinkedAccounts.some((a) => sameInstance(a) && a.external_id === declared.external_id && a.user_id !== userId)) {
+        throw new ApiError(409, { title: "Conflict", detail: `this ${declared.provider} user id is already linked to another member` });
       }
-      const saved: TrackerIdentity = {
-        tracker: "github",
-        external_id: put.external_id,
-        login: put.login,
+      const kept = mockLinkedAccounts.findIndex((a) => sameInstance(a) && a.user_id === userId);
+      const saved: LinkedAccount = {
+        id: `la-${Date.now()}`,
+        org,
         user_id: userId,
+        provider: declared.provider,
+        base_url: baseUrl,
+        external_id: declared.external_id,
+        login: declared.login,
+        avatar_url: null,
+        profile_url: null,
+        verified: false,
+        verified_at: null,
+        connector: null,
         created_by: me.email,
         created_at: new Date().toISOString(),
       };
-      mockTrackerIdentities.set(userId, saved);
+      if (kept >= 0) mockLinkedAccounts.splice(kept, 1, saved);
+      else mockLinkedAccounts.push(saved);
       return structuredClone(saved) as T;
     }
     if (method === "DELETE") {
-      mockTrackerIdentities.delete(userId);
+      const at = mockLinkedAccounts.findIndex((a) => a.id === decodeURIComponent(memberLinks[3] ?? ""));
+      if (at >= 0) mockLinkedAccounts.splice(at, 1);
       return undefined as T;
     }
-    const linked = mockTrackerIdentities.get(userId);
-    return structuredClone(linked ? [linked] : []) as T;
+    return structuredClone(mockLinkedAccounts.filter((a) => a.org === org && a.user_id === userId)) as T;
+  }
+  if (method === "GET" && bare === "/me/linked-accounts") {
+    return structuredClone({ items: mockLinkedAccounts.filter((a) => a.user_id === "u1"), instances: [...mockForgeInstances] }) as T;
+  }
+  const myLink = /^\/me\/linked-accounts\/([^/]+)$/.exec(bare);
+  if (method === "DELETE" && myLink) {
+    const at = mockLinkedAccounts.findIndex((a) => a.id === decodeURIComponent(myLink[1] ?? "") && a.user_id === "u1");
+    if (at >= 0) mockLinkedAccounts.splice(at, 1);
+    return undefined as T;
+  }
+  if (method === "POST" && /^\/me\/linked-accounts\/[^/]+\/start$/.test(bare)) {
+    // The demo has no forge to sign in to: the browser comes straight back as the callback would.
+    return { authorization_url: "/account?link_error=forge_unreachable#linked-accounts" } as T;
   }
   if (method === "PATCH" && /^\/orgs\/[^/]+$/.test(bare)) {
     const update = body as { name?: string; slug?: string; currency?: string };
@@ -3382,6 +3541,8 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   if (typeof window !== "undefined") (window as unknown as { __mockAgents?: Agent[] }).__mockAgents = agents;
   const channels = agentReleasesApi(method, path.split("?")[0] ?? path, path.split("?")[1] ?? "", body, agents, me.email);
   if (channels !== undefined) return structuredClone(channels) as T;
+  const social = agentSocialApi(method, path.split("?")[0] ?? path, body, agents, me.email);
+  if (social !== undefined) return structuredClone(social) as T;
   const network = egressApi(method, path.split("?")[0] ?? path, body);
   if (network !== undefined) return network as T;
   // What is running, and stopping it (S64-06): the list, a run's cancel, an agent's stop.
@@ -3857,6 +4018,26 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   if (method === "POST" && /^\/orgs\/[^/]+\/skills\/import-git\/preview$/.test(chemin ?? "")) return skillGitPreview as T;
   if (method === "POST" && /^\/orgs\/[^/]+\/skills\/import-git$/.test(chemin ?? "")) return [skills[0]] as T;
   if (method === "POST" && /^\/orgs\/[^/]+\/skills\/[^/]+\/versions\/\d+\/approve$/.test(chemin ?? "")) return skillVersion as T;
+  const settlement = /^\/projects\/[^/]+\/actions\/([^/]+)\/settlement$/.exec(chemin ?? "");
+  if (method === "POST" && settlement) {
+    // As the API: an action in doubt resumes (`approved`), its effect in doubt recorded with what was found.
+    const reqBody = JSON.parse(String(init.body ?? "{}")) as {
+      outcome: "made" | "not_made";
+      note: string;
+      result?: Record<string, unknown> | null;
+    };
+    const action = actions.find((a) => a.id === settlement[1]) ?? actions[0]!;
+    const record = {
+      position: 0,
+      outcome: reqBody.outcome,
+      by: me.email,
+      at: new Date().toISOString(),
+      note: reqBody.note,
+      result: reqBody.outcome === "made" ? (reqBody.result ?? {}) : null,
+      in_doubt: [],
+    };
+    return { ...action, status: "approved", error: null, settlement: record } as T;
+  }
   const decision = /^\/projects\/[^/]+\/actions\/([^/]+)\/decision$/.exec(chemin ?? "");
   if (method === "POST" && decision) {
     const reqBody = JSON.parse(String(init.body ?? "{}")) as { decision: string; reason?: string };
@@ -3867,6 +4048,22 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       decisions: [{ by: me.email, decision: reqBody.decision, reason: reqBody.reason ?? null, at: new Date().toISOString() }],
       temporal_wf_id: `action-${action.id}`,
     } as T;
+  }
+  // An operation's rule (`updateConnectorOperation`): applied as the API applies it, and at an outpost the
+  // two statements of a write judged first, as the API judges them (ADR 0149 §6).
+  const operationRule = /^\/orgs\/[^/]+\/connectors\/([^/]+)\/operations\/([^/]+)$/.exec(chemin ?? "");
+  if (method === "PATCH" && operationRule) {
+    const connector = orgConnectors.find((c) => c.name === decodeURIComponent(operationRule[1]!));
+    const name = decodeURIComponent(operationRule[2]!);
+    const operation = connector?.operations?.find((o) => o.name === name);
+    if (!connector || !operation) throw new ApiError(404, { title: "Not found", detail: `no operation \`${name}\`` });
+    const patch = JSON.parse(String(init.body ?? "{}")) as OperationPatch;
+    if (connector.type === "mcp-outpost") changeOperationAtOutpost(connector, name, patch);
+    if (patch.policy) operation.policy = patch.policy;
+    if ("groups" in patch) operation.groups = patch.groups ?? [];
+    if ("approver_group" in patch) operation.approver_group = patch.approver_group ?? null;
+    if ("result_max_bytes" in patch) operation.result_max_bytes = patch.result_max_bytes ?? null;
+    return structuredClone(operation) as T;
   }
   // Connector secrets (ADR 0058): the mock keeps what the console may know — set, version, who — and,
   // like the API, never a value.
@@ -4159,7 +4356,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   if (/^\/orgs\/[^/]+\/agents$/.test(route ?? "")) {
     // Every tag given (AND), as the API filters (S40-10).
     const wanted = new URLSearchParams(path.split("?")[1] ?? "").getAll("tag");
-    return structuredClone(agents.filter((a) => wanted.every((t) => (a.tags ?? []).includes(t)))) as T;
+    return structuredClone(agents.filter((a) => wanted.every((t) => (a.tags ?? []).includes(t))).map(decorateAgent)) as T;
   }
   const projectOrg = /^\/projects\/([^/]+)\/org-connectors$/.exec(route ?? "");
   if (projectOrg) {

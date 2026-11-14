@@ -7,6 +7,7 @@ import { MOCK_DOOR_KEYS, MOCK_DOOR_ORIGIN } from "@/mocks/outposts";
 import type {
   AgentAccess,
   ConnectorDiscovery,
+  ConnectorOperation,
   ConnectorType,
   OrgConnector,
   Outpost,
@@ -150,5 +151,23 @@ describe("the demo's connectors at an outpost (ADR 0149)", () => {
     expect(where["erp-branch__stock_level"]).toEqual({ name: "branch-office", endpoint: "erp", status: "active", online: false });
     expect(where["tracker-onsite__create_issue"], "a forbidden operation is not reached").toBeUndefined();
     expect(access.tools.find((t) => t.name === "track_order")).not.toHaveProperty("outpost");
+  });
+
+  it("judges the two statements of a write's rule as the API does (S65-17c, ADR 0149 §6)", async () => {
+    const rule = (operation: string, body: unknown) =>
+      mockApi<ConnectorOperation>(`/orgs/acme/connectors/warehouse-onsite/operations/${operation}`, { method: "PATCH", body: JSON.stringify(body) });
+    const neither = await refusal(rule("reserve_stock", { policy: "approval" }));
+    expect([neither.status, neither.problem.errors?.map((e) => (e as { loc: string[] }).loc.at(-1))]).toEqual([422, ["platform_arguments", "in_doubt_accepted"]]);
+    const keyless = await refusal(rule("reserve_stock", { policy: "approval", platform_arguments: ["action_key"] }));
+    expect([keyless.status, keyless.problem.errors]).toEqual([422, [{ loc: ["body", "platform_arguments"], msg: expect.stringContaining("cannot hand it one") }]]);
+    const read = await refusal(rule("stock_level", { in_doubt_accepted: true }));
+    expect([read.status, read.problem.errors]).toEqual([422, [{ loc: ["body", "in_doubt_accepted"], msg: expect.stringContaining("nothing to accept") }]]);
+    const opened = await rule("reserve_stock", { policy: "approval", in_doubt_accepted: true });
+    expect([opened.policy, opened.in_doubt_accepted]).toEqual(["approval", true]);
+    const withdrawn = await refusal(rule("reserve_stock", { in_doubt_accepted: null }));
+    expect(withdrawn.status, "withdrawing the last statement of an open write").toBe(422);
+    const closed = await rule("reserve_stock", { policy: "forbidden" });
+    expect((await rule("reserve_stock", { in_doubt_accepted: null })).in_doubt_accepted).toBe(false);
+    expect(closed.policy).toBe("forbidden");
   });
 });
