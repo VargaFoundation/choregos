@@ -4849,6 +4849,14 @@ stories:
     size: S
     depends_on: [S65-01]
     notes: "memory.skipped, written before the run starts, is numbered below 0 (below any line already there, a batch in its order, each memory once) instead of from 1, where it took the runner's first numbers and the door dropped the runner's first lines; gate.outcome, written once the run's process has finished, follows the highest line and never takes 0; a run prepared with one skipped memory whose runner posts lines 1 to 3 shows four lines through the console's route; activities only, nothing under workflows/, no contract change (RunEvent.seq is an integer with no minimum; RunEventIn keeps minimum 0)."
+  - id: S65-27
+    title: "fix(contracts): the generated TypeScript contract has no root entry and is compiled in CI (finding #1607)"
+    stream: S65
+    sprint: 8
+    priority: 2
+    size: S
+    depends_on: [S65-10]
+    notes: "tools/gen_contracts.py stops writing packages/contracts/ts/index.ts (nine names exported by both modules, TS2308; nothing imported it) and removes a leftover one, --check refusing it; the package exports ./schemas and ./api only; the console's typecheck compiles packages/contracts/ts as its own project, so the web job turns red on a name generated twice; tests/ci/test_contracts_ts_compiled.py."
   # ───────────── S67 — the terminal is a surface of the platform (ADR 0154) ─────────────
   - id: S67-00
     title: "docs(adr): ADR 0154, the terminal is a surface of the platform; the S67 plan"

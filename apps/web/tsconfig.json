@@ -32,9 +32,6 @@
       "@/*": [
         "./src/*"
       ],
-      "@choregos/contracts": [
-        "../../packages/contracts/ts/index.ts"
-      ],
       "@choregos/contracts/*": [
         "../../packages/contracts/ts/*"
       ]
