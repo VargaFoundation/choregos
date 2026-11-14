@@ -532,7 +532,7 @@ async def github_webhook(
     body = await request.body()
     settings = get_settings()
     # The App's own secret: the deployment's, or the one GitHub generated for an App registered from a
-    # manifest (ADR 0164).
+    # manifest (ADR 0167).
     await github_app_credentials.refresh(session)
     secret = github_app_credentials.webhook_secret(settings)
     if not secret:

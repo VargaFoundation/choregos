@@ -1,4 +1,4 @@
-"""The GitHub App Manifest flow's conversion, and where the adapters read the App from (S70-21, ADR 0164)."""
+"""The GitHub App Manifest flow's conversion, and where the adapters read the App from (S70-21, ADR 0167)."""
 
 from __future__ import annotations
 

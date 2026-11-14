@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""The GitHub App registered from a manifest: `github_app_registrations` (S70-21, ADR 0164)
+"""The GitHub App registered from a manifest: `github_app_registrations` (S70-21, ADR 0167)
 
 A platform administrator creates the deployment's GitHub App from the console (the GitHub App Manifest
 flow); GitHub answers its credentials once. What GitHub publishes about the App is kept in clear, its

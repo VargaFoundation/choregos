@@ -2,7 +2,7 @@
 """The GitHub App Manifest flow's last step, and where the deployment's App credentials come from.
 
 A platform administrator registers the App on github.com from a manifest the platform builds (ADR
-0164); GitHub sends the browser back with a one-hour `code`, and `POST /app-manifests/{code}/conversions`
+0167); GitHub sends the browser back with a one-hour `code`, and `POST /app-manifests/{code}/conversions`
 (no authentication: the code is the proof) answers the App with its credentials: `id`, `slug`,
 `client_id`, `client_secret`, `webhook_secret` and `pem`. `FakeManifestConversion`
 (`fakes/github_app.py`) has the same method.
@@ -42,7 +42,7 @@ def set_app_credentials_provider(provider: AppCredentialsProvider | None) -> Non
 
 def app_credentials() -> tuple[str, str]:
     """`(app_id, private_key)`: the deployment's variables when they name an App, else the provider's
-    stored App, else two empty strings. The deployment's settings always win (ADR 0164)."""
+    stored App, else two empty strings. The deployment's settings always win (ADR 0167)."""
     app_id = os.environ.get("CHOREGOS_GITHUB_APP_ID", "")
     private_key = os.environ.get("CHOREGOS_GITHUB_APP_PRIVATE_KEY", "")
     if app_id or private_key:

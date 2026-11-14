@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Creating the deployment's GitHub App from a manifest (S70-21, ADR 0164).
+"""Creating the deployment's GitHub App from a manifest (S70-21, ADR 0167).
 
 GitHub's App Manifest flow, three steps:
 

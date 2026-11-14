@@ -2219,7 +2219,7 @@ paths:
       description: |
         `source` is `deployment` when the deployment's settings name the App (`CHOREGOS_GITHUB_APP_ID` and
         its key: they always win), `manifest` when a platform administrator created it from the console
-        (S70-21, ADR 0164), `none` otherwise. Never a secret: the private key, webhook secret and client
+        (S70-21, ADR 0167), `none` otherwise. Never a secret: the private key, webhook secret and client
         secret of a stored App are sealed (ADR 0058). Also what a new App would be asked for (the
         permissions and events the adapters use) and the URLs derived from this instance, and
         `blocked_by`, why the console cannot create one now. The platform administrator only.
@@ -2242,7 +2242,7 @@ paths:
       tags: [admin]
       operationId: startGitHubAppManifest
       description: |
-        Step 1 of GitHub's App Manifest flow (ADR 0164): the manifest (name, this instance's URLs, the
+        Step 1 of GitHub's App Manifest flow (ADR 0167): the manifest (name, this instance's URLs, the
         permissions and events the platform uses, `public` as chosen) and GitHub's registration page,
         with a signed `state` valid one hour. The console POSTs a form to `action_url` whose one field,
         `manifest`, is the JSON of `manifest`. 409 when the deployment's settings define the App, an App
@@ -2261,7 +2261,7 @@ paths:
       tags: [admin]
       operationId: githubAppManifestCallback
       description: |
-        The manifest's `redirect_url`, steps 2 and 3 (ADR 0164): GitHub sends the browser back with a
+        The manifest's `redirect_url`, steps 2 and 3 (ADR 0167): GitHub sends the browser back with a
         `code` (one hour, single use) and our `state`. The state must be the one this instance signed for
         the person of the console session, a platform administrator; the code is exchanged with
         `POST /app-manifests/{code}/conversions`, the credentials sealed and stored, the creation audited
@@ -6948,7 +6948,7 @@ components:
           items: { $ref: "#/components/schemas/GitHubInstallation" }
     GitHubAppRegistrationStatus:
       type: object
-      description: The App this instance acts as (S70-21, ADR 0164). No secret.
+      description: The App this instance acts as (S70-21, ADR 0167). No secret.
       required: [source, usable, suggested_name, permissions, events, webhook_url, callback_url, redirect_url]
       properties:
         source: { type: string, enum: [none, deployment, manifest], description: "deployment: the deployment's settings name it (they win); manifest: created from the console; none: no App" }

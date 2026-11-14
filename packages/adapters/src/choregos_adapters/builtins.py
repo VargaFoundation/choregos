@@ -67,7 +67,7 @@ def _github_client(config: dict[str, Any]) -> Any:
 
     The deployment's App is its settings (`CHOREGOS_GITHUB_APP_ID` / `_PRIVATE_KEY`), else the App a
     platform administrator registered from a manifest, which the API's process provider opens from the
-    database (ADR 0164): the private key never travels in a connector's configuration."""
+    database (ADR 0167): the private key never travels in a connector's configuration."""
     import os
 
     from .github import GitHubAppAuth, GitHubClient, app_credentials

@@ -178,7 +178,7 @@ rename its variable or widen the pattern.
 
 One App serves the deployment: the tracker, the pull requests, the checks and the run's git token go
 through it, and whoever registers it on GitHub owns it. It comes from one of two places, and the first
-wins ([ADR 0164](adr/0164-the-github-app-is-created-from-a-manifest.md)):
+wins ([ADR 0167](adr/0167-the-github-app-is-created-from-a-manifest.md)):
 
 1. **The deployment's settings**: `github-app-id` and `github-app-private-key` (with
    `github-webhook-secret`, and `github-app-client-id` / `github-app-client-secret` for claims on an
@@ -1772,7 +1772,7 @@ WHERE w.is_active;
 
 No row: nothing to do. The rule needs no migration.
 
-**The GitHub App can be created from the console** (S70-21, [ADR 0164](adr/0164-the-github-app-is-created-from-a-manifest.md)). A platform administrator registers it on GitHub from a manifest; its credentials are sealed in the new table `github_app_registrations` (created empty by the migration). Nothing to do for a deployment whose settings name the App: they still win. To use it, keep `secrets-keks` configured ([the GitHub App](#the-github-app)).
+**The GitHub App can be created from the console** (S70-21, [ADR 0167](adr/0167-the-github-app-is-created-from-a-manifest.md)). A platform administrator registers it on GitHub from a manifest; its credentials are sealed in the new table `github_app_registrations` (created empty by the migration). Nothing to do for a deployment whose settings name the App: they still win. To use it, keep `secrets-keks` configured ([the GitHub App](#the-github-app)).
 
 ## Upgrading to 0.27
 
