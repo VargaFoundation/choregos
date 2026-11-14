@@ -10,8 +10,13 @@ PREFIX = "/api/v1"
 
 # Contract-first (ADR 0001): operations the contract declares before the API serves them. Each entry
 # names the story that implements it; an entry the API does serve must be removed from here.
-CONTRACT_ONLY: dict[str, str] = {}
-CONTRACT_ONLY_PATHS: set[str] = set()
+CONTRACT_ONLY: dict[str, str] = {
+    "listOutpostEnrolments": "S65-24",
+    "cancelOutpostEnrolment": "S65-24",
+}
+CONTRACT_ONLY_PATHS: set[str] = {
+    "/orgs/{org}/outposts/{slug}/enrolments/{enrolment_id}",
+}
 
 
 def _app_paths(spec: dict[str, Any]) -> set[str]:

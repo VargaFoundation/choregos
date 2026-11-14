@@ -74,6 +74,9 @@ class OutpostDto(Dto):
     endpoints: list[str]
     #: The `mcp-outpost` connectors that route to it; it is not deleted while one remains.
     connectors: list[str]
+    #: The door's origin, as the outpost's policy file names it (`control_plane`): the deployment's, the
+    #: same for every outpost; null when it declares none.
+    control_plane: str | None
     #: The door's public keys an operator pins in the outpost's policy file (ADR 0148 §13): the one
     #: that signs now first. Empty while the deployment's door has no signing key.
     door_keys: list[str]
@@ -83,6 +86,11 @@ class OutpostDto(Dto):
 
 class OutpostList(Dto):
     items: list[OutpostDto]
+    #: The deployment keeps outposts switched on (`CHOREGOS_OUTPOSTS`): off, a creation and an
+    #: enrolment token are refused (409 `outposts_disabled`).
+    enabled: bool
+    #: The door has a signing key: without one, an enrolment token is refused (409 `door_key_missing`).
+    door_signing_key: bool
 
 
 class OutpostEnrolmentCreate(Dto):
@@ -113,7 +121,13 @@ class OutpostInstanceDto(Dto):
     capabilities: list[OutpostCapability]
     endpoints: list[str]
     facts: dict[str, str]
+    #: The enrolment token it enrolled with, the last one when a pending key enrolled again.
+    enrolment_id: str | None
+    #: Who issued that token.
+    enrolled_by: str | None
     enrolled_at: datetime
+    #: How recent the sign-in of the person who approves it must be, in minutes (the deployment's).
+    approval_step_up_minutes: int
     approved_by: str | None
     approved_at: datetime | None
     revoked_by: str | None

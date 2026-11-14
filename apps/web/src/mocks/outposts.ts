@@ -106,7 +106,10 @@ function instance(outpost: Stored, seed: string, values: Partial<OutpostInstance
     capabilities: ["tools"],
     endpoints: [],
     facts: {},
+    enrolment_id: null,
+    enrolled_by: null,
     enrolled_at: iso(5),
+    approval_step_up_minutes: 10,
     approved_by: null,
     approved_at: null,
     revoked_by: null,
@@ -297,6 +300,7 @@ function view(outpost: Stored, connectors: OrgConnector[]): Outpost {
     },
     endpoints: [...new Set(own.filter((i) => i.status === "active").flatMap((i) => i.endpoints))].sort(),
     connectors: connectorsOf(outpost, connectors),
+    control_plane: MOCK_DOOR_ORIGIN,
     door_keys: MOCK_DOOR_KEYS,
     created_by: outpost.created_by,
     created_at: outpost.created_at,
@@ -510,7 +514,11 @@ export function outpostsApi(method: string, bare: string, query: string, body: u
       calls[made.slug] = [];
       return view(made, connectors);
     }
-    const all: OutpostList = { items: [...outposts].sort((a, b) => a.slug.localeCompare(b.slug)).map((o) => view(o, connectors)) };
+    const all: OutpostList = {
+      items: [...outposts].sort((a, b) => a.slug.localeCompare(b.slug)).map((o) => view(o, connectors)),
+      enabled: true,
+      door_signing_key: true,
+    };
     return all;
   }
   const outpost = stored(decodeURIComponent(slug));

@@ -357,6 +357,7 @@ async def view(session: AsyncSession, outpost: Outpost) -> OutpostDto:
         instances=OutpostInstanceCounts(**counted),
         endpoints=sorted({alias for i in active for alias in (i.endpoints or [])}),
         connectors=await connectors_of(session, outpost),
+        control_plane=get_settings().outposts_door_origin,
         door_keys=get_settings().outposts_door_keys,
         created_by=outpost.created_by,
         created_at=_aware(outpost.created_at),
@@ -370,7 +371,29 @@ async def list_outposts(session: AsyncSession, organisation: Organization) -> li
     return [await view(session, outpost) for outpost in list(outposts)]
 
 
-def _instance_view(instance: OutpostInstance, in_flight: int, now: datetime) -> OutpostInstanceDto:
+@dataclass(frozen=True, slots=True)
+class _EnrolledWith:
+    """The enrolment token an instance enrolled with, and who issued it."""
+
+    id: str
+    created_by: str | None
+
+
+async def _enrolled_with(session: AsyncSession, outpost: Outpost) -> dict[str, _EnrolledWith]:
+    """The token each instance of the outpost enrolled with: the last one it used, when a pending key
+    enrolled again under a new token. The caller names the outpost."""
+    rows = await session.execute(
+        select(OutpostEnrolment.instance_id, OutpostEnrolment.id, OutpostEnrolment.created_by)
+        .where(OutpostEnrolment.outpost_id == outpost.id, OutpostEnrolment.instance_id.is_not(None))
+        .order_by(OutpostEnrolment.used_at, OutpostEnrolment.id)
+    )
+    # In the order they were used: the last one an instance used is the one kept.
+    return {str(instance_id): _EnrolledWith(str(id_), created_by) for instance_id, id_, created_by in rows}
+
+
+def _instance_view(
+    instance: OutpostInstance, in_flight: int, now: datetime, enrolled_with: _EnrolledWith | None
+) -> OutpostInstanceDto:
     return OutpostInstanceDto(
         id=instance.id,
         status=OutpostInstanceStatus(instance.status),
@@ -380,7 +403,10 @@ def _instance_view(instance: OutpostInstance, in_flight: int, now: datetime) -> 
         capabilities=[OutpostCapability(name) for name in instance.capabilities or []],
         endpoints=list(instance.endpoints or []),
         facts=dict(instance.facts or {}),
+        enrolment_id=enrolled_with.id if enrolled_with else None,
+        enrolled_by=enrolled_with.created_by if enrolled_with else None,
         enrolled_at=_aware(instance.enrolled_at),
+        approval_step_up_minutes=APPROVAL_STEP_UP_MINUTES,
         approved_by=instance.approved_by,
         approved_at=_when(instance.approved_at),
         revoked_by=instance.revoked_by,
@@ -410,8 +436,9 @@ async def list_instances(session: AsyncSession, outpost: Outpost) -> list[Outpos
     instances = await _instances(session, outpost)
     async with in_outpost_scope(session, outpost.id):
         held = await _in_flight(session, outpost)
+        enrolled_with = await _enrolled_with(session, outpost)
     now = utcnow()
-    return [_instance_view(i, held.get(i.id, 0), now) for i in instances]
+    return [_instance_view(i, held.get(i.id, 0), now, enrolled_with.get(i.id)) for i in instances]
 
 
 async def _instance(session: AsyncSession, outpost: Outpost, instance_id: str) -> OutpostInstance:
@@ -432,7 +459,8 @@ async def _one_instance_view(
     session: AsyncSession, outpost: Outpost, instance: OutpostInstance
 ) -> OutpostInstanceDto:
     held = await _in_flight(session, outpost)
-    return _instance_view(instance, held.get(instance.id, 0), utcnow())
+    enrolled_with = await _enrolled_with(session, outpost)
+    return _instance_view(instance, held.get(instance.id, 0), utcnow(), enrolled_with.get(instance.id))
 
 
 # ───────────────────────── what a person does to an outpost ─────────────────────────
