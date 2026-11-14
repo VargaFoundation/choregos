@@ -60,7 +60,10 @@ const CHUNKS = join(process.cwd(), ".next", "static", "chunks");
 // (about 25 kB), on top of S60-07b's 2456 kB; no new dependency.
 // 2026-11-12 (agent forks, watch, stars; ADR 0152): no change, 2500 kB. The social bar, the Forks tab and the inbox card
 // add about 20 kB to main's 2451 kB (2483 kB measured on the rebased branch).
-const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 2500);
+// 2026-11-14 (S66-41): 2500 -> 2525 kB. The linked accounts (the member's card on My account, the members list with
+// verified and declared links, the declare form and the three forge types' icons) measure 2503 kB on main at 2483 kB,
+// with no new dependency.
+const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 2525);
 const CHUNK_MAX_KB = Number(process.env.BUNDLE_CHUNK_MAX_KB ?? 600);
 
 function* files(dir) {

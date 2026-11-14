@@ -81,6 +81,12 @@ NOT_CALLED_BY_A_CLIENT: dict[str, str] = {
     "/auth/callback": "the identity provider's redirect after sign-in: the browser lands on it",
     "/me/connected-accounts/callback": "the source's redirect after a person consented: the browser lands "
     "on it, and the API sends it on to the console's /me/connected-accounts page (S63-18)",
+    "/auth/linked-accounts/callback": "the forge's redirect after a member signed in to link their account "
+    "(ADR 0161): the browser lands on it, and the API sends it on to the console's My account page",
+    "/orgs/{org}/members/{user_id}/tracker-identities": "deprecated by ADR 0161 for the callers written "
+    "against S47-14; the console reads the member's linked accounts",
+    "/orgs/{org}/members/{user_id}/tracker-identities/{tracker}": "deprecated by ADR 0161 for the callers "
+    "written against S47-14; the console declares and removes linked accounts",
     "/github/setup": "the GitHub App's Setup URL: GitHub redirects the browser there after an installation",
     "/remote-credentials/oauth/callback": "the provider's redirect after an administrator authorised a "
     "remote agent's credential",

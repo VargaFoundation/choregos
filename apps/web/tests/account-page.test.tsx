@@ -32,6 +32,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
         { id: "t2", name: "old-ci", scopes: ["*"], expires_at: "2026-01-01T00:00:00Z", last_used_at: null },
       ]),
       mySessions: vi.fn(),
+      myLinkedAccounts: vi.fn().mockResolvedValue({ items: [], instances: [] }),
       endSession: vi.fn().mockResolvedValue(undefined),
       endOtherSessions: vi.fn().mockResolvedValue({ ended: 1 }),
       policyCeiling: vi.fn().mockResolvedValue({}),
@@ -88,19 +89,20 @@ describe("my account, your roles", () => {
     expect(screen.getByRole("list", { name: "Your roles in acme" })).toBeTruthy();
   });
 
-  it("holds what is the person's: profile, sessions, access tokens, roles and preferences", async () => {
+  it("holds what is the person's: profile, sessions, access tokens, linked accounts, roles and preferences", async () => {
     vi.mocked(api.edition).mockResolvedValue({ edition: "community", features: [] } as never);
     vi.mocked(api.mySessions).mockResolvedValue([]);
     wrap();
     expect(screen.getByRole("heading", { level: 1, name: "My account" })).toBeTruthy();
     const titles = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
-    expect(titles).toEqual(["Profile", "Sessions", "Access tokens", "Roles", "Preferences"]);
+    expect(titles).toEqual(["Profile", "Sessions", "Access tokens", "Linked accounts", "Roles", "Preferences"]);
     // The side index leads to each of them.
     const index = screen.getByRole("navigation", { name: "Account sections" });
     expect(within(index).getAllByRole("link").map((a) => a.getAttribute("href"))).toEqual([
       "#profile",
       "#sessions",
       "#tokens",
+      "#linked-accounts",
       "#roles",
       "#preferences",
     ]);

@@ -4,7 +4,7 @@
 
 One procedure per connector type, knowledge source kind, MCP-door client and external agent kind ([ADR 0067](../adr/0067-a-procedure-per-connector-and-agent-type.md)). The console shows the same text beside the form where you add the thing, with this deployment's own URLs filled in. A deployment adds its own notes (`<id>.site.md`) or procedures through `CHOREGOS_PROCEDURES_EXTRA`; see [deployment](../deployment.md#site-notes-on-the-setup-procedures).
 
-64 procedures.
+67 procedures.
 
 ## Connectors
 
@@ -20,6 +20,9 @@ One procedure per connector type, knowledge source kind, MCP-door client and ext
 | [Connect SharePoint and OneDrive](connector.documents.sharepoint.md) | an organisation administrator | `documents/sharepoint` | 2026-11-09 |
 | [Connect a web site behind a login as a documents source](connector.documents.web.md) | an organisation administrator | `documents/web` | 2026-10-28 |
 | [Connect a pfSense firewall](connector.firewall.pfsense.md) | an organisation administrator | `firewall/pfsense` | 2026-10-16 |
+| [Let members link their Forgejo account](connector.forge_account.forgejo-oauth.md) | an organisation administrator | `forge_account/forgejo-oauth` | 2026-11-12 |
+| [Let members link their GitHub account](connector.forge_account.github-oauth.md) | an organisation administrator | `forge_account/github-oauth` | 2026-11-12 |
+| [Let members link their GitLab account](connector.forge_account.gitlab-oauth.md) | an organisation administrator | `forge_account/gitlab-oauth` | 2026-11-12 |
 | [Use the direct gateway (development only)](connector.gateway.direct.md) | the person who operates the platform | `gateway/direct` | 2026-10-16 |
 | [Connect a LiteLLM gateway](connector.gateway.litellm.md) | the person who operates the platform | `gateway/litellm` | 2026-10-16 |
 | [Connect an OpenAI-compatible gateway](connector.gateway.openai-compatible.md) | the person who operates the platform | `gateway/openai-compatible` | 2026-10-16 |

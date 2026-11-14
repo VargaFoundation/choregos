@@ -3385,16 +3385,13 @@ workflow: a decision stays in the console, after a fresh sign-in. Choregos repli
 link to the inbox and records a `tracker.command.redirected` audit entry (ADR 0102).
 
 `/choregos pause`, `resume` and `stop` are honoured in one case only: a GitHub comment, in a delivery
-verified by its HMAC (`CHOREGOS_GITHUB_WEBHOOK_SECRET` is set), by a GitHub account that an
-organisation administrator linked to a member (`PUT /orgs/{org}/members/{user_id}/tracker-identities/github`
-with the account's numeric user id). The command runs with that member's own rights (a developer or
+verified by its HMAC (`CHOREGOS_GITHUB_WEBHOOK_SECRET` is set), by a github.com account linked to a member
+of the project's organisation. The command runs with that member's own rights (a developer or
 above), is audited as `workitem.pause`, `workitem.resume` or `workitem.stop` on the channel `tracker`,
 and Choregos confirms on the ticket. A login is never matched, so a renamed account inherits nothing.
-Find a user id at `https://api.github.com/users/<login>` (the `id` field). Nothing proves that the member
-owns the account: the administrator asserts the link. Jira and GitLab comments, and any delivery that
-carries only the shared secret, are never honoured: a display name or a username is not a stable
-identity. Anyone else gets the console link, with a note that an administrator can link their account.
-A reply that cannot be posted never fails the webhook.
+Jira and GitLab comments, and any delivery that carries only the shared secret, are never honoured: a
+display name or a username is not a stable identity. Anyone else gets the console link, with a note on
+how to link their account. A reply that cannot be posted never fails the webhook.
 
 Moving a card on the tracker board (GitHub Projects, Jira) does not move the work item: the board
 follows Choregos, not the reverse (ADR 0102). Move a work item from the console.
@@ -3403,6 +3400,26 @@ follows Choregos, not the reverse (ADR 0102). Move a work item from the console.
 choregos items list billing-api
 choregos runs tail <run-id>        # live ACP log over SSE
 ```
+
+### Linked accounts
+
+A member links their own accounts on code forges (ADR 0161): **My account**, **Linked accounts**, **Link**
+next to a forge their organisation configured. The browser signs in at the forge (OAuth 2.0, authorization
+code with PKCE, a scope that only reads the user: `read:user` on GitHub and Forgejo, `read_user` on GitLab)
+and comes back with the account recorded as **Verified**: the forge's numeric user id, its login and its
+profile address. The platform keeps no token. An organisation administrator configures each forge as a
+connector of the **Member accounts** capability (`github-oauth`, `gitlab-oauth` for gitlab.com or a
+self-managed instance, `forgejo-oauth`): its address, the OAuth application's client id and secret (sealed),
+and its hosts in the egress allowlist; the setup procedures say what to register at each forge, with the
+callback address `<api_url>/api/v1/auth/linked-accounts/callback`.
+
+An administrator still declares a member's account by its numeric id on **Administration**, **Members**
+(`POST /orgs/{org}/members/{user_id}/linked-accounts`): it is shown as **Declared**, not verified, until the
+member links it themself. One forge account belongs to one member of an organisation, whichever way it was
+linked. Today a declared github.com link is honoured for the signed comments above like a verified one (it
+always was); requiring `verified` is a later switch. The routes of S47-14
+(`/orgs/{org}/members/{user_id}/tracker-identities/github`) still answer, deprecated: they read and write the
+member's github.com link.
 
 ### Work items on a schedule
 

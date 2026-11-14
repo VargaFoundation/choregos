@@ -2270,6 +2270,109 @@
   },
   {
     "capabilities": [
+      "forge_account"
+    ],
+    "config_schema": {
+      "properties": {
+        "base_url": {
+          "default": "https://github.com",
+          "type": "string"
+        },
+        "client_id": {
+          "description": "the OAuth application's client id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "client_id"
+      ],
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "GitHub sign-in (members link their account)",
+    "has_check_config": true,
+    "has_egress": true,
+    "has_factory": true,
+    "kind": "forge_account",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [
+      "client_secret"
+    ],
+    "type": "github-oauth"
+  },
+  {
+    "capabilities": [
+      "forge_account"
+    ],
+    "config_schema": {
+      "properties": {
+        "base_url": {
+          "default": "https://gitlab.com",
+          "type": "string"
+        },
+        "client_id": {
+          "description": "the OAuth application's client id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "client_id"
+      ],
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "GitLab sign-in (members link their account)",
+    "has_check_config": true,
+    "has_egress": true,
+    "has_factory": true,
+    "kind": "forge_account",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [
+      "client_secret"
+    ],
+    "type": "gitlab-oauth"
+  },
+  {
+    "capabilities": [
+      "forge_account"
+    ],
+    "config_schema": {
+      "properties": {
+        "base_url": {
+          "description": "the instance's address, https://forge.example",
+          "type": "string"
+        },
+        "client_id": {
+          "description": "the OAuth application's client id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "base_url",
+        "client_id"
+      ],
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "Forgejo sign-in (members link their account)",
+    "has_check_config": true,
+    "has_egress": true,
+    "has_factory": true,
+    "kind": "forge_account",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [
+      "client_secret"
+    ],
+    "type": "forgejo-oauth"
+  },
+  {
+    "capabilities": [
       "marketdata"
     ],
     "config_schema": {
@@ -3158,26 +3261,26 @@
     "type": "slack"
   },
   {
-    "kind": "notify",
-    "type": "teams",
-    "display": "Microsoft Teams (incoming webhook or Workflows URL)",
     "capabilities": [
       "notify"
     ],
     "config_schema": {
-      "type": "object",
-      "properties": {}
+      "properties": {},
+      "type": "object"
     },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "Microsoft Teams (incoming webhook or Workflows URL)",
+    "has_check_config": false,
+    "has_egress": true,
+    "has_factory": true,
+    "kind": "notify",
+    "operations": [],
+    "pooled_fields": [],
     "secret_fields": [
       "webhook_url"
     ],
-    "deprecated": false,
-    "pooled_fields": [],
-    "dev_only": false,
-    "has_egress": true,
-    "has_check_config": false,
-    "has_factory": true,
-    "operations": []
+    "type": "teams"
   },
   {
     "capabilities": [

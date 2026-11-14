@@ -3,6 +3,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { UserRound } from "lucide-react";
+import { MyLinkedAccountsCard } from "@/components/accounts/my-linked-accounts";
 import { AccessTokensCard } from "@/components/account/access-tokens";
 import { personName } from "@/components/account/account-menu";
 import { SessionsCard } from "@/components/account/sessions";
@@ -20,6 +21,7 @@ const SECTIONS = [
   { id: "profile", label: "Profile" },
   { id: "sessions", label: "Sessions" },
   { id: "tokens", label: "Access tokens" },
+  { id: "linked-accounts", label: "Linked accounts" },
   { id: "roles", label: "Roles" },
   { id: "preferences", label: "Preferences" },
 ] as const;
@@ -35,7 +37,8 @@ function initials(name: string): string {
 
 /**
  * My account: what belongs to the signed-in person rather than to the organisation — who they are,
- * where they are signed in, their access tokens, their roles and their preferences. The account menu
+ * where they are signed in, their access tokens, their accounts on code forges, their roles and their
+ * preferences. The account menu
  * under their name, in the header, leads here; the administration keeps what one administers for
  * everyone.
  */
@@ -109,6 +112,8 @@ export default function AccountPage() {
           <SessionsCard className="scroll-mt-6" />
 
           <AccessTokensCard className="scroll-mt-6" />
+
+          <MyLinkedAccountsCard className="scroll-mt-6" />
 
           <div className="grid gap-4 lg:grid-cols-2">
             <Card title="Roles" id="roles" className="scroll-mt-6">

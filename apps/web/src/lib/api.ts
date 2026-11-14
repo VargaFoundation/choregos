@@ -138,7 +138,10 @@ import type {
   AssigneeChange,
   Membership,
   MembershipUpsert,
-  TrackerIdentity,
+  LinkedAccount,
+  LinkedAccountDeclare,
+  LinkedAccountStart,
+  MyLinkedAccounts,
   Org,
   OrgCreate,
   OrgUpdate,
@@ -512,16 +515,19 @@ export const api = {
     request<void>(`/orgs/${org}/members/${encodeURIComponent(userId)}${project ? `?project=${encodeURIComponent(project)}` : ""}`, {
       method: "DELETE",
     }),
-  /** A member's links to their accounts on trackers (S47-14): GitHub only for now. */
-  trackerIdentities: (org: string, userId: string) =>
-    request<TrackerIdentity[]>(`/orgs/${org}/members/${encodeURIComponent(userId)}/tracker-identities`),
-  setTrackerIdentity: (org: string, userId: string, tracker: TrackerIdentity["tracker"], body: { external_id: string; login: string }) =>
-    request<TrackerIdentity>(`/orgs/${org}/members/${encodeURIComponent(userId)}/tracker-identities/${tracker}`, {
-      method: "PUT",
+  /** A member's accounts on code forges (ADR 0161): verified by the member, or declared by an administrator. */
+  memberLinkedAccounts: (org: string, userId: string) =>
+    request<LinkedAccount[]>(`/orgs/${org}/members/${encodeURIComponent(userId)}/linked-accounts`),
+  /** An administrator declares a member's account: stored NOT verified. */
+  declareMemberLinkedAccount: (org: string, userId: string, body: LinkedAccountDeclare) =>
+    request<LinkedAccount>(`/orgs/${org}/members/${encodeURIComponent(userId)}/linked-accounts`, {
+      method: "POST",
       body: JSON.stringify(body),
     }),
-  deleteTrackerIdentity: (org: string, userId: string, tracker: TrackerIdentity["tracker"]) =>
-    request<void>(`/orgs/${org}/members/${encodeURIComponent(userId)}/tracker-identities/${tracker}`, { method: "DELETE" }),
+  deleteMemberLinkedAccount: (org: string, userId: string, accountId: string) =>
+    request<void>(`/orgs/${org}/members/${encodeURIComponent(userId)}/linked-accounts/${encodeURIComponent(accountId)}`, {
+      method: "DELETE",
+    }),
   /** The administration sections that extensions declare, filtered by the API (ADR 0032). */
   adminSections: (org: string) => request<AdminSection[]>(`/ui/admin-sections?org=${encodeURIComponent(org)}`),
   /**
@@ -822,6 +828,16 @@ export const api = {
     request<ApiTokenCreated>("/me/tokens", { method: "POST", body: JSON.stringify(body) }),
   revokeToken: (id: string) => request<void>(`/me/tokens/${id}`, { method: "DELETE" }),
   mySessions: () => request<BrowserSession[]>("/me/sessions"),
+  /** My accounts on code forges, and the instances I can link one on (ADR 0161). */
+  myLinkedAccounts: () => request<MyLinkedAccounts>("/me/linked-accounts"),
+  /** Starts linking my account on an instance: the forge's authorization URL, to open in this browser. */
+  startMyLinkedAccount: (provider: LinkedAccount["provider"], org: string, instance: string) =>
+    request<LinkedAccountStart>(
+      `/me/linked-accounts/${provider}/start?org=${encodeURIComponent(org)}&instance=${encodeURIComponent(instance)}`,
+      { method: "POST" },
+    ),
+  deleteMyLinkedAccount: (accountId: string) =>
+    request<void>(`/me/linked-accounts/${encodeURIComponent(accountId)}`, { method: "DELETE" }),
   endSession: (id: string) => request<void>(`/me/sessions/${encodeURIComponent(id)}`, { method: "DELETE" }),
   endOtherSessions: () => request<EndedSessions>("/me/sessions/end-others", { method: "POST" }),
   templates: () => request<TemplateSummary[]>("/templates"),

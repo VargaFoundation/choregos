@@ -61,13 +61,13 @@ from .costs import BudgetAlert, CostLedger
 from .gateway import BackendRegistryRow, GatewayKeyRow, ModelCatalogueRow
 from .identity import (
     ApiToken,
+    LinkedAccount,
     MachineAccount,
     Membership,
     Organization,
     OrgGroup,
     OrgGroupMember,
     OrgSlugAlias,
-    TrackerIdentity,
     User,
     UserSession,
 )
@@ -238,6 +238,7 @@ __all__ = [
     "KnowledgeSource",
     "KnowledgeUpdateProposal",
     "LargeBinary",
+    "LinkedAccount",
     "MachineAccount",
     "Mapped",
     "Membership",
@@ -281,7 +282,6 @@ __all__ = [
     "Template",
     "Text",
     "TimestampMixin",
-    "TrackerIdentity",
     "TriggerToken",
     "UniqueConstraint",
     "User",

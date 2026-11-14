@@ -46,6 +46,9 @@ const BRAND_OF_TYPE: Record<string, Brand> = {
   github: "github",
   "gitlab-issues": "gitlab",
   gitlab: "gitlab",
+  // A forge's sign-in, through which a member links their account (ADR 0161).
+  "github-oauth": "github",
+  "gitlab-oauth": "gitlab",
   jira: "jira",
   confluence: "confluence",
   git: "git",
@@ -83,6 +86,7 @@ const LUCIDE_OF_KIND: Record<string, LucideIcon> = {
   notify: Bell,
   documents: Library,
   identity: IdCard,
+  forge_account: GitBranch,
   mdm: Laptop,
   shipping: Truck,
   access_control: DoorClosedLocked,
