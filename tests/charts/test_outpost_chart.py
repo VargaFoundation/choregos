@@ -26,6 +26,7 @@ from typing import Any
 
 import pytest
 import yaml
+from choregos_core.publishing import PUBLISHING
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 CHART = ROOT / "charts" / "choregos-outpost"
@@ -136,10 +137,10 @@ def test_the_image_is_the_release_one_pinned_by_digest_when_given() -> None:
     container = _pod(_documents(*MINIMAL))["containers"][0]
     version = yaml.safe_load((CHART / "Chart.yaml").read_text(encoding="utf-8"))["appVersion"]
     # The image the release builds, signs and attests (`release.yml`, the `outpost` image).
-    assert container["image"] == f"ghcr.io/vargafoundation/choregos-outpost:{version}"
+    assert container["image"] == PUBLISHING.image("choregos-outpost", version)
     pinned = _pod(_documents(*MINIMAL, f'image.digest="{digest}"', 'image.tag="9.9.9"'))
     for holder in (pinned["containers"][0], pinned["initContainers"][0]):
-        assert holder["image"] == f"ghcr.io/vargafoundation/choregos-outpost@{digest}"
+        assert holder["image"] == PUBLISHING.image(f"choregos-outpost@{digest}")
     assert "image.digest" in _refusal(*MINIMAL, 'image.digest="latest"')
     # `run` is what the pod runs, through the image's own entrypoint.
     assert container["args"] == ["run"] and "command" not in container
@@ -849,7 +850,7 @@ def test_the_chart_is_linted_and_published_beside_the_platforms() -> None:
     published = "\n".join(str(step.get("run", "")) for step in release["jobs"]["chart"]["steps"])
     for chart in ("choregos", "choregos-outpost"):
         assert f'helm package charts/{chart} --version "$version" --app-version "$version"' in published
-        assert f'helm push "{chart}-$version.tgz" oci://ghcr.io/vargafoundation/charts' in published
+        assert f'helm push "{chart}-$version.tgz" oci://{PUBLISHING.registry}/charts' in published
     # After the images: a published chart never points at an image that was not pushed.
     assert release["jobs"]["chart"]["needs"] == "manifest"
     assert "outpost" in release["jobs"]["manifest"]["strategy"]["matrix"]["image"]

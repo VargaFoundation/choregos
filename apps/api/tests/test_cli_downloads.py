@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from choregos_core.publishing import PUBLISHING
 from httpx import AsyncClient
 
 NAMES = {
@@ -158,10 +159,7 @@ async def test_without_a_bundle_the_answer_is_a_clear_404_naming_the_release(
         problem = response.json()
         assert problem["code"] == "no_cli_bundled"
         assert problem["version"] == __version__
-        assert (
-            problem["release_url"]
-            == f"https://github.com/VargaFoundation/choregos/releases/tag/v{__version__}"
-        )
+        assert problem["release_url"] == PUBLISHING.release(__version__)
         assert "bundles no `choregos` CLI" in problem["detail"]
     reset_settings_cache()
 
@@ -416,7 +414,7 @@ def test_install_sh_says_when_the_instance_bundles_no_cli(
     done = _install(live_instance["url"], home)
     assert done.returncode != 0
     assert "this instance may bundle no CLI" in done.stderr
-    assert "https://github.com/VargaFoundation/choregos/releases" in done.stderr
+    assert PUBLISHING.releases in done.stderr
 
 
 # ─── the scripts, read ───

@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
 """The public pages of S62-09b (`docs/site/build`, `integrate`, `cli`, `host`, `reference`) stay true.
 
-They are published to https://docs.varga.foundation/choregos/ and read by people who know nothing of
-the repository: a command that does not exist, a YAML example the parser refuses, a link to nothing or
-a key of the workflow schema the reference forgets would send them into the wall. Each check below
+They are published at the publishing identity's documentation address and read by people who know
+nothing of the repository: a command that does not exist, a YAML example the parser refuses, a link to
+nothing or a key of the workflow schema the reference forgets would send them into the wall. Each check below
 reads the pages as they are and compares them with the code:
 
 - the fixed slugs of the shared contract exist, each page has its front matter and one title;
@@ -31,6 +31,7 @@ from typing import Any
 
 import pytest
 import yaml
+from choregos_core.publishing import PUBLISHING
 
 ROOT = Path(__file__).resolve().parents[2]
 SITE = ROOT / "docs" / "site"
@@ -155,7 +156,7 @@ def test_links_resolve(page: Path) -> None:
             if path.removeprefix("/choregos/") not in CONTRACT_SLUGS:
                 broken.append(target)
         elif re.match(r"^[a-z]+:", target):
-            if target.startswith("https://github.com/VargaFoundation/choregos/blob/"):
+            if target.startswith(f"{PUBLISHING.source_repository}/blob/"):
                 broken.append(f"{target} (link to the repository with a relative path)")
         else:
             resolved = (page.parent / path).resolve()

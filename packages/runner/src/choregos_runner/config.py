@@ -9,6 +9,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
+from choregos_core.publishing import PUBLISHING
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -64,7 +65,7 @@ class RunnerSettings(BaseSettings):
     hosted_workspace: Path = Path("/hosted-workspace")
     tools_url: str = "http://localhost:7777/mcp"
     git_user_name: str = "choregos-bot"
-    git_user_email: str = "choregos-bot@varga.foundation"
+    git_user_email: str = PUBLISHING.commit_email
     event_batch_size: int = 25
     event_flush_seconds: float = 5.0
     dry_run: bool = Field(default=False, validation_alias="CHOREGOS_RUNNER_DRY_RUN")
