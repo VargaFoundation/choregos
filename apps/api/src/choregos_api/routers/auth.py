@@ -48,8 +48,8 @@ from ..rbac import Permission
 from ..schemas import ApiTokenCreate, ApiTokenCreated, ApiTokenDto, MeDto, MembershipDto
 from ..security import generate_api_token, read_session, sign_session
 from ..services.api_tokens import api_token_dto, linked_projects
-from ..services.identity_relink import normalised_issuer, relink_candidates
 from ..services.avatars import avatar_url
+from ..services.identity_relink import normalised_issuer, relink_candidates
 from ..tenant_sign_in import OidcProvider, SignInHint, TenantSignIn, email_domain, resolve
 
 router = APIRouter(tags=["session"])
