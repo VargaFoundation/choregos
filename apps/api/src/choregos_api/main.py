@@ -81,6 +81,7 @@ from .routers import (
     my_sessions,
     org_connectors,
     org_groups,
+    org_security,
     outbound_proxy,
     outposts,
     platform_identity,
@@ -437,6 +438,7 @@ def create_app() -> FastAPI:
     core_routers = (
         auth.router,
         my_sessions.router,
+        org_security.router,
         ui.router,
         theme.router,
         integrations.router,
