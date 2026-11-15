@@ -4881,6 +4881,14 @@ stories:
     size: S
     depends_on: [S65-01]
     notes: "memory.skipped, written before the run starts, is numbered below 0 (below any line already there, a batch in its order, each memory once) instead of from 1, where it took the runner's first numbers and the door dropped the runner's first lines; gate.outcome, written once the run's process has finished, follows the highest line and never takes 0; a run prepared with one skipped memory whose runner posts lines 1 to 3 shows four lines through the console's route; activities only, nothing under workflows/, no contract change (RunEvent.seq is an integer with no minimum; RunEventIn keeps minimum 0)."
+  - id: S65-34
+    title: "fix(api): a worker stopped while it places a write through an outpost sees its cancellation (finding #1710)"
+    stream: S65
+    sprint: 8
+    priority: 1
+    size: S
+    depends_on: [S65-29]
+    notes: "#1710 (b) was the defect S65-29 fixed (the failing run predates it); proven now on a real PostgreSQL by cancelling a look while its read waits on a table lock. The same test on the placement found in_outpost_scope's finally doing the same: restored on a normal exit, and on an exception under suppress(SQLAlchemyError), then re-raised. in_platform_scope left to finding #1743."
   - id: S65-27
     title: "fix(contracts): the generated TypeScript contract has no root entry and is compiled in CI (finding #1607)"
     stream: S65

@@ -247,6 +247,27 @@ async def test_the_outpost_named_is_restored_after_a_block_and_carried_across_a_
         assert (await session.execute(text(named))).scalar_one() == "", "carried once: transaction-local"
 
 
+async def test_the_outpost_named_is_restored_after_a_block_that_raised_on_a_usable_transaction(
+    three_outposts: dict[str, str],
+) -> None:
+    """A block that fails and leaves the transaction usable (an exception that is not the database's,
+    a statement that failed under a savepoint) still gives back what was named before (S65-34): only
+    a transaction nobody may use any more is left without it, and dies with its naming."""
+    from choregos_api.db.session import in_outpost_scope, name_the_outpost, session_scope
+
+    north, south = three_outposts["a/north"], three_outposts["a/south"]
+    async with session_scope(orgs=["a"]) as session:
+        await name_the_outpost(session, south)
+        with pytest.raises(LookupError):
+            async with in_outpost_scope(session, north):
+                raise LookupError("the block failed")
+        assert await _owners(session, "outpost_instances") == {south}, "what was named before is restored"
+        with pytest.raises(DBAPIError):
+            async with in_outpost_scope(session, north), session.begin_nested():
+                await session.execute(text("SELECT 1 / 0"))
+        assert await _owners(session, "outpost_instances") == {south}, "and after a savepoint rolled back"
+
+
 async def test_a_bare_session_is_given_the_scope_of_one_outpost_of_one_organisation(
     three_outposts: dict[str, str],
 ) -> None:
