@@ -88,6 +88,12 @@ POD_NAME_ANNOTATION = "agents.x-k8s.io/pod-name"
 #: its log, which takes the orchestrator one status poll; not an hour of a volume per stage.
 DEFAULT_TTL_SECONDS = 300
 
+#: A pod log is read for the `runner` container by name: with the agent in a container of its own
+#: (ADR 0146) the pod has two, and the API server refuses a log request that does not choose. The
+#: agent container's log is the launcher's and the agent's own output, which is never the runner's
+#: assignment key nor what the platform archives.
+RUNNER_LOG = {"container": "runner"}
+
 
 class AgentSandboxExecutor:
     kind = ExecutorKind.AGENT_SANDBOX
@@ -371,7 +377,9 @@ class AgentSandboxExecutor:
         if not ips:
             return None
         pod = _annotations(sandbox).get(POD_NAME_ANNOTATION) or sandbox.get("metadata", {}).get("name")
-        log = await self.client.request("GET", f"{CORE_API}/namespaces/{namespace}/pods/{pod}/log")
+        log = await self.client.request(
+            "GET", f"{CORE_API}/namespaces/{namespace}/pods/{pod}/log", params=RUNNER_LOG
+        )
         public_key = key_from_log(str(log or ""))
         if public_key is None:
             return None  # no key printed (yet): nothing is sent
@@ -566,7 +574,9 @@ class AgentSandboxExecutor:
         pod = await self._pod_name(namespace, ref.name)
         if not pod:
             return
-        text = await self.client.request("GET", f"{CORE_API}/namespaces/{namespace}/pods/{pod}/log")
+        text = await self.client.request(
+            "GET", f"{CORE_API}/namespaces/{namespace}/pods/{pod}/log", params=RUNNER_LOG
+        )
         for line in str(text or "").splitlines():
             yield line
 

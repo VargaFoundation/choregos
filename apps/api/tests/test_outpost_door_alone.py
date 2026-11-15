@@ -402,10 +402,17 @@ async def pg_client(pg_app: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncIterat
 async def test_a_poll_is_woken_through_the_processs_own_listen_connection(
     pg_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Under its own start-up and no other: a call written is handed over within a second, where the
-    periodic look alone would take five to ten."""
+    """Under its own start-up and no other: a call written is handed over by the look the
+    notification wakes, never by a periodic one.
+
+    The mechanism is read, not the clock (#1725): a 2-second bound was crossed on a loaded runner with
+    the notification path working. The periodic look is pushed a minute away, so a call handed over
+    within the poll's wait came through the wake-up, and the pause it ended was ended by it."""
     from choregos_api.outposts import alone as module
     from choregos_api.outposts import rendezvous
+
+    monkeypatch.setattr(rendezvous, "LOOK_S", (60.0, 60.0))  # only a notification can wake it in time
+    pauses = daemon_kit.record_pauses(monkeypatch)
 
     listening: list[tuple[bool, list[str]]] = []
 
@@ -427,20 +434,21 @@ async def test_a_poll_is_woken_through_the_processs_own_listen_connection(
         module.lifespan(application),
         AsyncClient(transport=ASGITransport(app=application), base_url="http://door") as http,
     ):
-        poll = asyncio.ensure_future(daemon.calls(http, wait_s=20))
+        poll = asyncio.ensure_future(daemon.calls(http, wait_s=25))
 
         async def waits() -> bool:
-            return rendezvous.waiters().waiting() == 1
+            return pauses.began == 1  # it looked once, found nothing, and waits
 
         await _until(waits, "the poll never waited")
         # Give the relay the time to attach: a notification sent before it listens is not heard.
         heard = rendezvous.waiters().heard
         await _until_heard_or_attached(heard)
-        placed_at = time.monotonic()
+        assert not poll.done()
         placed = await daemon_kit.place()
-        (call,) = await asyncio.wait_for(poll, timeout=4)
+        # Before the poll's own end (25 s, a tenth sooner at most), whatever the relay's attachment took.
+        (call,) = await asyncio.wait_for(poll, timeout=22)
         assert call["id"] == placed.id
-        assert time.monotonic() - placed_at < 2.0, "the poll waited for its periodic look"
+        assert pauses.woken == [True], "the poll waited for its periodic look"
     # One connection, on the wake-ups' channel, and not on the platform's events.
     assert listening == [(False, [rendezvous.CHANNEL])]
 

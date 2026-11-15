@@ -269,3 +269,87 @@ def test_the_executor_is_told_how_long_a_finished_sandbox_keeps_its_volume() -> 
 
     assert int(ttl()) <= 600, "not an hour of a volume per finished stage"
     assert ttl("choregos-orchestrator.runner.sandbox.ttlSecondsAfterFinished=120") == "120"
+
+
+# ADR 0146: the agent in its own container ───────────────────────────────────────────────
+
+
+def _pod(*overrides: str) -> dict[str, Any]:
+    return _objects(*overrides)["SandboxTemplate/choregos-runner"]["spec"]["podTemplate"]["spec"]
+
+
+SEPARATE = "choregos-orchestrator.runner.sandbox.agentIsolation=container"
+
+
+@needs_helm
+def test_by_default_the_agent_shares_the_runners_container() -> None:
+    """The rollback: `process` (the default) renders the pod this chart rendered before ADR 0146."""
+    pod = _pod()
+    assert "initContainers" not in pod
+    assert [c["name"] for c in pod["containers"]] == ["runner"]
+    assert "volumes" not in pod
+    names = {e["name"] for e in pod["containers"][0].get("env", [])}
+    assert "CHOREGOS_RUNNER_AGENT_ISOLATION" not in names
+
+
+@needs_helm
+def test_the_separate_agent_is_a_sidecar_with_another_uid_and_no_secret() -> None:
+    pod = _pod(SEPARATE, "choregos-orchestrator.runner.envFromSecrets={git-credentials}")
+    [agent] = pod["initContainers"]
+    runner = pod["containers"][0]
+    assert agent["name"] == "agent"
+    assert agent["restartPolicy"] == "Always", "a native sidecar: Ready before the runner starts"
+    assert agent["args"][0] == "launcher"
+    assert agent["securityContext"]["runAsUser"] not in (None, 1000), "the runner's uid is not the agent's"
+    assert agent["securityContext"]["readOnlyRootFilesystem"] is True
+    assert agent["securityContext"]["runAsNonRoot"] is True
+    assert agent["securityContext"]["allowPrivilegeEscalation"] is False
+    assert agent["securityContext"]["capabilities"]["drop"] == ["ALL"]
+    # Nothing of the runner's: no secret, no envFrom, no environment but the two paths.
+    assert {e["name"] for e in agent["env"]} == {"TMPDIR", "HOME"}
+    for forbidden in ("secretKeyRef", "secretRef", "envFrom", "git-credentials", "projected"):
+        assert forbidden not in yaml.safe_dump(agent)
+    assert pod["automountServiceAccountToken"] is False
+    # The runner says where the agent is, and refuses to start it itself.
+    runner_env = {e["name"]: e["value"] for e in runner["env"]}
+    assert runner_env["CHOREGOS_RUNNER_AGENT_ISOLATION"] == "container"
+    assert runner_env["TMPDIR"] == "/exchange"
+    assert runner_env["CHOREGOS_RUNNER_LAUNCHER_PORT"] == agent["args"][-1]
+    assert violations(pod) == []
+
+
+@needs_helm
+def test_the_two_containers_share_the_workspace_and_the_exchange_directory_only() -> None:
+    pod = _pod(SEPARATE)
+    [agent] = pod["initContainers"]
+    runner = pod["containers"][0]
+    mounts = {c["name"]: {m["name"]: m["mountPath"] for m in c["volumeMounts"]} for c in (agent, runner)}
+    shared = set(mounts["agent"]) & set(mounts["runner"])
+    assert shared == {"workspace", "exchange"}, mounts
+    assert mounts["agent"]["workspace"] == mounts["runner"]["workspace"] == "/workspace"
+    # The exchange directory is an emptyDir of the pod: gone with it, never a claim.
+    assert {"name": "exchange", "emptyDir": {}} in pod["volumes"]
+
+
+@needs_helm
+def test_the_separate_agent_template_fits_the_pinned_crds() -> None:
+    template = _objects(SEPARATE)["SandboxTemplate/choregos-runner"]
+    assert _crds().problems(template) == []
+
+
+@needs_helm
+def test_an_unknown_isolation_is_refused() -> None:
+    result = _render(
+        *SANDBOX_VALUES, "choregos-orchestrator.runner.sandbox.agentIsolation=shared", check=False
+    )
+    assert result.returncode != 0
+    assert "agentIsolation" in result.stderr
+
+
+@needs_helm
+def test_the_launcher_probe_is_an_exec_inside_the_pod() -> None:
+    """The kubelet's TCP probe connects from the node: it cannot reach a loopback listener."""
+    agent = _pod(SEPARATE)["initContainers"][0]
+    probe = agent["startupProbe"]
+    assert "tcpSocket" not in probe
+    assert probe["exec"]["command"][0] == "python"
