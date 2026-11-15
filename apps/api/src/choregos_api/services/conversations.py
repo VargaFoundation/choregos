@@ -65,6 +65,7 @@ from .agent_sessions import (
 )
 from .budgets import lock_budget_scopes
 from .conversation_installation import apply_installation
+from .conversation_instructions import render_instructions_of
 from .conversation_signals import memory_written_of
 from .conversation_title import model_title
 from .conversation_turns import (
@@ -142,6 +143,9 @@ async def open_conversation(  # noqa: PLR0913 - the terms of a conversation, one
             retention_days=retention_days,
         ),
     )
+    if installation_id is not None and record.messages:
+        # S63-28: the template is rendered with the installation's config and the caller's preferences.
+        await render_instructions_of(session, record, str(record.messages[0].get("content") or ""))
     # A conversation that never had a turn is purged too: its clock starts when it is opened.
     if record.retention_until is None:
         record.retention_until = retention_until(record, utcnow())
@@ -207,7 +211,8 @@ async def _turn(
     # `incomplete` or `suspended` since the opening refuses the turn), then what is refused first.
     await apply_installation(session, record)
     refuse_if_not_allowed(record, now)  # before anything is written: no key, no model call
-    if is_idle(record, now) or record.status == "idle":
+    resumed = is_idle(record, now) or record.status == "idle"
+    if resumed:
         idle_for = int((now - last_activity(record)).total_seconds())
         record.status = "open"
         await journal(session, record, "conversation.resumed", {"idle_seconds": idle_for})
@@ -225,6 +230,9 @@ async def _turn(
     resolved = await resolve_agent(
         session, record.org_id, project.id, f"{record.agent_slug}@{record.agent_version}"
     )
+    if resumed and await render_instructions_of(session, record, resolved.spec.instructions or ""):
+        # S63-28: the installation's config (or the caller's preferences) changed while it was idle.
+        await journal(session, record, "conversation.instructions_rendered", {"reason": "resumed"})
     if record.installation_id is not None:
         # Two turns of one installation read its month and reserve from it one after the other: the lock
         # is held until the turn's key is written (below), so the second sees the first's reservation.

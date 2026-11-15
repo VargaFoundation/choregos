@@ -4625,6 +4625,14 @@ stories:
     size: S
     depends_on: [S63-07]
     notes: "CHOREGOS_TOKEN_EXCHANGE_SCOPES (audience to scope) sends RFC 8693 scope with the exchange. Keycloak's standard exchange grants an audience only through a client scope; named in the request, it can stay optional on the client."
+  - id: S63-28
+    title: "fix(api): an assistant's conversation sends its instructions rendered, with config and preferences (#1737, ADR 0133 amendment)"
+    stream: S63
+    sprint: 3
+    priority: 1
+    size: S
+    depends_on: [S63-04, S63-09]
+    notes: "Blocks the pilot of the one-on-one assistant: `{{ config.<key> }}` reached the model literally and `preferences` could not be published."
   - id: S64-00
     title: "docs(adr): ADRs 0141 and 0142, the S64 plan, the backlog stories"
     stream: S64
