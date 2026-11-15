@@ -168,38 +168,45 @@ async def test_a_hundred_waiting_polls_hold_no_pooled_connection(
     assert rendezvous.waiters().waiting(key) == 0
 
 
-async def test_a_call_written_is_handed_over_within_a_second(
+async def test_a_call_written_is_handed_over_through_the_notification(
     client: AsyncClient, daemon: Daemon, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Woken by the notification that left with the call's commit, at whichever replica the poll waits."""
+    """Woken by the notification that left with the call's commit, at whichever replica the poll waits.
+
+    What is read is the mechanism, not the clock (#1710): a periodic look comes a minute after the
+    last, so a call handed over within the poll's wait came through the wake-up, and the pause the poll
+    was in ended because it was woken."""
     from choregos_api.outposts import rendezvous
 
     monkeypatch.setattr(rendezvous, "LOOK_S", (60.0, 60.0))  # only a notification can wake it in time
+    pauses = daemon_kit.record_pauses(monkeypatch)
     async with _relay():
         waiting = asyncio.create_task(daemon.poll(client, wait_s=25))
-        await _until(lambda: _waits(daemon))
-        await asyncio.sleep(0.5)
+        # It has looked once, found nothing, and waits: what it is handed next, it is handed by a look
+        # that something woke.
+        await _until(lambda: pauses.began == 1)
         assert not waiting.done()
         heard = rendezvous.waiters().heard
-        started = time.monotonic()
         placed = await daemon_kit.place()
-        response = await asyncio.wait_for(waiting, timeout=10)
-        elapsed = time.monotonic() - started
+        # Well before the poll's own end (25 s, a tenth sooner at most): it was not the end of the wait.
+        response = await asyncio.wait_for(waiting, timeout=15)
         assert [call["id"] for call in response.json()["calls"]] == [placed.id]
-        assert elapsed < 1.0, f"handed over {elapsed:.2f} s after it was written"
+        assert pauses.woken == [True], "one pause, ended by the wake-up, not by its minute"
         assert rendezvous.waiters().heard > heard, "it came through NOTIFY"
 
-        # The other way: whoever placed the call is woken when the door records its answer.
+        # The other way: whoever placed the call is woken when the door records its answer. It looks
+        # again a minute later at the earliest, and the call has thirty seconds: an outcome read within
+        # fifteen was read because the answer's notification woke it.
         (call,) = [daemon.opened(handed) for handed in response.json()["calls"]]
         outpost_id = (await kit.outpost_row(SLUG)).id
         outcome = asyncio.create_task(rendezvous.wait(outpost_id, placed.id))
         await asyncio.sleep(0.5)
         assert not outcome.done()
-        started = time.monotonic()
+        heard = rendezvous.waiters().heard
         assert (await daemon.answer(client, call)).status_code == 200
-        read = await asyncio.wait_for(outcome, timeout=10)
+        read = await asyncio.wait_for(outcome, timeout=15)
         assert read is not None and read.answer is not None
-        assert time.monotonic() - started < 1.0
+        assert rendezvous.waiters().heard > heard, "the answer's commit notified whoever waited"
 
 
 async def test_a_call_is_not_handed_over_before_it_is_committed(
@@ -236,19 +243,18 @@ async def test_without_the_relay_a_call_is_still_handed_over_at_the_periodic_loo
     from choregos_api.outposts import rendezvous
 
     monkeypatch.setattr(rendezvous, "LOOK_S", (1.0, 1.5))
+    pauses = daemon_kit.record_pauses(monkeypatch)
     async with _relay() as relay:
         assert relay.attached.is_set()
     assert not relay.attached.is_set(), "the relay is stopped"
     heard = rendezvous.waiters().heard
     waiting = asyncio.create_task(daemon.poll(client, wait_s=25))
-    await _until(lambda: _waits(daemon))
-    await asyncio.sleep(0.2)
-    started = time.monotonic()
+    await _until(lambda: pauses.began >= 1)
     placed = await daemon_kit.place()
-    response = await asyncio.wait_for(waiting, timeout=10)
-    elapsed = time.monotonic() - started
+    # Well before the poll's own end (25 s, a tenth sooner at most): a look in the middle found it.
+    response = await asyncio.wait_for(waiting, timeout=15)
     assert [call["id"] for call in response.json()["calls"]] == [placed.id]
-    assert elapsed < 1.5 + 1.0, f"within the periodic look: {elapsed:.2f} s"
+    assert pauses.woken and not any(pauses.woken), "every pause ran its course: nothing woke the poll"
     assert rendezvous.waiters().heard == heard, "nothing was heard: the look found it"
 
 

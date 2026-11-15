@@ -1060,18 +1060,25 @@ async def test_a_poll_answers_what_it_holds_that_is_awaited_no_more(
 
 
 async def test_a_poll_with_nothing_to_hand_over_answers_at_the_end_of_its_wait(
-    client: AsyncClient, daemon: Daemon, quick_looks: None
+    client: AsyncClient, daemon: Daemon, quick_looks: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """The lower bound is the clock's (a loaded runner only makes a wait longer); "at once" is read
+    from the pauses the poll took, not from the clock (#1710, #1725)."""
     from choregos_api.outposts import door as door_module
 
+    pauses = daemon_kit.record_pauses(monkeypatch)
     started = time.monotonic()
     assert await daemon.calls(client, wait_s=2) == []
     waited = time.monotonic() - started
     assert door_module.JITTER <= 0.1
-    assert 2 * 0.9 - 0.05 <= waited < 6, "the wait asked for, a tenth sooner at most (jitter)"
-    started = time.monotonic()
+    assert waited >= 2 * 0.9 - 0.05, "the wait asked for, a tenth sooner at most (jitter)"
+    assert pauses.woken and not any(pauses.woken), "it waited between its looks, and nothing woke it"
+    # Far below the 25 seconds of a poll that would not have read its `wait_s`.
+    assert waited < 15
+    pauses.woken.clear()
+    pauses.began = 0
     assert await daemon.calls(client, wait_s=0) == []
-    assert time.monotonic() - started < 1.5, "0 answers at once"
+    assert pauses.began == 0, "0 answers at once: one look, and no pause after it"
 
 
 async def test_a_waiting_poll_answers_as_soon_as_a_call_is_placed(
