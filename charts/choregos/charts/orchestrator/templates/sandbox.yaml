@@ -34,6 +34,14 @@ pass `--api-versions extensions.agents.x-k8s.io/v1beta1/SandboxTemplate` or set
 {{- end }}
 {{- $sandbox := .Values.runner.sandbox | default dict }}
 {{- $port := int ($sandbox.assignmentPort | default 8765) }}
+{{- $isolation := $sandbox.agentIsolation | default "process" }}
+{{- if not (has $isolation (list "process" "container")) }}
+{{- fail (printf "runner.sandbox.agentIsolation=%q: expected process or container (ADR 0146)" $isolation) }}
+{{- end }}
+{{- $launcherPort := int ($sandbox.launcherPort | default 8766) }}
+{{- $agentUid := int ($sandbox.agentUid | default 1001) }}
+{{- $separate := eq $isolation "container" }}
+{{- $image := printf "%s/%s:%s" .Values.global.imageRegistry .Values.runner.image (.Values.runner.tag | default .Values.global.imageTag) }}
 apiVersion: extensions.agents.x-k8s.io/v1beta1
 kind: SandboxTemplate
 metadata:
@@ -71,9 +79,49 @@ spec:
         runAsUser: 1000
         fsGroup: 1000
         seccompProfile: { type: RuntimeDefault }
+      {{- if $separate }}
+      # ADR 0146: the agent is a native sidecar (an init container that keeps running, Kubernetes
+      # >= 1.29), so it is Ready before the runner is. It has NO secret, no envFrom and no
+      # environment but what the runner sends per process: the runner's run token, git token and
+      # egress report key stay in the `runner` container, which it cannot read (own PID and
+      # mount namespaces, another uid). The two share /workspace and /exchange only.
+      initContainers:
+        - name: agent
+          image: {{ $image }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          restartPolicy: Always
+          args: ["launcher", "--port", {{ $launcherPort | quote }}]
+          env:
+            - { name: TMPDIR, value: /exchange }
+            - { name: HOME, value: /exchange }
+          startupProbe:
+            # An exec probe: the kubelet's TCP probe connects from the node, where the launcher's
+            # loopback (the pod's own) is not reachable.
+            exec:
+              command: [python, -c, "import socket; socket.create_connection(('127.0.0.1', {{ $launcherPort }}), 1)"]
+            periodSeconds: 1
+            failureThreshold: 60
+          resources:
+            requests: { cpu: 500m, memory: 1Gi }
+            limits: { cpu: {{ .Values.runner.limits.cpu | quote }}, memory: {{ .Values.runner.limits.memory | quote }} }
+          securityContext:
+            runAsNonRoot: true
+            # Not the runner's uid: a process of this container cannot signal, ptrace or read the
+            # /proc entries of the runner's. The pod's fsGroup (1000) gives it the shared volumes.
+            runAsUser: {{ $agentUid }}
+            runAsGroup: 1000
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+            seccompProfile: { type: RuntimeDefault }
+          volumeMounts:
+            - { name: workspace, mountPath: /workspace }
+            - { name: exchange, mountPath: /exchange }
+            - { name: agent-tmp, mountPath: /tmp }
+      {{- end }}
       containers:
         - name: runner
-          image: {{ .Values.global.imageRegistry }}/{{ .Values.runner.image }}:{{ .Values.runner.tag | default .Values.global.imageTag }}
+          image: {{ $image }}
           imagePullPolicy: {{ .Values.global.imagePullPolicy }}
           args: ["await-assignment", "--port", {{ $port | quote }}]
           ports:
@@ -82,12 +130,20 @@ spec:
           readinessProbe:
             httpGet: { path: /healthz, port: assignment }
             periodSeconds: 2
-          {{- with .Values.runner.env }}
+          {{- if or .Values.runner.env $separate }}
           # Plain values for every run of the deployment, never a secret. What is per run, the
           # token included, is pushed with the assignment.
           env:
-            {{- range $name, $value := . }}
+            {{- range $name, $value := .Values.runner.env }}
             - { name: {{ $name | quote }}, value: {{ $value | quote }} }
+            {{- end }}
+            {{- if $separate }}
+            # ADR 0146: the agent runs in the `agent` container, reached over the pod's loopback.
+            - { name: CHOREGOS_RUNNER_AGENT_ISOLATION, value: container }
+            - { name: CHOREGOS_RUNNER_LAUNCHER_PORT, value: {{ $launcherPort | quote }} }
+            # Every temporary file of the runner (the agent's `$HOME`, tool scripts) lands on the
+            # surface both containers see.
+            - { name: TMPDIR, value: /exchange }
             {{- end }}
           {{- end }}
           resources:
@@ -99,6 +155,14 @@ spec:
             seccompProfile: { type: RuntimeDefault }
           volumeMounts:
             - { name: workspace, mountPath: /workspace }
+            {{- if $separate }}
+            - { name: exchange, mountPath: /exchange }
+            {{- end }}
+  {{- if $separate }}
+      volumes:
+        - { name: exchange, emptyDir: {} }
+        - { name: agent-tmp, emptyDir: {} }
+  {{- end }}
   # A volume, not an emptyDir: a suspended sandbox loses its pod and keeps this (ADR 0016).
   volumeClaimTemplates:
     - metadata:

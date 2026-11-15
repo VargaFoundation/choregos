@@ -13,6 +13,7 @@ from typing import Any
 
 from choregos_contracts import Evidence, StageInput
 
+from .launcher import Launcher
 from .workspace import CommandResult, run_command
 
 MAX_OUTPUT_CHARS = 4000
@@ -135,23 +136,42 @@ def _detect_language(workspace: Path) -> str:
     return "other"
 
 
-async def run_checks(stage_input: StageInput, workspace: Path, *, timeout: float = 1800.0) -> DodReport:
-    """Run tests, lint and typing. A missing command is `skipped`, never `ok`."""
+async def run_checks(
+    stage_input: StageInput,
+    workspace: Path,
+    *,
+    timeout: float = 1800.0,
+    launcher: Launcher | None = None,
+    env: dict[str, str] | None = None,
+) -> DodReport:
+    """Run tests, lint and typing. A missing command is `skipped`, never `ok`.
+
+    With a `launcher` they run in the agent's container (ADR 0146 §6), with `env` on top of the
+    runner's own credential-free environment: they execute the code the agent wrote, and the runner
+    starts nothing it could have written."""
     report = DodReport()
     for name, command in commands_for(stage_input, workspace).items():
         if not command:
             report.checks.append(CheckOutcome(name=name, command="", ok=False, skipped=True))
             continue
-        result: CommandResult = await run_command(command, cwd=workspace, timeout=timeout)
+        result: CommandResult = await run_command(
+            command, cwd=workspace, timeout=timeout, launcher=launcher, env=env
+        )
         report.checks.append(
             CheckOutcome(name=name, command=command, ok=result.ok, output=_truncate(result.output))
         )
-    await _measure_facts(stage_input, workspace, report, timeout=timeout)
+    await _measure_facts(stage_input, workspace, report, timeout=timeout, launcher=launcher, env=env)
     return report
 
 
 async def _measure_facts(
-    stage_input: StageInput, workspace: Path, report: DodReport, *, timeout: float
+    stage_input: StageInput,
+    workspace: Path,
+    report: DodReport,
+    *,
+    timeout: float,
+    launcher: Launcher | None = None,
+    env: dict[str, str] | None = None,
 ) -> None:
     """Run the `dod.facts` commands: exit code 0 = true.
 
@@ -165,7 +185,7 @@ async def _measure_facts(
     for name, command in stage_input.project.fact_commands.items():
         if not command.strip():
             continue
-        outcome = await run_command(command, cwd=workspace, timeout=timeout)
+        outcome = await run_command(command, cwd=workspace, timeout=timeout, launcher=launcher, env=env)
         report.facts[name] = outcome.ok
         report.checks.append(
             CheckOutcome(
