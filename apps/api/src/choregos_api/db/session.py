@@ -285,12 +285,19 @@ async def in_platform_scope(session: AsyncSession) -> AsyncIterator[None]:
         return
     before = (await session.execute(text("SELECT current_setting('app.current_orgs', true)"))).scalar_one()
     await session.execute(text("SELECT set_config('app.current_orgs', :orgs, true)"), {"orgs": ALL_ORGS})
+    restore = text("SELECT set_config('app.current_orgs', :orgs, true)")
     try:
         yield
-    finally:
-        await session.execute(
-            text("SELECT set_config('app.current_orgs', :orgs, true)"), {"orgs": before or ""}
-        )
+    except BaseException:
+        # As in `in_outpost_scope`: where the block left the transaction usable, the previous scope is
+        # restored, and that matters here, since the block's scope is the whole instance. Where it did
+        # not (a statement that failed, or that a cancellation interrupted in the driver), the scope is
+        # transaction-local and dies with that transaction; restoring it would only raise in turn, and
+        # its `PendingRollbackError` would replace the block's error or its cancellation.
+        with suppress(SQLAlchemyError):
+            await session.execute(restore, {"orgs": before or ""})
+        raise
+    await session.execute(restore, {"orgs": before or ""})
 
 
 @asynccontextmanager
