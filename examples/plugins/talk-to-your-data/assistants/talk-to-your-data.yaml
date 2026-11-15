@@ -15,9 +15,9 @@ config_schema:
 audience:
   personal_data: true
 tools:
-  # The person's own identity (ADR 0135, RFC 8693 exchange): graal applies the person's rights per call.
-  # The graal connector must be registered with the read-only door (URL ending in ?profile=read).
-  - need: graal
+  # The person's own identity (ADR 0135, RFC 8693 exchange): the platform applies the person's rights per call.
+  # The data-platform connector must be registered with the read-only door (URL ending in ?profile=read).
+  - need: data_platform
     operations: [search_catalog, list_catalog, describe_table, preview_table, query_sql]
     access: read
     identity: user_exchange

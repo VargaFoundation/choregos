@@ -7,11 +7,11 @@ cases:
     context: { relation: self }
     turns: ["How many orders did we receive last month?"]
     tool_results:
-      graal__search_catalog: [{ table: sales.public.orders, description: Customer orders }]
-      graal__describe_table: { table: sales.public.orders, columns: [id, created_at, amount] }
-      graal__query_sql: { columns: [n], rows: [[1284]] }
+      data_platform__search_catalog: [{ table: sales.public.orders, description: Customer orders }]
+      data_platform__describe_table: { table: sales.public.orders, columns: [id, created_at, amount] }
+      data_platform__query_sql: { columns: [n], rows: [[1284]] }
     assert:
-      call_order: [[graal__search_catalog, graal__describe_table, graal__query_sql]]
+      call_order: [[data_platform__search_catalog, data_platform__describe_table, data_platform__query_sql]]
       must_cite:
         - figure: '\d+ orders'
           source: '\(source: [a-z_.]+\)'
@@ -22,7 +22,7 @@ cases:
     context: { relation: self }
     turns: ["What is the weather on Mars?"]
     tool_results:
-      graal__search_catalog: []
+      data_platform__search_catalog: []
     assert:
-      must_call: [{ tool: graal__search_catalog, before: any }]
-      must_not_call: [graal__query_sql]
+      must_call: [{ tool: data_platform__search_catalog, before: any }]
+      must_not_call: [data_platform__query_sql]

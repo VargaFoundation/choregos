@@ -7,7 +7,7 @@ metadata:
   license: Apache-2.0
   description: >-
     "Talk to your data": a person asks a question in natural language, the agent finds the right
-    tables in the graal catalogue, runs a read-only SQL query under the person's own identity and
+    tables in the data platform catalogue, runs a read-only SQL query under the person's own identity and
     answers with the tables it used. Reference journey of the MCP door between products (D14).
   core: ">=0.25.0"
 contents:

@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """The "talk to your data" reference plugin (examples/plugins/talk-to-your-data): it loads, its only
-need is graal under the person's own identity and read-only, and its eval suite passes on a scripted
+need is data_platform under the person's own identity and read-only, and its eval suite passes on a scripted
 good run and fails on a run that queries before searching or answers without citing the table."""
 
 from __future__ import annotations
@@ -15,8 +15,12 @@ from choregos_core.conversation_evals import evaluate_case, loop_tools, play_cas
 from choregos_core.plugins import load_directory
 
 PLUGIN = Path(__file__).resolve().parents[3] / "examples" / "plugins" / "talk-to-your-data"
-SEARCH, DESCRIBE, QUERY = "graal__search_catalog", "graal__describe_table", "graal__query_sql"
-TOOLS = loop_tools([SEARCH, DESCRIBE, QUERY, "graal__preview_table", "graal__list_catalog"])
+SEARCH, DESCRIBE, QUERY = (
+    "data_platform__search_catalog",
+    "data_platform__describe_table",
+    "data_platform__query_sql",
+)
+TOOLS = loop_tools([SEARCH, DESCRIBE, QUERY, "data_platform__preview_table", "data_platform__list_catalog"])
 CITED = "You received 1284 orders (source: sales.public.orders) last month."
 
 
@@ -53,12 +57,14 @@ def _cases() -> list[dict[str, Any]]:
     return cases
 
 
-def test_the_plugin_loads_and_asks_graal_for_the_person_s_identity_read_only() -> None:
+def test_the_plugin_loads_and_asks_the_data_platform_for_the_person_s_identity_read_only() -> None:
     loaded = load_directory(PLUGIN)
     assistant = loaded.assistants["talk-to-your-data"]
     assert assistant["agent"] == "data-analyst"
     (need,) = assistant["tools"]
-    assert need["need"] == "graal" and need["identity"] == "user_exchange" and need["access"] == "read"
+    assert (
+        need["need"] == "data_platform" and need["identity"] == "user_exchange" and need["access"] == "read"
+    )
     assert "write" not in {t.get("access") for t in assistant["tools"]}
     assert "query_sql" in need["operations"]
 
