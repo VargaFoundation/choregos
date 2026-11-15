@@ -111,7 +111,12 @@ NOT_CALLED_BY_A_CLIENT: dict[str, str] = {
 }
 
 #: Paths whose console screen is a story still to come: that story removes its entries.
-NO_CLIENT_YET: dict[str, str] = {}
+NO_CLIENT_YET: dict[str, str] = {
+    "/orgs/{org}/security": "the organisation's re-authentication setting (ADR 0170, decision D5) is API-only "
+    "in the core; the enterprise edition's console section writes it today",
+    "/orgs/{org}/members/{email}/sessions/revocation": "ending a member's sessions (ADR 0170, decision D5) is "
+    "API-only in the core; the enterprise edition's platform route has no console screen either",
+}
 
 #: Paths the CLI calls and the console must not: an operator's command, not a screen.
 CLI_ONLY: dict[str, str] = {
