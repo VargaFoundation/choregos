@@ -5,7 +5,7 @@ metadata:
   display_name: Talk to your data
   description: Ask a question in plain language; get an answer from your governed tables, with sources.
   icon: chart
-  i18n: { fr: { display_name: "Parlez à vos données" } }
+  i18n: { fr: { display_name: "Parlez à vos données" } }  # lang: fr-ok (the French translation of the display name)
 agent: data-analyst
 config_schema:
   type: object
