@@ -54,6 +54,7 @@ from .hosted_workspace import HostedWorkspaceError, export_tree, import_tree
 from .inputs import INPUTS_DIR, InputInvalidError, inputs_markdown, mount_inputs
 from .job import REPORT_COMMAND, REPORT_IMAGE, command_digest, job_result, run_job, write_fields
 from .knowledge import KnowledgeInvalidError, lay_out
+from .launcher import SHARED_UMASK, Launcher
 from .local_tools import start_if_absent
 from .local_tools import stop as stop_tools
 from .loopback import Loopback
@@ -229,6 +230,11 @@ class Runner:
         #: "Calling tools from a script" (ADR 0122 §5), added to the first prompt when the run was offered
         #: tool scripts and its client was written (S57-11b).
         self.tool_instructions = ""
+        #: The agent's container's launcher, when the deployment says the agent runs there (ADR 0146);
+        #: `None` under `process`, where the agent is the runner's child.
+        self.launcher: Launcher | None = None
+        #: What `agent.isolation` journals: where this run's agent runs (ADR 0146 §9).
+        self.isolation: dict[str, str] = {"mode": "process"}
         #: The run's git token (S22-07): in memory only, for the clone and the push.
         self.git_token: str | None = None
         #: The run's compression proxy (ADR 0055), when it runs one.
@@ -295,7 +301,9 @@ class Runner:
                 work_item=stage_input.work_item.key,
                 stage=stage_input.transition.role,
             ) as span:
-                outcome = await self._execute(stage_input, client, workspace, journal)
+                outcome = await self._isolate(journal) or await self._execute(
+                    stage_input, client, workspace, journal
+                )
                 status = outcome.result.status if outcome.result else None
                 telemetry.record_outcome(
                     span,
@@ -313,6 +321,7 @@ class Runner:
         await journal.record(
             "run.started", {"run_id": stage_input.run_id, "role": stage_input.transition.role}
         )
+        await journal.record("agent.isolation", self.isolation)
 
         self.tools = await self._start_tools(client, journal, stage_input)
 
@@ -407,6 +416,7 @@ class Runner:
                 cwd=str(workspace.path),
                 scripts_dir=scripts_dir,
                 env=env,
+                launcher=self.launcher,
                 on_update=on_update,
                 on_permission=on_permission,
                 write_guard=file_system_guard(guards),
@@ -429,7 +439,7 @@ class Runner:
 
                 # 8. boucle DoD
                 max_iterations = max(0, stage_input.permissions.dod_iterations)
-                report = await run_checks(stage_input, workspace.path)
+                report = await self._checks(stage_input, workspace.path)
                 repairable = await _repairable(
                     stage_input, workspace, start_ref, report, journal, max_iterations
                 )
@@ -446,7 +456,7 @@ class Runner:
                         {"iteration": dod_iterations, "failures": [c.name for c in report.failures()]},
                     )
                     refused = await _turn(agent, report.prompt_for_repair(), self._remaining(budget_seconds))
-                    report = await run_checks(stage_input, workspace.path)
+                    report = await self._checks(stage_input, workspace.path)
 
                 # 9. scope
                 scope_result = await check_scope(
@@ -680,7 +690,7 @@ class Runner:
             },
         )
         result, job_evidence = job_result(stage_input, workspace.path, ran)
-        report = await run_checks(stage_input, workspace.path)
+        report = await self._checks(stage_input, workspace.path)
         measured = report.evidence()
         # The project's `dod.facts` commands win over the job on a fact both name.
         measured.facts = {**(job_evidence.facts or {}), **(measured.facts or {})} or None
@@ -698,6 +708,37 @@ class Runner:
         )
         final = await self._publish(client, journal, workspace, stage_input, final, base, start_ref)
         return RunOutcome(Exit.OK, final, transcript_path=journal.path)
+
+    async def _isolate(self, journal: EventJournal) -> RunOutcome | None:
+        """Where the agent will run, journaled with `run.started`, so before the agent starts
+        (ADR 0146 §9). Under `container` the launcher of the agent's container must answer: with
+        none, the run ends and the agent is never started as the runner's own child instead."""
+        self.launcher = None
+        self.isolation = {"mode": "process"}
+        if self.settings.agent_isolation == "process":
+            return None
+        launcher = Launcher(self.settings.launcher_host, self.settings.launcher_port)
+        address = f"{launcher.host}:{launcher.port}"
+        if not await launcher.wait_ready(self.settings.launcher_wait_seconds):
+            detail = (
+                "the agent's container is required (agent_isolation=container) and "
+                f"no launcher answers at {address}"
+            )
+            await journal.record("run.failed", {"phase": "isolation", "error": detail})
+            await journal.flush()
+            return RunOutcome(Exit.AGENT_ISOLATION_UNAVAILABLE, detail=detail)
+        # The two containers run as different users and share one volume: what the runner writes
+        # there must be writable by the group the pod's `fsGroup` gives both (the launcher does the same).
+        os.umask(SHARED_UMASK)
+        self.launcher = launcher
+        self.isolation = {"mode": "container", "launcher": address}
+        return None
+
+    async def _checks(self, stage_input: StageInput, workspace: Path) -> DodReport:
+        """The project's checks: in the agent's container when there is one, since they run the code
+        the agent wrote (ADR 0146 §6)."""
+        env = {"HOME": str(agent_home(stage_input))} if self.launcher is not None else None
+        return await run_checks(stage_input, workspace, launcher=self.launcher, env=env)
 
     async def _egress_credential(self, client: Any) -> str:
         """What the proxy variables carry (ADR 0115): the run's egress token, which opens the run's
@@ -836,7 +877,7 @@ class Runner:
         no_repo = stage_input.project.model_copy(
             update={"test_command": "", "lint_command": "", "typecheck_command": ""}
         )
-        report = await run_checks(stage_input.model_copy(update={"project": no_repo}), workspace.path)
+        report = await self._checks(stage_input.model_copy(update={"project": no_repo}), workspace.path)
         final = complete_result(
             result,
             measured=report.evidence(),
@@ -891,7 +932,7 @@ class Runner:
             timeout_s=stage_input.budget.max_minutes * 60,
             hints=self._context_hints(stage_input, workspace.path),
         )
-        report = await run_checks(stage_input, workspace.path)
+        report = await self._checks(stage_input, workspace.path)
         outcome = step.outcome
         diagnostics = Diagnostics(
             turns=outcome.turns if outcome else 0,
@@ -1069,7 +1110,7 @@ class Runner:
         no_repo = stage_input.project.model_copy(
             update={"test_command": "", "lint_command": "", "typecheck_command": ""}
         )
-        return await run_checks(stage_input.model_copy(update={"project": no_repo}), workspace.path)
+        return await self._checks(stage_input.model_copy(update={"project": no_repo}), workspace.path)
 
     async def _place_skills(
         self, client: Any, journal: Any, stage_input: StageInput, backend: Any, workspace: Any

@@ -18,6 +18,7 @@ from typing import Any, ClassVar
 from choregos_contracts import ArtifactDisplay, ContextPack, StageInput
 
 from .config import agent_base_environment
+from .launcher import NOT_STARTED, Launcher, LauncherError
 
 # Files written by the runner in the workspace: they do not belong to the repository.
 RUNNER_FILES = (
@@ -192,13 +193,20 @@ async def run_command(
     cwd: str | Path,
     env: dict[str, str] | None = None,
     timeout: float = 900.0,
+    launcher: Launcher | None = None,
 ) -> CommandResult:
-    """Run a command, capture everything, never raise on a non-zero code."""
+    """Run a command, capture everything, never raise on a non-zero code.
+
+    With a `launcher` (ADR 0146 §6), the command runs in the agent's container, not in the runner's:
+    the project's checks run the code the agent wrote, and a program the agent can write is never
+    one the runner starts."""
     # `cwd` is the run's workspace: it is the one git must consider safe. Never the run's
     # credentials (ADR 0115): the project's checks run the code the agent wrote, and what they print
     # comes back to it. A job gets its run token in `env`, on purpose (ADR 0056).
     base = clean_git_environment(agent_base_environment(), Path(cwd))
     merged = {**base, **_git_env(Path(cwd)), **(env or {})}
+    if launcher is not None:
+        return await _run_remote(launcher, command, str(cwd), merged, timeout)
     if isinstance(command, str):
         process = await asyncio.create_subprocess_shell(
             command,
@@ -220,6 +228,29 @@ async def run_command(
     except TimeoutError:
         process.kill()
         return CommandResult(124, "", f"timed out ({timeout:.0f} s)")
+    return CommandResult(
+        process.returncode or 0,
+        stdout.decode("utf-8", errors="replace"),
+        stderr.decode("utf-8", errors="replace"),
+    )
+
+
+async def _run_remote(
+    launcher: Launcher, command: list[str] | str, cwd: str, env: dict[str, str], timeout: float
+) -> CommandResult:
+    try:
+        process = await launcher.spawn(command, cwd=cwd, env=env)
+    except LauncherError as exc:
+        return CommandResult(NOT_STARTED, "", str(exc))
+    try:
+        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
+    except TimeoutError:
+        process.kill()
+        await process.aclose()
+        return CommandResult(124, "", f"timed out ({timeout:.0f} s)")
+    await process.aclose()
+    if process.start_error is not None:
+        return CommandResult(NOT_STARTED, "", process.start_error)
     return CommandResult(
         process.returncode or 0,
         stdout.decode("utf-8", errors="replace"),

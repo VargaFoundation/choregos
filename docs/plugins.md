@@ -267,7 +267,7 @@ the assistant, empty when there is none or under `memory.enabled: false`). A key
 so a template reads `{% if preferences.brief_length %}...{% endif %}` or `{{ preferences.brief_length or
 "standard" }}`. A version is checked with samples for both; `preferences.<key>` is not checked against the
 profile's schema ([ADR 0133](adr/0133-a-plugin-ships-an-assistant-an-organisation-installs-it-for-an-audience.md),
-amendment of S63-27).
+amendment of S63-28).
 
 A `knowledge` item is exactly one of a seed (`seed`, with `serving_mode` and `upstream`) or a binding need
 (`bind: {description, required}`, [ADR 0159](adr/0159-an-assistant-may-read-the-organisation-s-knowledge-bases-by-reference.md)):

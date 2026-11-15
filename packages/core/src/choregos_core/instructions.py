@@ -10,7 +10,7 @@ The same variables as a playbook: `ticket`, `spec`, `plan_markdown`, `inputs`, `
 `context`, `project`. The frame the agent cannot modify (the output contract, the
 invariants) is added AFTER the rendering, by the orchestrator.
 
-An assistant's conversation (ADR 0133 point 3, S63-27) renders the same instructions with `config` (the
+An assistant's conversation (ADR 0133 point 3, S63-28) renders the same instructions with `config` (the
 installation's values) and `preferences` (the caller's profile memory of the assistant), a run's variables
 being empty (there is no work item), in a sandbox where a key with no value renders empty: never a sample,
 never the braces.
@@ -26,7 +26,7 @@ from jinja2.sandbox import SandboxedEnvironment
 
 
 class _SampleConfig(dict[str, Any]):
-    """An assistant's `{{ config.<key> }}` (ADR 0133) or `{{ preferences.<key> }}` (S63-27): any key reads
+    """An assistant's `{{ config.<key> }}` (ADR 0133) or `{{ preferences.<key> }}` (S63-28): any key reads
     as a sample when a version is checked at publication. The values an installation sets, and the caller's
     profile, are given at conversation time (`render_conversation_instructions`)."""
 
@@ -54,7 +54,7 @@ SAMPLE_VARIABLES: dict[str, Any] = {
     "production_indicators": [],
     #: What an assistant's installation sets (ADR 0133): any key renders.
     "config": _SampleConfig(),
-    #: The caller's profile memory of an assistant (S63-27): any key renders.
+    #: The caller's profile memory of an assistant (S63-28): any key renders.
     "preferences": _SampleConfig(),
 }
 
@@ -109,7 +109,7 @@ _CONVERSATION = SandboxedEnvironment(
 def render_conversation_instructions(
     source: str, *, config: Mapping[str, Any], preferences: Mapping[str, Any]
 ) -> str:
-    """An assistant's instructions as its conversation sends them (S63-27): `config` and `preferences`, a
+    """An assistant's instructions as its conversation sends them (S63-28): `config` and `preferences`, a
     run's variables empty, no sample; a key with no value renders empty. Raises `TemplateError`
     (`SecurityError` included)."""
     return _CONVERSATION.from_string(source).render(

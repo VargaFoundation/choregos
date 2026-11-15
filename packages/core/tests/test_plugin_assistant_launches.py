@@ -115,3 +115,17 @@ def test_a_suite_may_not_name_a_launch_the_assistant_does_not_declare(plugin: Pa
     _edit(plugin / ASSISTANT, lambda d: d.update(launches=[LAUNCH]))
     _suite_asserts(plugin, "launch__something_else")
     assert any("`launch__something_else` is not a `need__operation`" in p for p in _problems(plugin))
+
+
+def test_a_suite_may_assert_that_the_agent_reads_what_became_of_a_launch(plugin: Path) -> None:
+    """#1726: `launch_status` is given to the agent beside the launches; a suite may name it."""
+    _edit(plugin / ASSISTANT, lambda d: d.update(launches=[LAUNCH]))
+    _suite_asserts(plugin, "launch_status")
+    assert (
+        load_directory(plugin).assistants["investment-assistant"]["launches"][0]["name"] == "portfolio_review"
+    )
+
+
+def test_without_launches_a_suite_may_not_name_launch_status(plugin: Path) -> None:
+    _suite_asserts(plugin, "launch_status")
+    assert any("`launch_status` is not a `need__operation`" in p for p in _problems(plugin))

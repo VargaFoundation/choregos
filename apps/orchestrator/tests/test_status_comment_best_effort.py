@@ -9,8 +9,10 @@ behind `STATUS_COMMENT_BEST_EFFORT`; `mirror_state` (the state itself, in the da
 
 from __future__ import annotations
 
+import asyncio
 import json
 import pathlib
+import time
 from typing import Any
 
 import pytest
@@ -38,11 +40,27 @@ def _comment_refused(setup: Fixture, monkeypatch: pytest.MonkeyPatch) -> list[st
     return calls
 
 
+async def _row_state(setup: Fixture, state: str, *, timeout: float = 60.0) -> str | None:
+    """The work item's state as the database holds it, once it is `state` or the deadline passed.
+
+    The `status` query answers the interpreter's state as soon as it moves; `mirror_state` writes the
+    row in an activity right after. Read once, the row could still hold the previous state (#1718)."""
+    from choregos_api.db.models import WorkItem
+    from choregos_api.db.session import session_scope
+
+    deadline = time.monotonic() + timeout
+    while True:
+        async with session_scope() as session:
+            item = await session.get(WorkItem, setup.work_item_id)
+        found = item.state if item is not None else None
+        if found == state or time.monotonic() >= deadline:
+            return found
+        await asyncio.sleep(0.1)
+
+
 async def test_a_refused_status_comment_does_not_stop_the_work_item(
     setup: Fixture, temporal_env: Any, worker_factory: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
     from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.worker import Replayer
 
@@ -55,9 +73,9 @@ async def test_a_refused_status_comment_does_not_stop_the_work_item(
         assert description.status is not None and description.status.name == "RUNNING", "not failed"
         # Reaching this state took the first mirror past its comment: its five attempts all refused.
         assert len(calls) >= 5, f"the first comment spent its retries: {len(calls)} calls"
-        async with session_scope() as session:
-            item = await session.get(WorkItem, setup.work_item_id)
-        assert item is not None and item.state == "awaiting_spec_approval", "the state is still written"
+        # The row is written by `mirror_state`, an activity after the state moved: wait for it.
+        state = await _row_state(setup, "awaiting_spec_approval")
+        assert state == "awaiting_spec_approval", "the state is still written"
         await handle.signal("control", {"action": "stop"})
         await handle.result()
         history = await handle.fetch_history()

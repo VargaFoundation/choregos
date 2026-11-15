@@ -139,13 +139,38 @@ async def test_initialize_failure_is_reported(tmp_path: Path) -> None:
 
 
 async def test_prompt_timeout_cancels_session(tmp_path: Path) -> None:
-    client = await _client(tmp_path, {"turns": [{"stop_reason": "end_turn"}]})
+    """A live agent that has not ended its turn when the time runs out: the turn is cancelled
+    (`session/cancel`) and ends as a `timeout`, not as an unreachable agent (S65-30).
+
+    The agent holds its turn until it is cancelled, so the timeout always fires first: the test
+    used to give a fast agent 1 ms and accept either outcome, which proved nothing locally (the
+    agent answered in time) and raised `AgentUnreachableError` on a slow CI runner (#1707)."""
+    client = await _client(tmp_path, {"turns": [{"until_cancelled": True}, {"stop_reason": "end_turn"}]})
+    async with client:
+        await client.initialize()
+        session_id = await client.new_session(str(tmp_path))
+        outcome = await client.prompt("work", timeout=0.2)
+        assert outcome.stop_reason == "timeout"
+        assert outcome.cancelled
+        # The pipe is ordered: once the next turn is answered, the agent has read the cancel.
+        following = await client.prompt("go on", timeout=30)
+        assert following.stop_reason == "end_turn"
+    cancelled = json.loads((tmp_path / "cancelled.json").read_text(encoding="utf-8"))
+    assert cancelled == {"sessionId": session_id}, "the agent was told to stop its turn"
+
+
+async def test_a_prompt_to_an_agent_that_died_is_unreachable_not_a_timeout(tmp_path: Path) -> None:
+    """The other half of the distinction: an agent whose process exited during its turn did not run
+    out of time, it crashed — `prompt` raises, saying the exit code, and cancels nothing."""
+    from choregos_runner.acp.client import AgentUnreachableError
+
+    client = await _client(tmp_path, {"turns": [{"exit": 3}]})
     async with client:
         await client.initialize()
         await client.new_session(str(tmp_path))
-        # A very short timeout forces the cancellation before the answer.
-        outcome = await client.prompt("travaille", timeout=0.001)
-    assert outcome.stop_reason in {"timeout", "end_turn"}
+        with pytest.raises(AgentUnreachableError) as refusal:
+            await client.prompt("work", timeout=1.0)
+    assert "code 3" in str(refusal.value), refusal.value
 
 
 def test_protocol_methods_are_covered() -> None:

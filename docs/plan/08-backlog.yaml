@@ -4618,6 +4618,14 @@ stories:
     depends_on: [S63-01]
     notes: "Installs and converses with no code of its own in the core; played in CI."
   - id: S63-27
+    title: "feat(api,adapters): the exchange names its scope, so the source's audience is not in every token"
+    stream: S63
+    sprint: 3
+    priority: 1
+    size: S
+    depends_on: [S63-07]
+    notes: "CHOREGOS_TOKEN_EXCHANGE_SCOPES (audience to scope) sends RFC 8693 scope with the exchange. Keycloak's standard exchange grants an audience only through a client scope; named in the request, it can stay optional on the client."
+  - id: S63-28
     title: "fix(api): an assistant's conversation sends its instructions rendered, with config and preferences (#1737, ADR 0133 amendment)"
     stream: S63
     sprint: 3
@@ -4857,6 +4865,30 @@ stories:
     size: M
     depends_on: [S65-17]
     notes: "listOutposts says whether outposts are on and whether the door has a signing key; an outpost carries control_plane; an approval refused to a token has the code approval_requires_session, its 401 speaks of an approval and the window is on the instance; enrolment tokens are listed and cancelled (enrolment_used for one that enrolled); an instance names its enrolment token and who issued it; the calls' 1000-call window is said; the CLI and the console use each of them."
+  - id: S65-33
+    title: "test(api): the outposts' wait tests read the mechanism, not the clock (findings #1710, #1725)"
+    stream: S65
+    sprint: 8
+    priority: 1
+    size: S
+    depends_on: [S65-12, S65-16]
+    notes: "Four wall-clock bounds (1 s, 1 s, 2 s, 1.5 s) were crossed on loaded CI runners with the door right. The wake-up tests push the periodic look a minute away and read the poll's pauses (kits/outpost_daemon.record_pauses: one pause, ended by the wake-up; without a relay every pause runs its course; wait_s 0 takes none), and wait for the poll's first pause instead of sleeping; the answer side reads that the notification was heard. Tests only."
+  - id: S65-32
+    title: "fix(api): a logger cached at first use stays within reach of capture_logs (finding #1717)"
+    stream: S65
+    sprint: 8
+    priority: 2
+    size: S
+    depends_on: [S65-01]
+    notes: "A logger cached at first use holds the processors list it was created with; capture_logs fills the current list in place; configure_logging, called again by a later lifespan in the same worker, brought a new list, so every logger cached before it printed JSON past the capture (test_run_closed_when_the_wait_ends [cancel fails]). configure_logging now keeps the list instance and replaces its contents; the root conftest puts structlog's configuration back after every test, the same list included; apps/api/tests/test_logs_captured_after_a_second_configuration.py, each half red without it."
+  - id: S65-30
+    title: "fix(runner): a live agent that runs out of time in its turn ends as a timeout, its turn cancelled (finding #1707)"
+    stream: S65
+    sprint: 8
+    priority: 2
+    size: S
+    depends_on: [S65-21a]
+    notes: "AcpClient.request turned the prompt's TimeoutError into an AgentUnreachableError (#111), so prompt's except TimeoutError never ran: a live agent past its time ended unreachable, never cancelled, and test_prompt_timeout_cancels_session raced a 1 ms timeout against a fast fake agent. request raises AgentSilentError (an AgentUnreachableError that says whether the process was alive); prompt cancels a live agent and returns stop_reason timeout; a dead agent stays unreachable. The fake agent's until_cancelled turn holds until session/cancel, so the test never races."
   - id: S65-29
     title: "fix(api): a look at an outpost's call that a cancellation interrupts stays a cancellation"
     stream: S65
@@ -4873,6 +4905,14 @@ stories:
     size: S
     depends_on: [S65-01]
     notes: "memory.skipped, written before the run starts, is numbered below 0 (below any line already there, a batch in its order, each memory once) instead of from 1, where it took the runner's first numbers and the door dropped the runner's first lines; gate.outcome, written once the run's process has finished, follows the highest line and never takes 0; a run prepared with one skipped memory whose runner posts lines 1 to 3 shows four lines through the console's route; activities only, nothing under workflows/, no contract change (RunEvent.seq is an integer with no minimum; RunEventIn keeps minimum 0)."
+  - id: S65-34
+    title: "fix(api): a worker stopped while it places a write through an outpost sees its cancellation (finding #1710)"
+    stream: S65
+    sprint: 8
+    priority: 1
+    size: S
+    depends_on: [S65-29]
+    notes: "#1710 (b) was the defect S65-29 fixed (the failing run predates it); proven now on a real PostgreSQL by cancelling a look while its read waits on a table lock. The same test on the placement found in_outpost_scope's finally doing the same: restored on a normal exit, and on an exception under suppress(SQLAlchemyError), then re-raised. in_platform_scope left to finding #1743."
   - id: S65-27
     title: "fix(contracts): the generated TypeScript contract has no root entry and is compiled in CI (finding #1607)"
     stream: S65
@@ -4881,6 +4921,14 @@ stories:
     size: S
     depends_on: [S65-10]
     notes: "tools/gen_contracts.py stops writing packages/contracts/ts/index.ts (nine names exported by both modules, TS2308; nothing imported it) and removes a leftover one, --check refusing it; the package exports ./schemas and ./api only; the console's typecheck compiles packages/contracts/ts as its own project, so the web job turns red on a name generated twice; tests/ci/test_contracts_ts_compiled.py."
+  - id: S65-31
+    title: "test(orchestrator): a refused status comment's test waits for the row it reads (finding #1718)"
+    stream: S65
+    sprint: 8
+    priority: 2
+    size: S
+    depends_on: [S65-21]
+    notes: "The status query answers the interpreter's new state before mirror_state, the activity after it, commits the row; the test read the row once after _wait_state and could find the previous state. It polls the row with a 60 s deadline and asserts on what the database holds. Test only, not a product race: the row is a mirror written right after, and mirror_state stays blocking."
   - id: S65-26
     title: "feat(api,orchestrator,web): a person settles an action in doubt (ADR 0149 §5)"
     stream: S65

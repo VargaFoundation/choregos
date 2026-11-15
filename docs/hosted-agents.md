@@ -418,7 +418,7 @@ answered 404, and on PostgreSQL a restrictive policy on `agent_sessions` and
   under `memory.enabled: false`); a key with no value renders empty. A plugin agent's work item context
   (what a run hands it) is left out: a conversation has no work item. They are rendered at the opening
   and again on resume (`conversation.instructions_rendered` when they changed); instructions that do not
-  render refuse the conversation, 409 (S63-27, ADR 0133 amendment).
+  render refuse the conversation, 409 (S63-28, ADR 0133 amendment).
 - **Title.** Written by the model from the first exchange (the person's message and the answer), as one
   more call on the turn's own key: its cost is the turn's. When the model cannot (a refusal, a spent key, an
   empty answer) the title is the first message cut at 60 characters, at a word: a title never fails a turn.

@@ -193,7 +193,7 @@ def _context() -> str:
 
 def without_context(instructions: str) -> str:
     """An internal agent's instructions without the work item's context that `entry_of` put before them:
-    what an assistant's conversation renders, since it hands the agent no work item (S63-27)."""
+    what an assistant's conversation renders, since it hands the agent no work item (S63-28)."""
     frame = _context()
     return instructions[len(frame) :] if instructions.startswith(frame) else instructions
 

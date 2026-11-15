@@ -30,6 +30,7 @@ organisations must assume **a member of one will try to read another**.
 | the platform calling a host nobody opened | an **organisation egress allowlist** (`org_egress_rules`), decided in the console by the organisation's administrator and enforced by the platform's own outbound clients on every request, redirects included, **failing closed** when a call has no policy in context; a deployment **ceiling** per pod family refuses, before sending, a host the cluster's network does not open; every governed "add" opens its host first (ADR 0066) | `choregos_core/egress.py`, `choregos_adapters/http/egress.py`, `services/egress.py`, `routers/egress.py` |
 | escaping the container | non-root, no capabilities, seccomp — **required** by a strict Kyverno rule on every pod of the `choregos` namespace, a `choregos-*` or a `proj-*` one (a pod with no security context is refused, not tolerated; a container's own `seccompProfile` or `appArmorProfile`, an init or ephemeral container's, or the pod's AppArmor profile, set to `Unconfined`, is refused too); no service-account token; `RuntimeClass gvisor` where the policy requires it, `runner.runtimeClass` (gVisor, Kata) for every agent pod where the deployment chooses it | `infra/policies/pod-security.yaml`, `tests/charts/test_pod_security.py`, `k8s_job.py`, `tekton.py` |
 | the agent writing outside its workspace, or reaching the network around the egress proxy | the runner launches the agent through a Landlock self-restriction ([ADR 0094](adr/0094-the-kernel-confines-the-agent-at-launch.md)): writes beneath the workspace, `$TMPDIR` and `/dev` only; TCP connections to the proxy's and the direct platform endpoints' ports only, when a proxy is set; no `ptrace` of the runner. Ports, not hosts; UDP not filtered; nothing under gVisor (`best_effort` journals it, `enforce` refuses the run) | `choregos_runner/confine.py`, `packages/runner/tests/test_confinement.py` |
+| the agent reading the runner's credentials (run token, git token, egress report key) or rewriting the runner | with `runner.sandbox.agentIsolation: container` (agent sandbox executor, opt-in, [ADR 0146](adr/0146-the-runner-and-the-agent-do-not-share-a-container.md)) the agent and the project's checks run in their own container, as another user id, sharing only `/workspace` and an exchange directory; a runner that finds no launcher stops (exit 100) instead of starting the agent itself. In the default `process` mode the two share a container and a user id: see [What a coding agent can run](#what-a-coding-agent-can-run). Proved on a kubelet with runc, not under gVisor | `launcher.py`, `sandbox.yaml`, `tests/cluster/test_agent_isolation.py` |
 | prompt injection through what the agent reads | lexical detection over the ticket, its documents and the memory pack **before** the run: `sandbox.prompt_injection: warn` journals a security event on the ticket, `block` (the `regulated` preset) stops the stage before any run with the reason — a net against the crude cases, not an understanding; the walls remain the ones below | `choregos_core/injection.py`, `activities/stage.py` |
 | a secret the agent read leaving for the model provider | with `sandbox.llm_security_analyzer` (the `team` and `regulated` presets) the run's and the hosted session's gateway key are minted marked, and LiteLLM's `pre_call` guardrail masks known token shapes, long bearer/basic credentials and URL user-info in the request **before** the provider call, and its `post_call` guardrail masks them in the model's answer (text, tool arguments and reasoning, streamed or not, on `/chat/completions`, `/v1/messages` and `/v1/responses`; a signature or encrypted reasoning left as is) before the agent or the record sees it, and withholds an answer it fails on; never in the agent's process, never turned on or off by the request. Only the LiteLLM gateway enforces it: with `direct` or `openai-compatible` the flag refuses the stage and the session; a filter, not a scanner (ADR 0084) | `choregos_core/llm_guardrail.py`, `charts/choregos/charts/litellm`, `activities/run_key.py` |
 | a tool server flooding or steering the agent through its answer | every broker result is checked against the `outputSchema` its server declared (422 without the payload), its secrets masked with `redact`, and cut with a marker to its operation's cap (`CHOREGOS_BROKER_RESULT_MAX_BYTES` unless an organisation administrator set one), never above `CHOREGOS_BROKER_RESULT_CEILING_BYTES`, its data counted once (a text block that serializes its `structuredContent` is not counted again, #1374); the injection guard then reads what is left (#755, S40-17). A catalogue or plugin tool's answer is masked and cut the same way, to the cap its catalogue entry declares or the default, without a schema (#759), then read by the same injection guard (S40-18); `web_fetch`'s page and `web_search`'s results are masked and cut the same way, at the default (#1383), and the API names the bound it applied (`result_max_bytes`), up to which the run's tool server shows the model the result. The guard reads an MCP answer's `structuredContent` as well as its text, and a hosted session's tool answers as a run's (S40-18b); a session's model reads a `structuredContent` its text does not serialize, masked, capped and guarded with it (S40-18c) | `services/broker.py` (former name `services/courtier.py`), `apps/api/tests/test_broker_result_bounds.py`, `apps/api/tests/test_catalogue_plugin_result_bounds.py`, `apps/api/tests/test_operation_result_cap.py`, `apps/api/tests/test_catalogue_plugin_injection_guard.py`, `apps/api/tests/test_guard_structured_content.py`, `apps/api/tests/test_result_bound_both_doors.py` |
@@ -47,6 +48,61 @@ organisations must assume **a member of one will try to read another**.
 | an outside agent driving a workflow, or deciding in a person's place | the A2A door (ADR 0078) serves only the workflows that opted in (`a2a:`), to a token with the `a2a` scope (a `*` token is refused, and an `a2a` token is refused by the REST API); the caller acts with its person's rights, a resent message is the same work item (id derived from organisation, client and `messageId`), a waiting decision is answered `input-required` with the console's `decision_url` and a reply to a task is refused; every call is audited (`a2a.call`), rate-limited per token, counted in the daily write budget shared with the MCP door, and a message is capped (20 parts, 100,000 characters; file parts within the project's `a2a.max_file_bytes`, 10 MiB by default, each and together, in a media type the skill lists, never fetched by `uri`, stored as input artefacts before the work item exists and audited as `workitem.input_file`; the body the door reads is bounded by the organisation's largest project limit) | `a2a/door.py`, `mcp/appelant.py`, `apps/api/tests/test_a2a_inbound.py` |
 | an application acting under a person's name, or outliving its purpose | a machine account (ADR 0131) belongs to one project and is a `kind: machine` principal, which every gate asking for a person refuses; its tokens open the A2A door only, are bound to the project and expire within 365 days; it has no group, so no approval rule can name it, and the door takes no decision; the OAuth path refuses it; removing it ends its tokens at once | what the application does with a token it holds: a stolen token acts within the project's opted-in workflows until it is revoked or expires |
 | a process that outlives its run (a cancel that failed, a pod slow to die, a queued pod that starts late) writing as that run | when the orchestrator stops waiting it closes the run's row first — a terminal status, the end date and the result the workflow is told, committed before the executor is asked to cancel, whatever the cancel then does; a closed run's API answers 409 `run_closed` on every route but its two append-only journals (`events`, `network/decisions`) and `POST …/result`, whose idempotent answer changes neither the run nor its work item; a closed run has no network, and the runner refused at its first call exits with 0 ([ADR 0143](adr/0143-a-run-that-ended-stays-ended.md)) | `choregos_core/run_closure.py`, `activities/execution.py`, `deps.py` (`OpenRunAuth`), `apps/api/tests/test_run_closed.py`, `apps/api/tests/test_run_closed_postgres.py`, `apps/orchestrator/tests/test_run_closed_when_the_wait_ends.py` |
+
+## What a coding agent can run
+
+The console's agent page lists the runtime's built-in tools (files, shell, git, search). This is
+what is **enforced** around them and what is only a **best-effort filter**, as of 0.27.2
+(audit of production, 2026-11-14), and what
+[ADR 0146](adr/0146-the-runner-and-the-agent-do-not-share-a-container.md) changes once a deployment
+sets `runner.sandbox.agentIsolation: container` (the default is still `process`: the shape is proved
+on a kubelet with runc, not yet under gVisor nor on the operator).
+
+**Enforced (a wall, whatever the agent does):**
+
+- the run's pod: non-root, every capability dropped, seccomp, no service-account token (so no
+  Kubernetes credential), required by the Kyverno policies; under gVisor where the deployment sets
+  `runner.runtimeClass`;
+- the network: the pod's NetworkPolicies and the per-run egress proxy for host, port and connection
+  rate (see [Egress](#egress-three-layers-and-what-is-not-guarded));
+- the model: a capped, per-run gateway key;
+- what leaves the run: the diff is checked after the run (scope, secrets, gates) and the runner runs
+  the tests itself.
+
+**Best-effort (a net, not a wall):**
+
+- the runner's guardrails (`deny_commands`, dangerous patterns, `deny_paths`): they judge ACP
+  permission requests. A shell command a backend runs without asking is not judged. Measured on
+  production, runs under opencode ask for permission rarely (6 requests over 104 runs);
+- the opencode backend now writes `permission.bash` from the policy's `deny_commands` (each command
+  alone and as a prefix), as Claude Code's settings carry them. It is the agent's own filter: a shell
+  can spell a command another way, and the wall is the container below;
+- the commands themselves are **recorded** in the run's events, which is an audit, not a block.
+
+**With `agentIsolation: container` (agent sandbox executor, opt-in):** the agent and the project's checks
+run in a container of the sandbox pod of their own, as another user id (1001), started by a launcher
+on the pod's loopback. From there the runner's `/proc/<pid>/environ`, its processes, its `/app` and
+its files are not visible: a test on a kubelet shows the same probe reading the runner's environment
+as the runner's child and reading none of it through the launcher. The two containers share
+`/workspace` and an exchange directory, and nothing else. A runner told `container` that finds no
+launcher stops (exit code 100) instead of starting the agent itself. What stays within the agent's
+reach, by design until ADR 0146 §7 is built: the model gateway key and the egress token (the agent
+needs them to work), and the MCP headers; the runner still runs git in the tree the agent writes
+(hardened, not isolated); the other executors get no second container yet.
+
+**Known gaps in the default `process` mode:**
+
+- the runner and the agent share one container and one user id. The agent can read the runner's
+  `/proc/<pid>/environ`, so the run token, the git token (`contents: write`, one hour) and the egress
+  report key are within its reach, and it can modify the runner's code under `/app`;
+- Landlock (ADR 0094) does not exist under gVisor: the run journals `agent.confinement: best_effort`
+  with `landlock_abi: 0`, and the confinement of the agent's writes and ports does not apply (all 104
+  production runs audited);
+- the container's root filesystem is not read-only (the agent's container is, in `container` mode).
+
+Treat an agent's shell as able to act with the run's own credentials for the life of the run. The
+blast radius is the run's repository, its capped model key and its network routes, not the cluster
+or another organisation.
 
 ## What is *not* a wall, and is said so
 
@@ -326,7 +382,10 @@ The `TOOL_CALLED` event carries `as: person:<subject>` (or `assigned:<connector>
 **What the identity provider must allow.** The exchange client (`CHOREGOS_TOKEN_EXCHANGE_CLIENT_ID` and
 `_SECRET`, `_ENDPOINT`; by default the console's client and token endpoint) needs the realm's standard
 token exchange enabled, permission to exchange towards each source's audience, and refresh tokens at sign-in (the realm's normal ones). Keycloak's standard exchange has no actor token and ignores
-`requested_actor`: `act` is in the issued token only if a protocol mapper adds it. Sources must accept
+`requested_actor`: `act` is in the issued token only if a protocol mapper adds it. Keycloak grants an audience only
+through a client scope that carries it: either a default scope of the exchange client (then every token
+that client is issued carries the source's audience), or an optional one that the request names. Prefer the
+second: set `CHOREGOS_TOKEN_EXCHANGE_SCOPES` (a JSON object, audience to scope) and the exchange sends it. Sources must accept
 tokens of their audience (`iris-mcp`, `insights360-mcp`, ...). Through an MCP gateway the mode is refused.
 
 The dedicated security review of this exchange (ADR 0135) was done on 2026-11-11: see

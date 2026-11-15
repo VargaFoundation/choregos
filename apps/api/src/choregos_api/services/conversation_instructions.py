@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""An assistant's instructions, rendered for its conversation (S63-27, ADR 0133 point 3, ADR 0136 point 5).
+"""An assistant's instructions, rendered for its conversation (S63-28, ADR 0133 point 3, ADR 0136 point 5).
 
 The registry keeps the agent's instructions as a template; a conversation of an installation sends them
 rendered, with two variables:

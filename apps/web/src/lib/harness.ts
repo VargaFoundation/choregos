@@ -51,7 +51,9 @@ export function harnessOf(spec: Pick<AgentSpec, "backend" | "runtime" | "workspa
             ? "read and search the work item's clone; nothing in it may be written"
             : "read, edit and create files in the work item's clone",
     },
-    { id: "shell", label: "Shell", detail: "run commands in the sandbox, within the platform's guardrails" },
+    { id: "shell", label: "Shell", detail:
+        "commands in the run's isolated pod: gVisor where the deployment sets it, non-root, no Kubernetes credentials; network only through the run's egress proxy; commands recorded in the run's events",
+    },
   ];
   if (workspace !== "none") tools.push({ id: "git", label: "Git", detail: "through the shell, on the work item's clone" });
   if (workspace !== "none") tools.push({ id: "search", label: "Search", detail: "find files and text in the clone" });

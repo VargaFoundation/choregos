@@ -144,7 +144,7 @@ async def open_conversation(  # noqa: PLR0913 - the terms of a conversation, one
         ),
     )
     if installation_id is not None and record.messages:
-        # S63-27: the template is rendered with the installation's config and the caller's preferences.
+        # S63-28: the template is rendered with the installation's config and the caller's preferences.
         await render_instructions_of(session, record, str(record.messages[0].get("content") or ""))
     # A conversation that never had a turn is purged too: its clock starts when it is opened.
     if record.retention_until is None:
@@ -231,7 +231,7 @@ async def _turn(
         session, record.org_id, project.id, f"{record.agent_slug}@{record.agent_version}"
     )
     if resumed and await render_instructions_of(session, record, resolved.spec.instructions or ""):
-        # S63-27: the installation's config (or the caller's preferences) changed while it was idle.
+        # S63-28: the installation's config (or the caller's preferences) changed while it was idle.
         await journal(session, record, "conversation.instructions_rendered", {"reason": "resumed"})
     if record.installation_id is not None:
         # Two turns of one installation read its month and reserve from it one after the other: the lock

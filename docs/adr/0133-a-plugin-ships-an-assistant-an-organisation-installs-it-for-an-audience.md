@@ -106,7 +106,7 @@ platform has:
 - What a source lets a person read is still decided by the source (ADR 0135): the installation decides who
   may talk to the assistant, never what it may read about someone.
 
-## Amendment (2026-11-14, S63-27): the instructions are rendered for the conversation
+## Amendment (2026-11-14, S63-28): the instructions are rendered for the conversation
 
 Found on the pilot of a one-on-one assistant (issue #1737): point 3 checked `{{ config.<key> }}` at
 validation, but nothing rendered it at conversation time; the template reached the model with its braces.

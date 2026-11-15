@@ -4,10 +4,11 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator, Awaitable, Callable
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from typing import Any
 
 from sqlalchemy import event, text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import Session
 
@@ -257,8 +258,17 @@ async def in_outpost_scope(session: AsyncSession, outpost_id: str | None) -> Asy
     await name_the_outpost(session, outpost_id)
     try:
         yield
-    finally:
-        await name_the_outpost(session, before or None)
+    except BaseException:
+        # The block failed, or was cancelled. Where it left the transaction usable (an error caught
+        # under a savepoint, an exception that is not the database's), what was named before is named
+        # again. Where it did not (a statement that failed, or that a cancellation interrupted in the
+        # driver), the naming is transaction-local and dies with that transaction: the statement that
+        # names it again would only raise in turn, and its error would replace the block's. A worker
+        # stopped while it placed its write saw `PendingRollbackError` instead of its cancellation.
+        with suppress(SQLAlchemyError):
+            await name_the_outpost(session, before or None)
+        raise
+    await name_the_outpost(session, before or None)
 
 
 @asynccontextmanager

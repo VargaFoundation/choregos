@@ -1,4 +1,4 @@
-"""An assistant's conversation sends its agent's instructions rendered (S63-27, #1737, ADR 0133).
+"""An assistant's conversation sends its agent's instructions rendered (S63-28, #1737, ADR 0133).
 
 The agent's template reads `{{ config.house_name }}` (the installation's value), `{{ config.desk }}` (a
 default of the test's `config_schema`) and `{{ preferences.risk_tolerance }}` (the caller's `user` profile

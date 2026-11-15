@@ -1,5 +1,5 @@
 """An assistant's instructions: checked at publication with samples, rendered at conversation time with the
-installation's config and the caller's preferences, never with a sample (S63-27, issue #1737)."""
+installation's config and the caller's preferences, never with a sample (S63-28, issue #1737)."""
 
 from __future__ import annotations
 

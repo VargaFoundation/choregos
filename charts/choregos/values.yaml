@@ -15,7 +15,7 @@ global:
   # `choregos-api.runDoor.hostnames`, and write that URL here (ADR 0144).
   internalApiUrl: ""
   imageRegistry: ghcr.io/vargafoundation
-  imageTag: "0.27.5"
+  imageTag: "0.27.6"
   imagePullPolicy: IfNotPresent
   # Images are referenced by digest in staging and prod (Kyverno policy).
   imageDigest: ""
@@ -676,6 +676,13 @@ choregos-orchestrator:
       # NetworkPolicies and refuses a tenant's (an Argo CD AppProject that blacklists them):
       # the platform then holds that promise itself, or nobody does.
       assignmentNetworkPolicy: true
+      # Where the coding agent runs (ADR 0146). `process`: in the runner's container, as its child
+      # (same uid, same /proc, same /app; what the platform shipped until 0.27). `container`: in
+      # its OWN container of the sandbox pod, another uid, started by a launcher; it then holds
+      # neither the runner's environment (run token, git token, egress report key) nor /app.
+      # `agent_sandbox` only: the runner refuses (exit 100) rather than fall back to `process`.
+      # Needs Kubernetes >= 1.29 (native sidecar). Roll back by setting `process`.
+      agentIsolation: process
     # Context reduction (ADR 0055): rtk filters shell output, headroom compresses tool results.
     # `enabled: false` refuses both to every run; `true` lets each project's policy decide, and a
     # policy without `context` reduces nothing.
