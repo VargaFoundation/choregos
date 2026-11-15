@@ -4881,6 +4881,14 @@ stories:
     size: S
     depends_on: [S65-10]
     notes: "tools/gen_contracts.py stops writing packages/contracts/ts/index.ts (nine names exported by both modules, TS2308; nothing imported it) and removes a leftover one, --check refusing it; the package exports ./schemas and ./api only; the console's typecheck compiles packages/contracts/ts as its own project, so the web job turns red on a name generated twice; tests/ci/test_contracts_ts_compiled.py."
+  - id: S65-31
+    title: "test(orchestrator): a refused status comment's test waits for the row it reads (finding #1718)"
+    stream: S65
+    sprint: 8
+    priority: 2
+    size: S
+    depends_on: [S65-21]
+    notes: "The status query answers the interpreter's new state before mirror_state, the activity after it, commits the row; the test read the row once after _wait_state and could find the previous state. It polls the row with a 60 s deadline and asserts on what the database holds. Test only, not a product race: the row is a mirror written right after, and mirror_state stays blocking."
   - id: S65-26
     title: "feat(api,orchestrator,web): a person settles an action in doubt (ADR 0149 §5)"
     stream: S65
