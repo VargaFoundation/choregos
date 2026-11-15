@@ -258,7 +258,9 @@ write, forbidden commands, the hosts a run may reach, release trains. An organis
 - The **community edition** is Apache 2.0 and holds one organisation per instance. Everything in this
   documentation is in it.
 - The **enterprise edition** is published separately. It adds several organisations on one instance,
-  with the isolation and the identity features they need.
+  with the isolation, SCIM provisioning and the identity features they need. SAML sign-in,
+  re-authentication and session revocation are decided to belong to the community edition (2026-11-15);
+  they are not all delivered there yet.
 
 **Admin › Edition** and **About** (at the bottom of the sidebar) say which one runs.
 

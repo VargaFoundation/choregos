@@ -1784,6 +1784,16 @@ The **enterprise edition** unlocks multiple organisations *and finishes the isol
 published separately, and it declares itself at start-up; the core never assumes it is there,
 which is why the default is the most restrictive one.
 
+**Where the identity boundary lies (decision D5, 2026-11-15; [ADR 0024](adr/0024-two-editions.md),
+amendment).** SAML sign-in for the instance's organisation, re-authentication for the gestures that need
+one, and the revocation of sessions (a person's own, and an administrator's for their own organisation)
+**belong to the community edition**; SCIM provisioning and the deprovisioning it drives, several
+organisations, per-organisation ceilings and identity providers, platform administrators and
+white-labelling stay in the enterprise edition. **This is decided, not delivered**: today the community core
+has OIDC, the session rows and the owner's own revocation; SAML, SAML's authentication time and the
+administrator's revocation of an organisation's sessions are still served by the enterprise edition until the
+code moves. This page changes to the present tense when it does.
+
 The rights check runs **before** the edition check on purpose: a developer gets `403` and
 learns nothing about the edition or the number of organisations. A product limit is not
 explained to someone who has no right to meet it.
