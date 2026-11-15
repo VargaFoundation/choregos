@@ -37,6 +37,14 @@ async def test_the_exchange_sends_the_rfc_8693_request_and_returns_the_persons_t
     assert issued.access_token not in repr(issued), "a token never reaches a log through repr"
 
 
+async def test_a_scope_is_sent_only_when_asked() -> None:
+    idp = FakeIdentityProvider(access_tokens={"person-token": "sub-1"})
+    await _client(idp).exchange("person-token", audience="iris-mcp")
+    await _client(idp).exchange("person-token", audience="iris-mcp", scope="iris-mcp")
+    unscoped, scoped = idp.requests
+    assert "scope" not in unscoped and scoped["scope"] == "iris-mcp"
+
+
 async def test_a_refusal_carries_the_providers_code_and_never_a_token() -> None:
     idp = FakeIdentityProvider(access_tokens={"person-token": "sub-1"}, allowed_audiences={"other"})
     with pytest.raises(ExchangeRefused) as refused:

@@ -127,6 +127,9 @@ class Settings(BaseSettings):
     #: The audiences a person's token may be exchanged for. Empty: any audience a connector declares (the
     #: provider's own exchange permissions then decide); set it in production (security review S63-07).
     token_exchange_audiences: list[str] = Field(default_factory=list)
+    #: The scope sent with an exchange, by audience (RFC 8693 `scope`). Empty: no scope is sent, and the
+    #: provider grants the audience only if a default scope of the client carries it (S63-27).
+    token_exchange_scopes: dict[str, str] = Field(default_factory=dict)
     #: RFC 7009 revocation endpoint of the provider, to kill a delegation's offline token (S63-14). Empty:
     #: the fake's under CHOREGOS_FAKES, none otherwise (the sealed token is then only deleted here).
     token_revocation_endpoint: str = ""
