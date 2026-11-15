@@ -490,6 +490,12 @@ with an extension installed for real.
 
 ## Identity seams: revoking a session, granting platform administration
 
+> **Boundary decided on 2026-11-15 (D5, [ADR 0024](adr/0024-two-editions.md), amendment).** SAML,
+> re-authentication and the revocation of sessions are to be community functions; SCIM stays in the enterprise
+> edition. The seams below are how the enterprise edition does these today; code that moves a function into
+> the core changes what crosses them, and lands before the seams are frozen for 1.0
+> ([ADR 0168](adr/0168-the-surfaces-frozen-for-1-0.md)).
+
 Three hooks in `choregos_api.edition`, next to the group mapper:
 
 - **`declare_session_validation(fn)`** — `fn(session_db, user, payload)`, sync or async,
