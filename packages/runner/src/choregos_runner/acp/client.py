@@ -53,6 +53,18 @@ class AgentUnreachableError(RuntimeError):
     """The backend did not answer `initialize`: the backend is broken, not the agent."""
 
 
+class AgentSilentError(AgentUnreachableError):
+    """A request got no answer within its timeout; `alive` says whether the agent's process still ran.
+
+    For `session/prompt` the difference is the outcome (S65-30): an agent still running when its
+    time ran out is a timeout, its turn cancelled; an agent whose process exited is unreachable.
+    """
+
+    def __init__(self, message: str, *, alive: bool) -> None:
+        super().__init__(message)
+        self.alive = alive
+
+
 class AgentProtocolError(RuntimeError):
     """The agent broke the ACP protocol."""
 
@@ -276,7 +288,12 @@ class AcpClient:
             response = await self._prompt_until_tripped(text, timeout)
             if response is None:
                 return self.outcome
-        except TimeoutError:
+        except AgentSilentError as silent:
+            # `request` turns the wait's `TimeoutError` into a diagnosis (#111): a bare
+            # `except TimeoutError` here never caught it, and a live agent that ran out of time
+            # ended as unreachable, never cancelled (S65-30). A dead agent still is unreachable.
+            if not silent.alive:
+                raise
             await self.cancel()
             self.outcome.stop_reason = "timeout"
             self.outcome.cancelled = True
@@ -345,7 +362,8 @@ class AcpClient:
         try:
             return await asyncio.wait_for(future, timeout=timeout)
         except TimeoutError as exc:
-            raise AgentUnreachableError(self._why_silent(method, timeout)) from exc
+            alive = self.process is not None and self.process.returncode is None
+            raise AgentSilentError(self._why_silent(method, timeout), alive=alive) from exc
         finally:
             self._pending.pop(request.id, None)
 
