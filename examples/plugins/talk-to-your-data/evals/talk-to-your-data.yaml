@@ -1,0 +1,28 @@
+kind: conversation
+agent: data-analyst
+description: The analyst searches the catalogue before querying, only reads, and cites the tables it used.
+threshold: 1
+cases:
+  - name: question-is-answered-from-a-table-and-cited
+    context: { relation: self }
+    turns: ["How many orders did we receive last month?"]
+    tool_results:
+      graal__search_catalog: [{ table: sales.public.orders, description: Customer orders }]
+      graal__describe_table: { table: sales.public.orders, columns: [id, created_at, amount] }
+      graal__query_sql: { columns: [n], rows: [[1284]] }
+    assert:
+      call_order: [[graal__search_catalog, graal__describe_table, graal__query_sql]]
+      must_cite:
+        - figure: '\d+ orders'
+          source: '\(source: [a-z_.]+\)'
+      length: { min_words: 3, max_words: 150 }
+    rubric:
+      - { criterion: states the figure and names the table it came from, threshold: 0.8 }
+  - name: no-matching-table-is-said-not-invented
+    context: { relation: self }
+    turns: ["What is the weather on Mars?"]
+    tool_results:
+      graal__search_catalog: []
+    assert:
+      must_call: [{ tool: graal__search_catalog, before: any }]
+      must_not_call: [graal__query_sql]

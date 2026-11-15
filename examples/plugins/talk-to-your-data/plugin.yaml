@@ -1,0 +1,15 @@
+apiVersion: choregos/v1
+kind: Plugin
+metadata:
+  name: talk-to-your-data
+  version: 0.1.0
+  publisher: Varga Foundation
+  license: Apache-2.0
+  description: >-
+    "Talk to your data": a person asks a question in natural language, the agent finds the right
+    tables in the graal catalogue, runs a read-only SQL query under the person's own identity and
+    answers with the tables it used. Reference journey of the MCP door between products (D14).
+  core: ">=0.25.0"
+contents:
+  agents: [agents/data-analyst.yaml]
+  assistants: [assistants/talk-to-your-data.yaml]
