@@ -4625,6 +4625,14 @@ stories:
     size: S
     depends_on: [S63-07]
     notes: "CHOREGOS_TOKEN_EXCHANGE_SCOPES (audience to scope) sends RFC 8693 scope with the exchange. Keycloak's standard exchange grants an audience only through a client scope; named in the request, it can stay optional on the client."
+  - id: S63-28
+    title: "fix(api): an assistant's conversation sends its instructions rendered, with config and preferences (#1737, ADR 0133 amendment)"
+    stream: S63
+    sprint: 3
+    priority: 1
+    size: S
+    depends_on: [S63-04, S63-09]
+    notes: "Blocks the pilot of the one-on-one assistant: `{{ config.<key> }}` reached the model literally and `preferences` could not be published."
   - id: S64-00
     title: "docs(adr): ADRs 0141 and 0142, the S64 plan, the backlog stories"
     stream: S64
@@ -4905,6 +4913,14 @@ stories:
     size: S
     depends_on: [S65-29]
     notes: "#1710 (b) was the defect S65-29 fixed (the failing run predates it); proven now on a real PostgreSQL by cancelling a look while its read waits on a table lock. The same test on the placement found in_outpost_scope's finally doing the same: restored on a normal exit, and on an exception under suppress(SQLAlchemyError), then re-raised. in_platform_scope left to finding #1743."
+  - id: S65-36
+    title: "fix(api): a block under the whole instance's scope that a cancellation interrupts raises its cancellation (finding #1743)"
+    stream: S65
+    sprint: 8
+    priority: 2
+    size: S
+    depends_on: [S65-34]
+    notes: "in_platform_scope restored the previous scope in a finally, so on PostgreSQL a cancellation in the driver surfaced as PendingRollbackError. Same fix as in_outpost_scope (S65-34): restore on a normal exit, on an exception under suppress(SQLAlchemyError), then re-raise."
   - id: S65-27
     title: "fix(contracts): the generated TypeScript contract has no root entry and is compiled in CI (finding #1607)"
     stream: S65

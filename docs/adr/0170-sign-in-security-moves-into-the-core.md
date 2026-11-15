@@ -1,7 +1,7 @@
 # 0170 — Re-authentication to approve and the revocation of sessions are served by the core; SAML follows
 
 - **Status**: accepted, 2026-11-15 (decision D5 of the 2026-11 offer, taken by the product owner on
-  2026-11-15); S70-22 implements the first two functions, SAML is a later story
+  2026-11-15); S70-23 implements the first two functions, SAML is a later story
 - **Concerns**: `approval_freshness.py`, `extensions.check_gesture`, `extensions.IDENTITY_FEATURES`,
   `browser_sessions.revoke_user_sessions`, `routers/org_security.py` (`GET|PUT /orgs/{org}/security`,
   `POST /orgs/{org}/members/{email}/sessions/revocation`); amends [ADR 0024](0024-two-editions.md)

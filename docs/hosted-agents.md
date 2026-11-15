@@ -412,6 +412,13 @@ answered 404, and on PostgreSQL a restrictive policy on `agent_sessions` and
   conversation reads `idle`; the next message reopens it with its history (`conversation.resumed`
   in the journal). The state is derived from the clock, nothing sweeps it. A conversation keeps the
   agent version it started with (`agent_revision`), whatever is published after.
+- **An assistant's instructions are rendered.** A conversation of an installation sends its agent's
+  instructions rendered with `{{ config.<key> }}` (the installation's values over `config_schema`'s
+  defaults) and `{{ preferences.<key> }}` (the caller's `user` profile memory of the assistant; empty
+  under `memory.enabled: false`); a key with no value renders empty. A plugin agent's work item context
+  (what a run hands it) is left out: a conversation has no work item. They are rendered at the opening
+  and again on resume (`conversation.instructions_rendered` when they changed); instructions that do not
+  render refuse the conversation, 409 (S63-28, ADR 0133 amendment).
 - **Title.** Written by the model from the first exchange (the person's message and the answer), as one
   more call on the turn's own key: its cost is the turn's. When the model cannot (a refusal, a spent key, an
   empty answer) the title is the first message cut at 60 characters, at a word: a title never fails a turn.
