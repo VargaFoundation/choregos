@@ -52,6 +52,7 @@ async def _settle(setup: Fixture, action_id: str, outcome: str) -> Any:
         assert org is not None
         person = SimpleNamespace(
             kind="user",
+            credential="cookie",  # the person's own console session (S67-06)
             user_id=None,
             email="ops@varga.dev",
             authenticated_at=time.time(),
