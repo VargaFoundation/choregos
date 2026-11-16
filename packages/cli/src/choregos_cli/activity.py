@@ -277,18 +277,28 @@ def _tree(
     return root
 
 
-def _sub_agents(under: Tree, nodes: list[dict[str, Any]], now: datetime, out: Console) -> None:
-    """The run's sub-agents under its line, each under the node it was launched from; the run's own agent is
-    the line above, and a run with no sub-agent (a backend that names no parent included) adds nothing."""
-    by_id: dict[str, Tree] = {}
+def sub_agents(nodes: list[dict[str, Any]]) -> list[tuple[dict[str, Any], dict[str, Any] | None]]:
+    """The run's sub-agent nodes, each with the sub-agent node it was launched from (`None`: from the run's
+    own agent), parents first. The run's own agent is the run's line, and a run with no sub-agent (a backend
+    that names no parent included) gives nothing. The tree here and the workspace's draw the same shape."""
+    placed: dict[str, dict[str, Any]] = {}
+    found: list[tuple[dict[str, Any], dict[str, Any] | None]] = []
     for node in nodes:
         if node.get("kind") != "subagent":
             continue
-        parent = by_id.get(str(node.get("parent_id")), under)
-        by_id[str(node["id"])] = parent.add(_agent_line(node, now, out))
+        found.append((node, placed.get(str(node.get("parent_id")))))
+        placed[str(node["id"])] = node
+    return found
 
 
-def _agent_line(node: dict[str, Any], now: datetime, out: Console) -> Text:
+def _sub_agents(under: Tree, nodes: list[dict[str, Any]], now: datetime, out: Console) -> None:
+    by_id: dict[str, Tree] = {}
+    for node, parent in sub_agents(nodes):
+        holder = by_id[str(parent["id"])] if parent else under
+        by_id[str(node["id"])] = holder.add(agent_line(node, now, out))
+
+
+def agent_line(node: dict[str, Any], now: datetime, out: Console) -> Text:
     """`● running  sub-agent Agent · 3 tool calls   1m04s`."""
     text = theme.badge(theme.status_of(str(node.get("status") or "")), out)
     calls = int(node.get("tool_calls") or 0)
@@ -326,6 +336,8 @@ def group(entries: list[dict[str, Any]]) -> Grouped:
 
 def work_item_label(entry: dict[str, Any]) -> Text:
     text = Text(work_item_of(entry), style="bold")
+    if entry.get("work_item_title"):
+        text.append(f"  {entry['work_item_title']}")
     workflow = entry.get("workflow")
     if workflow:
         text.append("  ")

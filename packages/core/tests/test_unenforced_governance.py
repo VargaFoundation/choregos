@@ -77,9 +77,9 @@ def test_the_shipped_templates_validate() -> None:
         assert report.errors == [], (path.name, [i.code for i in report.errors])
 
 
-def test_advanced_is_version_3_and_promises_no_human_review() -> None:
+def test_advanced_is_version_4_and_promises_no_human_review() -> None:
     advanced = load_template("advanced")
-    assert advanced.metadata.version == 3
+    assert advanced.metadata.version == 4
     assert all(t.review is None or t.review.humans is None for t in advanced.transitions)
 
 

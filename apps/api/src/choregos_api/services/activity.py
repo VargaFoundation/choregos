@@ -254,6 +254,7 @@ async def _run_entries(
                 project_slug=project.slug,
                 work_item_id=item.id,
                 work_item_key=item.tracker_key,
+                work_item_title=item.title,
                 workflow=workflow,
                 stage_role=run.stage_role,
                 agent_slug=run.agent_slug,

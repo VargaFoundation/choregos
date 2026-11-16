@@ -41,7 +41,14 @@ from jsonschema.exceptions import SchemaError
 
 from ..domain import REPOSITORY_FIELD, TRACKER_FIELD
 from ..errors import Issue
-from ..gates import ALREADY_FIXED_GATE, known_gates
+from ..gates import (
+    ALREADY_FIXED_GATE,
+    DIFF_GATES,
+    OVER_WORK_ITEM,
+    RUN_SCOPED_GATES,
+    judged_on_a_run,
+    known_gates,
+)
 from .dates import field_of
 from .groups import is_per_project, placeholder_error
 from .legacy import legacy_outputs
@@ -100,6 +107,8 @@ def validate_workflow(wf: Workflow, source: Any = None) -> ValidationReport:
     _check_output_types(wf, report, source)
     _check_artifact_declarations(wf, report, source)
     _check_unenforced_review(wf, report, source)
+    _check_merge_holds_a_diff_guarantee(wf, report, source)
+    _check_scope_readings(wf, report, source)
     _check_warnings(wf, report, source)
     return report
 
@@ -812,6 +821,60 @@ def _check_effects(wf: Workflow, report: ValidationReport, source: Any) -> None:
                 "so that a rename no longer lifts the lock"
             )
             report.warn("workflow.implicit_effect", message, ["states", state_name], source)
+
+
+def _check_merge_holds_a_diff_guarantee(wf: Workflow, report: ValidationReport, source: Any) -> None:
+    """A merge names the commit its own transition's gates judged (ADR 0171): a guarantee on the diff
+    that only an earlier step carries is not held on what is merged. A warning: the workflow may rely
+    on the forge's required checks alone, and then says so by leaving it. A guarantee judged on a
+    run's writes does not count — on a merge transition the run is the last step's — and what says so
+    is its declaration, not its name: `scope_respected` with `over: work_item` reads the whole diff."""
+    for index, t in enumerate(wf.transitions):
+        if not isinstance(wf.actors.get(t.by or ""), SystemActor) or transition_effect(t) != "merge_pr":
+            continue
+        if any(g.name in DIFF_GATES and not judged_on_a_run(g.name, g.params) for g in t.gates):
+            continue
+        report.warn(
+            "workflow.no_diff_gate_at_merge",
+            f"the transition to `{t.to}` merges the pull request with no guarantee on its diff: what an "
+            "earlier step judged is not judged again on the commit that is merged — declare `no_secrets` "
+            "there, and the other diff guarantees the workflow relies on",
+            ["transitions", index],
+            source,
+        )
+
+
+def _check_scope_readings(wf: Workflow, report: ValidationReport, source: Any) -> None:
+    """How a `scope_respected` reads the change is written (ADR 0171): a run's writes, or with `over:
+    work_item` the work item's whole diff. An `over` the guarantee does not know is refused. And a
+    declaration judged on a run, on a transition the platform takes, is warned about: no run is that
+    transition's own, so the verdict is about the last step's writes — or, once the interpreter no
+    longer knows that step, about something else."""
+    for index, t in enumerate(wf.transitions):
+        by_the_platform = isinstance(wf.actors.get(t.by or ""), SystemActor)
+        for g_index, g in enumerate(t.gates):
+            if g.name not in RUN_SCOPED_GATES:
+                continue
+            over = g.params.get("over")
+            if over is not None and over != OVER_WORK_ITEM:
+                report.error(
+                    "gate.scope_over_unknown",
+                    f"`over: {over}` is not a reading of `{g.name}`: its only value is `{OVER_WORK_ITEM}` "
+                    "(the work item's whole diff); without `over`, the guarantee reads a run's writes",
+                    ["transitions", index, "gates", g_index, "params", "over"],
+                    source,
+                )
+            elif by_the_platform and judged_on_a_run(g.name, g.params):
+                report.warn(
+                    "workflow.run_scope_on_system_step",
+                    f"`{g.name}` on the transition to `{t.to}` is judged on a run's writes, and the "
+                    "platform takes this transition: the run is the last step's, or none, so the verdict "
+                    "is about neither this transition nor the work item — declare "
+                    f"`{{ name: {g.name}, params: {{ over: {OVER_WORK_ITEM} }} }}` to judge the work item's "
+                    "whole diff, or move the guarantee to the step that writes",
+                    ["transitions", index, "gates", g_index],
+                    source,
+                )
 
 
 def _check_prod_states(wf: Workflow, report: ValidationReport, source: Any) -> None:

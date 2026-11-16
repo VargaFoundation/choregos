@@ -13,6 +13,7 @@ the ACP updates themselves, so polling `after_seq` is the one way to read each u
 from __future__ import annotations
 
 import time
+from datetime import datetime
 from typing import Any
 
 from rich.console import Console, Group, RenderableType
@@ -23,7 +24,7 @@ from rich.text import Text
 from . import theme
 from .activity import DASH, IN_FLIGHT, clock, elapsed
 from .client import ApiError, Client
-from .run_steps import RunSteps
+from .run_steps import RunSteps, Step, Task
 
 #: How often `--watch` asks for what is new.
 POLL_EVERY_S = 2.0
@@ -66,6 +67,11 @@ def _breakdown(api: Client, run_id: str) -> dict[str, Any] | None:
         if exc.status_code == 404:
             return None
         raise
+    return latest_of(context)
+
+
+def latest_of(context: dict[str, Any]) -> dict[str, Any] | None:
+    """The latest breakdown of a `RunContext`, or `None` when the backend is not measurable."""
     latest = context.get("latest")
     return latest if context.get("measurable") and isinstance(latest, dict) else None
 
@@ -99,13 +105,17 @@ def _plan(steps: RunSteps, out: Console) -> RenderableType:
         return Text("\nPlan: none declared", style="bright_black")
     done = sum(1 for task in steps.plan if task.status == "completed")
     lines = [Text(f"\nPlan  {done}/{len(steps.plan)} done", style="bold")]
-    for task in steps.plan:
-        status = theme.status_of(task.status)
-        line = Text(f"  {theme.glyph(status, out)} ", style=status.style)
-        line.append(task.content)
-        line.no_wrap, line.overflow = True, "ellipsis"
-        lines.append(line)
+    lines.extend(task_line(task, out, indent="  ") for task in steps.plan)
     return Group(*lines)
+
+
+def task_line(task: Task, out: Console, *, indent: str = "") -> Text:
+    """`✓ Read the totals code`: one task of the plan."""
+    status = theme.status_of(task.status)
+    line = Text(f"{indent}{theme.glyph(status, out)} ", style=status.style)
+    line.append(task.content)
+    line.no_wrap, line.overflow = True, "ellipsis"
+    return line
 
 
 def _steps(steps: RunSteps, out: Console) -> RenderableType:
@@ -117,42 +127,52 @@ def _steps(steps: RunSteps, out: Console) -> RenderableType:
     lines: list[Text] = [Text(header, style="bold")]
     if len(steps.steps) > len(shown):
         lines.append(Text(f"  … {len(steps.steps) - len(shown)} earlier", style="bright_black"))
-    for step in shown:
-        status = theme.status_of(step.status)
-        line = Text(f"  {theme.glyph(status, out)} ", style=status.style)
-        took = elapsed({"started_at": step.started_at or None, "ended_at": step.ended_at}, now)
-        line.append(f"{status.word:<11} {took:>6}  ")
-        line.append(f"{step.kind:<8} {step.title}")
-        # One line per step: on a narrow terminal the title is cut, never the state or the time.
-        line.no_wrap, line.overflow = True, "ellipsis"
-        lines.append(line)
+    lines.extend(step_line(step, now, out, indent="  ") for step in shown)
     if not steps.steps:
         lines.append(Text("  no tool call yet", style="bright_black"))
     return Group(*lines)
 
 
-def _tokens(value: int) -> str:
+def step_line(step: Step, now: datetime, out: Console, *, indent: str = "") -> Text:
+    """`✓ done          2s  read     Read src/invoices/total.py`: one tool call, its state, its time."""
+    status = theme.status_of(step.status)
+    line = Text(f"{indent}{theme.glyph(status, out)} ", style=status.style)
+    took = elapsed({"started_at": step.started_at or None, "ended_at": step.ended_at}, now)
+    line.append(f"{status.word:<11} {took:>6}  ")
+    line.append(f"{step.kind:<8} {step.title}")
+    # One line per step: on a narrow terminal the title is cut, never the state or the time.
+    line.no_wrap, line.overflow = True, "ellipsis"
+    return line
+
+
+def tokens(value: int) -> str:
     return f"{value / 1000:.1f}k" if value >= 1000 else str(value)
+
+
+def context_head(breakdown: dict[str, Any]) -> str:
+    """`Context  call 7 · sonnet-4.5 · 40.0k of 200.0k (20%)`: what the model's context holds now."""
+    total = int(breakdown.get("prompt_tokens") or 0)
+    window = breakdown.get("max_input_tokens")
+    model = str(breakdown.get("model") or DASH).split("/")[-1]
+    head = f"Context  call {breakdown.get('call')} · {model} · {tokens(total)}"
+    if isinstance(window, int) and window > 0:
+        head += f" of {tokens(window)} ({total * 100 // window}%)"
+    return head
 
 
 def _context(breakdown: dict[str, Any] | None, out: Console) -> RenderableType:
     if breakdown is None:
         return Text("\nContext: not measured", style="bright_black")
     total = int(breakdown.get("prompt_tokens") or 0)
-    window = breakdown.get("max_input_tokens")
-    model = str(breakdown.get("model") or DASH).split("/")[-1]
-    head = f"\nContext  call {breakdown.get('call')} · {model} · {_tokens(total)}"
-    if isinstance(window, int) and window > 0:
-        head += f" of {_tokens(window)} ({total * 100 // window}%)"
-    lines: list[Text] = [Text(head, style="bold")]
+    lines: list[Text] = [Text("\n" + context_head(breakdown), style="bold")]
     full, empty = ("█", "░") if theme.unicode_ok(out) else ("#", "-")
     sections = sorted(
         ((k, int(v or 0)) for k, v in (breakdown.get("sections") or {}).items()), key=lambda kv: -kv[1]
     )
-    for name, tokens in sections:
-        share = tokens / total if total else 0.0
+    for name, count in sections:
+        share = count / total if total else 0.0
         filled = round(share * BAR)
         lines.append(
-            Text(f"  {name:<15} {_tokens(tokens):>7} {full * filled}{empty * (BAR - filled)} {share:.0%}")
+            Text(f"  {name:<15} {tokens(count):>7} {full * filled}{empty * (BAR - filled)} {share:.0%}")
         )
     return Group(*lines)

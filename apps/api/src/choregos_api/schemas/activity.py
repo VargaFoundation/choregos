@@ -30,6 +30,8 @@ class ActivityEntry(Dto):
     project_slug: str | None = None
     work_item_id: str | None = None
     work_item_key: str | None = None
+    #: The work item's title (ADR 0154 §4, G6): a surface shows more than a key.
+    work_item_title: str | None = None
     workflow: str | None = None
     stage_role: str | None = None
     agent_slug: str | None = None

@@ -28,6 +28,24 @@ class UpstreamError(AdapterError):
         self.status_code = status_code
 
 
+class HeadMovedError(UpstreamError):
+    """The pull request's head is not the commit the merge named: nothing was merged (ADR 0171).
+
+    `expected` is the commit the caller named, `actual` the head the forge holds when it could be
+    read. The same merge would be refused the same way: the caller judges the new head, it does not
+    retry."""
+
+    def __init__(self, service: str, *, expected: str, actual: str | None = None) -> None:
+        where = f"is at {actual}" if actual else "has moved"
+        super().__init__(
+            service,
+            f"the pull request's head {where}, not at {expected}: nothing was merged",
+            status_code=409,
+        )
+        self.expected = expected
+        self.actual = actual
+
+
 class ConfigurationError(AdapterError):
     """A connector configuration that is incomplete or inconsistent."""
 

@@ -31,6 +31,7 @@ ALLOWED_SOURCES = {
     "test_gateway_key_through_the_secret",
     "test_interpreter",
     "test_lost_run",
+    "test_merged_is_what_was_judged",
     "test_project_day_team",
     "test_remote_agent_step",
     "test_resolver_sees_the_gateway",

@@ -2,7 +2,7 @@ apiVersion: choregos/v1
 kind: Template
 metadata:
   name: software-delivery-governed
-  version: 1.0.0
+  version: 1.0.1
   display: GitHub · governed software delivery (architecture, QA, security, compliance)
   description: >-
     One workflow for changes that must pass everything, run by the catalogue's specialists: research

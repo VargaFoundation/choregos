@@ -12,8 +12,10 @@ from __future__ import annotations
 
 import base64
 import contextlib
+import os
 from collections.abc import AsyncIterator
 from typing import Any
+from urllib.parse import urlsplit
 
 import httpx
 from choregos_contracts import ExecutorKind, StageResult
@@ -37,7 +39,10 @@ class KubernetesClient:
         client: httpx.AsyncClient | None = None,
     ) -> None:
         self.base_url = base_url.rstrip("/")
-        self.token = token or _in_cluster_token()
+        # The pod's service-account token is THIS cluster's credential (S65-03): it goes to this
+        # cluster's API server and nowhere else. Any other API server is spoken to with the token
+        # the caller gave, or with none — and then answers 401, which names the mistake.
+        self.token = token or (_in_cluster_token() if is_own_cluster(self.base_url) else None)
         self._client = client or httpx.AsyncClient(timeout=30.0, verify=verify)
 
     async def aclose(self) -> None:
@@ -68,6 +73,23 @@ class KubernetesClient:
         if "json" not in response.headers.get("content-type", ""):
             return response.text
         return response.json()
+
+
+#: The names a pod reaches its own cluster's API server under. A cluster whose domain is not
+#: `cluster.local` is still reached at the short names, which is what the default `base_url` uses.
+OWN_CLUSTER_HOSTS = frozenset(
+    {"kubernetes", "kubernetes.default", "kubernetes.default.svc", "kubernetes.default.svc.cluster.local"}
+)
+
+
+def is_own_cluster(base_url: str) -> bool:
+    """True when `base_url` is the API server of the cluster this process runs in.
+
+    By its service name, or by the address the kubelet gives every pod (`KUBERNETES_SERVICE_HOST`).
+    Exact names only: a host that merely starts or ends like one of them is another server."""
+    host = (urlsplit(base_url).hostname or "").lower()
+    own_address = os.environ.get("KUBERNETES_SERVICE_HOST", "").strip().strip("[]").lower()
+    return bool(host) and (host in OWN_CLUSTER_HOSTS or host == own_address)
 
 
 def _in_cluster_token() -> str | None:
