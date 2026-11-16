@@ -108,6 +108,7 @@ from .runs import (
     TriggerToken,
     WebhookDelivery,
 )
+from .saml import OrgSamlIdp, SamlConsumedAssertion
 from .secrets import OrgSecret, RemoteCredential
 from .skills import Skill, SkillVersion
 from .tasks import Delegation, TaskEvent, TaskSubscription
@@ -270,6 +271,7 @@ __all__ = [
     "OrgPlugin",
     "OrgPluginApproval",
     "OrgPluginFile",
+    "OrgSamlIdp",
     "OrgSecret",
     "OrgSlugAlias",
     "OrgWorkflow",
@@ -288,6 +290,7 @@ __all__ = [
     "RemoteCredential",
     "Run",
     "RunEvent",
+    "SamlConsumedAssertion",
     "Skill",
     "SkillVersion",
     "String",

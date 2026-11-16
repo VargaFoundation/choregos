@@ -14753,5 +14753,145 @@
     ]
    ]
   ]
+ },
+ "org_saml_idps": {
+  "columns": [
+   {
+    "name": "org_id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "idp_entity_id",
+    "type": "String(length=500)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "sso_url",
+    "type": "String(length=1000)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "certificate_pem",
+    "type": "Text()",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "email_attribute",
+    "type": "String(length=200)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "groups_attribute",
+    "type": "String(length=200)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "group_map",
+    "type": "Json()",
+    "nullable": false,
+    "default": "<function dict>",
+    "server_default": null
+   },
+   {
+    "name": "domains",
+    "type": "Json()",
+    "nullable": false,
+    "default": "<function list>",
+    "server_default": null
+   },
+   {
+    "name": "id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": "<function uuid7>",
+    "server_default": null
+   },
+   {
+    "name": "created_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": false,
+    "default": "<function utcnow>",
+    "server_default": "<sqlalchemy.sql.functions.now; now>"
+   },
+   {
+    "name": "updated_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": false,
+    "default": "<function utcnow>",
+    "server_default": "<sqlalchemy.sql.functions.now; now>"
+   }
+  ],
+  "primary_key": [
+   "id"
+  ],
+  "foreign_keys": [
+   [
+    [
+     "org_id"
+    ],
+    [
+     "organizations.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_org_saml_idps_org_id_organizations"
+   ]
+  ],
+  "uniques": [
+   [
+    "uq_org_saml_idps_org_id",
+    [
+     "org_id"
+    ]
+   ]
+  ],
+  "checks": [],
+  "indexes": [
+   [
+    "ix_org_saml_idps_org_id",
+    [
+     "org_saml_idps.org_id"
+    ],
+    false
+   ]
+  ]
+ },
+ "saml_consumed_assertions": {
+  "columns": [
+   {
+    "name": "id",
+    "type": "String(length=200)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "expires_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   }
+  ],
+  "primary_key": [
+   "id"
+  ],
+  "foreign_keys": [],
+  "uniques": [],
+  "checks": [],
+  "indexes": []
  }
 }

@@ -371,6 +371,74 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { description: Below the 60-second floor }
+  /orgs/{org}/saml:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    get:
+      tags: [admin]
+      operationId: getOrgSaml
+      summary: The organisation's SAML sign-in provider (ADR 0170)
+      description: "The provider's settings, and the service provider's entity id and assertion consumer URL to give to the provider. Platform administrator only."
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/SamlProvider" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [admin]
+      operationId: setOrgSaml
+      summary: Configure the organisation's SAML sign-in provider (ADR 0170)
+      description: "The provider's signing certificate is pinned: assertions are verified against it, never against a certificate carried by the response. One domain belongs to one organisation; an organisation signs in through SAML or through an OIDC provider, not both. Audited. Platform administrator only."
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/SamlProviderIn" } } } }
+      responses:
+        "200": { description: Saved, content: { application/json: { schema: { $ref: "#/components/schemas/SamlProvider" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: A domain belongs to another organisation, or the organisation already signs in through OIDC }
+        "422": { description: Not a certificate, not a domain, or a group that maps to no core group }
+    delete:
+      tags: [admin]
+      operationId: deleteOrgSaml
+      summary: Remove the organisation's SAML sign-in provider (ADR 0170)
+      description: "Audited. Platform administrator only."
+      responses:
+        "204": { description: Removed }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /saml/{org}/metadata:
+    parameters: [{ name: org, in: path, required: true, schema: { type: string } }]
+    get:
+      tags: [session]
+      operationId: samlMetadata
+      summary: The service provider metadata of the organisation's SAML sign-in (ADR 0170)
+      description: "XML read by the identity provider's administrator. Public; 404 when the organisation has no SAML provider."
+      security: []
+      responses:
+        "200": { description: SAML metadata, content: { application/samlmetadata+xml: { schema: { type: string } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /saml/{org}/login:
+    parameters:
+      - { name: org, in: path, required: true, schema: { type: string } }
+      - { name: redirect_to, in: query, schema: { type: string } }
+    get:
+      tags: [session]
+      operationId: samlLogin
+      summary: Start a SAML sign-in (ADR 0170)
+      description: "Redirects to the provider with a signed authentication request, and sets a short-lived cookie that binds the response to it."
+      security: []
+      responses:
+        "307": { description: Redirect to the identity provider }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /saml/{org}/acs:
+    parameters: [{ name: org, in: path, required: true, schema: { type: string } }]
+    post:
+      tags: [session]
+      operationId: samlAcs
+      summary: The SAML assertion consumer service (ADR 0170)
+      description: "The browser posts the provider's response here. It is accepted only if it answers a request this browser started, is signed by the pinned certificate, and is fresh and unused."
+      security: []
+      requestBody: { required: true, content: { application/x-www-form-urlencoded: { schema: { type: object, required: [SAMLResponse], properties: { SAMLResponse: { type: string }, RelayState: { type: string } } } } } }
+      responses:
+        "307": { description: Signed in; redirected to the target }
+        "401": { description: The response is refused }
   /orgs/{org}/members/{email}/sessions/revocation:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -12562,6 +12630,30 @@ components:
       properties:
         revoked: { type: string }
         ended: { type: integer }
+    SamlProviderIn:
+      type: object
+      required: [idp_entity_id, sso_url, certificate_pem, domains]
+      properties:
+        idp_entity_id: { type: string }
+        sso_url: { type: string, description: "https only" }
+        certificate_pem: { type: string, description: "The provider's signing certificate, PEM; pinned" }
+        email_attribute: { type: [string, "null"], description: "The NameID when absent" }
+        groups_attribute: { type: [string, "null"] }
+        group_map: { type: object, additionalProperties: { type: string }, description: "A provider group to a core group; others are dropped" }
+        domains: { type: array, items: { type: string } }
+    SamlProvider:
+      type: object
+      required: [sp_entity_id, acs_url, domains, group_map]
+      properties:
+        idp_entity_id: { type: [string, "null"] }
+        sso_url: { type: [string, "null"] }
+        certificate_pem: { type: [string, "null"] }
+        email_attribute: { type: [string, "null"] }
+        groups_attribute: { type: [string, "null"] }
+        group_map: { type: object, additionalProperties: { type: string } }
+        domains: { type: array, items: { type: string } }
+        sp_entity_id: { type: string }
+        acs_url: { type: string }
     PlatformIdentity:
       type: object
       required: [items]

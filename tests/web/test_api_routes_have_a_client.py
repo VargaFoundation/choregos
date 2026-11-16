@@ -89,6 +89,11 @@ NOT_CALLED_BY_A_CLIENT: dict[str, str] = {
     "written against S47-14; the console declares and removes linked accounts",
     "/users/{user_id}/avatar": "a person's photo (ADR 0162), read by the browser as an <img> source from the "
     "`avatar_url` the API answers; no client builds its path",
+    "/saml/{org}/metadata": "the service provider's metadata, read by the identity provider's administrator "
+    "(ADR 0170, D5); no client builds its path",
+    "/saml/{org}/login": "the sign-in page redirects the browser there (`auth/login` answers its path, "
+    "ADR 0108); no client builds it",
+    "/saml/{org}/acs": "the identity provider's response, posted by the browser after sign-in (ADR 0170, D5)",
     "/github/setup": "the GitHub App's Setup URL: GitHub redirects the browser there after an installation",
     "/github/manifest/callback": "the GitHub App manifest's redirect URL: GitHub sends the browser there "
     "with the conversion code once the App is registered (S70-21, ADR 0167)",
@@ -116,6 +121,8 @@ NO_CLIENT_YET: dict[str, str] = {
     "API-only in the core; the enterprise edition's console section writes it today",
     "/orgs/{org}/members/{email}/sessions/revocation": "ending a member's sessions (ADR 0170, D5) "
     "is API-only in the core; the enterprise edition's platform route has no console screen either",
+    "/orgs/{org}/saml": "the organisation's SAML provider (ADR 0170, D5) is API-only in the core; the "
+    "enterprise edition's console section writes it today",
 }
 
 #: Paths the CLI calls and the console must not: an operator's command, not a screen.

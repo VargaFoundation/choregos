@@ -94,9 +94,10 @@ SECTION_FEATURES: frozenset[str] = frozenset({"block_permission", "asset_upload"
 #: The identity functions the core serves itself since ADR 0170, so that an extension that used to provide
 #: them detects it by announcement, never by version: `approval_freshness` (the organisation's demand for
 #: a recent authentication to approve, `GET|PUT /orgs/{org}/security`), `session_revocation` (an
-#: administrator ends a member's sessions, `revoke_user_sessions`). An extension that serves the same
-#: route would stop the start (overlap check): it asks this set first.
-IDENTITY_FEATURES: frozenset[str] = frozenset({"approval_freshness", "session_revocation"})
+#: administrator ends a member's sessions, `revoke_user_sessions`), `saml` (an identity provider per
+#: organisation, `PUT /orgs/{org}/saml` and `/saml/{org}/{login,acs,metadata}`). An extension that serves
+#: the same route would stop the start (overlap check): it asks this set first.
+IDENTITY_FEATURES: frozenset[str] = frozenset({"approval_freshness", "session_revocation", "saml"})
 
 
 def declare_admin_section(manifest: dict[str, Any]) -> None:
