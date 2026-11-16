@@ -5262,3 +5262,20 @@ stories:
     size: M
     depends_on: [S66-11]
     notes: "A required unbound need is incomplete and binding it makes it ready; a base the binder cannot read and a missing one are the same 422; nothing is copied; the conversation searches the bound base and cites it by its slug; a person outside the base's readers gets nothing of it and the next turn follows a grant; an upgrade that drops, adds or renames a bound need follows S63-22; the console's installation page binds it."
+  # ───────────── S72 — the Open Knowledge Format at the edge of a knowledge base (ADR 0174) ─────────────
+  - id: S72-01
+    title: "feat(api,runner): read a document's OKF header, serve a files base as an OKF bundle (ADR 0174)"
+    stream: S72
+    sprint: 1
+    priority: 2
+    size: S
+    depends_on: []
+    notes: "The header's title names the document; status deprecated keeps it out of runs and of the index; every served document carries one header, the document's own keys kept; an imported verified is served as source_verified; index.md with okf_version; no contract or table changes."
+  - id: S72-02
+    title: "feat(api): export a knowledge base and a memory's accepted facts as an OKF bundle (ADR 0174 point 6)"
+    stream: S72
+    sprint: 2
+    priority: 3
+    size: M
+    depends_on: [S72-01]
+    notes: "An archive of the bundle for a caller who may read everything in it, audited; an accepted proposal is verified human:<decider>; valid_to maps to status deprecated and the export says what it loses; no rights travel with it."

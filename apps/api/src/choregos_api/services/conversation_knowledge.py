@@ -27,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import undefer
 
 from ..db.models import AgentSessionRecord, KnowledgeBase, KnowledgeDocument
+from ..knowledge import okf
 from ..knowledge.index import search
 
 SEARCH_TOOL = "knowledge_search"
@@ -208,7 +209,8 @@ async def serve(
         }
     )
     return _framed(
-        (document.markdown or "")[:DOCUMENT_CHARS],
+        # As a run reads it: with its OKF header, an imported `verified` claim renamed (ADR 0174).
+        okf.served_document(document)[:DOCUMENT_CHARS],
         base=next((b.slug for b in chosen if b.id == document.knowledge_base_id), ""),
         document_id=document.id,
         title=document.title,
