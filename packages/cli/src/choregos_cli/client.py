@@ -125,6 +125,17 @@ class Client:
     def get(self, path: str, **kwargs: Any) -> Any:
         return self.request("GET", path, **kwargs)
 
+    def get_raw(self, path: str, **kwargs: Any) -> httpx.Response:
+        """A GET whose answer is bytes, not JSON (an artefact's content): the response as served."""
+        response = self._client.get(path, **kwargs)
+        if response.status_code >= 400:
+            try:
+                raise ApiError(response.status_code, response.json())
+            except (json.JSONDecodeError, ValueError):
+                raise ApiError(response.status_code, response.text) from None
+        self._check_version()
+        return response
+
     def post(self, path: str, **kwargs: Any) -> Any:
         return self.request("POST", path, **kwargs)
 

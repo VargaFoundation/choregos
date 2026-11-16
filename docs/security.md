@@ -87,8 +87,8 @@ as the runner's child and reading none of it through the launcher. The two conta
 `/workspace` and an exchange directory, and nothing else. A runner told `container` that finds no
 launcher stops (exit code 100) instead of starting the agent itself. What stays within the agent's
 reach: the `gemini-cli` backend's gateway key (its API paths are not served by the runner's model
-listener, so the key stays in its container); the runner still runs git in the tree the agent writes
-(hardened, not isolated, until S65-04c is merged). The runner opens every file it reads or writes in that tree without following a link (`safe_files.py`, `O_NOFOLLOW` from the workspace root, S65-04b: results, deliverables, inputs, task, journal, saved session; the ACP `fs/*` handlers still resolve a path inside the workspace and are not covered, nor is the tree the runner's git walks). The other executors get no second container yet. The other executors get no second container yet.
+listener, so the key stays in its container); the runner's git directory is outside the tree the agent writes
+(S65-04c), though git still walks that tree. The runner opens every file it reads or writes in that tree without following a link (`safe_files.py`, `O_NOFOLLOW` from the workspace root, S65-04b: results, deliverables, inputs, task, journal, saved session; the ACP `fs/*` handlers still resolve a path inside the workspace and are not covered, nor is the tree the runner's git walks). The other executors get no second container yet. The other executors get no second container yet.
 The gateway key, the egress token and the MCP headers of every other backend are held by the runner,
 which serves the agent a loopback model, MCP and CONNECT listener (ADR 0146 §7, S65-04f): the agent's
 environment holds the constant loopback key, loopback addresses and no run credential. A plain-HTTP
@@ -914,6 +914,12 @@ what the person who runs an outpost is told is in [Running an outpost](outpost-o
   transport is never used (https or a local path), so `core.sshCommand=false` is only defence in
   depth. A `pre-push` hook the agent wrote read the token before this (`packages/runner/src/
   choregos_runner/workspace.py`, `packages/runner/tests/test_runner_git_hooks.py`).
+  Second lock (S65-04c, ADR 0146 §5): the runner's git directory is **not in the tree** — every command
+  names it (`--git-dir`, under `CHOREGOS_RUNNER_GIT_DIR_ROOT`) with the tree as `--work-tree` — so the
+  `.git` the agent leaves (hooks, `config`, `includeIf`, `info/attributes`, `index`, a link) is read by
+  nobody; the agent gets a copy made before it starts. Under `agentIsolation: container` the directory is a
+  path of the runner's own container; in `process` mode the runner and the agent share a user id and the
+  wall is the confinement alone (`test_runner_git_outside_tree.py`).
 - Run token: ES256 JWT, `aud=internal`, `sub=run_id`, TTL `max_minutes + 15`, renewed while
   the run waits for a slot. Minted by `start_run` for the run's Secret only: never stored in
   `runs.stage_input`, never carried by a Temporal payload (#519). The runner reads it, and the
