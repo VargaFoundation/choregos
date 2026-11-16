@@ -562,8 +562,8 @@ Options:
 ```text
 Usage: choregos login [OPTIONS]
 
-  Sign in as yourself: shows a code, you approve it in the console, and the
-  CLI holds a session of yours.
+  Sign in as yourself with your browser: you approve in the console, the CLI
+  holds a session of yours.
 
   That session is listed under My account (`/account`) and ending it there
   signs the CLI out; `choregos logout` ends it too. Nothing is printed that
@@ -573,9 +573,10 @@ Usage: choregos login [OPTIONS]
   with `--token`).
 
 Options:
-  --api-url <str>           [default: http://localhost:8000]
-  --token <str>             An API token to save instead of signing in in the
-                            console (scripts, CI)
+  --api-url <str>           The instance's address (default: the profile's or
+                            CHOREGOS_API_URL, else asked)
+  --token <str>             An API token to save instead of signing in with
+                            your browser (scripts, CI)
   --org <str>               Default organisation slug (else --org per command
                             or CHOREGOS_ORG)
   --fresh                   Make the console sign you in again at your

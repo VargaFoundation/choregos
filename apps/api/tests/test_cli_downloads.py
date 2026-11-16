@@ -371,7 +371,9 @@ def test_install_sh_installs_the_verified_binary_into_local_bin(
     assert "Installed choregos 9.9.9" in done.stdout
     # Not on PATH: the script says how to put it there, for the person's shell.
     assert f"echo 'export PATH=\"{home}/.local/bin:$PATH\"' >> ~/.zshrc" in done.stdout
-    assert f"choregos login --api-url {live_instance['url']}" in done.stdout
+    # The sign-in it suggests first is the browser's; a token is the scripts' alternative (S67-05).
+    assert f"  choregos login --api-url {live_instance['url']}\n" in done.stdout
+    assert done.stdout.index("--token") > done.stdout.index("sign in with your browser")
     # Run again (an update): the same place, still one file, nothing staged left behind.
     again = _install(live_instance["url"], home)
     assert again.returncode == 0, again.stderr

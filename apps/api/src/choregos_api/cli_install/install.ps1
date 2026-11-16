@@ -119,8 +119,10 @@ function Install-Choregos {
         if (($env:Path.Split(';')) -notcontains $InstallDir) { $env:Path = "$env:Path;$InstallDir" }
 
         Write-Host ''
-        Write-Host 'Next: create a full-access token in the console (My account, Access tokens), then'
-        Write-Host "  choregos login --api-url $InstanceUrl --token <token> --org <organisation>"
+        Write-Host 'Next: sign in with your browser'
+        Write-Host "  choregos login --api-url $InstanceUrl"
+        Write-Host 'For a script or a CI job, save an access token instead (My account, Access tokens):'
+        Write-Host "  choregos login --api-url $InstanceUrl --token <token>"
         Write-Host 'Keep it in step with the instance later with: choregos self update'
     } finally {
         Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue

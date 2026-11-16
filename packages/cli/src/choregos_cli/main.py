@@ -3,11 +3,14 @@
 
 from __future__ import annotations
 
-import contextlib
 import json
+import os
+import platform
+import sys
 import webbrowser
 from pathlib import Path
 from typing import Annotated, Any
+from urllib.parse import urlsplit
 
 import httpx
 import typer
@@ -15,6 +18,7 @@ from rich.console import Console
 from rich.table import Table
 
 from . import __version__, device_login, theme
+from . import client as client_module
 from .a2a import a2a_app
 from .activity import activity
 from .artifacts import artifacts_app
@@ -167,9 +171,12 @@ def _organisation(profile: Profile, org: str | None) -> str:
 
 @app.command()
 def login(
-    api_url: Annotated[str, typer.Option(prompt=True)] = "http://localhost:8000",
+    api_url: Annotated[
+        str | None,
+        typer.Option(help="The instance's address (default: the profile's or CHOREGOS_API_URL, else asked)"),
+    ] = None,
     token: Annotated[
-        str, typer.Option(help="An API token to save instead of signing in in the console (scripts, CI)")
+        str, typer.Option(help="An API token to save instead of signing in with your browser (scripts, CI)")
     ] = "",
     org: Annotated[
         str, typer.Option(help="Default organisation slug (else --org per command or CHOREGOS_ORG)")
@@ -182,13 +189,14 @@ def login(
         bool, typer.Option("--browser/--no-browser", help="Open the approval page in your browser")
     ] = True,
 ) -> None:
-    """Sign in as yourself: shows a code, you approve it in the console, and the CLI holds a session of yours.
+    """Sign in as yourself with your browser: you approve in the console, the CLI holds a session of yours.
 
     That session is listed under My account (`/account`) and ending it there signs the CLI out; `choregos
     logout` ends it too. Nothing is printed that could be reused. With `--token`, an API token is saved
     instead (it is not a session of yours; the CLI cannot issue the first token, `tokens create` itself needs
     one: get it from the console, under My account, then pass it with `--token`).
     """
+    api_url = api_url or _known_instance() or typer.prompt("Instance address (https://…)")
     if token:
         profile = Profile(api_url=api_url, token=token, org=org)
     else:
@@ -201,6 +209,9 @@ def login(
         except httpx.TransportError as exc:
             fail(f"cannot reach {api_url}: {str(exc) or type(exc).__name__}")
             return
+        except KeyboardInterrupt:
+            console.print("sign-in cancelled; nothing was saved")
+            raise typer.Exit(130) from None
     path = profile.save()
     try:
         me = TransportSafeClient(profile).get("/me")
@@ -215,14 +226,43 @@ def _device_sign_in(profile: Profile, *, org: str | None, fresh: bool, open_brow
     with httpx.Client(base_url=profile.api_url.rstrip("/") + "/api/v1", timeout=30.0) as http:
         codes = device_login.start(http, org=org)
         url = device_login.link(codes, fresh=fresh)
-        console.print(f"Open [bold]{url}[/bold]")
-        console.print(f"and check that it shows the code [bold]{codes['user_code']}[/bold], then approve it.")
-        if open_browser:
-            with contextlib.suppress(Exception):
-                webbrowser.open(url)
-        console.print("Waiting for your approval…")
+        host = urlsplit(profile.api_url).netloc or profile.api_url
+        if open_browser and _browser_reachable() and _open(url):
+            console.print(f"Opening your browser to sign in to [bold]{host}[/bold]…")
+            console.print(f"If it does not open, visit: [bold]{url}[/bold]")
+        else:
+            console.print(f"Open this link in a browser to sign in to [bold]{host}[/bold]:")
+            console.print(f"  [bold]{url}[/bold]")
+        console.print(f"Check that the page shows the code [bold]{codes['user_code']}[/bold], then approve.")
+        console.print("Waiting for your approval… (Ctrl-C to cancel)")
         session = device_login.wait_for_session(http, codes)
     return str(session["access_token"])
+
+
+def _known_instance() -> str:
+    """The instance this CLI already talks to: the saved profile's, else `CHOREGOS_API_URL`; "" when none."""
+    if client_module.CONFIG_PATH.exists():
+        return Profile.load().api_url
+    return os.environ.get("CHOREGOS_API_URL", "")
+
+
+def _browser_reachable() -> bool:
+    """Whether a browser can open on the person's screen: not over SSH, and on Linux only with a display
+    (or under WSL, whose browser is Windows')."""
+    if os.environ.get("SSH_CONNECTION") or os.environ.get("SSH_TTY"):
+        return False
+    if sys.platform.startswith("linux"):
+        wsl = "microsoft" in platform.release().lower()
+        return wsl or bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+    return True
+
+
+def _open(url: str) -> bool:
+    """Ask the system to open `url`; False when it could not (then the link is all the person gets)."""
+    try:
+        return bool(webbrowser.open(url))
+    except Exception:  # a broken browser setup must not stop the sign-in
+        return False
 
 
 @app.command()
