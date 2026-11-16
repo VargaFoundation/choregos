@@ -893,7 +893,7 @@ def test_the_workspace_snapshot_with_an_expanded_run(
 
     async def settled(pilot: Any) -> None:
         await until(pilot, lambda: app.live and "Quarter close" in screen_text(app), "the workspace")
-        await until(pilot, lambda: bool(app.proposals) and bool(app.pending), "the decisions")
+        await until(pilot, lambda: bool(app.pending), "the decisions")
         await put_cursor_on(pilot, "implement")
         await pilot.press("enter")
         await until(pilot, lambda: "Context: call 7" in screen_text(app), "the run's steps")
