@@ -289,6 +289,22 @@ client or an A2A caller, which propose and do not decide:
   `agent.release` gesture check). A release also runs the eval suite again and keeps a history of
   every move.
 
+### An organisation's own demand, and ending a member's sessions ([ADR 0170](adr/0170-sign-in-security-moves-into-the-core.md))
+
+An organisation's `org_admin` can require, for every approval in the organisation, an authentication
+less than N seconds old (`PUT /api/v1/orgs/{org}/security`, `{"approval_freshness_s": 300}`; at least
+60, `null` removes it; `GET` reads it). It applies to approving a decision request (`approve`,
+`scope_change`), a release, and an agent release to production; answering a question is not approving.
+A stale or unknown authentication is a `401` pointing to `GET /api/v1/auth/login?reauth=1`. It adds to
+the per-gesture `step_up_minutes` above and never relaxes it.
+
+The same administrator can end every session of a member of the organisation
+(`POST /api/v1/orgs/{org}/members/{email}/sessions/revocation`, `{"reason": "..."}`): recorded sessions
+end and older cookies stop being accepted, from the person's next request
+([ADR 0130](adr/0130-a-browser-session-is-recorded-and-its-owner-ends-it.md)). The gesture is audited
+(`user.sessions.revoke`). A person's sessions are not scoped to an organisation, so in an instance with
+several organisations this ends them everywhere.
+
 ## Injection through context
 
 Context packs and tickets contain text written by third parties. Two rules:

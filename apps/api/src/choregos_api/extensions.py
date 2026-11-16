@@ -91,6 +91,13 @@ _SECTIONS: list[dict[str, Any]] = []
 # section may name its navigation icon from the schema's closed `icon` vocabulary.
 SECTION_FEATURES: frozenset[str] = frozenset({"block_permission", "asset_upload", "section_icon"})
 
+#: The identity functions the core serves itself since ADR 0170, so that an extension that used to provide
+#: them detects it by announcement, never by version: `approval_freshness` (the organisation's demand for
+#: a recent authentication to approve, `GET|PUT /orgs/{org}/security`), `session_revocation` (an
+#: administrator ends a member's sessions, `revoke_user_sessions`). An extension that serves the same
+#: route would stop the start (overlap check): it asks this set first.
+IDENTITY_FEATURES: frozenset[str] = frozenset({"approval_freshness", "session_revocation"})
+
 
 def declare_admin_section(manifest: dict[str, Any]) -> None:
     """Called by an extension when it loads; the validation happens when the API starts."""
@@ -323,6 +330,8 @@ async def check_gesture(session: Any, request: GestureRequest) -> None:
 
     from .errors import conflict, forbidden, unauthorized
 
+    # The core's own check comes first: an extension can only refuse more (ADR 0170).
+    await _approval_freshness(session, request)
     for name, function in _GESTURE_CHECKS[request.gesture].items():
         try:
             result = function(session, request)
@@ -335,6 +344,26 @@ async def check_gesture(session: Any, request: GestureRequest) -> None:
             if refusal.nature == "reauth":
                 raise unauthorized(f"{reason} — sign in again (GET /api/v1/auth/login?reauth=1)") from refusal
             raise forbidden(reason) from refusal
+
+
+async def _approval_freshness(session: Any, request: GestureRequest) -> None:
+    """The organisation's demand for a recent authentication to approve (ADR 0170)."""
+    from sqlalchemy import select
+
+    from .approval_freshness import is_approval, stale_reason
+    from .db.models import Organization
+    from .errors import unauthorized
+
+    if not is_approval(request.gesture, request.target):
+        return
+    organisation = (
+        await session.execute(select(Organization).where(Organization.slug == request.org))
+    ).scalar_one_or_none()
+    if organisation is None:
+        return
+    reason = stale_reason(organisation, getattr(request.principal, "authenticated_at", None), request.org)
+    if reason is not None:
+        raise unauthorized(f"approval_freshness: {reason} — sign in again (GET /api/v1/auth/login?reauth=1)")
 
 
 def reset_gesture_checks() -> None:

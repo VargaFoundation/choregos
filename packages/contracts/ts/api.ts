@@ -6058,6 +6058,20 @@ export type PlatformIdentityRow = {
   source: "settings" | "derived" | "default";
 };
 
+export type OrgSecurity = {
+  /** Seconds; null removes the requirement */
+  approval_freshness_s?: number | null;
+};
+
+export type SessionRevocation = {
+  reason: string;
+};
+
+export type SessionsRevoked = {
+  revoked: string;
+  ended: number;
+};
+
 export type PlatformIdentity = {
   items: Array<PlatformIdentityRow>;
 };
@@ -6384,6 +6398,7 @@ export interface Operations {
   getOrgCosts: { method: "GET"; path: "/orgs/{org}/costs"; body: never; response: CostReport };
   getOrgEgress: { method: "GET"; path: "/orgs/{org}/egress"; body: never; response: EgressOverview };
   getOrgGroup: { method: "GET"; path: "/orgs/{org}/groups/{slug}"; body: never; response: OrgGroup };
+  getOrgSecurity: { method: "GET"; path: "/orgs/{org}/security"; body: never; response: OrgSecurity };
   getOutboundProxy: { method: "GET"; path: "/orgs/{org}/outbound-proxy"; body: never; response: OutboundProxyState };
   getOutpost: { method: "GET"; path: "/orgs/{org}/outposts/{slug}"; body: never; response: Outpost };
   getPlatformGitHubApp: { method: "GET"; path: "/platform/github-app"; body: never; response: GitHubAppRegistrationStatus };
@@ -6707,6 +6722,7 @@ export interface Operations {
   revealAssistantWebhookSecret: { method: "POST"; path: "/orgs/{org}/assistants/{slug}/webhook-secret"; body: WebhookSecretRequest; response: WebhookSecret };
   revealTaskEventKey: { method: "POST"; path: "/orgs/{org}/assistants/{slug}/tasks/{task}/event-key"; body: never; response: TaskEventKey };
   revokeMachineToken: { method: "DELETE"; path: "/projects/{id}/machine-accounts/{slug}/tokens/{token_id}"; body: never; response: void };
+  revokeMemberSessions: { method: "POST"; path: "/orgs/{org}/members/{email}/sessions/revocation"; body: SessionRevocation; response: SessionsRevoked };
   revokeMyDelegation: { method: "DELETE"; path: "/me/delegations/{delegation_id}"; body: never; response: void };
   revokeMyToken: { method: "DELETE"; path: "/me/tokens/{id}"; body: never; response: void };
   revokeOrgEgressRule: { method: "DELETE"; path: "/orgs/{org}/egress/rules/{rule_id}"; body: never; response: EgressRule };
@@ -6727,6 +6743,7 @@ export interface Operations {
   setAgentReleasePolicy: { method: "PUT"; path: "/orgs/{org}/agents/{slug}/release-policy"; body: AgentReleasePolicy; response: Agent };
   setConnectorSecret: { method: "PUT"; path: "/projects/{id}/connectors/{kind}/secrets/{field}"; body: SecretValue; response: Connector };
   setOrgConnectorSecret: { method: "PUT"; path: "/orgs/{org}/connectors/{name}/secrets/{field}"; body: SecretValue; response: OrgConnector };
+  setOrgSecurity: { method: "PUT"; path: "/orgs/{org}/security"; body: OrgSecurity; response: OrgSecurity };
   setProjectAgentChannel: { method: "PUT"; path: "/projects/{id}/agent-channel"; body: ProjectAgentChannel; response: ProjectAgentChannel };
   setTrackerIdentity: { method: "PUT"; path: "/orgs/{org}/members/{user_id}/tracker-identities/{tracker}"; body: TrackerIdentityPut; response: TrackerIdentity };
   settleAction: { method: "POST"; path: "/projects/{id}/actions/{action_id}/settlement"; body: ActionSettlementRequest; response: Action };
