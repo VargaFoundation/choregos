@@ -40,18 +40,22 @@ from textual.widgets import Footer, Input, OptionList, Static, Tree
 from textual.widgets.option_list import Option
 from textual.widgets.tree import TreeNode
 
-from . import activity, theme
+from . import activity, run_activity, theme
 from .ask import confirm_link
 from .client import ApiError, AsyncClient, Profile
+from .run_steps import RunSteps
 
 #: Seconds before the activity stream is opened again after it ended or failed.
 RECONNECT_S = 3.0
 #: How many conversations the switcher and the "elsewhere" pane list.
 CONVERSATIONS_SHOWN = 50
+#: How often an expanded run that is still in flight is asked for what is new (its journal, by `after_seq`).
+RUN_POLL_S = 2.0
 #: Under this many columns the panes are stacked.
 NARROW = 100
 DASH = activity.DASH
 Key = tuple[str, ...]
+Row = tuple[Key, Key | None, Text, dict[str, Any]]
 
 
 def run(
@@ -89,21 +93,58 @@ def smoke(profile: Profile, organisation: str) -> str:
 # ──────────────────────────────── what the tree draws ────────────────────────────────
 
 
-def run_steps(entry: dict[str, Any], out: Console) -> list[Text]:
-    """The lines under an expanded run node.
+class RunDetail:
+    """What an expanded run node shows beyond the activity entry: its journal reduced (S67-03), the latest
+    context breakdown and its sub-agent nodes (S67-12). Kept when the node is collapsed, so that opening it
+    again asks only for the events after `steps.last_seq`."""
 
-    The basic node is all the platform's activity entry says today: how many events it recorded and the last
-    one. The run's plan and tool calls are the journal's reduction (S67-03), which this hook shows once it is
-    merged; nothing else in the workspace changes when it is filled.
-    """
-    lines: list[Text] = []
-    steps = int(entry.get("steps") or 0)
-    if steps:
-        text = Text(f"{steps} events")
-        if entry.get("last_event"):
-            text.append(f" · last: {entry['last_event']}")
-        lines.append(text)
-    return lines
+    def __init__(self) -> None:
+        self.steps = RunSteps()
+        self.breakdown: dict[str, Any] | None = None
+        self.agents: list[dict[str, Any]] = []
+        self.loaded = False
+        #: Why the journal could not be read, in words; `None` when it could.
+        self.unreadable: str | None = None
+
+
+def run_rows(key: Key, detail: RunDetail | None, now: datetime, out: Console) -> list[Row]:
+    """The nodes under an expanded run, parents first: its plan, its tool calls, its context and its
+    sub-agents. Only what the journal and the platform say is drawn; `_meta` is never read."""
+    if detail is None or not (detail.loaded or detail.unreadable):
+        return [
+            ((*key, "loading"), key, Text("reading the journal…", style="bright_black"), {"kind": "note"})
+        ]
+    rows: list[Row] = []
+    steps = detail.steps
+    if detail.unreadable:
+        rows.append(((*key, "error"), key, Text(detail.unreadable, style="bright_black"), {"kind": "note"}))
+    if steps.plan is not None:
+        done = sum(1 for task in steps.plan if task.status == "completed")
+        pkey: Key = (*key, "plan")
+        rows.append((pkey, key, Text(f"Plan  {done}/{len(steps.plan)} done", style="bold"), {"kind": "plan"}))
+        for number, task in enumerate(steps.plan):
+            rows.append(((*pkey, str(number)), pkey, run_activity.task_line(task, out), {"kind": "task"}))
+    skey: Key = (*key, "steps")
+    head = f"Steps  {len(steps.steps)} tool calls · {steps.finished()} finished"
+    rows.append((skey, key, Text(head, style="bold"), {"kind": "steps"}))
+    shown = list(steps.steps.values())[-run_activity.STEPS_SHOWN :]
+    if len(steps.steps) > len(shown):
+        earlier = Text(f"… {len(steps.steps) - len(shown)} earlier", style="bright_black")
+        rows.append(((*skey, "earlier"), skey, earlier, {"kind": "note"}))
+    for step in shown:
+        rows.append(((*skey, step.id), skey, run_activity.step_line(step, now, out), {"kind": "step"}))
+    if not steps.steps:
+        rows.append(((*skey, "none"), skey, Text("no tool call yet", style="bright_black"), {"kind": "note"}))
+    if detail.breakdown is None:
+        context = Text("Context: not measured", style="bright_black")
+    else:
+        context = Text(run_activity.context_head(detail.breakdown).replace("Context  ", "Context: ", 1))
+    rows.append(((*key, "context"), key, context, {"kind": "context"}))
+    for node, parent in activity.sub_agents(detail.agents):
+        akey: Key = (*key, "agent", str(node["id"]))
+        holder: Key = (*key, "agent", str(parent["id"])) if parent else key
+        rows.append((akey, holder, activity.agent_line(node, now, out), {"kind": "agent"}))
+    return rows
 
 
 class FlightTree(Tree[dict[str, Any]]):
@@ -234,6 +275,9 @@ class Workspace(App[None]):
         self._tree_keys: list[Key] = []
         self._by_key: dict[Key, TreeNode[dict[str, Any]]] = {}
         self._turn_running = False
+        #: The runs whose node the person has expanded, by run id: they are read while they are open.
+        self._open_runs: set[str] = set()
+        self._details: dict[str, RunDetail] = {}
 
     # ───────────────────────────── layout ─────────────────────────────
 
@@ -378,10 +422,10 @@ class Workspace(App[None]):
             status.append(" activity stream reconnecting")
         self.query_one("#status", Static).update(status)
 
-    def _tree_shape(self) -> tuple[list[Key], list[tuple[Key, Key | None, Text, dict[str, Any]]]]:
+    def _tree_shape(self) -> tuple[list[Key], list[Row]]:
         """The nodes the tree shows, parents first: `(key, parent, label, data)`."""
         now = activity.clock()
-        rows: list[tuple[Key, Key | None, Text, dict[str, Any]]] = []
+        rows: list[Row] = []
 
         def section(prefix: str, entries: list[dict[str, Any]], title: Text | None) -> None:
             grouped = activity.group(entries)
@@ -414,9 +458,7 @@ class Workspace(App[None]):
         rows += self._step_rows(rows)
         return [row[0] for row in rows], rows
 
-    def _entry_row(
-        self, prefix: str, parent: Key, entry: dict[str, Any], now: datetime
-    ) -> tuple[Key, Key | None, Text, dict[str, Any]]:
+    def _entry_row(self, prefix: str, parent: Key, entry: dict[str, Any], now: datetime) -> Row:
         key: Key = (prefix, str(entry.get("kind")), str(entry.get("id")))
         return (
             key,
@@ -425,15 +467,14 @@ class Workspace(App[None]):
             {"kind": str(entry.get("kind")), "entry": entry},
         )
 
-    def _step_rows(
-        self, rows: list[tuple[Key, Key | None, Text, dict[str, Any]]]
-    ) -> list[tuple[Key, Key | None, Text, dict[str, Any]]]:
-        steps: list[tuple[Key, Key | None, Text, dict[str, Any]]] = []
+    def _step_rows(self, rows: list[Row]) -> list[Row]:
+        """What is under each run node: the reading of its journal, parents before their children."""
+        now = activity.clock()
+        under: list[Row] = []
         for key, _parent, _label, data in rows:
             if data.get("kind") == "run":
-                for number, text in enumerate(run_steps(data["entry"], self.out)):
-                    steps.append(((*key, "step", str(number)), key, text, {"kind": "step"}))
-        return steps
+                under += run_rows(key, self._details.get(str(data["entry"]["id"])), now, self.out)
+        return under
 
     def draw_tree(self) -> None:
         tree = self.query_one(FlightTree)
@@ -450,23 +491,27 @@ class Workspace(App[None]):
         for key, parent, label, data in rows:
             holder = tree.root if parent is None else self._by_key[parent]
             kind = data.get("kind")
-            if kind in ("step",) or (
-                kind in ("run", "session", "turn") and not self._has_children(key, rows)
+            if kind in ("step", "task", "note", "context") or (
+                kind in ("run", "session", "turn", "agent") and not self._has_children(key, rows)
             ):
                 node = holder.add_leaf(label, data=data)
+            elif kind == "run":
+                node = holder.add(label, data=data, expand=str(data["entry"]["id"]) in self._open_runs)
             else:
-                default = kind in ("project", "item", "section")
+                default = kind in ("project", "item", "section", "plan", "steps", "agent")
                 node = holder.add(label, data=data, expand=self._user_open.get(key, default))
             self._by_key[key] = node
         self._tree_keys = shape
         if not rows:
             tree.root.add_leaf(Text("nothing is running"), data={"kind": "empty"})
         elif selected in self._by_key:
-            tree.move_cursor(self._by_key[selected], animate=False)
+            # A node knows its line only once the tree has laid its nodes out again.
+            node = self._by_key[selected]
+            tree.call_after_refresh(tree.move_cursor, node, False)
         tree.border_subtitle = f"{self.board.running()} running" if self.live else "reconnecting"
 
     @staticmethod
-    def _has_children(key: Key, rows: list[tuple[Key, Key | None, Text, dict[str, Any]]]) -> bool:
+    def _has_children(key: Key, rows: list[Row]) -> bool:
         return any(parent == key for _k, parent, _l, _d in rows)
 
     def _key_of(self, node: TreeNode[dict[str, Any]]) -> Key | None:
@@ -476,8 +521,72 @@ class Workspace(App[None]):
     @on(Tree.NodeCollapsed)
     def remember(self, event: Tree.NodeExpanded[dict[str, Any]] | Tree.NodeCollapsed[dict[str, Any]]) -> None:
         key = self._key_of(event.node)
-        if key is not None:
+        if key is None:
+            return
+        data = event.node.data or {}
+        if data.get("kind") == "run":
+            # Keyed by the run, not by its place: a run that ends moves from the live part to the ended
+            # one and stays open.
+            run_id = str(data["entry"]["id"])
+            (self._open_runs.add if event.node.is_expanded else self._open_runs.discard)(run_id)
+            self.sync_run_readers()
+        else:
             self._user_open[key] = event.node.is_expanded
+
+    def sync_run_readers(self) -> None:
+        """One reader per run that is open and not yet over; collapsing a run stops its reader."""
+        wanted = {run_id for run_id in self._open_runs if run_id in self._run_ids()}
+        for worker in list(self.workers):
+            group = worker.group
+            if group.startswith("run:") and group[4:] not in wanted:
+                worker.cancel()
+        running = {worker.group for worker in self.workers if worker.group.startswith("run:")}
+        for run_id in wanted:
+            if f"run:{run_id}" not in running:
+                self.run_worker(self.follow_run(run_id), group=f"run:{run_id}", exit_on_error=False)
+
+    def _run_ids(self) -> set[str]:
+        return {*self.board.in_flight, *self.board.finished}
+
+    async def follow_run(self, run_id: str) -> None:
+        """Reads the open run's journal after the last event it has, its context and its sub-agents; again
+        every `RUN_POLL_S` while it is in flight, once when it is over."""
+        detail = self._details.setdefault(run_id, RunDetail())
+        while True:
+            await self.read_run(run_id, detail)
+            self.draw_tree()
+            if run_id not in self.board.in_flight:
+                return
+            await asyncio.sleep(RUN_POLL_S)
+
+    async def read_run(self, run_id: str, detail: RunDetail) -> None:
+        """One round of reads. A route that fails leaves what was read and says so on the node; it never
+        takes the workspace down, and never notifies again every round."""
+        found: Any = await asyncio.gather(
+            self.api.get(f"/runs/{run_id}/events", params={"after_seq": detail.steps.last_seq}),
+            self.api.get(f"/runs/{run_id}/context-breakdown"),
+            self.api.get(f"/runs/{run_id}/agents"),
+            return_exceptions=True,
+        )
+        events, context, agents = found
+        if isinstance(events, BaseException):
+            if not isinstance(events, ApiError | httpx.TransportError):
+                raise events
+            detail.unreadable = "the journal cannot be read" + (
+                f" ({events.status_code})" if isinstance(events, ApiError) else ""
+            )
+        else:
+            detail.unreadable = None
+            detail.steps.apply(events or [])
+            detail.loaded = True
+        # No breakdown is "not measured", whatever the reason (a backend the platform cannot see into, no
+        # call measured yet, a 404, or no right to read it): the same words as `activity --run`.
+        if not isinstance(context, BaseException):
+            detail.breakdown = run_activity.latest_of(context or {})
+        elif isinstance(context, ApiError) and context.status_code == 404:
+            detail.breakdown = None
+        if not isinstance(agents, BaseException):
+            detail.agents = list((agents or {}).get("items") or [])
 
     def draw_decisions(self) -> None:
         body = self.query_one("#decisions-body", Static)

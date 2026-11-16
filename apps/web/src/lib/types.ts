@@ -16,6 +16,7 @@ export type {
   ApiTokenCreate,
   ApiTokenCreated,
   BrowserSession,
+  DeviceRequest,
   EndedSessions,
   ArtifactRef,
   AuditPage,

@@ -142,6 +142,10 @@ class Principal:
     #: The browser session the request came with (ADR 0130), `None` for an API token or a cookie
     #: opened before sessions were recorded: what My account calls "this session".
     session_id: str | None = None
+    #: What proved the identity: `cookie` (the console), `frame` (the embedded component's token),
+    #: `surface` (a developer surface's session, ADR 0154 §6) or `api_token`; empty for a principal built
+    #: any other way (a door's token, a machine, a run). A decision asks for one of the first three (§7).
+    credential: str = ""
 
     def role_for(self, org: str, project_slug: str | None = None) -> Role | None:
         if project_slug:

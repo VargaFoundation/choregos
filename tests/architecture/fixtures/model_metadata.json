@@ -12378,78 +12378,108 @@
   ]
  },
  "user_sessions": {
-  "checks": [],
   "columns": [
    {
-    "default": null,
     "name": "user_id",
+    "type": "String(length=36)",
     "nullable": false,
-    "server_default": null,
-    "type": "String(length=36)"
+    "default": null,
+    "server_default": null
    },
    {
-    "default": null,
     "name": "channel",
+    "type": "String(length=32)",
     "nullable": false,
-    "server_default": null,
-    "type": "String(length=32)"
+    "default": null,
+    "server_default": null
    },
    {
-    "default": null,
     "name": "expires_at",
+    "type": "DateTime(timezone=True)",
     "nullable": false,
-    "server_default": null,
-    "type": "DateTime(timezone=True)"
+    "default": null,
+    "server_default": null
    },
    {
-    "default": null,
     "name": "last_seen_at",
+    "type": "DateTime(timezone=True)",
     "nullable": true,
-    "server_default": null,
-    "type": "DateTime(timezone=True)"
+    "default": null,
+    "server_default": null
    },
    {
-    "default": null,
     "name": "user_agent",
+    "type": "String(length=300)",
     "nullable": true,
-    "server_default": null,
-    "type": "String(length=300)"
+    "default": null,
+    "server_default": null
    },
    {
-    "default": null,
     "name": "ip",
+    "type": "String(length=64)",
     "nullable": true,
-    "server_default": null,
-    "type": "String(length=64)"
-   },
-   {
     "default": null,
+    "server_default": null
+   },
+   {
     "name": "revoked_at",
+    "type": "DateTime(timezone=True)",
     "nullable": true,
-    "server_default": null,
-    "type": "DateTime(timezone=True)"
+    "default": null,
+    "server_default": null
    },
    {
-    "default": "<function uuid7>",
+    "name": "kind",
+    "type": "String(length=16)",
+    "nullable": false,
+    "default": "'browser'",
+    "server_default": "'browser'"
+   },
+   {
+    "name": "client_name",
+    "type": "String(length=80)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "auth_time",
+    "type": "DateTime(timezone=True)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "idle_expires_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
     "name": "id",
+    "type": "String(length=36)",
     "nullable": false,
-    "server_default": null,
-    "type": "String(length=36)"
+    "default": "<function uuid7>",
+    "server_default": null
    },
    {
-    "default": "<function utcnow>",
     "name": "created_at",
+    "type": "DateTime(timezone=True)",
     "nullable": false,
-    "server_default": "<sqlalchemy.sql.functions.now; now>",
-    "type": "DateTime(timezone=True)"
+    "default": "<function utcnow>",
+    "server_default": "<sqlalchemy.sql.functions.now; now>"
    },
    {
-    "default": "<function utcnow>",
     "name": "updated_at",
+    "type": "DateTime(timezone=True)",
     "nullable": false,
-    "server_default": "<sqlalchemy.sql.functions.now; now>",
-    "type": "DateTime(timezone=True)"
+    "default": "<function utcnow>",
+    "server_default": "<sqlalchemy.sql.functions.now; now>"
    }
+  ],
+  "primary_key": [
+   "id"
   ],
   "foreign_keys": [
    [
@@ -12464,6 +12494,8 @@
     "fk_user_sessions_user_id_users"
    ]
   ],
+  "uniques": [],
+  "checks": [],
   "indexes": [
    [
     "ix_user_sessions_user_id",
@@ -12472,11 +12504,7 @@
     ],
     false
    ]
-  ],
-  "primary_key": [
-   "id"
-  ],
-  "uniques": []
+  ]
  },
  "users": {
   "checks": [],
@@ -14891,6 +14919,140 @@
   ],
   "foreign_keys": [],
   "uniques": [],
+  "checks": [],
+  "indexes": []
+ },
+ "device_authorizations": {
+  "columns": [
+   {
+    "name": "device_hash",
+    "type": "String(length=64)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "user_code_hash",
+    "type": "String(length=64)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "client_kind",
+    "type": "String(length=16)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "client_name",
+    "type": "String(length=80)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "org_slug",
+    "type": "String(length=120)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "status",
+    "type": "String(length=12)",
+    "nullable": false,
+    "default": "'pending'",
+    "server_default": null
+   },
+   {
+    "name": "user_id",
+    "type": "String(length=36)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "auth_time",
+    "type": "DateTime(timezone=True)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "expires_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "interval_s",
+    "type": "Integer()",
+    "nullable": false,
+    "default": "5",
+    "server_default": null
+   },
+   {
+    "name": "last_polled_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": "<function uuid7>",
+    "server_default": null
+   },
+   {
+    "name": "created_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": false,
+    "default": "<function utcnow>",
+    "server_default": "<sqlalchemy.sql.functions.now; now>"
+   },
+   {
+    "name": "updated_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": false,
+    "default": "<function utcnow>",
+    "server_default": "<sqlalchemy.sql.functions.now; now>"
+   }
+  ],
+  "primary_key": [
+   "id"
+  ],
+  "foreign_keys": [
+   [
+    [
+     "user_id"
+    ],
+    [
+     "users.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_device_authorizations_user_id_users"
+   ]
+  ],
+  "uniques": [
+   [
+    "uq_device_authorizations_device_hash",
+    [
+     "device_hash"
+    ]
+   ],
+   [
+    "uq_device_authorizations_user_code_hash",
+    [
+     "user_code_hash"
+    ]
+   ]
+  ],
   "checks": [],
   "indexes": []
  }

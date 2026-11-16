@@ -112,6 +112,7 @@ import type {
   ApiTokenCreate,
   ApiTokenCreated,
   BrowserSession,
+  DeviceRequest,
   EndedSessions,
   Artifact,
   ArtifactRef,
@@ -854,6 +855,15 @@ export const api = {
     return request<Avatar>("/me/avatar", { method: "PUT", body: form });
   },
   deleteMyAvatar: () => request<void>("/me/avatar", { method: "DELETE" }),
+  /** What a developer surface's sign-in code asks for (ADR 0154 §6); needs the person's own console session. */
+  deviceRequest: (userCode: string) =>
+    request<DeviceRequest>(`/auth/device/requests/${encodeURIComponent(userCode)}`),
+  /** Approve or refuse that sign-in; the surface, which polls, receives its session on approval. */
+  decideDeviceRequest: (userCode: string, decision: "approve" | "deny") =>
+    request<void>(`/auth/device/requests/${encodeURIComponent(userCode)}/decision`, {
+      method: "POST",
+      body: JSON.stringify({ decision }),
+    }),
   endSession: (id: string) => request<void>(`/me/sessions/${encodeURIComponent(id)}`, { method: "DELETE" }),
   endOtherSessions: () => request<EndedSessions>("/me/sessions/end-others", { method: "POST" }),
   templates: () => request<TemplateSummary[]>("/templates"),

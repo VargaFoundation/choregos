@@ -959,6 +959,62 @@ def test_a_suite_names_a_need_operation_or_a_launch_tool(tool: str, valid: bool)
     assert (not errors) is valid, [e.message for e in errors]
 
 
+def _ref(spec: dict[str, Any], schema: dict[str, Any]) -> dict[str, Any]:
+    node = schema
+    while "$ref" in node:
+        node = spec["components"]["schemas"][node["$ref"].rsplit("/", 1)[1]]
+    return node
+
+
+def test_a_developer_surface_sign_in_is_declared_contract_first() -> None:
+    """S67-04a (ADR 0154 §6): the four device-flow operations, the session kind, nothing implicit."""
+    spec = contracts.load_openapi()
+    paths = spec["paths"]
+    assert paths["/auth/device"]["post"]["operationId"] == "startDeviceSignIn"
+    assert paths["/auth/device/token"]["post"]["operationId"] == "pollDeviceToken"
+    assert paths["/auth/device/requests/{user_code}"]["get"]["operationId"] == "getDeviceRequest"
+    decision = paths["/auth/device/requests/{user_code}/decision"]["post"]
+    assert decision["operationId"] == "decideDeviceRequest"
+    # The two calls a surface makes carry no credential (the codes are the proof); the console's two
+    # carry the person's cookie only: a pasted API token or a surface session never approves a sign-in.
+    assert paths["/auth/device"]["post"]["security"] == []
+    assert paths["/auth/device/token"]["post"]["security"] == []
+    assert paths["/auth/device/requests/{user_code}"]["get"]["security"] == [{"session": []}]
+    assert decision["security"] == [{"session": []}]
+
+
+def test_the_device_token_errors_are_the_ones_of_rfc_8628() -> None:
+    spec = contracts.load_openapi()
+    error = spec["components"]["schemas"]["DeviceTokenError"]
+    assert set(error["properties"]["error"]["enum"]) >= {
+        "authorization_pending",
+        "slow_down",
+        "expired_token",
+        "access_denied",
+    }
+    poll = spec["paths"]["/auth/device/token"]["post"]["responses"]
+    assert "400" in poll and "200" in poll
+    ok = _ref(spec, poll["200"]["content"]["application/json"]["schema"])
+    assert {"access_token", "session_id", "kind", "expires_in"} <= set(ok["required"])
+    request = _ref(
+        spec,
+        spec["paths"]["/auth/device/token"]["post"]["requestBody"]["content"]["application/json"]["schema"],
+    )
+    assert request["properties"]["grant_type"]["enum"] == ["urn:ietf:params:oauth:grant-type:device_code"]
+
+
+def test_a_session_has_a_kind_and_surfaces_are_cli_or_editor() -> None:
+    spec = contracts.load_openapi()
+    session = spec["components"]["schemas"]["BrowserSession"]
+    assert session["properties"]["kind"]["enum"] == ["browser", "cli", "editor"]
+    assert "kind" in session["required"]
+    start = spec["components"]["schemas"]["DeviceAuthorizationRequest"]
+    assert start["properties"]["client_kind"]["enum"] == ["cli", "editor"]
+    assert spec["components"]["schemas"]["DeviceToken"]["properties"]["kind"]["enum"] == ["cli", "editor"]
+    # a surface session ends through the route that ends a browser one
+    assert spec["paths"]["/me/sessions/{id}"]["delete"]["operationId"] == "endMySession"
+
+
 def test_the_developer_surfaces_read_what_the_door_reads_and_what_waits_for_the_person() -> None:
     """S67-04b (ADR 0154 §4): G1, G2, G5, G6, G8 are in the contract, optional if older clients exist."""
     spec = contracts.load_openapi()

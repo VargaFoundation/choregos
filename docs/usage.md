@@ -26,6 +26,13 @@ without one.
 
 Three ways, same result: the web wizard (`/projects/new`), the CLI, or the API.
 
+Sign in as yourself with `choregos login --api-url https://api.example --org acme`: it opens your browser on the
+console (over SSH or without a display it prints the link instead) and shows a code; you approve the code in the
+console (signed in as you, through your organisation's identity provider), and the
+CLI holds a session of yours. It is listed under **My account**, *Sessions* (ending it there signs the CLI out at
+its next call), `choregos logout` ends it from the terminal, and `--fresh` makes the console ask your identity
+provider for a new sign-in first. A script or CI keeps using an API token:
+
 ```bash
 choregos login --api-url https://api.example --token "$CHOREGOS_TOKEN" --org acme
 choregos projects create billing-api --name "Billing API" --org acme
@@ -526,6 +533,39 @@ lifted the production lock. Those names are still read, so a published workflow 
 behaviour, but the validator warns (`workflow.implicit_effect`), and a rename from the console
 first writes the effect down.
 
+**What is merged is what the merge transition's gates judged.** `does: merge_pr` merges the pull
+request at the commit the transition's own gates ruled on ([ADR 0171](adr/0171-what-is-merged-is-what-was-judged.md)).
+A gate on an earlier step ruled on the branch as it stood then, and a commit may land before the merge:
+declare on the merge transition the guarantees that must hold on what is merged.
+
+```yaml
+  - id: t-merge
+    from: review
+    to: integrated
+    by: ci
+    does: merge_pr
+    gates:
+      - ci_green
+      - no_secrets
+      - { name: diff_size_max, params: { files: 60 } }
+      - { name: scope_respected, params: { over: work_item } }
+    timeout_hours: 48
+    on_fail: { to: in_progress, max_attempts: 3, escalate_to: needs_human }
+```
+
+`no_secrets`, `diff_size_max`, `docs_updated`, `markdown_sections` and `adr_number_free` read the work
+item's whole diff at that commit, whichever step ran last: use the parameters of the step that first
+asked them (a size limit then counts what the later steps added). `scope_respected` says which change
+it reads. As a step declares it, it judges what that step's run wrote; on a transition the platform
+takes there is no such run, and the validator warns (`workflow.run_scope_on_system_step`). With
+`over: work_item` it judges the whole diff and no run: every file under a path the policy forbids
+(`scope.deny_paths`) is refused, and every file outside `paths` when you give them
+(`params: { over: work_item, paths: ["docs/adr/**"] }`). It does not read the work item's own allowed
+paths — a step sets them and a later one may narrow them — so without `paths` only the forbidden ones
+are held: name in `paths` what the workflow may merge, or forbid in the policy what it may not. A
+refusal follows the transition's `on_fail`, once the pull request's pending checks have answered. The
+validator warns about a transition that merges and reads no diff (`workflow.no_diff_gate_at_merge`).
+
 **A pull request can be opened as a draft.** By default `does: open_pr` opens the pull request ready
 for review. `pull_request: { draft: true }` on the same transition opens it as a draft:
 
@@ -901,6 +941,25 @@ curl -X PUT "$API/projects/acme:dev/workflows/dev-complex" \
 
 Running items stay pinned to their version until they are migrated (see above); every state of
 the old version exists in the new one, so no `state_mapping` is needed.
+
+**The versions whose merge transition holds the diff guarantees** (ADR 0171) are `default-simple` 2,
+`full-auto` 3, `advanced` 4, version 2 of the core's `dev-feature`, `dev-fix`, `hotfix`,
+`refactoring`, `dependency-upgrade`, `vulnerability-fix`, `documentation` and
+`architecture-decision`, `dev-simple` 3, `dev-complex` 3 and `study` 2 of `github-software-delivery`
+1.1.1, and `governed-delivery` 2 of `software-delivery-governed` 1.0.1. A project created on an
+earlier image keeps the version it stores, whose merge transition does not carry them, until the
+newer one is published in it:
+
+- a project born from a template: its readiness item `workflow-template` turns to *check* and names
+  the file; publish it as above (`choregos workflow push <project> <file>`);
+- a workflow adopted from the catalogue: **Adopted workflows up to date** turns to *check*; adopt the
+  entry again, which publishes the project's next version;
+- a project created without a template, which received `default-simple`: nothing says so. Take the
+  text from `GET /workflows/templates` and publish it the same way.
+
+A workflow someone edited in the project is theirs: add the gates to its merge transition by hand.
+Work items in progress finish on the version they were born in, with the merge transition it had,
+unless you migrate them; no state changed, so no `state_mapping` is needed.
 
 ### Editing a workflow without rewriting it
 
@@ -2647,7 +2706,10 @@ reverts one a shell made anyway, and `scope_respected` fails on a change under a
 allowed path is declared. No scope change grants one. The step's own files, `.choregos/result.json` and
 `.choregos/outputs/`, stay writable under a denied `.choregos/**`. The default list is
 `.choregos/**`, `.github/workflows/**` and `charts/**`: a project whose agents change its charts lists
-its own.
+its own. On a transition the platform takes, `scope_respected` with `over: work_item` holds the same
+paths on the work item's whole diff ([ADR 0171](adr/0171-what-is-merged-is-what-was-judged.md)): the
+shipped workflows declare it on their merge transition, so a file under a denied path is not merged
+whoever committed it, a person on the pull request included.
 
 **An organisation sets a ceiling that every project policy may only tighten**
 (`PUT /orgs/{org}/policy-ceiling`, `org_admin`; **policy ceiling** on the admin page):

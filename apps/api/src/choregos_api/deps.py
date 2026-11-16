@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.requests import HTTPConnection
 
 from . import embed_frame
+from .browser_sessions import SURFACE_PREFIX, SURFACE_PURPOSE, check_surface_session
 from .config import Settings, get_settings
 from .db.models import AgentSessionRecord, ApiToken, Membership, Organization, Project, Run, User
 from .db.org_aliases import current_slug
@@ -194,6 +195,8 @@ async def current_principal(
     await limit_to_organisations(session, ALL_ORGS)
     if authorization and authorization.lower().startswith("bearer "):
         raw = authorization.split(" ", 1)[1].strip()
+        if raw.startswith(SURFACE_PREFIX):
+            return await _surface_principal(request, session, settings, raw)
         token = (
             await session.execute(select(ApiToken).where(ApiToken.hash == hash_api_token(raw)))
         ).scalar_one_or_none()
@@ -217,6 +220,7 @@ async def current_principal(
         record_usage(token, request)
         principal = await _principal_from_user(session, user)
         principal.kind = "user"
+        principal.credential = "api_token"
         return principal
 
     frame = request.headers.get(embed_frame.HEADER)
@@ -235,10 +239,34 @@ async def current_principal(
     await _validate_session(session, user, payload)
     principal = await _principal_from_user(session, user)
     principal.session_id = sid
+    principal.credential = "cookie"
     # The authentication time at the IdP (`auth_time`) when the session carries it; otherwise the
     # time the session was opened (`iat`), which overestimates it after a silent SSO reconnection.
     when = payload.get("auth_time", payload.get("iat"))
     principal.authenticated_at = int(when) if isinstance(when, int | float) else None
+    return principal
+
+
+async def _surface_principal(
+    request: HTTPConnection, session: AsyncSession, settings: Settings, raw: str
+) -> Principal:
+    """The principal of a developer surface's session (ADR 0154 §6): the person, and the sign-in's time.
+
+    Its credential is a signed value of its own purpose (a cookie is not accepted here, nor this as one), and
+    the `user_sessions` row says whether it still holds: ended from My account, expired, or idle too long."""
+    payload = read_session(raw[len(SURFACE_PREFIX) :], settings, purpose=SURFACE_PURPOSE)
+    sid = payload.get("sid") if payload else None
+    if payload is None or not isinstance(sid, str):
+        raise unauthorized("unknown or expired session: run `choregos login`")
+    user = await session.get(User, str(payload.get("sub", "")))
+    if user is None:
+        raise unauthorized("expired session")
+    row = await check_surface_session(session, user, sid, request, settings)
+    await _validate_session(session, user, {"sub": user.id, "iat": payload.get("iat"), "sid": sid})
+    principal = await _principal_from_user(session, user)
+    principal.session_id = row.id
+    principal.credential = "surface"
+    principal.authenticated_at = int(_aware(row.auth_time).timestamp()) if row.auth_time else None
     return principal
 
 
@@ -268,6 +296,7 @@ async def _frame_principal(
     principal.org_roles = {token.org: role} if role is not None else {}
     principal.project_roles = {}
     principal.session_id = sid
+    principal.credential = "frame"
     principal.authenticated_at = token.issued_at or None
     await limit_to_organisations(session, sorted(principal.org_roles))
     await name_the_user(session, user.id)

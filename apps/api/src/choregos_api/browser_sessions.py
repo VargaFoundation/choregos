@@ -16,7 +16,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from choregos_core import utcnow
-from sqlalchemy import select, update
+from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.requests import HTTPConnection
 
@@ -87,6 +87,80 @@ async def check_session(
     return sid
 
 
+#: What a developer surface's credential starts with: it is a signed value naming a `user_sessions` row, and
+#: no API token (`chg_`) looks like it.
+SURFACE_PREFIX = "chs_"
+SURFACE_PURPOSE = "surface-session"
+SURFACE_KINDS = ("cli", "editor")
+
+
+def surface_credential(row: UserSession, settings: Settings) -> str:
+    """The bearer a developer surface presents: shown once, when its device code is exchanged."""
+    from .security import sign_session
+
+    payload = {
+        "sub": row.user_id,
+        "sid": row.id,
+        "iat": int(_aware(row.created_at or utcnow()).timestamp()),
+        "exp": int(_aware(row.expires_at).timestamp()),
+    }
+    return SURFACE_PREFIX + sign_session(payload, settings, purpose=SURFACE_PURPOSE)
+
+
+async def open_surface_session(
+    session: AsyncSession,
+    user: User,
+    *,
+    kind: str,
+    client_name: str | None,
+    auth_time: datetime | None,
+    request: HTTPConnection,
+    settings: Settings,
+) -> UserSession:
+    """A developer surface's session: its limits, and the approving sign-in's time."""
+    now = utcnow()
+    row = await open_session(
+        session,
+        user,
+        channel="device",
+        expires_at=now + timedelta(seconds=settings.surface_session_max_age_s),
+        request=request,
+        settings=settings,
+    )
+    row.kind = kind
+    row.client_name = client_name
+    row.auth_time = auth_time
+    row.idle_expires_at = now + timedelta(seconds=settings.surface_session_idle_s)
+    await session.flush()
+    return row
+
+
+async def check_surface_session(
+    session: AsyncSession, user: User, sid: str, request: HTTPConnection, settings: Settings
+) -> UserSession:
+    """Refuse a surface credential ended, expired or idle; a use pushes the idle limit back."""
+    row = await session.get(UserSession, sid)
+    now = utcnow()
+    if (
+        row is None
+        or row.user_id != user.id
+        or row.kind not in SURFACE_KINDS
+        or row.revoked_at is not None
+        or _aware(row.expires_at) <= now
+        or row.idle_expires_at is None
+        or _aware(row.idle_expires_at) <= now
+    ):
+        raise unauthorized(ENDED)
+    agent, address = _client(request, settings)
+    stale = row.last_seen_at is None or now - _aware(row.last_seen_at) >= TOUCH_EVERY
+    if stale or agent != row.user_agent or address != row.ip:
+        row.last_seen_at = now
+        row.user_agent = agent
+        row.ip = address
+        row.idle_expires_at = now + timedelta(seconds=settings.surface_session_idle_s)
+    return row
+
+
 async def active_sessions(session: AsyncSession, user_id: str) -> list[UserSession]:
     """The caller's sessions that still hold, the most recently active first."""
     rows = (
@@ -96,6 +170,7 @@ async def active_sessions(session: AsyncSession, user_id: str) -> list[UserSessi
                     UserSession.user_id == user_id,
                     UserSession.revoked_at.is_(None),
                     UserSession.expires_at > utcnow(),
+                    or_(UserSession.idle_expires_at.is_(None), UserSession.idle_expires_at > utcnow()),
                 )
             )
         )

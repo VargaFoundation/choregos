@@ -304,7 +304,23 @@ superseded by [ADR 0072](adr/0072-agent-sandbox-is-the-runtime-of-a-real-deploym
 **What a project may pick.** The API knows the executor (`CHOREGOS_EXECUTOR_KIND`) and the
 allowed list (`CHOREGOS_EXECUTORS_ALLOWED`, from `global.runner.allowedExecutors`). `GET
 /platform/executors` answers from them, and `PUT /projects/{id}/connectors/runtime` refuses (422)
-a type outside the list and names the allowed ones.
+a type outside the list and names the allowed ones. It also refuses a configuration that sets
+what only the deployment sets ([ADR 0172](adr/0172-a-connector-never-sets-what-the-deployment-sets.md)):
+`kubernetes` (the API server and its credential), `env_from_secrets`, `image_pull_secrets` and
+`service_account`. The pod's Secrets come from `runner.envFromSecrets`, its pull secrets from
+`global.imagePullSecrets`, and it runs as the account the chart creates. A row stored with one of
+these by an earlier version stops its project's stages with the same message: before upgrading, list
+them and move their values to the chart —
+
+```sql
+select project_id, type, config from connectors
+where kind = 'runtime'
+  and config::jsonb ?| array['kubernetes', 'env_from_secrets', 'image_pull_secrets', 'service_account'];
+```
+
+A blank value (`""`, `[]`) sets nothing and stops nothing. Projects that need Secrets of their own get
+them from runner namespaces of their own (`runner.namespacePattern`): the Secret has the same name in
+each namespace, and each project's content.
 
 **Upgrading from 0.17 or earlier**, which defaulted to Tekton: set
 `global.runner.executor: tekton` to keep it. An override of only
@@ -1357,6 +1373,14 @@ first token comes from the server side:
 kubectl -n choregos exec deploy/choregos-api -- choregos-admin tokens create --email alice@acme.example
 choregos login --api-url https://api.choregos.example --token chg_… --org acme
 ```
+
+A person signs the CLI in as themselves with `choregos login` (no token to paste): the console's `/device` page
+approves a short code, and the CLI holds a session of that person, listed and ended under My account (ADR 0154
+§6). Its limits are settings of the API: `CHOREGOS_SURFACE_SESSION_IDLE_S` (7 days without a request, sliding),
+`CHOREGOS_SURFACE_SESSION_MAX_AGE_S` (30 days in all), `CHOREGOS_DEVICE_CODE_TTL_S` (600 s to approve a code) and
+`CHOREGOS_DEVICE_POLL_INTERVAL_S` (5 s between polls; a faster poll is told `slow_down`). A request that names an
+organisation is approved only by a member of it, and, for an account bound to a tenant's own identity provider
+(ADR 0108), only by that tenant's.
 
 A project with no repository takes its requests from Choregos itself:
 

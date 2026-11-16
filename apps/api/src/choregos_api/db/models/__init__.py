@@ -69,6 +69,7 @@ from .costs import BudgetAlert, CostLedger
 from .gateway import BackendRegistryRow, GatewayKeyRow, ModelCatalogueRow
 from .identity import (
     ApiToken,
+    DeviceAuthorization,
     LinkedAccount,
     MachineAccount,
     Membership,
@@ -231,6 +232,7 @@ __all__ = [
     "DecisionRecordRow",
     "Delegation",
     "Deployment",
+    "DeviceAuthorization",
     "Event",
     "Finding",
     "Float",
