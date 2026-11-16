@@ -278,7 +278,7 @@ describe("the Open Knowledge Format (ADR 0174)", () => {
     Object.assign(URL, { createObjectURL: created, revokeObjectURL: revoked });
     const clicked = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
     vi.mocked(api.exportKnowledgeBase).mockResolvedValue(new Blob(["zip"], { type: "application/zip" }));
-    await show({ ...base, can: { edit: false, distill: false, share: false, archive: false, widen: false }, my_role: "reader" });
+    await show({ ...base, can: { edit: false, distill: false, share: false, archive: false, widen: false }, my_role: "viewer" });
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: /Download \(OKF\)/ }));
     });
