@@ -1,4 +1,4 @@
-# 0153 — A connector never sets what the deployment sets
+# 0172 — A connector never sets what the deployment sets
 
 - **Status**: proposed, 2026-11-11; S65-03 implements it
 - **Concerns**: the configuration of a `runtime` and of a `ci` connector
