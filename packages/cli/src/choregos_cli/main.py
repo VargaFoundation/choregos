@@ -15,6 +15,7 @@ from rich.table import Table
 from . import __version__, theme
 from .a2a import a2a_app
 from .activity import activity
+from .artifacts import artifacts_app
 from .ask import ask
 from .binary_info import binary_info
 from .client import ApiError, Client, NoOrganisationError, Profile
@@ -87,6 +88,7 @@ def _root(
 
 app.command("ask")(ask)
 app.command("activity")(activity)
+app.add_typer(artifacts_app, name="artifacts")
 
 # Hidden: the native binaries' smoke test asks the binary what it knows about itself (S62-07).
 app.command("binary-info", hidden=True)(binary_info)
@@ -108,6 +110,13 @@ class TransportSafeClient(Client):
         except httpx.TransportError as exc:  # connect error, timeout, dropped connection…
             self._unreachable(exc)
             return None  # `fail` raises; for the type checker
+
+    def get_raw(self, path: str, **kwargs: Any) -> httpx.Response:
+        try:
+            return super().get_raw(path, **kwargs)
+        except httpx.TransportError as exc:
+            self._unreachable(exc)
+            raise  # `fail` raises; for the type checker
 
     def stream_sse(self, path: str, **kwargs: Any) -> Any:
         try:
