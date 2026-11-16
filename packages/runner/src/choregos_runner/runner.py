@@ -41,7 +41,7 @@ from . import compression, confine, tool_scripts
 from .acp import AcpClient, AgentUnreachableError
 from .acp.client import PromptOutcome, WriteGuard
 from .acp.guard import TurnGuard
-from .backends import get_backend
+from .backends import Backend, LaunchPlan, get_backend
 from .budget import BUDGET_REASON, gateway_budget_refusal
 from .client import InternalApiError, InternalClient
 from .config import RunnerSettings, agent_base_environment, get_settings
@@ -60,6 +60,7 @@ from .launcher import SHARED_UMASK, Launcher
 from .local_tools import start_if_absent
 from .local_tools import stop as stop_tools
 from .loopback import Loopback
+from .loopback.agent import agent_view, proxy_environment
 from .loopback.connect import ConnectProxy, upstream_proxy
 from .loopback.mcp import McpProxy
 from .loopback.model import ModelProxy
@@ -235,6 +236,11 @@ class Runner:
         #: The agent's container's launcher, when the deployment says the agent runs there (ADR 0146);
         #: `None` under `process`, where the agent is the runner's child.
         self.launcher: Launcher | None = None
+        #: The proxy variables the agent's container starts with (ADR 0146 §7): the loopback CONNECT proxy,
+        #: never the pod's egress proxy with the run's token. The project's checks get them too.
+        self.agent_proxy_env: dict[str, str] = {}
+        #: The loopback listeners of an agent in a container, closed when the run ends.
+        self.agent_listeners = contextlib.AsyncExitStack()
         #: What `agent.isolation` journals: where this run's agent runs (ADR 0146 §9).
         self.isolation: dict[str, str] = {"mode": "process"}
         #: The run's git token (S22-07): in memory only, for the clone and the push.
@@ -316,6 +322,7 @@ class Runner:
         finally:
             await compression.stop(self.compressor)
             await stop_tools(self.tools)
+            await self.agent_listeners.aclose()
 
     async def _execute(
         self, stage_input: StageInput, client: InternalClient, workspace: Workspace, journal: EventJournal
@@ -362,13 +369,12 @@ class Runner:
 
         # 4-5. backend et lancement
         backend = get_backend(stage_input.agent.backend)
-        plan = backend.launch_plan(stage_input, workspace.path)
+        plan, env = self._agent_launch(stage_input, backend, workspace)
         await self._record_shell_filter(stage_input, backend, journal)
         written = _materialize(plan, workspace, stage_input)
         # Skills, then knowledge bases: the first refusal stops the run before the agent starts.
         if (
-            refusal := await self._place_skills(client, journal, stage_input, backend, workspace)
-            or await self._lay_out_knowledge(client, journal, stage_input, workspace)
+            refusal := await self._place_inputs(client, journal, stage_input, backend, workspace)
         ) is not None:
             return refusal
         # A run offered tool scripts may write them with its file-write tool in their directory (#1365).
@@ -379,11 +385,6 @@ class Runner:
             workspace=str(workspace.path),
             scripts_dir=scripts_dir,
         )
-        env = {
-            **plan.env,
-            **backend.model_env(stage_input.model, stage_input.gateway_key),
-            **workspace_env(stage_input),
-        }
         # The client a script imports (ADR 0122 §3), for every shell backend: its environment only.
         env.update(await self._tool_client(client, journal, stage_input, env))
         # The agent reads its repository with its own git: the same `safe.directory` as the
@@ -392,7 +393,13 @@ class Runner:
         env.update(agent_git_env({**agent_base_environment(), **env}, workspace.path))
         await self._register_context_parts(journal, stage_input, workspace.path, plan, written)
 
+        # Asked once, after a turn that ended in an error naming no refusal (S65-35): an agent that
+        # drops the provider's error (opencode, #1742) no longer hides a budget refusal.
+        probe = GatewayProbe(
+            stage_input.model, stage_input.gateway_key, journal.record, transport=self.model_transport
+        )
         command, refusal = await self._confine(plan, env, workspace, journal)
+        refusal = refusal or await self._serve_agent(stage_input, journal, guards, probe)
         if refusal is not None:
             return refusal
 
@@ -410,12 +417,6 @@ class Runner:
         agent_result: StageResult | None = None
         dod_iterations = repairs = 0
         scope_result = None
-        # Asked once, after a turn that ended in an error naming no refusal (S65-35): an agent that
-        # drops the provider's error (opencode, #1742) no longer hides a budget refusal.
-        probe = GatewayProbe(
-            stage_input.model, stage_input.gateway_key, journal.record, transport=self.model_transport
-        )
-
         try:
             async with AcpClient(
                 command,
@@ -749,10 +750,85 @@ class Runner:
         self.isolation = {"mode": "container", "launcher": address}
         return None
 
+    async def _place_inputs(
+        self,
+        client: InternalClient,
+        journal: EventJournal,
+        stage_input: StageInput,
+        backend: Backend,
+        workspace: Workspace,
+    ) -> RunOutcome | None:
+        """The skills, then the knowledge bases: the first refusal stops the run."""
+        refusal = await self._place_skills(client, journal, stage_input, backend, workspace)
+        if refusal is None:
+            refusal = await self._lay_out_knowledge(client, journal, stage_input, workspace)
+        return refusal
+
+    async def _serve_agent(
+        self,
+        stage_input: StageInput,
+        journal: EventJournal,
+        guards: GuardRails,
+        probe: GatewayProbe,
+    ) -> RunOutcome | None:
+        """The loopback listeners of an ACP step whose agent is in a container (ADR 0146 §7, S65-04f): the
+        model with the run's key, the MCP servers with their headers, and the CONNECT proxy with the pod's
+        egress credentials — each held here, none in the agent's container. The model listener counts no
+        turn (`max_turns` is the turn guard's) and the gateway keeps enforcing the run's budget. Stopped
+        with the run by `agent_listeners`. `None`: they are serving (or the agent is the runner's child)."""
+        if self.launcher is None:
+            return None
+        model = ModelProxy(
+            stage_input, journal.record, transport=self.model_transport, count_turns=False, measure=False
+        )
+        mcp = McpProxy(
+            stage_input,
+            journal.record,
+            guards,
+            transport=self.mcp_transport,
+            verbatim=True,
+        )
+        connect = ConnectProxy(stage_input, journal.record, upstream=upstream_proxy(os.environ))
+        try:
+            await self.agent_listeners.enter_async_context(
+                Loopback(model, mcp, connect, ports=self.loopback_ports)
+            )
+        except OSError as exc:
+            await journal.record("run.failed", {"phase": "loopback", "error": str(exc)[:500]})
+            await journal.flush()
+            return RunOutcome(Exit.AGENT_UNREACHABLE, detail=str(exc))
+        probe.known = lambda: model.budget_refusal
+        return None
+
+    def _agent_launch(
+        self, stage_input: StageInput, backend: Backend, workspace: Workspace
+    ) -> tuple[LaunchPlan, dict[str, str]]:
+        """The agent's launch plan and environment, from the step as the agent may see it. Under
+        `container` (ADR 0146 §7) that is a copy with the loopback addresses and the loopback key, never
+        the run's gateway key nor an MCP server's headers (the runner's own copy keeps them), and the
+        proxy variables name the loopback CONNECT proxy."""
+        self.agent_proxy_env = {}
+        agent_input = stage_input
+        if self.launcher is not None:
+            self.agent_proxy_env = proxy_environment(agent_base_environment(), self.loopback_ports)
+            agent_input = agent_view(stage_input, self.loopback_ports, model=backend.loopback_model)
+        plan = backend.launch_plan(agent_input, workspace.path)
+        env = {
+            **plan.env,
+            **backend.model_env(agent_input.model, agent_input.gateway_key),
+            **workspace_env(stage_input),
+            **self.agent_proxy_env,
+        }
+        return plan, env
+
     async def _checks(self, stage_input: StageInput, workspace: Path) -> DodReport:
         """The project's checks: in the agent's container when there is one, since they run the code
         the agent wrote (ADR 0146 §6)."""
-        env = {"HOME": str(agent_home(stage_input))} if self.launcher is not None else None
+        env = (
+            {"HOME": str(agent_home(stage_input)), **self.agent_proxy_env}
+            if self.launcher is not None
+            else None
+        )
         return await run_checks(stage_input, workspace, launcher=self.launcher, env=env)
 
     async def _egress_credential(self, client: Any) -> str:

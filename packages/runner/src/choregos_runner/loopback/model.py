@@ -59,8 +59,21 @@ _MAX_ANSWER_BYTES = 8 * 1024 * 1024
 
 class ModelProxy:
     def __init__(
-        self, stage_input: StageInput, record: Record, *, transport: Any = None, hints: Hints | None = None
+        self,
+        stage_input: StageInput,
+        record: Record,
+        *,
+        transport: Any = None,
+        hints: Hints | None = None,
+        count_turns: bool = True,
+        measure: bool = True,
     ) -> None:
+        """`count_turns=False`, `measure=False`: the agent of an ACP step (ADR 0146 §7, S65-04f). Its
+        `max_turns` is the turn guard's (tool calls, enforced by the ACP client), not a count of model
+        calls, and its context is measured by the runner's own registration; this listener then only
+        carries the run's key to the gateway, which keeps enforcing the run's budget."""
+        self.count_turns = count_turns
+        self.measure = measure
         self.stage_input = stage_input
         self.record = record
         self.http = httpx.AsyncClient(transport=transport, timeout=httpx.Timeout(600, connect=10))
@@ -106,7 +119,7 @@ class ModelProxy:
         if not isinstance(body, dict):
             return _error(400, "invalid_request", "the body is not a JSON object")
         limit = self.stage_input.budget.max_turns
-        if self.turns >= limit:
+        if self.count_turns and self.turns >= limit:
             self.refused_turns += 1
             await self.record("hosted.model_refused", {"path": path, "reason": "max_turns", "limit": limit})
             # 400, not 429: every SDK retries a 429 with backoff, and each retry is refused again.
@@ -166,7 +179,7 @@ class ModelProxy:
             self.budget_refusal = self.budget_refusal or gateway_budget_refusal([text])
             return Response(text, status_code=answer.status_code, headers=kept)
         chunks: AsyncIterator[bytes] = answer.aiter_bytes()
-        if body is not None and path in _MEASURED:
+        if self.measure and body is not None and path in _MEASURED:
             # The sections are counted now, from the body the proxy holds; the text is not kept.
             chunks = self._measured(
                 chunks, self.context.estimate(body), answer.headers.get("content-type", "")

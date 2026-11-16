@@ -63,6 +63,10 @@ class Backend:
     #: The shell filters its launch plan wires (ADR 0055). Another one asked of it is not applied,
     #: and the run says so.
     shell_filters: ClassVar[frozenset[str]] = frozenset()
+    #: Whether the agent's model calls can go through the runner's loopback model listener (ADR 0146 §7):
+    #: it serves the OpenAI and Anthropic shapes, so a backend that speaks another (Gemini's) keeps the
+    #: run's key in its container, and the run says so.
+    loopback_model: ClassVar[bool] = True
 
     def launch_plan(self, stage_input: StageInput, workspace: Path) -> LaunchPlan:
         raise NotImplementedError
