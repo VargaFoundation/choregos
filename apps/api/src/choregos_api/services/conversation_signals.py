@@ -21,6 +21,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.models import AgentSessionEvent, AgentSessionRecord
+from ..schemas.agent_sessions import AgentResponse
 
 CITED = "knowledge.cited"
 ACCOUNT_MISSING = "account.missing"
@@ -108,3 +109,29 @@ async def memory_written_of(session: AsyncSession, conversation_id: str) -> list
         if name and name not in spaces:
             spaces.append(name)
     return spaces
+
+
+async def pending_actions_of(session: AsyncSession, conversation_id: str) -> list[dict[str, Any]]:
+    """The writes the assistant proposed and the person has not decided, each with the console link where
+    they decide. The MCP door and the REST turn both answer with this list (ADR 0154 §4, G1): they
+    list them, they never execute one (ADR 0030)."""
+    from .conversation_actions import actions_of, confirm_url
+
+    return [
+        {"id": a.id, "summary": a.summary, "confirm_url": confirm_url(conversation_id, a.id)}
+        for a in await actions_of(session, conversation_id, status="proposed")
+    ]
+
+
+async def with_signals(session: AsyncSession, response: AgentResponse) -> AgentResponse:
+    """The REST turn's answer says what the door's says for the same turn: the same three lists, from the
+    same reads (`signals_of`, `pending_actions_of`)."""
+    from ..schemas.agent_sessions import AgentCitation, AgentMissingAccount, AgentPendingAction
+
+    citations, accounts = await signals_of(session, response.session_id)
+    response.citations = [AgentCitation.model_validate(c) for c in citations]
+    response.missing_accounts = [AgentMissingAccount.model_validate(a) for a in accounts]
+    response.pending_actions = [
+        AgentPendingAction.model_validate(p) for p in await pending_actions_of(session, response.session_id)
+    ]
+    return response

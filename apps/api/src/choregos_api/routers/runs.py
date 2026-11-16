@@ -4,10 +4,13 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from typing import Annotated, Any
 
 from choregos_core import access_report, matches_any
+from choregos_core.agent_tree import NodeStatus, agent_nodes
 from choregos_core.context_breakdown import EVENT as CONTEXT_BREAKDOWN
+from choregos_core.domain import aware, utcnow
 from choregos_core.tool_ledger import IN_FLIGHT
 from fastapi import APIRouter, Header, Query, Request, status
 from sqlalchemy import select
@@ -23,6 +26,8 @@ from ..schemas import (
     ArtifactRef,
     DiffFileDto,
     DiffSummaryDto,
+    RunAgentList,
+    RunAgentNode,
     RunContextDto,
     RunContextPoint,
     RunDto,
@@ -164,6 +169,60 @@ async def context_breakdown(id: str, session: Db, principal: Me) -> RunContextDt
         backend=run.backend,
         latest=latest,
         series=[RunContextPoint(call=b.call, at=b.at, prompt_tokens=b.prompt_tokens) for b in kept],
+    )
+
+
+#: A run's status, as a node's: what is neither over nor failed is still running.
+_NODE_STATUS: dict[str, NodeStatus] = {
+    "succeeded": "completed",
+    "failed": "failed",
+    "cancelled": "failed",
+    "timed_out": "failed",
+}
+
+
+def _stamp(value: str | None) -> datetime | None:
+    return aware(datetime.fromisoformat(value)) if value else None
+
+
+@router.get("/runs/{id}/agents", response_model=RunAgentList, operation_id="listRunAgents")
+async def run_agents(id: str, session: Db, principal: Me) -> RunAgentList:
+    """The run's agent and the sub-agents it delegated to (ADR 0154 §5, G5), derived from its journal with
+    the backend's own rule (`choregos_core.agent_tree`). A backend that sends no parent id gives the run's
+    agent alone, its calls flat; a surface reads these nodes and never the journal's `_meta`."""
+    run, _ = await _run(session, id, principal)
+    rows = (
+        (
+            await session.execute(
+                select(RunEvent).where(RunEvent.run_id == run.id, RunEvent.type == "session/update")
+            )
+        )
+        .scalars()
+        .all()
+    )
+    started = aware(run.started_at or run.created_at) or utcnow()
+    nodes = agent_nodes(
+        run.backend or "",
+        [{"seq": r.seq, "type": r.type, "ts": aware(r.ts), "payload": r.payload} for r in rows],
+        root_id=run.id,
+        root_status=_NODE_STATUS.get(run.status, "running"),
+        root_started=started.isoformat(),
+        root_ended=ended.isoformat() if (ended := aware(run.ended_at)) else None,
+    )
+    return RunAgentList(
+        items=[
+            RunAgentNode(
+                id=n.id,
+                parent_id=n.parent_id,
+                kind=n.kind,
+                tool=n.tool,
+                status=n.status,
+                started_at=_stamp(n.started_at) or started,
+                ended_at=_stamp(n.ended_at),
+                tool_calls=n.tool_calls,
+            )
+            for n in nodes
+        ]
     )
 
 
