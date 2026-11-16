@@ -16,15 +16,15 @@ from choregos_api.services.context_breakdown import GATEWAY_SEQ_BASE
 from httpx import AsyncClient
 
 from .kits.closed_runs import token_of
-from .kits.context_breakdown import run_with_events
-from .test_gateway_context_breakdown import (
-    _events,
-    gateway_breakdown,
-    master_key,  # noqa: F401 (the callback signs with it)
-    signed,
-)
+from .kits.context_breakdown import gateway_breakdown, run_with_events, set_master_key, signed
+from .kits.context_breakdown import journal as _events
 
 RUNS = "/api/v1/internal/runs"
+
+
+@pytest.fixture(autouse=True)
+def master_key(monkeypatch: pytest.MonkeyPatch, app: Any) -> None:
+    set_master_key(monkeypatch)
 
 
 def _breakdown(seq: int, source: str) -> dict[str, Any]:

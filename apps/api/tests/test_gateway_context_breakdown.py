@@ -14,54 +14,19 @@ import json
 from typing import Any
 
 import pytest
-from choregos_core import llm_spans
 from choregos_core.context_breakdown import register
 from httpx import AsyncClient
-from sqlalchemy import select
 
+from .kits.context_breakdown import MASTER_KEY, gateway_breakdown, set_master_key, signed
+from .kits.context_breakdown import journal as _events
 from .kits.context_breakdown import run_with_events as _run
 
-MASTER_KEY = "-".join(["sk", "master", "c0ffee" * 3])
 CANARY = "canary-3d1e-what-the-ticket-said"
 
 
 @pytest.fixture(autouse=True)
 def master_key(monkeypatch: pytest.MonkeyPatch, app: Any) -> None:
-    from choregos_api.config import reset_settings_cache
-
-    monkeypatch.setenv("CHOREGOS_GATEWAY_MASTER_KEY", MASTER_KEY)
-    reset_settings_cache()
-
-
-def signed(run_id: str, key: str = MASTER_KEY) -> dict[str, str]:
-    """The callback's own header, from the callback's own function."""
-    return {"authorization": f"Bearer {llm_spans.context_signature(key, run_id)}"}
-
-
-def gateway_breakdown(call: int, tokens: int, **extra: Any) -> dict[str, Any]:
-    return {
-        "call": call,
-        "at": f"2026-11-11T10:00:{call:02d}+00:00",
-        "model": "claude-sonnet",
-        "prompt_tokens": tokens,
-        "max_input_tokens": None,
-        "source": "gateway",
-        "sections": {"system": tokens // 10, "skills": tokens // 10, "backend": tokens - 2 * (tokens // 10)},
-        **extra,
-    }
-
-
-async def _events(run_id: str) -> list[tuple[int, str, dict[str, Any]]]:
-    from choregos_api.db.models import RunEvent
-    from choregos_api.db.session import session_scope
-
-    async with session_scope() as session:
-        rows = await session.execute(
-            select(RunEvent.seq, RunEvent.type, RunEvent.payload)
-            .where(RunEvent.run_id == run_id)
-            .order_by(RunEvent.seq)
-        )
-        return [(seq, type_, dict(payload)) for seq, type_, payload in rows.all()]
+    set_master_key(monkeypatch)
 
 
 PARTS = {
