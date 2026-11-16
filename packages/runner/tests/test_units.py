@@ -603,7 +603,7 @@ def test_runtime_noise_does_not_enter_the_runs_commit(tmp_path) -> None:  # type
     repo_dir = tmp_path / "ws"
     repo_dir.mkdir()
     subprocess.run(["git", "init", "-q"], cwd=repo_dir, check=True)
-    workspace = Workspace(repo_dir)
+    workspace = Workspace(repo_dir, git_dir=repo_dir / ".git")
     workspace.exclude([".mcp.json"])
 
     (repo_dir / "__pycache__").mkdir()
@@ -669,7 +669,7 @@ async def test_the_diff_is_measured_on_a_shallow_history(tmp_path) -> None:  # t
     git("config", "user.email", "a@b", cwd=local)
     git("config", "user.name", "t", cwd=local)
 
-    workspace = Workspace(local)
+    workspace = Workspace(local, git_dir=local / ".git")
     base = await workspace.base_sha("main")
     (local / "b.py").write_text("y = 1\n")
     git("add", "-A", cwd=local)

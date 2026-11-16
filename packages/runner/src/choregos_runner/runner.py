@@ -78,7 +78,7 @@ from .remote import (
 from .result import complete_result, fallback_result, load_result, repair_prompt, write_result
 from .scope import check_scope
 from .skills import InvalidSkill, place_skills
-from .workspace import Workspace, agent_git_env, agent_home, inline_outputs, workspace_env
+from .workspace import Workspace, agent_git_env, agent_home, git_dir_for, inline_outputs, workspace_env
 
 if TYPE_CHECKING:
     from choregos_tools_mcp.bridge import Bridge
@@ -286,7 +286,10 @@ class Runner:
 
     async def execute(self, stage_input: StageInput, client: InternalClient) -> RunOutcome:
         workspace = Workspace(
-            self.settings.workspace, self.settings.git_user_name, self.settings.git_user_email
+            self.settings.workspace,
+            self.settings.git_user_name,
+            self.settings.git_user_email,
+            git_dir=git_dir_for(self.settings.workspace, self.settings.git_dir_root),
         )
         journal = EventJournal(
             client,

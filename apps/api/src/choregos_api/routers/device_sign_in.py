@@ -139,65 +139,72 @@ async def poll_device_token(
     body: DeviceTokenRequestDto, request: Request, session: Db, settings: Config
 ) -> Response | DeviceTokenDto:
     async with in_platform_scope(session):
-        row = (
-            await session.execute(
-                select(DeviceAuthorization).where(DeviceAuthorization.device_hash == _hash(body.device_code))
-            )
-        ).scalar_one_or_none()
-        if row is None:
-            return _error("invalid_grant", "unknown device code")
-        now = utcnow()
-        if row.status == "consumed" or _aware(row.expires_at) <= now:
-            return _error("expired_token", "the device code expired or was already used")
-        if (
-            row.last_polled_at is not None
-            and (now - _aware(row.last_polled_at)).total_seconds() < row.interval_s
-        ):
-            row.interval_s += SLOW_DOWN_STEP_S
-            row.last_polled_at = now
-            return _error("slow_down", "poll no faster than `interval`", interval=row.interval_s)
+        answer = await _poll(body, request, session, settings)
+        # Written while the scope still sees the row: flushed at commit, under the caller's scope, the
+        # row's RLS would hide it and the UPDATE would match nothing.
+        await session.flush()
+    return answer
+
+
+async def _poll(
+    body: DeviceTokenRequestDto, request: Request, session: Db, settings: Config
+) -> Response | DeviceTokenDto:
+    row = (
+        await session.execute(
+            select(DeviceAuthorization).where(DeviceAuthorization.device_hash == _hash(body.device_code))
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        return _error("invalid_grant", "unknown device code")
+    now = utcnow()
+    if row.status == "consumed" or _aware(row.expires_at) <= now:
+        return _error("expired_token", "the device code expired or was already used")
+    if row.last_polled_at is not None and (now - _aware(row.last_polled_at)).total_seconds() < row.interval_s:
+        row.interval_s += SLOW_DOWN_STEP_S
         row.last_polled_at = now
-        if row.status == "pending":
-            return _error("authorization_pending", "the person has not decided yet")
-        if row.status == "denied":
-            return _error("access_denied", "the person refused this sign-in")
-        # approved: one conditional update decides who consumes the code
-        won = await session.execute(
-            update(DeviceAuthorization)
-            .where(DeviceAuthorization.id == row.id, DeviceAuthorization.status == "approved")
-            .values(status="consumed")
-        )
-        if not getattr(won, "rowcount", 0):
-            return _error("expired_token", "the device code expired or was already used")
-        user = await session.get(User, row.user_id) if row.user_id else None
-        if user is None:
-            return _error("access_denied", "the account no longer exists")
-        opened = await open_surface_session(
-            session,
-            user,
-            kind=row.client_kind,
-            client_name=row.client_name,
-            auth_time=row.auth_time,
-            request=request,
-            settings=settings,
-        )
-        await record(
-            session,
-            None,
-            "session.surface.open",
-            org_id=None,
-            target_type="session",
-            target_id=opened.id,
-            kind=row.client_kind,
-            user_id=user.id,
-        )
-        return DeviceTokenDto(
-            access_token=surface_credential(opened, settings),
-            session_id=opened.id,
-            kind=row.client_kind,
-            expires_in=settings.surface_session_idle_s,
-            auth_time=row.auth_time,
-        )
+        return _error("slow_down", "poll no faster than `interval`", interval=row.interval_s)
+    row.last_polled_at = now
+    if row.status == "pending":
+        return _error("authorization_pending", "the person has not decided yet")
+    if row.status == "denied":
+        return _error("access_denied", "the person refused this sign-in")
+    # approved: one conditional update decides who consumes the code
+    won = await session.execute(
+        update(DeviceAuthorization)
+        .where(DeviceAuthorization.id == row.id, DeviceAuthorization.status == "approved")
+        .values(status="consumed")
+    )
+    if not getattr(won, "rowcount", 0):
+        return _error("expired_token", "the device code expired or was already used")
+    user = await session.get(User, row.user_id) if row.user_id else None
+    if user is None:
+        return _error("access_denied", "the account no longer exists")
+    opened = await open_surface_session(
+        session,
+        user,
+        kind=row.client_kind,
+        client_name=row.client_name,
+        auth_time=row.auth_time,
+        request=request,
+        settings=settings,
+    )
+    await record(
+        session,
+        None,
+        "session.surface.open",
+        org_id=None,
+        target_type="session",
+        target_id=opened.id,
+        kind=row.client_kind,
+        user_id=user.id,
+    )
+    return DeviceTokenDto(
+        access_token=surface_credential(opened, settings),
+        session_id=opened.id,
+        kind=row.client_kind,
+        expires_in=settings.surface_session_idle_s,
+        auth_time=row.auth_time,
+    )
 
 
 def _console_only(principal: Any) -> None:
@@ -294,4 +301,5 @@ async def decide_device_request(
             target_id=row.id,
             kind=row.client_kind,
         )
+        await session.flush()  # while the scope still sees the row (see `poll_device_token`)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
