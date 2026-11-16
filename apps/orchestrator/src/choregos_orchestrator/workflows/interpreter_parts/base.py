@@ -33,6 +33,7 @@ class InterpreterBase:
     current_run: str | None
     last_run: str | None
     pending_request: str | None
+    stale_decisions: list[str]
     last_outcome: str | None
     last_outputs: dict[str, Any] | None
     workflow_override: dict[str, Any] | None
@@ -90,6 +91,8 @@ class InterpreterBase:
         async def _release_suspension(self) -> None: ...
 
         def _answer_resumes(self, decision: dict[str, Any]) -> bool: ...
+
+        def _take_decision(self) -> dict[str, Any] | None: ...
 
         async def _suspend(self, params: InterpreterInput, run_id: str, key: str) -> None: ...
 

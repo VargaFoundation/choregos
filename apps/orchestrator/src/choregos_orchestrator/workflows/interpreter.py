@@ -146,6 +146,12 @@ RUN_STOPPED_GOES_TO_A_PERSON = "run-stopped-goes-to-a-person"
 #: mirrors the platform's state, and the next mirror rewrites it whole. Before this marker the failure
 #: failed the interpreter (FON-277 stood still for two days, 2026-11-09).
 STATUS_COMMENT_BEST_EFFORT = "status-comment-best-effort"
+#: A decision that names the request it answers (`request_id`) is applied only while that request is
+#: the one pending (#1795, S67-15). A decision made for a request that has since been closed, or
+#: replaced by another (an approval in `pr_open` delivered once the work item had escalated to
+#: `needs_human`), is journaled and ignored instead of deciding whatever waits now: it moved a work
+#: item `needs_human -> abandoned`. A decision without `request_id` (an old sender) is applied as before.
+DECISION_NAMES_ITS_REQUEST = "decision-names-its-request"
 
 
 def _attempts_ceiling(context: dict[str, Any], actor: Any) -> int | None:
@@ -230,6 +236,8 @@ class WorkflowInterpreter(
         self.current_run: str | None = None
         self.last_run: str | None = None
         self.pending_request: str | None = None
+        #: The request ids of the decisions ignored because their request was no longer the pending one.
+        self.stale_decisions: list[str] = []
         self.last_outcome: str | None = None
         #: The outputs of the work item's last stage: a transition's `when` chooses on them (S48-01).
         self.last_outputs: dict[str, Any] | None = None
@@ -278,7 +286,7 @@ class WorkflowInterpreter(
 
     @workflow.signal
     def human_decision(self, decision: dict[str, Any]) -> None:
-        self.decisions.append(decision)
+        self.decisions.append(decision)  # whether it still answers something is read where it is taken
         if decision.get("kind") == "question":
             self._look_up_resume()
 
@@ -339,6 +347,7 @@ class WorkflowInterpreter(
             "paused": self.paused,
             "stopped": self.stopped,
             "pending_request": self.pending_request,
+            "stale_decisions": list(self.stale_decisions),
             "waiting_until": self.waiting,
             "action": self.current_action,
         }

@@ -238,7 +238,10 @@ async def verdicts(setup: Fixture, gate: str) -> list[dict[str, Any]]:
 
 async def _approve_whatever_waits(handle: Any, escalations: set[str]) -> None:
     """A person approves each request the work item raises, once, except where a failing transition
-    escalated it: the tests wait for it there, and an approval would move it on before they look."""
+    escalated it: the tests wait for it there, and an approval would move it on before they look.
+
+    The decision names the request the person saw (#1795): one delivered after the work item moved on
+    to an escalation is no longer for the request pending there, and the interpreter ignores it."""
     answered: set[str] = set()
     while True:
         with contextlib.suppress(Exception):  # a query that times out is asked again
@@ -247,7 +250,8 @@ async def _approve_whatever_waits(handle: Any, escalations: set[str]) -> None:
             if request and request not in answered and status.get("state") not in escalations:
                 answered.add(request)
                 await handle.signal(
-                    "human_decision", {"approved": True, "decided_by": "marie", "kind": "approval"}
+                    "human_decision",
+                    {"request_id": request, "approved": True, "decided_by": "marie", "kind": "approval"},
                 )
         await asyncio.sleep(0.1)
 
