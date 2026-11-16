@@ -34,6 +34,7 @@ from ..config import get_settings
 from ..db.models import KnowledgeBase, KnowledgeDocument, Organization
 from ..db.session import ALL_ORGS, session_scope
 from ..logging import get_logger
+from . import okf
 from .formats import STRUCTURED
 
 logger = get_logger("choregos.knowledge")
@@ -59,10 +60,12 @@ class ConversionError(RuntimeError):
 
 
 def title_of(markdown: str, declared: str | None, filename: str) -> str:
-    """The title a document goes by: the one its format declares, its first heading, its name."""
+    """The title a document goes by: the one its format declares, then its OKF header's (ADR 0174),
+    its first heading, its name. A `#` comment of the header is not a heading."""
+    declared = declared if declared and declared.strip() else okf.declared_title(markdown)
     if declared and declared.strip():
         return declared.strip()[:300]
-    first = _HEADING.search(markdown)
+    first = _HEADING.search(okf.split(markdown)[1])
     if first:
         return first.group(1).strip()[:300]
     return PurePosixPath(filename).stem[:300] or filename[:300]

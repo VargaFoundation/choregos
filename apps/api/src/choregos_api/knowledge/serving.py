@@ -5,7 +5,10 @@ When the run is prepared, `pin()` resolves each base its agent names — it must
 the run's project and, when restricted, be readable by the person the run acts for (ADR 0097) — and
 pins its ready documents by id, with the digest of the files they make.
 The runner then fetches exactly those documents (`GET /internal/runs/{id}/knowledge`), recomputes
-the digest, and lays them read-only under `.choregos/knowledge/<slug>/`, with an `INDEX.md`.
+the digest, and lays them read-only under `.choregos/knowledge/<slug>/`, with an `index.md`.
+
+Each file is served with its OKF header (ADR 0174): the folder is an Open Knowledge Format bundle. A
+document that declares itself `deprecated` is not pinned.
 """
 
 from __future__ import annotations
@@ -20,9 +23,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import undefer
 
 from ..db.models import KnowledgeBase, KnowledgeDocument
+from . import okf
 from .on_behalf import OnBehalf
 
-INDEX = "INDEX.md"
 _UNSAFE = re.compile(r"[^a-z0-9._-]+")
 
 
@@ -34,7 +37,7 @@ def file_name(filename: str, taken: set[str]) -> str:
     """A markdown file name for a document: its own stem, made safe, unique in the base."""
     stem = _UNSAFE.sub("-", PurePosixPath(filename).stem.lower()).strip("-.") or "document"
     name, n = f"{stem[:80]}.md", 2
-    while name in taken or name == INDEX.lower():
+    while name in taken or name in okf.RESERVED:
         name, n = f"{stem[:80]}-{n}.md", n + 1
     taken.add(name)
     return name
@@ -48,7 +51,7 @@ def files_of(documents: list[KnowledgeDocument]) -> list[dict[str, str]]:
             "path": file_name(document.filename, taken),
             "title": document.title,
             "filename": document.filename,
-            "markdown": document.markdown or "",
+            "markdown": okf.served_document(document),
         }
         for document in sorted(documents, key=lambda d: (d.filename, d.id))
     ]
@@ -62,7 +65,7 @@ async def _ready(session: AsyncSession, base: KnowledgeBase, ids: list[str] | No
     )
     if ids is not None:
         query = query.where(KnowledgeDocument.id.in_(ids))
-    return list((await session.execute(query)).scalars())
+    return [d for d in (await session.execute(query)).scalars() if not okf.deprecated(d.markdown or "")]
 
 
 async def _base(session: AsyncSession, org_id: str, slug: str) -> KnowledgeBase | None:

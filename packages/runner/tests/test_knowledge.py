@@ -9,7 +9,7 @@ from typing import Any
 import pytest
 from choregos_contracts import KnowledgeRef, StageInput, knowledge_digest
 from choregos_runner.exits import Exit
-from choregos_runner.knowledge import INDEX, ROOT, KnowledgeInvalidError, lay_out
+from choregos_runner.knowledge import INDEX, OKF_VERSION, ROOT, KnowledgeInvalidError, lay_out
 from choregos_runner.runner import Runner
 from choregos_runner.workspace import git_dir_for
 
@@ -87,6 +87,25 @@ def test_a_path_that_leaves_its_folder_is_refused_even_with_its_digest(tmp_path:
     ref = REF.model_copy(update={"digest": knowledge_digest(escaping)})
     with pytest.raises(KnowledgeInvalidError, match="bad path"):
         lay_out([{**DELIVERED, "documents": escaping}], [ref], tmp_path)
+
+
+def test_the_folder_is_an_okf_bundle_whose_root_index_declares_its_version(tmp_path: Path) -> None:
+    """ADR 0174: OKF reserves `index.md`; the root one may carry `okf_version`, and nothing else in it
+    is a header."""
+    _, prompt = lay_out([DELIVERED], [REF], tmp_path)
+    index = (tmp_path / ROOT / "architecture" / "index.md").read_text()
+    assert INDEX == "index.md"
+    assert index.startswith(f'---\nokf_version: "{OKF_VERSION}"\n---\n\n# Architecture framework\n')
+    assert "`source_verified` is its author's claim" in prompt and "`stale_after`" in prompt
+
+
+@pytest.mark.parametrize("reserved", ["index.md", "INDEX.md", "log.md"])
+def test_a_document_under_a_name_okf_reserves_is_refused(reserved: str, tmp_path: Path) -> None:
+    named = [{**DOCUMENTS[0], "path": reserved}]
+    ref = REF.model_copy(update={"digest": knowledge_digest(named)})
+    with pytest.raises(KnowledgeInvalidError, match="bad path"):
+        lay_out([{**DELIVERED, "documents": named}], [ref], tmp_path)
+    assert not (tmp_path / ROOT).exists(), "nothing is written"
 
 
 async def test_a_fake_run_greps_the_corpus(stage_input: StageInput, runner_settings: Any) -> None:

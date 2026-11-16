@@ -29,7 +29,7 @@ from ..config import get_settings
 from ..db.models import KnowledgeBase, KnowledgeChunk, KnowledgeDocument
 from ..db.session import session_scope
 from ..logging import get_logger
-from . import offload
+from . import offload, okf
 from .chunking import chunk
 from .embeddings import Embedder, check_model_usage, cosine, embedding_model, get_embedder, words
 
@@ -103,8 +103,14 @@ async def index_document(org: str, document_id: str, embedder: Embedder | None =
         await session.execute(delete(KnowledgeChunk).where(KnowledgeChunk.document_id == document_id))
         if base is None or base.serving_mode != "index" or document.status != "ready":
             return 0
+        markdown = document.markdown or ""
+        # A document that declares itself withdrawn is not searched; its OKF header is not text to
+        # search, and a `verified` claim in it must not reach an agent as a passage (ADR 0174).
+        if okf.deprecated(markdown):
+            return 0
+        _, body = okf.split(markdown)
         # Cutting a long document is CPU-bound: a worker process, not the API's event loop (S39-26).
-        chunks = await offload.run(chunk, document.markdown or "", document.title)
+        chunks = await offload.run(chunk, body, document.title)
         if not chunks:
             return 0
         embedder = embedder if embedder is not None else get_embedder()

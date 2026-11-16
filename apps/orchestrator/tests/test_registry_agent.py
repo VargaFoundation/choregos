@@ -261,6 +261,7 @@ async def _reads(slugs: list[str]) -> None:
 
 async def test_the_knowledge_bases_of_the_agent_are_pinned_in_the_stage_input(setup: Fixture) -> None:
     """S33-02: prepare_stage passes the agent's bases — its ready documents and their digest."""
+    from choregos_api.knowledge import okf
     from choregos_contracts import knowledge_digest
     from choregos_orchestrator.activities.stage import prepare_stage
 
@@ -271,8 +272,10 @@ async def test_the_knowledge_bases_of_the_agent_are_pinned_in_the_stage_input(se
     stage_input = (await prepare_stage(agent_stage_plan(setup, agent="coordinateur")))["stage_input"]
     files, index = stage_input["knowledge"]
     assert (files["slug"], files["mode"], len(files["documents"])) == ("architecture", "files", 1)
+    # Served with its OKF header (ADR 0174): no source URL, no conversion time in this fixture.
+    served = okf.served("# Zoning\n", title="zoning.pptx", filename="zoning.pptx")
     assert files["digest"] == knowledge_digest(
-        [{"path": "zoning.md", "title": "zoning.pptx", "filename": "zoning.pptx", "markdown": "# Zoning\n"}]
+        [{"path": "zoning.md", "title": "zoning.pptx", "filename": "zoning.pptx", "markdown": served}]
     ), "only the ready document, under its file name"
     assert (index["slug"], index["mode"], index["documents"]) == ("big-corpus", "index", [])
 

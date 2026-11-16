@@ -256,3 +256,9 @@ API's event loop. Since S39-26:
     a name that looks like a credential (`auth`, `cookie`, `token`, `key`, `secret`, `session`,
     `password`, `signature`) is refused there, because a source's configuration is stored in the clear.
     A login that needs a browser, a second factor or single sign-on is out of reach by design.
+
+## Update 2026-11-16 — an OKF bundle (S72-01)
+
+What a `files` base lays down is an Open Knowledge Format bundle, and a document's own OKF header is
+read: [ADR 0174](0174-the-open-knowledge-format-at-the-edge-of-a-knowledge-base.md). `INDEX.md` (§5)
+becomes `index.md`.

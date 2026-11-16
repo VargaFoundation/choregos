@@ -2423,8 +2423,16 @@ When a run is prepared, each named base must exist and be served to the run's pr
 the run does not start (`KnowledgeRefused`). A base served as **files** has its ready documents
 pinned by id and digest; the runner fetches exactly those (`GET /internal/runs/{id}/knowledge`),
 checks the digest (a base changed in between stops the run, exit 51), and lays them read-only under
-`.choregos/knowledge/<slug>/` with an `INDEX.md`, out of the diff. The prompt says where they are
+`.choregos/knowledge/<slug>/` with an `index.md`, out of the diff. The prompt says where they are
 and asks the agent to cite the document and section it applies.
+
+The folder is an [Open Knowledge Format](https://github.com/GoogleCloudPlatform/open-knowledge-format)
+bundle ([ADR 0174](adr/0174-the-open-knowledge-format-at-the-edge-of-a-knowledge-base.md)): each file
+opens with a YAML header — `type`, `title`, `resource` (the source URL), `generated` (when it was
+converted), `sources` — and the root `index.md` declares `okf_version`. A markdown document that
+already carries an OKF header (a bundle synced from git, say) keeps its own keys; its `title` names
+it, and a `status: deprecated` keeps it out of runs and out of the index. A `verified` it carries is
+its author's claim and is served as `source_verified`: the platform never presents it as a review.
 
 A base served as an **index** is cut into contextual chunks (each prefixed by its document's title
 and heading path) and embedded through the gateway (`default_model_profiles["embed"]`, else
