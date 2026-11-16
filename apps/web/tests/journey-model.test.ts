@@ -37,7 +37,10 @@ describe("a journey's model (S22-02)", () => {
     ]);
     expect([byId("t-approve-spec").kind, byId("t-approve-spec").label]).toEqual(["human", "Product owners"]);
     expect([byId("t-open-pr").kind, byId("t-open-pr").action]).toEqual(["platform", "opens the pull request"]);
-    expect([byId("t-merge").action, byId("t-merge").gates]).toEqual(["merges the pull request", ["ci_green"]]);
+    expect([byId("t-merge").action, byId("t-merge").gates]).toEqual([
+      "merges the pull request",
+      ["ci_green", "no_secrets", "diff_size_max", "docs_updated", "scope_respected"],
+    ]);
     expect([byId("t-release").kind, byId("t-release").action]).toEqual(["train", "deploys to prod"]);
     expect(byId("t-implement").maxRounds).toBe(3);
     expect(byId("t-test").sentence).toMatch(/tester/);

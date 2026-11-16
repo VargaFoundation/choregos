@@ -119,6 +119,8 @@ When a workflow is refused, `errors` lists each problem with its `code`, `line` 
 | `workflow.no_terminal_state`, `workflow.terminal_unreachable` | the work item could never end |
 | `workflow.no_human_state` | no state waits for a person |
 | `workflow.no_verify_before_pr` | a pull request is opened without a verification step |
+| `workflow.no_diff_gate_at_merge` | a transition merges the pull request and none of its gates reads the diff: declare `no_secrets` there, and the other diff gates the workflow relies on (a warning) |
+| `workflow.run_scope_on_system_step` | `scope_respected` judged on a run, on a transition the platform takes: the run is the last step's, or none. Declare `params: { over: work_item }` there, or move the gate to the step that writes (a warning) |
 | `workflow.implicit_effect` | an effect deduced from a state's name: write `does` or `production` |
 | `workflow.name_reserved` | a reserved workflow name |
 | `state.unknown`, `state.orphan`, `state.no_inbound` | a state that is not declared, or that nothing leads to |
@@ -128,6 +130,7 @@ When a workflow is refused, `errors` lists each problem with its `code`, `line` 
 | `transition.does_requires_system` | `does` on a transition whose actor is not `system` |
 | `transition.pull_request_without_open_pr` | `pull_request` on a transition that does not open one |
 | `gate.unknown`, `gate.nothing_to_check`, `gate.output_schema`, `gate.already_fixed_not_an_exit` | a gate that does not exist, has nothing to check, or is misused |
+| `gate.scope_over_unknown` | `over` on `scope_respected` takes one value, `work_item` |
 | `action.not_system`, `action.on_fail_missing`, `action.effect_unknown`, `action.date_field_unknown`, `action.date_field_not_date` | a governed action declared on the wrong actor, without a way out, or with an unknown effect or date field |
 | `decision.output_collision`, `decision.threshold_without_human`, `decision.gateway_unsupported`, `decision.model_usage` | a decision step whose outputs collide, without a person behind a threshold, or a gateway or model that cannot decide |
 | `policy.*` | a policy setting the platform does not enforce (a warning) |

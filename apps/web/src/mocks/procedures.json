@@ -2983,12 +2983,12 @@
       {
         "key": "permissions",
         "title": "Permissions",
-        "markdown": "The orchestrator creates, reads and deletes `PipelineRun`s and `Secret`s in the runner namespaces. The\n`service_account` is the identity of the stage's pod: give it nothing beyond what the runner needs."
+        "markdown": "The orchestrator creates, reads and deletes `PipelineRun`s and `Secret`s in the runner namespaces. A\nstage's pod runs as `choregos-runner`, the account the chart creates: give it nothing beyond what the\nrunner needs. That account is the deployment's and is not set on a connector."
       },
       {
         "key": "in_choregos",
         "title": "In Choregos",
-        "markdown": "Mostly chart values. If a connector is declared, `pipeline` names the Pipeline to start and\n`service_account` the account it runs as."
+        "markdown": "Mostly chart values. If a connector is declared, `pipeline` names the Pipeline to start."
       },
       {
         "key": "test",
@@ -3004,8 +3004,7 @@
     "values": {},
     "egress": [],
     "fields": {
-      "pipeline": "the Pipeline each run starts, choregos-agent by default",
-      "service_account": "the service account the PipelineRun runs as"
+      "pipeline": "the Pipeline each run starts, choregos-agent by default"
     },
     "vendor_docs": [
       {

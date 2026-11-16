@@ -11,7 +11,7 @@ from urllib.parse import quote
 from choregos_contracts import InboundEvent
 from choregos_core.domain import CheckRun, DiffFile, DiffSummary, PrRef, PrState, ReviewState
 
-from ..errors import UpstreamError
+from ..errors import HeadMovedError, UpstreamError
 from ..github.auth import RUNNER_PERMISSIONS
 from ..github.client import GitHubClient
 from ..tracker.github_events import parse_github_event
@@ -21,8 +21,10 @@ mutation($id: ID!) { markPullRequestReadyForReview(input: {pullRequestId: $id}) 
 """
 
 ENABLE_AUTO_MERGE = """
-mutation($pullRequestId: ID!, $method: PullRequestMergeMethod!) {
-  enablePullRequestAutoMerge(input: {pullRequestId: $pullRequestId, mergeMethod: $method}) {
+mutation($pullRequestId: ID!, $method: PullRequestMergeMethod!, $expectedHeadOid: GitObjectID!) {
+  enablePullRequestAutoMerge(
+    input: {pullRequestId: $pullRequestId, mergeMethod: $method, expectedHeadOid: $expectedHeadOid}
+  ) {
     pullRequest { id number }
   }
 }
@@ -35,6 +37,9 @@ AUTO_MERGE_REFUSED = ("Auto merge is not allowed", "clean status")
 
 class GitHubScm:
     """SCM GitHub via l'App `choregos-bot`."""
+
+    #: A merge names its commit: `expectedHeadOid` on the merge queue, `sha` on a direct merge.
+    capabilities: frozenset[str] = frozenset({"merge_at_commit"})
 
     def __init__(
         self,
@@ -86,6 +91,20 @@ class GitHubScm:
                 return False
             raise
         return True
+
+    async def head_of(self, repo: str, branch: str) -> str | None:
+        """The commit `branch` points at now, `None` when there is no such branch (ADR 0171). Any
+        other error is raised: an outage is not an absence."""
+        try:
+            ref = await self.client.request("GET", f"/repos/{repo}/git/ref/heads/{branch}", repo=repo)
+        except UpstreamError as exc:
+            if exc.status_code == 404:
+                return None
+            raise
+        sha = ((ref or {}).get("object") or {}).get("sha")
+        if not sha:
+            raise UpstreamError("github", f"the ref of `{branch}` names no commit")
+        return str(sha)
 
     async def commit_files(self, repo: str, branch: str, files: dict[str, str], message: str) -> str:
         """Writes files on a branch through the Contents API, one commit per modified file.
@@ -252,14 +271,24 @@ class GitHubScm:
             },
         )
 
-    async def enqueue_merge(self, ref: PrRef) -> None:
-        """Merge queue: `enablePullRequestAutoMerge`, otherwise a direct merge if the policy allows it."""
-        pr = await self.client.request("GET", f"/repos/{ref.repo}/pulls/{ref.number}", repo=ref.repo)
+    async def enqueue_merge(self, ref: PrRef, sha: str) -> None:
+        """Merge the pull request at `sha`, the commit the gates judged (ADR 0171).
+
+        Merge queue: `enablePullRequestAutoMerge` with `expectedHeadOid`, otherwise a direct merge
+        with `sha` if the policy allows it. A head that is elsewhere is a `HeadMovedError` and
+        nothing is merged; a pull request already merged at `sha` is left as it is, so a replayed
+        merge is not a second one. The merge never goes out without the commit.
+        """
+        head = await self._pull_request_head(ref)
+        if head["sha"] != sha:
+            raise HeadMovedError("github", expected=sha, actual=head["sha"] or None)
+        if head["merged"]:
+            return
         if self.use_merge_queue:
             try:
                 await self.client.graphql(
                     ENABLE_AUTO_MERGE,
-                    {"pullRequestId": pr["node_id"], "method": self.merge_method},
+                    {"pullRequestId": head["node_id"], "method": self.merge_method, "expectedHeadOid": sha},
                     repo=ref.repo,
                 )
                 return
@@ -268,13 +297,32 @@ class GitHubScm:
                 # protection), or a pull request already mergeable ("clean status"), refuses it: the
                 # merge step runs after `ci_green`, so the pull request is merged directly (S59-12).
                 if not any(reason in str(exc) for reason in AUTO_MERGE_REFUSED):
+                    # GitHub words a stale `expectedHeadOid` as it likes: the head is read again.
+                    moved = (await self._pull_request_head(ref))["sha"]
+                    if moved != sha:
+                        raise HeadMovedError("github", expected=sha, actual=moved or None) from exc
                     raise
-        await self.client.request(
-            "PUT",
-            f"/repos/{ref.repo}/pulls/{ref.number}/merge",
-            repo=ref.repo,
-            json={"merge_method": self.merge_method.lower()},
-        )
+        try:
+            await self.client.request(
+                "PUT",
+                f"/repos/{ref.repo}/pulls/{ref.number}/merge",
+                repo=ref.repo,
+                json={"merge_method": self.merge_method.lower(), "sha": sha},
+            )
+        except UpstreamError as exc:
+            # 409: "sha was provided and pull request head did not match" (GitHub's REST reference).
+            if exc.status_code == 409:
+                raise HeadMovedError("github", expected=sha) from exc
+            raise
+
+    async def _pull_request_head(self, ref: PrRef) -> dict[str, Any]:
+        """The pull request's node id, the commit its head is at, and whether it is merged."""
+        pr = await self.client.request("GET", f"/repos/{ref.repo}/pulls/{ref.number}", repo=ref.repo)
+        return {
+            "node_id": pr.get("node_id"),
+            "sha": str((pr.get("head") or {}).get("sha") or ""),
+            "merged": bool(pr.get("merged")),
+        }
 
     async def compare(self, repo: str, base: str, head: str) -> DiffSummary:
         payload = await self.client.request("GET", f"/repos/{repo}/compare/{base}...{head}", repo=repo)

@@ -433,6 +433,9 @@ class AdapterSet:
         """Builds from a project's connector configuration."""
         if fakes_enabled():
             return cls.fakes()
+        # Before anything is built: a row stored before the declaration refused it is refused too (S65-03).
+        for kind, spec in connectors.items():
+            refuse_deployment_fields(kind, spec.get("config"))
 
         def get(kind: str, default_type: str) -> Any:
             spec = connectors.get(kind, {})
@@ -465,6 +468,41 @@ class AdapterSet:
 #: refused here on every declaration and edit, honoured only where the deployment serves eval fakes.
 FAKE_SCENE_FIELD = "fake_scene"
 
+#: What a connector's configuration never says (S65-03, ADR 0172): which cluster the platform talks to,
+#: and what a run's pod is given from that cluster. These are the deployment's, set by its operator
+#: (the chart's `runner.envFromSecrets`, `global.imagePullSecrets`, the runner's service account):
+#:
+#: - `kubernetes`: the API server's connection (`base_url`, `token`, `verify`), which the factories of
+#:   the cluster-backed kinds accept from the code that builds them (a test, a bench);
+#: - `env_from_secrets`: the Secrets injected whole into a run's pod;
+#: - `image_pull_secrets`: the pull secrets of that pod;
+#: - `service_account`: the account that pod runs as.
+#:
+#: A project's runs may live in a namespace they share with the platform: a name written by a project
+#: there would reach objects that are not the project's.
+DEPLOYMENT_FIELDS: Mapping[str, frozenset[str]] = {
+    "runtime": frozenset({"kubernetes", "env_from_secrets", "image_pull_secrets", "service_account"}),
+    "ci": frozenset({"kubernetes"}),
+}
+
+
+def refuse_deployment_fields(kind: str, config: Mapping[str, Any] | None) -> None:
+    """Raise when a connector's configuration sets what only the deployment sets.
+
+    An empty value sets nothing and is let through: a form that saved every field of a type, blank
+    ones included, must not stop its project's runs."""
+    named = sorted(
+        name
+        for name in DEPLOYMENT_FIELDS.get(kind, frozenset())
+        if (config or {}).get(name) not in (None, "", [], {})
+    )
+    if named:
+        fields = ", ".join(f"`{name}`" for name in named)
+        raise ConfigurationError(
+            f"{fields}: which cluster a `{kind}` connector talks to, and what a run's pod is given from "
+            "it, is the deployment's to set, never a connector's configuration"
+        )
+
 
 def validate_config(kind: str, type_name: str, config: dict[str, Any]) -> None:
     """Run the type's own configuration check, if it declares one; raises an `AdapterError`.
@@ -477,6 +515,7 @@ def validate_config(kind: str, type_name: str, config: dict[str, Any]) -> None:
             f"`{FAKE_SCENE_FIELD}` binds a connector to a fake's scene for the live eval matrix (S57-11a): "
             "only the matrix's seeding writes it, never a declaration or an edit"
         )
+    refuse_deployment_fields(kind, config)
     spec = _SPECS.get((kind, type_name))
     rotation = config.get("key_rotation")
     if rotation is not None and (spec is None or not spec.pooled_fields):

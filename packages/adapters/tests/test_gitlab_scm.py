@@ -14,6 +14,9 @@ from choregos_adapters.scm.gitlab import GitLabScm
 from choregos_core.domain import PrRef
 
 BASE = "https://gitlab.com/api/v4/projects/varga%2Fbilling-api"
+#: The commit the gates judged, and the one a later push put at the head.
+JUDGED = "a" * 40
+LATER = "b" * 40
 
 
 def adapter() -> GitLabScm:
@@ -99,10 +102,14 @@ async def test_open_pr_then_auto_merge() -> None:
         repo="varga/billing-api", number=7, url="https://gitlab.com/mr/7", head="feat/x", base="main"
     )
     assert body_of(created)["title"] == "Draft: Add x"
+    respx.get(f"{BASE}/merge_requests/7").mock(
+        return_value=httpx.Response(200, json={"iid": 7, "state": "opened", "sha": JUDGED})
+    )
     merge = respx.put(f"{BASE}/merge_requests/7/merge").mock(return_value=httpx.Response(200, json={}))
-    await adapter().enqueue_merge(ref)
+    await adapter().enqueue_merge(ref, JUDGED)
     sent = body_of(merge)
     assert sent["auto_merge"] is True and sent["merge_when_pipeline_succeeds"] is True
+    assert sent["sha"] == JUDGED, "the merge names the commit its head must be at"
 
 
 @respx.mock
@@ -227,3 +234,94 @@ def test_parse_webhook_delegates_merge_request_payloads() -> None:
 def test_the_type_is_registered_with_a_secret_token() -> None:
     specs = {(kind, name): spec for kind, name, spec in connector_types()}
     assert specs[("scm", "gitlab")].secret_fields == ("token",)
+
+
+# ───────────────────────── the merge names the judged commit (ADR 0171) ─────────────────────────
+
+
+@respx.mock
+async def test_the_head_of_a_branch_is_the_commit_of_the_branch() -> None:
+    import pytest
+    from choregos_adapters.errors import UpstreamError
+
+    respx.get(f"{BASE}/repository/branches/feat%2Fx").mock(
+        return_value=httpx.Response(200, json={"name": "feat/x", "commit": {"id": JUDGED}})
+    )
+    respx.get(f"{BASE}/repository/branches/gone").mock(return_value=httpx.Response(404))
+    respx.get(f"{BASE}/repository/branches/closed").mock(return_value=httpx.Response(403, json={}))
+    assert await adapter().head_of("varga/billing-api", "feat/x") == JUDGED
+    assert await adapter().head_of("varga/billing-api", "gone") is None, "no branch is no commit"
+    with pytest.raises(UpstreamError):
+        await adapter().head_of("varga/billing-api", "closed")
+
+
+@respx.mock
+async def test_a_head_that_moved_is_refused_before_anything_is_asked() -> None:
+    import pytest
+    from choregos_adapters.errors import HeadMovedError
+
+    respx.get(f"{BASE}/merge_requests/7").mock(
+        return_value=httpx.Response(200, json={"iid": 7, "state": "opened", "sha": LATER})
+    )
+    merge = respx.put(f"{BASE}/merge_requests/7/merge").mock(return_value=httpx.Response(200, json={}))
+    with pytest.raises(HeadMovedError) as moved:
+        await adapter().enqueue_merge(PrRef(repo="varga/billing-api", number=7), JUDGED)
+    assert (moved.value.expected, moved.value.actual) == (JUDGED, LATER)
+    assert not merge.called, "nothing was asked of the forge"
+
+
+@respx.mock
+async def test_a_merge_the_forge_refuses_on_its_sha_is_a_moved_head() -> None:
+    """The head moves between the read and the merge: GitLab answers 409 to the `sha` it was sent."""
+    import pytest
+    from choregos_adapters.errors import HeadMovedError
+
+    respx.get(f"{BASE}/merge_requests/7").mock(
+        return_value=httpx.Response(200, json={"iid": 7, "state": "opened", "sha": JUDGED})
+    )
+    merge = respx.put(f"{BASE}/merge_requests/7/merge").mock(
+        return_value=httpx.Response(409, json={"message": "SHA does not match HEAD of source branch"})
+    )
+    with pytest.raises(HeadMovedError) as moved:
+        await adapter().enqueue_merge(PrRef(repo="varga/billing-api", number=7), JUDGED)
+    assert moved.value.expected == JUDGED
+    assert body_of(merge)["sha"] == JUDGED, "the forge refused the commit it was sent"
+    assert merge.call_count == 1, "one merge, not a second without it"
+
+
+@respx.mock
+async def test_another_refusal_of_the_merge_is_not_a_moved_head() -> None:
+    import pytest
+    from choregos_adapters.errors import HeadMovedError, UpstreamError
+
+    respx.get(f"{BASE}/merge_requests/7").mock(
+        return_value=httpx.Response(200, json={"iid": 7, "state": "opened", "sha": JUDGED})
+    )
+    respx.put(f"{BASE}/merge_requests/7/merge").mock(
+        return_value=httpx.Response(405, json={"message": "405 Method Not Allowed"})
+    )
+    with pytest.raises(UpstreamError) as refused:
+        await adapter().enqueue_merge(PrRef(repo="varga/billing-api", number=7), JUDGED)
+    assert not isinstance(refused.value, HeadMovedError)
+
+
+@respx.mock
+async def test_a_merge_request_already_merged_at_the_commit_is_not_merged_again() -> None:
+    import pytest
+    from choregos_adapters.errors import HeadMovedError
+
+    merged = respx.get(f"{BASE}/merge_requests/7").mock(
+        return_value=httpx.Response(200, json={"iid": 7, "state": "merged", "sha": JUDGED})
+    )
+    merge = respx.put(f"{BASE}/merge_requests/7/merge").mock(return_value=httpx.Response(405, json={}))
+    await adapter().enqueue_merge(PrRef(repo="varga/billing-api", number=7), JUDGED)
+    assert merged.called and not merge.called, "a replayed merge asks nothing"
+    with pytest.raises(HeadMovedError):
+        await adapter().enqueue_merge(PrRef(repo="varga/billing-api", number=7), LATER)
+
+
+def test_the_adapter_says_it_merges_at_a_commit() -> None:
+    from choregos_adapters.base import SCM_CAPABILITIES, merge_at_commit_refusal
+
+    assert GitLabScm.capabilities <= SCM_CAPABILITIES
+    assert merge_at_commit_refusal(adapter()) is None
