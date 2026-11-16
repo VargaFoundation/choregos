@@ -6,7 +6,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from .base import Dto, PageMeta
 
@@ -56,6 +56,30 @@ class AgentResponseUsage(Dto):
     tool_calls: int = 0
 
 
+class AgentCitation(BaseModel):
+    """A passage or document a knowledge tool returned in the turn (ADR 0139 §3)."""
+
+    model_config = ConfigDict(extra="allow")
+
+    document_id: str
+    title: str | None = None
+    version: str | None = None
+    base: str | None = None
+
+
+class AgentPendingAction(Dto):
+    """A write the assistant proposed that the person has not decided: decided in the console."""
+
+    id: str
+    summary: str
+    confirm_url: str
+
+
+class AgentMissingAccount(Dto):
+    need: str
+    connect_url: str
+
+
 class AgentResponse(Dto):
     """The Responses API's shape, the part a client reads."""
 
@@ -69,6 +93,11 @@ class AgentResponse(Dto):
     error: AgentResponseError | None = None
     #: The memory spaces the turn wrote or proposed in (a conversation with an assistant).
     memory_updated: list[str] = Field(default_factory=list)
+    #: What the MCP door's answer carries for the same turn (S67-08, ADR 0154 §4, G1): read from the turn's
+    #: journal by `conversation_signals`, so the two surfaces cannot say different things.
+    citations: list[AgentCitation] = Field(default_factory=list)
+    pending_actions: list[AgentPendingAction] = Field(default_factory=list)
+    missing_accounts: list[AgentMissingAccount] = Field(default_factory=list)
 
 
 class AgentDelta(Dto):
@@ -152,6 +181,8 @@ class ConversationMessageCreate(Dto):
 
     input: str = Field(min_length=1, max_length=65_536)
     stream: bool = False
+    #: The turn keeps running, and is booked once, when the client that sent it goes away (ADR 0154 §4, G2).
+    detach: bool = False
 
 
 class ConversationFeedbackCreate(Dto):
