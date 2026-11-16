@@ -132,3 +132,13 @@ Hence:
 - `preferences` is a variable of a published version's check (`SAMPLE_VARIABLES`): any key reads as a
   sample, as `config` does. `choregos plugin validate` does not check a `preferences.<key>` against the
   profile's schema.
+
+## Amendment (2026-11-16, S63-30): a task run renders the same values
+
+A task of the installation (its workflow's agent step, run by the orchestrator) rendered the agent's
+instructions with the run's variables only, so `config` and `preferences` were the publication samples:
+its model read `<hr_contact>` (#1784). The stage now asks for the work item's values
+(`services.task_instruction_values`: the installation's config over the schema's defaults, the profile
+memory of the personal space's owner, empty under `memory.enabled: false`) and renders with them and the
+run's variables (`choregos_core.instructions.render_task_instructions`). A key with no value renders empty;
+a run variable that does not exist is still an error. Any other work item renders as before.

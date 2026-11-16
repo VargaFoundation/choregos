@@ -8,6 +8,8 @@ stays the address of everything.
 
 from __future__ import annotations
 
+from typing import Any
+
 from .costs import (
     estimate_cost,
     record_cost,
@@ -86,6 +88,15 @@ from .tickets import (
     work_item_dto,
 )
 
+
+async def task_instruction_values(session: Any, item: Any) -> dict[str, Any] | None:
+    """`config` and `preferences` of a task run of an installation (#1784), for the orchestrator's stage;
+    imported on use, the assistant services importing this package."""
+    from .conversation_instructions import task_instruction_values as values
+
+    return await values(session, item)
+
+
 __all__ = [
     "DEFAULT_POLICY_PRESET",
     "DEFAULT_WORKFLOW",
@@ -139,6 +150,7 @@ __all__ = [
     "run_dto",
     "run_summary",
     "store_outputs",
+    "task_instruction_values",
     "timeline",
     "tool_connectors_of",
     "totals_from",

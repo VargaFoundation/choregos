@@ -14,7 +14,7 @@ from typing import Any
 
 import structlog
 from choregos_api.db.models import Run
-from choregos_api.services import persist_event
+from choregos_api.services import persist_event, task_instruction_values
 from choregos_api.services.artifacts import producing_runs
 from choregos_api.services.hosted_builds import builds_for
 from choregos_api.services.model_catalogue import load_policy
@@ -298,7 +298,16 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
         )
         memory_scope = resolved_memories.legacy_scope or "none"
         await guard_against_injection(session, bundle, item, run_id, plan, context_pack)
-        playbook_prompt = _render_playbook(plan, bundle, item, context_pack, agent)
+        # A task run of an assistant's installation (ADR 0137) renders its `config` and its subscriber's
+        # `preferences`, never the publication samples (#1784).
+        playbook_prompt = _render_playbook(
+            plan,
+            bundle,
+            item,
+            context_pack,
+            agent,
+            await task_instruction_values(session, item) if agent else None,
+        )
         playbook_ref = _playbook_ref(plan, agent, playbook_prompt)
         # A `read` agent writes no repository file: its scope matches only its deliverables (ADR 0119).
         allowed_paths = write_paths_for(workspace, list(item.allowed_paths or []))
@@ -653,8 +662,10 @@ async def _context_pack(
     )
 
 
-def _render_playbook(plan: StagePlan, bundle: Any, item: Any, context: ContextPack, agent: Any = None) -> str:
-    text = _render_playbook_text(plan, bundle, item, context, agent)
+def _render_playbook(
+    plan: StagePlan, bundle: Any, item: Any, context: ContextPack, agent: Any = None, assistant: Any = None
+) -> str:
+    text = _render_playbook_text(plan, bundle, item, context, agent, assistant)
     answer = str((item.documents or {}).get("human_answer") or "").strip()
     if not answer:
         return text
@@ -664,7 +675,7 @@ def _render_playbook(plan: StagePlan, bundle: Any, item: Any, context: ContextPa
 
 
 def _render_playbook_text(
-    plan: StagePlan, bundle: Any, item: Any, context: ContextPack, agent: Any = None
+    plan: StagePlan, bundle: Any, item: Any, context: ContextPack, agent: Any = None, assistant: Any = None
 ) -> str:
     from choregos_playbooks import frame, invariants_in, render_playbook
 
@@ -696,7 +707,7 @@ def _render_playbook_text(
     # built-in role, which no author wrote, writes in English.
     language = getattr(agent.spec, "language", None) if agent is not None else None
     if agent is not None and agent.spec.instructions.strip():
-        from choregos_core.instructions import render_instructions
+        from choregos_core.instructions import render_instructions, render_task_instructions
         from jinja2 import TemplateError
         from temporalio.exceptions import ApplicationError
 
@@ -704,7 +715,16 @@ def _render_playbook_text(
         # template that does not render (a sandbox-refused escape included) is not retried: it
         # will not render any better the fifth time.
         try:
-            return frame(render_instructions(agent.spec.instructions, **variables), language)
+            if assistant is not None:
+                rendered = render_task_instructions(
+                    agent.spec.instructions,
+                    config=assistant["config"],
+                    preferences=assistant["preferences"],
+                    **variables,
+                )
+            else:
+                rendered = render_instructions(agent.spec.instructions, **variables)
+            return frame(rendered, language)
         except TemplateError as error:
             who = f"{agent.agent.slug}@{agent.version}"
             raise ApplicationError(

@@ -19,10 +19,9 @@ from typing import Any
 import pytest
 from choregos_core import utcnow
 from httpx import AsyncClient
-from sqlalchemy import select
 
 from .kits.assistant_install import FIXTURE, ORG
-from .kits.assistant_memory import _agent, _assistant, _open
+from .kits.assistant_memory import _agent, _assistant, _open, _profile
 from .kits.conversations import _events
 from .kits.synthetic_installation import synthetic_installation  # noqa: F401
 from .test_agent_sessions import Upstream, upstream  # noqa: F401
@@ -54,26 +53,6 @@ def offline(tmp_path: Path) -> Iterator[Path]:
     use_plugin_supply(OfflineDirectory(root))
     yield root
     use_plugin_supply(None)
-
-
-async def _profile(installation_id: str, document: dict[str, Any], email: str = "admin@varga.dev") -> None:
-    """An active version of the person's `investor_profile`, as the memory page writes one."""
-    from choregos_api.db.models import AssistantInstallation, MemoryProfile, User
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.assistant_memory import ensure_store, spaces_of
-
-    async with session_scope(orgs="*") as session:
-        user = (await session.execute(select(User).where(User.email == email))).scalar_one()
-        installation = await session.get(AssistantInstallation, installation_id)
-        assert installation is not None
-        spaces = await spaces_of(session, installation, user.id)
-        assert spaces is not None
-        store = await ensure_store(session, spaces, spaces.decl("investor_profile"), None)
-        session.add(
-            MemoryProfile(
-                org_id=store.org_id, memory_store_id=store.id, version=1, document=document, status="active"
-            )
-        )
 
 
 def _system(body: dict[str, Any]) -> str:
