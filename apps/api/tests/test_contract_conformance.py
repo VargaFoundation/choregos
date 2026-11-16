@@ -12,11 +12,6 @@ PREFIX = "/api/v1"
 # names the story that implements it; an entry the API does serve must be removed from here.
 CONTRACT_ONLY: dict[str, str] = {}
 CONTRACT_ONLY_PATHS: set[str] = set()
-CONTRACT_ONLY_PATHS: set[str] = {
-    "/me/pending",
-    "/runs/{id}/agents",
->>>>>>> origin/feat/s67-08-rest-turn-signals-and-follow
-}
 
 
 def _app_paths(spec: dict[str, Any]) -> set[str]:

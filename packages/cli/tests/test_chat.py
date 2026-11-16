@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import subprocess
 import sys
 from collections.abc import AsyncIterator, Callable
@@ -38,6 +39,7 @@ def profile(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     # Elapsed times are read against a pinned clock; a reconnection is not tried within a test.
     monkeypatch.setattr(activity, "clock", lambda: NOW)
     monkeypatch.setattr(workspace, "RECONNECT_S", 3600)
+    monkeypatch.setattr(workspace, "RUN_POLL_S", 0.05)
     monkeypatch.setenv("CHOREGOS_API_URL", API)
     monkeypatch.setenv("CHOREGOS_TOKEN", "chg_test")
     monkeypatch.setenv("CHOREGOS_ORG", "acme")
@@ -128,6 +130,64 @@ def _delta(text: str) -> tuple[str, dict[str, Any]]:
     }
 
 
+def _event(seq: int, update: dict[str, Any], seconds_ago: int) -> dict[str, Any]:
+    return {
+        "seq": seq,
+        "type": "session/update",
+        "ts": _iso(NOW - timedelta(seconds=seconds_ago)),
+        "payload": {"sessionId": "sess-1", "update": update},
+    }
+
+
+def _call(call_id: str, title: str, kind: str, status: str = "pending", **extra: Any) -> dict[str, Any]:
+    return {
+        "sessionUpdate": "tool_call",
+        "toolCallId": call_id,
+        "title": title,
+        "kind": kind,
+        "status": status,
+    } | extra
+
+
+def _update(call_id: str, status: str) -> dict[str, Any]:
+    return {"sessionUpdate": "tool_call_update", "toolCallId": call_id, "status": status}
+
+
+def _journal() -> list[dict[str, Any]]:
+    """A claude-code journal, timed against the pinned clock: a plan, a finished read, a failed command and
+    a call still running. The `_meta` a backend adds is there to be ignored (ADR 0154 §5)."""
+    plan = {
+        "sessionUpdate": "plan",
+        "entries": [
+            {"content": "Read the totals code", "status": "completed", "priority": "high"},
+            {"content": "Run the tests", "status": "in_progress", "priority": "medium"},
+        ],
+    }
+    spy = {"_meta": {"claudeCode": {"toolName": "Task", "parentToolUseId": "toolu_zzz"}}}
+    updates = [
+        (60, plan),
+        (50, _call("toolu_01", "Read src/invoices/total.py", "read", **spy)),
+        (48, _update("toolu_01", "completed")),
+        (30, _call("toolu_02", "`make test`", "execute")),
+        (25, _update("toolu_02", "failed")),
+        (12, _call("toolu_03", "`make test` again", "execute", "in_progress")),
+    ]
+    return [_event(n, update, ago) for n, (ago, update) in enumerate(updates, start=1)]
+
+
+def _agent_node(node_id: str, parent: str | None, kind: str, **changes: Any) -> dict[str, Any]:
+    return {
+        "id": node_id,
+        "parent_id": parent,
+        "kind": kind,
+        "tool": "Agent" if kind == "subagent" else None,
+        "status": "running",
+        "started_at": _iso(NOW - timedelta(minutes=1, seconds=4)),
+        "ended_at": None,
+        "tool_calls": 0,
+    } | changes
+
+
 class Platform:
     """Every route the workspace reads, faked; what it sends is kept for the test to look at."""
 
@@ -189,6 +249,17 @@ class Platform:
         )
         self.stops: list[tuple[str, Any]] = []
         router.post(f"{V1}/runs/{RUN}/cancel").mock(side_effect=self._stop)
+        # What an expanded run node reads (S67-14): its journal, its context and its sub-agents.
+        self.journal: list[dict[str, Any]] = _journal()
+        self.breakdown: dict[str, Any] | None = None
+        self.agent_nodes: list[dict[str, Any]] = [_agent_node(RUN, None, "agent")]
+        self.asked: list[tuple[str, str]] = []  # (route, after_seq or "")
+        self.journal_status = 200
+        router.get(url__regex=rf"{re.escape(V1)}/runs/[^/]+/events").mock(side_effect=self._events)
+        router.get(url__regex=rf"{re.escape(V1)}/runs/[^/]+/context-breakdown").mock(
+            side_effect=self._context
+        )
+        router.get(url__regex=rf"{re.escape(V1)}/runs/[^/]+/agents").mock(side_effect=self._agents)
         router.post(f"{V1}/work-items/wi-12/actions").mock(side_effect=self._stop)
 
     def assistants(self, items: list[dict[str, Any]]) -> None:
@@ -249,6 +320,36 @@ class Platform:
             await asyncio.sleep(3600)  # a live stream stays open
 
         return Response(200, stream=body(), headers={"content-type": "text/event-stream"})  # type: ignore[arg-type]
+
+    def _events(self, request: Any) -> Response:
+        after = int(request.url.params.get("after_seq", 0))
+        self.asked.append(("events", str(after)))
+        if self.journal_status != 200:
+            return Response(self.journal_status, json={"title": "Forbidden", "detail": "no"})
+        return Response(200, json=[e for e in self.journal if e["seq"] > after])
+
+    def _context(self, request: Any) -> Response:
+        self.asked.append(("context", ""))
+        body = {
+            "run_id": RUN,
+            "measurable": self.breakdown is not None,
+            "backend": "claude-code",
+            "latest": self.breakdown,
+            "series": [],
+        }
+        return Response(200, json=self.contract("RunContext", body))
+
+    def _agents(self, request: Any) -> Response:
+        self.asked.append(("agents", ""))
+        return Response(200, json=self.contract("RunAgentList", {"items": self.agent_nodes}))
+
+    def add_events(self, *updates: dict[str, Any], seconds_ago: int = 1) -> None:
+        """What the agent journals while the person watches."""
+        for update in updates:
+            self.journal.append(_event(len(self.journal) + 1, update, seconds_ago))
+
+    def asked_events(self) -> list[str]:
+        return [after for route, after in self.asked if route == "events"]
 
     def _stop(self, request: Any) -> Response:
         body = json.loads(request.content)
@@ -391,17 +492,6 @@ async def test_the_tree_follows_the_activity_stream(platform: Platform) -> None:
         await ready(pilot)
         await until(pilot, lambda: "FIN-20" in screen_text(app), "the streamed entry")
         assert "2 running" in screen_text(app)
-
-
-async def test_expanding_a_run_shows_its_events(platform: Platform) -> None:
-    app = make_app()
-    async with app.run_test(size=(160, 40)) as pilot:
-        await ready(pilot)
-        assert "42 events" not in screen_text(app)
-        await put_cursor_on(pilot, "implement")
-        await pilot.press("enter")
-        await pilot.pause()
-        assert "42 events · last: session/update" in screen_text(app)
 
 
 async def test_every_status_is_a_word(platform: Platform) -> None:
@@ -564,6 +654,166 @@ async def test_a_run_the_person_may_not_stop_opens_no_dialog(platform: Platform)
         assert "Stop run" not in screen_text(app)
 
 
+# ─────────────────────── an expanded run node (S67-14, ADR 0154 §2, §5) ───────────────────────
+
+
+async def expand_run(pilot: Any, text: str = "implement") -> None:
+    await put_cursor_on(pilot, text)
+    await pilot.press("enter")
+
+
+def lines_of(app: Any) -> list[str]:
+    return [line.rstrip() for line in screen_text(app).splitlines()]
+
+
+async def test_an_expanded_run_shows_its_plan_its_tool_calls_its_context_and_its_sub_agents(
+    platform: Platform,
+) -> None:
+    platform.agent_nodes = [
+        _agent_node(RUN, None, "agent", tool_calls=3),
+        _agent_node("toolu_a", RUN, "subagent", tool_calls=2),
+        _agent_node("toolu_b", "toolu_a", "subagent", tool="Task", tool_calls=1, status="completed"),
+    ]
+    app = make_app()
+    async with app.run_test(size=(160, 50)) as pilot:
+        await ready(pilot)
+        assert platform.asked == [], "a collapsed run is not read"
+        await expand_run(pilot)
+        await until(pilot, lambda: "Plan  1/2 done" in screen_text(app), "the plan")
+        lines = lines_of(app)
+    text = "\n".join(lines)
+    assert "✓ Read the totals code" in text and "● Run the tests" in text
+    assert "Steps  3 tool calls · 2 finished" in text
+    assert re.search(r"✓ done\s+2s\s+read\s+Read src/invoices/total\.py", text), text
+    assert re.search(r"✗ failed\s+5s\s+execute\s+`make test`", text), text
+    assert re.search(r"● running\s+12s\s+execute\s+`make test` again", text), text
+    assert "Context: not measured" in text
+    first = next(n for n, line in enumerate(lines) if "sub-agent Agent · 2 tool calls" in line)
+    second = next(n for n, line in enumerate(lines) if "sub-agent Task · 1 tool call" in line)
+    assert second == first + 1
+
+    def indent(n: int) -> int:
+        found = re.search(r"[●✓] \w+ +sub-agent", lines[n])
+        assert found, lines[n]
+        return found.start()
+
+    assert indent(second) > indent(first)
+
+
+async def test_an_expanded_run_shows_the_context_when_it_is_measured(platform: Platform) -> None:
+    platform.breakdown = {
+        "call": 7,
+        "at": _iso(NOW),
+        "model": "anthropic/sonnet-4.5",
+        "prompt_tokens": 40_000,
+        "max_input_tokens": 200_000,
+        "sections": {"system": 4_000, "messages": 36_000},
+    }
+    platform.contract(
+        "RunContext",
+        {"run_id": RUN, "measurable": True, "backend": "x", "latest": platform.breakdown, "series": []},
+    )
+    app = make_app()
+    async with app.run_test(size=(160, 50)) as pilot:
+        await ready(pilot)
+        await expand_run(pilot)
+        await until(pilot, lambda: "Context: call 7" in screen_text(app), "the context")
+        assert "Context: call 7 · sonnet-4.5 · 40.0k of 200.0k (20%)" in screen_text(app)
+        assert "not measured" not in screen_text(app)
+
+
+async def test_an_open_run_is_read_incrementally_while_it_runs(platform: Platform) -> None:
+    app = make_app()
+    async with app.run_test(size=(160, 50)) as pilot:
+        await ready(pilot)
+        await expand_run(pilot)
+        await until(pilot, lambda: "Steps  3 tool calls" in screen_text(app), "the first read")
+        platform.add_events(_update("toolu_03", "completed"), _call("toolu_04", "Edit total.py", "edit"))
+        await until(pilot, lambda: "Edit total.py" in screen_text(app), "the later events")
+        asked = platform.asked_events()
+        assert "Steps  4 tool calls · 3 finished" in screen_text(app)
+    assert asked[0] == "0" and "6" in asked, asked  # then only what is after the last event read
+    assert asked.count("0") == 1, asked
+
+
+async def test_collapsing_a_run_stops_reading_it(platform: Platform) -> None:
+    app = make_app()
+    async with app.run_test(size=(160, 50)) as pilot:
+        await ready(pilot)
+        await expand_run(pilot)
+        await until(pilot, lambda: "Steps  3 tool calls" in screen_text(app), "the first read")
+        await pilot.press("enter")  # collapse
+        await pilot.pause(0.1)
+        asked = len(platform.asked)
+        await pilot.pause(0.5)  # ten poll periods
+        assert len(platform.asked) == asked, "a collapsed run is still being read"
+        assert "Steps  3 tool calls" not in screen_text(app)
+        await pilot.press("enter")  # open again: it resumes after the last event, not from zero
+        await until(pilot, lambda: len(platform.asked) > asked, "reading again")
+        assert platform.asked_events()[-1] == "6"
+
+
+async def test_a_run_that_has_ended_is_read_once(platform: Platform) -> None:
+    platform.in_flight = []
+    platform.finished = [_entry(RUN, status="succeeded", ended_at=_iso(NOW))]
+    app = make_app()
+    async with app.run_test(size=(160, 50)) as pilot:
+        await ready(pilot)
+        await expand_run(pilot)
+        await until(pilot, lambda: "Steps  3 tool calls" in screen_text(app), "the read")
+        await pilot.pause(0.5)
+        assert platform.asked_events() == ["0"]
+
+
+async def test_a_run_stays_open_when_it_moves_to_the_ended_part(platform: Platform) -> None:
+    from choregos_cli.activity import Board
+
+    app = make_app()
+    async with app.run_test(size=(160, 50)) as pilot:
+        await ready(pilot)
+        await expand_run(pilot)
+        await until(pilot, lambda: "Steps  3 tool calls" in screen_text(app), "the read")
+        platform.in_flight, platform.finished = [], [_entry(RUN, status="succeeded", ended_at=_iso(NOW))]
+        app.board = Board.of({"in_flight": [], "finished": platform.finished})
+        app.redraw()
+        await pilot.pause(0.2)
+        assert "Steps  3 tool calls" in screen_text(app)
+
+
+async def test_an_unreadable_journal_is_said_on_the_node_and_the_workspace_goes_on(
+    platform: Platform,
+) -> None:
+    platform.journal_status = 403
+    app = make_app()
+    async with app.run_test(size=(160, 50)) as pilot:
+        await ready(pilot)
+        await expand_run(pilot)
+        await until(pilot, lambda: "the journal cannot be read (403)" in screen_text(app), "the notice")
+        assert "Quarter close" in screen_text(app)
+
+
+async def test_what_a_backend_writes_in_meta_does_not_move_a_tool_call(platform: Platform) -> None:
+    """The journal's first call carries a `_meta` naming a parent: the platform's agent list says there is
+    no sub-agent, so there is none, and the call stays flat under the run."""
+    app = make_app()
+    async with app.run_test(size=(160, 50)) as pilot:
+        await ready(pilot)
+        await expand_run(pilot)
+        await until(pilot, lambda: "Read src/invoices/total.py" in screen_text(app), "the steps")
+        assert "sub-agent" not in screen_text(app)
+
+
+def test_no_workspace_module_reads_meta() -> None:
+    source = Path(__file__).parents[1] / "src" / "choregos_cli"
+    for name in ("workspace.py", "run_steps.py", "run_activity.py", "activity.py"):
+        code = [
+            line
+            for line in (source / name).read_text().splitlines()
+            if not line.lstrip().startswith(("#", '"'))
+        ]
+        assert not [line for line in code if '"_meta"' in line or "'_meta'" in line], name
+
+
 # ─────────────────────────────── snapshots (SVG) ───────────────────────────────
 
 
@@ -610,6 +860,46 @@ def _showcase(platform: Platform) -> None:
 
 
 SIZES = {"80": (80, 36), "160": (160, 44)}
+#: Taller, so that the tree's pane shows the whole expanded run.
+TALL = {"80": (80, 80), "160": (160, 76)}
+
+
+@pytest.mark.parametrize("colour", ["colour", "no-color"])
+@pytest.mark.parametrize("columns", ["80", "160"])
+def test_the_workspace_snapshot_with_an_expanded_run(
+    snap_compare: Any,
+    platform: Platform,
+    monkeypatch: pytest.MonkeyPatch,
+    colour: str,
+    columns: str,
+) -> None:
+    if colour == "no-color":
+        monkeypatch.setenv("NO_COLOR", "1")
+    _showcase(platform)
+    platform.breakdown = {
+        "call": 7,
+        "at": _iso(NOW),
+        "model": "anthropic/sonnet-4.5",
+        "prompt_tokens": 40_000,
+        "max_input_tokens": 200_000,
+        "sections": {"system": 4_000, "messages": 36_000},
+    }
+    platform.agent_nodes = [
+        _agent_node(RUN, None, "agent", tool_calls=3),
+        _agent_node("toolu_a", RUN, "subagent", tool_calls=2),
+        _agent_node("toolu_b", "toolu_a", "subagent", tool="Task", tool_calls=1, status="completed"),
+    ]
+    app = make_app(conversation=CID)
+
+    async def settled(pilot: Any) -> None:
+        await until(pilot, lambda: app.live and "Quarter close" in screen_text(app), "the workspace")
+        await until(pilot, lambda: bool(app.proposals) and bool(app.pending), "the decisions")
+        await put_cursor_on(pilot, "implement")
+        await pilot.press("enter")
+        await until(pilot, lambda: "Context: call 7" in screen_text(app), "the run's steps")
+        await pilot.pause(0.3)
+
+    assert snap_compare(app, terminal_size=TALL[columns], run_before=settled)
 
 
 @pytest.mark.parametrize("colour", ["colour", "no-color"])
