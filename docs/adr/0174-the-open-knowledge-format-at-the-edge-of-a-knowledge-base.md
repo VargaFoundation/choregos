@@ -84,6 +84,7 @@ The format is five months old and led by one vendor; adopting it as a store woul
   conversation's document read; `DOCUMENT_CHARS` now counts them.
 - A document of an `index` base that declares itself deprecated drops out of `knowledge_search` at its
   next indexing (conversion, sync or reindex), not before.
-- Not covered: the console does not show a document's OKF status or staleness; conversations still
-  list a deprecated document (they do not read the markdown to list); the eval set's recall@5 does not
-  distinguish deprecated documents. `stale_after` is served, never acted on.
+- A conversation neither lists nor reads a deprecated document (`knowledge_list`, `knowledge_get`), as
+  a run is not served it.
+- Not covered: the console does not show a document's OKF status or staleness; the eval set's
+  recall@5 does not distinguish deprecated documents. `stale_after` is served, never acted on.

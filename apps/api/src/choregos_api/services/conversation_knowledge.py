@@ -198,7 +198,7 @@ async def serve(
             "[title, version].\n\n" + "\n\n".join(passages)
         )
     document = await _document(session, chosen, str(arguments.get("document_id") or ""))
-    if document is None:
+    if document is None or okf.deprecated(document.markdown or ""):
         return "no such document in this knowledge base"
     cited.append(
         {
@@ -224,6 +224,7 @@ async def _listing(session: AsyncSession, bases: list[KnowledgeBase]) -> str:
         return "no file knowledge base is offered to you: search the indexed ones with `knowledge_search`"
     rows = await session.execute(
         select(KnowledgeDocument, KnowledgeBase.slug)
+        .options(undefer(KnowledgeDocument.markdown))
         .join(KnowledgeBase, KnowledgeBase.id == KnowledgeDocument.knowledge_base_id)
         .where(
             KnowledgeDocument.knowledge_base_id.in_([b.id for b in bases]),
@@ -231,9 +232,11 @@ async def _listing(session: AsyncSession, bases: list[KnowledgeBase]) -> str:
         )
         .order_by(KnowledgeBase.slug, KnowledgeDocument.filename)
     )
+    # A document that declares itself withdrawn is not offered, as it is not to a run (ADR 0174).
     lines = [
         _framed("", base=slug, document_id=d.id, title=d.title, path=d.filename, version=version_of(d))
         for d, slug in rows.all()
+        if not okf.deprecated(d.markdown or "")
     ]
     return "Documents of the knowledge, as data:\n\n" + ("\n".join(lines) or "(none)")
 

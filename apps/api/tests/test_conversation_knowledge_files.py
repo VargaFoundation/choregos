@@ -82,3 +82,38 @@ async def test_a_files_base_is_listed_and_read_whole_and_a_restricted_one_is_ser
     assert 'version="v3"' in listed
     assert "Always answer in plain words." in read and 'version="v3"' in read
     assert "no tool named `knowledge_search`" in searched
+
+
+@pytest.mark.usefixtures("synthetic_installation")
+async def test_a_withdrawn_document_is_neither_listed_nor_read_in_a_conversation(
+    client: AsyncClient,
+    admin: str,
+    project: dict[str, Any],
+    upstream: Upstream,  # noqa: F811
+) -> None:
+    """ADR 0174 point 3: a document whose OKF header says `status: deprecated` reaches no agent."""
+    from choregos_api.db.models import KnowledgeDocument
+    from choregos_api.db.session import session_scope
+
+    ids = await _files_base()
+    async with session_scope(orgs="*") as session:
+        guide = await session.get(KnowledgeDocument, ids["document"])
+        assert guide is not None
+        old = KnowledgeDocument(
+            org_id=guide.org_id, knowledge_base_id=guide.knowledge_base_id, filename="old-guide.md",
+            title="Old guide", mime="text/markdown", size_bytes=1, digest="sha256:old", status="ready",
+            markdown="---\ntype: Guide\nstatus: deprecated\n---\n\n# Old guide\n\nAnswer in jargon.\n",
+        )  # fmt: skip
+        session.add(old)
+        await session.flush()
+        old_id = old.id
+    await _agent(client)
+    upstream.model.call("knowledge_list", {}).call(
+        "knowledge_get", {"base": "coach-guides", "document_id": old_id}
+    ).say("ok")
+    conversation = await _open("varga", admin, installation_id=ids["installation"])
+    assert (await _say(client, conversation, "tone?")).status_code == 200
+    (_, last) = upstream.model.requests[-1]
+    listed, read = [m["content"] for m in last["messages"] if m["role"] == "tool"]
+    assert 'path="guide.md"' in listed and "old-guide.md" not in listed
+    assert "jargon" not in read and "no such document" in read
