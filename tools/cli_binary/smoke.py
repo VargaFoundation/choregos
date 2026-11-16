@@ -22,9 +22,12 @@ files are inside); `workflow validate` passes a shipped template and fails a bro
 unreadable YAML with exit code 1; `a2a skills` prints the skills of the fake door's card and its
 fields, and a refused token exits 1; `binary-info` (hidden), called by path and by bare name on the
 PATH, says its version comes from the `choregos-cli` metadata and the executable `self update`
-(S62-08) would replace is the binary's real path. Any failure exits 1: the release and the CI stop there.
+(S62-08) would replace is the binary's real path; `chat --smoke` (hidden) starts the Textual workspace
+headless, finds its six parts and quits (S67-09: Textual and its data files are inside). Any failure exits 1:
+the release and the CI stop there.
 
-The budgets. Measured on the first builds (Linux x86_64, 2026-11-11, a 24-core machine): 24.8 MB,
+The budgets. With Textual (S67-09, Linux x86_64, 2026-11-16): 29.4 MB, `--version` 0.93 s warm, 0.99 s cold.
+Measured on the first builds (Linux x86_64, 2026-11-11, a 24-core machine): 24.8 MB,
 `--version` in 0.69 s warm and cold alike; the CPython import of the CLI alone takes 0.30 s, the
 onefile bootstrap's check of its unpacked files the rest. They leave room for the other targets
 and for the dependencies to grow, not for a regression in kind:
@@ -351,6 +354,9 @@ def functional_checks(runner: Runner, version: str) -> None:
     expect(
         runner.run("workflow", "validate", "unreadable.yaml"), 1, "invalid workflow", what="unreadable YAML"
     )
+    # The workspace starts without a terminal, shows its parts and quits (S67-09): Textual and its data files
+    # are inside the binary.
+    expect(runner.run("chat", "--smoke", "--org", ORG), 0, "workspace ok: 6 parts", what="the workspace")
     runner.env["CHOREGOS_A2A_TOKEN"] = TOKEN
     expect(
         runner.run("a2a", "skills", "--org", ORG),
