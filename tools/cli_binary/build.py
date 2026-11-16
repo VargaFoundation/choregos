@@ -180,6 +180,8 @@ def nuitka_command(python: pathlib.Path, work: pathlib.Path, name: str, version:
         "--include-package-data=choregos_core",
         "--include-package-data=choregos_contracts",
         "--include-package-data=jsonschema_specifications",
+        # The workspace (`choregos chat`, S67-09): Textual's stylesheets, its themes and its Unicode tables.
+        "--include-package-data=textual",
         # `choregos --version` reads it (`importlib.metadata`).
         "--include-distribution-metadata=choregos-cli",
         # Typer finds the shell for `--install-completion` by importing a module by name.

@@ -7,7 +7,24 @@ from typing import Any
 
 import pytest
 
+try:  # pytest-textual-snapshot 1.0 names the extension `_file_extension`; syrupy 5+ reads `file_extension`
+    from pytest_textual_snapshot import SVGImageExtension
+
+    SVGImageExtension.file_extension = "svg"
+except ImportError:  # the plugin is a test dependency of the workspace's snapshots only
+    pass
+
 OPENAPI = Path(__file__).resolve().parents[3] / "packages" / "contracts" / "openapi.yaml"
+
+
+@pytest.fixture(autouse=True)
+def _no_real_profile(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    # `client.CONFIG_PATH` is read from the environment when the module is first imported: a suite that
+    # imports it at collection (the workspace's) would freeze the developer's real profile for the ones
+    # that import it later. A suite that wants a profile file points `CONFIG_PATH` at its own.
+    from choregos_cli import client
+
+    monkeypatch.setattr(client, "CONFIG_PATH", tmp_path / "no-profile.json")
 
 
 @pytest.fixture(autouse=True)

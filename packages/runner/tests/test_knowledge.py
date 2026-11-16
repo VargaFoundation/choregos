@@ -11,6 +11,7 @@ from choregos_contracts import KnowledgeRef, StageInput, knowledge_digest
 from choregos_runner.exits import Exit
 from choregos_runner.knowledge import INDEX, ROOT, KnowledgeInvalidError, lay_out
 from choregos_runner.runner import Runner
+from choregos_runner.workspace import git_dir_for
 
 from .conftest import FakeInternalClient, agent_script, valid_result
 
@@ -114,7 +115,7 @@ async def test_a_fake_run_greps_the_corpus(stage_input: StageInput, runner_setti
     assert ".choregos/knowledge/architecture/encryption.md:5:TLS 1.3 everywhere." in summary
     prompt = runner._prompt(with_kb, Path(runner_settings.workspace))
     assert "## Knowledge bases" in prompt and ".choregos/knowledge/architecture/" in prompt
-    exclusions = (Path(runner_settings.workspace) / ".git" / "info" / "exclude").read_text()
+    exclusions = (git_dir_for(Path(runner_settings.workspace)) / "info" / "exclude").read_text()
     assert ".choregos/knowledge/architecture/encryption.md" in exclusions, "the corpus stays out of the diff"
 
 

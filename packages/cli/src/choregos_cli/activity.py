@@ -117,14 +117,29 @@ def activity(
     org: Annotated[
         str | None, typer.Option("--org", help="the organisation; the profile's otherwise")
     ] = None,
+    run: Annotated[
+        str | None, typer.Option("--run", help="one run's steps instead: its plan, tool calls and context")
+    ] = None,
 ) -> None:
     """What runs in the organisation, as a tree: project, work item, run, with status, time, tokens and cost.
 
-    Read-only. `--watch` follows the activity stream; elapsed times move every second.
+    Read-only. `--watch` follows the activity stream; elapsed times move every second. `--run ID` shows one
+    run's own steps (the agent's plan, its tool calls with state and time, what fills its context).
     """
     from . import main
 
     api: Client = main.TransportSafeClient()
+    if run:
+        from . import run_activity
+
+        if project or workflow or agent or kind:
+            main.fail("--run shows one run: it takes no --project, --workflow, --agent or --kind")
+            return
+        try:
+            run_activity.show(api, run, watch=watch, out=theme.console())
+        except ApiError as exc:
+            main.fail(str(exc))
+        return
     try:
         organisation = api.profile.organisation(org)
     except NoOrganisationError as exc:
@@ -248,23 +263,17 @@ def _tree(
     if not entries:
         root.add(Text(empty))
         return root
-    projects: dict[str, Tree] = {}
-    items: dict[tuple[str, str], Tree] = {}
-    sessions: Tree | None = None
-    for entry in entries:
-        project = entry.get("project_slug")
-        if entry.get("kind") != "run" or not project:
-            if sessions is None:
-                sessions = root.add(Text("your sessions and conversations", style="bold"))
-            sessions.add(_line(entry, now, out))
-            continue
-        if project not in projects:
-            projects[project] = root.add(Text(project, style=f"bold {theme.hue_style(project)}"))
-        key = entry.get("work_item_key") or entry.get("work_item_id") or DASH
-        if (project, key) not in items:
-            items[(project, key)] = projects[project].add(_work_item(entry))
-        line = items[(project, key)].add(_line(entry, now, out))
-        _sub_agents(line, agents.get(str(entry.get("id"))) or [], now, out)
+    grouped = group(entries)
+    for project, work_items in grouped.projects.items():
+        branch = root.add(Text(project, style=f"bold {theme.hue_style(project)}"))
+        for runs in work_items.values():
+            item = branch.add(work_item_label(runs[0]))
+            for entry in runs:
+                _sub_agents(item.add(line(entry, now, out)), agents.get(str(entry.get("id"))) or [], now, out)
+    if grouped.sessions:
+        sessions = root.add(Text("your sessions and conversations", style="bold"))
+        for entry in grouped.sessions:
+            sessions.add(line(entry, now, out))
     return root
 
 
@@ -289,8 +298,34 @@ def _agent_line(node: dict[str, Any], now: datetime, out: Console) -> Text:
     return text
 
 
-def _work_item(entry: dict[str, Any]) -> Text:
-    text = Text(str(entry.get("work_item_key") or entry.get("work_item_id") or DASH), style="bold")
+@dataclass
+class Grouped:
+    """The tree's shape, without its drawing: runs by project then work item, and the person's own
+    sessions and turns. The workspace (`choregos chat`) draws the same shape with Textual."""
+
+    projects: dict[str, dict[str, list[dict[str, Any]]]] = field(default_factory=dict)
+    sessions: list[dict[str, Any]] = field(default_factory=list)
+
+
+def work_item_of(entry: dict[str, Any]) -> str:
+    return str(entry.get("work_item_key") or entry.get("work_item_id") or DASH)
+
+
+def group(entries: list[dict[str, Any]]) -> Grouped:
+    """Project → work item → run, in the order the entries come; what is not a run of a project goes
+    under the person's sessions."""
+    grouped = Grouped()
+    for entry in entries:
+        project = entry.get("project_slug")
+        if entry.get("kind") != "run" or not project:
+            grouped.sessions.append(entry)
+            continue
+        grouped.projects.setdefault(project, {}).setdefault(work_item_of(entry), []).append(entry)
+    return grouped
+
+
+def work_item_label(entry: dict[str, Any]) -> Text:
+    text = Text(work_item_of(entry), style="bold")
     workflow = entry.get("workflow")
     if workflow:
         text.append("  ")
@@ -298,19 +333,24 @@ def _work_item(entry: dict[str, Any]) -> Text:
     return text
 
 
-def _line(entry: dict[str, Any], now: datetime, out: Console) -> Text:
-    """`● running  implement · coder · sonnet-4.5   4m12s · 12.3k in / 800 out · $0.84   run 0192a3b4c5d6`."""
+def line(entry: dict[str, Any], now: datetime, out: Console, *, compact: bool = False) -> Text:
+    """`● running  implement · coder · sonnet-4.5   4m12s · 12.3k in / 800 out · $0.84   run 0192a3b4c5d6`.
+
+    `compact` (the workspace's half-screen tree) leaves the model and the id out: the rest is the same."""
     text = theme.badge(theme.status_of(str(entry.get("status") or "")), out)
-    what = [entry.get("stage_role") or entry.get("kind"), entry.get("agent_slug"), _model(entry.get("model"))]
+    what = [entry.get("stage_role") or entry.get("kind"), entry.get("agent_slug")]
+    if not compact:
+        what.append(model_name(entry.get("model")))
     text.append("  " + " · ".join(str(w) for w in what if w))
     text.append(f"   {elapsed(entry, now)} · {spend(entry.get('spend'))}")
-    text.append(f"   {entry.get('kind')} {str(entry.get('id'))[:12]}")
+    if not compact:
+        text.append(f"   {entry.get('kind')} {str(entry.get('id'))[:12]}")
     # One line per entry: on a narrow terminal the id is cut, never the status, the time or the spend.
     text.no_wrap, text.overflow = True, "ellipsis"
     return text
 
 
-def _model(model: Any) -> str | None:
+def model_name(model: Any) -> str | None:
     return str(model).split("/")[-1] if model else None
 
 
