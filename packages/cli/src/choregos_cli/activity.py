@@ -93,14 +93,29 @@ def activity(
     org: Annotated[
         str | None, typer.Option("--org", help="the organisation; the profile's otherwise")
     ] = None,
+    run: Annotated[
+        str | None, typer.Option("--run", help="one run's steps instead: its plan, tool calls and context")
+    ] = None,
 ) -> None:
     """What runs in the organisation, as a tree: project, work item, run, with status, time, tokens and cost.
 
-    Read-only. `--watch` follows the activity stream; elapsed times move every second.
+    Read-only. `--watch` follows the activity stream; elapsed times move every second. `--run ID` shows one
+    run's own steps (the agent's plan, its tool calls with state and time, what fills its context).
     """
     from . import main
 
     api: Client = main.TransportSafeClient()
+    if run:
+        from . import run_activity
+
+        if project or workflow or agent or kind:
+            main.fail("--run shows one run: it takes no --project, --workflow, --agent or --kind")
+            return
+        try:
+            run_activity.show(api, run, watch=watch, out=theme.console())
+        except ApiError as exc:
+            main.fail(str(exc))
+        return
     try:
         organisation = api.profile.organisation(org)
     except NoOrganisationError as exc:
