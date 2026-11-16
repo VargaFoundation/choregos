@@ -119,8 +119,6 @@ NOT_CALLED_BY_A_CLIENT: dict[str, str] = {
 NO_CLIENT_YET: dict[str, str] = {
     "/me/conversations/{conversation_id}/events": "followed from another surface (ADR 0154 §4, G2): "
     "`choregos chat` (S67-09) and the editor extension (S68) are its clients; S67-08 serves it",
-    "/me/pending": "what waits for the person (ADR 0154 §4, G8): the terminal's status line and decisions "
-    "pane (S67-09, S67-10) and the editor (S68) read it; served since S67-07",
     "/orgs/{org}/security": "the organisation's re-authentication setting (ADR 0170, D5) is "
     "API-only in the core; the enterprise edition's console section writes it today",
     "/orgs/{org}/members/{email}/sessions/revocation": "ending a member's sessions (ADR 0170, D5) "
