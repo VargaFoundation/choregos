@@ -140,7 +140,8 @@ Usage: choregos activity [OPTIONS]
   status, time, tokens and cost.
 
   Read-only. `--watch` follows the activity stream; elapsed times move every
-  second.
+  second. `--run ID` shows one run's own steps (the agent's plan, its tool
+  calls with state and time, what fills its context).
 
 Options:
   -w, --watch       keep the tree live until the stream ends or Ctrl-C
@@ -149,6 +150,7 @@ Options:
   --agent <str>     only this agent (its slug)
   --kind <str>      run, session or turn
   --org <str>       the organisation; the profile's otherwise
+  --run <str>       one run's steps instead: its plan, tool calls and context
   --help            Show this message and exit.
 ```
 
@@ -194,6 +196,105 @@ Options:
   --help  Show this message and exit.
 ```
 
+## `choregos artifacts`
+
+A work item's artefacts, your inbox and a run's diff: list, download, open, compare.
+
+### `choregos artifacts compare`
+
+```text
+Usage: choregos artifacts compare [OPTIONS] {work_item} {before} {after}
+
+  A unified diff of two revisions of a text artefact (two refs: the API has no
+  diff route).
+
+Arguments:
+  work_item  the work item's id  [required]
+  before     `name@version`  [required]
+  after      `name@version`, or `name` for the latest  [required]
+
+Options:
+  --help  Show this message and exit.
+```
+
+### `choregos artifacts diff`
+
+```text
+Usage: choregos artifacts diff [OPTIONS] {run_id}
+
+  What a run changed: its files and their patches.
+
+Arguments:
+  run_id  the run's id  [required]
+
+Options:
+  --json  print the API's summary as JSON
+  --help  Show this message and exit.
+```
+
+### `choregos artifacts download`
+
+```text
+Usage: choregos artifacts download [OPTIONS] {work_item} {ref} [path]
+
+  Save an artefact's bytes, exactly as the API served them. An existing file
+  is kept without --force.
+
+Arguments:
+  work_item  the work item's id  [required]
+  ref        `name` for the latest revision, `name@version` for one
+             [required]
+  path       where to write; a directory, or the artefact's name
+
+Options:
+  --force  overwrite an existing file
+  --help   Show this message and exit.
+```
+
+### `choregos artifacts inbox`
+
+```text
+Usage: choregos artifacts inbox [OPTIONS]
+
+  The artefacts your tasks delivered, newest first.
+
+Options:
+  --limit <int range>  how many, newest first  [default: 100; 1<=x<=200]
+  --json               print the API's list as JSON
+  --help               Show this message and exit.
+```
+
+### `choregos artifacts list`
+
+```text
+Usage: choregos artifacts list [OPTIONS] {work_item}
+
+  Every revision of every artefact of a work item.
+
+Arguments:
+  work_item  the work item's id  [required]
+
+Options:
+  --json  print the API's list as JSON
+  --help  Show this message and exit.
+```
+
+### `choregos artifacts open`
+
+```text
+Usage: choregos artifacts open [OPTIONS] {work_item} {ref}
+
+  Open an artefact with the system's viewer, from a temporary copy.
+
+Arguments:
+  work_item  the work item's id  [required]
+  ref        `name` for the latest revision, `name@version` for one
+             [required]
+
+Options:
+  --help  Show this message and exit.
+```
+
 ### `choregos ask`
 
 ```text
@@ -215,6 +316,26 @@ Options:
   --continue                continue the assistant's most recent conversation
   --json                    print one JSON object once the turn ended, nothing
                             while it runs
+  --org <str>               the organisation; the profile's otherwise
+  --help                    Show this message and exit.
+```
+
+### `choregos chat`
+
+```text
+Usage: choregos chat [OPTIONS]
+
+  The workspace: converse with an assistant, watch what runs, see what waits
+  for you.
+
+  Conversation on the left, the live tree (blue) and the decisions (amber) on
+  the right, what moved elsewhere below. The keys are in the footer. It needs
+  a terminal; `choregos ask` and `choregos activity` are the scriptable forms.
+
+Options:
+  -a, --assistant <str>     the assistant's slug; the only one ready for you
+                            otherwise
+  -c, --conversation <str>  resume this conversation (its id)
   --org <str>               the organisation; the profile's otherwise
   --help                    Show this message and exit.
 ```

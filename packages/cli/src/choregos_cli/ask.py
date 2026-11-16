@@ -194,7 +194,11 @@ def confirm_url(api: Client, cid: str, action_id: str) -> str:
     `confirm_url` (`services/conversation_actions.confirm_url`). The CLI knows the instance's address, which
     is the console's when the CLI was installed from it (S62-08); the REST answer does not carry the link yet
     (ADR 0154 G1)."""
-    return f"{api.profile.api_url.rstrip('/')}/conversations/{cid}?action={action_id}"
+    return confirm_link(api.profile.api_url, cid, action_id)
+
+
+def confirm_link(api_url: str, cid: str, action_id: str) -> str:
+    return f"{api_url.rstrip('/')}/conversations/{cid}?action={action_id}"
 
 
 def _footer(err: Any, api: Client, cid: str, final: dict[str, Any], pending: list[dict[str, str]]) -> None:

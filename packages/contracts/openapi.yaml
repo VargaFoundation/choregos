@@ -4004,9 +4004,11 @@ paths:
         Follows the conversation's turn from elsewhere (ADR 0154 §4, G2): a turn started in the console, in another
         terminal or detached is replayed from its journal, then followed until it ends. Server-sent events as the
         sending request streams them (`response.created`, `response.output_text.delta`, then `response.completed`
-        or `response.failed`), each with an `id` that is its journal position. `Last-Event-ID` (or `after_seq`)
-        resumes after that event without repeating a delta. With no turn in flight the stream replays the latest
-        turn and ends. Only the conversation's owner (404 otherwise).
+        or `response.failed`), each with an `id` that is its position in the turn. The positions are kept by the
+        replica that runs the turn (the delta text is not journaled): a turn in flight on another replica is 409.
+        `Last-Event-ID` (or `after_seq`) resumes after that event without repeating a delta. With no turn in
+        flight the stream gives the latest turn's answer as it ended, then ends. Only the conversation's owner (404
+        otherwise).
       parameters:
         - { name: after_seq, in: query, schema: { type: integer, minimum: 0 } }
         - { name: Last-Event-ID, in: header, schema: { type: string } }
@@ -4017,6 +4019,7 @@ paths:
             text/event-stream: { schema: { type: string } }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /me/pending:
     get:
       tags: [agents]
@@ -8165,9 +8168,9 @@ components:
     AgentCitation:
       type: object
       description: "A passage or document a knowledge tool returned in the turn: what the assistant was given to cite (ADR 0139 §3)."
-      required: [id]
+      required: [document_id]
       properties:
-        id: { type: string }
+        document_id: { type: string }
         title: { type: [string, "null"] }
         version: { type: [string, "null"] }
         base: { type: [string, "null"], description: "the knowledge base it comes from" }

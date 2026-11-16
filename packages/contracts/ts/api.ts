@@ -1684,7 +1684,7 @@ export type AgentResponse = {
 
 /** A passage or document a knowledge tool returned in the turn: what the assistant was given to cite (ADR 0139 §3). */
 export type AgentCitation = {
-  id: string;
+  document_id: string;
   title?: string | null;
   version?: string | null;
   /** the knowledge base it comes from */

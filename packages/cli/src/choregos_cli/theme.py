@@ -49,6 +49,9 @@ STATUSES: dict[str, Status] = {
     "timed_out": Status("✗", "x", "timed out", "red"),
     "cancelled": Status("■", "#", "cancelled", "bright_black"),
     "waiting": WAITING,
+    # A tool call's and a plan task's states, as ACP names them (`choregos activity --run`).
+    "pending": QUEUED,
+    "in_progress": RUNNING,
 }
 
 #: The frames of the workspace's parts (ADR 0154 §2): the live tree in blue, the decisions in amber.
@@ -111,3 +114,8 @@ def badge(status: Status, target: Console) -> Text:
     colour."""
     glyph = status.glyph if unicode_ok(target) else status.ascii
     return Text(f"{glyph} {status.word}", style=status.style)
+
+
+def glyph(status: Status, target: Console) -> str:
+    """The status's glyph alone (ASCII when the encoding cannot draw it), where the word would repeat."""
+    return status.glyph if unicode_ok(target) else status.ascii
