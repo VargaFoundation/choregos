@@ -3994,6 +3994,59 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/ValidationError" }
+  /me/conversations/{conversation_id}/events:
+    parameters:
+      - { name: conversation_id, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [agents]
+      operationId: followMyConversationTurn
+      description: >-
+        Follows the conversation's turn from elsewhere (ADR 0154 §4, G2): a turn started in the console, in another
+        terminal or detached is replayed from its journal, then followed until it ends. Server-sent events as the
+        sending request streams them (`response.created`, `response.output_text.delta`, then `response.completed`
+        or `response.failed`), each with an `id` that is its position in the turn. The positions are kept by the
+        replica that runs the turn (the delta text is not journaled): a turn in flight on another replica is 409.
+        `Last-Event-ID` (or `after_seq`) resumes after that event without repeating a delta. With no turn in
+        flight the stream gives the latest turn's answer as it ended, then ends. Only the conversation's owner (404
+        otherwise).
+      parameters:
+        - { name: after_seq, in: query, schema: { type: integer, minimum: 0 } }
+        - { name: Last-Event-ID, in: header, schema: { type: string } }
+      responses:
+        "200":
+          description: The turn's events
+          content:
+            text/event-stream: { schema: { type: string } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /me/pending:
+    get:
+      tags: [agents]
+      operationId: listMyPending
+      description: >-
+        What waits for the caller across the organisations they belong to (ADR 0154 §4, G8), newest first: the human
+        steps addressed to them or their groups that they may decide, the governed actions they may approve (rank,
+        group and separation of duties applied: never one they proposed), and the writes and launches their
+        conversations proposed. Only what the caller may read.
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 100 } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/PendingList" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /runs/{id}/agents:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [runs]
+      operationId: listRunAgents
+      summary: The run's agent and the sub-agents it delegated to (ADR 0154 §5, G5)
+      description: >-
+        The nodes the platform derived from the run's journal with the backend's own rule: the run's agent, then
+        each sub-agent a tool call delegated to, with the calls it made. A backend that names no parent shows its
+        calls flat under the run, never guessed into a sub-agent. Whoever reads the run reads it.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/RunAgentList" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
   /orgs/{org}/agent-sessions/{session_id}/feedback:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -8100,6 +8153,41 @@ components:
         usage: { $ref: "#/components/schemas/AgentResponseUsage" }
         error: { oneOf: [{ $ref: "#/components/schemas/AgentResponseError" }, { type: "null" }] }
         memory_updated: { type: array, items: { type: string }, description: "The memory spaces the turn wrote or proposed in (a conversation with an assistant)." }
+        citations:
+          type: array
+          items: { $ref: "#/components/schemas/AgentCitation" }
+          description: "What the turn's knowledge tools returned (ADR 0154 §4, G1): the same list the MCP door's answer carries for the same turn. Empty outside a conversation with an assistant."
+        pending_actions:
+          type: array
+          items: { $ref: "#/components/schemas/AgentPendingAction" }
+          description: "The writes and launches the assistant proposed and the person has not decided, each with the console address where they decide (G1). Listing is not deciding: a surface shows them, the person confirms from their own session."
+        missing_accounts:
+          type: array
+          items: { $ref: "#/components/schemas/AgentMissingAccount" }
+          description: "The accounts a tool of the turn needed and the person has not connected, with where to connect them (G1)."
+    AgentCitation:
+      type: object
+      description: "A passage or document a knowledge tool returned in the turn: what the assistant was given to cite (ADR 0139 §3)."
+      required: [document_id]
+      properties:
+        document_id: { type: string }
+        title: { type: [string, "null"] }
+        version: { type: [string, "null"] }
+        base: { type: [string, "null"], description: "the knowledge base it comes from" }
+      additionalProperties: true
+    AgentPendingAction:
+      type: object
+      required: [id, summary, confirm_url]
+      properties:
+        id: { type: string }
+        summary: { type: string }
+        confirm_url: { type: string, description: "the console's address where the person decides; the CLI and an editor cannot compute it" }
+    AgentMissingAccount:
+      type: object
+      required: [need, connect_url]
+      properties:
+        need: { type: string, description: "the connector's need that has no connected account" }
+        connect_url: { type: string }
     AgentDelta:
       type: object
       description: "A `response.output_text.delta` event."
@@ -8181,6 +8269,10 @@ components:
       properties:
         input: { type: string, minLength: 1, maxLength: 65536 }
         stream: { type: boolean, default: false }
+        detach:
+          type: boolean
+          default: false
+          description: "ADR 0154 §4, G2. The turn keeps running, and is booked once, when the client that sent it goes away; its progress is read from `GET /me/conversations/{id}/events` and its answer from `GET /me/conversations/{id}`. A client that stays receives the same answer as without it."
     ConversationFeedbackCreate:
       type: object
       description: "A thumb on one answer of a session (S63-17, ADR 0140)."
@@ -12389,6 +12481,59 @@ components:
         at: { type: string, format: date-time }
         by: { type: string }
         reason: { type: string }
+    PendingItem:
+      type: object
+      description: "One thing that waits for the caller (ADR 0154 §4, G8)."
+      required: [kind, id, what, where, since, decision]
+      properties:
+        kind:
+          type: string
+          enum: [human_step, governed_action, conversation_action, launch]
+          description: "`human_step`: a workflow's human request. `governed_action`: an action waiting for an approver. `conversation_action`: a write an assistant proposed. `launch`: the start of a workflow an assistant proposed (ADR 0158)."
+        id: { type: string, description: "the request's, the action's or the proposal's id" }
+        what: { type: string, description: "one line saying what is asked" }
+        where:
+          type: object
+          description: "Where it lives: any of these that applies"
+          properties:
+            org: { type: [string, "null"] }
+            project_slug: { type: [string, "null"] }
+            work_item_id: { type: [string, "null"] }
+            work_item_key: { type: [string, "null"] }
+            conversation_id: { type: [string, "null"] }
+        since: { type: string, format: date-time }
+        due_at: { type: [string, "null"], format: date-time }
+        decision:
+          type: object
+          description: "The route that decides it, a path of the API (a surface calls it with the person's own session) and the console's address."
+          required: [method, path, url]
+          properties:
+            method: { type: string, enum: [POST] }
+            path: { type: string }
+            url: { type: string, description: "the console's address" }
+    PendingList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/PendingItem" } }
+    RunAgentNode:
+      type: object
+      description: "A node of the run's tree (ADR 0154 §5): the run's agent or a sub-agent it delegated to."
+      required: [id, kind, status, started_at, tool_calls]
+      properties:
+        id: { type: string, description: "the node's id; for a sub-agent, the id of the tool call that delegated" }
+        parent_id: { type: [string, "null"], description: "the node it hangs under; null for the run's own agent" }
+        kind: { type: string, enum: [agent, subagent] }
+        tool: { type: [string, "null"], description: "the delegating tool's name, for a sub-agent" }
+        status: { type: string, enum: [running, completed, failed] }
+        started_at: { type: string, format: date-time }
+        ended_at: { type: [string, "null"], format: date-time }
+        tool_calls: { type: integer, minimum: 0, description: "the node's own tool calls" }
+    RunAgentList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/RunAgentNode" } }
     ActivityEntry:
       type: object
       required: [kind, id, status, started_at, can_stop]
@@ -12399,6 +12544,7 @@ components:
         project_slug: { type: [string, "null"] }
         work_item_id: { type: [string, "null"] }
         work_item_key: { type: [string, "null"] }
+        work_item_title: { type: [string, "null"], description: "the work item's title, for a surface that shows more than a key (ADR 0154 §4, G6)" }
         workflow: { type: [string, "null"] }
         stage_role: { type: [string, "null"] }
         agent_slug: { type: [string, "null"] }
