@@ -1,7 +1,8 @@
 # 0154 — The terminal is a surface of the platform
 
-- **Status**: proposed, 2026-11-12 (the product owner's request of the same day; the screen model and the
-  colours of its mock-up approved the same day)
+- **Status**: accepted, 2026-11-16 (the product owner's go for the whole stream S67) — proposed, 2026-11-12
+  (the product owner's request of the same day; the screen model and the colours of its mock-up approved the
+  same day)
 - **Concerns**: `packages/cli` (new commands `ask`, `activity`, `chat`, a bare `choregos` in a terminal, a
   `theme` module, `login`/`logout`), `tools/cli_binary/` (Textual in the binary), the routes the developer
   surfaces read (listed in §4), a developer-surface sign-in (§6), the decision and confirmation routes (§7);
@@ -169,3 +170,12 @@ governance this platform exists for.
   minor version after the notice.
 - The editor extension (ADR 0155) reuses the screen model, the routes, the sign-in and the decision rule, and
   adds only its views.
+
+## Amendment, 2026-11-16: accepted, and what acceptance does not claim
+
+The decision is accepted as written; the product owner gave the go for every story of stream S67 the same day.
+Acceptance freezes the screen model (§2), the rule that a developer surface runs nothing locally (§1), the
+sign-in (§6) and the decision rule (§7); it proves none of the stories that implement them, which STATUS lists
+one by one. The record this ADR calls "ADR 0153 (an assistant proposes to start a project's workflow)" was
+numbered [ADR 0158](0158-an-assistant-may-propose-to-start-a-project-s-workflow.md) when it was written; it
+is still proposed, so the launches of §2 and §7 wait for it.

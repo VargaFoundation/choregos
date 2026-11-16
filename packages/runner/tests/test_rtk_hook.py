@@ -19,7 +19,7 @@ from choregos_contracts import ModelRef, StageContext, StageInput
 from choregos_runner.backends.claude_code import RTK_CONFIG, RTK_HOOK, ClaudeCodeBackend
 from choregos_runner.exits import Exit
 from choregos_runner.guardrails import GuardRails
-from choregos_runner.workspace import agent_home
+from choregos_runner.workspace import agent_home, git_dir_for
 
 from .conftest import valid_result
 from .test_runner_flow import execute
@@ -124,7 +124,7 @@ async def test_nothing_rtk_writes_lands_in_the_diff(stage_input: StageInput, run
     workspace = runner_settings.workspace
     assert not (workspace / RTK_CONFIG).exists()
     tracked = subprocess.run(
-        ["git", "show", "--name-only", "--format=", "HEAD"],
+        ["git", "--git-dir", str(git_dir_for(workspace)), "show", "--name-only", "--format=", "HEAD"],
         cwd=workspace,
         capture_output=True,
         text=True,
