@@ -8,7 +8,11 @@ identity. No credential is written into the image: the token is mounted in memor
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import os
 import re
+import shutil
+import stat
 import tempfile
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
@@ -168,6 +172,25 @@ def agent_git_env(env: Mapping[str, str], workspace: Path) -> dict[str, str]:
     }
 
 
+#: Where the runner keeps the git directory of a run (ADR 0146 §5, S65-04c), when nothing says
+#: otherwise. Not the work tree, and not a write root of the agent's confinement (the workspace, the
+#: temporary directory and `/dev`, ADR 0094): the runner's git runs with the run's git token, so
+#: nothing in the directory it reads its configuration, hooks and index from may be the agent's to
+#: write. Under `agentIsolation: container` it is also a path of the runner's own container, which
+#: the agent cannot see; in `process` mode the agent and the runner share a user id, so the wall is
+#: the confinement alone, and it is said so in docs/security.md.
+GIT_DIR_ROOT_VARIABLE = "CHOREGOS_RUNNER_GIT_DIR_ROOT"
+DEFAULT_GIT_DIR_ROOT = Path("/var/tmp/choregos-git")  # noqa: S108 - not a write root of the agent
+
+
+def git_dir_for(workspace: Path, root: Path | None = None) -> Path:
+    """The runner's own git directory for `workspace`: a fixed name derived from the path, so that a
+    replay of the run in the same container finds the repository it left."""
+    base = root or Path(os.environ.get(GIT_DIR_ROOT_VARIABLE) or DEFAULT_GIT_DIR_ROOT)
+    digest = hashlib.sha256(str(workspace.resolve()).encode()).hexdigest()[:16]
+    return base / digest
+
+
 class WorkspaceError(RuntimeError):
     """The workspace could not be prepared (clone, branch)."""
 
@@ -261,8 +284,20 @@ async def _run_remote(
 class Workspace:
     """A run's working directory, and the git operations that go with it."""
 
-    def __init__(self, path: Path, user_name: str = "choregos-bot", user_email: str = "bot@choregos") -> None:
+    def __init__(
+        self,
+        path: Path,
+        user_name: str = "choregos-bot",
+        user_email: str = "bot@choregos",
+        *,
+        git_dir: Path | None = None,
+    ) -> None:
         self.path = path
+        #: The repository's git directory. It is NOT `path/.git`: the tree is written by the agent,
+        #: and the runner's git (commit, push with the run's token) must read no configuration, hook,
+        #: attribute or index the agent could have written (ADR 0146 §5, S65-04c). Every command the
+        #: runner runs names it with `--git-dir` and the tree with `--work-tree`.
+        self.git_dir = git_dir if git_dir is not None else git_dir_for(path)
         self.user_name = user_name
         self.user_email = user_email
         #: Every path the runner wrote and excluded: `commit` leaves them out even once tracked.
@@ -273,7 +308,11 @@ class Workspace:
         it run a program (#1345): the static overrides plus a fresh sweep of the config's own
         `filter`/`diff` drivers. Re-read every call, never cached: the agent may add a driver
         between two of the runner's commands, and the sweep must then still catch it."""
-        flags = [*_config_flags(RUNNER_GIT_HARDENING), *await self._driver_overrides()]
+        flags = [
+            *self._repository_flags(),
+            *_config_flags(RUNNER_GIT_HARDENING),
+            *await self._driver_overrides(),
+        ]
         return await run_command(["git", *flags, *args], cwd=self.path, timeout=timeout)
 
     async def _git_hardened(self, *args: str, timeout: float = 300.0) -> CommandResult:
@@ -281,8 +320,14 @@ class Workspace:
         itself runs (`config --list`), so it must not call `_driver_overrides` and loop. Listing the
         config runs no repository code — it touches no working-tree file — so it is safe without the
         sweep."""
-        flags = _config_flags(RUNNER_GIT_HARDENING)
+        flags = [*self._repository_flags(), *_config_flags(RUNNER_GIT_HARDENING)]
         return await run_command(["git", *flags, *args], cwd=self.path, timeout=timeout)
+
+    def _repository_flags(self) -> list[str]:
+        """The repository is the runner's own directory and the work tree is the agent's: git never
+        looks for `.git` in the tree, so the `.git` the agent leaves there (hooks, `config`,
+        `info/attributes`, `index`, a symbolic link) is read by nobody."""
+        return ["--git-dir", str(self.git_dir), "--work-tree", str(self.path)]
 
     async def _driver_overrides(self) -> list[str]:
         """`-c filter.<n>.clean= …` for every `filter`/`diff` driver the effective config defines:
@@ -311,24 +356,21 @@ class Workspace:
             # We still initialise a LOCAL git, with no remote: this is what lets
             # the rest of the runner measure what changed and exclude its own
             # files, without cloning or pushing anything.
-            if not (self.path / ".git").exists():
-                init = await self.git("init", "--initial-branch", "work")
-                if not init.ok:
-                    raise WorkspaceError(f"git init failed: {init.output}")
+            if not self._initialised():
+                await self._init("work")
             await self._require_own_repository()
             await self.git("config", "user.name", self.user_name)
             await self.git("config", "user.email", self.user_email)
             await self.git("config", "commit.gpgsign", "false")
             self._exclude_runner_files()
+            await asyncio.to_thread(self._seed_agent_repository)
             return
         # The token is written nowhere: neither in the `origin` URL (so in `.git/config`, which
         # the agent reads), nor on disk. It goes in a header, command by command (S22-07).
         url = repo.url
         auth = _auth_header(token)
-        if not (self.path / ".git").exists():
-            init = await self.git("init", "--initial-branch", repo.base_branch)
-            if not init.ok:
-                raise WorkspaceError(f"git init failed: {init.output}")
+        if not self._initialised():
+            await self._init(repo.base_branch)
             await self.git("remote", "add", "origin", url)
         else:
             await self.git("remote", "set-url", "origin", url)
@@ -349,12 +391,67 @@ class Workspace:
         remote = await self.git(*auth, "ls-remote", "--heads", "origin", repo.work_branch)
         if remote.ok and repo.work_branch in remote.stdout:
             await self.git(*auth, "fetch", "--depth", str(repo.clone_depth), "origin", repo.work_branch)
-            checkout = await self.git("checkout", "-B", repo.work_branch, "FETCH_HEAD")
+            target = "FETCH_HEAD"
         else:
-            checkout = await self.git("checkout", "-B", repo.work_branch, repo.base_branch)
+            target = repo.base_branch
+        checkout = await self._check_out(repo.work_branch, target)
         if not checkout.ok:
             raise WorkspaceError(f"cannot check out {repo.work_branch}: {checkout.output}")
         self._exclude_runner_files()
+        await asyncio.to_thread(self._seed_agent_repository)
+
+    def _initialised(self) -> bool:
+        return (self.git_dir / "HEAD").is_file()
+
+    async def _init(self, branch: str) -> None:
+        """`git init` of the runner's own directory, with no template (no sample hook) and no
+        `core.worktree`: the work tree is named on every command, never recorded."""
+        self.git_dir.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        init = await self.git("init", "--template=", "--initial-branch", branch)
+        if not init.ok:
+            raise WorkspaceError(f"git init failed: {init.output}")
+        await self._git_hardened("config", "--unset", "core.worktree")
+
+    async def _check_out(self, branch: str, target: str) -> CommandResult:
+        """The work branch, on `target`. A tree that already holds files (a replay: the run's
+        leftovers on a volume that outlived its pod) keeps them: the index is pointed at the commit and
+        the files stay as they are, so that they show as changes — what `checkout` did when the
+        repository was inside the tree and remembered them. An empty tree is checked out."""
+        if not await asyncio.to_thread(self._tree_has_content):
+            return await self.git("checkout", "-B", branch, target)
+        resolved = await self.git("rev-parse", "--verify", f"{target}^{{commit}}")
+        if not resolved.ok:
+            return resolved
+        for step in (
+            ("symbolic-ref", "HEAD", f"refs/heads/{branch}"),
+            ("update-ref", f"refs/heads/{branch}", resolved.stdout.strip()),
+            ("reset", "-q"),
+        ):
+            done = await self.git(*step)
+            if not done.ok:
+                return done
+        return resolved
+
+    def _tree_has_content(self) -> bool:
+        return any(entry.name not in (".git", ".choregos") for entry in self.path.iterdir())
+
+    def _seed_agent_repository(self) -> None:
+        """Give the agent a `.git` of its own, a copy of the runner's, made before the agent starts and
+        NEVER read again (ADR 0146 §5): `git status` and `git diff` work for it, whatever it writes there
+        is its own, and its commits stay in it — the runner commits the tree it finds, not the agent's
+        history. The copy holds no credential (the token only ever travels in a command's `-c`, and the
+        `origin` URL has none), no hook and no `core.worktree`. Whatever stood at `path/.git` (a
+        directory, a file, a link: a replay's leftover) is removed WITHOUT following it."""
+        target = self.path / ".git"
+        _remove_without_following(target)
+        shutil.copytree(self.git_dir, target, symlinks=True)
+        # The agent may run as another user id of the same group (`agentIsolation: container`).
+        for current, dirs, files in os.walk(target):
+            for name in dirs:
+                _add_mode(Path(current, name), 0o2070)
+            for name in files:
+                _add_mode(Path(current, name), 0o060)
+        _add_mode(target, 0o2070)
 
     async def _require_own_repository(self) -> None:
         """Refuse to configure a repository that is not the workspace's own (#891): git climbs
@@ -390,12 +487,12 @@ class Workspace:
     )
 
     def exclude(self, paths: list[str]) -> None:
-        """Add paths to `.git/info/exclude` (backend configuration, journal...)."""
+        """Add paths to the runner's `info/exclude` (backend configuration, journal...)."""
         self.runner_paths.extend(path for path in paths if path not in self.runner_paths)
         paths = [*paths, *self.BRUIT]
         if not paths:
             return
-        exclude = self.path / ".git" / "info" / "exclude"
+        exclude = self.git_dir / "info" / "exclude"
         exclude.parent.mkdir(parents=True, exist_ok=True)
         existing = exclude.read_text(encoding="utf-8") if exclude.exists() else ""
         lines = [path for path in paths if path not in existing]
@@ -521,6 +618,21 @@ class Workspace:
             *_auth_header(token), "push", "--no-verify", "--set-upstream", "origin", branch, timeout=300.0
         )
         return CommandResult(outcome.code, _redact(outcome.stdout, token), _redact(outcome.stderr, token))
+
+
+def _remove_without_following(path: Path) -> None:
+    """Remove `path` whatever the agent made of it: a link is unlinked, never followed."""
+    if path.is_symlink() or path.is_file():
+        path.unlink()
+    elif path.is_dir():
+        shutil.rmtree(path)
+
+
+def _add_mode(path: Path, bits: int) -> None:
+    if path.is_symlink():
+        return
+    mode = stat.S_IMODE(path.stat().st_mode)
+    path.chmod(mode | bits)
 
 
 def _auth_header(token: str | None) -> list[str]:

@@ -60,6 +60,9 @@ class RunnerSettings(BaseSettings):
     #: How often a remote task that does not stream is asked for its state.
     remote_poll_seconds: float = Field(default=5.0, gt=0, validation_alias="CHOREGOS_REMOTE_POLL_SECONDS")
     workspace: Path = Path("/workspace")
+    #: Where the runner keeps the git directory of the run, outside the tree the agent writes
+    #: (ADR 0146 §5). Empty: `/var/tmp/choregos-git`, which is not a write root of the confinement.
+    git_dir_root: Path | None = Field(default=None, validation_alias="CHOREGOS_RUNNER_GIT_DIR_ROOT")
     #: The copy of the working tree a hosted container works in (S41-18): a volume the two
     #: containers share, never the runner's checkout.
     hosted_workspace: Path = Path("/hosted-workspace")

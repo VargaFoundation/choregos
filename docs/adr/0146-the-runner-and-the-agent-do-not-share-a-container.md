@@ -55,9 +55,10 @@ same proxy variables as the agent.
 
 **Built after, S65-04b (§6)**: the runner opens what it reads or writes in the agent's tree through `safe_files.py` (each directory from its parent's descriptor, `O_NOFOLLOW`, a regular file only): result, deliverables, inputs, task and context, journal, saved session, the hosted prompt agent's file tools. Not covered: the ACP `fs/*` handlers (they resolve, then refuse a path outside the workspace) and the files git walks. The transcript and `acp-session.json` stay in `.choregos/`: a link there is refused, not moved out of the tree.
 
-**Not built, still decided**: The runner's git outside the
-agent's tree (§5, S65-04c): the runner still runs git in a tree the
-agent writes, and the hardening of #1345 is the only lock. `k8s_job`, `local_docker`, `tekton`, `aca`
+**Built after, S65-04c (§5)**: the runner's git directory is outside the tree the agent writes (`--git-dir`
+the runner's own), and the hardening of #1345 is the second lock.
+
+**Not built, still decided**: `k8s_job`, `local_docker`, `tekton`, `aca`
 get no second container here: a runner told `container` there exits 100. The `separate_agent`
 capability has no consumer until one of them does, so it is not declared. The runner container keeps
 today's requests and limits (§12 asks for a smaller one: not measured), so a `container` pod requests
