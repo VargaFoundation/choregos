@@ -428,6 +428,15 @@ answered 404, and on PostgreSQL a restrictive policy on `agent_sessions` and
   `stream: true` and each text chunk is sent as it arrives, one `response.output_text.delta` per
   chunk; tool calls are assembled from the stream and journaled by the loop as before. A turn the
   conversation refuses (limit, running turn) is 409 before the stream opens.
+- **What the answer carries, following, detaching (S67-08).** The answer of a turn, whole or the last
+  event of the stream, carries `citations`, `pending_actions` (each with its console `confirm_url`) and
+  `missing_accounts`: what the MCP door's answer says for the same turn, read by the same functions.
+  Every event of the stream has an `id` (its position in the turn); `GET …/{id}/events` replays the
+  latest turn from a position (`Last-Event-ID`, or `after_seq`) and follows it until it ends, for a second
+  terminal or an editor. With `detach: true` a client that leaves does not stop the turn: it ends and is
+  booked once, and its answer is read with `GET …/{id}`; without it, the sending client leaving still
+  cancels the turn. The positions live in the process that runs the turn (delta text is not journaled): a
+  turn on another replica answers 409 to a follower.
 - **Limits (S63-04b).** `max_turns` (200 by default) refuses the turn past it with 409 before any
   key or call. `retention_until` moves to now plus `retention_days` (30 by default) at each turn.
   Past about 6000 estimated tokens (characters / 4) the oldest turns, all but the latest two, leave

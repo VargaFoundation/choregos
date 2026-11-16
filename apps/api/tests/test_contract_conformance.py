@@ -11,11 +11,9 @@ PREFIX = "/api/v1"
 # Contract-first (ADR 0001): operations the contract declares before the API serves them. Each entry
 # names the story that implements it; an entry the API does serve must be removed from here.
 CONTRACT_ONLY: dict[str, str] = {
-    "followMyConversationTurn": "S67-08 (ADR 0154 §4, G2)",
     "listMyPending": "S67-07 (ADR 0154 §4, G8)",
 }
 CONTRACT_ONLY_PATHS: set[str] = {
-    "/me/conversations/{conversation_id}/events",
     "/me/pending",
 }
 

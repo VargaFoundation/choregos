@@ -45,7 +45,7 @@ from ..logging import get_logger
 from ..rbac import Permission
 from ..services import assistants as installations
 from ..services.assistant_access import holds
-from ..services.conversation_signals import signals_of
+from ..services.conversation_signals import pending_actions_of, signals_of
 from ..services.conversations import TURN_KEY_TTL_S, converse, open_conversation
 
 if TYPE_CHECKING:
@@ -236,14 +236,8 @@ def _last_answer(record: AgentSessionRecord) -> str | None:
 
 
 async def _pending(ctx: Context, conversation_id: str) -> list[dict[str, Any]]:
-    """The writes the assistant proposed and the person has not decided, each with the console link where
-    they decide. The door lists them; it never executes one (ADR 0030)."""
-    from ..services.conversation_actions import actions_of, confirm_url
-
-    return [
-        {"id": a.id, "summary": a.summary, "confirm_url": confirm_url(conversation_id, a.id)}
-        for a in await actions_of(ctx.session, conversation_id, status="proposed")
-    ]
+    """The writes the assistant proposed and the person has not decided (shared with the REST turn)."""
+    return await pending_actions_of(ctx.session, conversation_id)
 
 
 async def _read(ctx: Context, record: AgentSessionRecord) -> dict[str, Any]:

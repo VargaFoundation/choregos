@@ -39,6 +39,7 @@ ALLOWED_SOURCES = frozenset(
         "test_knowledge_index",
         "test_knowledge_project_owned",
         "test_knowledge_rights",
+        "test_mcp_assistants",
         "test_mcp_door",
         "test_migrations",
         "test_network_policy_api",
