@@ -26,6 +26,7 @@ from .artifacts import artifacts_app
 from .ask import ask
 from .binary_info import binary_info
 from .client import ApiError, Client, NoOrganisationError, Profile
+from .decide import decide_app
 from .device_login import DeviceSignInError
 from .knowledge import knowledge_app
 from .outposts import outposts_app
@@ -66,6 +67,7 @@ app.add_typer(knowledge_app, name="knowledge")
 app.add_typer(plugin_app, name="plugin")
 app.add_typer(a2a_app, name="a2a")
 app.add_typer(self_app, name="self")
+app.add_typer(decide_app, name="decide")
 
 console = Console()
 

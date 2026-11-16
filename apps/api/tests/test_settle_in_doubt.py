@@ -259,7 +259,7 @@ async def test_a_developer_and_an_api_token_do_not_settle(
             json={"outcome": "made", "note": NOTE},
             headers={"Authorization": f"Bearer {token}"},
         )
-        assert refused.status_code == 403 and "human session" in refused.text, refused.text
+        assert refused.status_code == 403 and "decision_requires_session" in refused.text, refused.text
     finally:
         await by_token.aclose()
     assert (await kit.action_row(action_id)).status == "in_doubt"

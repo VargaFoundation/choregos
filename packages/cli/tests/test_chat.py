@@ -275,13 +275,13 @@ class Platform:
             )
         )
 
-    def pending(self, actions: list[dict[str, Any]] | None) -> None:
-        if actions is None:
-            self.router.get(f"{V1}/orgs/acme/actions").mock(return_value=Response(403, json={"detail": "no"}))
+    def pending(self, items: list[dict[str, Any]] | None) -> None:
+        """`GET /me/pending`: what waits for the person (None: the route is refused)."""
+        if items is None:
+            self.router.get(f"{V1}/me/pending").mock(return_value=Response(403, json={"detail": "no"}))
             return
-        for action in actions:
-            self.contract("Action", action)
-        self.router.get(f"{V1}/orgs/acme/actions").mock(return_value=Response(200, json=actions))
+        body = self.contract("PendingList", {"items": items})
+        self.router.get(f"{V1}/me/pending").mock(return_value=Response(200, json=body))
 
     def turn(self, body: str | AsyncIterator[bytes]) -> None:
         if isinstance(body, str):
@@ -428,19 +428,39 @@ async def test_the_workspace_shows_its_five_parts(platform: Platform) -> None:
     assert "billing-api" in text and "FIN-12" in text and "● running" in text
     assert "implement · coder" in text and "4m12s · 12.3k in / 800 out · $0.84" in text
     assert "Decisions" in text and "⏸ waiting for you  Merge the release train" in text
-    assert "read-only here" in text
+    assert "F2 decides one" in text
     assert "digest.md · weekly-digest v2" in text and "Quarter close · finance" in text
-    assert "acme · 1 running · — waiting for you · $1.23 today" in text
+    assert "acme · 1 running · 1 waiting for you · $1.23 today" in text
     assert "Ended in the last hour" in text
 
 
 def _pending_action() -> dict[str, Any]:
     return {
+        "kind": "governed_action",
         "id": "gov-1",
-        "origin": "tool",
-        "kind": "merge_release",
-        "title": "Merge the release train",
-        "status": "pending_approval",
+        "what": "Merge the release train",
+        "where": {"org": "acme", "project_slug": "billing-api"},
+        "since": "2026-11-16T09:00:00Z",
+        "decision": {
+            "method": "POST",
+            "path": "/projects/p-1/actions/gov-1/decision",
+            "url": "http://console.test/p/billing-api/actions/gov-1",
+        },
+    }
+
+
+def _pending_proposal() -> dict[str, Any]:
+    return {
+        "kind": "conversation_action",
+        "id": "act-1",
+        "what": "Create the ticket FIN-12",
+        "where": {"org": "acme", "conversation_id": CID},
+        "since": "2026-11-12T09:05:00Z",
+        "decision": {
+            "method": "POST",
+            "path": f"/me/conversations/{CID}/actions/act-1/confirm",
+            "url": f"http://console.test/conversations/{CID}?action=act-1",
+        },
     }
 
 
@@ -454,7 +474,7 @@ async def test_unreadable_pending_actions_and_costs_are_dashes_not_zero(platform
         await pilot.pause(0.2)
         text = screen_text(app)
     assert "— waiting for you · — today" in text
-    assert "not readable by you" in text and "$0.00" not in text
+    assert "not readable right now" in text and "$0.00" not in text
 
 
 async def test_nothing_waiting_says_so(platform: Platform) -> None:
@@ -494,7 +514,7 @@ async def test_a_turn_is_sent_streamed_and_its_writes_are_listed(platform: Platf
     app = make_app()
     async with app.run_test(size=(160, 40)) as pilot:
         await ready(pilot)
-        platform.proposals = [_proposal()]
+        platform.pending([_pending_proposal()])
         await pilot.press(*"How is the close?", "enter")
         await until(pilot, lambda: "✓ 1200 in / 80 out" in screen_text(app), "the end of the turn")
         text = screen_text(app)
@@ -502,10 +522,7 @@ async def test_a_turn_is_sent_streamed_and_its_writes_are_listed(platform: Platf
     assert platform.sent_turns == [{"input": "How is the close?", "stream": True}]
     assert "Hello, Quarter close is on track." in text and "you" in text
     assert "⏸ waiting for you  Create the ticket FIN-12" in text
-    assert (
-        f"{API}/conversations/{CID}?action=act-1" in text.replace("\n", "").replace(" ", "")
-        or "act-1" in text
-    )
+    assert "write proposed by an assistant" in text and "F2 decides one" in text
     assert "$0.0125" in text
 
 
@@ -839,7 +856,7 @@ def _showcase(platform: Platform) -> None:
         },
     ]
     platform.proposals = [_proposal()]
-    platform.pending([_pending_action()])
+    platform.pending([_pending_proposal(), _pending_action()])
 
 
 SIZES = {"80": (80, 36), "160": (160, 44)}
@@ -876,7 +893,7 @@ def test_the_workspace_snapshot_with_an_expanded_run(
 
     async def settled(pilot: Any) -> None:
         await until(pilot, lambda: app.live and "Quarter close" in screen_text(app), "the workspace")
-        await until(pilot, lambda: bool(app.proposals) and bool(app.pending), "the decisions")
+        await until(pilot, lambda: bool(app.pending), "the decisions")
         await put_cursor_on(pilot, "implement")
         await pilot.press("enter")
         await until(pilot, lambda: "Context: call 7" in screen_text(app), "the run's steps")
@@ -901,7 +918,7 @@ def test_the_workspace_snapshot(
 
     async def settled(pilot: Any) -> None:
         await until(pilot, lambda: app.live and "Quarter close" in screen_text(app), "the workspace")
-        await until(pilot, lambda: bool(app.proposals) and bool(app.pending), "the decisions")
+        await until(pilot, lambda: bool(app.pending), "the decisions")
         await pilot.pause(0.3)
 
     assert snap_compare(app, terminal_size=SIZES[columns], run_before=settled)

@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..audit import record
 from ..db.models import Action, ActionEffect, Agent, Project, User, WorkItem
+from ..decision_session import holds_a_person_session, refusal
 from ..errors import ApiError, conflict, forbidden, unprocessable
 from ..freshness import authentication_age, require_fresh_authentication
 from ..schemas.actions import ActionCreate, ActionDto, ActionEffectDto, ActionSettlementBody, ApprovalSpec
@@ -363,9 +364,9 @@ async def decide(
     reason: str | None,
     principal: Any,
 ) -> Action:
-    if principal.kind != "user" or principal.authenticated_at is None:
-        # An API token, an MCP client: they propose, they do not decide (ADR 0030).
-        raise forbidden("a decision is made in a human session (decision_requires_session)")
+    if not holds_a_person_session(principal) or principal.authenticated_at is None:
+        # An API token, an MCP client: they propose, they do not decide (ADR 0030, ADR 0154 §7).
+        raise refusal("deciding a governed action")
     if decision == "reject" and not (reason or "").strip():
         raise unprocessable("a rejection must say why")
     action = (
@@ -498,8 +499,8 @@ async def settle(
 
     from choregos_contracts import SettlementOutcome
 
-    if principal.kind != "user" or principal.authenticated_at is None:
-        raise forbidden("a settlement is made in a human session (decision_requires_session)")
+    if not holds_a_person_session(principal) or principal.authenticated_at is None:
+        raise refusal("settling an action in doubt")
     outcome = SettlementOutcome(body.outcome)
     if outcome is SettlementOutcome.NOT_MADE and body.result is not None:
         raise unprocessable(

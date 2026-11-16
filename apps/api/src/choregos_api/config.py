@@ -177,6 +177,11 @@ class Settings(BaseSettings):
     surface_session_max_age_s: int = 30 * 24 * 3600
     device_code_ttl_s: int = 600
     device_poll_interval_s: int = 5
+    #: Routes that still accept an API token where ADR 0154 §7 asks for the person's own session, for ONE
+    #: minor version (G10): `post_decision` (`POST /work-items/{id}/decisions`) and `conversation_actions`
+    #: (confirming or refusing an assistant's proposed write). Comma-separated; empty (the default) enforces
+    #: the rule. Nothing else can be reopened: a governed action and a release never accept a token.
+    legacy_decision_routes: str = ""
     #: Development sign-in (`/auth/login?as=<email>`): OFF by default. It used to be on by default
     #: and never set by the chart: a production installation accepted `?code=dev:admin@x` and
     #: returned ORG_ADMIN on all organisations (inventory of 2026-09-24). The validator below
@@ -539,6 +544,21 @@ class Settings(BaseSettings):
         the chart both default `env` to dev). S47-02 and S47-13 reuse it.
         """
         return self.cookies_secure
+
+    @model_validator(mode="after")
+    def _legacy_decision_routes_are_the_two_it_names(self) -> Settings:
+        from .decision_session import LEGACY_ROUTES
+
+        unknown = sorted(self.legacy_decision_route_set() - LEGACY_ROUTES)
+        if unknown:
+            raise ValueError(
+                f"CHOREGOS_LEGACY_DECISION_ROUTES names {', '.join(unknown)}: only "
+                f"{', '.join(sorted(LEGACY_ROUTES))} can keep accepting an API token (ADR 0154 §7)"
+            )
+        return self
+
+    def legacy_decision_route_set(self) -> frozenset[str]:
+        return frozenset(part.strip() for part in self.legacy_decision_routes.split(",") if part.strip())
 
     @model_validator(mode="after")
     def _no_back_door_in_production(self) -> Settings:
