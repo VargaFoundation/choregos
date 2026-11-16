@@ -3754,6 +3754,13 @@ prompt: at most one measurement per call and one per 5 seconds per run (the firs
 window and the last). `GET /runs/{id}/context-breakdown` returns the last one and the series of totals,
 with the run's read right.
 
+**Sub-agents.** `GET /runs/{id}/agents` serves the run's agent and the sub-agents it delegated to (Claude Code's
+`Agent`/`Task` tool), each with its parent, status, start and end and its own tool-call count, and
+`choregos activity` shows them under their run. ACP has no notion of a sub-agent: the platform derives them
+from the run's journal with one rule per backend (`choregos_core.agent_tree`), and only for a backend that
+sends the parent of the calls made inside a sub-agent (Claude Code does). opencode and the others give a flat
+list: no sub-agent is guessed. Tokens and cost stay per run.
+
 ## 7. Day-2 knobs
 
 | Symptom | Knob |
