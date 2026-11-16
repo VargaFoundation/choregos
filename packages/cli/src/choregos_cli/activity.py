@@ -241,11 +241,12 @@ def render(board: Board, organisation: str, today: float | None, out: Console) -
     return Group(*parts)
 
 
-def status_line(board: Board, organisation: str, today: float | None) -> Text:
-    """`acme · 3 running · — waiting for you · $1.24 today`: what waits for the person has no route yet
-    (ADR 0154 G8), so it reads "—"."""
+def status_line(board: Board, organisation: str, today: float | None, waiting: int | None = None) -> Text:
+    """`acme · 3 running · 2 waiting for you · $1.24 today`: `waiting` is what `GET /me/pending` lists, "—"
+    where it is not read (`choregos activity` reads no such list)."""
     spent = DASH if today is None else f"${today:.2f}"
-    return Text(f"{organisation} · {board.running()} running · {DASH} waiting for you · {spent} today")
+    count = DASH if waiting is None else str(waiting)
+    return Text(f"{organisation} · {board.running()} running · {count} waiting for you · {spent} today")
 
 
 def _tree(

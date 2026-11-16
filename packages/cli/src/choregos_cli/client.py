@@ -78,9 +78,15 @@ class ApiError(RuntimeError):
             self.code = code if isinstance(code, str) else None
             detail = problem.get("detail") or problem.get("title") or str(problem)
             errors = problem.get("errors") or []
-            if errors:
+            if self.code is None and any(
+                isinstance(e, dict) and e.get("error") == "step_up_required" for e in errors
+            ):
+                # The authentication is too old for a decision (a 401 whose `errors` carry the marker).
+                self.code = "step_up_required"
+            listed = [e for e in errors if isinstance(e, dict) and "msg" in e]
+            if listed:
                 detail += "\n" + "\n".join(
-                    f"  - {'.'.join(str(p) for p in e.get('loc', []))}: {e.get('msg', '')}" for e in errors
+                    f"  - {'.'.join(str(p) for p in e.get('loc', []))}: {e.get('msg', '')}" for e in listed
                 )
         else:
             detail = str(problem)[:500]
