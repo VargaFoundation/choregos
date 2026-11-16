@@ -1,4 +1,4 @@
-"""`choregos login` signs in as the person, by the device flow (ADR 0154 §6, S67-05), against a simulated API."""
+"""`choregos login` signs in as the person by the device flow (ADR 0154 §6, S67-05), against a fake API."""
 
 from __future__ import annotations
 
