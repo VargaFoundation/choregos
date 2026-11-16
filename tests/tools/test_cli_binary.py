@@ -58,7 +58,7 @@ def test_the_nuitka_command_carries_the_data_and_leaves_out_what_is_not_the_cli(
 ) -> None:
     command = build.nuitka_command(pathlib.Path("python"), tmp_path, "choregos-linux-x86_64", "0.25.3")
     assert "--mode=onefile" in command
-    for package in ("choregos_core", "choregos_contracts", "jsonschema_specifications"):
+    for package in ("choregos_core", "choregos_contracts", "jsonschema_specifications", "textual"):
         assert f"--include-package-data={package}" in command
     assert "--include-distribution-metadata=choregos-cli" in command
     for module in ("opentelemetry", "choregos_orchestrator", "zstandard"):

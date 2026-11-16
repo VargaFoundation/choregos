@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import json
 import os
-from collections.abc import Iterator
+from collections.abc import AsyncIterator, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -169,3 +169,61 @@ class Client:
                     payload = line.removeprefix("data:").strip()
                     if payload:
                         yield json.loads(payload)
+
+
+class AsyncClient:
+    """The same calls for the workspace (`choregos chat`), which lives in an event loop: a turn is read as a
+    task, so ending the task closes the stream and the platform cancels the turn (S63-04b)."""
+
+    def __init__(self, profile: Profile | None = None) -> None:
+        self.profile = profile or Profile.load()
+        headers = {"Accept": "application/json"}
+        if self.profile.token:
+            headers["Authorization"] = f"Bearer {self.profile.token}"
+        self._client = httpx.AsyncClient(
+            base_url=self.profile.api_url.rstrip("/") + "/api/v1", headers=headers, timeout=30.0
+        )
+
+    async def close(self) -> None:
+        await self._client.aclose()
+
+    async def request(self, method: str, path: str, **kwargs: Any) -> Any:
+        response = await self._client.request(method, path, **kwargs)
+        if response.status_code >= 400:
+            raise _problem(response)
+        return response.json() if response.content else None
+
+    async def get(self, path: str, **kwargs: Any) -> Any:
+        return await self.request("GET", path, **kwargs)
+
+    async def post(self, path: str, **kwargs: Any) -> Any:
+        return await self.request("POST", path, **kwargs)
+
+    async def stream_events(
+        self, method: str, path: str, **kwargs: Any
+    ) -> AsyncIterator[tuple[str, dict[str, Any]]]:
+        """`Client.stream_events`, awaited: `(event, data)` in the order they come."""
+        headers = {"Accept": "text/event-stream"}
+        async with self._client.stream(method, path, headers=headers, timeout=None, **kwargs) as response:
+            if response.status_code >= 400:
+                await response.aread()
+                raise _problem(response)
+            name, data = "message", list[str]()
+            async for line in response.aiter_lines():
+                if not line:
+                    if data:
+                        yield name, _event_data("\n".join(data))
+                    name, data = "message", list[str]()
+                elif line.startswith("event:"):
+                    name = line.removeprefix("event:").strip()
+                elif line.startswith("data:"):
+                    data.append(line.removeprefix("data:").strip())
+            if data:
+                yield name, _event_data("\n".join(data))
+
+
+def _problem(response: httpx.Response) -> ApiError:
+    try:
+        return ApiError(response.status_code, response.json())
+    except (json.JSONDecodeError, ValueError):
+        return ApiError(response.status_code, response.text)
