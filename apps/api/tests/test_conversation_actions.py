@@ -181,6 +181,50 @@ async def test_a_refusal_executes_nothing(
     assert _writes(source) == []
 
 
+async def test_a_refusal_keeps_its_reason_on_the_action_and_in_the_audit_record(
+    client: AsyncClient,
+    admin: str,
+    project: dict[str, Any],
+    upstream: Upstream,  # noqa: F811
+    source: Any,  # noqa: F811
+    idp: FakeIdentityProvider,  # noqa: F811
+) -> None:
+    """S67-16b (ADR 0154 §7): the reason reaches the route, is stored on the action and audited."""
+    ids = await _ready(client)
+    conversation, action_id = await _propose(client, admin, upstream, ids)
+    refused = await client.post(
+        f"{ME}/{conversation}/actions/{action_id}/refuse", json={"reason": "  not this supplier  "}
+    )
+    assert refused.status_code == 200, refused.text
+    assert refused.json()["status"] == "refused" and refused.json()["refusal_reason"] == "not this supplier"
+    (listed,) = (await client.get(f"{ME}/{conversation}/actions")).json()["items"]
+    assert listed["refusal_reason"] == "not this supplier"
+    audit = (await client.get("/api/v1/audit", params={"target_type": "conversation_action"})).json()["items"]
+    entries = [e for e in audit if e["action"] == "assistant.action.refuse" and e["target_id"] == action_id]
+    assert [e["payload"]["reason"] for e in entries] == ["not this supplier"]
+    assert _writes(source) == []
+
+
+async def test_a_refusal_with_a_blank_reason_is_refused_and_one_without_a_body_still_works(
+    client: AsyncClient,
+    admin: str,
+    project: dict[str, Any],
+    upstream: Upstream,  # noqa: F811
+    source: Any,  # noqa: F811
+    idp: FakeIdentityProvider,  # noqa: F811
+) -> None:
+    ids = await _ready(client)
+    conversation, action_id = await _propose(client, admin, upstream, ids)
+    url = f"{ME}/{conversation}/actions/{action_id}/refuse"
+    for body in ({"reason": "   "}, {"reason": ""}, {}, {"reason": "x" * 501}):
+        assert (await client.post(url, json=body)).status_code == 422, body
+    (still,) = (await client.get(f"{ME}/{conversation}/actions")).json()["items"]
+    assert still["status"] == "proposed" and still["refusal_reason"] is None
+    # The console and the embedded component send no body: that refusal is still accepted, without a reason.
+    bare = await client.post(url)
+    assert bare.status_code == 200 and bare.json()["refusal_reason"] is None
+
+
 async def test_another_person_cannot_confirm(
     client: AsyncClient,
     admin: str,

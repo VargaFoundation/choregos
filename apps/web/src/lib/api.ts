@@ -498,8 +498,12 @@ export const api = {
   conversationActions: (id: string) => request<ConversationActionList>(`/me/conversations/${id}/actions`),
   confirmConversationAction: (id: string, action: string) =>
     request<ConversationAction>(`/me/conversations/${id}/actions/${action}/confirm`, { method: "POST" }),
-  refuseConversationAction: (id: string, action: string) =>
-    request<ConversationAction>(`/me/conversations/${id}/actions/${action}/refuse`, { method: "POST" }),
+  /** A refusal says why (ADR 0154 §7): the reason is kept on the action and in the audit log. */
+  refuseConversationAction: (id: string, action: string, reason: string) =>
+    request<ConversationAction>(`/me/conversations/${id}/actions/${action}/refuse`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    }),
   /** The running edition (ADR 0024): the console shows what it allows itself. */
   edition: () => request<Edition>("/edition"),
   /** Where to plug an MCP client (ADR 0030): the gate's URL, for the Integrations page. */

@@ -68,6 +68,11 @@ function fakeApi(options: { signedIn?: boolean; resumable?: boolean; needsToken?
       actions = [{ ...proposed, status: "executed" }];
       return Response.json(actions[0]);
     }
+    if (path === "/me/conversations/c1/actions/a1/refuse") {
+      const reason = (JSON.parse(String(init?.body ?? "{}")) as { reason?: string }).reason ?? null;
+      actions = [{ ...proposed, status: "refused", refusal_reason: reason }];
+      return Response.json(actions[0]);
+    }
     return new Response("{}", { status: 404 });
   });
   vi.stubGlobal("fetch", fetcher);
@@ -135,6 +140,22 @@ describe("the embedded assistant (S63-12)", () => {
       ),
     );
     await waitFor(() => expect(screen.queryByRole("button", { name: "Confirm" })).toBeNull());
+  });
+
+  it("asks why before refusing a proposed write, and sends the reason", async () => {
+    const calls = fakeApi();
+    mount();
+    fireEvent.change(await screen.findByLabelText("Message"), { target: { value: "Call them" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await screen.findByText("Update the contact's phone");
+    fireEvent.click(screen.getByRole("button", { name: "Refuse" }));
+    const run = screen.getByRole("button", { name: "Refuse" });
+    expect(run).toBeDisabled();
+    expect(calls.some((c) => c.path.endsWith("/refuse"))).toBe(false);
+    fireEvent.change(screen.getByLabelText(/Why you refuse it/), { target: { value: "wrong number" } });
+    fireEvent.click(screen.getByRole("button", { name: "Refuse" }));
+    await waitFor(() => expect(screen.queryByText("Update the contact's phone")).toBeNull());
+    expect(calls.find((c) => c.path.endsWith("/refuse"))?.body).toEqual({ reason: "wrong number" });
   });
 
   it("shows what a proposed write would change, from the source's preview", async () => {

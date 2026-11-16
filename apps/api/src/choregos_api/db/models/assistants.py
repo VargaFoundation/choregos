@@ -128,6 +128,8 @@ class ConversationAction(Base, PkMixin, TimestampMixin):
     confirmed_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
     confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     executed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    #: Why the person refused it (S67-16b, ADR 0154 §7); null when it was not, or by a client that sends none.
+    refusal_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     #: `write` (a write need's operation) or `launch` (the start of a project's workflow, ADR 0158).
     kind: Mapped[str] = mapped_column(String(16), default="write", server_default="write")
     #: For a launch, the binding when it was proposed: `{project_id, project, workflow}`.

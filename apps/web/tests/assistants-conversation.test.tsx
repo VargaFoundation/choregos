@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AssistantsList } from "@/components/assistants/assistants-list";
 import { ConversationList } from "@/components/assistants/conversation-list";
@@ -234,7 +234,15 @@ describe("a conversation", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "Confirm" })[0]!);
     await waitFor(() => expect(mocks.confirmAction).toHaveBeenCalledWith("c1", "a1"));
     fireEvent.click(screen.getAllByRole("button", { name: "Refuse" })[1]!);
-    await waitFor(() => expect(mocks.refuseAction).toHaveBeenCalledWith("c1", "a2"));
+    // A refusal says why: the button that runs it is dead until a reason is typed (ADR 0154 §7).
+    const confirmation = within(screen.getByTestId("confirmation"));
+    const run = confirmation.getByRole("button", { name: "Refuse" });
+    expect(run).toBeDisabled();
+    fireEvent.click(run);
+    expect(mocks.refuseAction).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText(/Why you refuse it/), { target: { value: "  wrong supplier " } });
+    fireEvent.click(confirmation.getByRole("button", { name: "Refuse" }));
+    await waitFor(() => expect(mocks.refuseAction).toHaveBeenCalledWith("c1", "a2", "wrong supplier"));
     expect(await screen.findByText("already decided")).toBeInTheDocument();
   });
 
