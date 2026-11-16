@@ -7,9 +7,10 @@ gateway cannot say is "—", never 0 (ADR 0141 §2). Then what ended in the last
 taken effect. `--watch` keeps the tree live from the activity stream (`activity.upsert`, `activity.ended`)
 until the stream ends or the person interrupts it.
 
-It reads `GET /orgs/{org}/activity` and its stream, and nothing else but today's spend for the status line
-(`GET /orgs/{org}/costs`, "—" for a person who may not read it). It is read-only: stopping stays where it is
-today (`choregos items action … stop`, the console).
+It reads `GET /orgs/{org}/activity` and its stream, the sub-agents of each run (`GET /runs/{id}/agents`,
+S67-12: the platform names them, this command never reads a backend's `_meta`), and nothing else but
+today's spend for the status line (`GET /orgs/{org}/costs`, "—" for a person who may not read it). It is
+read-only: stopping stays where it is today (`choregos items action … stop`, the console).
 """
 
 from __future__ import annotations
@@ -38,6 +39,8 @@ FINISHED_SHOWN = 50
 #: How often the live view redraws, so elapsed times move even when no event comes.
 REDRAW_EVERY_S = 1.0
 DASH = "—"
+#: How long a run's sub-agents are kept before the live view asks again (a run upserts at every step).
+AGENTS_EVERY_S = 3.0
 
 
 def clock() -> datetime:
@@ -51,6 +54,9 @@ class Board:
 
     in_flight: dict[str, dict[str, Any]] = field(default_factory=dict)
     finished: dict[str, dict[str, Any]] = field(default_factory=dict)
+    #: A run's agent nodes (`RunAgentNode`), by run id, and when each list was read.
+    agents: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
+    agents_read: dict[str, datetime] = field(default_factory=dict)
 
     @classmethod
     def of(cls, listing: dict[str, Any]) -> Board:
@@ -77,6 +83,24 @@ class Board:
             self.in_flight.pop(key, None)
             self.finished = {key: entry} | {k: v for k, v in self.finished.items() if k != key}
             self.finished = dict(list(self.finished.items())[:FINISHED_SHOWN])
+
+    def read_agents(self, api: Client, now: datetime) -> None:
+        """Asks for the sub-agents of each run shown: an ended run once, a run in flight again after
+        `AGENTS_EVERY_S`. A run whose nodes cannot be read is shown without them, never with a failure."""
+        for entry in [*self.in_flight.values(), *self.finished.values()]:
+            run_id = str(entry.get("id"))
+            if entry.get("kind") != "run":
+                continue
+            read = self.agents_read.get(run_id)
+            live = entry.get("status") in IN_FLIGHT
+            if read is not None and not (live and (now - read).total_seconds() >= AGENTS_EVERY_S):
+                continue
+            self.agents_read[run_id] = now
+            try:
+                listing = api.get(f"/runs/{run_id}/agents")
+            except ApiError:
+                continue
+            self.agents[run_id] = list((listing or {}).get("items") or [])
 
     def running(self) -> int:
         return sum(1 for entry in self.in_flight.values() if entry.get("status") in ("running", "open"))
@@ -112,6 +136,7 @@ def activity(
     out = theme.console()
     try:
         board = Board.of(api.get(f"/orgs/{organisation}/activity", params=filters))
+        board.read_agents(api, clock())
         today = _today_spend(api, organisation)
         if not watch:
             out.print(render(board, organisation, today, out))
@@ -159,6 +184,7 @@ def _follow(
             for item in _drain(events):
                 if item is not None:
                     board.apply(*item)
+                board.read_agents(api, clock())
                 live.update(render(board, organisation, today, out), refresh=True)
     except KeyboardInterrupt:
         return
@@ -186,14 +212,16 @@ def render(board: Board, organisation: str, today: float | None, out: Console) -
     now = clock()
     parts: list[RenderableType] = [
         Panel(
-            _tree(list(board.in_flight.values()), now, out, "nothing is running"),
+            _tree(list(board.in_flight.values()), now, out, "nothing is running", board.agents),
             title=Text("In flight", style="bold"),
             title_align="left",
             border_style=theme.TREE_FRAME,
         )
     ]
     if board.finished:
-        parts.append(_tree(list(board.finished.values()), now, out, "", label="Ended in the last hour"))
+        parts.append(
+            _tree(list(board.finished.values()), now, out, "", board.agents, label="Ended in the last hour")
+        )
     parts.append(status_line(board, organisation, today))
     return Group(*parts)
 
@@ -205,7 +233,15 @@ def status_line(board: Board, organisation: str, today: float | None) -> Text:
     return Text(f"{organisation} · {board.running()} running · {DASH} waiting for you · {spent} today")
 
 
-def _tree(entries: list[dict[str, Any]], now: datetime, out: Console, empty: str, *, label: str = "") -> Tree:
+def _tree(
+    entries: list[dict[str, Any]],
+    now: datetime,
+    out: Console,
+    empty: str,
+    agents: dict[str, list[dict[str, Any]]],
+    *,
+    label: str = "",
+) -> Tree:
     root = Tree(
         Text(label, style="bold") if label else Text(""), hide_root=not label, guide_style=theme.TREE_FRAME
     )
@@ -227,8 +263,30 @@ def _tree(entries: list[dict[str, Any]], now: datetime, out: Console, empty: str
         key = entry.get("work_item_key") or entry.get("work_item_id") or DASH
         if (project, key) not in items:
             items[(project, key)] = projects[project].add(_work_item(entry))
-        items[(project, key)].add(_line(entry, now, out))
+        line = items[(project, key)].add(_line(entry, now, out))
+        _sub_agents(line, agents.get(str(entry.get("id"))) or [], now, out)
     return root
+
+
+def _sub_agents(under: Tree, nodes: list[dict[str, Any]], now: datetime, out: Console) -> None:
+    """The run's sub-agents under its line, each under the node it was launched from; the run's own agent is
+    the line above, and a run with no sub-agent (a backend that names no parent included) adds nothing."""
+    by_id: dict[str, Tree] = {}
+    for node in nodes:
+        if node.get("kind") != "subagent":
+            continue
+        parent = by_id.get(str(node.get("parent_id")), under)
+        by_id[str(node["id"])] = parent.add(_agent_line(node, now, out))
+
+
+def _agent_line(node: dict[str, Any], now: datetime, out: Console) -> Text:
+    """`● running  sub-agent Agent · 3 tool calls   1m04s`."""
+    text = theme.badge(theme.status_of(str(node.get("status") or "")), out)
+    calls = int(node.get("tool_calls") or 0)
+    text.append(f"  sub-agent {node.get('tool') or DASH} · {calls} tool call{'' if calls == 1 else 's'}")
+    text.append(f"   {elapsed(node, now)}")
+    text.no_wrap, text.overflow = True, "ellipsis"
+    return text
 
 
 def _work_item(entry: dict[str, Any]) -> Text:

@@ -505,6 +505,23 @@ class RunContextDto(Dto):
     series: list[RunContextPoint] = Field(default_factory=list)
 
 
+class RunAgentNode(Dto):
+    """A node of the run's tree (ADR 0154 §5): the run's agent or a sub-agent it delegated to."""
+
+    id: str
+    parent_id: str | None = None
+    kind: Literal["agent", "subagent"]
+    tool: str | None = None
+    status: Literal["running", "completed", "failed"]
+    started_at: datetime
+    ended_at: datetime | None = None
+    tool_calls: int = Field(ge=0)
+
+
+class RunAgentList(Dto):
+    items: list[RunAgentNode]
+
+
 class DiffFileDto(Dto):
     path: str
     status: str = "modified"

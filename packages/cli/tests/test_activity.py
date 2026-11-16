@@ -86,15 +86,45 @@ def _session(session_id: str, **changes: Any) -> dict[str, Any]:
     } | changes
 
 
+def _node(node_id: str, parent: str | None, kind: str, **changes: Any) -> dict[str, Any]:
+    return {
+        "id": node_id,
+        "parent_id": parent,
+        "kind": kind,
+        "tool": "Agent" if kind == "subagent" else None,
+        "status": "running",
+        "started_at": _iso(NOW - timedelta(minutes=1, seconds=4)),
+        "ended_at": None,
+        "tool_calls": 0,
+    } | changes
+
+
 class Platform:
     def __init__(self, router: respx.Router, contract: Any) -> None:
         self.router, self.contract = router, contract
         self.listing([_run_entry("run-a1b2c3d4e5f6a7b8")], [])
         self.today(1.2345)
+        # Every run is flat unless a test says otherwise: the run's own agent and nothing under it.
+        self.served: dict[str, Response] = {}
+        self.asked: list[str] = []
+
+        def answer(request: Any) -> Response:
+            run_id = request.url.path.split("/")[-2]
+            self.asked.append(run_id)
+            flat = {"items": [_node(run_id, None, "agent")]}
+            return self.served.get(run_id) or Response(200, json=contract("RunAgentList", flat))
+
+        self.router.get(url__regex=rf"{re.escape(V1)}/runs/[^/]+/agents").mock(side_effect=answer)
 
     def listing(self, in_flight: list[dict[str, Any]], finished: list[dict[str, Any]]) -> None:
         body = self.contract("ActivityList", {"in_flight": in_flight, "finished": finished})
         self.listed = self.router.get(f"{V1}/orgs/acme/activity").mock(return_value=Response(200, json=body))
+
+    def agents(self, run_id: str, *nodes: dict[str, Any], status: int = 200) -> None:
+        body: Any = {"title": "Forbidden", "detail": "no"}
+        if status == 200:
+            body = self.contract("RunAgentList", {"items": list(nodes)})
+        self.served[run_id] = Response(status, json=body)
 
     def today(self, cost: float | None, status: int = 200) -> None:
         body: dict[str, Any] = {"title": "Forbidden", "detail": "no"}
@@ -252,3 +282,55 @@ def test_an_ascii_terminal_gets_ascii_glyphs(platform: Platform, monkeypatch: py
 
     monkeypatch.setattr(theme, "unicode_ok", lambda target: False)
     assert "* running implement" in _said(_run())
+
+
+def test_sub_agents_are_shown_under_their_run_each_under_the_node_it_was_launched_from(
+    platform: Platform,
+) -> None:
+    platform.listing([_run_entry("run-1")], [])
+    platform.agents(
+        "run-1",
+        _node("run-1", None, "agent", tool_calls=1),
+        _node("toolu_a", "run-1", "subagent", tool_calls=2),
+        _node("toolu_b", "toolu_a", "subagent", tool="Task", tool_calls=1, status="completed"),
+    )
+    result = _run()
+    assert result.exit_code == 0, result.output
+    lines = [" ".join(line.strip("│├└─ ").split()) for line in ANSI.sub("", result.output).splitlines()]
+    run = next(n for n, line in enumerate(lines) if line.startswith("● running implement"))
+    assert lines[run + 1].startswith("● running sub-agent Agent · 2 tool calls 1m04s"), lines[run + 1]
+    assert lines[run + 2].startswith("✓ done sub-agent Task · 1 tool call 1m04s"), lines[run + 2]
+    indent = [len(line) - len(line.lstrip("│├└─ ")) for line in ANSI.sub("", result.output).splitlines()]
+    assert indent[run + 2] > indent[run + 1] > indent[run]
+    assert platform.asked == ["run-1"]
+
+
+def test_a_flat_list_adds_no_sub_agent_line(platform: Platform) -> None:
+    platform.listing([_run_entry("run-1")], [])
+    platform.agents("run-1", _node("run-1", None, "agent", tool_calls=9))
+    assert "sub-agent" not in _said(_run())
+
+
+def test_a_run_whose_agents_cannot_be_read_is_still_shown(platform: Platform) -> None:
+    platform.listing([_run_entry("run-1")], [])
+    platform.agents("run-1", status=403)
+    result = _run()
+    assert result.exit_code == 0, result.output
+    assert "● running implement" in _said(result) and "sub-agent" not in _said(result)
+
+
+def test_the_live_view_reads_the_sub_agents_of_a_run_that_appears(platform: Platform) -> None:
+    platform.listing([], [])
+    platform.agents("run-new", _node("run-new", None, "agent"), _node("toolu_a", "run-new", "subagent"))
+    platform.stream(("activity.upsert", _run_entry("run-new", work_item_key="FIN-20")))
+    result = _run("--watch")
+    assert result.exit_code == 0, result.output
+    assert "sub-agent Agent · 0 tool calls" in _said(result)
+
+
+def test_a_surface_never_reads_a_backends_private_meta() -> None:
+    """The platform names the sub-agents (ADR 0154 §5): no CLI module reads `_meta` or a backend's key."""
+    source = Path(__file__).parents[1] / "src" / "choregos_cli"
+    quoted = re.compile(r"""["'](_meta|claudeCode|parentToolUseId|toolName)["']""")
+    offenders = [p.name for p in source.glob("*.py") if quoted.search(p.read_text(encoding="utf-8"))]
+    assert offenders == []

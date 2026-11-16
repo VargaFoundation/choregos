@@ -2,15 +2,16 @@
 """The agents of a run, derived from its journal (ADR 0154 §5, G5).
 
 A sub-agent launched inside a sandboxed run appears in the journal only as ACP `tool_call` updates: ACP has no
-notion of a sub-agent. What says "this call delegated" and "this call is the sub-agent's own" is private to each
-backend, so the platform keeps one **rule per ACP backend** (`RULES`, one entry for each backend of
+notion of a sub-agent. What says "this call delegated" and "this call is the sub-agent's own" is private
+to each backend, so the platform keeps one **rule per ACP backend** (`RULES`, one entry for each backend of
 `choregos_runner.backends`, kept equal by a test) and derives the nodes here, server-side. A surface never
 parses a backend's private shapes (its `_meta`): it reads the nodes.
 
-A node is the run's own agent (`kind="agent"`, the root) or a sub-agent (`kind="subagent"`), which is a call the
-backend's rule names as delegating **when that backend also sends the parent id of the calls it makes**. A
-backend that sends none gives a flat list: its delegating call stays an ordinary tool call of the run, and no
-sub-agent is made of it (never guessed). A call whose parent id names no known delegating call is the root's.
+A node is the run's own agent (`kind="agent"`, the root) or a sub-agent (`kind="subagent"`), which is a
+call the backend's rule names as delegating **when that backend also sends the parent id of the calls it
+makes**. A backend that sends none gives a flat list: its delegating call stays an ordinary tool call of
+the run, and no sub-agent is made of it (never guessed). A call whose parent id names no known delegating
+call is the root's.
 
 Tokens and cost stay per run (the gateway counts per run key): a node carries no spend.
 """
@@ -19,14 +20,16 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Literal
 
 AgentKind = Literal["agent", "subagent"]
 
 #: The journal's type for one ACP `session/update`.
 SESSION_UPDATE = "session/update"
-#: ACP's tool-call statuses, as the journal holds them.
+#: ACP's tool-call statuses, as the journal holds them, and the node status each one gives (the contract's).
 CALL_STATUSES = ("pending", "in_progress", "completed", "failed")
+NodeStatus = Literal["running", "completed", "failed"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,9 +40,11 @@ class SubagentRule:
     nothing there.
     """
 
-    #: The delegating tools' names, compared lower-cased (Claude Code's `Task` and `Agent`, opencode's `task`).
+    # The delegating tools' names, compared lower-cased (Claude Code's `Task` and `Agent`, opencode's
+    # `task`).
     tools: frozenset[str]
-    #: Where the backend puts the tool's programmatic name; `None` reads the call's `title`, which is the tool's
+    # Where the backend puts the tool's programmatic name; `None` reads the call's `title`, which is
+    # the tool's
     #: name for a backend that sets no other (opencode).
     name_path: tuple[str, ...] | None
     #: Where the backend puts the id of the delegating call a call was made inside; `None`: it sends none.
@@ -48,11 +53,13 @@ class SubagentRule:
     source: str
 
 
-#: One entry per ACP backend the runner image carries. `None`: the backend delegates to nothing the journal can
+# One entry per ACP backend the runner image carries. `None`: the backend delegates to nothing the
+# journal can
 #: tell (it has no sub-agent tool, or the shape is unknown), so its calls are a flat list.
 RULES: dict[str, SubagentRule | None] = {
     # `@agentclientprotocol/claude-agent-acp` 0.85.1: the first `tool_call` of a call carries
-    # `_meta.claudeCode.toolName` (dist/tool-calls/renderer.js, `toolUseMeta`), and every update of a call made
+    # `_meta.claudeCode.toolName` (dist/tool-calls/renderer.js, `toolUseMeta`), and every update of a
+    # call made
     # inside a sub-agent carries `_meta.claudeCode.parentToolUseId` = the delegating call's id
     # (dist/acp-agent.js, `stampParentToolUseId`). The client does not announce the `subagents` capability,
     # so the adapter keeps them in the one session (dist/native-subagents.js is then not in the path).
@@ -90,14 +97,14 @@ class AgentNode:
     """One agent of a run: the run's own agent, or a sub-agent it delegated to."""
 
     id: str
-    parent: str | None
+    parent_id: str | None
     kind: AgentKind
     #: The delegating tool's name (`Task`, `Agent`, `task`); `None` for the run's own agent.
     tool: str | None
-    #: An ACP status (`pending`, `in_progress`, `completed`, `failed`); the root's is the caller's to set.
-    status: str | None
-    started: str | None
-    ended: str | None
+    #: `running` until the delegating call completed or failed; the root's is the caller's to set.
+    status: NodeStatus
+    started_at: str | None
+    ended_at: str | None
     #: The tool calls this agent made itself, a delegating call excluded.
     tool_calls: int
 
@@ -140,7 +147,7 @@ def _calls(events: Iterable[Mapping[str, Any]], rule: SubagentRule | None) -> li
         if call_id is None:
             continue
         ts = event.get("ts")
-        stamp = ts.isoformat() if hasattr(ts, "isoformat") else _text(ts)
+        stamp = ts.isoformat() if isinstance(ts, datetime) else _text(ts)
         call = by_id.get(call_id)
         if call is None:
             call = by_id[call_id] = _Call(call_id, None, None, None, stamp, stamp)
@@ -163,7 +170,7 @@ def agent_nodes(
     events: Iterable[Mapping[str, Any]],
     *,
     root_id: str,
-    root_status: str | None = None,
+    root_status: NodeStatus = "running",
     root_started: str | None = None,
     root_ended: str | None = None,
 ) -> list[AgentNode]:
@@ -176,7 +183,7 @@ def agent_nodes(
     delegating: dict[str, _Call] = {}
     if rule is not None and rule.parent_path is not None:
         delegating = {c.id: c for c in calls if c.name is not None and c.name.lower() in rule.tools}
-    owned = {node_id: 0 for node_id in (root_id, *delegating)}
+    owned = dict.fromkeys((root_id, *delegating), 0)
     for call in calls:
         if call.id in delegating:
             continue
@@ -184,16 +191,18 @@ def agent_nodes(
         owned[owner] += 1
     nodes = [AgentNode(root_id, None, "agent", None, root_status, root_started, root_ended, owned[root_id])]
     for call in delegating.values():
-        finished = call.status in ("completed", "failed")
+        status: NodeStatus = (
+            "completed" if call.status == "completed" else "failed" if call.status == "failed" else "running"
+        )
         nodes.append(
             AgentNode(
                 id=call.id,
-                parent=call.parent if call.parent in delegating else root_id,
+                parent_id=call.parent if call.parent in delegating else root_id,
                 kind="subagent",
                 tool=call.name,
-                status=call.status,
-                started=call.first,
-                ended=call.last if finished else None,
+                status=status,
+                started_at=call.first,
+                ended_at=call.last if status != "running" else None,
                 tool_calls=owned[call.id],
             )
         )

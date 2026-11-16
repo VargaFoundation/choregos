@@ -13,12 +13,10 @@ PREFIX = "/api/v1"
 CONTRACT_ONLY: dict[str, str] = {
     "followMyConversationTurn": "S67-08 (ADR 0154 §4, G2)",
     "listMyPending": "S67-07 (ADR 0154 §4, G8)",
-    "listRunAgents": "S67-12 (ADR 0154 §5, G5)",
 }
 CONTRACT_ONLY_PATHS: set[str] = {
     "/me/conversations/{conversation_id}/events",
     "/me/pending",
-    "/runs/{id}/agents",
 }
 
 
