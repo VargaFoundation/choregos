@@ -5,11 +5,13 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import os
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from .. import safe_files
 from ..config import agent_base_environment
 from ..launcher import Launcher, LauncherError, RemoteProcess
 from .guard import TurnGuard
@@ -505,31 +507,33 @@ class AcpClient:
             error_response(request.id, PERMISSION_DENIED, f"unhandled method: {request.method}")
         )
 
-    def _resolve(self, raw: Any) -> Path | None:
-        """A path inside the workspace, or beneath the run's script directory, or nothing.
+    def _resolve(self, raw: Any) -> tuple[Path, Path] | None:
+        """`(root, path below root)` for a file of the workspace, or beneath the run's script directory,
+        or nothing.
 
-        The workspace is the boundary: a relative path is attached to it, an absolute path
-        must fall inside it. What goes outside, such as `../../etc/passwd` or a link that climbs
-        out, is not an agent error to correct, it is a request to refuse. A run offered tool scripts
-        has a second place, its script directory (#1365), outside the workspace and so never
-        committed: a file beneath it, once links are followed — not its neighbour, the client's.
+        The workspace is the boundary: a relative path is attached to it, an absolute path must fall
+        inside it, judged on the path as the agent wrote it (`..` folded, no link looked at). What goes
+        outside, such as `../../etc/passwd`, is a request to refuse. A run offered tool scripts has a
+        second place, its script directory (#1365), outside the workspace and so never committed.
+        The path is NOT resolved here: it is opened by `safe_files` component by component from `root`,
+        `O_NOFOLLOW`, so a link the agent planted in the tree — to `/etc/passwd`, to a runner-owned file,
+        in a middle directory — is refused by the open, not followed, and a link swapped in after the
+        check is refused too (S65-04b, ADR 0146 §6).
         """
         if not isinstance(raw, str) or not raw:
             return None
-        root = Path(self.cwd).resolve()
-        target = (root / raw).resolve() if not Path(raw).is_absolute() else Path(raw).resolve()
-        if target == root or root in target.parents:
-            return target
-        if self.scripts_dir and Path(self.scripts_dir).resolve() in target.parents:
-            return target
+        for root in (Path(self.cwd), *([Path(self.scripts_dir)] if self.scripts_dir else [])):
+            for base in dict.fromkeys((root.absolute(), root.resolve())):
+                candidate = Path(os.path.normpath(base / raw))  # `raw` absolute: the join keeps it
+                if candidate != base and base in candidate.parents:
+                    return root, candidate.relative_to(base)
         return None
 
-    def _judged(self, target: Path, raw: str) -> str:
-        """The path the write guard judges: where the write lands, links followed, relative to the
-        workspace (a link inside it that points at a path the scope refuses is judged as that path);
-        beneath the script directory, the path as the agent named it."""
-        root = Path(self.cwd).resolve()
-        return target.relative_to(root).as_posix() if root in target.parents else raw
+    def _judged(self, target: tuple[Path, Path], raw: str) -> str:
+        """The path the write guard judges: relative to the workspace, as written (a link is refused by the
+        open, never judged as its target); beneath the script directory, the path as the agent named it."""
+        root, relative = target
+        return relative.as_posix() if root == Path(self.cwd) else raw
 
     async def _read_text_file(self, request: Request) -> None:
         params = request.params or {}
@@ -538,8 +542,8 @@ class AcpClient:
             await self.respond(error_response(request.id, PERMISSION_DENIED, "path outside the workspace"))
             return
         try:
-            lines = target.read_text(encoding="utf-8").splitlines(keepends=True)
-        except OSError as exc:
+            lines = safe_files.read_text(*target).splitlines(keepends=True)
+        except (OSError, ValueError) as exc:
             await self.respond(error_response(request.id, PERMISSION_DENIED, f"cannot read: {exc}"))
             return
         # `line` is 1-indexed in ACP; `limit` bounds the number of lines returned.
@@ -561,8 +565,7 @@ class AcpClient:
                 await self.respond(error_response(request.id, PERMISSION_DENIED, reason))
                 return
         try:
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(str(params.get("content", "")), encoding="utf-8")
+            safe_files.write_text(*target, str(params.get("content", "")))
         except OSError as exc:
             await self.respond(error_response(request.id, PERMISSION_DENIED, f"cannot write: {exc}"))
             return
