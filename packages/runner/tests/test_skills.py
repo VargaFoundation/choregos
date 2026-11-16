@@ -11,6 +11,7 @@ from choregos_runner.backends import get_backend
 from choregos_runner.exits import Exit
 from choregos_runner.runner import Runner
 from choregos_runner.skills import FALLBACK_DIR, InvalidSkill, place_skills
+from choregos_runner.workspace import git_dir_for
 
 from .conftest import FakeInternalClient, agent_script, valid_result
 
@@ -100,7 +101,7 @@ async def test_the_runner_places_the_skills_out_of_the_diff(
     root = str(get_backend(with_skills.agent.backend).skills_dir)
     assert (Path(runner_settings.workspace) / root / "onboarding-procedure" / "SKILL.md").exists()
     # Out of the diff: the runner excludes them from git, like the backend's configuration.
-    exclusions = (Path(runner_settings.workspace) / ".git" / "info" / "exclude").read_text()
+    exclusions = (git_dir_for(Path(runner_settings.workspace)) / "info" / "exclude").read_text()
     assert f"{root}/onboarding-procedure/SKILL.md" in exclusions
 
 
