@@ -35,6 +35,15 @@ GATEWAY_SEQ_BASE = 1_000_000_000
 MAX_PARTS = 4096
 
 
+def gateway_written(seq: int, type_: str, payload: Any) -> bool:
+    """A line of a run's journal only the gateway's callback writes (S65-08b, ADR 0173): any line
+    numbered in the gateway's range, and a breakdown that says the gateway measured it. The run's door
+    refuses both, so that what the console shows as the gateway's count is the gateway's."""
+    if seq >= GATEWAY_SEQ_BASE:
+        return True
+    return type_ == EVENT and isinstance(payload, dict) and payload.get("source") == "gateway"
+
+
 def breakdown_of(payload: Any) -> ContextBreakdownDto | None:
     """A kept event as the contract says it, numbers only: an event that is not one is left out, and a
     section the contract does not name is never served."""

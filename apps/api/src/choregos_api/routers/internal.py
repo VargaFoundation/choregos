@@ -87,7 +87,12 @@ from ..services.artifacts import (
 )
 from ..services.artifacts import latest as latest_artifact
 from ..services.budget_alerts import check_after_spend
-from ..services.context_breakdown import MEASURED_BACKENDS, record_gateway_breakdown, registered_parts
+from ..services.context_breakdown import (
+    MEASURED_BACKENDS,
+    gateway_written,
+    record_gateway_breakdown,
+    registered_parts,
+)
 from ..services.costs import dimensions_of
 from ..services.extension_tools import (
     ACCESS_KEY,
@@ -147,7 +152,8 @@ async def post_events(id: str, body: RunEventsBatch, session: Db, claims: RunAut
 
     A run writes its own lines, never the platform's (ADR 0173): a batch that carries a type the
     platform writes in this journal (`gate.outcome`, `memory.skipped`, their namespaces) is refused
-    whole, and nothing of it is written. No runner sends one; the refusal is logged."""
+    whole, and nothing of it is written. No runner sends one; the refusal is logged. The same holds for
+    the gateway's lines (S65-08b): a `seq` in its range, or a breakdown that says `source: gateway`."""
     run, _, project = await _run_and_item(session, id)
     reserved = sorted({event.type for event in body.events if platform_written(event.type)})
     if reserved:
@@ -157,6 +163,17 @@ async def post_events(id: str, body: RunEventsBatch, session: Db, claims: RunAut
         raise unprocessable(
             "a run does not write the platform's lines of its journal: "
             + ", ".join(f"`{name}`" for name in reserved[:8])
+        )
+    claimed = sorted(
+        {event.seq for event in body.events if gateway_written(event.seq, event.type, event.payload)}
+    )
+    if claimed:
+        logger.warning(
+            "run_journal.gateway_line_refused", run_id=run.id, project=project.slug, seqs=claimed[:8]
+        )
+        raise unprocessable(
+            "a run does not write the gateway's lines of its journal: "
+            + ", ".join(str(seq) for seq in claimed[:8])
         )
     known = set(
         (await session.execute(select(RunEvent.seq).where(RunEvent.run_id == run.id))).scalars().all()
