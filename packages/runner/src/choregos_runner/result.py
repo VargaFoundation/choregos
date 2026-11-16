@@ -24,6 +24,7 @@ from choregos_contracts import (
 )
 from pydantic import ValidationError
 
+from . import safe_files
 from .dod import merge_evidence
 
 
@@ -52,9 +53,17 @@ def load_result(
     goes back to repair (S22-12): on the dev tenant, on 09/10, a triage returned
     a `triage` output (JSON as text) instead of `size` and `risk`, and the `outputs_in` guard
     escalated a ticket that was, in fact, triageable."""
-    if not path.exists():
+    # `path` is `<workspace>/.choregos/result.json`: opened from the workspace, no link followed (S65-04b).
+    try:
+        raw = safe_files.read_text(path.parent.parent, path.relative_to(path.parent.parent))
+    except FileNotFoundError:
         return ResultLoad(None, error=f"`{path.name}` is missing: write it before you finish.")
-    raw = path.read_text(encoding="utf-8")
+    except safe_files.LinkRefusedError as exc:
+        return ResultLoad(
+            None, error=f"`{path.name}` is a link, or sits behind one: write a regular file. ({exc.path})"
+        )
+    except (OSError, UnicodeDecodeError) as exc:
+        return ResultLoad(None, error=f"`{path.name}` cannot be read: {exc}")
     if not raw.strip():
         return ResultLoad(None, error=f"`{path.name}` is empty.", raw=raw)
     try:
@@ -90,7 +99,11 @@ def load_result(
         )
     # `files`: the deliverables a `done` step declares (ADR 0049), expected beside this file in
     # `.choregos/outputs/`. A missing one goes back to the agent like a missing output.
-    absent = [name for name in files or [] if not (path.parent / "outputs" / name).is_file()]
+    absent = [
+        name
+        for name in files or []
+        if not safe_files.is_regular(path.parent.parent, Path(".choregos") / "outputs" / name)
+    ]
     if absent and parsed.status is StageStatus.DONE:
         return ResultLoad(
             None,
@@ -225,8 +238,9 @@ def complete_result(
 
 
 def write_result(path: Path, result: StageResult) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
+    root = path.parent.parent
+    safe_files.write_text(
+        root,
+        path.relative_to(root),
         json.dumps(result.model_dump(mode="json", by_alias=True), indent=2, ensure_ascii=False) + "\n",
-        encoding="utf-8",
     )

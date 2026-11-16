@@ -37,7 +37,7 @@ from choregos_core.hosted import CONNECT_PORT, MCP_PORT, MODEL_PORT
 from choregos_core.redaction import REDACTED, redact
 from pydantic import ValidationError
 
-from . import compression, confine, tool_scripts
+from . import compression, confine, safe_files, tool_scripts
 from .acp import AcpClient, AgentUnreachableError
 from .acp.client import PromptOutcome, WriteGuard
 from .acp.guard import TurnGuard
@@ -130,9 +130,10 @@ class EventJournal:
         self.seq += 1
         event = {"seq": self.seq, "type": type_, "payload": payload}
         self.buffer.append(event)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        with self.path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(event, ensure_ascii=False) + "\n")
+        root = self.path.parent.parent
+        safe_files.write_text(
+            root, self.path.relative_to(root), json.dumps(event, ensure_ascii=False) + "\n", append=True
+        )
         if len(self.buffer) >= self.batch_size or _no_wait(type_, payload):
             await self.flush()
 
@@ -1647,18 +1648,15 @@ async def _open_session(
             )
     session_id = await agent.new_session(str(workspace), mcp_servers)
     await journal.record("session/new", {"backend": backend})
-    path = workspace / SAVED_SESSION
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({"backend": backend, "session_id": session_id}), encoding="utf-8")
+    safe_files.write_text(
+        workspace, SAVED_SESSION, json.dumps({"backend": backend, "session_id": session_id})
+    )
 
 
 def _saved_session(workspace: Path) -> dict[str, Any] | None:
-    path = workspace / SAVED_SESSION
-    if not path.exists():
-        return None
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except ValueError:
+        data = json.loads(safe_files.read_text(workspace, SAVED_SESSION))
+    except (OSError, ValueError):
         return None
     return data if isinstance(data, dict) and data.get("session_id") else None
 
@@ -1667,10 +1665,10 @@ def _events_already_journaled(path: Path) -> int:
     """A run resumed in its own sandbox after a person's answer (S35-03) finds its journal on the
     workspace volume: it goes on from there, or the API, idempotent by `seq`, would drop every
     event of the continuation as already received. A fresh workspace has none."""
-    if not path.exists():
+    try:
+        return safe_files.read_bytes(path.parent.parent, path.relative_to(path.parent.parent)).count(b"\n")
+    except OSError:
         return 0
-    with path.open(encoding="utf-8") as lines:
-        return sum(1 for _ in lines)
 
 
 async def run_stage(settings: RunnerSettings | None = None) -> RunOutcome:

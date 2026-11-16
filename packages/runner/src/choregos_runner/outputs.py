@@ -27,6 +27,8 @@ from choregos_contracts import (
     type_of_filename,
 )
 
+from . import safe_files
+
 OUTPUTS_DIR = ".choregos/outputs"
 _NAME = re.compile(ARTIFACT_NAME_PATTERN)
 
@@ -41,7 +43,11 @@ def expected_files(stage_input: StageInput) -> dict[str, str]:
 
 
 def missing_files(outputs_dir: Path, expected: dict[str, str]) -> list[str]:
-    return [filename for filename in expected.values() if not (outputs_dir / filename).is_file()]
+    return [
+        filename
+        for filename in expected.values()
+        if not safe_files.is_regular(outputs_dir.parent.parent, Path(".choregos") / "outputs" / filename)
+    ]
 
 
 def collect(workspace: Path, stage_input: StageInput) -> tuple[list[tuple[str, str, Path]], list[str]]:
@@ -56,10 +62,12 @@ def collect(workspace: Path, stage_input: StageInput) -> tuple[list[tuple[str, s
     declared = {filename: name for name, filename in expected_files(stage_input).items()}
     kept: list[tuple[str, str, Path]] = []
     refused: list[str] = []
-    for path in sorted(folder.iterdir()):
-        if path.is_symlink() or not path.is_file():
-            refused.append(f"{path.name}: not a regular file")
-            continue
+    try:
+        regular, other = safe_files.regular_files(workspace, OUTPUTS_DIR)
+    except OSError:
+        return [], [f"{OUTPUTS_DIR}: is a link, or sits behind one"]
+    refused.extend(f"{name}: not a regular file" for name in other)
+    for path in (folder / name for name in regular):
         if path.name in declared:
             name = declared[path.name]
             kept.append((name, stage_input.transition.output_types[name], path))
@@ -79,7 +87,11 @@ async def store_outputs(
     kept, problems = collect(workspace, stage_input)
     stored: dict[str, ArtifactFile] = {}
     for name, type_, path in kept:
-        data = path.read_bytes()
+        try:
+            data = safe_files.read_bytes(workspace, path.relative_to(workspace))
+        except OSError as exc:
+            problems.append(f"{path.name}: {str(exc)[:200]}")
+            continue
         digest = artifact_digest(data)
         try:
             await client.put_output(name, type_, data, digest)
