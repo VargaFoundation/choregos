@@ -320,6 +320,26 @@ Options:
   --help                    Show this message and exit.
 ```
 
+### `choregos chat`
+
+```text
+Usage: choregos chat [OPTIONS]
+
+  The workspace: converse with an assistant, watch what runs, see what waits
+  for you.
+
+  Conversation on the left, the live tree (blue) and the decisions (amber) on
+  the right, what moved elsewhere below. The keys are in the footer. It needs
+  a terminal; `choregos ask` and `choregos activity` are the scriptable forms.
+
+Options:
+  -a, --assistant <str>     the assistant's slug; the only one ready for you
+                            otherwise
+  -c, --conversation <str>  resume this conversation (its id)
+  --org <str>               the organisation; the profile's otherwise
+  --help                    Show this message and exit.
+```
+
 ## `choregos dev`
 
 Development environment
@@ -562,8 +582,8 @@ Options:
 ```text
 Usage: choregos login [OPTIONS]
 
-  Sign in as yourself: shows a code, you approve it in the console, and the
-  CLI holds a session of yours.
+  Sign in as yourself with your browser: you approve in the console, the CLI
+  holds a session of yours.
 
   That session is listed under My account (`/account`) and ending it there
   signs the CLI out; `choregos logout` ends it too. Nothing is printed that
@@ -573,9 +593,10 @@ Usage: choregos login [OPTIONS]
   with `--token`).
 
 Options:
-  --api-url <str>           [default: http://localhost:8000]
-  --token <str>             An API token to save instead of signing in in the
-                            console (scripts, CI)
+  --api-url <str>           The instance's address (default: the profile's or
+                            CHOREGOS_API_URL, else asked)
+  --token <str>             An API token to save instead of signing in with
+                            your browser (scripts, CI)
   --org <str>               Default organisation slug (else --org per command
                             or CHOREGOS_ORG)
   --fresh                   Make the console sign you in again at your

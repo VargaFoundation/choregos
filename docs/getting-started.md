@@ -163,7 +163,7 @@ once a day, when the two versions differ (`CHOREGOS_NO_VERSION_CHECK=1` silences
 ### Create the project
 
 ```bash
-choregos login --api-url https://choregos.example.com --token chg_… --org acme
+choregos login --api-url https://choregos.example.com --org acme   # your browser opens; approve there
 choregos projects create billing-api \
   --repo https://github.com/acme/billing-api \
   --language python \

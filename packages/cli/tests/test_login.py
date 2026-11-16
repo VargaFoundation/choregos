@@ -184,3 +184,70 @@ def test_logout_forgets_the_credential_even_when_the_session_was_already_ended(p
     result = _run("logout")
     assert result.exit_code == 0, result.output
     assert json.loads(profile.read_text())["token"] == ""
+
+
+def _signs_in(contract: Any) -> None:
+    respx.post(f"{API}/api/v1/auth/device").mock(return_value=Response(200, json=_codes(contract)))
+    respx.post(f"{API}/api/v1/auth/device/token").mock(return_value=_session(contract))
+    respx.get(f"{API}/api/v1/me").mock(return_value=Response(200, json={"email": "v@example.test"}))
+
+
+@pytest.fixture
+def desktop(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """A person at their own screen: no SSH, a display; the URLs the browser was asked to open."""
+    opened: list[str] = []
+    for name in ("SSH_CONNECTION", "SSH_TTY"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("DISPLAY", ":0")
+    monkeypatch.setattr("webbrowser.open", lambda url: opened.append(url) or True)
+    return opened
+
+
+@respx.mock
+def test_login_opens_the_browser_by_default_and_still_gives_the_link(
+    profile: Path, contract: Any, desktop: list[str]
+) -> None:
+    _signs_in(contract)
+    result = _run("login", "--api-url", API)
+    assert result.exit_code == 0, result.output
+    assert desktop == ["http://console.test/device?user_code=BCDF-GH23"]
+    assert "Opening your browser to sign in to api.test" in result.output
+    assert "If it does not open, visit: http://console.test/device?user_code=BCDF-GH23" in result.output
+    assert "BCDF-GH23" in result.output
+
+
+@respx.mock
+def test_login_over_ssh_prints_the_link_and_opens_nothing(
+    profile: Path, contract: Any, desktop: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("SSH_CONNECTION", "192.0.2.1 50000 192.0.2.2 22")
+    _signs_in(contract)
+    result = _run("login", "--api-url", API)
+    assert result.exit_code == 0, result.output
+    assert desktop == [], "no browser is started on a remote machine"
+    assert "Open this link in a browser to sign in to api.test" in result.output
+    assert "http://console.test/device?user_code=BCDF-GH23" in result.output
+
+
+@respx.mock
+def test_login_says_open_the_link_when_the_browser_cannot_start(
+    profile: Path, contract: Any, desktop: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("webbrowser.open", lambda _url: False)
+    _signs_in(contract)
+    result = _run("login", "--api-url", API)
+    assert result.exit_code == 0, result.output
+    assert "Opening your browser" not in result.output
+    assert "Open this link in a browser" in result.output
+
+
+@respx.mock
+def test_login_without_an_address_signs_in_to_the_saved_instance(
+    profile: Path, contract: Any, desktop: list[str]
+) -> None:
+    profile.write_text(json.dumps({"api_url": API, "token": "", "org": "acme"}))
+    _signs_in(contract)
+    result = _run("login")
+    assert result.exit_code == 0, result.output
+    assert "Instance address" not in result.output, "a known instance is not asked again"
+    assert json.loads(profile.read_text())["api_url"] == API

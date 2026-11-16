@@ -127,6 +127,8 @@ case ":${PATH:-}:" in
 esac
 
 say ""
-say "Next: create a full-access token in the console (My account, Access tokens), then"
-say "  choregos login --api-url $INSTANCE_URL --token <token> --org <organisation>"
+say "Next: sign in with your browser"
+say "  choregos login --api-url $INSTANCE_URL"
+say "For a script or a CI job, save an access token instead (My account, Access tokens):"
+say "  choregos login --api-url $INSTANCE_URL --token <token>"
 say "Keep it in step with the instance later with: choregos self update"

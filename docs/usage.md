@@ -26,8 +26,9 @@ without one.
 
 Three ways, same result: the web wizard (`/projects/new`), the CLI, or the API.
 
-Sign in as yourself with `choregos login --api-url https://api.example --org acme`: it shows a code and a link,
-you approve the code in the console (signed in as you, through your organisation's identity provider), and the
+Sign in as yourself with `choregos login --api-url https://api.example --org acme`: it opens your browser on the
+console (over SSH or without a display it prints the link instead) and shows a code; you approve the code in the
+console (signed in as you, through your organisation's identity provider), and the
 CLI holds a session of yours. It is listed under **My account**, *Sessions* (ending it there signs the CLI out at
 its next call), `choregos logout` ends it from the terminal, and `--fresh` makes the console ask your identity
 provider for a new sign-in first. A script or CI keeps using an API token:

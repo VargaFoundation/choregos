@@ -100,12 +100,20 @@ wheels the same way with `--force`.
 
 ## Sign in
 
-The CLI cannot issue its first token: create a full-access token in the console, menu under your
-name, **My account**, *Access tokens*, **Create an API token (90 days)**. Then:
+`choregos login` opens your browser on the console, which shows a code; check it is the one the terminal
+shows and approve. The CLI then holds a session of yours, listed under **My account**, *Sessions*:
+
+```bash
+choregos login --api-url https://choregos.example.com --org acme
+choregos whoami
+```
+
+Over SSH, or on a machine without a display, nothing opens: the terminal prints the link to open in a browser
+anywhere. Later runs of `choregos login` reuse the saved address. A script or a CI job saves an access token
+instead (**My account**, *Access tokens*):
 
 ```bash
 choregos login --api-url https://choregos.example.com --token chg_... --org acme
-choregos whoami
 ```
 
 **What you should see:** `whoami` prints who you are and your roles. The profile is saved in

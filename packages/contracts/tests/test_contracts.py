@@ -1013,3 +1013,39 @@ def test_a_session_has_a_kind_and_surfaces_are_cli_or_editor() -> None:
     assert spec["components"]["schemas"]["DeviceToken"]["properties"]["kind"]["enum"] == ["cli", "editor"]
     # a surface session ends through the route that ends a browser one
     assert spec["paths"]["/me/sessions/{id}"]["delete"]["operationId"] == "endMySession"
+
+
+def test_the_developer_surfaces_read_what_the_door_reads_and_what_waits_for_the_person() -> None:
+    """S67-04b (ADR 0154 §4): G1, G2, G5, G6, G8 are in the contract, optional if older clients exist."""
+    spec = contracts.load_openapi()
+    schemas = spec["components"]["schemas"]
+    # G1: the REST turn carries what the door's answer carries, none of it required.
+    response = schemas["AgentResponse"]
+    for name in ("citations", "pending_actions", "missing_accounts"):
+        assert name in response["properties"] and name not in response["required"], name
+    assert set(schemas["AgentPendingAction"]["required"]) == {"id", "summary", "confirm_url"}
+    assert set(schemas["AgentMissingAccount"]["required"]) == {"need", "connect_url"}
+    # G2: a turn is followed from elsewhere and survives its client.
+    assert schemas["ConversationMessageCreate"]["properties"]["detach"]["default"] is False
+    events = spec["paths"]["/me/conversations/{conversation_id}/events"]["get"]
+    assert events["operationId"] == "followMyConversationTurn"
+    assert {p["name"] for p in events["parameters"]} == {"after_seq", "Last-Event-ID"}
+    assert "text/event-stream" in events["responses"]["200"]["content"]
+    # G8: what waits, four kinds, each with its decision route.
+    pending = schemas["PendingItem"]
+    assert pending["properties"]["kind"]["enum"] == [
+        "human_step",
+        "governed_action",
+        "conversation_action",
+        "launch",
+    ]
+    assert {"what", "where", "since", "decision"} <= set(pending["required"])
+    assert spec["paths"]["/me/pending"]["get"]["operationId"] == "listMyPending"
+    # G5: the run's nodes.
+    node = schemas["RunAgentNode"]
+    assert node["properties"]["kind"]["enum"] == ["agent", "subagent"]
+    assert {"id", "kind", "status", "started_at", "tool_calls"} <= set(node["required"])
+    assert spec["paths"]["/runs/{id}/agents"]["get"]["operationId"] == "listRunAgents"
+    # G6: an entry names its work item's title, optionally.
+    entry = schemas["ActivityEntry"]
+    assert "work_item_title" in entry["properties"] and "work_item_title" not in entry["required"]
