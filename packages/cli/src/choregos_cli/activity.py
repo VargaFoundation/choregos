@@ -336,6 +336,8 @@ def group(entries: list[dict[str, Any]]) -> Grouped:
 
 def work_item_label(entry: dict[str, Any]) -> Text:
     text = Text(work_item_of(entry), style="bold")
+    if entry.get("work_item_title"):
+        text.append(f"  {entry['work_item_title']}")
     workflow = entry.get("workflow")
     if workflow:
         text.append("  ")

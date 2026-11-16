@@ -21,6 +21,7 @@ from httpx import ASGITransport, AsyncClient
 from jsonschema import Draft202012Validator
 
 from .conftest import login
+from .kits.memberships import _only
 
 ACTIVITY = "/api/v1/orgs/varga/activity"
 
@@ -41,26 +42,6 @@ async def _project(client: AsyncClient, slug: str) -> dict[str, Any]:
     )
     assert response.status_code == 201, response.text
     return dict(response.json())
-
-
-async def _only(email: str, role: str | None = None, project_slug: str | None = None) -> None:
-    """The person holds this one role on this one project, or nothing in the organisation (a development
-    sign-in makes everyone a developer of it)."""
-    from choregos_api.db.models import Membership, Organization, Project, User
-    from choregos_api.db.session import session_scope
-    from sqlalchemy import delete, select
-
-    async with session_scope() as session:
-        org = (await session.execute(select(Organization).where(Organization.slug == "varga"))).scalar_one()
-        user = (await session.execute(select(User).where(User.email == email))).scalar_one()
-        await session.execute(delete(Membership).where(Membership.user_id == user.id))
-        if role is not None:
-            project_id = (
-                await session.execute(
-                    select(Project.id).where(Project.org_id == org.id, Project.slug == project_slug)
-                )
-            ).scalar_one()
-            session.add(Membership(user_id=user.id, org_id=org.id, project_id=project_id, role=role))
 
 
 async def _org_id() -> str:
@@ -227,6 +208,7 @@ async def test_a_person_who_cannot_read_a_project_sees_none_of_its_runs(
         assert _ids(seen.json()) == {"run-billing"}, "a run of a project the reader cannot read is listed"
         entry = seen.json()["in_flight"][0]
         assert entry["work_item_key"] == "KEY-run-billing"
+        assert entry["work_item_title"] == "run-billing", "a surface shows the title, not only the key (G6)"
         assert (entry["steps"], entry["last_event"]) == (2, "message")
         assert entry["can_stop"] is False, "a viewer holds no item:control"
     admin_entry = next(e for e in everything.json()["in_flight"] if e["id"] == "run-billing")
