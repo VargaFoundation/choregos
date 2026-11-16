@@ -108,7 +108,7 @@ async def test_an_approval_needs_a_fresh_sign_in_and_a_person(
         refused = await machine.post(
             f"{ORG}/agents/reviewer/releases/{waiting['id']}/decision", json={"decision": "approve"}
         )
-        assert refused.status_code == 403 and "human session" in refused.text
+        assert refused.status_code == 403 and refused.json()["code"] == "decision_requires_session"
     await as_user(client, DAVE)
     later = time.time() + 11 * 60
     monkeypatch.setattr(freshness.time, "time", lambda: later)

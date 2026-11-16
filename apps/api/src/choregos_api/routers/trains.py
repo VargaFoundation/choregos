@@ -15,6 +15,7 @@ from sqlalchemy import select
 
 from ..audit import record
 from ..db.models import Project, Release
+from ..decision_session import require_person_session
 from ..deps import Db, Me, Pagination, ProjectCtx, resolve_project
 from ..errors import forbidden, not_found
 from ..extensions import GestureRequest, check_gesture
@@ -178,7 +179,8 @@ async def unfreeze(ctx: ProjectCtx, env: Annotated[str, Path()], session: Db) ->
 
 @router.post("/releases/{id}/approve", status_code=status.HTTP_202_ACCEPTED, operation_id="approveRelease")
 async def approve(id: str, body: ApproveRequest, session: Db, principal: Me) -> dict[str, str]:
-    """Approving a production release needs the release_captain role (or owner)."""
+    """Approving a production release needs the release_captain role (or owner), in the person's session."""
+    require_person_session(principal, "approving a release")
     row, project, org_slug = await _release(session, id, principal)
     if not principal.can(Permission.TRAIN_APPROVE, org_slug, project.slug):
         raise forbidden("approving a release needs the release_captain role")

@@ -12,6 +12,7 @@ from sqlalchemy import select
 from ..audit import record
 from ..db.models import Agent, AgentVersion, Organization, Project
 from ..db.models import AgentEvaluation as AgentEvaluationRow
+from ..decision_session import require_person_session
 from ..deps import Db, Me, ProjectCtx
 from ..errors import forbidden, not_found
 from ..freshness import require_fresh_authentication
@@ -87,6 +88,7 @@ async def decide_agent_release(
     a human session with a fresh sign-in, and — with `separation_of_duties` — to be neither the requester
     nor the revision's author; the last approval moves production. Rejecting needs a reason; the requester
     or an org_admin cancels."""
+    require_person_session(principal, "deciding an agent release")
     organisation, agent, subject = await load_visible_agent(session, principal, org, slug)
     enforce_decision(decide(principal, org, subject, Action.RELEASE))
     row = await agent_releases.decide_release(session, principal, organisation, agent, release_id, body)

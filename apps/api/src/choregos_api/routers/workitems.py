@@ -14,7 +14,8 @@ from sqlalchemy import select
 
 from ..audit import record
 from ..db.models import HumanRequest, Project, Run, WorkflowDef, WorkItem
-from ..deps import Db, Me, Pagination, ProjectCtx, resolve_project
+from ..decision_session import POST_DECISION, require_person_session
+from ..deps import Config, Db, Me, Pagination, ProjectCtx, resolve_project
 from ..errors import ApiError, conflict, forbidden, not_found, unprocessable
 from ..extensions import GestureRequest, check_gesture
 from ..knowledge.marked import listed_only, readable, require_readable
@@ -342,8 +343,12 @@ async def _complete_the_task(
     status_code=status.HTTP_202_ACCEPTED,
     operation_id="postDecision",
 )
-async def post_decision(id: str, body: DecisionRequest, session: Db, principal: Me) -> HumanRequestDto:
-    """Record the decision, pass it to the workflow, and close the human request."""
+async def post_decision(
+    id: str, body: DecisionRequest, session: Db, principal: Me, settings: Config
+) -> HumanRequestDto:
+    """Record the decision, pass it to the workflow, and close the human request. The person's own session
+    decides (ADR 0154 §7): an API token does not, unless the deployment keeps `post_decision` open."""
+    require_person_session(principal, "deciding", settings=settings, legacy=POST_DECISION)
     item, project = await _load(session, id, principal)
     _, org_slug = await resolve_project(session, project.id)
     if not principal.can(Permission.ITEM_DECIDE, org_slug, project.slug):

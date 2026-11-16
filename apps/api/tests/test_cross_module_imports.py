@@ -34,6 +34,7 @@ ALLOWED_SOURCES = frozenset(
         "test_budget_alerts",
         "test_catalogue_provenance_migration",
         "test_hosted_sources",
+        "test_human_task",
         "test_knowledge_distillation_passes",
         "test_knowledge_files",
         "test_knowledge_index",
