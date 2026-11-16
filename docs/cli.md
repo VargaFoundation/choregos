@@ -392,6 +392,82 @@ Options:
   --help                    Show this message and exit.
 ```
 
+## `choregos decide`
+
+Decide what waits for you: confirm a write, approve an action, answer a step. One at a time.
+
+### `choregos decide answer`
+
+```text
+Usage: choregos decide answer [OPTIONS] {ID}
+
+  Answer a workflow's question.
+
+Arguments:
+  ID  a question of a workflow, by its id  [required]
+
+Options:
+  -a, --answer <str>  the answer; asked for when it is not given
+  --help              Show this message and exit.
+```
+
+### `choregos decide approve`
+
+```text
+Usage: choregos decide approve [OPTIONS] {ID}
+
+  Confirm a write or a launch, approve a governed action or an approval step:
+  one, after seeing it.
+
+Arguments:
+  ID  one thing, by its id  [required]
+
+Options:
+  --help  Show this message and exit.
+```
+
+### `choregos decide list`
+
+```text
+Usage: choregos decide list [OPTIONS]
+
+  What waits for you across your organisations, newest first (`GET
+  /me/pending`).
+
+Options:
+  --help  Show this message and exit.
+```
+
+### `choregos decide reject`
+
+```text
+Usage: choregos decide reject [OPTIONS] {ID}
+
+  Refuse a write or a launch, reject a governed action or an approval step:
+  one, with a reason.
+
+Arguments:
+  ID  one thing, by its id  [required]
+
+Options:
+  -r, --reason <str>  why; asked for when it is not given
+  --help              Show this message and exit.
+```
+
+### `choregos decide show`
+
+```text
+Usage: choregos decide show [OPTIONS] {ID}
+
+  Show what one thing asks, with its arguments and diff, and decide nothing.
+
+Arguments:
+  ID  what waits, by its id  [required]
+
+Options:
+  --help  Show this message and exit.
+```
+
 ## `choregos dev`
 
 Development environment

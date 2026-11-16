@@ -9,9 +9,10 @@ Five parts, from routes that exist on `main` (ADR 0154 §4):
   (`activity.Board`, `activity.group`, `activity.line`), kept live by the activity stream. `x` stops the run
 or
   the work item under the cursor, always with a reason (ADR 0142 §2).
-- **Decisions** (right, amber): read-only. What waits for the person and what can be read today: the
-  organisation's governed actions awaiting approval and the current conversation's proposals. There is no
-  list across projects and conversations yet (ADR 0154 G8), and deciding from the terminal is S67-10.
+- **Decisions** (right, amber): what waits for the person (`GET /me/pending`: writes and launches an assistant
+  proposed, governed actions, human steps). `d` (in the pane) or F2 opens one: its operation, arguments
+  and diff, then ONE explicit key per decision (`a` approve, `r` reject with a reason, `n` answer). Never a
+  batch, never a default (ADR 0154 §7; the rules are `decide.py`'s).
 - **Elsewhere** (below): `/me/inbox` and the person's recent conversations.
 - **Status line**: `acme · N running · — waiting for you · $X today` (`activity.status_line`).
 
@@ -40,8 +41,7 @@ from textual.widgets import Footer, Input, OptionList, Static, Tree
 from textual.widgets.option_list import Option
 from textual.widgets.tree import TreeNode
 
-from . import activity, run_activity, theme
-from .ask import confirm_link
+from . import activity, decide, run_activity, theme
 from .client import ApiError, AsyncClient, Profile
 from .run_steps import RunSteps
 
@@ -158,6 +158,17 @@ class FlightTree(Tree[dict[str, Any]]):
         app.action_stop_selected()
 
 
+class DecisionsPane(VerticalScroll):
+    """The decisions: `d` opens one while the pane has focus (the prompt keeps its letters), F2 anywhere."""
+
+    BINDINGS: ClassVar[list[BindingType]] = [Binding("d", "decide", "Decide")]
+
+    def action_decide(self) -> None:
+        app = self.app
+        assert isinstance(app, Workspace)
+        app.action_decide()
+
+
 class StopScreen(ModalScreen[str | None]):
     """A stop always asks why (ADR 0142 §2): an empty reason is not sent."""
 
@@ -182,6 +193,61 @@ class StopScreen(ModalScreen[str | None]):
             self.query_one("#problem", Static).update(Text("✗ a stop needs a reason", style="red"))
             return
         self.dismiss(reason)
+
+
+class TextScreen(ModalScreen[str | None]):
+    """One required line (a reason, an answer): empty is not sent, Esc leaves the thing waiting."""
+
+    BINDINGS: ClassVar[list[BindingType]] = [Binding("escape", "dismiss(None)", "Back")]
+
+    def __init__(self, title: str, placeholder: str, problem: str) -> None:
+        super().__init__()
+        self.heading, self.placeholder, self.problem = title, placeholder, problem
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="dialog"):
+            yield Static(Text(self.heading, style="bold"))
+            yield Input(placeholder=self.placeholder, id="line", max_length=2000)
+            yield Static("", id="problem")
+            yield Static("Enter sends the line on to the decision · Esc goes back")
+
+    @on(Input.Submitted, "#line")
+    def submit(self, event: Input.Submitted) -> None:
+        line = event.value.strip()
+        if not line:
+            self.query_one("#problem", Static).update(Text(f"✗ {self.problem}", style="red"))
+            return
+        self.dismiss(line)
+
+
+class DecisionScreen(ModalScreen[str | None]):
+    """One pending thing, shown whole (operation, arguments, diff), then ONE key per decision. No key is the
+    default: Enter does nothing here, only `a`, `r` or `n` decide, and Esc leaves it waiting."""
+
+    BINDINGS: ClassVar[list[BindingType]] = [
+        Binding("escape", "dismiss(None)", "Leave it waiting"),
+        Binding("a", "choose('approve')", "Approve"),
+        Binding("r", "choose('reject')", "Reject"),
+        Binding("n", "choose('answer')", "Answer"),
+    ]
+
+    def __init__(self, lines: list[Text], verbs: list[str]) -> None:
+        super().__init__()
+        self.lines, self.verbs = lines, verbs
+
+    def compose(self) -> ComposeResult:
+        keys = {"approve": "a approves", "reject": "r rejects", "answer": "n answers"}
+        with Vertical(id="decision"):
+            yield VerticalScroll(Static(Group(*self.lines)), id="decision-body")
+            yield Static(
+                " · ".join([keys[v] for v in self.verbs] + ["Esc leaves it waiting"])
+                if self.verbs
+                else "decide it in the console · Esc closes"
+            )
+
+    def action_choose(self, verb: str) -> None:
+        if verb in self.verbs:
+            self.dismiss(verb)
 
 
 class PickScreen(ModalScreen[str | None]):
@@ -235,7 +301,9 @@ class Workspace(App[None]):
     #inbox, #recent { width: 1fr; height: 100%; border: round ansi_default; padding: 0 1; }
     #status { height: 1; padding: 0 1; }
     .message { margin: 0 0 1 0; }
-    StopScreen, PickScreen { align: center middle; }
+    StopScreen, PickScreen, TextScreen, DecisionScreen { align: center middle; }
+    #decision { width: 90%; height: 80%; border: round ansi_yellow; padding: 1 2; }
+    #decision-body { height: 1fr; }
     #dialog { width: 70%; max-width: 90; height: auto; border: round ansi_default; padding: 1 2; }
     #choices { height: auto; max-height: 14; }
     """
@@ -244,6 +312,7 @@ class Workspace(App[None]):
         Binding("ctrl+o", "conversations", "Conversations"),
         Binding("ctrl+n", "new_conversation", "New"),
         Binding("ctrl+a", "assistants", "Assistant"),
+        Binding("f2", "decide", "Decide"),
         Binding("tab", "focus_next", "Next pane"),
         Binding("ctrl+q", "quit", "Quit"),
     ]
@@ -267,8 +336,10 @@ class Workspace(App[None]):
         self.today: float | None = None
         self.assistants: list[dict[str, Any]] = []
         self.conversations: list[dict[str, Any]] = []
-        self.proposals: list[dict[str, Any]] = []
         self.pending: list[dict[str, Any]] | None = None
+        #: What the last decision said (the API's own words on a refusal): the person's, and the tests'.
+        self.outcome = ""
+        self._deciding = False
         self.inbox: list[dict[str, Any]] = []
         self.live = False
         self._user_open: dict[Key, bool] = {}
@@ -289,7 +360,7 @@ class Workspace(App[None]):
                 yield Input(placeholder="Say something · Enter sends", id="prompt")
             with Vertical(id="right"):
                 yield FlightTree("", id="tree")
-                yield VerticalScroll(Static(id="decisions-body"), id="decisions")
+                yield DecisionsPane(Static(id="decisions-body"), id="decisions")
         with Horizontal(id="elsewhere"):
             yield Static(id="inbox")
             yield Static(id="recent")
@@ -358,21 +429,14 @@ class Workspace(App[None]):
         return float(value) if isinstance(value, int | float) else None
 
     async def refresh_decisions(self) -> None:
-        """What the platform lists for the person today: the organisation's governed actions awaiting
-        approval, and this conversation's proposals."""
+        """What waits for the person, across the organisations and conversations they belong to."""
         try:
-            actions = await self.api.get(
-                f"/orgs/{self.organisation}/actions", params={"status": "pending_approval"}
-            )
-            self.pending = list(actions or [])
+            listed = await self.api.get("/me/pending", params={"limit": 200})
+            self.pending = list((listed or {}).get("items") or [])
         except (ApiError, httpx.TransportError):
             self.pending = None
-        if self.conversation_id:
-            listed = await self._read(f"/me/conversations/{self.conversation_id}/actions")
-            self.proposals = [a for a in (listed or {}).get("items") or [] if a.get("status") == "proposed"]
-        else:
-            self.proposals = []
         self.draw_decisions()
+        self.draw_status()
 
     async def follow_activity(self) -> None:
         """The board from the list, then from the stream; opened again when it ends."""
@@ -415,7 +479,12 @@ class Workspace(App[None]):
         self.query_one("#title", Static).update(text)
 
     def draw_status(self) -> None:
-        status = activity.status_line(self.board, self.organisation, self.today)
+        status = activity.status_line(
+            self.board,
+            self.organisation,
+            self.today,
+            None if self.pending is None else len(self.pending),
+        )
         if not self.live:
             status.append(" · ")
             status.append_text(theme.badge(theme.QUEUED, self.out))
@@ -591,32 +660,26 @@ class Workspace(App[None]):
     def draw_decisions(self) -> None:
         body = self.query_one("#decisions-body", Static)
         lines: list[RenderableType] = []
-        for action in self.proposals:
+        for item in self.pending or []:
             head = theme.badge(theme.WAITING, self.out)
-            head.append(f"  {action.get('summary') or action.get('operation')}")
+            head.append(f"  {decide.clean(item['what'])}")
             lines.append(head)
+            where = item.get("where") or {}
+            place = where.get("project_slug") or where.get("org") or ""
             lines.append(
-                Text(f"  proposed in this conversation · confirm in the console: {self._confirm_url(action)}")
+                Text(f"  {decide.KIND_LABEL.get(item['kind'], item['kind'])} · {decide.clean(place)}")
             )
-        for action in self.pending or []:
-            head = theme.badge(theme.WAITING, self.out)
-            head.append(f"  {action.get('title')}")
-            lines.append(head)
-            note = f"  {action.get('kind')} · governed action awaiting approval"
-            lines.append(Text(note))
         if not lines:
             lines.append(
                 Text(
-                    "nothing waits for you in what this view reads"
+                    "nothing waits for you"
                     if self.pending is not None
-                    else f"{DASH} the organisation's pending actions are not readable by you"
+                    else f"{DASH} what waits for you is not readable right now"
                 )
             )
-        lines.append(Text("read-only here: decide in the console", style="bold"))
+        else:
+            lines.append(Text("d (here) or F2 decides one, after showing it", style="bold"))
         body.update(Group(*lines))
-
-    def _confirm_url(self, action: dict[str, Any]) -> str:
-        return confirm_link(self.api.profile.api_url, str(self.conversation_id), str(action["id"]))
 
     def draw_elsewhere(self) -> None:
         inbox: list[Text] = []
@@ -773,7 +836,7 @@ class Workspace(App[None]):
         if self._turn_running:
             self.notify("a turn is running: Esc cancels it", severity="warning")
             return
-        self.conversation_id, self.conversation, self.proposals = None, None, []
+        self.conversation_id, self.conversation = None, None
         self.query_one("#conversation").border_subtitle = ""
         self.show_welcome()
         self.draw_decisions()
@@ -813,6 +876,81 @@ class Workspace(App[None]):
         )
 
     # ─────────────────────────────── stopping ───────────────────────────────
+
+    # ───────────────────────────── deciding (ADR 0154 §7) ─────────────────────────────
+
+    def action_decide(self) -> None:
+        """`d`: choose ONE of what waits. Nothing is chosen for the person, however short the list."""
+        if not self.pending:
+            self.notify("nothing waits for you", severity="information")
+            return
+        options: list[tuple[str, RenderableType]] = []
+        for item in self.pending:
+            label = Text(decide.clean(item["what"]), style="bold")
+            label.append(f"  {decide.KIND_LABEL.get(item['kind'], item['kind'])}", style="dim")
+            options.append((item["id"], label))
+
+        def chosen(item_id: str | None) -> None:
+            item = next((i for i in self.pending or [] if i["id"] == item_id), None)
+            if item is not None:
+                self.run_worker(self.show_decision(item), exit_on_error=False)
+
+        self.push_screen(PickScreen("Decide one", options, "nothing waits for you"), chosen)
+
+    async def show_decision(self, item: dict[str, Any]) -> None:
+        try:
+            detail = decide.pick_detail(item, await self.api.get(decide.detail_path(item)))
+        except (ApiError, httpx.TransportError) as exc:
+            self.notify(str(exc), title="could not read it", severity="error")
+            return
+        lines = decide.describe(item, detail)
+        verbs = decide.verbs(item, detail)
+
+        def verb_chosen(verb: str | None) -> None:
+            if verb:
+                self.gather(item, verb)
+
+        self.push_screen(DecisionScreen(lines, verbs), verb_chosen)
+
+    def gather(self, item: dict[str, Any], verb: str) -> None:
+        """What the verb needs first: an answer, or the reason of a rejection."""
+        if verb == "answer":
+            self.push_screen(
+                TextScreen("Your answer", "answer (required)", "an answer is required: nothing was sent"),
+                lambda text: self.send(item, verb, answer=text) if text else None,
+            )
+        elif decide.asks_reason(item, verb):
+            self.push_screen(
+                TextScreen(
+                    "Why reject it", "reason (required)", "a rejection needs a reason: nothing was sent"
+                ),
+                lambda text: self.send(item, verb, reason=text) if text else None,
+            )
+        else:
+            self.send(item, verb)
+
+    def send(self, item: dict[str, Any], verb: str, *, reason: str = "", answer: str = "") -> None:
+        if self._deciding:
+            return  # one decision at a time
+        self._deciding = True
+        self.run_worker(self.send_decision(item, verb, reason, answer), exit_on_error=False)
+
+    async def send_decision(self, item: dict[str, Any], verb: str, reason: str, answer: str) -> None:
+        path, body = decide.request_for(item, verb, reason=reason, answer=answer)
+        try:
+            await self.api.post(path, **({} if body is None else {"json": body}))
+        except ApiError as exc:
+            self.outcome = "\n".join(decide.explain(exc))
+            self.notify(self.outcome, title=f"{verb} refused", severity="error", timeout=20)
+        except httpx.TransportError as exc:
+            self.outcome = str(exc) or type(exc).__name__
+            self.notify(self.outcome, title=f"{verb} not sent", severity="error", timeout=20)
+        else:
+            self.outcome = f"{verb} sent: {decide.clean(item['what'])}"
+            self.notify(f"✓ {self.outcome}")
+            await self.refresh_decisions()
+        finally:
+            self._deciding = False
 
     def action_stop_selected(self) -> None:
         tree = self.query_one(FlightTree)
