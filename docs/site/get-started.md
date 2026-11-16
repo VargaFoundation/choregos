@@ -113,7 +113,7 @@ In the console:
 Or from the command line, once you are signed in (see [Install the CLI](cli/install.md)):
 
 ```bash
-choregos login --api-url https://choregos.example.com --token chg_xxx --org acme
+choregos login --api-url https://choregos.example.com --org acme   # your browser opens; approve there
 choregos projects create billing-api --name "Billing API" --repo https://github.com/acme/billing-api --template github-software-delivery
 choregos projects provision billing-api --follow
 ```

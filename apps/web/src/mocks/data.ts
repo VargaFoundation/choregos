@@ -2296,6 +2296,7 @@ let mySessions: BrowserSession[] = [
   {
     id: "ses-here",
     channel: "oidc",
+    kind: "browser",
     created_at: iso(95),
     expires_at: iso(-385),
     last_seen_at: iso(0),
@@ -2306,6 +2307,7 @@ let mySessions: BrowserSession[] = [
   {
     id: "ses-phone",
     channel: "oidc",
+    kind: "browser",
     created_at: iso(240),
     expires_at: iso(-240),
     last_seen_at: iso(38),
@@ -2316,6 +2318,7 @@ let mySessions: BrowserSession[] = [
   {
     id: "ses-laptop",
     channel: "saml",
+    kind: "browser",
     created_at: iso(420),
     expires_at: iso(-60),
     last_seen_at: iso(300),
@@ -3644,6 +3647,18 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     // The secret exists only here, once: the console shows it and does not keep it.
     return { id: "t2", name: "okta", token: "scim_demo_shown_once" } as T;
   }
+  // A developer surface's sign-in code (S67-05): the demo knows one, for the page to show.
+  const deviceCode = /^\/auth\/device\/requests\/([^/]+)(\/decision)?$/.exec(path);
+  if (deviceCode && method === "GET") {
+    return {
+      user_code: decodeURIComponent(deviceCode[1]!).toUpperCase(),
+      client_kind: "cli",
+      client_name: "choregos 0.27.8 on a laptop",
+      org: null,
+      expires_at: "2026-11-16T14:00:00Z",
+    } as T;
+  }
+  if (deviceCode && method === "POST") return undefined as T;
   if (method === "POST" && path === "/me/sessions/end-others") {
     const ended = mySessions.filter((s) => !s.current).length;
     mySessions = mySessions.filter((s) => s.current);

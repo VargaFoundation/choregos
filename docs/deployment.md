@@ -1358,6 +1358,14 @@ kubectl -n choregos exec deploy/choregos-api -- choregos-admin tokens create --e
 choregos login --api-url https://api.choregos.example --token chg_… --org acme
 ```
 
+A person signs the CLI in as themselves with `choregos login` (no token to paste): the console's `/device` page
+approves a short code, and the CLI holds a session of that person, listed and ended under My account (ADR 0154
+§6). Its limits are settings of the API: `CHOREGOS_SURFACE_SESSION_IDLE_S` (7 days without a request, sliding),
+`CHOREGOS_SURFACE_SESSION_MAX_AGE_S` (30 days in all), `CHOREGOS_DEVICE_CODE_TTL_S` (600 s to approve a code) and
+`CHOREGOS_DEVICE_POLL_INTERVAL_S` (5 s between polls; a faster poll is told `slow_down`). A request that names an
+organisation is approved only by a member of it, and, for an account bound to a tenant's own identity provider
+(ADR 0108), only by that tenant's.
+
 A project with no repository takes its requests from Choregos itself:
 
 ```bash

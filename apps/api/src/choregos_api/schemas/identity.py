@@ -95,9 +95,15 @@ class BrowserSessionDto(Dto):
     id: str
     #: How it was opened: `oidc`, `saml`, `dev`...
     channel: str
+    #: What holds it (ADR 0154 §6): the console's cookie, `choregos login`, an editor extension.
+    kind: Literal["browser", "cli", "editor"] = "browser"
     created_at: datetime
     expires_at: datetime
     last_seen_at: datetime | None = None
+    #: What a developer surface called itself, the sign-in's authentication time and its inactivity limit.
+    client_name: str | None = None
+    auth_time: datetime | None = None
+    idle_expires_at: datetime | None = None
     #: The `User-Agent` and the client address of its last request.
     user_agent: str | None = None
     ip: str | None = None
@@ -175,3 +181,44 @@ class IntegrationsDto(Dto):
     protocol_versions: list[str]
     oauth: OAuthDto
     version: str
+
+
+class DeviceAuthorizationRequestDto(Dto):
+    client_kind: Literal["cli", "editor"]
+    client_name: str | None = Field(default=None, max_length=80)
+    org: str | None = Field(default=None, max_length=120)
+
+
+class DeviceAuthorizationDto(Dto):
+    device_code: str
+    user_code: str
+    verification_uri: str
+    verification_uri_complete: str
+    expires_in: int
+    interval: int
+
+
+class DeviceTokenRequestDto(Dto):
+    grant_type: Literal["urn:ietf:params:oauth:grant-type:device_code"]
+    device_code: str = Field(max_length=256)
+
+
+class DeviceTokenDto(Dto):
+    access_token: str
+    token_type: Literal["Bearer"] = "Bearer"  # noqa: S105 - the scheme, not a secret
+    session_id: str
+    kind: Literal["cli", "editor"]
+    expires_in: int
+    auth_time: datetime | None = None
+
+
+class DeviceRequestDto(Dto):
+    user_code: str
+    client_kind: Literal["cli", "editor"]
+    client_name: str | None = None
+    org: str | None = None
+    expires_at: datetime
+
+
+class DeviceDecisionDto(Dto):
+    decision: Literal["approve", "deny"]

@@ -80,7 +80,8 @@ paths:
     get:
       tags: [session]
       operationId: listMySessions
-      summary: The caller's browser sessions that still hold, the most recently active first (ADR 0130)
+      summary: The caller's sessions that still hold (browser, terminal, editor), the most recently active first (ADR 0130, ADR 0154 §6)
+      description: "A developer-surface session (`kind` `cli` or `editor`) is listed with the browser sessions; the person sees it on My account and ends it there."
       responses:
         "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/BrowserSession" } } } } }
         "401": { $ref: "#/components/responses/Unauthorized" }
@@ -88,7 +89,10 @@ paths:
     delete:
       tags: [session]
       operationId: endMySession
-      summary: End one of the caller's sessions; its cookie is refused from its next request
+      summary: End one of the caller's sessions (browser or developer surface); its credential is refused from its next request
+      description: >-
+        The same route ends a developer-surface session (`choregos logout` calls it on the session it holds):
+        the next call with that credential is a 401.
       parameters:
         - { name: id, in: path, required: true, schema: { type: string } }
       responses:
@@ -140,6 +144,87 @@ paths:
       tags: [session]
       operationId: authLogout
       responses: { "204": { description: Session closed } }
+  /auth/device:
+    post:
+      tags: [session]
+      operationId: startDeviceSignIn
+      security: []
+      summary: Start a developer-surface sign-in (RFC 8628 device authorisation, ADR 0154 §6)
+      description: >-
+        The terminal (`choregos login`) or an editor extension asks for a code, then sends the person to
+        `verification_uri` (the console's `/device` page), where they sign in through their organisation's
+        identity provider (ADR 0108) and approve the code. Meanwhile the surface polls
+        `POST /auth/device/token`. The request is JSON, not form-encoded as RFC 8628 has it. Nothing is
+        authenticated here: the codes are the proof, `device_code` single-use and secret to the surface,
+        `user_code` short and typed by the person. `org` names the organisation whose identity provider must
+        have signed the approver in; without it the instance's own sign-in rules apply.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/DeviceAuthorizationRequest" } } }
+      responses:
+        "200": { description: The codes, content: { application/json: { schema: { $ref: "#/components/schemas/DeviceAuthorization" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { description: Too many sign-ins started from this address }
+  /auth/device/token:
+    post:
+      tags: [session]
+      operationId: pollDeviceToken
+      security: []
+      summary: Exchange an approved device code for a developer-surface session (RFC 8628 §3.4-3.5)
+      description: >-
+        200 once the person approved: the session credential, shown this once. A device code is single-use
+        (a second exchange answers `expired_token`) and expires (`expires_in` of the authorisation).
+        Otherwise 400 with an RFC 8628 error: `authorization_pending` (not decided yet, keep polling),
+        `slow_down` (polled faster than `interval`: the interval grows by 5 seconds), `expired_token`,
+        `access_denied` (the person refused, or the approver's sign-in belongs to another organisation's
+        provider than the one the request named), `invalid_grant` (unknown code), `unsupported_grant_type`.
+        The credential is presented as `Authorization: Bearer` on every other route of the REST API and is
+        listed, with its kind, on `GET /me/sessions`.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/DeviceTokenRequest" } } }
+      responses:
+        "200": { description: The session, content: { application/json: { schema: { $ref: "#/components/schemas/DeviceToken" } } } }
+        "400": { description: An RFC 8628 error, content: { application/json: { schema: { $ref: "#/components/schemas/DeviceTokenError" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /auth/device/requests/{user_code}:
+    get:
+      tags: [session]
+      operationId: getDeviceRequest
+      security: [{ session: [] }]
+      summary: What a user code asks for, to show the person before they approve (console `/device`)
+      description: >-
+        The console's `/device` page reads it with the person's own console session (a cookie: no API token,
+        no surface session may approve another's sign-in). `user_code` is matched without case or dashes.
+      parameters:
+        - { name: user_code, in: path, required: true, schema: { type: string, maxLength: 32 } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/DeviceRequest" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /auth/device/requests/{user_code}/decision:
+    post:
+      tags: [session]
+      operationId: decideDeviceRequest
+      security: [{ session: [] }]
+      summary: Approve or refuse a device sign-in (console `/device`)
+      description: >-
+        Approving binds the surface session to the approver and to the approving sign-in's authentication
+        time (`auth_time`): a surface session is as fresh as the sign-in that approved it, never fresher.
+        403 when the approver's sign-in belongs to another organisation's identity provider than the one the
+        request named. 409 when the request was decided or has expired.
+      parameters:
+        - { name: user_code, in: path, required: true, schema: { type: string, maxLength: 32 } }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/DeviceDecision" } } }
+      responses:
+        "204": { description: Decided }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /orgs:
     get:
       tags: [projects]
@@ -6519,7 +6604,7 @@ paths:
 components:
   securitySchemes:
     session: { type: apiKey, in: cookie, name: choregos_session }
-    bearer: { type: http, scheme: bearer, bearerFormat: choregos-api-token }
+    bearer: { type: http, scheme: bearer, bearerFormat: "choregos-api-token, or a developer-surface session (`POST /auth/device/token`, ADR 0154 §6)" }
     runToken: { type: http, scheme: bearer, bearerFormat: JWT, description: "Run JWT signed with ES256, aud=internal" }
     relayToken: { type: http, scheme: bearer, bearerFormat: JWT, description: "Relay JWT signed with ES256, aud=choregos-relay, sub=the organisation's slug, expiring (ADR 0091)" }
     egressToken: { type: http, scheme: bearer, bearerFormat: JWT, description: "Egress JWT signed with ES256, aud=choregos-egress, sub=the run, expiring with its run token (ADR 0115)" }
@@ -11618,16 +11703,77 @@ components:
         expires_in_days: { type: integer, minimum: 1, maximum: 365, default: 90 }
     BrowserSession:
       type: object
-      required: [id, channel, created_at, expires_at, current]
+      required: [id, channel, kind, created_at, expires_at, current]
       properties:
         id: { type: string }
         channel: { type: string, description: "How the session was opened: `oidc`, `saml`, `dev`..." }
+        kind: { type: string, enum: [browser, cli, editor], description: "What holds the session (ADR 0154 §6): `browser` (the console's cookie), `cli` (`choregos login`), `editor` (an editor extension, ADR 0155). A surface session's credential is a bearer, never a cookie." }
+        client_name: { type: [string, "null"], description: "What the surface called itself when it asked for its code (`choregos 0.27.8 on host`), for the person to recognise it; null for a browser." }
+        auth_time: { type: [string, "null"], format: date-time, description: "When the person authenticated at their identity provider, the sign-in that opened (or approved) the session; null when it is not known." }
+        idle_expires_at: { type: [string, "null"], format: date-time, description: "A surface session ends after this much inactivity; null for a browser session (its `expires_at` is absolute)." }
         created_at: { type: string, format: date-time }
         expires_at: { type: string, format: date-time }
         last_seen_at: { type: [string, "null"], format: date-time }
         user_agent: { type: [string, "null"], description: "The `User-Agent` of its last request, truncated." }
         ip: { type: [string, "null"], description: "The client address of its last request (an IPv6 client as its /64)." }
         current: { type: boolean, description: "The session this request came with." }
+    DeviceAuthorizationRequest:
+      type: object
+      required: [client_kind]
+      additionalProperties: false
+      properties:
+        client_kind: { type: string, enum: [cli, editor], description: "What asks: it becomes the session's `kind`." }
+        client_name: { type: string, maxLength: 80, description: "How the surface names itself, shown to the person before they approve." }
+        org: { type: string, maxLength: 120, description: "The organisation whose identity provider must have signed the approver in (ADR 0108)." }
+    DeviceAuthorization:
+      type: object
+      required: [device_code, user_code, verification_uri, verification_uri_complete, expires_in, interval]
+      properties:
+        device_code: { type: string, description: "Secret to the surface; single-use; at least 128 bits." }
+        user_code: { type: string, description: "Short, typed or confirmed by the person (`ABCD-EFGH`, no ambiguous character)." }
+        verification_uri: { type: string, description: "The console's `/device` page." }
+        verification_uri_complete: { type: string, description: "`verification_uri` with the user code, to open or show as a QR code." }
+        expires_in: { type: integer, description: "Seconds the codes live." }
+        interval: { type: integer, description: "Minimum seconds between two polls." }
+    DeviceTokenRequest:
+      type: object
+      required: [grant_type, device_code]
+      additionalProperties: false
+      properties:
+        grant_type: { type: string, enum: ["urn:ietf:params:oauth:grant-type:device_code"] }
+        device_code: { type: string, maxLength: 256 }
+    DeviceToken:
+      type: object
+      required: [access_token, token_type, session_id, kind, expires_in]
+      properties:
+        access_token: { type: string, description: "The session credential, a bearer. Shown once; the surface keeps it as a secret and never prints it." }
+        token_type: { type: string, enum: [Bearer] }
+        session_id: { type: string, description: "The id `GET /me/sessions` lists, to end the session." }
+        kind: { type: string, enum: [cli, editor] }
+        expires_in: { type: integer, description: "Seconds of inactivity after which the session ends; each use renews it." }
+        auth_time: { type: [string, "null"], format: date-time, description: "The approving sign-in's authentication time." }
+    DeviceTokenError:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string, enum: [authorization_pending, slow_down, expired_token, access_denied, invalid_grant, unsupported_grant_type] }
+        error_description: { type: string }
+        interval: { type: integer, description: "With `slow_down`: the new minimum interval." }
+    DeviceRequest:
+      type: object
+      required: [user_code, client_kind, expires_at]
+      properties:
+        user_code: { type: string }
+        client_kind: { type: string, enum: [cli, editor] }
+        client_name: { type: [string, "null"] }
+        org: { type: [string, "null"] }
+        expires_at: { type: string, format: date-time }
+    DeviceDecision:
+      type: object
+      required: [decision]
+      additionalProperties: false
+      properties:
+        decision: { type: string, enum: [approve, deny] }
     EndedSessions:
       type: object
       required: [ended]

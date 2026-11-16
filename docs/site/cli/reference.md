@@ -582,18 +582,40 @@ Options:
 ```text
 Usage: choregos login [OPTIONS]
 
-  Save the connection profile (`~/.config/choregos/config.json`).
+  Sign in as yourself with your browser: you approve in the console, the CLI
+  holds a session of yours.
 
-  The CLI cannot issue the first token (`tokens create` itself needs one): get
-  it from the console, under My account (the menu under your name,
-  `/account`), then pass it with `--token`.
+  That session is listed under My account (`/account`) and ending it there
+  signs the CLI out; `choregos logout` ends it too. Nothing is printed that
+  could be reused. With `--token`, an API token is saved instead (it is not a
+  session of yours; the CLI cannot issue the first token, `tokens create`
+  itself needs one: get it from the console, under My account, then pass it
+  with `--token`).
 
 Options:
-  --api-url <str>  [default: http://localhost:8000]
-  --token <str>
-  --org <str>      Default organisation slug (else --org per command or
-                   CHOREGOS_ORG)
-  --help           Show this message and exit.
+  --api-url <str>           The instance's address (default: the profile's or
+                            CHOREGOS_API_URL, else asked)
+  --token <str>             An API token to save instead of signing in with
+                            your browser (scripts, CI)
+  --org <str>               Default organisation slug (else --org per command
+                            or CHOREGOS_ORG)
+  --fresh                   Make the console sign you in again at your
+                            identity provider first
+  --browser / --no-browser  Open the approval page in your browser  [default:
+                            browser]
+  --help                    Show this message and exit.
+```
+
+### `choregos logout`
+
+```text
+Usage: choregos logout [OPTIONS]
+
+  End this CLI's session on the server (it also disappears from My account)
+  and forget it here.
+
+Options:
+  --help  Show this message and exit.
 ```
 
 ## `choregos machines`
