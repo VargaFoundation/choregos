@@ -47,8 +47,11 @@ COPY tests/fixtures/repos tests/fixtures/repos
 # shares this builder, so it must carry both applications — the whole workspace is synced,
 # which holds them and nothing heavier.
 # The agent SDK (a package for agent authors: openai, the ACP SDK) is not something the API or the
-# workers run: it stays out of the image.
-RUN uv sync --frozen --no-dev --all-packages --no-install-package choregos-agent-sdk
+# workers run: it stays out of the image. Nor is the outpost daemon (ADR 0147): it is the program an
+# outpost's operator runs in their own network, with an image of its own (`outpost.Dockerfile`), and
+# the platform serves its door without ever importing it.
+RUN uv sync --frozen --no-dev --all-packages \
+    --no-install-package choregos-agent-sdk --no-install-package choregos-outpost
 
 # SkillSpector, the skill gate's second scanner (ADR 0095), in an environment of its own: its
 # dependencies (LangGraph, YARA…) are not the platform's, and the API runs it as a child process,

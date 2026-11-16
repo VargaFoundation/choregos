@@ -6,7 +6,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { groupsOf } from "@/components/assistants/install-assistant";
+import { TaskEventJournal, TaskEventKeyCard, TeamsDeliveryCard } from "@/components/assistants/installation-task-events";
+import { InstallationLaunches } from "@/components/assistants/installation-launches";
 import { InstallationMemory } from "@/components/assistants/installation-memory";
+import { InstallationSpend, InstallationStop } from "@/components/assistants/installation-stop";
 import { ConfirmedGesture } from "@/components/confirmed-gesture";
 import { OrgPageHeader } from "@/components/org-page-header";
 import { SchemaForm, type JsonSchema } from "@/components/schema-form";
@@ -112,6 +115,80 @@ function Bindings({ org, slug, assistant, needs }: Ref & { assistant: Assistant;
             );
           })}
         </div>
+      </div>
+    </Card>
+  );
+}
+
+type KnowledgeNeed = { name: string; description: string; required: boolean };
+
+/**
+ * The knowledge needs the organisation binds to its own bases, by reference (ADR 0159): nothing is copied.
+ * The bases offered are those the owner may read (the knowledge list answers only those); a base another
+ * owner bound stays listed so it can be kept or removed.
+ */
+function KnowledgeBindings({ org, slug, assistant, needs }: Ref & { assistant: Assistant; needs: KnowledgeNeed[] }) {
+  const client = useQueryClient();
+  const bases = useQuery({ queryKey: ["knowledge-bases", org], queryFn: () => api.knowledgeBases(org) });
+  const bound = (name: string) => assistant.knowledge_bindings?.find((b) => b.name === name);
+  const [chosen, setChosen] = useState<Record<string, string[]>>(() =>
+    Object.fromEntries(needs.map((n) => [n.name, bound(n.name)?.enabled ? bound(n.name)?.bases ?? [] : []])),
+  );
+  const [error, setError] = useState<string | null>(null);
+  async function save(name: string) {
+    setError(null);
+    try {
+      await assistantsApi.bindKnowledge(org, slug, name, { bases: chosen[name] ?? [] });
+      await Promise.all([
+        client.invalidateQueries({ queryKey: ["installation", org, slug] }),
+        client.invalidateQueries({ queryKey: ["readiness", org, slug] }),
+      ]);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Binding refused");
+    }
+  }
+  function toggle(name: string, base: string, on: boolean) {
+    setChosen((now) => {
+      const list = (now[name] ?? []).filter((b) => b !== base);
+      return { ...now, [name]: on ? [...list, base] : list };
+    });
+  }
+  const readable = (bases.data ?? []).filter((b) => b.status === "active").map((b) => b.slug);
+  return (
+    <Card title="Knowledge from the organisation">
+      <div className="space-y-4">
+        <p className="text-sm text-ink-muted">
+          Each need reads existing knowledge bases by reference: they keep their owners, rights and sources. A person
+          is answered from a base only when they may read it.
+        </p>
+        <ReadState lecture={bases} quoi="the knowledge bases" />
+        {error && <ErrorNote>{error}</ErrorNote>}
+        {needs.map((n) => {
+          const options = [...new Set([...readable, ...(bound(n.name)?.bases ?? [])])].sort();
+          return (
+            <fieldset key={n.name} className="space-y-2">
+              <legend className="text-sm font-medium">
+                {n.name} {!n.required && <span className="text-xs text-ink-muted">(optional)</span>}
+              </legend>
+              <p className="text-xs text-ink-muted">{n.description}</p>
+              {options.length === 0 && <Empty>No knowledge base you may read.</Empty>}
+              <div className="flex flex-wrap gap-3">
+                {options.map((base) => (
+                  <label key={base} className="flex items-center gap-1 text-sm">
+                    <input
+                      type="checkbox"
+                      aria-label={`${base} for ${n.name}`}
+                      checked={(chosen[n.name] ?? []).includes(base)}
+                      onChange={(e) => toggle(n.name, base, e.target.checked)}
+                    />
+                    {base}
+                  </label>
+                ))}
+              </div>
+              <Button onClick={() => void save(n.name)}>Bind {n.name}</Button>
+            </fieldset>
+          );
+        })}
       </div>
     </Card>
   );
@@ -559,14 +636,29 @@ export function InstallationDetail({ slug }: { slug: string }) {
       <ReadState lecture={assistant} quoi="this installation" />
       {data && (
         <>
+          <InstallationStop org={org} assistant={data} />
           <Settings key={data.created_at + JSON.stringify(data.config)} org={org} slug={slug} assistant={data} schema={(manifest?.config_schema ?? null) as JsonSchema | null} />
           <Bindings org={org} slug={slug} assistant={data} needs={manifest?.needs ?? []} />
+          <InstallationSpend assistant={data} />
+          <InstallationLaunches org={org} slug={slug} assistant={data} />
+          {(manifest?.knowledge_needs ?? []).length > 0 && (
+            <KnowledgeBindings
+              key={JSON.stringify(data.knowledge_bindings ?? [])}
+              org={org}
+              slug={slug}
+              assistant={data}
+              needs={manifest?.knowledge_needs ?? []}
+            />
+          )}
           <InstallationMemory
             org={org}
             slug={slug}
             spaces={(manifest?.memory_spaces ?? []).filter((s) => s.scope === "installation").map((s) => s.name)}
           />
           <WebhookKey org={org} slug={slug} />
+          <TaskEventKeyCard org={org} slug={slug} />
+          <TaskEventJournal org={org} slug={slug} />
+          <TeamsDeliveryCard org={org} slug={slug} />
           <KnowledgeUpdates org={org} slug={slug} />
           <ReadsJournal org={org} slug={slug} />
           <SubjectRights org={org} slug={slug} />

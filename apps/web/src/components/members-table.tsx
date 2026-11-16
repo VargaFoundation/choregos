@@ -2,6 +2,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
 import { useState } from "react";
 import { Confirmation } from "@/components/confirmed-gesture";
 import { AdditiveRolesNote, PROJECT_ROLES, ROLE_LABELS, ROLES, peopleOf, rank, type Role } from "@/components/members";
@@ -148,7 +149,15 @@ export function MembersTable({ project }: { project?: string }) {
                 const lowering = person.role != null && newRole?.key === key && rank(newRole.role) < rank(person.role);
                 return (
                   <TR key={key} data-testid={`member-${person.email}`}>
-                    <TD>{person.email}</TD>
+                    <TD>
+                      {person.userId ? (
+                        <Link href={`/admin/members/${encodeURIComponent(person.userId)}`} data-verbatim>
+                          {person.email}
+                        </Link>
+                      ) : (
+                        person.email
+                      )}
+                    </TD>
                     <TD>
                       <Select
                         aria-label={`Role of ${person.email}${project ? ` on ${project}` : ""}`}

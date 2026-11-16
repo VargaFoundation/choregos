@@ -1,6 +1,6 @@
 """No pull request is asked for without a branch: the work item escalates instead (S22-46, #539).
 
-On the dev tenant (2026-10-15, v0.17.15), `DiametralGroup/choregos-sandbox-dev#21` (`dev-simple`):
+On the dev tenant (2026-10-15, v0.17.15), `globex/choregos-sandbox-dev#21` (`dev-simple`):
 the bug was already fixed on `main`, the implementation changed nothing and pushed no branch. Since
 S22-40 the empty diff passes the gates, the work item reached `reviewed`, and `t-open-pr`
 (`does: open_pr`) asked GitHub for a pull request from that absent branch: 422 `head invalid`,
@@ -52,7 +52,7 @@ async def _to_the_pull_request(handle: Any, setup: Fixture) -> None:
 
 def _no_change(setup: Fixture) -> None:
     # As the runner reports it: an empty change MEASURED by git, which is what makes a branch that
-    # does not exist an empty diff (#536). `FakeScm` no longer answers one by itself (ADR 0152).
+    # does not exist an empty diff (#536). `FakeScm` no longer answers one by itself (ADR 0171).
     unchanged = stage_result("Already fixed on main: nothing to change", artifacts={"commits": []})
     unchanged.evidence.diff_files = unchanged.evidence.diff_lines = 0
     unchanged.evidence.measured = ["diff_files", "diff_lines"]

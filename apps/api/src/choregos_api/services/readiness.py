@@ -1085,7 +1085,7 @@ async def load_facts(session: AsyncSession, project: Project, org_slug: str) -> 
         requirements=requirements,
         connectors=connectors,
         provided=frozenset(c for c in capabilities if _deployment_provides(c)),
-        github_app=github_app.get_github_app() is not None,
+        github_app=await github_app.github_app(session) is not None,
         github_owners=await _github_owners(session, project, connectors),
         usable_backends=await _usable_backends(session),
         profiles_unknown=unknown_profiles,

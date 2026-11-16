@@ -115,12 +115,12 @@ DIFF_GATES: frozenset[str] = frozenset(
 #: The diff gates judged, unless their declaration says otherwise, on what a RUN wrote since the
 #: commit where it began (S22-11), against the paths that run may write: the others read the work
 #: item's whole diff at the judged commit. On a `system` transition the run is the last step's, or
-#: none, so such a declaration holds nothing on what is merged (ADR 0152). `judged_on_a_run` reads a
+#: none, so such a declaration holds nothing on what is merged (ADR 0171). `judged_on_a_run` reads a
 #: declaration; a name alone does not say.
 RUN_SCOPED_GATES: frozenset[str] = frozenset({"scope_respected"})
 
 #: The one value of `scope_respected`'s `over` parameter: the work item's whole diff at the judged
-#: commit, and nothing of a run (ADR 0152, decision 13).
+#: commit, and nothing of a run (ADR 0171, decision 13).
 OVER_WORK_ITEM = "work_item"
 
 
@@ -197,7 +197,7 @@ def _without_diff(name: str) -> GateOutcome:
 def _scope_respected(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     """The changed files stay out of the paths the policy forbids, and inside the allowed ones.
 
-    Two readings, chosen by the declaration (ADR 0152). Without `over`, the files are a run's — what
+    Two readings, chosen by the declaration (ADR 0171). Without `over`, the files are a run's — what
     it wrote since the commit where it began, handed over by the evaluation — and the allowed paths are
     `paths`, else that run's. With `over: work_item`, the files are the work item's whole diff at the
     judged commit and nothing of a run is read: the allowed paths are `paths` and only `paths` — a
@@ -500,7 +500,11 @@ def _outputs_present(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     )
 
 
-#: The states of an action that will not move again.
+#: The states of an action that settle the transition that proposed it. `in_doubt` (ADR 0149 §5) is
+#: not one of them, although the action will not move again by itself: nobody knows whether its write
+#: was made, and a failure would follow `on_fail`, whose retry proposes the action again under a new
+#: attempt, a second delivery of the write. The transition waits, as it waits for an approval nobody
+#: gave yet, until a person has looked.
 ACTION_SETTLED = frozenset({"succeeded", "failed", "rejected"})
 
 
@@ -508,8 +512,8 @@ ACTION_SETTLED = frozenset({"succeeded", "failed", "rejected"})
 def _action_succeeded(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     """The transition's governed action SUCCEEDED: each of its effects done, confirmed (ADR 0035).
 
-    Rejected, failed (and then compensated), it blocks; proposed, awaiting a decision or
-    running, it waits. A transition without an action has nothing to judge: the validator refuses it.
+    Rejected, failed (and then compensated), it blocks; proposed, awaiting a decision, running or
+    in doubt, it waits. A transition without an action has nothing to judge: the validator refuses it.
     """
     status = ctx.action_status
     if status is None or status not in ACTION_SETTLED:

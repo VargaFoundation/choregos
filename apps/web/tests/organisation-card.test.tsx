@@ -38,7 +38,7 @@ describe("the Organisation card", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(api.platformIdentity).mockRejectedValue(new ApiError(403, { title: "Forbidden" }));
-    vi.mocked(api.updateOrg).mockResolvedValue({ slug: "varga", name: "Diametral", role: "org_admin", currency: "USD" } as never);
+    vi.mocked(api.updateOrg).mockResolvedValue({ slug: "varga", name: "Globex", role: "org_admin", currency: "USD" } as never);
     Object.defineProperty(window, "location", { value: { assign, origin: "http://console.test" }, configurable: true });
   });
 
@@ -54,10 +54,10 @@ describe("the Organisation card", () => {
     wrap();
     const name = await screen.findByLabelText("Display name");
     await user.clear(name);
-    await user.type(name, "Diametral");
+    await user.type(name, "Globex");
     await user.selectOptions(screen.getByLabelText("Currency"), "USD");
     await user.click(screen.getByRole("button", { name: "Save the organisation" }));
-    await waitFor(() => expect(api.updateOrg).toHaveBeenCalledWith("varga", { name: "Diametral", currency: "USD" }));
+    await waitFor(() => expect(api.updateOrg).toHaveBeenCalledWith("varga", { name: "Globex", currency: "USD" }));
     expect(await screen.findByText("Organisation saved")).toBeTruthy();
   });
 
@@ -105,10 +105,10 @@ describe("the Organisation card", () => {
       expect(api.updateOrg).not.toHaveBeenCalled();
       const input = screen.getByRole("textbox", { name: /New slug/ });
       await user.clear(input);
-      await user.type(input, "diametral");
+      await user.type(input, "globex");
       await user.click(screen.getByRole("button", { name: "Change the slug" }));
-      await waitFor(() => expect(api.updateOrg).toHaveBeenCalledWith("varga", { slug: "diametral" }));
-      expect(session.selectOrg).toHaveBeenCalledWith("diametral");
+      await waitFor(() => expect(api.updateOrg).toHaveBeenCalledWith("varga", { slug: "globex" }));
+      expect(session.selectOrg).toHaveBeenCalledWith("globex");
       expect(assign).toHaveBeenCalledWith("http://console.test/admin");
     });
 

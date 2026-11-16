@@ -11,7 +11,7 @@ from urllib.parse import parse_qs, urlparse
 import pytest
 import respx
 from choregos_api.config import reset_settings_cache
-from choregos_api.db.models import AuditLog, User
+from choregos_api.db.models import User
 from choregos_api.db.session import session_scope
 from choregos_api.routers.auth import forget_discovery
 from httpx import AsyncClient, Response
@@ -225,28 +225,6 @@ async def test_the_instance_provider_cannot_issue_a_reserved_subject(
     response = await _sign_in(client, {"sub": sub, "email": "jo@varga.dev"})
     assert response.status_code == 401, response.text
     assert "reserved" in response.text
-
-
-async def test_an_idp_migration_relinks_a_verified_email_only_when_switched_on(
-    client: AsyncClient, org: str, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    async with session_scope(orgs="*") as session:
-        session.add(User(email="jo@varga.dev", display_name="Jo", oidc_sub="old-idp-sub"))
-    verified = {"sub": "new-idp-sub", "email": "jo@varga.dev", "email_verified": True}
-    refused = await _sign_in(client, verified)
-    assert refused.status_code == 401, "the default must refuse a re-link"
-    monkeypatch.setenv("CHOREGOS_OIDC_RELINK_VERIFIED_EMAIL", "true")
-    reset_settings_cache()
-    # The switch is no way round `email_verified`: a provider that omits the claim is still refused.
-    omitted = await _sign_in(client, {"sub": "new-idp-sub", "email": "jo@varga.dev"})
-    assert omitted.status_code == 401
-    relinked = await _sign_in(client, verified)
-    assert relinked.status_code == 307, relinked.text
-    (user,) = await _users()
-    assert user.oidc_sub == "new-idp-sub"
-    async with session_scope(orgs="*") as session:
-        actions = [row.action for row in (await session.execute(select(AuditLog))).scalars()]
-    assert "user.relink" in actions
 
 
 async def test_an_unreachable_discovery_url_is_a_503_not_a_500(

@@ -1,0 +1,12 @@
+control_plane: https://outposts.example.com
+door_keys: ["3k9fZti-P3Z9Du9RmNmJm-pNxgUQSHfGN_bx7DmXwNw"]   # the only keys whose calls it makes
+endpoints:
+  tracker:
+    url: http://tracker-mcp.tools.svc:8080/mcp     # known to the outpost only
+    auth: { header: Authorization, from_file: /secrets/tracker-token }
+    tools: ["search_*", "get_*", "create_issue"]
+    writes: allow                                  # deny by default
+    timeout_s: 60
+    max_payload_kb: 512
+concurrency: 8
+audit: { file: /var/log/choregos-outpost/audit.jsonl }

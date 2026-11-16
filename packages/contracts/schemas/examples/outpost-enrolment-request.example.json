@@ -1,0 +1,14 @@
+{
+  "protocol": 1,
+  "token": "enrolment-token-example-0000",
+  "signing_key": "Rc1PTmqSEE66sm_bZBFUhfd49nHRyIwM62KuqS2PvXQ",
+  "sealing_key": "sTi3s2Pg2FWi9AkPTs73jJ0gfifo3rgtRSVjxJ9Aphw",
+  "daemon_version": "0.26.0",
+  "capabilities": [
+    "tools"
+  ],
+  "facts": {
+    "hostname": "outpost-0.tools.svc",
+    "platform": "linux/amd64"
+  }
+}

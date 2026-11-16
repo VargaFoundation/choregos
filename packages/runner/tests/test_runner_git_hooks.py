@@ -20,6 +20,7 @@ import pytest
 from choregos_contracts import StageInput, StageStatus
 from choregos_runner.exits import Exit
 from choregos_runner.runner import Runner
+from choregos_runner.workspace import git_dir_for
 
 from .conftest import FakeInternalClient, agent_script, valid_result
 
@@ -123,7 +124,7 @@ async def test_the_runners_git_runs_no_hook_the_agent_wrote(
     # The run did commit and push: without the hooks disabled, pre-commit and pre-push WOULD fire.
     assert outcome.result.artifacts.commits, "the run committed"
     workspace = Path(runner_settings.workspace)
-    assert _rev(toy_repo, "refs/heads/choregos/1-total") == _rev(workspace, "HEAD"), (
+    assert _rev(toy_repo, "refs/heads/choregos/1-total") == _rev(git_dir_for(workspace), "HEAD"), (
         "the push reached the remote"
     )
 

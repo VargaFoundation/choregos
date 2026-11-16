@@ -99,7 +99,9 @@ Read it in order the first time: what it is, the ideas, a first project, then th
 
 This documentation describes the **community edition**: Apache 2.0, one organisation per instance,
 everything in this documentation included. An **enterprise edition**, published separately, adds
-several organisations on one instance and the identity features that come with them. The console
+several organisations on one instance, SCIM provisioning and the identity features that come with several
+organisations. SAML sign-in, re-authentication and the revocation of sessions are decided to belong to the
+community edition (2026-11-15); they are not all delivered there yet. The console
 shows which edition runs under **About**, at the bottom of the sidebar.
 
 ## Where the deep detail lives

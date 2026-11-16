@@ -9,7 +9,7 @@
     "bundle:check": "node scripts/bundle-budget.mjs",
     "start": "next start",
     "lint": "eslint . --max-warnings 0",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p ../../packages/contracts/ts",
     "test": "vitest run --coverage",
     "theme:defaults": "node scripts/export-theme-defaults.mts",
     "test:watch": "vitest",

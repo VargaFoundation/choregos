@@ -40,6 +40,18 @@
   "type": "pfsense"
  },
  {
+  "kind": "forge_account",
+  "type": "forgejo-oauth"
+ },
+ {
+  "kind": "forge_account",
+  "type": "github-oauth"
+ },
+ {
+  "kind": "forge_account",
+  "type": "gitlab-oauth"
+ },
+ {
   "kind": "gateway",
   "type": "direct"
  },
@@ -84,6 +96,10 @@
   "type": "mcp-gateway"
  },
  {
+  "kind": "mcp",
+  "type": "mcp-outpost"
+ },
+ {
   "kind": "mdm",
   "type": "demo"
  },
@@ -106,6 +122,10 @@
  {
   "kind": "notify",
   "type": "slack"
+ },
+ {
+  "kind": "notify",
+  "type": "teams"
  },
  {
   "kind": "runtime",

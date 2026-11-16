@@ -185,14 +185,28 @@ def _open_dek(row: OrgSecret, wrapper: KeyWrapper | Keyring) -> bytes:
 
 
 def unseal(row: OrgSecret, wrapper: KeyWrapper | Keyring) -> str:
-    dek = _open_dek(row, wrapper)
+    sealed = Sealed(row.ciphertext, row.nonce, row.wrapped_dek, row.dek_nonce, row.kek_id)
+    return open_sealed(sealed, wrapper, row.org_id, row.name, row.version)
+
+
+def open_sealed(sealed: Sealed, wrapper: KeyWrapper | Keyring, org_id: str, name: str, version: int) -> str:
+    """Open an envelope `seal` made for this organisation, name and version, wherever its five parts
+    are kept: a row of `org_secrets`, or a call that waits for an outpost (ADR 0148 §11). The
+    additional data binds it to that place: under another organisation, name or version it does not open."""
+    aad = _aad(org_id, name, version)
     try:
-        return (
-            AESGCM(dek).decrypt(row.nonce, row.ciphertext, _aad(row.org_id, row.name, row.version)).decode()
-        )
+        dek = _as_wrapper(wrapper).unwrap(sealed.wrapped_dek, sealed.dek_nonce, aad, sealed.kek_id)
+    except SecretStoreUnavailable as refusal:
+        if "does not open" in str(refusal):
+            raise SecretStoreUnavailable(
+                f"`{name}`: the sealed key does not open (wrong key, or moved)"
+            ) from None
+        raise
+    try:
+        return AESGCM(dek).decrypt(sealed.nonce, sealed.ciphertext, aad).decode()
     except InvalidTag:
         raise SecretStoreUnavailable(
-            f"`{row.name}`: the sealed value does not open (tampered, or moved)"
+            f"`{name}`: the sealed value does not open (tampered, or moved)"
         ) from None
 
 
@@ -247,6 +261,10 @@ class SealedDbSecretStore:
 
     def available(self) -> bool:
         return self._wrapper() is not None
+
+    def key_wrapper(self) -> KeyWrapper | None:
+        """The wrapper this store seals with, for what is sealed at rest outside `org_secrets`."""
+        return self._wrapper()
 
     async def put(
         self, session: AsyncSession, org_id: str, name: str, value: str, actor: str | None
@@ -399,6 +417,13 @@ def get_secret_store() -> SecretStore:
     return store
 
 
+def active_key_wrapper() -> KeyWrapper | None:
+    """The key wrapper of the deployment (ADR 0103): the one of the store an extension set, else the
+    environment keyring. `None` when no key is configured; the in-memory fake has none."""
+    store = _OVERRIDE[0] if _OVERRIDE else SealedDbSecretStore()
+    return store.key_wrapper() if isinstance(store, SealedDbSecretStore) else None
+
+
 def reset_fake_store() -> None:
     _FAKE.values.clear()
 
@@ -513,14 +538,17 @@ __all__ = [
     "FakeSecretStore",
     "KeyWrapper",
     "Keyring",
+    "Sealed",
     "SealedDbSecretStore",
     "SecretMeta",
     "SecretStore",
     "SecretStoreUnavailable",
+    "active_key_wrapper",
     "derived_org_name",
     "derived_project_name",
     "get_secret_store",
     "keyring_from_env",
+    "open_sealed",
     "parse_keyring",
     "resolve_store_fields",
     "resolved_configuration",

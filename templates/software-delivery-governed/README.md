@@ -19,7 +19,7 @@ versions of them.
 | compliance | `compliance` (never legal advice) | `compliance_review`, `verdict` | **compliance officers decide** |
 | documentation | `docs-writer` | `docs_report` | scope, no secrets |
 | release readiness | `devops` | `rollout_plan`, `verdict` | verdict `approve` |
-| pull request | the platform, then **maintainers approve** | — | to merge: CI green, no secrets, diff size, no file under a path the policy forbids (read on the commit that is merged, [ADR 0152](../../docs/adr/0152-what-is-merged-is-what-was-judged.md)) |
+| pull request | the platform, then **maintainers approve** | — | to merge: CI green, no secrets, diff size, no file under a path the policy forbids (read on the commit that is merged, [ADR 0171](../../docs/adr/0171-what-is-merged-is-what-was-judged.md)) |
 | staging, production | the release train; **release captains approve production** | — | ADR 0041 |
 | verification | `devops`, from logs and metrics read through read-only connectors | `devops_report`, `verdict` | verdict `approve`; "nothing observed" goes to a person |
 

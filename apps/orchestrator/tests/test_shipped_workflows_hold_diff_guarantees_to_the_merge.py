@@ -1,4 +1,4 @@
-"""The shipped workflows hold their diff guarantees to the merge (S65-07, ADR 0152).
+"""The shipped workflows hold their diff guarantees to the merge (S65-07, ADR 0171).
 
 The merge names the commit its own transition's gates judged. A commit that landed after an earlier
 step's gates had ruled, and before the merge transition was entered, was therefore judged by the merge
@@ -440,7 +440,7 @@ async def test_a_file_outside_the_paths_a_merge_declares_is_not_merged(
 async def test_what_remains_a_file_outside_the_work_items_allowed_paths_is_not_refused_for_its_path(
     setup: Fixture, temporal_env: Any
 ) -> None:
-    """What the merge does not hold (ADR 0152, decision 13): a work item's own allowed paths. A file
+    """What the merge does not hold (ADR 0171, decision 13): a work item's own allowed paths. A file
     outside them, and under no forbidden path, that lands before the merge is read by `no_secrets`
     and the other guarantees, and by no scope: the verdict says which paths it held. This test changes
     the day the platform owns those paths."""

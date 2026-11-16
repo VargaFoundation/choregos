@@ -22,6 +22,7 @@ import httpx
 import pytest
 from choregos_adapters.fakes.kubernetes import FakeKubernetesApi
 from choregos_adapters.plugin_servers import CONFIG_DIGEST, TOKEN_ENV, PluginServerRuntime
+from choregos_core.publishing import PUBLISHING
 from httpx import AsyncClient
 from sqlalchemy import func, select
 
@@ -111,7 +112,7 @@ async def test_install_runs_the_server_under_the_pod_rules(
     deployment = _only(kube, "deployments")
     pod = deployment["spec"]["template"]["spec"]
     container = pod["containers"][0]
-    assert container["image"].startswith("ghcr.io/vargafoundation/choregos-agents/hello-mcp@sha256:")
+    assert container["image"].startswith(PUBLISHING.image("choregos-agents/hello-mcp@sha256:"))
     assert pod["automountServiceAccountToken"] is False
     assert pod["securityContext"]["runAsNonRoot"] is True
     assert pod["runtimeClassName"] == "gvisor"

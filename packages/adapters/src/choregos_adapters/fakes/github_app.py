@@ -92,3 +92,67 @@ class FakeGitHubApp:
     async def user_installation_ids(self, code: str) -> set[int]:
         self._check("user_installation_ids")
         return set(self.oauth_grants.get(code, set()))
+
+
+#: Not a key: a placeholder the fake answers when a test scripts none.
+FAKE_PEM = "-----BEGIN RSA PRIVATE KEY-----\nfake\n-----END RSA PRIVATE KEY-----\n"
+
+
+class FakeManifestConversion:
+    """The GitHub App Manifest flow's conversion (`POST /app-manifests/{code}/conversions`), in memory.
+
+    Same method as `choregos_adapters.github.manifest.GitHubManifestConversion`. A test scripts the App a
+    `code` turns into (`register`), or a refusal (`refuse`); a code is single-use, as at GitHub, and an
+    unknown one answers 404. One shared instance per process (`shared()`), `reset()` between tests.
+    """
+
+    _shared: FakeManifestConversion | None = None
+
+    def __init__(self) -> None:
+        self.reset()
+
+    @classmethod
+    def shared(cls) -> FakeManifestConversion:
+        if cls._shared is None:
+            cls._shared = cls()
+        return cls._shared
+
+    def reset(self) -> None:
+        self.apps: dict[str, dict[str, Any]] = {}
+        self.refusals: dict[str, int] = {}
+        self.calls: list[str] = []
+
+    # ── scripting ──
+    def register(self, code: str, **fields: Any) -> dict[str, Any]:
+        """The App GitHub answers for `code`: GitHub's fields, overridable one by one."""
+        app_id = int(fields.pop("id", 4242))
+        slug = str(fields.pop("slug", "choregos-test"))
+        answer: dict[str, Any] = {
+            "id": app_id,
+            "slug": slug,
+            "node_id": f"A_{app_id}",
+            "name": fields.pop("name", "Choregos test"),
+            "owner": fields.pop("owner", {"login": "acme", "type": "Organization"}),
+            "html_url": fields.pop("html_url", f"https://github.com/apps/{slug}"),
+            "client_id": fields.pop("client_id", f"Iv1.{app_id:016x}"),
+            "client_secret": fields.pop("client_secret", "fake-client-secret"),
+            "webhook_secret": fields.pop("webhook_secret", "fake-webhook-secret"),
+            "pem": fields.pop("pem", FAKE_PEM),
+            **fields,
+        }
+        self.apps[code] = answer
+        return dict(answer)
+
+    def refuse(self, code: str, status: int = 422) -> None:
+        self.refusals[code] = status
+
+    # ── the port ──
+    async def convert(self, code: str) -> dict[str, Any]:
+        self.calls.append(code)
+        if code in self.refusals:
+            status = self.refusals[code]
+            raise UpstreamError("github", f"POST /app-manifests/{{code}}/conversions -> {status}")
+        answer = self.apps.pop(code, None)
+        if answer is None:
+            raise UpstreamError("github", "POST /app-manifests/{code}/conversions -> 404")
+        return dict(answer)

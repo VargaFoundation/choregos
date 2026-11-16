@@ -15,6 +15,7 @@ class FakeObjectStore:
         self.base = url.rstrip("/")
         self.objects: dict[str, tuple[bytes, str]] = {}
         self.puts = 0
+        self.deletes = 0
         self._failures: list[str] = []
 
     def url_of(self, key: str) -> str:
@@ -32,6 +33,11 @@ class FakeObjectStore:
             return self.objects[key.lstrip("/")][0]
         except KeyError:
             raise ObjectNotFoundError(f"no object at {self.url_of(key)}") from None
+
+    async def delete(self, key: str) -> None:
+        self._maybe_fail()
+        self.objects.pop(key.lstrip("/"), None)
+        self.deletes += 1
 
     async def check(self) -> None:
         self._maybe_fail()

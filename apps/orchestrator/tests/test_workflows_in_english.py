@@ -94,6 +94,7 @@ RECORDED_WORKFLOW_TYPES = {
     "MemoryIngestion",
     "ProjectProvisioning",
     "ReleaseTrain",
+    "RunCancellation",
     "TrackerReconciliation",
     "WorkflowInterpreter",
 }

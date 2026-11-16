@@ -129,11 +129,13 @@ def _load_checker() -> ModuleType:
     return module
 
 
-def _parsed_graph() -> dict[str, str | None]:
-    """Every migration's `revision` -> `down_revision`, read from the syntax tree."""
-    graph: dict[str, str | None] = {}
+def _parsed_graph() -> dict[str, str | tuple[str, ...] | None]:
+    """Every migration's `revision` -> `down_revision`, read from the syntax tree.
+
+    A revision that joins two branches names a tuple of parents (`20261114_1350_one_head_again.py`)."""
+    graph: dict[str, str | tuple[str, ...] | None] = {}
     for path in sorted(VERSIONS.glob("*.py")):
-        values: dict[str, str | None] = {}
+        values: dict[str, str | tuple[str, ...] | None] = {}
         for node in ast.parse(path.read_text(encoding="utf-8")).body:
             if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
                 name, value = node.target.id, node.value
@@ -143,7 +145,8 @@ def _parsed_graph() -> dict[str, str | None]:
                 continue
             if name in ("revision", "down_revision") and value is not None:
                 values[name] = ast.literal_eval(value)
-        graph[values["revision"] or ""] = values["down_revision"]
+        revision = values["revision"]
+        graph[revision if isinstance(revision, str) else ""] = values["down_revision"]
     return graph
 
 
@@ -160,7 +163,10 @@ def test_migration_graph_unchanged() -> None:
     parsed = {(revision, parent) for revision, parent in graph.items()}
     missing = sorted(RECORDED - parsed, key=str)
     assert not missing, f"a recorded (revision, down_revision) pair changed or disappeared: {missing}"
-    heads = set(graph) - {parent for parent in graph.values() if parent}
+    parents: set[str] = set()
+    for parent in graph.values():
+        parents.update((parent,) if isinstance(parent, str) else parent or ())
+    heads = set(graph) - parents
     assert len(heads) == 1, f"the migration chain must have exactly one head, found {sorted(heads)}"
 
 

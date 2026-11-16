@@ -399,7 +399,7 @@ async def test_another_graphql_refusal_is_not_merged_around() -> None:
     assert ("PUT", f"/repos/{REPO}/pulls/8/merge") not in wire.sent()
 
 
-# ───────────────────────── the merge names the judged commit (ADR 0152) ─────────────────────────
+# ───────────────────────── the merge names the judged commit (ADR 0171) ─────────────────────────
 
 
 async def test_the_head_of_a_branch_is_the_commit_of_its_ref() -> None:

@@ -37,6 +37,8 @@ or external: the external aliases' window closed with 0.23.0 and S45-49 removed 
   `[tool.coverage.run].source`, threshold 80 % (`fail_under`); the web suite has its own floor
   (`apps/web/vitest.config.ts`, enforced by `pnpm test`).
 - Front end: `make web-ci` = lint + typecheck + test + build.
+- Editor extension: `make vscode-ci` = lint (ESLint, Prettier) + typecheck + test (coverage floor) + VSIX
+  (`apps/vscode`, ADR 0155); its CI job is `vscode`.
 - Charts: `make charts-lint` (helm lint + kubeconform). `make charts-test` requires the
   helm-unittest plugin **1.1.2** and Helm ≥ 3.18; without them it **refuses to run** rather than
   give a false verdict, and `tests/charts/` renders the chart and checks it in Python.

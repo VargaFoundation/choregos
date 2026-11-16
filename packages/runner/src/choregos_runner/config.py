@@ -9,6 +9,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
+from choregos_core.publishing import PUBLISHING
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -59,12 +60,15 @@ class RunnerSettings(BaseSettings):
     #: How often a remote task that does not stream is asked for its state.
     remote_poll_seconds: float = Field(default=5.0, gt=0, validation_alias="CHOREGOS_REMOTE_POLL_SECONDS")
     workspace: Path = Path("/workspace")
+    #: Where the runner keeps the git directory of the run, outside the tree the agent writes
+    #: (ADR 0146 §5). Empty: `/var/tmp/choregos-git`, which is not a write root of the confinement.
+    git_dir_root: Path | None = Field(default=None, validation_alias="CHOREGOS_RUNNER_GIT_DIR_ROOT")
     #: The copy of the working tree a hosted container works in (S41-18): a volume the two
     #: containers share, never the runner's checkout.
     hosted_workspace: Path = Path("/hosted-workspace")
     tools_url: str = "http://localhost:7777/mcp"
     git_user_name: str = "choregos-bot"
-    git_user_email: str = "choregos-bot@varga.foundation"
+    git_user_email: str = PUBLISHING.commit_email
     event_batch_size: int = 25
     event_flush_seconds: float = 5.0
     dry_run: bool = Field(default=False, validation_alias="CHOREGOS_RUNNER_DRY_RUN")
@@ -77,6 +81,18 @@ class RunnerSettings(BaseSettings):
     confinement: Literal["off", "best_effort", "enforce"] = Field(
         default="best_effort", validation_alias="CHOREGOS_RUNNER_CONFINEMENT"
     )
+    #: Where the agent runs (ADR 0146): `process`, a child of the runner in its container (the
+    #: historical shape), or `container`, in a container of the pod of its own, started by the
+    #: launcher there. Under `container` the runner never falls back to a child: with no launcher it
+    #: exits with `AGENT_ISOLATION_UNAVAILABLE`.
+    agent_isolation: Literal["process", "container"] = Field(
+        default="process", validation_alias="CHOREGOS_RUNNER_AGENT_ISOLATION"
+    )
+    #: The launcher's address: the pod's loopback, the namespace the two containers share.
+    launcher_host: str = Field(default="127.0.0.1", validation_alias="CHOREGOS_RUNNER_LAUNCHER_HOST")
+    launcher_port: int = Field(default=8766, validation_alias="CHOREGOS_RUNNER_LAUNCHER_PORT")
+    #: How long the runner waits for the launcher before it ends the run.
+    launcher_wait_seconds: float = Field(default=60.0, validation_alias="CHOREGOS_RUNNER_LAUNCHER_WAIT")
     #: The headroom the runner starts when a run asks for compression (ADR 0055).
     headroom_command: str = "headroom"
 

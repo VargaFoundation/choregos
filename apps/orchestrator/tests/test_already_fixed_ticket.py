@@ -1,6 +1,6 @@
 """A ticket whose fix is already on `main` closes as already fixed, on measured evidence only (S22-47).
 
-On the dev tenant, `DiametralGroup/choregos-sandbox-dev#18` and `#21` (`dev-simple`, #539): the bug
+On the dev tenant, `globex/choregos-sandbox-dev#18` and `#21` (`dev-simple`, #539): the bug
 was already fixed on `main`, the implementation changed nothing, and the work item went on to test,
 review, then a pull request from a branch that did not exist. `dev-simple` v2 declares
 `t-already-fixed`: after an implementation that MEASURED no change, the platform reads

@@ -61,7 +61,7 @@ def _listed(values: Any) -> str:
 
 def gate_summary(name: str, params: dict[str, Any]) -> str:
     """What a guarantee checks, in one sentence, as this declaration reads it: `scope_respected` over
-    the work item's whole diff is not about an agent (ADR 0152)."""
+    the work item's whole diff is not about an agent (ADR 0171)."""
     if name == "scope_respected" and params.get("over") == OVER_WORK_ITEM:
         return "the whole change stays out of the paths the policy forbids" + (
             " and within the declared ones" if params.get("paths") else ""
@@ -140,6 +140,15 @@ def _decision(acteur: DecisionActor) -> str:
     return f"a decision by `{acteur.model}` on {', '.join(acteur.state)}: {', '.join(questions)}"
 
 
+def _human_who(actor: HumanActor) -> str:
+    """Who answers a human step, in plain words (ADR 0153): a person, a group, or a person first."""
+    if actor.user and actor.group:
+        return f"`{actor.user}`, then a person of group `{actor.group}` once the SLA has passed"
+    if actor.user:
+        return f"`{actor.user}`"
+    return f"a person of group `{actor.group}`"
+
+
 def _who(wf: Workflow, t: Transition) -> tuple[str, str, str]:
     """(actor type, name, description)."""
     if t.via == "release_train":
@@ -153,7 +162,7 @@ def _who(wf: Workflow, t: Transition) -> tuple[str, str, str]:
         return "job", name, f"the job `{name}` (role {actor.role}): `{' '.join(actor.command)}`, no model"
     if isinstance(actor, HumanActor):
         delay = f", within {actor.sla_hours} h" if actor.sla_hours else ""
-        return "human", name, f"a person of group `{actor.group}`{delay}"
+        return "human", name, f"{_human_who(actor)}{delay}"
     if isinstance(actor, DecisionActor):
         return "decision", name, _decision(actor)
     # What the platform does when it crosses it, in plain words (`does`, #175).
@@ -263,6 +272,7 @@ def to_process(wf: Workflow) -> list[dict[str, Any]]:
                 "role": str(actor.role) if isinstance(actor, AgentActor | JobActor | DecisionActor) else None,
                 "model": actor.model if isinstance(actor, AgentActor | DecisionActor) else None,
                 "group": actor.group if isinstance(actor, HumanActor) else None,
+                "user": actor.user if isinstance(actor, HumanActor) else None,
                 "sla_hours": actor.sla_hours if isinstance(actor, HumanActor) else None,
                 "command": list(actor.command) if isinstance(actor, JobActor) else None,
                 "image": (str(actor.image) if actor.image else None) if isinstance(actor, JobActor) else None,

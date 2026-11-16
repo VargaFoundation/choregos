@@ -30,6 +30,7 @@ jobs:
     outputs:
       python: ${{ steps.filter.outputs.python }}
       web: ${{ steps.filter.outputs.web }}
+      vscode: ${{ steps.filter.outputs.vscode }}
       charts: ${{ steps.filter.outputs.charts }}
       contracts: ${{ steps.filter.outputs.contracts }}
       docker: ${{ steps.filter.outputs.docker }}
@@ -63,6 +64,10 @@ jobs:
               - 'uv.lock'
             web:
               - 'apps/web/**'
+              - 'packages/contracts/ts/**'
+            # The editor extension (ADR 0155) is typed by the same generated contract.
+            vscode:
+              - 'apps/vscode/**'
               - 'packages/contracts/ts/**'
             charts:
               - 'charts/**'
@@ -351,6 +356,30 @@ jobs:
         if: failure()
         with: { name: playwright-report, path: apps/web/playwright-report, retention-days: 7 }
 
+  vscode:
+    # The editor extension (ADR 0155, S68-01): lint (ESLint and Prettier), the strict typecheck against the
+    # generated contract, the unit suite on the fakes with its coverage floor, then the VSIX the editor installs,
+    # kept as a build artefact. Node 24 as the console's job; the bundle targets the editor's own runtime.
+    needs: changes
+    if: needs.changes.outputs.vscode == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run: { working-directory: apps/vscode }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with: { package_json_file: apps/vscode/package.json }
+      - uses: actions/setup-node@v7
+        with: { node-version: 24, cache: pnpm, cache-dependency-path: apps/vscode/pnpm-lock.yaml }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm package
+      - uses: actions/upload-artifact@v7
+        with: { name: choregos-vscode, path: apps/vscode/dist/choregos-vscode.vsix, retention-days: 7 }
+
   charts:
     needs: changes
     if: needs.changes.outputs.charts == 'true'
@@ -362,16 +391,19 @@ jobs:
       # The default executor (agent_sandbox, ADR 0072) refuses to render without its operator in the
       # cluster's API versions: an offline rendering skips that check, nothing else.
       - run: helm lint charts/choregos --set choregos-orchestrator.runner.skipOperatorCheck=true
+      # The outpost's chart (S65-16) renders nothing without a policy: linted on its complete example.
+      - run: helm lint charts/choregos-outpost -f charts/choregos-outpost/values/example.yaml
       - name: render the four environments (local = the bundled dependencies)
         run: |
           for env in local dev staging prod; do
             helm template choregos charts/choregos -f charts/choregos/values/$env.yaml --set choregos-orchestrator.runner.skipOperatorCheck=true > /tmp/$env.yaml
           done
+          helm template outpost charts/choregos-outpost -f charts/choregos-outpost/values/example.yaml > /tmp/outpost.yaml
       - name: kubeconform
         run: |
           curl -sSLo kubeconform.tar.gz https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz
           tar xf kubeconform.tar.gz
-          ./kubeconform -strict -ignore-missing-schemas -summary /tmp/prod.yaml
+          ./kubeconform -strict -ignore-missing-schemas -summary /tmp/prod.yaml /tmp/outpost.yaml
       - name: helm unittest
         run: |
           # Pinned version: the plugin tracks Helm closely — `platformHooks` in its
@@ -432,6 +464,9 @@ jobs:
           # The decision model behind LiteLLM (ADR 0121, S52-02): its checkpoint is baked in.
           - image: laya
             file: docker/laya.Dockerfile
+          # The daemon an outpost's operator runs in their own network (ADR 0147, S65-15).
+          - image: outpost
+            file: docker/outpost.Dockerfile
     steps:
       - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v4
@@ -1008,7 +1043,8 @@ jobs:
     # Python is available — a bare environment, then `debian:bookworm-slim`. A change that breaks the
     # build (a dependency Nuitka cannot follow, a data file read at run time and left out) is seen on
     # its pull request, not on the tag. Nuitka's cache, with ccache's inside it, is kept between runs:
-    # a run that changes little recompiles little. The four other targets are built at release only.
+    # a run that changes little recompiles little. The four other targets are built on a tag
+    # (`release.yml`) and every week on main (`cli-binaries-weekly.yml`), not on pull requests.
     needs: changes
     if: needs.changes.outputs.cli-binary == 'true' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -1051,7 +1087,7 @@ jobs:
     # 2026-10-05, the hosted runners stopped acquiring jobs, `python` came back
     # `abandoned`, and a PR's gate was green without a single Python test having run. Whatever
     # GitHub invents tomorrow will close the gate too: we enumerate what passes, not what breaks.
-    needs: [changes, python, python-postgres, contracts, web, charts, conformance-backends, images, local-install, hosted-build, hosted-cosign, hosted-admission, hosted-gvisor, hosted-cluster, hosted-foundry, hosted-images, hosted-docker, llm-guard, decisions-live, skill-scanner, web-live, cli-binary, secrets, dco, english]
+    needs: [changes, python, python-postgres, contracts, web, vscode, charts, conformance-backends, images, local-install, hosted-build, hosted-cosign, hosted-admission, hosted-gvisor, hosted-cluster, hosted-foundry, hosted-images, hosted-docker, llm-guard, decisions-live, skill-scanner, web-live, cli-binary, secrets, dco, english]
     if: always()
     runs-on: ubuntu-latest
     steps:

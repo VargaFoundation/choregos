@@ -7,7 +7,8 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": resolve(import.meta.dirname, "./src"),
-      "@choregos/contracts": resolve(import.meta.dirname, "../../packages/contracts/ts/index.ts"),
+      // The package is read by its two modules, `@choregos/contracts/schemas` and `/api` (it has no root entry).
+      "@choregos/contracts": resolve(import.meta.dirname, "../../packages/contracts/ts"),
     },
   },
   test: {

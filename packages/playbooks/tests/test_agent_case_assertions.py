@@ -100,6 +100,13 @@ FIXTURES: list[tuple[dict[str, Any], dict[str, Any], dict[str, Any], str]] = [
         "executed_actions: 2, expected at most 1",
     ),
     (
+        # An action in doubt was sent (ADR 0149): it is a write that was played, not a proposal.
+        {"kind": "executed_actions", "tool": "tracker__create_issue", "count": 0},
+        _observation(actions=[{"tool": "tracker__create_issue", "status": "pending_approval"}]),
+        _observation(actions=[{"tool": "tracker__create_issue", "status": "in_doubt"}]),
+        "executed_actions: 1, expected 0",
+    ),
+    (
         {"kind": "no_tool_called", "tools": ["entra__create_user", "pfsense__delete_*"]},
         _observation(),
         _observation(calls=[{"tool": "pfsense__delete_firewall_rule", "origin": "script"}]),

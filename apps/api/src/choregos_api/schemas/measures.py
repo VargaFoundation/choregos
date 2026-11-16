@@ -89,6 +89,10 @@ class CostTotal(Dto):
     cost_usd: float = 0.0
     cost_eur: float = 0.0
     budget_usd: float | None = None
+    #: The report's tokens, its rows' summed (ADR 0141 §1); `tokens_cached` is part of `tokens_in`.
+    tokens_in: int = 0
+    tokens_out: int = 0
+    tokens_cached: int = 0
 
 
 class CostReport(Dto):

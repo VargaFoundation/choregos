@@ -62,7 +62,9 @@ class OidcProvider:
     (a provider that omits the claim, such as Entra ID, is accepted). `groups_claim` names the
     userinfo claim that carries the groups. `groups_map`, when set, translates the provider's group
     values (an Entra ID group id, say) into the core's group names (`org-admins`, `developers`…);
-    a value it does not list is dropped. The extension checks the names it maps to.
+    a value it does not list is dropped. The extension checks the names it maps to. `job_title_claim` and
+    `department_claim` name the userinfo claims copied onto the person at each sign-in (ADR 0162), with
+    `given_name` and `family_name`.
     """
 
     issuer: str
@@ -75,6 +77,8 @@ class OidcProvider:
     require_email_verified: bool = True
     groups_claim: str = "groups"
     groups_map: dict[str, str] = field(default_factory=dict)
+    job_title_claim: str = "job_title"
+    department_claim: str = "department"
 
     def mapped_groups(self, claimed: Any) -> list[str]:
         """The groups the provider claims, as the core's group names."""
@@ -133,7 +137,8 @@ def reset() -> None:
     _RESOLVER.clear()
 
 
-async def resolve(session: Any, hint: SignInHint) -> TenantSignIn | None:
+async def resolve_extension(session: Any, hint: SignInHint) -> TenantSignIn | None:
+    """What the extension's resolver says, without the core's own SAML providers."""
     resolver = _RESOLVER.get("resolver")
     if resolver is None or not (hint.org or hint.email_domain):
         return None
@@ -143,6 +148,16 @@ async def resolve(session: Any, hint: SignInHint) -> TenantSignIn | None:
     if found is not None and not isinstance(found, TenantSignIn):
         raise TypeError(f"the sign-in resolver returned {type(found).__name__}, not a TenantSignIn")
     return found
+
+
+async def resolve(session: Any, hint: SignInHint) -> TenantSignIn | None:
+    """The extension's answer first, then the core's own SAML providers (ADR 0170)."""
+    found = await resolve_extension(session, hint)
+    if found is not None or not (hint.org or hint.email_domain):
+        return found
+    from .services.saml_providers import saml_sign_in
+
+    return await saml_sign_in(session, hint)
 
 
 def email_domain(address: str | None) -> str | None:

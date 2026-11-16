@@ -1,5 +1,5 @@
-# Tenant mode: an AppProject that refuses any cluster-scoped object (Diametral:
-# `clusterResourceWhitelist: []`) refuses the **whole** sync at the first ClusterRole rendered.
+# Tenant mode: an AppProject that refuses any cluster-scoped object (as some
+# platforms do: `clusterResourceWhitelist: []`) refuses the **whole** sync at the first ClusterRole rendered.
 # These tests guard the boundary on both sides: nothing cluster-scoped when it is cut off,
 # and the default unchanged for the others.
 suite: mode locataire
@@ -58,7 +58,7 @@ tests:
     set:
       choregos-api.ingress.kind: ingress
       choregos-api.ingress.className: traefik
-      choregos-api.ingress.hostnames: ["choregos-api.internal.dev.diametral.com"]
+      choregos-api.ingress.hostnames: ["choregos-api.internal.dev.example.com"]
     asserts:
       - isKind:
           of: Ingress
@@ -67,7 +67,7 @@ tests:
           value: traefik
       - equal:
           path: spec.rules[0].host
-          value: choregos-api.internal.dev.diametral.com
+          value: choregos-api.internal.dev.example.com
       - lengthEqual:
           path: spec.rules[0].http.paths
           count: 9
@@ -139,19 +139,19 @@ tests:
   - it: public URLs can be overridden for an internal HTTP ingress
     template: charts/choregos-api/templates/deployment.yaml
     set:
-      global.publicUrl: http://choregos.internal.dev.diametral.com
-      global.apiUrl: http://choregos-api.internal.dev.diametral.com
+      global.publicUrl: http://choregos.internal.dev.example.com
+      global.apiUrl: http://choregos-api.internal.dev.example.com
     asserts:
       - contains:
           path: spec.template.spec.containers[0].env
           content:
             name: CHOREGOS_PUBLIC_URL
-            value: http://choregos.internal.dev.diametral.com
+            value: http://choregos.internal.dev.example.com
       - contains:
           path: spec.template.spec.containers[0].env
           content:
             name: CHOREGOS_API_URL
-            value: http://choregos-api.internal.dev.diametral.com
+            value: http://choregos-api.internal.dev.example.com
 
   - it: the database URL is composed from the Zalando operator's secret
     template: charts/choregos-api/templates/deployment.yaml

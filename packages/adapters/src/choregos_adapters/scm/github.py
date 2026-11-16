@@ -93,7 +93,7 @@ class GitHubScm:
         return True
 
     async def head_of(self, repo: str, branch: str) -> str | None:
-        """The commit `branch` points at now, `None` when there is no such branch (ADR 0152). Any
+        """The commit `branch` points at now, `None` when there is no such branch (ADR 0171). Any
         other error is raised: an outage is not an absence."""
         try:
             ref = await self.client.request("GET", f"/repos/{repo}/git/ref/heads/{branch}", repo=repo)
@@ -272,7 +272,7 @@ class GitHubScm:
         )
 
     async def enqueue_merge(self, ref: PrRef, sha: str) -> None:
-        """Merge the pull request at `sha`, the commit the gates judged (ADR 0152).
+        """Merge the pull request at `sha`, the commit the gates judged (ADR 0171).
 
         Merge queue: `enablePullRequestAutoMerge` with `expectedHeadOid`, otherwise a direct merge
         with `sha` if the policy allows it. A head that is elsewhere is a `HeadMovedError` and

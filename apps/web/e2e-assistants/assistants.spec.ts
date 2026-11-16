@@ -72,7 +72,7 @@ test("an owner installs an assistant with the form its config_schema draws", asy
   await page.getByLabel("Plugin").selectOption("coaching");
   await page.getByLabel("Assistant").selectOption("one-on-one-coach");
   // The defaults are in, the required field without one is asked for, the list of URLs is typed as a URL list.
-  await expect(page.getByLabel(/company name/i)).toHaveValue("Diametral");
+  await expect(page.getByLabel(/company name/i)).toHaveValue("Globex");
   await page.getByLabel(/hr contact/i).fill("hr@acme.test");
   await page.getByLabel(/embed origins/i).fill("https://scorecard.example.org, https://hr.example.org");
   // A oneOf of constants is a choice, a nullable integer a number field, a list of `$ref`'d objects an item list.
@@ -86,7 +86,7 @@ test("an owner installs an assistant with the form its config_schema draws", asy
     plugin: "coaching",
     assistant: "one-on-one-coach",
     config: {
-      company_name: "Diametral",
+      company_name: "Globex",
       hr_contact: "hr@acme.test",
       embed_origins: ["https://scorecard.example.org", "https://hr.example.org"],
       tone: "direct",
@@ -94,4 +94,26 @@ test("an owner installs an assistant with the form its config_schema draws", asy
       topics: [{ label: "Feedback" }],
     },
   });
+});
+
+test("an owner reveals a task's event door, reads the events journal and seals a Teams webhook", async ({ page, request }) => {
+  await page.goto("/assistants/manage/coach");
+  await page.getByLabel("Current organisation").selectOption({ label: "Acme" });
+  await expect(page.getByText("The key below is a secret")).toBeVisible();
+  await page.getByLabel("Task", { exact: true }).fill("new_ticket");
+  await page.getByRole("button", { name: "Show the URL and key" }).click();
+  await expect(page.getByTestId("event-key")).toContainText("chev_e2e_secret");
+  await expect(page.getByTestId("event-key")).toContainText("/tasks/new_ticket/events");
+  await expect(page.getByText("run started for ada")).toBeVisible();
+
+  await expect(page.getByText("Not configured")).toBeVisible();
+  await page.getByLabel("Teams webhook URL").fill("https://example.webhook.office.com/secret-path");
+  await page.getByRole("button", { name: "Seal the URL" }).click();
+  await expect(page.getByText(/version 1/)).toBeVisible();
+  await expect(page.locator("body")).not.toContainText("secret-path");
+  const put = (await calls(request)).filter((c) => c.method === "PUT" && c.path.endsWith("/delivery/teams"));
+  expect(put.at(-1)?.body).toEqual({ webhook_url: "https://example.webhook.office.com/secret-path" });
+  await page.getByRole("button", { name: "Remove" }).click();
+  await page.getByRole("button", { name: "Remove" }).last().click();
+  await expect(page.getByText("Not configured")).toBeVisible();
 });

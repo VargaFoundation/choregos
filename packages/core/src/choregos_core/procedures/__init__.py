@@ -66,7 +66,7 @@ PLUGIN_SERVER = re.compile(r"^([a-z0-9][a-z0-9-]{0,62})/([a-z0-9][a-z0-9-]{0,62}
 PLAIN_PLACEHOLDERS = frozenset({"api_url", "public_url", "org"})
 PARAMETRISED_PLACEHOLDERS = {
     "webhook_url": frozenset(WEBHOOK_SOURCES),
-    "oauth_callback": frozenset({"remote"}),
+    "oauth_callback": frozenset({"remote", "linked-accounts"}),
 }
 
 _FENCE = re.compile(r"^\s*(```|~~~)")
@@ -262,6 +262,8 @@ def resolve_placeholder(name: str, argument: str | None, ctx: Context) -> str:
         return f"{api}/api/v1/webhooks/{argument}"
     if name == "plugin_webhook_url":
         return f"{api}/api/v1/webhooks/plugins/{ctx.org}/{argument}"
+    if argument == "linked-accounts":
+        return f"{api}/api/v1/auth/linked-accounts/callback"
     return f"{api}/api/v1/remote-credentials/oauth/callback"  # oauth_callback:remote
 
 

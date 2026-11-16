@@ -29,7 +29,7 @@ class UpstreamError(AdapterError):
 
 
 class HeadMovedError(UpstreamError):
-    """The pull request's head is not the commit the merge named: nothing was merged (ADR 0152).
+    """The pull request's head is not the commit the merge named: nothing was merged (ADR 0171).
 
     `expected` is the commit the caller named, `actual` the head the forge holds when it could be
     read. The same merge would be refused the same way: the caller judges the new head, it does not

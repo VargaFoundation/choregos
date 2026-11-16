@@ -90,9 +90,12 @@ class TokenExchangeClient:
         return body
 
     async def exchange(
-        self, subject_token: str, *, audience: str, actor: str | None = None
+        self, subject_token: str, *, audience: str, actor: str | None = None, scope: str | None = None
     ) -> ExchangedToken:
-        """A token of `audience` for the person `subject_token` designates."""
+        """A token of `audience` for the person `subject_token` designates. `scope` (RFC 8693 section 2.1)
+        is sent when given: a provider such as Keycloak only grants an audience that one of the requested
+        scopes carries, so a deployment can keep that scope optional on the client instead of putting the
+        source's audience in every token the client is issued."""
         data = {
             "grant_type": GRANT_EXCHANGE,
             "subject_token": subject_token,
@@ -102,6 +105,8 @@ class TokenExchangeClient:
         }
         if actor:
             data["requested_actor"] = actor
+        if scope:
+            data["scope"] = scope
         body = await self._post(data)
         return ExchangedToken(str(body["access_token"]), int(body.get("expires_in") or 0))
 

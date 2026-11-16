@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://choregos.dev/schemas/outpost-enrolment-request.schema.json",
+  "title": "OutpostEnrolmentRequest",
+  "description": "The body of `POST /outposts/v1/enrol` (ADR 0148 §3): an enrolment token and the public halves of the keys the instance made on the spot (ADR 0147 §2, §4). The private halves never leave the machine. The request is signed with the key it enrols, which ties the sealing key to the signing key whose fingerprint a person compares.",
+  "type": "object",
+  "required": [
+    "protocol",
+    "token",
+    "signing_key",
+    "sealing_key",
+    "daemon_version",
+    "capabilities"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "protocol": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "The protocol the daemon speaks: 1 for this contract."
+    },
+    "token": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._~-]{16,256}$",
+      "description": "The enrolment token a person created for one outpost: single use, valid 15 minutes at most. Opaque to a daemon; the door reads in it which outpost it is for (ADR 0148 §6)."
+    },
+    "signing_key": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$",
+      "description": "Ed25519, raw 32 bytes, base64url without padding: verifies every later request of this instance."
+    },
+    "sealing_key": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$",
+      "description": "X25519, raw 32 bytes, base64url without padding: the calls this instance claims are sealed to it."
+    },
+    "daemon_version": {
+      "type": "string",
+      "pattern": "^[0-9A-Za-z][0-9A-Za-z.+-]{0,63}$",
+      "description": "The daemon's own release, as a fact to show."
+    },
+    "capabilities": {
+      "type": "array",
+      "maxItems": 4,
+      "items": {
+        "enum": [
+          "tools"
+        ]
+      },
+      "description": "What the instance can do. `tools` is the one capability of protocol 1; `runs` is reserved and announced by no daemon of this protocol (ADR 0147 §11, ADR 0149 §12)."
+    },
+    "facts": {
+      "type": "object",
+      "maxProperties": 16,
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]{0,31}$"
+      },
+      "additionalProperties": {
+        "type": "string",
+        "maxLength": 256
+      },
+      "default": {},
+      "description": "Facts about the instance for the person who approves it (a host name, a platform): bounded, stored as data, never interpreted (ADR 0148 §9)."
+    }
+  }
+}

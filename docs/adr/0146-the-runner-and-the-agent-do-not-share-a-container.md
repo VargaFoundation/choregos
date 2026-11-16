@@ -1,6 +1,10 @@
 # 0146 — The runner and the agent do not share a container
 
-- **Status**: proposed, 2026-11-11 — design study S65-04; nothing is implemented. Would amend
+- **Status**: accepted, 2026-11-15, **in part**. Proposed 2026-11-11 (design study S65-04), accepted
+  after the audit of production 0.27.2 on 2026-11-14 (Landlock inactive on all 104 runs; agent
+  and runner in one container and one uid) and the product owner's decision to fix it. The decision
+  stands as written; what the code does of it today is in "Accepted, and what is built" below.
+  Would amend
   [ADR 0094](0094-the-kernel-confines-the-agent-at-launch.md) (what the confinement is still for),
   [ADR 0115](0115-the-agent-never-holds-the-run-token.md) (closes its first consequence) and
   [ADR 0002](0002-acp-as-the-agent-contract.md) ("in-pod stdio"); extends
@@ -11,6 +15,60 @@
   `agent_sandbox`, `local_docker`, `tekton`, `aca`) and their `capabilities`, the chart's
   SandboxTemplate; stories in
   [PLAN-2026-11-11-runner-agent-separation.md](../plan/PLAN-2026-11-11-runner-agent-separation.md)
+
+## Accepted, and what is built
+
+**Decision**: §1-§4 and §8-§9 are the decision, for the `agent_sandbox` executor first: the agent runs
+in a container of its own, as another uid, and the flag is `CHOREGOS_RUNNER_AGENT_ISOLATION`
+(`process` | `container`), set in the chart by `runner.sandbox.agentIsolation`. **The default stays
+`process`** (§13): the shape is proved on a kubelet with runc, not yet on the operator or under
+gVisor. A deployment turns `container` on in dev first, and rolls back by setting `process`: the
+chart then renders the pod it rendered before this ADR (a test compares the two).
+
+Built (S65-04d, e, g and the `agent_sandbox` part of h, i):
+
+- `choregos-runner launcher` (`launcher.py`, standard library only), and `AcpClient` and the
+  checks reading a stream instead of a pipe. Frames over loopback TCP, one connection per process;
+  a runner that disconnects takes its process group with it.
+- `SandboxTemplate`: a native sidecar `agent` (init container, `restartPolicy: Always`, Kubernetes 1.29
+  or later) from the runner image, uid 1001, `readOnlyRootFilesystem`, no secret, no `envFrom`;
+  `/workspace` and `/exchange` (an `emptyDir`) are the only volumes both mount. `TMPDIR=/exchange`
+  puts the agent's `$HOME` and the tool scripts on that surface. The pod's `fsGroup` and a `0002`
+  umask on both sides keep what one writes writable by the other.
+- A runner told `container` that finds no launcher ends with exit code 100
+  (`AGENT_ISOLATION_UNAVAILABLE`), journals `run.failed` (`phase: isolation`) and never starts the agent
+  as its child. Every run journals `agent.isolation` with `run.started`.
+- The executor reads the pod log of the `runner` container by name.
+- The project's checks run through the launcher, in the agent's container (§6).
+- The `opencode` backend writes `permission.bash` from the policy's `deny_commands`, as Claude Code's
+  `permissions.deny` does (keys read from `https://opencode.ai/config.json` on 2026-11-15).
+
+**Built after, S65-04f (§7)**: under `container` the runner serves the three loopback listeners for an ACP
+step's agent and hands it a copy of the step with loopback addresses and the loopback key
+(`loopback/agent.py`). Two details the ADR left open, decided: the model listener's turn count is a
+constructor option (`count_turns=False` for an ACP step, which also skips the context measure: the runner
+registers the context itself), and the MCP listener still judges every `tools/call` though the ACP
+permission judged it first, because a `curl` from the shell skips the permission. The `gemini-cli`
+backend speaks API paths the model listener does not serve (`Backend.loopback_model = False`): its key
+stays in the container, and the docs say so. The project's checks start with the
+same proxy variables as the agent.
+
+**Built after, S65-04b (§6)**: the runner opens what it reads or writes in the agent's tree through `safe_files.py` (each directory from its parent's descriptor, `O_NOFOLLOW`, a regular file only): result, deliverables, inputs, task and context, journal, saved session, the hosted prompt agent's file tools. Not covered: the ACP `fs/*` handlers (they resolve, then refuse a path outside the workspace) and the files git walks. The transcript and `acp-session.json` stay in `.choregos/`: a link there is refused, not moved out of the tree.
+
+**Built after, S65-04c (§5)**: the runner's git directory is outside the tree the agent writes (`--git-dir`
+the runner's own), and the hardening of #1345 is the second lock.
+
+**Not built, still decided**: `k8s_job`, `local_docker`, `tekton`, `aca`
+get no second container here: a runner told `container` there exits 100. The `separate_agent`
+capability has no consumer until one of them does, so it is not declared. The runner container keeps
+today's requests and limits (§12 asks for a smaller one: not measured), so a `container` pod requests
+twice what a `process` pod does.
+
+**Proved** (`tests/cluster/test_agent_isolation.py`, kubelet 1.34, runc): the same probe, run as the
+runner's child, reads the runner's environment, process and file; run by the launcher, it reads none
+of the three, is uid 1001, and the shared volumes still carry the work both ways. **Not proved**:
+gVisor, the operator's behaviour with the sidecar (readiness, suspension), the real runner image
+with a real harness.
 
 ## Context
 

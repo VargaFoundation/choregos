@@ -64,8 +64,7 @@ from .broker import (
 from .conversation_needs import need_identities, previews, write_tools
 from .events import persist_event
 from .identity_exchange import SERVICE, USER_CONSENT, USER_EXCHANGE, Acting
-from .mcp_gateway import route_of
-from .mcp_gateway_identity import GatewayRefusal
+from .mcp_gateway import RouteRefusal, route_of
 
 #: A proposal nobody decided in this time is `expired`.
 EXPIRES_AFTER = timedelta(hours=24)
@@ -232,7 +231,7 @@ async def _propose_governed(
         return "action not proposed: the conversation has no space to act in"
     try:
         await route_of(session, entry.tool.connector)
-    except GatewayRefusal as refused:
+    except RouteRefusal as refused:
         return f"action not proposed: {refused}"
     governed = await tool_action(
         session,
@@ -327,6 +326,8 @@ def to_dto(action: ConversationAction) -> ConversationActionDto:
         status=action.status,
         result=dict(action.result) if action.result is not None else None,
         diff=dict(action.diff) if action.diff is not None else None,
+        kind="launch" if action.kind == "launch" else "write",
+        target=dict(action.target) if action.target is not None else None,
         confirmed_by=action.confirmed_by,
         confirmed_at=action.confirmed_at,
         executed_at=action.executed_at,
@@ -421,6 +422,10 @@ async def confirm(
         action.status = "expired"
         await session.commit()
         raise _typed(f"action {action.id} expired: the assistant must propose it again", "action_expired")
+    if action.kind == "launch":  # ADR 0158: a work item filed in the bound project, as the person
+        from .conversation_launches import confirm as confirm_launch
+
+        return await confirm_launch(session, record, action, principal)
     project = await session.get(Project, record.project_id) if record.project_id else None
     if project is None:
         raise _typed("the conversation has no space to act in", "no_project")
