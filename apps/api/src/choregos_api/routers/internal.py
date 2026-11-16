@@ -153,7 +153,7 @@ async def post_events(id: str, body: RunEventsBatch, session: Db, claims: RunAut
     A run writes its own lines, never the platform's (ADR 0173): a batch that carries a type the
     platform writes in this journal (`gate.outcome`, `memory.skipped`, their namespaces) is refused
     whole, and nothing of it is written. No runner sends one; the refusal is logged. The same holds for
-    the gateway's lines (S65-08b): a `seq` in its range, or a breakdown that says `source: gateway`."""
+    the gateway's lines (S65-08b): a breakdown that says `source: gateway`."""
     run, _, project = await _run_and_item(session, id)
     reserved = sorted({event.type for event in body.events if platform_written(event.type)})
     if reserved:
@@ -164,9 +164,7 @@ async def post_events(id: str, body: RunEventsBatch, session: Db, claims: RunAut
             "a run does not write the platform's lines of its journal: "
             + ", ".join(f"`{name}`" for name in reserved[:8])
         )
-    claimed = sorted(
-        {event.seq for event in body.events if gateway_written(event.seq, event.type, event.payload)}
-    )
+    claimed = sorted({event.seq for event in body.events if gateway_written(event.type, event.payload)})
     if claimed:
         logger.warning(
             "run_journal.gateway_line_refused", run_id=run.id, project=project.slug, seqs=claimed[:8]

@@ -1,10 +1,10 @@
 """A run does not write the gateway's lines of its journal (S65-08b, ADR 0173).
 
 `context.breakdown` has two authors: the run records the context it measured, and the gateway's
-callback adds its own count of an ACP CLI's calls (`source: gateway`, numbered above
-`GATEWAY_SEQ_BASE`). The run's door wrote both shapes, so the console could show a run's number as the
-gateway's, and a run could take the number the gateway writes next. Now the door refuses a line in the
-gateway's range and a breakdown that says the gateway measured it; the run's own breakdowns pass.
+callback adds its own count of an ACP CLI's calls (`source: gateway`). The run's door wrote both shapes,
+so the console could show a run's number as the gateway's. Now the door refuses a breakdown that says
+the gateway measured it; the run's own breakdowns pass. Numbers above `GATEWAY_SEQ_BASE` are not the
+gateway's alone: the run's tool bridge numbers its lines there (`SIDECAR_SEQ_BASE`), and they pass.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from choregos_api.services.context_breakdown import GATEWAY_SEQ_BASE
+from choregos_tools_mcp.bridge import SIDECAR_SEQ_BASE
 from httpx import AsyncClient
 
 from .kits.closed_runs import token_of
@@ -49,20 +49,6 @@ async def test_a_run_cannot_say_the_gateway_measured_its_breakdown(
     assert await _events("run-gl-1") == []
 
 
-@pytest.mark.parametrize("type_", ["context.breakdown", "session/update"])
-async def test_a_run_cannot_number_a_line_in_the_gateways_range(
-    client: AsyncClient, project: dict[str, Any], type_: str
-) -> None:
-    await run_with_events(project, "run-gl-2", "claude-code", [])
-
-    refused = await _post(
-        client, "run-gl-2", {"seq": GATEWAY_SEQ_BASE + 1, "type": type_, "payload": {"source": "loop"}}
-    )
-
-    assert refused.status_code == 422, refused.text
-    assert await _events("run-gl-2") == []
-
-
 async def test_a_batch_that_carries_one_is_refused_whole(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
@@ -88,26 +74,24 @@ async def test_the_runs_own_breakdowns_are_still_written(
     assert (seq, type_, payload["source"]) == (1, "context.breakdown", source)
 
 
-async def test_the_gateways_next_line_stays_the_gateways(
+async def test_the_tool_bridges_lines_still_pass_and_the_gateway_writes_after_them(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    """The gateway numbers its next line after its last one: a run that took that number first would
-    make the gateway's write collide with it. Refused at the door, it is the gateway's."""
+    """The tool bridge numbers its lines from `SIDECAR_SEQ_BASE`, the gateway's base too: the door lets
+    them through, and the gateway's next breakdown takes the number after the highest it finds."""
     await run_with_events(project, "run-gl-5", "claude-code", [])
-    taken = await _post(
-        client, "run-gl-5", {"seq": GATEWAY_SEQ_BASE + 1, "type": "session/update", "payload": {}}
-    )
-    assert taken.status_code == 422, taken.text
+    bridge = SIDECAR_SEQ_BASE + 1_234
+    posted = await _post(client, "run-gl-5", {"seq": bridge, "type": "tools.client", "payload": {}})
+    assert posted.status_code == 202, posted.text
 
     kept = await client.post(
         f"{RUNS}/run-gl-5/context-breakdown", headers=signed("run-gl-5"), json=gateway_breakdown(1, 1200)
     )
 
     assert kept.status_code == 202, kept.text
-    [(seq, type_, payload)] = await _events("run-gl-5")
-    assert (seq, type_, payload["source"], payload["prompt_tokens"]) == (
-        GATEWAY_SEQ_BASE + 1,
-        "context.breakdown",
-        "gateway",
-        1200,
-    )
+    lines = await _events("run-gl-5")
+    assert [(seq, type_) for seq, type_, _ in lines] == [
+        (bridge, "tools.client"),
+        (bridge + 1, "context.breakdown"),
+    ]
+    assert lines[1][2]["source"] == "gateway" and lines[1][2]["prompt_tokens"] == 1200

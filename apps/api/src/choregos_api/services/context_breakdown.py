@@ -35,12 +35,12 @@ GATEWAY_SEQ_BASE = 1_000_000_000
 MAX_PARTS = 4096
 
 
-def gateway_written(seq: int, type_: str, payload: Any) -> bool:
-    """A line of a run's journal only the gateway's callback writes (S65-08b, ADR 0173): any line
-    numbered in the gateway's range, and a breakdown that says the gateway measured it. The run's door
-    refuses both, so that what the console shows as the gateway's count is the gateway's."""
-    if seq >= GATEWAY_SEQ_BASE:
-        return True
+def gateway_written(type_: str, payload: Any) -> bool:
+    """A line of a run's journal only the gateway's callback writes (S65-08b, ADR 0173): a breakdown that
+    says the gateway measured it. The run's door refuses it, so that what the console shows as the
+    gateway's count is the gateway's. The numbers above `GATEWAY_SEQ_BASE` are not the gateway's alone:
+    the run's tool bridge numbers its own lines there too (`SIDECAR_SEQ_BASE`), and the gateway takes the
+    next number after the highest it finds."""
     return type_ == EVENT and isinstance(payload, dict) and payload.get("source") == "gateway"
 
 
