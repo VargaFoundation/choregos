@@ -127,7 +127,8 @@ describe("my account, your roles", () => {
 const SESSIONS = [
   {
     id: "s-here",
-    channel: "oidc", kind: "browser" as const,
+    channel: "oidc",
+    kind: "browser" as const,
     created_at: "2026-11-09T08:00:00Z",
     expires_at: "2099-11-09T16:00:00Z",
     last_seen_at: "2026-11-09T09:00:00Z",
@@ -137,7 +138,8 @@ const SESSIONS = [
   },
   {
     id: "s-phone",
-    channel: "oidc", kind: "browser" as const,
+    channel: "oidc",
+    kind: "browser" as const,
     created_at: "2026-11-09T07:00:00Z",
     expires_at: "2099-11-09T15:00:00Z",
     last_seen_at: "2026-11-09T07:30:00Z",
