@@ -10,7 +10,6 @@ vendor_docs:
 egress: []
 fields:
   pipeline: "the Pipeline each run starts, choregos-agent by default"
-  service_account: "the service account the PipelineRun runs as"
 ---
 
 ## Before you start
@@ -27,13 +26,13 @@ and goes with it however it ends.
 
 ## Permissions
 
-The orchestrator creates, reads and deletes `PipelineRun`s and `Secret`s in the runner namespaces. The
-`service_account` is the identity of the stage's pod: give it nothing beyond what the runner needs.
+The orchestrator creates, reads and deletes `PipelineRun`s and `Secret`s in the runner namespaces. A
+stage's pod runs as `choregos-runner`, the account the chart creates: give it nothing beyond what the
+runner needs. That account is the deployment's and is not set on a connector.
 
 ## In Choregos
 
-Mostly chart values. If a connector is declared, `pipeline` names the Pipeline to start and
-`service_account` the account it runs as.
+Mostly chart values. If a connector is declared, `pipeline` names the Pipeline to start.
 
 ## Test it
 

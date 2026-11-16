@@ -6,7 +6,7 @@ apiVersion: choregos/v1
 kind: Workflow
 metadata:
   name: architecture-decision
-  version: 1
+  version: 2
   catalogue:
     title: Architecture decision record
     summary: "A structural question answered by one architecture decision record in MADR 4 format: the question framed, research with evidence, the ADR drafted, critiqued by a reviewer, decided by the architects, marked accepted and merged. Nothing is deployed."
@@ -79,12 +79,25 @@ transitions:
     by: platform
     does: open_pr
     on_fail: { to: accepted, max_attempts: 2, escalate_to: needs_human }
+  # Held to the merge (ADR 0171): the merge names the commit its own gates judged, so what the
+  # earlier steps were asked on the diff is asked again here, on the commit that is merged.
+  # The scope is read there on the work item's whole diff (`over: work_item`), whichever step ran
+  # last: nothing but the record, and no file under a path the policy forbids.
   - id: t-merge
     from: in_pr
     to: adopted
     by: platform
     does: merge_pr
-    gates: [ci_green, adr_number_free]
+    gates:
+      - ci_green
+      - adr_number_free
+      - no_secrets
+      - { name: scope_respected, params: { over: work_item, paths: ["docs/adr/**"] } }
+      - name: markdown_sections
+        params:
+          paths: ["docs/adr/**"]
+          sections: [Context and Problem Statement, Considered Options, Decision Outcome]
+          patterns: ['Chosen option: "', 'status: "?accepted']
     timeout_hours: 24
     on_fail: { to: decided, max_attempts: 2, escalate_to: needs_human }
   - id: t-abandon

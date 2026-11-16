@@ -5107,6 +5107,14 @@ stories:
     size: M
     depends_on: [S67-04b, S67-03]
     notes: "Recorded claude-code and opencode transcripts that delegate give the expected nodes; no parent id gives a flat list; no surface reads _meta."
+  - id: S67-14
+    title: "feat(cli): the workspace's expanded run node shows its steps and its sub-agents (ADR 0154)"
+    stream: S67
+    sprint: 5
+    priority: 1
+    size: S
+    depends_on: [S67-09, S67-03, S67-12]
+    notes: "An expanded run shows its plan, its tool calls (state, title, elapsed), its context or 'not measured', and its sub-agents nested; the journal is read by after_seq while the run is in flight and not at all once the node is collapsed; _meta is never read; pilot tests and SVG snapshots in colour and NO_COLOR at 80 and 160 columns."
   - id: S67-13
     title: "docs: the terminal in the user documentation"
     stream: S67
