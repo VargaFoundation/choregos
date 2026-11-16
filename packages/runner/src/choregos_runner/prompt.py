@@ -30,6 +30,7 @@ from choregos_core.mcp import RESULT_CEILING_BYTES
 from choregos_core.prompt_loop import LoopOutcome, LoopRequest, LoopTool, run_loop
 from choregos_tools_mcp.answer import MAX_NOTICES
 
+from . import safe_files
 from .budget import gateway_budget_refusal
 from .egress import step_policy
 from .guardrails import GuardRails
@@ -250,9 +251,12 @@ class PromptRun:
 
     def _read(self, relative: str) -> str:
         target = self._inside(relative)
-        if not target.is_file():
+        try:
+            data = safe_files.read_bytes(
+                self.workspace, target.relative_to(self.workspace), limit=_MAX_FILE_BYTES
+            )
+        except OSError:
             return f"`{relative}` is not a file of the workspace"
-        data = target.read_bytes()[:_MAX_FILE_BYTES]
         return data.decode("utf-8", errors="replace")
 
     def _list(self, relative: str) -> str:
@@ -271,14 +275,21 @@ class PromptRun:
             return f"`{filename}` is not a file this step declares: {', '.join(sorted(self.files.values()))}"
         if not isinstance(content, str):
             return "`content` must be text"
-        target = self.workspace / OUTPUTS_DIR / filename
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(content, encoding="utf-8")
+        try:
+            safe_files.write_text(self.workspace, Path(OUTPUTS_DIR) / filename, content)
+        except OSError as exc:
+            return f"`{filename}` was not written: {exc}"
         return f"`{filename}` written ({len(content.encode())} bytes)"
 
     def _submit(self, payload: dict[str, Any]) -> str:
-        self.result_path.parent.mkdir(parents=True, exist_ok=True)
-        self.result_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        try:
+            safe_files.write_text(
+                self.workspace,
+                self.result_path.relative_to(self.workspace),
+                json.dumps(payload, ensure_ascii=False),
+            )
+        except OSError as exc:
+            return f"the result was not written: {exc}"
         load = load_result(
             self.result_path,
             inline_outputs(self.stage_input),

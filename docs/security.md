@@ -88,7 +88,7 @@ as the runner's child and reading none of it through the launcher. The two conta
 launcher stops (exit code 100) instead of starting the agent itself. What stays within the agent's
 reach: the `gemini-cli` backend's gateway key (its API paths are not served by the runner's model
 listener, so the key stays in its container); the runner still runs git in the tree the agent writes
-(hardened, not isolated, until S65-04c is merged); the other executors get no second container yet.
+(hardened, not isolated, until S65-04c is merged). The runner opens every file it reads or writes in that tree without following a link (`safe_files.py`, `O_NOFOLLOW` from the workspace root, S65-04b: results, deliverables, inputs, task, journal, saved session; the ACP `fs/*` handlers still resolve a path inside the workspace and are not covered, nor is the tree the runner's git walks). The other executors get no second container yet. The other executors get no second container yet.
 The gateway key, the egress token and the MCP headers of every other backend are held by the runner,
 which serves the agent a loopback model, MCP and CONNECT listener (ADR 0146 §7, S65-04f): the agent's
 environment holds the constant loopback key, loopback addresses and no run credential. A plain-HTTP
