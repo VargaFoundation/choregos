@@ -1049,3 +1049,21 @@ def test_the_developer_surfaces_read_what_the_door_reads_and_what_waits_for_the_
     # G6: an entry names its work item's title, optionally.
     entry = schemas["ActivityEntry"]
     assert "work_item_title" in entry["properties"] and "work_item_title" not in entry["required"]
+
+
+def test_refusing_a_proposed_action_carries_an_optional_reason() -> None:
+    """S67-16a (ADR 0154 §7): a refusal may say why; callers written before it keep working."""
+    spec = contracts.load_openapi()
+    refuse = spec["paths"]["/me/conversations/{conversation_id}/actions/{action_id}/refuse"]["post"]
+    assert refuse["operationId"] == "refuseMyConversationAction"
+    body = refuse["requestBody"]
+    assert body.get("required") is False
+    assert body["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/ConversationActionRefusal"
+    }
+    schemas = spec["components"]["schemas"]
+    reason = schemas["ConversationActionRefusal"]["properties"]["reason"]
+    assert schemas["ConversationActionRefusal"]["required"] == ["reason"]
+    assert reason["minLength"] == 1 and reason["maxLength"] == 500
+    action = schemas["ConversationAction"]
+    assert "refusal_reason" in action["properties"] and "refusal_reason" not in action["required"]

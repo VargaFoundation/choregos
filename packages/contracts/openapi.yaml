@@ -4248,12 +4248,19 @@ paths:
     post:
       tags: [agents]
       operationId: refuseMyConversationAction
-      description: Refuses a proposed write; nothing reaches the source. Only the conversation's owner (404 otherwise).
+      description: >-
+        Refuses a proposed write or launch; nothing reaches the source. Only the conversation's owner (404 otherwise).
+        The body is optional so that callers written before it keep working; a client that asks the person
+        sends the reason (ADR 0154 §7), which is kept on the action as `refusal_reason` and in the audit record.
+      requestBody:
+        required: false
+        content: { application/json: { schema: { $ref: "#/components/schemas/ConversationActionRefusal" } } }
       responses:
         "200": { description: The action, refused, content: { application/json: { schema: { $ref: "#/components/schemas/ConversationAction" } } } }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/agents/{slug}/metrics:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -11232,7 +11239,14 @@ components:
         confirmed_by: { type: [string, "null"] }
         confirmed_at: { type: [string, "null"], format: date-time }
         executed_at: { type: [string, "null"], format: date-time }
+        refusal_reason: { type: [string, "null"], description: "Why the person refused the action; null when it was not refused, or refused without a reason (before ADR 0154 §7)." }
         created_at: { type: string, format: date-time }
+    ConversationActionRefusal:
+      type: object
+      required: [reason]
+      description: Why a proposed write or launch is refused (ADR 0154 §7).
+      properties:
+        reason: { type: string, minLength: 1, maxLength: 500, description: Why — kept on the action and in the audit log. }
     AssistantBind:
       type: object
       required: [connector]
