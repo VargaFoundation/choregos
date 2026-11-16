@@ -445,6 +445,12 @@ const ARTIFACT_CONTENT: Record<string, [string, () => BlobPart]> = {
   "demo@1": ["video/mp4", () => new Uint8Array(2048)],
 };
 
+/** A knowledge base's OKF bundle in demo mode: a placeholder zip (the browser saves it, nothing reads it). */
+export async function mockKnowledgeExport(slug: string): Promise<Blob> {
+  await new Promise((resolve) => setTimeout(resolve, 40));
+  return new Blob([`demo bundle of ${slug}`], { type: "application/zip" });
+}
+
 /** The bytes of a revision in demo mode; `budget_summary` plays a revision altered behind the platform. */
 export async function mockArtifactContent(_id: string, ref: string): Promise<Blob> {
   await new Promise((resolve) => setTimeout(resolve, 40));
@@ -2372,8 +2378,8 @@ export const knowledgeBase: KnowledgeBase = {
   groups: [],
   serving_mode: "files",
   status: "active",
-  document_count: 1,
-  documents_by_status: { ready: 1 },
+  document_count: 2,
+  documents_by_status: { ready: 2 },
   created_by: "lea@varga.dev",
   created_at: iso(60 * 24 * 5),
   restricted: false,
@@ -2411,6 +2417,19 @@ export const knowledgeBase: KnowledgeBase = {
       created_by: "lea@varga.dev",
       created_at: iso(60 * 24 * 5),
       markdown: "<!-- Slide number: 1 -->\n# Network zoning principles\nEvery zone has a firewall.\n",
+    },
+    {
+      id: "kd-2",
+      filename: "legacy-zones.md",
+      title: "Legacy zones",
+      mime: "text/markdown",
+      size_bytes: 1_024,
+      digest: "sha256:5e6f7a8b",
+      source: "upload",
+      status: "ready",
+      created_by: "lea@varga.dev",
+      created_at: iso(60 * 24 * 4),
+      okf: { type: "Policy", status: "deprecated", stale_after: null, stale: false },
     },
   ],
 };

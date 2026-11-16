@@ -10,11 +10,11 @@ import { KnowledgeDistill } from "@/components/knowledge-distill";
 import { KnowledgeServing, KnowledgeStatusBanner, KnowledgeUsedBy } from "@/components/knowledge-overview";
 import { KnowledgeSources } from "@/components/knowledge-sources";
 import { Badge, Card, Dot, Empty, ErrorNote, Heading, buttonClasses, type Tone } from "@/components/ui";
-import { FileText, Upload } from "lucide-react";
+import { Download, FileText, Upload } from "lucide-react";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { relative } from "@/lib/format";
-import { DOCUMENT_STATUS, distillationLabel, permissionsOf, stillConverting } from "@/lib/knowledge";
+import { DOCUMENT_STATUS, distillationLabel, okfBadge, permissionsOf, stillConverting } from "@/lib/knowledge";
 import { useSession } from "@/lib/session";
 import { skillHref } from "@/lib/skill-slug";
 
@@ -96,6 +96,20 @@ export function KnowledgeBaseView({
     }
     await refresh();
   }
+  /** The base as an Open Knowledge Format bundle (ADR 0174): the browser saves `<slug>.okf.zip`. */
+  async function download() {
+    setError(null);
+    try {
+      const bundle = await api.exportKnowledgeBase(org, slug);
+      const link = window.document.createElement("a");
+      link.href = URL.createObjectURL(bundle);
+      link.download = `${slug}.okf.zip`;
+      link.click();
+      URL.revokeObjectURL(link.href);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Refused");
+    }
+  }
   if (base.error) return <ErrorNote>{String(base.error)}</ErrorNote>;
   if (!base.data) return <Empty>Reading the knowledge base…</Empty>;
   const documents = base.data.documents ?? [];
@@ -166,7 +180,19 @@ export function KnowledgeBaseView({
         title="Documents"
         icon={FileText}
         action={
-          can.edit ? (
+          <div className="flex flex-wrap items-center gap-2">
+            {documents.length > 0 && (
+              <button
+                type="button"
+                className={buttonClasses("secondary", "sm")}
+                title="The base as an Open Knowledge Format bundle: one markdown file per document, with its header"
+                onClick={() => void download()}
+              >
+                <Download aria-hidden className="size-3.5" strokeWidth={2} />
+                Download (OKF)
+              </button>
+            )}
+            {can.edit && (
             <label className={cn(buttonClasses("primary", "sm"), "cursor-pointer focus-within:outline-2 focus-within:outline-accent")}>
               <Upload aria-hidden className="size-3.5" strokeWidth={2} />
               Upload documents
@@ -182,7 +208,8 @@ export function KnowledgeBaseView({
                 }}
               />
             </label>
-          ) : undefined
+            )}
+          </div>
         }
       >
         <div className="space-y-3">
@@ -234,6 +261,7 @@ export function KnowledgeBaseView({
                   <tbody>
                     {listed.map((doc) => {
                       const status = DOCUMENT_STATUS[doc.status] ?? { label: doc.status, tone: "neutral" as const };
+                      const lifecycle = okfBadge(doc);
                       return (
                         <tr key={doc.id} className="border-t border-line align-top" data-status={doc.status}>
                           <td className="py-2 pr-3">
@@ -262,6 +290,11 @@ export function KnowledgeBaseView({
                           </td>
                           <td className="py-2 pr-3">
                             <Badge tone={status.tone}>{status.label}</Badge>
+                            {lifecycle && (
+                              <span className="ml-1" title={lifecycle.title} data-testid={`document-okf-${doc.id}`}>
+                                <Badge tone={lifecycle.tone}>{lifecycle.label}</Badge>
+                              </span>
+                            )}
                           </td>
                           <td className="py-2 pr-3 text-xs text-ink-muted">{doc.created_at ? relative(doc.created_at) : "—"}</td>
                           <td className="py-2">

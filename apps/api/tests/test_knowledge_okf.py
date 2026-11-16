@@ -195,3 +195,84 @@ async def test_a_withdrawn_document_is_not_searched_and_a_header_is_not_a_passag
     assert not any("human:someone" in hit["excerpt"] for hit in found["hits"])
     claim = (await client.post(f"{BASE}/catalog/search", json={"query": "human someone verified"})).json()
     assert not any("human:someone" in hit["excerpt"] for hit in claim["hits"])
+
+
+# ───────────────────────────── export and the console's field (S72-03) ─────────────────────────────
+
+
+def test_a_lifecycle_says_status_and_staleness() -> None:
+    from choregos_api.knowledge import okf
+
+    now = datetime(2026, 11, 16, tzinfo=UTC)
+    assert okf.lifecycle("# no header\n", now) is None
+    assert okf.lifecycle(IMPORTED, now) == {
+        "type": "Table",
+        "status": "stable",
+        "stale_after": "2027-01-01T00:00:00Z",
+        "stale": False,
+    }
+    assert okf.lifecycle(IMPORTED, datetime(2027, 1, 1, tzinfo=UTC))["stale"] is True  # type: ignore[index]
+    assert okf.lifecycle(WITHDRAWN, now)["status"] == "deprecated"  # type: ignore[index]
+    odd = "---\ntype: x\nstatus: retired\nstale_after: 2020-01-01\n---\n"
+    assert okf.lifecycle(odd, now) == {
+        "type": "x",
+        "status": "stable",
+        "stale_after": "2020-01-01",
+        "stale": False,
+    }, "an unknown status is stable; an instant without an offset is never past"
+
+
+async def test_a_listing_shows_each_document_s_okf_lifecycle(client: AsyncClient, admin: str) -> None:
+    from choregos_api.knowledge.conversion import conversions
+
+    await client.post(BASE, json={"slug": "catalog", "name": "Catalog"})
+    for name, data in (("orders.md", IMPORTED), ("old-orders.md", WITHDRAWN), ("plain.md", "# Plain\n")):
+        await client.post(f"{BASE}/catalog/documents", files={"file": (name, data.encode())})
+    await conversions.drain()
+    base = (await client.get(f"{BASE}/catalog")).json()
+    by_name = {d["filename"]: d for d in base["documents"]}
+    assert by_name["orders.md"]["okf"] == {
+        "type": "Table",
+        "status": "stable",
+        "stale_after": "2027-01-01T00:00:00Z",
+        "stale": False,
+    }
+    assert by_name["old-orders.md"]["okf"]["status"] == "deprecated"
+    assert by_name["plain.md"]["okf"] is None
+    one = (await client.get(f"{BASE}/catalog/documents/{by_name['orders.md']['id']}")).json()
+    assert one["okf"]["type"] == "Table" and one["markdown"].startswith("---\ntype: Table\n")
+
+
+async def test_a_base_exports_as_an_okf_bundle_its_reader_may_take_and_it_is_audited(
+    client: AsyncClient, admin: str
+) -> None:
+    import io
+    import zipfile
+
+    from choregos_api.knowledge import okf
+    from choregos_api.knowledge.conversion import conversions
+
+    await client.post(BASE, json={"slug": "catalog", "name": "Catalog"})
+    for name, data in (("orders.md", IMPORTED), ("old-orders.md", WITHDRAWN)):
+        await client.post(f"{BASE}/catalog/documents", files={"file": (name, data.encode())})
+    await conversions.drain()
+    exported = await client.get(f"{BASE}/catalog/export")
+    assert exported.status_code == 200, exported.text
+    assert exported.headers["content-type"] == "application/zip"
+    assert exported.headers["content-disposition"] == 'attachment; filename="catalog.okf.zip"'
+    archive = zipfile.ZipFile(io.BytesIO(exported.content))
+    assert sorted(archive.namelist()) == ["catalog/index.md", "catalog/old-orders.md", "catalog/orders.md"]
+    index = archive.read("catalog/index.md").decode()
+    assert index.startswith(f'---\nokf_version: "{okf.OKF_VERSION}"\n---\n\n# Catalog\n')
+    assert "[Orders](/orders.md)" in index
+    for name in ("catalog/orders.md", "catalog/old-orders.md"):
+        header = _header(archive.read(name).decode())
+        assert header["type"] == "Table" and "verified" not in header, "OKF §11, and no claim as a review"
+    assert _header(archive.read("catalog/old-orders.md").decode())["status"] == "deprecated", (
+        "the export is the base, its withdrawn documents with their status"
+    )
+    assert (await client.get(f"{BASE}/catalog/export")).content == exported.content, "deterministic"
+    audit = (await client.get("/api/v1/audit", params={"target_type": "knowledge_base"})).json()["items"]
+    exports = [e for e in audit if e["action"] == "knowledge.export"]
+    assert len(exports) == 2, "each export is recorded"
+    assert (await client.get(f"{BASE}/nothing-here/export")).status_code == 404

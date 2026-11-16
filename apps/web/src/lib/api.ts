@@ -413,6 +413,29 @@ export async function request<T>(path: string, init: RequestInit = {}): Promise<
   return (await response.json()) as T;
 }
 
+/** A knowledge base as an Open Knowledge Format bundle (ADR 0174 point 6): a zip the browser saves. */
+async function knowledgeExport(org: string, slug: string): Promise<Blob> {
+  if (IS_MOCK) {
+    const { mockKnowledgeExport } = await import("@/mocks/data");
+    return mockKnowledgeExport(slug);
+  }
+  const response = await fetch(`${API_BASE}/orgs/${org}/knowledge/${slug}/export`, {
+    credentials: "include",
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    let problem: { title?: string; detail?: string } = {};
+    try {
+      problem = await response.json();
+    } catch {
+      problem = { title: response.statusText };
+    }
+    if (response.status === 401) versLaConnexion();
+    throw new ApiError(response.status, problem);
+  }
+  return response.blob();
+}
+
 async function artifactContent(id: string, ref: string): Promise<Blob> {
   if (IS_MOCK) {
     const { mockArtifactContent } = await import("@/mocks/data");
@@ -777,6 +800,7 @@ export const api = {
     form.append("file", file);
     return request<KnowledgeDocument>(`/orgs/${org}/knowledge/${slug}/documents`, { method: "POST", body: form });
   },
+  exportKnowledgeBase: (org: string, slug: string) => knowledgeExport(org, slug),
   knowledgeDocument: (org: string, slug: string, id: string) =>
     request<KnowledgeDocument>(`/orgs/${org}/knowledge/${slug}/documents/${id}`),
   deleteKnowledgeDocument: (org: string, slug: string, id: string) =>

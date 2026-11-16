@@ -4,13 +4,16 @@ import { Suspense } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import KnowledgeBasePage from "@/app/knowledge/[slug]/page";
 import { api } from "@/lib/api";
-import { SERVING_MODES, baseHealth, indexLine, readersLabel, servedRunsLabel } from "@/lib/knowledge";
+import { SERVING_MODES, baseHealth, indexLine, okfBadge, readersLabel, servedRunsLabel } from "@/lib/knowledge";
 import type { KnowledgeBase, KnowledgeDocument, KnowledgeSource } from "@/lib/types";
 
 vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "varga" }) }));
 vi.mock("@/lib/api", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/api")>();
-  return { ...real, api: { ...real.api, knowledgeBase: vi.fn(), orgConnectors: vi.fn(), members: vi.fn(), projects: vi.fn() } };
+  return {
+    ...real,
+    api: { ...real.api, knowledgeBase: vi.fn(), orgConnectors: vi.fn(), members: vi.fn(), projects: vi.fn(), exportKnowledgeBase: vi.fn() },
+  };
 });
 
 const doc = (id: string, status: KnowledgeDocument["status"], extra: Partial<KnowledgeDocument> = {}): KnowledgeDocument => ({
@@ -243,5 +246,51 @@ describe("the documents", () => {
     await show(mixed);
     expect(screen.getAllByRole("button", { name: "Delete" })[0]!.className).toContain("text-failed-ink");
     expect(screen.getByLabelText("Documents to upload").closest("label")!.className).toContain("bg-inverse");
+  });
+});
+
+describe("the Open Knowledge Format (ADR 0174)", () => {
+  it("says what a document's own header declares: withdrawn first, then out of date, then draft", () => {
+    expect(okfBadge({ okf: null })).toBeNull();
+    expect(okfBadge({ okf: { type: "Table", status: "stable", stale_after: null, stale: false } })).toBeNull();
+    expect(okfBadge({ okf: { type: null, status: "deprecated", stale_after: "2020-01-01T00:00:00Z", stale: true } })).toMatchObject({
+      label: "Withdrawn",
+    });
+    expect(okfBadge({ okf: { type: null, status: "draft", stale_after: "2020-01-01T00:00:00Z", stale: true } })).toMatchObject({
+      label: "Out of date",
+      tone: "warn",
+    });
+    expect(okfBadge({ okf: { type: null, status: "draft", stale_after: null, stale: false } })).toMatchObject({ label: "Draft" });
+  });
+
+  it("badges a withdrawn document in the list and leaves a plain one alone", async () => {
+    await show({
+      ...base,
+      documents: [doc("a", "ready"), doc("b", "ready", { okf: { type: "Policy", status: "deprecated", stale_after: null, stale: false } })],
+    });
+    expect(screen.getByTestId("document-okf-b")).toHaveTextContent("Withdrawn");
+    expect(screen.queryByTestId("document-okf-a")).toBeNull();
+  });
+
+  it("downloads the base as <slug>.okf.zip, for a reader who cannot edit it too", async () => {
+    const created = vi.fn(() => "blob:bundle");
+    const revoked = vi.fn();
+    Object.assign(URL, { createObjectURL: created, revokeObjectURL: revoked });
+    const clicked = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    vi.mocked(api.exportKnowledgeBase).mockResolvedValue(new Blob(["zip"], { type: "application/zip" }));
+    await show({ ...base, can: { edit: false, distill: false, share: false, archive: false, widen: false }, my_role: "reader" });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Download \(OKF\)/ }));
+    });
+    expect(api.exportKnowledgeBase).toHaveBeenCalledWith("varga", "handbook");
+    const link = clicked.mock.contexts[0] as HTMLAnchorElement;
+    expect(link.download).toBe("handbook.okf.zip");
+    expect(revoked).toHaveBeenCalledWith("blob:bundle");
+    clicked.mockRestore();
+  });
+
+  it("offers no download for an empty base", async () => {
+    await show({ ...base, document_count: 0, documents_by_status: {}, documents: [] });
+    expect(screen.queryByRole("button", { name: /Download \(OKF\)/ })).toBeNull();
   });
 });
