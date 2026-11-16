@@ -196,6 +196,105 @@ Options:
   --help  Show this message and exit.
 ```
 
+## `choregos artifacts`
+
+A work item's artefacts, your inbox and a run's diff: list, download, open, compare.
+
+### `choregos artifacts compare`
+
+```text
+Usage: choregos artifacts compare [OPTIONS] {work_item} {before} {after}
+
+  A unified diff of two revisions of a text artefact (two refs: the API has no
+  diff route).
+
+Arguments:
+  work_item  the work item's id  [required]
+  before     `name@version`  [required]
+  after      `name@version`, or `name` for the latest  [required]
+
+Options:
+  --help  Show this message and exit.
+```
+
+### `choregos artifacts diff`
+
+```text
+Usage: choregos artifacts diff [OPTIONS] {run_id}
+
+  What a run changed: its files and their patches.
+
+Arguments:
+  run_id  the run's id  [required]
+
+Options:
+  --json  print the API's summary as JSON
+  --help  Show this message and exit.
+```
+
+### `choregos artifacts download`
+
+```text
+Usage: choregos artifacts download [OPTIONS] {work_item} {ref} [path]
+
+  Save an artefact's bytes, exactly as the API served them. An existing file
+  is kept without --force.
+
+Arguments:
+  work_item  the work item's id  [required]
+  ref        `name` for the latest revision, `name@version` for one
+             [required]
+  path       where to write; a directory, or the artefact's name
+
+Options:
+  --force  overwrite an existing file
+  --help   Show this message and exit.
+```
+
+### `choregos artifacts inbox`
+
+```text
+Usage: choregos artifacts inbox [OPTIONS]
+
+  The artefacts your tasks delivered, newest first.
+
+Options:
+  --limit <int range>  how many, newest first  [default: 100; 1<=x<=200]
+  --json               print the API's list as JSON
+  --help               Show this message and exit.
+```
+
+### `choregos artifacts list`
+
+```text
+Usage: choregos artifacts list [OPTIONS] {work_item}
+
+  Every revision of every artefact of a work item.
+
+Arguments:
+  work_item  the work item's id  [required]
+
+Options:
+  --json  print the API's list as JSON
+  --help  Show this message and exit.
+```
+
+### `choregos artifacts open`
+
+```text
+Usage: choregos artifacts open [OPTIONS] {work_item} {ref}
+
+  Open an artefact with the system's viewer, from a temporary copy.
+
+Arguments:
+  work_item  the work item's id  [required]
+  ref        `name` for the latest revision, `name@version` for one
+             [required]
+
+Options:
+  --help  Show this message and exit.
+```
+
 ### `choregos ask`
 
 ```text
