@@ -11,6 +11,9 @@ rendered, with two variables:
 A plugin's internal agent carries the work item's context before its own instructions (`agent_catalogue`): a
 conversation has no work item, so that block is left out.
 
+A task run of the installation (ADR 0137) renders the same two variables through the orchestrator
+(`task_instruction_values`, #1784), with the run's own variables, the work item's context included.
+
 They are rendered when the conversation opens, and again when an idle conversation is resumed: an
 installation whose config changed meanwhile reaches the conversations already open at their next resume.
 Instructions that do not render refuse the conversation (409): the template never reaches the model.
@@ -18,16 +21,19 @@ Instructions that do not render refuse the conversation (409): the template neve
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from choregos_core.agent_catalogue import without_context
 from choregos_core.instructions import render_conversation_instructions
 from jinja2 import TemplateError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..db.models import AgentSessionRecord, AssistantInstallation
+from ..db.models import AgentSessionRecord, AssistantInstallation, Project, WorkItem
 from ..errors import ApiError
 from . import assistants
+
+if TYPE_CHECKING:
+    from .assistant_memory import Spaces
 
 
 def config_values(document: dict[str, Any] | None, config: dict[str, Any]) -> dict[str, Any]:
@@ -43,9 +49,41 @@ def config_values(document: dict[str, Any] | None, config: dict[str, Any]) -> di
 
 async def preferences_of(session: AsyncSession, record: AgentSessionRecord) -> dict[str, Any]:
     """The caller's profile memory of the assistant: its `user` profile spaces' active documents."""
-    from .assistant_memory import active_profile, conversation_spaces, find_store, profiles_of
+    from .assistant_memory import conversation_spaces
 
-    spaces = await conversation_spaces(session, record)
+    return await _profiles(session, await conversation_spaces(session, record))
+
+
+async def task_instruction_values(session: AsyncSession, item: WorkItem) -> dict[str, Any] | None:
+    """`config` and `preferences` of a task run of an installation (#1784, ADR 0137): the installation's
+    values over its defaults, and the subscriber's profile memory (the owner of the personal space the task
+    runs in), empty under `memory.enabled: false`. `None` for any work item that is not a task's."""
+    from choregos_core.policy import PolicyEngine
+
+    from .assistant_memory import spaces_of
+    from .definitions import effective_policy
+
+    task = (item.documents or {}).get("task")
+    if not isinstance(task, dict) or not task.get("installation_id"):
+        return None
+    installation = await session.get(AssistantInstallation, str(task["installation_id"]))
+    space = await session.get(Project, item.project_id)
+    if installation is None or space is None or not space.owner_user_id:
+        return None
+    document = await assistants.manifest(session, installation)
+    spaces = await spaces_of(session, installation, space.owner_user_id)
+    if spaces is not None and not PolicyEngine(await effective_policy(session, space.id)).memory_enabled():
+        spaces = None
+    return {
+        "config": config_values(document, dict(installation.config or {})),
+        "preferences": await _profiles(session, spaces),
+    }
+
+
+async def _profiles(session: AsyncSession, spaces: Spaces | None) -> dict[str, Any]:
+    """The active documents of the `user` profile spaces, merged in the manifest's order."""
+    from .assistant_memory import active_profile, find_store, profiles_of
+
     if spaces is None:  # no memory declared, or `memory.enabled: false`
         return {}
     merged: dict[str, Any] = {}
@@ -101,4 +139,10 @@ async def render_instructions_of(session: AsyncSession, record: AgentSessionReco
     return True
 
 
-__all__ = ["config_values", "preferences_of", "render_for", "render_instructions_of"]
+__all__ = [
+    "config_values",
+    "preferences_of",
+    "render_for",
+    "render_instructions_of",
+    "task_instruction_values",
+]

@@ -117,6 +117,32 @@ def render_conversation_instructions(
     )
 
 
+class _TaskValues(_Values):
+    """`config` or `preferences` in a task run, whose template renders under `StrictUndefined`: a missing key
+    is still undefined and renders empty (`| default(...)` applies), never an error and never a sample."""
+
+    __slots__ = ()
+
+    def __getattr__(self, key: str) -> Any:
+        if key.startswith("_"):
+            raise AttributeError(key)
+        return self._data.get(key, ChainableUndefined(name=key))
+
+    def __getitem__(self, key: str) -> Any:
+        return self._data.get(key, ChainableUndefined(name=key))
+
+
+def render_task_instructions(
+    source: str, *, config: Mapping[str, Any], preferences: Mapping[str, Any], **variables: Any
+) -> str:
+    """An assistant's instructions in a task run (#1784): the run's variables as `render_instructions` takes
+    them, with the installation's `config` and the subscriber's `preferences` instead of the samples; a key
+    with no value renders empty. Raises `TemplateError` (`SecurityError` included)."""
+    return render_instructions(
+        source, **variables, config=_TaskValues(config), preferences=_TaskValues(preferences)
+    )
+
+
 def instruction_errors(source: str) -> list[str]:
     """What would keep the template from rendering, checked when a version is published."""
     try:
@@ -131,4 +157,5 @@ __all__ = [
     "instruction_errors",
     "render_conversation_instructions",
     "render_instructions",
+    "render_task_instructions",
 ]

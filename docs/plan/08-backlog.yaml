@@ -4641,6 +4641,14 @@ stories:
     size: S
     depends_on: [S63-07]
     notes: "Blocks the pilot of the one-on-one assistant: iris-mcp (`identity_modes: [user_exchange]`) answered 401 to every discovery, so its need could not be bound."
+  - id: S63-30
+    title: "fix(orchestrator): an assistant's task run renders its agent's config and preferences (#1784, ADR 0133 amendment)"
+    stream: S63
+    sprint: 3
+    priority: 1
+    size: S
+    depends_on: [S63-28, S63-13]
+    notes: "The one-on-one assistant's tasks (lot 2) read `<hr_contact>`: a task run rendered the publication samples."
   - id: S64-00
     title: "docs(adr): ADRs 0141 and 0142, the S64 plan, the backlog stories"
     stream: S64

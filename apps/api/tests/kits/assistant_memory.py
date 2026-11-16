@@ -147,3 +147,23 @@ async def _stored(space: str) -> list[Any]:
         for fact in found:
             session.expunge(fact)
         return found
+
+
+async def _profile(installation_id: str, document: dict[str, Any], email: str = "admin@varga.dev") -> None:
+    """An active version of the person's `investor_profile`, as the memory page writes one."""
+    from choregos_api.db.models import AssistantInstallation, MemoryProfile, User
+    from choregos_api.db.session import session_scope
+    from choregos_api.services.assistant_memory import ensure_store, spaces_of
+
+    async with session_scope(orgs="*") as session:
+        user = (await session.execute(select(User).where(User.email == email))).scalar_one()
+        installation = await session.get(AssistantInstallation, installation_id)
+        assert installation is not None
+        spaces = await spaces_of(session, installation, user.id)
+        assert spaces is not None
+        store = await ensure_store(session, spaces, spaces.decl("investor_profile"), None)
+        session.add(
+            MemoryProfile(
+                org_id=store.org_id, memory_store_id=store.id, version=1, document=document, status="active"
+            )
+        )

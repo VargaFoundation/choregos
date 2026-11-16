@@ -72,3 +72,22 @@ def test_the_work_item_context_of_a_plugin_agent_is_left_out_of_a_conversation()
 def test_a_run_template_renders_empty_in_a_conversation_never_raises() -> None:
     source = "{{ ticket.key }}{% for name, value in inputs.items() %}{{ name }}{% endfor %}{{ spec }}."
     assert render_conversation_instructions(source, config={}, preferences={}) == "."
+
+
+def test_a_task_run_renders_the_values_and_keeps_its_run_variables_strict() -> None:
+    """#1784: a task run reads the installation's values; a missing key renders empty, `default` applies,
+    `items` is a key, and a run variable that does not exist is still an error, as in any run."""
+    import pytest
+    from choregos_core.instructions import render_task_instructions
+    from jinja2 import UndefinedError
+
+    source = (
+        "{{ config.house_name }}|{{ preferences.missing }}|{{ preferences.horizon | default('none') }}"
+        "|{{ config.items }}|{{ ticket.key }}"
+    )
+    rendered = render_task_instructions(
+        source, config={"house_name": "Globex", "items": 3}, preferences={}, ticket={"key": "T-1"}
+    )
+    assert rendered == "Globex||none|3|T-1"
+    with pytest.raises(UndefinedError):
+        render_task_instructions("{{ nowhere }}", config={}, preferences={})
