@@ -304,8 +304,28 @@ def _commands() -> list[str]:
         for raw in body.replace("\\\n", " ").splitlines():
             command = raw.split(" #", 1)[0].strip()
             if command and not command.startswith("#"):
-                commands.append(command)
+                commands.extend(_pipeline(command))
     return commands
+
+
+def _pipeline(command: str) -> list[str]:
+    """`echo hi | NO_COLOR=1 choregos ask -` is two commands; a leading `NAME=value` is not the tool."""
+    parts: list[str] = []
+    for segment in command.split(" | "):
+        words = segment.split()
+        while words and re.fullmatch(r"[A-Z_]+=\S*", words[0]):
+            words = words[1:]
+        parts.append(" ".join(words))
+    return parts
+
+
+def _root_usage() -> str:
+    """The options of `choregos` itself (`--no-color`): the reference has no root section."""
+    import typer.main
+    from choregos_cli.main import app
+
+    flags = [opt for param in typer.main.get_command(app).params for opt in param.opts]
+    return "Usage: choregos " + " ".join(flags)
 
 
 def _compose_profiles() -> set[str]:
@@ -329,7 +349,7 @@ def test_every_command_exists_with_its_options(command: str) -> None:
                 path = f"{path} {word}"
             else:
                 break
-        usage = known.get(path, "")
+        usage = known.get(path) or (_root_usage() if path == "choregos" else "")
         assert "Usage:" in usage, f"no CLI command for `{command}` (`{path}` is not a command)"
         for word in words:
             flag = word.split("=", 1)[0]
@@ -343,7 +363,7 @@ def test_every_command_exists_with_its_options(command: str) -> None:
                 assert words[index + 1] in _compose_profiles(), f"no compose profile `{words[index + 1]}`"
     elif tool == "cp":
         assert (ROOT / words[1]).exists(), f"`{words[1]}` is not in the repository"
-    elif tool not in {"git", "cd", "curl"}:
+    elif tool not in {"git", "cd", "curl", "sh", "echo"}:
         pytest.fail(f"a command this test does not know how to check: `{command}`")
 
 

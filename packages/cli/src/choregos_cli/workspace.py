@@ -42,7 +42,6 @@ from textual.widgets.option_list import Option
 from textual.widgets.tree import TreeNode
 
 from . import activity, decide, run_activity, theme
-from .ask import confirm_link
 from .client import ApiError, AsyncClient, Profile
 from .run_steps import RunSteps
 
