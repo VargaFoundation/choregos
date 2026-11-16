@@ -62,6 +62,7 @@ from .routers import (
     conversations,
     costs,
     delegations,
+    device_sign_in,
     egress,
     embed_token,
     findings,
@@ -438,6 +439,7 @@ def create_app() -> FastAPI:
 
     core_routers = (
         auth.router,
+        device_sign_in.router,
         my_sessions.router,
         org_security.router,
         saml.router,

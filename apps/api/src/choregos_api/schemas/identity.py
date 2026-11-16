@@ -181,3 +181,44 @@ class IntegrationsDto(Dto):
     protocol_versions: list[str]
     oauth: OAuthDto
     version: str
+
+
+class DeviceAuthorizationRequestDto(Dto):
+    client_kind: Literal["cli", "editor"]
+    client_name: str | None = Field(default=None, max_length=80)
+    org: str | None = Field(default=None, max_length=120)
+
+
+class DeviceAuthorizationDto(Dto):
+    device_code: str
+    user_code: str
+    verification_uri: str
+    verification_uri_complete: str
+    expires_in: int
+    interval: int
+
+
+class DeviceTokenRequestDto(Dto):
+    grant_type: Literal["urn:ietf:params:oauth:grant-type:device_code"]
+    device_code: str = Field(max_length=256)
+
+
+class DeviceTokenDto(Dto):
+    access_token: str
+    token_type: Literal["Bearer"] = "Bearer"  # noqa: S105 - the scheme, not a secret
+    session_id: str
+    kind: Literal["cli", "editor"]
+    expires_in: int
+    auth_time: datetime | None = None
+
+
+class DeviceRequestDto(Dto):
+    user_code: str
+    client_kind: Literal["cli", "editor"]
+    client_name: str | None = None
+    org: str | None = None
+    expires_at: datetime
+
+
+class DeviceDecisionDto(Dto):
+    decision: Literal["approve", "deny"]

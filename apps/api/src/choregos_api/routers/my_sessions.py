@@ -25,6 +25,10 @@ async def list_my_sessions(session: Db, principal: Me) -> list[BrowserSessionDto
         BrowserSessionDto(
             id=row.id,
             channel=row.channel,
+            kind=row.kind,
+            client_name=row.client_name,
+            auth_time=row.auth_time,
+            idle_expires_at=row.idle_expires_at,
             created_at=row.created_at,
             expires_at=row.expires_at,
             last_seen_at=row.last_seen_at,

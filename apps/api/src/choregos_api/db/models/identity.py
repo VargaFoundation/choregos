@@ -210,6 +210,39 @@ class UserSession(Base, PkMixin, TimestampMixin):
     user_agent: Mapped[str | None] = mapped_column(String(300), nullable=True)
     ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    #: What holds it (ADR 0154 §6): `browser` (the cookie above), `cli` or `editor` (a developer surface's
+    #: bearer, issued by the device flow). A surface session also ends after `idle_expires_at`, which each
+    #: use pushes back; `expires_at` is its absolute limit.
+    kind: Mapped[str] = mapped_column(String(16), default="browser", server_default="browser")
+    client_name: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    #: When the person authenticated at their identity provider, in the sign-in that opened or approved it.
+    auth_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    idle_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class DeviceAuthorization(Base, PkMixin, TimestampMixin):
+    """A developer surface's sign-in waiting for the person (RFC 8628, ADR 0154 §6).
+
+    Only the hashes of the two codes are kept. `status`: `pending`, `approved` or `denied` by the person at
+    the console's `/device` page, then `consumed` once the surface has exchanged its device code for a
+    session: a device code is single-use. Under forced RLS, platform scope only: the surface that polls has
+    no principal, and the person's approval is written by the route in platform scope too."""
+
+    __tablename__ = "device_authorizations"
+
+    device_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    user_code_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    client_kind: Mapped[str] = mapped_column(String(16))
+    client_name: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    #: The organisation (slug) whose identity provider must have signed the approver in (ADR 0108).
+    org_slug: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    status: Mapped[str] = mapped_column(String(12), default="pending")
+    user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
+    #: The approving sign-in's authentication time: what the surface session will carry.
+    auth_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    interval_s: Mapped[int] = mapped_column(Integer, default=5)
+    last_polled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class LinkedAccount(Base, PkMixin, TimestampMixin):

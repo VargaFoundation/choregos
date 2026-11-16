@@ -2,7 +2,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Monitor, Smartphone, Tablet } from "lucide-react";
+import { Monitor, Smartphone, Tablet, Terminal } from "lucide-react";
 import { ConfirmedGesture } from "@/components/confirmed-gesture";
 import { Badge, Card, ReadState } from "@/components/ui";
 import { api } from "@/lib/api";
@@ -15,6 +15,7 @@ const DEVICE_ICONS = { computer: Monitor, phone: Smartphone, tablet: Tablet } as
 /** How a session was opened, in words. */
 const CHANNELS: Record<string, string> = {
   oidc: "single sign-on",
+  device: "a code approved in the console",
   saml: "SAML single sign-on",
   renewed: "renewed when the other sessions ended",
 };
@@ -75,12 +76,19 @@ export function SessionsCard({ className }: { className?: string }) {
 
 function SessionRow({ session, onEnded }: { session: BrowserSession; onEnded: () => Promise<unknown> }) {
   const { device } = describeBrowser(session.user_agent);
-  const Icon = DEVICE_ICONS[device];
-  const label = session.user_agent ? browserLabel(session.user_agent) : "A browser not seen yet";
+  const surface = session.kind === "cli" || session.kind === "editor";
+  const surfaceName = session.client_name ?? (session.kind === "cli" ? "Command line" : "Editor");
+  const Icon = surface ? Terminal : DEVICE_ICONS[device];
+  const label = surface
+    ? `${surfaceName} (${session.kind === "cli" ? "command line" : "editor"})`
+    : session.user_agent
+      ? browserLabel(session.user_agent)
+      : "A browser not seen yet";
   const facts = [
     session.ip,
     `signed in ${shortDate(session.created_at)} with ${CHANNELS[session.channel] ?? session.channel}`,
     session.current ? "active now" : `active ${relative(session.last_seen_at ?? session.created_at)}`,
+    surface && session.idle_expires_at ? `signs out if idle after ${shortDate(session.idle_expires_at)}` : "",
     `ends ${shortDate(session.expires_at)}`,
   ].filter(Boolean);
   return (

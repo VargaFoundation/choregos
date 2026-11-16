@@ -170,6 +170,13 @@ class Settings(BaseSettings):
     session_secret_previous: str = ""
     session_cookie: str = "choregos_session"
     session_max_age_s: int = 8 * 3600
+    #: A developer surface's session (ADR 0154 §6): it ends after this long without a request, and in any case
+    #: after `surface_session_max_age_s`. A device code lives `device_code_ttl_s` and is polled no faster than
+    #: every `device_poll_interval_s`.
+    surface_session_idle_s: int = 7 * 24 * 3600
+    surface_session_max_age_s: int = 30 * 24 * 3600
+    device_code_ttl_s: int = 600
+    device_poll_interval_s: int = 5
     #: Development sign-in (`/auth/login?as=<email>`): OFF by default. It used to be on by default
     #: and never set by the chart: a production installation accepted `?code=dev:admin@x` and
     #: returned ORG_ADMIN on all organisations (inventory of 2026-09-24). The validator below
