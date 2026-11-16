@@ -305,7 +305,7 @@ superseded by [ADR 0072](adr/0072-agent-sandbox-is-the-runtime-of-a-real-deploym
 allowed list (`CHOREGOS_EXECUTORS_ALLOWED`, from `global.runner.allowedExecutors`). `GET
 /platform/executors` answers from them, and `PUT /projects/{id}/connectors/runtime` refuses (422)
 a type outside the list and names the allowed ones. It also refuses a configuration that sets
-what only the deployment sets ([ADR 0153](adr/0153-a-connector-never-sets-what-the-deployment-sets.md)):
+what only the deployment sets ([ADR 0172](adr/0172-a-connector-never-sets-what-the-deployment-sets.md)):
 `kubernetes` (the API server and its credential), `env_from_secrets`, `image_pull_secrets` and
 `service_account`. The pod's Secrets come from `runner.envFromSecrets`, its pull secrets from
 `global.imagePullSecrets`, and it runs as the account the chart creates. A row stored with one of

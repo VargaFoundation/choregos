@@ -468,7 +468,7 @@ class AdapterSet:
 #: refused here on every declaration and edit, honoured only where the deployment serves eval fakes.
 FAKE_SCENE_FIELD = "fake_scene"
 
-#: What a connector's configuration never says (S65-03, ADR 0153): which cluster the platform talks to,
+#: What a connector's configuration never says (S65-03, ADR 0172): which cluster the platform talks to,
 #: and what a run's pod is given from that cluster. These are the deployment's, set by its operator
 #: (the chart's `runner.envFromSecrets`, `global.imagePullSecrets`, the runner's service account):
 #:
