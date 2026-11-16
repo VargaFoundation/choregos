@@ -77,6 +77,7 @@ Read it in order the first time: what it is, the ideas, a first project, then th
 | ▸ [Connectors](use/connectors.md) | Connect the tracker, the repository, the deployment and the other systems |
 | ▸ [Budgets and policies](use/budgets-and-policies.md) | Cap what work costs and bound what agents may do |
 | ▸ [Assistants](use/assistants.md) | Talk to an assistant, confirm its writes, and keep control of what it remembers and does for you |
+| ▸ [The terminal](use/terminal.md) | Sign in as yourself, ask an assistant, follow what runs, decide what waits, from a terminal |
 | **Build agents** | Write what agents carry |
 | ▸ [Skills](build/skills.md) | Package know-how an agent loads |
 | ▸ [Agents](build/agents.md) | Create, version and release agents of every kind |
