@@ -12,11 +12,9 @@ PREFIX = "/api/v1"
 # names the story that implements it; an entry the API does serve must be removed from here.
 CONTRACT_ONLY: dict[str, str] = {
     "followMyConversationTurn": "S67-08 (ADR 0154 §4, G2)",
-    "listRunAgents": "S67-12 (ADR 0154 §5, G5)",
 }
 CONTRACT_ONLY_PATHS: set[str] = {
     "/me/conversations/{conversation_id}/events",
-    "/runs/{id}/agents",
 }
 
 
