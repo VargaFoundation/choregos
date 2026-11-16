@@ -9,6 +9,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 import pytest
+from choregos_core.publishing import PUBLISHING
 from httpx import AsyncClient
 
 
@@ -34,7 +35,7 @@ async def test_the_public_site_by_default(client: AsyncClient, docs_env: pytest.
 
     reset_settings_cache()
     body = (await client.get("/api/v1/edition")).json()
-    assert body["docs_url"] == "https://docs.varga.foundation/choregos"
+    assert body["docs_url"] == PUBLISHING.documentation
 
 
 async def test_an_install_points_it_at_its_own_copy(
@@ -52,4 +53,4 @@ async def test_what_is_not_an_http_address_gives_the_public_site(
 ) -> None:
     _set(docs_env, value)
     body = (await client.get("/api/v1/edition")).json()
-    assert body["docs_url"] == "https://docs.varga.foundation/choregos"
+    assert body["docs_url"] == PUBLISHING.documentation

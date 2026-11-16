@@ -490,6 +490,12 @@ with an extension installed for real.
 
 ## Identity seams: revoking a session, granting platform administration
 
+> **Boundary decided on 2026-11-15 (D5, [ADR 0024](adr/0024-two-editions.md), amendment).** SAML,
+> re-authentication and the revocation of sessions are to be community functions; SCIM stays in the enterprise
+> edition. The seams below are how the enterprise edition does these today; code that moves a function into
+> the core changes what crosses them, and lands before the seams are frozen for 1.0
+> ([ADR 0168](adr/0168-the-surfaces-frozen-for-1-0.md)).
+
 Three hooks in `choregos_api.edition`, next to the group mapper:
 
 - **`declare_session_validation(fn)`** — `fn(session_db, user, payload)`, sync or async,
@@ -613,6 +619,23 @@ The edition API (`choregos_api.edition`) and the `Principal` followed in 0.21 (S
 | `declarer_un_administrateur_de_plateforme`, `administrateurs_de_plateforme` | `declare_platform_administrator`, `platform_administrators` <!-- lang: fr-ok --> |
 | `reinitialiser` | `reset` <!-- lang: fr-ok --> |
 | `Principal.authentifie_le` (read and write) | `Principal.authenticated_at` <!-- lang: fr-ok --> |
+
+## The publishing identity
+
+Who publishes Choregos and where (the image and chart namespace, the source repository and its
+releases, the documentation site, the security contact, the agent's commit address, the plugins'
+repository and signed index) is defined once, in `packages/core/src/choregos_core/publishing.json`
+([ADR 0156](adr/0156-the-publishing-identity-is-one-file.md)).
+
+- In Python, read `choregos_core.publishing.PUBLISHING` (`PUBLISHING.image("choregos-runner", tag)`,
+  `PUBLISHING.releases`, `PUBLISHING.signing_identity(ref)`, …); in the console, `@/lib/publishing`.
+  Never write one of its values in code: `tests/tools/test_publishing_identity.py` refuses it.
+- A file that cannot read JSON (a chart's values, a policy, a workflow, a Dockerfile, a page of
+  documentation) spells the values out and is listed in `DERIVED` in `tools/publishing_identity.py`.
+- A test that needs a registry or a repository as arbitrary data uses `registry.example` or
+  `github.com/example`, not the project's.
+- To publish elsewhere: edit `publishing.json`, run `make publishing-rewrite FROM=<the commit before the
+  edit>`, read the diff. `make publishing-check` runs the check alone.
 
 ## The English ratchet
 

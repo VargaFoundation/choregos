@@ -10,6 +10,7 @@ from typing import Any
 
 import pytest
 import yaml
+from choregos_core.publishing import PUBLISHING
 
 CHART = pathlib.Path(__file__).resolve().parents[2] / "charts" / "choregos"
 
@@ -67,7 +68,7 @@ def test_enabled_renders_a_restricted_deployment_and_a_service_named_choregos_eg
     assert container["securityContext"]["allowPrivilegeEscalation"] is False
     assert container["securityContext"]["capabilities"] == {"drop": ["ALL"]}
     assert container["resources"]["limits"] == {"cpu": "500m", "memory": "256Mi"}
-    assert container["image"].startswith("ghcr.io/vargafoundation/choregos-api:")
+    assert container["image"].startswith(PUBLISHING.image("choregos-api") + ":")
     env = _env(deployment)
     assert env["CHOREGOS_EGRESS_API_URL"] == "http://choregos-api:8000/api/v1"
     assert json.loads(env["CHOREGOS_EGRESS_PORTS"]) == [443, 80]
@@ -93,6 +94,26 @@ def test_enabled_tells_the_runners_to_authenticate_and_carries_the_deployments_d
         "x.example",
         "y.example",
     ]
+
+
+def test_the_proxys_report_key_goes_to_the_api_and_the_proxy_and_to_no_run() -> None:
+    """ADR 0145: the agent inherits what a run's pod receives, so the key must reach no run's pod."""
+    docs = _docs("global.egress.enabled=true", "global.devSecrets=true")
+    holders = {
+        key for key, doc in docs.items() if key[0] != "Secret" and "egress-report-key" in json.dumps(doc)
+    }
+    assert holders == {("Deployment", "choregos-api"), ("Deployment", "choregos-egress")}
+    for name in ("choregos-api", "choregos-egress"):
+        containers = docs[("Deployment", name)]["spec"]["template"]["spec"]["containers"]
+        refs = [
+            v["valueFrom"]["secretKeyRef"]
+            for c in containers
+            for v in c.get("env", [])
+            if v["name"] == "CHOREGOS_EGRESS_REPORT_KEY"
+        ]
+        assert refs == [{"name": "choregos-api-secrets", "key": "egress-report-key", "optional": True}], name
+    # A bench draws one, as it draws the other application secrets.
+    assert docs[("Secret", "choregos-api-secrets")]["stringData"]["egress-report-key"]
 
 
 def test_the_guard_refuses_a_proxy_nobody_would_use() -> None:

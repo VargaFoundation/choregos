@@ -123,7 +123,7 @@ async def test_only_its_administrator_requires_it(
 
 def _incomplete_in_catalogue(monkeypatch: Any, *slugs: str) -> None:
     """The offline catalogue with these entries leaving their tools and memories to the project, as a
-    plugin's agents may (diametral-delivery's, in production)."""
+    plugin's agents may (an operator's delivery plugin, in production)."""
     import dataclasses
 
     from choregos_api.services import agent_catalogue as service

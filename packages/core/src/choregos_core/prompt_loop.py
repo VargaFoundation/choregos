@@ -6,6 +6,9 @@ response body out) and `call_tool` (one offered tool, arguments in, text out), s
 session run the same loop, and a test scripts both. Every model call is a turn; past `max_turns` the
 loop stops on its own. A tool the model names that it was not offered is never called: the refusal goes
 back to the model as the tool's answer, and to `on_event`.
+
+Each call's `prompt_tokens` is kept (`LoopOutcome.prompt_tokens`), and `on_call` hears every call with
+the request it sent and the usage it got back: what a caller measures the context with (ADR 0141 §3).
 """
 
 from __future__ import annotations
@@ -18,6 +21,8 @@ from typing import Any, Literal
 Complete = Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]
 CallTool = Callable[[str, dict[str, Any]], Awaitable[str]]
 OnEvent = Callable[[str, dict[str, Any]], Awaitable[None]]
+#: Told of every model call: the request body sent, and the `usage` the answer carried (`{}` if none).
+OnCall = Callable[[dict[str, Any], dict[str, Any]], Awaitable[None]]
 #: Asked when the model ends its turn with text: a message that sends it back to work, or `None`.
 OnFinal = Callable[[str], Awaitable[str | None]]
 
@@ -51,6 +56,8 @@ class LoopOutcome:
     tool_calls: int = 0
     refused: list[str] = field(default_factory=list)
     usage: dict[str, int] = field(default_factory=dict)
+    #: Each call's `prompt_tokens`, in order (`None` for a call whose answer did not say).
+    prompt_tokens: list[int | None] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -75,7 +82,7 @@ class LoopRequest:
         return body
 
 
-async def run_loop(
+async def run_loop(  # noqa: PLR0913 - the loop and its four hooks
     request: LoopRequest,
     messages: list[dict[str, Any]],
     tools: list[LoopTool],
@@ -85,6 +92,7 @@ async def run_loop(
     on_event: OnEvent | None = None,
     on_final: OnFinal | None = None,
     stop_when: Callable[[], bool] | None = None,
+    on_call: OnCall | None = None,
 ) -> LoopOutcome:
     """Runs the model on `messages` (extended in place) until it answers, `stop_when` holds, or it has
     used `request.max_turns` model calls."""
@@ -96,11 +104,18 @@ async def run_loop(
             await on_event(type_, payload)
 
     while outcome.turns < request.max_turns:
-        answer = await complete(request.body(messages, tools))
+        body = request.body(messages, tools)
+        answer = await complete(body)
         outcome.turns += 1
-        for key, value in (answer.get("usage") or {}).items():
+        usage = answer.get("usage")
+        usage = usage if isinstance(usage, dict) else {}
+        for key, value in usage.items():
             if isinstance(value, int):
                 outcome.usage[key] = outcome.usage.get(key, 0) + value
+        reported = usage.get("prompt_tokens")
+        outcome.prompt_tokens.append(reported if isinstance(reported, int) else None)
+        if on_call is not None:
+            await on_call(body, usage)
         message = _message(answer)
         calls = [call for call in message.get("tool_calls") or [] if isinstance(call, dict)]
         content = message.get("content")

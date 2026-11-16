@@ -1,0 +1,342 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://choregos.dev/schemas/outpost-audit-line.schema.json",
+  "title": "OutpostAuditLine",
+  "description": "One line of the outpost's own audit log (ADR 0147 §8), a file of JSON lines: one line when an assignment is received, one when it is executed, refused or answered from the journal. It is the operator's record, independent of the platform's, so that the two can be compared. It holds digests, never arguments or results. A call refused for its signature has one line, which says nothing of what the envelope held: it was not opened.",
+  "type": "object",
+  "required": [
+    "at",
+    "event",
+    "call_id"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "event": {
+      "enum": [
+        "received",
+        "executed",
+        "refused",
+        "replayed"
+      ],
+      "description": "`replayed`: a call id the journal already held got what the journal held; the server was not called again."
+    },
+    "call_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$"
+    },
+    "signed_by": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$",
+      "default": null,
+      "description": "The pinned key (`door_keys`) that verified the call's signature; null on the line of a call refused `signature_refused`, which no pinned key verified."
+    },
+    "kind": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[a-z][a-z0-9_]{0,31}$",
+      "default": null,
+      "description": "Null when the envelope was not opened, or did not open."
+    },
+    "endpoint": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[a-z][a-z0-9-]{0,62}$",
+      "default": null
+    },
+    "tool": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1,
+      "maxLength": 128,
+      "default": null
+    },
+    "arguments_sha256": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[0-9a-f]{64}$",
+      "default": null,
+      "description": "The SHA-256 of the canonical JSON of the arguments (sorted keys, compact separators, UTF-8), lowercase hex: the digest the platform's `tool.called` event keeps for the same call."
+    },
+    "write": {
+      "type": [
+        "boolean",
+        "null"
+      ],
+      "default": null,
+      "description": "What the outpost read from its own server; null when it did not get that far."
+    },
+    "outcome": {
+      "enum": [
+        "result",
+        "error",
+        "unanswered",
+        "oversized",
+        null
+      ],
+      "default": null,
+      "description": "`executed`: what was reported to the door. `replayed`: what the journal held for the call; null while the call it repeats is still under way and has no answer to replay yet."
+    },
+    "refusal": {
+      "enum": [
+        "unknown_endpoint",
+        "tool_not_allowed",
+        "write_denied",
+        "payload_too_large",
+        "busy",
+        "endpoint_unavailable",
+        "cannot_record",
+        "unsupported_kind",
+        "signature_refused",
+        "call_unreadable",
+        "deadline_passed",
+        "cancelled",
+        null
+      ],
+      "default": null,
+      "description": "`refused`: why."
+    },
+    "duration_ms": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0,
+      "default": null
+    },
+    "asserted": {
+      "$ref": "#/$defs/asserted"
+    }
+  },
+  "if": {
+    "properties": {
+      "event": {
+        "const": "refused"
+      }
+    },
+    "required": [
+      "event"
+    ]
+  },
+  "then": {
+    "required": [
+      "refusal"
+    ],
+    "properties": {
+      "refusal": {
+        "type": "string"
+      },
+      "outcome": {
+        "type": "null"
+      }
+    },
+    "if": {
+      "properties": {
+        "refusal": {
+          "const": "signature_refused"
+        }
+      }
+    },
+    "then": {
+      "properties": {
+        "signed_by": {
+          "type": "null"
+        },
+        "kind": {
+          "type": "null"
+        },
+        "endpoint": {
+          "type": "null"
+        },
+        "tool": {
+          "type": "null"
+        },
+        "arguments_sha256": {
+          "type": "null"
+        },
+        "write": {
+          "type": "null"
+        }
+      }
+    }
+  },
+  "else": {
+    "if": {
+      "properties": {
+        "event": {
+          "const": "received"
+        }
+      },
+      "required": [
+        "event"
+      ]
+    },
+    "then": {
+      "properties": {
+        "refusal": {
+          "type": "null"
+        },
+        "outcome": {
+          "type": "null"
+        }
+      }
+    },
+    "else": {
+      "if": {
+        "properties": {
+          "event": {
+            "const": "executed"
+          }
+        },
+        "required": [
+          "event"
+        ]
+      },
+      "then": {
+        "required": [
+          "outcome"
+        ],
+        "properties": {
+          "outcome": {
+            "type": "string"
+          },
+          "refusal": {
+            "type": "null"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "refusal": {
+            "type": "null"
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "asserted": {
+      "type": "object",
+      "description": "The asserted names the call carried, as the control plane wrote them: assertions, logged as such (ADR 0147 §6). Only the names this contract lists are kept.",
+      "properties": {
+        "sub": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 256,
+          "default": null,
+          "description": "The caller the platform acts for: a run, an action, a person."
+        },
+        "org": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 256,
+          "default": null,
+          "description": "The organisation's slug, for display."
+        },
+        "org_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 256,
+          "default": null,
+          "description": "The organisation's id, which survives a rename."
+        },
+        "purpose": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 256,
+          "default": null
+        },
+        "project": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 256,
+          "default": null
+        },
+        "run": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 256,
+          "default": null
+        },
+        "work_item": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 256,
+          "default": null
+        },
+        "agent": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 256,
+          "default": null
+        },
+        "initiator": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 256,
+          "default": null
+        },
+        "action": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 256,
+          "default": null,
+          "description": "The governed action a write belongs to."
+        },
+        "connector": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 256,
+          "default": null,
+          "description": "The connector that routed the call."
+        },
+        "approved_by": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "default": []
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

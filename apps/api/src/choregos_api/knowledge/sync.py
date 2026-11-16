@@ -156,16 +156,18 @@ async def github_app_credential(session: Any, org_id: str, url: str) -> Callable
     import httpx
     from choregos_adapters.github import GitHubAppAuth
 
+    from ..services import github_app_credentials
     from ..services.github_app import claimed_installation_for, implicit_claim_enabled
     from ..services.template_knowledge import github_repository
 
     repository = github_repository(url)
     if repository is None:
         raise SourceUnavailableError(f"`{url}` is not a GitHub repository: the GitHub App cannot read it")
-    settings = get_settings()
-    if not (settings.github_app_id and settings.github_app_private_key):
+    app = await github_app_credentials.refresh(session)
+    if app is None:
         raise SourceUnavailableError(
-            "the deployment has no GitHub App (CHOREGOS_GITHUB_APP_ID): name a `documents/git` connector"
+            "the deployment has no GitHub App (CHOREGOS_GITHUB_APP_ID, or one created from the console): "
+            "name a `documents/git` connector"
         )
     owner = repository.split("/", 1)[0]
     claimed = await claimed_installation_for(session, org_id, owner)
@@ -175,8 +177,8 @@ async def github_app_credential(session: Any, org_id: str, url: str) -> Callable
             "install it from Settings, Connections, then sync again."
         )
     auth = GitHubAppAuth(
-        app_id=settings.github_app_id,
-        private_key=settings.github_app_private_key,
+        app_id=app.app_id,
+        private_key=app.private_key,
         pinned_installation=claimed.id if claimed else None,
         pinned_account=owner if claimed else None,
     )

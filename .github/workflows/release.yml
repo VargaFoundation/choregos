@@ -186,7 +186,7 @@ jobs:
       matrix:
         # `image` carries its own keys through `include`; `platform` is a dimension. Two
         # `include`s that add the same key to every combination would overlap.
-        image: [api, orchestrator, tools, web, runner, laya]
+        image: [api, orchestrator, tools, web, runner, laya, outpost]
         platform: [amd64, arm64]
         include:
           - { image: api, file: docker/api.Dockerfile, target: api }
@@ -195,6 +195,8 @@ jobs:
           - { image: web, file: docker/web.Dockerfile, target: "" }
           - { image: runner, file: docker/runner.Dockerfile, target: "" }
           - { image: laya, file: docker/laya.Dockerfile, target: "" }
+          # The daemon an outpost's operator runs (ADR 0147): built, signed and attested as its neighbours.
+          - { image: outpost, file: docker/outpost.Dockerfile, target: "" }
     env:
       IMAGE: ghcr.io/vargafoundation/choregos-${{ matrix.image }}
     steps:
@@ -261,7 +263,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image: [api, orchestrator, tools, web, runner, laya]
+        image: [api, orchestrator, tools, web, runner, laya, outpost]
     env:
       IMAGE: ghcr.io/vargafoundation/choregos-${{ matrix.image }}
     steps:
@@ -334,15 +336,19 @@ jobs:
         # `tools/bump_version.py`, and the repository always tells the truth. A tag that does not
         # match the files stops the release here.
         run: uv run python tools/bump_version.py "${GITHUB_REF_NAME#v}" --check
-      - name: publish the chart as OCI
+      - name: publish the charts as OCI
         env:
           HELM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ACTOR: ${{ github.repository_owner }}
         run: |
           version="${GITHUB_REF_NAME#v}"
           helm package charts/choregos --version "$version" --app-version "$version"
+          # The chart an outpost's operator installs in their own cluster (ADR 0147): a chart of its
+          # own, published beside the platform's at the same version.
+          helm package charts/choregos-outpost --version "$version" --app-version "$version"
           echo "$HELM_TOKEN" | helm registry login ghcr.io -u "$ACTOR" --password-stdin
           helm push "choregos-$version.tgz" oci://ghcr.io/vargafoundation/charts
+          helm push "choregos-outpost-$version.tgz" oci://ghcr.io/vargafoundation/charts
 
   pypi:
     # `choregos-agent-sdk` and the `choregos-contracts` it depends on (ADR 0063). OFF until the two

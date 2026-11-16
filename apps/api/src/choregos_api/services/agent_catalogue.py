@@ -14,6 +14,8 @@ the same name without coming from the catalogue wins: the catalogue does not tou
 
 from __future__ import annotations
 
+import re
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -31,7 +33,7 @@ from ..audit import record
 from ..db.models import Agent, AgentVersion, OrgPlugin, OrgPluginFile, Skill, SkillVersion
 from ..rbac import SYSTEM
 from ..schemas import AgentSpec
-from ..schemas.agents import MAX_TAGS
+from ..schemas.agents import MAX_TAGS, AgentKnowledgeRef
 from .agent_releases import after_publish
 from .agents import digest, require_complete, version_errors
 from .installation import install_skills_and_agents
@@ -135,6 +137,58 @@ def spec_of(entry: CatalogueEntry) -> AgentSpec:
     return AgentSpec.model_validate(entry.document.get("spec") or {})
 
 
+def kept_knowledge(
+    versions: Sequence[Any], spec: AgentSpec, is_catalogue: Callable[[str | None], bool]
+) -> tuple[AgentSpec, list[str]] | None:
+    """An organisation's own knowledge bases survive an upgrade (ADR 0127, amendment).
+
+    A public plugin cannot name an organisation's base, so the organisation adds it by publishing a
+    version. When the latest version equals the last one the catalogue wrote EXCEPT for `knowledge`
+    entries added to it (order-insensitive, none removed), the agent is not divergent: returns `spec`
+    (the catalogue's new text) with those entries merged in (no duplicate) and the slugs that were
+    kept; what an earlier upgrade kept (named in its version message) stays kept. `None` otherwise
+    (nothing of the organisation's to keep, any other difference, a hand-written first version): the
+    caller keeps its behaviour. `skills` are not kept: a skill grants tools and instructions, which the
+    catalogue vouches for; a knowledge base only adds data.
+    """
+    if not versions or (versions[0].created_by or "").endswith(DIVERGE):
+        return None
+    latest = versions[-1]
+    base = next((v for v in reversed(versions) if is_catalogue(v.created_by)), None)
+    if base is None:
+        return None
+    # What an earlier upgrade kept stays kept: the catalogue wrote that version, its message says which.
+    own = _kept_in(base.message)
+    after = AgentSpec.model_validate(latest.spec)
+    now = [k.slug for k in after.knowledge]
+    if base is not latest:
+        before = AgentSpec.model_validate(base.spec)
+        if digest(before.model_copy(update={"knowledge": []})) != digest(
+            after.model_copy(update={"knowledge": []})
+        ):
+            return None
+        had = {k.slug for k in before.knowledge}
+        if not had <= set(now):
+            return None
+        own = [*own, *(slug for slug in dict.fromkeys(now) if slug not in had and slug not in own)]
+    own = [slug for slug in own if slug in now]
+    if not own:
+        return None
+    present = {k.slug for k in spec.knowledge}
+    merged = [*spec.knowledge, *(AgentKnowledgeRef(slug=s) for s in own if s not in present)]
+    return spec.model_copy(update={"knowledge": merged}), own
+
+
+def kept_note(kept: list[str]) -> str:
+    """The version message's tail when an organisation's knowledge bases were kept by an upgrade."""
+    return f" (the organisation's knowledge kept: {', '.join(kept)})" if kept else ""
+
+
+def _kept_in(message: str | None) -> list[str]:
+    found = re.search(r"knowledge kept: ([^)]*)\)", message or "")
+    return [s.strip() for s in found.group(1).split(",") if s.strip()] if found else []
+
+
 async def state(session: AsyncSession, org_id: Any, entry: CatalogueEntry) -> OrgState:
     agent = (
         await session.execute(select(Agent).where(Agent.org_id == org_id, Agent.slug == entry.slug))
@@ -150,7 +204,9 @@ async def state(session: AsyncSession, org_id: Any, entry: CatalogueEntry) -> Or
     )
     first, latest = versions[0], versions[-1]
     own = from_catalogue(first.created_by, entry)
-    changed = latest.checksum != digest(spec_of(entry))
+    target = spec_of(entry)
+    kept = kept_knowledge(versions, target, lambda by: from_catalogue(by, entry))
+    changed = latest.checksum != digest(kept[0] if kept else target)
     diverged = own and (first.created_by or "").endswith(DIVERGE) and changed
     return OrgState(True, latest.version, own, own and changed, agent.scope, diverged)
 
@@ -224,6 +280,20 @@ async def upgrade(
         .scalars()
         .first()
     )
+    kept_by_org: list[str] = []
+    if latest is not None:
+        history = list(
+            (
+                await session.execute(
+                    select(AgentVersion)
+                    .where(AgentVersion.agent_id == agent.id)
+                    .order_by(AgentVersion.version)
+                )
+            ).scalars()
+        )
+        kept = kept_knowledge(history, spec, lambda by: from_catalogue(by, entry))
+        if kept:
+            spec, kept_by_org = kept
     # A tag-only change of the catalogue still reaches an upgraded agent (S40-10): the entry's tags are
     # added, an organisation's own are never removed, and the cap holds (its own come first).
     added = [t for t in entry.tags if t not in (agent.tags or [])]
@@ -239,12 +309,13 @@ async def upgrade(
             spec=spec.model_dump(mode="json"),
             checksum=digest(spec),
             created_by=author_of(entry),
-            message=f"Catalogue update to {entry.plugin}/{entry.slug}@{entry.version}",
+            message=f"Catalogue update to {entry.plugin}/{entry.slug}@{entry.version}"
+            + kept_note(kept_by_org),
         )
     )
     await session.flush()
     await record(session, principal, "agent.publish", org_id=org_id, target_type="agent", target_id=agent.id,
-                 version=version, via=author_of(entry))  # fmt: skip
+                 version=version, via=author_of(entry), kept_knowledge=kept_by_org or None)  # fmt: skip
     # What an upgrade does to the channels is the agent's policy (ADR 0071).
     await after_publish(session, principal, agent, version, author_of(entry))
     return version
@@ -343,6 +414,8 @@ __all__ = [
     "from_catalogue",
     "install",
     "install_named_agents",
+    "kept_knowledge",
+    "kept_note",
     "named_agents",
     "offer",
     "offline_catalogue",

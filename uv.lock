@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = "==3.12.*"
 resolution-markers = [
     "sys_platform == 'win32'",
@@ -16,6 +16,7 @@ members = [
     "choregos-core",
     "choregos-ontology",
     "choregos-orchestrator",
+    "choregos-outpost",
     "choregos-playbooks",
     "choregos-quant",
     "choregos-runner",
@@ -307,7 +308,7 @@ wheels = [
 
 [[package]]
 name = "choregos-adapters"
-version = "0.26.0"
+version = "0.27.8"
 source = { editable = "packages/adapters" }
 dependencies = [
     { name = "choregos-core" },
@@ -332,7 +333,7 @@ requires-dist = [
 
 [[package]]
 name = "choregos-agent-sdk"
-version = "0.26.0"
+version = "0.27.8"
 source = { editable = "packages/agent-sdk" }
 dependencies = [
     { name = "agent-client-protocol" },
@@ -351,7 +352,7 @@ requires-dist = [
 
 [[package]]
 name = "choregos-api"
-version = "0.26.0"
+version = "0.27.8"
 source = { editable = "apps/api" }
 dependencies = [
     { name = "aiosqlite" },
@@ -364,10 +365,12 @@ dependencies = [
     { name = "itsdangerous" },
     { name = "markitdown", extra = ["docx", "pdf", "pptx", "xlsx"] },
     { name = "openpyxl" },
+    { name = "pillow" },
     { name = "prometheus-client" },
     { name = "pydantic-settings" },
     { name = "pyjwt", extra = ["crypto"] },
     { name = "python-multipart" },
+    { name = "signxml" },
     { name = "sqlalchemy", extra = ["asyncio"] },
     { name = "sse-starlette" },
     { name = "structlog" },
@@ -388,10 +391,12 @@ requires-dist = [
     { name = "itsdangerous", specifier = ">=2.2" },
     { name = "markitdown", extras = ["docx", "pdf", "pptx", "xlsx"], specifier = "==0.1.9" },
     { name = "openpyxl", specifier = "==3.1.5" },
+    { name = "pillow", specifier = ">=13.0" },
     { name = "prometheus-client", specifier = ">=0.21" },
     { name = "pydantic-settings", specifier = ">=2.6" },
     { name = "pyjwt", extras = ["crypto"], specifier = ">=2.9" },
     { name = "python-multipart", specifier = ">=0.0.12" },
+    { name = "signxml", specifier = "==5.1.0" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
     { name = "sse-starlette", specifier = ">=2.1" },
     { name = "structlog", specifier = ">=24.4" },
@@ -402,7 +407,7 @@ requires-dist = [
 
 [[package]]
 name = "choregos-cli"
-version = "0.26.0"
+version = "0.27.8"
 source = { editable = "packages/cli" }
 dependencies = [
     { name = "choregos-core" },
@@ -423,7 +428,7 @@ requires-dist = [
 
 [[package]]
 name = "choregos-contracts"
-version = "0.26.0"
+version = "0.27.8"
 source = { editable = "packages/contracts" }
 dependencies = [
     { name = "pydantic" },
@@ -438,7 +443,7 @@ requires-dist = [
 
 [[package]]
 name = "choregos-core"
-version = "0.26.0"
+version = "0.27.8"
 source = { editable = "packages/core" }
 dependencies = [
     { name = "choregos-contracts" },
@@ -470,7 +475,7 @@ provides-extras = ["telemetry"]
 
 [[package]]
 name = "choregos-ontology"
-version = "0.26.0"
+version = "0.27.8"
 source = { editable = "packages/ontology" }
 dependencies = [
     { name = "cel-python" },
@@ -498,7 +503,7 @@ provides-extras = ["service"]
 
 [[package]]
 name = "choregos-orchestrator"
-version = "0.26.0"
+version = "0.27.8"
 source = { editable = "apps/orchestrator" }
 dependencies = [
     { name = "choregos-adapters" },
@@ -522,8 +527,41 @@ requires-dist = [
 ]
 
 [[package]]
+name = "choregos-outpost"
+version = "0.27.8"
+source = { editable = "packages/outpost" }
+dependencies = [
+    { name = "choregos-adapters" },
+    { name = "choregos-contracts" },
+    { name = "choregos-core" },
+    { name = "cryptography" },
+    { name = "httpx" },
+    { name = "jsonschema" },
+    { name = "pydantic" },
+    { name = "pyjwt" },
+    { name = "pyyaml" },
+    { name = "structlog" },
+    { name = "typer" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "choregos-adapters", editable = "packages/adapters" },
+    { name = "choregos-contracts", editable = "packages/contracts" },
+    { name = "choregos-core", editable = "packages/core" },
+    { name = "cryptography", specifier = ">=43.0" },
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "jsonschema", specifier = ">=4.23" },
+    { name = "pydantic", specifier = ">=2.9" },
+    { name = "pyjwt", specifier = ">=2.9" },
+    { name = "pyyaml", specifier = ">=6.0" },
+    { name = "structlog", specifier = ">=24.4" },
+    { name = "typer", specifier = ">=0.15" },
+]
+
+[[package]]
 name = "choregos-playbooks"
-version = "0.26.0"
+version = "0.27.8"
 source = { editable = "packages/playbooks" }
 dependencies = [
     { name = "jinja2" },
@@ -540,12 +578,12 @@ requires-dist = [
 
 [[package]]
 name = "choregos-quant"
-version = "0.26.0"
+version = "0.27.8"
 source = { editable = "packages/quant" }
 
 [[package]]
 name = "choregos-runner"
-version = "0.26.0"
+version = "0.27.8"
 source = { editable = "packages/runner" }
 dependencies = [
     { name = "choregos-adapters" },
@@ -580,7 +618,7 @@ requires-dist = [
 
 [[package]]
 name = "choregos-tools-mcp"
-version = "0.26.0"
+version = "0.27.8"
 source = { editable = "packages/tools-mcp" }
 dependencies = [
     { name = "choregos-contracts" },
@@ -607,7 +645,7 @@ requires-dist = [
 
 [[package]]
 name = "choregos-workspace"
-version = "0.26.0"
+version = "0.27.8"
 source = { editable = "." }
 dependencies = [
     { name = "choregos-adapters" },
@@ -618,6 +656,7 @@ dependencies = [
     { name = "choregos-core" },
     { name = "choregos-ontology" },
     { name = "choregos-orchestrator" },
+    { name = "choregos-outpost" },
     { name = "choregos-playbooks" },
     { name = "choregos-quant" },
     { name = "choregos-runner" },
@@ -653,6 +692,7 @@ requires-dist = [
     { name = "choregos-core", editable = "packages/core" },
     { name = "choregos-ontology", editable = "packages/ontology" },
     { name = "choregos-orchestrator", editable = "apps/orchestrator" },
+    { name = "choregos-outpost", editable = "packages/outpost" },
     { name = "choregos-playbooks", editable = "packages/playbooks" },
     { name = "choregos-quant", editable = "packages/quant" },
     { name = "choregos-runner", editable = "packages/runner" },
@@ -2188,6 +2228,20 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/58/15/8b3609fd3830ef7b27b655beb4b4e9c62313a4e8da8c676e142cc210d58e/shellingham-1.5.4.tar.gz", hash = "sha256:8dbca0739d487e5bd35ab3ca4b36e11c4078f3a234bfce294b0a0291363404de", size = 10310, upload-time = "2023-10-24T04:13:40.426Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e0/f9/0595336914c5619e5f28a1fb793285925a8cd4b432c9da0a987836c7f822/shellingham-1.5.4-py2.py3-none-any.whl", hash = "sha256:7ecfff8f2fd72616f7481040475a65b2bf8af90a56c89140852d1120324e8686", size = 9755, upload-time = "2023-10-24T04:13:38.866Z" },
+]
+
+[[package]]
+name = "signxml"
+version = "5.1.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "certifi" },
+    { name = "cryptography" },
+    { name = "lxml" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/41/48/82fb75feed6fd29af5cc26ff6b8d05845c7e4620a13c18e4c9c0f7940d09/signxml-5.1.0.tar.gz", hash = "sha256:9b5fb208b59e843a87f36fd9fc3c8ccbb46e11b1ffab037d4b177ece33b5fd18", size = 1623299, upload-time = "2026-07-05T02:03:03.41Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/50/20/16b2e170786aa6140344d3aac887fbd266717421ab4a79c0020df0e19726/signxml-5.1.0-py3-none-any.whl", hash = "sha256:f9d815164e35c8451295fc532d5292d2b10202a85a845c17c802fb15da8783c6", size = 62628, upload-time = "2026-07-05T02:03:01.556Z" },
 ]
 
 [[package]]

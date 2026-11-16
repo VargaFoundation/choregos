@@ -1013,7 +1013,15 @@ def _check_warnings(wf: Workflow, report: ValidationReport, source: Any) -> None
         )
     train_approvers = {str(t.train.approval) for t in wf.transitions if t.train and t.train.approval}
     for actor_id, declared in wf.actors.items():
-        if isinstance(declared, HumanActor):
+        if isinstance(declared, HumanActor) and declared.group is None and actor_id in train_approvers:
+            report.error(
+                "actor.train_approver_group",
+                f"human actor `{actor_id}` approves a train: it names a `group` (a train's departure is "
+                "approved by a group; a `user` alone is for a workflow step, ADR 0153)",
+                ["actors", actor_id],
+                source,
+            )
+        if isinstance(declared, HumanActor) and declared.group is not None:
             refused = placeholder_error(declared.group)
             if refused is not None:
                 report.error("actor.group_placeholder", refused, ["actors", actor_id, "group"], source)
@@ -1025,7 +1033,7 @@ def _check_warnings(wf: Workflow, report: ValidationReport, source: Any) -> None
                     ["actors", actor_id, "group"],
                     source,
                 )
-        if isinstance(declared, HumanActor) and not declared.group.strip():
+        if isinstance(declared, HumanActor) and declared.user is None and not (declared.group or "").strip():
             report.warn(
                 "actor.group_empty",
                 f"human actor `{actor_id}` names no group: nobody can answer its steps but an "

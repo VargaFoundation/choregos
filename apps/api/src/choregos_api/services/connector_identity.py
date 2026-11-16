@@ -15,9 +15,21 @@ SERVICE = "service"
 IDENTITY_MODES = (SERVICE, "user_exchange", "user_consent")
 
 
+#: A connector reached through an outpost (ADR 0149 §2): the call reaches the outpost's server under the
+#: credential the outpost holds for the alias, and under no other.
+OUTPOST_TYPE = "mcp-outpost"
+
+
 def supports_identity(connector: OrgConnector, mode: str) -> bool:
-    """Whether `connector` can be called under `mode`."""
+    """Whether `connector` can be called under `mode`.
+
+    A connector at an outpost supports `service` alone, whatever its row says: a person's token must
+    not rest in a row of the platform nor cross a process that is not its audience, so none travels
+    to an outpost (ADR 0149 §2). Its declared schema is closed and has no `identity_modes`, so a need
+    that must be called as the person is refused when it is bound; this is the second lock."""
     if mode == SERVICE:
         return True
+    if connector.type == OUTPOST_TYPE:
+        return False
     declared = (connector.config or {}).get("identity_modes")
     return isinstance(declared, list) and mode in declared

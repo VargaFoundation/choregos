@@ -8,6 +8,7 @@ import { useDocsUrl } from "@/components/docs-link";
 import { useServedTheme } from "@/components/served-theme";
 import { buttonClasses, Card, Drawer, ReadState } from "@/components/ui";
 import { api } from "@/lib/api";
+import { SOURCE_REPOSITORY as PUBLISHED_SOURCE } from "@/lib/publishing";
 import type { Edition } from "@/lib/types";
 
 /**
@@ -135,10 +136,11 @@ export function FooterText() {
 }
 
 /**
- * Where the core's source lives: the foundation's repository (ADR 0048). The documentation is the
- * instance's (`docs_url`, S62-11), no longer the repository's `docs/` tree.
+ * Where the core's source lives: the foundation's repository (ADR 0048), as the publishing identity
+ * names it (ADR 0156). The documentation is the instance's (`docs_url`, S62-11), no longer the
+ * repository's `docs/` tree.
  */
-export const SOURCE_REPOSITORY = "https://github.com/VargaFoundation/choregos";
+export const SOURCE_REPOSITORY = PUBLISHED_SOURCE;
 
 /** The plain text "Copy for support" puts on the clipboard: what a support request needs, nothing more. */
 export function aboutSupportText(productName: string, edition: Edition): string {

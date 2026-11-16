@@ -89,6 +89,36 @@ footer. This is not a new decision, only the record of who publishes and of the 
 
 2026-10-16: the publisher name is normalised to `GraalSystems` (one word, no dot).
 
+## Amendment, 2026-11-15 (decision D5): SAML, re-authentication and session revocation move to the community edition
+
+The product owner decided on 2026-11-15, after the offer of November 2026 (D5), where the boundary of this
+record lies for identity. **Decided** (not yet all in the code):
+
+| Function | Edition | Why |
+|:--|:--|:--|
+| Sign-in through one SAML identity provider for the instance's organisation | **community** (moves from the enterprise edition) | an identity protocol gated in one edition and free in the other product's open core is the "SSO tax" this record already refused for OIDC |
+| Re-authentication for a gesture that needs a fresh sign-in (ADR 0035 point 5, `step_up_required`), on every sign-in protocol, SAML's `AuthnInstant` included | **community** | an approval that needs a re-authenticated person must not depend on the edition |
+| Revocation of sessions: a person ends their own (ADR 0130), and an administrator ends the sessions of the members of **their own organisation** | **community** | finding #1146: cutting a member's access must not depend on the edition |
+| SCIM provisioning, and the deprovisioning it drives | **enterprise** (unchanged) | decided on 2026-11-12 and kept on 2026-11-15; the enterprise edition also keeps several organisations, per-organisation ceilings, platform administrators, a provider per organisation (ADR 0108), white-labelling, and later the signed attestation (ADR 0015) |
+
+What the amendment changes in this record: decision 3 ("what leaves") and the alternative "Gating simple SSO"
+(which kept SAML for the enterprise edition) no longer hold for SAML, re-authentication and the revocation of
+one's own organisation's sessions. Decisions 1, 2 (apart from this list), 4, 5 and 6 are unchanged. The
+sentence of ADR 0029 and of ADR 0032 that lists "SAML, SCIM, session revocation, fresh authentication" among
+the enterprise layer's features, and ADR 0108's "SAML provider" of a tenant, describe the situation before
+this amendment: the per-organisation provider stays enterprise, the instance's does not.
+
+**What is and is not true on the day of this amendment.**
+- **Is**: OIDC with discovery and PKCE, the `user_sessions` rows and the owner's right to end their own
+  sessions, and the `iat`-based freshness check (`?reauth=1`) are in the community core. The seams the
+  enterprise edition used (`declare_session_validation`, `terminer_la_connexion`) are in the core.
+- **Is not yet**: a SAML sign-in in the community core; an `AuthnInstant` read as the authentication time
+  (a SAML session still carries `iat` only, as `docs/plan/STATUS.md` records); an administrator's revocation of the sessions
+  of a whole organisation in the core. These are code, built by another change; this documentation says
+  *decided*, never *delivered*, until that change lands and its guard is in STATUS.
+- **Order with the freeze**: the move changes what crosses the seams, so it lands before the seams are frozen
+  for 1.0 ([ADR 0168](0168-the-surfaces-frozen-for-1-0.md) decision 7).
+
 ## Alternatives discarded
 
 - **An `ee/` directory in this monorepo under BSL 1.1.** One repository, one CI, no branches to
@@ -99,6 +129,7 @@ footer. This is not a new decision, only the record of who publishes and of the 
   service, but the AGPL is a frequent veto in large accounts and would deter contributors.
 - **Gating simple SSO.** Competitors put it in their team tier, and a community edition whose
   only login is the development back door would have no security at all. OIDC with discovery and
-  PKCE stays open; SAML, SCIM and deprovisioning are what the enterprise edition sells.
+  PKCE stays open; SAML, SCIM and deprovisioning are what the enterprise edition sells. *Amended on
+  2026-11-15: SAML is open too; SCIM and the deprovisioning it drives stay with the enterprise edition.*
 - **A free ceiling of three organisations.** A number rather than a capability, worked around by
   a one-line fork, and it protects nothing an enterprise actually buys.

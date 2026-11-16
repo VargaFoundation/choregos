@@ -12,11 +12,15 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from . import __version__
+from . import __version__, theme
 from .a2a import a2a_app
+from .activity import activity
+from .artifacts import artifacts_app
+from .ask import ask
 from .binary_info import binary_info
 from .client import ApiError, Client, NoOrganisationError, Profile
 from .knowledge import knowledge_app
+from .outposts import outposts_app
 from .plugins import plugin_app
 from .self_update import self_app
 
@@ -35,10 +39,13 @@ tokens_app = typer.Typer(help="API tokens")
 machines_app = typer.Typer(help="Applications that call the A2A door under their own name")
 admin_app = typer.Typer(help="Platform administration")
 secrets_app = typer.Typer(help="Sealed connector secrets")
+identity_app = typer.Typer(help="How people sign in to the instance")
 admin_app.add_typer(secrets_app, name="secrets")
+admin_app.add_typer(identity_app, name="identity")
 app.add_typer(orgs_app, name="orgs")
 app.add_typer(tokens_app, name="tokens")
 app.add_typer(machines_app, name="machines")
+app.add_typer(outposts_app, name="outposts")
 app.add_typer(admin_app, name="admin")
 app.add_typer(projects_app, name="projects")
 app.add_typer(items_app, name="items")
@@ -67,9 +74,21 @@ def _root(
         bool,
         typer.Option("--version", callback=_print_version, is_eager=True, help="Print the version and exit."),
     ] = False,
+    no_color: Annotated[
+        bool,
+        typer.Option(
+            "--no-color", help="No colour, as `NO_COLOR` does: glyphs and words carry every status."
+        ),
+    ] = False,
 ) -> None:
     """Options of `choregos` itself, before any command."""
+    if no_color:
+        theme.MONOCHROME = True
 
+
+app.command("ask")(ask)
+app.command("activity")(activity)
+app.add_typer(artifacts_app, name="artifacts")
 
 # Hidden: the native binaries' smoke test asks the binary what it knows about itself (S62-07).
 app.command("binary-info", hidden=True)(binary_info)
@@ -92,9 +111,22 @@ class TransportSafeClient(Client):
             self._unreachable(exc)
             return None  # `fail` raises; for the type checker
 
+    def get_raw(self, path: str, **kwargs: Any) -> httpx.Response:
+        try:
+            return super().get_raw(path, **kwargs)
+        except httpx.TransportError as exc:
+            self._unreachable(exc)
+            raise  # `fail` raises; for the type checker
+
     def stream_sse(self, path: str, **kwargs: Any) -> Any:
         try:
             yield from super().stream_sse(path, **kwargs)
+        except httpx.TransportError as exc:
+            self._unreachable(exc)
+
+    def stream_events(self, method: str, path: str, **kwargs: Any) -> Any:
+        try:
+            yield from super().stream_events(method, path, **kwargs)
         except httpx.TransportError as exc:
             self._unreachable(exc)
 
@@ -187,6 +219,46 @@ def secrets_rewrap() -> None:
     CHOREGOS_SECRETS_KEKS, the API restarted). The values are not read out nor changed."""
     result = client().post("/platform/secrets/rewrap")
     console.print(f"[green]✓[/green] {result['rewrapped']} secret(s) re-wrapped under the active key")
+
+
+@identity_app.command("relink")
+def identity_relink(
+    issuer: Annotated[
+        str | None, typer.Option(help="The new provider's issuer; default: the instance's configured one")
+    ] = None,
+    as_json: Annotated[bool, typer.Option("--json", help="The whole plan as JSON")] = False,
+) -> None:
+    """Plan a change of identity provider (a dry run, ADR 0164): which accounts a re-link window moves to
+    the new provider's subject at their first sign-in, which it refuses (two accounts, one address), and
+    whether the deployment's window (CHOREGOS_OIDC_RELINK_UNTIL) is open. Changes nothing."""
+    plan = client().get("/platform/identity/relink", params={"issuer": issuer} if issuer else None)
+    if as_json:
+        typer.echo(json.dumps(plan, indent=2))
+        return
+    window = plan["window"]
+    console.print(f"issuer of the plan: {plan['issuer']} (configured: {plan['configured_issuer']})")
+    until = f" (until {window['until']})" if window.get("until") else ""
+    applies = "" if window["applies"] else ", for the configured issuer, not this one"
+    console.print(f"re-link window: {window['state']}{until}{applies}")
+    counts = plan["counts"]
+    console.print(
+        f"{counts['pending']} to re-link, {counts['ambiguous']} ambiguous (refused), "
+        f"{counts['current']} already on this issuer, {counts['unbound']} without a subject, "
+        f"{counts['not_concerned']} not concerned"
+    )
+    for key, title in (("ambiguous", "ambiguous: resolve before the window"), ("pending", "to re-link")):
+        if not plan[key]:
+            continue
+        table = Table("e-mail", "name", "bound by", "last sign-in", "same address as", title=title)
+        for account in plan[key]:
+            table.add_row(
+                account["email"],
+                account["display_name"],
+                account.get("issuer") or "(not recorded)",
+                account.get("last_login_at") or "never",
+                ", ".join(account.get("same_address_as") or []),
+            )
+        console.print(table)
 
 
 @tokens_app.command("create")

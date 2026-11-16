@@ -15,6 +15,7 @@ import os
 import sys
 import tempfile
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, cast
@@ -28,17 +29,19 @@ from choregos_contracts import (
     StageOutputs,
     StageResult,
     StageStatus,
+    is_inert_binary_path,
 )
 from choregos_core import telemetry
+from choregos_core.context_breakdown import PARTS_EVENT, Hints, register
 from choregos_core.hosted import CONNECT_PORT, MCP_PORT, MODEL_PORT
 from choregos_core.redaction import REDACTED, redact
 from pydantic import ValidationError
 
-from . import compression, confine, tool_scripts
+from . import compression, confine, safe_files, tool_scripts
 from .acp import AcpClient, AgentUnreachableError
 from .acp.client import PromptOutcome, WriteGuard
 from .acp.guard import TurnGuard
-from .backends import get_backend
+from .backends import Backend, LaunchPlan, get_backend
 from .budget import BUDGET_REASON, gateway_budget_refusal
 from .client import InternalApiError, InternalClient
 from .config import RunnerSettings, agent_base_environment, get_settings
@@ -46,15 +49,18 @@ from .dod import CheckOutcome, DodReport, run_checks
 from .egress import AUTH_VARIABLE as EGRESS_AUTH_VARIABLE
 from .egress import authenticate_proxy_env
 from .exits import Exit
+from .gateway_probe import GatewayProbe
 from .guardrails import GuardRails
 from .hosted import REPORT_HOSTED_IMAGE, REPORT_HOSTED_PROVENANCE, REPORT_RESPONSE, result_of, run_hosted
 from .hosted_workspace import HostedWorkspaceError, export_tree, import_tree
 from .inputs import INPUTS_DIR, InputInvalidError, inputs_markdown, mount_inputs
 from .job import REPORT_COMMAND, REPORT_IMAGE, command_digest, job_result, run_job, write_fields
 from .knowledge import KnowledgeInvalidError, lay_out
+from .launcher import SHARED_UMASK, Launcher
 from .local_tools import start_if_absent
 from .local_tools import stop as stop_tools
 from .loopback import Loopback
+from .loopback.agent import agent_view, proxy_environment
 from .loopback.connect import ConnectProxy, upstream_proxy
 from .loopback.mcp import McpProxy
 from .loopback.model import ModelProxy
@@ -72,7 +78,7 @@ from .remote import (
 from .result import complete_result, fallback_result, load_result, repair_prompt, write_result
 from .scope import check_scope
 from .skills import InvalidSkill, place_skills
-from .workspace import Workspace, agent_git_env, agent_home, inline_outputs, workspace_env
+from .workspace import Workspace, agent_git_env, agent_home, git_dir_for, inline_outputs, workspace_env
 
 if TYPE_CHECKING:
     from choregos_tools_mcp.bridge import Bridge
@@ -124,9 +130,10 @@ class EventJournal:
         self.seq += 1
         event = {"seq": self.seq, "type": type_, "payload": payload}
         self.buffer.append(event)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        with self.path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(event, ensure_ascii=False) + "\n")
+        root = self.path.parent.parent
+        safe_files.write_text(
+            root, self.path.relative_to(root), json.dumps(event, ensure_ascii=False) + "\n", append=True
+        )
         if len(self.buffer) >= self.batch_size or _no_wait(type_, payload):
             await self.flush()
 
@@ -222,9 +229,21 @@ class Runner:
         self.skills_index = ""
         #: Where the knowledge bases lie in the workspace (ADR 0051), added to the prompt.
         self.knowledge_index = ""
+        #: The skill files the run placed (text ones), whose paragraphs the context breakdown registers.
+        self.skill_files: list[str] = []
         #: "Calling tools from a script" (ADR 0122 §5), added to the first prompt when the run was offered
         #: tool scripts and its client was written (S57-11b).
         self.tool_instructions = ""
+        #: The agent's container's launcher, when the deployment says the agent runs there (ADR 0146);
+        #: `None` under `process`, where the agent is the runner's child.
+        self.launcher: Launcher | None = None
+        #: The proxy variables the agent's container starts with (ADR 0146 §7): the loopback CONNECT proxy,
+        #: never the pod's egress proxy with the run's token. The project's checks get them too.
+        self.agent_proxy_env: dict[str, str] = {}
+        #: The loopback listeners of an agent in a container, closed when the run ends.
+        self.agent_listeners = contextlib.AsyncExitStack()
+        #: What `agent.isolation` journals: where this run's agent runs (ADR 0146 §9).
+        self.isolation: dict[str, str] = {"mode": "process"}
         #: The run's git token (S22-07): in memory only, for the clone and the push.
         self.git_token: str | None = None
         #: The run's compression proxy (ADR 0055), when it runs one.
@@ -267,7 +286,10 @@ class Runner:
 
     async def execute(self, stage_input: StageInput, client: InternalClient) -> RunOutcome:
         workspace = Workspace(
-            self.settings.workspace, self.settings.git_user_name, self.settings.git_user_email
+            self.settings.workspace,
+            self.settings.git_user_name,
+            self.settings.git_user_email,
+            git_dir=git_dir_for(self.settings.workspace, self.settings.git_dir_root),
         )
         journal = EventJournal(
             client,
@@ -291,7 +313,9 @@ class Runner:
                 work_item=stage_input.work_item.key,
                 stage=stage_input.transition.role,
             ) as span:
-                outcome = await self._execute(stage_input, client, workspace, journal)
+                outcome = await self._isolate(journal) or await self._execute(
+                    stage_input, client, workspace, journal
+                )
                 status = outcome.result.status if outcome.result else None
                 telemetry.record_outcome(
                     span,
@@ -302,6 +326,7 @@ class Runner:
         finally:
             await compression.stop(self.compressor)
             await stop_tools(self.tools)
+            await self.agent_listeners.aclose()
 
     async def _execute(
         self, stage_input: StageInput, client: InternalClient, workspace: Workspace, journal: EventJournal
@@ -309,6 +334,7 @@ class Runner:
         await journal.record(
             "run.started", {"run_id": stage_input.run_id, "role": stage_input.transition.role}
         )
+        await journal.record("agent.isolation", self.isolation)
 
         self.tools = await self._start_tools(client, journal, stage_input)
 
@@ -347,15 +373,12 @@ class Runner:
 
         # 4-5. backend et lancement
         backend = get_backend(stage_input.agent.backend)
-        plan = backend.launch_plan(stage_input, workspace.path)
+        plan, env = self._agent_launch(stage_input, backend, workspace)
         await self._record_shell_filter(stage_input, backend, journal)
-        written = plan.materialize(workspace.path)
-        workspace.exclude(written)
-        plan.materialize_home(agent_home(stage_input))
+        written = _materialize(plan, workspace, stage_input)
         # Skills, then knowledge bases: the first refusal stops the run before the agent starts.
         if (
-            refusal := await self._place_skills(client, journal, stage_input, backend, workspace)
-            or await self._lay_out_knowledge(client, journal, stage_input, workspace)
+            refusal := await self._place_inputs(client, journal, stage_input, backend, workspace)
         ) is not None:
             return refusal
         # A run offered tool scripts may write them with its file-write tool in their directory (#1365).
@@ -366,19 +389,21 @@ class Runner:
             workspace=str(workspace.path),
             scripts_dir=scripts_dir,
         )
-        env = {
-            **plan.env,
-            **backend.model_env(stage_input.model, stage_input.gateway_key),
-            **workspace_env(stage_input),
-        }
         # The client a script imports (ADR 0122 §3), for every shell backend: its environment only.
         env.update(await self._tool_client(client, journal, stage_input, env))
         # The agent reads its repository with its own git: the same `safe.directory` as the
         # runner, counted on the environment it will really receive (the runner's without the run's
         # credentials, ADR 0115, then its own).
         env.update(agent_git_env({**agent_base_environment(), **env}, workspace.path))
+        await self._register_context_parts(journal, stage_input, workspace.path, plan, written)
 
+        # Asked once, after a turn that ended in an error naming no refusal (S65-35): an agent that
+        # drops the provider's error (opencode, #1742) no longer hides a budget refusal.
+        probe = GatewayProbe(
+            stage_input.model, stage_input.gateway_key, journal.record, transport=self.model_transport
+        )
         command, refusal = await self._confine(plan, env, workspace, journal)
+        refusal = refusal or await self._serve_agent(stage_input, journal, guards, probe)
         if refusal is not None:
             return refusal
 
@@ -394,16 +419,15 @@ class Runner:
 
         diagnostics = Diagnostics()
         agent_result: StageResult | None = None
-        dod_iterations = 0
-        repairs = 0
+        dod_iterations = repairs = 0
         scope_result = None
-
         try:
             async with AcpClient(
                 command,
                 cwd=str(workspace.path),
                 scripts_dir=scripts_dir,
                 env=env,
+                launcher=self.launcher,
                 on_update=on_update,
                 on_permission=on_permission,
                 write_guard=file_system_guard(guards),
@@ -422,11 +446,11 @@ class Runner:
                 budget_seconds = stage_input.budget.max_minutes * 60
                 # A key the gateway refuses for budget refuses every further turn too: no DoD
                 # retry, no reminder, no repair — each would only be refused again (S27-01).
-                refused = await _turn(agent, prompt, budget_seconds)
+                refused = await _turn(agent, prompt, budget_seconds, probe)
 
                 # 8. boucle DoD
                 max_iterations = max(0, stage_input.permissions.dod_iterations)
-                report = await run_checks(stage_input, workspace.path)
+                report = await self._checks(stage_input, workspace.path)
                 repairable = await _repairable(
                     stage_input, workspace, start_ref, report, journal, max_iterations
                 )
@@ -442,8 +466,10 @@ class Runner:
                         "dod.retry",
                         {"iteration": dod_iterations, "failures": [c.name for c in report.failures()]},
                     )
-                    refused = await _turn(agent, report.prompt_for_repair(), self._remaining(budget_seconds))
-                    report = await run_checks(stage_input, workspace.path)
+                    refused = await _turn(
+                        agent, report.prompt_for_repair(), self._remaining(budget_seconds), probe
+                    )
+                    report = await self._checks(stage_input, workspace.path)
 
                 # 9. scope
                 scope_result = await check_scope(
@@ -451,7 +477,9 @@ class Runner:
                 )
                 if scope_result.reverted and not refused and agent.outcome.guard is None:
                     await journal.record("scope.reverted", {"paths": scope_result.reverted})
-                    refused = await _turn(agent, scope_result.prompt(), self._remaining(budget_seconds))
+                    refused = await _turn(
+                        agent, scope_result.prompt(), self._remaining(budget_seconds), probe
+                    )
                     scope_result = await check_scope(
                         workspace, start_ref, guards.allowed_paths, denied_paths=guards.permissions.deny_paths
                     )
@@ -469,7 +497,10 @@ class Runner:
                     repairs += 1
                     await journal.record("result.repair", {"attempt": repairs, "error": load.error})
                     refused = await _turn(
-                        agent, repair_prompt(load, workspace.result_path()), self._remaining(budget_seconds)
+                        agent,
+                        repair_prompt(load, workspace.result_path()),
+                        self._remaining(budget_seconds),
+                        probe,
                     )
                     load = load_result(
                         workspace.result_path(), inline_outputs(stage_input), _files(stage_input), displays
@@ -488,7 +519,9 @@ class Runner:
                     dod_iterations=dod_iterations,
                     result_repairs=repairs,
                 )
-                stop = _stop(agent, refused, agent_result, load.error, workspace.result_path())
+                stop = _stop(
+                    agent, refused, agent_result, load.error, workspace.result_path(), gateway=probe.failure
+                )
                 if stop is not None:
                     code, reason, detail = stop
                     final = complete_result(
@@ -677,7 +710,7 @@ class Runner:
             },
         )
         result, job_evidence = job_result(stage_input, workspace.path, ran)
-        report = await run_checks(stage_input, workspace.path)
+        report = await self._checks(stage_input, workspace.path)
         measured = report.evidence()
         # The project's `dod.facts` commands win over the job on a fact both name.
         measured.facts = {**(job_evidence.facts or {}), **(measured.facts or {})} or None
@@ -695,6 +728,112 @@ class Runner:
         )
         final = await self._publish(client, journal, workspace, stage_input, final, base, start_ref)
         return RunOutcome(Exit.OK, final, transcript_path=journal.path)
+
+    async def _isolate(self, journal: EventJournal) -> RunOutcome | None:
+        """Where the agent will run, journaled with `run.started`, so before the agent starts
+        (ADR 0146 §9). Under `container` the launcher of the agent's container must answer: with
+        none, the run ends and the agent is never started as the runner's own child instead."""
+        self.launcher = None
+        self.isolation = {"mode": "process"}
+        if self.settings.agent_isolation == "process":
+            return None
+        launcher = Launcher(self.settings.launcher_host, self.settings.launcher_port)
+        address = f"{launcher.host}:{launcher.port}"
+        if not await launcher.wait_ready(self.settings.launcher_wait_seconds):
+            detail = (
+                "the agent's container is required (agent_isolation=container) and "
+                f"no launcher answers at {address}"
+            )
+            await journal.record("run.failed", {"phase": "isolation", "error": detail})
+            await journal.flush()
+            return RunOutcome(Exit.AGENT_ISOLATION_UNAVAILABLE, detail=detail)
+        # The two containers run as different users and share one volume: what the runner writes
+        # there must be writable by the group the pod's `fsGroup` gives both (the launcher does the same).
+        os.umask(SHARED_UMASK)
+        self.launcher = launcher
+        self.isolation = {"mode": "container", "launcher": address}
+        return None
+
+    async def _place_inputs(
+        self,
+        client: InternalClient,
+        journal: EventJournal,
+        stage_input: StageInput,
+        backend: Backend,
+        workspace: Workspace,
+    ) -> RunOutcome | None:
+        """The skills, then the knowledge bases: the first refusal stops the run."""
+        refusal = await self._place_skills(client, journal, stage_input, backend, workspace)
+        if refusal is None:
+            refusal = await self._lay_out_knowledge(client, journal, stage_input, workspace)
+        return refusal
+
+    async def _serve_agent(
+        self,
+        stage_input: StageInput,
+        journal: EventJournal,
+        guards: GuardRails,
+        probe: GatewayProbe,
+    ) -> RunOutcome | None:
+        """The loopback listeners of an ACP step whose agent is in a container (ADR 0146 §7, S65-04f): the
+        model with the run's key, the MCP servers with their headers, and the CONNECT proxy with the pod's
+        egress credentials — each held here, none in the agent's container. The model listener counts no
+        turn (`max_turns` is the turn guard's) and the gateway keeps enforcing the run's budget. Stopped
+        with the run by `agent_listeners`. `None`: they are serving (or the agent is the runner's child)."""
+        if self.launcher is None:
+            return None
+        model = ModelProxy(
+            stage_input, journal.record, transport=self.model_transport, count_turns=False, measure=False
+        )
+        mcp = McpProxy(
+            stage_input,
+            journal.record,
+            guards,
+            transport=self.mcp_transport,
+            verbatim=True,
+        )
+        connect = ConnectProxy(stage_input, journal.record, upstream=upstream_proxy(os.environ))
+        try:
+            await self.agent_listeners.enter_async_context(
+                Loopback(model, mcp, connect, ports=self.loopback_ports)
+            )
+        except OSError as exc:
+            await journal.record("run.failed", {"phase": "loopback", "error": str(exc)[:500]})
+            await journal.flush()
+            return RunOutcome(Exit.AGENT_UNREACHABLE, detail=str(exc))
+        probe.known = lambda: model.budget_refusal
+        return None
+
+    def _agent_launch(
+        self, stage_input: StageInput, backend: Backend, workspace: Workspace
+    ) -> tuple[LaunchPlan, dict[str, str]]:
+        """The agent's launch plan and environment, from the step as the agent may see it. Under
+        `container` (ADR 0146 §7) that is a copy with the loopback addresses and the loopback key, never
+        the run's gateway key nor an MCP server's headers (the runner's own copy keeps them), and the
+        proxy variables name the loopback CONNECT proxy."""
+        self.agent_proxy_env = {}
+        agent_input = stage_input
+        if self.launcher is not None:
+            self.agent_proxy_env = proxy_environment(agent_base_environment(), self.loopback_ports)
+            agent_input = agent_view(stage_input, self.loopback_ports, model=backend.loopback_model)
+        plan = backend.launch_plan(agent_input, workspace.path)
+        env = {
+            **plan.env,
+            **backend.model_env(agent_input.model, agent_input.gateway_key),
+            **workspace_env(stage_input),
+            **self.agent_proxy_env,
+        }
+        return plan, env
+
+    async def _checks(self, stage_input: StageInput, workspace: Path) -> DodReport:
+        """The project's checks: in the agent's container when there is one, since they run the code
+        the agent wrote (ADR 0146 §6)."""
+        env = (
+            {"HOME": str(agent_home(stage_input)), **self.agent_proxy_env}
+            if self.launcher is not None
+            else None
+        )
+        return await run_checks(stage_input, workspace, launcher=self.launcher, env=env)
 
     async def _egress_credential(self, client: Any) -> str:
         """What the proxy variables carry (ADR 0115): the run's egress token, which opens the run's
@@ -833,7 +972,7 @@ class Runner:
         no_repo = stage_input.project.model_copy(
             update={"test_command": "", "lint_command": "", "typecheck_command": ""}
         )
-        report = await run_checks(stage_input.model_copy(update={"project": no_repo}), workspace.path)
+        report = await self._checks(stage_input.model_copy(update={"project": no_repo}), workspace.path)
         final = complete_result(
             result,
             measured=report.evidence(),
@@ -886,8 +1025,9 @@ class Runner:
             model_transport=self.model_transport,
             mcp_transport=self.mcp_transport,
             timeout_s=stage_input.budget.max_minutes * 60,
+            hints=self._context_hints(stage_input, workspace.path),
         )
-        report = await run_checks(stage_input, workspace.path)
+        report = await self._checks(stage_input, workspace.path)
         outcome = step.outcome
         diagnostics = Diagnostics(
             turns=outcome.turns if outcome else 0,
@@ -950,7 +1090,12 @@ class Runner:
                 await journal.flush()
                 return RunOutcome(Exit.CLONE_FAILED, detail=str(exc))
             await journal.record("hosted.workspace", {"mode": hosted.workspace, "files": copied})
-        model = ModelProxy(stage_input, journal.record, transport=self.model_transport)
+        model = ModelProxy(
+            stage_input,
+            journal.record,
+            transport=self.model_transport,
+            hints=self._context_hints(stage_input, workspace.path, foreign=True),
+        )
         mcp = McpProxy(stage_input, journal.record, guards, transport=self.mcp_transport)
         # After `authenticate_proxy_env`: the pod's egress proxy with the run's credentials, which
         # the tunnels carry and the container never sees.
@@ -1060,7 +1205,7 @@ class Runner:
         no_repo = stage_input.project.model_copy(
             update={"test_command": "", "lint_command": "", "typecheck_command": ""}
         )
-        return await run_checks(stage_input.model_copy(update={"project": no_repo}), workspace.path)
+        return await self._checks(stage_input.model_copy(update={"project": no_repo}), workspace.path)
 
     async def _place_skills(
         self, client: Any, journal: Any, stage_input: StageInput, backend: Any, workspace: Any
@@ -1078,6 +1223,7 @@ class Runner:
             await journal.flush()
             return RunOutcome(Exit.SKILLS_INVALID, detail=str(exc))
         workspace.exclude(ecrites)
+        self.skill_files = [path for path in ecrites if not is_inert_binary_path(path)]
         return None
 
     async def _write_context(
@@ -1199,6 +1345,44 @@ class Runner:
             playbook = f"{playbook}\n\n{self.tool_instructions}"
         return f"{playbook}\n\n---\n\n{task}"
 
+    def _context_hints(self, stage_input: StageInput, workspace: Path, *, foreign: bool = False) -> Hints:
+        """What the runner wrote into the prompt, by section, for the context breakdown (ADR 0141 §3):
+        the playbook is the agent's instructions, the skills and knowledge indexes their own sections.
+        A hosted container wraps the prompt in its own request (`foreign`): the task is then named
+        too, so that only what the container added counts as `backend`."""
+        parts: dict[str, list[str]] = {
+            "system": [stage_input.playbook.prompt or ""],
+            "skills": [self.skills_index],
+            "knowledge": [self.knowledge_index],
+        }
+        if foreign:
+            task = workspace / ".choregos" / "task.md"
+            parts["messages"] = [task.read_text(encoding="utf-8") if task.is_file() else ""]
+        return Hints(parts=parts, foreign=foreign, mcp_servers=frozenset(stage_input.tools.mcp))
+
+    async def _register_context_parts(
+        self, journal: EventJournal, stage_input: StageInput, workspace: Path, plan: Any, written: list[str]
+    ) -> None:
+        """`context.parts` (ADR 0141 §4, S64-08b): what the runner wrote that an ACP CLI will send its
+        model, registered by section as paragraph digests and sizes, never the text — the gateway's
+        callback counts each call's request against it, and the rest is `backend`. The playbook, the
+        tool-script instructions and the instruction files the backend wrote (`CLAUDE.md`) are the
+        agent's instructions (`system`), `task.md` its task (`messages`), the skills' files and index
+        `skills`, the knowledge index `knowledge`; the MCP servers name the tools that are `tools.mcp`.
+        Sent at once: the agent's first call must find it."""
+        task = workspace / ".choregos" / "task.md"
+        instructions = [plan.files[path] for path in written if path.endswith(".md") and path in plan.files]
+        parts = {
+            "system": [stage_input.playbook.prompt or "", self.tool_instructions, *instructions],
+            "messages": [task.read_text(encoding="utf-8") if task.is_file() else ""],
+            "skills": [self.skills_index, *_texts_of(workspace, self.skill_files)],
+            "knowledge": [self.knowledge_index],
+        }
+        await journal.record(
+            PARTS_EVENT, {"parts": register(parts), "mcp_servers": sorted(stage_input.tools.mcp)}
+        )
+        await journal.flush()
+
     async def _record_tool_instructions(self, journal: EventJournal, prompt: str) -> None:
         """`tools.instructions`: whether the first prompt holds the scripts section, and its size — what
         the run page and the live matrix read, instead of guessing from a model that wrote no script."""
@@ -1296,6 +1480,31 @@ class Runner:
         return result
 
 
+def _materialize(plan: Any, workspace: Workspace, stage_input: StageInput) -> list[str]:
+    """The backend's files in the workspace, out of the diff, and its `$HOME` files: the files written."""
+    written: list[str] = plan.materialize(workspace.path)
+    workspace.exclude(written)
+    plan.materialize_home(agent_home(stage_input))
+    return written
+
+
+#: The most of one file the context breakdown registers: past it, the file's tail counts as `backend`.
+_MAX_REGISTERED_BYTES = 256 * 1024
+
+
+def _texts_of(workspace: Path, paths: list[str]) -> list[str]:
+    """The text of each file the run placed, as far as `_MAX_REGISTERED_BYTES`; one it cannot read as
+    text is left out."""
+    texts: list[str] = []
+    for path in paths:
+        try:
+            with (workspace / path).open("rb") as handle:
+                texts.append(handle.read(_MAX_REGISTERED_BYTES).decode("utf-8", errors="ignore"))
+        except OSError:
+            continue
+    return texts
+
+
 def _files(stage_input: StageInput) -> list[str]:
     """The files a `done` result must leave in `.choregos/outputs/` (ADR 0049)."""
     return list(expected_files(stage_input).values())
@@ -1318,27 +1527,37 @@ def _commit_message(stage_input: StageInput, result: StageResult) -> str:
     return f"{prefix}({scope}): {summary}"
 
 
-def _diagnosis_without_result(agent: Any, error: str | None, result_path: Path) -> tuple[str, str]:
+def _diagnosis_without_result(
+    agent: Any, error: str | None, result_path: Path, gateway: str | None = None
+) -> tuple[str, str]:
     """Two failures that look alike and are not cured the same way: an agent that worked
     but did not write its result, and an agent whose turn comes back EMPTY: key refused,
     quota reached, provider down. Blaming the second on an oversight sends the investigation
-    the wrong way."""
+    the wrong way. `gateway` is what the gateway answered the run's key when the runner asked it
+    (S65-35): the refusal an agent did not relay."""
+    told = f" — {gateway}" if gateway else ""
     if _agent_silent(agent.outcome) and not result_path.exists():
         # What the agent wrote on its error output is worth more than any rewording:
         # that is where the provider says "quota reached" or "key refused".
         noise = " | ".join(agent.outcome.errors[-2:] or agent.stderr_tail[-2:])
         detail = (
             "the agent produced neither text nor a tool call: check its access to the model "
-            f"(end of turn: {agent.outcome.stop_reason})" + (f" — {noise[:300]}" if noise else "")
+            f"(end of turn: {agent.outcome.stop_reason})" + told + (f" — {noise[:300]}" if noise else "")
         )
         return "agent_silencieux", detail
-    return "invalid_result", (error or "unreadable result")
+    return "invalid_result", (error or "unreadable result") + told
 
 
-async def _turn(agent: Any, text: str, timeout: float) -> str | None:
-    """One prompt turn; then the gateway's budget refusal, if the agent met one (S27-01)."""
+async def _turn(
+    agent: Any, text: str, timeout: float, probe: Callable[[], Awaitable[str | None]] | None = None
+) -> str | None:
+    """One prompt turn; then the gateway's budget refusal, if the agent met one (S27-01). A turn that
+    ended in an error naming none asks the gateway itself (S65-35): an agent may drop the refusal."""
     await agent.prompt(text, timeout=timeout)
-    return _budget_refusal(agent)
+    refused = _budget_refusal(agent)
+    if refused is None and probe is not None and agent.outcome.stop_reason == "error":
+        refused = await probe()
+    return refused
 
 
 def _budget_refusal(agent: Any) -> str | None:
@@ -1348,7 +1567,13 @@ def _budget_refusal(agent: Any) -> str | None:
 
 
 def _stop(
-    agent: Any, refused: str | None, result: StageResult | None, error: str | None, result_path: Path
+    agent: Any,
+    refused: str | None,
+    result: StageResult | None,
+    error: str | None,
+    result_path: Path,
+    *,
+    gateway: str | None = None,
 ) -> tuple[Exit, str, str] | None:
     """Why the run ends without the agent's own result — `(exit code, reason, detail)` — or `None`.
 
@@ -1357,7 +1582,7 @@ def _stop(
     if refused and (result is None or result.status is StageStatus.FAILED):
         return Exit.BUDGET_EXCEEDED, BUDGET_REASON, f"the gateway refused the run's key: {refused}"
     if result is None:
-        reason, detail = _diagnosis_without_result(agent, error, result_path)
+        reason, detail = _diagnosis_without_result(agent, error, result_path, gateway)
         return Exit.INVALID_RESULT, reason, detail
     return None
 
@@ -1426,18 +1651,15 @@ async def _open_session(
             )
     session_id = await agent.new_session(str(workspace), mcp_servers)
     await journal.record("session/new", {"backend": backend})
-    path = workspace / SAVED_SESSION
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({"backend": backend, "session_id": session_id}), encoding="utf-8")
+    safe_files.write_text(
+        workspace, SAVED_SESSION, json.dumps({"backend": backend, "session_id": session_id})
+    )
 
 
 def _saved_session(workspace: Path) -> dict[str, Any] | None:
-    path = workspace / SAVED_SESSION
-    if not path.exists():
-        return None
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except ValueError:
+        data = json.loads(safe_files.read_text(workspace, SAVED_SESSION))
+    except (OSError, ValueError):
         return None
     return data if isinstance(data, dict) and data.get("session_id") else None
 
@@ -1446,10 +1668,10 @@ def _events_already_journaled(path: Path) -> int:
     """A run resumed in its own sandbox after a person's answer (S35-03) finds its journal on the
     workspace volume: it goes on from there, or the API, idempotent by `seq`, would drop every
     event of the continuation as already received. A fresh workspace has none."""
-    if not path.exists():
+    try:
+        return safe_files.read_bytes(path.parent.parent, path.relative_to(path.parent.parent)).count(b"\n")
+    except OSError:
         return 0
-    with path.open(encoding="utf-8") as lines:
-        return sum(1 for _ in lines)
 
 
 async def run_stage(settings: RunnerSettings | None = None) -> RunOutcome:

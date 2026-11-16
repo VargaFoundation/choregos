@@ -46,6 +46,7 @@ from choregos_adapters.a2a import (
 from choregos_contracts import StageInput, StageStatus
 from choregos_core.redaction import REDACTED
 
+from . import safe_files
 from .inputs import INPUTS_DIR
 from .outputs import OUTPUTS_DIR
 
@@ -96,9 +97,10 @@ def _message_text(stage_input: StageInput, workspace: Path) -> str:
     """The instructions of the registry entry, then the task and the context the runner wrote."""
     pieces = [(stage_input.playbook.prompt or "").strip()]
     for name in ("task.md", "context.md"):
-        path = workspace / ".choregos" / name
-        if path.is_file():
-            pieces.append(path.read_text(encoding="utf-8").strip())
+        try:
+            pieces.append(safe_files.read_text(workspace, Path(".choregos") / name).strip())
+        except OSError:
+            continue
     return "\n\n---\n\n".join(p for p in pieces if p)
 
 
@@ -108,10 +110,13 @@ def _input_parts(workspace: Path) -> list[dict[str, Any]]:
     total = 0
     if not folder.is_dir():
         return parts
-    for path in sorted(folder.iterdir()):
-        if not path.is_file() or path.is_symlink():
-            continue
-        content = path.read_bytes()
+    try:
+        names, _ = safe_files.regular_files(workspace, INPUTS_DIR)
+    except OSError:
+        return parts
+    for name in names:
+        path = folder / name
+        content = safe_files.read_bytes(workspace, path.relative_to(workspace))
         total += len(content)
         if total > MAX_INPUT_BYTES:
             raise ValueError(f"the declared inputs exceed {MAX_INPUT_BYTES // (1024 * 1024)} MiB")

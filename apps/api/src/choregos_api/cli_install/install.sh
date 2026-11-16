@@ -18,7 +18,7 @@ set -eu
 
 INSTANCE_URL='__CHOREGOS_INSTANCE_URL__'
 PREFIX="${CHOREGOS_INSTALL_PREFIX:-${HOME:-}/.local}"
-RELEASES='https://github.com/VargaFoundation/choregos/releases'
+RELEASES='__CHOREGOS_RELEASES__'
 
 say() { printf '%s\n' "$*"; }
 fail() { printf 'choregos install: %s\n' "$*" >&2; exit 1; }

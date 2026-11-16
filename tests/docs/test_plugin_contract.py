@@ -105,10 +105,10 @@ def test_an_empty_contents_and_unknown_keys_are_refused() -> None:
 @pytest.mark.parametrize(
     "image",
     [
-        "ghcr.io/vargafoundation/servicenow-mcp:0.1.0",
-        "ghcr.io/vargafoundation/servicenow-mcp",
-        "ghcr.io/vargafoundation/servicenow-mcp@sha256:abc",
-        "ghcr.io/vargafoundation/servicenow-mcp@sha512:" + "0" * 64,
+        "registry.example/servicenow-mcp:0.1.0",
+        "registry.example/servicenow-mcp",
+        "registry.example/servicenow-mcp@sha256:abc",
+        "registry.example/servicenow-mcp@sha512:" + "0" * 64,
     ],
 )
 def test_a_server_image_without_a_digest_is_refused(image: str) -> None:

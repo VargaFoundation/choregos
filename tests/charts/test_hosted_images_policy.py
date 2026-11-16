@@ -22,6 +22,7 @@ from typing import Any
 
 import pytest
 import yaml
+from choregos_core.publishing import PUBLISHING
 
 CHART = pathlib.Path(__file__).resolve().parents[2] / "charts" / "choregos"
 DIGEST = "sha256:" + "a" * 64
@@ -236,7 +237,7 @@ def test_under_warn_the_policy_pins_and_keyless_verifies_the_identity() -> None:
 
 
 def _pod(name: str, namespace: str, agent: str, *, sidecar: bool) -> dict[str, Any]:
-    runner = {"name": "runner", "image": f"ghcr.io/vargafoundation/choregos-runner@{DIGEST}"}
+    runner = {"name": "runner", "image": PUBLISHING.image(f"choregos-runner@{DIGEST}")}
     spec: dict[str, Any] = {"containers": [runner]}
     if sidecar:
         spec["initContainers"] = [{"name": "agent", "image": agent, "restartPolicy": "Always"}]

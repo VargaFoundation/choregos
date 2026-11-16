@@ -167,6 +167,7 @@ async def test_responses_held_at_their_model_leave_the_pool_to_the_other_request
         assert [kind for session_id, kind in lines if session_id == record.id] == [
             "session.opened",
             "input.text",
+            "context.breakdown",  # the only call, kept at once (ADR 0141 §5)
             "prompt.turn",
             "response.completed",
         ]

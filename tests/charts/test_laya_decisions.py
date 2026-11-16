@@ -15,6 +15,7 @@ from typing import Any
 
 import pytest
 import yaml
+from choregos_core.publishing import PUBLISHING
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 CHART = ROOT / "charts" / "choregos"
@@ -180,7 +181,7 @@ def test_laya_runs_offline_on_cpu_and_is_probed_on_its_health_route() -> None:
     assert env["LAYA_DEVICE"] == "cpu"
     # The tag follows the chart's `global.imageTag`, which `tools/bump_version.py` moves at each release.
     tag = yaml.safe_load((CHART / "values.yaml").read_text())["global"]["imageTag"]
-    assert container["image"] == f"ghcr.io/vargafoundation/choregos-laya:{tag}"
+    assert container["image"] == PUBLISHING.image("choregos-laya", tag)
     assert container["ports"] == [{"name": "http", "containerPort": 8000}]
     for probe in ("startupProbe", "readinessProbe", "livenessProbe"):
         assert container[probe]["httpGet"] == {"path": "/health", "port": "http"}, probe

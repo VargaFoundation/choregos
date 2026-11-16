@@ -234,6 +234,7 @@ memory:
       kind: facts, writes: agent_proposes }
 knowledge:
   - { name: investment_policy, seed: knowledge/investment-policy }
+  - { name: house_research, bind: { description: "The house's research notes.", required: true } }
 tasks:
   - { name: morning_brief, workflow: workflows/morning-brief.yaml, delegation: read_only,
       needs: [market_data], triggers: [{ kind: schedule, cron: "30 7 * * 1-5", user_timezone: true }] }
@@ -255,10 +256,23 @@ policy:
    a need marked `subject_resolver: true` otherwise);
 6. `audience.personal_data: true` without `policy.conversation.retention_days` and an `erasure` mode;
 7. a task that calls a write need, or that reads with the person's identity while it runs without them (a
-   schedule, a poll) and has no `delegation: read_only`; a delegated task lists the needs it reads
+   schedule, a poll, an event) and has no `delegation: read_only`; a delegated task lists the needs it reads
    (`needs`), which the person sees when they agree;
 8. a name (`need`, operations, `memory`, `knowledge`, `tasks`, prompts) that is not English `snake_case`
    (a double underscore separates a need from its operation and is refused in a name).
+
+The agent's instructions are a template: a conversation sends them rendered with `config` (the installation's
+values over `config_schema`'s defaults) and `preferences` (the person's `scope: user, kind: profile` memory of
+the assistant, empty when there is none or under `memory.enabled: false`). A key with no value renders empty,
+so a template reads `{% if preferences.brief_length %}...{% endif %}` or `{{ preferences.brief_length or
+"standard" }}`. A version is checked with samples for both; `preferences.<key>` is not checked against the
+profile's schema ([ADR 0133](adr/0133-a-plugin-ships-an-assistant-an-organisation-installs-it-for-an-audience.md),
+amendment of S63-28).
+
+A `knowledge` item is exactly one of a seed (`seed`, with `serving_mode` and `upstream`) or a binding need
+(`bind: {description, required}`, [ADR 0159](adr/0159-an-assistant-may-read-the-organisation-s-knowledge-bases-by-reference.md)):
+the schema refuses both, neither, and a binding need with `serving_mode` or `upstream`. A binding need names no
+file.
 
 Names are unique within their list, a prompt's `{argument}` placeholders are its arguments, and every file
 the assistant names ships with the plugin: each knowledge seed (a directory holding a `knowledge.yaml` in
@@ -289,8 +303,25 @@ now with `POST …/run`. Nothing changes in the Temporal workflows: the schedule
   conversation of the installation is offered the same through ONE tool, `run_task(task)`, whose `task` is one of
   the manifest's on-demand tasks (`conversation_tasks`): it starts the task as the conversation's owner, with
   no delegation, under the click's budget and readiness checks, and tells the agent the work item's key (proved
-  through a full model turn). The **`trigger`** kind (an external event starting a run) stays for later: ADR 0137
-  point 2 defers it, so this is a deferral the ADR already made, not a departure.
+  through a full model turn).
+- **`trigger`** (S63-21): an event of [ADR 0113](adr/0113-a-workflow-starts-from-a-trigger.md) starts the task
+  in the personal space of the person it names. The task declares
+  `{ kind: trigger, subscriber: /attendee/email, idempotency: /event/id }`: `subscriber` is the JSON pointer, in
+  the event's payload, of the subscriber's EMAIL; `idempotency` (optional) the pointer of the event's identifier.
+  A system posts the event to `POST /webhooks/assistants/{org}/{slug}/tasks/{task}/events` with
+  `X-Choregos-Signature: sha256=<HMAC-SHA256 of the body>`; the key and the URL are shown to whoever manages the
+  installation by `POST /orgs/{org}/assistants/{slug}/tasks/{task}/event-key` (derived from the installation's
+  webhook key and the task: rotating the webhook key changes it, another task's key opens nothing). The person
+  subscribes with `PUT …/tasks/{task}` `{ "kind": "trigger" }` (no cron). Routing never guesses: the pointer must
+  designate exactly one text; it is matched, case-insensitively, against the people with an ENABLED `trigger`
+  subscription to this task. No pointer, a value that is not text, several people (a `*`), nobody subscribed or two
+  accounts that match are refused (422) and journaled; so is an event the subscriber's gate refuses (409: the
+  audience, the standing delegation of a `read_only` task, the budget: the very rules of a schedule and a
+  poll, the reason in `last_refusal`). The event id is the payload's value at `idempotency`, else the
+  `Idempotency-Key` header, else the body's digest, and keys the work item: a replay answers `duplicate` and starts
+  nothing, even on another replica; a refused event keeps no dedup, so the corrected one goes through. The journal
+  (`task_events`, `GET /orgs/{org}/assistants/{slug}/task-events` for the manager) records the decision, the event
+  id and the work item, never the payload or the address. The scheduler never runs this kind.
 - **Delegation**: a task with `delegation: read_only` can be subscribed, but its scheduled and polled runs are
   refused, the reason in `last_refusal`, unless the subscriber's standing delegation holds
   ([security](security.md#the-standing-delegation-adr-0137-points-3-4)). The steps of the run's workflow read
@@ -306,9 +337,19 @@ now with `POST …/run`. Nothing changes in the Temporal workflows: the schedule
 - **Delivery**: the run's artifacts are listed by `GET /me/inbox` (always). `email` and `teams` go through a
   notifier, `webhook` is an HMAC-signed POST (`X-Choregos-Signature: t=…,v1=…`, as the A2A push notifications)
   to the installation's `policy_overrides.delivery.webhook.url`; each is sent once per artifact revision and a
-  channel nobody configured is recorded as `not_configured` in the work item. No Teams adapter ships: the
-  `teams` channel works through whichever notifier the installation's `policy_overrides.delivery.teams`
-  (`{type, config}`) names. The webhook's signing key is shown ONCE to whoever manages the installation:
+  channel nobody configured is recorded as `not_configured` in the work item. `email` goes through whichever
+  notifier `policy_overrides.delivery.email` (`{type, config}`) names. `teams` (S63-25) posts an Adaptive Card to a
+  Microsoft Teams incoming webhook or Workflows URL: the manager seals the URL with
+  `PUT /orgs/{org}/assistants/{slug}/delivery/teams` `{ "webhook_url": … }` (`assistant:manage`; `https` without
+  credentials, else 422), which stores it in the organisation's secret store as
+  `assistant/<slug>/delivery/teams` and points `delivery.teams` at it (`{type: teams, secret_refs}`); `GET` says
+  whether it is configured and `DELETE` forgets it. The URL is the credential: it is never returned, never in the
+  audit log, a log line or an error, and the call is made under the organisation's egress allowlist, so an
+  administrator opens the URL's host in `/admin/egress` first (until then the card is not sent and the ledger says
+  `egress refused`, retried at the next pass). The card carries the task, the artifact and the work item; the same
+  channel receives the owners' notice of a plugin upgrade that left knowledge proposals (one card for the
+  installation, besides the e-mail to each owner). Under `CHOREGOS_FAKES=1` the notifier posts its real card to
+  `FakeTeamsWebhook`. The webhook's signing key is shown ONCE to whoever manages the installation:
   `POST /orgs/{org}/assistants/{slug}/webhook-secret` (`assistant:manage`) returns it, a second call is 409
   unless `{"rotate": true}` makes a new generation (the console's installation page has the two buttons); each
   showing is audited, never the key.
@@ -328,6 +369,38 @@ name, even when the person reads it through the knowledge routes, and a `knowled
 document is refused. Each passage is framed as data with its document id, title, path and version
 (`source_version`, else the content digest), and the agent's instructions tell it to cite
 `[document, version]`.
+
+The bases bound to the installation's knowledge needs are offered too (below), with one difference: each is
+offered at a turn only when the person of the conversation may read it at that moment.
+
+#### Knowledge bound by reference
+
+A knowledge need (`knowledge: [{name, bind: {description, required}}]`, S66-12,
+[ADR 0159](adr/0159-an-assistant-may-read-the-organisation-s-knowledge-bases-by-reference.md)) is bound to
+existing knowledge bases of the organisation, by reference: one `assistant_knowledge_bindings` row per base,
+nothing copied, and the base keeps its owners, grants, reach, sources and serving mode.
+
+- **Binding.** At install, `knowledge_bindings: {name: [base slug, ...]}` in the body of
+  `POST /orgs/{org}/assistants`; later, `PUT /orgs/{org}/assistants/{slug}/knowledge-bindings/{name}` with
+  `{"bases": [...]}`, the whole list (empty unbinds; 20 at most; idempotent), by an organisation administrator
+  or a member of the owner groups. Every base added must be `active` and readable by the caller (ADR 0081);
+  a base the caller may not read and one that does not exist get the same 422 (`` `x` is not a knowledge base of
+  <org> you may read ``), and nothing changes. Keeping a base another owner bound, or removing one, needs no
+  right on it. Audited as `assistant.knowledge.bind` with the bases added and removed. The installation's
+  `knowledge_bindings` lists every bound base's slug to its managers; `GET /orgs/{org}/plugins/{name}/assistants`
+  lists each assistant's `knowledge_needs`. The console's installation page has a card for it.
+- **Reading.** At each turn, a bound base is offered only when the conversation's person may read it now
+  (`knowledge.access.visible_to` with the base's grants, the person's roles and groups read from the
+  database). A base they may not read is dropped from that turn: not named in the tools, not searchable, not
+  readable by id. A grant, a group joined or a base restricted takes effect at the next turn. A disabled
+  binding or an archived base is never offered. Passages, documents read and citations name their base.
+- **Readiness.** A `required` need with no enabled binding to an active base is a readiness item
+  `knowledge_unbound` (the owners fix it); an optional one is not a gap.
+- **Upgrades.** A need the new version drops (or turns into a seed) has its bindings disabled and kept; one it
+  adds is unbound (a readiness item when required); a `required` flag that moved is reported. A rename is a
+  drop and an add. The owners are told with the tool needs' changes (`knowledge_removed`, `knowledge_added`,
+  `knowledge_required_changed` in the `assistant.upgrade` audit event). Binding a need that came back enables
+  its bindings again.
 
 #### Offered knowledge: a copy, an origin, proposed updates
 
@@ -376,6 +449,20 @@ Four more rules keep the owners' decisions:
 Installing the plugin makes its assistants available; installing an assistant (S63-02) makes one of them an
 object of the organisation, for an audience. The manifest is never copied: it is read again from the
 installed plugin, so a plugin upgrade is seen at once.
+
+**Upgrading the plugin moves the bindings (S63-22).** The upgrade compares each installation's manifest with
+the new one, need by need:
+
+| The upgrade | The binding | The readiness |
+| --- | --- | --- |
+| drops a need | disabled and kept, for the audit | nothing is asked of it |
+| adds a need | none | a required one is `need_unbound` |
+| changes a need's operations, `access`, `identity` or approval floor | checked again against the connector: it follows the manifest when it fits, it is disabled when it does not | a disabled required binding shows why (`need_not_served`, `identity_unsupported`) |
+| flips `required` | unchanged | recomputed |
+
+The change is audited (`assistant.upgrade`) and the owners are told through the installation's `email`
+notifier, as they are of knowledge proposals; an upgrade that changes no need says nothing. A binding the
+upgrade disabled is enabled again by binding the need (`PUT …/bindings/{need}`) once the connector fits.
 
 ```
 POST  /api/v1/orgs/{org}/assistants      {"plugin": "investment-assistant", "assistant": "investment-assistant",
@@ -493,6 +580,62 @@ owners raised the approval is refused at confirmation with `approval_console`. A
 source receives the account's access token); without a connected account the confirmation is refused
 `account_not_connected` and nothing reaches the source.
 
+#### Starting a project's workflow from a conversation
+
+An assistant may propose to start a workflow a project of the organisation already runs, without declaring
+it again in the plugin ([ADR 0158](adr/0158-an-assistant-may-propose-to-start-a-project-s-workflow.md)). The
+manifest declares **launches** and names no project:
+
+```yaml
+launches:
+  - name: portfolio_review
+    description: Ask the review team for a portfolio review document, once the person said which portfolio.
+    input_schema:            # what the assistant fills from the conversation: the work item's fields
+      type: object
+      required: [portfolio]
+      properties: { portfolio: { type: string }, review_date: { type: string } }
+    required: true           # default; an optional launch may stay unbound or be switched off
+```
+
+`choregos plugin validate` refuses a launch name declared twice, an `input_schema` that is not a JSON Schema of
+`type: object`, and a need called `launch` beside launches (their tools are `launch__<name>`).
+
+**Binding.** The installation binds each launch, by reference, to a team's project and the name of one of its
+active workflows:
+
+```
+PUT /api/v1/orgs/{org}/assistants/{slug}/launches/{launch}   {"project": "reviews", "workflow": "review"}
+```
+
+It needs `assistant:manage` on the installation **and** `item:control` in the project (a developer of the
+project or above): 403 otherwise. A personal space, a project without an active workflow of that name, and a
+workflow whose `metadata.inputs` cannot take what the launch fills (an input it requires that the launch does
+not require, a property its closed inputs refuse) are 422 and nothing changes. Audited `assistant.launch.bind`.
+Nothing of the workflow is copied: the work item is born under the project's active version at confirmation.
+A required launch unbound or switched off is the readiness item `launch_unbound`; a bound workflow the project no
+longer has, or whose inputs stopped fitting, is `launch_workflow_missing` or `launch_inputs_mismatch`, for the
+owners to fix. Deleting the project unbinds the launch. A plugin upgrade treats launches as it treats needs:
+dropped, the binding is switched off and kept; changed, it is checked again and switched off when it no longer
+fits; added, it is unbound; the owners are told by the same notice.
+
+**In a conversation** a bound, enabled launch is offered as `launch__<name>(title, inputs)`. Calling it starts
+nothing: inputs the `input_schema` refuses are answered to the agent, a person who may not create work items in
+the project is told so and nothing is stored, otherwise a pending action of `kind: launch` is stored
+(`need` = the launch, `operation` = `start`, `target` = the project and workflow at that time), listed and
+decided like a write (`GET /me/conversations/{id}/actions`, `.../confirm`, `.../refuse`; the door's
+`pending_actions` with their `confirm_url`; expired after 24 hours). Confirming re-reads the binding (`409
+launch_rebound` when it now points elsewhere) and the confirming person's own rights (`403 launch_forbidden`
+without `item:control` in the project); nothing is created in either case. The work item is then filed through
+the same path as `POST /projects/{id}/work-items`, the person as reporter and initiator (`person:<email>`), under
+the bound workflow, the inputs as its fields (422 when the workflow refuses them), the project's tracker, budget
+and journal applying. The action becomes `executed`, `result` naming `work_item_id`, `work_item_key`, `project`,
+`workflow` and the console `url`; it is audited `assistant.launch.confirm`. `launch_status(action_id?)` tells
+the agent what each launch of the conversation became: the work item's key, title, state, whether it ended, and
+its artefacts (name, version, type, how it is shown, the address of its content, never the content), read with
+the person's current rights. Both tools write a line of the reads journal (`propose`, `status`). Launches are
+offered to `prompt` agents, like inline writes; a message pushed into the conversation when the work item moves
+is left out.
+
 ### Who may use an assistant, and what it may spend
 
 Three permissions (S63-15), decided in one place (`services/assistant_access.py`) from the groups the
@@ -582,8 +725,8 @@ row-level policy.
   like a session's.
 - **Erasure by user.** `DELETE /api/v1/me/assistants/{org}/{slug}` removes the caller's conversations and
   memories in that installation, their standing delegations (revoked first), task subscriptions, the artifacts of
-  their task runs (the work item stays as the trace; the bytes of a file artifact stay in the object store, which
-  has no delete) and their connected accounts at the connectors the installation binds with `user_consent`
+  their task runs (the work item stays as the trace; the bytes of a file artifact are deleted from the object store first, the row after: a store
+  that refuses fails the erasure with a 502 and nothing is erased, the person asks again) and their connected accounts at the connectors the installation binds with `user_consent`
   (revoked at the source when it offers it), and is written in the audit log. The person's journal lines stay as
   the accountability record (ADR 0133 point 6 lists no deletion of it) but lose who: their `user_id` becomes
   `erased-user:<random>`, one token per erasure, not derived from the id.

@@ -1,5 +1,10 @@
 # 0138 — Knowledge an assistant offers: a seed, the installation's copy, proposed upstream updates
 
+> **Amended (S66-10, 2026-11-12)**: a knowledge item may instead declare a binding need, bound at install to
+> existing bases of the organisation by reference, and served at each turn only when the person may read them
+> ([ADR 0159](0159-an-assistant-may-read-the-organisation-s-knowledge-bases-by-reference.md)). Points 1 and 4
+> below hold for seeds and their copies.
+
 - **Status**: accepted, 2026-11-11 (product owner's review of the same day; proposed 2026-11-10)
 - **Concerns**: `knowledge_bases`, `knowledge_documents` (an `origin`), the plugin installer and upgrade,
   the hybrid index (`knowledge/index.py` `search`), the knowledge tools of a conversation, the routes

@@ -28,6 +28,13 @@ class MeDto(Dto):
     display_name: str
     oidc_sub: str | None = None
     last_login_at: datetime | None = None
+    #: What the identity provider says of the person, as of their last sign-in (ADR 0162).
+    given_name: str | None = None
+    family_name: str | None = None
+    job_title: str | None = None
+    department: str | None = None
+    #: Their photo, same-origin (`GET /users/{id}/avatar`); `None` without one.
+    avatar_url: str | None = None
     memberships: list[MembershipDto] = Field(default_factory=list)
 
 

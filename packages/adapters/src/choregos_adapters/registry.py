@@ -176,14 +176,17 @@ def connector_types() -> list[tuple[str, str, ConnectorTypeSpec]]:
 def account_of(kind: str, type_name: str, config: dict[str, Any] | None) -> str | None:
     """The account a connector writes under, when its configuration names one (ADR 0107 point 4).
 
-    Never a secret: a Jira email, an MCP `basic` username, a plugin's server. `None` when the
-    configuration names none (a GitHub App installation, a GitLab or a bearer token): the console
-    then says which credential it is instead."""
+    Never a secret: a Jira email, an MCP `basic` username, the OAuth client of an MCP connector signed in
+    with `oauth_client_credentials` (a client id is an identifier, RFC 6749 §2.2), a plugin's server.
+    `None` when the configuration names none (a GitHub App installation, a GitLab or a bearer token): the
+    console then says which credential it is instead."""
     cfg = config or {}
     if type_name in {"jira", "confluence"}:
         return str(cfg.get("email") or "") or None
     if kind == "mcp" and cfg.get("auth_scheme") == "basic":
         return str(cfg.get("username") or "") or None
+    if kind == "mcp" and cfg.get("auth_scheme") == "oauth_client_credentials":
+        return str(cfg.get("client_id") or "") or None
     if type_name == "plugin" and cfg.get("plugin") and cfg.get("server"):
         return f"{cfg['plugin']}/{cfg['server']}"
     return None
@@ -343,7 +346,15 @@ def available(kind: ConnectorKind | str) -> list[str]:
 #: Types that stay themselves under `CHOREGOS_FAKES`: their fake is what they call, not the adapter. A
 #: plugin tracker (S43-07) under fakes talks to the in-memory server of the tracker profile
 #: (`FakePluginTrackerServer`, the transport the API injects), so the profile mapping is what runs.
-BUILT_UNDER_FAKES: frozenset[tuple[str, str]] = frozenset({("tracker", "plugin")})
+#: The Teams notifier (S63-25) stays itself too: under fakes it posts its real card to `FakeTeamsWebhook`,
+#: so the guarded transport and the egress allowlist are what run.
+#: A connector at an outpost (S65-13, ADR 0149) stays itself as well: its client opens no connection, it
+#: places a call at a rendezvous only the platform supplies, and it is the platform that hands it the
+#: scriptable `FakeOutpost` where it has no door to meet an outpost at. Built as the fake `mcp` client,
+#: it would call the fake MCP server directly, as if the outpost were not there.
+BUILT_UNDER_FAKES: frozenset[tuple[str, str]] = frozenset(
+    {("tracker", "plugin"), ("notify", "teams"), ("mcp", "mcp-outpost")}
+)
 
 
 def build(kind: ConnectorKind | str, type_name: str, config: dict[str, Any] | None = None) -> Any:

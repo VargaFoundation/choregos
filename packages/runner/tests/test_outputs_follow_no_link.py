@@ -3,11 +3,14 @@
 `collect` refused a symbolic link in place of a file and followed one in place of the folder: the
 folder is the agent's to write, and a link there made the runner read, and hand to the platform as
 deliverables, files that are the pod's and not the step's.
+
+The code that closes it is S65-04b's (`safe_files`, ADR 0146 §6: every path the runner opens in the tree is
+walked with `O_NOFOLLOW`), which reached `main` first. These tests hold it to this case: a link in place of
+the folder, of a file, or swapped in between the listing and the read.
 """
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from typing import Any
 
@@ -16,10 +19,7 @@ from choregos_contracts import StageInput
 from choregos_runner import outputs
 from choregos_runner.outputs import (
     OUTPUTS_DIR,
-    NotAFolderError,
     collect,
-    open_folder,
-    read_regular,
     store_outputs,
 )
 
@@ -74,7 +74,7 @@ async def test_a_link_in_place_of_the_folder_is_refused_whole(
         (workspace / OUTPUTS_DIR).symlink_to(elsewhere, target_is_directory=True)
     kept, refused = collect(workspace, stage_input)
     assert kept == []
-    assert len(refused) == 1 and "symbolic link" in refused[0] and OUTPUTS_DIR in refused[0]
+    assert len(refused) == 1 and "is a link" in refused[0] and OUTPUTS_DIR in refused[0]
     client = Client()
     stored, problems = await store_outputs(client, workspace, stage_input)
     assert client.put == {} and stored == {} and problems == refused
@@ -90,7 +90,7 @@ async def test_the_pod_s_own_files_are_not_deliverables(stage_input: StageInput,
     client = Client()
     stored, problems = await store_outputs(client, workspace, stage_input)
     assert client.put == {} and stored == {}
-    assert problems and "symbolic link" in problems[0]
+    assert problems and "is a link" in problems[0]
 
 
 async def test_a_link_in_place_of_a_file_is_still_refused(stage_input: StageInput, tmp_path: Path) -> None:
@@ -124,7 +124,7 @@ async def test_a_file_that_became_a_link_after_it_was_listed_is_not_read(
     client = Client()
     stored, problems = await store_outputs(client, workspace, stage_input)
     assert client.put == {} and stored == {}
-    assert problems == ["notes.txt: not a regular file"]
+    assert len(problems) == 1 and problems[0].startswith("notes.txt:") and "does not follow it" in problems[0]
 
 
 async def test_a_folder_that_became_a_link_after_it_was_listed_is_not_read(
@@ -147,42 +147,4 @@ async def test_a_folder_that_became_a_link_after_it_was_listed_is_not_read(
     client = Client()
     stored, problems = await store_outputs(client, workspace, stage_input)
     assert client.put == {} and stored == {}
-    assert problems == [f"{OUTPUTS_DIR}: no longer a folder of the workspace, nothing stored"]
-
-
-def test_what_is_not_a_file_is_refused_without_waiting(stage_input: StageInput, tmp_path: Path) -> None:
-    """A FIFO nobody writes to would block a plain open for ever."""
-    workspace = _workspace(tmp_path)
-    folder = workspace / OUTPUTS_DIR
-    folder.mkdir(parents=True)
-    os.mkfifo(folder / "pipe")
-    (folder / "sub").mkdir()
-    kept, refused = collect(workspace, stage_input)
-    assert kept == []
-    assert refused == ["pipe: not a regular file", "sub: not a regular file"]
-    folder_fd = open_folder(workspace)
-    assert folder_fd is not None
-    try:
-        assert read_regular(folder_fd, "pipe") is None
-        assert read_regular(folder_fd, "sub") is None
-        assert read_regular(folder_fd, "absent") is None
-    finally:
-        os.close(folder_fd)
-
-
-def test_no_folder_is_nothing_to_collect(stage_input: StageInput, tmp_path: Path) -> None:
-    workspace = _workspace(tmp_path)
-    assert open_folder(workspace) is None
-    assert collect(workspace, stage_input) == ([], [])
-    (workspace / ".choregos").mkdir()
-    assert open_folder(workspace) is None
-
-
-def test_a_file_in_place_of_the_folder_is_not_a_folder(stage_input: StageInput, tmp_path: Path) -> None:
-    workspace = _workspace(tmp_path)
-    (workspace / ".choregos").mkdir()
-    (workspace / OUTPUTS_DIR).write_bytes(b"not a folder")
-    with pytest.raises(NotAFolderError):
-        open_folder(workspace)
-    kept, refused = collect(workspace, stage_input)
-    assert kept == [] and len(refused) == 1
+    assert len(problems) == 1 and "does not follow it" in problems[0]

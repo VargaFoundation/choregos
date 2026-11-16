@@ -25,14 +25,23 @@ class DecisionSink(Protocol):
 
 
 class HttpDecisionSink:
-    def __init__(self, base_url: str, client: httpx.AsyncClient | None = None) -> None:
+    """Posts with the run's token AND the proxy's own key (ADR 0145): the agent holds the first, not
+    the second, so a report the agent makes itself is refused."""
+
+    def __init__(
+        self, base_url: str, client: httpx.AsyncClient | None = None, *, report_key: str = ""
+    ) -> None:
         self.base_url = base_url.rstrip("/")
         self.client = client or httpx.AsyncClient(timeout=10)
+        self.report_key = report_key
 
     async def post(self, run_id: str, token: str, decisions: list[dict[str, Any]]) -> None:
+        headers = {"Authorization": f"Bearer {token}"}
+        if self.report_key:
+            headers["X-Choregos-Egress-Key"] = self.report_key
         response = await self.client.post(
             f"{self.base_url}/internal/runs/{run_id}/network/decisions",
-            headers={"Authorization": f"Bearer {token}"},
+            headers=headers,
             json={"decisions": decisions},
         )
         response.raise_for_status()

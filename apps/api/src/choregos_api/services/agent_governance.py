@@ -322,11 +322,35 @@ def decide(
     return TABLE[action](principal, org, agent or _NOBODY, Request(project_slug, target_scope))
 
 
-def usable_in_project(scope: str, agent_project_id: str | None, slug: str, project_id: str) -> str | None:
+#: An agent of this kind is a client of the MCP door (ADR 0033): the platform never runs it.
+EXTERNAL = "external"
+
+
+def carries_no_step(kind: str, slug: str) -> str | None:
+    """Why an agent of this kind may not carry a step of a workflow; `None` if it may (ADR 0163 §1).
+
+    An `external` agent is a client of the door — Claude Code, Cursor, an assistant elsewhere — that calls
+    the platform under its person's rights: nothing of it is the platform's to measure, and its outputs
+    would choose a workflow's transitions. Its place is to prepare a person's step (ADR 0163 §2)."""
+    if kind == EXTERNAL:
+        return (
+            f"agent `{slug}` is an external agent, a client of the MCP door: it never carries a step of a "
+            "workflow. Name a person for the step; the client may prepare that person's decision"
+        )
+    return None
+
+
+def usable_in_project(
+    scope: str, agent_project_id: str | None, slug: str, project_id: str, *, kind: str = "internal"
+) -> str | None:
     """Why this agent may not run in, or be named by, the workflow of that project; `None` if it may.
 
     Enforced where a project pins it, where a workflow naming it is published, and when a run resolves
-    it — a personal agent never runs in a workflow, a project agent runs only in its project."""
+    it — a personal agent never runs in a workflow, a project agent runs only in its project, an external
+    agent runs nowhere (ADR 0163)."""
+    refusal = carries_no_step(kind, slug)
+    if refusal is not None:
+        return refusal
     if scope == PERSONAL:
         return (
             f"agent `{slug}` is a personal agent: it never runs in a project's workflow. Promote it to the "
@@ -404,9 +428,9 @@ def _can_pin_somewhere(principal: Principal, org: str, subject: Subject) -> Deci
 async def refusals_for_named_agents(
     session: AsyncSession, org_id: str, project_id: str, names: set[str]
 ) -> list[str]:
-    """What a workflow of this project may not name: the personal agents, another project's agents.
-    One sentence per agent, with its scope and the fix; empty when every name is fine or unknown (an
-    unknown name is the validator's and the run's business)."""
+    """What a workflow of this project may not name: the personal agents, another project's agents, the
+    external agents (ADR 0163). One sentence per agent, with its scope, its kind and the fix; empty when
+    every name is fine or unknown (an unknown name is the validator's and the run's business)."""
     if not names:
         return []
     rows = (
@@ -414,7 +438,7 @@ async def refusals_for_named_agents(
     ).scalars()
     refusals = []
     for agent in sorted(rows, key=lambda a: a.slug):
-        refusal = usable_in_project(agent.scope, agent.project_id, agent.slug, project_id)
+        refusal = usable_in_project(agent.scope, agent.project_id, agent.slug, project_id, kind=agent.kind)
         if refusal is not None:
-            refusals.append(f"{refusal} (scope: {agent.scope})")
+            refusals.append(f"{refusal} (scope: {agent.scope}, kind: {agent.kind})")
     return refusals
