@@ -12,22 +12,22 @@ from __future__ import annotations
 import asyncio
 import json
 from collections.abc import AsyncIterator
-from typing import Any
+from typing import Annotated, Any
 from uuid import uuid4
 
-from fastapi import APIRouter, Response, status
+from choregos_core import utcnow
+from choregos_core.domain import aware
+from fastapi import APIRouter, Header, Query, Response, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 from sse_starlette.sse import EventSourceResponse
 
 from ..db.models import AgentSessionRecord, Organization
-from ..db.session import name_the_user, session_scope
+from ..db.session import release_connection
 from ..deps import Db, Me, Pagination
 from ..errors import ApiError, conflict, not_found
-from ..rbac import Principal
 from ..schemas.agent_sessions import (
-    AgentDelta,
     AgentResponse,
     Conversation,
     ConversationMessageCreate,
@@ -37,6 +37,7 @@ from ..schemas.agent_sessions import (
 from ..schemas.base import PageMeta
 from ..services.assistant_conversations import require_audience
 from ..services.conversation_assistant import with_assistant
+from ..services.conversation_signals import with_signals
 from ..services.conversation_turns import cancel_turn, refuse_if_not_allowed
 from ..services.conversations import (
     conversation_of,
@@ -44,11 +45,12 @@ from ..services.conversations import (
     delete_conversation,
     summary_of,
 )
+from ..services.turn_follow import TurnRun, is_running, position_after, run_of, start_turn
 
 router = APIRouter(tags=["agents"])
 
 
-async def _mine(session: AsyncSession, principal: Me, conversation_id: str) -> AgentSessionRecord:
+async def mine(session: AsyncSession, principal: Me, conversation_id: str) -> AgentSessionRecord:
     record = await session.get(AgentSessionRecord, conversation_id)
     organisation = await session.get(Organization, record.org_id) if record is not None else None
     if (
@@ -99,7 +101,7 @@ async def list_my_conversations(session: Db, principal: Me, page: Pagination) ->
     "/me/conversations/{conversation_id}", response_model=Conversation, operation_id="getMyConversation"
 )
 async def get_my_conversation(conversation_id: str, session: Db, principal: Me) -> Conversation:
-    record = await _mine(session, principal, conversation_id)
+    record = await mine(session, principal, conversation_id)
     return (await with_assistant(session, [record], [conversation_of(record)]))[0]
 
 
@@ -109,7 +111,7 @@ async def get_my_conversation(conversation_id: str, session: Db, principal: Me) 
     operation_id="deleteMyConversation",
 )
 async def delete_my_conversation(conversation_id: str, session: Db, principal: Me) -> Response:
-    await delete_conversation(session, await _mine(session, principal, conversation_id))
+    await delete_conversation(session, await mine(session, principal, conversation_id))
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -122,65 +124,99 @@ async def delete_my_conversation(conversation_id: str, session: Db, principal: M
 async def send_my_conversation_message(
     conversation_id: str, body: ConversationMessageCreate, session: Db, principal: Me
 ) -> Any:
-    record = await _mine(session, principal, conversation_id)
+    record = await mine(session, principal, conversation_id)
     # The audience is read again at every turn (S63-15): leaving the group cuts the next one.
     await require_audience(session, principal, record)
-    if not body.stream:
-        return await converse(session, record, body.input)
-    # What a turn refuses first is refused before the stream opens (409, not an event).
+    if not body.stream and not body.detach:
+        return await with_signals(session, await converse(session, record, body.input))
+    # What a turn refuses first is refused before anything starts (409, not an event).
     refuse_if_not_allowed(record)
-    return EventSourceResponse(_stream_turn(principal, conversation_id, body.input))
+    if is_running(conversation_id):
+        raise conflict(f"a turn of conversation {conversation_id} is already running")
+    await release_connection(session)  # the turn reads the conversation from a session of its own
+    run = start_turn(principal, conversation_id, body.input)
+    if body.stream:
+        return EventSourceResponse(_sent(run, detach=body.detach))
+    return await _answered(run)
 
 
-async def _stream_turn(
-    principal: Principal, conversation_id: str, text: str
-) -> AsyncIterator[dict[str, str]]:
-    """The turn runs in a session of its own: the request's closes before the stream is read. Each chunk
-    the model streams is a `response.output_text.delta`, in the order it came."""
-    queue: asyncio.Queue[str | AgentResponse | ApiError] = asyncio.Queue()
+async def _answered(run: TurnRun) -> AgentResponse:
+    """The whole answer of a detached turn, for a client that stayed: what the stream's last event carries.
+    The turn is shielded: a client that left does not stop it."""
+    assert run.task is not None
+    await asyncio.shield(asyncio.wait({run.task}))
+    name, data = run.events[-1]
+    if name == "error":
+        detail = json.loads(data)
+        raise ApiError(int(detail["status"]), "Turn refused", str(detail["detail"]))
+    return AgentResponse.model_validate_json(data)
 
-    async def on_delta(chunk: str) -> None:
-        await queue.put(chunk)
 
-    async def run() -> None:
-        try:
-            async with session_scope(orgs=list(principal.org_roles)) as session:
-                await name_the_user(session, principal.user_id)
-                record = await _mine(session, principal, conversation_id)
-                await require_audience(session, principal, record)
-                await queue.put(await converse(session, record, text, on_delta=on_delta))
-        except ApiError as refused:
-            await queue.put(refused)
-
-    task = asyncio.ensure_future(run())
-    response_id = f"resp_{uuid4().hex}"
+async def _sent(run: TurnRun, *, detach: bool) -> AsyncIterator[dict[str, str]]:
+    """The turn the sender asked to stream. When the client leaves, the turn is cancelled, settled and
+    booked, unless it was `detach`ed: then it runs on and is booked once, when it ends."""
     try:
-        yield {
-            "event": "response.created",
-            "data": AgentResponse(
-                id=response_id, session_id=conversation_id, status="completed"
-            ).model_dump_json(),
-        }
-        while True:
-            item = await queue.get()
-            if isinstance(item, str):
-                yield {
-                    "event": "response.output_text.delta",
-                    "data": AgentDelta(response_id=response_id, delta=item).model_dump_json(),
-                }
-            elif isinstance(item, ApiError):
-                yield {
-                    "event": "error",
-                    "data": json.dumps({"status": item.status_code, "detail": item.detail}),
-                }
-                return
-            else:
-                yield {"event": f"response.{item.status}", "data": item.model_dump_json()}
-                return
+        async for event in run.follow():
+            yield event
     finally:
-        if not task.done():  # the client left: the turn is cancelled, settled and booked
-            await cancel_turn(conversation_id)
-        await asyncio.gather(task, return_exceptions=True)
+        # The turn may not have registered yet (it is cancellable once `converse` runs): then the task is.
+        if not detach and not run.finished and not await cancel_turn(run.conversation_id) and run.task:
+            run.task.cancel()
+        if run.task is not None and not detach:
+            await asyncio.gather(run.task, return_exceptions=True)
+
+
+@router.get(
+    "/me/conversations/{conversation_id}/events",
+    operation_id="followMyConversationTurn",
+    responses={200: {"content": {"text/event-stream": {}}}},
+)
+async def follow_my_conversation_turn(
+    conversation_id: str,
+    session: Db,
+    principal: Me,
+    after_seq: Annotated[int | None, Query(ge=0)] = None,
+    last_event_id: Annotated[str | None, Header()] = None,
+) -> Any:
+    record = await mine(session, principal, conversation_id)
+    run = run_of(conversation_id)
+    after = position_after(last_event_id, after_seq)
+    if run is not None:
+        return EventSourceResponse(run.follow(after))
+    lease = aware(record.turn_lease_until)
+    if lease is not None and lease > utcnow():
+        raise conflict(
+            f"the turn of conversation {conversation_id} runs on another replica: not followable here"
+        )
+    return EventSourceResponse(_settled(await _latest_answer(session, record), after))
+
+
+async def _latest_answer(session: AsyncSession, record: AgentSessionRecord) -> AgentResponse:
+    """The latest turn as it ended, for a conversation with no turn in flight here: its last answer and
+    the signals of the turn (the deltas were not journaled, so the answer comes whole)."""
+    said = next(
+        (
+            str(m["content"])
+            for m in reversed(record.messages or [])
+            if m.get("role") == "assistant" and m.get("content")
+        ),
+        "",
+    )
+    answer = AgentResponse(
+        id=f"resp_{uuid4().hex}", session_id=record.id, status="completed", output_text=said
+    )
+    return await with_signals(session, answer)
+
+
+async def _settled(answer: AgentResponse, after: int) -> AsyncIterator[dict[str, str]]:
+    created = AgentResponse(id=answer.id, session_id=answer.session_id, status="completed")
+    events = [
+        ("response.created", created.model_dump_json()),
+        ("response.completed", answer.model_dump_json()),
+    ]
+    for position, (name, data) in enumerate(events, start=1):
+        if position > after:
+            yield {"id": str(position), "event": name, "data": data}
 
 
 @router.post(
@@ -191,7 +227,7 @@ async def _stream_turn(
 async def cancel_my_conversation_turn(
     conversation_id: str, session: Db, principal: Me
 ) -> ConversationSummary:
-    record = await _mine(session, principal, conversation_id)
+    record = await mine(session, principal, conversation_id)
     if not await cancel_turn(conversation_id, session):
         raise conflict(f"no turn of conversation {conversation_id} is running")
     await session.refresh(record)
