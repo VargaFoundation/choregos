@@ -1,0 +1,279 @@
+{
+ "source": "NOT RECORDED FROM A LIVE RUN (no model key). Built from the adapter's source at the version the runner image pins (packages/runner/src/choregos_runner/backends/versions.lock: claude-agent-acp=0.85.1): the delegating call is a tool_call whose _meta.claudeCode.toolName is Agent or Task (dist/tool-calls/renderer.js, toolUseMeta, line 462-465 and 262), and every update of a call made inside a sub-agent carries _meta.claudeCode.parentToolUseId = the delegating call's id (dist/acp-agent.js, stampParentToolUseId, line 483-491; stamped at 7942, 8042, 8209, 8241, 8331). The choregos client does not announce the `subagents` capability, so dist/native-subagents.js routing is off and everything stays in one session. Shapes of other fields follow the real recorded opencode journal in apps/web/tests/fixtures.",
+ "backend": "claude-code",
+ "events": [
+  {
+   "seq": 1,
+   "type": "session/update",
+   "ts": "2026-11-16T10:00:01.000000Z",
+   "payload": {
+    "update": {
+     "sessionUpdate": "tool_call",
+     "toolCallId": "toolu_root_read",
+     "title": "Read src/app.py",
+     "kind": "read",
+     "status": "pending",
+     "_meta": {
+      "claudeCode": {
+       "toolName": "Read"
+      }
+     }
+    }
+   }
+  },
+  {
+   "seq": 2,
+   "type": "session/update",
+   "ts": "2026-11-16T10:00:02.000000Z",
+   "payload": {
+    "update": {
+     "sessionUpdate": "tool_call_update",
+     "toolCallId": "toolu_root_read",
+     "status": "completed",
+     "_meta": {
+      "claudeCode": {
+       "toolName": "Read"
+      }
+     }
+    }
+   }
+  },
+  {
+   "seq": 3,
+   "type": "session/update",
+   "ts": "2026-11-16T10:00:03.000000Z",
+   "payload": {
+    "update": {
+     "sessionUpdate": "tool_call",
+     "toolCallId": "toolu_agent_1",
+     "title": "Explore the billing module",
+     "kind": "think",
+     "status": "pending",
+     "_meta": {
+      "claudeCode": {
+       "toolName": "Agent"
+      }
+     }
+    }
+   }
+  },
+  {
+   "seq": 4,
+   "type": "session/update",
+   "ts": "2026-11-16T10:00:04.000000Z",
+   "payload": {
+    "update": {
+     "sessionUpdate": "tool_call",
+     "toolCallId": "toolu_child_grep",
+     "title": "grep total",
+     "kind": "search",
+     "status": "pending",
+     "_meta": {
+      "claudeCode": {
+       "toolName": "Grep",
+       "parentToolUseId": "toolu_agent_1"
+      }
+     }
+    }
+   }
+  },
+  {
+   "seq": 5,
+   "type": "session/update",
+   "ts": "2026-11-16T10:00:05.000000Z",
+   "payload": {
+    "update": {
+     "sessionUpdate": "tool_call_update",
+     "toolCallId": "toolu_child_grep",
+     "status": "completed",
+     "_meta": {
+      "claudeCode": {
+       "toolName": "Grep",
+       "parentToolUseId": "toolu_agent_1"
+      }
+     }
+    }
+   }
+  },
+  {
+   "seq": 6,
+   "type": "session/update",
+   "ts": "2026-11-16T10:00:06.000000Z",
+   "payload": {
+    "update": {
+     "sessionUpdate": "tool_call",
+     "toolCallId": "toolu_child_read",
+     "title": "Read src/total.py",
+     "kind": "read",
+     "status": "pending",
+     "_meta": {
+      "claudeCode": {
+       "toolName": "Read",
+       "parentToolUseId": "toolu_agent_1"
+      }
+     }
+    }
+   }
+  },
+  {
+   "seq": 7,
+   "type": "session/update",
+   "ts": "2026-11-16T10:00:07.000000Z",
+   "payload": {
+    "update": {
+     "sessionUpdate": "tool_call_update",
+     "toolCallId": "toolu_child_read",
+     "status": "completed",
+     "_meta": {
+      "claudeCode": {
+       "toolName": "Read"
+      }
+     }
+    }
+   }
+  },
+  {
+   "seq": 8,
+   "type": "session/update",
+   "ts": "2026-11-16T10:00:08.000000Z",
+   "payload": {
+    "update": {
+     "sessionUpdate": "tool_call",
+     "toolCallId": "toolu_task_2",
+     "title": "Check the tests",
+     "kind": "think",
+     "status": "pending",
+     "_meta": {
+      "claudeCode": {
+       "toolName": "Task",
+       "parentToolUseId": "toolu_agent_1"
+      }
+     }
+    }
+   }
+  },
+  {
+   "seq": 9,
+   "type": "session/update",
+   "ts": "2026-11-16T10:00:09.000000Z",
+   "payload": {
+    "update": {
+     "sessionUpdate": "tool_call",
+     "toolCallId": "toolu_grandchild_bash",
+     "title": "pytest -q",
+     "kind": "execute",
+     "status": "pending",
+     "_meta": {
+      "claudeCode": {
+       "toolName": "Bash",
+       "parentToolUseId": "toolu_task_2"
+      }
+     }
+    }
+   }
+  },
+  {
+   "seq": 10,
+   "type": "session/update",
+   "ts": "2026-11-16T10:00:10.000000Z",
+   "payload": {
+    "update": {
+     "sessionUpdate": "tool_call_update",
+     "toolCallId": "toolu_grandchild_bash",
+     "status": "completed",
+     "_meta": {
+      "claudeCode": {
+       "toolName": "Bash",
+       "parentToolUseId": "toolu_task_2"
+      }
+     }
+    }
+   }
+  },
+  {
+   "seq": 11,
+   "type": "session/update",
+   "ts": "2026-11-16T10:00:11.000000Z",
+   "payload": {
+    "update": {
+     "sessionUpdate": "tool_call_update",
+     "toolCallId": "toolu_task_2",
+     "status": "completed",
+     "_meta": {
+      "claudeCode": {
+       "toolName": "Task",
+       "parentToolUseId": "toolu_agent_1"
+      }
+     }
+    }
+   }
+  },
+  {
+   "seq": 12,
+   "type": "session/update",
+   "ts": "2026-11-16T10:00:12.000000Z",
+   "payload": {
+    "update": {
+     "sessionUpdate": "tool_call_update",
+     "toolCallId": "toolu_agent_1",
+     "status": "completed",
+     "_meta": {
+      "claudeCode": {
+       "toolName": "Agent"
+      }
+     }
+    }
+   }
+  },
+  {
+   "seq": 13,
+   "type": "session/update",
+   "ts": "2026-11-16T10:00:13.000000Z",
+   "payload": {
+    "update": {
+     "sessionUpdate": "agent_message_chunk",
+     "content": {
+      "type": "text",
+      "text": "done"
+     }
+    }
+   }
+  },
+  {
+   "seq": 14,
+   "type": "session/update",
+   "ts": "2026-11-16T10:00:14.000000Z",
+   "payload": {
+    "update": {
+     "sessionUpdate": "tool_call",
+     "toolCallId": "toolu_agent_2",
+     "title": "Review the diff",
+     "kind": "think",
+     "status": "pending",
+     "_meta": {
+      "claudeCode": {
+       "toolName": "Agent"
+      }
+     }
+    }
+   }
+  },
+  {
+   "seq": 15,
+   "type": "session/update",
+   "ts": "2026-11-16T10:00:15.000000Z",
+   "payload": {
+    "update": {
+     "sessionUpdate": "tool_call_update",
+     "toolCallId": "toolu_agent_2",
+     "status": "in_progress",
+     "_meta": {
+      "claudeCode": {
+       "toolName": "Agent"
+      }
+     }
+    }
+   }
+  }
+ ]
+}

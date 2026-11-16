@@ -1,0 +1,92 @@
+{
+ "source": "NOT RECORDED FROM A LIVE RUN of a delegating agent (no model key; the only recorded opencode journal in the repo, apps/web/tests/fixtures/dev-run-opencode-events.json, has no `task` call). Built from opencode 1.18.31 (versions.lock), packages/opencode/src/acp/event.ts: toolStart (line 379) sends a tool_call titled with the tool name (`task`, kind `think` per tool.ts line 65); handlePartUpdated (line 193-198) drops every part of a session the ACP layer did not register (`if (!session) return`), which is the child session a `task` creates, so a sub-agent's own calls never reach the journal; and no update carries `_meta`. Update shapes follow the real recorded journal.",
+ "backend": "opencode",
+ "events": [
+  {
+   "seq": 1,
+   "type": "session/update",
+   "ts": "2026-11-16T10:00:01.000000Z",
+   "payload": {
+    "update": {
+     "sessionUpdate": "tool_call",
+     "toolCallId": "call_read",
+     "title": "read",
+     "kind": "read",
+     "status": "pending"
+    }
+   }
+  },
+  {
+   "seq": 2,
+   "type": "session/update",
+   "ts": "2026-11-16T10:00:02.000000Z",
+   "payload": {
+    "update": {
+     "sessionUpdate": "tool_call_update",
+     "toolCallId": "call_read",
+     "title": "src/app.py",
+     "status": "completed"
+    }
+   }
+  },
+  {
+   "seq": 3,
+   "type": "session/update",
+   "ts": "2026-11-16T10:00:03.000000Z",
+   "payload": {
+    "update": {
+     "sessionUpdate": "tool_call",
+     "toolCallId": "call_task",
+     "title": "task",
+     "kind": "think",
+     "status": "pending"
+    }
+   }
+  },
+  {
+   "seq": 4,
+   "type": "session/update",
+   "ts": "2026-11-16T10:00:04.000000Z",
+   "payload": {
+    "update": {
+     "sessionUpdate": "tool_call_update",
+     "toolCallId": "call_task",
+     "title": "task",
+     "kind": "think",
+     "status": "in_progress",
+     "rawInput": {
+      "description": "Explore the billing module",
+      "subagent_type": "general"
+     }
+    }
+   }
+  },
+  {
+   "seq": 5,
+   "type": "session/update",
+   "ts": "2026-11-16T10:00:05.000000Z",
+   "payload": {
+    "update": {
+     "sessionUpdate": "tool_call_update",
+     "toolCallId": "call_task",
+     "title": "Explore the billing module",
+     "status": "completed"
+    }
+   }
+  },
+  {
+   "seq": 6,
+   "type": "session/update",
+   "ts": "2026-11-16T10:00:06.000000Z",
+   "payload": {
+    "update": {
+     "sessionUpdate": "tool_call",
+     "toolCallId": "call_bash",
+     "title": "bash",
+     "kind": "execute",
+     "status": "pending"
+    }
+   }
+  }
+ ]
+}
