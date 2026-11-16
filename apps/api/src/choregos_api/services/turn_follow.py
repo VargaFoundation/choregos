@@ -106,10 +106,10 @@ def position_after(last_event_id: str | None, after_seq: int | None) -> int:
 
 def start_turn(principal: Principal, conversation_id: str, text: str) -> TurnRun:
     """Starts the turn as a task of its own and returns the run to read it from."""
-    from ..routers.conversations import mine  # the one place that says whose a conversation is
     from .assistant_conversations import require_audience
     from .conversation_signals import with_signals
     from .conversations import converse
+    from .my_conversations import mine
 
     run = TurnRun(conversation_id)
     _remember(run)

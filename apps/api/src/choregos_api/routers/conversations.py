@@ -26,7 +26,7 @@ from sse_starlette.sse import EventSourceResponse
 from ..db.models import AgentSessionRecord, Organization
 from ..db.session import release_connection
 from ..deps import Db, Me, Pagination
-from ..errors import ApiError, conflict, not_found
+from ..errors import ApiError, conflict
 from ..schemas.agent_sessions import (
     AgentResponse,
     Conversation,
@@ -45,23 +45,10 @@ from ..services.conversations import (
     delete_conversation,
     summary_of,
 )
+from ..services.my_conversations import mine
 from ..services.turn_follow import TurnRun, is_running, position_after, run_of, start_turn
 
 router = APIRouter(tags=["agents"])
-
-
-async def mine(session: AsyncSession, principal: Me, conversation_id: str) -> AgentSessionRecord:
-    record = await session.get(AgentSessionRecord, conversation_id)
-    organisation = await session.get(Organization, record.org_id) if record is not None else None
-    if (
-        record is None
-        or record.kind != "conversation"
-        or record.user_id != principal.user_id
-        or organisation is None
-        or organisation.slug not in principal.org_roles
-    ):
-        raise not_found("Conversation", conversation_id)
-    return record
 
 
 @router.get("/me/conversations", response_model=ConversationPage, operation_id="listMyConversations")
