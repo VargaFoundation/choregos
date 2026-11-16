@@ -84,6 +84,13 @@ class Shipped:
         return any(g.name == "markdown_sections" for t in self.workflow.transitions for g in t.gates)
 
     @property
+    def escalations(self) -> set[str]:
+        """The states a failing transition hands the work item to a person in."""
+        return {
+            t.on_fail.escalate_to for t in self.workflow.transitions if t.on_fail and t.on_fail.escalate_to
+        }
+
+    @property
     def branch(self) -> list[tuple[Any, ...]]:
         return list(RECORD if self.writes_a_record else CODE)
 
@@ -229,13 +236,15 @@ async def verdicts(setup: Fixture, gate: str) -> list[dict[str, Any]]:
         return [dict(e.payload) for e in rows.scalars() if e.payload.get("name") == gate]
 
 
-async def _approve_whatever_waits(handle: Any) -> None:
-    """A person approves each request the work item raises, once."""
+async def _approve_whatever_waits(handle: Any, escalations: set[str]) -> None:
+    """A person approves each request the work item raises, once, except where a failing transition
+    escalated it: the tests wait for it there, and an approval would move it on before they look."""
     answered: set[str] = set()
     while True:
         with contextlib.suppress(Exception):  # a query that times out is asked again
-            request = (await handle.query("status")).get("pending_request")
-            if request and request not in answered:
+            status = await handle.query("status")
+            request = status.get("pending_request")
+            if request and request not in answered and status.get("state") not in escalations:
                 answered.add(request)
                 await handle.signal(
                     "human_decision", {"approved": True, "decided_by": "marie", "kind": "approval"}
@@ -320,7 +329,7 @@ async def walked(
                 id=interpreter_id(setup.project_slug, setup.tracker_key),
                 task_queue="test",
             )
-            person = asyncio.create_task(_approve_whatever_waits(walk.handle))
+            person = asyncio.create_task(_approve_whatever_waits(walk.handle, shipped.escalations))
             try:
                 yield walk
             finally:
