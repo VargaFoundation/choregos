@@ -20,7 +20,7 @@ be written outside the reserved namespace without a test saying so
 
 from __future__ import annotations
 
-#: The verdict of one guarantee on the run, as the orchestrator judged it (ADR 0152 for its commit).
+#: The verdict of one guarantee on the run, as the orchestrator judged it (ADR 0171 for its commit).
 GATE_OUTCOME = "gate.outcome"
 
 #: A memory the platform left out of the run's context, and why.

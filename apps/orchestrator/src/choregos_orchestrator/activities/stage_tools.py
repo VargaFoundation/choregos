@@ -309,7 +309,5 @@ async def _journal_skipped_memories(session: Any, run_id: str, skipped: list[dic
     first = int(lowest or 0) - len(fresh)
     for offset, entry in enumerate(fresh):
         session.add(
-            RunEvent(
-                run_id=run_id, seq=first + offset, type=MEMORY_SKIPPED, payload=dict(entry), ts=utcnow()
-            )
+            RunEvent(run_id=run_id, seq=first + offset, type=MEMORY_SKIPPED, payload=dict(entry), ts=utcnow())
         )

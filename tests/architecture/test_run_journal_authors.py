@@ -24,6 +24,12 @@ RUN_DOOR = "apps/api/src/choregos_api/routers/internal.py"
 #: The names of `choregos_core.run_journal` that are a platform type.
 PLATFORM_NAMES = {name for name in run_journal.__all__ if getattr(run_journal, name) in PLATFORM_EVENTS}
 
+#: Lines the platform adds under a type the run writes too, by file and by the name the type is
+#: taken from. Such a type cannot be reserved: the run's door would refuse the run's own lines.
+#: `context.breakdown`: the runner records the context it measured; the API adds the gateway's count
+#: (`source: gateway`, above `GATEWAY_SEQ_BASE`). A number, not a verdict.
+SHARED_TYPES = {"apps/api/src/choregos_api/services/context_breakdown.py": "EVENT"}
+
 #: Who records a run's own lines: the runner and its tool bridge.
 RUN_SIDE = ["packages/runner/src", "packages/tools-mcp/src"]
 
@@ -71,13 +77,16 @@ def test_the_platform_takes_its_journal_types_from_one_module() -> None:
         if path == RUN_DOOR:
             continue
         for call in calls:
-            if _name(_type_of(call)) not in PLATFORM_NAMES:
+            name = _name(_type_of(call))
+            if name not in PLATFORM_NAMES and SHARED_TYPES.get(path) != name:
                 wrong.append(f"{path}:{call.lineno}")
     assert not wrong, (
         "a line the platform writes in a run's journal takes its type from choregos_core.run_journal "
         f"(one of {sorted(PLATFORM_NAMES)}), so that the run's door refuses it from a run: {wrong}"
     )
     assert len(lines) > 1, "no platform writer was found: the guard would pass on nothing"
+    gone = [path for path in SHARED_TYPES if path not in lines]
+    assert not gone, f"a shared type's writer no longer writes the journal, drop it from SHARED_TYPES: {gone}"
 
 
 def test_only_the_runs_door_writes_a_type_it_was_sent() -> None:
