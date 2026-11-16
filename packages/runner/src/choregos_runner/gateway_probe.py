@@ -125,11 +125,16 @@ class GatewayProbe:
         self.record = record
         self.transport = transport
         self.answer: GatewayAnswer | None = None
+        #: A refusal the runner already saw on its own way to the gateway (the model listener of a run
+        #: whose agent is in a container, ADR 0146 §7): no need to ask again.
+        self.known: Callable[[], str | None] | None = None
 
     async def __call__(self) -> str | None:
         """The gateway's budget refusal of the run's key, or `None`."""
         if not self.model.base_url:
             return None  # a step without a model (a job) has no gateway to ask
+        if self.known is not None and (seen := self.known()):
+            return seen
         if self.answer is None:
             self.answer = await ask_the_gateway(self.model, self.key, transport=self.transport)
             await self.record(

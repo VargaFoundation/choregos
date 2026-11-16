@@ -43,8 +43,17 @@ Built (S65-04d, e, g and the `agent_sandbox` part of h, i):
 - The `opencode` backend writes `permission.bash` from the policy's `deny_commands`, as Claude Code's
   `permissions.deny` does (keys read from `https://opencode.ai/config.json` on 2026-11-15).
 
-**Not built, still decided**: the loopback model, MCP and CONNECT listeners (§7, S65-04f): the agent
-container still holds the gateway key, the egress token and the MCP headers, which is what §7 exists to remove and stays open. The runner's git outside the
+**Built after, S65-04f (§7)**: under `container` the runner serves the three loopback listeners for an ACP
+step's agent and hands it a copy of the step with loopback addresses and the loopback key
+(`loopback/agent.py`). Two details the ADR left open, decided: the model listener's turn count is a
+constructor option (`count_turns=False` for an ACP step, which also skips the context measure: the runner
+registers the context itself), and the MCP listener still judges every `tools/call` though the ACP
+permission judged it first, because a `curl` from the shell skips the permission. The `gemini-cli`
+backend speaks API paths the model listener does not serve (`Backend.loopback_model = False`): its key
+stays in the container, and the docs say so. The project's checks start with the
+same proxy variables as the agent.
+
+**Not built, still decided**: The runner's git outside the
 agent's tree (§5, S65-04c) and `O_NOFOLLOW` reads (S65-04b): the runner still runs git in a tree the
 agent writes, and the hardening of #1345 is the only lock. `k8s_job`, `local_docker`, `tekton`, `aca`
 get no second container here: a runner told `container` there exits 100. The `separate_agent`

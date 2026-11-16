@@ -31,8 +31,18 @@ _RETURNED = ("content-type", "mcp-session-id")
 
 class McpProxy:
     def __init__(
-        self, stage_input: StageInput, record: Record, guards: GuardRails, *, transport: Any = None
+        self,
+        stage_input: StageInput,
+        record: Record,
+        guards: GuardRails,
+        *,
+        transport: Any = None,
+        verbatim: bool = False,
     ) -> None:
+        """`verbatim=True`: the agent of an ACP step (ADR 0146 §7, S65-04f). The server's headers go out
+        exactly as the step declared them, as the agent would have sent them itself. The listener still
+        judges every `tools/call`: that is what a `curl` from the agent's shell cannot go around."""
+        self.verbatim = verbatim
         self.stage_input = stage_input
         self.record = record
         self.guards = guards
@@ -72,7 +82,7 @@ class McpProxy:
             if refused is not None:
                 return refused
         headers = {name: request.headers[name] for name in _FORWARDED if name in request.headers}
-        headers.update(_credential(ref.env))  # the server's credential, held by the runner only
+        headers.update(dict(ref.env) if self.verbatim else _credential(ref.env))  # held by the runner only
         try:
             answer = await self.http.request(request.method, ref.url, headers=headers, content=content)
         except httpx.HTTPError as exc:
