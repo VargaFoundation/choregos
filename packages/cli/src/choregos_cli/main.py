@@ -13,6 +13,7 @@ from rich.console import Console
 from rich.table import Table
 
 from . import __version__, theme
+from . import chat as chat_module
 from .a2a import a2a_app
 from .activity import activity
 from .artifacts import artifacts_app
@@ -68,8 +69,9 @@ def _print_version(value: bool) -> None:
         raise typer.Exit()
 
 
-@app.callback()
+@app.callback(invoke_without_command=True)
 def _root(
+    ctx: typer.Context,
     version: Annotated[
         bool,
         typer.Option("--version", callback=_print_version, is_eager=True, help="Print the version and exit."),
@@ -84,10 +86,19 @@ def _root(
     """Options of `choregos` itself, before any command."""
     if no_color:
         theme.MONOCHROME = True
+    if ctx.invoked_subcommand is None:
+        # A bare `choregos` (ADR 0154 §3): the workspace in a terminal, the help anywhere else, so that no
+        # script which pipes it changes behaviour.
+        if chat_module.interactive():
+            chat_module.open_workspace()
+        else:
+            typer.echo(ctx.get_help())
+        raise typer.Exit()
 
 
 app.command("ask")(ask)
 app.command("activity")(activity)
+app.command("chat")(chat_module.chat)
 app.add_typer(artifacts_app, name="artifacts")
 
 # Hidden: the native binaries' smoke test asks the binary what it knows about itself (S62-07).
