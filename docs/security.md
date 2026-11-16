@@ -276,8 +276,24 @@ by the customer, not by the operator, so the core does not trust it as it trusts
 - a discovery document that cannot be read fails the sign-in instead of being guessed, and an address it
   marks unverified is refused.
 
-An edition proving another protocol (SAML) finishes its sign-in with `terminer_la_connexion(org=…)` to
-get the same confinement. The resolver must map a domain only to an organisation that proved it owns it.
+SAML is served by the core itself ([ADR 0170](adr/0170-sign-in-security-moves-into-the-core.md)): the
+platform administrator pins one provider and its signing certificate per organisation, and the verifier
+(`services/saml.py`) accepts an assertion only when all of this holds:
+
+- it is signed by the pinned certificate (never one the response carries), with a SHA-2 algorithm and
+  exactly one signed reference, and only the signed assertion is read (signature-wrapping attacks);
+- the document has no DTD or entity declaration and is under 256 KiB;
+- the issuer, audience (every restriction), recipient and destination are this provider and this
+  organisation's service, and the status is a success;
+- it is inside its validity window (two minutes of skew) and answers the request this very browser
+  started (`InResponseTo`, bound to a signed, short-lived cookie): a provider-initiated response is refused;
+- its identifier was never used before (a captured response cannot be replayed);
+- its address belongs to a domain of this provider, and its groups reach only the organisation's own
+  roles, through the provider's mapping.
+
+It finishes with `terminer_la_connexion(org=…)`, which confines the domain and the roles to the
+organisation. An edition proving another protocol does the same, and its resolver must map a domain only to
+an organisation that proved it owns it.
 
 ## Decisions that need a fresh sign-in
 

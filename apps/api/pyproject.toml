@@ -30,6 +30,8 @@ dependencies = [
     # A member's photo is decoded and re-encoded as WebP (ADR 0162); already locked through MarkItDown's PDF
     # extra (MIT-CMU).
     "pillow>=13.0",
+    # SAML sign-in (ADR 0170): XML-signature verification (Apache-2.0); lxml and cryptography were already locked.
+    "signxml==5.1.0",
 ]
 
 [project.scripts]

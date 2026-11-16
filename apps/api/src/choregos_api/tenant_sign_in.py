@@ -137,7 +137,8 @@ def reset() -> None:
     _RESOLVER.clear()
 
 
-async def resolve(session: Any, hint: SignInHint) -> TenantSignIn | None:
+async def resolve_extension(session: Any, hint: SignInHint) -> TenantSignIn | None:
+    """What the extension's resolver says, without the core's own SAML providers."""
     resolver = _RESOLVER.get("resolver")
     if resolver is None or not (hint.org or hint.email_domain):
         return None
@@ -147,6 +148,16 @@ async def resolve(session: Any, hint: SignInHint) -> TenantSignIn | None:
     if found is not None and not isinstance(found, TenantSignIn):
         raise TypeError(f"the sign-in resolver returned {type(found).__name__}, not a TenantSignIn")
     return found
+
+
+async def resolve(session: Any, hint: SignInHint) -> TenantSignIn | None:
+    """The extension's answer first, then the core's own SAML providers (ADR 0170)."""
+    found = await resolve_extension(session, hint)
+    if found is not None or not (hint.org or hint.email_domain):
+        return found
+    from .services.saml_providers import saml_sign_in
+
+    return await saml_sign_in(session, hint)
 
 
 def email_domain(address: str | None) -> str | None:

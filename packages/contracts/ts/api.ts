@@ -6072,6 +6072,36 @@ export type SessionsRevoked = {
   ended: number;
 };
 
+export type SamlProviderIn = {
+  idp_entity_id: string;
+  /** https only */
+  sso_url: string;
+  /** The provider's signing certificate, PEM; pinned */
+  certificate_pem: string;
+  /** The NameID when absent */
+  email_attribute?: string | null;
+  groups_attribute?: string | null;
+  /** A provider group to a core group; others are dropped */
+  group_map?: {
+    [key: string]: string;
+  };
+  domains: Array<string>;
+};
+
+export type SamlProvider = {
+  idp_entity_id?: string | null;
+  sso_url?: string | null;
+  certificate_pem?: string | null;
+  email_attribute?: string | null;
+  groups_attribute?: string | null;
+  group_map: {
+    [key: string]: string;
+  };
+  domains: Array<string>;
+  sp_entity_id: string;
+  acs_url: string;
+};
+
 export type PlatformIdentity = {
   items: Array<PlatformIdentityRow>;
 };
@@ -6307,6 +6337,7 @@ export interface Operations {
   deleteMyTaskSubscription: { method: "DELETE"; path: "/me/assistants/{org}/{slug}/tasks/{task}"; body: never; response: void };
   deleteOrgConnector: { method: "DELETE"; path: "/orgs/{org}/connectors/{name}"; body: never; response: void };
   deleteOrgGroup: { method: "DELETE"; path: "/orgs/{org}/groups/{slug}"; body: never; response: void };
+  deleteOrgSaml: { method: "DELETE"; path: "/orgs/{org}/saml"; body: never; response: void };
   deleteOutboundProxy: { method: "DELETE"; path: "/orgs/{org}/outbound-proxy"; body: never; response: void };
   deleteOutpost: { method: "DELETE"; path: "/orgs/{org}/outposts/{slug}"; body: never; response: void };
   deleteProject: { method: "DELETE"; path: "/projects/{id}"; body: never; response: void };
@@ -6398,6 +6429,7 @@ export interface Operations {
   getOrgCosts: { method: "GET"; path: "/orgs/{org}/costs"; body: never; response: CostReport };
   getOrgEgress: { method: "GET"; path: "/orgs/{org}/egress"; body: never; response: EgressOverview };
   getOrgGroup: { method: "GET"; path: "/orgs/{org}/groups/{slug}"; body: never; response: OrgGroup };
+  getOrgSaml: { method: "GET"; path: "/orgs/{org}/saml"; body: never; response: SamlProvider };
   getOrgSecurity: { method: "GET"; path: "/orgs/{org}/security"; body: never; response: OrgSecurity };
   getOutboundProxy: { method: "GET"; path: "/orgs/{org}/outbound-proxy"; body: never; response: OutboundProxyState };
   getOutpost: { method: "GET"; path: "/orgs/{org}/outposts/{slug}"; body: never; response: Outpost };
@@ -6734,6 +6766,9 @@ export interface Operations {
   rotateTriggerToken: { method: "POST"; path: "/projects/{id}/triggers/{name}/token"; body: never; response: TriggerToken };
   runKnowledgeEval: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/eval/run"; body: never; response: KnowledgeBase };
   runMyTask: { method: "POST"; path: "/me/assistants/{org}/{slug}/tasks/{task}/run"; body: never; response: TaskRun };
+  samlAcs: { method: "POST"; path: "/saml/{org}/acs"; body: void; response: void };
+  samlLogin: { method: "GET"; path: "/saml/{org}/login"; body: never; response: void };
+  samlMetadata: { method: "GET"; path: "/saml/{org}/metadata"; body: never; response: void };
   searchGlobalMemory: { method: "GET"; path: "/orgs/{org}/memories/{slug}/search"; body: never; response: Array<Memory> };
   searchKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/search"; body: KnowledgeSearchRequest; response: KnowledgeSearchResult };
   searchMemory: { method: "GET"; path: "/projects/{id}/memory/search"; body: never; response: Array<Memory> };
@@ -6743,6 +6778,7 @@ export interface Operations {
   setAgentReleasePolicy: { method: "PUT"; path: "/orgs/{org}/agents/{slug}/release-policy"; body: AgentReleasePolicy; response: Agent };
   setConnectorSecret: { method: "PUT"; path: "/projects/{id}/connectors/{kind}/secrets/{field}"; body: SecretValue; response: Connector };
   setOrgConnectorSecret: { method: "PUT"; path: "/orgs/{org}/connectors/{name}/secrets/{field}"; body: SecretValue; response: OrgConnector };
+  setOrgSaml: { method: "PUT"; path: "/orgs/{org}/saml"; body: SamlProviderIn; response: SamlProvider };
   setOrgSecurity: { method: "PUT"; path: "/orgs/{org}/security"; body: OrgSecurity; response: OrgSecurity };
   setProjectAgentChannel: { method: "PUT"; path: "/projects/{id}/agent-channel"; body: ProjectAgentChannel; response: ProjectAgentChannel };
   setTrackerIdentity: { method: "PUT"; path: "/orgs/{org}/members/{user_id}/tracker-identities/{tracker}"; body: TrackerIdentityPut; response: TrackerIdentity };

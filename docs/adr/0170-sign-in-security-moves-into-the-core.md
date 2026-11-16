@@ -1,7 +1,7 @@
 # 0170 — Re-authentication to approve and the revocation of sessions are served by the core; SAML follows
 
 - **Status**: accepted, 2026-11-15 (decision D5 of the 2026-11 offer, taken by the product owner on
-  2026-11-15); S70-23 implements the first two functions, SAML is a later story
+  2026-11-15); S70-23 implements the first two functions, S70-24 delivers SAML (amendment 1 below)
 - **Concerns**: `approval_freshness.py`, `extensions.check_gesture`, `extensions.IDENTITY_FEATURES`,
   `browser_sessions.revoke_user_sessions`, `routers/org_security.py` (`GET|PUT /orgs/{org}/security`,
   `POST /orgs/{org}/members/{email}/sessions/revocation`); amends [ADR 0024](0024-two-editions.md)
@@ -42,8 +42,8 @@ in the EE.
    multi-organisation instance an organisation's administrator can therefore end the sessions of a
    member who belongs to other organisations too; that is the same reach as the person's membership, and
    the platform-wide route stays the EE's.
-3. **The core announces what it serves.** `extensions.IDENTITY_FEATURES` lists `approval_freshness` and
-   `session_revocation`. An extension detects them by that announcement, never by version, and does not
+3. **The core announces what it serves.** `extensions.IDENTITY_FEATURES` lists `approval_freshness`,
+   `session_revocation` and, since S70-24, `saml`. An extension detects them by that announcement, never by version, and does not
    serve what the core serves (a route overlapping a core route stops the start, ADR 0024's seam rules).
 4. **SAML is decided, not delivered here.** SAML (an IdP per organisation, signed-assertion
    verification, replay protection, domain ownership) moves in a later story; until then the core keeps
@@ -62,7 +62,7 @@ in the EE.
   core's mechanism on a core that announces `session_revocation`.
 - An organisation that had set `fraicheur_approbation_s` in the EE keeps it: the EE migration copies it
   to `organizations.settings.approval_freshness_s` (the value, not a reference).
-- Not covered: SAML (above), an administrator's view of another person's sessions (ADR 0130), a console
+- Not covered: an administrator's view of another person's sessions (ADR 0130), a console
   screen for these settings in the core (the EE's section keeps rendering them; the core ships the API),
   and a platform-scope revocation by e-mail without an organisation.
 
@@ -73,3 +73,22 @@ in the EE.
 - *A new column on `organizations`.* `settings` already carries per-organisation options; a column buys
   nothing here and a migration on a table under RLS.
 - *Deliver SAML in the same change.* See Decision 4.
+
+## Amendment 1 — SAML is delivered (S70-24)
+
+Decision 4 deferred SAML for two reasons: a XML-signature dependency in the image and a verifier that
+needs its own review. Both are met:
+
+- `signxml` 5.1.0 (Apache-2.0) is a dependency of `apps/api`; its own dependencies (`cryptography`,
+  `lxml`, `certifi`) were already in the lock, so the image gains one package.
+- The verifier is `services/saml.py`, written for the core. Its security review and a test per point are in
+  the pull request and in `apps/api/tests/test_saml.py`.
+- The core owns the routes (`/orgs/{org}/saml`, `/saml/{org}/{login,acs,metadata}`) and two tables. An
+  extension that announces its own SAML routes stops the start of the API, like any overlapping route, so
+  the EE does not declare its SAML router on a core that announces `saml` (decision 3).
+- `tenant_sign_in.resolve()` asks the extension's resolver first, then the core's SAML providers: an
+  organisation signs in through one protocol, and a domain belongs to one organisation across both.
+- An organisation that already signs in through the EE's SAML keeps working: the EE copies its settings
+  into `org_saml_idps` in its own migration, then steps aside. The migration creates no account. A sign-in
+  finds the account by address, as every provider does, and never replaces a subject already bound to it;
+  it grants roles in its own organisation only, and only through a mapped group.

@@ -114,5 +114,7 @@
  "Outpost",
  "OutpostCall",
  "OutpostEnrolment",
- "OutpostInstance"
+ "OutpostInstance",
+ "OrgSamlIdp",
+ "SamlConsumedAssertion"
 ]
