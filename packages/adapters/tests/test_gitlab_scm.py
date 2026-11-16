@@ -236,7 +236,7 @@ def test_the_type_is_registered_with_a_secret_token() -> None:
     assert specs[("scm", "gitlab")].secret_fields == ("token",)
 
 
-# ───────────────────────── the merge names the judged commit (ADR 0152) ─────────────────────────
+# ───────────────────────── the merge names the judged commit (ADR 0171) ─────────────────────────
 
 
 @respx.mock

@@ -117,7 +117,7 @@ class GitLabScm:
         return True
 
     async def head_of(self, repo: str, branch: str) -> str | None:
-        """The commit `branch` points at now, `None` when there is no such branch (ADR 0152). Any
+        """The commit `branch` points at now, `None` when there is no such branch (ADR 0171). Any
         other error is raised: an outage is not an absence."""
         try:
             found = await self.client.request(
@@ -250,7 +250,7 @@ class GitLabScm:
             await self.client.request("PUT", self._mr(ref), json={"reviewer_ids": ids})
 
     async def enqueue_merge(self, ref: PrRef, sha: str) -> None:
-        """Merge the merge request at `sha`, the commit the gates judged (ADR 0152), when the
+        """Merge the merge request at `sha`, the commit the gates judged (ADR 0171), when the
         pipeline succeeds. Recent GitLab reads `auto_merge`, older reads
         `merge_when_pipeline_succeeds`: both are sent, with the `sha` its head must be at.
 

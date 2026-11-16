@@ -136,6 +136,16 @@ FRESH_ATTEMPTS_EACH_RECURRENCE = "fresh-attempts-each-recurrence"
 #: pending request is closed as superseded (it judges no decision) and the loop migrates. Before this
 #: marker the human wait did not see it; the API refused such a migration.
 HUMAN_WAIT_YIELDS_TO_MIGRATION = "human-wait-yields-to-migration"
+#: A run a person stopped (`POST /runs/{id}/cancel`, a work item's `stop`; ADR 0142 §2-3) takes its
+#: stage to a person: it is not retried and does not count as an attempt, and the work item waits with
+#: "run stopped by <who>: <reason>". A work item stopped meanwhile ends as a stop does. No history
+#: before this marker holds such a result.
+RUN_STOPPED_GOES_TO_A_PERSON = "run-stopped-goes-to-a-person"
+#: The status comment is best-effort (#1646, S62-05): when the tracker does not take it once
+#: `update_status_comment`'s retries are spent, the interpreter logs it and goes on. The comment only
+#: mirrors the platform's state, and the next mirror rewrites it whole. Before this marker the failure
+#: failed the interpreter (FON-277 stood still for two days, 2026-11-09).
+STATUS_COMMENT_BEST_EFFORT = "status-comment-best-effort"
 
 
 def _attempts_ceiling(context: dict[str, Any], actor: Any) -> int | None:

@@ -67,7 +67,7 @@ No agent deploys: the release train does, under the project's policy. A batch th
 `dev-complex` work item waits for its captain; a batch of fixes alone leaves on its own.
 
 **What is merged is what the merge read** (`dev-simple` 3, `dev-complex` 3, `study` 2;
-[ADR 0152](../../docs/adr/0152-what-is-merged-is-what-was-judged.md)). The platform merges the commit
+[ADR 0171](../../docs/adr/0171-what-is-merged-is-what-was-judged.md)). The platform merges the commit
 its merge transition's gates judged, so each workflow asks there, again, what its steps asked of the
 diff: `no_secrets` in all three, the size limit of the implementation in `dev-simple` and
 `dev-complex` (it now counts what the later steps added), `docs_updated` in `dev-complex`, the

@@ -2,7 +2,8 @@
 """Pause, resume and stop a work item with the rights of a principal (S47-14).
 
 One place for the console's action and for a signed tracker comment (ADR 0102): the same permission,
-the same signal, the same audit row."""
+the same signal, the same audit row. A stop also stops the run in flight, with the same reason
+(ADR 0142 §3); a pause leaves it running and holds the next stage."""
 
 from __future__ import annotations
 
@@ -16,6 +17,10 @@ from ..db.models import Project, WorkItem
 from ..errors import forbidden
 from ..rbac import Permission, Principal
 from ..temporal import deliver_control
+from .run_cancel import cancel_current_runs
+
+#: The reason a run stopped with its work item carries when the stop gave none.
+STOPPED_WITH_ITS_WORK_ITEM = "the work item was stopped"
 
 ControlAction = Literal["pause", "resume", "stop"]
 
@@ -39,6 +44,10 @@ async def apply_control(
     control = Control(action=action, reason=reason, by=principal.email)
     await deliver_control(project.slug, item.tracker_key, control)
     item.paused = action == "pause"
+    if action == "stop":
+        await cancel_current_runs(
+            session, principal, item, reason or STOPPED_WITH_ITS_WORK_ITEM, channel="work_item"
+        )
     extra = {"channel": channel} if channel else {}
     await record(
         session,

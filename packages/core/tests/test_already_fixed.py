@@ -1,6 +1,6 @@
 """A ticket whose fix is already on the default branch ends on measured evidence only (S22-47, #539).
 
-On the dev tenant, `DiametralGroup/choregos-sandbox-dev#18` and `#21` (`dev-simple`) described bugs
+On the dev tenant, `globex/choregos-sandbox-dev#18` and `#21` (`dev-simple`) described bugs
 already fixed on `main`: the implementation changed nothing, and the work item went on to test, review
 and a pull request from a branch that did not exist. `already_fixed_proven` guards the platform's
 "already fixed" exit, which the interpreter takes only after a step that measured no change.

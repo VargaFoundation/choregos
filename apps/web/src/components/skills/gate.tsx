@@ -244,11 +244,12 @@ export function VersionGate({
 }) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  async function approve() {
+  const [reason, setReason] = useState("");
+  async function approve(force = false) {
     setError(null);
     setBusy(true);
     try {
-      await api.approveSkillVersion(org, slug, version.version);
+      await api.approveSkillVersion(org, slug, version.version, force ? { reason: reason.trim() } : undefined);
       onChanged?.();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "approval refused");
@@ -287,7 +288,23 @@ export function VersionGate({
           <Button tone="primary" onClick={() => void approve()} disabled={busy || mine}>
             Approve v{version.version}
           </Button>
-          {mine && <p className="text-xs text-ink-muted">You imported it: a second person approves it.</p>}
+          {mine && (
+            <div className="space-y-1" data-testid="force-approval">
+              <p className="text-xs text-ink-muted">
+                You imported it: a second person approves it. If no one can in time, force it: the audit keeps your
+                reason.
+              </p>
+              <Input
+                aria-label="reason for forcing"
+                placeholder="Why it cannot wait (10 characters at least)"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+              />
+              <Button onClick={() => void approve(true)} disabled={busy || reason.trim().length < 10}>
+                Force the approval of v{version.version}
+              </Button>
+            </div>
+          )}
         </div>
       )}
       {error && <ErrorNote>{error}</ErrorNote>}

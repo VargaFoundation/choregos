@@ -230,7 +230,10 @@ later hardening by the organisation always overrides.
 **An MCP server** is a connector of type `mcp`: its URL, and its key by reference
 (`secret_refs: {"token": "env:CONNECTOR_SUPPLIER_KEY"}`); the token is sent as a Bearer by default, or as
 `Basic base64(username:token)` with `auth_scheme: basic` and a `username`
-([Atlassian's Rovo MCP Server](integrations.md#atlassians-rovo-mcp-server-as-a-connector)). It declares no operation — they are
+([Atlassian's Rovo MCP Server](integrations.md#atlassians-rovo-mcp-server-as-a-connector)). A server that
+only takes short-lived OAuth tokens is declared with `auth_scheme: oauth_client_credentials`, a
+`token_url`, a `client_id` and a sealed `client_secret`: the platform fetches the token, caches it and
+renews it ([the details](integrations.md#an-mcp-server-that-only-accepts-short-lived-oauth-tokens)). It declares no operation — they are
 **discovered**: `POST /orgs/{org}/connectors/{name}/discover` (or *discover* in the console) runs
 `initialize` and `tools/list` over Streamable HTTP — JSON or SSE answers, the session the server
 gives, every page of the list — and returns the diff. **A new tool is born closed**
@@ -524,7 +527,7 @@ behaviour, but the validator warns (`workflow.implicit_effect`), and a rename fr
 first writes the effect down.
 
 **What is merged is what the merge transition's gates judged.** `does: merge_pr` merges the pull
-request at the commit the transition's own gates ruled on ([ADR 0152](adr/0152-what-is-merged-is-what-was-judged.md)).
+request at the commit the transition's own gates ruled on ([ADR 0171](adr/0171-what-is-merged-is-what-was-judged.md)).
 A gate on an earlier step ruled on the branch as it stood then, and a commit may land before the merge:
 declare on the merge transition the guarantees that must hold on what is merged.
 
@@ -932,7 +935,7 @@ curl -X PUT "$API/projects/acme:dev/workflows/dev-complex" \
 Running items stay pinned to their version until they are migrated (see above); every state of
 the old version exists in the new one, so no `state_mapping` is needed.
 
-**The versions whose merge transition holds the diff guarantees** (ADR 0152) are `default-simple` 2,
+**The versions whose merge transition holds the diff guarantees** (ADR 0171) are `default-simple` 2,
 `full-auto` 3, `advanced` 4, version 2 of the core's `dev-feature`, `dev-fix`, `hotfix`,
 `refactoring`, `dependency-upgrade`, `vulnerability-fix`, `documentation` and
 `architecture-decision`, `dev-simple` 3, `dev-complex` 3 and `study` 2 of `github-software-delivery`
@@ -1507,7 +1510,10 @@ tools of the group `rh`). A tool that is named but not open to the project is no
 calling it answers 404, as an unknown tool does. A version that leaves a list out keeps today's
 behaviour for that source. To see what a version reaches in a project, with the origin of each item and
 the reason of each refusal: `GET /api/v1/orgs/{org}/agents/{slug}/access?project={project}` (add
-`&version=` for a version other than the one the project is served).
+`&version=` for a version other than the one the project is served). A tool of a connector at an outpost
+also carries `outpost`: the outpost's `name`, the `endpoint` alias, the outpost's `status` and whether it is
+`online` now; a tool of a direct connector carries no such key
+([ADR 0149](adr/0149-a-tool-may-live-at-an-outpost.md) §10).
 
 ## 3 ter. Register your agents
 
@@ -1783,7 +1789,11 @@ sources the run can read — the project's catalogue tools filed under `observab
 MCP servers named after an observability tool, empty when there is none), and the platform appends a frame the author cannot remove — the output
 contract and the invariants. The run records the agent and its version; a revoked, suspended or
 expired agent does not start, and neither does one that has spent its `daily_usd` since midnight
-(UTC) — models **and** tool calls. `GET /orgs/{org}/agents/{slug}/metrics?days=30` gives its runs,
+(UTC) — models **and** tool calls. `POST /orgs/{org}/agents/{slug}/stop` with a `reason` (whoever
+may change the agent's status) suspends it first, then stops its runs `queued` or `running` in every
+project (each work item waits for a person) and closes its open sessions; the answer counts them,
+`agent.stop` is audited, and `PATCH ... {"status": "active"}` resumes it without restarting anything
+([ADR 0142](adr/0142-a-stop-interrupts-what-is-in-flight.md) §4). `GET /orgs/{org}/agents/{slug}/metrics?days=30` gives its runs,
 their success rate, their cost by kind and by project, and what it spent today.
 
 **What the tracker says about the ticket.** `ticket.fields` holds the work item's fields; a work item
@@ -2690,7 +2700,7 @@ allowed path is declared. No scope change grants one. The step's own files, `.ch
 `.choregos/outputs/`, stay writable under a denied `.choregos/**`. The default list is
 `.choregos/**`, `.github/workflows/**` and `charts/**`: a project whose agents change its charts lists
 its own. On a transition the platform takes, `scope_respected` with `over: work_item` holds the same
-paths on the work item's whole diff ([ADR 0152](adr/0152-what-is-merged-is-what-was-judged.md)): the
+paths on the work item's whole diff ([ADR 0171](adr/0171-what-is-merged-is-what-was-judged.md)): the
 shipped workflows declare it on their merge transition, so a file under a denied path is not merged
 whoever committed it, a person on the pull request included.
 
@@ -2854,6 +2864,95 @@ default; letters, digits, dots, dashes and underscores); it sends the route and 
 result is a connector of type `mcp-gateway` with the config `{server}`. **Administration → Connectors** marks it
 *via gateway* with its server name, and declaring an `mcp-gateway` connector there is refused, with a link to
 **Administration**, while the organisation has no gateway or its mode is `off`.
+
+**Outposts.** [ADR 0147](adr/0147-an-outpost-only-dials-out.md): an outpost is a place of the organisation that
+the platform cannot reach, a network behind a firewall for example. A program installed there
+(`choregos-outpost`) opens every connection itself and takes the tool calls routed to it; the platform never
+connects to it and stores no address of it. An organisation whose MCP gateway the platform can reach needs
+none: use the gateway above. Outposts are off unless the deployment turns them on
+([deployment](deployment.md#outposts-adrs-0147-0149)).
+
+**Administration → Outposts** (`/admin/outposts`) is the organisation administrator's: the entry is listed
+for whoever holds `outpost:manage`, and the API refuses anyone else. The page lists the outposts with their
+status, their instances (approved, pending, revoked) and their presence (*Online*, or when one was last seen),
+and creates one from a slug and a name. An outpost's page shows:
+
+- **Instances**, the pending ones first. A pending instance shows the fingerprint of its signing key, and
+  **Approve the instance** stays disabled until you tick that it is the fingerprint `choregos-outpost enrol`
+  printed on the outpost's machine; the request carries the fingerprint you confirmed. It also names the
+  enrolment token it enrolled with and who issued it. Approving needs a sign-in less than ten minutes old,
+  which the instance says before the click: with an older one you are sent to sign in again and come back to
+  the page, where the fingerprint is confirmed again. **Revoke** is final, and says so before it is done;
+- **Enrol an instance**: *Create an enrolment token* shows, once, the token (single use, 15 minutes), when it
+  expires, the door's origin, the keys to pin, the two lines to put in the outpost's policy file
+  (`control_plane` and `door_keys`) and the command to run there. *Cancel the token* there, or later under
+  **Open enrolment tokens** (the tokens that can still enrol, never their value), makes it enrol nothing;
+- **Keys to pin**: the `control_plane` and `door_keys` lines again, at any time;
+- **Pause** and **Resume** (a paused outpost says so at the top of its page), **Revoke** (final: every
+  instance is revoked) and **Delete**, which the API refuses while the outpost is not revoked or while
+  connectors still route to it: the refusal is shown as the API wrote it, with the connectors it names;
+- **Recent calls**, newest first, with their state and the code of a refusal. Digests only: the platform
+  keeps no arguments and no result of a call. The list reads the newest 1000 calls, and says so where it ends.
+
+A deployment where outposts are off, or whose door has no signing key, says which before anyone tries: the
+list page says it at the top and does not offer a creation while outposts are off, and an outpost's page
+offers no token. A refusal that comes anyway is shown in the API's own words.
+
+The same from the CLI ([reference](cli.md)):
+
+```bash
+choregos outposts create factory-floor --display-name "Factory floor"
+choregos outposts list
+choregos outposts show factory-floor              # the control_plane and door_keys lines to pin, again
+choregos outposts token factory-floor             # the token, once, with the policy lines and the enrol command
+choregos outposts tokens factory-floor            # the tokens that can still enrol, never their value
+choregos outposts cancel-token factory-floor <id> # that token enrols nothing from now on
+choregos outposts instances factory-floor         # ids and fingerprints, pending ones first
+choregos outposts revoke-instance factory-floor <instance>
+choregos outposts pause factory-floor             # then resume, revoke (final) and delete
+choregos outposts calls factory-floor --state refused
+```
+
+`choregos outposts approve <slug> <instance> --fingerprint SHA256:…` exists and is refused: the API takes an
+approval from a person's session that carries a recent sign-in, never from an API token, and the CLI holds a
+token. It prints the API's refusal with its code, `approval_requires_session`, and where to approve instead.
+
+**A connector at an outpost** ([ADR 0149](adr/0149-a-tool-may-live-at-an-outpost.md)). In **Administration →
+Connectors**, *Declare a connector* with the type *MCP server at an outpost* asks for three things, and for no
+URL and no secret (the server's address and its credential are in the outpost's policy file):
+
+- **Outpost**, chosen among the organisation's outposts, never typed. Each says whether it is online, paused,
+  or when it was last seen; a revoked outpost, or one not enabled for tools, cannot be chosen. With no outpost
+  yet, the form leads to **Outposts**;
+- **Endpoint**, chosen among the aliases that outpost's approved instances announce from their policy file.
+  While none announces one (an outpost created before its operator started an instance), the alias is typed,
+  and the form says so: an alias, never an address;
+- **Timeout (seconds)**, between 1 and 120, 30 when left empty. It bounds the whole call: the wait for an
+  instance to take it, then the server's answer.
+
+**Edit settings** on the connector shows the same fields, and an edit is judged as a declaration. The card is
+marked *at outpost: factory-floor/tracker*. The API's refusals are shown as it gives them: an outpost the
+organisation does not have is a 422 shown on the *Outpost* field; an outpost that is paused or revoked, or
+outposts switched off, is a 409 `outpost_paused`. **Discover** may also meet `outpost_offline` (no instance that
+serves the alias polled within the poll window), `outpost_refused` (the outpost's own policy refused, with its
+code, such as `unknown_endpoint`) and `outpost_timeout`: each is shown with its code, the outpost, the alias and
+the outpost's own words. When the outposts' quotas refuse a discovery, the 429 says when to try again.
+
+**Opening a write at an outpost** (S65-17c, [ADR 0149](adr/0149-a-tool-may-live-at-an-outpost.md) §6). Each
+discovered tool is born `forbidden`. Under each write of such a connector, and under nothing else, **How it is
+delivered** holds the two statements of its rule: *It takes the platform's idempotency key* (`action_key`,
+offered only when the tool's input schema has that argument) and *An in-doubt outcome is accepted for it,
+explicitly*. Silence opens nothing: setting the write's policy to `allowed` or `approval` sends the statement
+ticked with it, in the same request, and a request that says neither is refused with a 422 that names both.
+**Set** sends the statements alone (one stated while the write is closed opens it later). Unticking the last
+statement of an open write is refused too. The API's sentence is shown, and its words under each statement it
+names.
+
+**Where a tool lives, before a run.** An agent's **Access** tab names, for each tool of a connector at an
+outpost, the outpost and the alias, and says *Online* or *Offline*: online when an instance that serves the
+alias polled within the poll window, the presence the call's own route reads. An offline tool's call fails at
+once, so the tab says it before a run does. A paused or revoked outpost says so beside it, and a connector that
+routes to no outpost of the organisation names none. A tool of a direct connector is listed as before.
 
 **Network activity.** What the egress proxy and the runner let through or refused is journaled per run;
 `GET /orgs/{org}/network-activity` (`audit:read`: the organisation's administrators and owners) groups
@@ -3181,6 +3280,37 @@ curl -X POST $API/projects/acme:hr/actions/<id>/decision -d '{"decision": "appro
   forbidden operation) stops the action, and what was done is **compensated in reverse** — the
   action says what it could not undo. Parameters are Jinja (sandboxed) over `params` and the results
   of earlier `effects`; a compensation also sees its own effect's `result`.
+- **In doubt**: one effect cannot be made idempotent by the platform, a write through an
+  [outpost](integrations.md#a-tool-server-at-an-outpost-adr-0149), whose server Choregos does not
+  see. It is delivered **at most once**. When an instance of the outpost took the write and its
+  answer never came back, nobody knows whether the server made it: the effect and the action end
+  **`in_doubt`**, where the platform stops, as at `succeeded`, `failed` and `rejected`
+  ([ADR 0149](adr/0149-a-tool-may-live-at-an-outpost.md) §5). Such an action is **never replayed
+  by itself** — an agent that repeats the call gets the same action back, in doubt (a tool
+  error `504` whose `code` is `action_in_doubt`) — and **nothing it had done is compensated**: the
+  effects before it stay done, the ones after it did not run. Both would act on a state nobody
+  knows. **What a person does**: read on the action's page which tool was sent, to which outpost
+  and endpoint, which instance took it and when (the journal's effect carries them under
+  `result.in_doubt`, with the digest of the arguments, never the arguments), check the system
+  behind the outpost, and **settle** the action with what they found, on its page (*What a person
+  found*) or with `POST /projects/{id}/actions/{action_id}/settlement` (`outcome`, a `note`, and
+  with `made` the `result` they read there). **Made**: the effect is recorded `done` with that
+  result (the effects after it may cite it), the action is `approved` again and its workflow runs
+  once more: the journal answers what was done, the effects after the write are played, and a
+  later failure compensates as for any action. **Not made**: the effect is recorded `not_made`,
+  never attempted, and the action fails, compensating what it had done before. Settling is guarded
+  as approving is (a recent sign-in in a human session, an approver's rank and group, and whoever
+  proposed the action, or owns the agent that did, does not settle it); the effect keeps what was
+  sent with the settlement; settling again with the same outcome changes nothing, the other is a
+  `409 action_already_settled`. The event is `choregos.action.settled`, the audit line
+  `action.settle`. Until it is settled, a work item whose transition proposed it waits where it
+  is, as it waits for an approval nobody gave: reading the doubt as a failure would follow
+  `on_fail` and propose the action again, a second delivery of the write. Once settled, the
+  action's end (`succeeded` or `failed`) moves the work item on. The one exception is a write whose rule says its tool takes the platform's
+  idempotency key (`platform_arguments: ["action_key"]`): after a doubt the effect's own retries
+  deliver it again with the same key, and the action is in doubt only if every delivery was.
+  The event is `choregos.action.failed` with `status: in_doubt` in its data; `GET
+  /projects/{id}/actions?status=in_doubt` lists them.
 - **Proving**: an effect can make the action wait for the proof that it served — the next report
   of a collector, say — until a deadline: the action shows `awaiting_evidence`; a contrary proof, or
   none in time, fails it and compensates what was done.
@@ -3328,16 +3458,13 @@ workflow: a decision stays in the console, after a fresh sign-in. Choregos repli
 link to the inbox and records a `tracker.command.redirected` audit entry (ADR 0102).
 
 `/choregos pause`, `resume` and `stop` are honoured in one case only: a GitHub comment, in a delivery
-verified by its HMAC (`CHOREGOS_GITHUB_WEBHOOK_SECRET` is set), by a GitHub account that an
-organisation administrator linked to a member (`PUT /orgs/{org}/members/{user_id}/tracker-identities/github`
-with the account's numeric user id). The command runs with that member's own rights (a developer or
+verified by its HMAC (`CHOREGOS_GITHUB_WEBHOOK_SECRET` is set), by a github.com account linked to a member
+of the project's organisation. The command runs with that member's own rights (a developer or
 above), is audited as `workitem.pause`, `workitem.resume` or `workitem.stop` on the channel `tracker`,
 and Choregos confirms on the ticket. A login is never matched, so a renamed account inherits nothing.
-Find a user id at `https://api.github.com/users/<login>` (the `id` field). Nothing proves that the member
-owns the account: the administrator asserts the link. Jira and GitLab comments, and any delivery that
-carries only the shared secret, are never honoured: a display name or a username is not a stable
-identity. Anyone else gets the console link, with a note that an administrator can link their account.
-A reply that cannot be posted never fails the webhook.
+Jira and GitLab comments, and any delivery that carries only the shared secret, are never honoured: a
+display name or a username is not a stable identity. Anyone else gets the console link, with a note on
+how to link their account. A reply that cannot be posted never fails the webhook.
 
 Moving a card on the tracker board (GitHub Projects, Jira) does not move the work item: the board
 follows Choregos, not the reverse (ADR 0102). Move a work item from the console.
@@ -3346,6 +3473,46 @@ follows Choregos, not the reverse (ADR 0102). Move a work item from the console.
 choregos items list billing-api
 choregos runs tail <run-id>        # live ACP log over SSE
 ```
+
+### Linked accounts
+
+A member links their own accounts on code forges (ADR 0161): **My account**, **Linked accounts**, **Link**
+next to a forge their organisation configured. The browser signs in at the forge (OAuth 2.0, authorization
+code with PKCE, a scope that only reads the user: `read:user` on GitHub and Forgejo, `read_user` on GitLab)
+and comes back with the account recorded as **Verified**: the forge's numeric user id, its login and its
+profile address. The platform keeps no token. An organisation administrator configures each forge as a
+connector of the **Member accounts** capability (`github-oauth`, `gitlab-oauth` for gitlab.com or a
+self-managed instance, `forgejo-oauth`): its address, the OAuth application's client id and secret (sealed),
+and its hosts in the egress allowlist; the setup procedures say what to register at each forge, with the
+callback address `<api_url>/api/v1/auth/linked-accounts/callback`.
+
+An administrator still declares a member's account by its numeric id on **Administration**, **Members**
+(`POST /orgs/{org}/members/{user_id}/linked-accounts`): it is shown as **Declared**, not verified, until the
+member links it themself. One forge account belongs to one member of an organisation, whichever way it was
+linked. Today a declared github.com link is honoured for the signed comments above like a verified one (it
+always was); requiring `verified` is a later switch. The routes of S47-14
+(`/orgs/{org}/members/{user_id}/tracker-identities/github`) still answer, deprecated: they read and write the
+member's github.com link.
+
+### A member's profile
+
+Each member has a page (ADR 0162): **Administration**, **Members**, then the member's address, or **My
+account**, **View my profile** (`GET /orgs/{org}/members/{user_id}/profile`). Every member of the
+organisation sees a colleague's card: their photo or initials, given and family name, job title, department,
+address, status, organisation and project roles, and groups with where each comes from (internal, SCIM, the
+identity provider). An organisation administrator, and the person themself, also see how the account came
+(identity provider sign-in, provisioned, added by an administrator), the last sign-in, the open sessions, and
+their work in the team projects the reader sees: the human requests waiting on them (addressed to them, or to a
+group they are in), their recent decisions, the runs of the work items they started, and what their assistant
+conversations and tasks cost this month. An administrator alone sees their API tokens count and the audit
+events that name them, and the page of someone who left the organisation.
+
+The names, job title and department come from the identity provider at each sign-in: the claims `given_name`,
+`family_name`, `job_title` (or `jobTitle`) and `department`; a tenant's own provider may name other job title
+and department claims. A photo is one the person uploads on **My account** (PNG, JPEG or WebP, at most 2 MiB,
+32 to 4096 pixels a side): the platform re-encodes it as a 512-pixel square without its metadata and serves it
+from its own address, to the members of an organisation the person belongs to. A `picture` claim from the
+provider is never fetched.
 
 ### Work items on a schedule
 
@@ -3532,6 +3699,116 @@ there. Clicking a step opens its panel: one tab per attempt, what the agent did 
 refusals first, files changed), its log — live while it runs — and, for a person still awaited, the
 decision itself.
 
+### What is running, and stopping it
+
+**Activity** (in the *Work* group of the navigation, `/activity`) lists what is running in the
+organisation now: runs `queued` or `running` and open agent sessions, newest first, then what ended in
+the last hour (at most 50), so that a stop is seen to have taken effect. Each entry says what it is (the
+work item's key and stage, or the session), its agent and model, how long it has been running, and its
+**tokens and cost so far**. A run's spend so far is the gateway's count for the run's key, read at most
+every 30 seconds and never booked: the ledger line is still written when the run ends. A run whose
+gateway cannot say reads `—`, never 0. A run opens onto its steps (its events). Filters keep one
+workflow, one agent or one kind (runs, sessions); a project's *Activity* entry opens the same screen
+narrowed to it (`/activity?project=<slug>`). The list follows what happens live. You see only the
+entries of the projects you can read.
+
+Conversation **turns** are listed too (`kind=turn`): one entry per conversation, `running` while a turn
+is in flight, then `completed`, `cancelled` or `failed` for an hour once it ended, with its agent, its
+model, its assistant (the installation's id) and its tokens and cost so far. A turn is seen by the
+person whose conversation it is, who may stop it, and by whoever audits its assistant
+(`assistant:audit`: its owners, the administrator, the privacy officers), who sees that it runs and what
+it spends, never what is said. The `assistant` filter (an installation's id) keeps only that assistant's
+turns.
+
+```bash
+curl "$API/orgs/acme/activity?project=billing&agent=developer"   # {"in_flight": [...], "finished": [...]}
+curl -N "$API/orgs/acme/activity/stream?kind=run"                  # the same entries, as server-sent events
+curl "$API/orgs/acme/activity?kind=turn&assistant=$INSTALLATION_ID"  # one assistant's turns
+```
+
+Every stop asks **why** (1 to 500 characters), and the reason is audited with who asked
+([ADR 0142](adr/0142-a-stop-interrupts-what-is-in-flight.md)):
+
+- **Stop a run** (*Stop* on its entry, or `POST /runs/{id}/cancel` with `{"reason": "..."}`;
+  `item:control` on the project). The run is cancelled where it stands, within one poll of the
+  orchestrator (`heartbeat_seconds`): its executor is stopped, its logs archived, its key closed and
+  its spend booked once. The stage is not retried and does not count as an attempt; the work item waits
+  for a person with "run stopped by <who>: <reason>", who reruns the stage (`rerun_stage`), stops the
+  work item or moves it on. A run that has just ended keeps how it ended: the stop answers `409`.
+- **Stop a work item** (*Stop* on its page, or its `stop` action with a reason). The work item stops
+  **and** its run in flight is cancelled with the same reason; until S64 the run went on to the end of
+  its stage. The `pause` action still leaves the run in flight alone and holds the next stage.
+- **Stop an agent** (*Stop the agent…* on its page, or `POST /orgs/{org}/agents/{slug}/stop`; whoever
+  may change the agent's status). The agent is **suspended** first, so nothing new starts; then its
+  runs `queued` or `running` in every project are cancelled as above (their work items wait for a
+  person) and its open sessions are closed. The answer counts what was stopped and lists what could not
+  be stopped yet, which the reconciliation retries. *Reactivate* resumes the agent and restarts nothing
+  on its own. Stopping an agent that is already suspended stops what is still running and is audited
+  again. The turns in flight of its conversations, whoever's they are, are cancelled as for an
+  assistant (below); the conversations themselves are not closed.
+- **Stop an assistant** (*Stop the assistant…* on its installation page, or
+  `POST /orgs/{org}/assistants/{slug}/stop` with `{"reason": "..."}`;
+  `assistant:manage`: the organisation's administrator and the assistant's owner groups). The assistant
+  is marked stopped (who, when, why: `stopped` on the assistant) and reads `suspended` until it is
+  resumed, whatever its readiness says, so no new turn starts. Every turn its conversations are taking
+  is cancelled at its next model or tool call, on whichever API replica runs it: its spend is booked
+  once and its key revoked, as when its person cancels it. The conversations stay open: their people
+  read them meanwhile and continue them once the assistant is resumed. The answer counts the turns
+  cancelled (`turns_cancelled`). **Resume** with `POST /orgs/{org}/assistants/{slug}/resume`: the stop
+  is cleared, the status is derived again (`ready` when nothing is missing), and nothing stopped
+  restarts on its own (the page shows who stopped it, when and why, and its **Resume** button); resuming an assistant that is not stopped answers `409`. Both are audited
+  (`assistant.stop` with the reason, `assistant.resume`). Stopping a stopped assistant keeps the first
+  stop, cancels what still runs and is audited again.
+
+```bash
+curl -X POST "$API/orgs/acme/assistants/coach/stop" -d '{"reason": "quotes a stale price list"}'
+# {"slug": "coach", "status": "suspended", "turns_cancelled": 2, "not_stopped": []}
+curl -X POST "$API/orgs/acme/assistants/coach/resume"    # the assistant, `ready` again
+```
+
+A conversation turn on the Activity screen says its assistant and the person whose conversation it is;
+it has no Stop of its own: its assistant's stop (or its agent's) is the stop. A click on the assistant,
+or `/activity?assistant=<installation id>`, keeps only that assistant's turns.
+
+### Tokens, and what fills the context
+
+Spend is read in **tokens** as well as money
+([ADR 0141](adr/0141-tokens-and-the-context-are-read-per-scope.md)). A **Tokens and cost** panel sits on
+the project's overview, on a workflow's *Tokens and cost* tab and on an agent's page (the agent in every
+project): its totals give the input tokens, the part of them read from the model's cache, and the output
+tokens, next to the cost; one grouping at a time (by model, stage, agent, workflow or run), in money or in
+tokens, with the CSV of exactly what is shown. The organisation's **Spend** page (`/costs`) has the same
+*Measure* switch for each breakdown, and adds *Top runs* and *Top assistants*; tool calls stay in money,
+as they spend no model token. An assistant's installation page has the same panel, narrowed to the
+assistant (`assistant=<installation id>`: its conversations' turns and its tasks), by model or agent.
+
+The panels read the cost report with a filter: `agent` (its slug), `workflow` (its name) and `work_item`
+narrow it, combined with each other and with `kind`, `since` and `until`; `group_by=run` names each run by
+its work item's key and stage (`PAY-12 · review #2` for a second attempt). `assistant` (an assistant
+installation's id) narrows it to that assistant's conversation turns and tasks, and `group_by=assistant`
+names each installation by its slug, `—` for what no assistant spent. The report's `total` carries
+`tokens_in`, `tokens_out` and `tokens_cached` next to the money.
+
+```bash
+curl "$API/orgs/acme/costs?agent=developer&group_by=model"
+curl "$API/projects/$P/costs?workflow=default&group_by=run&since=2026-11-01"
+curl "$API/orgs/acme/costs?group_by=assistant"
+```
+
+A run's page has a **Context** card: what filled the model's input on the run's last call, section by
+section (system prompt, platform tools, MCP tools, skills, knowledge, memory, messages, and what the
+backend added that the platform did not write), against the model's input window, with the free space
+left. The **total is exact** (the model's own count); the **split is estimated** (characters / 4, scaled
+to the total). A model whose window the catalogue does not know shows the free space as unknown. Where it
+is measured depends on the backend: every section for `prompt` agents and sessions, from the request the
+container sends for `hosted` agents, and from the gateway for the coding CLIs (Claude Code, Codex,
+Gemini CLI, Goose, OpenCode, Copilot CLI), which attributes what the platform wrote (playbook, `task.md`,
+`CLAUDE.md`, skills, MCP tools) and counts the rest as *added by the backend*. `code` and `remote` agents
+are not measurable: the platform does not see their model calls. Only numbers are kept, never the
+prompt: at most one measurement per call and one per 5 seconds per run (the first, the largest of each
+window and the last). `GET /runs/{id}/context-breakdown` returns the last one and the series of totals,
+with the run's read right.
+
 ## 7. Day-2 knobs
 
 | Symptom | Knob |
@@ -3543,8 +3820,9 @@ decision itself.
 | An agent wandering outside its scope | `scope.max_diff_files`, `scope.deny_paths`, gate `scope_respected` |
 | Too many findings from one run | `findings.max_per_run` |
 
-Costs export as CSV from the project overview, grouped by day, stage, model, backend, size
-or kind.
+Costs export as CSV from the project overview, grouped by day, stage, model, backend, size,
+kind, agent, workflow, work item, run or assistant, and narrowed to one agent, workflow, work item or
+assistant.
 
 **Your roles.** The administration overview (Session card) lists your roles by scope instead of
 repeating the organisation: `platform : org_admin` on the community edition (one organisation, whose
@@ -3619,7 +3897,9 @@ answer carries a *Connect* link. *Memory, accounts and tasks* (one page per assi
 administrator installs an assistant from an installed plugin: the configuration form is drawn from the
 assistant's `config_schema`, then the audience groups, owner groups and channel. An installation's page
 sets the budgets, binds each need to a connector (the readiness list says what still blocks it and who may
-fix it), decides the knowledge updates the plugin proposes (accept, merge with edits, refuse, with the
+fix it), binds each knowledge need to knowledge bases of the organisation the owner may read (card *Knowledge
+from the organisation*; nothing is copied, and a person is answered from a base only when they may read it,
+ADR 0159), decides the knowledge updates the plugin proposes (accept, merge with edits, refuse, with the
 diff), reads the reads journal, exports or erases what the assistant holds about a subject, and lists the
 feedback candidates a thumb down proposed to the agent's owners.
 

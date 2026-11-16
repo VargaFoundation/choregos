@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { Status, propose } from "@/components/actions/status";
 import { orgConnectorHref } from "@/lib/connector-link";
+import { WatchedAgentsCard } from "@/components/agents/social";
 import { DecisionBar } from "@/components/decision-bar";
 import { Badge, Button, Card, Empty, ErrorNote, Eyebrow, Heading } from "@/components/ui";
 import { requestLabel, phraseDeBudget, requestSummary, useADecider } from "@/lib/a-decider";
@@ -199,6 +200,8 @@ export function InboxView({ project, heading = "h1" }: { project?: string; headi
           )}
         </Card>
       )}
+
+      {!project && <WatchedAgentsCard org={org} />}
 
       <Card title="Budgets crossed" action={<span className="text-xs text-ink-muted">{inbox.budgets.length} open</span>}>
         <p className="mb-3 max-w-3xl text-sm text-ink-muted">

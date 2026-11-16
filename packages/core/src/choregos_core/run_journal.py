@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Who writes which lines of a run's journal (ADR 0154).
+"""Who writes which lines of a run's journal (ADR 0173).
 
 A run's journal has two authors. The run writes what it did: its ACP log, what its runner mounted,
 refused or stored, the calls of its tools. The platform writes what it decided about the run: the

@@ -33,8 +33,8 @@ def _jira(seen: list[httpx.Request]) -> JiraTracker:
         return httpx.Response(200, json=ISSUE)
 
     client = RestClient(
-        "https://fondation.atlassian.net",
-        auth=("bot@fondation.example", "token"),
+        "https://acme.atlassian.net",
+        auth=("bot@acme.example", "token"),
         client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
         service="jira",
     )
@@ -57,7 +57,7 @@ async def test_a_jira_issue_gives_its_requester_labels_and_answers_by_display_na
     assert tracker["creator"] == {
         "account_id": "557058:creator-bot",
         "display_name": "Portal automation",
-        "email": "portal-bot@fondation.example",
+        "email": "portal-bot@acme.example",
     }
     assert tracker["labels"] == ["agent-ready", "project-request"]
     assert item.author == "Camille Martin", "the display name stays the author"

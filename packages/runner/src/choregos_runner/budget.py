@@ -7,6 +7,9 @@ writes the provider's message to its error output, or relays it as text. Before 
 runner reported all three as `agent_silencieux` or `invalid_result` — reasons the workflow
 *retries*, with a fresh key at the full stage budget. A refusal is not a failure to retry: it is
 the budget doing its job, and the stage stops with `reason="budget"`.
+
+An agent that relays none of the three (opencode, finding #1742) is caught by asking the gateway
+itself: `gateway_probe` (S65-35).
 """
 
 from __future__ import annotations

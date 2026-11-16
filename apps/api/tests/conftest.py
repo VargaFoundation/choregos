@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import os
 import pathlib
 from collections.abc import AsyncIterator, Iterator
@@ -11,6 +12,7 @@ from typing import Any
 
 import pytest
 from alembic import command
+from choregos_core.publishing import PUBLISHING
 from httpx import ASGITransport, AsyncClient
 
 # Shared fixtures of the kits: every test module of the directory can use them by name.
@@ -22,7 +24,7 @@ os.environ.setdefault("CHOREGOS_FAKES", "1")
 # The egress allowlist (S39-22) only warns in the suites: the tests that prove it ask for `enforce`.
 os.environ.setdefault("CHOREGOS_EGRESS_MODE", "warn")
 # The registry the test plugins' servers come from (ADR 0096): the tests that prove the allowlist set another.
-os.environ.setdefault("CHOREGOS_PLUGIN_SERVERS_REGISTRIES", '["ghcr.io/vargafoundation/choregos-agents"]')
+os.environ.setdefault("CHOREGOS_PLUGIN_SERVERS_REGISTRIES", json.dumps([PUBLISHING.image("choregos-agents")]))
 os.environ.setdefault("CHOREGOS_DEV_LOGIN_ENABLED", "true")
 os.environ.setdefault("CHOREGOS_DEV_ADMIN_EMAILS", "admin@varga.dev")
 # The suites build prod and https apps, which refuse a short or default session secret at start.
@@ -43,6 +45,7 @@ async def app(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[A
     from choregos_api.config import reset_settings_cache
     from choregos_api.db import session as db_session
     from choregos_api.main import create_app
+    from choregos_api.services.github_app_credentials import forget_cache as forget_stored_github_app
     from choregos_api.temporal import FakeTemporal, set_temporal
 
     if SUITE_ON_POSTGRES:
@@ -62,6 +65,8 @@ async def app(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[A
     else:
         os.environ["CHOREGOS_DATABASE_URL"] = f"sqlite+aiosqlite:///{tmp_path}/test.db"
     reset_settings_cache()
+    # A GitHub App a previous test registered lives in this process's cache, not in the new database.
+    forget_stored_github_app()
     await db_session.dispose_engine()
     if SUITE_ON_POSTGRES:
         await _fresh_postgres()
@@ -73,6 +78,7 @@ async def app(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[A
     await db_session.dispose_engine()
     set_temporal(None)
     reset_settings_cache()
+    forget_stored_github_app()
 
 
 @pytest.fixture

@@ -140,6 +140,13 @@
       "seed": "knowledge/investment-policy",
       "serving_mode": "index",
       "upstream": "propose_updates"
+    },
+    {
+      "name": "house_research",
+      "bind": {
+        "description": "The house's own research notes on the instruments it covers.",
+        "required": false
+      }
     }
   ],
   "tasks": [
@@ -184,6 +191,22 @@
       "deliver": [
         "inbox"
       ]
+    }
+  ],
+  "launches": [
+    {
+      "name": "portfolio_review",
+      "description": "Ask the review team to write a portfolio review document, once the person has said which portfolio and for which date.",
+      "input_schema": {
+        "type": "object",
+        "required": ["portfolio", "review_date"],
+        "properties": {
+          "portfolio": { "type": "string", "minLength": 1 },
+          "review_date": { "type": "string", "format": "date" }
+        },
+        "additionalProperties": false
+      },
+      "required": false
     }
   ],
   "surfaces": {

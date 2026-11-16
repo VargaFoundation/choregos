@@ -47,7 +47,6 @@ from choregos_core import (
 )
 from choregos_core.memory_bindings import merge_context_packs
 from choregos_core.redaction import REDACTED
-from choregos_core.run_journal import MEMORY_SKIPPED
 from choregos_core.workspace import write_paths_for
 from temporalio import activity
 
@@ -115,6 +114,7 @@ from .stage_tools import (
     ResolvedMemories,
     _agent_skills,
     _gateway_catalogue,
+    _journal_skipped_memories,
     _knowledge_of_agent,
     _mcp_servers,
     _memory_bindings,
@@ -602,29 +602,6 @@ async def _record_chain(session: Any, run: Run, item: Any, inputs: list[str], pr
     run.initiated_by = item.initiated_by
     run.inputs_from = await producing_runs(session, item.id, [*inputs, *embedded], embedded, reader=run.id)
     return embedded
-
-
-async def _journal_skipped_memories(session: Any, run_id: str, skipped: list[dict[str, str]]) -> None:
-    """One `memory.skipped` event per unresolved binding, on the run page; once, even if replayed."""
-    if not skipped:
-        return
-    from choregos_api.db.models import RunEvent
-    from sqlalchemy import func, select
-
-    rows = (
-        await session.execute(
-            select(RunEvent.payload).where(RunEvent.run_id == run_id, RunEvent.type == MEMORY_SKIPPED)
-        )
-    ).scalars()
-    already = {str(payload.get("memory")) for payload in rows}
-    seq = int(
-        (await session.execute(select(func.max(RunEvent.seq)).where(RunEvent.run_id == run_id))).scalar() or 0
-    )
-    for entry in skipped:
-        if entry["memory"] in already:
-            continue
-        seq += 1
-        session.add(RunEvent(run_id=run_id, seq=seq, type=MEMORY_SKIPPED, payload=dict(entry), ts=utcnow()))
 
 
 async def _context_pack(

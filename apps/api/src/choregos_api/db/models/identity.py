@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Identity: organisations, users, memberships, API tokens, browser sessions and tracker identities."""
+"""Identity: organisations, users, their photos, memberships, API tokens, browser sessions and linked forge
+accounts."""
 
 from __future__ import annotations
 
@@ -10,10 +11,14 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
+    LargeBinary,
     String,
     UniqueConstraint,
+    false,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -53,6 +58,9 @@ class User(Base, PkMixin, TimestampMixin):
     __tablename__ = "users"
 
     oidc_sub: Mapped[str | None] = mapped_column(String(255), unique=True, index=True, nullable=True)
+    #: The issuer that gave `oidc_sub`, as configured (no trailing slash), recorded at each sign-in through
+    #: an OIDC provider (ADR 0164). Null for an account bound before it was recorded, or never bound.
+    oidc_issuer: Mapped[str | None] = mapped_column(String(512), nullable=True)
     email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
     display_name: Mapped[str] = mapped_column(String(200), default="")
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -63,6 +71,29 @@ class User(Base, PkMixin, TimestampMixin):
     #: A session cookie without a session id (opened before ADR 0130) issued before this instant is
     #: refused: "sign out my other sessions" reaches the cookies no row records.
     sessions_not_before: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    #: What the identity provider says of the person (ADR 0162), as of their last sign-in through it: the
+    #: standard OIDC claims `given_name` and `family_name`, and a job title and a department when it sends
+    #: them. Each sign-in that carries a claim replaces it; one that does not leaves it.
+    given_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    family_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    job_title: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    department: Mapped[str | None] = mapped_column(String(200), nullable=True)
+
+
+class UserAvatar(Base, TimestampMixin):
+    """A person's photo (ADR 0162): one they uploaded, re-encoded as WebP, served same-origin.
+
+    One per person, in the database like a knowledge document's bytes: a few dozen kilobytes, read only by
+    `GET /users/{id}/avatar`. Under the RLS of `users`: visible to the person and to whoever sees them. A
+    `picture` claim of the identity provider is never fetched, so no row comes from anywhere else."""
+
+    __tablename__ = "user_avatars"
+
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    content_type: Mapped[str] = mapped_column(String(32))
+    #: The SHA-256 of the stored bytes: the `ETag`, and the version in the console's `avatar_url`.
+    digest: Mapped[str] = mapped_column(String(64))
+    content: Mapped[bytes] = mapped_column(LargeBinary, deferred=True)
 
 
 class Membership(Base, PkMixin, TimestampMixin):
@@ -97,6 +128,51 @@ class MachineAccount(Base, PkMixin, TimestampMixin):
     created_by: Mapped[str | None] = mapped_column(String(320), nullable=True)
     #: Set when the account ends: the row stays so that the journal still reads, its slug stays taken.
     removed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class OrgGroup(Base, PkMixin, TimestampMixin):
+    """A group of people that belongs to an organisation (ADR 0160), with exactly one source.
+
+    `internal`: created and edited in the console by an organisation administrator. `scim`: pushed by
+    an identity provider (`external_id` is its identifier there), read-only through the core API. The
+    identity provider's `groups` claim (`User.groups`) stays a third source, read as before."""
+
+    __tablename__ = "org_groups"
+    __table_args__ = (
+        UniqueConstraint("org_id", "slug", name="uq_org_groups_org_slug"),
+        Index(
+            "uq_org_groups_org_external_id",
+            "org_id",
+            "external_id",
+            unique=True,
+            postgresql_where=text("external_id IS NOT NULL"),
+            sqlite_where=text("external_id IS NOT NULL"),
+        ),
+    )
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    slug: Mapped[str] = mapped_column(String(63))
+    name: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    #: `internal` or `scim`: who may change the group (ADR 0160).
+    source: Mapped[str] = mapped_column(String(16), default="internal")
+    external_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_by: Mapped[str | None] = mapped_column(String(320), nullable=True)
+
+
+class OrgGroupMember(Base, PkMixin):
+    """One person in one organisation group (ADR 0160)."""
+
+    __tablename__ = "org_group_members"
+    __table_args__ = (UniqueConstraint("group_id", "user_id", name="uq_org_group_members_group_user"),)
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    group_id: Mapped[str] = mapped_column(ForeignKey("org_groups.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    added_by: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), default=utcnow, nullable=False
+    )
 
 
 class ApiToken(Base, PkMixin, TimestampMixin):
@@ -136,21 +212,33 @@ class UserSession(Base, PkMixin, TimestampMixin):
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
-class TrackerIdentity(Base, PkMixin, TimestampMixin):
-    """A member's account on a tracker, by the provider's stable numeric user id (S47-14, ADR 0102).
+class LinkedAccount(Base, PkMixin, TimestampMixin):
+    """A member's account on a code forge (ADR 0161; before it, `tracker_identities`, ADR 0102).
 
-    Linked by an organisation administrator (not proven by the member). A login or a display name is
-    never matched: only `external_id`. `login` is shown, nothing more."""
+    One per member and forge instance (`provider` + `base_url`), one member per account on an instance.
+    `verified`: the member proved it by signing in to the forge (OAuth); otherwise an organisation
+    administrator declared it. Only `external_id`, the forge's stable numeric user id, is ever matched:
+    a login, an avatar or a profile URL is shown, nothing more."""
 
-    __tablename__ = "tracker_identities"
+    __tablename__ = "linked_accounts"
     __table_args__ = (
-        UniqueConstraint("org_id", "tracker", "external_id", name="uq_tracker_identities_external"),
-        UniqueConstraint("org_id", "user_id", "tracker", name="uq_tracker_identities_member"),
+        UniqueConstraint("org_id", "provider", "base_url", "external_id", name="uq_linked_accounts_external"),
+        UniqueConstraint("org_id", "user_id", "provider", "base_url", name="uq_linked_accounts_member"),
     )
 
     org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
-    tracker: Mapped[str] = mapped_column(String(16))
+    #: `github`, `gitlab` or `forgejo`.
+    provider: Mapped[str] = mapped_column(String(16))
+    #: The instance, normalised: `https://github.com`, `https://gitlab.example`.
+    base_url: Mapped[str] = mapped_column(String(255))
     external_id: Mapped[str] = mapped_column(String(64))
     login: Mapped[str] = mapped_column(String(255))
+    avatar_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    profile_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    verified: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    #: The organisation connector whose OAuth application proved it; `NULL` for a declared link.
+    connector: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    #: Who wrote the link: the member themself (verified) or the administrator who declared it.
     created_by: Mapped[str | None] = mapped_column(String(320), nullable=True)

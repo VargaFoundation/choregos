@@ -29,11 +29,11 @@ log = structlog.get_logger(__name__)
 #: finds the same absent branch — and the interpreter escalates the work item on it.
 NO_BRANCH = "NoBranch"
 #: The error type `enqueue_merge` raises when the pull request's head is not the commit the merge
-#: names (ADR 0152): nothing was merged. Non-retryable — the same merge would be refused the same
+#: names (ADR 0171): nothing was merged. Non-retryable — the same merge would be refused the same
 #: way — so the work item's workflow stops on it with this reason, and its gates judge the new head
 #: when it is started again.
 HEAD_MOVED = "HeadMoved"
-#: The error type `enqueue_merge` raises when the merge cannot name a commit (ADR 0152): the SCM
+#: The error type `enqueue_merge` raises when the merge cannot name a commit (ADR 0171): the SCM
 #: connector declares no `merge_at_commit`, or the forge gives the pull request no head. The platform
 #: does not merge a head it cannot name. Non-retryable.
 MERGE_UNPINNED = "MergeUnpinned"
@@ -118,7 +118,7 @@ def _pr_body(item: Any, documents: dict[str, Any]) -> str:
 
 @activity.defn(name="enqueue_merge")
 async def enqueue_merge(payload: dict[str, Any]) -> dict[str, Any]:
-    """Merge the work item's pull request at the commit its gates judged (ADR 0152).
+    """Merge the work item's pull request at the commit its gates judged (ADR 0171).
 
     The merge names that commit, and the forge refuses it when the pull request's head is elsewhere:
     a typed, non-retryable `HeadMoved`, nothing merged, never a second try without the commit. A
@@ -206,7 +206,7 @@ async def collect_run_artifacts(payload: dict[str, Any]) -> dict[str, Any]:
         branch = bundle.config.branch_for(item.tracker_key, repo=found.repo)
         try:
             scm = await scm_for(session, bundle, found.repo.url)
-            # The diff of the commit at the head of the branch, read once (ADR 0152); a branch that
+            # The diff of the commit at the head of the branch, read once (ADR 0171); a branch that
             # is not there is compared by its name, and the SCM answers as it did.
             head_of = getattr(scm, "head_of", None)
             head = await head_of(repo, branch) if head_of is not None else None

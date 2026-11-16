@@ -203,3 +203,15 @@ def test_a_level_travels_over_a2a_as_text_not_a_file() -> None:
 
     row: Any = SimpleNamespace(storage_key=None, type="level", content="approve")
     assert _content_part(row, b"approve") == {"kind": "text", "text": "approve"}
+
+
+async def test_an_inline_value_under_a_file_output_does_not_hide_the_file(
+    client: AsyncClient, project: dict[str, Any]
+) -> None:
+    """A step declares `deck: pptx`; its agent also returns `deck` in its outputs, often the file's
+    path (seen in production). That text must not become `deck`'s latest revision over the file."""
+    item = await _work_item(client, project)
+    headers = await _run(item, project, "r1", "deck", outputs=["deck", "notes"],
+                         output_types={"deck": "pptx", "notes": "markdown"})  # fmt: skip
+    await _post(client, "r1", headers, {"deck": ".choregos/outputs/deck.pptx", "notes": "ready"})
+    assert [(r.name, r.type) for r in await _rows(item["id"])] == [("notes", "markdown")]

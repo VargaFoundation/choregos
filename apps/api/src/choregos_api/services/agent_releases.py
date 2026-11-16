@@ -40,6 +40,7 @@ from ..schemas import (
 from .agent_evals import evaluate, suite_for
 from .agent_governance import PERSONAL, is_admin
 from .agent_live_evals import latest_finished
+from .agent_social import notify
 from .conversation_gate import conversation_check
 from .hosted_builds import build_row, ensure_build, names_key, zip_build_key
 
@@ -535,6 +536,7 @@ async def release(
     await session.refresh(agent)
     policy = policy_of(agent)
     previous = agent.stable_version if body.channel == "stable" else agent.candidate_version
+    was_candidate = agent.candidate_version
     version, kind, percent = await _plan(session, agent, body)
     checks = await checks_for(
         session,
@@ -653,7 +655,30 @@ async def release(
         percent=recorded_percent,
         reason=body.reason,
     )
+    await _tell_watchers(session, principal, agent, body.channel, kind, version, previous, was_candidate)
     return row
+
+
+async def _tell_watchers(
+    session: AsyncSession,
+    principal: Principal | None,
+    agent: Agent,
+    channel: str,
+    kind: str,
+    version: int | None,
+    previous: int | None,
+    was_candidate: int | None,
+) -> None:
+    """The inbox item of a channel move (ADR 0152): production moved, a candidate promoted or started or
+    withdrawn, a rollback. A publish says so on its own (`version_published`)."""
+    if kind == "rollback":
+        event = "rolled_back"
+    elif channel == "stable":
+        event = "candidate_promoted" if kind == "promote" and version == was_candidate else "production_moved"
+    else:
+        event = "candidate_withdrawn" if kind == "withdraw" else "candidate_started"
+    shown = previous if kind == "withdraw" else version
+    await notify(session, agent, event, principal, version=shown, previous_version=previous, move=kind)
 
 
 async def pending_release(session: AsyncSession, agent: Agent) -> AgentRelease | None:
@@ -824,6 +849,7 @@ async def _apply(
     """The last approval is in: re-check, then move production from where the request saw it."""
     await session.refresh(agent)
     assert row.version is not None
+    was_candidate = agent.candidate_version
     if agent.stable_version != row.previous_version:
         # Production moved meanwhile (a rollback, another release): the request is stale. The status
         # must survive the refusal, so it is committed before the 409 is raised.
@@ -882,6 +908,9 @@ async def _apply(
         release_id=row.id,
         approved_by=[d["by"] for d in row.decisions if d.get("decision") == "approve"],
     )
+    await _tell_watchers(
+        session, principal, agent, "stable", row.kind, row.version, row.previous_version, was_candidate
+    )
 
 
 async def list_releases(
@@ -909,6 +938,8 @@ async def after_publish(
     sends it to testing, `none` leaves both pointers alone."""
     now = utcnow()
     policy = policy_of(agent)
+    if version > 1:  # a first revision is the agent's birth (or a fork's copy), not an evolution
+        await notify(session, agent, "version_published", principal, version=version, author=author)
     # A first revision is production whatever the policy: there is nothing else to serve.
     target = "stable" if version == 1 else policy.on_publish
     if agent.stable_version is None and version > 1 and target != "stable":
@@ -997,6 +1028,8 @@ async def after_publish(
         kind="publish",
         via="publish",
     )
+    if version > 1:
+        await _tell_watchers(session, principal, agent, channel, "publish", version, previous, None)
 
 
 async def _built(session: AsyncSession, agent: Agent, version: int) -> bool:

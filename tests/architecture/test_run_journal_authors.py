@@ -1,4 +1,4 @@
-"""The two authors of a run's journal stay apart (S65-08, ADR 0154).
+"""The two authors of a run's journal stay apart (S65-08, ADR 0173).
 
 - The platform writes a line of a run's journal with a type taken from `choregos_core.run_journal`,
   so that a new one cannot appear outside the namespaces the run's door refuses.

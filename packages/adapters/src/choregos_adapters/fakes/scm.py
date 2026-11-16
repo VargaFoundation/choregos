@@ -19,7 +19,7 @@ class FakeScm:
 
     A branch has a head commit, as on a forge: every write to it (`set_diff`, `commit_files`,
     `push`) gives it a new one, a commit keeps the diff it was pushed with, and a merge names the
-    commit it merges (ADR 0152)."""
+    commit it merges (ADR 0171)."""
 
     capabilities: frozenset[str] = frozenset({"merge_at_commit"})
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -59,9 +60,22 @@ class Profile:
         return CONFIG_PATH
 
 
+def _event_data(raw: str) -> dict[str, Any]:
+    """An event's data: a JSON object, or the text itself under `text` when it is not one."""
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError:
+        return {"text": raw}
+    return value if isinstance(value, dict) else {"value": value}
+
+
 class ApiError(RuntimeError):
     def __init__(self, status_code: int, problem: dict[str, Any] | str) -> None:
+        #: The problem's machine `code`, when the API gave one: what a command tells refusals apart by.
+        self.code: str | None = None
         if isinstance(problem, dict):
+            code = problem.get("code")
+            self.code = code if isinstance(code, str) else None
             detail = problem.get("detail") or problem.get("title") or str(problem)
             errors = problem.get("errors") or []
             if errors:
@@ -111,6 +125,17 @@ class Client:
     def get(self, path: str, **kwargs: Any) -> Any:
         return self.request("GET", path, **kwargs)
 
+    def get_raw(self, path: str, **kwargs: Any) -> httpx.Response:
+        """A GET whose answer is bytes, not JSON (an artefact's content): the response as served."""
+        response = self._client.get(path, **kwargs)
+        if response.status_code >= 400:
+            try:
+                raise ApiError(response.status_code, response.json())
+            except (json.JSONDecodeError, ValueError):
+                raise ApiError(response.status_code, response.text) from None
+        self._check_version()
+        return response
+
     def post(self, path: str, **kwargs: Any) -> Any:
         return self.request("POST", path, **kwargs)
 
@@ -119,6 +144,31 @@ class Client:
 
     def put(self, path: str, **kwargs: Any) -> Any:
         return self.request("PUT", path, **kwargs)
+
+    def stream_events(self, method: str, path: str, **kwargs: Any) -> Iterator[tuple[str, dict[str, Any]]]:
+        """Server-sent events as `(event, data)`, in the order they come: a conversation's turn (`POST`), the
+        organisation's activity (`GET`). An event without a name is `message`, as the SSE format says; a
+        refusal before the stream opens is an `ApiError`, as for any other call."""
+        headers = {"Accept": "text/event-stream"}
+        with self._client.stream(method, path, headers=headers, timeout=None, **kwargs) as response:
+            if response.status_code >= 400:
+                response.read()
+                try:
+                    raise ApiError(response.status_code, response.json())
+                except (json.JSONDecodeError, ValueError):
+                    raise ApiError(response.status_code, response.text) from None
+            name, data = "message", list[str]()
+            for line in response.iter_lines():
+                if not line:
+                    if data:
+                        yield name, _event_data("\n".join(data))
+                    name, data = "message", list[str]()
+                elif line.startswith("event:"):
+                    name = line.removeprefix("event:").strip()
+                elif line.startswith("data:"):
+                    data.append(line.removeprefix("data:").strip())
+            if data:
+                yield name, _event_data("\n".join(data))
 
     def stream_sse(self, path: str, **kwargs: Any) -> Any:
         """Follow an SSE stream (a run's journal, provisioning)."""

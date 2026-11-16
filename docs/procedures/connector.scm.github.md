@@ -2,18 +2,21 @@
 
 # Use GitHub for branches, pull requests and checks
 
-For a project owner. Procedure `connector.scm.github`, version 1, reviewed 2026-10-19 against the vendor's own pages.
+For a project owner. Procedure `connector.scm.github`, version 2, reviewed 2026-11-12 against the vendor's own pages.
 
 ## Before you start
 
 - The same **GitHub App** as the tracker (see "Use GitHub Issues and Projects v2 as the board"): one App
-  serves both. Its id, private key and webhook secret are platform settings.
+  serves both. The person who operates Choregos creates it from the console (*Administration, GitHub
+  App*, from a manifest with the permissions and events below) or sets its id, private key and webhook
+  secret as platform settings.
 - The repository the agents change. They work on a branch and open a pull request; nothing is pushed to
   the default branch.
 
 ## At GitHub
 
-1. Create the App with the **Webhook URL** `<api_url>/api/v1/webhooks/github`, or reuse the platform's.
+1. Create the App from the console (*Administration, GitHub App*), which sets the **Webhook URL**
+   `<api_url>/api/v1/webhooks/github` itself, or by hand with that URL; or reuse the platform's.
 2. **Install** it on the repository: the repository field's **Install on GitHub** button opens GitHub's
    install page and brings you back. The installation is discovered by the platform: there
    is no number to copy.
@@ -83,4 +86,5 @@ Hosts the platform must be allowed to reach:
 
 - [Registering a GitHub App](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/registering-a-github-app)
 - [Permissions required for GitHub Apps](https://docs.github.com/en/rest/overview/permissions-required-for-github-apps)
+- [Registering a GitHub App from a manifest](https://docs.github.com/en/apps/sharing-github-apps/registering-a-github-app-from-a-manifest)
 - [Managing a merge queue](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/managing-a-merge-queue)

@@ -18,6 +18,7 @@ from typing import Annotated, Any
 from choregos_adapters.storage import ObjectStoreError
 from choregos_contracts import (
     ARTIFACT_TYPES,
+    ActionStatus,
     Artifact,
     ContextPack,
     EventType,
@@ -31,7 +32,7 @@ from choregos_core.run_closure import run_is_closed
 from choregos_core.run_journal import platform_written
 from choregos_core.workspace import is_read_only_scope
 from fastapi import APIRouter, Header, Query, Request, Response, status
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from ..catalogue import call as call_catalogue_tool
 from ..config import get_settings
@@ -46,7 +47,7 @@ from ..db.models import (
 )
 from ..db.models import Finding as FindingRow
 from ..db.session import allow_release_during_calls, outside_the_transaction
-from ..deps import Db, NetworkAuth, OpenNetworkAuth, OpenRunAuth, RunAuth
+from ..deps import Db, GatewayAuth, OpenNetworkAuth, OpenRunAuth, ReportAuth, RunAuth
 from ..errors import ApiError, conflict, not_found, unprocessable
 from ..logging import get_logger
 from ..object_store import object_store
@@ -86,6 +87,7 @@ from ..services.artifacts import (
 )
 from ..services.artifacts import latest as latest_artifact
 from ..services.budget_alerts import check_after_spend
+from ..services.context_breakdown import MEASURED_BACKENDS, record_gateway_breakdown, registered_parts
 from ..services.costs import dimensions_of
 from ..services.extension_tools import (
     ACCESS_KEY,
@@ -95,6 +97,7 @@ from ..services.extension_tools import (
 )
 from ..services.network import record_decisions, run_network
 from ..services.receipts import PRODUCED, PROMPT_DOCUMENTS, READ, record, record_digests
+from ..services.run_cancel import without_a_result
 from ..services.tickets import outputs_to_store
 from ..services.tool_call_cap import take_tool_call_slot
 from ..temporal import get_temporal, interpreter_id
@@ -142,7 +145,7 @@ async def post_events(id: str, body: RunEventsBatch, session: Db, claims: RunAut
     Accepted for a closed run too (ADR 0143): the journal is append-only, and what a process did
     after its run ended is exactly what an operator wants to read.
 
-    A run writes its own lines, never the platform's (ADR 0154): a batch that carries a type the
+    A run writes its own lines, never the platform's (ADR 0173): a batch that carries a type the
     platform writes in this journal (`gate.outcome`, `memory.skipped`, their namespaces) is refused
     whole, and nothing of it is written. No runner sends one; the refusal is logged."""
     run, _, project = await _run_and_item(session, id)
@@ -188,6 +191,35 @@ async def post_events(id: str, body: RunEventsBatch, session: Db, claims: RunAut
     return {"accepted": written}
 
 
+@router.get("/runs/{id}/context-parts", include_in_schema=False)
+async def get_context_parts(id: str, session: Db, run_id: GatewayAuth) -> dict[str, Any]:
+    """What the run's runner registered of the text it wrote (S64-08b), for the gateway's callback:
+    digests and sizes by section, and the run's MCP servers. Outside the contract: only the gateway's
+    callback calls it, signed for this run."""
+    run = await session.get(Run, run_id)
+    if run is None:
+        raise not_found("Run", run_id)
+    return await registered_parts(session, run.id)
+
+
+@router.post("/runs/{id}/context-breakdown", status_code=status.HTTP_202_ACCEPTED, include_in_schema=False)
+async def post_context_breakdown(
+    id: str, body: dict[str, Any], session: Db, run_id: GatewayAuth
+) -> dict[str, int]:
+    """A breakdown of an ACP CLI's call the gateway's callback kept (ADR 0141 §4): written as the run's
+    `context.breakdown` event, numbers only. A run the platform measures itself (`prompt`, `hosted`)
+    takes none from the gateway: 409. Outside the contract, like `context-parts`."""
+    run = await session.get(Run, run_id)
+    if run is None:
+        raise not_found("Run", run_id)
+    if run.backend in MEASURED_BACKENDS:
+        raise conflict(f"the {run.backend} backend measures its own calls")
+    kept = await record_gateway_breakdown(session, run, body)
+    if kept is None:
+        raise unprocessable("not a context breakdown")
+    return {"accepted": 1}
+
+
 @router.get("/runs/{id}/network", response_model=RunNetwork, operation_id="getRunNetwork")
 async def get_run_network(id: str, session: Db, claims: OpenNetworkAuth) -> RunNetwork:
     """The network THIS run may use (ADR 0070): the egress proxy reads it with the run's own token.
@@ -205,7 +237,7 @@ async def get_run_network(id: str, session: Db, claims: OpenNetworkAuth) -> RunN
     operation_id="postRunNetworkDecisions",
 )
 async def post_network_decisions(
-    id: str, body: NetworkDecisionBatch, session: Db, claims: NetworkAuth
+    id: str, body: NetworkDecisionBatch, session: Db, claims: ReportAuth
 ) -> dict[str, int]:
     """What the proxy or the runner let through or refused: cumulative totals, replay-safe. It is
     a journal: a closed run's decisions are accepted too (ADR 0143). A session's decisions are not
@@ -245,6 +277,16 @@ async def post_result(id: str, body: StageResult, session: Db, claims: RunAuth) 
     payload = body.model_dump(mode="json", by_alias=True)
     await session.refresh(run, with_for_update={"key_share": True})
     if run_is_closed(run):
+        return {"status": "already_recorded", "run_id": run.id}
+    # First writer wins (ADR 0142 §2): a person who stopped the run in the meantime keeps the stop,
+    # and this result changes nothing; written first, it is the stop that changes nothing.
+    claimed = await session.execute(
+        update(Run)
+        .where(Run.id == run.id, without_a_result())
+        .values(result=payload)
+        .execution_options(synchronize_session=False)
+    )
+    if claimed.rowcount != 1:  # type: ignore[attr-defined]
         return {"status": "already_recorded", "run_id": run.id}
     run.result = payload
     run.status = "succeeded" if body.status == "done" else "failed"
@@ -771,20 +813,20 @@ async def post_git_token(id: str, session: Db, claims: OpenRunAuth) -> GitToken:
     repository and to `contents: write`; without an App, or outside GitHub, it is null and the run
     clones without.
     """
-    import os
     from datetime import UTC, datetime
 
     import httpx
     from choregos_adapters.github import RUNNER_PERMISSIONS, GitHubAppAuth
 
+    from ..services import github_app_credentials
     from ..services.github_app import claimed_installation_for, implicit_claim_enabled
 
     run, _item, project_row = await _run_and_item(session, id)
     url = str(((run.stage_input or {}).get("repo") or {}).get("url") or "")
     repository = github_repository(url)
-    app_id = os.environ.get("CHOREGOS_GITHUB_APP_ID", "")
-    private_key = os.environ.get("CHOREGOS_GITHUB_APP_PRIVATE_KEY", "")
-    if repository is None or not app_id or not private_key:
+    # The deployment's App: its settings, else the one registered from a manifest (ADR 0167).
+    app = await github_app_credentials.refresh(session)
+    if repository is None or app is None:
         return GitToken(token=None, repository=repository)
     # The installation THIS organisation claimed on the repository's owner, never another's (ADR 0073).
     # Without a claim, a single-organisation instance still discovers it from the repository; with
@@ -794,8 +836,8 @@ async def post_git_token(id: str, session: Db, claims: OpenRunAuth) -> GitToken:
     if claimed is None and not await implicit_claim_enabled(session):
         return GitToken(token=None, repository=repository)
     auth = GitHubAppAuth(
-        app_id=app_id,
-        private_key=private_key,
+        app_id=app.app_id,
+        private_key=app.private_key,
         pinned_installation=claimed.id if claimed else None,
         pinned_account=owner if claimed else None,
     )
@@ -1086,7 +1128,10 @@ async def call_tool(
                 check_arguments(brokered[name], body or {})
             except ArgumentsRefused as refusal:
                 raise _arguments_problem(refusal) from refusal
-            code, result_body = 202, await propose_call(session, run, project, brokered[name], body or {})
+            result_body = await propose_call(session, run, project, brokered[name], body or {})
+            # The call found the action it already proposed, approved since and ended in doubt: a claim
+            # that got no answer, not a proposal (ADR 0149 §5).
+            code = 504 if result_body.get("status") == ActionStatus.IN_DOUBT.value else 202
             provider, price_eur = f"mcp:{brokered[name].connector.name}", 0.0
         elif name in brokered and brokered[name].is_write:
             # A write, even an allowed one, is a governed action (#241): done once, journaled,

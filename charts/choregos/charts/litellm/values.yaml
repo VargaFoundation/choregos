@@ -4,7 +4,7 @@ image:
   tag: "v1.105.5"
 # The aliases Choregos asks for (`profile:*` → `platform/*`), and what they become in
 # amont. Deux formes possibles :
-#   - upstream = another gateway (Diametral): api_base + virtual key;
+#   - upstream = another gateway (the platform's own): api_base + virtual key;
 #   - upstream = a provider: model `openai/gpt-…` or `anthropic/claude-…` + its key.
 # `upstream.apiKeySecret` names the secret (key `api-key`) injected as $UPSTREAM_API_KEY.
 upstream:

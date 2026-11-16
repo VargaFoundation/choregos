@@ -1857,7 +1857,7 @@
           "additionalProperties": false,
           "properties": {
             "rule": {
-              "description": "pfrest v2 rule fields: type, interface, ipprotocol, protocol, source, destination, destination_port, descr\u2026",
+              "description": "pfrest v2 rule fields: type, interface, ipprotocol, protocol, source, destination, destination_port, descr…",
               "type": "object"
             }
           },
@@ -1884,7 +1884,7 @@
           "additionalProperties": false,
           "properties": {
             "changes": {
-              "description": "pfrest v2 rule fields: type, interface, ipprotocol, protocol, source, destination, destination_port, descr\u2026",
+              "description": "pfrest v2 rule fields: type, interface, ipprotocol, protocol, source, destination, destination_port, descr…",
               "type": "object"
             },
             "tracker": {
@@ -2261,13 +2261,116 @@
   },
   {
     "capabilities": [
+      "forge_account"
+    ],
+    "config_schema": {
+      "properties": {
+        "base_url": {
+          "default": "https://github.com",
+          "type": "string"
+        },
+        "client_id": {
+          "description": "the OAuth application's client id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "client_id"
+      ],
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "GitHub sign-in (members link their account)",
+    "has_check_config": true,
+    "has_egress": true,
+    "has_factory": true,
+    "kind": "forge_account",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [
+      "client_secret"
+    ],
+    "type": "github-oauth"
+  },
+  {
+    "capabilities": [
+      "forge_account"
+    ],
+    "config_schema": {
+      "properties": {
+        "base_url": {
+          "default": "https://gitlab.com",
+          "type": "string"
+        },
+        "client_id": {
+          "description": "the OAuth application's client id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "client_id"
+      ],
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "GitLab sign-in (members link their account)",
+    "has_check_config": true,
+    "has_egress": true,
+    "has_factory": true,
+    "kind": "forge_account",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [
+      "client_secret"
+    ],
+    "type": "gitlab-oauth"
+  },
+  {
+    "capabilities": [
+      "forge_account"
+    ],
+    "config_schema": {
+      "properties": {
+        "base_url": {
+          "description": "the instance's address, https://forge.example",
+          "type": "string"
+        },
+        "client_id": {
+          "description": "the OAuth application's client id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "base_url",
+        "client_id"
+      ],
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "Forgejo sign-in (members link their account)",
+    "has_check_config": true,
+    "has_egress": true,
+    "has_factory": true,
+    "kind": "forge_account",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [
+      "client_secret"
+    ],
+    "type": "forgejo-oauth"
+  },
+  {
+    "capabilities": [
       "marketdata"
     ],
     "config_schema": {
       "properties": {
         "key_rotation": {
           "default": "failover",
-          "description": "with several keys (`api_key.2` \u2026): `failover` uses the first that answers, `round_robin` spreads the calls",
+          "description": "with several keys (`api_key.2` …): `failover` uses the first that answers, `round_robin` spreads the calls",
           "enum": [
             "failover",
             "round_robin"
@@ -2446,7 +2549,7 @@
       "properties": {
         "key_rotation": {
           "default": "failover",
-          "description": "with several keys (`api_key.2` \u2026): `failover` uses the first that answers, `round_robin` spreads the calls",
+          "description": "with several keys (`api_key.2` …): `failover` uses the first that answers, `round_robin` spreads the calls",
           "enum": [
             "failover",
             "round_robin"
@@ -2632,7 +2735,7 @@
         },
         "key_rotation": {
           "default": "failover",
-          "description": "with several keys (`api_key.2` \u2026): `failover` uses the first that answers, `round_robin` spreads the calls",
+          "description": "with several keys (`api_key.2` …): `failover` uses the first that answers, `round_robin` spreads the calls",
           "enum": [
             "failover",
             "round_robin"
@@ -2791,7 +2894,7 @@
         },
         "key_rotation": {
           "default": "failover",
-          "description": "with several keys (`api_key.2` \u2026): `failover` uses the first that answers, `round_robin` spreads the calls",
+          "description": "with several keys (`api_key.2` …): `failover` uses the first that answers, `round_robin` spreads the calls",
           "enum": [
             "failover",
             "round_robin"
@@ -2860,7 +2963,7 @@
         },
         "key_rotation": {
           "default": "failover",
-          "description": "with several keys (`api_key.2` \u2026): `failover` uses the first that answers, `round_robin` spreads the calls",
+          "description": "with several keys (`api_key.2` …): `failover` uses the first that answers, `round_robin` spreads the calls",
           "enum": [
             "failover",
             "round_robin"
@@ -2993,6 +3096,10 @@
     ],
     "config_schema": {
       "properties": {
+        "audience": {
+          "description": "the audience asked for, when the token endpoint needs one",
+          "type": "string"
+        },
         "auth_header": {
           "default": "Authorization",
           "description": "the header the token travels in: `Authorization` sends a Bearer, another name (`X-API-Key`) sends the raw token",
@@ -3000,16 +3107,29 @@
         },
         "auth_scheme": {
           "default": "bearer",
-          "description": "how the token is sent: Bearer, or Basic base64(username:token)",
+          "description": "how the server is signed in to: the token as Bearer, Basic base64(username:token), or `oauth_client_credentials`: a short-lived token the platform fetches from `token_url` with `client_id` and `client_secret`",
           "enum": [
             "bearer",
-            "basic"
+            "basic",
+            "oauth_client_credentials"
           ],
+          "type": "string"
+        },
+        "client_id": {
+          "description": "the OAuth client's identifier, for `oauth_client_credentials`",
+          "type": "string"
+        },
+        "scope": {
+          "description": "the scopes asked for, space-separated, for `oauth_client_credentials`",
           "type": "string"
         },
         "timeout_s": {
           "default": 30,
           "type": "number"
+        },
+        "token_url": {
+          "description": "the OAuth token endpoint, https, for `oauth_client_credentials`",
+          "type": "string"
         },
         "url": {
           "description": "the server's MCP endpoint, https",
@@ -3028,14 +3148,15 @@
     "deprecated": false,
     "dev_only": false,
     "display": "MCP server (Streamable HTTP)",
-    "has_check_config": false,
-    "has_egress": false,
+    "has_check_config": true,
+    "has_egress": true,
     "has_factory": true,
     "kind": "mcp",
     "operations": [],
     "pooled_fields": [],
     "secret_fields": [
-      "token"
+      "token",
+      "client_secret"
     ],
     "type": "mcp"
   },
@@ -3076,6 +3197,49 @@
   },
   {
     "capabilities": [
+      "mcp"
+    ],
+    "config_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "endpoint": {
+          "description": "the alias of an endpoint in that outpost's policy file",
+          "pattern": "^[a-z][a-z0-9-]{0,62}$",
+          "type": "string"
+        },
+        "outpost": {
+          "description": "an outpost of the same organisation",
+          "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+          "type": "string"
+        },
+        "timeout_s": {
+          "default": 30,
+          "description": "seconds before a call is abandoned, the wait for an instance to claim it included",
+          "maximum": 120,
+          "minimum": 1,
+          "type": "number"
+        }
+      },
+      "required": [
+        "outpost",
+        "endpoint"
+      ],
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "MCP server at an outpost",
+    "has_check_config": true,
+    "has_egress": true,
+    "has_factory": true,
+    "kind": "mcp",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [],
+    "type": "mcp-outpost"
+  },
+  {
+    "capabilities": [
       "notify"
     ],
     "config_schema": {
@@ -3104,6 +3268,28 @@
       "bot_token"
     ],
     "type": "slack"
+  },
+  {
+    "capabilities": [
+      "notify"
+    ],
+    "config_schema": {
+      "properties": {},
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "Microsoft Teams (incoming webhook or Workflows URL)",
+    "has_check_config": false,
+    "has_egress": true,
+    "has_factory": true,
+    "kind": "notify",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [
+      "webhook_url"
+    ],
+    "type": "teams"
   },
   {
     "capabilities": [

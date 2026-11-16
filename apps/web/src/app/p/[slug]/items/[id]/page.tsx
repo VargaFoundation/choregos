@@ -25,8 +25,9 @@ import { api } from "@/lib/api";
 import { factsOf, groupArtifacts } from "@/lib/artifacts";
 import { libelleDeCode, relative, shortDate, tokens, usd } from "@/lib/format";
 import { RISK_LEVELS, SIZE_LEVELS } from "@/lib/levels";
-import type { WorkItemJourney } from "@/lib/types";
+import type { DecisionDraft, WorkItemJourney } from "@/lib/types";
 import { ConfirmedGesture } from "@/components/confirmed-gesture";
+import { StopWithReason } from "@/components/activity/stop";
 import { AgentProposal } from "@/components/agent-proposal";
 import { ArtifactFacts } from "@/components/artifact-value";
 import { Artifacts } from "@/components/artifacts";
@@ -39,6 +40,8 @@ import { ChangeWorkflow } from "@/components/ticket/change-workflow";
 import { NextStepBanner } from "@/components/ticket/next-step-banner";
 import { TargetRepository } from "@/components/ticket/target-repository";
 import { LongText, RequestCard } from "@/components/ticket/request-card";
+import { RequestAssignee } from "@/components/ticket/request-assignee";
+import { DecisionDraftCard } from "@/components/ticket/decision-draft";
 import { runOutcome } from "@/components/ticket/run-outcome";
 import { keyNames, useLiveRefresh } from "@/lib/live";
 import { WorkflowChip } from "@/components/workflow-chip";
@@ -60,6 +63,8 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
   const [erreurDeControle, setErreurDeControle] = useState<string | null>(null);
   // The artifact a fact of the card asked to open (ADR 0129): the tab is opened by mounting on it.
   const [artifactAsked, setArtifactAsked] = useState<{ name: string; times: number } | null>(null);
+  // A client's draft the person took into the decision's form (ADR 0163); `times` remounts the form.
+  const [taken, setTaken] = useState<{ draft: DecisionDraft | null; times: number }>({ draft: null, times: 0 });
   // Live (S59-08): what happens to the ticket refetches the page, decisions and runs included.
   useLiveRefresh(`/work-items/${encodeURIComponent(id)}/events/stream`, keyNames(id));
   const item = useQuery({ queryKey: ["item", id], queryFn: () => api.workItem(id) });
@@ -123,14 +128,15 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
           >
             {data.paused ? "Resume" : "Pause"}
           </Button>
-          <ConfirmedGesture
-            tonDuBouton="danger"
+          {/* The stop asks why (ADR 0142 §3, §5): the reason is audited and cancels the run in flight with it. */}
+          <StopWithReason
             question="Stop this ticket? Its run is cancelled and it leaves the workflow — it does not resume, it has to be filed again."
-            confirmer="Stop the ticket"
-            action={() => control("stop")}
-          >
-            Stop
-          </ConfirmedGesture>
+            confirm="Stop the ticket"
+            action={async (reason) => {
+              await api.stopWorkItem(id, reason);
+              await queryClient.invalidateQueries({ queryKey: ["item", id] });
+            }}
+          />
           <ChangeWorkflow
             slug={slug}
             itemId={id}
@@ -192,14 +198,33 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
                   <LongText text={String(data.pending_request.payload?.question ?? data.pending_request.payload?.summary)} />
                 </div>
               ) : null}
+              {/* Who answers (ADR 0153): a person, a group, or a person first; an administrator reassigns. */}
+              <RequestAssignee
+                slug={slug}
+                itemId={id}
+                request={data.pending_request}
+                onDone={() => queryClient.invalidateQueries({ queryKey: ["item", id] })}
+              />
               {/* What the agent proposes is read here, before deciding, not in the Artifacts card below. */}
               <div className="mb-3">
                 <AgentProposal slug={slug} runs={runs.data} prUrl={data.pr_url} />
               </div>
+              {/* What the person's client prepared through the MCP door (ADR 0163): taken or discarded. */}
+              {data.pending_request.draft && (
+                <DecisionDraftCard
+                  itemId={id}
+                  requestId={data.pending_request.id}
+                  draft={data.pending_request.draft}
+                  onTake={(draft) => setTaken({ draft, times: taken.times + 1 })}
+                  onDone={() => queryClient.invalidateQueries({ queryKey: ["item", id] })}
+                />
+              )}
               <DecisionBar
+                key={`${data.pending_request.id}-${taken.times}`}
                 itemId={id}
                 kind={data.pending_request.kind}
                 request={data.pending_request}
+                taken={taken.draft}
                 onDone={() => queryClient.invalidateQueries({ queryKey: ["item", id] })}
               />
             </Card>

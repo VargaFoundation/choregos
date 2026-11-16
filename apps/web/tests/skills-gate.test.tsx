@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { Findings, GitImport, importable, RiskBadge, sortFindings, toneOfRisk } from "@/components/skills/gate";
+import { Findings, GitImport, importable, RiskBadge, sortFindings, toneOfRisk, VersionGate } from "@/components/skills/gate";
 import { api } from "@/lib/api";
 import { RESERVED_SKILL_SLUGS, skillSlugError } from "@/lib/skill-slug";
 import type { SkillCandidate, SkillGitPreview } from "@/lib/types";
@@ -9,7 +9,7 @@ const SHA = "a".repeat(40);
 
 vi.mock("@/lib/api", async (importOriginal) => {
   const reel = await importOriginal<typeof import("@/lib/api")>();
-  return { ...reel, api: { ...reel.api, previewSkillsFromGit: vi.fn(), importSkillsFromGit: vi.fn() } };
+  return { ...reel, api: { ...reel.api, previewSkillsFromGit: vi.fn(), importSkillsFromGit: vi.fn(), approveSkillVersion: vi.fn() } };
 });
 
 const candidate = (over: Partial<SkillCandidate>): SkillCandidate => ({
@@ -33,6 +33,27 @@ describe("the gate of a skill, in the console (S32-06)", () => {
     render(<RiskBadge risk="high" reviewStatus="pending_review" />);
     expect(screen.getByTestId("risk").textContent).toContain("High risk");
     expect(screen.getByTestId("review").textContent).toContain("Pending review");
+  });
+
+  it("the importer forces the approval of their own version only with a reason", async () => {
+    vi.mocked(api.approveSkillVersion).mockResolvedValue({} as never);
+    const version = { version: 2, risk: "high", review_status: "pending_review", created_by: "me@d.com", findings: [] };
+    const changed = vi.fn();
+    render(<VersionGate org="o" slug="deck" version={version as never} me="me@d.com" onChanged={changed} />);
+    expect(screen.getByRole("button", { name: "Approve v2" })).toBeDisabled();
+    const force = screen.getByRole("button", { name: "Force the approval of v2" });
+    expect(force).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("reason for forcing"), { target: { value: "demo, second admin away" } });
+    fireEvent.click(force);
+    await waitFor(() => expect(changed).toHaveBeenCalled());
+    expect(api.approveSkillVersion).toHaveBeenCalledWith("o", "deck", 2, { reason: "demo, second admin away" });
+  });
+
+  it("another administrator approves without forcing", () => {
+    const version = { version: 2, risk: "high", review_status: "pending_review", created_by: "other@d.com", findings: [] };
+    render(<VersionGate org="o" slug="deck" version={version as never} me="me@d.com" />);
+    expect(screen.getByRole("button", { name: "Approve v2" })).toBeEnabled();
+    expect(screen.queryByTestId("force-approval")).toBeNull();
   });
 
   it("the most severe finding comes first", () => {

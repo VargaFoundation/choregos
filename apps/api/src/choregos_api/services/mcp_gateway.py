@@ -14,26 +14,24 @@ points inside the cluster unless the operator lists that host (`mcp_gateway_inte
 
 from __future__ import annotations
 
-import hashlib
 import ipaddress
 import re
-import time
 from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Final
 from urllib.parse import quote, urlsplit
 
 import choregos_adapters
 import httpx
 from choregos_adapters import build, fakes_enabled
-from choregos_adapters.http.egress import guarded
-from choregos_adapters.mcp import McpError
+from choregos_adapters.mcp import ClientCredentials, TokenCache
+from choregos_adapters.outpost import OutpostRefusal
 from choregos_core.redaction import remember_secret
 from choregos_core.secrets import SecretNotFound
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.models import Organization, OrgConnector
-from ..errors import conflict, unprocessable
+from ..errors import ApiError, conflict, unprocessable
 from ..schemas.mcp_gateway import McpGateway, McpGatewayAuth, McpGatewayPut, McpGatewayState
 from ..secret_store import SecretStore, SecretStoreUnavailable, get_secret_store, resolved_configuration
 from .egress import Target, targets_of_urls
@@ -51,10 +49,9 @@ SETTINGS_KEY = "mcp_gateway"
 #: Where the credential is sealed (ADR 0058). One per organisation, since there is one gateway.
 SECRET_NAME = "org/mcp-gateway/credential"  # noqa: S105 - a name in the secret store, not a secret
 GATEWAY_TYPE = "mcp-gateway"
+#: The type of a connector reached through an outpost (ADR 0149): `services/outpost_route.py`.
+OUTPOST_TYPE = "mcp-outpost"
 ORIGIN = "mcp-gateway"
-#: A cached OAuth token is renewed this long before it expires.
-TOKEN_SKEW_S = 30
-DEFAULT_TOKEN_TTL_S = 300
 PRIVATE_SUFFIXES = (".svc", ".svc.cluster.local", ".cluster.local", ".local", ".internal")
 #: The placeholder an endpoint carries for the server's name.
 SERVER_PLACEHOLDER = "{server}"
@@ -62,7 +59,8 @@ _HOST_NAME = re.compile(r"^[a-z0-9]([a-z0-9._-]*[a-z0-9])?$")
 _NEEDS_SECRET = ("bearer", "header", "oauth_client_credentials")
 
 Provider = Callable[[bool], Awaitable[dict[str, str]]]
-_TOKENS: dict[str, tuple[str, float]] = {}
+#: The gateway's OAuth tokens, by organisation (ADR 0105).
+_TOKENS = TokenCache(label="the MCP gateway's token endpoint")
 _token_transport: httpx.AsyncBaseTransport | None = None
 
 
@@ -318,57 +316,23 @@ def _transport() -> httpx.AsyncBaseTransport | None:
     return None
 
 
-def _digest(text: str) -> str:
-    return hashlib.sha256(text.encode()).hexdigest()
-
-
 async def _oauth_token(org_id: str, setting: GatewaySetting, client_secret: str, refresh: bool) -> str:
-    """The client-credentials token, cached until shortly before it expires. The request goes through
-    the guarded transport: it is checked against the organisation's egress list like any other."""
+    """The client-credentials token, cached until shortly before it expires (the shared
+    `choregos_adapters.mcp.client_credentials`, which a direct `mcp` connector uses too). The request goes
+    through the guarded transport: it is checked against the organisation's egress list like any other."""
     auth = setting.auth
-    key = _digest(
-        "|".join(
-            [
-                org_id,
-                auth.token_url or "",
-                auth.client_id or "",
-                auth.scope or "",
-                auth.resource or "",
-                auth.token_audience or "",
-                _digest(client_secret),
-            ]
-        )
-    )
-    cached = _TOKENS.get(key)
-    if cached is not None and not refresh and cached[1] > time.monotonic():
-        return cached[0]
     parts = urlsplit(setting.endpoint.replace(SERVER_PLACEHOLDER, "x"))
-    form = {"grant_type": "client_credentials"}
-    if auth.scope:
-        form["scope"] = auth.scope
-    form["resource"] = auth.resource or f"{parts.scheme}://{parts.netloc}"
-    if auth.token_audience:
-        form["audience"] = auth.token_audience
-    async with httpx.AsyncClient(transport=guarded(_transport()), timeout=setting.timeout_s) as http:
-        response = await http.post(
-            auth.token_url or "", data=form, auth=httpx.BasicAuth(auth.client_id or "", client_secret)
-        )
-    body: Any = None
-    if response.status_code == 200:
-        try:
-            body = response.json()
-        except ValueError:
-            body = None
-    token = body.get("access_token") if isinstance(body, dict) else None
-    if not isinstance(token, str) or not token:
-        raise McpError(
-            f"the MCP gateway's token endpoint refused the client (HTTP {response.status_code})",
-            response.status_code,
-        )
-    remember_secret(token)
-    lifetime = body.get("expires_in") if isinstance(body.get("expires_in"), int | float) else None
-    _TOKENS[key] = (token, time.monotonic() + (lifetime or DEFAULT_TOKEN_TTL_S) - TOKEN_SKEW_S)
-    return token
+    credentials = ClientCredentials(
+        token_url=auth.token_url or "",
+        client_id=auth.client_id or "",
+        client_secret=client_secret,
+        scope=auth.scope,
+        audience=auth.token_audience,
+        resource=auth.resource or f"{parts.scheme}://{parts.netloc}",
+    )
+    return await _TOKENS.token(
+        credentials, refresh=refresh, transport=_transport(), timeout_s=setting.timeout_s, partition=org_id
+    )
 
 
 # ───────────────────────────── the client ─────────────────────────────
@@ -452,20 +416,64 @@ async def client_for_server(
 
 @dataclass(frozen=True)
 class Route:
-    """Where a connector's calls go: the host the network bounds judge, and whether it is the gateway's."""
+    """Where a connector's calls go: the host the network bounds judge, and whether it is the gateway's;
+    or, through an outpost (ADR 0149 §3), the outpost's name and the endpoint alias, and no host: the
+    platform opens no connection for such a call."""
 
     host: str | None
     via_gateway: bool
+    outpost: str | None = None
+    endpoint: str | None = None
+
+    @property
+    def via_outpost(self) -> bool:
+        return self.outpost is not None
+
+
+#: What the seam refuses a route with, before a call leaves or while it is made: the MCP gateway's
+#: refusals (ADR 0105 §7) and an outpost's (ADR 0149 §7). Each caller turns one into its own.
+RouteRefusal: Final = (GatewayRefusal, OutpostRefusal)
+
+
+def tool_error(refused: GatewayRefusal | OutpostRefusal) -> tuple[int, dict[str, Any]]:
+    """What a refusal of the route is for whoever called a tool: a status and a tool-error body. The
+    gateway's are a 403 of type `network_policy`, which no booking counts; an outpost's are one per
+    class (`outpost_route.tool_error`)."""
+    if isinstance(refused, OutpostRefusal):
+        from .outpost_route import tool_error as outpost_tool_error
+
+        return outpost_tool_error(refused)
+    return 403, {"error": str(refused), "type": "network_policy", "code": refused.code}
+
+
+def route_problem(refused: GatewayRefusal | OutpostRefusal) -> ApiError:
+    """What a refusal of the route is where a connector is declared or discovered: a 409 that carries
+    its code, and for an outpost the contract's `OutpostConflict` (`outpost_route.problem`)."""
+    if isinstance(refused, OutpostRefusal):
+        from .outpost_route import problem
+
+        return problem(refused)
+    return conflict(str(refused), extra={"code": refused.code})
 
 
 async def route_of(session: AsyncSession, instance: OrgConnector) -> Route:
-    """How an organisation connector is reached, decided BEFORE anything leaves (ADR 0105).
+    """How an organisation connector is reached, decided BEFORE anything leaves (ADR 0105, ADR 0149).
 
+    - an `mcp-outpost` connector is reached through its outpost, which must be handed calls:
+      `OutpostPaused` when it is paused or revoked, or outposts are switched off;
     - an `mcp-gateway` connector needs a gateway that is set and not `off`: `GatewayNotConfigured`;
     - in mode `required`, a direct `mcp` connector is not called: `GatewayRequired`. A plugin's server is
-      exempt in every mode (ADR 0096): the platform deployed it, the organisation did not declare it;
+      exempt in every mode (ADR 0096): the platform deployed it, the organisation did not declare it.
+      A connector at an outpost is exempt too (ADR 0149 §8): `required` exists so that the gateway is
+      the one place that holds upstream credentials and decides the upstream network, and here the
+      platform holds no upstream credential and opens no upstream connection: the outpost does both;
     - any other connector is reached as it always was.
-    Every caller turns a `GatewayRefusal` into its own refusal; none creates an action or a cost line."""
+    Every caller turns a `RouteRefusal` into its own refusal; none creates an action or a cost line."""
+    if instance.kind == "mcp" and instance.type == OUTPOST_TYPE:
+        from . import outpost_route
+
+        reached = await outpost_route.route(session, instance)
+        return Route(None, False, outpost=reached.name, endpoint=reached.endpoint)
     organisation = await session.get(Organization, instance.org_id)
     setting = stored(organisation)
     org_name = organisation.slug if organisation is not None else instance.org_id
@@ -476,6 +484,8 @@ async def route_of(session: AsyncSession, instance: OrgConnector) -> Route:
                 "off): an administrator sets it on the Administration page"
             )
         return Route(gateway_host(organisation), True)
+    # The direct type alone: neither a plugin's server (ADR 0096) nor a connector at an outpost
+    # (ADR 0149 §8, decided above) is a direct `mcp` connector.
     if (
         instance.kind == "mcp"
         and instance.type == "mcp"
@@ -494,15 +504,28 @@ async def connector_client(
     session: AsyncSession,
     instance: OrgConnector,
     identity: Callable[[], Awaitable[CallIdentity]],
+    *,
+    effect_key: str | None = None,
 ) -> Any:
     """The client every organisation connector is called with (broker, governed writes, discovery).
 
-    `route_of` decides first and raises `GatewayRefusal`. A gateway connector gets the gateway's address
+    `route_of` decides first and raises a `RouteRefusal`. A gateway connector gets the gateway's address
     and headers, signed with `identity` (computed only here, so a direct call never pays for it); the
-    connector's own `timeout_s` wins over the gateway's. Any other connector, a plugin's server included
-    (ADR 0096), is built by `plugin_servers.connector_client` exactly as before."""
+    connector's own `timeout_s` wins over the gateway's. A connector at an outpost gets a client with
+    the same two methods and no connection behind them (ADR 0149 §3): its calls are placed at the
+    outpost's rendezvous, with the names of `identity` as what the outpost may log. Any other
+    connector, a plugin's server included (ADR 0096), is built by `plugin_servers.connector_client`
+    exactly as before.
+
+    `effect_key` is the key of the governed effect that makes the call, when one does: through an
+    outpost a write is placed once under it and never delivered twice, whatever is retried (ADR 0149
+    §5). A write that reaches an outpost's connector without one is not placed."""
     from . import plugin_servers
 
+    if instance.kind == "mcp" and instance.type == OUTPOST_TYPE:
+        from . import outpost_route
+
+        return await outpost_route.client(session, instance, identity, effect_key=effect_key)
     route = await route_of(session, instance)
     if not route.via_gateway:
         return await plugin_servers.connector_client(session, instance)
@@ -525,7 +548,12 @@ async def check_declaration(
     session: AsyncSession, organisation: Organization, kind: str, type_name: str
 ) -> None:
     """At declaration (the one door, the catalogue install included): mode `required` declares no direct
-    `mcp` connector, and an `mcp-gateway` one needs a gateway that is set and not `off` (ADR 0105)."""
+    `mcp` connector, and an `mcp-gateway` one needs a gateway that is set and not `off` (ADR 0105).
+
+    Mode `required` refuses the type `mcp` and no other. A connector at an outpost (`mcp-outpost`) is
+    declared in every mode (ADR 0149 §8, amending ADR 0105 §5): the mode keeps the upstream credentials
+    and the upstream network at the gateway, and through an outpost the platform holds neither. What
+    such a declaration needs is its outpost (`outpost_route.declared_outpost`)."""
     setting = stored(organisation)
     if kind == "mcp" and type_name == "mcp" and setting is not None and setting.mode == "required":
         raise conflict(
@@ -571,6 +599,7 @@ async def state_of(
 __all__ = [
     "GATEWAY_TYPE",
     "ORIGIN",
+    "OUTPOST_TYPE",
     "SECRET_NAME",
     "SETTINGS_KEY",
     "GatewayCredentialMissing",
@@ -578,6 +607,7 @@ __all__ = [
     "GatewayRequired",
     "GatewaySetting",
     "Route",
+    "RouteRefusal",
     "check_declaration",
     "check_endpoint",
     "check_token_url",
@@ -589,9 +619,11 @@ __all__ = [
     "gateway_host",
     "hosts_in_use",
     "route_of",
+    "route_problem",
     "server_url",
     "set_token_transport",
     "state_of",
     "stored",
+    "tool_error",
     "validate_put",
 ]

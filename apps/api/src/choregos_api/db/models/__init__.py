@@ -36,6 +36,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..base import Base, Json, PkMixin, TimestampMixin, utcnow, uuid7
 from .agent_sessions import AgentSessionEvent, AgentSessionRecord, ConversationFeedback
+from .agent_social import AgentNotification, AgentStar, AgentWatch
 from .agents import (
     Agent,
     AgentCredential,
@@ -45,11 +46,19 @@ from .agents import (
     HostedBuildRecord,
     ProjectAgent,
 )
+from .assistant_launches import AssistantLaunchBinding
 from .assistant_reads import AssistantRead
-from .assistants import AssistantInstallation, AssistantToolBinding, ConnectedAccount, ConversationAction
+from .assistants import (
+    AssistantInstallation,
+    AssistantKnowledgeBinding,
+    AssistantToolBinding,
+    ConnectedAccount,
+    ConversationAction,
+)
 from .audit import AuditLog, NetworkDecision
 from .connectors import (
     ConnectorOperation,
+    GitHubAppRegistration,
     GitHubInstallation,
     OrgConnector,
     OrgConnectorProject,
@@ -60,12 +69,15 @@ from .costs import BudgetAlert, CostLedger
 from .gateway import BackendRegistryRow, GatewayKeyRow, ModelCatalogueRow
 from .identity import (
     ApiToken,
+    LinkedAccount,
     MachineAccount,
     Membership,
     Organization,
+    OrgGroup,
+    OrgGroupMember,
     OrgSlugAlias,
-    TrackerIdentity,
     User,
+    UserAvatar,
     UserSession,
 )
 from .knowledge import (
@@ -81,6 +93,7 @@ from .knowledge import (
     MemoryStore,
 )
 from .offered_knowledge import KnowledgeSeedTombstone
+from .outposts import Outpost, OutpostCall, OutpostEnrolment, OutpostInstance
 from .plugins import OrgPlugin, OrgPluginApproval, OrgPluginFile
 from .projects import Connector, ModelProfileRow, OrgWorkflow, PolicyDef, Project, Template, WorkflowDef
 from .releases import Deployment, Release
@@ -95,9 +108,10 @@ from .runs import (
     TriggerToken,
     WebhookDelivery,
 )
+from .saml import OrgSamlIdp, SamlConsumedAssertion
 from .secrets import OrgSecret, RemoteCredential
 from .skills import Skill, SkillVersion
-from .tasks import Delegation, TaskSubscription
+from .tasks import Delegation, TaskEvent, TaskSubscription
 from .work_items import Event, Finding, HumanRequest, Run, RunEvent, WorkItem
 
 ALL_TABLES = [
@@ -106,10 +120,14 @@ ALL_TABLES = [
     Membership,
     Project,
     MachineAccount,
+    OrgGroup,
+    OrgGroupMember,
     AssistantInstallation,
     AssistantRead,
+    AssistantLaunchBinding,
     AssistantToolBinding,
     TaskSubscription,
+    TaskEvent,
     Delegation,
     ConnectedAccount,
     Connector,
@@ -139,6 +157,7 @@ ALL_TABLES = [
     SkillVersion,
     AgentCredential,
     KnowledgeBase,
+    AssistantKnowledgeBinding,
     KnowledgeDocument,
     KnowledgeSeedTombstone,
     KnowledgeUpdateProposal,
@@ -147,6 +166,10 @@ ALL_TABLES = [
     OrgPlugin,
     OrgPluginFile,
     OrgPluginApproval,
+    Outpost,
+    OutpostInstance,
+    OutpostEnrolment,
+    OutpostCall,
 ]
 
 
@@ -176,14 +199,19 @@ __all__ = [
     "Agent",
     "AgentCredential",
     "AgentEvaluation",
+    "AgentNotification",
     "AgentRelease",
     "AgentSessionEvent",
     "AgentSessionRecord",
+    "AgentStar",
     "AgentVersion",
+    "AgentWatch",
     "Any",
     "ApiToken",
     "ArtifactRecord",
     "AssistantInstallation",
+    "AssistantKnowledgeBinding",
+    "AssistantLaunchBinding",
     "AssistantRead",
     "AssistantToolBinding",
     "AuditLog",
@@ -208,6 +236,7 @@ __all__ = [
     "Float",
     "ForeignKey",
     "GatewayKeyRow",
+    "GitHubAppRegistration",
     "GitHubInstallation",
     "HandOffReceipt",
     "HostedBuildRecord",
@@ -224,6 +253,7 @@ __all__ = [
     "KnowledgeSource",
     "KnowledgeUpdateProposal",
     "LargeBinary",
+    "LinkedAccount",
     "MachineAccount",
     "Mapped",
     "Membership",
@@ -236,13 +266,20 @@ __all__ = [
     "OrgConnector",
     "OrgConnectorProject",
     "OrgEgressRule",
+    "OrgGroup",
+    "OrgGroupMember",
     "OrgPlugin",
     "OrgPluginApproval",
     "OrgPluginFile",
+    "OrgSamlIdp",
     "OrgSecret",
     "OrgSlugAlias",
     "OrgWorkflow",
     "Organization",
+    "Outpost",
+    "OutpostCall",
+    "OutpostEnrolment",
+    "OutpostInstance",
     "PkMixin",
     "PolicyDef",
     "Project",
@@ -253,17 +290,19 @@ __all__ = [
     "RemoteCredential",
     "Run",
     "RunEvent",
+    "SamlConsumedAssertion",
     "Skill",
     "SkillVersion",
     "String",
+    "TaskEvent",
     "TaskSubscription",
     "Template",
     "Text",
     "TimestampMixin",
-    "TrackerIdentity",
     "TriggerToken",
     "UniqueConstraint",
     "User",
+    "UserAvatar",
     "UserSession",
     "WebhookDelivery",
     "WorkItem",

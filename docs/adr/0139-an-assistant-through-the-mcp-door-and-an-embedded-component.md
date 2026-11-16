@@ -1,5 +1,10 @@
 # 0139 — Talking to an assistant through the MCP door and an embedded component
 
+> **Amended (S67-00, 2026-11-12)**: point 5 extends to the developer surfaces (the terminal, a code editor): a
+> write proposed in a conversation is confirmed there too, but only under the person's own session — a console
+> cookie, an embedded frame token or a developer-surface session obtained by an interactive sign-in — never under
+> an API, MCP, A2A, machine or run token ([ADR 0154](0154-the-terminal-is-a-surface-of-the-platform.md) §6-7).
+
 - **Status**: accepted, 2026-11-11 (product owner's review of the same day; proposed 2026-11-10)
 - **Concerns**: the MCP door (`mcp/transport.py`, `mcp/tools.py`, `mcp/caller.py`), MCP prompts, a new path
   `/mcp/assistants/{org}:{installation}`, the console's `/embed/assistants/{org}/{installation}` page, the

@@ -5,11 +5,13 @@ from __future__ import annotations
 
 import ipaddress
 import re
+from datetime import UTC, datetime, timedelta
 from functools import lru_cache
 from typing import Any, Literal
 
 from choregos_core.images import check_image_map
 from choregos_core.mcp import RESULT_CEILING_BYTES, RESULT_MAX_BYTES
+from choregos_core.publishing import PUBLISHING
 from pydantic import BaseModel, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -22,6 +24,8 @@ UNRESOLVED_TEMPLATE = ("<no value>", "<nil>")
 DEFAULT_SESSION_SECRET = "dev-session-secret-change-me"
 #: The shortest session secret a deployed instance accepts: a 256-bit HMAC key.
 MIN_SESSION_SECRET_BYTES = 32
+#: The longest re-link window a deployment may open at once (ADR 0164): a window is an event, not a mode.
+OIDC_RELINK_MAX_DAYS = 31
 
 
 #: A hostname as `CHOREGOS_RUN_DOOR_HOSTS` and `CHOREGOS_PUBLIC_HOSTS` take it: no scheme, port or path;
@@ -45,8 +49,40 @@ class OAuthClient(BaseModel):
     callback_port: int | None = Field(default=None, ge=1024, le=65535)
 
 
-#: The public documentation site (S62 shared contracts), when `CHOREGOS_DOCS_URL` names none.
-DEFAULT_DOCS_URL = "https://docs.varga.foundation/choregos"
+#: The public documentation site (S62 shared contracts), when `CHOREGOS_DOCS_URL` names none: the
+#: publishing identity's (ADR 0156).
+DEFAULT_DOCS_URL = PUBLISHING.documentation
+
+#: An origin as `CHOREGOS_OUTPOSTS_DOOR_URL` takes it, and as an outpost's policy file writes its
+#: `control_plane` (`outpost-policy.schema.json`): a scheme and a host, no path, query or user.
+ORIGIN = re.compile(r"https?://[^\s/@?#]+")
+#: A raw 32-byte public key as the outposts' contract writes one: unpadded base64url, one spelling
+#: per key (`choregos_contracts.outpost.PUBLIC_KEY_PATTERN`).
+PUBLIC_KEY = re.compile(r"[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]")
+#: The most keys an outpost's policy file pins (`choregos_contracts.outpost.MAX_DOOR_KEYS`): the key
+#: that signs, and room for a rotation.
+MAX_DOOR_KEYS = 4
+
+
+@lru_cache(maxsize=4)
+def ed25519_public_key(private_pem: str) -> str:
+    """The public half of an Ed25519 private key given as PEM (PKCS#8), written as the outposts'
+    contract writes a key. `ValueError` when the text is not such a key: its content is never quoted."""
+    import base64
+
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    try:
+        key = serialization.load_pem_private_key(private_pem.encode(), password=None)
+    except (ValueError, TypeError) as error:
+        raise ValueError("not a PEM private key") from error
+    if not isinstance(key, Ed25519PrivateKey):
+        raise ValueError(f"an Ed25519 key is expected, not {type(key).__name__}")
+    raw = key.public_key().public_bytes(
+        encoding=serialization.Encoding.Raw, format=serialization.PublicFormat.Raw
+    )
+    return base64.urlsafe_b64encode(raw).decode().rstrip("=")
 
 
 class Settings(BaseSettings):
@@ -91,6 +127,9 @@ class Settings(BaseSettings):
     #: The audiences a person's token may be exchanged for. Empty: any audience a connector declares (the
     #: provider's own exchange permissions then decide); set it in production (security review S63-07).
     token_exchange_audiences: list[str] = Field(default_factory=list)
+    #: The scope sent with an exchange, by audience (RFC 8693 `scope`). Empty: no scope is sent, and the
+    #: provider grants the audience only if a default scope of the client carries it (S63-27).
+    token_exchange_scopes: dict[str, str] = Field(default_factory=dict)
     #: RFC 7009 revocation endpoint of the provider, to kill a delegation's offline token (S63-14). Empty:
     #: the fake's under CHOREGOS_FAKES, none otherwise (the sealed token is then only deleted here).
     token_revocation_endpoint: str = ""
@@ -101,8 +140,13 @@ class Settings(BaseSettings):
     #: An existing account is linked by e-mail only when the provider does not say
     #: `email_verified: false` (Entra omits the claim, so only an explicit false refuses).
     oidc_require_email_verified: bool = True
-    #: Temporary switch for an identity provider MIGRATION (ADR 0100): an account bound to another
-    #: subject is re-linked when the provider asserts `email_verified: true`. Off: it is refused.
+    #: The end of a re-link window, for a change of the instance's identity provider (ADR 0164): until
+    #: this instant, a sign-in whose address the provider asserts with `email_verified: true` re-links the
+    #: one account bound to another provider's subject. Unset: no window, such a sign-in is refused. At
+    #: most `OIDC_RELINK_MAX_DAYS` ahead; a date in the past is a closed window.
+    oidc_relink_until: datetime | None = None
+    #: Replaced by `oidc_relink_until` (ADR 0164): a switch without an end stays open; `true` refuses
+    #: to start.
     oidc_relink_verified_email: bool = False
     #: The MCP door also accepts OAuth tokens issued by the IdP (ADR 0030, RFC 9728): claude.ai and
     #: hosted clients cannot present a `chg_` token. Off by default.
@@ -151,6 +195,10 @@ class Settings(BaseSettings):
     run_token_public_key: str = ""
     run_token_issuer: str = "choregos-api"
     run_token_audience: str = "internal"
+    #: The egress proxy's own key (ADR 0145, `CHOREGOS_EGRESS_REPORT_KEY`): a report made with the
+    #: egress token must carry it, so that the agent, which inherits that token, cannot rewrite its
+    #: run's counters. Empty: the egress token alone is accepted, as before, and start-up says so.
+    egress_report_key: str = ""
 
     #: Hosts no run of this deployment may reach, whatever an organisation or a project says (ADR 0070):
     #: a comma-separated list of host patterns (`CHOREGOS_NETWORK_INSTANCE_DENY`).
@@ -237,7 +285,7 @@ class Settings(BaseSettings):
     #: MCP door's `docs_search` and `docs_read`. An absent directory: this build bundles none.
     docs_dir: str = "/opt/choregos/docs"
     #: The public documentation site, for the links those tools give (S62 shared contracts).
-    docs_url: str = "https://docs.varga.foundation/choregos"
+    docs_url: str = DEFAULT_DOCS_URL
     #: Plugin servers (ADR 0096): `kubernetes` runs them in `plugin_servers_namespace` through the API's
     #: Role there; `off` refuses a plugin that brings one (`CHOREGOS_FAKES` runs them in memory).
     plugin_servers: Literal["off", "kubernetes"] = "off"
@@ -366,6 +414,45 @@ class Settings(BaseSettings):
     #: routes answer 404 and say where the GitHub release is (S62-08, `routers/cli_downloads.py`).
     cli_dir: str = "/opt/choregos/cli"
 
+    # Outposts (ADRs 0147-0149)
+    #: `CHOREGOS_OUTPOSTS`, `off` by default (ADR 0147 §12). Off, the outposts' door is not mounted and
+    #: creating an outpost or an enrolment token is refused (409 `outposts_disabled`): it is also the
+    #: switch that stops every outpost at once. `on` or `off`, or any spelling of a boolean.
+    outposts: bool = False
+    #: The public origin of the outposts' door (`CHOREGOS_OUTPOSTS_DOOR_URL`, ADR 0148 §8): scheme and
+    #: host, no path (`https://outposts.example.com`). It is what an outpost's operator writes as
+    #: `control_plane` in the policy file, what an enrolment token is returned with, and what the door
+    #: compares a signature's `htu` with. Empty: the deployment declares none.
+    outposts_door_url: str = ""
+    #: The Ed25519 key the door signs every call it hands over with (`CHOREGOS_OUTPOSTS_DOOR_SIGNING_KEY`,
+    #: ADR 0148 §13): a PEM private key (PKCS#8), a secret of the installation. Its public half is the
+    #: first of the `door_keys` an operator pins. Empty: the door can sign nothing, and no enrolment
+    #: token is issued.
+    outposts_door_signing_key: str = ""
+    #: Public keys announced beside the one that signs, for a rotation (ADR 0148 §13), as a JSON list
+    #: (`CHOREGOS_OUTPOSTS_DOOR_ANNOUNCED_KEYS`): the next key before the door signs with it, the former
+    #: one after. Each is the unpadded base64url of 32 raw bytes; three at most, since a policy file
+    #: pins four keys.
+    outposts_door_announced_keys: list[str] = Field(default_factory=list)
+    #: The most requests one instance sends the door in a minute, counted per replica
+    #: (`CHOREGOS_OUTPOSTS_DOOR_RATE_PER_MINUTE`, ADR 0148 §9): beyond it the door answers 429
+    #: `rate_limited` with `retry_after`. A poll, an answer and a refusal each count for one; 0 lifts
+    #: the limit.
+    outposts_door_rate_per_minute: int = Field(default=1200, ge=0)
+    #: The most calls an outpost, and all the outposts of an organisation, have in flight at once
+    #: (`CHOREGOS_OUTPOSTS_CALLS_IN_FLIGHT_PER_OUTPOST`, `…_PER_ORGANISATION`, ADR 0148 §10): a call
+    #: counts from the moment it is placed until it is answered, refused or out of time, and one more
+    #: is refused where it is admitted, before anything is written.
+    outposts_calls_in_flight_per_outpost: int = Field(default=128, ge=1)
+    outposts_calls_in_flight_per_organisation: int = Field(default=512, ge=1)
+    #: The most calls an outpost, and all the outposts of an organisation, are handed in a minute
+    #: (`CHOREGOS_OUTPOSTS_CALLS_PER_MINUTE_PER_OUTPOST`, `…_PER_ORGANISATION`, ADR 0148 §10): counted
+    #: over the last sixty seconds from the calls' own rows, where a call is admitted, so every replica
+    #: reads the same number; one more is refused before anything is written. A call counts from the
+    #: moment it is placed, whatever becomes of it.
+    outposts_calls_per_minute_per_outpost: int = Field(default=600, ge=1)
+    outposts_calls_per_minute_per_organisation: int = Field(default=2400, ge=1)
+
     # Webhooks
     github_webhook_secret: str = ""
     github_app_id: str = ""
@@ -456,6 +543,32 @@ class Settings(BaseSettings):
         return self
 
     @model_validator(mode="after")
+    def _the_relink_window_has_an_end(self) -> Settings:
+        """A re-link window is temporary (ADR 0164): it has an end, and the end is near."""
+        if self.oidc_relink_verified_email:
+            raise ValueError(
+                "CHOREGOS_OIDC_RELINK_VERIFIED_EMAIL is replaced by CHOREGOS_OIDC_RELINK_UNTIL, the end of a "
+                "re-link window (an ISO 8601 instant, at most "
+                f"{OIDC_RELINK_MAX_DAYS} days ahead): a switch without an end stays open"
+            )
+        until = self.oidc_relink_until
+        if until is None:
+            return self
+        if until.tzinfo is None:
+            until = self.oidc_relink_until = until.replace(tzinfo=UTC)
+        if until - datetime.now(UTC) > timedelta(days=OIDC_RELINK_MAX_DAYS):
+            raise ValueError(
+                f"CHOREGOS_OIDC_RELINK_UNTIL={until.isoformat()} is more than {OIDC_RELINK_MAX_DAYS} days "
+                "ahead: a re-link window is temporary, open a shorter one and extend it if needed"
+            )
+        return self
+
+    def relink_window_open(self, now: datetime | None = None) -> bool:
+        """Whether a sign-in may re-link an account bound to another provider now (ADR 0164)."""
+        until = self.oidc_relink_until
+        return until is not None and (now or datetime.now(UTC)) < until
+
+    @model_validator(mode="after")
     def _oidc_endpoints_all_or_none(self) -> Settings:
         explicit = [self.oidc_authorization_endpoint, self.oidc_token_endpoint, self.oidc_userinfo_endpoint]
         if any(explicit) and not all(explicit):
@@ -493,6 +606,41 @@ class Settings(BaseSettings):
                     raise ValueError(
                         f"{name}: `{entry}` is not a hostname (no scheme, port or path; `*.` may lead)"
                     )
+        return self
+
+    @model_validator(mode="after")
+    def _the_outposts_door_is_well_formed(self) -> Settings:
+        """An origin with a path would never equal a policy file's `control_plane`, and a key that does
+        not parse would leave every outpost refusing every call (`signature_refused`): both are refused
+        here, in every process, rather than found by an operator of an outpost. Safe where the settings
+        are unset."""
+        if self.outposts_door_url and not ORIGIN.fullmatch(self.outposts_door_url):
+            raise ValueError(
+                "CHOREGOS_OUTPOSTS_DOOR_URL is not an origin: a scheme and a host, no path "
+                "(`https://outposts.example.com`)"
+            )
+        announced = self.outposts_door_announced_keys
+        if any(not PUBLIC_KEY.fullmatch(key) for key in announced):
+            raise ValueError(
+                "CHOREGOS_OUTPOSTS_DOOR_ANNOUNCED_KEYS: each entry is a public key, the unpadded "
+                "base64url of its 32 raw bytes"
+            )
+        if len(announced) > MAX_DOOR_KEYS - 1:
+            raise ValueError(
+                f"CHOREGOS_OUTPOSTS_DOOR_ANNOUNCED_KEYS: at most {MAX_DOOR_KEYS - 1} keys beside the one "
+                f"that signs (a policy file pins {MAX_DOOR_KEYS})"
+            )
+        signing = None
+        if self.outposts_door_signing_key:
+            try:
+                signing = ed25519_public_key(self.outposts_door_signing_key)
+            except ValueError as error:
+                raise ValueError(f"CHOREGOS_OUTPOSTS_DOOR_SIGNING_KEY: {error}") from None
+        if len({signing, *announced} - {None}) != len(announced) + (signing is not None):
+            raise ValueError(
+                "CHOREGOS_OUTPOSTS_DOOR_ANNOUNCED_KEYS: a key is announced once, and the key that signs "
+                "is not announced beside itself"
+            )
         return self
 
     @model_validator(mode="after")
@@ -541,6 +689,25 @@ class Settings(BaseSettings):
                 "Vérifier la source du secret (Infisical, Helm) avant de redémarrer."  # lang: fr-ok
             )
         return self
+
+    @property
+    def outposts_door_origin(self) -> str | None:
+        """The door's origin as a policy file's `control_plane` names it: scheme and host in lower
+        case, a default port left out. `None` when the deployment declares none."""
+        if not self.outposts_door_url:
+            return None
+        scheme, _, host = self.outposts_door_url.lower().partition("://")
+        default = {"https": ":443", "http": ":80"}[scheme]
+        return f"{scheme}://{host.removesuffix(default)}"
+
+    @property
+    def outposts_door_keys(self) -> list[str]:
+        """The door's public keys an outpost's operator pins (`door_keys`, ADR 0148 §13): the one that
+        signs now first, then the ones announced for a rotation. Empty without a signing key: a
+        door that signs nothing has nothing to pin."""
+        if not self.outposts_door_signing_key:
+            return []
+        return [ed25519_public_key(self.outposts_door_signing_key), *self.outposts_door_announced_keys]
 
     @property
     def bootstrap_admin_emails(self) -> list[str]:

@@ -19,9 +19,9 @@ find what waits for you and how to answer each kind of request.
 
 ## Before you start
 
-- To decide a step of a work item: **Developer** or above on the project, and membership of the group
-  the step is addressed to (for example `maintainers`). Groups come from your identity provider, as of
-  your last sign-in.
+- To decide a step of a work item: **Developer** or above on the project, and being who the step is
+  addressed to: a member of its group (for example `maintainers`), or the person it names. Groups come
+  from your identity provider, as of your last sign-in.
 - To approve a production release: **Release captain**.
 - To approve a governed action: the role and group its approval rule names, and a recent sign-in.
 
@@ -127,11 +127,32 @@ Every human step can carry a deadline (`sla_hours` on the group, `timeout_hours`
 The inbox puts overdue requests first. When a step times out, the work item goes where its workflow
 says, usually **Needs a human**, and from there a person decides to resume or abandon it.
 
+## A step addressed to a person
+
+A human actor may name a person instead of, or as well as, a group:
+
+```yaml
+actors:
+  approver: { type: human, user: lea@example.com, group: approvers, sla_hours: 8 }
+```
+
+With `user` alone, only that person answers. With both, the person is asked first; once the step's
+deadline (`sla_hours`, 24 by default) has passed, a member of the group may answer too. The work item
+shows **Assigned to** with the person or the group. Validating the workflow in a project warns
+(`actor.user_unknown`) when the person is not a member of the organisation.
+
+## Reassign a waiting step
+
+An **organisation admin** sees **Reassign** next to **Assigned to** on a waiting step. Choose a member
+of the organisation, a group, or both, and say why. The new assignee replaces the workflow's actor for
+that request only; the workflow does not change. The audit log records `workitem.request.reassign`, with
+who it was addressed to before and after, and the reason.
+
 ## Who decides when nobody can
 
-A step addressed to a group that nobody carries would wait forever. An **organisation admin** may answer
-any step; doing so outside the group is recorded in the audit log as an override, with the group it
-bypassed.
+A step addressed to a group that nobody carries, or to a person who left, would wait forever. An
+**organisation admin** may answer any step; doing so when it is addressed to someone else is recorded in
+the audit log as an override (`workitem.decision.group_override`), with the group or person it bypassed.
 
 ## Decisions stay in the console
 
@@ -145,6 +166,9 @@ console or with their own token.
 | :-- | :-- |
 | "deciding needs at least the developer role" | You are a viewer on this project |
 | "this step is addressed to the group … only its members answer it" | You do not carry the step's group at your last sign-in; sign in again after your identity provider adds you, or ask an organisation admin |
+| "this step is addressed to … only that person answers it" | The step names a person; ask them, or an organisation admin to reassign it |
+| "this step is addressed to … first: the group … may answer it once its SLA has passed" | The named person has until the deadline; after it, the group may answer |
+| "reassigning a waiting request is an organisation administrator's gesture" | Ask an organisation admin |
 | "no human request is pending on this work item" | Someone decided before you, or the work item moved on |
 | "approving a release needs the release_captain role" | Ask a project owner for the role |
 

@@ -23,6 +23,8 @@ import yaml
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 OPENAPI = ROOT / "packages" / "contracts" / "openapi.yaml"
+#: The outposts' door has a contract document of its own (ADR 0148 §2): its paths are contract paths too.
+DOOR_CONTRACTS = (ROOT / "packages" / "contracts" / "outpost-door.yaml",)
 WEB_SRC = ROOT / "apps" / "web" / "src"
 WEB_MOCKS = WEB_SRC / "mocks"
 CLI_SRC = ROOT / "packages" / "cli" / "src"
@@ -32,11 +34,15 @@ API_SRC = ROOT / "apps" / "api" / "src"
 #: under that prefix. The MCP and A2A doors, their discovery documents and `/metrics` are served
 #: outside the contract (`include_in_schema=False`): no contract path names them yet, so their entries
 #: are checked against the API's own route declarations instead, and cover them the day one enters the
-#: contract. Later stories (S46-07, S47-14, S47-15) add their machine-only routes here.
+#: contract. The outposts' door is outside the API's document like them, and unlike them it has a contract
+#: of its own (`DOOR_CONTRACTS`): its paths are read from there, and its entry is checked against them.
+#: Later stories (S46-07, S47-14, S47-15) add their machine-only routes here.
 MACHINE_ONLY_ROUTES: dict[str, str] = {
     "/webhooks/*": "a forge, a tracker, a pipeline, a deployer, Alertmanager or a plugin's server posts "
     "its signed events",
-    "/internal/*": "a runner or an agent session calls it from its pod, with its run token",
+    "/internal/*": "a runner or an agent session calls it from its pod, with its run token; the gateway's "
+    "callback reads a run's registered parts and posts its context breakdowns, signed for that run "
+    "(S64-08b, outside the contract)",
     "/mcp": "the MCP door (ADR 0030): an external MCP client calls the organisation's tools over "
     "JSON-RPC; outside the contract",
     "/mcp/projects/{project}": "the MCP door narrowed to one project, for the same clients; outside the "
@@ -49,6 +55,8 @@ MACHINE_ONLY_ROUTES: dict[str, str] = {
     "JSON-RPC, and `choregos a2a` (S62-03) with the same `a2a` token; outside the contract",
     "/a2a/orgs/{org}/.well-known/agent-card.json": "the A2A door's agent card, read by the calling agent "
     "and `choregos a2a skills`; outside the contract",
+    "/outposts/v1/*": "the outposts' door (ADR 0148): the daemon `choregos-outpost` enrols, polls, answers "
+    "and refuses there, under its own signature; its contract is `packages/contracts/outpost-door.yaml`",
     "/metrics": "the Prometheus scrape, read by the monitoring stack; outside the contract",
     "/downloads/cli/manifest.json": "the CLI the instance bundles (S62-08): read by the install scripts, "
     "`choregos self update` and the console's download block; files, not an API resource, outside the "
@@ -73,7 +81,22 @@ NOT_CALLED_BY_A_CLIENT: dict[str, str] = {
     "/auth/callback": "the identity provider's redirect after sign-in: the browser lands on it",
     "/me/connected-accounts/callback": "the source's redirect after a person consented: the browser lands "
     "on it, and the API sends it on to the console's /me/connected-accounts page (S63-18)",
+    "/auth/linked-accounts/callback": "the forge's redirect after a member signed in to link their account "
+    "(ADR 0161): the browser lands on it, and the API sends it on to the console's My account page",
+    "/orgs/{org}/members/{user_id}/tracker-identities": "deprecated by ADR 0161 for the callers written "
+    "against S47-14; the console reads the member's linked accounts",
+    "/orgs/{org}/members/{user_id}/tracker-identities/{tracker}": "deprecated by ADR 0161 for the callers "
+    "written against S47-14; the console declares and removes linked accounts",
+    "/users/{user_id}/avatar": "a person's photo (ADR 0162), read by the browser as an <img> source from the "
+    "`avatar_url` the API answers; no client builds its path",
+    "/saml/{org}/metadata": "the service provider's metadata, read by the identity provider's administrator "
+    "(ADR 0170, D5); no client builds its path",
+    "/saml/{org}/login": "the sign-in page redirects the browser there (`auth/login` answers its path, "
+    "ADR 0108); no client builds it",
+    "/saml/{org}/acs": "the identity provider's response, posted by the browser after sign-in (ADR 0170, D5)",
     "/github/setup": "the GitHub App's Setup URL: GitHub redirects the browser there after an installation",
+    "/github/manifest/callback": "the GitHub App manifest's redirect URL: GitHub sends the browser there "
+    "with the conversion code once the App is registered (S70-21, ADR 0167)",
     "/remote-credentials/oauth/callback": "the provider's redirect after an administrator authorised a "
     "remote agent's credential",
     "/orgs/{org}/hosted-sources/{sha256}": "reads an uploaded source zip back for the pipeline that "
@@ -81,7 +104,7 @@ NOT_CALLED_BY_A_CLIENT: dict[str, str] = {
     "/projects/{id}/workflows/validate": "the project-scoped twin of /workflows/validate, which the console "
     "and the CLI call; its extra actor-group warning is for API callers",
     "/templates/{name}": "platform template authoring by API (getTemplate, updateTemplate), no screen or "
-    "command yet: finding VargaFoundation/choregos#1075",
+    "command yet: finding #1075",
     "/orgs/{org}/aliases/{alias}": "platform administrator's API gesture; its console text lives in the "
     "enterprise repository (S42-14 STATUS row)",
     "/work-items/{id}/artifacts/{ref}": "one revision's metadata, for API callers; the console lists the "
@@ -93,7 +116,20 @@ NOT_CALLED_BY_A_CLIENT: dict[str, str] = {
 }
 
 #: Paths whose console screen is a story still to come: that story removes its entries.
-NO_CLIENT_YET: dict[str, str] = {}
+NO_CLIENT_YET: dict[str, str] = {
+    "/me/conversations/{conversation_id}/events": "followed from another surface (ADR 0154 §4, G2): "
+    "`choregos chat` (S67-09) and the editor extension (S68) are its clients; S67-08 serves it",
+    "/me/pending": "what waits for the person (ADR 0154 §4, G8): the terminal's status line and decisions "
+    "pane (S67-09, S67-10) and the editor (S68) read it; S67-07 serves it",
+    "/runs/{id}/agents": "the run's sub-agent nodes (ADR 0154 §5, G5): the live tree of `choregos chat` "
+    "(S67-09) reads it; S67-12 serves it",
+    "/orgs/{org}/security": "the organisation's re-authentication setting (ADR 0170, D5) is "
+    "API-only in the core; the enterprise edition's console section writes it today",
+    "/orgs/{org}/members/{email}/sessions/revocation": "ending a member's sessions (ADR 0170, D5) "
+    "is API-only in the core; the enterprise edition's platform route has no console screen either",
+    "/orgs/{org}/saml": "the organisation's SAML provider (ADR 0170, D5) is API-only in the core; the "
+    "enterprise edition's console section writes it today",
+}
 
 #: Paths the CLI calls and the console must not: an operator's command, not a screen.
 CLI_ONLY: dict[str, str] = {
@@ -131,8 +167,9 @@ def path_pattern(path: str) -> re.Pattern[str]:
 
 @functools.cache
 def contract_paths() -> tuple[str, ...]:
-    spec = yaml.safe_load(OPENAPI.read_text(encoding="utf-8"))
-    return tuple(spec["paths"])
+    """The paths of the API's contract, then those of each door that has a contract of its own."""
+    documents = [yaml.safe_load(path.read_text(encoding="utf-8")) for path in (OPENAPI, *DOOR_CONTRACTS)]
+    return tuple(path for document in documents for path in document["paths"])
 
 
 def _read(files: Iterable[pathlib.Path]) -> str:
@@ -233,6 +270,13 @@ def test_a_new_client_less_path_is_refused() -> None:
     assert unexplained(["/projects/{id}/metrics/brand-new"], web, "") == ["/projects/{id}/metrics/brand-new"]
     assert unexplained(["/projects/{id}/metrics/dora"], web, "") == []
     assert unexplained(["/internal/runs/{id}/brand-new", "/healthz"], "", "") == []
+    # A door's own contract is read too (ADR 0148): its paths are held by its entry, whatever a verb adds.
+    door = [path for path in contract_paths() if path.startswith("/outposts/v1/")]
+    assert len(door) == 4 and unexplained(door, "", "") == []
+    assert unexplained(["/outposts/v2/poll", "/orgs/{org}/outposts/{slug}/brand-new"], "", "") == [
+        "/outposts/v2/poll",
+        "/orgs/{org}/outposts/{slug}/brand-new",
+    ]
     # A machine-only door that enters the contract is covered whatever its parameter is named.
     assert unexplained(["/mcp/projects/{slug}"], "", "") == []
 

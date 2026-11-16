@@ -1,0 +1,44 @@
+{
+  "description": "The sealed envelope of a call and of its answer (outpost-door.yaml, x-sealing), and the door's signature of the call (x-call-signature), with nothing left to chance. Every private key is the SHA-256 of its label (UTF-8), every nonce the first 12 bytes of the SHA-256 of its label: test material only, derivable by anyone. `plaintext` is the exact text that was sealed. The door's key is the one the policy example pins (`door_keys`).",
+  "info": "choregos/assignment/v1",
+  "door": {
+    "signing_key_label": "choregos outpost contract v1: test door signing key",
+    "signing_key": "3k9fZti-P3Z9Du9RmNmJm-pNxgUQSHfGN_bx7DmXwNw"
+  },
+  "call": {
+    "recipient": "the claiming instance's sealing key",
+    "recipient_key_label": "choregos outpost contract v1: test sealing key",
+    "recipient_key": "sTi3s2Pg2FWi9AkPTs73jJ0gfifo3rgtRSVjxJ9Aphw",
+    "ephemeral_key_label": "choregos outpost contract v1: test ephemeral key of the call",
+    "ephemeral_key": "O6vimE8d2J03zRzS_HU2jI_CFcfFYXPeyoGde37gBCo",
+    "nonce_label": "choregos outpost contract v1: test nonce of the call",
+    "nonce": "bkyML3Zbo08gU7Ti",
+    "associated_data": "8f0e6b1c-5a3d-4c57-9e21-7b2a4d9c0f13",
+    "plaintext": "{\"id\": \"8f0e6b1c-5a3d-4c57-9e21-7b2a4d9c0f13\", \"kind\": \"call_tool\", \"endpoint\": \"tracker\", \"tool\": \"create_issue\", \"arguments\": {\"title\": \"Invoice export fails on empty lines\", \"labels\": [\"bug\"]}, \"deadline\": \"2026-11-12T10:01:00Z\", \"answer_key\": \"Q4IMFCU_Csh9pa0aiVR8ouhVAHi-W_CSVzbx0EVCtmI\", \"asserted\": {\"sub\": \"run:r-20261112-0042\", \"org\": \"acme\", \"org_id\": \"0c5d7e1a-9b2f-4c36-8d40-3e6a1f7b2c95\", \"purpose\": \"tool_call\", \"project\": \"billing-api\", \"run\": \"r-20261112-0042\", \"work_item\": \"BILL-128\", \"agent\": \"triage\", \"action\": \"5e1f0c7a-3b9d-4a62-8f14-d2c6b8a09e37\", \"connector\": \"tracker-at-the-factory\", \"approved_by\": [\"ada@example.org\"]}}",
+    "sealed": "O6vimE8d2J03zRzS_HU2jI_CFcfFYXPeyoGde37gBCpuTIwvdlujTyBTtOJ86IJngqCc0RlNbHMl68FCkfd6ZlvL-Pa319aTwk8iQqfnb2b9r7rYq_sKiExOPqWbtObgEHXgUc3bYL0y0GnFj4omm3eEQbsWOn_zxttBtMl_egHv7vAPuAx-I4krgGpFMKu59ZVgyjfCp7uPxrNkN_03j-zryVZLzo8uo0K_HEo1TPxPx74IsmzyHd5axQAE3X_OLXofjqAM2dEOVbB2Fa3XMxp2ASAp2IoUKgDgbpOWOk4ipvUVdDCuEigP_qdgh3-pHq9xFl9DCiDDsC9PPeW5xP6FZoJAJd0JlUNeNON3WbTUZkV0F-vwsp4MYh0LMUmZVhh5kyUwIpP3Bi8aLThUWpJvLkmTbH9KNt0fa05Tc7IYKX3A5BHI7q3jY5RkzyaoDE7x_hDmd5pZE1tQlGhrVIRdaEdsLYgMovW_uhvQRyciO9ZcjFVswhuvwjJnLTto6Apc17stPy6XKup0-DTh_43E2unwrQ0Pwv-Ffb0uIdWTYx8sEvZXlpSJDo1FZTBni9FKfDPM-jzvIVTXhRmJOHbPsyhxxVi4QWJtj_emwYX_11mnN6o8Ryq6fFrGY4Xj9S4b13oDY9Uhcdm9bT99egxIljPlCV3TKLinB7HCvziKvbNLzeGlza1WJTuz_j4ftKKmlHRtdj60nbrDTCq_eeRE3jf8yO2d3TpzKcr7yyJwDutj7K486opQvgXiTKoyjIi9INY619YwQNU21tL3Dt2JbHYRvklI3SiAUOnpdKL3wK3zg3L3FW1qbcoyBt_n5-PBu0uoU28vYvTLaBqkCSXAJ9bUjOXXFZ-I9k4OpM2hVo9nMWaC_AbKFtltzVvs4yhAKJucCJgHtkm5KHpf27Z4z-ubHEnP_mUmJ9YMEGnqgT8",
+    "instance": "b3c1f6a2-6d0e-4b7a-9a55-2f1c8e7d4a90",
+    "signature_header": {
+      "alg": "EdDSA",
+      "typ": "choregos-outpost-call+jwt",
+      "kid": "3k9fZti-P3Z9Du9RmNmJm-pNxgUQSHfGN_bx7DmXwNw"
+    },
+    "signature_claims": {
+      "call": "8f0e6b1c-5a3d-4c57-9e21-7b2a4d9c0f13",
+      "instance": "b3c1f6a2-6d0e-4b7a-9a55-2f1c8e7d4a90",
+      "sealed_sha256": "09f547de84f6b6daf6e75f9c6263345d344e0f5370fd06b7c042cd126a76deaa"
+    },
+    "signature": "eyJhbGciOiJFZERTQSIsImtpZCI6IjNrOWZadGktUDNaOUR1OVJtTm1KbS1wTnhnVVFTSGZHTl9ieDdEbVh3TnciLCJ0eXAiOiJjaG9yZWdvcy1vdXRwb3N0LWNhbGwrand0In0.eyJjYWxsIjoiOGYwZTZiMWMtNWEzZC00YzU3LTllMjEtN2IyYTRkOWMwZjEzIiwiaW5zdGFuY2UiOiJiM2MxZjZhMi02ZDBlLTRiN2EtOWE1NS0yZjFjOGU3ZDRhOTAiLCJzZWFsZWRfc2hhMjU2IjoiMDlmNTQ3ZGU4NGY2YjZkYWY2ZTc1ZjljNjI2MzM0NWQzNDRlMGY1MzcwZmQwNmI3YzA0MmNkMTI2YTc2ZGVhYSJ9.o938kzYebElXgMsIyAxd7sD2G3-lJru8QgUPIcKMH2DPyOdxnwbsfXyjrLOj8EAvqCbO6sUel235BgfJ6aNIAg"
+  },
+  "answer": {
+    "recipient": "the call's answer_key",
+    "recipient_key_label": "choregos outpost contract v1: test answer key",
+    "recipient_key": "Q4IMFCU_Csh9pa0aiVR8ouhVAHi-W_CSVzbx0EVCtmI",
+    "ephemeral_key_label": "choregos outpost contract v1: test ephemeral key of the answer",
+    "ephemeral_key": "uS1nQlfwlroXQk7Rb5uY7F75s80-rULhg0Gty4Eikic",
+    "nonce_label": "choregos outpost contract v1: test nonce of the answer",
+    "nonce": "w4wS6np6je_A5PWa",
+    "associated_data": "8f0e6b1c-5a3d-4c57-9e21-7b2a4d9c0f13",
+    "plaintext": "{\"id\": \"8f0e6b1c-5a3d-4c57-9e21-7b2a4d9c0f13\", \"outcome\": \"result\", \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"Created BILL-129\"}], \"structuredContent\": {\"key\": \"BILL-129\"}, \"isError\": false}, \"write\": true, \"replayed\": false, \"duration_ms\": 412}",
+    "sealed": "uS1nQlfwlroXQk7Rb5uY7F75s80-rULhg0Gty4EikifDjBLqenqN78Dk9ZqBJ8eeW0JmM2R7httqHccoiMApSd_VMojPcvXjBX4u_xSjCKKyzd_PCW-m1THNOBaTzyMHTbRi66lwKBaWmJLGD17stTTuQvaotRwOtxDDXWrICHqxPj3-YiYOi5DIAvIuSFBhXVuiewKHVHds9OLpEcx77oPqIB5oX1ZYTftdh6uC5pfKfc0nES93fwXFrbTJ0ID1MwSNsHyfmoyEtZhFHklnMrrBSW6xNOTTKateuM19PgDLsZRp0J_YPOcowxy-CfLS8yFrSVZ-9wad2QWBysfkP2L1BVcKwszYHX4A3SFkE-9cVb1yVX95qRE1UxYhiHlkGoxe9lhY88Q90K2yzcrApSLdvVZ3RV9p"
+  }
+}

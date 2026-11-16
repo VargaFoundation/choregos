@@ -347,3 +347,89 @@ def test_a_manifest_names_the_catalogue_provenance_of_the_agents_it_takes_from_i
     assert delivery(manifest, None).catalogue_agents == {
         "reviewer": f"plugin:software-delivery/reviewer@{reviewer.version}"
     }
+
+
+# -- an organisation's knowledge bases survive an upgrade (ADR 0127, amendment) ----------------------------
+
+
+async def _hand_version(slug: str, **changes: Any) -> None:
+    """The organisation publishes the next version of `slug`: its latest spec with `changes`."""
+    from choregos_api.db.models import Agent, AgentVersion
+    from choregos_api.db.session import session_scope
+    from choregos_api.schemas import AgentSpec
+    from choregos_api.services.agents import digest
+    from sqlalchemy import select
+
+    async with session_scope() as session:
+        agent = (await session.execute(select(Agent).where(Agent.slug == slug))).scalar_one()
+        last = (
+            (
+                await session.execute(
+                    select(AgentVersion)
+                    .where(AgentVersion.agent_id == agent.id)
+                    .order_by(AgentVersion.version.desc())
+                )
+            )
+            .scalars()
+            .first()
+        )
+        assert last is not None
+        spec = AgentSpec.model_validate({**last.spec, **changes})
+        session.add(
+            AgentVersion(
+                agent_id=agent.id,
+                org_id=agent.org_id,
+                version=last.version + 1,
+                spec=spec.model_dump(mode="json"),
+                checksum=digest(spec),
+                created_by="alice@varga.dev",
+            )
+        )
+        await session.commit()
+
+
+def _catalogue_moves(monkeypatch: pytest.MonkeyPatch, slug: str, **spec: Any) -> None:
+    old = entry(slug)
+    assert old is not None
+    document = {**old.document, "spec": {**old.document["spec"], "instructions": "Review it, v2.", **spec}}
+    _replace_entry(monkeypatch, dataclasses.replace(old, version=2, document=document))
+
+
+async def test_an_upgrade_keeps_the_knowledge_the_organisation_added(
+    client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    assert (await client.post(f"{ORG}/agent-catalogue/reviewer/install")).status_code == 201
+    await _hand_version("reviewer", knowledge=[{"slug": "our-engineering"}])
+    _catalogue_moves(monkeypatch, "reviewer")
+    listed = next(e for e in (await client.get(f"{ORG}/agent-catalogue")).json() if e["slug"] == "reviewer")
+    assert listed["update_available"] is True
+    published = await client.post(f"{ORG}/agent-catalogue/reviewer/install", json={"upgrade": True})
+    assert published.status_code == 200, published.text
+    latest = published.json()["versions"][0]
+    assert latest["version"] == 3 and latest["spec"]["instructions"] == "Review it, v2."
+    assert [k["slug"] for k in latest["spec"]["knowledge"]] == ["our-engineering"]
+    assert "knowledge kept: our-engineering" in latest["message"]
+    again = await client.post(f"{ORG}/agent-catalogue/reviewer/install", json={"upgrade": True})
+    assert again.json()["latest_version"] == 3, "nothing left to publish"
+
+
+async def test_another_change_than_knowledge_is_not_kept(
+    client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    assert (await client.post(f"{ORG}/agent-catalogue/reviewer/install")).status_code == 201
+    await _hand_version("reviewer", knowledge=[{"slug": "our-engineering"}], instructions="Ours.")
+    _catalogue_moves(monkeypatch, "reviewer")
+    published = await client.post(f"{ORG}/agent-catalogue/reviewer/install", json={"upgrade": True})
+    latest = published.json()["versions"][0]
+    assert latest["spec"].get("knowledge", []) == [] and "kept" not in (latest["message"] or "")
+
+
+async def test_a_knowledge_base_the_catalogue_adds_too_is_not_listed_twice(
+    client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    assert (await client.post(f"{ORG}/agent-catalogue/reviewer/install")).status_code == 201
+    await _hand_version("reviewer", knowledge=[{"slug": "shared"}, {"slug": "ours"}])
+    _catalogue_moves(monkeypatch, "reviewer", knowledge=[{"slug": "shared"}])
+    published = await client.post(f"{ORG}/agent-catalogue/reviewer/install", json={"upgrade": True})
+    latest = published.json()["versions"][0]
+    assert [k["slug"] for k in latest["spec"]["knowledge"]] == ["shared", "ours"]

@@ -18,6 +18,7 @@ with workflow.unsafe.imports_passed_through():
     from choregos_core import WorkflowEngine
     from choregos_core.decision_ledger import declares_a_confidence
     from choregos_core.gates import unchanged_run
+    from choregos_core.run_stop import STOPPED_BY_A_PERSON, stopped_by_a_person
 
     from ...activities import decision as decision_activities
     from ...activities import scm as scm_activities
@@ -33,6 +34,7 @@ from ..interpreter import (
     DECISION_LEDGER,
     DECLARED_OUTPUTS_REQUIRED,
     IDENTICAL_FAILURE_ESCALATES,
+    RUN_STOPPED_GOES_TO_A_PERSON,
     SUSPEND_AROUND_HUMAN,
     TICKET_SPEND_FROM_LEDGER,
     _attempts_ceiling,
@@ -130,23 +132,13 @@ class StagesMixin(InterpreterBase):
             retry_policy=POLL_RETRY,
         )
         result = StageResult.model_validate(awaited["result"])
-
-        spend = await execute_on_its_queue(
-            stage_activities.collect_spend,
-            {"project_id": params.project_id, "run_id": run_id},
-            start_to_close_timeout=timedelta(minutes=2),
-            retry_policy=DEFAULT_RETRY,
-        )
-        if "ticket_cost_usd" in spend and workflow.patched(TICKET_SPEND_FROM_LEDGER):
-            self.cost_usd = float(spend["ticket_cost_usd"])  # the ledger: models AND tools
-        else:
-            self.cost_usd += float(spend.get("cost_usd", 0.0))
-        await execute_on_its_queue(
-            stage_activities.record_run_outcome,
-            {"project_id": params.project_id, "run_id": run_id, "result": awaited["result"]},
-            start_to_close_timeout=timedelta(minutes=1),
-            retry_policy=DEFAULT_RETRY,
-        )
+        spend = await self._close_the_run(params, run_id, awaited["result"])
+        # A person stopped the run (ADR 0142 §2): its spend is booked and its outcome recorded, and
+        # nothing else of a finished stage applies (no diff, no gates, no retry). The condition
+        # first, `patched` next: a history without such a result never asks.
+        if stopped_by_a_person(result) and workflow.patched(RUN_STOPPED_GOES_TO_A_PERSON):
+            self.current_run = None
+            return await self._run_stopped(params, engine, transition, result, run_id)
         # The run's diff is what the front end SHOWS, not what the ticket depends on. A failure
         # here (SCM unreachable, project without a repository on a late image) must not kill a
         # stage that has just succeeded: it happened to RH-1 on 2026-09-24.
@@ -216,6 +208,64 @@ class StagesMixin(InterpreterBase):
                 and workflow.patched(SUSPEND_AROUND_HUMAN)
             ):
                 await self._suspend(params, run_id, key)
+        return decision
+
+    async def _close_the_run(self, params: InterpreterInput, run_id: str, result: dict[str, Any]) -> Any:
+        """The run is over: its spend booked (the ticket's spend read back from the ledger) and its
+        outcome recorded. The spend as `collect_spend` answered it."""
+        spend = await execute_on_its_queue(
+            stage_activities.collect_spend,
+            {"project_id": params.project_id, "run_id": run_id},
+            start_to_close_timeout=timedelta(minutes=2),
+            retry_policy=DEFAULT_RETRY,
+        )
+        if "ticket_cost_usd" in spend and workflow.patched(TICKET_SPEND_FROM_LEDGER):
+            self.cost_usd = float(spend["ticket_cost_usd"])  # the ledger: models AND tools
+        else:
+            self.cost_usd += float(spend.get("cost_usd", 0.0))
+        await execute_on_its_queue(
+            stage_activities.record_run_outcome,
+            {"project_id": params.project_id, "run_id": run_id, "result": result},
+            start_to_close_timeout=timedelta(minutes=1),
+            retry_policy=DEFAULT_RETRY,
+        )
+        return spend
+
+    async def _run_stopped(
+        self,
+        params: InterpreterInput,
+        engine: WorkflowEngine,
+        transition: Any,
+        result: StageResult,
+        run_id: str,
+    ) -> Any:
+        """The stage of a run a person stopped goes to a person (ADR 0142 §2). The attempt it spent
+        is given back, so a person's replay is not refused for want of attempts, and the work item
+        waits with "run stopped by <who>: <reason>": it parks where an escalation parks it, and a
+        request asks the person when that is the question state; with nowhere to park, it holds where
+        it is, paused, until a person resumes or stops it. A work item stopped meanwhile (its `stop`
+        stops its run, §3) ends as a stop does: `None`, and the main loop sees `stopped`."""
+        key = transition.key
+        self.attempt_resets[key] = min(self.attempt_resets[key] + 1, self.attempts[key])
+        self.failure_signatures.pop(key, None)  # a stop is no failure to compare the next one with
+        if self.stopped:
+            return None
+        decision = engine.escalate(transition, result.summary[:300])
+        if decision.next_state == transition.from_:
+            self.paused = True  # replaying the stage now would be the retry the person did not want
+        elif decision.next_state == engine.question_state():
+            await self._create_request(
+                params,
+                transition,
+                kind="approval",
+                payload={
+                    "question": f"{result.summary}. Replay the stage, stop the work item or move it on.",
+                    "options": [],
+                    "summary": result.summary,
+                    "run_id": run_id,
+                    "reason": STOPPED_BY_A_PERSON,
+                },
+            )
         return decision
 
     async def _already_fixed(

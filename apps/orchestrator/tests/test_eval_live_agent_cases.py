@@ -824,9 +824,12 @@ def plugin_runtime(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
     from choregos_api.config import reset_settings_cache as reset_api_settings
     from choregos_api.services.plugin_servers import use_plugin_runtime, use_plugin_transport
     from choregos_core.agent_catalogue import OFFLINE_ENV
+    from choregos_core.publishing import PUBLISHING
 
     monkeypatch.setenv(OFFLINE_ENV, str(FIXTURES / "plugins"))
-    monkeypatch.setenv("CHOREGOS_PLUGIN_SERVERS_REGISTRIES", '["ghcr.io/vargafoundation/choregos-agents"]')
+    monkeypatch.setenv(
+        "CHOREGOS_PLUGIN_SERVERS_REGISTRIES", json.dumps([PUBLISHING.image("choregos-agents")])
+    )
     reset_api_settings()
     kube = FakeKubernetesApi()
     use_plugin_runtime(PluginServerRuntime(kube, "choregos-plugins"))

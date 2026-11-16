@@ -239,6 +239,24 @@ def write(path: Path, content: str, check: bool) -> bool:
     return True
 
 
+def retire(path: Path, check: bool) -> bool:
+    """Removes a file the generator no longer writes; in check mode, reports it without removing it.
+
+    `index.ts` re-exported `./schemas` and `./api` together, and the two modules share names (an API
+    component aliased to its schema, or a different type under the same name): TypeScript refused the
+    second `export *` (TS2308) and nothing imported the entry point (S65-27, issue #1607). The package
+    is read by its two modules, `@choregos/contracts/schemas` and `@choregos/contracts/api`.
+    """
+    if not path.exists():
+        return False
+    if check:
+        print(f"[contracts] no longer generated: {path.relative_to(ROOT)}", file=sys.stderr)
+        return True
+    path.unlink()
+    print(f"[contracts] removed {path.relative_to(ROOT)}")
+    return True
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Generates the contract types")
     parser.add_argument("--check", action="store_true", help="fails if the generated files differ")
@@ -246,10 +264,7 @@ def main() -> int:
     changed = False
     changed |= write(TS_DIR / "schemas.ts", generate_schemas_ts(), args.check)
     changed |= write(TS_DIR / "api.ts", generate_api_ts(), args.check)
-    index = HEADER.format(source="schemas/*.json + openapi.yaml") + (
-        'export * from "./schemas";\nexport * from "./api";\n'
-    )
-    changed |= write(TS_DIR / "index.ts", index, args.check)
+    changed |= retire(TS_DIR / "index.ts", args.check)
     if args.check and changed:
         print("[contracts] `make contracts` must be run again and the result committed", file=sys.stderr)
         return 1

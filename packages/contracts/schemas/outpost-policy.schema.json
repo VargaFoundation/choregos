@@ -1,0 +1,146 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://choregos.dev/schemas/outpost-policy.schema.json",
+  "title": "OutpostPolicy",
+  "description": "The local policy file of an outpost (ADR 0147 §6): what the daemon `choregos-outpost` checks alone, from a file the control plane cannot write. It pins the keys whose calls the outpost makes (ADR 0148 §13) and holds the only copy of each endpoint's address and credential (ADR 0147 §7). A file without `door_keys` is not a policy: an outpost that cannot check who orders it does not serve. Nothing in it names a project, an agent or a version: those are names the control plane asserts, and a rule on them would stop nobody who holds it.",
+  "type": "object",
+  "required": [
+    "control_plane",
+    "door_keys",
+    "endpoints",
+    "audit"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "control_plane": {
+      "type": "string",
+      "maxLength": 255,
+      "pattern": "^https?://[^\\s/@?#]+$",
+      "description": "The door's origin: scheme and host, with a port if any, and no path. Every connection the outpost opens goes there, and a request's signature binds this origin followed by the verb's path (`outpost-door.yaml`). `http` is for a local bench."
+    },
+    "door_keys": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 4,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$"
+      },
+      "description": "The door's Ed25519 signing keys this outpost obeys, each the unpadded base64url of its 32 raw bytes: a call signed by no key of this list is not made, and its envelope is not opened (ADR 0148 §13). This file is the only place the set lives: nothing the door sends, at enrolment or later, adds a key to it or changes it. More than one key is a rotation under way: the operator adds the next key before the door signs with it."
+    },
+    "endpoints": {
+      "type": "object",
+      "maxProperties": 64,
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9-]{0,62}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/endpoint"
+      },
+      "description": "The MCP servers this outpost may call, each under the alias a connector names (ADR 0149 §1). An alias the file does not hold is refused `unknown_endpoint`."
+    },
+    "concurrency": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 64,
+      "default": 4,
+      "description": "Calls in progress at once, all endpoints together; beyond it a call is refused `busy`."
+    },
+    "audit": {
+      "$ref": "#/$defs/audit"
+    }
+  },
+  "$defs": {
+    "endpoint": {
+      "type": "object",
+      "description": "One MCP server, reached from the outpost with a credential the outpost holds.",
+      "required": [
+        "url",
+        "tools"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "url": {
+          "type": "string",
+          "maxLength": 2000,
+          "pattern": "^https?://[^\\s@?#]+$",
+          "description": "The server's MCP endpoint, known to the outpost only; no credentials, query or fragment."
+        },
+        "auth": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "default": null,
+          "description": "The credential that opens the endpoint, which exists in the outpost's files only (ADR 0147 §7); absent, the server is called without one.",
+          "required": [
+            "from_file"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "header": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9-]{1,64}$",
+              "default": "Authorization",
+              "description": "`Authorization` sends `Bearer` and the file's content; another name sends the content raw, as the direct `mcp` connector does."
+            },
+            "from_file": {
+              "type": "string",
+              "pattern": "^/.+$",
+              "maxLength": 1024,
+              "description": "An absolute path the daemon reads the credential from; its content never leaves the outpost."
+            }
+          }
+        },
+        "tools": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.*-]{1,128}$"
+          },
+          "description": "The tools a call may name. `*` stands for any run of characters, nothing else is special, and the whole name must match. A tool outside the patterns is refused `tool_not_allowed`; an empty list serves none."
+        },
+        "writes": {
+          "enum": [
+            "deny",
+            "allow"
+          ],
+          "default": "deny",
+          "description": "`deny` refuses `write_denied` any tool the endpoint's own server does not declare read-only (`readOnlyHint`): whether a tool writes is never read from the call."
+        },
+        "timeout_s": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 300,
+          "default": 30,
+          "description": "Seconds the outpost waits for its server; past it the call is reported `unanswered`."
+        },
+        "max_payload_kb": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1024,
+          "default": 256,
+          "description": "The most a call's arguments, or its result, may weigh, in KiB of JSON: arguments above it are refused `payload_too_large`, a result above it is reported `oversized`."
+        }
+      }
+    },
+    "audit": {
+      "type": "object",
+      "description": "The outpost's own audit log (ADR 0147 §8).",
+      "required": [
+        "file"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "file": {
+          "type": "string",
+          "pattern": "^/.+$",
+          "maxLength": 1024,
+          "description": "An absolute path; the daemon appends one JSON line per event (`outpost-audit-line.schema.json`)."
+        }
+      }
+    }
+  }
+}

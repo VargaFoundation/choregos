@@ -1,4 +1,4 @@
-"""A run writes its own lines of its journal, never the platform's (S65-08, ADR 0154).
+"""A run writes its own lines of its journal, never the platform's (S65-08, ADR 0173).
 
 The run's journal has two authors: the run (its ACP log, what its runner did) and the platform (the
 verdict of each guarantee, `gate.outcome`; the memories it left out, `memory.skipped`). The console's

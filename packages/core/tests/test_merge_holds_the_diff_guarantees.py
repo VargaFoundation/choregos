@@ -1,4 +1,4 @@
-"""The shipped workflows hold their diff guarantees to the merge (S65-07, ADR 0152).
+"""The shipped workflows hold their diff guarantees to the merge (S65-07, ADR 0171).
 
 A merge names the commit its own transition's gates judged: a guarantee on the diff that only an
 earlier step carries is not held on what is merged. Every workflow the repository ships that merges

@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.models import KnowledgeGrant, Membership, Organization, Project, User, WorkItem
 from ..rbac import Principal
+from ..services.org_groups import groups_of
 from .access import served_to_project, visible_to
 
 #: The initiator kinds whose subject is a person's e-mail.
@@ -75,7 +76,7 @@ async def principal_in_org(session: AsyncSession, org_id: str, email: str) -> Pr
         kind="user",
         org_roles=org_roles,
         project_roles=project_roles,
-        groups=[str(g) for g in (user.groups or [])],
+        groups=await groups_of(session, user),
     )
 
 

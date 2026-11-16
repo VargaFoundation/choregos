@@ -64,7 +64,7 @@ async def evaluate_gates(payload: dict[str, Any]) -> list[dict[str, Any]]:
         branch = (result.artifacts.branch if result else None) or (
             bundle.config.branch_for(item.tracker_key, repo=repo_config) if repo_config is not None else ""
         )
-        # The commit this evaluation judges (ADR 0152): the head of the branch, read once. Every read
+        # The commit this evaluation judges (ADR 0171): the head of the branch, read once. Every read
         # of the branch below is a read of THAT commit, never of what the name designates by then.
         head, head_unread = await _head(scm, repo_config, branch)
         if needs_diff and repo_config is not None:
@@ -132,7 +132,7 @@ async def evaluate_gates(payload: dict[str, Any]) -> list[dict[str, Any]]:
         # The scope is judged on what the RUN wrote, since the commit where it began (S22-11): from
         # the base, it counted the work of the earlier steps. On the dev tenant, on 10/09, the ADR of
         # study #5 turned red on the Makefile that the framing step had pushed. A declaration that
-        # says `over: work_item` reads the whole diff instead, and no run (ADR 0152).
+        # says `over: work_item` reads the whole diff instead, and no run (ADR 0171).
         run_scope = await _run_diff(scm, repo_config, result, head, gates) if diff is not None else None
         context = GateContext(
             result=result,
@@ -227,7 +227,7 @@ def empty_diff_of_unchanged_run(
 
 
 async def _head(scm: Any, repo_config: Any, branch: str) -> tuple[str | None, Exception | None]:
-    """The commit the head of `branch` is at, read once per evaluation (ADR 0152).
+    """The commit the head of `branch` is at, read once per evaluation (ADR 0171).
 
     `(sha, None)`; `(None, None)` when there is no such branch, or no repository; `(None, error)`
     when the SCM cannot say — a connector that cannot read a head, a 403, an outage. Without a
@@ -267,7 +267,7 @@ async def _run_diff(
     """The files the run changed, from the commit where it began to the judged one (`head`); `None`
     when the run does not say (a runner older than S22-11), no commit is judged, or the comparison
     fails: the work item's diff then holds. Read only for a guarantee judged on a run: one declared
-    `over: work_item` reads the work item's whole diff, and nothing of a run (ADR 0152)."""
+    `over: work_item` reads the work item's whole diff, and nothing of a run (ADR 0171)."""
     start = (result.artifacts.reports.get("start_commit") if result else None) or ""
     on_a_run = any(judged_on_a_run(g["name"], g.get("params")) for g in gates)
     if not start or not on_a_run or repo_config is None:
@@ -328,19 +328,25 @@ def added_text_of(patch: str) -> str:
 
 async def _journal(session: Any, run: Run, outcomes: list[GateOutcome], head: str | None = None) -> None:
     """File each verdict in the run's journal (`gate.outcome`), with the commit it was given on
-    (`head_sha`, ADR 0152) when the evaluation judged one.
+    (`head_sha`, ADR 0171) when the evaluation judged one.
 
     The verdicts were only returned to the workflow, which decided and then forgot them: no screen
     could say WHICH guarantees had run nor what they had answered, and the product's central promise
     was invisible (state of play of 2026-09-24). The run's journal is what the page already shows;
     the verdicts take their place there.
+
+    Numbered after the highest line, at 1 at least (S65-28, finding #1608). The verdicts are judged
+    once the run's process has finished, and the runner posts its last line (`run.result`) before it
+    posts its result: the numbers after the highest are no longer the runner's to take. A journal that
+    holds only the platform's lines from before the run (`memory.skipped`, numbered below 0) does not
+    pull a verdict down to 0, a number a run may still send.
     """
     from choregos_api.db.models import RunEvent
     from choregos_core import utcnow
     from sqlalchemy import func, select
 
     last = (await session.execute(select(func.max(RunEvent.seq)).where(RunEvent.run_id == run.id))).scalar()
-    seq = int(last or 0)
+    seq = max(int(last or 0), 0)
     for outcome in outcomes:
         seq += 1
         session.add(
@@ -366,7 +372,7 @@ async def _publish_check_runs(
 ) -> None:
     """Check-runs `choregos/scope` and `choregos/evidence` (S3-05): the verdict is visible in the PR,
     on the work item's target repository (ADR 0124), on the commit it was given on (`head`, ADR
-    0152) — never on a commit a run declared. Without a judged commit there is nothing to mark."""
+    0171) — never on a commit a run declared. Without a judged commit there is nothing to mark."""
     if not item.pr_url or repo_config is None or head is None or not hasattr(scm, "create_check_run"):
         return
     repo = _repo_slug(repo_config.url)
@@ -402,7 +408,7 @@ async def check_scope_violations(payload: dict[str, Any]) -> list[str]:
         repo = _repo_slug(repo_config.url)
         branch = bundle.config.branch_for(item.tracker_key, repo=repo_config)
         scm = await scm_for(session, bundle, repo_config.url)
-        # The commit at the head of the branch, read once (ADR 0152); a branch that is not there is
+        # The commit at the head of the branch, read once (ADR 0171); a branch that is not there is
         # compared by its name, and the SCM answers as it did.
         head, unread = await _head(scm, repo_config, branch)
         if unread is not None:

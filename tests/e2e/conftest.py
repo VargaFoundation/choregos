@@ -159,6 +159,9 @@ class Platform:
     project_slug: str
     adapters: Any
     env: Any
+    #: The API application the client talks to: what another client of the same platform (an
+    #: outpost's daemon, S65-19) reaches through its own ASGI transport.
+    app: Any = None
 
     async def work_item(self, key: str) -> Any:
         from choregos_api.db.models import WorkItem
@@ -233,7 +236,12 @@ async def platform(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncItera
     transport = ASGITransport(app=application)
     async with AsyncClient(transport=transport, base_url="http://e2e") as http:
         yield Platform(
-            client=http, project_id=project_id, project_slug=project_slug, adapters=adapters, env=environment
+            client=http,
+            project_id=project_id,
+            project_slug=project_slug,
+            adapters=adapters,
+            env=environment,
+            app=application,
         )
     await environment.shutdown()
     set_adapters_override(None)

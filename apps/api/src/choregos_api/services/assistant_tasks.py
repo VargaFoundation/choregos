@@ -13,6 +13,10 @@ opens ordinary work items, the way a person's click does.
 - **poll**: on its window, the declared read operation is called through the broker under the
   connector's own (service) identity; the run starts only when `when` holds, once per object
   (`idempotency` pointer): the keys seen are kept on the subscription and in the work item's key.
+- **trigger** (S63-21): an event of ADR 0113 posted to the installation's task door names its subscriber
+  by a JSON pointer; it starts the task in that person's personal space under the same gate as a window
+  (`gate`: audience, delegation, budget) and the same `start_run`, once per event id
+  (`services/task_events.py`). Nothing here polls: `run_due` ignores the kind.
 - **on demand**: `run_now`, with the caller as initiator; no delegation is needed (the session's identity).
 - **delegation**: a task with `delegation: read_only` can be subscribed, but its scheduled and polled runs
   are REFUSED with a reason unless the subscription's standing delegation (S63-14,
@@ -25,6 +29,7 @@ opens ordinary work items, the way a person's click does.
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -59,6 +64,7 @@ from .assistant_memory import subjects_in
 from .broker import BrokerTool, call
 from .definitions import active_workflow_named, publish_workflow
 from .initiator import initiator
+from .org_groups import groups_of
 from .personal_spaces import personal_space
 from .task_poll import due_objects
 from .tickets import create_work_item, start_work_item
@@ -141,10 +147,10 @@ def _trigger_of(declared: dict[str, Any], body: TaskSubscriptionPut) -> dict[str
     if trigger is None:
         kinds = sorted({str(t.get("kind")) for t in declared.get("triggers") or []})
         raise unprocessable(f"the task `{declared['name']}` has no `{body.kind}` trigger (it has: {kinds})")
-    if body.kind == "on_demand":
+    if body.kind in ("on_demand", "trigger"):
         if body.cron or body.timezone:
-            raise unprocessable("an on-demand trigger has no cron and no time zone")
-        return {"kind": "on_demand"}
+            raise unprocessable(f"a `{body.kind}` trigger has no cron and no time zone")
+        return {"kind": body.kind}
     own_hour = bool(trigger.get("user_timezone"))
     cron = body.cron or str(trigger["cron"])
     if cron != trigger["cron"] and not (body.kind == "schedule" and own_hour):
@@ -191,7 +197,7 @@ async def put_subscription(
         sub.seen_keys = []
     sub.enabled = body.enabled
     sub.last_refusal = None
-    if trigger["kind"] != "on_demand":
+    if trigger["kind"] in ("schedule", "poll"):
         window = latest_window(trigger["cron"], trigger["timezone"], now)
         if window is not None and sub.last_window is None:
             sub.last_window = _stamp(window)
@@ -545,14 +551,22 @@ async def _claim(session: AsyncSession, sub: Subscription, window: datetime) -> 
     return bool(claimed.rowcount)  # type: ignore[attr-defined]
 
 
-async def _run_one(session: AsyncSession, sub: Subscription, now: datetime) -> str | None:
-    """One subscription's pass; returns what it started (`schedule:<window>` or `poll:<key>`), or nothing."""
-    kind = str(sub.trigger.get("kind"))
-    if kind not in ("schedule", "poll"):
-        return None
-    window = latest_window(str(sub.trigger["cron"]), str(sub.trigger.get("timezone") or "UTC"), now)
-    if window is None or sub.last_window == _stamp(window):
-        return None
+@dataclass(slots=True)
+class Gate:
+    """What a run of a subscription is judged on: the entities, the delegation, and why it is refused."""
+
+    organisation: Organization
+    row: AssistantInstallation
+    user: User
+    declared: dict[str, Any] | None
+    delegation: Delegation | None
+    refusal: str | None
+
+
+async def gate(session: AsyncSession, sub: Subscription, now: datetime) -> Gate | None:
+    """The rules every kind of run shares (a window, an object, an event): the task is still declared, the
+    installation ready, the subscriber still in the audience, the delegation valid when the task needs
+    one, then the budget. `None` when the organisation, the installation or the person is gone."""
     organisation = await session.get(Organization, sub.org_id)
     row = await session.get(AssistantInstallation, sub.installation_id)
     user = await session.get(User, sub.user_id)
@@ -580,7 +594,7 @@ async def _run_one(session: AsyncSession, sub: Subscription, now: datetime) -> s
             user_id=user.id,
             email=user.email,
             org_roles={organisation.slug: Role.VIEWER},
-            groups=list(user.groups or []),
+            groups=await groups_of(session, user),
         ),
         Permission.ASSISTANT_USE,
         organisation.slug,
@@ -591,6 +605,22 @@ async def _run_one(session: AsyncSession, sub: Subscription, now: datetime) -> s
         refusal = delegation_refusal
     if refusal is None and document is not None and declared is not None:
         refusal = await _over_budget(session, row, document, user.id)
+    return Gate(organisation, row, user, declared, delegation, refusal)
+
+
+async def _run_one(session: AsyncSession, sub: Subscription, now: datetime) -> str | None:
+    """One subscription's pass; returns what it started (`schedule:<window>` or `poll:<key>`), or nothing."""
+    kind = str(sub.trigger.get("kind"))
+    if kind not in ("schedule", "poll"):
+        return None
+    window = latest_window(str(sub.trigger["cron"]), str(sub.trigger.get("timezone") or "UTC"), now)
+    if window is None or sub.last_window == _stamp(window):
+        return None
+    judged = await gate(session, sub, now)
+    if judged is None:
+        return None
+    organisation, row, user, declared = judged.organisation, judged.row, judged.user, judged.declared
+    delegation, refusal = judged.delegation, judged.refusal
     if refusal is not None or declared is None:
         if await _claim(session, sub, window):
             sub.last_refusal = refusal

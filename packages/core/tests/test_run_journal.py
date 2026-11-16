@@ -1,4 +1,4 @@
-"""Which lines of a run's journal are the platform's to write (S65-08, ADR 0154)."""
+"""Which lines of a run's journal are the platform's to write (S65-08, ADR 0173)."""
 
 from __future__ import annotations
 

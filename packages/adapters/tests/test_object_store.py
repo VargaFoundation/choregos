@@ -151,3 +151,43 @@ async def test_the_fake_check_answers_and_can_be_scripted_to_fail() -> None:
     store.fail_next("down")
     with pytest.raises(ObjectStoreError, match="down"):
         await store.check()
+
+
+async def test_s3_deletes_and_a_missing_object_is_not_an_error() -> None:
+    seen: list[httpx.Request] = []
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(404 if request.url.path.endswith("absent") else 204)
+
+    store = S3ObjectStore(
+        "s3://choregos/artifacts",
+        endpoint="http://localhost:9000",
+        access_key="choregos",
+        secret_key="secret",
+        client=httpx.AsyncClient(transport=httpx.MockTransport(answer)),
+    )
+    await store.delete("orgs/acme/deck")
+    await store.delete("orgs/acme/absent")
+    assert [r.method for r in seen] == ["DELETE", "DELETE"]
+    assert seen[0].url.path == "/choregos/artifacts/orgs/acme/deck"
+    assert seen[0].headers["Authorization"].startswith("AWS4-HMAC-SHA256 Credential=choregos/")
+    refusing = S3ObjectStore(
+        "s3://choregos",
+        endpoint="http://localhost:9000",
+        client=httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(403, text="denied"))),
+    )
+    with pytest.raises(ObjectStoreError, match="refused DELETE"):
+        await refusing.delete("k")
+
+
+async def test_the_fake_deletes_idempotently_and_can_refuse() -> None:
+    store = FakeObjectStore()
+    await store.put("k", b"x", "text/plain")
+    await store.delete("k")
+    await store.delete("k")
+    with pytest.raises(ObjectNotFoundError):
+        await store.get("k")
+    store.fail_next()
+    with pytest.raises(ObjectStoreError):
+        await store.delete("k")

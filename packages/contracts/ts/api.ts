@@ -165,7 +165,7 @@ export type Problem = {
     column?: number;
   }>;
   retry_after?: number;
-  /** A machine code on some 409s: `stale_base` (from an agent publication, or from `updateProject`), `no_change`, `eval_failed` (S40-12) */
+  /** A machine code on some 409s: `stale_base` (from an agent publication, or from `updateProject`), `no_change`, `eval_failed` (S40-12), `action_not_in_doubt` and `action_already_settled` (`settleAction`); on the 403 of `approveOutpostInstance`, `approval_requires_session` */
   code?: string;
   /** On `stale_base` and `no_change`: the agent's latest version */
   latest_version?: number;
@@ -192,6 +192,16 @@ export type Me = {
   display_name: string;
   oidc_sub?: string;
   last_login_at?: string | null;
+  /** from the identity provider's `given_name` claim, at the last sign-in (ADR 0162) */
+  given_name?: string | null;
+  /** from the identity provider's `family_name` claim */
+  family_name?: string | null;
+  /** from the identity provider's job title claim, when it sends one */
+  job_title?: string | null;
+  /** from the identity provider's department claim, when it sends one */
+  department?: string | null;
+  /** the person's photo, same-origin (`getUserAvatar`); null without one */
+  avatar_url?: string | null;
   memberships: Array<Membership>;
 };
 
@@ -203,7 +213,160 @@ export type Membership = {
   role: Role;
 };
 
-/** A member's account on a tracker, by the provider's stable numeric user id. Only GitHub for now: the other trackers come when their deliveries are signed per source. */
+/** A member's account on a code forge (ADR 0161): one per member and instance (`provider`, `base_url`), one member per account on an instance. Only `external_id` is ever matched; the rest is shown. */
+export type LinkedAccount = {
+  id: string;
+  org: string;
+  user_id: string;
+  provider: "github" | "gitlab" | "forgejo";
+  /** the forge instance, e.g. https://github.com */
+  base_url: string;
+  /** the forge's stable numeric user id */
+  external_id: string;
+  /** display only, never matched */
+  login: string;
+  avatar_url?: string | null;
+  profile_url?: string | null;
+  /** the member signed in to the forge; `false`: an administrator declared it */
+  verified: boolean;
+  verified_at?: string | null;
+  /** the `forge_account` connector whose OAuth application proved it */
+  connector?: string | null;
+  created_by?: string | null;
+  created_at: string;
+};
+
+export type LinkedAccountDeclare = {
+  provider: "github" | "gitlab" | "forgejo";
+  /** the instance; by default https://github.com or https://gitlab.com, required for Forgejo */
+  base_url?: string | null;
+  /** the forge's numeric user id, never a login */
+  external_id: string;
+  /** display only */
+  login: string;
+};
+
+/** A forge instance the caller can link an account on. */
+export type ForgeInstance = {
+  org: string;
+  /** the `forge_account` connector's name */
+  instance: string;
+  provider: "github" | "gitlab" | "forgejo";
+  base_url: string;
+};
+
+export type MyLinkedAccounts = {
+  items: Array<LinkedAccount>;
+  instances: Array<ForgeInstance>;
+};
+
+export type LinkedAccountStart = {
+  authorization_url: string;
+};
+
+export type Avatar = {
+  /** same-origin, versioned: `/api/v1/users/{id}/avatar?v=…` */
+  avatar_url: string;
+};
+
+/** One member's profile (ADR 0162). `view: basic` carries the card every member of the organisation reads; `view: full` adds the account, the sessions and the work (an administrator, or the person themself). `administration` is set for an administrator only. */
+export type MemberProfile = {
+  user_id: string;
+  org: string;
+  view: "basic" | "full";
+  /** `former`: no role in the organisation or its projects any more */
+  status: "active" | "former";
+  display_name: string;
+  given_name?: string | null;
+  family_name?: string | null;
+  job_title?: string | null;
+  department?: string | null;
+  email: string;
+  avatar_url?: string | null;
+  /** null: project roles only, or a former member */
+  org_role?: Role | null;
+  project_roles: Array<MemberProjectRole>;
+  groups: Array<MemberGroup>;
+  /** how the account came; full view only */
+  origin?: "identity_provider" | "provisioned" | "manual" | null;
+  last_login_at?: string | null;
+  sessions?: MemberSessions | null;
+  work?: MemberWork | null;
+  administration?: MemberAdministration | null;
+};
+
+export type MemberProjectRole = {
+  project_slug: string;
+  project_name: string;
+  role: Role;
+};
+
+export type MemberGroup = {
+  slug: string;
+  name: string;
+  /** an organisation group (ADR 0160), or the identity provider's `groups` claim as of the last sign-in */
+  source: "internal" | "scim" | "identity_provider";
+};
+
+export type MemberSessions = {
+  /** browser sessions neither ended nor expired (ADR 0130) */
+  open: number;
+  last_activity_at?: string | null;
+};
+
+/** In the organisation's team projects the caller reads; a personal space is never shown. */
+export type MemberWork = {
+  pending_requests: Array<MemberPendingRequest>;
+  decisions: Array<MemberDecision>;
+  runs: Array<MemberRun>;
+  /** what the person's assistant conversations and tasks cost in this organisation since the first of the month (the ledger lines that name them) */
+  spend_month_usd?: number | null;
+};
+
+export type MemberPendingRequest = {
+  id: string;
+  work_item_id: string;
+  work_item_key: string;
+  work_item_title: string;
+  project_slug: string;
+  kind: string;
+  requested_at: string;
+  due_at?: string | null;
+  /** addressed to them, or to a group they are in */
+  via: "person" | "group";
+  group?: string | null;
+};
+
+export type MemberDecision = {
+  request_id: string;
+  work_item_id: string;
+  work_item_key: string;
+  work_item_title: string;
+  project_slug: string;
+  kind: string;
+  approved?: boolean | null;
+  decided_at: string;
+};
+
+export type MemberRun = {
+  id: string;
+  work_item_id: string;
+  work_item_key: string;
+  project_slug: string;
+  stage_role: string;
+  status: string;
+  started_at?: string | null;
+  cost_usd: number;
+};
+
+export type MemberAdministration = {
+  /** the person's API tokens that have not expired; never a token */
+  api_tokens: number;
+  /** the organisation's recent audit events where they are the actor or the target */
+  audit: Array<AuditEntry>;
+};
+
+/** Deprecated (ADR 0161): a member's GitHub link at github.com, as the `tracker-identities` routes answer it. Use `LinkedAccount`. */
 export type TrackerIdentity = {
   tracker: "github";
   /** the provider's numeric user id */
@@ -392,6 +555,62 @@ export type GitHubAppStatus = {
   installations: Array<GitHubInstallation>;
 };
 
+/** The App this instance acts as (S70-21, ADR 0167). No secret. */
+export type GitHubAppRegistrationStatus = {
+  /** deployment: the deployment's settings name it (they win); manifest: created from the console; none: no App */
+  source: "none" | "deployment" | "manifest";
+  app_id?: string | null;
+  /** A stored App's; a deployment's App is read from GitHub elsewhere */
+  slug?: string | null;
+  name?: string | null;
+  owner_login?: string | null;
+  /** Organization or User */
+  owner_type?: string | null;
+  html_url?: string | null;
+  /** Installable by any account (true) or by its owner's account only */
+  public?: boolean | null;
+  webhook_active?: boolean | null;
+  created_by?: string | null;
+  created_at?: string | null;
+  /** The App's credentials are available (false for a stored App whose sealing key is gone) */
+  usable: boolean;
+  /** Why a new App cannot be created from the console now; null when it can */
+  blocked_by?: string | null;
+  /** A name for the App derived from the instance's host (GitHub names are unique, 34 characters at most) */
+  suggested_name: string;
+  /** What the App is asked for: the adapters' own list, the one the GitHub procedures show */
+  permissions: {
+    [key: string]: "read" | "write";
+  };
+  /** The webhook events the App subscribes to; installation events are delivered to every App */
+  events: Array<string>;
+  webhook_url: string;
+  /** Where GitHub sends a person after installing the App (the Setup route) */
+  callback_url: string;
+  /** Where GitHub sends the browser once the App is registered */
+  redirect_url: string;
+};
+
+export type GitHubAppManifestRequest = {
+  /** The App's name on GitHub, unique across GitHub */
+  name: string;
+  /** The GitHub organisation that owns the App; absent: the personal account of the person who registers it */
+  organization?: string | null;
+  /** Installable by any account (true) or only by its owner's account (false). Required: an explicit choice */
+  public: boolean;
+  /** GitHub can reach this instance's webhook URL */
+  webhook_active?: boolean;
+};
+
+export type GitHubAppManifestStart = {
+  /** GitHub's registration page, with the signed state */
+  action_url: string;
+  /** The JSON to post as the form field `manifest` */
+  manifest: {
+    [key: string]: unknown;
+  };
+};
+
 export type GitHubRepository = {
   /** owner/repo */
   full_name: string;
@@ -453,7 +672,14 @@ export type ConnectorOperation = {
   arguments?: {
     [key: string]: unknown;
   } | null;
+  /** the arguments the organisation's rule says the PLATFORM fills on a governed call of this operation, never the agent: what a connector type or a plugin's server declares for its own operations (`platform_arguments` of `plugin-server.schema.json`), said here by the administrator for a discovered tool, which declares nothing. Empty for an operation whose type or plugin server declares them. For a write through an outpost, listing `action_key` is the statement that the operation takes the platform's idempotency key: after a doubt it may be delivered again with the same key (ADR 0149 §5-6) */
+  platform_arguments?: Array<PlatformArgument>;
+  /** the administrator's explicit statement that an in-doubt outcome is accepted for this operation: a write through an outpost is delivered at most once, and when the instance that claimed it never answers, its action ends `in_doubt` (ADR 0149 §5-6). True only for a write of a connector of type `mcp-outpost` */
+  in_doubt_accepted?: boolean;
 };
+
+/** An argument the platform fills, never the agent; whatever was written under its name is dropped first. `action_key`: an idempotency key, stable for one governed action and call (the same at every retry and at every delivery, another for another call). `work_item_key`: the work item the action belongs to. The same list as `platform_arguments` of a plugin server's operation (`plugin-server.schema.json`). */
+export type PlatformArgument = "action_key" | "work_item_key";
 
 export type ConnectorDiscovery = {
   added?: Array<string>;
@@ -466,6 +692,7 @@ export type OrgConnector = {
   name: string;
   kind: string;
   type: string;
+  /** the type's configuration, as `GET /connectors/types` gives its schema; for the type `mcp-outpost` it is `McpOutpostConnectorConfig`: an outpost and an endpoint alias, no URL and no secret (ADR 0149) */
   config?: {
     [key: string]: unknown;
   };
@@ -735,6 +962,7 @@ export type OrgConnectorCreate = {
   name: string;
   type: string;
   kind?: string | null;
+  /** the type's configuration; for the type `mcp-outpost`, `McpOutpostConnectorConfig` */
   config?: {
     [key: string]: unknown;
   };
@@ -779,6 +1007,10 @@ export type OperationPatch = {
   arguments?: {
     [key: string]: unknown;
   } | null;
+  /** the arguments the platform fills on a governed call of this operation (see `ConnectorOperation`); absent leaves them, null or an empty list clears them. Refused (422) for a read, for an operation whose type or plugin server declares its own, when it names an argument the operation's input schema does not have, and when clearing `action_key` would leave an open write of a connector at an outpost with neither statement (ADR 0149 §6) */
+  platform_arguments?: Array<PlatformArgument> | null;
+  /** true: an in-doubt outcome is accepted for this operation, explicitly (see `ConnectorOperation`); absent leaves it, null or false withdraws it. Refused (422) for anything but a write of a connector at an outpost, and when withdrawing it would leave an open write of such a connector with neither statement (ADR 0149 §6) */
+  in_doubt_accepted?: boolean | null;
 };
 
 export type ProjectOperation = {
@@ -853,13 +1085,17 @@ export type ActionEffect = {
   position: number;
   key: string;
   effect: string;
-  status: "started" | "done" | "compensated" | "compensation_failed";
+  /** `in_doubt`: the effect was sent and nobody knows whether it was executed (a write through an outpost that was claimed and never answered, ADR 0149 §5). It is not attempted again and not compensated until a person settles it (`settleAction`): `made` records it `done`, `not_made` records it `not_made`, an effect never attempted again and never compensated, since it did nothing */
+  status: "started" | "done" | "compensated" | "compensation_failed" | "in_doubt" | "not_made";
   attempts?: number;
+  /** what a done effect returned. For an effect `in_doubt`, `in_doubt` lists what was sent and never answered, one entry per delivery (`outpost`, `endpoint`, `operation`, `call_id`, `instance_id`, `claimed_at`, `arguments_sha256`), and `again` says whether the effect's own retries may deliver it again: true only for an operation that takes the platform's idempotency key */
   result?: {
     [key: string]: unknown;
   } | null;
   error?: string | null;
   finished_at?: string | null;
+  /** what a person recorded of this effect once it was in doubt; null for an effect that never was */
+  settlement?: ActionSettlement | null;
 };
 
 /** A governed action (ADR 0035) and the log of its effects. */
@@ -884,7 +1120,8 @@ export type Action = {
   decisions?: Array<{
     [key: string]: unknown;
   }>;
-  status: "pending_approval" | "rejected" | "approved" | "running" | "awaiting_evidence" | "succeeded" | "failed";
+  /** `in_doubt` ends what the platform does by itself, like `succeeded`, `failed` and `rejected`: one of the action's effects was sent and nobody knows whether it was executed (ADR 0149 §5). Nothing replays it and nothing it had done is compensated automatically. Only a person moves it on: they check the system the write was for and settle the action (`settleAction`), which makes it `approved` again, to end `succeeded` or `failed`. The journal says which effect, and what was sent */
+  status: "pending_approval" | "rejected" | "approved" | "running" | "awaiting_evidence" | "succeeded" | "failed" | "in_doubt";
   result?: {
     [key: string]: unknown;
   } | null;
@@ -896,6 +1133,43 @@ export type Action = {
   created_at?: string | null;
   finished_at?: string | null;
   journal?: Array<ActionEffect>;
+  /** what a person recorded once the action was in doubt (`settleAction`): the same record as on the effect it concerns. Null for an action that was never settled */
+  settlement?: ActionSettlement | null;
+};
+
+/** What a person found in the system an action in doubt wrote to (ADR 0149 §5). */
+export type ActionSettlementRequest = {
+  outcome: SettlementOutcome;
+  /** what the person checked, and where: a settlement always says it */
+  note: string;
+  /** with `made` only (422 otherwise): what the write returned, as the person read it in the system, recorded as the effect's result for the effects after it to cite (`effects[<position>]`). None: an empty result. At most 16 KiB as JSON */
+  result?: {
+    [key: string]: unknown;
+  } | null;
+};
+
+/** `made`: the write is in the system, and the action resumes after it. `not_made`: it is not, and the action fails, compensating what it had done before it */
+export type SettlementOutcome = "made" | "not_made";
+
+/** What a person recorded of an effect in doubt, and the doubt's evidence, kept with it. */
+export type ActionSettlement = {
+  /** the effect in doubt that was settled */
+  position: number;
+  outcome: SettlementOutcome;
+  /** who settled it (their e-mail) */
+  by: string;
+  at: string;
+  note: string;
+  /** the result the person stated, with `made` */
+  result?: {
+    [key: string]: unknown;
+  } | null;
+  /** how old their authentication was, as on a decision */
+  auth_age_seconds?: number | null;
+  /** what was sent and never answered, one entry per delivery, as the effect in doubt held it (`outpost`, `endpoint`, `operation`, `call_id`, `instance_id`, `claimed_at`, `arguments_sha256`) */
+  in_doubt: Array<{
+    [key: string]: unknown;
+  }>;
 };
 
 export type ReadinessFix = {
@@ -1130,6 +1404,8 @@ export type ProcessStep = {
   model?: string | null;
   /** The group of a human actor. */
   group?: string | null;
+  /** The person a human actor names, by e-mail (ADR 0153): asked first, before the group. */
+  user?: string | null;
   /** The SLA of a human actor. */
   sla_hours?: number | null;
   /** The argv of a job actor. */
@@ -1398,6 +1674,35 @@ export type AgentResponse = {
   error?: AgentResponseError | null;
   /** The memory spaces the turn wrote or proposed in (a conversation with an assistant). */
   memory_updated?: Array<string>;
+  /** What the turn's knowledge tools returned (ADR 0154 §4, G1): the same list the MCP door's answer carries for the same turn. Empty outside a conversation with an assistant. */
+  citations?: Array<AgentCitation>;
+  /** The writes and launches the assistant proposed and the person has not decided, each with the console address where they decide (G1). Listing is not deciding: a surface shows them, the person confirms from their own session. */
+  pending_actions?: Array<AgentPendingAction>;
+  /** The accounts a tool of the turn needed and the person has not connected, with where to connect them (G1). */
+  missing_accounts?: Array<AgentMissingAccount>;
+};
+
+/** A passage or document a knowledge tool returned in the turn: what the assistant was given to cite (ADR 0139 §3). */
+export type AgentCitation = {
+  document_id: string;
+  title?: string | null;
+  version?: string | null;
+  /** the knowledge base it comes from */
+  base?: string | null;
+  [key: string]: unknown;
+};
+
+export type AgentPendingAction = {
+  id: string;
+  summary: string;
+  /** the console's address where the person decides; the CLI and an editor cannot compute it */
+  confirm_url: string;
+};
+
+export type AgentMissingAccount = {
+  /** the connector's need that has no connected account */
+  need: string;
+  connect_url: string;
 };
 
 /** A `response.output_text.delta` event. */
@@ -1477,6 +1782,8 @@ export type ConversationPage = {
 export type ConversationMessageCreate = {
   input: string;
   stream?: boolean;
+  /** ADR 0154 §4, G2. The turn keeps running, and is booked once, when the client that sent it goes away; its progress is read from `GET /me/conversations/{id}/events` and its answer from `GET /me/conversations/{id}`. A client that stays receives the same answer as without it. */
+  detach?: boolean;
 };
 
 /** A thumb on one answer of a session (S63-17, ADR 0140). */
@@ -2151,6 +2458,65 @@ export type Agent = {
   release_policy?: AgentReleasePolicy;
   /** the release waiting for approval */
   pending_release?: AgentRelease | null;
+  social?: AgentSocial;
+};
+
+/** The counters of an agent and what the caller does with it (ADR 0152). `forks` counts the forks the caller may see. */
+export type AgentSocial = {
+  watchers?: number;
+  stars?: number;
+  forks?: number;
+  /** the caller's watch level */
+  watching?: "all" | "releases" | null;
+  starred_by_me?: boolean;
+};
+
+export type AgentWatchPut = {
+  level?: "all" | "releases";
+};
+
+export type AgentForkEntry = {
+  slug: string;
+  display_name: string;
+  scope: "platform" | "org" | "project" | "personal";
+  project?: string | null;
+  owner?: string | null;
+  created_at?: string | null;
+  /** the version of the source this fork copied */
+  forked_from_version?: number | null;
+  latest_version: number;
+  /** its own versions go past the first */
+  diverged?: boolean;
+  lifecycle?: "draft" | "active" | "deprecated" | "retired";
+};
+
+export type AgentForkList = {
+  items: Array<AgentForkEntry>;
+};
+
+export type AgentNotification = {
+  id: string;
+  kind: "version_published" | "production_moved" | "candidate_started" | "candidate_promoted" | "candidate_withdrawn" | "rolled_back" | "forked" | "lifecycle_changed";
+  agent: string;
+  /** the fork a `forked` item names */
+  fork?: string | null;
+  actor?: string | null;
+  version?: number | null;
+  previous_version?: number | null;
+  /** what the move was (`promote`, `rollback`, `publish`) or the lifecycle reached */
+  detail?: string | null;
+  created_at: string;
+  read_at?: string | null;
+};
+
+export type AgentNotificationList = {
+  items: Array<AgentNotification>;
+  /** unread items the caller may still read */
+  unread?: number;
+};
+
+export type AgentNotificationsRead = {
+  updated: number;
 };
 
 export type AgentReleaseDecision = {
@@ -2373,6 +2739,19 @@ export type AgentAccessTool = {
   access?: "read" | "write" | "approval" | null;
   /** why a named tool is refused */
   reason?: string | null;
+  outpost?: AgentAccessOutpost;
+};
+
+/** Where a connector tool reached through an outpost lives (ADR 0149 §10, amending ADR 0127 §6): the outpost, the alias of the endpoint in its policy file, and whether a call made now would be handed to an instance. Present on the tool of an `mcp-outpost` connector and on no other: a tool of a direct connector carries no `outpost` key. Read when the access is asked, never promised: a person reads before a run that a tool its agent names will not answer. */
+export type AgentAccessOutpost = {
+  /** the outpost's slug; null when the connector routes to no outpost of the organisation (a call is then refused `outpost_paused`). An outpost of another organisation is never named */
+  name: string | null;
+  /** the alias of the endpoint in the outpost's policy file, as the connector names it */
+  endpoint: string;
+  /** the outpost's status: a call is handed to it only while it is `active`; null when the connector routes to no outpost of the organisation */
+  status: OutpostStatus | null;
+  /** an active instance that serves the alias polled within the poll window: the presence the call's own route reads. false when none did (a call fails at once, `outpost_offline`), when the connector routes to no outpost of the organisation, and while outposts are switched off on the deployment */
+  online: boolean;
 };
 
 export type AgentAccessItem = {
@@ -2654,6 +3033,12 @@ export type ProjectAgent = {
   effective: AgentSpec;
   /** said when the agent is deprecated */
   warning?: string | null;
+};
+
+/** Optional body of an approval: the importer forces the approval of their own version, with a written reason the audit keeps (ADR 0050 amendment). */
+export type SkillApproval = {
+  force?: boolean;
+  reason?: string | null;
 };
 
 export type SkillFiles = {
@@ -3407,6 +3792,289 @@ export type McpGatewayTest = {
   error: string | null;
 };
 
+/** `paused`: nothing more is handed to it, what its instances hold may finish. `revoked`: final; its instances are revoked and its epoch moved (ADR 0147 §5). */
+export type OutpostStatus = "active" | "paused" | "revoked";
+
+/** `pending`: enrolled with a token and handed nothing until a person approves it against its fingerprint (ADR 0147 §4). */
+export type OutpostInstanceStatus = "pending" | "active" | "revoked";
+
+/** What an outpost may be used for (ADR 0147 §11). `tools` is the one capability of this version. `runs` is reserved: no daemon announces it and no organisation can enable it (ADR 0149 §12). */
+export type OutpostCapability = "tools" | "runs";
+
+/** A tool call, or a tool listing (discovery). */
+export type OutpostCallKind = "call_tool" | "list_tools";
+
+/** `pending`: claimed by no instance yet. `claimed`: leased to one instance. `answered`: that instance answered within its lease. `refused`: the outpost's own policy refused it, and nothing reached its server. `expired`: no active instance claimed it in time, and nothing reached any server. `timed_out`: a claimed read got no answer within its lease; it may be asked again. `in_doubt`: a claimed write got no answer within its lease; nobody knows whether the server executed it, and it is never handed over again (ADR 0149 §5). */
+export type OutpostCallState = "pending" | "claimed" | "answered" | "refused" | "expired" | "timed_out" | "in_doubt";
+
+/** What the instance reported of a call it took to its server. `result`: the server answered. `error`: it answered a JSON-RPC error. `unanswered`: the call was sent, or begun, and the instance holds no answer. `oversized`: the server answered and its result was above a ceiling; it was executed and its result was not sent. */
+export type OutpostAnswerOutcome = "result" | "error" | "unanswered" | "oversized";
+
+/** Why an outpost did not execute a call: a closed list that names a class of refusal and never the rule that produced it (ADR 0147 §10). Whatever the code, the outpost's server did not receive the call. `signature_refused` on a call the platform did hand over says that the outpost's policy file does not pin the key the door signs with (ADR 0148 §13). `cannot_record` says that the outpost could not write its journal or its audit line, and so did not make the call. `busy` also covers a call claimed and never begun because the daemon was stopping or was restarted. */
+export type OutpostRefusalCode = "unknown_endpoint" | "tool_not_allowed" | "write_denied" | "payload_too_large" | "busy" | "endpoint_unavailable" | "cannot_record" | "unsupported_kind" | "signature_refused" | "call_unreadable" | "deadline_passed" | "cancelled";
+
+export type OutpostCreate = {
+  /** the name connectors route by and the journal shows (`outpost:<slug>/<alias>`) */
+  slug: string;
+  display_name?: string | null;
+  /** what the organisation enables this outpost for; `tools` is the one capability that can be enabled */
+  capabilities?: Array<"tools">;
+};
+
+export type OutpostInstanceCounts = {
+  pending: number;
+  active: number;
+  revoked: number;
+};
+
+/** An outpost as its organisation keeps it (ADR 0147). Nothing of the outpost's side is stored: no address, no credential (ADR 0147 §7). */
+export type Outpost = {
+  slug: string;
+  display_name: string;
+  status: OutpostStatus;
+  /** what the organisation enabled; an outpost is used only for what its instances also announce */
+  capabilities: Array<OutpostCapability>;
+  /** moved by every revocation, of the outpost or of one instance: an answer is taken only under the epoch its call was claimed in (ADR 0147 §5) */
+  epoch: number;
+  /** an active instance polled within the poll window */
+  online: boolean;
+  /** the last poll of any of its instances */
+  last_seen_at: string | null;
+  instances: OutpostInstanceCounts;
+  /** the endpoint aliases its active instances announce: names only, which a connector's `endpoint` picks from */
+  endpoints: Array<string>;
+  /** the `mcp-outpost` connectors that route to it; it is not deleted while one remains */
+  connectors: Array<string>;
+  /** the door's origin, as the outpost's policy file names it (`control_plane`): the line above `door_keys` in that file. The deployment's, the same for every outpost; null when it declares none */
+  control_plane: string | null;
+  /** the door's public signing keys an operator pins in the outpost's policy file (`door_keys`), which is the only place an outpost reads them from (ADR 0148 §13): the first is the one that signs now, the others are announced for a rotation. Public keys, each the unpadded base64url of 32 raw bytes; empty while the deployment has no door */
+  door_keys: Array<string>;
+  created_by: string | null;
+  created_at: string;
+};
+
+export type OutpostList = {
+  items: Array<Outpost>;
+  /** the deployment keeps outposts switched on (`CHOREGOS_OUTPOSTS`, ADR 0147 §12); off, `createOutpost` and `createOutpostEnrolment` answer 409 `outposts_disabled`, and what exists can still be read, revoked and removed */
+  enabled: boolean;
+  /** the outposts' door has a signing key (`CHOREGOS_OUTPOSTS_DOOR_SIGNING_KEY`); without one there is no key to pin, and `createOutpostEnrolment` answers 409 `door_key_missing` (ADR 0148 §13) */
+  door_signing_key: boolean;
+};
+
+export type OutpostEnrolmentCreate = {
+  expires_in_minutes?: number;
+};
+
+/** An enrolment token, shown once. The platform keeps its digest. */
+export type OutpostEnrolmentCreated = {
+  id: string;
+  /** The plaintext token, returned only once: what `choregos-outpost enrol` presents. */
+  token: string;
+  expires_at: string;
+  /** the door's origin, as the outpost's policy file names it (`control_plane`); null when the deployment declares none */
+  control_plane: string | null;
+  /** the door's public signing keys to pin in the outpost's policy file (`door_keys`) before the daemon starts: the first is the one that signs now, the others are announced for a rotation. The console and the CLI print them beside the enrolment command; no answer of the door itself carries them (ADR 0148 §13) */
+  door_keys: Array<string>;
+};
+
+/** An enrolment token that can still enrol an instance, as the platform keeps it: never the token, whose digest is all that is kept. */
+export type OutpostEnrolment = {
+  /** the `id` its creation answered, which `cancelOutpostEnrolment` takes */
+  id: string;
+  expires_at: string;
+  /** who issued it */
+  created_by: string | null;
+  created_at: string;
+};
+
+export type OutpostEnrolmentList = {
+  items: Array<OutpostEnrolment>;
+};
+
+/** One copy of the daemon `choregos-outpost`, with keys made on the spot (ADR 0147 §2). Only public data: the platform never holds a private key of an instance. */
+export type OutpostInstance = {
+  id: string;
+  status: OutpostInstanceStatus;
+  /** `SHA256:` and the unpadded base64url SHA-256 of its raw Ed25519 signing key: what the daemon printed at enrolment and a person compares before approving */
+  fingerprint: string;
+  /** the daemon's own release, as it announced it last */
+  daemon_version: string;
+  /** the door protocol it spoke last */
+  protocol: number;
+  /** what it announces */
+  capabilities: Array<OutpostCapability>;
+  /** the aliases its policy file serves, as its last poll announced them; empty before its first */
+  endpoints: Array<string>;
+  /** what it said of itself at enrolment (a host name, a platform): stored as data, never interpreted */
+  facts: {
+    [key: string]: string;
+  };
+  /** the enrolment token it enrolled with (the `id` of `OutpostEnrolmentCreated`), the last one when a pending key enrolled again under a new token: what tells two pending instances apart besides what they declare themselves */
+  enrolment_id: string | null;
+  /** who issued that token */
+  enrolled_by: string | null;
+  enrolled_at: string;
+  /** how recent the sign-in of a person who approves a pending instance must be, in minutes: older, the approval is a 401 `step_up_required`. The deployment's, the same for every instance */
+  approval_step_up_minutes: number;
+  approved_by: string | null;
+  approved_at: string | null;
+  revoked_by: string | null;
+  revoked_at: string | null;
+  last_seen_at: string | null;
+  /** active, and it polled within the poll window */
+  online: boolean;
+  /** the calls it holds and has not answered */
+  in_flight: number;
+};
+
+export type OutpostInstanceList = {
+  items: Array<OutpostInstance>;
+};
+
+export type OutpostInstanceApprove = {
+  /** the fingerprint the daemon printed, as the person read it there */
+  fingerprint: string;
+};
+
+/** What the platform keeps of a call through an outpost: references and digests, never its arguments or its result (ADR 0148 §11). */
+export type OutpostCallRecord = {
+  id: string;
+  kind: OutpostCallKind;
+  state: OutpostCallState;
+  /** the connector that routed it; null once that connector is gone */
+  connector: string | null;
+  /** the alias it was sent to */
+  endpoint: string;
+  /** null for a tool listing */
+  tool: string | null;
+  /** the platform took it for a write: it is delivered at most once */
+  write: boolean;
+  /** the instance that claimed it */
+  instance_id: string | null;
+  /** the outpost's epoch when it was claimed */
+  epoch: number | null;
+  /** what the instance reported, for an answered call */
+  outcome: OutpostAnswerOutcome | null;
+  /** outcome `result`: the server's own result says it is an error */
+  is_error: boolean | null;
+  /** why the outpost refused it, for a refused call */
+  refusal: OutpostRefusalCode | null;
+  /** the SHA-256 of the canonical JSON of its arguments, as a `tool.called` event keeps it and as the outpost's own audit log writes it */
+  arguments_sha256: string | null;
+  /** the SHA-256 of the canonical JSON of the result, written by whoever opens the answer: the side that placed the call, never the door, which cannot open one. Null for a call nobody opened */
+  result_sha256: string | null;
+  project: string | null;
+  run_id: string | null;
+  /** the governed action a write belongs to */
+  action_id: string | null;
+  created_at: string;
+  claimed_at: string | null;
+  finished_at: string | null;
+};
+
+export type OutpostCallPage = {
+  items: Array<OutpostCallRecord>;
+  meta: PageMeta;
+};
+
+/** The `config` of an organisation connector of type `mcp-outpost` (kind `mcp`, ADR 0149 §1): a tool server that lives at an outpost. It names the outpost and the alias of an endpoint in that outpost's policy file. It has no URL and no secret field: the address and the credential are the outpost's and exist in its file only (ADR 0147 §7), and a declaration that carries either is a 422. */
+export type McpOutpostConnectorConfig = {
+  /** an outpost of the same organisation */
+  outpost: string;
+  /** the alias of an endpoint in that outpost's policy file */
+  endpoint: string;
+  /** seconds before a call is abandoned, the wait for an instance to claim it included */
+  timeout_s?: number;
+};
+
+/** `internal`: created and edited through this API by an organisation administrator; `scim`: pushed by an identity provider, read-only here (ADR 0164) */
+export type OrgGroupSource = "internal" | "scim";
+
+export type OrgGroupCreate = {
+  /** what a workflow's human actor names (`group: release-captains`) */
+  slug: string;
+  name: string;
+  description?: string | null;
+};
+
+/** Only the fields sent change; `description` null clears it. */
+export type OrgGroupUpdate = {
+  name?: string | null;
+  description?: string | null;
+};
+
+/** A group that belongs to the organisation (ADR 0160). A person in it carries it as `choregos:<org>:<slug>` wherever a group is checked. */
+export type OrgGroup = {
+  slug: string;
+  name: string;
+  description?: string | null;
+  source: OrgGroupSource;
+  /** members of the organisation in the group */
+  member_count: number;
+  created_by?: string | null;
+  created_at: string;
+};
+
+export type OrgGroupList = {
+  items: Array<OrgGroup>;
+};
+
+/** One of the two, naming a member of the organisation. */
+export type OrgGroupMemberAdd = {
+  email?: string | null;
+  user_id?: string | null;
+};
+
+export type OrgGroupMember = {
+  user_id: string;
+  email: string;
+  display_name: string;
+  added_by?: string | null;
+  added_at: string;
+};
+
+export type OrgGroupMemberList = {
+  items: Array<OrgGroupMember>;
+};
+
+/** The 409 body of a refused write on an organisation's group (ADR 0160): `group_exists` (the slug is taken in the organisation) or `group_read_only` (the group comes from the identity provider; `source` says which). */
+export type OrgGroupConflict = {
+  type: string;
+  title: string;
+  status: number;
+  detail?: string;
+  instance?: string;
+  code: "group_exists" | "group_read_only";
+  source?: OrgGroupSource;
+};
+
+/** The 409 body of the refusals that concern an outpost (ADRs 0147 and 0149): an RFC 9457 problem with a `code`. On the outposts' own routes: `outposts_disabled` (the deployment keeps outposts switched off), `door_key_missing` (outposts are on and the door has no signing key, so no enrolment token can be created: an outpost could pin nothing, ADR 0148 §13), `outpost_exists`, `outpost_revoked`, `outpost_not_revoked` and `outpost_in_use` (the outpost is not deleted while connectors route to it; `connectors` names them), `instance_not_pending`, `fingerprint_mismatch` and `enrolment_used` (an enrolment token that already enrolled an instance is not cancelled: the instance is revoked instead). Where a connector is reached through an outpost, the refusals of ADR 0149 §7 that a 409 carries: `outpost_paused` (paused, revoked, or outposts switched off: nothing was written), `outpost_offline` (no active instance claimed the call in time), `outpost_refused` (the outpost's own policy refused; `refusal` is its code) and `outpost_timeout` (a claimed read got no answer in time). Each of these four names the `outpost`. */
+export type OutpostConflict = {
+  type: string;
+  title: string;
+  status: number;
+  detail?: string;
+  /** the request path, as the API always sets it on a problem */
+  instance?: string;
+  /** the problem's `errors` list, as on `Problem` (an API refusal may carry it) */
+  errors?: Array<{
+    loc?: Array<string>;
+    msg?: string;
+    code?: string;
+    line?: number;
+    column?: number;
+  }>;
+  retry_after?: number;
+  code: "outposts_disabled" | "door_key_missing" | "outpost_exists" | "outpost_revoked" | "outpost_not_revoked" | "outpost_in_use" | "instance_not_pending" | "fingerprint_mismatch" | "enrolment_used" | "outpost_paused" | "outpost_offline" | "outpost_refused" | "outpost_timeout";
+  /** the outpost the refusal is about */
+  outpost?: string;
+  /** the alias the call was for */
+  endpoint?: string;
+  refusal?: OutpostRefusalCode;
+  /** the connectors that route to the outpost (`outpost_in_use`) */
+  connectors?: Array<string>;
+};
+
 /** A JSON Web Key Set (RFC 7517): public keys only. */
 export type JsonWebKeySet = {
   keys: Array<{
@@ -3577,6 +4245,8 @@ export type GatewayModel = {
   max_input_tokens?: number | null;
   supports_tool_calling?: boolean;
   supports_vision?: boolean;
+  /** Whether the gateway says the model reasons; null when it does not say. */
+  supports_reasoning?: boolean | null;
   /** What the gateway says the model does; `evaluation` is a decision model (ADR 0121). */
   mode?: string;
   internal_price?: boolean;
@@ -3600,6 +4270,8 @@ export type ModelGatewayFacts = {
   max_input_tokens?: number | null;
   supports_tool_calling?: boolean;
   supports_vision?: boolean;
+  /** whether the model reasons before it answers, as the gateway states it; null when it does not say */
+  supports_reasoning?: boolean | null;
   mode?: string;
 };
 
@@ -3891,6 +4563,10 @@ export type AssistantInstall = {
   owner_groups?: Array<string>;
   audience_groups?: Array<string>;
   channel?: "stable" | "candidate";
+  /** The knowledge needs (`knowledge[].bind`) bound at install, each to existing knowledge bases of the organisation by their slugs (ADR 0159), as `PUT .../knowledge-bindings/{name}` takes them. */
+  knowledge_bindings?: {
+    [key: string]: Array<string>;
+  };
 };
 
 export type AssistantUpdate = {
@@ -3920,6 +4596,12 @@ export type ConversationAction = {
   summary: string;
   /** `governed`: a console approval, decided as a governed action named in `result.action`. */
   status: "proposed" | "confirmed" | "executed" | "refused" | "expired" | "governed";
+  /** `write`: a write need's operation (`need`, `operation`). `launch` (ADR 0158): the start of a project's workflow; `need` is the launch's name, `operation` is `start`, `arguments` are `{title, inputs}` and `target` names the project and the workflow; once executed, `result` holds `work_item_id`, `work_item_key`, `project`, `workflow` and `url`. */
+  kind?: "write" | "launch";
+  /** For a launch: `{project, workflow}`, the binding at the time of the proposal. */
+  target?: {
+    [key: string]: unknown;
+  } | null;
   result?: {
     [key: string]: unknown;
   } | null;
@@ -3950,7 +4632,34 @@ export type AssistantBinding = {
   enabled: boolean;
 };
 
+export type AssistantLaunchBind = {
+  /** The slug of a project of the organisation (not a personal space). */
+  project: string;
+  /** The name of one of the project's active workflows. */
+  workflow: string;
+  enabled?: boolean;
+};
+
+/** A launch the manifest declares (ADR 0158), with its binding when it has one. */
+export type AssistantLaunch = {
+  name: string;
+  description: string;
+  required: boolean;
+  input_schema?: {
+    [key: string]: unknown;
+  };
+  /** The bound project's slug; null while unbound. */
+  project?: string | null;
+  /** The bound workflow's name; null while unbound. */
+  workflow?: string | null;
+  /** False while unbound or switched off. */
+  enabled: boolean;
+  bound_by?: string | null;
+};
+
 export type Assistant = {
+  /** the installation's id: what the cost and activity routes' `assistant` filter takes (ADR 0141 §1) */
+  id: string;
   slug: string;
   plugin: string;
   plugin_version: string;
@@ -3963,12 +4672,32 @@ export type Assistant = {
   audience_groups: Array<string>;
   channel: "stable" | "candidate";
   status: "incomplete" | "ready" | "suspended";
+  /** set while a person has stopped the assistant: its status then reads `suspended` */
+  stopped?: AssistantStop | null;
   policy_overrides: {
     [key: string]: unknown;
   };
   bindings: Array<AssistantBinding>;
+  /** The workflows the assistant may propose to start, and where each is bound (ADR 0158). */
+  launches?: Array<AssistantLaunch>;
+  /** The knowledge needs that are bound, and to which bases (ADR 0159). */
+  knowledge_bindings?: Array<AssistantKnowledgeBinding>;
   created_by?: string | null;
   created_at: string;
+};
+
+export type AssistantKnowledgeBind = {
+  /** The slugs of the knowledge bases the need is bound to, the whole list; empty unbinds it. */
+  bases: Array<string>;
+};
+
+export type AssistantKnowledgeBinding = {
+  /** The knowledge need's name in the manifest. */
+  name: string;
+  /** The slugs of the bound bases. */
+  bases: Array<string>;
+  /** False once a plugin upgrade dropped the need: kept, never served. */
+  enabled: boolean;
 };
 
 export type AssistantReadLine = {
@@ -4138,6 +4867,12 @@ export type AssistantNeed = {
   required: boolean;
 };
 
+export type AssistantKnowledgeNeed = {
+  name: string;
+  description: string;
+  required: boolean;
+};
+
 export type AssistantTaskDecl = {
   name: string;
   delegation: "none" | "read_only";
@@ -4153,6 +4888,8 @@ export type PluginAssistant = {
   } | null;
   suggested_groups: Array<string>;
   needs: Array<AssistantNeed>;
+  /** The knowledge the installation binds to the organisation's bases (ADR 0159); seeds are not listed. */
+  knowledge_needs?: Array<AssistantKnowledgeNeed>;
   /** Every declared space, the installation's own included (the owners' page); a person's page never lists an installation space. */
   memory_spaces?: Array<AssistantMemorySpace>;
 };
@@ -4166,7 +4903,7 @@ export type MyAssistantList = {
 };
 
 export type TaskSubscriptionPut = {
-  kind?: "on_demand" | "schedule" | "poll";
+  kind?: "on_demand" | "schedule" | "poll" | "trigger";
   cron?: string | null;
   /** An IANA time zone, e.g. Europe/Paris. */
   timezone?: string | null;
@@ -4174,7 +4911,7 @@ export type TaskSubscriptionPut = {
 };
 
 export type TaskTrigger = {
-  kind: "on_demand" | "schedule" | "poll";
+  kind: "on_demand" | "schedule" | "poll" | "trigger";
   cron?: string | null;
   timezone?: string;
 };
@@ -4250,6 +4987,42 @@ export type DelegationList = {
   items: Array<Delegation>;
 };
 
+export type TaskEventAck = {
+  accepted: boolean;
+  outcome: "started" | "duplicate";
+  work_item_key?: string | null;
+};
+
+export type TaskEventKey = {
+  url: string;
+  secret: string;
+  generation: number;
+};
+
+export type TaskEventLine = {
+  task: string;
+  event_id: string;
+  outcome: "started" | "duplicate" | "refused";
+  summary: string;
+  work_item_key?: string | null;
+  received_at: string;
+};
+
+export type TaskEventList = {
+  items: Array<TaskEventLine>;
+};
+
+export type TeamsDeliveryPut = {
+  /** The credential itself: an https URL, sealed and never shown again. */
+  webhook_url: string;
+};
+
+export type TeamsDelivery = {
+  configured: boolean;
+  version?: number | null;
+  updated_at?: string | null;
+};
+
 export type WebhookSecretRequest = {
   /** Make a new key instead of refusing a second showing. */
   rotate?: boolean;
@@ -4269,8 +5042,11 @@ export type AssistantConversationOpen = {
 };
 
 export type AssistantReadinessItem = {
-  kind: "assistant_missing" | "config_missing" | "need_unbound" | "need_not_served" | "identity_unsupported";
+  kind: "assistant_missing" | "config_missing" | "need_unbound" | "need_not_served" | "identity_unsupported" | "launch_unbound" | "launch_workflow_missing" | "launch_inputs_mismatch" | "knowledge_unbound";
+  /** The tool need, or for `knowledge_unbound` the knowledge need's name. */
   need?: string | null;
+  /** The launch, for the `launch_*` kinds (ADR 0158). */
+  launch?: string | null;
   /** The configuration key, for `config_missing`. */
   key?: string | null;
   message: string;
@@ -4636,6 +5412,60 @@ export type HumanRequest = {
   decision?: {
     [key: string]: unknown;
   } | null;
+  /** Who the request is addressed to (ADR 0153): the workflow's human actor, or an organisation administrator's reassignment. Null when the step names nobody. */
+  assignee?: HumanRequestAssignee | null;
+  /** What a person's client prepared for this request through the MCP door (ADR 0163): a proposal, never a decision. Null when none was deposited, or once it is discarded. */
+  draft?: DecisionDraft | null;
+};
+
+/** A draft of a person's decision, deposited by their client through the MCP door's `draft_decision` (ADR 0163 points 4-5). It decides nothing: the person takes it into the decision's form, or discards it. It never attests and never grants paths. */
+export type DecisionDraft = {
+  /** What the client proposes: `approve` or `reject` for an approval or a scope change, `answer` for a question, `complete` or `reject` for a task. */
+  kind: "approve" | "reject" | "answer" | "complete";
+  answer?: string | null;
+  reason?: string | null;
+  /** A task's values, checked against its form when drafted; required fields may be left for the person to fill. */
+  values?: {
+    [key: string]: unknown;
+  } | null;
+  /** Why the client proposes this — written by the client, shown as data. */
+  note?: string | null;
+  /** The platform's one-line reading of the draft. */
+  summary: string;
+  /** The person whose client deposited it, by e-mail. */
+  by: string;
+  via: DecisionDraftVia;
+  at: string;
+};
+
+/** Through what the draft came (ADR 0163 point 4). */
+export type DecisionDraftVia = {
+  door: "mcp";
+  /** The client — the name of the token it used, or its OAuth client id. */
+  client?: string | null;
+  /** The external agent the client embodies, when it is attached to one (ADR 0033). */
+  agent?: string | null;
+  user_agent?: string | null;
+};
+
+/** Who a waiting request is addressed to — a person, a group, or a person first (ADR 0153). */
+export type HumanRequestAssignee = {
+  /** The person, by e-mail, lowercase. */
+  user?: string | null;
+  /** The group, resolved for the project (`{project}` replaced). */
+  group?: string | null;
+  /** An organisation administrator reassigned the request. */
+  reassigned?: boolean;
+};
+
+/** A waiting request readdressed (ADR 0153): a person, a group, or both, and why. */
+export type AssigneeChange = {
+  /** A member of the organisation, by e-mail. */
+  user?: string | null;
+  /** A group; `{project}` names the work item's project. */
+  group?: string | null;
+  /** Why — kept in the audit log. */
+  reason: string;
 };
 
 export type WorkItemAction = {
@@ -4690,9 +5520,9 @@ export type Run = RunSummary & {
 export type ToolConnector = {
   name: string;
   type: string;
-  /** bearer or basic, for an `mcp` connector */
+  /** bearer, basic or oauth_client_credentials, for an `mcp` connector */
   auth_scheme?: string | null;
-  /** The account the connector calls as, when its configuration names one (a `basic` username). */
+  /** The account the connector calls as, when its configuration names one (a `basic` username, an OAuth client id). */
   account?: string | null;
 };
 
@@ -5014,6 +5844,179 @@ export type BudgetAlert = {
   can_acknowledge?: boolean;
 };
 
+export type StopRequest = {
+  /** why it is stopped; audited and shown on the work item */
+  reason: string;
+};
+
+export type AgentStopResult = {
+  slug: string;
+  status: "suspended";
+  runs_cancelled: number;
+  sessions_closed: number;
+  turns_cancelled: number;
+  /** what could not be stopped now (an executor that did not answer); the reconciliation retries it */
+  not_stopped?: Array<{
+    kind: "run" | "session" | "turn";
+    id: string;
+    detail: string;
+  }>;
+};
+
+export type AssistantStopResult = {
+  slug: string;
+  status: "suspended";
+  /** turns in flight whose cancel was requested; each settles at its next model or tool call */
+  turns_cancelled: number;
+  /** what could not be stopped now; the turn's own lease ends it at the latest */
+  not_stopped?: Array<{
+    kind: "turn";
+    id: string;
+    detail: string;
+  }>;
+};
+
+/** who stopped the assistant, when and why (ADR 0142 §4 bis) */
+export type AssistantStop = {
+  at: string;
+  by: string;
+  reason: string;
+};
+
+/** One thing that waits for the caller (ADR 0154 §4, G8). */
+export type PendingItem = {
+  /** `human_step`: a workflow's human request. `governed_action`: an action waiting for an approver. `conversation_action`: a write an assistant proposed. `launch`: the start of a workflow an assistant proposed (ADR 0158). */
+  kind: "human_step" | "governed_action" | "conversation_action" | "launch";
+  /** the request's, the action's or the proposal's id */
+  id: string;
+  /** one line saying what is asked */
+  what: string;
+  /** Where it lives: any of these that applies */
+  where: {
+    org?: string | null;
+    project_slug?: string | null;
+    work_item_id?: string | null;
+    work_item_key?: string | null;
+    conversation_id?: string | null;
+  };
+  since: string;
+  due_at?: string | null;
+  /** The route that decides it, a path of the API (a surface calls it with the person's own session) and the console's address. */
+  decision: {
+    method: "POST";
+    path: string;
+    /** the console's address */
+    url: string;
+  };
+};
+
+export type PendingList = {
+  items: Array<PendingItem>;
+};
+
+/** A node of the run's tree (ADR 0154 §5): the run's agent or a sub-agent it delegated to. */
+export type RunAgentNode = {
+  /** the node's id; for a sub-agent, the id of the tool call that delegated */
+  id: string;
+  /** the node it hangs under; null for the run's own agent */
+  parent_id?: string | null;
+  kind: "agent" | "subagent";
+  /** the delegating tool's name, for a sub-agent */
+  tool?: string | null;
+  status: "running" | "completed" | "failed";
+  started_at: string;
+  ended_at?: string | null;
+  /** the node's own tool calls */
+  tool_calls: number;
+};
+
+export type RunAgentList = {
+  items: Array<RunAgentNode>;
+};
+
+export type ActivityEntry = {
+  kind: "run" | "session" | "turn";
+  id: string;
+  /** a run's status; `open` or `closed` for a session; `running`, `completed`, `cancelled` or `failed` for a turn */
+  status: string;
+  project_slug?: string | null;
+  work_item_id?: string | null;
+  work_item_key?: string | null;
+  /** the work item's title, for a surface that shows more than a key (ADR 0154 §4, G6) */
+  work_item_title?: string | null;
+  workflow?: string | null;
+  stage_role?: string | null;
+  agent_slug?: string | null;
+  /** the assistant installation's id, for a turn */
+  assistant?: string | null;
+  model?: string | null;
+  initiated_by?: string | null;
+  started_at: string;
+  ended_at?: string | null;
+  /** the type of the last event the entry emitted (a step, a tool call) */
+  last_event?: string | null;
+  /** events recorded so far */
+  steps?: number;
+  /** null when the gateway cannot say (ADR 0141 §2), never zero for unknown */
+  spend?: SpendSoFar | null;
+  /** whether the reader may stop it */
+  can_stop: boolean;
+};
+
+export type SpendSoFar = {
+  tokens_in: number;
+  tokens_out: number;
+  tokens_cached: number;
+  cost_usd: number;
+  /** when the gateway was asked; at most every 30 s per run */
+  read_at: string;
+  /** true once the ledger holds it (the entry has ended) */
+  booked?: boolean;
+};
+
+export type ActivityList = {
+  in_flight: Array<ActivityEntry>;
+  finished: Array<ActivityEntry>;
+};
+
+/** One model call's context (ADR 0141 §3): `prompt_tokens` is what the model reported (exact); the sections are estimated and scaled so they sum to it; free space is `max_input_tokens - prompt_tokens`. */
+export type ContextBreakdown = {
+  /** the call's ordinal in the run or the conversation */
+  call: number;
+  at: string;
+  model: string;
+  prompt_tokens: number;
+  /** null when the catalogue does not know the model's window */
+  max_input_tokens?: number | null;
+  /** where it was measured */
+  source?: "loop" | "hosted_proxy" | "gateway";
+  /** tokens per section; absent sections are zero */
+  sections: {
+    system?: number;
+    "tools.platform"?: number;
+    "tools.mcp"?: number;
+    skills?: number;
+    knowledge?: number;
+    memory?: number;
+    messages?: number;
+    /** what a third-party CLI or container added that the platform did not write */
+    backend?: number;
+  };
+};
+
+export type RunContext = {
+  run_id: string;
+  measurable: boolean;
+  backend?: string | null;
+  latest?: ContextBreakdown | null;
+  /** each kept call's total, oldest first (at most one per 5 s, ADR 0141 §5) */
+  series: Array<{
+    call: number;
+    at: string;
+    prompt_tokens: number;
+  }>;
+};
+
 export type CostReport = {
   group_by: string;
   currency?: string;
@@ -5030,6 +6033,11 @@ export type CostReport = {
     cost_usd?: number;
     cost_eur?: number;
     budget_usd?: number | null;
+    /** the input tokens of the report's lines, summed (ADR 0141 §1) */
+    tokens_in?: number;
+    tokens_out?: number;
+    /** the input tokens the model read from its cache, part of tokens_in */
+    tokens_cached?: number;
   };
 };
 
@@ -5134,8 +6142,91 @@ export type PlatformIdentityRow = {
   source: "settings" | "derived" | "default";
 };
 
+export type OrgSecurity = {
+  /** Seconds; null removes the requirement */
+  approval_freshness_s?: number | null;
+};
+
+export type SessionRevocation = {
+  reason: string;
+};
+
+export type SessionsRevoked = {
+  revoked: string;
+  ended: number;
+};
+
+export type SamlProviderIn = {
+  idp_entity_id: string;
+  /** https only */
+  sso_url: string;
+  /** The provider's signing certificate, PEM; pinned */
+  certificate_pem: string;
+  /** The NameID when absent */
+  email_attribute?: string | null;
+  groups_attribute?: string | null;
+  /** A provider group to a core group; others are dropped */
+  group_map?: {
+    [key: string]: string;
+  };
+  domains: Array<string>;
+};
+
+export type SamlProvider = {
+  idp_entity_id?: string | null;
+  sso_url?: string | null;
+  certificate_pem?: string | null;
+  email_attribute?: string | null;
+  groups_attribute?: string | null;
+  group_map: {
+    [key: string]: string;
+  };
+  domains: Array<string>;
+  sp_entity_id: string;
+  acs_url: string;
+};
+
 export type PlatformIdentity = {
   items: Array<PlatformIdentityRow>;
+};
+
+/** The re-link window of a change of identity provider (ADR 0164). */
+export type RelinkWindow = {
+  /** open until `until`; closed once it passed; none when the deployment sets no window. */
+  state: "open" | "closed" | "none";
+  until?: string | null;
+  /** The plan's issuer is the configured one: the window applies to the sign-ins the plan describes. */
+  applies: boolean;
+};
+
+export type RelinkCounts = {
+  pending: number;
+  ambiguous: number;
+  current: number;
+  unbound: number;
+  not_concerned: number;
+};
+
+export type RelinkAccount = {
+  user_id: string;
+  email: string;
+  display_name: string;
+  /** The issuer of the account's subject; null when it was bound before issuers were recorded. */
+  issuer?: string | null;
+  last_login_at?: string | null;
+  /** For an ambiguous account, the other accounts' addresses that are the same, letter case aside. */
+  same_address_as?: Array<string>;
+};
+
+/** What a re-link window for `issuer` does to each account. A dry run, nothing is changed. */
+export type RelinkPlan = {
+  issuer: string;
+  configured_issuer: string;
+  window: RelinkWindow;
+  counts: RelinkCounts;
+  pending: Array<RelinkAccount>;
+  ambiguous: Array<RelinkAccount>;
+  generated_at: string;
 };
 
 export type ExecutorInfo = {
@@ -5237,16 +6328,18 @@ export interface Operations {
   acknowledgeBudgetAlert: { method: "POST"; path: "/orgs/{org}/budget-alerts/{alert_id}/acknowledge"; body: never; response: BudgetAlert };
   addMember: { method: "POST"; path: "/orgs/{org}/members"; body: MembershipUpsert; response: Membership };
   addModelCatalogueEntry: { method: "POST"; path: "/orgs/{org}/models"; body: ModelCatalogueEntryCreate; response: ModelCatalogueEntry };
+  addOrgGroupMember: { method: "POST"; path: "/orgs/{org}/groups/{slug}/members"; body: OrgGroupMemberAdd; response: OrgGroupMember };
   adoptWorkflow: { method: "POST"; path: "/projects/{id}/workflow-adoptions"; body: WorkflowAdopt; response: WorkflowDef };
   alertmanagerWebhook: { method: "POST"; path: "/webhooks/alertmanager"; body: {
   [key: string]: unknown;
 }; response: WebhookAck };
   approveOrgEgressRequest: { method: "POST"; path: "/orgs/{org}/egress/requests/{rule_id}/approve"; body: EgressDecision; response: EgressRule };
+  approveOutpostInstance: { method: "POST"; path: "/orgs/{org}/outposts/{slug}/instances/{instance_id}/approve"; body: OutpostInstanceApprove; response: OutpostInstance };
   approvePluginInstall: { method: "POST"; path: "/orgs/{org}/plugin-approvals/{approval_id}/approve"; body: never; response: PluginApproval };
   approveRelease: { method: "POST"; path: "/releases/{id}/approve"; body: {
   note?: string;
 }; response: void };
-  approveSkillVersion: { method: "POST"; path: "/orgs/{org}/skills/{slug}/versions/{version}/approve"; body: never; response: SkillVersion };
+  approveSkillVersion: { method: "POST"; path: "/orgs/{org}/skills/{slug}/versions/{version}/approve"; body: SkillApproval; response: SkillVersion };
   argocdWebhook: { method: "POST"; path: "/webhooks/argocd"; body: {
   [key: string]: unknown;
 }; response: WebhookAck };
@@ -5255,6 +6348,8 @@ export interface Operations {
   authLogin: { method: "GET"; path: "/auth/login"; body: never; response: void };
   authLogout: { method: "POST"; path: "/auth/logout"; body: never; response: void };
   authorizeRemoteCredential: { method: "POST"; path: "/orgs/{org}/remote-credentials/{name}/authorize"; body: never; response: RemoteCredentialAuthorization };
+  bindAssistantKnowledge: { method: "PUT"; path: "/orgs/{org}/assistants/{slug}/knowledge-bindings/{name}"; body: AssistantKnowledgeBind; response: Assistant };
+  bindAssistantLaunch: { method: "PUT"; path: "/orgs/{org}/assistants/{slug}/launches/{launch}"; body: AssistantLaunchBind; response: Assistant };
   bindAssistantNeed: { method: "PUT"; path: "/orgs/{org}/assistants/{slug}/bindings/{need}"; body: AssistantBind; response: Assistant };
   callAgentSessionTool: { method: "POST"; path: "/internal/agent-sessions/{id}/tools/{name}"; body: AgentSessionToolCall; response: AgentSessionToolAnswer };
   callRunTool: { method: "POST"; path: "/internal/runs/{id}/tools/{name}"; body: {
@@ -5267,6 +6362,8 @@ export interface Operations {
   result_max_bytes?: number;
 } };
   cancelMyConversationTurn: { method: "POST"; path: "/me/conversations/{conversation_id}/cancel"; body: never; response: ConversationSummary };
+  cancelOutpostEnrolment: { method: "DELETE"; path: "/orgs/{org}/outposts/{slug}/enrolments/{enrolment_id}"; body: never; response: void };
+  cancelRun: { method: "POST"; path: "/runs/{id}/cancel"; body: StopRequest; response: Run };
   changeAgentLifecycle: { method: "POST"; path: "/orgs/{org}/agents/{slug}/lifecycle"; body: AgentLifecycleChange; response: AgentLifecycleResult };
   changeAgentScope: { method: "POST"; path: "/orgs/{org}/agents/{slug}/scope"; body: AgentScopeChange; response: Agent };
   checkOrgEgress: { method: "POST"; path: "/orgs/{org}/egress/check"; body: EgressCheck; response: EgressCheckResult };
@@ -5275,6 +6372,7 @@ export interface Operations {
   clearOrgConnectorSecret: { method: "DELETE"; path: "/orgs/{org}/connectors/{name}/secrets/{field}"; body: never; response: OrgConnector };
   closeAgentSession: { method: "DELETE"; path: "/orgs/{org}/agent-sessions/{session_id}"; body: never; response: void };
   completeMyAccountConnection: { method: "GET"; path: "/me/connected-accounts/callback"; body: never; response: void };
+  completeMyLinkedAccount: { method: "GET"; path: "/auth/linked-accounts/callback"; body: never; response: void };
   confirmMyConversationAction: { method: "POST"; path: "/me/conversations/{conversation_id}/actions/{action_id}/confirm"; body: never; response: ConversationAction };
   connectCatalogueClient: { method: "POST"; path: "/orgs/{org}/agent-catalogue/{slug}/connect"; body: AgentCatalogueConnect; response: AgentCatalogueConnection };
   connectMyAccount: { method: "POST"; path: "/me/connected-accounts/{connector}/connect"; body: never; response: ConnectedAccountConnect };
@@ -5292,6 +6390,9 @@ export interface Operations {
   createOrg: { method: "POST"; path: "/orgs"; body: OrgCreate; response: Org };
   createOrgConnector: { method: "POST"; path: "/orgs/{org}/connectors"; body: OrgConnectorCreate; response: OrgConnector };
   createOrgEgressRule: { method: "POST"; path: "/orgs/{org}/egress/rules"; body: EgressRuleCreate; response: EgressRule };
+  createOrgGroup: { method: "POST"; path: "/orgs/{org}/groups"; body: OrgGroupCreate; response: OrgGroup };
+  createOutpost: { method: "POST"; path: "/orgs/{org}/outposts"; body: OutpostCreate; response: Outpost };
+  createOutpostEnrolment: { method: "POST"; path: "/orgs/{org}/outposts/{slug}/enrolments"; body: OutpostEnrolmentCreate; response: OutpostEnrolmentCreated };
   createProject: { method: "POST"; path: "/orgs/{org}/projects"; body: ProjectCreate; response: Project };
   createProjectKnowledgeBase: { method: "POST"; path: "/projects/{id}/knowledge"; body: ProjectKnowledgeBaseCreate; response: KnowledgeBase };
   createProjectMemory: { method: "POST"; path: "/projects/{id}/memories"; body: ProjectMemoryCreate; response: MemoryStore };
@@ -5305,23 +6406,32 @@ export interface Operations {
   decideAssistantKnowledgeUpdate: { method: "POST"; path: "/orgs/{org}/assistants/{slug}/knowledge/updates/{update_id}"; body: KnowledgeUpdateDecision; response: KnowledgeUpdate };
   decideGlobalPendingMemory: { method: "POST"; path: "/orgs/{org}/memories/{slug}/pending"; body: MemoryDecision; response: void };
   decidePendingMemory: { method: "POST"; path: "/projects/{id}/memory/pending"; body: MemoryDecision; response: void };
+  declareMemberLinkedAccount: { method: "POST"; path: "/orgs/{org}/members/{user_id}/linked-accounts"; body: LinkedAccountDeclare; response: LinkedAccount };
   deleteAgent: { method: "DELETE"; path: "/orgs/{org}/agents/{slug}"; body: never; response: void };
   deleteKnowledgeDocument: { method: "DELETE"; path: "/orgs/{org}/knowledge/{slug}/documents/{document_id}"; body: never; response: void };
   deleteKnowledgeSource: { method: "DELETE"; path: "/orgs/{org}/knowledge/{slug}/sources/{source_id}"; body: never; response: void };
   deleteMcpGateway: { method: "DELETE"; path: "/orgs/{org}/mcp-gateway"; body: never; response: void };
+  deleteMemberLinkedAccount: { method: "DELETE"; path: "/orgs/{org}/members/{user_id}/linked-accounts/{account_id}"; body: never; response: void };
   deleteModelCatalogueEntry: { method: "DELETE"; path: "/orgs/{org}/models/{entry_id}"; body: never; response: void };
   deleteMyAssistantMemory: { method: "DELETE"; path: "/me/assistants/{org}/{slug}/memory/{space}"; body: never; response: void };
   deleteMyAssistantSubjectMemory: { method: "DELETE"; path: "/me/assistants/{org}/{slug}/memory/{space}/{subject}"; body: never; response: void };
+  deleteMyAvatar: { method: "DELETE"; path: "/me/avatar"; body: never; response: void };
   deleteMyConversation: { method: "DELETE"; path: "/me/conversations/{conversation_id}"; body: never; response: void };
+  deleteMyLinkedAccount: { method: "DELETE"; path: "/me/linked-accounts/{account_id}"; body: never; response: void };
   deleteMyTaskSubscription: { method: "DELETE"; path: "/me/assistants/{org}/{slug}/tasks/{task}"; body: never; response: void };
   deleteOrgConnector: { method: "DELETE"; path: "/orgs/{org}/connectors/{name}"; body: never; response: void };
+  deleteOrgGroup: { method: "DELETE"; path: "/orgs/{org}/groups/{slug}"; body: never; response: void };
+  deleteOrgSaml: { method: "DELETE"; path: "/orgs/{org}/saml"; body: never; response: void };
   deleteOutboundProxy: { method: "DELETE"; path: "/orgs/{org}/outbound-proxy"; body: never; response: void };
+  deleteOutpost: { method: "DELETE"; path: "/orgs/{org}/outposts/{slug}"; body: never; response: void };
   deleteProject: { method: "DELETE"; path: "/projects/{id}"; body: never; response: void };
+  deleteTeamsDelivery: { method: "DELETE"; path: "/orgs/{org}/assistants/{slug}/delivery/teams"; body: never; response: void };
   deleteTrackerIdentity: { method: "DELETE"; path: "/orgs/{org}/members/{user_id}/tracker-identities/{tracker}"; body: never; response: void };
   departTrain: { method: "POST"; path: "/projects/{id}/trains/{env}/depart"; body: never; response: void };
   describeBuiltinAgent: { method: "GET"; path: "/projects/{id}/builtin-agent"; body: never; response: BuiltinAgent };
   detachAgentCredential: { method: "DELETE"; path: "/orgs/{org}/agents/{slug}/credentials/{credential_id}"; body: never; response: void };
   disableOrgConnector: { method: "DELETE"; path: "/projects/{id}/org-connectors/{connector}/enablement"; body: never; response: void };
+  discardDecisionDraft: { method: "DELETE"; path: "/work-items/{id}/human-requests/{request_id}/draft"; body: never; response: void };
   disconnectMyAccount: { method: "DELETE"; path: "/me/connected-accounts/{connector}"; body: never; response: void };
   discoverConnectorOperations: { method: "POST"; path: "/orgs/{org}/connectors/{name}/discover"; body: never; response: ConnectorDiscovery };
   discoverRemoteAgent: { method: "POST"; path: "/orgs/{org}/agents/discover"; body: RemoteAgentDiscover; response: RemoteAgentDiscovery };
@@ -5362,6 +6472,8 @@ export interface Operations {
   fireTrigger: { method: "POST"; path: "/projects/{id}/triggers/{name}/fire"; body: {
   [key: string]: unknown;
 }; response: TriggerAck };
+  followMyConversationTurn: { method: "GET"; path: "/me/conversations/{conversation_id}/events"; body: never; response: void };
+  forgetPlatformGitHubApp: { method: "DELETE"; path: "/platform/github-app"; body: never; response: void };
   forkAgent: { method: "POST"; path: "/orgs/{org}/agents/{slug}/fork"; body: AgentFork; response: Agent };
   freezeTrain: { method: "POST"; path: "/projects/{id}/trains/{env}/freeze"; body: {
   reason: string;
@@ -5387,6 +6499,7 @@ export interface Operations {
   getMcpGateway: { method: "GET"; path: "/orgs/{org}/mcp-gateway"; body: never; response: McpGatewayState };
   getMcpGatewayJwks: { method: "GET"; path: "/orgs/{org}/mcp-gateway/jwks.json"; body: never; response: JsonWebKeySet };
   getMe: { method: "GET"; path: "/me"; body: never; response: Me };
+  getMemberProfile: { method: "GET"; path: "/orgs/{org}/members/{user_id}/profile"; body: never; response: MemberProfile };
   getMemory: { method: "GET"; path: "/orgs/{org}/memories/{slug}"; body: never; response: MemoryStore };
   getMemoryAbReport: { method: "GET"; path: "/orgs/{org}/memory/ab-report"; body: never; response: MemoryAbReport };
   getModelCatalogue: { method: "GET"; path: "/orgs/{org}/models"; body: never; response: ModelCatalogue };
@@ -5400,7 +6513,12 @@ export interface Operations {
   getOrgConnector: { method: "GET"; path: "/orgs/{org}/connectors/{name}"; body: never; response: OrgConnector };
   getOrgCosts: { method: "GET"; path: "/orgs/{org}/costs"; body: never; response: CostReport };
   getOrgEgress: { method: "GET"; path: "/orgs/{org}/egress"; body: never; response: EgressOverview };
+  getOrgGroup: { method: "GET"; path: "/orgs/{org}/groups/{slug}"; body: never; response: OrgGroup };
+  getOrgSaml: { method: "GET"; path: "/orgs/{org}/saml"; body: never; response: SamlProvider };
+  getOrgSecurity: { method: "GET"; path: "/orgs/{org}/security"; body: never; response: OrgSecurity };
   getOutboundProxy: { method: "GET"; path: "/orgs/{org}/outbound-proxy"; body: never; response: OutboundProxyState };
+  getOutpost: { method: "GET"; path: "/orgs/{org}/outposts/{slug}"; body: never; response: Outpost };
+  getPlatformGitHubApp: { method: "GET"; path: "/platform/github-app"; body: never; response: GitHubAppRegistrationStatus };
   getPlatformIdentity: { method: "GET"; path: "/platform/identity"; body: never; response: PlatformIdentity };
   getPolicy: { method: "GET"; path: "/projects/{id}/policy"; body: never; response: PolicyDef };
   getPolicyCeiling: { method: "GET"; path: "/orgs/{org}/policy-ceiling"; body: never; response: PolicyCeilingState };
@@ -5430,6 +6548,7 @@ export interface Operations {
   getProvisionStatus: { method: "GET"; path: "/projects/{id}/provision"; body: never; response: ProvisionStatus };
   getRelayOutboundProxy: { method: "GET"; path: "/internal/orgs/{org}/outbound-proxy/{kind}"; body: never; response: RelayOutboundProxy };
   getRelease: { method: "GET"; path: "/releases/{id}"; body: never; response: Release };
+  getRelinkPlan: { method: "GET"; path: "/platform/identity/relink"; body: never; response: RelinkPlan };
   getRoutingCalibration: { method: "GET"; path: "/projects/{id}/workflow-routing/calibration"; body: never; response: RoutingCalibration };
   getRun: { method: "GET"; path: "/runs/{id}"; body: never; response: Run };
   getRunAccess: { method: "GET"; path: "/runs/{id}/access"; body: never; response: {
@@ -5471,6 +6590,7 @@ export interface Operations {
   ref?: string;
 } };
   getRunContext: { method: "GET"; path: "/internal/runs/{id}/context"; body: never; response: ContextPack };
+  getRunContextBreakdown: { method: "GET"; path: "/runs/{id}/context-breakdown"; body: never; response: RunContext };
   getRunDiff: { method: "GET"; path: "/runs/{id}/diff"; body: never; response: DiffSummary };
   getRunEvents: { method: "GET"; path: "/runs/{id}/events"; body: never; response: Array<RunEvent> };
   getRunInput: { method: "GET"; path: "/internal/runs/{id}/input"; body: never; response: StageInput };
@@ -5508,8 +6628,10 @@ export interface Operations {
   getSkillSources: { method: "GET"; path: "/orgs/{org}/skill-sources"; body: never; response: SkillSources };
   getSkillVersion: { method: "GET"; path: "/orgs/{org}/skills/{slug}/versions/{version}"; body: never; response: SkillVersion };
   getStepCalibration: { method: "GET"; path: "/projects/{id}/workflows/{name}/steps/{step}/calibration"; body: never; response: StepCalibration };
+  getTeamsDelivery: { method: "GET"; path: "/orgs/{org}/assistants/{slug}/delivery/teams"; body: never; response: TeamsDelivery };
   getTemplate: { method: "GET"; path: "/templates/{name}"; body: never; response: TemplateDetail };
   getTrainStatus: { method: "GET"; path: "/projects/{id}/trains/{env}"; body: never; response: TrainStatus };
+  getUserAvatar: { method: "GET"; path: "/users/{user_id}/avatar"; body: never; response: void };
   getWorkItem: { method: "GET"; path: "/work-items/{id}"; body: never; response: WorkItem };
   getWorkItemArtifact: { method: "GET"; path: "/work-items/{id}/artifacts/{ref}"; body: never; response: Artifact };
   getWorkItemArtifactContent: { method: "GET"; path: "/work-items/{id}/artifacts/{ref}/content"; body: never; response: void };
@@ -5519,6 +6641,7 @@ export interface Operations {
   getWorkflow: { method: "GET"; path: "/projects/{id}/workflow"; body: never; response: WorkflowDef };
   getWorkflowActivity: { method: "GET"; path: "/projects/{id}/workflows/{name}/activity"; body: never; response: WorkflowActivity };
   getWorkflowRouting: { method: "GET"; path: "/projects/{id}/workflow-routing"; body: never; response: WorkflowRouting };
+  githubAppManifestCallback: { method: "GET"; path: "/github/manifest/callback"; body: never; response: void };
   githubAppSetup: { method: "GET"; path: "/github/setup"; body: never; response: void };
   githubWebhook: { method: "POST"; path: "/webhooks/github"; body: {
   [key: string]: unknown;
@@ -5544,8 +6667,10 @@ export interface Operations {
   listAgentCredentials: { method: "GET"; path: "/orgs/{org}/agents/{slug}/credentials"; body: never; response: Array<AgentCredential> };
   listAgentEvaluations: { method: "GET"; path: "/orgs/{org}/agents/{slug}/versions/{version}/evaluations"; body: never; response: Array<AgentEvaluation> };
   listAgentFeedbackCandidates: { method: "GET"; path: "/orgs/{org}/agents/{slug}/feedback-candidates"; body: never; response: Array<ConversationCandidate> };
+  listAgentForks: { method: "GET"; path: "/orgs/{org}/agents/{slug}/forks"; body: never; response: AgentForkList };
   listAgentImages: { method: "GET"; path: "/platform/agent-images"; body: never; response: Array<AgentImageInfo> };
   listAgentMetrics: { method: "GET"; path: "/orgs/{org}/agent-metrics"; body: never; response: Array<AgentMetricsSummary> };
+  listAgentNotifications: { method: "GET"; path: "/orgs/{org}/agent-notifications"; body: never; response: AgentNotificationList };
   listAgentReleases: { method: "GET"; path: "/orgs/{org}/agents/{slug}/releases"; body: never; response: Array<AgentRelease> };
   listAgentRuns: { method: "GET"; path: "/orgs/{org}/agents/{slug}/runs"; body: never; response: Array<Run> };
   listAgentSessionTools: { method: "GET"; path: "/internal/agent-sessions/{id}/tools"; body: never; response: AgentSessionTools };
@@ -5570,6 +6695,7 @@ export interface Operations {
   listKnowledgeGrants: { method: "GET"; path: "/orgs/{org}/knowledge/{slug}/grants"; body: never; response: KnowledgeGrants };
   listMachineAccounts: { method: "GET"; path: "/projects/{id}/machine-accounts"; body: never; response: Array<MachineAccount> };
   listMcpCatalogue: { method: "GET"; path: "/orgs/{org}/mcp-catalogue"; body: never; response: McpCatalogue };
+  listMemberLinkedAccounts: { method: "GET"; path: "/orgs/{org}/members/{user_id}/linked-accounts"; body: never; response: Array<LinkedAccount> };
   listMembers: { method: "GET"; path: "/orgs/{org}/members"; body: never; response: Array<Membership> };
   listMemories: { method: "GET"; path: "/orgs/{org}/memories"; body: never; response: Array<MemoryStore> };
   listMyAssistants: { method: "GET"; path: "/me/assistants"; body: never; response: MyAssistantList };
@@ -5578,13 +6704,22 @@ export interface Operations {
   listMyConversations: { method: "GET"; path: "/me/conversations"; body: never; response: ConversationPage };
   listMyDelegations: { method: "GET"; path: "/me/delegations"; body: never; response: DelegationList };
   listMyInbox: { method: "GET"; path: "/me/inbox"; body: never; response: InboxList };
+  listMyLinkedAccounts: { method: "GET"; path: "/me/linked-accounts"; body: never; response: MyLinkedAccounts };
+  listMyPending: { method: "GET"; path: "/me/pending"; body: never; response: PendingList };
   listMySessions: { method: "GET"; path: "/me/sessions"; body: never; response: Array<BrowserSession> };
   listMyTokens: { method: "GET"; path: "/me/tokens"; body: never; response: Array<ApiToken> };
   listOrgActions: { method: "GET"; path: "/orgs/{org}/actions"; body: never; response: Array<Action> };
+  listOrgActivity: { method: "GET"; path: "/orgs/{org}/activity"; body: never; response: ActivityList };
   listOrgAgentCredentials: { method: "GET"; path: "/orgs/{org}/agent-credentials"; body: never; response: Array<AgentCredential> };
   listOrgAgentReleases: { method: "GET"; path: "/orgs/{org}/agent-releases"; body: never; response: Array<AgentRelease> };
   listOrgConnectors: { method: "GET"; path: "/orgs/{org}/connectors"; body: never; response: Array<OrgConnector> };
+  listOrgGroupMembers: { method: "GET"; path: "/orgs/{org}/groups/{slug}/members"; body: never; response: OrgGroupMemberList };
+  listOrgGroups: { method: "GET"; path: "/orgs/{org}/groups"; body: never; response: OrgGroupList };
   listOrgs: { method: "GET"; path: "/orgs"; body: never; response: Array<Org> };
+  listOutpostCalls: { method: "GET"; path: "/orgs/{org}/outposts/{slug}/calls"; body: never; response: OutpostCallPage };
+  listOutpostEnrolments: { method: "GET"; path: "/orgs/{org}/outposts/{slug}/enrolments"; body: never; response: OutpostEnrolmentList };
+  listOutpostInstances: { method: "GET"; path: "/orgs/{org}/outposts/{slug}/instances"; body: never; response: OutpostInstanceList };
+  listOutposts: { method: "GET"; path: "/orgs/{org}/outposts"; body: never; response: OutpostList };
   listPendingMemory: { method: "GET"; path: "/projects/{id}/memory/pending"; body: never; response: Array<Memory> };
   listPlatformModels: { method: "GET"; path: "/platform/models"; body: never; response: Array<GatewayModel> };
   listPluginApprovals: { method: "GET"; path: "/orgs/{org}/plugin-approvals"; body: never; response: PluginApprovalList };
@@ -5601,9 +6736,11 @@ export interface Operations {
   listReceivedEvents: { method: "GET"; path: "/projects/{id}/received-events"; body: never; response: ReceivedEventPage };
   listReleases: { method: "GET"; path: "/projects/{id}/releases"; body: never; response: ReleasePage };
   listRemoteCredentials: { method: "GET"; path: "/orgs/{org}/remote-credentials"; body: never; response: Array<RemoteCredential> };
+  listRunAgents: { method: "GET"; path: "/runs/{id}/agents"; body: never; response: RunAgentList };
   listRuns: { method: "GET"; path: "/work-items/{id}/runs"; body: never; response: Array<Run> };
   listSkillCatalogue: { method: "GET"; path: "/orgs/{org}/skill-catalogue"; body: never; response: SkillCatalogue };
   listSkills: { method: "GET"; path: "/orgs/{org}/skills"; body: never; response: Array<Skill> };
+  listTaskEvents: { method: "GET"; path: "/orgs/{org}/assistants/{slug}/task-events"; body: never; response: TaskEventList };
   listTemplates: { method: "GET"; path: "/templates"; body: never; response: Array<TemplateSummary> };
   listTrackerIdentities: { method: "GET"; path: "/orgs/{org}/members/{user_id}/tracker-identities"; body: never; response: Array<TrackerIdentity> };
   listTriggers: { method: "GET"; path: "/projects/{id}/triggers"; body: never; response: Array<Trigger> };
@@ -5619,6 +6756,7 @@ export interface Operations {
   nextAgentSessionSocketFrames: { method: "GET"; path: "/internal/agent-sessions/{id}/socket/next"; body: never; response: AgentSessionSocketNext };
   nextAgentSessionTurn: { method: "GET"; path: "/internal/agent-sessions/{id}/turns/next"; body: never; response: AgentSessionTurn };
   openMyAssistantConversation: { method: "POST"; path: "/me/assistants/{org}/{slug}/conversations"; body: AssistantConversationOpen; response: Conversation };
+  pauseOutpost: { method: "POST"; path: "/orgs/{org}/outposts/{slug}/pause"; body: never; response: Outpost };
   pinProjectAgent: { method: "PUT"; path: "/projects/{id}/agents/{slug}"; body: ProjectAgentPut; response: ProjectAgent };
   pluginWebhook: { method: "POST"; path: "/webhooks/plugins/{org}/{plugin}/{server}"; body: {
   [key: string]: unknown;
@@ -5663,6 +6801,7 @@ export interface Operations {
   putKnowledgeGrants: { method: "PUT"; path: "/orgs/{org}/knowledge/{slug}/grants"; body: KnowledgeGrantsPut; response: KnowledgeGrants };
   putMcpGateway: { method: "PUT"; path: "/orgs/{org}/mcp-gateway"; body: McpGatewayPut; response: McpGatewayState };
   putModelCatalogueSettings: { method: "PUT"; path: "/orgs/{org}/models/settings"; body: ModelCatalogueSettings; response: ModelCatalogueSettings };
+  putMyAvatar: { method: "PUT"; path: "/me/avatar"; body: void; response: Avatar };
   putMyTaskSubscription: { method: "PUT"; path: "/me/assistants/{org}/{slug}/tasks/{task}"; body: TaskSubscriptionPut; response: TaskSubscription };
   putNamedWorkflow: { method: "PUT"; path: "/projects/{id}/workflows/{name}"; body: WorkflowPut; response: WorkflowDef };
   putOutboundProxy: { method: "PUT"; path: "/orgs/{org}/outbound-proxy"; body: OutboundProxyPut; response: OutboundProxyState };
@@ -5671,9 +6810,13 @@ export interface Operations {
   putProjectModels: { method: "PUT"; path: "/projects/{id}/models"; body: ProjectModels; response: ProjectModels };
   putRunOutput: { method: "PUT"; path: "/internal/runs/{id}/outputs/{name}"; body: void; response: Artifact };
   putSkillSources: { method: "PUT"; path: "/orgs/{org}/skill-sources"; body: SkillSources; response: SkillSources };
+  putTeamsDelivery: { method: "PUT"; path: "/orgs/{org}/assistants/{slug}/delivery/teams"; body: TeamsDeliveryPut; response: TeamsDelivery };
   putWorkflow: { method: "PUT"; path: "/projects/{id}/workflow"; body: WorkflowPut; response: WorkflowDef };
   putWorkflowRouting: { method: "PUT"; path: "/projects/{id}/workflow-routing"; body: WorkflowRouting; response: WorkflowRouting };
+  readAgentNotification: { method: "POST"; path: "/orgs/{org}/agent-notifications/{item_id}/read"; body: never; response: AgentNotificationsRead };
+  readAllAgentNotifications: { method: "POST"; path: "/orgs/{org}/agent-notifications/read"; body: never; response: AgentNotificationsRead };
   readyz: { method: "GET"; path: "/readyz"; body: never; response: void };
+  reassignHumanRequest: { method: "POST"; path: "/work-items/{id}/human-requests/{request_id}/assignee"; body: AssigneeChange; response: HumanRequest };
   refreshGitHubInstallations: { method: "POST"; path: "/orgs/{org}/github/refresh"; body: never; response: GitHubAppStatus };
   refuseMyConversationAction: { method: "POST"; path: "/me/conversations/{conversation_id}/actions/{action_id}/refuse"; body: never; response: ConversationAction };
   refuseOrgEgressRequest: { method: "POST"; path: "/orgs/{org}/egress/requests/{rule_id}/refuse"; body: EgressDecision; response: EgressRule };
@@ -5688,21 +6831,31 @@ export interface Operations {
   remoteCredentialCallback: { method: "GET"; path: "/remote-credentials/oauth/callback"; body: never; response: void };
   removeMachineAccount: { method: "DELETE"; path: "/projects/{id}/machine-accounts/{slug}"; body: never; response: void };
   removeMember: { method: "DELETE"; path: "/orgs/{org}/members/{user_id}"; body: never; response: void };
+  removeOrgGroupMember: { method: "DELETE"; path: "/orgs/{org}/groups/{slug}/members/{user_id}"; body: never; response: void };
   requestOrgEgress: { method: "POST"; path: "/orgs/{org}/egress/requests"; body: EgressRequestCreate; response: EgressRule };
   resolveProjectAgents: { method: "GET"; path: "/projects/{id}/agent-resolution"; body: never; response: Array<AgentResolution> };
   restoreAgentVersion: { method: "POST"; path: "/orgs/{org}/agents/{slug}/versions/{version}/restore"; body: AgentVersionRestore; response: AgentVersion };
   restoreWorkflowVersion: { method: "POST"; path: "/projects/{id}/workflows/{name}/versions/{version}/restore"; body: never; response: WorkflowDef };
+  resumeAssistant: { method: "POST"; path: "/orgs/{org}/assistants/{slug}/resume"; body: never; response: Assistant };
+  resumeOutpost: { method: "POST"; path: "/orgs/{org}/outposts/{slug}/resume"; body: never; response: Outpost };
   revealAssistantWebhookSecret: { method: "POST"; path: "/orgs/{org}/assistants/{slug}/webhook-secret"; body: WebhookSecretRequest; response: WebhookSecret };
+  revealTaskEventKey: { method: "POST"; path: "/orgs/{org}/assistants/{slug}/tasks/{task}/event-key"; body: never; response: TaskEventKey };
   revokeMachineToken: { method: "DELETE"; path: "/projects/{id}/machine-accounts/{slug}/tokens/{token_id}"; body: never; response: void };
+  revokeMemberSessions: { method: "POST"; path: "/orgs/{org}/members/{email}/sessions/revocation"; body: SessionRevocation; response: SessionsRevoked };
   revokeMyDelegation: { method: "DELETE"; path: "/me/delegations/{delegation_id}"; body: never; response: void };
   revokeMyToken: { method: "DELETE"; path: "/me/tokens/{id}"; body: never; response: void };
   revokeOrgEgressRule: { method: "DELETE"; path: "/orgs/{org}/egress/rules/{rule_id}"; body: never; response: EgressRule };
+  revokeOutpost: { method: "POST"; path: "/orgs/{org}/outposts/{slug}/revoke"; body: never; response: Outpost };
+  revokeOutpostInstance: { method: "POST"; path: "/orgs/{org}/outposts/{slug}/instances/{instance_id}/revoke"; body: never; response: OutpostInstance };
   revokeRemoteCredential: { method: "DELETE"; path: "/orgs/{org}/remote-credentials/{name}"; body: never; response: void };
   rewrapSecrets: { method: "POST"; path: "/platform/secrets/rewrap"; body: never; response: SecretsRewrap };
   rotateMcpGatewayAssertionKey: { method: "POST"; path: "/orgs/{org}/mcp-gateway/assertion-key"; body: never; response: McpGatewayAssertion };
   rotateTriggerToken: { method: "POST"; path: "/projects/{id}/triggers/{name}/token"; body: never; response: TriggerToken };
   runKnowledgeEval: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/eval/run"; body: never; response: KnowledgeBase };
   runMyTask: { method: "POST"; path: "/me/assistants/{org}/{slug}/tasks/{task}/run"; body: never; response: TaskRun };
+  samlAcs: { method: "POST"; path: "/saml/{org}/acs"; body: void; response: void };
+  samlLogin: { method: "GET"; path: "/saml/{org}/login"; body: never; response: void };
+  samlMetadata: { method: "GET"; path: "/saml/{org}/metadata"; body: never; response: void };
   searchGlobalMemory: { method: "GET"; path: "/orgs/{org}/memories/{slug}/search"; body: never; response: Array<Memory> };
   searchKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/search"; body: KnowledgeSearchRequest; response: KnowledgeSearchResult };
   searchMemory: { method: "GET"; path: "/projects/{id}/memory/search"; body: never; response: Array<Memory> };
@@ -5712,18 +6865,30 @@ export interface Operations {
   setAgentReleasePolicy: { method: "PUT"; path: "/orgs/{org}/agents/{slug}/release-policy"; body: AgentReleasePolicy; response: Agent };
   setConnectorSecret: { method: "PUT"; path: "/projects/{id}/connectors/{kind}/secrets/{field}"; body: SecretValue; response: Connector };
   setOrgConnectorSecret: { method: "PUT"; path: "/orgs/{org}/connectors/{name}/secrets/{field}"; body: SecretValue; response: OrgConnector };
+  setOrgSaml: { method: "PUT"; path: "/orgs/{org}/saml"; body: SamlProviderIn; response: SamlProvider };
+  setOrgSecurity: { method: "PUT"; path: "/orgs/{org}/security"; body: OrgSecurity; response: OrgSecurity };
   setProjectAgentChannel: { method: "PUT"; path: "/projects/{id}/agent-channel"; body: ProjectAgentChannel; response: ProjectAgentChannel };
   setTrackerIdentity: { method: "PUT"; path: "/orgs/{org}/members/{user_id}/tracker-identities/{tracker}"; body: TrackerIdentityPut; response: TrackerIdentity };
+  settleAction: { method: "POST"; path: "/projects/{id}/actions/{action_id}/settlement"; body: ActionSettlementRequest; response: Action };
   shareWorkflow: { method: "POST"; path: "/orgs/{org}/workflow-catalogue"; body: WorkflowShare; response: WorkflowCatalogueEntry };
+  starAgent: { method: "PUT"; path: "/orgs/{org}/agents/{slug}/star"; body: never; response: AgentSocial };
   startAgentEvaluation: { method: "POST"; path: "/orgs/{org}/agents/{slug}/versions/{version}/evaluations"; body: AgentEvaluationCreate; response: AgentEvaluation };
   startAgentTrial: { method: "POST"; path: "/orgs/{org}/agent-trials"; body: AgentTrialCreate; response: AgentTrial };
+  startGitHubAppManifest: { method: "POST"; path: "/platform/github-app/manifest"; body: GitHubAppManifestRequest; response: GitHubAppManifestStart };
+  startMyLinkedAccount: { method: "POST"; path: "/me/linked-accounts/{provider}/start"; body: never; response: LinkedAccountStart };
+  stopAgent: { method: "POST"; path: "/orgs/{org}/agents/{slug}/stop"; body: StopRequest; response: AgentStopResult };
+  stopAssistant: { method: "POST"; path: "/orgs/{org}/assistants/{slug}/stop"; body: StopRequest; response: AssistantStopResult };
   stopKnowledgeDistillation: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/distill/stop"; body: never; response: KnowledgeBase };
+  streamOrgActivity: { method: "GET"; path: "/orgs/{org}/activity/stream"; body: never; response: void };
   streamProjectEvents: { method: "GET"; path: "/projects/{id}/events/stream"; body: never; response: void };
   streamWorkItemEvents: { method: "GET"; path: "/work-items/{id}/events/stream"; body: never; response: void };
   suspendProject: { method: "POST"; path: "/projects/{id}/suspend"; body: never; response: Project };
   syncKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/sync"; body: never; response: KnowledgeBase };
   syncKnowledgeSource: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/sources/{source_id}/sync"; body: never; response: KnowledgeSource };
   syncModelCatalogue: { method: "POST"; path: "/orgs/{org}/models/sync"; body: never; response: ModelSyncResult };
+  taskEventWebhook: { method: "POST"; path: "/webhooks/assistants/{org}/{slug}/tasks/{task}/events"; body: {
+  [key: string]: unknown;
+}; response: TaskEventAck };
   tektonWebhook: { method: "POST"; path: "/webhooks/tekton"; body: {
   [key: string]: unknown;
 }; response: WebhookAck };
@@ -5740,6 +6905,8 @@ export interface Operations {
   uninstallAssistant: { method: "DELETE"; path: "/orgs/{org}/assistants/{slug}"; body: never; response: void };
   uninstallPlugin: { method: "DELETE"; path: "/orgs/{org}/plugins/{name}"; body: never; response: PluginUninstallResult };
   unpinProjectAgent: { method: "DELETE"; path: "/projects/{id}/agents/{slug}"; body: never; response: void };
+  unstarAgent: { method: "DELETE"; path: "/orgs/{org}/agents/{slug}/star"; body: never; response: AgentSocial };
+  unwatchAgent: { method: "DELETE"; path: "/orgs/{org}/agents/{slug}/watch"; body: never; response: AgentSocial };
   updateAgent: { method: "PATCH"; path: "/orgs/{org}/agents/{slug}"; body: AgentPatch; response: Agent };
   updateAssistant: { method: "PATCH"; path: "/orgs/{org}/assistants/{slug}"; body: AssistantUpdate; response: Assistant };
   updateAssistantInstallationMemory: { method: "PATCH"; path: "/orgs/{org}/assistants/{slug}/memory/{space}"; body: MemoryAction; response: MemorySpace };
@@ -5752,6 +6919,7 @@ export interface Operations {
   updateMyAssistantSubjectMemory: { method: "PATCH"; path: "/me/assistants/{org}/{slug}/memory/{space}/{subject}"; body: MemoryAction; response: MemorySpace };
   updateOrg: { method: "PATCH"; path: "/orgs/{org}"; body: OrgUpdate; response: Org };
   updateOrgConnector: { method: "PATCH"; path: "/orgs/{org}/connectors/{name}"; body: OrgConnectorUpdate; response: OrgConnector };
+  updateOrgGroup: { method: "PATCH"; path: "/orgs/{org}/groups/{slug}"; body: OrgGroupUpdate; response: OrgGroup };
   updateProject: { method: "PATCH"; path: "/projects/{id}"; body: ProjectUpdate; response: Project };
   updateProjectMemory: { method: "PATCH"; path: "/projects/{id}/memories/{slug}"; body: MemoryStorePatch; response: MemoryStore };
   updateTemplate: { method: "PUT"; path: "/templates/{name}"; body: TemplateUpsert; response: TemplateSummary };
@@ -5761,6 +6929,7 @@ export interface Operations {
   uploadKnowledgeDocument: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/documents"; body: void; response: KnowledgeDocument };
   validateProjectWorkflow: { method: "POST"; path: "/projects/{id}/workflows/validate"; body: WorkflowValidateRequest; response: WorkflowValidation };
   validateWorkflow: { method: "POST"; path: "/workflows/validate"; body: WorkflowValidateRequest; response: WorkflowValidation };
+  watchAgent: { method: "PUT"; path: "/orgs/{org}/agents/{slug}/watch"; body: AgentWatchPut; response: AgentSocial };
 }
 
 export type OperationId = keyof Operations;

@@ -21,7 +21,7 @@ from fastapi.responses import JSONResponse
 
 from . import __version__
 from .a2a.push import push_loop
-from .adapter_wiring import attach_lexical_memory
+from .adapter_wiring import attach_lexical_memory, attach_outposts
 from .bootstrap import bootstrap_installation
 from .config import DEFAULT_DOCS_URL, get_settings
 from .db.session import create_all, dispose_engine
@@ -33,13 +33,16 @@ from .knowledge.conversion import conversions
 from .logging import bind, clear, configure_logging, get_logger
 from .metrics import expose, http_requests, refresh_loop
 from .origin_guard import check_cors_origins, install_origin_guard
+from .outposts import rendezvous as outpost_rendezvous
 from .routers import (
     actions,
+    activity,
     admin,
     agent_realtime,
     agent_releases,
     agent_session_pods,
     agent_sessions,
+    agent_social,
     agents,
     assistant_catalogue,
     assistant_conversations,
@@ -66,16 +69,21 @@ from .routers import (
     integrations,
     internal,
     knowledge,
+    linked_accounts,
     machine_accounts,
     mcp_catalogue,
     mcp_gateway,
+    member_profiles,
     memories,
     memory,
     model_catalogue,
     models,
     my_sessions,
     org_connectors,
+    org_groups,
+    org_security,
     outbound_proxy,
+    outposts,
     platform_identity,
     plugin_sources,
     plugins,
@@ -85,11 +93,11 @@ from .routers import (
     received_events,
     remote_credentials,
     runs,
+    saml,
     skill_catalogue,
     skills,
     templates,
     theme,
-    tracker_identities,
     trains,
     triggers,
     ui,
@@ -123,9 +131,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     _warn_without_secrets_key(settings.fakes)
     # What the run's API guard does here, and what to configure when it cannot refuse (ADR 0144).
     announce_the_internal_api_guard(settings)
+    _warn_without_egress_report_key(settings)
     metrics_refresh = asyncio.create_task(refresh_loop(settings.metrics_refresh_seconds))
     relay = None if settings.is_sqlite else PostgresRelay(settings.database_url)
     if relay is not None:
+        if settings.outposts:
+            # The outposts' wake-ups travel on a second channel of the same connection (ADR 0148 §7):
+            # they are not platform events, and carry an id and nothing else.
+            relay.listen_also(outpost_rendezvous.CHANNEL, outpost_rendezvous.woken)
         relay.start()
     if not settings.is_sqlite:
         await bootstrap_installation(settings)
@@ -154,6 +167,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     shipping_warmup = asyncio.create_task(warm_shipping(settings))
     # The daily purge of assistants' conversations and memories past their retention (S63-16).
     assistant_retention = asyncio.create_task(retention_loop(settings.assistant_retention_interval_s))
+    # Calls through an outpost that ran out of time where nobody polls or calls any more (ADR 0149 §5).
+    background = [asyncio.create_task(outpost_rendezvous.sweep_loop())] if settings.outposts else []
     yield
     # A conversion cut here stays `converting`; the next start-up takes it back once stale.
     await conversions.stop()
@@ -171,6 +186,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         plugin_defaults,
         osv_mirror,
         shipping_warmup,
+        *background,
     ):
         task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
@@ -192,6 +208,17 @@ def _warn_without_secrets_key(fakes: bool) -> None:
         logger.warning(
             "secrets.key_missing", detail=f"{ENV_KEKS} is not set: connector secrets cannot be typed"
         )
+
+
+def _warn_without_egress_report_key(settings: Any) -> None:
+    """Without the proxy's key, an agent can post its own run's network counters (ADR 0145). The
+    API still runs, as before the key existed: say it once, at start-up."""
+    if settings.fakes or settings.egress_report_key:
+        return
+    logger.warning(
+        "egress.report_key_missing",
+        detail="CHOREGOS_EGRESS_REPORT_KEY is not set: an agent can rewrite its run's network counters",
+    )
 
 
 async def _refuse_the_superuser() -> None:
@@ -312,9 +339,24 @@ def _check_the_sections(served: set[tuple[str, str]]) -> None:
                 )
 
 
+def _mount_the_outposts_door(app: FastAPI, settings: Any) -> None:
+    """The outposts' door (ADR 0148), the third: at the root and out of the OpenAPI document like the
+    two others, and mounted only when `CHOREGOS_OUTPOSTS` is on. Off, an outpost's daemon meets a 404
+    that is none of its contract's problems: the switch stops every outpost at once (ADR 0147 §12).
+    On, a door without its public origin or its signing key stops the start-up, naming the setting."""
+    if not settings.outposts:
+        return
+    from .outposts import check_the_door
+    from .outposts import router as outposts_door
+
+    check_the_door(settings)
+    app.include_router(outposts_door)
+
+
 def create_app() -> FastAPI:
     settings = get_settings()
     attach_lexical_memory()
+    attach_outposts()
     # The extensions installed alongside (enterprise edition, house connectors) register
     # themselves. A declared extension that does not load stops the startup, on purpose.
     load_extensions()
@@ -397,6 +439,8 @@ def create_app() -> FastAPI:
     core_routers = (
         auth.router,
         my_sessions.router,
+        org_security.router,
+        saml.router,
         ui.router,
         theme.router,
         integrations.router,
@@ -417,6 +461,7 @@ def create_app() -> FastAPI:
         model_catalogue.router,
         workitems.router,
         runs.router,
+        activity.router,
         trains.router,
         findings.router,
         memory.router,
@@ -426,10 +471,16 @@ def create_app() -> FastAPI:
         egress.router,
         outbound_proxy.router,
         mcp_gateway.router,
+        outposts.router,
         templates.router,
         admin.router,
-        tracker_identities.router,
+        org_groups.router,
+        linked_accounts.router,
+        linked_accounts.me_router,
+        member_profiles.router,
+        member_profiles.me_router,
         agents.router,
+        agent_social.router,
         agent_releases.router,
         agent_sessions.router,
         conversations.router,
@@ -472,6 +523,7 @@ def create_app() -> FastAPI:
     from .a2a import router as a2a_door
 
     app.include_router(a2a_door)
+    _mount_the_outposts_door(app, settings)
     # The CLI, served by the instance it talks to (S62-08): at the root, where the install scripts
     # and `choregos self update` fetch it through the console's host; outside the OpenAPI schema.
     from .routers import cli_downloads
