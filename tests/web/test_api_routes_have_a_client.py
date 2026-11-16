@@ -117,8 +117,6 @@ NOT_CALLED_BY_A_CLIENT: dict[str, str] = {
 
 #: Paths whose console screen is a story still to come: that story removes its entries.
 NO_CLIENT_YET: dict[str, str] = {
-    "/orgs/{org}/knowledge/{slug}/export": "a base's OKF bundle (ADR 0174 point 6): S72-03 serves it and "
-    "gives the knowledge base page its download button",
     "/me/conversations/{conversation_id}/events": "followed from another surface (ADR 0154 §4, G2): "
     "`choregos chat` (S67-09) and the editor extension (S68) are its clients; S67-08 serves it",
     "/orgs/{org}/security": "the organisation's re-authentication setting (ADR 0170, D5) is "

@@ -116,6 +116,72 @@ def served(
     return f"---\n{text}---\n\n{body}"
 
 
+#: How much of a document's markdown a listing reads to find its header (a header is at most
+#: `MAX_HEADER_BYTES`; the fences and the BOM around it are a few characters more).
+HEAD_CHARS = MAX_HEADER_BYTES + 64
+
+
+def lifecycle(markdown: str, now: datetime) -> dict[str, Any] | None:
+    """What a document's own header declares of its lifecycle (the console's `okf` field); `None`
+    without a header. An unknown `status` is `stable` (OKF §5); `stale` is computed against `now`."""
+    header, _ = split(markdown)
+    if header is None:
+        return None
+    kind = header.get("type")
+    status = header.get("status")
+    status = status.strip().lower() if isinstance(status, str) else "stable"
+    stale_after = header.get("stale_after")
+    stale_after = str(stale_after) if stale_after is not None else None
+    return {
+        "type": kind if isinstance(kind, str) and kind.strip() else None,
+        "status": status if status in {"draft", "stable", "deprecated"} else "stable",
+        "stale_after": stale_after,
+        "stale": _past(stale_after, now),
+    }
+
+
+def _past(instant: str | None, now: datetime) -> bool:
+    """Whether `now` is at or after `instant`; an instant that does not parse, or has no offset (OKF
+    §5 requires one), is never past."""
+    if not instant:
+        return False
+    try:
+        moment = datetime.fromisoformat(instant.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    if moment.tzinfo is None:
+        return False
+    return now >= moment
+
+
+def bundle_index(name: str, files: list[dict[str, str]]) -> str:
+    """The root `index.md` of a bundle: `okf_version`, then one link per concept (OKF §8)."""
+    lines = [f'---\nokf_version: "{OKF_VERSION}"\n---', "", f"# {name}", ""]
+    lines += [f"- [{f['title']}](/{f['path']}) — from `{f['filename']}`" for f in files]
+    if not files:
+        lines.append("_(no converted document)_")
+    return "\n".join(lines) + "\n"
+
+
+def bundle_zip(slug: str, name: str, files: list[dict[str, str]]) -> bytes:
+    """A base as an OKF bundle: one folder named after it, its `index.md` and one file per document.
+    Deterministic (entries in order, a fixed date), so the same base exports the same bytes."""
+    import io
+    import zipfile
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for path, text in [
+            ("index.md", bundle_index(name, files)),
+            *((f["path"], f["markdown"]) for f in files),
+        ]:
+            entry = zipfile.ZipInfo(f"{slug}/{path}", date_time=(1980, 1, 1, 0, 0, 0))
+            entry.compress_type = zipfile.ZIP_DEFLATED
+            entry.external_attr = 0o644 << 16
+            archive.writestr(entry, text.encode("utf-8"))
+    return buffer.getvalue()
+
+
 def served_document(document: Any) -> str:
     """`served()` of a `KnowledgeDocument`."""
     return served(
@@ -129,11 +195,15 @@ def served_document(document: Any) -> str:
 
 __all__ = [
     "DEFAULT_TYPE",
+    "HEAD_CHARS",
     "OKF_VERSION",
     "PRODUCER",
     "RESERVED",
+    "bundle_index",
+    "bundle_zip",
     "declared_title",
     "deprecated",
+    "lifecycle",
     "served",
     "served_document",
     "split",

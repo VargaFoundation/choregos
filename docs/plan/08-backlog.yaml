@@ -5288,10 +5288,26 @@ stories:
     depends_on: []
     notes: "The header's title names the document; status deprecated keeps it out of runs and of the index; every served document carries one header, the document's own keys kept; an imported verified is served as source_verified; index.md with okf_version; no contract or table changes."
   - id: S72-02
-    title: "feat(api): export a knowledge base and a memory's accepted facts as an OKF bundle (ADR 0174 point 6)"
+    title: "contract(openapi): a knowledge base exported as an OKF bundle, a document's OKF lifecycle (ADR 0174 point 6)"
     stream: S72
-    sprint: 2
-    priority: 3
-    size: M
+    sprint: 1
+    priority: 2
+    size: S
     depends_on: [S72-01]
-    notes: "An archive of the bundle for a caller who may read everything in it, audited; an accepted proposal is verified human:<decider>; valid_to maps to status deprecated and the export says what it loses; no rights travel with it."
+    notes: "exportKnowledgeBase (application/zip, any reader, audited) and KnowledgeDocument.okf (type, status, stale_after, stale); additive."
+  - id: S72-03
+    title: "feat(api,web): export a knowledge base as an OKF bundle, show each document's OKF lifecycle (ADR 0174 point 6)"
+    stream: S72
+    sprint: 1
+    priority: 2
+    size: S
+    depends_on: [S72-02]
+    notes: "A deterministic zip; a deprecated document included with its status; the listing reads the head of each markdown only; the console badges withdrawn, out-of-date and draft documents and offers the download to any reader."
+  - id: S72-04
+    title: "feat(adapters,api): a memory's accepted facts exported as an OKF bundle (ADR 0174 point 7)"
+    stream: S72
+    sprint: 3
+    priority: 4
+    size: M
+    depends_on: [S72-03]
+    notes: "Blocked on two facts that do not exist: MemoryAdapter has no listing operation (Ecphoria and the lexical fallback), and deciding a proposal records no decider. Without both, an export would miss Ecphoria's facts or write a verified the platform cannot prove."

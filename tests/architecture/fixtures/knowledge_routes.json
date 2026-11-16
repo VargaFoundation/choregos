@@ -28,6 +28,13 @@
     "operation_id": "getKnowledgeBase"
   },
   {
+    "path": "/orgs/{org}/knowledge/{slug}/export",
+    "methods": [
+      "GET"
+    ],
+    "operation_id": "exportKnowledgeBase"
+  },
+  {
     "path": "/orgs/{org}/knowledge/{slug}",
     "methods": [
       "PATCH"

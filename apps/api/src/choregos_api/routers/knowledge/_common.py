@@ -6,6 +6,7 @@ from __future__ import annotations
 import re
 from weakref import WeakKeyDictionary
 
+from choregos_core import utcnow
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,6 +25,7 @@ from ...db.models import (
 )
 from ...deps import Me
 from ...errors import forbidden, not_found, unprocessable
+from ...knowledge import okf
 from ...knowledge.access import (
     ROLES,
     KnowledgeAction,
@@ -36,6 +38,7 @@ from ...schemas.knowledge import (
     KnowledgeBaseDto,
     KnowledgeBaseUser,
     KnowledgeDocumentDto,
+    KnowledgeDocumentOkf,
     KnowledgeGrantDto,
     KnowledgePermissions,
     KnowledgeSourceDto,
@@ -123,7 +126,16 @@ async def _known_projects(session: AsyncSession, organisation: Organization, slu
         raise unprocessable(f"unknown project(s) in {organisation.slug}: {', '.join(unknown)}")
 
 
-def _document_dto(document: KnowledgeDocument, *, with_markdown: bool = False) -> KnowledgeDocumentDto:
+def _okf(markdown: str | None) -> KnowledgeDocumentOkf | None:
+    """What the document's own OKF header declares (ADR 0174); `None` without a header."""
+    found = okf.lifecycle(markdown, utcnow()) if markdown else None
+    return KnowledgeDocumentOkf(**found) if found is not None else None
+
+
+def _document_dto(
+    document: KnowledgeDocument, *, with_markdown: bool = False, head: str | None = None
+) -> KnowledgeDocumentDto:
+    """`head` is the start of the markdown a listing reads (`okf.HEAD_CHARS`), enough for its header."""
     return KnowledgeDocumentDto(
         id=document.id,
         filename=document.filename,
@@ -142,6 +154,7 @@ def _document_dto(document: KnowledgeDocument, *, with_markdown: bool = False) -
         source_id=document.source_id,
         source_url=document.source_url,
         origin=document.origin,
+        okf=_okf(document.markdown if with_markdown else head),
     )
 
 
@@ -176,15 +189,16 @@ async def _dto(
     }
     documents = None
     if with_documents:
+        # Only the head of each markdown is read: enough for its OKF header, not the whole corpus.
         documents = [
-            _document_dto(document)
-            for document in (
+            _document_dto(document, head=head)
+            for document, head in (
                 await session.execute(
-                    select(KnowledgeDocument)
+                    select(KnowledgeDocument, func.substr(KnowledgeDocument.markdown, 1, okf.HEAD_CHARS))
                     .where(KnowledgeDocument.knowledge_base_id == base.id)
                     .order_by(KnowledgeDocument.created_at.desc(), KnowledgeDocument.id.desc())
                 )
-            ).scalars()
+            ).tuples()
         ]
     return KnowledgeBaseDto(
         slug=base.slug,

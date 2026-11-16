@@ -10,12 +10,8 @@ PREFIX = "/api/v1"
 
 # Contract-first (ADR 0001): operations the contract declares before the API serves them. Each entry
 # names the story that implements it; an entry the API does serve must be removed from here.
-CONTRACT_ONLY: dict[str, str] = {
-    "exportKnowledgeBase": "S72-03 (ADR 0174 point 6)",
-}
-CONTRACT_ONLY_PATHS: set[str] = {
-    "/orgs/{org}/knowledge/{slug}/export",
-}
+CONTRACT_ONLY: dict[str, str] = {}
+CONTRACT_ONLY_PATHS: set[str] = set()
 
 
 def _app_paths(spec: dict[str, Any]) -> set[str]:

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 /** What the knowledge pages say about a base and its documents (ADR 0051). */
 import { relative } from "./format";
-import type { KnowledgeBase, KnowledgeEvalCase, KnowledgeGrant, KnowledgePermissions, KnowledgeSource, OrgConnector } from "./types";
+import type { KnowledgeBase, KnowledgeDocument, KnowledgeEvalCase, KnowledgeGrant, KnowledgePermissions, KnowledgeSource, OrgConnector } from "./types";
 
 /** Where a base is served, said in words: who reads it, which runs get it. */
 export function scopeLabel(base: Pick<KnowledgeBase, "scope" | "projects" | "groups">): string {
@@ -614,4 +614,19 @@ export const CONNECTED_KINDS: SourceKind[] = ["sharepoint", "confluence"];
 export function firstUsableKind(connectors: Pick<OrgConnector, "kind" | "type">[] | undefined): SourceKind {
   const has = (type: SourceKind) => (connectors ?? []).some((c) => c.kind === "documents" && c.type === type);
   return CONNECTED_KINDS.find(has) ?? "web";
+}
+
+/**
+ * What a document's own Open Knowledge Format header says of its lifecycle (ADR 0174), as a badge:
+ * withdrawn (served to no run, no conversation, no search), a draft, or past its `stale_after`. `null`
+ * when there is nothing to say: no header, or a current stable document.
+ */
+export function okfBadge(doc: Pick<KnowledgeDocument, "okf">): { label: string; tone: HealthTone; title: string } | null {
+  const okf = doc.okf;
+  if (!okf) return null;
+  if (okf.status === "deprecated")
+    return { label: "Withdrawn", tone: "neutral", title: "Its OKF header says deprecated: no run, conversation or search is served it" };
+  if (okf.stale) return { label: "Out of date", tone: "warn", title: `Its OKF header says it is stale after ${okf.stale_after ?? "?"}` };
+  if (okf.status === "draft") return { label: "Draft", tone: "neutral", title: "Its OKF header says draft" };
+  return null;
 }

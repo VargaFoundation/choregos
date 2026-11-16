@@ -1,6 +1,7 @@
 # 0174 — The Open Knowledge Format at the edge of a knowledge base, never its store nor its trust
 
-- **Status**: accepted, 2026-11-16; S72-01 implements points 1 to 5, S72-02 (export) is planned
+- **Status**: accepted, 2026-11-16; S72-01 implements points 1 to 5, S72-02 (contract) and S72-03 point 6;
+  a memory's export is not delivered (point 7)
 - **Concerns**: `apps/api/src/choregos_api/knowledge/okf.py`, `knowledge/serving.py` (`files_of`,
   `_ready`, `file_name`), `knowledge/index.py` (`index_document`), `knowledge/conversion.py`
   (`title_of`), `services/conversation_knowledge.py`, `packages/runner/src/choregos_runner/knowledge.py`;
@@ -56,11 +57,24 @@ The format is five months old and led by one vendor; adopting it as a store woul
    line whoever wrote the file could write (the platform's guarantees are mechanisms, principle 4).
    The platform writes no `verified` of its own today: nobody reviews a document of a base one by one.
    If that review exists one day, it is recorded by the platform and served as `verified`.
-6. **Export is planned, not delivered (S72-02).** A base, and a memory's accepted facts (where an
-   accepted proposal is exactly `verified: human:<id>`), exported as an OKF bundle make what an
-   organisation curated portable — reversibility for an Apache-2.0 platform. The export is lossy for a
-   memory (OKF has no bi-temporal validity; `valid_to` maps at best to `status: deprecated`) and carries
-   no rights: it is a gesture of someone who may read everything exported, recorded in the audit.
+6. **A base exports as an OKF bundle, and its console shows each document's lifecycle (S72-02,
+   S72-03).** `GET /orgs/{org}/knowledge/{slug}/export` answers a zip of one folder named after the
+   base: `index.md` with `okf_version`, then every ready document with the header a run is served — a
+   deprecated one included, with its `status`, since the export is the base, not what a run reads.
+   Any reader of the base may take it (it holds nothing the base's reading does not show); no right,
+   grant or source credential travels with it; it is audited (`knowledge.export`, with the number of
+   documents and bytes). The archive is deterministic: the same base exports the same bytes. A
+   document's `okf` field (`type`, `status`, `stale_after`, and `stale` computed when read) is read
+   from the head of its markdown only (`okf.HEAD_CHARS`), so a listing never loads a corpus; the
+   console badges a withdrawn, out-of-date or draft document and offers the download.
+7. **A memory's export is not delivered, and is not planned until two facts exist.** Accepted facts
+   would map to OKF concepts with `verified: [{by: human:<decider>, at}]`, which is the point of
+   exporting them. Two things are missing: the memory adapter (`MemoryAdapter`: Ecphoria or the
+   lexical fallback) has no operation that lists a memory's facts, only `search` and `context_pack`;
+   and deciding a proposal records no decider on the fact. Exporting without them would either miss
+   Ecphoria's facts or write a `verified` the platform cannot prove — what point 5 refuses for an
+   imported file. The export is lossy for a memory in any case (OKF has no bi-temporal validity;
+   `valid_to` maps at best to `status: deprecated`).
 
 ## Alternatives rejected
 
@@ -86,5 +100,8 @@ The format is five months old and led by one vendor; adopting it as a store woul
   next indexing (conversion, sync or reindex), not before.
 - A conversation neither lists nor reads a deprecated document (`knowledge_list`, `knowledge_get`), as
   a run is not served it.
-- Not covered: the console does not show a document's OKF status or staleness; the eval set's
-  recall@5 does not distinguish deprecated documents. `stale_after` is served, never acted on.
+- A bundle synced from git keeps its documents but not its folders: a document lands under its own
+  file name (ADR 0051), so a concept's bundle-relative link to another folder does not resolve in what
+  a run is served or in the export. OKF tolerates broken links (§11); the text is intact.
+- Not covered: the eval set's recall@5 does not distinguish deprecated documents; `stale_after` is
+  served and shown, never acted on; a memory's export (point 7).

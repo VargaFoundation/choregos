@@ -97,6 +97,16 @@ class KnowledgePermissions(Dto):
     widen: bool
 
 
+class KnowledgeDocumentOkf(Dto):
+    """The lifecycle a document's own Open Knowledge Format header declares (ADR 0174)."""
+
+    type: str | None = None
+    status: Literal["draft", "stable", "deprecated"] = "stable"
+    stale_after: str | None = None
+    #: computed when read: now is at or after `stale_after`
+    stale: bool = False
+
+
 class KnowledgeDocumentDto(Dto):
     id: str
     filename: str
@@ -119,6 +129,8 @@ class KnowledgeDocumentDto(Dto):
     source_url: str | None = None
     #: `local`, or `seed@<plugin version>` for the copy of an assistant's seed (S63-06)
     origin: str = "local"
+    #: what its own OKF header declares (ADR 0174); `None` without one
+    okf: KnowledgeDocumentOkf | None = None
 
 
 class KnowledgeBaseUser(Dto):

@@ -3,17 +3,21 @@
 
 from __future__ import annotations
 
+import asyncio
 from functools import partial
 
-from fastapi import status
+from fastapi import Response, status
 from sqlalchemy import select
+from sqlalchemy.orm import undefer
 
 from ...audit import record
 from ...db.models import (
     KnowledgeBase,
+    KnowledgeDocument,
 )
 from ...deps import Db, Me, ProjectCtx
 from ...errors import conflict, unprocessable
+from ...knowledge import okf
 from ...knowledge.access import (
     KnowledgeAction,
     can_manage,
@@ -21,6 +25,7 @@ from ...knowledge.access import (
 )
 from ...knowledge.conversion import conversions
 from ...knowledge.index import reindex_base
+from ...knowledge.serving import files_of
 from ...rbac import Permission
 from ...schemas.knowledge import (
     KnowledgeBaseCreate,
@@ -156,6 +161,47 @@ async def get_knowledge_base(org: str, slug: Slug, session: Db, principal: Me) -
     _member(principal, org)
     return await _dto(
         session, principal, org, await _base(session, principal, org, slug), with_documents=True
+    )
+
+
+@router.get(
+    "/orgs/{org}/knowledge/{slug}/export",
+    operation_id="exportKnowledgeBase",
+    response_class=Response,
+    responses={200: {"content": {"application/zip": {}}}},
+)
+async def export_knowledge_base(org: str, slug: Slug, session: Db, principal: Me) -> Response:
+    """The base as an Open Knowledge Format bundle (ADR 0174 point 6): what its reading already shows,
+    each ready document with the header a run is served, a deprecated one included with its status.
+    No right, grant or source credential travels with it."""
+    _member(principal, org)
+    base = await _base(session, principal, org, slug)
+    documents = list(
+        (
+            await session.execute(
+                select(KnowledgeDocument)
+                .options(undefer(KnowledgeDocument.markdown))
+                .where(KnowledgeDocument.knowledge_base_id == base.id, KnowledgeDocument.status == "ready")
+            )
+        ).scalars()
+    )
+    files = files_of(documents)
+    # Serialising and compressing a corpus is CPU-bound: not on the API's event loop (S39-26).
+    content = await asyncio.to_thread(okf.bundle_zip, base.slug, base.name, files)
+    await record(
+        session,
+        principal,
+        "knowledge.export",
+        org_id=base.org_id,
+        target_type="knowledge_base",
+        target_id=base.id,
+        documents=len(files),
+        bytes=len(content),
+    )
+    return Response(
+        content=content,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{base.slug}.okf.zip"'},
     )
 
 

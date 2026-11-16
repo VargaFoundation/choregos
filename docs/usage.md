@@ -2434,6 +2434,12 @@ already carries an OKF header (a bundle synced from git, say) keeps its own keys
 it, and a `status: deprecated` keeps it out of runs and out of the index. A `verified` it carries is
 its author's claim and is served as `source_verified`: the platform never presents it as a review.
 
+A base's page badges a document whose own header calls it withdrawn (`deprecated`), out of date (past
+its `stale_after`) or a draft, and **Download (OKF)** saves the whole base as `<slug>.okf.zip` — the
+same bundle, its withdrawn documents included with their status (`GET …/knowledge/{slug}/export`, for
+any reader of the base, recorded in the audit as `knowledge.export`). No right, grant or source
+credential is in it.
+
 A base served as an **index** is cut into contextual chunks (each prefixed by its document's title
 and heading path) and embedded through the gateway (`default_model_profiles["embed"]`, else
 `CHOREGOS_KNOWLEDGE_EMBEDDING_MODEL`, `platform/embed`; a deterministic fake under
