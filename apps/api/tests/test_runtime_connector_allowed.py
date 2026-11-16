@@ -67,7 +67,7 @@ async def test_the_requirements_name_the_deployment_s_runtime(
 async def test_a_runtime_never_sets_what_the_deployment_sets(
     client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch, config: dict[str, Any]
 ) -> None:
-    """S65-03, ADR 0153: the cluster, and what a run's pod is given from it, are the deployment's."""
+    """S65-03, ADR 0172: the cluster, and what a run's pod is given from it, are the deployment's."""
     monkeypatch.setenv("CHOREGOS_EXECUTOR_KIND", "k8s_job")
     path = f"/api/v1/projects/{project['id']}/connectors/runtime"
     refused = await client.put(path, json={"type": "k8s_job", "config": config})
