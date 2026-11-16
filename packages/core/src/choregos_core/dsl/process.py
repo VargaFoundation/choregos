@@ -24,7 +24,7 @@ from choregos_contracts.workflow import (
     transition_effect,
 )
 
-from choregos_core.gates import DIFF_GATES, is_async_gate
+from choregos_core.gates import DIFF_GATES, OVER_WORK_ITEM, is_async_gate
 
 #: What each guarantee checks, in one sentence. A test requires a summary for every known
 #: guarantee: a new guarantee without a summary would make the process view speak into the void.
@@ -59,6 +59,16 @@ def _listed(values: Any) -> str:
     return ", ".join(f"`{v}`" for v in values)
 
 
+def gate_summary(name: str, params: dict[str, Any]) -> str:
+    """What a guarantee checks, in one sentence, as this declaration reads it: `scope_respected` over
+    the work item's whole diff is not about an agent (ADR 0171)."""
+    if name == "scope_respected" and params.get("over") == OVER_WORK_ITEM:
+        return "the whole change stays out of the paths the policy forbids" + (
+            " and within the declared ones" if params.get("paths") else ""
+        )
+    return RESUMES.get(name, name)
+
+
 def gate_detail(name: str, params: dict[str, Any], timeout_hours: int | None = None) -> str | None:
     """What a guarantee holds the step to, with the thresholds it actually applies — the defaults of
     `choregos_core.gates` when the workflow sets none — and how long an asynchronous one waits."""
@@ -74,6 +84,16 @@ def gate_detail(name: str, params: dict[str, Any], timeout_hours: int | None = N
     elif name == "coverage_delta_min":
         threshold = float(params.get("x", params.get("min", 0.0)))
         parts.append(f"coverage may not move by less than {threshold:+.2f} points")
+    elif name == "scope_respected" and params.get("over") == OVER_WORK_ITEM:
+        paths = params.get("paths")
+        parts.append(
+            "read on the work item's whole diff, whichever step ran last; "
+            + (
+                f"only files under {_listed(paths)}"
+                if paths
+                else "no allowed paths are held, only the forbidden ones"
+            )
+        )
     elif name == "scope_respected":
         paths = params.get("paths")
         parts.append(
@@ -189,7 +209,7 @@ def to_process(wf: Workflow) -> list[dict[str, Any]]:
         guarantees = [
             {
                 "name": gate,
-                "summary": RESUMES.get(gate, gate),
+                "summary": gate_summary(gate, gate_params.get(gate, {})),
                 "detail": gate_detail(gate, gate_params.get(gate, {}), t.timeout_hours),
                 "asynchronous": is_async_gate(gate),
             }
@@ -198,7 +218,7 @@ def to_process(wf: Workflow) -> list[dict[str, Any]]:
         conditions = []
         if t.outputs:
             conditions.append("it produced " + ", ".join(f"`{o}`" for o in t.outputs))
-        conditions += [RESUMES.get(gate, gate) for gate in names]
+        conditions += [gate_summary(gate, gate_params.get(gate, {})) for gate in names]
         sentence = f"From “{_display(wf, t.from_)}”, {who} moves the item to “{_display(wf, t.to)}”"
         action = _action(t)
         if action:

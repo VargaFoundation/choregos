@@ -276,6 +276,40 @@ template (version 2) declares it as `t-already-fixed`.
 diff, `scope_respected` does not pass — it declines. A guarantee that passes blindly is worse
 than no guarantee, because it reassures.
 
+**A gate judges a commit, and the merge names it** (ADR 0171). An evaluation reads the head of the
+work item's branch once: the diff and the run's scope are compared at that commit, the pull request's
+checks, review and scans count only when its head is that commit (otherwise they stay pending and are
+read again), and each verdict is journaled with it (`head_sha`); `choregos/scope` and
+`choregos/evidence` are published on it. `does: merge_pr` then merges the pull request **at the commit
+its transition's gates judged**: a head that has moved since is refused by the forge, nothing is
+merged, and the work item's workflow stops with that reason — started again (the `mark_agent_ready`
+action), its gates judge the new head. A merge transition without gates names the head it reads when it
+merges. A guarantee therefore
+holds on what is merged when the merge transition carries it: one judged at an earlier step holds on
+the commit it judged, and a commit may land before the merge transition is entered. The guarantees
+that read the work item's whole diff — `no_secrets`, `diff_size_max`, `docs_updated`,
+`markdown_sections`, `adr_number_free` — are held to the merge by declaring them there too, with the
+same parameters: they are then judged on the commit that is merged, with or without a run. Every
+workflow the platform ships that merges does so, `no_secrets` on each (a size limit therefore counts
+what the later steps added), and the validator warns about a merge transition that reads no diff
+(`workflow.no_diff_gate_at_merge`). A refusal there follows the transition's `on_fail`, as a red CI
+does.
+
+**`scope_respected` has two readings, and its declaration says which.** Without `over`, it judges
+what a run wrote since the commit where it began, against `paths` or else that run's allowed paths:
+the reading of a step that writes. On a transition the platform takes — opening or merging the pull
+request — no run is the transition's own: the run is the last step's, or none once the interpreter
+was started again, so the validator warns (`workflow.run_scope_on_system_step`). With
+`params: { over: work_item }` it judges the work item's **whole** diff at the judged commit and
+nothing of a run. It refuses any file under a path the policy forbids (`scope.deny_paths`), always,
+and any file outside `paths` when the declaration gives them; it does not read the work item's own
+allowed paths, which a step's result sets and a later one may narrow, and without `paths` it holds
+the forbidden paths alone. `work_item` is the only value of `over`; another is refused
+(`gate.scope_over_unknown`). The shipped workflows declare it on their merge transition: what they
+merge holds no forbidden file, whenever it landed, and a decision record merges nothing but the
+record (`paths: ["docs/adr/**"]`). What is not held to the merge is the work item's allow-list: a
+file outside it, and not forbidden, that lands between two steps is judged by no step's scope.
+
 ## Evidence
 
 What a step leaves behind, in the result: tests run and passed, lint, typing, coverage delta,

@@ -7,6 +7,8 @@ import json
 from typing import Any
 
 import structlog
+from choregos_adapters.base import merge_at_commit_refusal
+from choregos_adapters.errors import HeadMovedError
 from choregos_api.db.models import Run
 from choregos_contracts import StageResult
 from choregos_core.domain import PrRef
@@ -16,6 +18,7 @@ from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
 from .base import db, load_work_item, project_bundle, scm_for
+from .judged import judged_commit
 from .outcome import record_the_diff
 from .repositories import fix, repo_slug, target_of, target_or_none
 
@@ -25,6 +28,15 @@ log = structlog.get_logger(__name__)
 #: from (S22-46): the implementation changed nothing, so nothing was pushed. Non-retryable — a retry
 #: finds the same absent branch — and the interpreter escalates the work item on it.
 NO_BRANCH = "NoBranch"
+#: The error type `enqueue_merge` raises when the pull request's head is not the commit the merge
+#: names (ADR 0171): nothing was merged. Non-retryable — the same merge would be refused the same
+#: way — so the work item's workflow stops on it with this reason, and its gates judge the new head
+#: when it is started again.
+HEAD_MOVED = "HeadMoved"
+#: The error type `enqueue_merge` raises when the merge cannot name a commit (ADR 0171): the SCM
+#: connector declares no `merge_at_commit`, or the forge gives the pull request no head. The platform
+#: does not merge a head it cannot name. Non-retryable.
+MERGE_UNPINNED = "MergeUnpinned"
 
 
 def _target(bundle: Any, item: Any) -> Any:
@@ -106,6 +118,13 @@ def _pr_body(item: Any, documents: dict[str, Any]) -> str:
 
 @activity.defn(name="enqueue_merge")
 async def enqueue_merge(payload: dict[str, Any]) -> dict[str, Any]:
+    """Merge the work item's pull request at the commit its gates judged (ADR 0171).
+
+    The merge names that commit, and the forge refuses it when the pull request's head is elsewhere:
+    a typed, non-retryable `HeadMoved`, nothing merged, never a second try without the commit. A
+    connector that cannot name a commit is not asked to merge (`MergeUnpinned`). Replayable (ADR
+    0008): a pull request already merged at that commit is left as it is.
+    """
     async with db() as session:
         bundle = await project_bundle(session, payload["project_id"])
         item = await load_work_item(session, payload["work_item_id"])
@@ -114,8 +133,43 @@ async def enqueue_merge(payload: dict[str, Any]) -> dict[str, Any]:
         found = _target(bundle, item)
         number = int(item.pr_url.rsplit("/", 1)[-1])
         scm = await scm_for(session, bundle, found.repo.url)
-        await scm.enqueue_merge(PrRef(repo=repo_slug(found.repo.url), number=number))
-        return {"enqueued": True, "pr_url": item.pr_url}
+        refusal = merge_at_commit_refusal(scm)
+        if refusal is not None:
+            raise ApplicationError(refusal, type=MERGE_UNPINNED, non_retryable=True)
+        repo = repo_slug(found.repo.url)
+        ref = PrRef(repo=repo, number=number)
+        sha = judged_commit(item, repo)
+        named = "its gates judged"
+        if sha is None:
+            # No gate ruled in the state the work item merges from: its merge transition carries
+            # none, so no verdict is betrayed. The head is read once, here, and the merge names it.
+            sha = (await scm.get_pr(ref)).head_sha
+            named = "the merge read"
+        if not sha:
+            raise ApplicationError(
+                f"the pull request {item.pr_url} has no head commit the merge could name: nothing was merged",
+                type=MERGE_UNPINNED,
+                non_retryable=True,
+            )
+        try:
+            await scm.enqueue_merge(ref, sha)
+        except HeadMovedError as moved:
+            log.warning(
+                "merge_refused_head_moved",
+                project=bundle.slug,
+                work_item=item.tracker_key,
+                expected=sha,
+                head=moved.actual,
+            )
+            now = f"is now at {moved.actual[:12]}" if moved.actual else "has moved"
+            raise ApplicationError(
+                f"the pull request {item.pr_url} moved: {named} {sha[:12]} and its head {now}. Nothing "
+                "was merged. Start the work item again (`mark_agent_ready`): its gates will judge the "
+                "new head",
+                type=HEAD_MOVED,
+                non_retryable=True,
+            ) from moved
+        return {"enqueued": True, "pr_url": item.pr_url, "sha": sha}
 
 
 @activity.defn(name="ensure_branch")
@@ -152,7 +206,11 @@ async def collect_run_artifacts(payload: dict[str, Any]) -> dict[str, Any]:
         branch = bundle.config.branch_for(item.tracker_key, repo=found.repo)
         try:
             scm = await scm_for(session, bundle, found.repo.url)
-            diff = await scm.compare(repo, found.repo.default_branch, branch)
+            # The diff of the commit at the head of the branch, read once (ADR 0171); a branch that
+            # is not there is compared by its name, and the SCM answers as it did.
+            head_of = getattr(scm, "head_of", None)
+            head = await head_of(repo, branch) if head_of is not None else None
+            diff = await scm.compare(repo, found.repo.default_branch, head or branch)
         except Exception:
             return {"files": 0}
         result = StageResult.model_validate(run.result)

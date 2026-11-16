@@ -6,7 +6,7 @@ apiVersion: choregos/v1
 kind: Workflow
 metadata:
   name: dev-feature
-  version: 1
+  version: 2
   catalogue:
     title: Feature development, end to end
     summary: "A feature or any change that is not small: specification approved by a product owner, plan, implementation, tests, documentation, code and security reviews, release notes, pull request approved by a maintainer, staging, then production approved by a release captain and checked by an agent."
@@ -139,12 +139,16 @@ transitions:
     to: pr_approved
     by: maintainers
     on_reject: addressing_review
+  # Held to the merge (ADR 0171): the merge names the commit its own gates judged, so what the
+  # earlier steps were asked on the diff is asked again here, on the commit that is merged.
+  # The scope is read there on the work item's whole diff (`over: work_item`), whichever step ran
+  # last: no file under a path the policy forbids.
   - id: t-merge
     from: pr_approved
     to: integrated
     by: platform
     does: merge_pr
-    gates: [ci_green]
+    gates: [ci_green, no_secrets, { name: diff_size_max, params: { files: 60, lines: 3000 } }, docs_updated, { name: scope_respected, params: { over: work_item } }]
     timeout_hours: 24
     on_fail: { to: fixing_ci, max_attempts: 3, escalate_to: needs_human }
   - id: t-fix-ci
