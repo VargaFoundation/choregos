@@ -125,15 +125,32 @@ class EventJournal:
     batch_size: int = 25
     seq: int = 0
     buffer: list[dict[str, Any]] = field(default_factory=list)
+    #: False once the agent has put a link where the local copy is written: that copy stops, the batches to
+    #: the API (the record that counts) go on.
+    local_copy: bool = True
 
     async def record(self, type_: str, payload: dict[str, Any]) -> None:
         self.seq += 1
         event = {"seq": self.seq, "type": type_, "payload": payload}
         self.buffer.append(event)
-        root = self.path.parent.parent
-        safe_files.write_text(
-            root, self.path.relative_to(root), json.dumps(event, ensure_ascii=False) + "\n", append=True
-        )
+        if self.local_copy:
+            root = self.path.parent.parent
+            try:
+                line = json.dumps(event, ensure_ascii=False) + "\n"
+                safe_files.write_text(root, self.path.relative_to(root), line, append=True)
+            except safe_files.LinkRefusedError as exc:
+                # The agent planted a link in the transcript's place (S65-04b): nothing is written through
+                # it, and the run is not failed for a log it can break at will — the API still gets every
+                # event, this one included. Said once, in the journal.
+                self.local_copy = False
+                self.seq += 1
+                self.buffer.append(
+                    {
+                        "seq": self.seq,
+                        "type": "journal.local_copy_refused",
+                        "payload": {"path": str(exc.path), "error": str(exc)[:300]},
+                    }
+                )
         if len(self.buffer) >= self.batch_size or _no_wait(type_, payload):
             await self.flush()
 
@@ -1651,9 +1668,14 @@ async def _open_session(
             )
     session_id = await agent.new_session(str(workspace), mcp_servers)
     await journal.record("session/new", {"backend": backend})
-    safe_files.write_text(
-        workspace, SAVED_SESSION, json.dumps({"backend": backend, "session_id": session_id})
-    )
+    try:
+        safe_files.write_text(
+            workspace, SAVED_SESSION, json.dumps({"backend": backend, "session_id": session_id})
+        )
+    except safe_files.LinkRefusedError as exc:
+        # A link in the saved session's place: nothing is written through it. The run goes on; only a
+        # resume after a person's answer would not reload this conversation (a new one starts).
+        await journal.record("session/save.refused", {"backend": backend, "error": str(exc)[:300]})
 
 
 def _saved_session(workspace: Path) -> dict[str, Any] | None:

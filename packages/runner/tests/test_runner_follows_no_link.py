@@ -128,9 +128,12 @@ def test_a_journal_that_is_a_link_is_not_followed_in_either_direction(tree: tupl
     _link(path, secret)
     assert _events_already_journaled(path) == 0
     journal = EventJournal(None, path)
-    with pytest.raises(safe_files.LinkRefusedError):
-        asyncio.run(journal.record("x", {"a": 1}))
+    asyncio.run(journal.record("x", {"a": 1}))  # a refused log does not fail the run
+    asyncio.run(journal.record("y", {"a": 2}))
     assert secret.read_text(encoding="utf-8") == SECRET
+    # ... the API still gets every event, and the refusal is said once, in the journal.
+    assert [e["type"] for e in journal.buffer] == ["x", "journal.local_copy_refused", "y"]
+    assert [e["seq"] for e in journal.buffer] == [1, 2, 3]
 
 
 def test_a_link_swapped_in_after_the_check_is_refused_by_the_open_itself(tree: tuple[Path, Path]) -> None:
