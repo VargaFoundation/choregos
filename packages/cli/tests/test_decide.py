@@ -260,7 +260,7 @@ def test_a_confirmation_sent_with_a_pasted_token_is_refused_and_says_how_to_sign
     assert result.exit_code == 1
     text = _plain(result)
     assert "decision_requires_session" in text and "needs their session" in text, "the API's own message"
-    assert "choregos login" in text, "and how to sign in"
+    assert "sign in as yourself with `choregos login`" in text, "and how to sign in"
     assert platform.sent == []
 
 
@@ -498,7 +498,7 @@ async def test_the_pane_with_a_pasted_token_shows_the_apis_message_and_how_to_si
         await _open(pilot, "Create the ticket")
         await pilot.press("a")
         await _until(pilot, lambda: bool(app.outcome), "the refusal")
-    assert "needs their session" in app.outcome and "choregos login" in app.outcome
+    assert "needs their session" in app.outcome and "sign in as yourself with `choregos login`" in app.outcome
     assert platform.sent == []
 
 
