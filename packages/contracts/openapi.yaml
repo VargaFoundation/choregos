@@ -5355,6 +5355,26 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/knowledge/{slug}/export:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [knowledge]
+      operationId: exportKnowledgeBase
+      description: >-
+        The base as an Open Knowledge Format bundle (ADR 0174 point 6): a zip archive of one folder named
+        after the base, holding `index.md` (with `okf_version`) and one markdown file per ready document, each
+        opening with the OKF header a run is served (a deprecated document included, with its `status`). Any
+        caller who may read the base, since it holds nothing the base's reading does not show; no right,
+        grant or source credential travels with it. Audited as `knowledge.export`.
+      responses:
+        "200":
+          description: The bundle
+          headers:
+            Content-Disposition: { schema: { type: string }, description: "`attachment; filename=\"<slug>.okf.zip\"`" }
+          content: { application/zip: { schema: { type: string, format: binary } } }
+        "404": { $ref: "#/components/responses/NotFound" }
   /orgs/{org}/knowledge/{slug}/grants:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -9759,6 +9779,20 @@ components:
         source_id: { type: [string, "null"], description: the source it was synced from; none for an upload }
         source_url: { type: [string, "null"], description: where to open the original }
         origin: { type: string, description: "`local` (written by people), or `seed@<plugin version>` for the copy of an assistant's seed document that nobody changed (S63-06)" }
+        okf:
+          oneOf: [{ $ref: "#/components/schemas/KnowledgeDocumentOkf" }, { type: "null" }]
+          description: "what the document's own Open Knowledge Format header declares (ADR 0174); null for a document with none, or not converted yet"
+    KnowledgeDocumentOkf:
+      type: object
+      description: >-
+        The lifecycle a document's own OKF header declares (ADR 0174). `deprecated` keeps it out of runs, conversations and the
+        index; `stale` is computed when read (now at or after `stale_after`) and changes nothing of how it is served.
+      required: [type, status, stale]
+      properties:
+        type: { type: [string, "null"], description: "the header's `type`; null when it names none" }
+        status: { type: string, enum: [draft, stable, deprecated], description: "`stable` when the header names none or another value" }
+        stale_after: { type: [string, "null"], description: "the header's `stale_after`, as written" }
+        stale: { type: boolean }
     KnowledgeDistillRequest:
       type: object
       description: Optional body of `distillKnowledgeBase` (S42-10).
