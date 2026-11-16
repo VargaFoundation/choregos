@@ -8165,9 +8165,9 @@ components:
     AgentCitation:
       type: object
       description: "A passage or document a knowledge tool returned in the turn: what the assistant was given to cite (ADR 0139 §3)."
-      required: [id]
+      required: [document_id]
       properties:
-        id: { type: string }
+        document_id: { type: string }
         title: { type: [string, "null"] }
         version: { type: [string, "null"] }
         base: { type: [string, "null"], description: "the knowledge base it comes from" }
