@@ -430,6 +430,13 @@ token_exchange: {audience: iris-mcp}       # required for user_exchange
 The agent version's `mcp_servers` entry picks the mode (`identity: user_exchange`; absent: `service`).
 Only conversations use it today; runs, realtime and pod sessions keep `service`.
 
+A connector that declares `user_exchange` and **not** `service` has no credential of its own: its server
+answers a person only. Its discovery (`POST /orgs/{org}/connectors/{name}/discover`) is then made as the
+administrator who asks, with a token exchanged for them and the connector's audience, never with no token
+and never through an MCP gateway. Without a sealed token of that administrator (they have not signed in to
+the console since the sign-in sealed it), the discovery is a 422 that says so, nothing reaches the server
+and the connector is not marked `error` (S63-29, ADR 0135 amendment of 2026-11-16).
+
 **What happens.** At each call the platform exchanges the person's token at the identity provider
 (RFC 8693: `subject_token` = the person's access token, `audience` = the connector's, `requested_actor`
 = `assistant:<slug>`) and calls the source with the exchanged token as bearer. The token serves one call;

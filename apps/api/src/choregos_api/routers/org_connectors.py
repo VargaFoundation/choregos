@@ -25,6 +25,7 @@ from ..db.models import (
     OrgConnector,
     OrgConnectorProject,
     ProjectOperationPolicy,
+    User,
 )
 from ..deps import Db, Me, ProjectCtx, is_instance_admin
 from ..errors import conflict, forbidden, not_found, unprocessable, upstream
@@ -71,6 +72,14 @@ from ..services.connectors import (
     verify_secrets,
 )
 from ..services.egress import egress_gate_for_connector, egress_scope
+from ..services.identity_exchange import (
+    SERVICE,
+    USER_EXCHANGE,
+    Acting,
+    IdentityUnavailable,
+    exchanged_token,
+    supports_identity,
+)
 from ..services.mcp_gateway import (
     OUTPOST_TYPE,
     RouteRefusal,
@@ -632,6 +641,37 @@ async def _discovery_identity(
     return identity_of_person(organisation, principal.email, instance, "discovery")
 
 
+async def _discovery_client(
+    session: AsyncSession,
+    organisation: Organization,
+    principal: Me,
+    instance: OrgConnector,
+    via_gateway: bool,
+) -> Any:
+    """The client a discovery lists the tools with.
+
+    A connector that declares `user_exchange` and not `service` has no credential of its own: its server
+    answers a person only (ADR 0135). It is discovered as the administrator who asks, with a token the
+    identity provider exchanged for them and the connector's audience, never with no token at all and
+    never through a gateway. Any other connector is discovered under its own identity, as ever."""
+    if supports_identity(instance, SERVICE) or not supports_identity(instance, USER_EXCHANGE):
+        return await connector_client(
+            session, instance, lambda: _discovery_identity(organisation, principal, instance)
+        )
+    if via_gateway:
+        raise IdentityUnavailable("the `user_exchange` identity does not go through an MCP gateway")
+    user = await session.get(User, principal.user_id)
+    acting = Acting(
+        USER_EXCHANGE,
+        user_id=principal.user_id,
+        subject=(user.oidc_sub if user is not None else None) or principal.user_id,
+        org_id=organisation.id,
+    )
+    return await plugin_servers.connector_client(
+        session, instance, bearer=await exchanged_token(session, instance, acting)
+    )
+
+
 @router.post(
     "/orgs/{org}/connectors/{name}/discover",
     response_model=ConnectorDiscovery,
@@ -664,14 +704,18 @@ async def discover_operations(org: str, name: Name, session: Db, principal: Me) 
     except PlatformNetworkRefused as refused:
         raise refusal_error(refused) from refused
     try:
-        client: Any = await connector_client(
-            session, instance, lambda: _discovery_identity(organisation, principal, instance)
-        )
+        client: Any = await _discovery_client(session, organisation, principal, instance, route.via_gateway)
         list_tools_fn = getattr(client, "list_tools", None)
         if list_tools_fn is None:
             raise unprocessable(f"`{instance.type}` does not discover its operations: its type declares them")
         async with egress_scope(session, organisation, "api", f"org-connector:{name}"):
             tools = await list_tools_fn()
+    except IdentityUnavailable as unavailable:
+        # No token of the administrator to discover a person-only connector with: it is the person's
+        # sign-in that is missing, not the connector that is down, so it is not marked `error`.
+        raise unprocessable(
+            f"`{name}` answers a person only and is discovered as you: {unavailable}"
+        ) from unavailable
     except RouteRefusal as refused:
         # A lost assertion key; an outpost that is offline, that refused or that did not answer in time:
         # refused, and the connector is not `error`.

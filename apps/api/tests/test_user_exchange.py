@@ -429,3 +429,55 @@ async def test_a_token_rotated_while_the_person_signs_out_is_killed_not_sealed_a
         with pytest.raises(SecretNotFound):
             await get_secret_store().get_many(session, org_id, [refresh_secret_name(user_id)])
     assert len(idp.revoked) == 1, "the token the provider just issued was revoked"
+
+
+async def _declare_person_only(client: AsyncClient) -> None:
+    """A connector with no credential of its own: its server answers a person only."""
+    config = {
+        "url": "https://fournisseur.test/mcp",
+        "identity_modes": ["user_exchange"],
+        "token_exchange": {"audience": AUDIENCE},
+    }
+    body = {"name": "fournisseur", "type": "mcp", "config": config}
+    created = await client.post(f"{ORG}/connectors", json=body)
+    assert created.status_code == 201, created.text
+
+
+async def test_a_person_only_connector_is_discovered_as_the_administrator_who_asks(
+    client: AsyncClient,
+    project: dict[str, Any],
+    source: Any,
+    idp: FakeIdentityProvider,
+) -> None:
+    await _declare_person_only(client)
+    await _sign_in_sealed()
+
+    discovered = await client.post(f"{ORG}/connectors/fournisseur/discover")
+
+    assert discovered.status_code == 200, discovered.text
+    assert "suivi_commande" in discovered.json()["added"]
+    listed = [headers for method, headers, _ in source.received if method == "tools/list"]
+    assert listed, "the server was asked for its tools"
+    claims = claims_of(listed[-1]["authorization"].removeprefix("Bearer "))
+    assert claims["sub"] == SUBJECT and claims["aud"] == AUDIENCE, (
+        "a token of the administrator, for the source"
+    )
+    connector = (await client.get(f"{ORG}/connectors/fournisseur")).json()
+    assert connector["status"] == "ok"
+
+
+async def test_a_person_only_connector_without_a_token_of_the_administrator_is_refused_not_marked_down(
+    client: AsyncClient,
+    project: dict[str, Any],
+    source: Any,
+    idp: FakeIdentityProvider,
+) -> None:
+    await _declare_person_only(client)  # no refresh token was sealed
+
+    discovered = await client.post(f"{ORG}/connectors/fournisseur/discover")
+
+    assert discovered.status_code == 422, discovered.text
+    assert "sign in again" in discovered.json()["detail"]
+    assert source.received == [], "nothing reached the server, under any identity"
+    connector = (await client.get(f"{ORG}/connectors/fournisseur")).json()
+    assert connector["status"] != "error" and connector["last_error"] is None
