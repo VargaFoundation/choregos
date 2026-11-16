@@ -349,6 +349,42 @@ paths:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/GitHubAppStatus" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/security:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    get:
+      tags: [admin]
+      operationId: getOrgSecurity
+      summary: The organisation's sign-in security settings (ADR 0170)
+      description: "The freshness of authentication an approval demands, in seconds (`null`: no requirement). The organisation's administrator only."
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/OrgSecurity" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [admin]
+      operationId: setOrgSecurity
+      summary: Set the organisation's sign-in security settings (ADR 0170)
+      description: "At least 60 seconds, or `null` to remove the requirement. An approval whose authentication is older is answered 401 towards `auth/login?reauth=1`. Audited. The organisation's administrator only."
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/OrgSecurity" } } } }
+      responses:
+        "200": { description: Saved, content: { application/json: { schema: { $ref: "#/components/schemas/OrgSecurity" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { description: Below the 60-second floor }
+  /orgs/{org}/members/{email}/sessions/revocation:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: email, in: path, required: true, schema: { type: string, maxLength: 320 } }
+    post:
+      tags: [admin]
+      operationId: revokeMemberSessions
+      summary: End every browser session of a member (ADR 0170)
+      description: "Every session of the member is closed and an older cookie is refused from the next request. The member can sign in again. Audited. The organisation's administrator only; the member must belong to the organisation."
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/SessionRevocation" } } } }
+      responses:
+        "200": { description: Ended, content: { application/json: { schema: { $ref: "#/components/schemas/SessionsRevoked" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /orgs/{org}/github/refresh:
     parameters: [{ $ref: "#/components/parameters/Org" }]
     post:
@@ -12511,6 +12547,21 @@ components:
           type: string
           enum: [settings, derived, default]
           description: "settings: set by the deployment; derived: computed from other settings; default: the built-in default."
+    OrgSecurity:
+      type: object
+      properties:
+        approval_freshness_s: { type: [integer, "null"], minimum: 60, description: "Seconds; null removes the requirement" }
+    SessionRevocation:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 3, maxLength: 500 }
+    SessionsRevoked:
+      type: object
+      required: [revoked, ended]
+      properties:
+        revoked: { type: string }
+        ended: { type: integer }
     PlatformIdentity:
       type: object
       required: [items]

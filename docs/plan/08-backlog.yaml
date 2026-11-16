@@ -4913,6 +4913,22 @@ stories:
     size: S
     depends_on: [S65-29]
     notes: "#1710 (b) was the defect S65-29 fixed (the failing run predates it); proven now on a real PostgreSQL by cancelling a look while its read waits on a table lock. The same test on the placement found in_outpost_scope's finally doing the same: restored on a normal exit, and on an exception under suppress(SQLAlchemyError), then re-raised. in_platform_scope left to finding #1743."
+  - id: S65-36
+    title: "fix(api): a block under the whole instance's scope that a cancellation interrupts raises its cancellation (finding #1743)"
+    stream: S65
+    sprint: 8
+    priority: 2
+    size: S
+    depends_on: [S65-34]
+    notes: "in_platform_scope restored the previous scope in a finally, so on PostgreSQL a cancellation in the driver surfaced as PendingRollbackError. Same fix as in_outpost_scope (S65-34): restore on a normal exit, on an exception under suppress(SQLAlchemyError), then re-raise."
+  - id: S65-35
+    title: "fix(runner): a gateway refusal an agent drops is named, and a budget refusal ends the run on budget (finding #1742)"
+    stream: S65
+    sprint: 8
+    priority: 1
+    size: S
+    depends_on: [S27-01]
+    notes: "opencode turns a provider's error into a None stream ('NoneType' object has no attribute '__aiter__'), so an upstream budget_exceeded reached the run as agent_silencieux, which the workflow retries. After a turn that ends in an error naming no refusal, the runner asks the gateway once per run with the run's key (one non-streamed call of one token, journaled gateway.probe): a budget refusal ends the run reason=budget (never retried, ADR 0047); any other refusal or an unreachable gateway is appended to the summary. Proposal 2 (keeping the body in the ACP adapter) not done; proposal 3 only within a work item, not across recurrences."
   - id: S65-27
     title: "fix(contracts): the generated TypeScript contract has no root entry and is compiled in CI (finding #1607)"
     stream: S65
