@@ -17,13 +17,45 @@ with workflow.unsafe.imports_passed_through():
 
     from ...activities import tracker as tracker_activities
 
-from ..interpreter import HUMAN_TASKS, HUMAN_WAIT_YIELDS_TO_MIGRATION
+from ..interpreter import DECISION_NAMES_ITS_REQUEST, HUMAN_TASKS, HUMAN_WAIT_YIELDS_TO_MIGRATION
 from .base import InterpreterBase
 from .helpers import DEFAULT_RETRY, NO_RETRY, InterpreterInput, _decision, wait_signal
 
 
 class HumansMixin(InterpreterBase):
     """A transition a person decides: approval or task."""
+
+    def _is_stale(self, decision: dict[str, Any]) -> bool:
+        """A decision for a request that is no longer the pending one (#1795): ignored and journaled.
+
+        Only a decision that names its request can be stale; one without `request_id` is applied as
+        before. The condition first, `patched` next: a history with no such decision never asks."""
+        request_id = decision.get("request_id")
+        if not request_id or request_id == self.pending_request:
+            return False
+        if self._answer_resumes(decision):
+            return False  # the answer to the question that parked the ticket: the abandon is pending, not it
+        if not workflow.patched(DECISION_NAMES_ITS_REQUEST):
+            return False
+        self.stale_decisions.append(str(request_id))
+        workflow.logger.warning(
+            "decision ignored: its request is no longer the pending one",
+            extra={
+                "state": self.state,
+                "request_id": request_id,
+                "pending_request": self.pending_request,
+                "decided_by": decision.get("decided_by"),
+            },
+        )
+        return True
+
+    def _take_decision(self) -> dict[str, Any] | None:
+        """The oldest decision that still answers something; the stale ones before it are dropped."""
+        while self.decisions:
+            decision = self.decisions.popleft()
+            if not self._is_stale(decision):
+                return decision
+        return None
 
     async def _wait_human(self, params: InterpreterInput, engine: WorkflowEngine, transition: Any) -> Any:
         actor = engine.human_of(transition)
@@ -76,8 +108,8 @@ class HumansMixin(InterpreterBase):
                 await self._release_suspension()
             if await self._replay_requested():
                 return await self._resume("replay requested", self.pending_request, engine=engine)
-            if self.decisions:
-                decision = self.decisions.popleft()
+            decision = self._take_decision()
+            if decision is not None:
                 if self._answer_resumes(decision):
                     if self.suspension is not None:
                         self.suspension["answered"] = True

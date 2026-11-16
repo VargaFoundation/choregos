@@ -132,8 +132,7 @@ class ExternalMixin(InterpreterBase):
                         if state.tracker and state.tracker.status == to_status:
                             return name
                 self._absorb(event)
-            while self.decisions:
-                decision = self.decisions.popleft()
+            while (decision := self._take_decision()) is not None:
                 if self._answer_resumes(decision):
                     if self.suspension is not None:
                         self.suspension["answered"] = True
