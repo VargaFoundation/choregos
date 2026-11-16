@@ -54,6 +54,20 @@ whatever the service account sees.
    source when it offers it, and the sealed secret deleted at once). The catalogue no longer refuses an
    OAuth server with `needs_oauth` when it is bound to a `user_consent` need.
 
+## Amendment (2026-11-16, S63-29): discovering a connector that answers a person only
+
+A connector may declare `identity_modes: [user_exchange]` without `service`: its server (iris-mcp, the
+directory of the one-on-one assistant) accepts no service account, only a person's token. Discovery
+called it under the connector's own identity, which is no credential at all, so the server answered 401,
+the connector was marked `error`, and no need could ever be bound to it (binding checks the discovered
+operations).
+
+Discovery of such a connector is made **as the administrator who asks**: a token exchanged for them and the
+connector's audience, under the same rules as a call (point 3: no fallback, never through a gateway, the
+deployment's audience list bounds it). It reads the tool list only. A missing token of the administrator is
+a 422, not a connector `error`: the connector is fine, the person's sign-in is missing. A connector that
+declares `service` is discovered under its own identity, as before.
+
 ## Alternatives rejected
 
 - **The connector's service account, filtered by Choregos.** Choregos would decide who reads what about
