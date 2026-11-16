@@ -227,6 +227,7 @@ async def test_a_person_who_cannot_read_a_project_sees_none_of_its_runs(
         assert _ids(seen.json()) == {"run-billing"}, "a run of a project the reader cannot read is listed"
         entry = seen.json()["in_flight"][0]
         assert entry["work_item_key"] == "KEY-run-billing"
+        assert entry["work_item_title"] == "run-billing", "a surface shows the title, not only the key (G6)"
         assert (entry["steps"], entry["last_event"]) == (2, "message")
         assert entry["can_stop"] is False, "a viewer holds no item:control"
     admin_entry = next(e for e in everything.json()["in_flight"] if e["id"] == "run-billing")

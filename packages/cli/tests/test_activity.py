@@ -166,6 +166,11 @@ def test_sessions_are_grouped_apart_and_each_status_reads_as_a_word(platform: Pl
     assert said.index("■ cancelled") > said.index("Ended in the last hour")
 
 
+def test_the_work_item_line_carries_its_title_when_the_platform_says_it(platform: Platform) -> None:
+    platform.listing([_run_entry("run-t", work_item_title="Reconcile the March ledger")], [])
+    assert "FIN-12 Reconcile the March ledger" in _said(_run())
+
+
 def test_nothing_running_says_so(platform: Platform) -> None:
     platform.listing([], [])
     assert "nothing is running" in _said(_run())

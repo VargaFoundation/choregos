@@ -233,6 +233,8 @@ def _tree(entries: list[dict[str, Any]], now: datetime, out: Console, empty: str
 
 def _work_item(entry: dict[str, Any]) -> Text:
     text = Text(str(entry.get("work_item_key") or entry.get("work_item_id") or DASH), style="bold")
+    if entry.get("work_item_title"):
+        text.append(f"  {entry['work_item_title']}")
     workflow = entry.get("workflow")
     if workflow:
         text.append("  ")
