@@ -1,0 +1,330 @@
+[
+ {
+  "seq": 1,
+  "type": "session/update",
+  "ts": "2026-11-10T09:00:00.000000Z",
+  "payload": {
+   "sessionId": "sess-7f3a",
+   "update": {
+    "sessionUpdate": "available_commands_update",
+    "availableCommands": [
+     {
+      "name": "compact",
+      "description": "Compact the context"
+     }
+    ]
+   }
+  }
+ },
+ {
+  "seq": 2,
+  "type": "session/update",
+  "ts": "2026-11-10T09:00:00.400000Z",
+  "payload": {
+   "sessionId": "sess-7f3a",
+   "update": {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+     "type": "text",
+     "text": "I should read the totals code first."
+    }
+   }
+  }
+ },
+ {
+  "seq": 3,
+  "type": "session/update",
+  "ts": "2026-11-10T09:00:01.000000Z",
+  "payload": {
+   "sessionId": "sess-7f3a",
+   "update": {
+    "sessionUpdate": "plan",
+    "entries": [
+     {
+      "content": "Read the totals code",
+      "status": "in_progress",
+      "priority": "high"
+     },
+     {
+      "content": "Deduct credit notes from the total",
+      "status": "pending",
+      "priority": "high"
+     },
+     {
+      "content": "Run the tests",
+      "status": "pending",
+      "priority": "medium"
+     }
+    ]
+   }
+  }
+ },
+ {
+  "seq": 4,
+  "type": "session/update",
+  "ts": "2026-11-10T09:00:01.200000Z",
+  "payload": {
+   "sessionId": "sess-7f3a",
+   "update": {
+    "sessionUpdate": "tool_call",
+    "toolCallId": "toolu_01A",
+    "title": "Read src/invoices/total.py",
+    "kind": "read",
+    "status": "pending",
+    "rawInput": {},
+    "content": [],
+    "locations": [
+     {
+      "path": "/work/src/invoices/total.py"
+     }
+    ],
+    "_meta": {
+     "claudeCode": {
+      "toolName": "Read"
+     }
+    }
+   }
+  }
+ },
+ {
+  "seq": 5,
+  "type": "session/update",
+  "ts": "2026-11-10T09:00:03.200000Z",
+  "payload": {
+   "sessionId": "sess-7f3a",
+   "update": {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "toolu_01A",
+    "status": "completed",
+    "content": [
+     {
+      "type": "content",
+      "content": {
+       "type": "text",
+       "text": "def compute_total..."
+      }
+     }
+    ],
+    "_meta": {
+     "claudeCode": {
+      "toolName": "Read"
+     }
+    }
+   }
+  }
+ },
+ {
+  "seq": 6,
+  "type": "session/update",
+  "ts": "2026-11-10T09:00:03.500000Z",
+  "payload": {
+   "sessionId": "sess-7f3a",
+   "update": {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+     "type": "text",
+     "text": "Reading the totals."
+    }
+   }
+  }
+ },
+ {
+  "seq": 7,
+  "type": "session/update",
+  "ts": "2026-11-10T09:00:04.000000Z",
+  "payload": {
+   "sessionId": "sess-7f3a",
+   "update": {
+    "sessionUpdate": "tool_call",
+    "toolCallId": "toolu_02B",
+    "title": "Explore how credit notes are stored",
+    "kind": "think",
+    "status": "pending",
+    "rawInput": {
+     "subagent_type": "Explore"
+    },
+    "content": [],
+    "_meta": {
+     "claudeCode": {
+      "toolName": "Task"
+     }
+    }
+   }
+  }
+ },
+ {
+  "seq": 8,
+  "type": "session/update",
+  "ts": "2026-11-10T09:00:04.200000Z",
+  "payload": {
+   "sessionId": "sess-7f3a",
+   "update": {
+    "sessionUpdate": "tool_call",
+    "toolCallId": "toolu_03C",
+    "title": "Edit src/invoices/total.py",
+    "kind": "edit",
+    "status": "pending",
+    "rawInput": {},
+    "content": [],
+    "locations": [
+     {
+      "path": "/work/src/invoices/total.py"
+     }
+    ],
+    "_meta": {
+     "claudeCode": {
+      "toolName": "Edit"
+     }
+    }
+   }
+  }
+ },
+ {
+  "seq": 9,
+  "type": "session/update",
+  "ts": "2026-11-10T09:00:05.200000Z",
+  "payload": {
+   "sessionId": "sess-7f3a",
+   "update": {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "toolu_03C",
+    "status": "completed"
+   }
+  }
+ },
+ {
+  "seq": 10,
+  "type": "session/update",
+  "ts": "2026-11-10T09:00:05.300000Z",
+  "payload": {
+   "sessionId": "sess-7f3a",
+   "update": {
+    "sessionUpdate": "future_kind_from_a_newer_agent",
+    "anything": 1
+   }
+  }
+ },
+ {
+  "seq": 11,
+  "type": "session/update",
+  "ts": "2026-11-10T09:00:06.000000Z",
+  "payload": {
+   "sessionId": "sess-7f3a",
+   "update": {
+    "sessionUpdate": "plan",
+    "entries": [
+     {
+      "content": "Read the totals code",
+      "status": "completed",
+      "priority": "high"
+     },
+     {
+      "content": "Deduct credit notes from the total",
+      "status": "completed",
+      "priority": "high"
+     },
+     {
+      "content": "Add a regression test",
+      "status": "in_progress",
+      "priority": "medium"
+     }
+    ]
+   }
+  }
+ },
+ {
+  "seq": 12,
+  "type": "session/update",
+  "ts": "2026-11-10T09:00:09.000000Z",
+  "payload": {
+   "sessionId": "sess-7f3a",
+   "update": {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "toolu_02B",
+    "status": "completed"
+   }
+  }
+ },
+ {
+  "seq": 13,
+  "type": "session/update",
+  "ts": "2026-11-10T09:00:09.500000Z",
+  "payload": {
+   "sessionId": "sess-7f3a",
+   "update": {
+    "sessionUpdate": "tool_call",
+    "toolCallId": "toolu_04D",
+    "title": "`make test`",
+    "kind": "execute",
+    "status": "pending",
+    "rawInput": {
+     "command": "make test"
+    },
+    "content": [],
+    "_meta": {
+     "claudeCode": {
+      "toolName": "Bash"
+     }
+    }
+   }
+  }
+ },
+ {
+  "seq": 14,
+  "type": "session/update",
+  "ts": "2026-11-10T09:00:14.500000Z",
+  "payload": {
+   "sessionId": "sess-7f3a",
+   "update": {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "toolu_04D",
+    "status": "failed",
+    "content": [
+     {
+      "type": "content",
+      "content": {
+       "type": "text",
+       "text": "exit 2"
+      }
+     }
+    ]
+   }
+  }
+ },
+ {
+  "seq": 15,
+  "type": "session/update",
+  "ts": "2026-11-10T09:00:15.000000Z",
+  "payload": {
+   "sessionId": "sess-7f3a",
+   "update": {
+    "sessionUpdate": "tool_call",
+    "toolCallId": "toolu_05E",
+    "title": "`make test`\u001b[2J\u001b[31m",
+    "kind": "execute",
+    "status": "pending",
+    "rawInput": {},
+    "content": []
+   }
+  }
+ },
+ {
+  "seq": 16,
+  "type": "session/update",
+  "ts": "2026-11-10T09:00:15.100000Z",
+  "payload": {
+   "sessionId": "sess-7f3a",
+   "update": {
+    "sessionUpdate": "another_future_kind"
+   }
+  }
+ },
+ {
+  "seq": 17,
+  "type": "run.result",
+  "ts": "2026-11-10T09:00:20.000000Z",
+  "payload": {
+   "status": "done"
+  }
+ }
+]

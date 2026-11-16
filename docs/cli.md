@@ -192,7 +192,8 @@ Usage: choregos activity [OPTIONS]
   status, time, tokens and cost.
 
   Read-only. `--watch` follows the activity stream; elapsed times move every
-  second.
+  second. `--run ID` shows one run's own steps (the agent's plan, its tool
+  calls with state and time, what fills its context).
 
 Options:
   -w, --watch       keep the tree live until the stream ends or Ctrl-C
@@ -201,6 +202,7 @@ Options:
   --agent <str>     only this agent (its slug)
   --kind <str>      run, session or turn
   --org <str>       the organisation; the profile's otherwise
+  --run <str>       one run's steps instead: its plan, tool calls and context
   --help            Show this message and exit.
 ```
 
