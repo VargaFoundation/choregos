@@ -5083,6 +5083,14 @@ export type BrowserSession = {
   id: string;
   /** How the session was opened: `oidc`, `saml`, `dev`... */
   channel: string;
+  /** What holds the session (ADR 0154 §6): `browser` (the console's cookie), `cli` (`choregos login`), `editor` (an editor extension, ADR 0155). A surface session's credential is a bearer, never a cookie. */
+  kind: "browser" | "cli" | "editor";
+  /** What the surface called itself when it asked for its code (`choregos 0.27.8 on host`), for the person to recognise it; null for a browser. */
+  client_name?: string | null;
+  /** When the person authenticated at their identity provider, the sign-in that opened (or approved) the session; null when it is not known. */
+  auth_time?: string | null;
+  /** A surface session ends after this much inactivity; null for a browser session (its `expires_at` is absolute). */
+  idle_expires_at?: string | null;
   created_at: string;
   expires_at: string;
   last_seen_at?: string | null;
@@ -5092,6 +5100,67 @@ export type BrowserSession = {
   ip?: string | null;
   /** The session this request came with. */
   current: boolean;
+};
+
+export type DeviceAuthorizationRequest = {
+  /** What asks: it becomes the session's `kind`. */
+  client_kind: "cli" | "editor";
+  /** How the surface names itself, shown to the person before they approve. */
+  client_name?: string;
+  /** The organisation whose identity provider must have signed the approver in (ADR 0108). */
+  org?: string;
+};
+
+export type DeviceAuthorization = {
+  /** Secret to the surface; single-use; at least 128 bits. */
+  device_code: string;
+  /** Short, typed or confirmed by the person (`ABCD-EFGH`, no ambiguous character). */
+  user_code: string;
+  /** The console's `/device` page. */
+  verification_uri: string;
+  /** `verification_uri` with the user code, to open or show as a QR code. */
+  verification_uri_complete: string;
+  /** Seconds the codes live. */
+  expires_in: number;
+  /** Minimum seconds between two polls. */
+  interval: number;
+};
+
+export type DeviceTokenRequest = {
+  grant_type: "urn:ietf:params:oauth:grant-type:device_code";
+  device_code: string;
+};
+
+export type DeviceToken = {
+  /** The session credential, a bearer. Shown once; the surface keeps it as a secret and never prints it. */
+  access_token: string;
+  token_type: "Bearer";
+  /** The id `GET /me/sessions` lists, to end the session. */
+  session_id: string;
+  kind: "cli" | "editor";
+  /** Seconds of inactivity after which the session ends; each use renews it. */
+  expires_in: number;
+  /** The approving sign-in's authentication time. */
+  auth_time?: string | null;
+};
+
+export type DeviceTokenError = {
+  error: "authorization_pending" | "slow_down" | "expired_token" | "access_denied" | "invalid_grant" | "unsupported_grant_type";
+  error_description?: string;
+  /** With `slow_down`: the new minimum interval. */
+  interval?: number;
+};
+
+export type DeviceRequest = {
+  user_code: string;
+  client_kind: "cli" | "editor";
+  client_name?: string | null;
+  org?: string | null;
+  expires_at: string;
+};
+
+export type DeviceDecision = {
+  decision: "approve" | "deny";
 };
 
 export type EndedSessions = {
@@ -6320,6 +6389,7 @@ export interface Operations {
   decideAction: { method: "POST"; path: "/projects/{id}/actions/{action_id}/decision"; body: ActionDecision; response: Action };
   decideAgentRelease: { method: "POST"; path: "/orgs/{org}/agents/{slug}/releases/{release_id}/decision"; body: AgentReleaseDecision; response: AgentRelease };
   decideAssistantKnowledgeUpdate: { method: "POST"; path: "/orgs/{org}/assistants/{slug}/knowledge/updates/{update_id}"; body: KnowledgeUpdateDecision; response: KnowledgeUpdate };
+  decideDeviceRequest: { method: "POST"; path: "/auth/device/requests/{user_code}/decision"; body: DeviceDecision; response: void };
   decideGlobalPendingMemory: { method: "POST"; path: "/orgs/{org}/memories/{slug}/pending"; body: MemoryDecision; response: void };
   decidePendingMemory: { method: "POST"; path: "/projects/{id}/memory/pending"; body: MemoryDecision; response: void };
   declareMemberLinkedAccount: { method: "POST"; path: "/orgs/{org}/members/{user_id}/linked-accounts"; body: LinkedAccountDeclare; response: LinkedAccount };
@@ -6406,6 +6476,7 @@ export interface Operations {
   getAssistantEmbed: { method: "GET"; path: "/public/assistants/{org}/{slug}/embed"; body: never; response: AssistantEmbed };
   getAssistantInstallationMemory: { method: "GET"; path: "/orgs/{org}/assistants/{slug}/memory/{space}"; body: never; response: MemorySpace };
   getAssistantReadiness: { method: "GET"; path: "/orgs/{org}/assistants/{slug}/readiness"; body: never; response: AssistantReadiness };
+  getDeviceRequest: { method: "GET"; path: "/auth/device/requests/{user_code}"; body: never; response: DeviceRequest };
   getGitHubAppStatus: { method: "GET"; path: "/orgs/{org}/github"; body: never; response: GitHubAppStatus };
   getHostedSource: { method: "GET"; path: "/orgs/{org}/hosted-sources/{sha256}"; body: never; response: HostedSource };
   getIntegrations: { method: "GET"; path: "/integrations"; body: never; response: Integrations };
@@ -6674,6 +6745,7 @@ export interface Operations {
   pluginWebhook: { method: "POST"; path: "/webhooks/plugins/{org}/{plugin}/{server}"; body: {
   [key: string]: unknown;
 }; response: WebhookAck };
+  pollDeviceToken: { method: "POST"; path: "/auth/device/token"; body: DeviceTokenRequest; response: DeviceToken };
   postAgentSessionSocketFrames: { method: "POST"; path: "/internal/agent-sessions/{id}/socket/out"; body: AgentSessionSocketOut; response: AgentSessionSocketRecorded };
   postAgentSessionTurnResult: { method: "POST"; path: "/internal/agent-sessions/{id}/turns/{turn_id}"; body: AgentSessionTurnResult; response: {
   status: "recorded" | "already_recorded";
@@ -6787,6 +6859,7 @@ export interface Operations {
   starAgent: { method: "PUT"; path: "/orgs/{org}/agents/{slug}/star"; body: never; response: AgentSocial };
   startAgentEvaluation: { method: "POST"; path: "/orgs/{org}/agents/{slug}/versions/{version}/evaluations"; body: AgentEvaluationCreate; response: AgentEvaluation };
   startAgentTrial: { method: "POST"; path: "/orgs/{org}/agent-trials"; body: AgentTrialCreate; response: AgentTrial };
+  startDeviceSignIn: { method: "POST"; path: "/auth/device"; body: DeviceAuthorizationRequest; response: DeviceAuthorization };
   startGitHubAppManifest: { method: "POST"; path: "/platform/github-app/manifest"; body: GitHubAppManifestRequest; response: GitHubAppManifestStart };
   startMyLinkedAccount: { method: "POST"; path: "/me/linked-accounts/{provider}/start"; body: never; response: LinkedAccountStart };
   stopAgent: { method: "POST"; path: "/orgs/{org}/agents/{slug}/stop"; body: StopRequest; response: AgentStopResult };

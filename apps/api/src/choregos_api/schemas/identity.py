@@ -95,9 +95,15 @@ class BrowserSessionDto(Dto):
     id: str
     #: How it was opened: `oidc`, `saml`, `dev`...
     channel: str
+    #: What holds it (ADR 0154 §6): the console's cookie, `choregos login`, an editor extension.
+    kind: Literal["browser", "cli", "editor"] = "browser"
     created_at: datetime
     expires_at: datetime
     last_seen_at: datetime | None = None
+    #: What a developer surface called itself, the sign-in's authentication time and its inactivity limit.
+    client_name: str | None = None
+    auth_time: datetime | None = None
+    idle_expires_at: datetime | None = None
     #: The `User-Agent` and the client address of its last request.
     user_agent: str | None = None
     ip: str | None = None
