@@ -3265,6 +3265,19 @@ export type KnowledgeDocument = {
   source_url?: string | null;
   /** `local` (written by people), or `seed@<plugin version>` for the copy of an assistant's seed document that nobody changed (S63-06) */
   origin?: string;
+  /** what the document's own Open Knowledge Format header declares (ADR 0174); null for a document with none, or not converted yet */
+  okf?: KnowledgeDocumentOkf | null;
+};
+
+/** The lifecycle a document's own OKF header declares (ADR 0174). `deprecated` keeps it out of runs, conversations and the index; `stale` is computed when read (now at or after `stale_after`) and changes nothing of how it is served. */
+export type KnowledgeDocumentOkf = {
+  /** the header's `type`; null when it names none */
+  type: string | null;
+  /** `stable` when the header names none or another value */
+  status: "draft" | "stable" | "deprecated";
+  /** the header's `stale_after`, as written */
+  stale_after?: string | null;
+  stale: boolean;
 };
 
 /** Optional body of `distillKnowledgeBase` (S42-10). */
@@ -6536,6 +6549,7 @@ export interface Operations {
   eraseAssistantSubject: { method: "POST"; path: "/orgs/{org}/assistants/{slug}/erasure"; body: SubjectErasureRequest; response: SubjectErasure };
   eraseMyAssistantData: { method: "DELETE"; path: "/me/assistants/{org}/{slug}"; body: never; response: UserErasure };
   estimateKnowledgeDistillation: { method: "GET"; path: "/orgs/{org}/knowledge/{slug}/distill/estimate"; body: never; response: KnowledgeDistillEstimate };
+  exportKnowledgeBase: { method: "GET"; path: "/orgs/{org}/knowledge/{slug}/export"; body: never; response: void };
   exportMyAssistantMemory: { method: "GET"; path: "/me/assistants/{org}/{slug}/memory-export"; body: never; response: MemoryExport };
   exportOrgCostsCsv: { method: "GET"; path: "/orgs/{org}/costs.csv"; body: never; response: void };
   exportProjectCostsCsv: { method: "GET"; path: "/projects/{id}/costs.csv"; body: never; response: void };
