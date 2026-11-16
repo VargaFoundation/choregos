@@ -1674,6 +1674,35 @@ export type AgentResponse = {
   error?: AgentResponseError | null;
   /** The memory spaces the turn wrote or proposed in (a conversation with an assistant). */
   memory_updated?: Array<string>;
+  /** What the turn's knowledge tools returned (ADR 0154 §4, G1): the same list the MCP door's answer carries for the same turn. Empty outside a conversation with an assistant. */
+  citations?: Array<AgentCitation>;
+  /** The writes and launches the assistant proposed and the person has not decided, each with the console address where they decide (G1). Listing is not deciding: a surface shows them, the person confirms from their own session. */
+  pending_actions?: Array<AgentPendingAction>;
+  /** The accounts a tool of the turn needed and the person has not connected, with where to connect them (G1). */
+  missing_accounts?: Array<AgentMissingAccount>;
+};
+
+/** A passage or document a knowledge tool returned in the turn: what the assistant was given to cite (ADR 0139 §3). */
+export type AgentCitation = {
+  document_id: string;
+  title?: string | null;
+  version?: string | null;
+  /** the knowledge base it comes from */
+  base?: string | null;
+  [key: string]: unknown;
+};
+
+export type AgentPendingAction = {
+  id: string;
+  summary: string;
+  /** the console's address where the person decides; the CLI and an editor cannot compute it */
+  confirm_url: string;
+};
+
+export type AgentMissingAccount = {
+  /** the connector's need that has no connected account */
+  need: string;
+  connect_url: string;
 };
 
 /** A `response.output_text.delta` event. */
@@ -1753,6 +1782,8 @@ export type ConversationPage = {
 export type ConversationMessageCreate = {
   input: string;
   stream?: boolean;
+  /** ADR 0154 §4, G2. The turn keeps running, and is booked once, when the client that sent it goes away; its progress is read from `GET /me/conversations/{id}/events` and its answer from `GET /me/conversations/{id}`. A client that stays receives the same answer as without it. */
+  detach?: boolean;
 };
 
 /** A thumb on one answer of a session (S63-17, ADR 0140). */
@@ -5921,6 +5952,57 @@ export type AssistantStop = {
   reason: string;
 };
 
+/** One thing that waits for the caller (ADR 0154 §4, G8). */
+export type PendingItem = {
+  /** `human_step`: a workflow's human request. `governed_action`: an action waiting for an approver. `conversation_action`: a write an assistant proposed. `launch`: the start of a workflow an assistant proposed (ADR 0158). */
+  kind: "human_step" | "governed_action" | "conversation_action" | "launch";
+  /** the request's, the action's or the proposal's id */
+  id: string;
+  /** one line saying what is asked */
+  what: string;
+  /** Where it lives: any of these that applies */
+  where: {
+    org?: string | null;
+    project_slug?: string | null;
+    work_item_id?: string | null;
+    work_item_key?: string | null;
+    conversation_id?: string | null;
+  };
+  since: string;
+  due_at?: string | null;
+  /** The route that decides it, a path of the API (a surface calls it with the person's own session) and the console's address. */
+  decision: {
+    method: "POST";
+    path: string;
+    /** the console's address */
+    url: string;
+  };
+};
+
+export type PendingList = {
+  items: Array<PendingItem>;
+};
+
+/** A node of the run's tree (ADR 0154 §5): the run's agent or a sub-agent it delegated to. */
+export type RunAgentNode = {
+  /** the node's id; for a sub-agent, the id of the tool call that delegated */
+  id: string;
+  /** the node it hangs under; null for the run's own agent */
+  parent_id?: string | null;
+  kind: "agent" | "subagent";
+  /** the delegating tool's name, for a sub-agent */
+  tool?: string | null;
+  status: "running" | "completed" | "failed";
+  started_at: string;
+  ended_at?: string | null;
+  /** the node's own tool calls */
+  tool_calls: number;
+};
+
+export type RunAgentList = {
+  items: Array<RunAgentNode>;
+};
+
 export type ActivityEntry = {
   kind: "run" | "session" | "turn";
   id: string;
@@ -5929,6 +6011,8 @@ export type ActivityEntry = {
   project_slug?: string | null;
   work_item_id?: string | null;
   work_item_key?: string | null;
+  /** the work item's title, for a surface that shows more than a key (ADR 0154 §4, G6) */
+  work_item_title?: string | null;
   workflow?: string | null;
   stage_role?: string | null;
   agent_slug?: string | null;
@@ -6458,6 +6542,7 @@ export interface Operations {
   fireTrigger: { method: "POST"; path: "/projects/{id}/triggers/{name}/fire"; body: {
   [key: string]: unknown;
 }; response: TriggerAck };
+  followMyConversationTurn: { method: "GET"; path: "/me/conversations/{conversation_id}/events"; body: never; response: void };
   forgetPlatformGitHubApp: { method: "DELETE"; path: "/platform/github-app"; body: never; response: void };
   forkAgent: { method: "POST"; path: "/orgs/{org}/agents/{slug}/fork"; body: AgentFork; response: Agent };
   freezeTrain: { method: "POST"; path: "/projects/{id}/trains/{env}/freeze"; body: {
@@ -6691,6 +6776,7 @@ export interface Operations {
   listMyDelegations: { method: "GET"; path: "/me/delegations"; body: never; response: DelegationList };
   listMyInbox: { method: "GET"; path: "/me/inbox"; body: never; response: InboxList };
   listMyLinkedAccounts: { method: "GET"; path: "/me/linked-accounts"; body: never; response: MyLinkedAccounts };
+  listMyPending: { method: "GET"; path: "/me/pending"; body: never; response: PendingList };
   listMySessions: { method: "GET"; path: "/me/sessions"; body: never; response: Array<BrowserSession> };
   listMyTokens: { method: "GET"; path: "/me/tokens"; body: never; response: Array<ApiToken> };
   listOrgActions: { method: "GET"; path: "/orgs/{org}/actions"; body: never; response: Array<Action> };
@@ -6721,6 +6807,7 @@ export interface Operations {
   listReceivedEvents: { method: "GET"; path: "/projects/{id}/received-events"; body: never; response: ReceivedEventPage };
   listReleases: { method: "GET"; path: "/projects/{id}/releases"; body: never; response: ReleasePage };
   listRemoteCredentials: { method: "GET"; path: "/orgs/{org}/remote-credentials"; body: never; response: Array<RemoteCredential> };
+  listRunAgents: { method: "GET"; path: "/runs/{id}/agents"; body: never; response: RunAgentList };
   listRuns: { method: "GET"; path: "/work-items/{id}/runs"; body: never; response: Array<Run> };
   listSkillCatalogue: { method: "GET"; path: "/orgs/{org}/skill-catalogue"; body: never; response: SkillCatalogue };
   listSkills: { method: "GET"; path: "/orgs/{org}/skills"; body: never; response: Array<Skill> };
