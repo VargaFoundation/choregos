@@ -1,9 +1,10 @@
 """The Choregos Claude Code plugin: installable from the repository, secret-free, at the repository's version.
 
-`/plugin marketplace add VargaFoundation/choregos` reads `.claude-plugin/marketplace.json` at the
-root, then `/plugin install choregos@choregos` installs `integrations/claude-code`: its MCP gate
-(ADR 0030) and its skill. The user's token never lives in the repository: it is a sensitive value
-of their configuration, kept by Claude Code in their machine's vault.
+`/plugin marketplace add <owner>/choregos` (the publishing identity's owner) reads
+`.claude-plugin/marketplace.json` at the root, then `/plugin install choregos@choregos` installs
+`integrations/claude-code`: its MCP gate (ADR 0030) and its skill. The user's token never lives in
+the repository: it is a sensitive value of their configuration, kept by Claude Code in their
+machine's vault.
 """
 
 from __future__ import annotations

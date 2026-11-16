@@ -48,6 +48,11 @@ class ObjectStore(Protocol):
         """Reads the object; `ObjectNotFoundError` when it is absent."""
         ...
 
+    async def delete(self, key: str) -> None:
+        """Removes the object; idempotent: an absent object is not an error (a retried erasure, a purge
+        that ran twice). `ObjectStoreError` when the store refuses or cannot be reached."""
+        ...
+
     async def check(self) -> None:
         """A cheap probe that creates nothing: returns when the store answers for its bucket, raises
         `ObjectStoreError` (never carrying a key or a secret) when it does not."""
@@ -198,6 +203,16 @@ class S3ObjectStore:
                 f"object store refused GET {self.url_of(key)}: {response.status_code} {response.text[:300]}"
             )
         return response.content
+
+    async def delete(self, key: str) -> None:
+        """`DELETE` on the key; S3 answers 204 whether or not the object existed, and 404 is taken as done
+        (some S3-compatible servers answer it). It needs the `s3:DeleteObject` permission."""
+        response = await self._request("DELETE", key)
+        if response.status_code >= 300 and response.status_code != 404:
+            raise ObjectStoreError(
+                f"object store refused DELETE {self.url_of(key)}: "
+                f"{response.status_code} {response.text[:300]}"
+            )
 
     async def check(self) -> None:
         """A `HEAD` on the bucket, signed like any call, with a short timeout: it writes nothing."""

@@ -4,7 +4,7 @@
 
 One procedure per connector type, knowledge source kind, MCP-door client and external agent kind ([ADR 0067](../adr/0067-a-procedure-per-connector-and-agent-type.md)). The console shows the same text beside the form where you add the thing, with this deployment's own URLs filled in. A deployment adds its own notes (`<id>.site.md`) or procedures through `CHOREGOS_PROCEDURES_EXTRA`; see [deployment](../deployment.md#site-notes-on-the-setup-procedures).
 
-62 procedures.
+67 procedures.
 
 ## Connectors
 
@@ -20,6 +20,9 @@ One procedure per connector type, knowledge source kind, MCP-door client and ext
 | [Connect SharePoint and OneDrive](connector.documents.sharepoint.md) | an organisation administrator | `documents/sharepoint` | 2026-11-09 |
 | [Connect a web site behind a login as a documents source](connector.documents.web.md) | an organisation administrator | `documents/web` | 2026-10-28 |
 | [Connect a pfSense firewall](connector.firewall.pfsense.md) | an organisation administrator | `firewall/pfsense` | 2026-10-16 |
+| [Let members link their Forgejo account](connector.forge_account.forgejo-oauth.md) | an organisation administrator | `forge_account/forgejo-oauth` | 2026-11-12 |
+| [Let members link their GitHub account](connector.forge_account.github-oauth.md) | an organisation administrator | `forge_account/github-oauth` | 2026-11-12 |
+| [Let members link their GitLab account](connector.forge_account.gitlab-oauth.md) | an organisation administrator | `forge_account/gitlab-oauth` | 2026-11-12 |
 | [Use the direct gateway (development only)](connector.gateway.direct.md) | the person who operates the platform | `gateway/direct` | 2026-10-16 |
 | [Connect a LiteLLM gateway](connector.gateway.litellm.md) | the person who operates the platform | `gateway/litellm` | 2026-10-16 |
 | [Connect an OpenAI-compatible gateway](connector.gateway.openai-compatible.md) | the person who operates the platform | `gateway/openai-compatible` | 2026-10-16 |
@@ -29,8 +32,9 @@ One procedure per connector type, knowledge source kind, MCP-door client and ext
 | [Use Stooq for daily market data](connector.marketdata.stooq.md) | a project owner | `marketdata/stooq` | 2026-10-16 |
 | [Use Tiingo for daily market data](connector.marketdata.tiingo.md) | a project owner | `marketdata/tiingo` | 2026-10-26 |
 | [Use Yahoo Finance for daily market data](connector.marketdata.yahoo.md) | a project owner | `marketdata/yahoo` | 2026-10-16 |
-| [Connect an MCP server](connector.mcp.mcp.md) | an organisation administrator | `mcp/mcp` | 2026-10-16 |
+| [Connect an MCP server](connector.mcp.mcp.md) | an organisation administrator | `mcp/mcp` | 2026-11-12 |
 | [Connect an MCP server through your organisation's MCP gateway](connector.mcp.mcp-gateway.md) | an organisation administrator | `mcp/mcp-gateway` | 2026-10-27 |
+| [Connect an MCP server that lives at an outpost](connector.mcp.mcp-outpost.md) | an organisation administrator | `mcp/mcp-outpost` | 2026-11-14 |
 | [Connect Atlassian's Rovo MCP Server](connector.mcp.mcp.atlassian-rovo.md) | an organisation administrator | `mcp/mcp` (preset `atlassian-rovo`) | 2026-10-28 |
 | [The demo device management (demonstration only)](connector.mdm.demo.md) | anyone | `mdm/demo` | 2026-10-16 |
 | [Connect Ecphoria, the platform's memory](connector.memory.ecphoria.md) | the person who operates the platform | `memory/ecphoria` | 2026-10-16 |
@@ -39,15 +43,16 @@ One procedure per connector type, knowledge source kind, MCP-door client and ext
 | [Connect Cilium and Hubble](connector.network_policy.cilium.md) | an organisation administrator | `network_policy/cilium` | 2026-10-16 |
 | [Connect an SMTP relay for e-mail notifications](connector.notify.email.md) | a project owner | `notify/email` | 2026-11-03 |
 | [Connect Slack for notifications and decisions](connector.notify.slack.md) | a project owner | `notify/slack` | 2026-10-16 |
+| [Connect Microsoft Teams for an assistant's deliveries](connector.notify.teams.md) | a project owner | `notify/teams` | 2026-11-12 |
 | [Run agent stages as Azure Container Apps jobs](connector.runtime.aca.md) | the person who operates the platform | `runtime/aca` | 2026-10-16 |
 | [Run agent stages in warm sandboxes (opt-in)](connector.runtime.agent_sandbox.md) | the person who operates the platform | `runtime/agent_sandbox` | 2026-10-16 |
 | [Run agent stages as Kubernetes Jobs](connector.runtime.k8s_job.md) | the person who operates the platform | `runtime/k8s_job` | 2026-10-16 |
 | [Run agent stages in local Docker (development)](connector.runtime.local_docker.md) | the person who operates the platform | `runtime/local_docker` | 2026-10-16 |
 | [Run agent stages as Tekton PipelineRuns](connector.runtime.tekton.md) | the person who operates the platform | `runtime/tekton` | 2026-10-16 |
-| [Use GitHub for branches, pull requests and checks](connector.scm.github.md) | a project owner | `scm/github` | 2026-10-19 |
+| [Use GitHub for branches, pull requests and checks](connector.scm.github.md) | a project owner | `scm/github` | 2026-11-12 |
 | [Use GitLab for branches, merge requests and auto-merge](connector.scm.gitlab.md) | a project owner | `scm/gitlab` | 2026-11-04 |
 | [The demo carrier (demonstration only)](connector.shipping.demo.md) | anyone | `shipping/demo` | 2026-10-16 |
-| [Use GitHub Issues and Projects v2 as the board](connector.tracker.github-issues.md) | a project owner | `tracker/github-issues` | 2026-10-19 |
+| [Use GitHub Issues and Projects v2 as the board](connector.tracker.github-issues.md) | a project owner | `tracker/github-issues` | 2026-11-12 |
 | [Use GitLab Issues as the board](connector.tracker.gitlab-issues.md) | a project owner | `tracker/gitlab-issues` | 2026-10-16 |
 | [Let Choregos hold the work items](connector.tracker.internal.md) | a project owner | `tracker/internal` | 2026-10-16 |
 | [Use Jira Cloud as the board](connector.tracker.jira.md) | a project owner | `tracker/jira` | 2026-11-01 |

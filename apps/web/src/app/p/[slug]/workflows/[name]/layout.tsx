@@ -17,6 +17,7 @@ const VUES = [
   { suffix: "/steps", label: "Steps" },
   { suffix: "/yaml", label: "YAML" },
   { suffix: "/history", label: "History" },
+  { suffix: "/spend", label: "Tokens and cost" },
 ];
 
 /** A project's workflow, by its name: its process, its map, its YAML, its history. */

@@ -1,7 +1,10 @@
 # 0113 — A workflow starts from a trigger: tracker, HTTP, schedule or a person
 
-- **Status**: proposed, 2026-10-29 — S56-01 implements the HTTP trigger and the common audit; S56-02 to
-  S56-05 the console, start rules, signed deliveries and the `when` filter (§8-11)
+- **Status**: accepted, 2026-11-15 (the product owner's decision D14 of the graal and Choregos offer: the
+  two doors between the products are MCP and A2A, and the triggers are the third way in, for a signal that
+  is neither; see [ADR 0168](0168-the-surfaces-frozen-for-1-0.md)) — proposed, 2026-10-29; S56-01 implements
+  the HTTP trigger and the common audit; S56-02 to S56-05 the console, start rules, signed deliveries and
+  the `when` filter (§8-11)
 - **Concerns**: `ProjectConfig.triggers` (contract), `routers/triggers.py`, `services/triggers.py`,
   `services/received_events.py`, `activities/schedules.py`, the `trigger_tokens` table; follows
   [ADR 0031](0031-several-workflows-per-project.md) (a project's workflows and their routing) and S42-06f
@@ -113,3 +116,14 @@ Two ways in, chosen by what the project needs:
   names (a rule on a type or a state is left to the webhook, their issue search cannot express it); a
   plugin tracker's server returns its own candidates.
 - The console edits `triggers` and `start_rules` as JSON in the triggers card; the API validates them.
+
+## Amendment, 2026-11-15: accepted, and what acceptance does not claim
+
+The decision is accepted as written. Acceptance freezes the *shape* (the route, the three ways to
+authenticate a call, the mapping by JSON pointers, the outcomes of `received_events`); it does not say the
+shape has been proven against a real sender. What STATUS S56-01 still lists as unproven stays unproven: no
+real ServiceNow instance, and no graal alert, has called a trigger. A trigger's signature check is the HMAC
+of the body keyed by the trigger's signing secret (§9); a *generic* verifier that accepts another sender's
+signature format (graal's `t=…,v1=…`, Standard Webhooks) is a later story, not part of this record.
+The surfaces this record names, and the rule that changes them, are in
+[ADR 0168](0168-the-surfaces-frozen-for-1-0.md).

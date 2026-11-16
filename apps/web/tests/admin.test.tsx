@@ -47,8 +47,8 @@ describe("SchemaForm (ADR 0032, S17-02)", () => {
     fireEvent.change(screen.getByLabelText(/^name/), { target: { value: "okta" } });
     fireEvent.change(screen.getByLabelText(/^seats/), { target: { value: "12" } });
     fireEvent.click(screen.getByLabelText(/^enabled/));
-    fireEvent.change(screen.getByLabelText(/^domains/), { target: { value: "acme.dev, diametral.com" } });
-    expect(latest).toEqual({ name: "okta", seats: 12, enabled: true, domains: ["acme.dev", "diametral.com"] });
+    fireEvent.change(screen.getByLabelText(/^domains/), { target: { value: "acme.dev, globex.example" } });
+    expect(latest).toEqual({ name: "okta", seats: 12, enabled: true, domains: ["acme.dev", "globex.example"] });
     expect(missingFields(schema, latest)).toEqual(["role"]);
   });
 });

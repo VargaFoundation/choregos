@@ -9,7 +9,10 @@ import { type CliManifest, MANIFEST_PATH } from "./cli-download";
 import { clearEmbedToken, embedHeaders, isFrameSession } from "./embed-token";
 import type {
   Action,
+  ActivityList,
   Agent,
+  AgentStopResult,
+  StopRequest,
   ConnectorDiscovery,
   ConnectorOperation,
   OperationPatch,
@@ -39,6 +42,11 @@ import type {
   AgentDraft,
   AgentDraftRequest,
   AgentFork,
+  AgentForkList,
+  AgentSocial,
+  AgentWatchPut,
+  AgentNotificationList,
+  AgentNotificationsRead,
   AgentScopeChange,
   RemoteAgentDiscovery,
   RemoteCredential,
@@ -121,14 +129,24 @@ import type {
   ModelCuratePreview,
   ModelSyncResult,
   UsableModel,
+  GitHubAppManifestRequest,
+  GitHubAppManifestStart,
+  GitHubAppRegistrationStatus,
   GitHubAppStatus,
   GitHubInstallLink,
   GitHubInstallLinkRequest,
   GitHubRepositoryPage,
   HandOff,
+  HumanRequest,
+  AssigneeChange,
   Membership,
   MembershipUpsert,
-  TrackerIdentity,
+  LinkedAccount,
+  LinkedAccountDeclare,
+  LinkedAccountStart,
+  MyLinkedAccounts,
+  Avatar,
+  MemberProfile,
   Org,
   OrgCreate,
   OrgUpdate,
@@ -178,6 +196,25 @@ import type {
   OutboundProxyPut,
   OutboundProxyState,
   OutboundProxyTest,
+  OrgGroup,
+  OrgGroupCreate,
+  OrgGroupList,
+  OrgGroupMember,
+  OrgGroupMemberAdd,
+  OrgGroupMemberList,
+  OrgGroupUpdate,
+  Outpost,
+  OutpostCallPage,
+  OutpostCallState,
+  OutpostCreate,
+  OutpostEnrolmentCreate,
+  OutpostEnrolmentCreated,
+  OutpostEnrolmentList,
+  OutpostInstance,
+  OutpostInstanceApprove,
+  OutpostInstanceList,
+  OutpostList,
+  OutpostRefusalCode,
   NetworkActivity,
   ProjectNetwork,
   ProjectDto,
@@ -215,6 +252,7 @@ import type {
   Conversation,
   ConversationAction,
   ConversationActionList,
+  RunContext,
 } from "./types";
 
 export const API_BASE = "/api/v1";
@@ -260,8 +298,17 @@ export type Problem = {
   latest_version?: number;
   latest_author?: string | null;
   verdicts?: EgressVerdict[];
-  /** `gateway_in_use` (ADR 0105): the connectors that still go through the MCP gateway. */
+  /** `gateway_in_use` (ADR 0105): the connectors that still go through the MCP gateway; `outpost_in_use`
+   * (ADR 0149): the connectors that still route to the outpost. */
   connectors?: string[];
+  /** The outpost a 409 of `OutpostConflict` concerns (ADR 0147), when it names one. */
+  outpost?: string;
+  /** The alias a refusal of a connector at an outpost was for (ADR 0149 §7). */
+  endpoint?: string;
+  /** `outpost_refused`: the outpost's own code for why it did not make the call (ADR 0147 §10). */
+  refusal?: OutpostRefusalCode;
+  /** Seconds before asking again, on a 429 (an outpost's quota at discovery, ADR 0148 §10). */
+  retry_after?: number;
 };
 
 export class ApiError extends Error {
@@ -474,16 +521,22 @@ export const api = {
     request<void>(`/orgs/${org}/members/${encodeURIComponent(userId)}${project ? `?project=${encodeURIComponent(project)}` : ""}`, {
       method: "DELETE",
     }),
-  /** A member's links to their accounts on trackers (S47-14): GitHub only for now. */
-  trackerIdentities: (org: string, userId: string) =>
-    request<TrackerIdentity[]>(`/orgs/${org}/members/${encodeURIComponent(userId)}/tracker-identities`),
-  setTrackerIdentity: (org: string, userId: string, tracker: TrackerIdentity["tracker"], body: { external_id: string; login: string }) =>
-    request<TrackerIdentity>(`/orgs/${org}/members/${encodeURIComponent(userId)}/tracker-identities/${tracker}`, {
-      method: "PUT",
+  /** A member's accounts on code forges (ADR 0161): verified by the member, or declared by an administrator. */
+  memberLinkedAccounts: (org: string, userId: string) =>
+    request<LinkedAccount[]>(`/orgs/${org}/members/${encodeURIComponent(userId)}/linked-accounts`),
+  /** An administrator declares a member's account: stored NOT verified. */
+  declareMemberLinkedAccount: (org: string, userId: string, body: LinkedAccountDeclare) =>
+    request<LinkedAccount>(`/orgs/${org}/members/${encodeURIComponent(userId)}/linked-accounts`, {
+      method: "POST",
       body: JSON.stringify(body),
     }),
-  deleteTrackerIdentity: (org: string, userId: string, tracker: TrackerIdentity["tracker"]) =>
-    request<void>(`/orgs/${org}/members/${encodeURIComponent(userId)}/tracker-identities/${tracker}`, { method: "DELETE" }),
+  deleteMemberLinkedAccount: (org: string, userId: string, accountId: string) =>
+    request<void>(`/orgs/${org}/members/${encodeURIComponent(userId)}/linked-accounts/${encodeURIComponent(accountId)}`, {
+      method: "DELETE",
+    }),
+  /** One member's profile page in one read (ADR 0162): the basic card for a member, everything for an administrator. */
+  memberProfile: (org: string, userId: string) =>
+    request<MemberProfile>(`/orgs/${org}/members/${encodeURIComponent(userId)}/profile`),
   /** The administration sections that extensions declare, filtered by the API (ADR 0032). */
   adminSections: (org: string) => request<AdminSection[]>(`/ui/admin-sections?org=${encodeURIComponent(org)}`),
   /**
@@ -519,11 +572,32 @@ export const api = {
   /** A fork: a new agent in the scope asked, whose v1 copies a version of the source (ADR 0061). */
   forkAgent: (org: string, slug: string, body: AgentFork) =>
     request<Agent>(`/orgs/${org}/agents/${slug}/fork`, { method: "POST", body: JSON.stringify(body) }),
+  /** The forks of an agent the caller may see (ADR 0152). */
+  agentForks: (org: string, slug: string) => request<AgentForkList>(`/orgs/${org}/agents/${slug}/forks`),
+  /** Watch an agent: `all` its activity, or its `releases` only (ADR 0152). */
+  watchAgent: (org: string, slug: string, level: AgentWatchPut["level"] = "all") =>
+    request<AgentSocial>(`/orgs/${org}/agents/${slug}/watch`, { method: "PUT", body: JSON.stringify({ level }) }),
+  unwatchAgent: (org: string, slug: string) => request<AgentSocial>(`/orgs/${org}/agents/${slug}/watch`, { method: "DELETE" }),
+  starAgent: (org: string, slug: string) => request<AgentSocial>(`/orgs/${org}/agents/${slug}/star`, { method: "PUT" }),
+  unstarAgent: (org: string, slug: string) => request<AgentSocial>(`/orgs/${org}/agents/${slug}/star`, { method: "DELETE" }),
+  /** What happened to the agents the caller watches, the ones they may still read (ADR 0152). */
+  agentNotifications: (org: string, unread = false) =>
+    request<AgentNotificationList>(`/orgs/${org}/agent-notifications${unread ? "?unread=true" : ""}`),
+  readAgentNotification: (org: string, id: string) =>
+    request<AgentNotificationsRead>(`/orgs/${org}/agent-notifications/${id}/read`, { method: "POST" }),
+  readAllAgentNotifications: (org: string) =>
+    request<AgentNotificationsRead>(`/orgs/${org}/agent-notifications/read`, { method: "POST" }),
   /** Move an agent to another scope (promote a personal or project agent); the server decides who may. */
   changeAgentScope: (org: string, slug: string, body: AgentScopeChange) =>
     request<Agent>(`/orgs/${org}/agents/${slug}/scope`, { method: "POST", body: JSON.stringify(body) }),
   updateAgent: (org: string, slug: string, body: AgentPatch) =>
     request<Agent>(`/orgs/${org}/agents/${slug}`, { method: "PATCH", body: JSON.stringify(body) }),
+  /**
+   * Suspends the agent, then cancels its runs in flight in every project, closes its open sessions and
+   * cancels its conversation turns (ADR 0142 §4); the answer counts what was stopped and what could not be.
+   */
+  stopAgent: (org: string, slug: string, reason: string) =>
+    request<AgentStopResult>(`/orgs/${org}/agents/${slug}/stop`, { method: "POST", body: JSON.stringify({ reason } satisfies StopRequest) }),
   /** Deletes an agent that never served; 409 with the reasons otherwise (retire it instead). */
   deleteAgent: (org: string, slug: string) => request<void>(`/orgs/${org}/agents/${slug}`, { method: "DELETE" }),
   /** Its life (S32-04): activate a draft, deprecate, retire — retiring runs its checklist. */
@@ -715,8 +789,11 @@ export const api = {
     request<Skill[]>(`/orgs/${org}/skills/import-git`, { method: "POST", body: JSON.stringify(body) }),
   skillSources: (org: string) => request<SkillSources>(`/orgs/${org}/skill-sources`),
   checkSkillUpdate: (org: string, slug: string) => request<SkillUpdate>(`/orgs/${org}/skills/${slug}/update`),
-  approveSkillVersion: (org: string, slug: string, version: number) =>
-    request<SkillVersion>(`/orgs/${org}/skills/${slug}/versions/${version}/approve`, { method: "POST" }),
+  approveSkillVersion: (org: string, slug: string, version: number, force?: { reason: string }) =>
+    request<SkillVersion>(`/orgs/${org}/skills/${slug}/versions/${version}/approve`, {
+      method: "POST",
+      ...(force ? { body: JSON.stringify({ force: true, reason: force.reason }) } : {}),
+    }),
 
   searchKnowledgeBase: (org: string, slug: string, query: string, k = 5) =>
     request<KnowledgeSearchResult>(`/orgs/${org}/knowledge/${slug}/search`, {
@@ -760,6 +837,23 @@ export const api = {
     request<ApiTokenCreated>("/me/tokens", { method: "POST", body: JSON.stringify(body) }),
   revokeToken: (id: string) => request<void>(`/me/tokens/${id}`, { method: "DELETE" }),
   mySessions: () => request<BrowserSession[]>("/me/sessions"),
+  /** My accounts on code forges, and the instances I can link one on (ADR 0161). */
+  myLinkedAccounts: () => request<MyLinkedAccounts>("/me/linked-accounts"),
+  /** Starts linking my account on an instance: the forge's authorization URL, to open in this browser. */
+  startMyLinkedAccount: (provider: LinkedAccount["provider"], org: string, instance: string) =>
+    request<LinkedAccountStart>(
+      `/me/linked-accounts/${provider}/start?org=${encodeURIComponent(org)}&instance=${encodeURIComponent(instance)}`,
+      { method: "POST" },
+    ),
+  deleteMyLinkedAccount: (accountId: string) =>
+    request<void>(`/me/linked-accounts/${encodeURIComponent(accountId)}`, { method: "DELETE" }),
+  /** My photo (ADR 0162): one PNG, JPEG or WebP file; the API re-encodes it and answers where it is served. */
+  putMyAvatar: (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return request<Avatar>("/me/avatar", { method: "PUT", body: form });
+  },
+  deleteMyAvatar: () => request<void>("/me/avatar", { method: "DELETE" }),
   endSession: (id: string) => request<void>(`/me/sessions/${encodeURIComponent(id)}`, { method: "DELETE" }),
   endOtherSessions: () => request<EndedSessions>("/me/sessions/end-others", { method: "POST" }),
   templates: () => request<TemplateSummary[]>("/templates"),
@@ -856,6 +950,79 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+  /**
+   * The organisation's own groups (ADR 0160). Every member reads them; the administrator writes the
+   * `internal` ones (`group:manage`). A `scim` group is the identity provider's: a write answers 409
+   * `group_read_only`.
+   */
+  orgGroups: (org: string) => request<OrgGroupList>(`/orgs/${org}/groups`),
+  createOrgGroup: (org: string, body: OrgGroupCreate) =>
+    request<OrgGroup>(`/orgs/${org}/groups`, { method: "POST", body: JSON.stringify(body) }),
+  orgGroup: (org: string, slug: string) => request<OrgGroup>(`/orgs/${org}/groups/${encodeURIComponent(slug)}`),
+  updateOrgGroup: (org: string, slug: string, body: OrgGroupUpdate) =>
+    request<OrgGroup>(`/orgs/${org}/groups/${encodeURIComponent(slug)}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteOrgGroup: (org: string, slug: string) => request<void>(`/orgs/${org}/groups/${encodeURIComponent(slug)}`, { method: "DELETE" }),
+  orgGroupMembers: (org: string, slug: string) => request<OrgGroupMemberList>(`/orgs/${org}/groups/${encodeURIComponent(slug)}/members`),
+  /** A member of the organisation only: anyone else is a 422. */
+  addOrgGroupMember: (org: string, slug: string, body: OrgGroupMemberAdd) =>
+    request<OrgGroupMember>(`/orgs/${org}/groups/${encodeURIComponent(slug)}/members`, { method: "POST", body: JSON.stringify(body) }),
+  removeOrgGroupMember: (org: string, slug: string, userId: string) =>
+    request<void>(`/orgs/${org}/groups/${encodeURIComponent(slug)}/members/${encodeURIComponent(userId)}`, { method: "DELETE" }),
+  /**
+   * A person records what they found of an action in doubt (S65-26, ADR 0149 §5): `made` resumes it,
+   * `not_made` fails it and compensates what came before. Guarded as an approval: a 401
+   * `step_up_required` goes back through the IdP and returns to the action's page.
+   */
+  settleAction: (
+    id: string,
+    actionId: string,
+    body: { outcome: "made" | "not_made"; note: string; result?: Record<string, unknown> | null },
+  ) =>
+    request<Action>(`/projects/${qualify(id)}/actions/${actionId}/settlement`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  /**
+   * The organisation's outposts (ADR 0147): places a person enrols, which only dial out. Every route is
+   * `outpost:manage`, the organisation administrator's. The platform stores no address and no
+   * credential of an outpost's side, so none is ever here.
+   */
+  outposts: (org: string) => request<OutpostList>(`/orgs/${org}/outposts`),
+  createOutpost: (org: string, body: OutpostCreate) =>
+    request<Outpost>(`/orgs/${org}/outposts`, { method: "POST", body: JSON.stringify(body) }),
+  outpost: (org: string, slug: string) => request<Outpost>(`/orgs/${org}/outposts/${slug}`),
+  /** Refused (409) while connectors still route to it (`outpost_in_use`), then while it is not revoked. */
+  deleteOutpost: (org: string, slug: string) => request<void>(`/orgs/${org}/outposts/${slug}`, { method: "DELETE" }),
+  pauseOutpost: (org: string, slug: string) => request<Outpost>(`/orgs/${org}/outposts/${slug}/pause`, { method: "POST" }),
+  resumeOutpost: (org: string, slug: string) => request<Outpost>(`/orgs/${org}/outposts/${slug}/resume`, { method: "POST" }),
+  /** Final: every instance is revoked and the epoch moves. */
+  revokeOutpost: (org: string, slug: string) => request<Outpost>(`/orgs/${org}/outposts/${slug}/revoke`, { method: "POST" }),
+  /** An enrolment token for one instance, shown once, with the door's origin and the keys to pin (ADR 0148). */
+  createOutpostEnrolment: (org: string, slug: string, body: OutpostEnrolmentCreate = {}) =>
+    request<OutpostEnrolmentCreated>(`/orgs/${org}/outposts/${slug}/enrolments`, { method: "POST", body: JSON.stringify(body) }),
+  /** The tokens that can still enrol an instance, newest first: never a token, whose digest is all that is kept. */
+  outpostEnrolments: (org: string, slug: string) => request<OutpostEnrolmentList>(`/orgs/${org}/outposts/${slug}/enrolments`),
+  /** A token that enrolled nothing enrols nothing from then on; one that did is a 409 `enrolment_used`. */
+  cancelOutpostEnrolment: (org: string, slug: string, enrolmentId: string) =>
+    request<void>(`/orgs/${org}/outposts/${slug}/enrolments/${enrolmentId}`, { method: "DELETE" }),
+  outpostInstances: (org: string, slug: string) => request<OutpostInstanceList>(`/orgs/${org}/outposts/${slug}/instances`),
+  /**
+   * A person approves a pending instance by sending the fingerprint they compared. It needs a recent
+   * session, as a decision on an action does: a 401 `step_up_required` goes back through the IdP.
+   */
+  approveOutpostInstance: (org: string, slug: string, instanceId: string, body: OutpostInstanceApprove) =>
+    request<OutpostInstance>(`/orgs/${org}/outposts/${slug}/instances/${instanceId}/approve`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  /** Final: the instance's key does not come back, and the outpost's epoch moves. */
+  revokeOutpostInstance: (org: string, slug: string, instanceId: string) =>
+    request<OutpostInstance>(`/orgs/${org}/outposts/${slug}/instances/${instanceId}/revoke`, { method: "POST" }),
+  /** The recent calls routed to an outpost, newest first: digests only, never arguments or a result. */
+  outpostCalls: (org: string, slug: string, params: { state?: OutpostCallState; cursor?: string; limit?: number } = {}) =>
+    request<OutpostCallPage>(
+      `/orgs/${org}/outposts/${slug}/calls${query(compact({ state: params.state, cursor: params.cursor, limit: params.limit?.toString() }))}`,
+    ),
   /** The organisation's connectors and the policy of each operation (ADR 0034). */
   orgConnectors: (org: string) => request<OrgConnector[]>(`/orgs/${org}/connectors`),
   createOrgConnector: (org: string, body: OrgConnectorCreate) =>
@@ -955,6 +1122,13 @@ export const api = {
     request<GitHubRepositoryPage>(`/orgs/${org}/github/repositories${q ? `?q=${encodeURIComponent(q)}` : ""}`),
   githubInstallLink: (org: string, body: GitHubInstallLinkRequest) =>
     request<GitHubInstallLink>(`/orgs/${org}/github/install-link`, { method: "POST", body: JSON.stringify(body) }),
+  /** The instance's GitHub App and where it comes from: the deployment's settings or the console (S70-21, ADR 0167). */
+  platformGitHubApp: () => request<GitHubAppRegistrationStatus>("/platform/github-app"),
+  /** Step 1 of GitHub's App Manifest flow: the form the console posts to github.com. */
+  startGitHubAppManifest: (body: GitHubAppManifestRequest) =>
+    request<GitHubAppManifestStart>("/platform/github-app/manifest", { method: "POST", body: JSON.stringify(body) }),
+  /** Forget the App created from the console (it stays on GitHub). */
+  forgetPlatformGitHubApp: () => request<void>("/platform/github-app", { method: "DELETE" }),
 
   workflow: (id: string) => request<WorkflowDef>(`/projects/${qualify(id)}/workflow`),
   putWorkflow: (id: string, yaml: string) =>
@@ -1106,6 +1280,21 @@ export const api = {
   action: (id: string, action: string) =>
     request<unknown>(`/work-items/${id}/actions`, { method: "POST", body: JSON.stringify({ action }) }),
   /**
+   * Readdresses a waiting request to a person, a group, or both (ADR 0153): an organisation
+   * administrator's gesture, audited with the reason. 422 for a person outside the organisation.
+   */
+  /**
+   * Discards the draft a person's client deposited through the MCP door (ADR 0163 §7): for whoever may answer
+   * the request, audited. Taking a draft has no route: the form is filled, and the person decides.
+   */
+  discardDraft: (id: string, requestId: string) =>
+    request<void>(`/work-items/${id}/human-requests/${encodeURIComponent(requestId)}/draft`, { method: "DELETE" }),
+  reassign: (id: string, requestId: string, body: AssigneeChange) =>
+    request<HumanRequest>(`/work-items/${id}/human-requests/${encodeURIComponent(requestId)}/assignee`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  /**
    * Moves a work item to another active workflow of its project, at that workflow's initial state
    * (ADR 0123, S52-11). Refused (409) while a run is in progress, once the item ended and to its own
    * workflow; 422 for a workflow unknown or inactive.
@@ -1115,12 +1304,29 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ action: "reroute", workflow, ...(reason ? { reason } : {}) }),
     }),
+  /** Stops a work item with a reason (ADR 0142 §3): its run in flight is cancelled with the same reason. */
+  stopWorkItem: (id: string, reason: string) =>
+    request<unknown>(`/work-items/${id}/actions`, { method: "POST", body: JSON.stringify({ action: "stop", reason }) }),
 
   runs: (itemId: string) => request<Run[]>(`/work-items/${itemId}/runs`),
   run: (runId: string) => request<Run>(`/runs/${runId}`),
+  /**
+   * Stops one run now, with a reason (ADR 0142 §2): its work item then waits for a person. 409 when the
+   * run has already ended (how it ended is in the problem); 403 without `item:control` on its project.
+   */
+  cancelRun: (runId: string, reason: string) =>
+    request<Run>(`/runs/${encodeURIComponent(runId)}/cancel`, { method: "POST", body: JSON.stringify({ reason } satisfies StopRequest) }),
+  /** What is in flight in the organisation, newest first, then what ended in the last hour (ADR 0142 §1). */
+  activity: (org: string, filter: ActivityFilter = {}) =>
+    request<ActivityList>(`/orgs/${encodeURIComponent(org)}/activity${query(compact(filter))}`),
+  /** The same entries as they change (SSE), with the same filter: the path `useLiveRefresh` listens to. */
+  activityStreamPath: (org: string, filter: ActivityFilter = {}) =>
+    `/orgs/${encodeURIComponent(org)}/activity/stream${query(compact(filter))}`,
   runEvents: (runId: string, afterSeq?: number) =>
     request<RunEventDto[]>(`/runs/${runId}/events${query(afterSeq ? { after_seq: String(afterSeq) } : undefined)}`),
   runDiff: (runId: string) => request<DiffSummary>(`/runs/${runId}/diff`),
+  /** What fills the run's model context: the last call's sections and the series of totals (ADR 0141 §6). */
+  runContext: (runId: string) => request<RunContext>(`/runs/${runId}/context-breakdown`),
 
   releases: (id: string, env?: string) => request<ReleasePage>(`/projects/${qualify(id)}/releases${query(env ? { env } : undefined)}`),
   train: (id: string, env: string) => request<TrainStatus>(`/projects/${qualify(id)}/trains/${env}`),
@@ -1187,7 +1393,7 @@ export const api = {
 
   costs: (id: string, groupBy = "day", filtre: CostFilter = {}) =>
     request<CostReport>(`/projects/${qualify(id)}/costs${query({ group_by: groupBy, ...compact(filtre) })}`),
-  /** The organisation's spend, in any grouping (S29-02): `since`, `until` (YYYY-MM-DD) and `kind` filter it. */
+  /** The organisation's spend, in any grouping (S29-02): `since`, `until` (YYYY-MM-DD), `kind`, `agent`, `workflow`, `work_item` and `assistant` filter it. */
   orgCosts: (org: string, groupBy = "day", filtre: CostFilter = {}) =>
     request<CostReport>(`/orgs/${org}/costs${query({ group_by: groupBy, ...compact(filtre) })}`),
   /** The budgets that crossed 80 or 100 % (S29-04): the inbox lists the open ones. */
@@ -1236,7 +1442,29 @@ export type BuiltinAgentQuery = {
   max_minutes?: number | null;
 };
 
-export type CostFilter = { since?: string; until?: string; kind?: "model" | "tool" | "distill" };
+/** What the Activity list is narrowed to (ADR 0142 §1): a project's slug, a workflow, an agent, an assistant installation, a kind. */
+export type ActivityFilter = {
+  project?: string;
+  workflow?: string;
+  agent?: string;
+  assistant?: string;
+  kind?: "run" | "session" | "turn";
+};
+
+/**
+ * What a spend report is narrowed to (ADR 0141 §1): a period, a kind of line, and one agent (its slug),
+ * one workflow (its name), one work item (its id) or one assistant installation (its id), combinable.
+ * The same filter goes to the JSON report and to its CSV.
+ */
+export type CostFilter = {
+  since?: string;
+  until?: string;
+  kind?: "model" | "tool" | "distill";
+  agent?: string;
+  workflow?: string;
+  work_item?: string;
+  assistant?: string;
+};
 
 function compact(filtre: Record<string, string | undefined>): Record<string, string> {
   return Object.fromEntries(Object.entries(filtre).filter(([, v]) => v)) as Record<string, string>;

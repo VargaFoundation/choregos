@@ -11,9 +11,16 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from choregos_contracts.outpost import ENDPOINT_ALIAS_PATTERN, OUTPOST_SLUG_PATTERN
+
 from .errors import AdapterError, ConfigurationError
 from .families import FAMILIES as _FAMILIES
 from .families import OPERATIONS_MARKETDATA as _OPERATIONS_MARKETDATA
+from .forge_accounts import DEFAULT_BASE_URL as _FORGE_DEFAULTS
+from .forge_accounts import KIND as _FORGE_KIND
+from .forge_accounts import check_config as _forge_check_config
+from .forge_accounts import connector_type as _forge_type
+from .forge_accounts import egress_of as _forge_egress_of
 from .identity.entra import OPERATIONS_ENTRA as _OPERATIONS_ENTRA
 from .netops.cilium import CiliumNetwork as _CiliumNetwork
 from .netops.nginx import NginxConfig as _NginxConfig
@@ -39,6 +46,75 @@ def _firecrawl_egress(config: dict[str, Any]) -> list[tuple[str, int]]:
 
     found = host_port_of(config.get("base_url"))
     return [found] if found else []
+
+
+#: The `auth_scheme` of a direct `mcp` connector whose token the platform fetches with the client
+#: credentials grant (RFC 6749 §4.4), from `token_url`, with `client_id` and the sealed `client_secret`.
+OAUTH_CLIENT_CREDENTIALS = "oauth_client_credentials"
+MCP_AUTH_SCHEMES = ("bearer", "basic", OAUTH_CLIENT_CREDENTIALS)
+#: The configuration of `oauth_client_credentials`; none of it means anything to another scheme.
+_OAUTH_FIELDS = ("token_url", "client_id", "scope", "audience")
+
+
+def _check_token_url(url: Any) -> None:
+    """The token endpoint receives the client secret: an https address with a host, no user-info and no
+    fragment (plain http only under CHOREGOS_FAKES, as for every other token endpoint the platform calls)."""
+    from urllib.parse import urlsplit
+
+    from .registry import fakes_enabled
+
+    if not isinstance(url, str) or not url.strip():
+        raise ConfigurationError("`oauth_client_credentials` needs `token_url`: the OAuth token endpoint")
+    try:
+        parts = urlsplit(url.strip())
+        parts.port  # noqa: B018 - raises ValueError on a port out of range
+    except ValueError as invalid:
+        raise ConfigurationError("`token_url` is not a valid address") from invalid
+    schemes = {"https", "http"} if fakes_enabled() else {"https"}
+    if parts.scheme not in schemes or not parts.hostname:
+        raise ConfigurationError(
+            "`token_url` must be an https address with a host: it receives the client secret"
+        )
+    if parts.username is not None or parts.password is not None or parts.fragment:
+        raise ConfigurationError("`token_url` must carry neither credentials nor a fragment")
+
+
+def _mcp_check(config: dict[str, Any]) -> None:
+    """A direct MCP server's authentication: a known scheme, and for `oauth_client_credentials` a token
+    endpoint and a client id (the secret is sealed, never in the configuration)."""
+    scheme = config.get("auth_scheme", "bearer")
+    if scheme not in MCP_AUTH_SCHEMES:
+        raise ConfigurationError(f"unknown MCP auth scheme `{scheme}`: one of {', '.join(MCP_AUTH_SCHEMES)}")
+    if scheme != OAUTH_CLIENT_CREDENTIALS:
+        stray = [name for name in _OAUTH_FIELDS if config.get(name) not in (None, "")]
+        if stray:
+            raise ConfigurationError(
+                f"{', '.join(f'`{name}`' for name in stray)} belong to the `{OAUTH_CLIENT_CREDENTIALS}` "
+                "auth scheme"
+            )
+        return
+    _check_token_url(config.get("token_url"))
+    client_id = config.get("client_id")
+    if not isinstance(client_id, str) or not client_id.strip():
+        raise ConfigurationError(
+            "`oauth_client_credentials` needs `client_id`: the OAuth client's identifier"
+        )
+    for name in ("scope", "audience"):
+        if config.get(name) is not None and not isinstance(config.get(name), str):
+            raise ConfigurationError(f"`{name}` is a string")
+
+
+def _mcp_egress(config: dict[str, Any]) -> list[tuple[str, int]]:
+    """The server's host and, with `oauth_client_credentials`, the token endpoint's: the platform calls
+    both, so the organisation opens both (ADR 0066)."""
+    from choregos_core.egress import host_port_of, hosts_of_config
+
+    hosts = hosts_of_config(config)
+    if config.get("auth_scheme") == OAUTH_CLIENT_CREDENTIALS:
+        found = host_port_of(config.get("token_url"))
+        if found and found not in hosts:
+            hosts.append(found)
+    return hosts
 
 
 #: The `mcp-gateway` connector type: a server the organisation's MCP gateway names (ADR 0105).
@@ -72,6 +148,73 @@ def _mcp_gateway_check(config: dict[str, Any]) -> None:
         )
 
 
+#: The `mcp-outpost` connector type: a tool server that lives at an outpost (ADR 0149 §1).
+MCP_OUTPOST_TYPE = "mcp-outpost"
+#: The only keys a stored `mcp-outpost` configuration may hold; every other key is the platform's.
+_OUTPOST_STORED_KEYS = ("outpost", "endpoint", "timeout_s")
+_OUTPOST_TIMEOUT_S = (1, 120)
+_OUTPOST_ONLY_PLATFORM = (
+    "an `mcp-outpost` connector is reached through its outpost's rendezvous, which only the platform "
+    "supplies: it cannot be built from its configuration alone"
+)
+#: The declared schema is the contract's `McpOutpostConnectorConfig`, closed: an outpost's name and an
+#: endpoint alias, no URL and no secret field (ADR 0147 §7).
+_OUTPOST_CONFIGURATION: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["outpost", "endpoint"],
+    "properties": {
+        "outpost": {
+            "type": "string",
+            "pattern": OUTPOST_SLUG_PATTERN,
+            "description": "an outpost of the same organisation",
+        },
+        "endpoint": {
+            "type": "string",
+            "pattern": ENDPOINT_ALIAS_PATTERN,
+            "description": "the alias of an endpoint in that outpost's policy file",
+        },
+        "timeout_s": {
+            "type": "number",
+            "minimum": _OUTPOST_TIMEOUT_S[0],
+            "maximum": _OUTPOST_TIMEOUT_S[1],
+            "default": 30,
+            "description": "seconds before a call is abandoned, the wait for an instance to claim it "
+            "included",
+        },
+    },
+}
+
+
+def _mcp_outpost_check(config: dict[str, Any]) -> None:
+    """A stored configuration: an outpost's name, an endpoint alias and a timeout, nothing else. The
+    address and the credential are the outpost's and exist in its policy file only (ADR 0147 §7)."""
+    extra = sorted(str(key) for key in config if key not in _OUTPOST_STORED_KEYS)
+    if extra:
+        raise AdapterError(
+            f"{', '.join(f'`{key}`' for key in extra)} has no place in an `mcp-outpost` connector: it "
+            "stores only `outpost`, `endpoint` and `timeout_s`; the server's address and its credential "
+            "are the outpost's and live in its policy file, and the platform supplies the rest"
+        )
+    outpost, endpoint = config.get("outpost"), config.get("endpoint")
+    if not isinstance(outpost, str) or not re.fullmatch(OUTPOST_SLUG_PATTERN, outpost):
+        raise AdapterError(
+            "`outpost` is the name of an outpost of the organisation: lowercase letters, digits or '-', "
+            "63 at most"
+        )
+    if not isinstance(endpoint, str) or not re.fullmatch(ENDPOINT_ALIAS_PATTERN, endpoint):
+        raise AdapterError(
+            "`endpoint` is the alias of an endpoint in the outpost's policy file, never an address: a "
+            "lowercase letter, then lowercase letters, digits or '-', 63 at most"
+        )
+    timeout = config.get("timeout_s")
+    low, high = _OUTPOST_TIMEOUT_S
+    if timeout is not None and (
+        isinstance(timeout, bool) or not isinstance(timeout, int | float) or not low <= timeout <= high
+    ):
+        raise AdapterError(f"`timeout_s` is a number of seconds between {low} and {high}")
+
+
 def _firecrawl_check(config: dict[str, Any]) -> None:
     from .web_search.firecrawl import checked_base_url
 
@@ -93,6 +236,14 @@ def _object_schema(proprietes: dict[str, Any], requis: tuple[str, ...] = ()) -> 
     if requis:
         schema["required"] = list(requis)
     return schema
+
+
+def _forge_egress(provider: str) -> Any:
+    return lambda config: _forge_egress_of(provider, config)
+
+
+def _forge_check(provider: str) -> Any:
+    return lambda config: _forge_check_config(provider, config)
 
 
 _TEXT: dict[str, Any] = {"type": "string"}
@@ -511,6 +662,36 @@ _SHIPPED_SPECS: dict[tuple[str, str], ConnectorTypeSpec] = {
             for name, access, description, schema in _OPERATIONS_ENTRA
         ),
     ),
+    # A forge's OAuth application, through which a member proves their own account (ADR 0161). No
+    # operation: an agent calls nothing through it; the platform reads the signed-in person's user once.
+    **{
+        (_FORGE_KIND, _forge_type(provider)): ConnectorTypeSpec(
+            display,
+            (_FORGE_KIND,),
+            _object_schema(
+                {
+                    "base_url": (
+                        {"type": "string", "default": _FORGE_DEFAULTS[provider]}
+                        if provider in _FORGE_DEFAULTS
+                        else {
+                            "type": "string",
+                            "description": "the instance's address, https://forge.example",
+                        }
+                    ),
+                    "client_id": {"type": "string", "description": "the OAuth application's client id"},
+                },
+                ("client_id",) if provider in _FORGE_DEFAULTS else ("base_url", "client_id"),
+            ),
+            ("client_secret",),
+            egress=_forge_egress(provider),
+            check_config=_forge_check(provider),
+        )
+        for provider, display in (
+            ("github", "GitHub sign-in (members link their account)"),
+            ("gitlab", "GitLab sign-in (members link their account)"),
+            ("forgejo", "Forgejo sign-in (members link their account)"),
+        )
+    },
     # The business families (S20-04) have no real type yet: `demo` holds them in memory, each
     # process for itself: a demonstration, refused in staging and prod.
     ("mdm", "demo"): ConnectorTypeSpec(
@@ -738,9 +919,11 @@ _SHIPPED_SPECS: dict[tuple[str, str], ConnectorTypeSpec] = {
                 "url": {"type": "string", "description": "the server's MCP endpoint, https"},
                 "auth_scheme": {
                     "type": "string",
-                    "enum": ["bearer", "basic"],
+                    "enum": list(MCP_AUTH_SCHEMES),
                     "default": "bearer",
-                    "description": "how the token is sent: Bearer, or Basic base64(username:token)",
+                    "description": "how the server is signed in to: the token as Bearer, Basic "
+                    "base64(username:token), or `oauth_client_credentials`: a short-lived token the "
+                    "platform fetches from `token_url` with `client_id` and `client_secret`",
                 },
                 "username": {"type": "string", "description": "the account, for `basic` (an email)"},
                 "auth_header": {
@@ -749,11 +932,30 @@ _SHIPPED_SPECS: dict[tuple[str, str], ConnectorTypeSpec] = {
                     "description": "the header the token travels in: `Authorization` sends a Bearer, "
                     "another name (`X-API-Key`) sends the raw token",
                 },
+                "token_url": {
+                    "type": "string",
+                    "description": "the OAuth token endpoint, https, for `oauth_client_credentials`",
+                },
+                "client_id": {
+                    "type": "string",
+                    "description": "the OAuth client's identifier, for `oauth_client_credentials`",
+                },
+                "scope": {
+                    "type": "string",
+                    "description": "the scopes asked for, space-separated, for `oauth_client_credentials`",
+                },
+                "audience": {
+                    "type": "string",
+                    "description": "the audience asked for, when the token endpoint needs one",
+                },
                 "timeout_s": {"type": "number", "default": 30},
             },
             ("url",),
         ),
-        ("token",),
+        # `token` for bearer and basic; `client_secret` for `oauth_client_credentials`.
+        ("token", "client_secret"),
+        egress=_mcp_egress,
+        check_config=_mcp_check,
     ),
     ("mcp", "mcp-gateway"): ConnectorTypeSpec(
         "MCP server through the organisation's MCP gateway",
@@ -778,11 +980,30 @@ _SHIPPED_SPECS: dict[tuple[str, str], ConnectorTypeSpec] = {
         egress=lambda config: [],
         check_config=_mcp_gateway_check,
     ),
+    # A tool server that lives where the platform cannot reach (ADR 0149): no URL, no secret field, no
+    # host of its own. The platform opens no connection for it, so it declares no egress.
+    ("mcp", MCP_OUTPOST_TYPE): ConnectorTypeSpec(
+        "MCP server at an outpost",
+        ("mcp",),
+        _OUTPOST_CONFIGURATION,
+        (),
+        egress=lambda config: [],
+        check_config=_mcp_outpost_check,
+    ),
     ("notify", "slack"): ConnectorTypeSpec(
         "Slack",
         ("notify",),
         _object_schema({"channel": {"type": "string", "default": "#choregos"}, "public_url": _TEXT}),
         ("webhook_url", "bot_token"),
+    ),
+    # The URL is the credential: a sealed secret, never a configuration value. The host is not known
+    # until it is resolved, so the organisation's list opens it when the first card is refused.
+    ("notify", "teams"): ConnectorTypeSpec(
+        "Microsoft Teams (incoming webhook or Workflows URL)",
+        ("notify",),
+        _object_schema({}),
+        ("webhook_url",),
+        egress=lambda cfg: [],
     ),
     # SMTP does not go through the httpx egress guard: the spec declares its egress, and the
     # operator's network policy must open it.

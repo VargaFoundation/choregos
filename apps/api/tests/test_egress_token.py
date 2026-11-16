@@ -90,3 +90,52 @@ def test_the_two_tokens_do_not_stand_in_for_each_other() -> None:
         verify_run_token(egress)
     with pytest.raises(jwt.InvalidAudienceError):
         verify_egress_token(run_token)
+
+
+KEY = "the-proxys-own-key"
+
+
+@pytest.fixture
+def report_key(app: Any, monkeypatch: pytest.MonkeyPatch) -> str:
+    from choregos_api.config import reset_settings_cache
+
+    monkeypatch.setenv("CHOREGOS_EGRESS_REPORT_KEY", KEY)
+    reset_settings_cache()
+    return KEY
+
+
+async def _report(client: AsyncClient, run_id: str, headers: dict[str, str]) -> int:
+    response = await client.post(
+        f"/api/v1/internal/runs/{run_id}/network/decisions",
+        headers=headers,
+        json=_batch({**ALLOWED, "count": 1}),
+    )
+    return response.status_code
+
+
+@pytest.mark.usefixtures("report_key")
+async def test_with_a_key_the_agents_egress_token_alone_cannot_report(
+    client: AsyncClient, project: dict[str, Any]
+) -> None:
+    """ADR 0145: the agent inherits the egress token, not the proxy's key."""
+    run_token = await _run(project, "run-egress-5")
+    egress = await _egress_token(client, "run-egress-5", run_token)
+
+    assert await _report(client, "run-egress-5", egress) == 403
+    assert await _report(client, "run-egress-5", {**egress, "X-Choregos-Egress-Key": "a-guess"}) == 403
+    assert await _report(client, "run-egress-5", {**egress, "X-Choregos-Egress-Key": KEY}) == 202
+    # The runner's own token still reports; reading the network still needs no key.
+    assert await _report(client, "run-egress-5", run_token) == 202
+    network = await client.get("/api/v1/internal/runs/run-egress-5/network", headers=egress)
+    assert network.status_code == 200, network.text
+
+
+@pytest.mark.usefixtures("report_key")
+async def test_the_key_opens_nothing_without_the_runs_token(
+    client: AsyncClient, project: dict[str, Any]
+) -> None:
+    mine = await _egress_token(client, "run-egress-6", await _run(project, "run-egress-6"))
+    await _run(project, "run-egress-7")
+    with_key = {**mine, "X-Choregos-Egress-Key": KEY}
+    assert await _report(client, "run-egress-7", with_key) == 403
+    assert await _report(client, "run-egress-7", {"X-Choregos-Egress-Key": KEY}) == 401

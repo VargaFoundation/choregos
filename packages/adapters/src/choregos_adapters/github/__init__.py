@@ -13,15 +13,27 @@ from .auth import (
     InstallationToken,
 )
 from .client import GitHubClient
+from .manifest import (
+    AppCredentialsProvider,
+    GitHubManifestConversion,
+    ManifestConversionPort,
+    app_credentials,
+    set_app_credentials_provider,
+)
 
 __all__ = [
     "APP_EVENTS",
     "APP_PERMISSIONS",
     "DEFAULT_PERMISSIONS",
     "RUNNER_PERMISSIONS",
+    "AppCredentialsProvider",
     "GitHubApp",
     "GitHubAppAuth",
     "GitHubAppPort",
     "GitHubClient",
+    "GitHubManifestConversion",
     "InstallationToken",
+    "ManifestConversionPort",
+    "app_credentials",
+    "set_app_credentials_provider",
 ]

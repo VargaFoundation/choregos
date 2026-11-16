@@ -54,7 +54,10 @@ curl -s "$CHOREGOS_API_URL/api/v1/orgs/acme/connectors" -H "Authorization: Beare
 ```
 
 - The key is write-only: it is sealed and never shown again. It is sent as `Authorization: Bearer`
-  (add `"auth_scheme": "basic"` and a `username` for Basic).
+  (add `"auth_scheme": "basic"` and a `username` for Basic). A server that only accepts short-lived
+  OAuth tokens takes `"auth_scheme": "oauth_client_credentials"` with a `token_url` and a `client_id`
+  in `config`, and its `client_secret` in `secret_values`: Choregos fetches and renews the token, and
+  `allow_egress` opens the token endpoint's host too.
 - `allow_egress: true` opens the server's host in the organisation's network list in the same call;
   without it, a host that is not open answers `409 egress_required`, and the console shows the
   *Network access needed* panel (**Allow and continue** for an administrator, **Ask an administrator**
@@ -173,4 +176,8 @@ with the layer that decided.
 - [Write a skill](skills.md): knowledge, where a tool is an action.
 - Bringing an organisation's own MCP gateway:
   [the gateway reference](../../integrations.md#your-organisations-mcp-gateway-adr-0105).
+- Tools in a network the platform cannot reach, for an organisation with no gateway there:
+  [outposts](../../outposts.md). They are off unless your operator turns them on; a write
+  through one is delivered at most once, and may end in doubt, which a person settles on the
+  action's page once they have checked the system it was for.
 - [Host: security model](../host/security.md), for what the sandbox and the egress proxy enforce.

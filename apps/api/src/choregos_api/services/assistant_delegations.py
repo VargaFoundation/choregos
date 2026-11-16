@@ -68,6 +68,7 @@ from .identity_exchange import (
     issue_offline_token,
     revoke_offline_token,
 )
+from .org_groups import groups_of
 
 log = structlog.get_logger("choregos.assistant_delegations")
 
@@ -455,7 +456,7 @@ async def _reason(session: AsyncSession, delegation: Delegation, now: datetime) 
         user_id=user.id,
         email=user.email,
         org_roles={organisation.slug: Role(membership.role)},
-        groups=list(user.groups or []),
+        groups=await groups_of(session, user),
     )
     if not holds(principal, Permission.ASSISTANT_USE, organisation.slug, row):
         return "the person is no longer in the assistant's audience"

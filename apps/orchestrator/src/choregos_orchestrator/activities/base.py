@@ -21,7 +21,7 @@ from choregos_adapters import (
     load_extensions,
     resolved_configuration,
 )
-from choregos_api.adapter_wiring import attach_lexical_memory
+from choregos_api.adapter_wiring import attach_lexical_memory, attach_outposts
 from choregos_api.db.models import Connector, Organization, OrgConnector, PolicyDef, Project, WorkItem
 from choregos_api.db.session import ALL_ORGS, session_scope
 from choregos_api.services import default_workflow, policy_model, workflow_model
@@ -49,6 +49,8 @@ logger = structlog.get_logger("choregos.activities.base")
 
 # The orchestrator owns the same tables as the API: it plugs in the same lexical fallback.
 attach_lexical_memory()
+# ... and the same rendezvous: a governed action's effect may call a connector at an outpost (ADR 0149).
+attach_outposts()
 # ... and the extensions declared outside the tree, as the API does.
 load_extensions()
 

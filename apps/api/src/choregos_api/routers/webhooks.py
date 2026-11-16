@@ -21,7 +21,7 @@ from sqlalchemy.exc import IntegrityError
 
 from ..audit import record
 from ..config import get_settings
-from ..db.models import Connector, OrgConnector, Project, TrackerIdentity, User, WebhookDelivery, WorkItem
+from ..db.models import Connector, OrgConnector, Project, User, WebhookDelivery, WorkItem
 from ..deps import PlatformDb, principal_for_user, resolve_project
 from ..errors import ApiError, not_found, unauthorized
 from ..logging import get_logger
@@ -29,6 +29,7 @@ from ..schemas import WebhookAck
 from ..security import body_digest, verify_github_signature, verify_shared_secret
 from ..services import (
     WorkItemBirth,
+    github_app_credentials,
     new_work_item,
     received_events,
     record_labels,
@@ -38,6 +39,7 @@ from ..services import (
 )
 from ..services.decision_ledger import ended_issue_reopened, observe_reopening
 from ..services.initiator import initiator
+from ..services.linked_accounts import github_member
 from ..services.recurrence import restart_work_item, says_back_to_work
 from ..services.routing import with_tracker
 from ..services.work_item_controls import apply_control
@@ -188,7 +190,7 @@ CONTROL_VERBS = frozenset({"pause", "resume", "stop"})
 COMMAND_MARKER = "<!-- choregos:command -->"
 
 
-LINK_HINT = "an organisation administrator can link your GitHub account to your member"
+LINK_HINT = "you can link your GitHub account on My account (or an organisation administrator declares it)"
 
 
 async def _control_from_a_signed_comment(
@@ -201,17 +203,10 @@ async def _control_from_a_signed_comment(
     organisation. A login, a username or a display name is never matched (ADR 0102). Returns the reply,
     or None when the command is not honoured."""
     by_id = str(event.payload.get("by_id") or "")
-    if event.source != "github" or not get_settings().github_webhook_secret or not by_id:
+    if event.source != "github" or not github_app_credentials.webhook_secret() or not by_id:
         return None
-    identity = (
-        await session.execute(
-            select(TrackerIdentity).where(
-                TrackerIdentity.org_id == project.org_id,
-                TrackerIdentity.tracker == "github",
-                TrackerIdentity.external_id == by_id,
-            )
-        )
-    ).scalar_one_or_none()
+    # A github.com link, declared or verified (ADR 0161): requiring `verified` is a later switch.
+    identity = await github_member(session, project.org_id, by_id)
     user = await session.get(User, identity.user_id) if identity is not None else None
     if user is None:
         return None
@@ -536,12 +531,16 @@ async def github_webhook(
 ) -> WebhookAck:
     body = await request.body()
     settings = get_settings()
-    if not settings.github_webhook_secret:
+    # The App's own secret: the deployment's, or the one GitHub generated for an App registered from a
+    # manifest (ADR 0167).
+    await github_app_credentials.refresh(session)
+    secret = github_app_credentials.webhook_secret(settings)
+    if not secret:
         # Without a secret, the signature was not verified at all: anyone could inject tracker
         # events. Tolerated only where there is no GitHub.
         if settings.deployed:
             raise unauthorized("GitHub webhook not configured: CHOREGOS_GITHUB_WEBHOOK_SECRET is missing")
-    elif not verify_github_signature(settings.github_webhook_secret, body, x_hub_signature_256):
+    elif not verify_github_signature(secret, body, x_hub_signature_256):
         raise unauthorized("invalid HMAC signature")
     if await _already_seen(session, "github", x_github_delivery or body_digest(body), x_github_event, body):
         return WebhookAck(accepted=True, duplicate=True)

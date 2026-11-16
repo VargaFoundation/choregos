@@ -47,7 +47,30 @@ const CHUNKS = join(process.cwd(), ".next", "static", "chunks");
 // 2026-11-11 (S62-11): 2375 -> 2400 kB. The A2A page of Integrations (four steps, the snippet builder and its
 // name list), the Help entry and the "Learn more" links add 19 kB: 2369 kB with the assistants, no new
 // dependency. S62-08's CLI page, written the same day, adds 6 kB more: the two together would sit at 2375.
-const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 2400);
+// 2026-11-12 (S65-17a): 2400 -> 2425 kB. Main at cb4d94d4c measures 2383 kB; the Outposts pages (the list, and
+// one outpost with its instances and their approval, the enrolment, the keys to pin and the recent calls) and
+// their twelve client operations bring 29 kB: 2412 kB, with no new dependency.
+// 2026-11-12 (S64-06, S64-07, S64-08): 2425 -> 2450 kB. S64 adds the Activity screen, the agent's stop and the work
+// item's stop reason (15 kB), the tokens-and-cost panel (5 kB) and the run's Context card (4 kB): about 24 kB on top
+// of main's 2412 kB, with no new dependency.
+// 2026-11-12 (S60-07b): 2450 -> 2475 kB. The Composition card now resolves the model, groups the tools by origin and
+// links knowledge, skills and memories (a few kB of component and two small libs): 2456 kB, no new dependency.
+// 2026-11-12 (S64-09d): 2475 -> 2500 kB. The assistant's Stop, Resume and Tokens and cost panel on its installation
+// page, and a conversation turn's assistant and owner on the Activity screen, measured 2451 kB on a main at 2426 kB
+// (about 25 kB), on top of S60-07b's 2456 kB; no new dependency.
+// 2026-11-12 (agent forks, watch, stars; ADR 0152): no change, 2500 kB. The social bar, the Forks tab and the inbox card
+// add about 20 kB to main's 2451 kB (2483 kB measured on the rebased branch).
+// 2026-11-14 (S66-41): 2500 -> 2525 kB. The linked accounts (the member's card on My account, the members list with
+// verified and declared links, the declare form and the three forge types' icons) measure 2503 kB on main at 2483 kB,
+// with no new dependency.
+// 2026-11-14 (S66-42): 2525 -> 2550 kB. A member's profile page (the card, access, work and administration
+// sections), the avatar with its initials fallback and My account's photo upload measure 2529 kB, with no new
+// dependency.
+// 2026-11-14 (S66-23): no change, 2550 kB. The installation page's launch bindings and the conversation's launch card
+// and started work items measure 2533 kB on the rebased branch, no new dependency.
+// 2026-11-14 (S65-26): 2550 -> 2575 kB. The action page's card *What a person found* (the two outcomes, the note,
+// the stated result, the record once settled), about 20 kB on top of S66-23's 2533 kB; no new dependency.
+const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 2575);
 const CHUNK_MAX_KB = Number(process.env.BUNDLE_CHUNK_MAX_KB ?? 600);
 
 function* files(dir) {

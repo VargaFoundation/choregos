@@ -1,0 +1,7 @@
+# Only the bundle, the manifest, the media, the README and the licence go into the VSIX.
+**
+!dist/extension.js
+!media/**
+!package.json
+!README.md
+!LICENSE

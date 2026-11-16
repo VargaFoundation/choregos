@@ -1,0 +1,37 @@
+apiVersion: choregos/v1
+kind: Assistant
+metadata:
+  name: talk-to-your-data
+  display_name: Talk to your data
+  description: Ask a question in plain language; get an answer from your governed tables, with sources.
+  icon: chart
+  i18n: { fr: { display_name: "Parlez à vos données" } }  # lang: fr-ok (the French translation of the display name)
+agent: data-analyst
+config_schema:
+  type: object
+  required: [organisation_name]
+  properties:
+    organisation_name: { type: string }
+audience:
+  personal_data: true
+tools:
+  # The person's own identity (ADR 0135, RFC 8693 exchange): the platform applies the person's rights per call.
+  # The data-platform connector must be registered with the read-only door (URL ending in ?profile=read).
+  - need: data_platform
+    operations: [search_catalog, list_catalog, describe_table, preview_table, query_sql]
+    access: read
+    identity: user_exchange
+    required: true
+surfaces:
+  console: true
+  mcp:
+    prompts:
+      - name: ask_data
+        description: Ask a question about your data.
+        arguments: [{ name: question, required: true }]
+        message: "{question}"
+policy:
+  budget: { per_user_month_usd: 10, per_conversation_usd: 1, per_installation_month_usd: 200 }
+  conversation: { retention_days: 30, max_turns: 40, idle_close_minutes: 120 }
+  data: { classification: sensitive, erasure: [by_user] }
+evals: [evals/talk-to-your-data.yaml]

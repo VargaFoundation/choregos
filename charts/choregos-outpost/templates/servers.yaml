@@ -1,0 +1,142 @@
+{{- /*
+MCP servers the outpost's OPERATOR chooses to run beside the daemon (ADR 0149 §9). The platform
+creates no workload at an outpost and sends it no secret: every entry of `servers` is an image the
+operator picked and a Secret the operator created. An internal tracker, a forge or a database is
+reached this way, as the tools of a server the daemon calls; there is no generic relay.
+
+Each server is locked down as the daemon is (ADR 0096 §2), listens behind a Service only the
+daemon's pods are admitted to, and reaches nothing unless the operator opens it (`egress`).
+*/ -}}
+{{- $fullname := include "choregos-outpost.fullname" . }}
+{{- $names := list }}
+{{- range $index, $server := (.Values.servers | default list) }}
+{{- $where := printf "servers[%d]" $index }}
+{{- if not (regexMatch "^[a-z][a-z0-9-]{0,9}$" ($server.name | default "" | toString)) }}
+{{- fail (printf "%s.name is required: lower case letters, digits and hyphens, a letter first, ten characters at most. The Service is `%s-<name>`." $where $fullname) }}
+{{- end }}
+{{- if has $server.name $names }}
+{{- fail (printf "%s.name: %q names two servers" $where $server.name) }}
+{{- end }}
+{{- $names = append $names $server.name }}
+{{- if not $server.image }}
+{{- fail (printf "%s.image is required: the image YOU chose for this server, pinned by digest" $where) }}
+{{- end }}
+{{- if not $server.port }}
+{{- fail (printf "%s.port is required: the port the server listens on" $where) }}
+{{- end }}
+{{- $name := printf "%s-%s" $fullname $server.name }}
+{{- $selector := include "choregos-outpost.serverSelectorLabels" (dict "root" $ "name" $server.name) }}
+{{- $user := int ($server.runAsUser | default 65532) }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels: {{- include "choregos-outpost.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ printf "server-%s" $server.name }}
+spec:
+  replicas: {{ int ($server.replicas | default 1) }}
+  selector:
+    matchLabels: {{- $selector | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- $selector | nindent 8 }}
+      annotations:
+        checksum/config: {{ toJson $server | sha256sum }}
+    spec:
+      serviceAccountName: {{ $fullname }}
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      {{- with $.Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- range . }}
+        - name: {{ . }}
+        {{- end }}
+      {{- end }}
+      {{- with $.Values.runtimeClassName }}
+      runtimeClassName: {{ . }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: {{ $user }}
+        runAsGroup: {{ $user }}
+        fsGroup: {{ $user }}
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: server
+          image: {{ $server.image | quote }}
+          imagePullPolicy: IfNotPresent
+          securityContext: {{- include "choregos-outpost.containerSecurityContext" $ | nindent 12 }}
+          ports:
+            - { name: mcp, containerPort: {{ int $server.port }}, protocol: TCP }
+          {{- with $server.env }}
+          env:
+            {{- range $variable, $value := . }}
+            - { name: {{ $variable }}, value: {{ $value | toString | quote }} }
+            {{- end }}
+          {{- end }}
+          {{- with $server.envFromSecrets }}
+          # The server's credentials, from Secrets the operator created: by reference, as a block.
+          envFrom:
+            {{- range . }}
+            - secretRef: { name: {{ . }} }
+            {{- end }}
+          {{- end }}
+          {{- if $server.healthPath }}
+          readinessProbe:
+            httpGet: { path: {{ $server.healthPath }}, port: mcp }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: {{ $server.healthPath }}, port: mcp }
+            periodSeconds: 30
+            failureThreshold: 4
+          {{- else }}
+          readinessProbe:
+            tcpSocket: { port: mcp }
+            periodSeconds: 10
+          {{- end }}
+          resources:
+            {{- if $server.resources }}
+            {{- toYaml $server.resources | nindent 12 }}
+            {{- else }}
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 500m, memory: 512Mi }
+            {{- end }}
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - { name: tmp, emptyDir: { sizeLimit: 64Mi } }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels: {{- include "choregos-outpost.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ printf "server-%s" $server.name }}
+spec:
+  type: ClusterIP
+  selector: {{- $selector | nindent 4 }}
+  ports:
+    - { name: mcp, port: {{ int $server.port }}, targetPort: mcp, protocol: TCP }
+{{- if $.Values.networkPolicy.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $name }}
+  labels: {{- include "choregos-outpost.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ printf "server-%s" $server.name }}
+spec:
+  podSelector:
+    matchLabels: {{- $selector | nindent 6 }}
+  policyTypes: ["Ingress", "Egress"]
+  ingress:
+    # The daemon's pods, and nobody else.
+    - from:
+        - podSelector:
+            matchLabels: {{- include "choregos-outpost.selectorLabels" $ | nindent 14 }}
+      ports: [{ protocol: TCP, port: {{ int $server.port }} }]
+  # What the operator opens for this server, and nothing by default.
+  egress: {{- toYaml ($server.egress | default list) | nindent 4 }}
+{{- end }}
+{{- end }}

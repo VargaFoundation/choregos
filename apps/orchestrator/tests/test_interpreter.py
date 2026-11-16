@@ -636,7 +636,7 @@ async def test_the_reminder_without_a_notifier_keeps_the_interpreter_alive(
     On the dev tenant (no Slack), `_remind` ran the `notify` activity with `NO_RETRY`; it raised
     the Slack "no `bot_token` nor `webhook_url`" error and the activity failure failed the whole
     WorkItem interpreter, leaving the work item in its human state with nobody to receive the
-    decision (DiametralGroup/choregos-sandbox-dev#4 and #6, 10/11 and 10/13)."""
+    decision (globex/choregos-sandbox-dev#4 and #6, 10/11 and 10/13)."""
     from datetime import timedelta
 
     from temporalio.client import WorkflowExecutionStatus

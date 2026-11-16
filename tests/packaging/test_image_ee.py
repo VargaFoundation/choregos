@@ -5,7 +5,7 @@ The plan (ADR 0024, milestone E4) builds the EE images **FROM** the CE images: t
 already installed, and the EE wheel is added with `--no-deps` (`test_ee_package_template.py`
 says why it does not declare the core). The gesture everybody will write is therefore:
 
-    FROM ghcr.io/vargafoundation/choregos-api:<version>
+    FROM <registry>/choregos-api:<version>
     RUN pip install --no-deps choregos_ee-*.whl
 
 Tried on `choregos-api:0.8.3` on 2026-09-28: **the image builds, starts, and runs as

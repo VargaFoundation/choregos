@@ -1,6 +1,6 @@
 """The chart's Grafana dashboards: in English, and sortable into a folder.
 
-On Diametral's dev tenant (2026-10-05), the six dashboards landed in the `General` folder
+On an operator's dev tenant (2026-10-05), the six dashboards landed in the `General` folder
 of the platform org, mixed with the infrastructure ones, with French titles:
 nothing let the Grafana sidecar sort them. `monitoring.dashboardAnnotations` sets
 the annotation the sidecar reads (usually `grafana_folder`) on each ConfigMap.

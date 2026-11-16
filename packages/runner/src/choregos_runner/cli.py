@@ -126,6 +126,19 @@ async def _serve_then_run(port: int, workspace: Path | None) -> tuple[RunOutcome
         await server.close()
 
 
+@app.command("launcher")
+def launcher(
+    port: Annotated[int, typer.Option("--port", envvar="CHOREGOS_RUNNER_LAUNCHER_PORT")] = 8766,
+    host: Annotated[str, typer.Option("--host", envvar="CHOREGOS_RUNNER_LAUNCHER_HOST")] = "127.0.0.1",
+) -> None:
+    """The agent's container (ADR 0146): start, on the runner's request, the agent and the project's
+    checks. Holds no credential and starts nothing until it is asked."""
+    # Imported here: the module is standard-library only and must stay loadable alone.
+    from .launcher import serve
+
+    asyncio.run(serve(host=host, port=port))
+
+
 @app.command("serve-session")
 def serve_session(
     run_id: Annotated[str, typer.Option("--run-id", envvar="CHOREGOS_RUN_ID")] = "",

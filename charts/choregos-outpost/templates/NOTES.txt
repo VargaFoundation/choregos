@@ -1,0 +1,33 @@
+The outpost {{ include "choregos-outpost.fullname" . }} is installed in the namespace {{ .Release.Namespace }}: {{ int .Values.replicas }} instance(s) of the
+daemon, which dial {{ .Values.policy.control_plane }} and nothing dials them.
+
+1. Enrol. Each instance enrols once, with a single-use token the console issues for this outpost
+   (valid 15 minutes). If the Secret is not there yet:
+
+     kubectl -n {{ .Release.Namespace }} create secret generic {{ include "choregos-outpost.enrolmentSecret" . }} \
+       --from-literal={{ (.Values.enrolment | default dict).key | default "token" }}=<the token>
+
+   The pod's first container takes it by itself, at its next start. An instance that already has
+   an identity is left alone. Each further instance needs a fresh token, in the same Secret.
+
+2. Read the fingerprint of the instance's signing key, as the enrolment printed it:
+
+     kubectl -n {{ .Release.Namespace }} logs {{ include "choregos-outpost.fullname" . }}-0 -c enrol
+
+   The daemon repeats it while it waits (`outpost.pending`, field `fingerprint`):
+
+     kubectl -n {{ .Release.Namespace }} logs {{ include "choregos-outpost.fullname" . }}-0 -c outpost | grep outpost.pending
+
+3. Approve. The instance is pending until a person approves it in the console, and is handed
+   nothing before. Approve it only if the fingerprint the console shows is the one you read here.
+
+The daemon stops with a code that says why, and two of them restart in a loop ON PURPOSE:
+  3  the door no longer serves this daemon's protocol: upgrade the image (it never upgrades itself);
+  4  the instance, or its outpost, was revoked: nothing will be handed to it again.
+The others: 2 it could not start (the policy, the identity or the files), 5 the disk refused the
+journal or the audit log. `kubectl logs` gives the last words of each.
+
+What the daemon may reach is its NetworkPolicy{{ if not .Values.networkPolicy.enabled }} (switched OFF in these values){{ end }}, and it holds only where the
+cluster's network plugin enforces policies. Check the path to the door, the clock and each endpoint:
+
+     kubectl -n {{ .Release.Namespace }} exec {{ include "choregos-outpost.fullname" . }}-0 -c outpost -- choregos-outpost doctor

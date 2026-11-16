@@ -27,6 +27,14 @@ class AssistantNeed(Dto):
     required: bool
 
 
+class AssistantKnowledgeNeed(Dto):
+    """A knowledge need the installation binds to the organisation's bases (ADR 0159); a seed is not one."""
+
+    name: str
+    description: str
+    required: bool
+
+
 class AssistantTaskDecl(Dto):
     """A task the assistant declares: the console subscribes the person to it."""
 
@@ -44,6 +52,7 @@ class PluginAssistant(Dto):
     config_schema: dict[str, Any] | None = None
     suggested_groups: list[str]
     needs: list[AssistantNeed]
+    knowledge_needs: list[AssistantKnowledgeNeed] = Field(default_factory=list)
     memory_spaces: list[AssistantMemorySpace] = Field(default_factory=list)
 
 

@@ -83,3 +83,37 @@ export function canManageMembers(
       (m.role === "org_admin" || (m.role === "project_owner" && (!m.project_slug || m.project_slug === project))),
   );
 }
+
+/**
+ * Whether the person manages the organisation's outposts: the API's `outpost:manage`, which the
+ * organisation's administrator holds and no other role does. The API stays the judge; this only decides
+ * whether the administration lists the page.
+ */
+export function canManageOutposts(
+  memberships: Array<Pick<Membership, "org" | "project_slug" | "role">>,
+  org: string,
+): boolean {
+  return memberships.some((m) => m.org === org && !m.project_slug && m.role === "org_admin");
+}
+
+/**
+ * Whether the person may reassign a waiting human request (ADR 0153): the organisation's
+ * administrator only. The API stays the judge; this only decides whether the ticket offers the gesture.
+ */
+export function canReassignRequests(
+  memberships: Array<Pick<Membership, "org" | "project_slug" | "role">>,
+  org: string,
+): boolean {
+  return memberships.some((m) => m.org === org && !m.project_slug && m.role === "org_admin");
+}
+
+/**
+ * Whether the person writes the organisation's groups: the API's `group:manage` (ADR 0160), the
+ * organisation administrator's. Every member reads them; the API stays the judge.
+ */
+export function canManageGroups(
+  memberships: Array<Pick<Membership, "org" | "project_slug" | "role">>,
+  org: string,
+): boolean {
+  return memberships.some((m) => m.org === org && !m.project_slug && m.role === "org_admin");
+}

@@ -17,12 +17,12 @@ SIGNAL_OF_4 = {
     "infra_pr_url": None,
     "labels": [],
     "merged_at": "2026-10-09T15:40:04.531105+00:00",
-    "pr_url": "https://github.com/DiametralGroup/choregos-sandbox-dev/pull/17",
+    "pr_url": "https://github.com/globex/choregos-sandbox-dev/pull/17",
     "risk": "medium",
     "sha": "",
     "start_payload": {"env": "prod", "project_slug": "dev"},
     "title": "Credits are not deducted from the invoice total",
-    "work_item_key": "DiametralGroup/choregos-sandbox-dev#4",
+    "work_item_key": "globex/choregos-sandbox-dev#4",
 }
 
 
@@ -40,7 +40,7 @@ def test_a_release_that_stores_the_raw_signal_is_readable() -> None:
     dto = release_dto(release, "dev")
 
     [item] = dto.items
-    assert item.work_item_key == "DiametralGroup/choregos-sandbox-dev#4"
-    assert item.pr_url == "https://github.com/DiametralGroup/choregos-sandbox-dev/pull/17"
+    assert item.work_item_key == "globex/choregos-sandbox-dev#4"
+    assert item.pr_url == "https://github.com/globex/choregos-sandbox-dev/pull/17"
     assert item.risk == "medium"
     assert "start_payload" not in item.model_dump()

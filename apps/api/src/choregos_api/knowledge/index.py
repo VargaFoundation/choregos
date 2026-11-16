@@ -153,7 +153,12 @@ async def reindex_base(org: str, base_id: str) -> int:
         await session.execute(delete(KnowledgeChunk).where(KnowledgeChunk.knowledge_base_id == base_id))
     total = 0
     for document_id in ids:
-        total += await index_document(org, document_id)
+        # One document the gateway cannot embed (a timeout after its retries, a refusal) leaves only
+        # that document out of the index: the others are still rebuilt.
+        try:
+            total += await index_document(org, document_id)
+        except Exception:
+            logger.exception("knowledge.reindex.document_failed", org=org, base=base_id, document=document_id)
     return total
 
 

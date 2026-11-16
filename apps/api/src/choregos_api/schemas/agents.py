@@ -8,6 +8,7 @@ import re
 from datetime import datetime
 from typing import Annotated, Any, Literal
 
+from choregos_contracts import OutpostStatus
 from choregos_contracts.policy import ToolScriptsMode
 from choregos_core.argument_grants import constraint_error
 from choregos_core.memory_bindings import Binding, binding_problems, effective_bindings
@@ -22,6 +23,7 @@ from pydantic import (
     model_validator,
 )
 
+from .agent_social import AgentSocial
 from .base import Dto
 from .identity import ApiTokenCreated
 
@@ -1128,6 +1130,8 @@ class AgentDto(Dto):
     release_policy: AgentReleasePolicy = Field(default_factory=AgentReleasePolicy)
     #: The release waiting for approval, if any (S40-02b).
     pending_release: AgentReleaseDto | None = None
+    #: Watchers, stars and forks, and what the caller does with it (ADR 0152).
+    social: AgentSocial = Field(default_factory=AgentSocial)
 
 
 class AgentOverrides(Dto):
@@ -1163,6 +1167,17 @@ class ProjectAgentDto(Dto):
     effective: AgentSpec
     #: Said when the agent is deprecated: the pin holds, but the agent is on its way out.
     warning: str | None = None
+
+
+class SkillApproval(Dto):
+    """The body of an approval, optional: `force` lets the importer approve their own version.
+
+    Forcing needs a written `reason` (10 characters at least) and is audited as such; an
+    administrator who is not the importer never needs it.
+    """
+
+    force: bool = False
+    reason: str | None = Field(default=None, max_length=1000)
 
 
 class SkillFiles(Dto):
@@ -1332,12 +1347,28 @@ class AgentAccessModel(Dto):
     reason: str | None = None
 
 
+class AgentAccessOutpost(Dto):
+    """Where a connector tool reached through an outpost lives (ADR 0149 §10): the outpost, the alias
+    of the endpoint in its policy file, and whether a call made now would be handed to an instance."""
+
+    #: The outpost's slug; None when the connector routes to no outpost of the organisation.
+    name: str | None
+    endpoint: str
+    #: The outpost's status; None when the connector routes to no outpost of the organisation.
+    status: OutpostStatus | None
+    #: An active instance that serves the alias polled within the poll window: the route's presence.
+    online: bool
+
+
 class AgentAccessTool(Dto):
     name: str
     source: Literal["frame", "catalogue", "extension", "connector", "web"]
     origin: AccessOrigin
     access: Literal["read", "write", "approval"] | None = None
     reason: str | None = None
+    #: Only on the tool of a connector at an outpost: the key is left out of every other entry, so the
+    #: entries the access answered before ADR 0149 are unchanged (`access` and `reason` stay `null`).
+    outpost: AgentAccessOutpost | None = Field(default=None, exclude_if=lambda value: value is None)
 
 
 class AgentAccessItem(Dto):
@@ -1544,6 +1575,26 @@ class AgentLifecycleResult(Dto):
     #: The work items whose run was in flight when the retirement was forced.
     running_work_items: list[str] = Field(default_factory=list)
     forced: bool = False
+
+
+class AgentNotStopped(Dto):
+    """What an agent's stop could not stop now (ADR 0142 §4); the reconciliation retries a run."""
+
+    kind: Literal["run", "session", "turn"]
+    id: str
+    detail: str
+
+
+class AgentStopResult(Dto):
+    """What stopping an agent did (`POST /orgs/{org}/agents/{slug}/stop`, ADR 0142 §4)."""
+
+    slug: str
+    status: Literal["suspended"] = "suspended"
+    runs_cancelled: int
+    sessions_closed: int
+    #: Conversation turns in flight whose cancel was requested (ADR 0142 §4 bis).
+    turns_cancelled: int = 0
+    not_stopped: list[AgentNotStopped] = Field(default_factory=list)
 
 
 class AgentOwnerChange(Dto):

@@ -68,8 +68,8 @@ function installed(name: string, extra: Partial<InstalledPlugin> = {}): Installe
 const SOURCES: PluginSource[] = [
   {
     name: "varga",
-    index: "oci://ghcr.io/vargafoundation/choregos-agents/index:stable",
-    trust: { mode: "keyless", identity: "https://github.com/VargaFoundation/choregos-agents/.*", issuer: "https://token.actions.githubusercontent.com" },
+    index: "oci://registry.example/choregos-agents/index:stable",
+    trust: { mode: "keyless", identity: "https://github.com/example/choregos-agents/.*", issuer: "https://token.actions.githubusercontent.com" },
     plugins: [
       {
         name: "hello",

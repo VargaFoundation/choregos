@@ -3,11 +3,12 @@ id: connector.scm.github
 title: Use GitHub for branches, pull requests and checks
 applies_to: {connector: scm/github}
 audience: project_owner
-version: 1
-reviewed: 2026-10-19
+version: 2
+reviewed: 2026-11-12
 vendor_docs:
   - {title: "Registering a GitHub App", url: "https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/registering-a-github-app"}
   - {title: "Permissions required for GitHub Apps", url: "https://docs.github.com/en/rest/overview/permissions-required-for-github-apps"}
+  - {title: "Registering a GitHub App from a manifest", url: "https://docs.github.com/en/apps/sharing-github-apps/registering-a-github-app-from-a-manifest"}
   - {title: "Managing a merge queue", url: "https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/managing-a-merge-queue"}
 egress: [api.github.com]
 values: ["webhook_url:github"]
@@ -20,13 +21,16 @@ fields:
 ## Before you start
 
 - The same **GitHub App** as the tracker (see "Use GitHub Issues and Projects v2 as the board"): one App
-  serves both. Its id, private key and webhook secret are platform settings.
+  serves both. The person who operates Choregos creates it from the console (*Administration, GitHub
+  App*, from a manifest with the permissions and events below) or sets its id, private key and webhook
+  secret as platform settings.
 - The repository the agents change. They work on a branch and open a pull request; nothing is pushed to
   the default branch.
 
 ## At GitHub
 
-1. Create the App with the **Webhook URL** `{{webhook_url:github}}`, or reuse the platform's.
+1. Create the App from the console (*Administration, GitHub App*), which sets the **Webhook URL**
+   `{{webhook_url:github}}` itself, or by hand with that URL; or reuse the platform's.
 2. **Install** it on the repository: the repository field's **Install on GitHub** button opens GitHub's
    install page and brings you back. The installation is discovered by the platform: there
    is no number to copy.

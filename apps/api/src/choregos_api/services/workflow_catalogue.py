@@ -297,7 +297,13 @@ def entry_dto(
                 display_name=r.display_name,
             )
         )
-    groups = sorted({spec.group for spec in o.workflow.actors.values() if isinstance(spec, HumanActor)})
+    groups = sorted(
+        {
+            spec.group
+            for spec in o.workflow.actors.values()
+            if isinstance(spec, HumanActor) and spec.group is not None
+        }
+    )
     return WorkflowCatalogueEntryDto(
         source=o.source,
         name=o.name,

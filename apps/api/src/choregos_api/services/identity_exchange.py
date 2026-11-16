@@ -227,7 +227,12 @@ async def exchanged_token(session: AsyncSession, connector: Any, acting: Acting)
         session, acting.org_id, acting.user_id, settings, secret_name=acting.refresh_secret or None
     )
     try:
-        issued = await (await _client(settings)).exchange(subject, audience=audience, actor=acting.actor)
+        issued = await (await _client(settings)).exchange(
+            subject,
+            audience=audience,
+            actor=acting.actor,
+            scope=settings.token_exchange_scopes.get(audience) or None,
+        )
     except (AdapterError, httpx.HTTPError) as failure:
         raise IdentityUnavailable(
             "the identity provider refused to issue a token for this source"

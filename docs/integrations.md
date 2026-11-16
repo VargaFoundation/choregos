@@ -28,7 +28,9 @@ and `2025-03-26`.
 | `get_work_item` | A work item's state, recent timeline and pending decision, with its link | `mcp:read` |
 | `summarize_run` | One agent run: stage, backend, model, status, cost, summary | `mcp:read` |
 | `list_pending_decisions` | What waits for a person, with the link where it is decided | `mcp:read` |
+| `get_pending_decision` | What waits for **your** decision: the list, or one request's full context (question, form, work item, existing draft, link) | `mcp:read` |
 | `create_work_item` | Opens a work item in a project (in its tracker first when external, ADR 0059) | `mcp:write` and the right to control work items |
+| `draft_decision` | Deposits a draft of the decision of a request waiting for you; it decides nothing (see below) | `mcp:write` and the right to decide work items |
 | `docs_search` | Searches this platform's user documentation: ranked pages with title, slug, public URL and a snippet | `mcp:read` |
 | `docs_read` | One documentation page as Markdown, by slug, or one of its sections by heading anchor; a long page comes in parts (`offset`) | `mcp:read` |
 
@@ -43,6 +45,31 @@ without internet. The links they give point to the public site, `CHOREGOS_DOCS_U
 project or not; they are audited (`mcp.call`) and rate limited like the other reads. A build without
 documentation answers so, with the public URL. Ask *"how do gates work in Choregos?"*: the client
 should call `docs_search`, then `docs_read`.
+
+### Your client prepares your decision (ADR 0163)
+
+A step of a workflow is carried by a person, never by your client: a workflow that names an agent of kind
+`external` is refused ([ADR 0163](adr/0163-a-client-prepares-a-person-s-decision-the-person-decides.md) §1).
+What your client may do is **prepare** the decisions that wait for you:
+
+1. `get_pending_decision` lists the requests you may answer yourself — addressed to you, to a group of
+   yours that may answer, or to anyone of your rank when the step names nobody, on work items you can read,
+   in projects where you may decide (an administrator's override does not count). With a `work_item`, it
+   returns what the request asks: the question, a task's form and the sentence it makes you attest, the
+   work item's body and fields, the draft already made, and the console link.
+2. `draft_decision` deposits a draft: `approve` or `reject` (with a `reason`) for an approval or a scope
+   change, `answer` (with the `answer`) for a question, `complete` (with the form's `values`, possibly
+   partial) or `reject` for a task, and a `note` saying why. The values are checked against the task's
+   form. A draft never attests. One draft per request: a new one replaces it.
+3. Nothing is decided: the request keeps waiting. The answer carries `pending_actions: [{id, summary,
+   confirm_url}]`, like an assistant's proposals; `confirm_url` opens the work item's awaited decision.
+   There you see the draft, which client made it (the token's name or the OAuth client, and the external
+   agent it acts as) and its note; **Take** fills the decision's form — you still check it, tick the
+   attestation and press the decision's button — and **Discard** removes it.
+
+Another person's request answers like a request that does not exist. A draft counts in your 50 writes a
+day and is audited (`workitem.decision.draft`; a discard `workitem.decision.draft.discard`); the decision's
+audit says whether it was the draft's (`draft: same` or `changed`).
 
 ### Assistants (ADR 0139)
 
@@ -419,8 +446,56 @@ curl -X POST $API/orgs/acme/connectors -d '{"kind": "mcp", "name": "rovo", "type
    network, the platform team may also need to open the host (the modal shows the change).
 4. *Discover* the connector, then open the tools the agents need: a new tool is born closed.
 
-`auth_scheme` is `bearer` (the default, unchanged) or `basic`; `basic` needs `username`. The
-server allows about 1 000 calls per hour on Standard and Premium plans.
+`auth_scheme` is `bearer` (the default, unchanged), `basic` or `oauth_client_credentials` (next
+section); `basic` needs `username`. The server allows about 1 000 calls per hour on Standard and
+Premium plans.
+
+## An MCP server that only accepts short-lived OAuth tokens
+
+An enterprise MCP server often sits behind its organisation's identity provider and accepts no static
+key: a machine signs in with the OAuth 2.0 **client credentials** grant ([RFC 6749
+§4.4](https://www.rfc-editor.org/rfc/rfc6749#section-4.4)) and receives a token that lives a few minutes.
+Declare it as a direct `mcp` connector with `auth_scheme: oauth_client_credentials`:
+
+```bash
+curl -X POST $API/orgs/acme/connectors -d '{"kind": "mcp", "name": "data", "type": "mcp",
+  "config": {"url": "https://data.example.com/mcp", "auth_scheme": "oauth_client_credentials",
+             "token_url": "https://login.example.com/oauth2/token", "client_id": "choregos-reader",
+             "scope": "mcp:read"},
+  "secret_values": {"client_secret": "typed once, sealed"}, "allow_egress": true}'
+```
+
+| Field | Meaning |
+| :-- | :-- |
+| `token_url` | The token endpoint, `https` (plain `http` only under `CHOREGOS_FAKES`): it receives the client secret. No user-info, no fragment. |
+| `client_id` | The OAuth client's identifier. It is what the run page shows as the account the connector calls as. |
+| `client_secret` | A secret field: typed once in `secret_values` (sealed, ADR 0058) or referenced in `secret_refs` by a platform administrator. Never in `config`. |
+| `scope`, `audience` | Sent with the token request only when filled in: the scopes the server expects, and the audience some providers require. |
+
+What the platform does with it (`choregos_adapters/mcp/client_credentials.py`):
+
+- **The broker holds the token.** The platform asks the token endpoint for a token
+  (`grant_type=client_credentials`, the client authenticated with HTTP Basic) and sends it to the
+  server as `Authorization: Bearer`. The token and the client secret never reach a run, an agent, a
+  log line, an audit row, an API answer or an error message.
+- **Cached, then renewed.** A token is reused until 30 seconds before the `expires_in` it came with
+  (300 seconds when the endpoint gives none). When the server answers `401` (the token was revoked or
+  the clocks disagree), the platform fetches a new token and sends the request again, **once**; a
+  second `401` is an error, never a loop. A new client secret never reuses the former one's token.
+- **Both hosts are governed.** The token endpoint's host is held to the organisation's network policy
+  exactly like the server's: it is one of the hosts the declaration opens in the egress allowlist
+  ([ADR 0066](adr/0066-the-organisation-egress-allowlist.md)), the organisation's network ceiling may
+  refuse it at declaration (422, ADR 0070), and every token request goes through the guarded transport,
+  so a token endpoint whose host was closed since is refused before anything leaves.
+- **Refusals say what failed.** A token endpoint that gives no token is a named error
+  (`TokenRefused`): *the token endpoint `<host>` refused the OAuth client `<client_id>` (HTTP 401,
+  invalid_client)*, with the host, the client and the OAuth error code, never the secret or the
+  endpoint's body. Discovery answers
+  `502` with it and marks the connector `error`; a tool call returns it as a tool error.
+
+The [organisation's MCP gateway](#your-organisations-mcp-gateway-adr-0105) signs in the same way when
+its sign-in is `oauth_client_credentials`: both use the same token code and the same refusals. A person's own token (ADR 0135)
+still wins over the connector's client: a call made as the person never fetches the client's token.
 
 ## A remote agent: Atlassian Rovo over A2A
 
@@ -564,6 +639,96 @@ organisation connector with `plugin_server` set, run by the platform in-cluster 
 namespace; `services/plugin_servers.py`) is not an upstream. It is never reached through the gateway
 and `required` mode does not refuse it. See [Servers](plugins.md#servers) and
 [Plugin servers](deployment.md#plugin-servers).
+
+## A tool server at an outpost (ADR 0149)
+
+Some servers live where nothing outside may connect: a production network, an internal tracker or
+forge, a database behind a firewall whose rule is "no inbound". If your organisation already exposes
+them through its own MCP gateway, use the section above: it needs nothing more. Otherwise an
+**outpost** is installed inside that network ([ADR 0147](adr/0147-an-outpost-only-dials-out.md)): a
+daemon that only dials out to Choregos and makes the calls it is handed. A connector of type
+`mcp-outpost` is how an organisation uses a server through one
+([ADR 0149](adr/0149-a-tool-may-live-at-an-outpost.md)).
+
+**What it is declared with.** An outpost's name, the alias of an endpoint in that outpost's policy
+file, and a timeout (`McpOutpostConnectorConfig` in `packages/contracts/openapi.yaml`). No URL and no
+secret: the address and the credential are the outpost's and exist in its file only. A declaration
+that carries either is a 422, and so is the name of an outpost the organisation does not have. The
+walk-through is the procedure
+[Connect an MCP server that lives at an outpost](procedures/connector.mcp.mcp-outpost.md).
+
+**What changes for agents, and what does not.** An agent names the same tools as before. The agent's
+selection, the operation's policy and groups, its argument schema, the grants that bind its
+arguments, the approval, the result cap and the injection guard apply as for a direct connector
+(`services/broker.py`): they are decided before a call leaves, and what the platform refuses writes
+nothing an outpost could claim. A call is booked in the cost ledger under `mcp:<connector>` and its
+`tool.called` event carries the same digests. What changes is the transport: instead of an HTTP call,
+the call waits in the platform's database until an instance of the outpost claims it at its next poll
+(`services/outpost_route.py`), sealed to that instance and signed by the door. The outpost is told
+who the call is made for, as names it may log and decides nothing on; it reads from its own server
+whether a tool writes. Each call is a line of the network activity under `outpost:<name>/<alias>`:
+the platform opened no connection, so the organisation's allowed hosts and per-host rate do not
+apply to it; the outpost's own ceilings and the door's quotas do.
+
+**What it can refuse**, each a tool error that names the outpost, never a crash:
+
+| Code | When | Booked |
+| :-- | :-- | :-- |
+| `outpost_paused` | the outpost is paused or revoked, or outposts are switched off | no |
+| `outpost_offline` | no instance that serves the alias polled in the last minute, or none took the call within the connector's timeout. An instance announces its policy file's aliases at every poll: an alias the file does not hold is answered this way | no |
+| `outpost_refused` | the outpost's own policy refused; `refusal` is its code (`tool_not_allowed`, `write_denied`, `endpoint_unavailable`…) | no |
+| `outpost_not_admitted` | a quota of calls in flight or per minute is reached, or the call is too large to cross the door | no |
+| `outpost_timeout` | an instance took the read and its server did not answer in time | yes: it may have been executed |
+| `action_in_doubt` | an instance took the **write** and never answered: its action ended `in_doubt` | yes: it may have been executed, and it is never sent again |
+
+At declaration and at discovery the same refusals are a 409 that carries the code (a quota is a 429).
+A call that reached no server is not booked.
+
+**A write is delivered at most once, and may end in doubt** (ADR 0149 §5-6). Choregos does not see
+the outpost's server: once an instance has taken a write, an answer that never comes back leaves one
+thing unknown, whether the server made it. So:
+
+- the write is sent once. Whatever is retried finds that first call and reads what became of it;
+- a write no instance took reached no server: the action retries it and it is delivered when the
+  outpost is back (then fails, saying why, if the outpost stays away);
+- a write an instance took and never answered ends the action **`in_doubt`**: it is not sent again
+  and nothing the action had done is undone
+  ([Usage](usage.md#4-bis-governed-actions), "In doubt", says what a person then does).
+
+That is weaker than what a direct connector gives, so it is never implied. A write operation of an
+`mcp-outpost` connector is set to `allowed` or `approval` only when its rule says one of two things,
+in the same request or before it (`PATCH /orgs/{org}/connectors/{name}/operations/{operation}`):
+
+| The rule says | Meaning | After a doubt |
+|:--|:--|:--|
+| `"platform_arguments": ["action_key"]` | the tool has an argument `action_key` and makes a call harmless when it arrives twice with the same key. Choregos fills it (the same for one action and call, whatever an agent wrote there) | the write is delivered again with the same key; the action is in doubt only if every delivery was |
+| `"in_doubt_accepted": true` | an in-doubt outcome is accepted for this tool, explicitly | the action ends `in_doubt` |
+
+In the console, **Administration → Connectors** shows the two statements under each write of a
+connector at an outpost (**How it is delivered**), and nowhere else: the first is offered only when
+the tool's input schema has an `action_key` argument. What is ticked leaves with the policy that
+opens the write, in the same request, or alone with **Set**; the API's refusal is shown with its own
+words, on each statement it names.
+
+A request that says neither is a 422 that names both fields, and so is one that would withdraw the
+last of the two from a write that is open. `platform_arguments` is the list a plugin's server
+declares for its own operations ([Plugins](plugins.md)); here the organisation states it for a
+discovered tool, which declares nothing, and it is refused for a tool whose input schema has no such
+argument. A tool whose schema changes is closed again and loses both statements. Choregos does not
+verify that a server honours the key: the statement is the administrator's.
+
+**Limits of this version.**
+
+- **An action in doubt waits for a person.** Nothing replays it by itself: a person checks the
+  system behind the outpost and settles it on the action's page (`settleAction`, S65-26): made, it
+  resumes after the write; not made, it fails and compensates what came before.
+- **The connector's own identity only.** The call reaches the server under the credential the
+  outpost holds for the alias. A need that must be called as the person cannot be bound to such a
+  connector.
+- **Mode `required` of the MCP gateway does not refuse it** (ADR 0149 §8): through an outpost
+  Choregos holds no upstream credential and opens no upstream connection.
+- **An outpost does not keep data where it is.** A tool's result travels to Choregos, is bounded and
+  screened there, and is read by a model.
 
 ## Limits
 

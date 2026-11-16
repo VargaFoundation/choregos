@@ -4,7 +4,7 @@
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { Settings } from "lucide-react";
-import { GROUP_HUES, useNavGroups, sectionOf } from "@/components/shell/navigation";
+import { adminTrail, GROUP_HUES, useNavGroups, sectionOf } from "@/components/shell/navigation";
 import { PageHeader } from "@/components/page-header";
 import { BreadcrumbBase, Breadcrumbs, type BreadcrumbStep } from "@/components/ui";
 
@@ -19,7 +19,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { groups } = useNavGroups(pathname);
   const section = sectionOf(pathname, groups);
-  const steps = section && section.href !== "/admin" ? [{ label: section.label }] : [];
+  const steps = adminTrail(pathname, section);
   return (
     <BreadcrumbBase.Provider value={BASE}>
       <div className="space-y-4">

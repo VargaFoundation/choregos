@@ -20,7 +20,7 @@ log = structlog.get_logger("choregos.egress")
 async def main() -> None:
     settings = EgressSettings()
     source = HttpRunNetworkSource(settings.api_url, cache_seconds=settings.cache_seconds)
-    sink = HttpDecisionSink(settings.api_url)
+    sink = HttpDecisionSink(settings.api_url, report_key=settings.report_key)
     reporter = Reporter(sink)
     proxy = EgressProxy(settings, source, reporter)
     port = await proxy.start()

@@ -176,6 +176,7 @@ class LiteLlmGateway:
                     supports_tool_calling=mode != DECISION_MODE
                     and _unless_denied(info.get("supports_function_calling")),
                     supports_vision=bool(info.get("supports_vision", False)),
+                    supports_reasoning=_flag(info.get("supports_reasoning")),
                     mode=mode,
                     internal_price=name in self.internal_prices,
                 )
@@ -225,6 +226,12 @@ class LiteLlmGateway:
     async def test(self) -> dict[str, Any]:
         models = await self.list_models()
         return {"ok": bool(models), "models": len(models)}
+
+
+def _flag(value: Any) -> bool | None:
+    """A capability the gateway states either way; `None` when it says nothing, so the console shows
+    nothing rather than a guess (a missing flag is not a denial)."""
+    return value if isinstance(value, bool) else None
 
 
 def _unless_denied(flag: Any) -> bool:

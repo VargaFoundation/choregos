@@ -3,7 +3,7 @@
 
 The review of 2026-10-07 found that software workflows ran IMPLICIT agents; the catalogue made them
 registry agents, ready to install. Since S43-09 the core no longer carries them: they ship as plugins
-of `VargaFoundation/choregos-agents` (`software-delivery`, `netops`, `authoring`, `mcp-clients`,
+of the agents' repository, `choregos-agents` (`software-delivery`, `netops`, `authoring`, `mcp-clients`,
 `requests`), and
 the catalogue is a VIEW over plugins — the deployment's offline directory (the committed
 `plugins/offline/` of this repository, `/opt/choregos/plugins` in the API image), plus, in the API,
@@ -191,6 +191,13 @@ def _context() -> str:
     return (FOLDER / "_context.md").read_text(encoding="utf-8")
 
 
+def without_context(instructions: str) -> str:
+    """An internal agent's instructions without the work item's context that `entry_of` put before them:
+    what an assistant's conversation renders, since it hands the agent no work item (S63-28)."""
+    frame = _context()
+    return instructions[len(frame) :] if instructions.startswith(frame) else instructions
+
+
 def entry_of(raw: dict[str, Any], plugin: str = "", plugin_version: str = "") -> CatalogueEntry:
     """An entry from a catalogue document (`catalogue:` + `agent:`): a plugin's agent file (ADR 0093).
     The context block precedes an internal agent's instructions; an external client keeps its `client`
@@ -334,4 +341,5 @@ __all__ = [
     "offline_directory",
     "plugin_ref",
     "skill_files",
+    "without_context",
 ]

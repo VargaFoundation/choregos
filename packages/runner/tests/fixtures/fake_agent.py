@@ -264,6 +264,9 @@ def main() -> int:
             plan = _plan_for(script, prompts_seen)
             session_id = (message.get("params") or {}).get("sessionId", "sess-fake-1")
 
+            if _ended_early(plan, message_id, workspace):
+                continue
+
             _say(session_id, plan.get("messages", []))
             for call in plan.get("model_calls", []):
                 _call_model(call)
@@ -348,6 +351,32 @@ def main() -> int:
                 }
             )
     return 0
+
+
+def _ended_early(plan: dict[str, Any], message_id: Any, workspace: Path) -> bool:
+    """`exit`: the agent dies in its turn, without a word. `until_cancelled`: the turn is held until
+    the client cancels it, then ends `cancelled`. True when the turn is over already."""
+    if "exit" in plan:
+        raise SystemExit(int(plan["exit"]))
+    if not plan.get("until_cancelled"):
+        return False
+    _hold_until_cancelled(workspace)
+    send({"jsonrpc": "2.0", "id": message_id, "result": {"stopReason": "cancelled"}})
+    return True
+
+
+def _hold_until_cancelled(workspace: Path) -> None:
+    """`until_cancelled`: the turn works on and answers nothing until the client sends
+    `session/cancel`, which it notes in `cancelled.json` in the workspace; the turn then ends
+    `cancelled`, as ACP asks, and the agent stays up for the next prompt."""
+    while True:
+        message = read()
+        if message is None:
+            return
+        if message.get("method") == "session/cancel":
+            params = message.get("params") or {}
+            (workspace / "cancelled.json").write_text(json.dumps(params), encoding="utf-8")
+            return
 
 
 def _report_tool_calls(session_id: str, calls: list[dict[str, Any]], outgoing_id: int) -> int:

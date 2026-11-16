@@ -32,6 +32,7 @@ from choregos_core import utcnow
 from choregos_core.egress import NetworkBounds
 from choregos_core.network import normalise_host, platform_allowed
 from choregos_core.policy_ceiling import CeilingNetwork
+from choregos_core.publishing import PUBLISHING
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -42,7 +43,8 @@ from ..errors import ApiError, unprocessable
 from .definitions import ceiling_of
 from .network import instance_deny
 
-DEFAULT_CONTACT = "https://github.com/VargaFoundation/choregos"
+#: The contact of the platform's requests when neither the organisation nor the deployment names one.
+DEFAULT_CONTACT = PUBLISHING.source_repository
 #: Configuration keys that hold the address a connector reaches, in the order they are read.
 URL_KEYS = ("url", "base_url", "api_url", "endpoint", "server_url", "host")
 WHERE = "change the organisation's network access on the Administration page, or the connector's address"
@@ -70,7 +72,15 @@ def host_of(url: str | None) -> str | None:
 
 
 def connector_host(config: Mapping[str, Any] | None) -> str | None:
-    """The host a connector's configuration points at, when it points at one."""
+    """The host a connector's configuration points at, when it points at one.
+
+    A connector reached through an outpost points at none (ADR 0149 §11): its `endpoint` is an alias
+    in that outpost's policy file, never an address, and the platform opens no connection for it.
+    Read as a host, the alias would be judged by the organisation's network policy, rate-limited
+    with whatever direct connector happens to bear the same name, and journaled as a place the
+    platform reached."""
+    if (config or {}).get("outpost"):
+        return None
     for key in URL_KEYS:
         host = host_of((config or {}).get(key))
         if host:
@@ -120,6 +130,11 @@ async def check_connector_declaration(
     session: AsyncSession, org_id: str, config: Mapping[str, Any] | None, name: str
 ) -> None:
     await check_platform_host(session, org_id, connector_host(config), f"connector `{name}`")
+    # An MCP connector signed in with `oauth_client_credentials` also has the platform call its token
+    # endpoint: that host is bounded like the server's.
+    token_url = (config or {}).get("token_url")
+    if isinstance(token_url, str):
+        await check_platform_host(session, org_id, token_url, f"the token endpoint of connector `{name}`")
 
 
 def refusal_error(refused: PlatformNetworkRefused) -> ApiError:

@@ -936,3 +936,60 @@ def test_the_primary_is_named_after_its_url_and_a_branch_takes_its_repository_s_
     assert config.branch_for("PLAT-7") == "choregos/PLAT-7", "the primary's prefix, as before"
     assert config.branch_for("PLAT-7", repo=diamctl) == "fix/PLAT-7"
     assert ProjectConfig.model_validate({"slug": "p", "org": "o"}).repository_names() == []
+
+
+@pytest.mark.parametrize(
+    ("tool", "valid"),
+    [
+        ("market_data__get_quote", True),
+        ("launch__portfolio_review", True),
+        ("launch_status", True),
+        ("launch_statuses", False),
+        ("get_quote", False),
+    ],
+)
+def test_a_suite_names_a_need_operation_or_a_launch_tool(tool: str, valid: bool) -> None:
+    """ADR 0158: a launch gives the agent `launch__<name>` and `launch_status`; a suite may name both, in an
+    assertion and in the fakes' answers, and still refuses any other name without `__` (#1726)."""
+    suite = _load("conversation-evals.example.json")
+    case = suite["cases"][0]
+    case["assert"] = {"must_call": [{"tool": tool, "before": "any"}]}
+    case["tool_results"] = {tool: {"ok": True}}
+    errors = list(_validator("conversation-evals.schema.json").iter_errors(suite))
+    assert (not errors) is valid, [e.message for e in errors]
+
+
+def test_the_developer_surfaces_read_what_the_door_reads_and_what_waits_for_the_person() -> None:
+    """S67-04b (ADR 0154 §4): G1, G2, G5, G6, G8 are in the contract, optional if older clients exist."""
+    spec = contracts.load_openapi()
+    schemas = spec["components"]["schemas"]
+    # G1: the REST turn carries what the door's answer carries, none of it required.
+    response = schemas["AgentResponse"]
+    for name in ("citations", "pending_actions", "missing_accounts"):
+        assert name in response["properties"] and name not in response["required"], name
+    assert set(schemas["AgentPendingAction"]["required"]) == {"id", "summary", "confirm_url"}
+    assert set(schemas["AgentMissingAccount"]["required"]) == {"need", "connect_url"}
+    # G2: a turn is followed from elsewhere and survives its client.
+    assert schemas["ConversationMessageCreate"]["properties"]["detach"]["default"] is False
+    events = spec["paths"]["/me/conversations/{conversation_id}/events"]["get"]
+    assert events["operationId"] == "followMyConversationTurn"
+    assert {p["name"] for p in events["parameters"]} == {"after_seq", "Last-Event-ID"}
+    assert "text/event-stream" in events["responses"]["200"]["content"]
+    # G8: what waits, four kinds, each with its decision route.
+    pending = schemas["PendingItem"]
+    assert pending["properties"]["kind"]["enum"] == [
+        "human_step",
+        "governed_action",
+        "conversation_action",
+        "launch",
+    ]
+    assert {"what", "where", "since", "decision"} <= set(pending["required"])
+    assert spec["paths"]["/me/pending"]["get"]["operationId"] == "listMyPending"
+    # G5: the run's nodes.
+    node = schemas["RunAgentNode"]
+    assert node["properties"]["kind"]["enum"] == ["agent", "subagent"]
+    assert {"id", "kind", "status", "started_at", "tool_calls"} <= set(node["required"])
+    assert spec["paths"]["/runs/{id}/agents"]["get"]["operationId"] == "listRunAgents"
+    # G6: an entry names its work item's title, optionally.
+    entry = schemas["ActivityEntry"]
+    assert "work_item_title" in entry["properties"] and "work_item_title" not in entry["required"]

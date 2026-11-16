@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://choregos.dev/schemas/outpost-enrolment-answer.schema.json",
+  "title": "OutpostEnrolmentAnswer",
+  "description": "The door's answer to an enrolment (ADR 0147 §4): a pending instance, handed nothing until a person approves it by comparing its fingerprint. A daemon ignores a field it does not know.",
+  "type": "object",
+  "required": [
+    "instance_id",
+    "organisation",
+    "outpost",
+    "status",
+    "fingerprint",
+    "protocol",
+    "server_time"
+  ],
+  "properties": {
+    "instance_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$",
+      "description": "The `kid` of every later signature of this instance. Opaque to a daemon; the door reads in it which outpost the instance is of, before it knows anything else (ADR 0148 §6)."
+    },
+    "organisation": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "The organisation the token belonged to, for the operator to check."
+    },
+    "outpost": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+      "description": "The outpost the token belonged to."
+    },
+    "status": {
+      "enum": [
+        "pending"
+      ]
+    },
+    "fingerprint": {
+      "type": "string",
+      "pattern": "^SHA256:[A-Za-z0-9_-]{43}$",
+      "description": "`SHA256:` and the unpadded base64url SHA-256 of the raw signing key, as the door computed it: what the console shows, and what the daemon prints from its own key."
+    },
+    "protocol": {
+      "$ref": "#/$defs/window"
+    },
+    "server_time": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "$defs": {
+    "window": {
+      "type": "object",
+      "description": "The protocol versions the door serves; a daemon below `minimum` is refused.",
+      "required": [
+        "current",
+        "minimum"
+      ],
+      "properties": {
+        "current": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "minimum": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    }
+  }
+}

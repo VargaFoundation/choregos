@@ -4,7 +4,7 @@
 The API image copies `docs/site/**` (the Markdown of the public site) to `/opt/choregos/docs`
 (`CHOREGOS_DOCS_DIR` overrides). The first `docs_search` or `docs_read` walks that directory once and
 keeps an index in memory: one page per Markdown file, under the slug the public site gives it
-(`https://docs.varga.foundation/choregos/<slug>`, `CHOREGOS_DOCS_URL`).
+(`<CHOREGOS_DOCS_URL>/<slug>`, the publishing identity's documentation by default).
 
 A slug is a key of that index, never a path: `docs_read` cannot open anything the walk did not list,
 and the walk lists only regular Markdown files under the directory, never through a symbolic link.
@@ -21,9 +21,11 @@ from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from choregos_core.publishing import PUBLISHING
+
 #: Where the image puts the documentation (`docker/api.Dockerfile`).
 DEFAULT_DOCS_DIR = "/opt/choregos/docs"
-DEFAULT_DOCS_URL = "https://docs.varga.foundation/choregos"
+DEFAULT_DOCS_URL = PUBLISHING.documentation
 #: A page larger than this is not documentation: it is left out of the index.
 MAX_PAGE_BYTES = 512 * 1024
 #: Bounds the walk: a directory mounted by mistake does not fill the API's memory.
