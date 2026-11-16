@@ -19,9 +19,9 @@ from sqlalchemy import select
 from .agent_scopes_kit import make_project
 from .kits.conversations import _open
 from .kits.human_actor import _member, _session
+from .kits.human_requests import _request
+from .kits.memberships import _only
 from .test_agent_sessions import _agent, upstream  # noqa: F401
-from .test_mcp_decision_drafts import _request
-from .test_org_activity import _only
 
 PENDING = "/api/v1/me/pending"
 LEA = "lea@varga.dev"
