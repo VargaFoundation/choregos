@@ -4625,7 +4625,15 @@ export type ConversationAction = {
   confirmed_by?: string | null;
   confirmed_at?: string | null;
   executed_at?: string | null;
+  /** Why the person refused the action; null when it was not refused, or refused without a reason (before ADR 0154 §7). */
+  refusal_reason?: string | null;
   created_at: string;
+};
+
+/** Why a proposed write or launch is refused (ADR 0154 §7). */
+export type ConversationActionRefusal = {
+  /** Why — kept on the action and in the audit log. */
+  reason: string;
 };
 
 export type AssistantBind = {
@@ -6904,7 +6912,7 @@ export interface Operations {
   readyz: { method: "GET"; path: "/readyz"; body: never; response: void };
   reassignHumanRequest: { method: "POST"; path: "/work-items/{id}/human-requests/{request_id}/assignee"; body: AssigneeChange; response: HumanRequest };
   refreshGitHubInstallations: { method: "POST"; path: "/orgs/{org}/github/refresh"; body: never; response: GitHubAppStatus };
-  refuseMyConversationAction: { method: "POST"; path: "/me/conversations/{conversation_id}/actions/{action_id}/refuse"; body: never; response: ConversationAction };
+  refuseMyConversationAction: { method: "POST"; path: "/me/conversations/{conversation_id}/actions/{action_id}/refuse"; body: ConversationActionRefusal; response: ConversationAction };
   refuseOrgEgressRequest: { method: "POST"; path: "/orgs/{org}/egress/requests/{rule_id}/refuse"; body: EgressDecision; response: EgressRule };
   reimportMemory: { method: "POST"; path: "/projects/{id}/memory/reimport"; body: {
   sources?: Array<string>;
