@@ -89,7 +89,7 @@ async def test_scm_pr_flow() -> None:
 
 
 async def test_scm_a_branch_has_a_head_that_every_write_moves() -> None:
-    """ADR 0152: the fake has commits, as a forge does. A commit keeps the diff it was pushed with."""
+    """ADR 0171: the fake has commits, as a forge does. A commit keeps the diff it was pushed with."""
     scm = AdapterSet.fakes().scm
     assert await scm.head_of("acme/billing", "choregos/123") is None, "no branch, no commit"
     scm.set_diff("acme/billing", "main", "choregos/123", [("src/a.py", 10, 2)])  # type: ignore[attr-defined]
@@ -110,7 +110,7 @@ async def test_scm_a_branch_has_a_head_that_every_write_moves() -> None:
 
 
 async def test_scm_a_merge_names_its_commit_and_a_stale_one_is_refused() -> None:
-    """ADR 0152: a merge that names a commit the head has left merges nothing; merged, it stays."""
+    """ADR 0171: a merge that names a commit the head has left merges nothing; merged, it stays."""
     from choregos_adapters.base import ScmAdapter, merge_at_commit_refusal
     from choregos_adapters.errors import HeadMovedError
 

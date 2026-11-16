@@ -276,7 +276,7 @@ template (version 2) declares it as `t-already-fixed`.
 diff, `scope_respected` does not pass — it declines. A guarantee that passes blindly is worse
 than no guarantee, because it reassures.
 
-**A gate judges a commit, and the merge names it** (ADR 0152). An evaluation reads the head of the
+**A gate judges a commit, and the merge names it** (ADR 0171). An evaluation reads the head of the
 work item's branch once: the diff and the run's scope are compared at that commit, the pull request's
 checks, review and scans count only when its head is that commit (otherwise they stay pending and are
 read again), and each verdict is journaled with it (`head_sha`); `choregos/scope` and

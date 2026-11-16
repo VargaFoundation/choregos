@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""The commit a work item's gates judged (ADR 0152): read once by the evaluation, named by the merge.
+"""The commit a work item's gates judged (ADR 0171): read once by the evaluation, named by the merge.
 
 A gate evaluation reads the head of the work item's branch once and rules on that commit. It leaves
 the commit on the work item, with the state the work item was in, and the merge names it: a pull

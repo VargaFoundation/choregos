@@ -52,7 +52,7 @@ async def _to_the_pull_request(handle: Any, setup: Fixture) -> None:
 
 def _no_change(setup: Fixture) -> None:
     # As the runner reports it: an empty change MEASURED by git, which is what makes a branch that
-    # does not exist an empty diff (#536). `FakeScm` no longer answers one by itself (ADR 0152).
+    # does not exist an empty diff (#536). `FakeScm` no longer answers one by itself (ADR 0171).
     unchanged = stage_result("Already fixed on main: nothing to change", artifacts={"commits": []})
     unchanged.evidence.diff_files = unchanged.evidence.diff_lines = 0
     unchanged.evidence.measured = ["diff_files", "diff_lines"]

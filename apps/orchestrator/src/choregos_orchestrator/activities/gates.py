@@ -57,7 +57,7 @@ async def evaluate_gates(payload: dict[str, Any]) -> list[dict[str, Any]]:
         branch = (result.artifacts.branch if result else None) or (
             bundle.config.branch_for(item.tracker_key, repo=repo_config) if repo_config is not None else ""
         )
-        # The commit this evaluation judges (ADR 0152): the head of the branch, read once. Every read
+        # The commit this evaluation judges (ADR 0171): the head of the branch, read once. Every read
         # of the branch below is a read of THAT commit, never of what the name designates by then.
         head, head_unread = await _head(scm, repo_config, branch)
         if needs_diff and repo_config is not None:
@@ -219,7 +219,7 @@ def empty_diff_of_unchanged_run(
 
 
 async def _head(scm: Any, repo_config: Any, branch: str) -> tuple[str | None, Exception | None]:
-    """The commit the head of `branch` is at, read once per evaluation (ADR 0152).
+    """The commit the head of `branch` is at, read once per evaluation (ADR 0171).
 
     `(sha, None)`; `(None, None)` when there is no such branch, or no repository; `(None, error)`
     when the SCM cannot say — a connector that cannot read a head, a 403, an outage. Without a
@@ -318,7 +318,7 @@ def added_text_of(patch: str) -> str:
 
 async def _journal(session: Any, run: Run, outcomes: list[GateOutcome], head: str | None = None) -> None:
     """File each verdict in the run's journal (`gate.outcome`), with the commit it was given on
-    (`head_sha`, ADR 0152) when the evaluation judged one.
+    (`head_sha`, ADR 0171) when the evaluation judged one.
 
     The verdicts were only returned to the workflow, which decided and then forgot them: no screen
     could say WHICH guarantees had run nor what they had answered, and the product's central promise
@@ -362,7 +362,7 @@ async def _publish_check_runs(
 ) -> None:
     """Check-runs `choregos/scope` and `choregos/evidence` (S3-05): the verdict is visible in the PR,
     on the work item's target repository (ADR 0124), on the commit it was given on (`head`, ADR
-    0152) — never on a commit a run declared. Without a judged commit there is nothing to mark."""
+    0171) — never on a commit a run declared. Without a judged commit there is nothing to mark."""
     if not item.pr_url or repo_config is None or head is None or not hasattr(scm, "create_check_run"):
         return
     repo = _repo_slug(repo_config.url)
@@ -398,7 +398,7 @@ async def check_scope_violations(payload: dict[str, Any]) -> list[str]:
         repo = _repo_slug(repo_config.url)
         branch = bundle.config.branch_for(item.tracker_key, repo=repo_config)
         scm = await scm_for(session, bundle, repo_config.url)
-        # The commit at the head of the branch, read once (ADR 0152); a branch that is not there is
+        # The commit at the head of the branch, read once (ADR 0171); a branch that is not there is
         # compared by its name, and the SCM answers as it did.
         head, unread = await _head(scm, repo_config, branch)
         if unread is not None:

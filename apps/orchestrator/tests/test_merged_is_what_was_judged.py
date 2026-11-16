@@ -1,4 +1,4 @@
-"""What is merged is what was judged (S65-05, ADR 0152).
+"""What is merged is what was judged (S65-05, ADR 0171).
 
 The gates of a work item used to judge its branch by its name, and the merge named no commit: a
 branch whose head moved after the gates had ruled was merged as it then stood. An evaluation now

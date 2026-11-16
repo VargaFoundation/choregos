@@ -1,4 +1,4 @@
-# 0152 — What is merged is what was judged
+# 0171 — What is merged is what was judged
 
 - **Status**: proposed, 2026-11-11; S65-05 implements it
 - **Concerns**: `activities/gates.py` (`evaluate_gates`), `activities/scm.py` (`enqueue_merge`), the
