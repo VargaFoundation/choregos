@@ -18,13 +18,19 @@ import choregos_adapters as _package
 from .errors import AdapterError, ConfigurationError
 from .families import FAMILIES as _FAMILIES
 from .http.pool import strategy_of
-from .registry import register
+from .registry import fakes_enabled, register
 from .specs import (
     _GATEWAY_ONLY_PLATFORM,
+    _OUTPOST_ONLY_PLATFORM,
+    _OUTPOST_STORED_KEYS,
     _SHIPPED_SPECS,
     MCP_GATEWAY_TYPE,
+    MCP_OUTPOST_TYPE,
+    OAUTH_CLIENT_CREDENTIALS,
     _check_plugin_tracker,
     _gateway_server_check,
+    _mcp_check,
+    _mcp_outpost_check,
 )
 
 
@@ -59,13 +65,18 @@ def _jira_tracker(cfg: dict[str, Any]) -> Any:
 
 
 def _github_client(config: dict[str, Any]) -> Any:
-    """Builds the GitHub client from the connector's configuration or the environment."""
+    """Builds the GitHub client from the connector's configuration or the deployment's App.
+
+    The deployment's App is its settings (`CHOREGOS_GITHUB_APP_ID` / `_PRIVATE_KEY`), else the App a
+    platform administrator registered from a manifest, which the API's process provider opens from the
+    database (ADR 0167): the private key never travels in a connector's configuration."""
     import os
 
-    from .github import GitHubAppAuth, GitHubClient
+    from .github import GitHubAppAuth, GitHubClient, app_credentials
 
-    app_id = config.get("app_id") or os.environ.get("CHOREGOS_GITHUB_APP_ID", "")
-    private_key = config.get("private_key") or os.environ.get("CHOREGOS_GITHUB_APP_PRIVATE_KEY", "")
+    deployment_id, deployment_key = app_credentials()
+    app_id = config.get("app_id") or deployment_id
+    private_key = config.get("private_key") or deployment_key
     token = config.get("token") or os.environ.get("CHOREGOS_GITHUB_TOKEN", "")
     # `installation_id` is never typed (ADR 0073): the API injects the one this organisation claimed.
     # Without it (a single-organisation instance, a repository outside the claims) the installation
@@ -153,15 +164,56 @@ def _fake_mcp_client(cfg: dict[str, Any]) -> Any:
         return _gateway_client(cfg, transport=fake_mcp_gateway().transport())
     if "server" in cfg:
         raise AdapterError(_GATEWAY_ONLY_PLATFORM)
+    url = cfg.get("url", "http://fake-mcp.test/mcp")
     return McpClient(
-        cfg.get("url", "http://fake-mcp.test/mcp"),
-        token=cfg.get("token", ""),
-        auth_scheme=cfg.get("auth_scheme", "bearer"),
-        username=cfg.get("username", ""),
-        auth_header=cfg.get("auth_header", "Authorization"),
+        url,
+        **_mcp_auth(cfg, url, token_transport=_fake_oauth_transport),
         transport=_current_fake_mcp().transport(),
         user_agent=str(cfg.get("user_agent", "")),
     )
+
+
+def _fake_oauth_transport() -> Any:
+    """Under CHOREGOS_FAKES=1, an `oauth_client_credentials` connector asks the fake OAuth provider."""
+    from .fakes.oauth_provider import current_fake_oauth_provider
+
+    return current_fake_oauth_provider().transport()
+
+
+def _mcp_auth(
+    cfg: dict[str, Any], url: str, *, token_transport: Callable[[], Any] | None = None
+) -> dict[str, Any]:
+    """How a direct `mcp` connector signs its requests: its token as Bearer, Basic or a named header, or,
+    with `oauth_client_credentials`, a token the platform fetches from `token_url` with the client's id
+    and sealed secret, cached until shortly before it expires and renewed after a 401. The static
+    `token` is not sent then: the connector has one credential, the client's."""
+    if cfg.get("auth_scheme") != OAUTH_CLIENT_CREDENTIALS:
+        return {
+            "token": cfg.get("token", ""),
+            "auth_scheme": cfg.get("auth_scheme", "bearer"),
+            "username": cfg.get("username", ""),
+            "auth_header": cfg.get("auth_header", "Authorization"),
+        }
+    from .mcp.client_credentials import CONNECTOR_TOKENS, ClientCredentials
+
+    _mcp_check(cfg)
+    secret = cfg.get("client_secret")
+    if not isinstance(secret, str) or not secret:
+        raise AdapterError(
+            "an `oauth_client_credentials` MCP connector needs its `client_secret`: an administrator "
+            "types it on the connector, where it is sealed"
+        )
+    credentials = ClientCredentials(
+        token_url=str(cfg["token_url"]),
+        client_id=str(cfg["client_id"]),
+        client_secret=secret,
+        scope=cfg.get("scope") or None,
+        audience=cfg.get("audience") or None,
+    )
+    provider = CONNECTOR_TOKENS.provider(
+        credentials, transport=token_transport, timeout_s=float(cfg.get("timeout_s", 30)), partition=url
+    )
+    return {"headers_provider": provider}
 
 
 def _mcp_client(cfg: dict[str, Any]) -> Any:
@@ -169,13 +221,27 @@ def _mcp_client(cfg: dict[str, Any]) -> Any:
 
     return McpClient(
         cfg["url"],
-        token=cfg.get("token", ""),
-        auth_scheme=cfg.get("auth_scheme", "bearer"),
-        username=cfg.get("username", ""),
-        auth_header=cfg.get("auth_header", "Authorization"),
+        **_mcp_auth(cfg, cfg["url"]),
         timeout_s=float(cfg.get("timeout_s", 30)),
         user_agent=str(cfg.get("user_agent", "")),
     )
+
+
+def _teams_notifier(cfg: dict[str, Any]) -> Any:
+    """The Teams webhook notifier. Under `CHOREGOS_FAKES=1` it is the real notifier (card, guarded transport,
+    egress allowlist) over the process-wide `FakeTeamsWebhook`, never a network call."""
+    from .notify.teams import TeamsNotifier
+
+    url = cfg.get("webhook_url")
+    if not isinstance(url, str) or not url:
+        raise AdapterError("a Teams notifier needs its `webhook_url` (a sealed secret of the installation)")
+    if fakes_enabled():
+        from .fakes.teams import FakeTeamsWebhook
+
+        if _package.FAKE_TEAMS is None:
+            _package.FAKE_TEAMS = FakeTeamsWebhook()
+        return TeamsNotifier(webhook_url=url, transport=_package.FAKE_TEAMS.transport())
+    return TeamsNotifier(webhook_url=url)
 
 
 def _mcp_gateway_client(cfg: dict[str, Any]) -> Any:
@@ -183,6 +249,29 @@ def _mcp_gateway_client(cfg: dict[str, Any]) -> Any:
     if cfg.get("route") != "gateway" or not cfg.get("gateway_url"):
         raise AdapterError(_GATEWAY_ONLY_PLATFORM)
     return _gateway_client(cfg, transport=cfg.get("transport"))
+
+
+def fake_outpost() -> Any:
+    """The fake outpost of CHOREGOS_FAKES=1: one, whose every alias is served by the CURRENT `FAKE_MCP`."""
+    from .fakes.outpost import FakeOutpost
+
+    if _package.FAKE_OUTPOST is None:
+        # The function itself, not its result: tests replace `FAKE_MCP`, and the outpost follows.
+        _package.FAKE_OUTPOST = FakeOutpost(fallback=_current_fake_mcp)
+    return _package.FAKE_OUTPOST
+
+
+def _mcp_outpost_client(cfg: dict[str, Any]) -> Any:
+    """The tool client of a connector at an outpost, over the rendezvous the platform injects. There
+    is none to build it with otherwise, under fakes or not: the platform registers the factory that
+    supplies its own (`choregos_api.adapter_wiring`)."""
+    from .outpost import client_of
+
+    _mcp_outpost_check({key: cfg[key] for key in _OUTPOST_STORED_KEYS if key in cfg})
+    rendezvous = cfg.get("rendezvous")
+    if cfg.get("route") != "outpost" or rendezvous is None:
+        raise AdapterError(_OUTPOST_ONLY_PLATFORM)
+    return client_of(cfg, rendezvous)
 
 
 def _fake_entra_directory(cfg: dict[str, Any]) -> Any:
@@ -710,6 +799,18 @@ def _register_documents_and_identity() -> None:
     register("firewall", "pfsense", _SHIPPED_SPECS[("firewall", "pfsense")])(PfSenseFirewall.from_config)
     register("network_policy", "cilium", _SHIPPED_SPECS[("network_policy", "cilium")])(_cilium)
     register("web_server", "nginx", _SHIPPED_SPECS[("web_server", "nginx")])(_nginx)
+    _register_forge_accounts()
+
+
+def _register_forge_accounts() -> None:
+    """A forge's OAuth application (ADR 0161): the factory builds the adapter that proves an account."""
+    from .forge_accounts import KIND, PROVIDERS, connector_type, forge_accounts
+
+    for provider in PROVIDERS:
+        type_name = connector_type(provider)
+        register(KIND, type_name, _SHIPPED_SPECS[(KIND, type_name)])(
+            lambda cfg, provider=provider: forge_accounts(provider, cfg)  # type: ignore[misc]
+        )
 
 
 def _register_mcp_and_notifiers() -> None:
@@ -720,6 +821,9 @@ def _register_mcp_and_notifiers() -> None:
     # A real MCP server (ADR 0034): its operations are DISCOVERED, and are born closed.
     register("mcp", "mcp", _SHIPPED_SPECS[("mcp", "mcp")])(_mcp_client)
     register("mcp", MCP_GATEWAY_TYPE, _SHIPPED_SPECS[("mcp", MCP_GATEWAY_TYPE)])(_mcp_gateway_client)
+    # A tool server at an outpost (ADR 0149): the platform replaces this factory with the one that
+    # supplies its rendezvous.
+    register("mcp", MCP_OUTPOST_TYPE, _SHIPPED_SPECS[("mcp", MCP_OUTPOST_TYPE)])(_mcp_outpost_client)
     register("notify", "slack", _SHIPPED_SPECS[("notify", "slack")])(
         lambda cfg: SlackNotifier(
             webhook_url=cfg.get("webhook_url", _env("CHOREGOS_SLACK_WEBHOOK", "")),
@@ -728,6 +832,7 @@ def _register_mcp_and_notifiers() -> None:
             public_url=cfg.get("public_url", _env("CHOREGOS_PUBLIC_URL", "")),
         )
     )
+    register("notify", "teams", _SHIPPED_SPECS[("notify", "teams")])(_teams_notifier)
     register("notify", "email", _SHIPPED_SPECS[("notify", "email")])(
         lambda cfg: EmailNotifier(
             host=str(cfg["host"]),

@@ -164,8 +164,8 @@ def test_an_argument_cannot_climb_the_url_path() -> None:
     assert request["url"] == "https://api.github.com/repos/org%2Fother/d"
 
     # And the nominal case passes, unchanged.
-    request = build_request(tool, {"owner": "VargaFoundation", "repo": "choregos"}, None)
-    assert request["url"] == "https://api.github.com/repos/VargaFoundation/choregos"
+    request = build_request(tool, {"owner": "acme", "repo": "choregos"}, None)
+    assert request["url"] == "https://api.github.com/repos/acme/choregos"
 
 
 def test_an_argument_outside_the_schema_is_refused_before_the_call() -> None:
@@ -180,7 +180,7 @@ def test_an_argument_outside_the_schema_is_refused_before_the_call() -> None:
     tool = load_catalogue(PATH_TEMPLATE).by_name("read_a_repository")
     assert tool is not None
 
-    validate_arguments(tool, {"owner": "VargaFoundation", "repo": "choregos"})  # nominal
+    validate_arguments(tool, {"owner": "acme", "repo": "choregos"})  # nominal
 
     with pytest.raises(ArgumentRefusedError) as refused:
         validate_arguments(tool, {"owner": "../..", "repo": "choregos"})

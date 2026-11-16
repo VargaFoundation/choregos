@@ -148,6 +148,60 @@ describe("the Access tab", () => {
     await waitFor(() => expect(screen.getByText("MCP clients acting as this agent")).toBeTruthy());
   });
 
+  it("names the outpost and the alias a connector tool lives at, and whether it answers now (ADR 0149 §10)", async () => {
+    vi.mocked(api.agentAccess).mockResolvedValue({
+      ...ACCESS,
+      tools: [
+        ...ACCESS.tools,
+        {
+          name: "tracker-onsite__search_issues",
+          source: "connector",
+          origin: "agent",
+          access: "read",
+          outpost: { name: "factory-floor", endpoint: "tracker", status: "active", online: true },
+        },
+        {
+          name: "erp-branch__stock_level",
+          source: "connector",
+          origin: "agent",
+          access: "read",
+          outpost: { name: "branch-office", endpoint: "erp", status: "active", online: false },
+        },
+        {
+          name: "sensors__read_probe",
+          source: "connector",
+          origin: "agent",
+          access: "read",
+          outpost: { name: "cold-store", endpoint: "sensors", status: "paused", online: false },
+        },
+        {
+          name: "borrowed__search_issues",
+          source: "connector",
+          origin: "agent",
+          access: "read",
+          outpost: { name: null, endpoint: "tracker", status: null, online: false },
+        },
+      ],
+    });
+    await open();
+    const where = async (tool: string) => within(await screen.findByTestId(`tool-connector-${tool}`)).getByTestId("tool-outpost");
+    const online = await where("tracker-onsite__search_issues");
+    expect(online).toHaveTextContent("At the outpost factory-floor, alias tracker");
+    expect(online).toHaveTextContent("Online");
+    expect(online).not.toHaveTextContent("Offline");
+    const offline = await where("erp-branch__stock_level");
+    expect(offline).toHaveTextContent("At the outpost branch-office, alias erp");
+    expect(offline).toHaveTextContent("Offline");
+    const paused = await where("sensors__read_probe");
+    expect(paused).toHaveTextContent("Offline");
+    expect(paused).toHaveTextContent("Paused");
+    const nowhere = await where("borrowed__search_issues");
+    expect(nowhere).toHaveTextContent("At no outpost of the organisation, alias tracker");
+    expect(nowhere).toHaveTextContent("Offline");
+    // A direct connector's tool says nothing of an outpost.
+    expect(within(screen.getByTestId("tool-connector-jira_search")).queryByTestId("tool-outpost")).toBeNull();
+  });
+
   it("says so when the person reads no project", async () => {
     vi.mocked(api.projects).mockResolvedValue({ items: [], meta: { has_more: false } } as never);
     await open();

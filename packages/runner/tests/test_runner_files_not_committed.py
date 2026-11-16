@@ -47,7 +47,7 @@ async def test_a_scratch_file_the_branch_already_tracks_is_not_committed_again(t
     _git(tmp_path, "add", "-A")
     _git(tmp_path, "commit", "-q", "-m", "an older run committed its scratch files")
 
-    workspace = Workspace(tmp_path)
+    workspace = Workspace(tmp_path, git_dir=tmp_path / ".git")
     workspace.exclude([".claude/skills/review/"])
     for relative in (".choregos/task.md", ".choregos/job.json", ".claude/skills/review/SKILL.md"):
         _write(tmp_path, relative, "this run's\n")
@@ -65,7 +65,7 @@ async def test_a_scratch_file_the_branch_already_tracks_is_not_committed_again(t
 async def test_without_a_first_commit_the_scratch_files_stay_out_too(tmp_path: Path) -> None:
     """A project without a repository (ADR 0012): a fresh `git init`, nothing tracked yet."""
     _init(tmp_path, "travail")  # lang: fr-ok (the runner's own branch name)
-    workspace = Workspace(tmp_path)
+    workspace = Workspace(tmp_path, git_dir=tmp_path / ".git")
     _write(tmp_path, ".choregos/fields.json", "{}\n")
     _write(tmp_path, "notes.md", "a finding\n")
 

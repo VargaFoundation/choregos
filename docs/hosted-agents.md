@@ -412,6 +412,13 @@ answered 404, and on PostgreSQL a restrictive policy on `agent_sessions` and
   conversation reads `idle`; the next message reopens it with its history (`conversation.resumed`
   in the journal). The state is derived from the clock, nothing sweeps it. A conversation keeps the
   agent version it started with (`agent_revision`), whatever is published after.
+- **An assistant's instructions are rendered.** A conversation of an installation sends its agent's
+  instructions rendered with `{{ config.<key> }}` (the installation's values over `config_schema`'s
+  defaults) and `{{ preferences.<key> }}` (the caller's `user` profile memory of the assistant; empty
+  under `memory.enabled: false`); a key with no value renders empty. A plugin agent's work item context
+  (what a run hands it) is left out: a conversation has no work item. They are rendered at the opening
+  and again on resume (`conversation.instructions_rendered` when they changed); instructions that do not
+  render refuse the conversation, 409 (S63-28, ADR 0133 amendment).
 - **Title.** Written by the model from the first exchange (the person's message and the answer), as one
   more call on the turn's own key: its cost is the turn's. When the model cannot (a refusal, a spent key, an
   empty answer) the title is the first message cut at 60 characters, at a word: a title never fails a turn.
@@ -427,8 +434,11 @@ answered 404, and on PostgreSQL a restrictive policy on `agent_sessions` and
   what the model receives and become one system message, a deterministic cut (not written by the
   model); the person still reads them. One turn runs at a time: a second is 409 (a row lock and a
   lease), so turn numbers never repeat. `POST …/{id}/cancel` cancels the running turn: tool calls
-  already made stay journaled, the key is revoked and the spend booked. The cancel reaches turns
-  run by the same API process only.
+  already made stay journaled, the key is revoked and the spend booked. The cancel may reach any API
+  replica (S63-23): the one that runs the turn stops it directly; another, on PostgreSQL, sets
+  `turn_cancel_requested_at` on the conversation's row and waits for the turn to end, while the replica that
+  runs the turn polls that flag every half second and cancels it. The turn settles the same way either
+  path. SQLite is one process and keeps the in-process cancel.
 - **Installation policy.** A conversation of an assistant reads its installation at every turn: the
   installation must be `ready` (one that became `incomplete` or `suspended` since the opening refuses the
   turn, 409, before any key or call; the conversation and its history stay), and `max_turns`,

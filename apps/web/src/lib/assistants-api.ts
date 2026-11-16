@@ -7,10 +7,13 @@
 import type {
   Assistant,
   AssistantBind,
+  AssistantKnowledgeBind,
   AssistantInstall,
+  AssistantLaunchBind,
   AssistantList,
   AssistantReadPage,
   AssistantReadiness,
+  AssistantStopResult,
   AssistantUpdate,
   ConnectedAccountConnect,
   ConnectedAccountList,
@@ -36,10 +39,14 @@ import type {
   MyAssistantList,
   PluginAssistantList,
   SubjectErasure,
+  StopRequest,
   SubjectErasureRequest,
+  TaskEventKey,
+  TaskEventList,
   TaskRun,
   TaskSubscription,
   TaskSubscriptionPut,
+  TeamsDelivery,
   UserErasure,
   WebhookSecret,
 } from "@choregos/contracts/api";
@@ -48,8 +55,13 @@ import { API_BASE, ApiError, problemOf, request } from "./api";
 export type {
   Assistant,
   AssistantBinding,
+  AssistantLaunch,
+  AssistantKnowledgeBinding,
+  AssistantKnowledgeNeed,
   AssistantReadLine,
   AssistantReadinessItem,
+  AssistantStop,
+  AssistantStopResult,
   ConnectedAccount,
   Conversation,
   ConversationAction,
@@ -65,6 +77,7 @@ export type {
   MyAssistant,
   PluginAssistant,
   SubjectErasure,
+  TaskEventLine,
   TaskSubscription,
   AssistantReadiness,
   AssistantReadPage,
@@ -246,8 +259,25 @@ export const assistantsApi = {
     request<void>(`/orgs/${enc(org)}/assistants/${enc(slug)}`, { method: "DELETE" }),
   readiness: (org: string, slug: string) =>
     request<AssistantReadiness>(`/orgs/${enc(org)}/assistants/${enc(slug)}/readiness`),
+  /** Stops the assistant and the turns its conversations are taking, with a reason (ADR 0142 §4 bis). */
+  stop: (org: string, slug: string, reason: string) =>
+    request<AssistantStopResult>(`/orgs/${enc(org)}/assistants/${enc(slug)}/stop`, post({ reason } satisfies StopRequest)),
+  /** Clears the stop: the status is derived again, and nothing stopped restarts on its own. */
+  resume: (org: string, slug: string) => request<Assistant>(`/orgs/${enc(org)}/assistants/${enc(slug)}/resume`, post()),
   bind: (org: string, slug: string, need: string, body: AssistantBind) =>
     request<Assistant>(`/orgs/${enc(org)}/assistants/${enc(slug)}/bindings/${enc(need)}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+  /** Binds a launch to a project's workflow (ADR 0158): the owners', who must also create work items there. */
+  bindLaunch: (org: string, slug: string, launch: string, body: AssistantLaunchBind) =>
+    request<Assistant>(`/orgs/${enc(org)}/assistants/${enc(slug)}/launches/${enc(launch)}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+  /** Binds a knowledge need to the organisation's bases, by reference (ADR 0159): the whole list. */
+  bindKnowledge: (org: string, slug: string, name: string, body: AssistantKnowledgeBind) =>
+    request<Assistant>(`/orgs/${enc(org)}/assistants/${enc(slug)}/knowledge-bindings/${enc(name)}`, {
       method: "PUT",
       body: JSON.stringify(body),
     }),
@@ -261,6 +291,20 @@ export const assistantsApi = {
     request<SubjectErasure>(`/orgs/${enc(org)}/assistants/${enc(slug)}/erasure`, post(body)),
   webhookSecret: (org: string, slug: string, rotate = false) =>
     request<WebhookSecret>(`/orgs/${enc(org)}/assistants/${enc(slug)}/webhook-secret`, post({ rotate })),
+  // The door of a `trigger` task and its journal (S63-21), the Teams channel of the deliveries (S63-25).
+  taskEventKey: (org: string, slug: string, task: string) =>
+    request<TaskEventKey>(`/orgs/${enc(org)}/assistants/${enc(slug)}/tasks/${enc(task)}/event-key`, post()),
+  taskEvents: (org: string, slug: string) =>
+    request<TaskEventList>(`/orgs/${enc(org)}/assistants/${enc(slug)}/task-events`),
+  teamsDelivery: (org: string, slug: string) =>
+    request<TeamsDelivery>(`/orgs/${enc(org)}/assistants/${enc(slug)}/delivery/teams`),
+  putTeamsDelivery: (org: string, slug: string, webhook_url: string) =>
+    request<TeamsDelivery>(`/orgs/${enc(org)}/assistants/${enc(slug)}/delivery/teams`, {
+      method: "PUT",
+      body: JSON.stringify({ webhook_url }),
+    }),
+  deleteTeamsDelivery: (org: string, slug: string) =>
+    request<void>(`/orgs/${enc(org)}/assistants/${enc(slug)}/delivery/teams`, { method: "DELETE" }),
   feedbackCandidates: (org: string, agent: string) =>
     request<ConversationCandidate[]>(`/orgs/${enc(org)}/agents/${enc(agent)}/feedback-candidates`),
   acceptCandidate: (org: string, agent: string, id: string, body: ConversationCandidateAccept) =>

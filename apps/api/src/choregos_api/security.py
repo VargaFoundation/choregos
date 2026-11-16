@@ -136,6 +136,23 @@ def verify_run_token(token: str, settings: Settings | None = None) -> RunClaims:
     )
 
 
+# ───────────────────────────── the gateway's callback ─────────────────────────────
+
+#: What the gateway's callback signs a run's id with (`choregos_core.llm_spans.context_signature`).
+GATEWAY_CONTEXT_PURPOSE = "choregos-context-breakdown:"
+
+
+def gateway_context_signature(run_id: str, settings: Settings | None = None) -> str | None:
+    """The bearer the gateway's callback speaks for ONE run with (S64-08b): an HMAC of the run id under
+    the gateway's master key, which both hold and neither sends. `None` without a master key: the
+    routes it opens then refuse every caller."""
+    settings = settings or get_settings()
+    if not settings.gateway_master_key:
+        return None
+    message = f"{GATEWAY_CONTEXT_PURPOSE}{run_id}".encode()
+    return hmac.new(settings.gateway_master_key.encode(), message, hashlib.sha256).hexdigest()
+
+
 # ───────────────────────────── relay tokens ─────────────────────────────
 
 #: Not the run token's audience: neither token is accepted for the other's routes (ADR 0091 §3).
@@ -245,7 +262,7 @@ SESSION_PURPOSE = "session"
 LEGACY_TAG_LENGTH = 32
 #: Cookies signed before this release carry a 128-bit tag without a purpose. They are accepted for
 #: `session` only, for one release, so that the upgrade does not sign everyone out. Removal is
-#: tracked in https://github.com/VargaFoundation/choregos/issues/1040.
+#: tracked in issue #1040 of the source repository.
 ACCEPT_LEGACY_SESSION_TAGS = True
 
 

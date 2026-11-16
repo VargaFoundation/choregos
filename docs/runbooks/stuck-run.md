@@ -69,6 +69,14 @@ changed keeps the one it was started with), or that it goes through a proxy. See
    The `cancel_run` activity closes the run first — status `cancelled`, a result whose reason is
    `cancelled` — then deletes the `PipelineRun` and its Secret. The run is closed whether or not
    the delete succeeds (ADR 0143): from then on its token opens nothing but its journals.
+   Since S64-03 the work item's `stop` also stops its run in flight, with the same reason (ADR
+   0142 §3): the API closes the run as stopped by a person, and `RunCancellation` plays the
+   `cancel_run` activity, which finds it closed, deletes the `PipelineRun` and its Secret, closes the
+   key and books the spend once.
+   To stop **only the run** and keep the work item, `POST /api/v1/runs/<run-id>/cancel` with
+   `{"reason": "..."}` (`item:control` on the project): the stage is not retried, the work item
+   waits for a person with "run stopped by <who>: <reason>", and `rerun_stage` replays it. A run
+   that already ended answers `409` with how it ended.
 3. **replay the stage** once the cause is fixed:
    ```bash
    choregos items action <ticket-id> rerun_stage

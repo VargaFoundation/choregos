@@ -101,9 +101,9 @@ async def test_a_deployment_adds_notes_and_procedures_through_its_directory(
         "## On this platform\n\nEntra apps are registered by the platform team.\n", encoding="utf-8"
     )
     extra = (core.SHIPPED / "connector.notify.slack.md").read_text(encoding="utf-8")
-    (tmp_path / "connector.notify.teams.md").write_text(
-        extra.replace("connector.notify.slack", "connector.notify.teams").replace(
-            "notify/slack", "notify/teams"
+    (tmp_path / "connector.notify.mattermost.md").write_text(
+        extra.replace("connector.notify.slack", "connector.notify.mattermost").replace(
+            "notify/slack", "notify/mattermost"
         ),
         encoding="utf-8",
     )
@@ -116,10 +116,10 @@ async def test_a_deployment_adds_notes_and_procedures_through_its_directory(
         "title": "On this platform",
         "markdown": "Entra apps are registered by the platform team.",
     }
-    teams = (await client.get("/api/v1/procedures/connector.notify.teams")).json()
-    assert teams["origin"] == "extra"
-    found = (await client.get("/api/v1/procedures", params={"for": "connector:notify/teams"})).json()
-    assert [p["id"] for p in found] == ["connector.notify.teams"]
+    mattermost = (await client.get("/api/v1/procedures/connector.notify.mattermost")).json()
+    assert mattermost["origin"] == "extra"
+    found = (await client.get("/api/v1/procedures", params={"for": "connector:notify/mattermost"})).json()
+    assert [p["id"] for p in found] == ["connector.notify.mattermost"]
     # Without the directory the notes are gone: they are the deployment's, not the platform's.
     monkeypatch.delenv("CHOREGOS_PROCEDURES_EXTRA")
     reset_settings_cache()

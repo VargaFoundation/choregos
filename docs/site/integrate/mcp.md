@@ -49,11 +49,19 @@ and `2025-03-26`.
 | `get_work_item` | a work item's state, recent timeline and pending decision, with its link | `mcp:read` |
 | `summarize_run` | one agent run: stage, backend, model, status, cost, summary | `mcp:read` |
 | `list_pending_decisions` | what waits for a person, with the link where it is decided | `mcp:read` |
+| `get_pending_decision` | what waits for **your** decision: the list, or one request's full context (question, form, work item, the draft already made, its link) | `mcp:read` |
 | `docs_search` | this documentation, in the version the instance runs: ranked pages with their slug, link and a snippet | `mcp:read` |
 | `docs_read` | one page of it as Markdown, by slug, or one of its sections; a long page comes in parts | `mcp:read` |
 | `create_work_item` | opens a work item in a project | `mcp:write` and the right to control work items |
+| `draft_decision` | deposits a draft of the decision of a request waiting for you; it decides nothing, you take or discard it in the console | `mcp:write` and the right to decide work items |
 
 A tool you may not use is not announced, and calling it answers like an unknown tool.
+
+**Your client prepares, you decide.** `get_pending_decision` and `draft_decision` let your client read
+what waits for your decision and fill a draft of it: an answer, a reason, a task's values. The draft
+decides nothing. On the work item, the awaited decision shows it with the client that made it;
+**Take** fills the form, you check it and decide, or **Discard** removes it. Another person's request
+answers like one that does not exist.
 
 `docs_search` and `docs_read` serve the pages you are reading, from the instance itself: an assistant
 connected to the door answers how Choregos works from the documentation of the version installed,

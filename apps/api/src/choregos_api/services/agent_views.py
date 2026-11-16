@@ -9,12 +9,13 @@ from typing import Literal
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..db.models import Agent, AgentVersion, HostedBuildRecord, Project, ProjectAgent, User
+from ..db.models import Agent, AgentVersion, HostedBuildRecord, Organization, Project, ProjectAgent, User
 from ..rbac import Principal
 from ..schemas import AgentDto, AgentSpec, AgentUpstream, AgentVersionDto
 from .agent_governance import Action, decide, is_admin, permissions_of, subject_of
 from .agent_lifecycle import last_run_at, unused
 from .agent_releases import pending_release, policy_of, release_dto
+from .agent_social import social_of
 from .hosted_builds import builds_for, with_current_build
 
 
@@ -102,6 +103,8 @@ async def agent_dto(
     pins = await agent_pins(session, principal, org, agent) if with_versions else None
     builds = await builds_for(session, agent.org_id, [v.spec for v in versions]) if with_versions else {}
     rights, reason_why = permissions_of(principal, org, subject)
+    organisation = await session.get(Organization, agent.org_id)
+    assert organisation is not None
     return AgentDto(
         scope=agent.scope,
         project=subject.project_slug,
@@ -132,4 +135,5 @@ async def agent_dto(
         pending_release=release_dto(waiting, agent.slug)
         if (waiting := await pending_release(session, agent))
         else None,
+        social=await social_of(session, principal, organisation, agent),
     )

@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { CliDownload } from "@/components/integrations/cli-download";
 import { IntegrationsPanel } from "@/components/integrations/panel";
 import { api, ApiError } from "@/lib/api";
+import { RELEASES } from "@/lib/publishing";
 import {
   type CliManifest,
   detectPlatform,
@@ -94,8 +95,8 @@ describe("the CLI the instance serves (S62-08), pure parts", () => {
   });
 
   it("names the release, the sizes and the first commands", () => {
-    expect(releaseUrl("0.26.0")).toBe("https://github.com/VargaFoundation/choregos/releases/tag/v0.26.0");
-    expect(releaseUrl("v0.26.0")).toBe("https://github.com/VargaFoundation/choregos/releases/tag/v0.26.0");
+    expect(releaseUrl("0.26.0")).toBe(`${RELEASES}/tag/v0.26.0`);
+    expect(releaseUrl("v0.26.0")).toBe(`${RELEASES}/tag/v0.26.0`);
     expect(formatSize(31_457_280)).toBe("30.0 MiB");
     expect(formatSize(2048)).toBe("2 KiB");
     expect(formatSize(12)).toBe("12 B");
@@ -157,7 +158,7 @@ describe("the download block on Integrations › CLI", () => {
     expect(await screen.findByTestId("cli-not-bundled")).toHaveTextContent("This build bundles no CLI");
     expect(screen.getByTestId("cli-release")).toHaveAttribute(
       "href",
-      "https://github.com/VargaFoundation/choregos/releases/tag/v0.26.0",
+      `${RELEASES}/tag/v0.26.0`,
     );
     expect(screen.queryByTestId("cli-install-command")).not.toBeInTheDocument();
   });

@@ -31,6 +31,7 @@ from choregos_core.domain import aware
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..config import get_settings
 from ..db.models import (
     AgentSessionEvent,
     AgentSessionRecord,
@@ -64,15 +65,18 @@ from .agent_sessions import (
 )
 from .budgets import lock_budget_scopes
 from .conversation_installation import apply_installation
+from .conversation_instructions import render_instructions_of
 from .conversation_signals import memory_written_of
 from .conversation_title import model_title
 from .conversation_turns import (
     claim_turn,
+    clear_cancel_request,
     compress_history,
     forget_turn,
     refuse_if_not_allowed,
     register_turn,
     retention_until,
+    watch_cancel,
 )
 from .model_stream import OnDelta
 from .personal_spaces import personal_space
@@ -139,6 +143,9 @@ async def open_conversation(  # noqa: PLR0913 - the terms of a conversation, one
             retention_days=retention_days,
         ),
     )
+    if installation_id is not None and record.messages:
+        # S63-28: the template is rendered with the installation's config and the caller's preferences.
+        await render_instructions_of(session, record, str(record.messages[0].get("content") or ""))
     # A conversation that never had a turn is purged too: its clock starts when it is opened.
     if record.retention_until is None:
         record.retention_until = retention_until(record, utcnow())
@@ -175,10 +182,14 @@ async def converse(
     the model's text is handed to it chunk by chunk as the gateway streams it."""
     task = asyncio.ensure_future(_turn(session, record, text, on_delta))
     register_turn(record.id, task)
+    # A cancel may reach another replica: it leaves a flag on the row, which this one polls (S63-23).
+    watcher = None if get_settings().is_sqlite else asyncio.ensure_future(watch_cancel(record.id, task))
     try:
         return await task
     finally:
         forget_turn(record.id, task)
+        if watcher is not None:
+            watcher.cancel()
 
 
 async def _turn(
@@ -200,7 +211,8 @@ async def _turn(
     # `incomplete` or `suspended` since the opening refuses the turn), then what is refused first.
     await apply_installation(session, record)
     refuse_if_not_allowed(record, now)  # before anything is written: no key, no model call
-    if is_idle(record, now) or record.status == "idle":
+    resumed = is_idle(record, now) or record.status == "idle"
+    if resumed:
         idle_for = int((now - last_activity(record)).total_seconds())
         record.status = "open"
         await journal(session, record, "conversation.resumed", {"idle_seconds": idle_for})
@@ -218,6 +230,9 @@ async def _turn(
     resolved = await resolve_agent(
         session, record.org_id, project.id, f"{record.agent_slug}@{record.agent_version}"
     )
+    if resumed and await render_instructions_of(session, record, resolved.spec.instructions or ""):
+        # S63-28: the installation's config (or the caller's preferences) changed while it was idle.
+        await journal(session, record, "conversation.instructions_rendered", {"reason": "resumed"})
     if record.installation_id is not None:
         # Two turns of one installation read its month and reserve from it one after the other: the lock
         # is held until the turn's key is written (below), so the second sees the first's reservation.
@@ -301,6 +316,7 @@ async def _end_lease(session: AsyncSession, record: AgentSessionRecord) -> None:
     request) does not keep it locked."""
     record.turn_lease_until = None
     try:
+        await clear_cancel_request(session, record.id)
         await release_connection(session)
     except Exception as failure:  # the lease lapses by itself
         log.warning("conversation.lease_not_released", session_id=record.id, error=type(failure).__name__)
@@ -311,7 +327,6 @@ async def _settle_turn(
 ) -> None:
     """The turn's key ends with the turn: its spend booked with `session_id`, the key revoked. A failure
     here is logged, not raised: the key still dies at its TTL, and the turn's answer is not lost."""
-    from ..config import get_settings
     from .costs import record_cost
     from .model_catalogue import priced_spend
 

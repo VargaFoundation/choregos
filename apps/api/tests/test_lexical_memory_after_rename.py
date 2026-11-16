@@ -40,11 +40,11 @@ async def test_the_old_slug_still_names_the_organisation_after_a_rename(
     await memory.write_fact(namespace, Fact(kind="decision", subject="tls", content="Pin TLS."))
     await declare_administrator({"admin@varga.dev"})
     try:
-        renamed = await client.patch("/api/v1/orgs/varga", json={"slug": "diametral"})
+        renamed = await client.patch("/api/v1/orgs/varga", json={"slug": "globex"})
         assert renamed.status_code == 200, renamed.text
         assert [m.content for m in await memory.search(namespace, "TLS", k=5)] == ["Pin TLS."]
         await memory.write_fact(namespace, Fact(kind="decision", subject="hsts", content="Send HSTS."))
-        found = await client.get("/api/v1/orgs/diametral/memories/lessons/search", params={"q": "HSTS"})
+        found = await client.get("/api/v1/orgs/globex/memories/lessons/search", params={"q": "HSTS"})
         assert [m["subject"] for m in found.json()] == ["hsts"]
     finally:
         reset()

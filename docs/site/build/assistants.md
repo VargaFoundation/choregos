@@ -143,6 +143,16 @@ tools:
   assistant says what is missing.
 - The source decides what a person may read, not Choregos.
 
+### Upgrading a plugin that changes a need
+
+When a new version of your plugin changes `tools`, each installation follows it. A need you drop has its
+binding switched off and kept for the audit. A need you add is unbound: the installation shows it as
+something to do. A need whose operations, `access` or `identity` changed is checked again against the
+connector it is bound to; if the connector still fits, nothing is asked of the owners, if not the binding is
+switched off and the installation says why. Flipping `required` changes what the installation needs to be
+ready. The owners are told by email when the installation has an email delivery. Keep a need's name when
+you change it, since a new name is a new need.
+
 ## 3. Memory spaces
 
 ```text
@@ -169,11 +179,12 @@ memory:
   `subject_resolver: true` returned it in that conversation, or if the subject says `resolver: none`
   (a public thing). The model never opens a subject by naming it.
 
-## 4. Knowledge seeds
+## 4. Knowledge: seeds and bound bases
 
 ```text
 knowledge:
   - { name: investment_policy, seed: knowledge/investment-policy, serving_mode: index, upstream: propose_updates }
+  - { name: house_research, bind: { description: "The house's own research notes.", required: true } }
 ```
 
 The seed is a folder of your plugin with a `knowledge.yaml` (a `KnowledgeBase` manifest, as in
@@ -181,6 +192,13 @@ The seed is a folder of your plugin with a `knowledge.yaml` (a `KnowledgeBase` m
 knowledge base of the organisation, which its owners then edit. `upstream` says what a plugin upgrade
 does to the copy: `follow`, `propose_updates` or `frozen`. An upgrade never deletes a document, and a
 document the owners changed is proposed, never overwritten.
+
+A `bind` item ships nothing: it asks the organisation to point the assistant at knowledge bases it already
+keeps. Whoever installs the assistant binds it to one or more of their bases, which stay theirs: same owners,
+same rights, same sources, nothing copied. A person is answered from a bound base only when they may read
+it, so two people may get different answers; write the `description` so the owners know what to bind. A
+required binding need keeps the installation incomplete until it is bound. An item is a seed or a binding
+need, never both.
 
 ## 5. Tasks
 
@@ -195,14 +213,62 @@ tasks:
 ```
 
 A task runs a workflow of the plugin, in the subscriber's personal space. A trigger is `on_demand`,
-`schedule` (a cron in the person's time zone) or `poll` (a cron that calls one read operation and starts
-the workflow only when a condition on its result holds). `deliver` is `inbox`, `email`, `teams` or
-`webhook`.
+`schedule` (a cron in the person's time zone), `poll` (a cron that calls one read operation and starts
+the workflow only when a condition on its result holds) or `trigger` (a system sends an event for one
+person). `deliver` is `inbox`, `email`, `teams` or `webhook`. `teams` posts a message card to a Microsoft Teams
+incoming webhook or Workflows URL that the installation's manager seals once; the same channel hears the
+installation's owners notices. The URL is never shown again, and the organisation opens its host in the
+egress allowlist first.
+
+```text
+triggers: [{ kind: trigger, subscriber: /attendee/email, idempotency: /event/id }]
+```
+
+`subscriber` is the JSON pointer, in the event, of the email of the person it is for; it is matched against the
+people subscribed to the task. An event that names nobody, several people, or nobody subscribed is refused and
+journaled for the installation's manager, and the same event id never starts the task twice. The sender signs
+the event with a key the manager reads on the installation page (card **Task event door**: type the task's name,
+then **Show the URL and key**; the key is a secret, shown again on each click and recorded in the audit log, never
+the key itself). The card **Task events** lists what each event decided, newest first: started, duplicate or
+refused, with a summary and the work item. The card **Microsoft Teams** shows whether the channel is configured and
+its version, seals a new webhook URL and removes it; the URL is never displayed.
 
 A task that reads with a person's identity while they are away needs `delegation: read_only` and lists
 the `needs` it reads; the person agrees to that exact list. A delegated task never calls a write need.
 A task that reads only `service` needs takes `delegation: none`. Each task's workflow is validated like
 any workflow.
+
+### Starting a workflow a project already runs
+
+A task runs a workflow your plugin ships. When the organisation already runs the workflow in one of its
+projects, with that project's agents, budget and people, declare a **launch** instead: the assistant may
+propose to start it, and you do not ship it again.
+
+```text
+launches:
+  - name: portfolio_review
+    description: Ask the review team for a portfolio review document, once the person said which portfolio.
+    input_schema:
+      type: object
+      required: [portfolio]
+      properties: { portfolio: { type: string }, review_date: { type: string } }
+    required: true
+```
+
+The manifest names no project: the installation's owners bind each launch to one of their projects and one of
+its workflows, on the installation page (card **Workflows it may start**). They need the right to create work
+items in that project. A required launch left unbound keeps the installation `incomplete`.
+
+`description` is what the agent reads to decide when to propose it. `input_schema` is what it fills from the
+conversation; it becomes the work item's fields, so the bound workflow's `metadata.inputs` must accept it: every
+input the workflow requires is one the launch requires, and a workflow with closed inputs accepts every property
+you declare. Otherwise the binding is refused and says why.
+
+The agent sees `launch__<name>(title, inputs)` and `launch_status`. Calling the first one starts nothing: it
+proposes, and the person confirms in their conversation. The work item is then filed in the bound project in
+their name, and only if they may create work items there. `launch_status` tells the agent what became of it: the
+work item's state and where to read its artefacts. Launches are offered to `prompt` agents. A plugin upgrade
+that drops, changes or adds a launch is followed like a need.
 
 ## 6. Surfaces
 
@@ -275,19 +341,24 @@ Each refusal names the file and the path in it.
   that is not `owner_only`; a subject resolver that is not a need marked `subject_resolver: true`.
 - `personal_data: true` without a conversation retention and an erasure mode.
 - A task that names a need or an operation the assistant does not declare, or a `read_only` task without
-  its `needs`; a poll without `cron`, `operation` and `when`.
+  its `needs`; a poll without `cron`, `operation` and `when`; a
+  `trigger` without a `subscriber` pointer.
 - A workflow, seed folder, or suite file that is not in the plugin, or a workflow that is not valid.
 - A suite that evaluates another agent than the assistant's, repeats a case name, or names a tool that
-  is not a `need__operation` of the assistant.
+  is neither a `need__operation` of the assistant nor a tool of its launches (`launch__<name>` for each
+  launch, `launch_status` when it declares one).
 - A prompt message that uses an argument the prompt does not declare.
+- A launch declared twice, a launch whose `input_schema` is not a JSON Schema of `type: object`, or a need
+  called `launch` in an assistant that declares launches.
 - A name that is not `snake_case` (needs, operations, memory spaces, knowledge bases, tasks, prompts,
   subject types and keys).
 
 ## Go further
 
 - Install it and bind its needs: sidebar **Assistants**, then **Manage installations** (organisation
-  administrators). The full contract is in the [plugins reference](../../plugins.md#assistants).
+  administrators); its knowledge needs on the card **Knowledge from the organisation** of the installation. The full contract is in the [plugins reference](../../plugins.md#assistants).
 - [Use an assistant](../use/assistants.md), as the people you ship it to see it.
 - [Connect it to claude.ai or embed it](../integrate/assistants.md).
-- The decisions: [ADR 0133](../../adr/0133-a-plugin-ships-an-assistant-an-organisation-installs-it-for-an-audience.md)
-  and [ADR 0140](../../adr/0140-conversation-evals-and-user-feedback.md).
+- The decisions: [ADR 0133](../../adr/0133-a-plugin-ships-an-assistant-an-organisation-installs-it-for-an-audience.md),
+  [ADR 0140](../../adr/0140-conversation-evals-and-user-feedback.md) and, for bound knowledge,
+  [ADR 0159](../../adr/0159-an-assistant-may-read-the-organisation-s-knowledge-bases-by-reference.md).

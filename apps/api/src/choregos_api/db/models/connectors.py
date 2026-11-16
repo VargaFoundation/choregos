@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Organisation connectors, operations and policies, GitHub installations, egress rules."""
+"""Organisation connectors, operations and policies, the GitHub App and its installations, egress rules."""
 
 from __future__ import annotations
 
@@ -8,14 +8,17 @@ from typing import Any
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     DateTime,
     Float,
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     String,
     Text,
     UniqueConstraint,
+    false,
     text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
@@ -54,6 +57,12 @@ class OrgConnector(Base, PkMixin, TimestampMixin):
     #: `operations`, the Service URL). Written by the installer only, never by the connector routes:
     #: the broker reads its operations as the governance floor. `NULL` for any other connector.
     plugin_server: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
+    #: The outpost an `mcp-outpost` connector routes to (ADR 0149 §1): how the platform's own paths
+    #: learn which outpost to name before they touch its rows (ADR 0148 §6), and why an outpost that
+    #: still has connectors is not deleted. `NULL` for any other connector.
+    outpost_id: Mapped[str | None] = mapped_column(
+        ForeignKey("outposts.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
 
 
 class OrgConnectorProject(Base, PkMixin, TimestampMixin):
@@ -101,6 +110,14 @@ class ConnectorOperation(Base, PkMixin, TimestampMixin):
     #: A JSON Schema every call's arguments must also satisfy, whichever agent calls (S60-06, ADR 0128);
     #: `{project}` is the run's project slug. None: the operation's input schema alone.
     arguments: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
+    #: The arguments the organisation's rule says the platform fills on a governed call (`action_key`,
+    #: `work_item_key`), for a discovered tool, which declares nothing; an operation its type or its
+    #: plugin's server declares takes them from there. Listing `action_key` for a write through an
+    #: outpost says the operation takes the platform's idempotency key (S65-14, ADR 0149 §5-6).
+    platform_arguments: Mapped[list[str] | None] = mapped_column(Json, nullable=True)
+    #: The administrator's explicit statement that an in-doubt outcome is accepted for this write
+    #: through an outpost (ADR 0149 §6).
+    in_doubt_accepted: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
 
 
 class ProjectOperationPolicy(Base, PkMixin, TimestampMixin):
@@ -147,6 +164,37 @@ class GitHubInstallation(Base, TimestampMixin):
     claimed_by: Mapped[str | None] = mapped_column(String(320), nullable=True)
     claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class GitHubAppRegistration(Base, PkMixin, TimestampMixin):
+    """The deployment's GitHub App, registered from a manifest by a platform administrator (ADR 0167).
+
+    At most one row: the instance's App when the deployment's settings name none
+    (`CHOREGOS_GITHUB_APP_ID` wins over it). What GitHub publishes about the App is kept in clear; its
+    private key, webhook secret and OAuth client secret are ONE envelope sealed under the deployment's
+    key (ADR 0058), its additional data bound to the platform and to `github-app/<app_id>`, so it opens
+    nowhere else. Platform scope only: no organisation reads it."""
+
+    __tablename__ = "github_app_registrations"
+
+    app_id: Mapped[str] = mapped_column(String(32), unique=True)
+    slug: Mapped[str] = mapped_column(String(100))
+    name: Mapped[str] = mapped_column(String(100))
+    owner_login: Mapped[str] = mapped_column(String(200))
+    #: `Organization` or `User`
+    owner_type: Mapped[str] = mapped_column(String(32))
+    html_url: Mapped[str] = mapped_column(String(300))
+    #: Installable by any account (`true`) or by its owner's account only.
+    public: Mapped[bool] = mapped_column(Boolean)
+    webhook_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    client_id: Mapped[str] = mapped_column(String(100))
+    created_by: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    ciphertext: Mapped[bytes] = mapped_column(LargeBinary)
+    nonce: Mapped[bytes] = mapped_column(LargeBinary)
+    wrapped_dek: Mapped[bytes] = mapped_column(LargeBinary)
+    dek_nonce: Mapped[bytes] = mapped_column(LargeBinary)
+    kek_id: Mapped[str] = mapped_column(String(32))
+    algorithm: Mapped[str] = mapped_column(String(16), default="A256GCM")
 
 
 class OrgEgressRule(Base, PkMixin, TimestampMixin):

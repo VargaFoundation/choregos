@@ -1,0 +1,317 @@
+{{- if include "choregos.outpostsEnabled" . }}
+{{- /*
+The outposts' door (ADR 0148): the one entrance an outpost's daemon dials, under a hostname of its
+own. This file renders what the door needs beside the API: the route that leads to `/outposts` and
+to nothing else, the Secret of its signing key when the operator names none, and, when
+`global.outposts.door.dedicated` is true, the Deployment that serves the door alone.
+
+Nothing here leads TO an outpost, and nothing can: the platform stores no address of one and opens
+no connection to one (ADR 0147 §1). What the API and the workers are told is in
+`choregos.outpostsEnv` and `choregos.outpostsDoorEnv` (`_helpers.tpl`).
+*/ -}}
+{{- $door := .Values.global.outposts.door | default dict }}
+{{- $api := index .Values "choregos-api" | default dict }}
+{{- $web := index .Values "choregos-web" | default dict }}
+{{- $ingress := $api.ingress | default dict }}
+{{- $hosts := compact ($door.hostnames | default list) }}
+{{- $origin := include "choregos.outpostsDoorUrl" . }}
+{{- $dedicated := eq (toString $door.dedicated) "true" }}
+{{- $doorPort := 8000 }}
+{{- /*
+A door is a name of its own (ADR 0148 §8): the one name an outpost's firewall opens is not the
+console's, nor the API's, nor a run door's. What the door's hostname would share with them is their
+routes, their rate limit and their source restrictions. Refused here, naming both values.
+*/ -}}
+{{- /* A name listed twice is reported under the last entry below: the routed hostnames, which an
+     operator wrote, win over the public URLs, which may only be derived from `global.domain`. */}}
+{{- $taken := dict }}
+{{- range (compact (($api.runDoor | default dict).hostnames | default list)) }}
+{{- $_ := set $taken (lower .) "choregos-api.runDoor.hostnames (a run door's)" }}
+{{- end }}
+{{- $_ := set $taken (lower ((urlParse (.Values.global.apiUrl | default (printf "https://api.%s" .Values.global.domain))).hostname | default "")) "global.apiUrl (the API's public URL)" }}
+{{- range (compact ($ingress.hostnames | default list)) }}
+{{- $_ := set $taken (lower .) "choregos-api.ingress.hostnames (the API's)" }}
+{{- end }}
+{{- $_ := set $taken (lower ((urlParse (.Values.global.publicUrl | default (printf "https://app.%s" .Values.global.domain))).hostname | default "")) "global.publicUrl (the console's public URL)" }}
+{{- range (compact (($web.ingress | default dict).hostnames | default list)) }}
+{{- $_ := set $taken (lower .) "choregos-web.ingress.hostnames (the console's)" }}
+{{- end }}
+{{- range (uniq (append $hosts ((urlParse $origin).hostname | default ""))) }}
+{{- if and . (hasKey $taken (lower .)) }}
+{{- fail (printf "global.outposts.door: the hostname %q is also in %s. The door's hostname is the one name an outpost's firewall opens, and the one you rate-limit or restrict by source apart from the console's: it is a name of its own (ADR 0148 §8). Give the door a hostname nothing else is routed under." . (get $taken (lower .))) }}
+{{- end }}
+{{- end }}
+{{- /*
+The signing key (ADR 0148 §13), when the operator names no Secret: drawn once, then READ BACK at
+every upgrade (`lookup`), as the chart's other generated secrets are. Every outpost pins the public
+half of this key, so two more things hold it in place:
+
+- `immutable`: no upgrade, and no renderer that cannot read the cluster (Argo CD, `helm template |
+  kubectl apply`: `lookup` answers nothing there, and each render draws a new key), can change it.
+  The apply is refused, loudly, instead of every outpost refusing every call (`signature_refused`);
+- `helm.sh/resource-policy: keep`: an uninstall, or outposts switched off for a while, does not
+  delete it. The next installation under the same release name reads it back.
+
+`genPrivateKey "ed25519"` writes PEM, PKCS#8: what the API reads.
+*/ -}}
+{{- $key := $door.signingKey | default dict }}
+{{- $entry := $key.key | default "signing-key" }}
+{{- if not $key.existingSecret }}
+{{- $name := include "choregos.outpostsDoorKeySecret" . }}
+{{- $existing := lookup "v1" "Secret" .Release.Namespace $name }}
+{{- $pem := "" }}
+{{- if $existing }}{{- $pem = index ($existing.data | default dict) $entry | default "" }}{{- end }}
+{{- if not $pem }}{{- $pem = genPrivateKey "ed25519" | b64enc }}{{- end }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $name }}
+  labels:
+    app.kubernetes.io/name: choregos-outposts-door
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: outposts-door
+    app.kubernetes.io/part-of: choregos
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+  annotations:
+    helm.sh/resource-policy: keep
+type: Opaque
+immutable: true
+data:
+  {{ $entry }}: {{ $pem | quote }}
+---
+{{- end }}
+{{- /*
+The route: `/outposts` under the door's own hostnames, and nothing else under them. It follows the
+API's entry form (`choregos-api.ingress`: kind, class, gateway) and is rendered with it: where the
+API's route is made outside this chart, so is the door's.
+
+A poll waits up to 25 seconds before it answers with nothing (ADR 0148 §7): the entrance must not
+cut a request before that, nor hold its answer back. The HTTPRoute says so with `timeouts.request`
+(`door.requestTimeout`); an Ingress has no portable field for it, and carries the door's own
+annotations (`door.annotations`), which are also where its rate limit and its source restriction go.
+*/ -}}
+{{- $backend := ternary "choregos-outposts-door" "choregos-api" $dedicated }}
+{{- $backendPort := ternary $doorPort (int (($api.service | default dict).port | default 8000)) $dedicated }}
+{{- if and $hosts (eq (toString $ingress.enabled) "true") (ne (toString $api.enabled) "false") }}
+{{- if eq ($ingress.kind | default "httproute") "ingress" }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: choregos-outposts-door
+  labels:
+    app.kubernetes.io/name: choregos-outposts-door
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: outposts-door
+    app.kubernetes.io/part-of: choregos
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+  {{- with $door.annotations }}
+  annotations: {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with $ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  rules:
+    {{- range $hosts }}
+    - host: {{ . | quote }}
+      http:
+        paths:
+          - path: /outposts
+            pathType: Prefix
+            backend:
+              service: { name: {{ $backend }}, port: { number: {{ $backendPort }} } }
+    {{- end }}
+{{- else }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: choregos-outposts-door
+  labels:
+    app.kubernetes.io/name: choregos-outposts-door
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: outposts-door
+    app.kubernetes.io/part-of: choregos
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  parentRefs:
+    - name: {{ $ingress.gateway }}
+      namespace: {{ $ingress.gatewayNamespace | default "gateway" }}
+  hostnames:
+    {{- range $hosts }}
+    - {{ . | quote }}
+    {{- end }}
+  rules:
+    - matches:
+        - path: { type: PathPrefix, value: /outposts }
+      {{- with $door.requestTimeout }}
+      # Above the 25 seconds a poll may wait: without it the implementation's own default applies.
+      timeouts: { request: {{ . | quote }} }
+      {{- end }}
+      backendRefs:
+        - name: {{ $backend }}
+          port: {{ $backendPort }}
+{{- end }}
+---
+{{- end }}
+{{- if $dedicated }}
+{{- /*
+The door's own Deployment (ADR 0148 §8): the API image, started as `python -m choregos_api.outposts`,
+which serves the four verbs, two probes, and nothing else of the API (`outposts/alone.py`).
+
+What it holds: the database (its own bounded pool), the door's signing key, and the key a call's
+arguments wait under (`CHOREGOS_SECRETS_KEKS`). What it does not: the session secret, the run-token
+key, the gateway's key, the object store's, the OIDC client's, nor `global.extraEnv` (connector
+secrets live there, and the door reaches no connector). No service account token either.
+
+The sweep that ends leases at outposts nobody polls stays in the API, which runs it in both
+layouts: it lists every outpost under the platform's scope, which the door never takes.
+
+Stopping: the process lets the polls it holds end by themselves, 30 seconds at most, then cancels
+what is left; the pod is given longer than that.
+*/ -}}
+{{- $grace := int ($door.terminationGracePeriodSeconds | default 45) }}
+{{- if le $grace 30 }}
+{{- fail (printf "global.outposts.door.terminationGracePeriodSeconds=%d: a door told to stop lets the polls it holds end by themselves, 30 seconds at most (the longest poll and the margin of its slot). Give the pod more than 30 seconds, or every rolling update cuts polls short and their instances meet poll_conflict." $grace) }}
+{{- end }}
+{{- $pool := $door.pool | default dict }}
+{{- $set := list "CHOREGOS_ENV" "CHOREGOS_EDITION" "CHOREGOS_LOG_LEVEL" "CHOREGOS_FAKES" "CHOREGOS_PORT" "CHOREGOS_DB_POOL_SIZE" "CHOREGOS_DB_MAX_OVERFLOW" "CHOREGOS_DB_POOL_TIMEOUT_S" "CHOREGOS_DATABASE_PASSWORD" "CHOREGOS_DATABASE_URL" "CHOREGOS_SECRETS_KEKS" }}
+{{- $set = concat $set (splitList " " (include "choregos.outpostsOwnedEnv" "all")) }}
+{{- range ($door.extraEnv | default list) }}
+{{- if has .name $set }}
+{{- fail (printf "global.outposts.door.extraEnv: %s is already set by the chart for the door's Deployment; two values for the same name, Kubernetes would keep the last one without saying anything" .name) }}
+{{- end }}
+{{- if eq (hasKey . "value") (hasKey . "valueFrom") }}
+{{- fail (printf "global.outposts.door.extraEnv: %s needs exactly one of value or valueFrom" .name) }}
+{{- end }}
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: choregos-outposts-door
+  labels:
+    app.kubernetes.io/name: choregos-outposts-door
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: outposts-door
+    app.kubernetes.io/part-of: choregos
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  replicas: {{ int ($door.replicas | default 2) }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: choregos-outposts-door
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: choregos-outposts-door
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: outposts-door
+        # NOT `part-of: choregos`: `choregos-allow-ingress` admits every pod of the namespace to the
+        # pods that carry it. The door takes requests from the entrance only (`choregos-outposts-door-net`).
+      annotations:
+        # A rotation of the signing key, or a new announced key, redeploys the pods.
+        checksum/config: {{ toJson .Values.global.outposts | sha256sum }}
+    spec:
+      # No service account token: the door asks nothing of the cluster.
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      {{- include "choregos.imagePullSecrets" $ | nindent 6 }}
+      {{- include "choregos.antiAffinity" (dict "global" .Values.global "labels" (dict "app.kubernetes.io/name" "choregos-outposts-door" "app.kubernetes.io/instance" .Release.Name)) | nindent 6 }}
+      # Longer than the 30 seconds the process gives the polls it holds (`outposts/alone.py`, GRACE_S).
+      terminationGracePeriodSeconds: {{ $grace }}
+      securityContext: {{- toYaml .Values.global.podSecurityContext | nindent 8 }}
+      containers:
+        - name: door
+          image: {{ include "choregos.image" (dict "global" .Values.global "image" ($api.image | default dict)) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          command: ["python", "-m", "choregos_api.outposts"]
+          securityContext: {{- toYaml .Values.global.securityContext | nindent 12 }}
+          ports:
+            - { name: http, containerPort: {{ $doorPort }} }
+          env:
+            - { name: CHOREGOS_ENV, value: {{ .Values.global.environment | quote }} }
+            - { name: CHOREGOS_EDITION, value: {{ .Values.global.edition | default "community" | quote }} }
+            - { name: CHOREGOS_LOG_LEVEL, value: {{ .Values.global.logLevel | quote }} }
+            - { name: CHOREGOS_FAKES, value: {{ .Values.global.fakes | quote }} }
+            - { name: CHOREGOS_PORT, value: {{ $doorPort | quote }} }
+            # This process's own pool (ADR 0148 §8): at most size + maxOverflow connections a replica.
+            - { name: CHOREGOS_DB_POOL_SIZE, value: {{ int ($pool.size | default 5) | quote }} }
+            - { name: CHOREGOS_DB_MAX_OVERFLOW, value: {{ if hasKey $pool "maxOverflow" }}{{ int $pool.maxOverflow | quote }}{{ else }}"5"{{ end }} }
+            - { name: CHOREGOS_DB_POOL_TIMEOUT_S, value: {{ int ($pool.timeoutSeconds | default 10) | quote }} }
+            {{- include "choregos.databaseEnv" . | trim | nindent 12 }}
+            {{- include "choregos.outpostsEnv" . | nindent 12 }}
+            {{- include "choregos.outpostsDoorEnv" . | nindent 12 }}
+            # The key a call's arguments wait under until an instance claims them (ADR 0103): the door
+            # opens them to seal them to that instance. Optional, as it is for the API: without it no
+            # call can be placed, so there is nothing to open.
+            - name: CHOREGOS_SECRETS_KEKS
+              valueFrom: { secretKeyRef: { name: {{ .Values.global.secrets.keksSecretRef | default .Values.global.apiSecretRef }}, key: {{ .Values.global.secrets.keksKey | default "secrets-keks" }}, optional: true } }
+            {{- range ($door.extraEnv | default list) }}
+            - name: {{ .name }}
+            {{- if hasKey . "valueFrom" }}
+              valueFrom:
+                {{- toYaml .valueFrom | nindent 16 }}
+            {{- else }}
+              value: {{ .value | quote }}
+            {{- end }}
+            {{- end }}
+          readinessProbe:
+            httpGet: { path: /readyz, port: http }
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources: {{- toYaml ($door.resources | default dict) | nindent 12 }}
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - { name: tmp, emptyDir: {} }
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: choregos-outposts-door
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: choregos-outposts-door
+  labels:
+    app.kubernetes.io/name: choregos-outposts-door
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: outposts-door
+    app.kubernetes.io/part-of: choregos
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  type: ClusterIP
+  ports:
+    - { name: http, port: {{ $doorPort }}, targetPort: http }
+  selector:
+    app.kubernetes.io/name: choregos-outposts-door
+    app.kubernetes.io/instance: {{ .Release.Name }}
+{{- $pdb := $door.podDisruptionBudget | default dict }}
+{{- if and (eq (toString $pdb.enabled) "true") (gt (int ($door.replicas | default 2)) 1) }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: choregos-outposts-door
+  labels:
+    app.kubernetes.io/name: choregos-outposts-door
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: outposts-door
+    app.kubernetes.io/part-of: choregos
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  minAvailable: {{ $pdb.minAvailable | default 1 }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: choregos-outposts-door
+      app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}
+{{- end }}
+{{- end }}

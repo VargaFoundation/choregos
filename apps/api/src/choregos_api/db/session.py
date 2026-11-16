@@ -4,10 +4,11 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator, Awaitable, Callable
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from typing import Any
 
 from sqlalchemy import event, text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import Session
 
@@ -64,8 +65,9 @@ def _dropped(session: Session) -> None:
 _RELEASABLE = "choregos.releasable"
 #: The transaction-local settings the session's next transaction starts with (`release_connection`).
 _RESUME = "choregos.resume_settings"
-#: The settings `release_connection` carries to the next transaction: the RLS scope and the user it names.
-_CARRIED = ("app.current_orgs", "app.current_user")
+#: The settings `release_connection` carries to the next transaction: the RLS scope, the user it names
+#: and the outpost it names (ADR 0148 §6).
+_CARRIED = ("app.current_orgs", "app.current_user", "app.current_outpost")
 
 
 def allow_release_during_calls(session: AsyncSession) -> None:
@@ -119,13 +121,8 @@ async def outside_the_transaction(session: AsyncSession) -> AsyncIterator[None]:
 async def _carried_settings(session: AsyncSession) -> dict[str, str]:
     if get_settings().is_sqlite:
         return {}
-    values = (
-        await session.execute(
-            text(
-                "SELECT current_setting('app.current_orgs', true), current_setting('app.current_user', true)"
-            )
-        )
-    ).one()
+    read = ", ".join(f"current_setting('{name}', true)" for name in _CARRIED)
+    values = (await session.execute(text(f"SELECT {read}"))).one()
     return {name: str(value) for name, value in zip(_CARRIED, values, strict=True) if value is not None}
 
 
@@ -225,6 +222,55 @@ async def name_the_user(session: AsyncSession, user_id: str | None) -> None:
     await session.execute(text("SELECT set_config('app.current_user', :u, true)"), {"u": user_id or ""})
 
 
+async def name_the_outpost(session: AsyncSession, outpost_id: str | None) -> None:
+    """Set `app.current_outpost` for the RLS of the outposts' tables (ADR 0148 §6), for THE current
+    transaction only.
+
+    The rows that belong to one outpost (its instances, its enrolment tokens, its calls) are visible
+    and writable only to a session that names that outpost, inside an organisation scope that holds
+    it: the second setting narrows the first, it never widens it. `None` names no outpost, which is
+    the default and fails closed: none of those rows. There is no "every outpost" value. A path
+    names the outpost it works for: the door, the one its caller's signature resolves to; the
+    management routes, the one in their URL; the broker, the one its connector routes to
+    (`org_connectors.outpost_id`).
+    """
+    if get_settings().is_sqlite:
+        return
+    await session.execute(
+        text("SELECT set_config('app.current_outpost', :outpost, true)"), {"outpost": outpost_id or ""}
+    )
+
+
+@asynccontextmanager
+async def in_outpost_scope(session: AsyncSession, outpost_id: str | None) -> AsyncIterator[None]:
+    """For the length of a block, the session names this outpost; what it named before is RESTORED.
+
+    For a request that works on several outposts in turn (the organisation's list), or that goes on
+    after it is done with one. What the block wrote must be flushed before it ends: an `INSERT` or an
+    `UPDATE` sent later would be judged without the outpost named, and refused. `None` names no
+    outpost for the block: what a session that already names one needs to read its organisation's
+    registry, which shows one row to a session that names an outpost.
+    """
+    if get_settings().is_sqlite:
+        yield
+        return
+    before = (await session.execute(text("SELECT current_setting('app.current_outpost', true)"))).scalar_one()
+    await name_the_outpost(session, outpost_id)
+    try:
+        yield
+    except BaseException:
+        # The block failed, or was cancelled. Where it left the transaction usable (an error caught
+        # under a savepoint, an exception that is not the database's), what was named before is named
+        # again. Where it did not (a statement that failed, or that a cancellation interrupted in the
+        # driver), the naming is transaction-local and dies with that transaction: the statement that
+        # names it again would only raise in turn, and its error would replace the block's. A worker
+        # stopped while it placed its write saw `PendingRollbackError` instead of its cancellation.
+        with suppress(SQLAlchemyError):
+            await name_the_outpost(session, before or None)
+        raise
+    await name_the_outpost(session, before or None)
+
+
 @asynccontextmanager
 async def in_platform_scope(session: AsyncSession) -> AsyncIterator[None]:
     """For the length of a block, the session sees the whole instance; the previous scope is RESTORED.
@@ -239,12 +285,19 @@ async def in_platform_scope(session: AsyncSession) -> AsyncIterator[None]:
         return
     before = (await session.execute(text("SELECT current_setting('app.current_orgs', true)"))).scalar_one()
     await session.execute(text("SELECT set_config('app.current_orgs', :orgs, true)"), {"orgs": ALL_ORGS})
+    restore = text("SELECT set_config('app.current_orgs', :orgs, true)")
     try:
         yield
-    finally:
-        await session.execute(
-            text("SELECT set_config('app.current_orgs', :orgs, true)"), {"orgs": before or ""}
-        )
+    except BaseException:
+        # As in `in_outpost_scope`: where the block left the transaction usable, the previous scope is
+        # restored, and that matters here, since the block's scope is the whole instance. Where it did
+        # not (a statement that failed, or that a cancellation interrupted in the driver), the scope is
+        # transaction-local and dies with that transaction; restoring it would only raise in turn, and
+        # its `PendingRollbackError` would replace the block's error or its cancellation.
+        with suppress(SQLAlchemyError):
+            await session.execute(restore, {"orgs": before or ""})
+        raise
+    await session.execute(restore, {"orgs": before or ""})
 
 
 @asynccontextmanager

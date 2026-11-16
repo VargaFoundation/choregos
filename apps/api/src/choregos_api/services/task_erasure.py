@@ -8,8 +8,11 @@ Registered where the other holders register (`assistant_erasure.USER_ERASERS`, `
 - `task_artifacts`: the artifacts of the person's task work items of the installation, rows and inline
   content.
   The work item stays as the trace of the run (its key, state and cost), with no output. The bytes of a FILE
-  artifact are in the object store, which has no delete: they stay there until the store's own lifecycle
-  rule (outside this repository).
+  artifact are deleted from the object store first (`ObjectStore.delete`, idempotent), then the row: when the
+  store refuses, an erasure fails with a 502 and deletes nothing (the transaction rolls back, the person
+  asks again: bytes already gone are not an error), and the purge keeps that row (and says so in the log)
+  for its next pass. Never a deleted row with bytes left behind. A key still named by a row that stays
+  (same name and content under two versions) is not deleted.
 - `connected_accounts`: the person's accounts at the connectors the installation binds with `user_consent`,
   disconnected like the person's own click does (revoked at the source when it offers it, the sealed refresh
   token deleted). An account at a connector no need of this installation uses is left.
@@ -25,6 +28,7 @@ import contextlib
 from datetime import datetime, timedelta
 from typing import Any
 
+from choregos_adapters.storage import ObjectStoreError
 from choregos_core.secrets import SecretNotFound
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -40,6 +44,9 @@ from ..db.models import (
     TaskSubscription,
     WorkItem,
 )
+from ..errors import upstream
+from ..logging import get_logger
+from ..object_store import object_store
 from ..schemas.assistant_memory import MemorySubject
 from ..schemas.assistant_reads import SubjectArtifact
 from ..secret_store import SecretStoreUnavailable, get_secret_store
@@ -52,6 +59,7 @@ from .identity_exchange import USER_CONSENT
 from .personal_spaces import PERSONAL
 
 BATCH = 500
+log = get_logger("choregos.assistants.task_erasure")
 
 
 def _task_of(item: WorkItem) -> dict[str, Any] | None:
@@ -71,9 +79,45 @@ async def _personal_items(
     ]
 
 
+async def _delete_bytes(session: AsyncSession, rows: list[ArtifactRecord]) -> set[str]:
+    """Deletes the object of each FILE artifact in `rows` that no row outside `rows` still names; the ids of
+    the rows whose object could not be deleted (the store refused or did not answer)."""
+    ids = {r.id for r in rows}
+    keys = {r.storage_key for r in rows if r.storage_key}
+    if not keys:
+        return set()
+    shared = set(
+        (
+            await session.execute(
+                select(ArtifactRecord.storage_key).where(
+                    ArtifactRecord.storage_key.in_(keys), ArtifactRecord.id.not_in(ids)
+                )
+            )
+        ).scalars()
+    )
+    store = object_store()
+    failed_keys: set[str] = set()
+    for key in sorted(keys - shared):
+        try:
+            await store.delete(key)
+        except ObjectStoreError as error:
+            log.warning("assistants.task_artifacts.bytes_not_deleted", error=str(error)[:200])
+            failed_keys.add(key)
+    return {r.id for r in rows if r.storage_key in failed_keys}
+
+
 async def _delete_artifacts(session: AsyncSession, item_ids: list[str]) -> int:
+    """The bytes first, then the rows; all or nothing: one object the store refuses to delete fails the call
+    before any row goes."""
     if not item_ids:
         return 0
+    rows = list(
+        (await session.execute(select(ArtifactRecord).where(ArtifactRecord.work_item_id.in_(item_ids))))
+        .scalars()
+        .all()
+    )
+    if await _delete_bytes(session, rows):
+        raise upstream("object-store", "the files of the artifacts could not be deleted; nothing was erased")
     done = await session.execute(delete(ArtifactRecord).where(ArtifactRecord.work_item_id.in_(item_ids)))
     return int(done.rowcount or 0)  # type: ignore[attr-defined]
 
@@ -228,13 +272,13 @@ async def retention_days_of(session: AsyncSession, installation: AssistantInstal
 
 
 async def purge_task_artifacts(session: AsyncSession, now: datetime) -> int:
-    """Deletes the task artifacts older than their installation's retention."""
+    """Deletes the task artifacts older than their installation's retention, their bytes first."""
     deleted = 0
     for installation in (await session.execute(select(AssistantInstallation))).scalars().all():
         horizon = now - timedelta(days=await retention_days_of(session, installation))
         rows = (
             await session.execute(
-                select(ArtifactRecord.id, WorkItem)
+                select(ArtifactRecord, WorkItem)
                 .join(WorkItem, WorkItem.id == ArtifactRecord.work_item_id)
                 .join(Project, Project.id == WorkItem.project_id)
                 .where(
@@ -246,13 +290,16 @@ async def purge_task_artifacts(session: AsyncSession, now: datetime) -> int:
             )
         ).all()
         old = [
-            artifact_id
-            for artifact_id, item in rows
+            artifact
+            for artifact, item in rows
             if (t := _task_of(item)) is not None and t.get("installation_id") == installation.id
         ]
-        if old:
-            await session.execute(delete(ArtifactRecord).where(ArtifactRecord.id.in_(old)))
-            deleted += len(old)
+        # A row whose object the store would not delete stays: the next pass retries it.
+        kept = await _delete_bytes(session, old)
+        gone = [a.id for a in old if a.id not in kept]
+        if gone:
+            await session.execute(delete(ArtifactRecord).where(ArtifactRecord.id.in_(gone)))
+            deleted += len(gone)
     return deleted
 
 

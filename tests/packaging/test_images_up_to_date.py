@@ -52,6 +52,7 @@ def test_il_y_a_bien_des_images_a_verifier() -> None:
     assert {
         ("api.Dockerfile", "commun"),
         ("tools.Dockerfile", "runtime"),
+        ("outpost.Dockerfile", "runtime"),
         ("web.Dockerfile", "runtime"),
         ("runner.Dockerfile", "runtime"),
         ("base.Dockerfile", "base"),

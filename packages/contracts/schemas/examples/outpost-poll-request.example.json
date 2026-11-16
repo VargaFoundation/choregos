@@ -1,0 +1,15 @@
+{
+  "protocol": 1,
+  "daemon_version": "0.26.0",
+  "wait_s": 25,
+  "capacity": 7,
+  "capabilities": [
+    "tools"
+  ],
+  "endpoints": [
+    "tracker"
+  ],
+  "running": [
+    "c41d8a70-2f5e-4b19-a3c6-0e9b7d5f1a62"
+  ]
+}

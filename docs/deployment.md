@@ -68,6 +68,11 @@ Only the API reads and writes the object store: a runner hands its files to the 
 under its run token and never holds the store's keys. Under `CHOREGOS_FAKES=1` (or with a
 `memory://` URL) the store is in memory and lost on restart.
 
+Since 0.27 the API also deletes objects (the bytes of a task artifact when a person or a subject is erased,
+and when the retention purge removes an expired one): the store's credentials need `s3:DeleteObject` on the
+prefix. Without it an erasure of an assistant's data that holds a file artifact answers 502 and erases
+nothing, and the purge keeps the expired rows and retries them at every pass.
+
 An empty `endpoint` means AWS, and without `secretRef` the calls are unsigned: nothing fails at install, and
 the first run that writes a file loses its run. The project's readiness (`object-store` item, `docs/usage.md`)
 probes the bucket when a workflow declares a file output and names the cause.
@@ -81,11 +86,12 @@ The chart never writes production secrets. It expects them to exist:
 
 | Secret | Keys | Used by |
 | :-- | :-- | :-- |
-| `global.apiSecretRef` (default `choregos-api-secrets`) | `run-token-private-key`, `github-app-id`, `github-app-private-key` | API **and** orchestrator |
+| `global.apiSecretRef` (default `choregos-api-secrets`) | `run-token-private-key`, `github-app-id`, `github-app-private-key` (the last two optional when the App is created from the console, [the GitHub App](#the-github-app)) | API **and** orchestrator |
 | `global.apiSecretRef`, entries `session-secret`, `run-token-public-key`, `github-webhook-secret` | the session signing key (required, see below), the run-token public key (derived from the private one when absent), the GitHub webhook secret | API only |
 | `global.apiSecretRef`, entry `session-secret-previous` (optional) | the previous session key during a rotation, `CHOREGOS_SESSION_SECRET_PREVIOUS`: verification only | API only |
 | `global.apiSecretRef`, entries `github-app-client-id`, `github-app-client-secret` (optional) | the App's OAuth client: needed only to claim an installation when the instance has several organisations ([the GitHub App](#the-github-app)) | API |
 | `global.apiSecretRef`, entry `secrets-keks` (optional) | `CHOREGOS_SECRETS_KEKS`, see below | API **and** orchestrator |
+| `global.apiSecretRef`, entry `egress-report-key` (optional) | `CHOREGOS_EGRESS_REPORT_KEY`: the egress proxy's own key, a random string (48 characters or more). Its reports need it on top of the run's egress token, so an agent cannot rewrite its run's network counters ([ADR 0145](adr/0145-the-proxy-reports-with-a-key-the-agent-does-not-hold.md)); absent, the API logs `egress.report_key_missing` at start-up and accepts the egress token alone. Rotate it by replacing it and restarting the API and `choregos-egress` together | API **and** egress proxy |
 | `global.oidc.secretRef` | `client-secret` | API |
 | `global.database.secretRef` | `url` (or `passwordSecret` holding the password) | API, orchestrator |
 | `global.gateway.secretRef` | `master-key` | orchestrator |
@@ -116,7 +122,8 @@ openssl rand -base64 48
 ```
 
 Each value signed with it carries a 256-bit tag bound to its purpose (session, OIDC state, OIDC
-handshake, remote OAuth state and handshake): a value signed for one purpose is refused for another.
+handshake, remote OAuth state and handshake, GitHub App creation state): a value signed for one
+purpose is refused for another.
 The API still reads the session cookies issued by the previous release for one more release; they
 carry a 128-bit tag without a purpose and are accepted as sessions only.
 
@@ -169,17 +176,82 @@ rename its variable or widen the pattern.
 
 ## The GitHub App
 
-One App serves the deployment (`github-app-id`, `github-app-private-key`). Its settings on github.com
-decide whether other companies can use it and whether a console install finds its way back:
+One App serves the deployment: the tracker, the pull requests, the checks and the run's git token go
+through it, and whoever registers it on GitHub owns it. It comes from one of two places, and the first
+wins ([ADR 0167](adr/0167-the-github-app-is-created-from-a-manifest.md)):
+
+1. **The deployment's settings**: `github-app-id` and `github-app-private-key` (with
+   `github-webhook-secret`, and `github-app-client-id` / `github-app-client-secret` for claims on an
+   instance with several organisations) in `global.apiSecretRef`. When they name an App, it is the App.
+2. **An App created from the console** (*Administration → GitHub App*), registered on github.com from a
+   manifest the platform builds and stored sealed in the database. Only when the settings name none.
+
+*Administration → GitHub App* says which one the instance acts as (`GET /api/v1/platform/github-app`).
+
+### Create it from the console (GitHub App Manifest flow)
+
+For a platform administrator, on an instance whose deployment names no App. It needs the secrets key
+(`secrets-keks`, [below](#secrets)): the App's private key, webhook secret and client secret are sealed
+with it, and without it the page refuses before anything is registered on GitHub.
+
+1. *Administration → GitHub App*. Check the name (unique across GitHub, 34 characters at most; the page
+   proposes one from the instance's host).
+2. **Owner**: leave it empty for your personal account, or name a GitHub organisation you are an owner
+   of. The owner owns the App on GitHub: choose the account of whoever operates this instance.
+3. **Who may install it**, a choice with no default: **Private** installs only on the owner's account
+   (enough when every repository belongs to it); **Public** lets any GitHub account install it, as each
+   company using a shared instance does on its own account. The owner can change it later in the App's
+   settings on GitHub.
+4. Untick **GitHub can reach this instance** when GitHub cannot reach `<api_url>` (an instance behind a
+   VPN): the webhook is registered inactive, and installations are still discovered by polling.
+5. **Continue on GitHub**: GitHub shows the App it is about to register; confirm. It sends you back to the
+   console within the hour (`?github_app=created`), and the App is the deployment's App from then on.
+   Another replica of the API learns of it within a minute.
+6. Install it on the repositories from a project's connectors (*Install on GitHub*), as below.
+
+What the platform puts in the manifest, derived from the instance and the adapters, never typed:
+
+| Manifest key | Value |
+| :-- | :-- |
+| `default_permissions` | Repository: `contents` write, `issues` write, `pull_requests` write, `checks` write, `metadata` read, `statuses` read; organisation: `organization_projects` write |
+| `default_events` | `issues`, `issue_comment`, `projects_v2_item`, `pull_request`, `pull_request_review`, `check_suite`, `check_run` (`installation` and `installation_repositories` are delivered to every App; nobody subscribes to them) |
+| `hook_attributes.url` | `<api_url>/api/v1/webhooks/github` |
+| `callback_urls` | `<api_url>/api/v1/github/setup`: where GitHub sends a person after an installation |
+| `request_oauth_on_install` | `true`: the person who installs authorises the App, the proof a claim needs on an instance with several organisations (no Setup URL then: GitHub uses the callback URL) |
+| `redirect_url` | `<api_url>/api/v1/github/manifest/callback`: where GitHub sends the browser once the App is registered |
+| `url` | `<public_url>`, the App's homepage |
+| `public` | as chosen |
+
+The permissions and events are the adapters' own list (`APP_PERMISSIONS`, `APP_EVENTS` in
+`choregos_adapters.github`), the one the GitHub procedures show; a test holds this table to it.
+Add `workflows: write` on GitHub by hand only if agents edit `.github/workflows`.
+
+**What is stored where.** One row of `github_app_registrations`, readable in the platform scope only:
+the App's id, slug, name, owner, address, public flag and client id in clear, and one envelope sealed
+under the active key of `CHOREGOS_SECRETS_KEKS` with the private key, the webhook secret GitHub
+generated and the client secret. Nothing is written to the Kubernetes Secret. Creating and forgetting
+are audited (`github_app.create`, `github_app.forget`).
+
+**Rotating and forgetting.** `choregos admin secrets rewrap` moves the App's envelope to a new key with
+the connector secrets. *Forget this App* deletes the stored credentials; the App stays on GitHub, where
+its owner deletes it (or keeps it and puts its id and a new private key in the deployment's settings,
+which then win). Losing the secrets key loses the App's private key: generate a new one on GitHub and set
+it in the deployment's settings, or forget the App and create another.
+
+### Create it by hand
+
+Register the App on github.com (*Settings → Developer settings → GitHub Apps → New GitHub App*, under the
+account that will own it) with the values of the table above, generate a private key and a webhook secret,
+and put `github-app-id`, `github-app-private-key` and `github-webhook-secret` (and, with the OAuth option,
+`github-app-client-id` / `github-app-client-secret`) in `global.apiSecretRef`:
 
 | Setting | Value |
 | :-- | :-- |
-| Permissions | Repository: Contents, Issues, Pull requests, Checks: read and write; Metadata: read |
-| Events | Issues, Issue comment, Pull request, Pull request review, Check suite, **Installation**, **Installation repositories** |
-| Setup URL | `<public url>/api/v1/github/setup`, with **Redirect on update** ticked. A browser redirect: it works over a VPN |
-| Webhook URL | `<public url>/api/v1/webhooks/github` (needs a host GitHub can reach; discovery does not depend on it) |
+| Permissions and events | As the manifest's table above |
+| Webhook URL | `<api_url>/api/v1/webhooks/github` (needs a host GitHub can reach; discovery does not depend on it) |
 | Where can this GitHub App be installed? | **Any account** if companies other than the App's owner use the deployment (a private App installs only on its owner's account) |
-| Request user authorization (OAuth) during installation | **Tick it before a second organisation exists**, generate a client secret, and give `github-app-client-id` / `github-app-client-secret` to the API |
+| Request user authorization (OAuth) during installation | **Tick it before a second organisation exists**, generate a client secret, and give `github-app-client-id` / `github-app-client-secret` to the API. Its **Callback URL** is `<api_url>/api/v1/github/setup` |
+| Setup URL | Without the OAuth option only: `<api_url>/api/v1/github/setup`, with **Redirect on update** ticked. GitHub offers no Setup URL once the OAuth option is ticked |
 
 The Setup URL is a browser page. A browser that comes back without a console session is sent to sign
 in and then back to it, and an installation started on github.com rather than from the console lands on
@@ -735,6 +807,259 @@ global:
     cidrs: [203.0.113.0/24]
 ```
 
+## Outposts (ADRs 0147-0149)
+
+An outpost is a place an organisation's administrator enrols, which only dials out to the platform
+([ADR 0147](adr/0147-an-outpost-only-dials-out.md)): the platform never connects to it and stores no
+address of it. Outposts are off unless you turn them on. What is in place is the platform's side of
+the record (the tables, the `outpost:manage` right of the organisation's administrator and the
+management API, `/api/v1/orgs/{org}/outposts…`), the door an outpost dials (`/outposts/v1`,
+[ADR 0148](adr/0148-the-outpost-door-is-a-third-door-with-its-own-contract.md)): an instance enrols
+there, is approved by a person, and polls; and the connector type that routes a tool call to one
+(`mcp-outpost`, [ADR 0149](adr/0149-a-tool-may-live-at-an-outpost.md);
+[Integrations](integrations.md#a-tool-server-at-an-outpost-adr-0149)). The daemon is a separate package
+with a chart of its own (below).
+
+This section holds the settings and the values. When to want an outpost, and when an organisation's
+own MCP gateway serves better; what an outpost gives and what it does not; and each gesture of its
+life, from the enrolment to the rotation of the door's key, are in [Outposts](outposts.md). The
+guide for whoever runs an outpost in their own network is [Running an outpost](outpost-operator.md).
+
+| Setting | Default | What it does |
+| :-- | :-- | :-- |
+| `CHOREGOS_OUTPOSTS` | `off` | `on`: the door is mounted, outposts can be created and enrolment tokens issued. `off`: the door is not served at all (a daemon meets a plain 404), creating an outpost or a token is refused (409 `outposts_disabled`), and what exists can still be listed, revoked and deleted. It is the one switch that stops every outpost. Read when the API starts: changing it takes a restart |
+| `CHOREGOS_OUTPOSTS_DOOR_URL` | empty | the public origin of the outposts' door: a scheme and a host, no path (`https://outposts.example.com`). It is returned with each enrolment token as `control_plane`, which is what the outpost's operator writes in the policy file; a request an outpost signs binds its URL under that origin (`packages/contracts/outpost-door.yaml`). Give the door a hostname of its own: it is the one name an outpost's firewall opens |
+| `CHOREGOS_OUTPOSTS_DOOR_SIGNING_KEY` | empty | **a secret.** The Ed25519 private key (PEM, PKCS#8) the door signs every call it hands over with ([ADR 0148](adr/0148-the-outpost-door-is-a-third-door-with-its-own-contract.md) §13). Only its public half is ever shown. Without it no enrolment token is issued (409 `door_key_missing`): an outpost makes only calls signed by a key it pins, so an instance enrolled with nothing to pin could never be handed anything |
+| `CHOREGOS_OUTPOSTS_DOOR_ANNOUNCED_KEYS` | `[]` | public keys shown beside the one that signs, for a rotation, as a JSON list; three at most, since a policy file pins four keys. Each is the unpadded base64url of the key's 32 raw bytes |
+| `CHOREGOS_OUTPOSTS_DOOR_RATE_PER_MINUTE` | `1200` | the most requests one instance sends the door in a minute, counted in memory and per replica: beyond it the door answers 429 `rate_limited` with `retry_after`. `0` lifts the limit. It bounds an instance that authenticated; requests that carry no valid signature are bounded at the entrance, by source |
+| `CHOREGOS_OUTPOSTS_CALLS_IN_FLIGHT_PER_OUTPOST` | `128` | the most calls one outpost has in flight (placed, and not yet answered, refused or out of time). One more is refused where it is admitted, before anything is written |
+| `CHOREGOS_OUTPOSTS_CALLS_IN_FLIGHT_PER_ORGANISATION` | `512` | the same bound over all the outposts of one organisation |
+| `CHOREGOS_OUTPOSTS_CALLS_PER_MINUTE_PER_OUTPOST` | `600` | the most calls one outpost is handed in a minute: the calls placed in the last sixty seconds, counted from their rows where the next one is admitted, so every replica reads the same number. One more is refused before anything is written, and the caller is told to come back (a tool error `outpost_not_admitted`, 429) |
+| `CHOREGOS_OUTPOSTS_CALLS_PER_MINUTE_PER_ORGANISATION` | `2400` | the same bound over all the outposts of one organisation |
+
+**With the chart.** `global.outposts` renders these settings, the door's route and, if you ask for it,
+the door's own Deployment. Nothing of it is rendered while `global.outposts.enabled` is false, which
+is the default.
+
+```yaml
+global:
+  outposts:
+    enabled: true
+    callsInFlight: { perOutpost: 128, perOrganisation: 512 }
+    door:
+      hostnames: [outposts.example.com]   # the door's own; the origin is https://<the first one>
+      signingKey:
+        existingSecret: outposts-door-key # empty: the chart draws one, once
+        key: signing-key
+      announcedKeys: []                   # for a rotation
+      ratePerMinute: 1200
+      dedicated: false                    # true: a Deployment that serves the door alone
+```
+
+| Value (under `global.outposts`) | Default | What it renders |
+| :-- | :-- | :-- |
+| `enabled` | `false` | `CHOREGOS_OUTPOSTS=on` for the API and for every worker (whoever places a call reads the switch), the door's settings for the API, the door's route, and the alert rule below |
+| `callsInFlight.perOutpost`, `.perOrganisation` | `128`, `512` | the two quotas, for the API and the workers |
+| `door.hostnames` | `[]` | the hostnames of the route `choregos-outposts-door`, which serves `/outposts` and nothing else, in the entry form of `choregos-api.ingress` (an HTTPRoute or an Ingress, the API's class and gateway). A hostname that is also the console's (`choregos-web.ingress.hostnames`, `global.publicUrl`), the API's (`choregos-api.ingress.hostnames`, `global.apiUrl`) or a run door's fails the render: the one name an outpost's firewall opens is a name of its own |
+| `door.url` | empty | `CHOREGOS_OUTPOSTS_DOOR_URL`. Empty: `https://` and the first hostname. Enabled with neither a hostname nor a URL, or with a URL that has a path, the render fails and names the value, before the API would refuse to start |
+| `door.signingKey.existingSecret`, `.key` | empty, `signing-key` | the Secret the API (and the door's Deployment) reads `CHOREGOS_OUTPOSTS_DOOR_SIGNING_KEY` from, by reference and not optional. Empty: the chart's own Secret, below |
+| `door.announcedKeys` | `[]` | `CHOREGOS_OUTPOSTS_DOOR_ANNOUNCED_KEYS`. A key that is not one, a key listed twice or a fourth one fails the render |
+| `door.ratePerMinute` | `1200` | `CHOREGOS_OUTPOSTS_DOOR_RATE_PER_MINUTE`; `0` lifts the limit |
+| `door.requestTimeout` | `60s` | the HTTPRoute's `timeouts.request` (Gateway API v1.2 and later); empty leaves the field out |
+| `door.annotations` | ingress-nginx's read timeout and buffering | the door Ingress's own annotations: its timeout, and its rate limit or source restriction |
+| `door.dedicated` and what follows it | `false` | the door's own Deployment, below |
+
+`global.extraEnv` may not set one of these variables once `global.outposts.enabled` is true: the
+render fails and names it. While it is false, an installation that passed them through
+`global.extraEnv` (the way before this chart rendered them) renders as before.
+
+**The workers read the switch too.** A governed action's effect that calls a connector at an outpost
+is played by the orchestrator, which places the call itself: with the switch off there, such an effect
+is refused `outpost_paused`. The chart gives the switch and the quotas of calls in flight to every
+worker for that reason (and the workers already hold `CHOREGOS_SECRETS_KEKS`). The workers hold no
+`LISTEN` connection: a call a worker placed is read at its next look, up to 10 seconds after the
+outpost answered. The two caps per minute (`CHOREGOS_OUTPOSTS_CALLS_PER_MINUTE_PER_OUTPOST`, 600, and
+`CHOREGOS_OUTPOSTS_CALLS_PER_MINUTE_PER_ORGANISATION`, 2400) are not values of the chart yet: set them
+with `global.extraEnv`, for the API and the workers alike.
+
+**The signing key's Secret.** Either you create it and name it:
+
+**Writes through an outpost** are played by the workers, delivered at most once, and may leave their
+action `in_doubt` ([Security](security.md#a-connector-at-an-outpost)). A worker that stops between an
+outpost's claim and the record of its answer loses nothing for fifteen minutes: the retry reads the
+answer where the door stored it. After that the answer is gone and the action ends in doubt rather
+than being sent again. Watch the actions in doubt (`GET /api/v1/projects/{id}/actions?status=in_doubt`,
+or the `choregos.action.failed` events whose `status` is `in_doubt`): a count that rises says the link
+between an outpost and the platform loses answers. Upgrade the API and the workers together before an
+administrator opens a write: a worker of an earlier version places no write through an outpost, and
+the action fails saying so. The upgrade adds two columns to `connector_operations`
+(`20261112_1300_operation_delivery_statements.py`), null and false on every existing row.
+
+```bash
+openssl genpkey -algorithm ed25519 -out door.pem          # PEM, PKCS#8: CHOREGOS_OUTPOSTS_DOOR_SIGNING_KEY
+kubectl -n <namespace> create secret generic outposts-door-key --from-file signing-key=door.pem
+openssl pkey -in door.pem -pubout -outform DER | tail -c 32 | basenc --base64url | tr -d '='   # its public half
+```
+
+or you leave `door.signingKey.existingSecret` empty and the chart draws a key at the first
+installation, in the Secret `<release>-outposts-door`. That Secret is read back at every upgrade
+(Helm's `lookup`), is `immutable`, and carries `helm.sh/resource-policy: keep`: no upgrade changes
+the key, and an uninstall does not delete it. Every outpost pins its public half, so back it up.
+`lookup` needs the cluster. **Under Argo CD, or any `helm template | kubectl apply`, the chart
+cannot read the Secret back and would draw a new key at every render**; the immutable Secret makes
+that apply fail instead of changing the key under every outpost. There, create the Secret yourself.
+
+**The keys an operator pins.** `GET /api/v1/orgs/{org}/outposts/{slug}` and the answer that issues an
+enrolment token both carry `door_keys`: the public half of the key that signs, then the announced
+keys. Whoever runs the outpost copies them into the `door_keys` of its policy file, which is the only
+place an outpost reads them from: nothing the platform sends later adds a key to that list or changes
+it. `door_keys` is empty while the deployment has no signing key.
+
+**Rotating the signing key** is an overlap that the operators of outposts take part in, in this order:
+
+1. generate the next key and put its public half in `CHOREGOS_OUTPOSTS_DOOR_ANNOUNCED_KEYS`. The
+   management API now shows both keys; each operator adds the new one to the policy file;
+2. once every outpost pins it, make it `CHOREGOS_OUTPOSTS_DOOR_SIGNING_KEY` and move the former public
+   key to the announced list. By the door's contract, an outpost that did not pin the new key makes
+   none of the calls signed with it and refuses each with `signature_refused`;
+3. when the operators have dropped the former key from their files, remove it from the announced list.
+
+With the chart, each step is a change of values, and the key itself never changes in place: a Secret
+is one key for its whole life (the chart's own is immutable).
+
+1. Create a **second** Secret with the next key (the three commands above, under another name, say
+   `outposts-door-key-2`), and set `global.outposts.door.announcedKeys` to its public half. Upgrade:
+   the API restarts and shows both keys.
+2. When every outpost pins the next key, set `global.outposts.door.signingKey.existingSecret` to
+   `outposts-door-key-2` and `announcedKeys` to the FORMER public half. Upgrade: the door signs with
+   the next key. The former Secret is no longer read; the chart's own one stays in the namespace,
+   since it is kept. Leave it there until step 3 is done: it is the way back.
+3. When the operators have dropped the former key, empty `announcedKeys`, upgrade, and delete the
+   former Secret.
+
+An outpost whose operator uses the `choregos-outpost` chart follows by adding the next key to
+`policy.door_keys` at step 1 and removing the former one after step 3: each change restarts its pods.
+
+The API refuses to start on a door URL that is not an origin, on a signing key that is not an Ed25519
+private key in PEM, and on an announced key that is not a public key in that spelling, is listed
+twice, is the public half of the signing key, or is a fourth one
+(`apps/api/tests/test_outposts_settings.py`). With `CHOREGOS_OUTPOSTS` on it also refuses to start
+without `CHOREGOS_OUTPOSTS_DOOR_URL` or without `CHOREGOS_OUTPOSTS_DOOR_SIGNING_KEY`, naming the one
+that is missing: a door could not compare the URL a request signs without the first, and no outpost
+would make a call it handed over without the second (`apps/api/tests/test_outpost_door.py`).
+
+**The door.** `/outposts/v1` is served at the root of the API, beside `/mcp` and `/a2a` and outside
+`/api/v1` and the OpenAPI document: four `POST` routes, `enrol`, `poll`, `calls/{id}/answer` and
+`calls/{id}/refuse` (`packages/contracts/outpost-door.yaml`). What whoever runs the platform has to
+arrange for it:
+
+- **A hostname of its own**, the one `CHOREGOS_OUTPOSTS_DOOR_URL` names, routed to `/outposts` and to
+  nothing else. It is the one name an outpost's firewall opens (port 443, outbound), and the one you can
+  rate-limit or restrict by source apart from the console's. The door compares the URL each request
+  signs with that origin, never with the `Host` header: behind a proxy that rewrites the host, nothing
+  changes. The chart renders this route from `global.outposts.door.hostnames`
+  (`tests/charts/test_outpost_door_routed.py`); the DNS record and the certificate of that hostname
+  are yours to arrange, as the console's are.
+- **Long requests.** A poll waits up to 25 seconds before it answers with nothing. Give the route an
+  idle timeout above that (30 seconds or more), and do not buffer the answer. The chart's HTTPRoute
+  carries `timeouts.request` (60 seconds); its Ingress carries the door's own annotations, whose
+  defaults are ingress-nginx's: under another controller, write its equivalents in
+  `global.outposts.door.annotations`. While a poll waits it
+  holds no database connection: a hundred waiting instances cost a hundred open requests and no pool
+  (`apps/api/tests/test_outpost_long_poll_holds_no_connection.py`).
+- **What the process that serves the door needs**: the database, as every API process; the signing
+  key; `CHOREGOS_SECRETS_KEKS` (or the key wrapper your edition supplies), with which a call's arguments
+  wait at rest until an instance claims them, and without which no call can be placed; and, on
+  PostgreSQL, the `LISTEN` connection every replica already holds, which now also carries the
+  outposts' wake-ups (channel `choregos_outpost_calls`, ids only). Where that connection is down, a
+  poll still finds a call at its next look, 5 to 10 seconds later.
+- **One poll per instance.** The slot is on the instance's row and is given back when the poll answers
+  or its client goes away. If a replica is killed, the slots of the polls it held lapse within 30
+  seconds; until then those instances read 409 `poll_conflict` with `retry_after`, and each raises one
+  alert (below). Stop replicas gracefully.
+
+**The alert to wire.** A second poll under a key that already has one waiting is what a stolen key
+looks like. The door refuses it and writes the audit event `outpost.poll_conflict` in the
+organisation's audit log, once a minute at most for an instance, under the actor kind `outpost`.
+`/metrics` counts those events per organisation as `choregos_outpost_poll_conflicts_total{org}`: alert
+on its increase, and answer by revoking the instance
+(`POST /api/v1/orgs/{org}/outposts/{slug}/instances/{instance_id}/revoke`), which holds from its next
+request. With `monitoring.alerts` and outposts on, the chart ships the rule
+`ChoregosOutpostPollConflict` (critical, per organisation) in its one rule group, in both monitoring
+flavours. A daemon that restarts while the door still holds its former poll raises it too: read the
+audit event before you revoke.
+
+**Rotating the signing key also rotates the nonces.** The key that authenticates the door's nonces is
+derived from the signing key. After a rotation a daemon's next request is refused once
+(401 `stale_nonce`) with a fresh nonce, and it signs again: nothing to do. While replicas with the
+former and the new key run side by side, a daemon may be refused a few times in a row.
+
+**The door's own Deployment** (`global.outposts.door.dedicated: true`,
+[ADR 0148](adr/0148-the-outpost-door-is-a-third-door-with-its-own-contract.md) §8). Polls wait by the
+hundred. Split out, they take no worker and no pooled connection from the console and the runs: the
+chart renders a Deployment `choregos-outposts-door` from the API image, started as
+`python -m choregos_api.outposts` (`apps/api/src/choregos_api/outposts/alone.py`), a Service of the
+same name, a disruption budget, and the route then leads there.
+
+| Value (under `global.outposts.door`) | Default | What it does |
+| :-- | :-- | :-- |
+| `dedicated` | `false` | false: the API serves the door. true: the Deployment below does, and the route leads to it |
+| `replicas` | `2` | its replicas; `podDisruptionBudget.minAvailable` (1) keeps one through a drain |
+| `pool.size`, `pool.maxOverflow`, `pool.timeoutSeconds` | `5`, `5`, `10` | this Deployment's own connection pool (`CHOREGOS_DB_POOL_SIZE`, `CHOREGOS_DB_MAX_OVERFLOW`): each replica holds at most `size + maxOverflow` connections. Add `replicas × (size + maxOverflow)` to what you size PostgreSQL's `max_connections` for |
+| `terminationGracePeriodSeconds` | `45` | how long a pod has to stop. The process lets the polls it holds end by themselves, 30 seconds at most, then cancels what is left; a value that is not above 30 fails the render |
+| `extraEnv` | `[]` | variables for this Deployment only. It does not receive `global.extraEnv`, which carries connector secrets |
+| `resources` | 100m / 256Mi, 1 / 512Mi | its requests and limits |
+
+- **What that process serves**: the four verbs, `/healthz` and `/readyz` (the database answers), and
+  no other route of the API (`apps/api/tests/test_outpost_door_alone.py`). It listens for the
+  outposts' wake-ups on its own `LISTEN` connection, and for nothing else of the platform's events.
+- **What it holds**: the database's URL, the door's signing key, and `CHOREGOS_SECRETS_KEKS`. A
+  database credential in a pod that faces other parties' machines is new, and it is all it holds: not
+  the session secret, the run-token key, the gateway's key, the object store's or the identity
+  provider's. It mounts no service account token.
+- **The sweep stays in the API.** What ran out of time at an outpost nobody polls any more is closed
+  by a loop that lists every outpost under the platform's scope, which the door never takes. The API
+  runs it in both layouts, and the door's own process never does: keep the API running.
+- **The API still mounts the door**, in both layouts: `CHOREGOS_OUTPOSTS` is one switch. With the door
+  split out no route leads to the API's copy from outside the cluster.
+- **Network policies** (`networkPolicies.enabled`): the door's pods get a policy of their own,
+  `choregos-outposts-door-net`. They take requests from the entrance's namespace
+  (`choregos-api.ingress.gatewayNamespace`) and reach DNS and the database, nothing else; they are
+  left out of the platform's own egress policy. Nothing in this chart opens a way to an outpost,
+  because there is none to open: an outpost dials out.
+- **Not there**: the door's own process exposes no `/metrics`. The poll-conflict series is the API's
+  (it counts audit events), but the door's request counts are not in `http_requests_total` once it is
+  split out.
+
+### The outpost's side: the chart `choregos-outpost`
+
+Whoever runs an outpost installs the daemon in THEIR cluster with a chart of its own, published
+beside the platform's (`oci://ghcr.io/vargafoundation/charts/choregos-outpost`). It is not a subchart
+of this one and shares no value with it: its page is `charts/choregos-outpost/README.md`, and a
+complete example is `charts/choregos-outpost/values/example.yaml`. What you hand its operator is
+what the management API returns with an enrolment token: the door's origin (`policy.control_plane`),
+the door's keys (`policy.door_keys`), and the token itself. Hand them
+[Running an outpost](outpost-operator.md) with it: that page is written for them, and says first
+that an outpost does not give data residency.
+
+| Value | Default | What it does |
+| :-- | :-- | :-- |
+| `image.digest`, `image.tag` | empty | the daemon's image, by digest when one is given; else by tag, the chart's own version |
+| `replicas` | `1` | instances of the outpost: a StatefulSet, each replica with a claim of its own for its keys, its journal and its audit log (`persistence.size`, `.storageClass`) |
+| `policy.control_plane`, `policy.door_keys` | required | the door's origin and the keys the outpost obeys; without either the render fails and says where they come from |
+| `policy.endpoints.<alias>` | `{}` | the policy file's own fields (`url`, `tools`, `writes`, `timeout_s`, `max_payload_kb`), plus `auth.secretName` and `auth.secretKey`: the credential is a Secret the operator creates, mounted as a file whose path the chart writes as `auth.from_file`. A credential typed as a value fails the render |
+| `policy.concurrency`, `policy.audit.file` | `4`, `/var/log/choregos-outpost/audit.jsonl` | the ceiling of calls at once, and the local audit log, on the instance's claim |
+| `enrolment.existingSecret`, `.key` | `<name>-enrolment`, `token` | the Secret that holds the single-use token. An init container enrols the instance only when it has no identity yet |
+| `proxy.url` or `proxy.existingSecret`; `ca.configMap` or `ca.secret` | empty | the outbound proxy towards the door, and an authority to trust besides the system's |
+| `graceSeconds`, `terminationGracePeriodSeconds` | `20`, `30` | how long calls in progress have to finish, and the pod's own period, which must be above it |
+| `networkPolicy.enabled`, `.controlPlane.cidrs` | `true`, `[]` | egress to DNS, the door and the servers the endpoints name; no ingress at all. Without the door's addresses its port is opened to public addresses only, since a NetworkPolicy cannot name a host |
+| `servers` | `[]` | MCP servers the operator chooses to run beside the daemon, each admitted to by the daemon's pods only ([ADR 0149](adr/0149-a-tool-may-live-at-an-outpost.md) §9). The platform deploys none |
+
+The daemon's pod is locked down as a plugin server's is (no service account token, not root, a
+read-only root filesystem, no capability), and only its state and its audit log are writable
+(`tests/charts/test_outpost_chart.py`). An instance that exits with code 3 (the door no longer
+serves its protocol) or 4 (revoked) restarts in a loop on purpose: the chart's notes say so.
+
 ## Extra volumes for the API
 
 `choregos-api.extraVolumes` and `choregos-api.extraVolumeMounts` are appended verbatim to the
@@ -1095,9 +1420,9 @@ to another subject. A provider that says `email_verified: false` never links an 
 is accepted); it also refuses a new account for such an address and keeps a returning account's stored
 address. An account bound to another subject is refused, except that a per-organisation provider re-links
 an address of its own domains (audited `user.relink`), so an organisation can move to its own provider.
-When you **migrate the instance's identity provider** (every subject changes), set
-`choregos-api.oidcRelinkVerifiedEmail: true` so accounts whose address the new provider asserts as
-`email_verified: true` are re-linked, then set it back to `false`. When the token endpoint returns an ID token, its `iss`, `aud` and `nonce` must match the
+Each sign-in records the issuer beside the subject (`users.oidc_issuer`). When you **change the instance's
+identity provider** (every subject changes), accounts follow through a time-boxed re-link window:
+[Changing the identity provider](#changing-the-identity-provider). When the token endpoint returns an ID token, its `iss`, `aud` and `nonce` must match the
 sign-in and its `sub` must equal userinfo's; otherwise the sign-in is refused (401).
 
 Roles come from **groups**, and a group names its organisation:
@@ -1163,6 +1488,96 @@ API itself in `staging` and `prod`, and turned on only by `values/local.yaml`
 **API tokens** for the CLI and CI are issued by the person who will use them:
 `POST /me/tokens` (or *Admin → Tokens*), shown once, expiring after 90 days by default.
 
+## Changing the identity provider
+
+An account is bound to its provider's subject (`sub`), and a subject only means something at its issuer.
+When the instance moves to another OIDC provider (another product, another realm, a provider that
+federates the previous one), every person gets a new subject, and without a re-link their first sign-in
+through the new provider finds no account: it is refused ("this e-mail belongs to another identity at the
+provider"), or creates an empty account for an address the instance does not know. The accounts, their
+memberships, the runs, decisions and approvals they recorded and the audit trail would be orphaned.
+
+A **re-link window** moves them ([ADR 0164](adr/0164-a-change-of-identity-provider-re-links-accounts-in-a-time-boxed-window.md)).
+Until `choregos-api.oidcRelinkUntil` (`CHOREGOS_OIDC_RELINK_UNTIL`, an ISO 8601 instant at most 31 days
+ahead, UTC when it names no zone), a sign-in through the instance's provider whose subject is unknown moves
+an account to that subject when:
+
+- the provider asserts the address with `email_verified: true` (an omitted claim is not enough), and
+- exactly **one** account is bound to another issuer's subject (or to a subject whose issuer was never
+  recorded) with that address, letter case aside.
+
+The account keeps its id: everything that names it follows. Its subject and issuer become the new
+provider's, and its address follows the provider's spelling. Each move is audited as `user.relink`, with the
+previous subject and issuer, in the sign-in's own transaction; a second sign-in moves nothing more. The
+window refuses an account already bound to a subject of the new provider (an account is never moved twice),
+two accounts with one address (both, until you resolve them), a tenant's member (its own provider re-links
+it) and a machine account. Once the window is closed, such a sign-in is refused again.
+
+A provider that keeps the subjects (the same realm served under another host name, a realm imported with
+its user ids) needs no window: set the new issuer, and each account follows its subject at its next sign-in.
+
+**Before the day.**
+
+1. At the new provider, register the confidential client with the redirect URI
+   `<apiUrl>/api/v1/auth/callback` (the new `apiUrl` if the instance's host name changes in the same
+   deployment), the scopes `openid profile email groups`, and the same `choregos:<org>:<group>` groups.
+   Make the addresses arrive **verified** and **equal** to the accounts' addresses. A provider that
+   federates the previous one must pass its addresses on as verified (Keycloak: the identity provider's
+   *Trust Email*); a provider that never asserts `email_verified` (Entra ID omits it by default) cannot be
+   the target of a window.
+2. Plan, while the instance still signs in with the old provider:
+
+   ```bash
+   choregos admin identity relink --issuer https://new-idp.example.com/realms/acme
+   ```
+
+   (`--json` gives the whole plan; it is `GET /api/v1/platform/identity/relink?issuer=…`, for the platform
+   administrator, and it changes nothing.) It sorts every account: **to re-link** (moved at its first
+   sign-in), **ambiguous** (refused: another account carries the same address, letter case aside),
+   already on that issuer, **without a subject** (an invitation never used: linked by address at its first
+   sign-in, window or not) and **not concerned** (development subjects, tenants' members, machine
+   accounts). Resolve every ambiguous pair before the day: decide which account is the person's, and give
+   the other one an address nobody uses. There is no console gesture for it yet; in `psql`, as the
+   application role, in one transaction (row-level security needs the platform scope):
+   `BEGIN; SELECT set_config('app.current_orgs', '*', true); UPDATE users SET email =
+   'retired-<id>@invalid' WHERE id = '<id>'; COMMIT;`. Then plan again until `ambiguous` is empty. Check that the addresses listed to re-link are the ones the new provider
+   will assert.
+3. Rehearse it on a non-production instance first, the same way. The proof to look for: `choregos whoami`
+   shows the same user id before and after a person's first sign-in through the new provider, and their
+   runs and approvals are still theirs.
+
+**On the day**, in one deployment:
+
+4. Set `global.oidc.issuer`, `global.oidc.clientId` and the `client-secret` of `global.oidc.secretRef` to
+   the new provider's, and open the window with an end:
+
+   ```yaml
+   choregos-api:
+     oidcRelinkUntil: "2026-12-15T00:00:00Z"   # at most 31 days ahead
+   ```
+
+   A date further than 31 days fails the API's start; the former switch `oidcRelinkVerifiedEmail: true`
+   fails the render.
+5. Check: *Admin → Identity* shows the new issuer and "Re-link window: open until …";
+   `choregos admin identity relink` (no `--issuer`: the configured one) says `re-link window: open`.
+6. People sign in. Each move is in the audit log (`user.relink`); run the plan again to watch the accounts
+   to re-link go down.
+
+**Closing.**
+
+7. When nobody is left to re-link, or at the end you chose, remove `oidcRelinkUntil` (a passed date is
+   already a closed window; removing it keeps the configuration honest). An account still listed to re-link
+   belongs to someone who did not sign in during the window: open another window when they come back, or
+   leave them refused, which is the safe default.
+
+**What does not follow.** API tokens and machine accounts are bound to the account, not to the subject:
+they keep working. A browser session opened before the change lasts until it expires (8 hours at most).
+Tokens issued by the old provider are not accepted by the new one: the MCP door's OAuth clients sign in
+again (when `global.mcp.oauth` uses the console's issuer), and a standing delegation's offline token is
+renewed by its owner. An organisation's own provider (ADR 0108) is not concerned. A person whose address
+changed at the new provider gets a new, empty account at the first sign-in, and the old account stays
+listed to re-link: align the address at the provider before the day.
+
 ## Verifying an installation
 
 ```bash
@@ -1212,7 +1627,7 @@ global:
 
 The network policies open port 4318 and Tempo's query port in the namespace each address names
 (`<service>.<namespace>.svc…`), `monitoring` when the host names none (S40-20e). A platform that
-already runs Tempo needs no collector of its own: Tempo receives OTLP itself. The Diametral dev
+already runs Tempo needs no collector of its own: Tempo receives OTLP itself. One operator's dev
 tenant points both values at `tempo.tempo.svc.cluster.local` (ports 4318 and 3200); its chart network
 policies are off and the tenant's own policies open those two ports to the API, the workers, the
 gateway and the drift job only, never to the agent pods (#946): `choregos-egress-traces-otlp` and
@@ -1236,7 +1651,7 @@ overrides:
       processors: [service-graphs, span-metrics]
 ```
 
-On the Diametral dev tenant, Tempo is DiametralGroup/infra's `platform/tempo` (infra#1355).
+On that tenant, Tempo is the platform's own, deployed by its infrastructure repository.
 
 `global.tracing.tempoUrl` renders the CronJob `choregos-trace-drift` (`api.traceDrift.schedule`,
 03:17 by default) and a network policy that opens that port to its pods only. Each
@@ -1261,6 +1676,17 @@ and each model call made with a run's key becomes `chat <model>` (or `embeddings
 `text_completion`), a child of the run's stage span, with the provider, the requested and answering
 model, the provider's token counts and, on a failure, `error.type`. The run comes from the key's
 metadata, never from the request; a call made with a key that names no run has no span.
+
+The same callback measures what fills an ACP CLI's context (ADR 0141 §4): for a run of `claude-code`,
+`codex`, `gemini-cli`, `goose`, `opencode` or `copilot-cli`, it splits each call's request into the
+parts the runner registered (paragraph digests, never the text) and `backend`, scales them to the
+call's `prompt_tokens`, and posts at most one breakdown per 5 seconds per run to the API's internal
+routes, each signed for its run with the gateway's master key. The embedded LiteLLM gets
+`CHOREGOS_CONTEXT_API_URL` (`global.internalApiUrl` + `/api/v1/internal`) and the NetworkPolicy
+`choregos-litellm-to-api`. An external LiteLLM measures nothing unless it loads the callback and sets
+`CHOREGOS_CONTEXT_API_URL` and `LITELLM_MASTER_KEY` (the same key as the API's
+`CHOREGOS_GATEWAY_MASTER_KEY`) itself; an ACP CLI's run then says "not measurable" until its first
+breakdown.
 
 A run is one trace. Its root is the orchestrator's `invoke_workflow <stage>` span, which lasts as
 long as the wait for the run; the runner's `invoke_agent <backend>` span (the agent's session) and
@@ -1374,6 +1800,16 @@ The **enterprise edition** unlocks multiple organisations *and finishes the isol
 published separately, and it declares itself at start-up; the core never assumes it is there,
 which is why the default is the most restrictive one.
 
+**Where the identity boundary lies (decision D5, 2026-11-15; [ADR 0024](adr/0024-two-editions.md),
+amendment).** SAML sign-in for the instance's organisation, re-authentication for the gestures that need
+one, and the revocation of sessions (a person's own, and an administrator's for their own organisation)
+**belong to the community edition**; SCIM provisioning and the deprovisioning it drives, several
+organisations, per-organisation ceilings and identity providers, platform administrators and
+white-labelling stay in the enterprise edition. **This is decided, not delivered**: today the community core
+has OIDC, the session rows and the owner's own revocation; SAML, SAML's authentication time and the
+administrator's revocation of an organisation's sessions are still served by the enterprise edition until the
+code moves. This page changes to the present tense when it does.
+
 The rights check runs **before** the edition check on purpose: a developer gets `403` and
 learns nothing about the edition or the number of organisations. A product limit is not
 explained to someone who has no right to meet it.
@@ -1432,6 +1868,44 @@ value>` on the first model call. Nothing said the key had never resolved.
 If the API refuses to start with `réglages non résolus`, fix the source of the secret — the key
 is missing where it is stored, not where it is read.
 
+## Upgrading past 0.27.3
+
+A workflow may no longer name an agent of kind `external` — a client of the MCP door — as a step's actor
+([ADR 0163](adr/0163-a-client-prepares-a-person-s-decision-the-person-decides.md) §1, S65-20). Such a
+workflow ran the client's version as if the platform ran it. After the upgrade its next publication is
+refused (422), and a run of it fails before it starts with the agent named; name a person for the step
+instead. Look for one before upgrading:
+
+```sql
+SELECT p.slug AS project, w.name AS workflow, w.version, a.slug AS agent
+FROM workflow_defs w
+JOIN projects p ON p.id = w.project_id
+JOIN LATERAL jsonb_each(w.json::jsonb -> 'actors') AS actor(name, spec) ON true
+JOIN agents a ON a.org_id = p.org_id AND a.kind = 'external'
+  AND a.slug = split_part(actor.spec ->> 'agent', '@', 1)
+WHERE w.is_active;
+```
+
+No row: nothing to do. The rule needs no migration.
+
+**The GitHub App can be created from the console** (S70-21, [ADR 0167](adr/0167-the-github-app-is-created-from-a-manifest.md)). A platform administrator registers it on GitHub from a manifest; its credentials are sealed in the new table `github_app_registrations` (created empty by the migration). Nothing to do for a deployment whose settings name the App: they still win. To use it, keep `secrets-keks` configured ([the GitHub App](#the-github-app)).
+
+**The re-link switch becomes a window** (S70-20, [ADR 0164](adr/0164-a-change-of-identity-provider-re-links-accounts-in-a-time-boxed-window.md)).
+`choregos-api.oidcRelinkVerifiedEmail` (`CHOREGOS_OIDC_RELINK_VERIFIED_EMAIL`) is gone: `true` fails the
+render and refuses the API's start, naming `choregos-api.oidcRelinkUntil`, an instant at most 31 days
+ahead ([Changing the identity provider](#changing-the-identity-provider)). A deployment that left it at
+`false`, the default, has nothing to do. A migration adds the nullable column `users.oidc_issuer`, and every
+sign-in through an OIDC provider records its issuer from then on.
+
+## Upgrading to 0.27
+
+One permission changes. The API now deletes the objects of a task artifact it erases or purges (an assistant's
+task output, S63-24), where 0.26 left them to the bucket's lifecycle rule.
+
+| What | Why | What to do |
+| :-- | :-- | :-- |
+| `s3:DeleteObject` on the object store's bucket and prefix | The erasure of a person's or a subject's data (S63-16) and the retention purge delete the bytes before the rows. A store that refuses the delete fails the erasure (502, nothing erased) and keeps the expired rows for the next purge pass. | Add the permission to the credentials of `objectStore.secretRef` (an IAM policy, or the MinIO/RustFS policy of the key). A lifecycle rule on the bucket is no longer needed for this, and stays harmless. No migration. |
+
 ## Upgrading to 0.26
 
 0.26.0 brings assistants (stream S63, ADRs 0133-0140): a plugin may ship one, an organisation installs it
@@ -1442,6 +1916,7 @@ chart's job as usual; what an operator does:
 | What | Why | What to do |
 | :-- | :-- | :-- |
 | `CHOREGOS_TOKEN_EXCHANGE_AUDIENCES` | The audiences a person's token may be exchanged for (`user_exchange`, ADR 0135). Unset, a connector's editor chooses any audience the identity provider allows. | Set it in `global.extraEnv` to a JSON list of your sources' audiences before binding a need under `user_exchange` ([security](security.md), "Review of the person's identity"). |
+| `CHOREGOS_TOKEN_EXCHANGE_SCOPES` | The scope sent with an exchange, by audience (a JSON object, e.g. `{"insights360-mcp": "insights360-mcp"}`). Unset, no scope is sent. | Keycloak grants an audience only through a scope the request names or a default scope of the client: name the scope here and keep it optional on the client, so the source's audience is not in every token the console is issued. |
 | The identity provider | `user_exchange` needs token exchange (RFC 8693) enabled for the API's client and limited to the sources' audiences; a standing delegation (ADR 0137) needs `offline_access`, bounded and revocable offline sessions. | Configure the realm; nothing changes for deployments without assistants. |
 | Open sessions of `/responses` | The migration that makes sessions durable closes the sessions open at upgrade time (`reason: migrated`, their spend booked). | Upgrade outside working hours if hosted prompt agents are in use. |
 | Connected accounts | Accounts are now bound to the authorization server the person consented to (`provider_digest`). | Accounts made before 0.26 (none outside a test deployment) are connected again once. |
@@ -1558,7 +2033,8 @@ without discovery needs `choregos-api.oidcEndpoints` (all three endpoints). A co
 bound to the provider's `sub`, and an address the provider reports as `email_verified: false` never
 links, renames or creates an account (`choregos-api.oidcRequireEmailVerified`, default true). To
 migrate the instance's provider, set `choregos-api.oidcRelinkVerifiedEmail: true` temporarily, then
-back to `false`. Accounts created before this change are not migrated.
+back to `false` (replaced after 0.27.1 by a window, `choregos-api.oidcRelinkUntil`: [Changing the
+identity provider](#changing-the-identity-provider)). Accounts created before this change are not migrated.
 
 ### Roles from the identity provider (S47-05)
 An IdP sign-in now removes the organisation roles it granted (`memberships.source` `idp`) and no longer maps; roles
@@ -1682,7 +2158,7 @@ activity as `unreachable`. A `403` names the reason (`not_allowed`, `denied:<pat
 `port_not_allowed`, `private_address`), a `429` comes with `Retry-After`, and a `407` means the proxy
 credentials are not a live run's.
 
-**On the Diametral platform** the infra owns egress with Cilium FQDN policies: runner pods may reach eight
+**On a platform whose infrastructure owns egress** with Cilium FQDN policies (one operator's case), runner pods may reach eight
 hosts directly, identically for every project and agent, so the Choregos proxy is a net there until infra
 (1) gives the `choregos-egress` pods an FQDN egress rule for the hosts the instance allows and (2) removes
 the runner entry's direct FQDNs. Until then a `502 unreachable` also appears if the proxy pod itself has no

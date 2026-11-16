@@ -166,6 +166,12 @@ class HumanRequest(Base, PkMixin, TimestampMixin):
     decided_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     decision: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
+    #: Who an organisation administrator reassigned the request to (ADR 0153): `{user, group}`, which
+    #: replaces the workflow's actor for this request only. Null: the workflow's actor answers.
+    assignee: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
+    #: What a person's client prepared for this request through the MCP door (ADR 0163): `{kind, answer,
+    #: reason, values, note, summary, by, via, at}`. A proposal, never a decision; one per request.
+    draft: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
 
 
 class Event(Base, PkMixin):

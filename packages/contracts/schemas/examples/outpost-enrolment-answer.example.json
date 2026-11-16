@@ -1,0 +1,12 @@
+{
+  "instance_id": "b3c1f6a2-6d0e-4b7a-9a55-2f1c8e7d4a90",
+  "organisation": "acme",
+  "outpost": "factory-floor",
+  "status": "pending",
+  "fingerprint": "SHA256:09wT63TkuDIeTj6MxD5TFt7dxaJNpfKNrUkVyJymRJE",
+  "protocol": {
+    "current": 1,
+    "minimum": 1
+  },
+  "server_time": "2026-11-12T10:00:01Z"
+}

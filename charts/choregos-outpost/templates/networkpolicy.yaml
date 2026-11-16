@@ -1,0 +1,94 @@
+{{- if .Values.networkPolicy.enabled }}
+{{- /*
+What the daemon's pods may reach, and that nothing may reach them.
+
+Egress: DNS; the door (`policy.control_plane`), or the outbound proxy that leads to it; the servers
+the policy's endpoints name; the servers this chart runs beside the daemon. Nothing else: the daemon
+calls two kinds of places and has no telemetry and no update check.
+
+Ingress: none. An outpost dials out, and the daemon listens on nothing (ADR 0147 §1): no rule admits
+anybody, the platform's cluster least of all.
+
+A NetworkPolicy names pods and addresses, never a host. So: an endpoint is opened as the pods of the
+namespace its Service's name carries (`<service>.<namespace>.svc`), or as the addresses given for it;
+the door, when no address is given for it, is opened as its port on every public address, private
+ranges excluded. `networkPolicy.controlPlane.cidrs` narrows that to the door's own addresses.
+
+A network plugin that does not enforce NetworkPolicies ignores all of this without a word.
+*/ -}}
+{{- $_ := include "choregos-outpost.policy" . }}
+{{- $np := .Values.networkPolicy }}
+{{- $fullname := include "choregos-outpost.fullname" . }}
+{{- $private := list "10.0.0.0/8" "172.16.0.0/12" "192.168.0.0/16" "169.254.0.0/16" "100.64.0.0/10" }}
+{{- $egress := list }}
+{{- /* DNS */}}
+{{- $dns := $np.dns | default dict }}
+{{- $resolvers := list (dict "namespaceSelector" (dict "matchLabels" (dict "kubernetes.io/metadata.name" ($dns.namespace | default "kube-system")))) }}
+{{- range ($dns.cidrs | default list) }}
+{{- $resolvers = append $resolvers (dict "ipBlock" (dict "cidr" (toString .))) }}
+{{- end }}
+{{- $egress = append $egress (dict "to" $resolvers "ports" (list (dict "protocol" "UDP" "port" 53) (dict "protocol" "TCP" "port" 53))) }}
+{{- /* The door, or the proxy that leads to it. */}}
+{{- $way := $np.controlPlane | default dict }}
+{{- $proxy := .Values.proxy | default dict }}
+{{- $behindProxy := or $proxy.url $proxy.existingSecret }}
+{{- $dialled := urlParse (toString .Values.policy.control_plane) }}
+{{- if $proxy.url }}{{- $dialled = urlParse $proxy.url }}{{- end }}
+{{- if $proxy.existingSecret }}{{- $dialled = dict "host" "" "hostname" "" "scheme" "" }}{{- end }}
+{{- $port := 0 }}
+{{- if $way.port }}
+{{- $port = int $way.port }}
+{{- else if $proxy.existingSecret }}
+{{- fail "networkPolicy.controlPlane.port: the proxy's URL is in a Secret this chart does not read. Give the port the daemon dials to reach it." }}
+{{- else }}
+{{- $port = int (include "choregos-outpost.portOf" $dialled) }}
+{{- end }}
+{{- $peers := include "choregos-outpost.peers" (dict "host" $dialled.hostname "cidrs" $way.cidrs "namespace" $way.namespace "podLabels" $way.podLabels "release" .Release.Namespace) | fromJsonArray }}
+{{- if not $peers }}
+{{- if $behindProxy }}
+{{- fail "networkPolicy.controlPlane.cidrs: the daemon reaches the door through its outbound proxy, and a NetworkPolicy cannot name a host. Give the proxy's addresses (cidrs), or its namespace when it runs in this cluster (namespace, podLabels)." }}
+{{- end }}
+{{- $peers = list (dict "ipBlock" (dict "cidr" "0.0.0.0/0" "except" $private)) }}
+{{- end }}
+{{- $egress = append $egress (dict "to" $peers "ports" (list (dict "protocol" "TCP" "port" $port))) }}
+{{- /* The servers the endpoints name. One this chart runs is opened below, by its own pods. */}}
+{{- $own := dict }}
+{{- range (.Values.servers | default list) }}
+{{- $_ := set $own (printf "%s-%s" $fullname .name) true }}
+{{- end }}
+{{- range $alias, $endpoint := (.Values.policy.endpoints | default dict) }}
+{{- $url := urlParse (toString $endpoint.url) }}
+{{- $network := $endpoint.network | default dict }}
+{{- range $field, $_ := $network }}
+{{- if not (has $field (list "namespace" "podLabels" "port" "cidrs")) }}
+{{- fail (printf "policy.endpoints.%s.network.%s: no such field (namespace, podLabels, port, cidrs)" $alias $field) }}
+{{- end }}
+{{- end }}
+{{- if or $network (not (hasKey $own $url.hostname)) }}
+{{- $reached := include "choregos-outpost.peers" (dict "host" $url.hostname "cidrs" $network.cidrs "namespace" $network.namespace "podLabels" $network.podLabels "release" $.Release.Namespace) | fromJsonArray }}
+{{- if not $reached }}
+{{- fail (printf "policy.endpoints.%s.network.cidrs: %q is neither a Service of this cluster (<service>.<namespace>.svc) nor an address, and a NetworkPolicy cannot name a host. Give the addresses its server answers at; or set networkPolicy.enabled=false and bound the daemon's egress by other means." $alias $url.hostname) }}
+{{- end }}
+{{- $egress = append $egress (dict "to" $reached "ports" (list (dict "protocol" "TCP" "port" (int ($network.port | default (include "choregos-outpost.portOf" $url)))))) }}
+{{- end }}
+{{- end }}
+{{- range (.Values.servers | default list) }}
+{{- $pods := include "choregos-outpost.serverSelectorLabels" (dict "root" $ "name" .name) | fromYaml }}
+{{- $egress = append $egress (dict "to" (list (dict "podSelector" (dict "matchLabels" $pods))) "ports" (list (dict "protocol" "TCP" "port" (int .port)))) }}
+{{- end }}
+{{- range ($np.extraEgress | default list) }}
+{{- $egress = append $egress . }}
+{{- end }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $fullname }}
+  labels: {{- include "choregos-outpost.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: {{- include "choregos-outpost.selectorLabels" . | nindent 6 }}
+  policyTypes: ["Ingress", "Egress"]
+  # No rule: nothing dials an outpost.
+  ingress: []
+  egress: {{- toYaml $egress | nindent 4 }}
+{{- end }}

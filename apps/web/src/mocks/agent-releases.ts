@@ -5,6 +5,7 @@
  * enough for the pages to render and for Playwright to walk a release; it is not the API.
  */
 import { ApiError } from "@/lib/api";
+import { socialOf } from "./agent-social";
 import type {
   Agent,
   AgentChannelStats,
@@ -77,6 +78,9 @@ function stateOf(agent: Agent): State {
 }
 
 /** The agent, with the channels the demo holds for it: what `GET /agents/{slug}` would answer. */
+const allAgents = (): Agent[] =>
+  typeof window === "undefined" ? [] : ((window as unknown as { __mockAgents?: Agent[] }).__mockAgents ?? []);
+
 export function decorateAgent(agent: Agent): Agent {
   const state = stateOf(agent);
   const pending = state.releases.find((r) => r.status === "pending_approval") ?? null;
@@ -95,6 +99,7 @@ export function decorateAgent(agent: Agent): Agent {
     candidate_since: state.since,
     release_policy: structuredClone(state.policy),
     pending_release: pending ? structuredClone(pending) : null,
+    social: socialOf(agent, allAgents()),
     versions: agent.versions?.map((v) => ({ ...v, channels: channels(v.version) })),
   };
 }

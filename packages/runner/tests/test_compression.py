@@ -24,6 +24,7 @@ from choregos_contracts import StageContext, StageInput
 from choregos_runner import compression
 from choregos_runner.exits import Exit
 from choregos_runner.runner import Runner
+from choregos_runner.workspace import git_dir_for
 
 from .conftest import FakeInternalClient, agent_script, valid_result
 
@@ -182,7 +183,7 @@ async def test_the_agent_reaches_the_gateway_through_the_run_s_proxy(
     assert Path(started["cwd"]) == compression.proxy_home(stage_input)
     workspace = runner_settings.workspace
     tracked = subprocess.run(
-        ["git", "show", "--name-only", "--format=", "HEAD"],
+        ["git", "--git-dir", str(git_dir_for(workspace)), "show", "--name-only", "--format=", "HEAD"],
         cwd=workspace,
         capture_output=True,
         text=True,

@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 from choregos_contracts import StageInput
-from choregos_runner.workspace import Workspace, WorkspaceError, run_command
+from choregos_runner.workspace import Workspace, run_command
 
 pytestmark = pytest.mark.asyncio
 
@@ -67,19 +67,23 @@ async def test_inherited_git_dir_does_not_reach_the_enclosing_repository(
     assert top.resolve() == (tree / "runs" / "r1").resolve()
 
 
-async def test_a_workspace_without_a_repository_of_its_own_is_refused(
+async def test_a_broken_dot_git_in_the_tree_is_replaced_and_never_climbed_from(
     linked_worktree: tuple[Path, Path], stage_input: StageInput
 ) -> None:
-    """A directory with a broken `.git` inside a checkout: git must not climb to the checkout."""
+    """A directory with a broken `.git` inside a checkout: git must not climb to the checkout. The
+    runner's repository is its own directory (S65-04c), so the `.git` the agent left is not read at
+    all; it is replaced by the agent's copy."""
     main, tree = linked_worktree
     before = _snapshot(main, tree)
     path = tree / "runs" / "r2"
-    (path / ".git").mkdir(parents=True)  # exists, so `init` is skipped, yet it is no repository
+    (path / ".git").mkdir(parents=True)  # no repository, only a directory called `.git`
 
-    with pytest.raises(WorkspaceError, match="not the workspace's own"):
-        await Workspace(path).prepare(stage_input.model_copy(update={"repo": None}))
+    workspace = Workspace(path)
+    await workspace.prepare(stage_input.model_copy(update={"repo": None}))
 
     assert _snapshot(main, tree) == before
+    assert (path / ".git" / "HEAD").is_file(), "the agent's own copy"
+    assert (workspace.git_dir / "HEAD").is_file()
 
 
 async def test_a_command_run_in_the_workspace_does_not_inherit_the_repository_variables(

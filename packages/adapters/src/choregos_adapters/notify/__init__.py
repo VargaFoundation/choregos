@@ -4,5 +4,6 @@
 from __future__ import annotations
 
 from .slack import SlackNotifier
+from .teams import TeamsNotifier
 
-__all__ = ["SlackNotifier"]
+__all__ = ["SlackNotifier", "TeamsNotifier"]

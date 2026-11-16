@@ -127,3 +127,12 @@ async def end_other_sessions(session: AsyncSession, user: User, keep: str | None
     # `iat` is in whole seconds: truncated, the cutoff refuses every cookie issued before this second.
     user.sessions_not_before = utcnow().replace(microsecond=0)
     return int(getattr(result, "rowcount", 0) or 0)
+
+
+async def revoke_user_sessions(session: AsyncSession, user: User) -> int:
+    """End EVERY session of a person: an administrator's gesture (ADR 0170), or a de-provisioning.
+
+    Recorded sessions are ended and the cookies opened before sessions were recorded fall below
+    `users.sessions_not_before`; none is kept. Returns how many recorded sessions were ended.
+    """
+    return await end_other_sessions(session, user, None)

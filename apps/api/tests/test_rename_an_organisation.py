@@ -1,6 +1,6 @@
 """Rename an organisation (`PATCH /orgs/{org}`).
 
-The Choregos dev ran in an organisation `diametral`, the name of the host, in an open source
+An instance ran in an organisation named after its host, `globex`, in an open source
 project, and nothing could rename it; the community edition holds only one, so nothing could create
 another one to move to either. Its name is changed by its administrator; its slug, by the platform
 administrator, because it is in every URL, every MCP address and the name of the IdP groups. The
@@ -138,11 +138,11 @@ async def test_a_platform_administrator_who_is_not_a_member_renames_name_and_slu
         await login(client, "platform@example.dev")
         await _remove_the_memberships("platform@example.dev")
         assert (await client.get(ORG)).json() == [], "he belongs to no organisation"
-        renamed = await client.patch(f"{ORG}/varga", json={"name": "Diametral", "slug": "diametral"})
+        renamed = await client.patch(f"{ORG}/varga", json={"name": "Globex", "slug": "globex"})
         assert renamed.status_code == 200, renamed.text
         assert renamed.json() == {
-            "slug": "diametral",
-            "name": "Diametral",
+            "slug": "globex",
+            "name": "Globex",
             "role": None,
             "currency": "EUR",
             "aliases": ["varga"],
@@ -150,16 +150,14 @@ async def test_a_platform_administrator_who_is_not_a_member_renames_name_and_slu
             "complete_agents": None,
         }
         await login(client, "admin@varga.dev")
-        assert {(o["slug"], o["name"]) for o in (await client.get(ORG)).json()} == {
-            ("diametral", "Diametral")
-        }
+        assert {(o["slug"], o["name"]) for o in (await client.get(ORG)).json()} == {("globex", "Globex")}
         (row,) = [
             a for a in (await client.get("/api/v1/audit")).json()["items"] if a["action"] == "org.update"
         ]
         assert row["payload"]["before"]["slug"] == "varga"
         assert row["payload"]["after"] == {
-            "slug": "diametral",
-            "name": "Diametral",
+            "slug": "globex",
+            "name": "Globex",
             "currency": "EUR",
             "tool_scripts": None,
             "complete_agents": None,

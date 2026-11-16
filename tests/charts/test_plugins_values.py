@@ -15,6 +15,7 @@ from typing import Any
 
 import pytest
 import yaml
+from choregos_core.publishing import PUBLISHING
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 CHART = ROOT / "charts" / "choregos"
@@ -25,9 +26,9 @@ PLUGINS: dict[str, Any] = {
     "sources": [
         {
             "name": "varga",
-            "index": "oci://ghcr.io/vargafoundation/choregos-agents/index:stable",
+            "index": "oci://registry.example/choregos-agents/index:stable",
             "trust": {
-                "identity": "https://github.com/VargaFoundation/choregos-agents/.*",
+                "identity": "https://github.com/example/choregos-agents/.*",
                 "issuer": "https://token.actions.githubusercontent.com",
             },
         }
@@ -93,10 +94,9 @@ def test_by_default_the_built_in_agents_are_installed_pre_approved(tmp_path: pat
         ("varga", name, "^1.0", preapproved) for name, preapproved in BUILT_IN
     ]
     (varga,) = config.sources
-    assert varga.index == "oci://ghcr.io/vargafoundation/choregos-agents/index:latest"
-    publish = (
-        "https://github.com/VargaFoundation/choregos-agents/.github/workflows/publish.yml@refs/heads/main"
-    )
+    # The chart's default source is the publishing identity's (ADR 0156).
+    assert varga.index == PUBLISHING.plugin_index
+    publish = PUBLISHING.plugin_signing_identity
     assert re.fullmatch(varga.trust.identity, publish)
     assert not re.fullmatch(varga.trust.identity, publish.replace("refs/heads/main", "refs/heads/evil"))
     assert re.fullmatch(varga.trust.issuer, "https://token.actions.githubusercontent.com")

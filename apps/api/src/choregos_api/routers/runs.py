@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Runs: detail, ACP log (SSE), transcript, diff."""
+"""Runs: detail, ACP log (SSE), transcript, diff, what fills the context."""
 
 from __future__ import annotations
 
@@ -7,8 +7,9 @@ import json
 from typing import Annotated, Any
 
 from choregos_core import access_report, matches_any
+from choregos_core.context_breakdown import EVENT as CONTEXT_BREAKDOWN
 from choregos_core.tool_ledger import IN_FLIGHT
-from fastapi import APIRouter, Header, Query, Request
+from fastapi import APIRouter, Header, Query, Request, status
 from sqlalchemy import select
 from sse_starlette.sse import EventSourceResponse
 
@@ -18,8 +19,21 @@ from ..errors import forbidden, not_found
 from ..events import get_bus, sse_format
 from ..knowledge.marked import readable, require_readable
 from ..rbac import Permission
-from ..schemas import ArtifactRef, DiffFileDto, DiffSummaryDto, RunDto, RunEventDto, RunLogsDto
+from ..schemas import (
+    ArtifactRef,
+    DiffFileDto,
+    DiffSummaryDto,
+    RunContextDto,
+    RunContextPoint,
+    RunDto,
+    RunEventDto,
+    RunLogsDto,
+    StopRequest,
+)
 from ..services import run_dto, tool_connectors_of
+from ..services.context_breakdown import MEASURED_BACKENDS, breakdown_of
+from ..services.model_catalogue import max_input_tokens_of
+from ..services.run_cancel import cancel_run_now
 
 router = APIRouter(tags=["runs"])
 
@@ -69,6 +83,21 @@ async def get_run(id: str, session: Db, principal: Me) -> RunDto:
     return run_dto(run, project.slug, await tool_connectors_of(session, run, project))
 
 
+@router.post(
+    "/runs/{id}/cancel",
+    response_model=RunDto,
+    status_code=status.HTTP_202_ACCEPTED,
+    operation_id="cancelRun",
+)
+async def cancel_run(id: str, body: StopRequest, session: Db, principal: Me) -> RunDto:
+    """Stop this run now, with a reason (ADR 0142 §2): its result is written as stopped by the caller
+    unless one is written already (409, saying how it ended), and its executor is stopped once that
+    is committed. Needs `item:control` on the run's project; audited as `run.cancel`."""
+    run, project = await _run(session, id, principal)
+    stopped = await cancel_run_now(session, principal, run, body.reason)
+    return run_dto(stopped, project.slug)
+
+
 @router.get("/runs/{id}/events", operation_id="getRunEvents")
 async def run_events(
     request: Request,
@@ -102,6 +131,40 @@ async def run_events(
             yield sse_format(live_event)
 
     return EventSourceResponse(stream())
+
+
+@router.get(
+    "/runs/{id}/context-breakdown", response_model=RunContextDto, operation_id="getRunContextBreakdown"
+)
+async def context_breakdown(id: str, session: Db, principal: Me) -> RunContextDto:
+    """What fills the run's context (ADR 0141 §6): its last measured call and the series of kept
+    totals, read from its `context.breakdown` events, with the run's own read right. A breakdown the
+    runner or the gateway left without the model's window gets it from the organisation's catalogue.
+    An ACP CLI's run is measurable once the gateway's callback kept a breakdown of it (S64-08b)."""
+    run, project = await _run(session, id, principal)
+    payloads = (
+        (
+            await session.execute(
+                select(RunEvent.payload)
+                .where(RunEvent.run_id == run.id, RunEvent.type == CONTEXT_BREAKDOWN)
+                .order_by(RunEvent.seq)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    kept = [breakdown for payload in payloads if (breakdown := breakdown_of(payload)) is not None]
+    latest = kept[-1] if kept else None
+    if latest is not None and latest.max_input_tokens is None:
+        window = await max_input_tokens_of(session, project.org_id, latest.model)
+        latest = latest.model_copy(update={"max_input_tokens": window})
+    return RunContextDto(
+        run_id=run.id,
+        measurable=run.backend in MEASURED_BACKENDS or bool(kept),
+        backend=run.backend,
+        latest=latest,
+        series=[RunContextPoint(call=b.call, at=b.at, prompt_tokens=b.prompt_tokens) for b in kept],
+    )
 
 
 @router.get("/runs/{id}/access", operation_id="getRunAccess")

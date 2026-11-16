@@ -53,8 +53,8 @@ from .identity_exchange import (
     IdentityUnavailable,
     exchanged_token,
 )
-from .mcp_gateway import connector_client, route_of
-from .mcp_gateway_identity import GatewayRefusal, identity_of_run
+from .mcp_gateway import RouteRefusal, connector_client, route_of, tool_error
+from .mcp_gateway_identity import identity_of_run
 from .platform_network import (
     WHERE,
     PlatformNetworkRefused,
@@ -273,28 +273,32 @@ async def propose_call(
     (separation of roles)."""
     from ..errors import ApiError
 
-    # ADR 0105: the route is judged BEFORE the action exists, so a refused connector (mode `required`,
-    # `off`, no gateway) leaves no pending action for a person to approve.
+    # ADR 0105, ADR 0149 §7: the route is judged BEFORE the action exists, so a refused connector (mode
+    # `required`, `off`, no gateway; an outpost that is paused or revoked) leaves no pending action for a
+    # person to approve.
     try:
         await route_of(session, tool.connector)
-    except GatewayRefusal as refused:
+    except RouteRefusal as refused:
+        status, body = tool_error(refused)
+        named = {name: value for name, value in body.items() if name not in ("error", "type")}
         raise ApiError(
-            403, "Network policy", str(refused), type_="network_policy", extra={"code": refused.code}
+            status, "Network policy", str(refused), type_="network_policy", extra=named
         ) from refused
     # The same call is the same action (#1379, ADR 0035), as for an allowed write: a model retrying or a
     # script run again (ADR 0122) finds its proposal instead of putting a second one before a person.
+    from choregos_contracts import ActionStatus
+
     from ..db.models import Action
 
     action_id = call_id(run.id, tool.name, arguments)
     action = await session.get(Action, action_id)
     if action is None:
         action = await _propose_tool_action(session, run, project, tool, arguments, action_id)
-    return {
-        "action": action.id,
-        "status": action.status,
-        "message": "proposed: a person approves it in the console before anything is done",
-        "decision_path": f"/p/{project.slug}/actions/{action.id}",
-    }
+    if action.status == ActionStatus.IN_DOUBT.value:
+        # The same call is the same action, whatever became of it: one that ended in doubt is said
+        # so, and repeating the call proposes nothing new (ADR 0149 §5).
+        return _in_doubt(project, action)
+    return _pending(project, action)
 
 
 async def _propose_tool_action(
@@ -435,8 +439,8 @@ async def write_through_action(
     # workers, an action and a priced line would already exist.
     try:
         await route_of(session, tool.connector)
-    except GatewayRefusal as refused:
-        return 403, {"error": str(refused), "type": "network_policy", "code": refused.code}, False
+    except RouteRefusal as refused:
+        return (*tool_error(refused), False)
     from choregos_contracts import ActionStatus
 
     from ..config import get_settings
@@ -463,7 +467,13 @@ async def write_through_action(
         await release_connection(session)
         await get_temporal().start_action(temporal_action_id(action.id), {"action_id": action.id})
     deadline = time.monotonic() + get_settings().courtier_attente_ecriture_s
-    finished = {ActionStatus.SUCCEEDED.value, ActionStatus.FAILED.value, ActionStatus.REJECTED.value}
+    in_doubt = ActionStatus.IN_DOUBT.value
+    finished = {
+        ActionStatus.SUCCEEDED.value,
+        ActionStatus.FAILED.value,
+        ActionStatus.REJECTED.value,
+        in_doubt,
+    }
     # A call that found its action already there read it in the request's transaction: that one ends
     # before the wait too.
     async with outside_the_transaction(session):
@@ -484,6 +494,11 @@ async def write_through_action(
         # a 422 would tell the agent that an effect that happened did not.
         result = await _action_result(session, action)
         return 200, bounded_result(result, tool.operation.result_max_bytes), created
+    if action.status == in_doubt:
+        # Sent, and nobody knows whether it was executed: a claim that got no answer (504), booked
+        # like any call that may have reached its server. The agent that repeats the call finds this
+        # action again and is told the same: nothing replays it.
+        return 504, _in_doubt(project, action), created
     if action.status in finished:
         refusal = {"error": action.error or f"action {action.status}", "action": action.id}
         return 422, refusal, created
@@ -507,6 +522,26 @@ def _pending(project: Project, action: Any) -> dict[str, Any]:
         "action": action.id,
         "status": action.status,
         "message": "proposed: a person approves it in the console before anything is done",
+        "decision_path": f"/p/{project.slug}/actions/{action.id}",
+    }
+
+
+#: What an agent is told of an action one of whose effects was sent and never answered (ADR 0149 §5),
+#: the first time and every time it repeats the call.
+IN_DOUBT_MESSAGE = (
+    "the write was sent and its answer never came: nobody knows whether it was executed. It is not "
+    "replayed and nothing was undone; repeating the call returns this same action. A person checks "
+    "the system the write was for"
+)
+
+
+def _in_doubt(project: Project, action: Any) -> dict[str, Any]:
+    return {
+        "error": action.error or IN_DOUBT_MESSAGE,
+        "code": "action_in_doubt",
+        "action": action.id,
+        "status": action.status,
+        "message": IN_DOUBT_MESSAGE,
         "decision_path": f"/p/{project.slug}/actions/{action.id}",
     }
 
@@ -635,11 +670,12 @@ async def _call(
     from choregos_core.secrets import SecretNotFound
 
     instance = tool.connector
-    # ADR 0105: how the connector is reached is decided first; a gateway refusal leaves nothing behind.
+    # ADR 0105, ADR 0149: how the connector is reached is decided first; a refusal of the route (the
+    # gateway's, an outpost's) leaves nothing behind.
     try:
         route = await route_of(session, instance)
-    except GatewayRefusal as refused:
-        return 403, {"error": str(refused), "type": "network_policy", "code": refused.code}
+    except RouteRefusal as refused:
+        return tool_error(refused)
     try:
         await enforce_connector_call(
             session,
@@ -657,7 +693,8 @@ async def _call(
         return 429, {"error": str(rate_limited), "type": "rate_limited"}
     try:
         # A gateway connector (ADR 0105) goes through the gateway, signed with this call's identity; a
-        # plugin's server (ADR 0096), its Service and bearer token; any other, its type's adapter.
+        # connector at an outpost (ADR 0149), through that outpost's rendezvous; a plugin's server
+        # (ADR 0096), its Service and bearer token; any other, its type's adapter.
         client = await _client_for(session, tool, route.via_gateway, run, project, acting)
         # A server may take thirty seconds to answer: the caller's transaction, when it allows it,
         # does not wait for it on a pooled connection (#1354).
@@ -675,8 +712,10 @@ async def _call(
         return 422, {"error": str(unavailable), "type": UNAVAILABLE}
     except McpError as mcp_error:
         return 502, {"error": redact(str(mcp_error))}
-    except GatewayRefusal as refused:  # a lost assertion key or credential: refused, never a 500
-        return 403, {"error": str(refused), "type": "network_policy", "code": refused.code}
+    except RouteRefusal as refused:
+        # A lost assertion key or credential of the gateway; an outpost that is offline, that refused,
+        # that did not answer in time, or a call its door did not admit: refused, never a 500.
+        return tool_error(refused)
     except AdapterError as adapter_refusal:
         return 422, {"error": redact(str(adapter_refusal))}
     except (SecretNotFound, httpx.HTTPError) as failure:

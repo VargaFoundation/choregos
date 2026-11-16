@@ -1,6 +1,6 @@
 """No pull request is asked for without a branch: the work item escalates instead (S22-46, #539).
 
-On the dev tenant (2026-10-15, v0.17.15), `DiametralGroup/choregos-sandbox-dev#21` (`dev-simple`):
+On the dev tenant (2026-10-15, v0.17.15), `globex/choregos-sandbox-dev#21` (`dev-simple`):
 the bug was already fixed on `main`, the implementation changed nothing and pushed no branch. Since
 S22-40 the empty diff passes the gates, the work item reached `reviewed`, and `t-open-pr`
 (`does: open_pr`) asked GitHub for a pull request from that absent branch: 422 `head invalid`,

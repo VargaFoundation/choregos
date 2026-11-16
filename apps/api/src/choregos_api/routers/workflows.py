@@ -123,7 +123,9 @@ async def validate_for_project(
     ctx: ProjectCtx, body: WorkflowValidateRequest, session: Db
 ) -> WorkflowValidation:
     """The same validation, in the context of a project: it also warns about a human actor whose group
-    nobody in the project's organisation carries (a step addressed to it waits for an administrator)."""
+    nobody in the project's organisation carries, or whose person is not one of its members (a step
+    addressed to them waits for an administrator)."""
+    from ..services.human_assignee import unknown_user_warnings, users_known_in
     from ..services.human_groups import groups_known_in, unknown_group_warnings
 
     validation = await validate(body)
@@ -136,6 +138,10 @@ async def validate_for_project(
     known = await groups_known_in(session, ctx.project.org_id)
     validation.warnings += [
         WorkflowIssue(**issue) for issue in unknown_group_warnings(workflow, known, ctx.project.slug)
+    ]
+    validation.warnings += [
+        WorkflowIssue(**issue)
+        for issue in unknown_user_warnings(workflow, await users_known_in(session, ctx.project.org_id))
     ]
     # An agent that asks for memory the project's policy disables gets none: said, not refused (S51-01).
     engine = await policy_engine(session, ctx.id)

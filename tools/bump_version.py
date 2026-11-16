@@ -6,7 +6,8 @@
 
 What "everywhere" means: the nine `pyproject.toml`, the umbrella's `Chart.yaml` (its
 version, its appVersion, the version of each of its dependencies), each subchart's
-`Chart.yaml`, and the image tags (global `imageTag`, the subcharts' `image.tag`).
+`Chart.yaml`, the outpost chart's, and the image tags (global `imageTag`, the subcharts'
+`image.tag`).
 
 Before 2026-09-24 nothing did this: the pyprojects stayed at 0.1.0, the chart at 1.0.0,
 and `release.yml` rewrote `imageTag` with `sed` at build time — so the repository
@@ -50,7 +51,10 @@ def _files() -> list[tuple[pathlib.Path, list[tuple[re.Pattern[str], str]]]]:
             ],
         )
     )
-    for chart in sorted((ROOT / "charts" / "choregos" / "charts").glob("*/Chart.yaml")):
+    subcharts = sorted((ROOT / "charts" / "choregos" / "charts").glob("*/Chart.yaml"))
+    # The outpost's chart is a chart of its own, published beside the umbrella (S65-16). Its image tag
+    # is its appVersion: no value of it holds a version.
+    for chart in [*subcharts, ROOT / "charts" / "choregos-outpost" / "Chart.yaml"]:
         targets.append(
             (
                 chart,

@@ -4,6 +4,11 @@
 The `lexical` memory keeps its facts in the API's tables (`memory_facts`, `projects`). The adapters
 do not know the API: it hands them its session and its models, here, at startup, and the
 orchestrator, which imports the API, does the same.
+
+A connector at an outpost (`mcp-outpost`, ADR 0149) is the same shape: the adapters hold the tool
+client and the port of the rendezvous it calls through, and the rendezvous itself is a table of the
+API's, behind the outposts' door. The API registers the factory that builds the client over it; the
+workers, which play governed writes, do the same.
 """
 
 from __future__ import annotations
@@ -41,6 +46,26 @@ def _lexical_memory(cfg: dict[str, Any]) -> LexicalMemory:
             Project=Project, MemoryFact=MemoryFact, Organization=Organization, MemoryStore=MemoryStore
         ),
     )
+
+
+def _outpost_tools(cfg: dict[str, Any]) -> Any:
+    """The tool client of a connector at an outpost, over the API's rendezvous (ADR 0149 §3).
+
+    What reaches this factory was built by the one seam of connector calls
+    (`services/mcp_gateway.py`, `connector_client`), which injects what the platform alone has: the
+    caller's session, the outpost and who the call is made for. A configuration that carries none of
+    it builds nothing. Imported here, not at the top: the route's module imports the adapters'
+    registry, which this module fills."""
+    from .services.outpost_route import tool_client
+
+    return tool_client(cfg)
+
+
+def attach_outposts() -> None:
+    """Registers the platform's factory for `mcp-outpost`, in place of the adapters' own, which can
+    build nothing without a rendezvous. The declaration (the type's schema and checks) stays the
+    adapters'."""
+    register("mcp", "mcp-outpost")(_outpost_tools)
 
 
 def attach_lexical_memory() -> None:

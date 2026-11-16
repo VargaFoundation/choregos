@@ -9,6 +9,9 @@ import { DeliveryTools, groupConnectors } from "@/components/org-connectors";
 import { discoverySummary } from "@/components/discovery";
 import { egressFlag, useEgressGuard } from "@/components/egress/egress-provider";
 import { Glossary } from "@/components/glossary";
+import { OutpostConnectorFields } from "@/components/outposts/connector-fields";
+import { OperationStatements, type StatementRefusal } from "@/components/outposts/operation-statements";
+import { RefusalNote } from "@/components/outposts/refusal";
 import { ProcedurePanel } from "@/components/procedures/procedure-panel";
 import { dataHandlingProblems } from "@/lib/data-handling";
 import { SchemaForm, missingFields, type JsonSchema } from "@/components/schema-form";
@@ -23,6 +26,18 @@ import {
 } from "@/components/secret-field";
 import { Badge, Button, Card, Empty, ErrorNote, Input, Select } from "@/components/ui";
 import { api } from "@/lib/api";
+import {
+  OUTPOST_CONNECTOR_TYPE,
+  deliveryOf,
+  deliveryPatch,
+  isOutpostWrite,
+  outpostConfigProblems,
+  refusalOf,
+  routeRefusal,
+  statementRefusals,
+  type DeliveryDraft,
+  type OutpostRefusal,
+} from "@/lib/outposts";
 import { connectorTarget, presetOfMcpUrl } from "@/lib/procedures";
 import { useSession } from "@/lib/session";
 import { kindLabel, isOrgDeclarable } from "@/lib/connector-kinds";
@@ -203,22 +218,34 @@ function Instance({
   }, [highlighted, anchor]);
   const [diff, setDiff] = useState<string | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
+  // A connector at an outpost: discovery's refusal is the route's (ADR 0149 §7), shown with what it names.
+  const [refused, setRefused] = useState<OutpostRefusal | null>(null);
+  const atOutpost = instance.type === OUTPOST_CONNECTOR_TYPE;
   async function decouvrir() {
     setErreur(null);
+    setRefused(null);
     setDiff(null);
     try {
       setDiff(discoverySummary(await api.discoverConnectorOperations(org, instance.name)));
       await client.invalidateQueries({ queryKey: ["org-connectors", org] });
     } catch (cause) {
-      setErreur(cause instanceof Error ? cause.message : "discovery failed");
+      const refusal = refusalOf(cause);
+      if (atOutpost && routeRefusal(refusal)) setRefused(refusal);
+      else setErreur(cause instanceof Error ? cause.message : "discovery failed");
     }
   }
   const action = (
-    <span className="inline-flex items-center gap-2">
+    // Wraps on a narrow screen: a route's badge (the gateway's, an outpost's) is as long as its names.
+    <span className="inline-flex flex-wrap items-center justify-end gap-2">
       <Badge tone="neutral">{kindLabel(instance.kind)}</Badge>
       {instance.type === "mcp-gateway" && (
         <Badge tone="accent" data-testid={`route-${instance.name}`}>
           via gateway{typeof instance.config?.server === "string" ? `: ${instance.config.server}` : ""}
+        </Badge>
+      )}
+      {atOutpost && (
+        <Badge tone="accent" data-testid={`route-${instance.name}`}>
+          at outpost: {String(instance.config?.outpost ?? "?")}/{String(instance.config?.endpoint ?? "?")}
         </Badge>
       )}
       {instance.kind === "mcp" && (
@@ -245,6 +272,7 @@ function Instance({
         </p>
       )}
       {erreur && <ErrorNote>{erreur}</ErrorNote>}
+      {refused && <RefusalNote refusal={refused} />}
       {instance.server && (
         <p className="mb-2 text-sm text-ink-muted" data-testid={`plugin-server-${instance.name}`}>
           The server of the plugin <strong data-verbatim>{instance.server.plugin}</strong> {instance.server.version}, run by
@@ -284,7 +312,13 @@ function Instance({
             </thead>
             <tbody>
               {(instance.operations ?? []).map((operation) => (
-                <Operation key={operation.name} org={org} connecteur={instance.name} operation={operation} />
+                <Operation
+                  key={operation.name}
+                  org={org}
+                  connecteur={instance.name}
+                  operation={operation}
+                  atOutpost={isOutpostWrite(instance, operation)}
+                />
               ))}
             </tbody>
           </table>
@@ -322,6 +356,9 @@ function Secrets({
   const editing = toggled ?? open;
   const [config, setConfig] = useState<Record<string, unknown>>(instance.config ?? {});
   const [erreur, setErreur] = useState<string | null>(null);
+  // An edit is judged as a declaration (ADR 0149 §1): its refusals are shown as the API gives them.
+  const atOutpost = instance.type === OUTPOST_CONNECTOR_TYPE;
+  const [refused, setRefused] = useState<OutpostRefusal | null>(null);
   // Slots being added (`api_key.2`, ADR 0089): shown as "not set" until their first value is typed.
   const [adding, setAdding] = useState<string[]>([]);
   // A field starting with `_` is the platform's (a plugin server's `_server_token`): no route sets it.
@@ -333,6 +370,7 @@ function Secrets({
   if (names.length === 0 && Object.keys(jsonSchema.properties ?? {}).length === 0) return null;
   async function saveConfig() {
     setErreur(null);
+    setRefused(null);
     try {
       await guard((allow) => api.updateOrgConnector(org, instance.name, { config, ...egressFlag(allow) }), {
         gesture: `Change the settings of ${instance.name}`,
@@ -342,7 +380,8 @@ function Secrets({
       setEditing(false);
       await refresh();
     } catch (cause) {
-      setErreur(cause instanceof Error ? cause.message : "refused");
+      if (atOutpost) setRefused(refusalOf(cause));
+      else setErreur(cause instanceof Error ? cause.message : "refused");
     }
   }
   return (
@@ -366,17 +405,39 @@ function Secrets({
             void saveConfig();
           }}
         >
-          <SchemaForm
-            schema={jsonSchema}
-            value={config}
-            onChange={setConfig}
-            connectorType={webSearchType(instance.kind, instance.type)}
-          />
-          <Button size="sm" tone="primary" type="submit" disabled={missingFields(jsonSchema, config).length > 0 || dataHandlingProblems(instance.type, config.data_handling).length > 0}
+          {atOutpost ? (
+            <OutpostConnectorFields
+              org={org}
+              schema={jsonSchema}
+              value={config}
+              onChange={(next) => {
+                setRefused(null);
+                setConfig(next);
+              }}
+              errors={refused?.fields}
+            />
+          ) : (
+            <SchemaForm
+              schema={jsonSchema}
+              value={config}
+              onChange={setConfig}
+              connectorType={webSearchType(instance.kind, instance.type)}
+            />
+          )}
+          <Button
+            size="sm"
+            tone="primary"
+            type="submit"
+            disabled={
+              missingFields(jsonSchema, config).length > 0 ||
+              dataHandlingProblems(instance.type, config.data_handling).length > 0 ||
+              (atOutpost && Object.keys(outpostConfigProblems(config, jsonSchema)).length > 0)
+            }
           >
             Save settings
           </Button>
           {erreur && <ErrorNote>{erreur}</ErrorNote>}
+          {refused && !refused.fields && <RefusalNote refusal={refused} />}
         </form>
       )}
       {names.map((field) => {
@@ -418,20 +479,49 @@ function ExistingOrNew({
   return <SecretField field={field} state={state} onSave={save} onClear={clear} />;
 }
 
-function Operation({ org, connecteur, operation }: { org: string; connecteur: string; operation: ConnectorOperation }) {
+/**
+ * One operation's rule: its policy, project groups, approver group and result cap. A write of a connector
+ * at an outpost (`atOutpost`) also says how it is delivered (ADR 0149 §6): the two statements are drafted
+ * on a row of their own, leave with the policy that opens the write or alone, and the API's refusal of a
+ * rule that says neither is shown there, on the statements it names.
+ */
+function Operation({
+  org,
+  connecteur,
+  operation,
+  atOutpost = false,
+}: {
+  org: string;
+  connecteur: string;
+  operation: ConnectorOperation;
+  atOutpost?: boolean;
+}) {
   const client = useQueryClient();
   const [groupes, setGroupes] = useState((operation.groups ?? []).join(", "));
   const [approbateurs, setApprobateurs] = useState(operation.approver_group ?? "");
   const [erreur, setErreur] = useState<string | null>(null);
   const [assouplir, setAssouplir] = useState<OperationPatch["policy"] | null>(null);
   const [cap, setCap] = useState(operation.result_max_bytes?.toString() ?? "");
+  const stored = deliveryOf(operation);
+  const [draft, setDraft] = useState<DeliveryDraft>(stored);
+  const [refused, setRefused] = useState<StatementRefusal | null>(null);
+  /** What a change of the rule says of the delivery: the statements drafted (none but at an outpost, where they are shown). */
+  const statements = deliveryPatch(operation, draft);
+  /** A refusal that names a statement is shown on the statements; `withDetail` false when another place shows the sentence. */
+  function heard(cause: unknown, withDetail: boolean): boolean {
+    const fields = atOutpost ? statementRefusals(cause) : {};
+    if (Object.keys(fields).length === 0) return false;
+    setRefused({ detail: withDetail && cause instanceof Error ? cause.message : null, fields });
+    return true;
+  }
   async function changer(body: OperationPatch) {
     setErreur(null);
+    setRefused(null);
     try {
       await api.updateConnectorOperation(org, connecteur, operation.name, body);
       await client.invalidateQueries({ queryKey: ["org-connectors", org] });
     } catch (cause) {
-      setErreur(cause instanceof Error ? cause.message : "refused");
+      if (!heard(cause, true)) setErreur(cause instanceof Error ? cause.message : "refused");
     }
   }
   const lus = groupes
@@ -439,6 +529,7 @@ function Operation({ org, connecteur, operation }: { org: string; connecteur: st
     .map((g) => g.trim())
     .filter(Boolean);
   return (
+    <>
     <tr className="border-t border-line">
       <td className="py-2">
         <code>{operation.name}</code>
@@ -487,7 +578,15 @@ function Operation({ org, connecteur, operation }: { org: string; connecteur: st
               question={`Loosen ${operation.name} to ${assouplir}? ${WHAT_IT_ALLOWS[assouplir as keyof typeof WHAT_IT_ALLOWS] ?? ""}, in every project it applies to.`}
               confirmer={`Set ${assouplir}`}
               action={async () => {
-                await api.updateConnectorOperation(org, connecteur, operation.name, { policy: assouplir });
+                setRefused(null);
+                try {
+                  // A write at an outpost opens with the statements drafted for it, in the same request.
+                  await api.updateConnectorOperation(org, connecteur, operation.name, { policy: assouplir, ...statements });
+                } catch (cause) {
+                  // The sentence stays in the confirmation; the statements it names say so where they are.
+                  heard(cause, false);
+                  throw cause;
+                }
                 await client.invalidateQueries({ queryKey: ["org-connectors", org] });
               }}
               onDone={() => setAssouplir(null)}
@@ -558,6 +657,22 @@ function Operation({ org, connecteur, operation }: { org: string; connecteur: st
         />
       </td>
     </tr>
+    {atOutpost && (
+      <tr>
+        <td colSpan={6} className="pb-2">
+          <OperationStatements
+            id={`delivery-${connecteur}-${operation.name}`}
+            operation={operation}
+            draft={draft}
+            stored={stored}
+            refused={refused}
+            onChange={setDraft}
+            onSave={() => void changer(statements)}
+          />
+        </td>
+      </tr>
+    )}
+    </>
   );
 }
 
@@ -628,6 +743,7 @@ function DeclareInstance({ org }: { org: string }) {
   const [config, setConfig] = useState<Record<string, unknown>>({});
   const [secrets, setSecrets] = useState<Record<string, SecretDraft>>({});
   const [erreur, setErreur] = useState<string | null>(null);
+  const [refused, setRefused] = useState<OutpostRefusal | null>(null);
   // A project's delivery tools are set in the project: they are not declared here.
   // The organisation's own model gateway is the one exception (S44-04).
   const candidats = (types.data ?? []).filter((t) => isOrgDeclarable(t.kind, t.type));
@@ -644,9 +760,12 @@ function DeclareInstance({ org }: { org: string }) {
   const viaGateway = type?.type === "mcp-gateway";
   const gateway = useQuery({ queryKey: ["mcp-gateway", org], queryFn: () => api.mcpGateway(org), enabled: viaGateway });
   const noGateway = viaGateway && (!gateway.data || !gateway.data.gateway || gateway.data.gateway.mode === "off");
+  // A connector at an outpost (ADR 0149): its outpost and its alias are chosen, never typed as an address.
+  const atOutpost = type?.type === OUTPOST_CONNECTOR_TYPE;
   async function declareInstance() {
     if (!type) return;
     setErreur(null);
+    setRefused(null);
     try {
       await guard(
         (allow) =>
@@ -655,7 +774,8 @@ function DeclareInstance({ org }: { org: string }) {
             type: type.type,
             kind: type.kind,
             config,
-            ...bodyOfDrafts(secrets),
+            // A connector at an outpost carries no secret, not even an empty one: its credential is the outpost's.
+            ...(atOutpost ? {} : bodyOfDrafts(secrets)),
             ...egressFlag(allow),
           }),
         {
@@ -669,8 +789,12 @@ function DeclareInstance({ org }: { org: string }) {
       setConfig({});
       setSecrets({});
       await client.invalidateQueries({ queryKey: ["org-connectors", org] });
+      if (atOutpost) await client.invalidateQueries({ queryKey: ["outposts", org] });
     } catch (cause) {
-      setErreur(cause instanceof Error ? cause.message : "refused");
+      // The declaration's refusals, as the API gives them: a 422 on the field it names, a 409 with its
+      // code and the outpost's own words.
+      if (atOutpost) setRefused(refusalOf(cause));
+      else setErreur(cause instanceof Error ? cause.message : "refused");
     }
   }
   return (
@@ -714,6 +838,7 @@ function DeclareInstance({ org }: { org: string }) {
                   setChoix(e.target.value);
                   setConfig({});
                   setSecrets({});
+                  setRefused(null);
                 }}
               >
                 <option value="">—</option>
@@ -737,15 +862,28 @@ function DeclareInstance({ org }: { org: string }) {
               />
             </div>
           )}
-          {type && (
-            <SchemaForm
-              schema={schema}
-              value={config}
-              onChange={setConfig}
-              connectorType={webSearchType(type.kind, type.type)}
-            />
-          )}
-          {(type?.secret_fields ?? []).map((field) => (
+          {type &&
+            (atOutpost ? (
+              <OutpostConnectorFields
+                org={org}
+                schema={schema}
+                value={config}
+                onChange={(next) => {
+                  setRefused(null);
+                  setConfig(next);
+                }}
+                errors={refused?.fields}
+              />
+            ) : (
+              <SchemaForm
+                schema={schema}
+                value={config}
+                onChange={setConfig}
+                connectorType={webSearchType(type.kind, type.type)}
+              />
+            ))}
+          {/* No secret at an outpost: its credential is the outpost's, in its policy file (ADR 0147 §7). */}
+          {(atOutpost ? [] : (type?.secret_fields ?? [])).map((field) => (
             <SecretField
               key={field}
               field={field}
@@ -763,11 +901,13 @@ function DeclareInstance({ org }: { org: string }) {
             </ErrorNote>
           )}
           {erreur && <ErrorNote>{erreur}</ErrorNote>}
+          {refused && !refused.fields && <RefusalNote refusal={refused} />}
           <Button
             type="submit"
             tone="accent"
             disabled={
               noGateway ||
+              (atOutpost && Object.keys(outpostConfigProblems(config, schema)).length > 0) ||
               !nom ||
               nameInvalid ||
               !type ||
