@@ -130,7 +130,7 @@ async def test_a_developer_does_not_decide_and_neither_does_an_api_token(
         refused = await by_token.post(
             base, json={"decision": "approve"}, headers={"Authorization": f"Bearer {token}"}
         )
-        assert refused.status_code == 403 and "human session" in refused.text
+        assert refused.status_code == 403 and refused.json()["code"] == "decision_requires_session"
     finally:
         await by_token.aclose()
 

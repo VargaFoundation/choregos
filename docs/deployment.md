@@ -1889,6 +1889,21 @@ ahead ([Changing the identity provider](#changing-the-identity-provider)). A dep
 `false`, the default, has nothing to do. A migration adds the nullable column `users.oidc_issuer`, and every
 sign-in through an OIDC provider records its issuer from then on.
 
+**A decision or a confirmation needs the person's session** (S67-06, [ADR 0154](adr/0154-the-terminal-is-a-surface-of-the-platform.md) §7, G10).
+Deciding a human step, deciding or settling a governed action, approving a release, deciding an agent
+release, and confirming or refusing a write an assistant proposed are accepted from the console (cookie), an
+embedded frame's token and a developer surface's session (`choregos login`), and refused with `403` and the
+code `decision_requires_session` for an API token (a machine account's, an MCP or A2A client's included), a
+run token and an outpost. Governed actions, releases and agent releases already refused a token that carries
+no sign-in; what changes is a token minted from a person's sign-in, which no longer decides in their place.
+Two routes took a token before and a client may rely on it: `POST /work-items/{id}/decisions` (`postDecision`)
+and `POST /me/conversations/{id}/actions/{action}/confirm|refuse`. **For one minor version only**, keep them
+open with `CHOREGOS_LEGACY_DECISION_ROUTES=post_decision,conversation_actions` (either name alone is fine;
+through `global.extraEnv`): the old behaviour is restored on exactly those routes, and a name that is neither
+is refused at start. Remove the setting once the clients sign in with `choregos login` or decide from the
+console; the next minor removes it. Before upgrading, look in the audit log for decisions made by a token:
+`workitem.decision` or `assistant.action.confirm` entries whose actor is a machine account.
+
 ## Upgrading to 0.27
 
 One permission changes. The API now deletes the objects of a task artifact it erases or purges (an assistant's
