@@ -9,7 +9,7 @@ from pathlib import Path
 
 from choregos_contracts import Workflow
 
-from .engine import Decision, WorkflowEngine
+from .engine import Decision, UnknownStateError, WorkflowEngine
 from .flow import CONTEXT_DOCUMENTS, PULL_REQUEST_SECTIONS, artifact_flow
 from .graph import to_graph, to_mermaid
 from .parser import checksum, dump_workflow, parse_workflow, parse_workflow_file
@@ -123,6 +123,7 @@ __all__ = [
     "TEMPLATES_DIR",
     "TEMPLATE_NAMES",
     "Decision",
+    "UnknownStateError",
     "ValidationReport",
     "WorkflowEngine",
     "artifact_flow",
