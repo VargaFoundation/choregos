@@ -245,14 +245,16 @@ class MarketDataProvider:
             text = text.replace(key, "***")
         return text
 
-    async def fetch(self, url: str, params: dict[str, Any] | None = None) -> httpx.Response:
+    async def fetch(
+        self, url: str, params: dict[str, Any] | None = None, headers: dict[str, str] | None = None
+    ) -> httpx.Response:
         """A GET with a bounded retry on 5xx and network errors. 429 raises `RateLimited` at once.
 
         Any other 4xx is returned to the caller, which knows what its provider means by it."""
         last_failure: str = ""
         for attempt in range(MAX_ATTEMPTS):
             try:
-                result = await self._client.get(url, params=params)
+                result = await self._client.get(url, params=params, headers=headers)
             except httpx.HTTPError as failure:
                 # The class only: an httpx message can carry the URL, and the URL carries the key.
                 last_failure = f"network error ({type(failure).__name__})"

@@ -23,6 +23,7 @@ from typing import Any
 from urllib.parse import quote
 
 from .base import (
+    KeyRefused,
     MarketDataError,
     MarketDataProvider,
     RateLimited,
@@ -68,17 +69,17 @@ class TiingoProvider(MarketDataProvider):
         super().__init__(**kwargs)
         if not self._api_key:
             raise MarketDataError("tiingo: the secret `api_key` is required")
-        # A header, not `token=` in the URL: httpx logs URLs, and a URL travels further than a header.
-        self._client.headers["Authorization"] = f"Token {self._api_key}"
 
     async def _get(self, symbol: str, suffix: str, params: dict[str, Any] | None = None) -> Any:
         # The symbol is validated (no `/`, `?`, `#`, `..`) AND percent-encoded: it stays one path segment.
         url = BASE + quote(validate_symbol(symbol).lower(), safe="") + suffix
-        response = await self.fetch(url, params)
+        # A header, not `token=` in the URL: httpx logs URLs, and a URL travels further than a header.
+        # Set per request, with the key of THIS call: several keys are used in turn (ADR 0089).
+        response = await self.fetch(url, params, {"Authorization": f"Token {self._api_key}"})
         if response.status_code == 404:
             raise UnknownSymbol(f"tiingo: unknown symbol {symbol}")
         if response.status_code in (401, 403):
-            raise MarketDataError(f"tiingo: the key was refused (HTTP {response.status_code})")
+            raise KeyRefused(f"tiingo: the key was refused (HTTP {response.status_code})")
         try:
             body = response.json()
         except ValueError as error:
