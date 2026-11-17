@@ -336,6 +336,25 @@ class LexicalMemory:
             )
         return [_memory(row) for row in rows]
 
+    async def list_facts(self, project: str) -> list[Memory]:
+        """Every active fact of one memory, and only of it (its export, ADR 0174 point 7)."""
+        MemoryFact = self.models.MemoryFact  # noqa: N806
+
+        async with self._sessions()() as session:
+            home = await self._home(session, project)
+            rows = (
+                (
+                    await session.execute(
+                        _select(MemoryFact).where(
+                            self._scope(MemoryFact, home), MemoryFact.status == "active"
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
+        return [_memory(row) for row in rows]
+
     async def accept_pending(self, project: str, memory_id: str) -> bool:
         return await self._set_status(project, memory_id, "active")
 

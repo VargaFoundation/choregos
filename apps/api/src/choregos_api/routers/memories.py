@@ -9,11 +9,13 @@ What the caller may not see does not exist for it (404).
 
 from __future__ import annotations
 
+import asyncio
 from typing import Annotated, Any
 
+from choregos_core import utcnow
 from choregos_core.memory_bindings import OWN, RESERVED_SLUGS, SHARED
 from choregos_core.memory_scope import global_store_namespace, memory_key
-from fastapi import APIRouter, Path, Query, status
+from fastapi import APIRouter, Path, Query, Response, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,6 +23,7 @@ from ..audit import record
 from ..db.models import Agent, AgentVersion, MemoryStore, Organization, Project
 from ..deps import Db, Me, ProjectCtx
 from ..errors import conflict, forbidden, not_found, unprocessable
+from ..knowledge import okf
 from ..rbac import Permission
 from ..schemas import (
     AgentSpec,
@@ -32,6 +35,7 @@ from ..schemas import (
     MemoryStoreUser,
     ProjectMemoryCreate,
 )
+from ..services import memory_export
 from ..services.agent_governance import visible_clause
 from ..services.memory_access import (
     can_manage,
@@ -41,6 +45,7 @@ from ..services.memory_access import (
     visible_to,
 )
 from ..services.organisations import organisation_by_slug
+from .memory import okf_zip, refuse_unlisted
 from .memory import to_dto as memory_dto
 
 router = APIRouter(tags=["memory"])
@@ -278,6 +283,38 @@ async def search_global_memory(
 
 
 @router.get(
+    "/orgs/{org}/memories/{slug}/export",
+    operation_id="exportGlobalMemory",
+    response_class=Response,
+    responses={200: {"content": {"application/zip": {}}}},
+)
+async def export_global_memory(org: str, slug: Slug, session: Db, principal: Me) -> Response:
+    """The global memory's active facts as an Open Knowledge Format bundle (ADR 0174 point 7), for
+    whoever may search it."""
+    _member(principal, org)
+    organisation, store = await _global(session, principal, org, slug)
+    adapter = await global_adapter(session, organisation)
+    refuse_unlisted(adapter)
+    namespace = global_store_namespace(memory_key(organisation), store.slug)
+    facts = await adapter.list_facts(namespace)
+    decided = await memory_export.deciders(session, organisation.id, [m.id for m in facts])
+    files = memory_export.files_of(facts, decided, utcnow())
+    content = await asyncio.to_thread(okf.bundle_zip, store.slug, store.display_name or store.slug, files)
+    await record(
+        session,
+        principal,
+        "memory.export",
+        org_id=organisation.id,
+        target_type="memory_store",
+        target_id=store.id,
+        facts=len(files),
+        verified=sum(1 for m in facts if m.id in decided),
+        bytes=len(content),
+    )
+    return okf_zip(content, store.slug)
+
+
+@router.get(
     "/orgs/{org}/memories/{slug}/pending",
     response_model=list[MemoryDto],
     operation_id="listGlobalPendingMemory",
@@ -314,6 +351,7 @@ async def decide_global_pending(
         target_id=body.id,
         reason=body.reason,
         memory_store=store.slug,
+        found=bool(done),
     )
     return {"status": "accepted" if done else "not_found"}
 

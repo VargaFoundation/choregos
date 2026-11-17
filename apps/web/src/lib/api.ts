@@ -414,12 +414,13 @@ export async function request<T>(path: string, init: RequestInit = {}): Promise<
 }
 
 /** A knowledge base as an Open Knowledge Format bundle (ADR 0174 point 6): a zip the browser saves. */
-async function knowledgeExport(org: string, slug: string): Promise<Blob> {
+/** An Open Knowledge Format bundle (ADR 0174): a knowledge base's or a memory's, as a zip. */
+async function okfBundle(path: string, name: string): Promise<Blob> {
   if (IS_MOCK) {
     const { mockKnowledgeExport } = await import("@/mocks/data");
-    return mockKnowledgeExport(slug);
+    return mockKnowledgeExport(name);
   }
-  const response = await fetch(`${API_BASE}/orgs/${org}/knowledge/${slug}/export`, {
+  const response = await fetch(`${API_BASE}${path}`, {
     credentials: "include",
     cache: "no-store",
   });
@@ -804,7 +805,7 @@ export const api = {
     form.append("file", file);
     return request<KnowledgeDocument>(`/orgs/${org}/knowledge/${slug}/documents`, { method: "POST", body: form });
   },
-  exportKnowledgeBase: (org: string, slug: string) => knowledgeExport(org, slug),
+  exportKnowledgeBase: (org: string, slug: string) => okfBundle(`/orgs/${org}/knowledge/${slug}/export`, slug),
   knowledgeDocument: (org: string, slug: string, id: string) =>
     request<KnowledgeDocument>(`/orgs/${org}/knowledge/${slug}/documents/${id}`),
   deleteKnowledgeDocument: (org: string, slug: string, id: string) =>
@@ -1386,6 +1387,11 @@ export const api = {
     request<Memory[]>(`/projects/${qualify(id)}/memory/search${query({ q, ...memoryParams(which) })}`),
   memoryPending: (id: string, which?: MemoryChoice) =>
     request<Memory[]>(`/projects/${qualify(id)}/memory/pending${query(memoryParams(which))}`),
+  /** One memory of the project as an OKF bundle (S72-04): its active facts, `verified` where a person accepted one. */
+  exportMemory: (id: string, which?: MemoryChoice) =>
+    okfBundle(`/projects/${qualify(id)}/memory/export${query(memoryParams(which))}`, `${id}-${which?.memory ?? "shared"}`),
+  /** A global memory as an OKF bundle (S72-04), for whoever may search it. */
+  exportGlobalMemory: (org: string, slug: string) => okfBundle(`/orgs/${org}/memories/${slug}/export`, slug),
   memoryDecide: (id: string, memoryId: string, action: "accept" | "reject", which?: MemoryChoice) =>
     request<unknown>(`/projects/${qualify(id)}/memory/pending${query(memoryParams(which))}`, {
       method: "POST",
