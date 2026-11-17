@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Button, Input } from "@/components/ui";
 import { ActionDiff } from "@/components/assistants/action-diff";
+import { ConfirmedGesture } from "@/components/confirmed-gesture";
 import { api, API_BASE, ApiError } from "@/lib/api";
 import {
   createEmitter,
@@ -234,24 +235,27 @@ export function EmbeddedAssistant({
     [busy, draft, memorySpaces],
   );
 
-  const decide = useCallback(async (conversation: Conversation, action: ConversationAction, confirm: boolean) => {
+  const decide = useCallback(async (conversation: Conversation, action: ConversationAction) => {
     setProblem(null);
     try {
-      const done = confirm
-        ? await api.confirmConversationAction(conversation.id, action.id)
-        : await api.refuseConversationAction(conversation.id, action.id);
+      const done = await api.confirmConversationAction(conversation.id, action.id);
       setActions((list) => list.map((a) => (a.id === done.id ? done : a)));
-      if (confirm) {
-        emitRef.current("action.confirmed", {
-          conversation_id: conversation.id,
-          action_id: done.id,
-          operation: done.operation,
-          status: done.status,
-        });
-      }
+      emitRef.current("action.confirmed", {
+        conversation_id: conversation.id,
+        action_id: done.id,
+        operation: done.operation,
+        status: done.status,
+      });
     } catch (error) {
       setProblem(error instanceof Error ? error.message : "The decision failed.");
     }
+  }, []);
+
+  /** A refusal says why (ADR 0154 §7); the confirmation shows the API's own message when it fails. */
+  const refuse = useCallback(async (conversation: Conversation, action: ConversationAction, reason: string) => {
+    setProblem(null);
+    const done = await api.refuseConversationAction(conversation.id, action.id, reason);
+    setActions((list) => list.map((a) => (a.id === done.id ? done : a)));
   }, []);
 
   const proposed = useMemo(() => actions.filter((a) => a.status === "proposed"), [actions]);
@@ -295,12 +299,18 @@ export function EmbeddedAssistant({
               <p className="text-xs text-ink-muted">{action.operation}</p>
               <ActionDiff diff={action.diff} />
               <div className="mt-2 flex gap-2">
-                <Button tone="primary" size="sm" onClick={() => void decide(phase.conversation, action, true)}>
+                <Button tone="primary" size="sm" onClick={() => void decide(phase.conversation, action)}>
                   Confirm
                 </Button>
-                <Button size="sm" onClick={() => void decide(phase.conversation, action, false)}>
+                <ConfirmedGesture
+                  question="Refuse this action? Nothing is done."
+                  confirmer="Refuse"
+                  ton="default"
+                  reason={{ label: "Why you refuse it", required: true, maxLength: 500 }}
+                  action={(reason) => refuse(phase.conversation, action, reason)}
+                >
                   Refuse
-                </Button>
+                </ConfirmedGesture>
               </div>
             </div>
           ))}

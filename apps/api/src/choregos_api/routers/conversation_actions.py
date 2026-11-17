@@ -13,7 +13,11 @@ from ..db.models import AgentSessionRecord, Organization
 from ..decision_session import CONVERSATION_ACTIONS, require_person_session
 from ..deps import Config, Db, Me
 from ..errors import not_found
-from ..schemas.conversation_actions import ConversationAction, ConversationActionList
+from ..schemas.conversation_actions import (
+    ConversationAction,
+    ConversationActionList,
+    ConversationActionRefusal,
+)
 from ..services import conversation_actions as service
 from ..services.assistant_conversations import require_audience
 
@@ -67,8 +71,15 @@ async def confirm_action(
     operation_id="refuseMyConversationAction",
 )
 async def refuse_action(
-    conversation_id: str, action_id: str, session: Db, principal: Me, settings: Config
+    conversation_id: str,
+    action_id: str,
+    session: Db,
+    principal: Me,
+    settings: Config,
+    body: ConversationActionRefusal | None = None,
 ) -> ConversationAction:
     require_person_session(principal, "refusing a write", settings=settings, legacy=CONVERSATION_ACTIONS)
     record = await _mine(session, principal, conversation_id)
-    return service.to_dto(await service.refuse(session, record, action_id, principal))
+    return service.to_dto(
+        await service.refuse(session, record, action_id, principal, body.reason if body else None)
+    )

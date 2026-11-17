@@ -13,7 +13,7 @@ The rules of the gesture, kept here so the command and the workspace's decisions
 - ONE explicit gesture decides ONE action: the id is one argument, the verb is typed (`approve`, `reject`,
   `answer`), and there is no default, no `--yes`, no `--all`, no loop: a batch confirmation does not exist
   (`test_no_batch_confirmation_exists`);
-- a rejection asks a reason, which the API audits where its route takes one.
+- a rejection asks a reason, an assistant's write or launch included (S67-16); the API audits it.
 
 This module holds no Textual. What an assistant or a source wrote is data: every control character is removed
 before it reaches the screen, and it is drawn as plain text, never as markup.
@@ -178,8 +178,10 @@ def request_for(
     """The route and body of ONE decision on ONE item."""
     kind, path = item["kind"], str(item["decision"]["path"])
     if kind in ("conversation_action", "launch"):
-        # A refusal has no body: the route takes no reason, so none is asked for it.
-        return (path if verb == "approve" else path.removesuffix("/confirm") + "/refuse"), None
+        if verb == "approve":
+            return path, None
+        # A refusal says why, like every other rejection (S67-16, ADR 0154 §7).
+        return path.removesuffix("/confirm") + "/refuse", {"reason": reason}
     if kind == "governed_action":
         return path, {"decision": verb, "reason": reason or None}
     body: dict[str, Any] = {"request_id": item["id"], "kind": "answer" if verb == "answer" else verb}
@@ -191,8 +193,8 @@ def request_for(
 
 
 def asks_reason(item: dict[str, Any], verb: str) -> bool:
-    """Whether a rejection asks one: whenever the route can keep it (a conversation's refusal cannot)."""
-    return verb == "reject" and item["kind"] not in ("conversation_action", "launch")
+    """Whether a decision asks one: every rejection does, an assistant's proposed write or launch included."""
+    return verb == "reject"
 
 
 def explain(exc: ApiError) -> list[str]:

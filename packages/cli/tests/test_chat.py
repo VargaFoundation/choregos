@@ -1000,3 +1000,12 @@ def test_the_workspace_module_is_the_only_one_importing_textual() -> None:
         if any(line.startswith(("import textual", "from textual")) for line in path.read_text().splitlines())
     )
     assert importing == ["workspace.py"]
+
+
+async def test_a_read_that_lands_after_the_workspace_closed_draws_nothing(platform: Platform) -> None:
+    """A journal or activity read can finish while the app tears down: drawing then is a no-op, not a crash
+    (seen on CI as `NoMatches: FlightTree` at the end of a test)."""
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+    app.draw_tree()  # the widgets are gone

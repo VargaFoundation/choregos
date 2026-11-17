@@ -3912,6 +3912,13 @@
     "server_default": null
    },
    {
+    "name": "refusal_reason",
+    "type": "Text()",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
     "name": "kind",
     "type": "String(length=16)",
     "nullable": false,

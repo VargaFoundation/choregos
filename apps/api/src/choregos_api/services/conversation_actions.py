@@ -331,6 +331,7 @@ def to_dto(action: ConversationAction) -> ConversationActionDto:
         confirmed_by=action.confirmed_by,
         confirmed_at=action.confirmed_at,
         executed_at=action.executed_at,
+        refusal_reason=action.refusal_reason,
         created_at=action.created_at,
     )
 
@@ -491,7 +492,11 @@ async def confirm(
 
 
 async def refuse(
-    session: AsyncSession, record: AgentSessionRecord, action_id: str, principal: Principal
+    session: AsyncSession,
+    record: AgentSessionRecord,
+    action_id: str,
+    principal: Principal,
+    reason: str | None = None,
 ) -> ConversationAction:
     action = await _action(session, record, action_id)
     if action.status == "governed":
@@ -499,7 +504,8 @@ async def refuse(
     if action.status not in ("proposed", "confirmed"):
         raise _typed(f"action {action.id} is {action.status}", f"action_{action.status}")
     action.status, action.confirmed_by, action.confirmed_at = "refused", principal.user_id, utcnow()
-    await journal(session, record, "action.refused", {"action_id": action.id})
+    action.refusal_reason = reason
+    await journal(session, record, "action.refused", {"action_id": action.id, "reason": reason})
     await audit(
         session,
         principal,
@@ -507,7 +513,9 @@ async def refuse(
         org_id=record.org_id,
         target_type="conversation_action",
         target_id=action.id,
+        reason=reason,
     )
-    _tell_the_conversation(record, f"The person refused the action `{action.id}` ({action.summary}).")
+    why = f": {reason}" if reason else ""
+    _tell_the_conversation(record, f"The person refused the action `{action.id}` ({action.summary}){why}.")
     await session.flush()
     return action

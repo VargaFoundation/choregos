@@ -210,6 +210,8 @@ class Platform:
             self.contract("ActionDecision", body)
         elif path.endswith("/decisions"):
             self.contract("DecisionRequest", body)
+        elif path.endswith("/refuse"):
+            self.contract("ConversationActionRefusal", body)
         # The rule of S67-06: a pasted API token does not decide; a surface session does.
         if not request.headers["authorization"].startswith("Bearer chs_"):
             return Response(
@@ -359,11 +361,28 @@ def test_a_reason_given_as_an_option_is_still_sent_only_after_the_gesture(platfo
     ]
 
 
-def test_refusing_an_assistants_write_goes_to_the_refuse_route(platform: Platform) -> None:
-    result = _run("reject", "act-1", stdin="reject\n")
+def test_refusing_an_assistants_write_asks_a_reason_and_sends_it_to_the_refuse_route(
+    platform: Platform,
+) -> None:
+    result = _run("reject", "act-1", stdin="wrong supplier\nreject\n")
     assert result.exit_code == 0, _plain(result)
-    assert platform.sent == [(f"/api/v1/me/conversations/{CID}/actions/act-1/refuse", None)]
-    assert "reason (required)" not in _plain(result), "that route keeps no reason, so none is asked for"
+    assert "reason (required)" in _plain(result)
+    assert platform.sent == [
+        (f"/api/v1/me/conversations/{CID}/actions/act-1/refuse", {"reason": "wrong supplier"})
+    ]
+
+
+def test_refusing_an_assistants_write_or_launch_without_a_reason_sends_nothing(platform: Platform) -> None:
+    for item in ("act-1", "act-2"):
+        result = _run("reject", item, stdin="\nreject\n")
+        assert result.exit_code == 1 and "reason is required" in _plain(result), item
+        assert _run("reject", item, "--reason", "   ", stdin="reject\n").exit_code == 1
+    assert platform.sent == []
+
+
+def test_confirming_an_assistants_write_still_sends_no_body(platform: Platform) -> None:
+    assert _run("approve", "act-1", stdin="approve\n").exit_code == 0
+    assert platform.sent == [(f"/api/v1/me/conversations/{CID}/actions/act-1/confirm", None)]
 
 
 # ───────────────────────────── a session too old, and what is shown ─────────────────────────────
@@ -535,3 +554,19 @@ async def test_the_pane_has_no_batch_key(platform: Platform) -> None:
         await pilot.pause(0.3)
     assert len(platform.sent) == 1
     assert Workspace is not None
+
+
+async def test_refusing_a_proposed_write_in_the_pane_asks_a_reason_and_sends_it(platform: Platform) -> None:
+    app = _pilot_env(platform)
+    async with app.run_test(size=(160, 50)) as pilot:
+        await _open(pilot, "Create the ticket")
+        await pilot.press("r")
+        await _until(pilot, lambda: "Why reject it" in _screen(app), "the reason")
+        await pilot.press("enter")
+        await _until(pilot, lambda: "a rejection needs a reason" in _screen(app), "the problem")
+        assert platform.sent == []
+        await pilot.press(*"wrong supplier", "enter")
+        await _until(pilot, lambda: bool(platform.sent), "the decision")
+    assert platform.sent == [
+        (f"/api/v1/me/conversations/{CID}/actions/act-1/refuse", {"reason": "wrong supplier"})
+    ]

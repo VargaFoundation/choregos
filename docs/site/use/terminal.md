@@ -180,8 +180,9 @@ The rules are the same here as in the workspace:
 - **One gesture decides one thing.** The id is one argument and the verb is typed: `approve`, `reject` or
   `answer`. There is no default, no `--yes`, no `--all`. After the details, the command asks you to type
   the verb; anything else leaves the item waiting and sends nothing.
-- **A reason to refuse.** Rejecting a governed action or a step asks for a reason (give it with
-  `--reason`, or you are asked) and the audit keeps it. Refusing an assistant's proposed write takes none.
+- **A reason to refuse.** Every rejection asks for a reason (give it with `--reason`, or you are asked): a
+  governed action, a step, and an assistant's proposed write or launch alike. An empty one sends nothing. The
+  audit keeps it; for an assistant's write it is also kept on the action and the assistant is told it.
 - **Not everything is decided here.** A task's form and a scope change stay in the console, and the
   command says so.
 

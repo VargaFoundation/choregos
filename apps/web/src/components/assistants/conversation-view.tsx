@@ -9,7 +9,9 @@ import { MemoryProposals } from "@/components/assistants/assistant-memory";
 import { MarkdownView } from "@/components/markdown-view";
 import { OrgPageHeader } from "@/components/org-page-header";
 import { Alert, Badge, Button, Card, ErrorNote, ReadState, Textarea, buttonClasses } from "@/components/ui";
+import { REASON_MAX } from "@/lib/activity";
 import { citationsOf, connectLinksOf, type ConnectLink } from "@/lib/assistants";
+import { ConfirmedGesture } from "@/components/confirmed-gesture";
 import { ActionDiff } from "@/components/assistants/action-diff";
 import { assistantsApi, streamTurn, type ConversationAction } from "@/lib/assistants-api";
 import { useSession } from "@/lib/session";
@@ -94,12 +96,10 @@ function Answer({ text, session, org, last }: { text: string; session: string; o
 /** A write the assistant proposes: confirm or refuse it, nothing is written before. */
 function ActionCard({ action, conversation, onDecided }: { action: ConversationAction; conversation: string; onDecided: () => void }) {
   const [error, setError] = useState<string | null>(null);
-  async function decide(kind: "confirm" | "refuse") {
+  async function confirm() {
     setError(null);
     try {
-      await (kind === "confirm"
-        ? assistantsApi.confirmAction(conversation, action.id)
-        : assistantsApi.refuseAction(conversation, action.id));
+      await assistantsApi.confirmAction(conversation, action.id);
       onDecided();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Refused");
@@ -121,13 +121,21 @@ function ActionCard({ action, conversation, onDecided }: { action: ConversationA
       <pre className="mt-2 overflow-x-auto rounded bg-surface-muted p-2 text-xs">{JSON.stringify(action.arguments, null, 2)}</pre>
       <ActionDiff diff={action.diff} />
       {error && <ErrorNote>{error}</ErrorNote>}
-      <div className="mt-3 flex gap-2">
-        <Button size="sm" tone="primary" onClick={() => void decide("confirm")}>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Button size="sm" tone="primary" onClick={() => void confirm()}>
           Confirm
         </Button>
-        <Button size="sm" tone="default" onClick={() => void decide("refuse")}>
+        {/* A refusal says why, like every other rejection (ADR 0154 §7): nothing is sent without it. */}
+        <ConfirmedGesture
+          question={launch ? "Refuse this launch? Nothing is started." : "Refuse this write? Nothing reaches the source."}
+          confirmer="Refuse"
+          ton="default"
+          reason={{ label: "Why you refuse it", required: true, maxLength: REASON_MAX }}
+          action={(reason) => assistantsApi.refuseAction(conversation, action.id, reason)}
+          onDone={onDecided}
+        >
           Refuse
-        </Button>
+        </ConfirmedGesture>
       </div>
     </Card>
   );

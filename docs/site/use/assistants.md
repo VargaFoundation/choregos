@@ -67,7 +67,7 @@ appears, with the operation, a summary, the arguments, and, when the source can 
 change**.
 
 1. Read the card.
-2. Press **Confirm** to let it go ahead, or **Refuse**.
+2. Press **Confirm** to let it go ahead, or **Refuse**, which asks why (a reason is required).
 
 Only you, the person who owns the conversation, can decide. The write is made with your identity, and
 the source decides whether you are allowed to make it. A proposal that nobody decides within 24 hours
@@ -80,7 +80,7 @@ document. The assistant never starts it by itself: a card **The assistant propos
 appears, naming the workflow and the project, with the title and the inputs it would give.
 
 1. Read the card.
-2. Press **Confirm** to file the work item, or **Refuse**.
+2. Press **Confirm** to file the work item, or **Refuse**, which asks why (a reason is required).
 
 The work item is filed in your name, in that project: you are its reporter, and it follows the project's
 rules, approvals and budget like any work item there. You need the right to create work items in the project

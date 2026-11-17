@@ -36,6 +36,7 @@ from textual import on
 from textual.app import App, ComposeResult
 from textual.binding import Binding, BindingType
 from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.css.query import NoMatches
 from textual.screen import ModalScreen
 from textual.widgets import Footer, Input, OptionList, Static, Tree
 from textual.widgets.option_list import Option
@@ -546,7 +547,10 @@ class Workspace(App[None]):
         return under
 
     def draw_tree(self) -> None:
-        tree = self.query_one(FlightTree)
+        try:
+            tree = self.query_one(FlightTree)
+        except NoMatches:  # a read that lands while the workspace closes: nothing left to draw on
+            return
         shape, rows = self._tree_shape()
         if shape == self._tree_keys:  # same nodes: only the times and the figures moved
             for key, _parent, label, data in rows:

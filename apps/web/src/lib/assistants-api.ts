@@ -20,6 +20,7 @@ import type {
   Conversation,
   ConversationAction,
   ConversationActionList,
+  ConversationActionRefusal,
   ConversationCandidate,
   ConversationCandidateAccept,
   ConversationFeedback,
@@ -184,8 +185,12 @@ export const assistantsApi = {
   conversationActions: (id: string) => request<ConversationActionList>(`/me/conversations/${enc(id)}/actions`),
   confirmAction: (id: string, action: string) =>
     request<ConversationAction>(`/me/conversations/${enc(id)}/actions/${enc(action)}/confirm`, post()),
-  refuseAction: (id: string, action: string) =>
-    request<ConversationAction>(`/me/conversations/${enc(id)}/actions/${enc(action)}/refuse`, post()),
+  /** A refusal says why (ADR 0154 §7): the reason is kept on the action and in the audit log. */
+  refuseAction: (id: string, action: string, reason: string) =>
+    request<ConversationAction>(
+      `/me/conversations/${enc(id)}/actions/${enc(action)}/refuse`,
+      post({ reason } satisfies ConversationActionRefusal),
+    ),
   feedback: (org: string, session: string, body: ConversationFeedbackCreate) =>
     request<ConversationFeedback>(`/orgs/${enc(org)}/agent-sessions/${enc(session)}/feedback`, post(body)),
   // Memory.
