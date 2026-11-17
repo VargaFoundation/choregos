@@ -12,10 +12,10 @@ from typing import Any
 
 from choregos_api.db.models import Event, Run, WorkflowDef, WorkItem
 from choregos_api.services import persist_event, work_item_workflow, workflow_model
-from choregos_api.services.agent_lifecycle import TRIAL_STATE
 from choregos_api.services.budgets import ticket_budget, ticket_spent
 from choregos_contracts import EventType
 from choregos_core import utcnow
+from choregos_core.domain import TRIAL_STATE
 from sqlalchemy import func, or_, select
 from temporalio import activity
 from temporalio.exceptions import ActivityError, ApplicationError

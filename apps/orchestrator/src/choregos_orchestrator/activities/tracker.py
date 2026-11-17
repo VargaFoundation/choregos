@@ -18,11 +18,10 @@ from choregos_api.services import (
     reopen_work_item,
     restart_payload,
 )
-from choregos_api.services.agent_lifecycle import TRIAL_STATE
 from choregos_api.services.initiator import initiator
 from choregos_contracts import EventType, HumanActor, HumanRequestKind, StageResult
 from choregos_core import Message, MessageAction, TrackerStateMapping, elapsed_seconds, utcnow
-from choregos_core.domain import TRACKER_FIELD
+from choregos_core.domain import TRACKER_FIELD, TRIAL_STATE
 from choregos_core.gates import ALREADY_FIXED_GATE
 from choregos_core.restricted import WITHHELD, is_marked
 from sqlalchemy import select, update

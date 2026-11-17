@@ -21,6 +21,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from choregos_core import utcnow
+from choregos_core.domain import TRIAL_STATE as _TRIAL_STATE
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -140,7 +141,7 @@ async def retire(session: AsyncSession, agent: Agent) -> dict[str, Any]:
 
 #: The state of the work item an agent trial runs on (`routing.new_trial_work_item`): a trial is
 #: how an agent is tried before it serves, so it does not count as having served.
-TRIAL_STATE = "trial"
+TRIAL_STATE = _TRIAL_STATE  # kept: the name callers import
 
 
 async def delete_blockers(session: AsyncSession, org_id: str, agent: Agent) -> list[str]:
