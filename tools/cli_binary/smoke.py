@@ -339,7 +339,7 @@ def write_inputs(work: pathlib.Path) -> None:
 
 
 def functional_checks(runner: Runner, version: str) -> None:
-    expect(runner.run("--version"), 0, f"choregos {version}", what="--version")
+    expect(runner.run("--version"), 0, f"tranibor {version}", what="--version")
     expect(runner.run("workflow", "templates"), 0, "default-simple", "incident-postmortem", what="templates")
     expect(
         runner.run("workflow", "validate", "template.yaml"), 0, "template.yaml is valid", what="a template"
@@ -411,7 +411,7 @@ def self_knowledge_checks(runner: Runner, version: str) -> list[dict[str, Any]]:
 def timings(runner: Runner, version: str, warm_runs: int = 5) -> tuple[float, float]:
     """(cold, warm median) seconds of `--version`: the first call unpacks, the next ones reuse."""
     cold = runner.run("--version")
-    expect(cold, 0, f"choregos {version}", what="--version (cold)")
+    expect(cold, 0, f"tranibor {version}", what="--version (cold)")
     warm = [runner.run("--version").seconds for _ in range(warm_runs)]
     return cold.seconds, statistics.median(warm)
 
