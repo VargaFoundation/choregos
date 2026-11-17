@@ -1,6 +1,6 @@
 # 0141 — Tokens, and what fills the context, are read per run, workflow, agent, assistant and project
 
-- **Status**: proposed, 2026-11-11
+- **Status**: accepted, 2026-11-17 (product owner's review, after S64-01..S64-10 implemented it; proposed 2026-11-11)
 - **Concerns**: `cost_ledger` (`db/models/costs.py`), `routers/costs.py` (`GROUPS`, `_report`), `CostReport`,
   `CostTotal`, the spend screens (`components/spend/breakdown.tsx`), the runner's `prompt` backend
   (`runner/prompt.py`, `choregos_core/prompt_loop.py`), the hosted loopback `ModelProxy`
