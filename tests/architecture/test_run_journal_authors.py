@@ -27,7 +27,8 @@ PLATFORM_NAMES = {name for name in run_journal.__all__ if getattr(run_journal, n
 #: Lines the platform adds under a type the run writes too, by file and by the name the type is
 #: taken from. Such a type cannot be reserved: the run's door would refuse the run's own lines.
 #: `context.breakdown`: the runner records the context it measured; the API adds the gateway's count
-#: (`source: gateway`, above `GATEWAY_SEQ_BASE`). A number, not a verdict.
+#: (`source: gateway`, above `GATEWAY_SEQ_BASE`). A number, not a verdict; the run's door refuses the
+#: gateway's shape of it (S65-08b, `gateway_written`).
 SHARED_TYPES = {"apps/api/src/choregos_api/services/context_breakdown.py": "EVENT"}
 
 #: Who records a run's own lines: the runner and its tool bridge.
