@@ -11,6 +11,13 @@ such a request, or `Sec-Fetch-Site` when it omits it (an empty `Origin` counts a
 of `null` is refused. Origins are compared normalised (lower-case, default port dropped). A request with
 neither header (a CLI) passes, and so does every request without the session cookie (webhooks, bearer
 tokens). Any other `Authorization` scheme does not exempt: the cookie still authenticates it.
+
+A host an organisation owns (ADR 0175) is an origin of the console too, at runtime, without listing it:
+the `Origin` must be that host's own (same scheme as the console's, no port), the host must be one the
+tenant-host resolver says is VERIFIED (`tenant_host.verified_host_cached`, cached for seconds), and it must
+be the host this very request was made for (`X-Forwarded-Host`, else `Host`). The last condition keeps a
+page on one verified host from acting on another's cookie when two of them share a registrable domain.
+An unverified host, a claimed-but-unproved one and any sibling sub-domain stay refused.
 """
 
 from __future__ import annotations
@@ -23,6 +30,7 @@ from fastapi.responses import JSONResponse
 
 from .config import Settings, get_settings
 from .errors import PROBLEM_JSON
+from .tenant_host import normalise_host, request_host, verified_host_cached
 
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 _FOREIGN_FETCH_SITES = frozenset({"cross-site", "same-site"})
@@ -56,6 +64,21 @@ def origin_allowed(origin: str | None, settings: Settings) -> bool:
     return origin_of(origin) in allowed_origins(settings)
 
 
+async def tenant_origin_allowed(origin: str, request: Request, settings: Settings) -> bool:
+    """`origin` is the verified tenant host this request was made for (ADR 0175)."""
+    parts = urlsplit(origin.strip())
+    try:
+        port = parts.port
+    except ValueError:
+        return False
+    if port is not None or parts.scheme != urlsplit(settings.public_url).scheme:
+        return False
+    host = normalise_host(parts.hostname)
+    if host is None or host != request_host(request.headers):
+        return False
+    return await verified_host_cached(host) is not None
+
+
 def check_cors_origins(settings: Settings) -> None:
     if "*" in settings.cors_list:
         raise RuntimeError(
@@ -74,7 +97,9 @@ def install_origin_guard(app: FastAPI) -> None:
         if request.method not in SAFE_METHODS and settings.session_cookie in request.cookies and not bearer:
             origin = request.headers.get("origin", "").strip()
             if origin:
-                refused = origin == "null" or not origin_allowed(origin, settings)
+                refused = origin == "null" or not (
+                    origin_allowed(origin, settings) or await tenant_origin_allowed(origin, request, settings)
+                )
             else:
                 refused = request.headers.get("sec-fetch-site", "").lower() in _FOREIGN_FETCH_SITES
             if refused:

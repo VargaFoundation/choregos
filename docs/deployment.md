@@ -1489,6 +1489,16 @@ typing their work address (its domain picks the provider) or through the link `/
 tenant registers the same redirect URI, `<apiUrl>/api/v1/auth/callback`. A tenant's provider signs in only
 addresses on the domains its tenant owns, and grants roles on that tenant only.
 
+**A host an organisation owns** (ADR 0175, S74-02; the edition's claims table decides which hosts are
+verified). Signing in there uses the redirect URI `https://<host>/api/v1/auth/callback`: the operator adds
+it, for each verified host, to the instance provider's client (for the platform Keycloak client `choregos`,
+`valid_redirect_uris` in `platform-realm.json` of the infrastructure repository, and the host to its web
+origins), and a tenant with its own provider registers it there. Without it the provider refuses the sign-in
+and nothing else changes. The ingress must route the host's `/api` to the API (or to the console, whose
+relay forwards `X-Forwarded-Host`) and must overwrite any `X-Forwarded-Host` a client sent. The allowlists
+(origins, run-API guard) need no setting: they follow the verified claims within 30 seconds. SAML
+organisations sign in on `<apiUrl>`.
+
 **Development login** (`/auth/login?as=<email>`, no IdP) is off by default, refused by the
 API itself in `staging` and `prod`, and turned on only by `values/local.yaml`
 (`global.devLogin.enabled`, `global.devLogin.adminEmails`).

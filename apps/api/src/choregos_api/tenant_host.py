@@ -34,6 +34,8 @@ from __future__ import annotations
 
 import inspect
 import re
+import time
+from dataclasses import dataclass
 from typing import Any
 
 from structlog import get_logger
@@ -43,6 +45,13 @@ from .theme import ORG_SLUG
 logger = get_logger("choregos.tenant_host")
 
 _RESOLVER: dict[str, Any] = {}
+
+#: How long the runtime allowlists (origin guard, internal-API guard) remember what the resolver said
+#: about a host, an answer and a refusal alike: a claim proved or withdrawn takes effect within this
+#: delay. Bounded in size so that a client sending many distinct `Host` values cannot grow it.
+CACHE_TTL_S = 30.0
+CACHE_MAX_ENTRIES = 1024
+_CACHE: dict[str, tuple[float, str | None]] = {}
 
 #: A DNS name of at least two labels (a custom host always has a dot), each 1-63 characters of
 #: letters, digits and hyphens (never at an end), 253 in all; `xn--` is how an IDN travels.
@@ -71,6 +80,7 @@ def has_host_resolver() -> bool:
 def reset() -> None:
     """For tests: no tenant host, every host is the instance's."""
     _RESOLVER.clear()
+    _CACHE.clear()
 
 
 def normalise_host(raw: str | None) -> str | None:
@@ -107,3 +117,55 @@ async def resolve_host(session: Any, raw_host: str | None) -> str | None:
     if found is not None:
         logger.error("tenant_host.invalid_answer", host=host, answer=type(found).__name__)
     return None
+
+
+def request_host(headers: Any) -> str | None:
+    """The DNS name the request was made for: `X-Forwarded-Host` (first entry), else `Host`; `None` when it
+    is not a DNS name. The console's relay of `/api/v1` rewrites `Host` and says where the request came in
+    with `X-Forwarded-Host`. Client-controlled: it selects anything only once `resolve_host` has matched
+    it against the verified table, and the ingress must overwrite a client-supplied value."""
+    return normalise_host(headers.get("x-forwarded-host") or headers.get("host"))
+
+
+@dataclass(frozen=True, slots=True)
+class TenantDoor:
+    """A verified host and the organisation it belongs to (ADR 0175)."""
+
+    host: str
+    org: str
+
+
+async def tenant_door(session: Any, headers: Any) -> TenantDoor | None:
+    """The verified tenant host the request arrived on, or `None` (the instance's own host, an unknown
+    host, an unverified claim, no resolver)."""
+    host = request_host(headers)
+    org = await resolve_host(session, host) if host else None
+    return TenantDoor(host, org) if host and org else None
+
+
+async def verified_host_cached(host: str | None) -> str | None:
+    """`resolve_host` for the guards that run before any route: own session, briefly cached.
+
+    The slug of the organisation that owns `host` (already a DNS name, as `normalise_host` gives it), or
+    `None`. A cache hit costs nothing; a miss asks the resolver once per `CACHE_TTL_S`. Never raises.
+    """
+    if not host or "resolver" not in _RESOLVER or normalise_host(host) != host:
+        return None
+    now = time.monotonic()
+    hit = _CACHE.get(host)
+    if hit is not None and hit[0] > now:
+        return hit[1]
+    from .db.session import ALL_ORGS, get_sessionmaker, limit_to_organisations
+
+    org: str | None = None
+    try:
+        async with get_sessionmaker()() as session:
+            await limit_to_organisations(session, ALL_ORGS)
+            org = await resolve_host(session, host)
+    except Exception:
+        logger.exception("tenant_host.lookup_failed", host=host)
+        return None  # not cached: the next request asks again
+    if len(_CACHE) >= CACHE_MAX_ENTRIES:
+        _CACHE.clear()
+    _CACHE[host] = (now + CACHE_TTL_S, org)
+    return org

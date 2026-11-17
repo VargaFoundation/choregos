@@ -27,7 +27,7 @@ import time
 from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
-from urllib.parse import quote, urlencode
+from urllib.parse import quote, urlencode, urlsplit
 
 from choregos_contracts import Role
 from choregos_core import utcnow
@@ -42,7 +42,7 @@ from ..db.models import ApiToken, Membership, Organization, User
 from ..db.org_aliases import current_slugs, organisation_by_slug_or_alias
 from ..deps import Config, Db, Me, PlatformDb, resolve_project
 from ..edition import group_mapper
-from ..errors import ApiError, not_found, unauthorized, unprocessable
+from ..errors import ApiError, forbidden, not_found, unauthorized, unprocessable
 from ..logging import get_logger
 from ..rbac import Permission
 from ..schemas import ApiTokenCreate, ApiTokenCreated, ApiTokenDto, MeDto, MembershipDto
@@ -50,6 +50,7 @@ from ..security import generate_api_token, read_session, sign_session
 from ..services.api_tokens import api_token_dto, linked_projects
 from ..services.avatars import avatar_url
 from ..services.identity_relink import normalised_issuer, relink_candidates
+from ..tenant_host import TenantDoor, tenant_door
 from ..tenant_sign_in import OidcProvider, SignInHint, TenantSignIn, email_domain, resolve
 
 router = APIRouter(tags=["session"])
@@ -181,17 +182,36 @@ def forget_discovery() -> None:
     _endpoints.clear()
 
 
-def redirection_sure(target: str | None, settings: Settings) -> str:
-    """A redirect target is a relative path, or a URL of OUR front end. Nothing else."""
+def _tenant_base(settings: Settings, host: str) -> str:
+    """The origin of a verified tenant host (ADR 0175): the instance's scheme, the host, no port."""
+    return f"{urlsplit(settings.public_url).scheme}://{host}"
+
+
+def callback_uri(settings: Settings, host: str | None = None) -> str:
+    """The redirect URI of the OIDC sign-in: the instance's, or that of the verified tenant host the sign-in
+    runs on (ADR 0175). The same value goes to the authorisation request and to the code exchange."""
+    base = _tenant_base(settings, host) if host else settings.api_url
+    return f"{base}/api/v1/auth/callback"
+
+
+def redirection_sure(target: str | None, settings: Settings, host: str | None = None) -> str:
+    """A redirect target is a relative path, or a URL of OUR front end. Nothing else.
+
+    `host`: the verified tenant host the sign-in runs on (ADR 0175, never a raw header): its own origin is
+    also ours, and it is where an empty target goes, since the session cookie is only valid there.
+    """
+    own = _tenant_base(settings, host) if host else settings.public_url
     if not target:
-        return settings.public_url
-    if target.startswith("/") and not target.startswith("//"):
+        return f"{own}/" if host else own
+    if target.startswith("/") and not target.startswith("//") and "\\" not in target:
         return target
-    base = settings.public_url.rstrip("/")
-    if target == base or target.startswith(base + "/"):
-        return target
+    for base in dict.fromkeys(
+        [own.rstrip("/"), settings.public_url.rstrip("/")] if host else [own.rstrip("/")]
+    ):
+        if target == base or target.startswith(base + "/"):
+            return target
     logger.warning("redirect refused", target=target[:120])
-    return settings.public_url
+    return f"{own}/" if host else own
 
 
 #: What an IdP answers to `prompt=none` when it cannot sign the person in without showing something.
@@ -216,7 +236,12 @@ def _pkce() -> tuple[str, str]:
 
 
 def _handshake(
-    settings: Settings, redirect: str, *, reauth: bool = False, org: str | None = None
+    settings: Settings,
+    redirect: str,
+    *,
+    reauth: bool = False,
+    org: str | None = None,
+    host: str | None = None,
 ) -> tuple[str, str, str, str]:
     """Return (signed state, signed cookie, code_challenge, nonce); the nonce binds the two, sent to the IdP.
 
@@ -230,6 +255,9 @@ def _handshake(
     # The tenant whose provider is asked, signed: the callback exchanges the code with that one.
     if org:
         claims["o"] = org
+    # The verified tenant host the sign-in runs on (ADR 0175), signed: the callback must come back to it.
+    if host:
+        claims["h"] = host
     state = sign_session(claims, settings, purpose="oidc-state")
     handshake: dict[str, Any] = {"n": nonce, "v": verifier, "exp": expiry}
     if reauth:
@@ -312,7 +340,11 @@ async def login(
     page) choose the tenant's own provider when an extension declared one (ADR 0108); otherwise
     the instance's. `login_hint` is passed on to the provider, which may prefill its form.
     """
-    target = redirection_sure(redirect_to, settings)
+    # A verified tenant host implies its organisation (ADR 0175 point 6): whatever `org` says.
+    door = await tenant_door(session, request.headers)
+    if door is not None:
+        org = door.org
+    target = redirection_sure(redirect_to, settings, door.host if door else None)
     as_user = request.query_params.get("as")
     tenant: TenantSignIn | None = None
     if not (as_user and settings.dev_login_enabled):
@@ -321,14 +353,27 @@ async def login(
             raise unauthorized(f"the sign-in resolver answered organisation {tenant.org!r} for {org!r}")
     if tenant is not None and tenant.start_path is not None:
         # Another protocol (SAML…), started by the extension's own route.
+        # SAML keeps the instance's host (ADR 0175 point 4, amended): its entity id and assertion consumer
+        # service are the canonical ones, so a sign-in begun on a tenant host runs there and ends there.
+        if door is not None:
+            target = redirection_sure(redirect_to, settings)
         forwarded = {"redirect_to": target} | ({"login_hint": login_hint} if login_hint else {})
         joiner = "&" if "?" in tenant.start_path else "?"
+        start = (
+            f"{settings.api_url}{tenant.start_path}"
+            if door and tenant.start_path.startswith("/")
+            else tenant.start_path
+        )
         return RedirectResponse(
-            url=f"{tenant.start_path}{joiner}{urlencode(forwarded)}",
+            url=f"{start}{joiner}{urlencode(forwarded)}",
             status_code=status.HTTP_307_TEMPORARY_REDIRECT,
         )
     state, cookie, challenge, nonce = _handshake(
-        settings, target, reauth=reauth, org=tenant.org if tenant is not None else None
+        settings,
+        target,
+        reauth=reauth,
+        org=tenant.org if tenant is not None else None,
+        host=door.host if door else None,
     )
     if as_user and settings.dev_login_enabled:
         response = RedirectResponse(
@@ -347,7 +392,7 @@ async def login(
         "client_id": client_id,
         "response_type": "code",
         "scope": scopes,
-        "redirect_uri": f"{settings.api_url}/api/v1/auth/callback",
+        "redirect_uri": callback_uri(settings, door.host if door else None),
         "state": state,
         "nonce": nonce,
         "code_challenge": challenge,
@@ -835,7 +880,10 @@ async def callback(
     handshake = read_session(request.cookies.get(OIDC_COOKIE, ""), settings, purpose="oidc-handshake")
     if not expected or not handshake or expected.get("n") != handshake.get("n"):
         raise unauthorized("invalid or expired sign-in state: start the sign-in again")
-    target = redirection_sure(str(expected.get("r") or ""), settings)
+    # The sign-in must come back to the host it started on, and that host must still be verified: the
+    # handshake cookie is host-only, and a claim withdrawn since refuses the sign-in (ADR 0175).
+    door, state_host = await _callback_door(session, request, expected)
+    target = redirection_sure(str(expected.get("r") or ""), settings, state_host)
     if code is None:
         return _without_code(target, error)
     reauth = bool(handshake.get("a"))
@@ -873,7 +921,7 @@ async def callback(
                 data={
                     "grant_type": "authorization_code",
                     "code": code,
-                    "redirect_uri": f"{settings.api_url}/api/v1/auth/callback",
+                    "redirect_uri": callback_uri(settings, state_host),
                     "client_id": client_id,
                     "client_secret": client_secret,
                     "code_verifier": str(handshake.get("v") or ""),
@@ -931,11 +979,49 @@ async def callback(
             await _map_groups_to_roles(session, user, list(info.get("groups", [])), settings)
             await _seal_refresh_token(session, user, refresh_token)
 
+    await _require_member(session, user, door)
     response = await ouvrir_la_session(
-        session, user, target, settings, canal="oidc", auth_time=auth_time, request=request
+        session, user, target, settings, canal="oidc", auth_time=auth_time, request=request, host=state_host
     )
     response.delete_cookie(OIDC_COOKIE)
     return response
+
+
+async def _callback_door(
+    session: Any, request: Request, expected: Mapping[str, Any]
+) -> tuple[TenantDoor | None, str | None]:
+    """The verified host this callback arrives on, and the host the sign-in began on (both `None` on the
+    instance's own host); they must be the same."""
+    door = await tenant_door(session, request.headers)
+    state_host = str(expected.get("h") or "") or None
+    if (door.host if door else None) != state_host:
+        raise unauthorized("this sign-in was started on another host: start the sign-in again")
+    return door, state_host
+
+
+async def _require_member(session: Any, user: User, door: TenantDoor | None) -> None:
+    """On a tenant host only a member of the host's organisation signs in (ADR 0175 point 5): a person who
+    belongs to others only is refused, and nothing of theirs is stored (the transaction ends with the
+    error). On the instance's own host (`door` is `None`) there is nothing to check."""
+    if door is None:
+        return
+    org = await organisation_by_slug_or_alias(session, door.org)
+    await session.flush()  # the roles this very sign-in granted count
+    member = (
+        await session.execute(
+            select(func.count())
+            .select_from(Membership)
+            .where(Membership.user_id == user.id, Membership.org_id == (org.id if org else ""))
+        )
+    ).scalar_one()
+    if not member:
+        logger.warning(
+            "tenant host sign-in refused: not a member", host=door.host, org=door.org, user=user.id
+        )
+        raise forbidden(
+            f"you are not a member of the organisation that owns {door.host}: sign in on the instance's "
+            "own address, or ask an administrator of that organisation to invite you"
+        )
 
 
 async def _org_ids_of(session: Any, user_id: str) -> list[str]:
@@ -969,6 +1055,7 @@ async def ouvrir_la_session(
     canal: str,
     auth_time: int | None = None,
     request: Request | None = None,
+    host: str | None = None,
 ) -> RedirectResponse:
     """The end of ANY sign-in: audit trace, signed cookie with `iat`, bounded redirect.
 
@@ -1002,8 +1089,10 @@ async def ouvrir_la_session(
         session_claims["auth_time"] = auth_time
     cookie = sign_session(session_claims, settings)
     response = RedirectResponse(
-        url=redirection_sure(target, settings), status_code=status.HTTP_307_TEMPORARY_REDIRECT
+        url=redirection_sure(target, settings, host), status_code=status.HTTP_307_TEMPORARY_REDIRECT
     )
+    # No `Domain`: the cookie is valid on the host that answered (a verified tenant host, or the instance's)
+    # and on no other, sub-domains included.
     response.set_cookie(
         settings.session_cookie,
         cookie,

@@ -14,7 +14,8 @@ other name (the Service, a compose service, `localhost`, an address) is served a
 
 - **Public** is what the deployment declares: the hosts of `CHOREGOS_PUBLIC_URL`, `CHOREGOS_API_URL`
   and `CHOREGOS_CORS_ORIGINS`, and `CHOREGOS_PUBLIC_HOSTS` (the chart's ingress hostnames). Ports are
-  not compared; a leading `*.` names every sub-domain.
+  not compared; a leading `*.` names every sub-domain. A host an organisation owns and PROVED (ADR 0175,
+  `tenant_host`) is public too, without being listed: it is the same door as the console's own address.
 - **Arrives under** is the `Host` header and every `X-Forwarded-Host` entry. The second is there for
   a reverse proxy that rewrites `Host`: the console's own relay of `/api/v1` does, and says where
   the request came in with that header. A client can write the header too, which only gets its own
@@ -48,6 +49,7 @@ from starlette.websockets import WebSocketClose
 
 from .config import Settings, get_settings
 from .logging import get_logger
+from .tenant_host import verified_host_cached
 
 #: Everything a run, a session pod or a platform proxy calls with its own token.
 PREFIX = "/api/v1/internal"
@@ -193,7 +195,10 @@ class InternalApiGuard:
             await self.app(scope, receive, send)
             return
         guard = guard_of(get_settings())
-        found = None if guard.mode == "off" else guard.public_host(presented_hosts(Headers(scope=scope)))
+        presented = presented_hosts(Headers(scope=scope))
+        found = None if guard.mode == "off" else guard.public_host(presented)
+        if found is None and guard.mode != "off":
+            found = await _tenant_host(guard, presented)
         if found is None:
             await self.app(scope, receive, send)
             return
@@ -209,6 +214,14 @@ class InternalApiGuard:
             return
         # What the router answers for a path it does not know, byte for byte.
         await JSONResponse({"detail": "Not Found"}, status_code=404)(scope, receive, send)
+
+
+async def _tenant_host(guard: Guard, presented: list[tuple[str, str]]) -> tuple[str, str] | None:
+    """The first presented host that a verified tenant owns (and that is no run door)."""
+    for header, host in presented:
+        if not _names(host, guard.doors) and await verified_host_cached(host) is not None:
+            return header, host
+    return None
 
 
 def install_internal_api_guard(app: FastAPI) -> None:
