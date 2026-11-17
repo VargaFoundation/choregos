@@ -8,8 +8,9 @@ first response of a session also held its budget's advisory lock that long, so a
 the same project could not even open. Here the pool is two connections with no overflow and a
 two-second wait; three responses of three sessions are held at the model. Without the fix the third
 never reaches the model and `/readyz` waits out the pool; with it, the three wait at the model
-holding nothing, `pg_stat_activity` shows no session of the application role idle in transaction,
-and each response is booked once the model answers, under RLS.
+holding nothing (the pool counts no connection checked out), `pg_stat_activity` shows no session of
+the application role idle in transaction, and each response is booked once the model answers, under
+RLS.
 
 Runs only against a real PostgreSQL (`CHOREGOS_TEST_DATABASE_URL`), as the application role (not a
 superuser, so RLS applies); the CI starts one, locally `docs/development.md` says how.
@@ -115,7 +116,7 @@ async def test_responses_held_at_their_model_leave_the_pool_to_the_other_request
     pg_app: Any, held: HeldModel, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from choregos_api.db.models import AgentSessionEvent, AgentSessionRecord
-    from choregos_api.db.session import session_scope
+    from choregos_api.db.session import get_engine, session_scope
 
     await _small_pool(monkeypatch)
     loop = asyncio.get_running_loop()
@@ -140,13 +141,19 @@ async def test_responses_held_at_their_model_leave_the_pool_to_the_other_request
             ended = [response.result().text for response in responses if response.done()]
             assert held.arrived == HELD, f"{held.arrived} responses reached the model: {ended}"
 
-            # A fourth request, a read that needs a connection, is served at once.
-            started = loop.time()
-            ready = await asyncio.wait_for(client.get("/readyz"), timeout=POOL_TIMEOUT_S * 5)
-            waited = loop.time() - started
-            assert ready.status_code == 200, ready.text
-            assert waited < POOL_TIMEOUT_S, f"/readyz waited {waited:.2f} s for a connection"
+            # Held at the model, the responses hand every connection back to the pool. Counted, not
+            # timed: a response's own writes before its model call may still be finishing, and how
+            # long a request takes on a loaded CI runner proves nothing about the pool.
+            pool = get_engine().sync_engine.pool
+            while pool.checkedout():  # type: ignore[attr-defined]
+                assert loop.time() < deadline, "a response holds a connection while it waits at the model"
+                await asyncio.sleep(0.01)
             assert await _idle_in_transaction() == 0, "a response holds a connection idle in transaction"
+
+            # A fourth request, a read that needs a connection, gets one: an exhausted pool would
+            # have answered 503 after `POOL_TIMEOUT_S`.
+            ready = await asyncio.wait_for(client.get("/readyz"), timeout=POOL_TIMEOUT_S * 5)
+            assert ready.status_code == 200, ready.text
         finally:
             held.release.set()
             answers = await asyncio.gather(*responses, return_exceptions=True)
