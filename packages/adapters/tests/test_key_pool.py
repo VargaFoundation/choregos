@@ -241,3 +241,32 @@ async def test_a_single_refused_search_key_is_the_old_error() -> None:
     brave = BraveSearch(api_key=KEYS[0], transport=httpx.MockTransport(lambda _r: httpx.Response(403)))
     with pytest.raises(SearchError, match=r"refused \(HTTP 403\)"):
         await brave.search("python")
+
+
+async def test_tiingo_sends_the_key_of_each_call_and_moves_past_a_refused_one() -> None:
+    """Tiingo's key is a header: set once at construction, every call of a pool would carry the first
+    key whatever the turn (S39-30d). Set per request, a refused key moves the call to the next."""
+    from choregos_adapters.marketdata import TiingoProvider
+
+    from .test_marketdata import TIINGO_ROWS
+
+    seen: list[str] = []
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        token = request.headers["Authorization"].removeprefix("Token ")
+        seen.append(token)
+        if token == KEYS[0]:
+            return httpx.Response(401, json={"detail": "Invalid token"})
+        return httpx.Response(200, json=TIINGO_ROWS)
+
+    tiingo = TiingoProvider(transport=httpx.MockTransport(answer), api_key=KEYS[:2])
+    bars = await tiingo.get_bars("AAPL", "2020-08-28", "2020-08-31")
+    assert len(bars["bars"]) == 2 and seen == [KEYS[0], KEYS[1]]
+
+
+def test_a_composite_pools_its_tiingo_keys() -> None:
+    from choregos_adapters.registry import spec_of
+
+    tiingo, composite = spec_of("marketdata", "tiingo"), spec_of("marketdata", "composite")
+    assert tiingo is not None and tiingo.pooled_fields == ("api_key",)
+    assert composite is not None and "tiingo_api_key" in composite.pooled_fields

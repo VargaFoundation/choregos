@@ -765,9 +765,10 @@ _SHIPPED_SPECS: dict[tuple[str, str], ConnectorTypeSpec] = {
     ("marketdata", "tiingo"): ConnectorTypeSpec(
         "Tiingo (free key: 30+ years of daily history, internal and personal use only)",
         ("marketdata",),
-        _object_schema({"timeout_s": {"type": "number", "default": 20}}),
+        _object_schema({"timeout_s": {"type": "number", "default": 20}, **_KEY_ROTATION}),
         ("api_key",),
         operations=_OPERATIONS_MARKETDATA,
+        pooled_fields=("api_key",),
     ),
     ("marketdata", "composite"): ConnectorTypeSpec(
         "market data from several sources, with fallback and a cross-check of the closes",
@@ -793,7 +794,7 @@ _SHIPPED_SPECS: dict[tuple[str, str], ConnectorTypeSpec] = {
         ),
         ("stooq_api_key", "alphavantage_api_key", "tiingo_api_key"),
         operations=_OPERATIONS_MARKETDATA,
-        pooled_fields=("stooq_api_key", "alphavantage_api_key"),
+        pooled_fields=("stooq_api_key", "alphavantage_api_key", "tiingo_api_key"),
     ),
     # The `web_search` family (S40-01g, ADR 0083): called by the API's built-in `web_search`, never by a
     # runner. Each type declares what it does with the queries (`choregos_adapters.web_search`); the
