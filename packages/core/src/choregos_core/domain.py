@@ -54,6 +54,9 @@ class Model(BaseModel):
 #: take this name, and a person or an agent may not write it.
 TRACKER_FIELD = "tracker"
 
+#: The state of the work item an agent trial runs on: no interpreter ever runs on it (#1781).
+TRIAL_STATE = "trial"
+
 #: The work item field that names the repository it works on (ADR 0124): one of its project's
 #: repository names, the primary when absent. The platform's, not the workflow's: a workflow input may
 #: not take this name, and `metadata.inputs` does not validate it.

@@ -15,7 +15,8 @@ from choregos_api.services import persist_event, work_item_workflow, workflow_mo
 from choregos_api.services.budgets import ticket_budget, ticket_spent
 from choregos_contracts import EventType
 from choregos_core import utcnow
-from sqlalchemy import func, select
+from choregos_core.domain import TRIAL_STATE
+from sqlalchemy import func, or_, select
 from temporalio import activity
 from temporalio.exceptions import ActivityError, ApplicationError
 
@@ -162,6 +163,11 @@ async def attempts_before(session: Any, work_item_id: str, since: Any) -> dict[s
     return {str(transition): int(attempt) for transition, attempt in rows.all() if attempt}
 
 
+#: The transition a trial's run bears (`workflows.trial.TRIAL_TRANSITION`; not imported: that module
+#: imports the activities).
+_TRIAL_TRANSITION = "trial"
+
+
 @activity.defn(name="record_workflow_failure")
 async def record_workflow_failure(payload: dict[str, Any]) -> dict[str, Any]:
     """Write on the work item that its interpreter died, and publish the event.
@@ -189,7 +195,7 @@ async def record_workflow_failure(payload: dict[str, Any]) -> dict[str, Any]:
             subject=item.tracker_key,
             **failure,
         )
-        open_runs = await _runs_without_spend(session, item.id)
+        open_runs = [] if item.state == TRIAL_STATE else await _runs_without_spend(session, item.id)
     # The interpreter dies — `await_run` gave up, an activity failed for good: nothing will call
     # `collect_spend` for its run. Its spend is booked and its key revoked here (#523).
     # A run still waiting for a slot is removed at the executor first, or its suspended Job and
@@ -201,10 +207,19 @@ async def record_workflow_failure(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 async def _runs_without_spend(session: Any, work_item_id: str) -> list[str]:
-    """The ticket's runs whose spend was never collected — at most the last few."""
+    """The interpreter's own runs whose spend was never collected — at most the last few.
+
+    A trial's run (`AgentTrial`, transition `trial`) is not the interpreter's: its own workflow
+    collects its spend and closes its key. Closing it here revoked a live trial's gateway key
+    (#1781).
+    """
     rows = await session.execute(
         select(Run.id)
-        .where(Run.work_item_id == work_item_id, Run.spend_collected.is_(False))
+        .where(
+            Run.work_item_id == work_item_id,
+            Run.spend_collected.is_(False),
+            or_(Run.transition_id.is_(None), Run.transition_id != _TRIAL_TRANSITION),
+        )
         .order_by(Run.created_at.desc())
         .limit(10)
     )

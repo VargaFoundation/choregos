@@ -21,7 +21,7 @@ from choregos_api.services import (
 from choregos_api.services.initiator import initiator
 from choregos_contracts import EventType, HumanActor, HumanRequestKind, StageResult
 from choregos_core import Message, MessageAction, TrackerStateMapping, elapsed_seconds, utcnow
-from choregos_core.domain import TRACKER_FIELD
+from choregos_core.domain import TRACKER_FIELD, TRIAL_STATE
 from choregos_core.gates import ALREADY_FIXED_GATE
 from choregos_core.restricted import WITHHELD, is_marked
 from sqlalchemy import select, update
@@ -626,6 +626,9 @@ async def reconcile_tracker(payload: dict[str, Any]) -> dict[str, Any]:
                             WorkItem.project_id == bundle.project.id,
                             WorkItem.closed_at.is_(None),
                             WorkItem.paused.is_(False),
+                            # A trial's work item is the platform's own scaffolding for an agent
+                            # trial: its workflow is `AgentTrial`, never an interpreter (#1781).
+                            WorkItem.state != TRIAL_STATE,
                         )
                     )
                 )
@@ -665,6 +668,10 @@ async def reconcile_tracker(payload: dict[str, Any]) -> dict[str, Any]:
                     ),
                 )
                 created.append(key)
+            elif item.state == TRIAL_STATE:
+                # Whatever lists a trial's key (the database, a tracker), no interpreter runs on it.
+                skipped.append(key)
+                continue
             elif item.closed_at is not None:
                 if await _restart_if_back(session, bundle, item, interpreter_id(bundle.slug, key)):
                     reopened.append(key)

@@ -51,6 +51,21 @@ OUTCOME_APPROVED = "approved"
 OUTCOME_REJECTED = "rejected"
 
 
+class UnknownStateError(KeyError):
+    """A work item sits in a state its workflow does not declare (a trial's `trial`, a stale pin).
+
+    A `KeyError` still (callers that caught it keep working), but with a message that names the
+    state and the workflow."""
+
+    def __init__(self, state: str, workflow_id: str | None = None) -> None:
+        super().__init__(state)
+        self.state = state
+        self.workflow_id = workflow_id
+
+    def __str__(self) -> str:
+        return f"unknown state {self.state!r} in workflow {self.workflow_id!r}"
+
+
 class WorkflowEngine:
     """Computational view of a workflow: transition selection and what follows a stage."""
 
@@ -64,7 +79,10 @@ class WorkflowEngine:
         return self.wf.initial_state
 
     def is_terminal(self, state: str) -> bool:
-        return self.wf.states[state].terminal
+        try:
+            return self.wf.states[state].terminal
+        except KeyError:
+            raise UnknownStateError(state, self.wf.metadata.name) from None
 
     def select_transition(
         self, state: str, outcome: str | None = None, outputs: Mapping[str, Any] | None = None

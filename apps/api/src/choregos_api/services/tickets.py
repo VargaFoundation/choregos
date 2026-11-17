@@ -508,7 +508,13 @@ async def start_work_item(project: Project, item: WorkItem) -> None:
     """Starts the work item's interpreter: what `create_work_item` does unless `start=False`.
 
     The A2A door starts it itself, once the files a message carried are stored: the first step
-    must find the inputs it declares (ADR 0078 §6)."""
+    must find the inputs it declares (ADR 0078 §6).
+
+    A trial's work item (`state = "trial"`) never gets one: `AgentTrial` runs on it (#1781)."""
+    from .agent_lifecycle import TRIAL_STATE  # lazy: `agent_lifecycle` imports `deps`, which imports this
+
+    if item.state == TRIAL_STATE:
+        return
     workflow_id = interpreter_id(project.slug, item.tracker_key)
     await get_temporal().start_interpreter(
         workflow_id,
