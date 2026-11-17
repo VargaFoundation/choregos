@@ -183,6 +183,22 @@ async def test_batch_ingestion_passes(memory: EcphoriaMemory) -> None:
     assert len(found) >= 1, found
 
 
+async def test_two_memories_of_one_project_do_not_read_each_other(memory: EcphoriaMemory) -> None:
+    """ADR 0075 (update of 2026-11-17): each memory is its own tenant. A token scoped to one tenant
+    fails this test, and rightly: with it, Ecphoria files every memory in that tenant."""
+    named, other = f"{TENANT}#memory:named-{RUN}", f"{TENANT}#memory:other-{RUN}"
+    marker = f"isolation-{RUN}"
+    written = await memory.write_fact(
+        named, fact(f"convention:{marker}", f"Only in the named memory {marker}.")
+    )
+    assert [f.id for f in await memory.list_facts(named)] == [written]
+    assert await memory.list_facts(other) == []
+    assert all(marker not in m.content for m in await memory.search(other, marker, k=20))
+    assert all(marker not in m.content for m in await memory.search(TENANT, marker, k=20)), (
+        "the project's shared memory does not see a named memory's fact"
+    )
+
+
 async def test_an_unreachable_memory_returns_an_empty_pack_not_an_error() -> None:
     """The S10 rule: a slow or dead memory never blocks a stage."""
     dead = EcphoriaMemory("http://127.0.0.1:9", token="x", tenant=TENANT, read_timeout_ms=50)

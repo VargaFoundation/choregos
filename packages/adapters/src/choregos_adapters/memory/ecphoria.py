@@ -18,6 +18,9 @@ from choregos_core.memory_scope import parse_namespace
 
 from ..errors import UpstreamError
 
+#: Ecphoria clamps a page to its `max_rows`: a page shorter than asked is not the last one.
+LIST_PAGE = 500
+
 
 class EcphoriaMemory:
     """The Ecphoria REST client, one tenant per project."""
@@ -44,26 +47,25 @@ class EcphoriaMemory:
     async def aclose(self) -> None:
         await self._client.aclose()
 
-    def _headers(self, project: str) -> dict[str, str]:
-        # An agent's own memory (S32-02) is the namespace `<project>#agent:<slug>`: without a
-        # configured tenant it is its own tenant, so it never mixes with the project's; with one,
-        # the namespace travels in its own header. A global memory (S40-11) lives in the
-        # organisation's tenant, `org:<org>`; every namespace but the project's shared one is sent
-        # in full in `X-Ecphoria-Namespace`.
-        if not project:  # a call that names no namespace (the connection test)
-            return {"Content-Type": "application/json", "X-Ecphoria-Tenant": self.tenant or ""} | (
-                {"Authorization": f"Bearer {self.token}"} if self.token else {}
-            )
-        parsed = parse_namespace(project)
+    def _tenant(self, namespace: str) -> str:
+        """The Ecphoria tenant of one memory: each memory is its own tenant.
+
+        Ecphoria isolates tenants and nothing finer (it reads `X-Ecphoria-Tenant` and no namespace
+        header), so two memories sharing a tenant would read each other's facts. The tenant is the
+        namespace itself, the project's part replaced by the configured tenant when there is one:
+        `<project>`, `<project>#agent:<slug>`, `<project>#memory:<slug>`, `org:<key>#memory:<slug>`.
+        A token scoped to one tenant overrides the header on Ecphoria's side: with such a token,
+        every memory of the project lands in that tenant (ADR 0075, update of 2026-11-17).
+        """
+        parsed = parse_namespace(namespace)
         if parsed.kind == "global_store":
-            tenant = f"org:{parsed.org}"
-        elif parsed.kind == "project_store":
-            tenant = self.tenant or str(parsed.project)
-        else:
-            tenant = self.tenant or project
+            return namespace
+        base = self.tenant or str(parsed.project)
+        return base + namespace[len(str(parsed.project)) :]
+
+    def _headers(self, project: str) -> dict[str, str]:
+        tenant = self._tenant(project) if project else self.tenant or ""
         headers = {"Content-Type": "application/json", "X-Ecphoria-Tenant": tenant}
-        if parsed.kind != "project":
-            headers["X-Ecphoria-Namespace"] = project
         if self.token:
             headers["Authorization"] = f"Bearer {self.token}"
         return headers
@@ -217,6 +219,23 @@ class EcphoriaMemory:
             _memory({**hit.get("memory", hit), "score": hit.get("score")})
             for hit in payload.get("results", [])
         ]
+
+    async def list_facts(self, project: str) -> list[Memory]:
+        """Every active fact of one memory, and only of it (its export, ADR 0174 point 7)."""
+        facts: list[Memory] = []
+        while True:
+            payload = await self._request(
+                "GET",
+                "/api/v1/memories",
+                project=project,
+                timeout=max(self.write_timeout, 10.0),
+                params={"limit": LIST_PAGE, "offset": len(facts)},
+            )
+            page = [_memory(item) for item in payload.get("memories", [])]
+            if not page:
+                break
+            facts += page
+        return [fact for fact in facts if fact.status == "active"]
 
     async def create_tenant(self, project: str) -> None:
         await self._request(

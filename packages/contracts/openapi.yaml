@@ -1991,7 +1991,7 @@ paths:
         and no other, its kind as `type`, its subject as `title`. `verified` (`human:<user id>`) only where a
         person accepted the fact through the API, as the audit log records it; a fact whose `valid_to` is past
         is `status: deprecated`. Any caller who may search the memory. 409 when the project's policy disables
-        memory, or when its backend cannot list one memory apart from the others (Ecphoria). Audited as
+        memory, or when its backend cannot list one memory apart from the others. Audited as
         `memory.export`.
       parameters:
         - { name: memory, in: query, schema: { type: string }, description: "which memory of the project (S40-11): `shared` (the default), `own` with `agent`, or a named memory of the project" }
@@ -2092,7 +2092,7 @@ paths:
       description: >-
         The global memory as an Open Knowledge Format bundle (ADR 0174 point 7, S72-04), as `exportMemory` makes
         it, for any caller who may search it. 409 when the organisation's memory backend cannot list one memory
-        apart from the others (Ecphoria). Audited as `memory.export`.
+        apart from the others. Audited as `memory.export`.
       responses:
         "200":
           description: The bundle

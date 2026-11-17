@@ -1,7 +1,7 @@
 # 0174 — The Open Knowledge Format at the edge of a knowledge base, never its store nor its trust
 
 - **Status**: accepted, 2026-11-16; S72-01 implements points 1 to 5, S72-02 (contract) and S72-03 point 6;
-  S72-04 point 7 (amended 2026-11-17): a memory's export, refused for Ecphoria
+  S72-04 point 7 (amended 2026-11-17): a memory's export, on the lexical memory and on Ecphoria
 - **Concerns**: `apps/api/src/choregos_api/knowledge/okf.py`, `knowledge/serving.py` (`files_of`,
   `_ready`, `file_name`), `knowledge/index.py` (`index_document`), `knowledge/conversion.py`
   (`title_of`), `services/conversation_knowledge.py`, `packages/runner/src/choregos_runner/knowledge.py`;
@@ -78,13 +78,11 @@ The format is five months old and led by one vendor; adopting it as a store woul
      system) on that fact. A decision records `found` from now on, and one that found nothing verifies
      nothing. A fact a run wrote, or one the auto-accept rule took, is exported without `verified`. A
      row written before `found` existed counts: the person did ask to accept that fact;
-   - **the listing** is the adapter's `list_facts`, which the lexical memory has. Ecphoria does not:
-     it has `GET /api/v1/memories`, but it does not read the `X-Ecphoria-Namespace` header Choregos
-     sends (ADR 0075), so a project's named memories share its tenant, a configured tenant holds every
-     namespace, and an organisation's global memories share `org:<org>`. A listing would mix
-     memories; the export is refused (409) rather than approximated. The same gap affects what
-     `search` and `context_pack` read on Ecphoria; it is Ecphoria's or ADR 0075's to close, not this
-     point's.
+   - **the listing** is the adapter's `list_facts`: the lexical memory's scope, and on Ecphoria
+     `GET /api/v1/memories` page by page in the memory's own tenant. Ecphoria first had no such
+     isolation (it ignored the `X-Ecphoria-Namespace` header Choregos sent), and its export was refused;
+     since ADR 0075's update of 2026-11-17 each memory is its own tenant and the export is offered. An
+     adapter without `list_facts` is refused (409) rather than approximated by a search.
 
 ## Alternatives rejected
 

@@ -61,8 +61,7 @@ memories at the same time.
    on the new ones, so no adapter can silently read a named memory as the shared one.
    `memory_facts` gains `org_id` (backfilled from the project, then NOT NULL) and `memory_store_id`;
    `project_id` becomes nullable under a CHECK that a fact has a home; the RLS policy keys on
-   `org_id`. Ecphoria: tenant `org:<org>` for a global memory, and the full namespace in
-   `X-Ecphoria-Namespace` for every namespace but the shared one. A global memory is served by the
+   `org_id`. Ecphoria: one tenant per memory (update of 2026-11-17 below). A global memory is served by the
    organisation's `memory` connector when it declares one, else by the deployment default.
 7. **Permissions.** Global memories: create, edit, change reach, archive, decide proposals are
    `agent:manage`; seeing and searching follow the reach (administrators see all; what a caller may not
@@ -115,3 +114,25 @@ adapter, the stage's memory resolution, the lexical memory's lookup of the organ
 in URLs; only the memory tenant uses the key. No migration (a JSON setting). A slug that is another
 organisation's memory key is refused (409), on rename and on creation.
 
+## Update 2026-11-17 — on Ecphoria, each memory is its own tenant
+
+Point 6 sent a named memory in its project's tenant, a global memory in `org:<org>`, and every
+memory of a project with a configured tenant in that tenant, with the full namespace in an
+`X-Ecphoria-Namespace` header. Ecphoria never read that header: it isolates tenants and nothing finer.
+So on Ecphoria a project's named memories read and fed its shared memory, an organisation's global
+memories read each other, and under a configured tenant an agent's own memory was the project's.
+Found while exporting a memory (S72-04).
+
+The tenant is now the namespace itself, the project's part replaced by the configured tenant when
+there is one: `<project>`, `<project>#agent:<slug>`, `<project>#memory:<slug>`,
+`org:<key>#memory:<slug>` (`EcphoriaMemory._tenant`); the header is no longer sent. Proven against a
+real Ecphoria (0.2.5) by `tests/live/test_ecphoria_live.py::test_two_memories_of_one_project_do_not_read_each_other`,
+red on the previous mapping.
+
+- **No migration.** Ecphoria never stored the namespace, so the facts already written cannot be told
+  apart: those of a named memory stay in its project's shared memory, those of a global memory in
+  `org:<key>`, which nothing reads any more, and those of an agent's memory under a configured tenant in
+  the project's. Each of those memories starts empty on Ecphoria.
+- **A token scoped to one tenant** wins over the header on Ecphoria's side: with such a token, every
+  memory of the project still lands in that one tenant. Give Choregos an unscoped key when a project
+  uses more than its shared memory on Ecphoria.
