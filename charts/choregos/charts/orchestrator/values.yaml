@@ -6,6 +6,12 @@ image:
   repository: choregos-orchestrator
   tag: ""
   digest: ""
+# What one worker pod takes on at once (S80-07a): see the umbrella chart's values.
+concurrency:
+  activities: 20
+  workflowTasks: 100
+  localActivities: 100
+  cachedWorkflows: 1000
 queues:
   - name: orchestrator
     replicas: 2

@@ -194,6 +194,16 @@ spec:
               value: {{ ternary "on" "off" (ne (($root.Values.runner.toolScripts | default dict).allowed) false) | quote }}
             - name: CHOREGOS_GATEWAY_MASTER_KEY
               valueFrom: { secretKeyRef: { name: {{ include "choregos.gatewaySecret" $root }}, key: master-key } }
+            {{- $concurrency := mergeOverwrite (deepCopy ($root.Values.concurrency | default dict)) (.concurrency | default dict) }}
+            # What this pod takes on at once (S80-07a): the chart's `concurrency`, then the queue's.
+            - name: CHOREGOS_WORKER_MAX_CONCURRENT_ACTIVITIES
+              value: {{ $concurrency.activities | default 20 | quote }}
+            - name: CHOREGOS_WORKER_MAX_CONCURRENT_WORKFLOW_TASKS
+              value: {{ $concurrency.workflowTasks | default 100 | quote }}
+            - name: CHOREGOS_WORKER_MAX_CONCURRENT_LOCAL_ACTIVITIES
+              value: {{ $concurrency.localActivities | default 100 | quote }}
+            - name: CHOREGOS_WORKER_MAX_CACHED_WORKFLOWS
+              value: {{ (hasKey $concurrency "cachedWorkflows") | ternary $concurrency.cachedWorkflows 1000 | quote }}
           resources: {{- toYaml .resources | nindent 12 }}
           volumeMounts:
             - { name: tmp, mountPath: /tmp }

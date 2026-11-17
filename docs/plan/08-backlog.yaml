@@ -53,6 +53,7 @@ streams:
   S65: "Outposts: tools that live where the platform cannot reach, behind a place that only dials out (ADRs 0147-0149)"
   S68: "The editor is a surface of the platform: a code editor extension that converses, shows what runs and what waits, and runs nothing locally (ADR 0155)"
   S75: "The core is named Tranibor: visible name, packages, images and charts, environment variables (ADR 0176)"
+  S80: "From engine to product: the plan of 2026-11-16"
 
 stories:
 
@@ -5362,3 +5363,13 @@ stories:
     size: S
     depends_on: []
     notes: "The decision of 2026-11-15 (D6) and 2026-11-17; what is never renamed (wire contracts, stored state, third-party-visible tokens) is listed with its reason; amends 0048, 0064, 0079, 0156."
+
+  # ───────────── S80 — from engine to product: the plan of 2026-11-16 ─────────────
+  - id: S80-07a
+    title: "feat(orchestrator,charts): the worker's concurrency is a setting (activities, workflow tasks, local activities, sticky cache), chart values per queue"
+    stream: S80
+    sprint: 1
+    priority: 7
+    size: S
+    depends_on: []
+    notes: "Plan workstream P3, first part. max_concurrent_activities=20 was a literal in worker.py and the other slots the SDK's defaults; the defaults are unchanged (20/100/100/1000). Not done: a load test, waiting for runs without polling, the import ceiling (the rest of P3)."

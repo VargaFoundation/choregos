@@ -637,6 +637,16 @@ choregos-orchestrator:
   # After losing a node, a worker waits this delay before being evicted (Kubernetes default:
   # 300 s, i.e. ~6 minutes of immobility — see `tests/cluster/test_node_loss.py`).
   unreachableTolerationSeconds: 20
+  # What ONE worker pod takes on at once (S80-07a), passed as `CHOREGOS_WORKER_MAX_*`. These are the
+  # values the worker had before they were settings: an executor activity holds a run's stage for
+  # its whole length, so `activities` x executor replicas bounds the simultaneous runs (20 x 2 = 40).
+  # A queue overrides any of them with its own `concurrency:` (e.g. `{ activities: 50 }`).
+  concurrency:
+    activities: 20
+    workflowTasks: 100
+    localActivities: 100
+    # Workflows kept in the sticky cache; 0 turns the cache off.
+    cachedWorkflows: 1000
   # One deployment per task queue: slow external calls do not choke the decision loop.
   queues:
     - name: orchestrator
