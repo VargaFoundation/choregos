@@ -2440,6 +2440,13 @@ same bundle, its withdrawn documents included with their status (`GET …/knowle
 any reader of the base, recorded in the audit as `knowledge.export`). No right, grant or source
 credential is in it.
 
+A memory downloads the same way: **Download (OKF)** on a project's memory page (the memory chosen in
+the selector) or on a global memory's page saves its active facts, one file per fact, with
+`verified: [{by: human:<user id>, at}]` where a person accepted the fact in the console
+(`GET /projects/{id}/memory/export`, `GET /orgs/{org}/memories/{slug}/export`, audited
+`memory.export`). It works on the lexical memory only: Ecphoria cannot list one memory apart from the
+others, and the download is refused there (ADR 0174 point 7).
+
 A base served as an **index** is cut into contextual chunks (each prefixed by its document's title
 and heading path) and embedded through the gateway (`default_model_profiles["embed"]`, else
 `CHOREGOS_KNOWLEDGE_EMBEDDING_MODEL`, `platform/embed`; a deterministic fake under

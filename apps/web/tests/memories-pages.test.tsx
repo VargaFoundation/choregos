@@ -34,6 +34,8 @@ vi.mock("@/lib/api", async (importOriginal) => {
       memoryPending: vi.fn(),
       memoryDecide: vi.fn(),
       agents: vi.fn(),
+      exportMemory: vi.fn(),
+      exportGlobalMemory: vi.fn(),
     },
   };
 });
@@ -146,6 +148,18 @@ describe("one global memory", () => {
     expect(screen.getByRole("link", { name: "architect v3" })).toBeInTheDocument();
   });
 
+  it("downloads it as an OKF bundle, and shows a refusal as it is said", async () => {
+    vi.mocked(api.exportGlobalMemory).mockResolvedValueOnce(new Blob(["zip"], { type: "application/zip" }));
+    URL.createObjectURL = vi.fn(() => "blob:bundle");
+    URL.revokeObjectURL = vi.fn();
+    await open();
+    fireEvent.click(await screen.findByRole("button", { name: "Download (OKF)" }));
+    await waitFor(() => expect(api.exportGlobalMemory).toHaveBeenCalledWith("acme", "security-lessons"));
+    vi.mocked(api.exportGlobalMemory).mockRejectedValueOnce(new Error("the `EcphoriaMemory` memory backend cannot list one memory's facts"));
+    fireEvent.click(screen.getByRole("button", { name: "Download (OKF)" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("cannot list one memory's facts");
+  });
+
   it("shows a member neither the proposals nor the controls", async () => {
     session.me = { memberships: [{ org: "acme", role: "developer" }] };
     await open();
@@ -184,6 +198,16 @@ describe("a project's memories", () => {
     // A decision is made in the memory being read.
     fireEvent.click(await screen.findByRole("button", { name: "Accept" }));
     await waitFor(() => expect(api.memoryDecide).toHaveBeenCalledWith("billing-api", "g1", "accept", { memory: "own", agent: "architect" }));
+  });
+
+  it("downloads the memory being read", async () => {
+    vi.mocked(api.exportMemory).mockResolvedValue(new Blob(["zip"], { type: "application/zip" }));
+    URL.createObjectURL = vi.fn(() => "blob:bundle");
+    URL.revokeObjectURL = vi.fn();
+    await open();
+    fireEvent.change(await screen.findByLabelText("Memory"), { target: { value: "memory:decisions" } });
+    fireEvent.click(screen.getByRole("button", { name: "Download (OKF)" }));
+    await waitFor(() => expect(api.exportMemory).toHaveBeenCalledWith("billing-api", { memory: "decisions" }));
   });
 
   it("shows the organisation's memories that reach it, read-only", async () => {

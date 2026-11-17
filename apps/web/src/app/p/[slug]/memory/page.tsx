@@ -4,6 +4,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { use, useState } from "react";
+import { MemoryExport } from "@/components/memory-export";
 import { MemoryReimport } from "@/components/memory-reimport";
 import { Button, Card, Drawer, Empty, ErrorNote, ReadState, Input, LEGENDE, Select } from "@/components/ui";
 import { OrganisationMemoryStore, ProjectMemoryStore } from "@/components/memory-store";
@@ -122,6 +123,12 @@ export default function MemoryPage({ params }: { params: Promise<{ slug: string 
           <Button onClick={() => setOpen(true)}>New project memory</Button>
         )}
         {canWrite && <MemoryReimport slug={slug} />}
+        {ready && (
+          <MemoryExport
+            bundle={() => (isGlobal ? api.exportGlobalMemory(org, globalSlug) : api.exportMemory(slug, which))}
+            filename={`${isGlobal ? globalSlug : `${slug}-${which.memory ?? "shared"}${which.agent ? `-${which.agent}` : ""}`}.okf.zip`}
+          />
+        )}
       </div>
       {error && <ErrorNote>{error}</ErrorNote>}
       {isGlobal ? <OrganisationMemoryStore org={org} /> : <ProjectMemoryStore slug={slug} />}

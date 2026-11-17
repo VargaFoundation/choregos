@@ -1,7 +1,7 @@
 # 0174 — The Open Knowledge Format at the edge of a knowledge base, never its store nor its trust
 
 - **Status**: accepted, 2026-11-16; S72-01 implements points 1 to 5, S72-02 (contract) and S72-03 point 6;
-  a memory's export is not delivered (point 7)
+  S72-04 point 7 (amended 2026-11-17): a memory's export, refused for Ecphoria
 - **Concerns**: `apps/api/src/choregos_api/knowledge/okf.py`, `knowledge/serving.py` (`files_of`,
   `_ready`, `file_name`), `knowledge/index.py` (`index_document`), `knowledge/conversion.py`
   (`title_of`), `services/conversation_knowledge.py`, `packages/runner/src/choregos_runner/knowledge.py`;
@@ -67,14 +67,24 @@ The format is five months old and led by one vendor; adopting it as a store woul
    document's `okf` field (`type`, `status`, `stale_after`, and `stale` computed when read) is read
    from the head of its markdown only (`okf.HEAD_CHARS`), so a listing never loads a corpus; the
    console badges a withdrawn, out-of-date or draft document and offers the download.
-7. **A memory's export is not delivered, and is not planned until two facts exist.** Accepted facts
-   would map to OKF concepts with `verified: [{by: human:<decider>, at}]`, which is the point of
-   exporting them. Two things are missing: the memory adapter (`MemoryAdapter`: Ecphoria or the
-   lexical fallback) has no operation that lists a memory's facts, only `search` and `context_pack`;
-   and deciding a proposal records no decider on the fact. Exporting without them would either miss
-   Ecphoria's facts or write a `verified` the platform cannot prove — what point 5 refuses for an
-   imported file. The export is lossy for a memory in any case (OKF has no bi-temporal validity;
-   `valid_to` maps at best to `status: deprecated`).
+7. **A memory's export: its active facts, `verified` only where a person accepted one (amended
+   2026-11-17, S72-04).** `GET /projects/{id}/memory/export` (`?memory=`, `?agent=`) and
+   `GET /orgs/{org}/memories/{slug}/export` answer a deterministic zip, for whoever may search that
+   memory, audited `memory.export`: one file per active fact of that memory and no other, its kind as
+   `type`, its subject as `title`, its content as body, its provenance as `sources`, `valid_from` and
+   `valid_to` kept as its own keys. OKF has no bi-temporal validity: a fact whose `valid_to` is past is
+   `status: deprecated`, which is all it can say. The two facts this point waited for:
+   - **the decider** is the audit log's: a `memory.accept` row by a user (not a token, not the
+     system) on that fact. A decision records `found` from now on, and one that found nothing verifies
+     nothing. A fact a run wrote, or one the auto-accept rule took, is exported without `verified`. A
+     row written before `found` existed counts: the person did ask to accept that fact;
+   - **the listing** is the adapter's `list_facts`, which the lexical memory has. Ecphoria does not:
+     it has `GET /api/v1/memories`, but it does not read the `X-Ecphoria-Namespace` header Choregos
+     sends (ADR 0075), so a project's named memories share its tenant, a configured tenant holds every
+     namespace, and an organisation's global memories share `org:<org>`. A listing would mix
+     memories; the export is refused (409) rather than approximated. The same gap affects what
+     `search` and `context_pack` read on Ecphoria; it is Ecphoria's or ADR 0075's to close, not this
+     point's.
 
 ## Alternatives rejected
 
@@ -104,4 +114,4 @@ The format is five months old and led by one vendor; adopting it as a store woul
   file name (ADR 0051), so a concept's bundle-relative link to another folder does not resolve in what
   a run is served or in the export. OKF tolerates broken links (§11); the text is intact.
 - Not covered: the eval set's recall@5 does not distinguish deprecated documents; `stale_after` is
-  served and shown, never acted on; a memory's export (point 7).
+  served and shown, never acted on; a memory's export on Ecphoria (point 7).

@@ -5318,7 +5318,7 @@ stories:
     priority: 4
     size: M
     depends_on: [S72-03]
-    notes: "Blocked on two facts that do not exist: MemoryAdapter has no listing operation (Ecphoria and the lexical fallback), and deciding a proposal records no decider. Without both, an export would miss Ecphoria's facts or write a verified the platform cannot prove."
+    notes: "Delivered 2026-11-17 for the lexical memory: the decider is the audit log's memory.accept by a user (a decision now records found), the listing is list_facts. Ecphoria is refused: it ignores X-Ecphoria-Namespace, so a listing would mix memories (the same gap affects search and context_pack, ADR 0075)."
   - id: S73-01
     title: "chore(publishing): the publication moves to graalsystems (owner, registry, source repository; ADR 0156 amendment)"
     stream: S73

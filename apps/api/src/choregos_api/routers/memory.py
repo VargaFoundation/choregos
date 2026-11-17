@@ -3,18 +3,21 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Annotated, Any
 
+from choregos_core import utcnow
 from choregos_core.domain import Memory
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..audit import record
 from ..deps import Db, Me, ProjectContext, ProjectCtx
 from ..errors import conflict, forbidden
+from ..knowledge import okf
 from ..rbac import Permission
 from ..schemas import MemoryAbGroup, MemoryAbReport, MemoryDecision, MemoryDto, MemoryReimport
-from ..services import effective_policy, policy_engine
+from ..services import effective_policy, memory_export, policy_engine
 from ..services.memory_access import project_adapter, project_namespace
 from ..temporal import MemoryLoopNotRunningError, signal_memory_loop
 
@@ -110,8 +113,68 @@ async def decide(
         target_type="memory",
         target_id=body.id,
         reason=body.reason,
+        found=bool(accepted),
     )
     return {"status": "accepted" if accepted else "not_found"}
+
+
+def refuse_unlisted(adapter: Any) -> None:
+    """A memory exported must be that memory's facts and no other's (ADR 0174 point 7)."""
+    if not hasattr(adapter, "list_facts"):
+        raise conflict(
+            f"the `{type(adapter).__name__}` memory backend cannot list one memory's facts apart from "
+            "the other memories' (Ecphoria does not read the namespace Choregos sends): its export "
+            "is not offered"
+        )
+
+
+def okf_zip(content: bytes, name: str) -> Response:
+    return Response(
+        content=content,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{name}.okf.zip"'},
+    )
+
+
+@router.get(
+    "/projects/{id}/memory/export",
+    operation_id="exportMemory",
+    response_class=Response,
+    responses={200: {"content": {"application/zip": {}}}},
+)
+async def export(
+    ctx: ProjectCtx,
+    session: Db,
+    memory: Annotated[str | None, Query()] = None,
+    agent: Annotated[str | None, Query()] = None,
+) -> Response:
+    """The memory's active facts as an Open Knowledge Format bundle (ADR 0174 point 7). Read by whoever
+    may search it; a fact a person accepted carries `verified`, from the audit log."""
+    if not (await policy_engine(session, ctx.id)).memory_enabled():
+        raise conflict(f"project {ctx.slug}'s policy disables memory (memory.enabled: false)")
+    namespace = await project_namespace(session, ctx.project, memory, agent)
+    adapter = await _adapter(ctx, session)
+    refuse_unlisted(adapter)
+    facts = await adapter.list_facts(namespace)
+    decided = await memory_export.deciders(session, ctx.project.org_id, [m.id for m in facts])
+    which = memory or "shared"
+    name = f"{ctx.slug}-{which}" + (f"-{agent}" if agent else "")
+    files = memory_export.files_of(facts, decided, utcnow())
+    content = await asyncio.to_thread(okf.bundle_zip, name, f"Memory {which} of {ctx.slug}", files)
+    await record(
+        session,
+        ctx.principal,
+        "memory.export",
+        org_id=ctx.project.org_id,
+        target_type="project",
+        target_id=ctx.project.id,
+        memory=which,
+        agent=agent,
+        facts=len(files),
+        verified=sum(1 for m in facts if m.id in decided),
+        bytes=len(content),
+    )
+    return okf_zip(content, name)
 
 
 @router.post(

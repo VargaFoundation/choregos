@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { use, useState } from "react";
 import { Breadcrumbs, Button, Card, Empty, ErrorNote, ReadState, Input, LEGENDE, Select } from "@/components/ui";
+import { MemoryExport } from "@/components/memory-export";
 import { OrgPageHeader } from "@/components/org-page-header";
 import { api } from "@/lib/api";
 import { shortDate } from "@/lib/format";
@@ -79,6 +80,9 @@ export default function MemoryPage({ params }: { params: Promise<{ slug: string 
         {memory.error && <ErrorNote>{String(memory.error)}</ErrorNote>}
       </div>
       {error && <ErrorNote>{error}</ErrorNote>}
+      <div className="flex justify-end">
+        <MemoryExport bundle={() => api.exportGlobalMemory(org, slug)} filename={`${slug}.okf.zip`} />
+      </div>
       <div className="grid gap-4 lg:grid-cols-2">
         <Card title="Search">
           <form

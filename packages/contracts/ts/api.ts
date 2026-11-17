@@ -6557,7 +6557,9 @@ export interface Operations {
   eraseAssistantSubject: { method: "POST"; path: "/orgs/{org}/assistants/{slug}/erasure"; body: SubjectErasureRequest; response: SubjectErasure };
   eraseMyAssistantData: { method: "DELETE"; path: "/me/assistants/{org}/{slug}"; body: never; response: UserErasure };
   estimateKnowledgeDistillation: { method: "GET"; path: "/orgs/{org}/knowledge/{slug}/distill/estimate"; body: never; response: KnowledgeDistillEstimate };
+  exportGlobalMemory: { method: "GET"; path: "/orgs/{org}/memories/{slug}/export"; body: never; response: void };
   exportKnowledgeBase: { method: "GET"; path: "/orgs/{org}/knowledge/{slug}/export"; body: never; response: void };
+  exportMemory: { method: "GET"; path: "/projects/{id}/memory/export"; body: never; response: void };
   exportMyAssistantMemory: { method: "GET"; path: "/me/assistants/{org}/{slug}/memory-export"; body: never; response: MemoryExport };
   exportOrgCostsCsv: { method: "GET"; path: "/orgs/{org}/costs.csv"; body: never; response: void };
   exportProjectCostsCsv: { method: "GET"; path: "/projects/{id}/costs.csv"; body: never; response: void };

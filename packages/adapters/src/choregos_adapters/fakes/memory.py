@@ -125,6 +125,9 @@ class FakeMemory:
         self.pending.setdefault(project, []).append(memory)
         return memory.id
 
+    async def list_facts(self, project: str) -> list[Memory]:
+        return [m for m in self.facts.get(project, []) if m.status == "active"]
+
     async def accept_pending(self, project: str, memory_id: str) -> bool:
         for memory in self.pending.get(project, []):
             if memory.id == memory_id:
