@@ -11,7 +11,7 @@ import { EditionFooterLine, FooterText } from "@/components/edition";
 import { Sidebar } from "@/components/shell/sidebar";
 import { SCRIPT_DES_PREFERENCES } from "@/lib/preferences";
 import { themeCss } from "@/lib/served-theme";
-import { instanceTheme } from "@/lib/served-theme-server";
+import { servedLook } from "@/lib/served-theme-server";
 import "./globals.css";
 import { Providers } from "./providers";
 import { DocumentTitle } from "./document-title";
@@ -38,7 +38,8 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   // The embedded component (S63-12) is framed by a host application: no navigation, no footer.
   const embedded = requestHeaders.get("x-embed") === "1";
   // The look the API serves, read before anything is drawn (ADR 0064); the default on any failure.
-  const theme = await instanceTheme();
+  // On a host an organisation owns, that organisation's look and its name (ADR 0175).
+  const { theme, hostOrg } = await servedLook();
   return (
     // The font variables on <html>: the theme tokens (`:root`) read them at this level.
     <html lang="en" suppressHydrationWarning
@@ -54,7 +55,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
         <script nonce={nonce} suppressHydrationWarning dangerouslySetInnerHTML={{ __html: SCRIPT_DES_PREFERENCES }} />
       </head>
       <body>
-        <ServedThemeProvider initial={theme}>
+        <ServedThemeProvider initial={theme} hostOrg={hostOrg}>
           <Providers>
             <OrganisationTheme />
             <DocumentTitle />

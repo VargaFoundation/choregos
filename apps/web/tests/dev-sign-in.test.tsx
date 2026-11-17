@@ -6,12 +6,18 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 let query = new URLSearchParams();
 vi.mock("next/navigation", () => ({ useSearchParams: () => query }));
 
-async function open(env: Record<string, string>) {
+async function open(env: Record<string, string>, hostOrg: string | null = null) {
   vi.resetModules();
   for (const [name, value] of Object.entries(env)) vi.stubEnv(name, value);
   const { default: LoginPage } = await import("@/app/login/page");
+  const { ServedThemeProvider } = await import("@/components/served-theme");
+  const { DEFAULT_SERVED_THEME } = await import("@/lib/served-theme");
   document.body.innerHTML = "";
-  render(<LoginPage />);
+  render(
+    <ServedThemeProvider initial={DEFAULT_SERVED_THEME} hostOrg={hostOrg}>
+      <LoginPage />
+    </ServedThemeProvider>,
+  );
 }
 
 function submitted(): URL {
@@ -80,5 +86,19 @@ describe("sign-in with the organisation's own identity provider (ADR 0108)", () 
     const link = screen.getByRole("link", { name: "Continue with the identity provider" });
     expect(new URL(link.getAttribute("href") ?? "", "http://localhost:3000").searchParams.get("org")).toBe("acme");
     expect(continued().searchParams.get("org")).toBe("acme");
+  });
+
+  it("implies the organisation of a host it owns, whatever the link says (ADR 0175)", async () => {
+    query = new URLSearchParams({ org: "someone-else" });
+    await open({}, "acme");
+    const link = screen.getByRole("link", { name: "Continue with the identity provider" });
+    expect(new URL(link.getAttribute("href") ?? "", "http://localhost:3000").searchParams.get("org")).toBe("acme");
+    expect(continued().searchParams.get("org")).toBe("acme");
+  });
+
+  it("implies nothing on the instance's own host", async () => {
+    await open({});
+    const link = screen.getByRole("link", { name: "Continue with the identity provider" });
+    expect(new URL(link.getAttribute("href") ?? "", "http://localhost:3000").searchParams.has("org")).toBe(false);
   });
 });

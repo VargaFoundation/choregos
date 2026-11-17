@@ -4,6 +4,7 @@
 import { buttonClasses, Heading, Input, Lead } from "@/components/ui";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
+import { useHostOrg } from "@/components/served-theme";
 import { api, IS_MOCK } from "@/lib/api";
 
 /**
@@ -28,7 +29,9 @@ function Connexion() {
   const next = params.get("next") || (devLogin && process.env.NEXT_PUBLIC_DEV_LOGIN_NEXT) || "/";
   const [email, setEmail] = useState(devLogin ? (process.env.NEXT_PUBLIC_DEV_LOGIN_EMAIL ?? "") : "");
   // A sign-in link per organisation (`/login?org=acme`) goes to that organisation's own provider.
-  const org = params.get("org") ?? undefined;
+  // On a host an organisation owns (`agentic.client.com`), the sign-in implies that organisation (ADR 0175).
+  const hostOrg = useHostOrg();
+  const org = hostOrg ?? params.get("org") ?? undefined;
   const [workEmail, setWorkEmail] = useState("");
 
   return (

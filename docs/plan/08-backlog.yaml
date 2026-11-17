@@ -5327,4 +5327,20 @@ stories:
     size: S
     depends_on: []
     notes: "Decided 2026-11-17: the repositories moved to graalsystems as tranibor, tranibor-agents, ecphoria. Images from 0.27.11 on are published to ghcr.io/graalsystems; 0.27.10 and older stay in the frozen ghcr.io/vargafoundation."
+  - id: S74-01
+    title: "feat(api,web): an organisation may own a host: ADR 0175, declare_host_resolver, theme by host, /login implies the organisation"
+    stream: S74
+    sprint: 1
+    priority: 1
+    size: M
+    depends_on: []
+    notes: "First step of a custom host per organisation (agentic.client.com lands on the organisation, themed from the first paint). Next steps, not in this story: S74-02 sign-in on the host (OIDC redirect_uri, host-only cookies, origin and CORS allowlist, Keycloak and SAML per host; ADR 0175 point 5 rule for a member of another organisation), S74-03 a per-organisation public URL for links, MCP, A2A and notifications, S74-04 chart, ingress and TLS (infra#1595 issues the certificate over HTTP-01)."
+  - id: S74-02
+    title: "feat(api,web): sign in on a tenant host (redirect_uri per host, host-only cookies, origin and CORS allowlist, Keycloak and SAML per host)"
+    stream: S74
+    sprint: 1
+    priority: 2
+    size: L
+    depends_on: [S74-01]
+    notes: "Out of scope of S74-01. Must match the host against the verified table, require the ingress to overwrite a client-supplied X-Forwarded-Host, and implement the not-a-member page of ADR 0175 point 5."
 
