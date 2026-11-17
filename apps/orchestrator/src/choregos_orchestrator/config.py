@@ -134,6 +134,16 @@ class OrchestratorSettings(BaseSettings):
     heartbeat_seconds: int = 60
     # The tracker's fallback polling (S3-06): 0 disables the catch-up.
     reconcile_interval_seconds: int = 60
+    #: How much one worker process takes on at once (S80-07a). The first was a literal in
+    #: `worker.py`, the others the Temporal SDK's silent defaults; the defaults are those same values,
+    #: so a deployment that sets nothing behaves as before. An executor activity holds a run's stage
+    #: for its whole length: 20 activities x 2 executor replicas is the ~40 simultaneous runs of a
+    #: default install. `CHOREGOS_WORKER_MAX_CONCURRENT_ACTIVITIES`, and so on.
+    worker_max_concurrent_activities: int = Field(default=20, ge=1)
+    worker_max_concurrent_workflow_tasks: int = Field(default=100, ge=1)
+    worker_max_concurrent_local_activities: int = Field(default=100, ge=1)
+    #: Workflows kept in the worker's sticky cache; `0` turns the cache off.
+    worker_max_cached_workflows: int = Field(default=1000, ge=0)
 
 
 @lru_cache(maxsize=1)
