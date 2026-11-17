@@ -213,13 +213,13 @@ export function extrait(
       };
     case "cli":
       return {
-        where: "a terminal — the CLI needs a full-access token, created in administration",
+        where: "a terminal — the CLI needs a full-access token, created in My account (Create an API token)",
         language: "bash",
         code: `choregos login --api-url ${origineDe(url)} --token <full-access token>`,
       };
     case "rest":
       return {
-        where: "a terminal — the REST API needs a full-access token, created in administration",
+        where: "a terminal — the REST API needs a full-access token, created in My account (Create an API token)",
         language: "bash",
         code: `curl -H "Authorization: Bearer <full-access token>" ${origineDe(url)}/api/v1/me`,
       };

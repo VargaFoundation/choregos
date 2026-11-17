@@ -14,6 +14,10 @@ and an optional MCP tools sidecar — plus four dependencies it can either **emb
 | PostgreSQL | 15 | Embedded single instance for a bench, an operator in production |
 | Temporal | 1.22 | Embedded dev server for a bench, a cluster in production |
 | An OIDC provider | — | Keycloak in our deployments; any OIDC issuer works |
+| The agent-sandbox operator | v1.0.6 | **Required by default.** `global.runner.executor` defaults to `agent_sandbox`, and the chart refuses to render when the cluster lacks the `extensions.agents.x-k8s.io/v1beta1/SandboxTemplate` API; its CRDs are cluster-scoped, so a platform team installs it ([the `agent_sandbox` executor](#the-agent_sandbox-executor-the-default)). Not needed with `global.runner.executor: k8s_job` |
+| External Secrets Operator | — | **Required by default.** `global.externalSecrets.enabled` is `true`: the chart renders an `ExternalSecret` (`external-secrets.io/v1beta1`) against the `ClusterSecretStore` named by `global.externalSecrets.storeRef`. Optional with `global.externalSecrets.enabled: false`, when the tenant provides the Secrets itself ([Secrets](#secrets)) |
+| An S3-compatible object store | — | Needed for **file artifacts** (decks, spreadsheets, images; `global.objectStore`; AWS S3, RustFS, MinIO, Ceph). Only the API talks to it. The chart renders without one; an in-memory store (`memory://` URL, or `CHOREGOS_FAKES=1`) is for a bench and is lost on restart |
+| Kyverno | 1.12 | **Optional for the chart**: nothing in the chart's default render needs it (`hostedCosignPolicy` renders a Kyverno `ClusterPolicy` only when switched on). Needed only to install the admission policies of `infra/policies` ("Installing the admission policies", under *Running agent stages*) |
 
 Optional but recommended in production: a model gateway (LiteLLM), a memory service
 (Ecphoria), Tekton for CI, Argo CD for CD, gVisor as a `RuntimeClass` for agent sandboxes.
@@ -456,6 +460,7 @@ versions (Argo CD and `helm install` pass them) and fails, naming the operator a
 
 ```yaml
 global:
+  rbac: { jobRunner: true }           # or the platform grants the same verbs (see rbac-jobs.yaml)
   runner:
     executor: agent_sandbox           # the default, written here to make the choice visible
     runtimeClass: gvisor              # the template's RuntimeClass; "" = the cluster's
@@ -464,8 +469,6 @@ choregos-orchestrator:
     # namespacePattern empty = the release namespace: the template lives there
     warmPool: { size: 2 }             # sandboxes made in advance, never used, holding nothing
     sandbox: { storage: 10Gi, storageClassName: "", assignmentPort: 8765, ttlSecondsAfterFinished: 300 }
-global:
-  rbac: { jobRunner: true }           # or the platform grants the same verbs (see rbac-jobs.yaml)
 ```
 
 A finished run's sandbox keeps its workspace volume for `ttlSecondsAfterFinished` seconds, then
