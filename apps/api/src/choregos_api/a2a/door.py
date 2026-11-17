@@ -70,6 +70,7 @@ from ..mcp.limits import RATE_LIMITER, WRITES_PER_DAY, writes_today
 from ..mcp.oauth import issuer_of
 from ..mcp.transport import MAX_BODY_SIZE, _allowed_origins, _http_refusal
 from ..object_store import object_store
+from ..origin_guard import tenant_origin_allowed
 from ..rbac import Permission
 from ..schemas import WorkItemCreate
 from ..services import create_work_item, work_item_workflow, workflow_model
@@ -86,6 +87,7 @@ from ..services.artifacts import (
 from ..services.personal_spaces import listed
 from ..services.tickets import start_work_item
 from ..temporal import InterpreterNotRunningError, deliver_control
+from ..tenant_host import org_base_url, request_base_url
 from . import v1
 
 router = APIRouter(include_in_schema=False)
@@ -235,13 +237,22 @@ async def _open(
 ) -> Door | Response:
     """The door's HTTP refusals, before any A2A exchange: origin, token, rate, organisation."""
     origin = request.headers.get("origin")
-    if origin and origin not in _allowed_origins(settings):
+    if (
+        origin
+        and origin not in _allowed_origins(settings)
+        and not await tenant_origin_allowed(origin, request, settings)
+    ):
         return _http_refusal(403, f"origin refused: {origin}")
     try:
         caller = await identify(session, request, settings, scopes=SCOPES_A2A, door="A2A")
     except Refusal as refusal:
         return _http_refusal(
-            refusal.status, str(refusal), oauth_error=refusal.error, settings=settings, path=request.url.path
+            refusal.status,
+            str(refusal),
+            oauth_error=refusal.error,
+            settings=settings,
+            path=request.url.path,
+            base=await request_base_url(request.headers, settings),
         )
     allowed, wait = RATE_LIMITER.admits("a2a:" + caller.key)
     if not allowed:
@@ -259,7 +270,7 @@ async def _open(
         return _http_refusal(
             403, f"this token is bound to project {caller.bound_project_org}:{caller.bound_project.slug}"
         )
-    return Door(session, caller, org, settings.public_url.rstrip("/"), request)
+    return Door(session, caller, org, await org_base_url(org.slug, settings), request)
 
 
 async def _projects(door: Door) -> list[Project]:

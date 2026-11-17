@@ -375,9 +375,10 @@ async def _follow_governed(session: AsyncSession, row: ConversationAction) -> No
         row.executed_at = governed.finished_at
 
 
-def confirm_url(conversation_id: str, action_id: str) -> str:
-    """Where the person decides: the console, never the door."""
-    base = get_settings().public_url.rstrip("/")
+def confirm_url(conversation_id: str, action_id: str, base: str | None = None) -> str:
+    """Where the person decides: the console, never the door. `base`: the organisation's console (its
+    verified host when it has one, ADR 0175), the instance's when absent."""
+    base = (base or get_settings().public_url).rstrip("/")
     return f"{base}/conversations/{conversation_id}?action={action_id}"
 
 

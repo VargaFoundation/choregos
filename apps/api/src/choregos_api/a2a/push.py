@@ -36,12 +36,12 @@ from choregos_core.mcp import INVALID_PARAMS, METHOD_NOT_FOUND
 from choregos_core.secrets import SecretNotFound
 from sqlalchemy import exists, func, or_, select
 
-from ..config import get_settings
 from ..db.models import A2aPushConfig, ApiToken, Event, Organization
 from ..db.session import ALL_ORGS, session_scope
 from ..logging import get_logger
 from ..mcp.caller import SCOPES_A2A, Refusal, caller_of_token
 from ..secret_store import SecretStoreUnavailable, get_secret_store
+from ..tenant_host import org_base_url
 from . import v1
 from .door import PUSH_NOT_SUPPORTED, TASK_NOT_FOUND, Door, Fault, _task, task_of
 
@@ -268,7 +268,7 @@ async def _deliver(session: Any, config: A2aPushConfig) -> bool:
         if org is None or token is None:
             raise Refusal(401, "unknown or revoked token")
         caller = await caller_of_token(session, token, scopes=SCOPES_A2A, door="A2A")
-        door = Door(session, caller, org, get_settings().public_url.rstrip("/"), None)
+        door = Door(session, caller, org, await org_base_url(org.slug), None)
         task = await task_of(door, *await _task(door, config.work_item_id))
     except (Refusal, Fault) as gone:
         _end(config, f"the registration's token no longer reads the task: {gone}")

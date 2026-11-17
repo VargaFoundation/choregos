@@ -29,6 +29,7 @@ from ..errors import ApiError
 from ..knowledge.marked import readable
 from ..rbac import Permission, Principal
 from ..schemas.pending import PendingDecision, PendingItem, PendingWhere
+from ..tenant_host import org_base_url
 from . import actions as governed
 from .conversation_actions import confirm_url
 from .decision_drafts import own_requests
@@ -38,8 +39,9 @@ from .personal_spaces import listed
 READ_AHEAD = 500
 
 
-def _console(path: str) -> str:
-    return f"{get_settings().public_url.rstrip('/')}{path}"
+async def _console(org: str | None, path: str) -> str:
+    """A console link for something of organisation `org`: its verified host when it has one (ADR 0175)."""
+    return f"{await org_base_url(org, get_settings())}{path}"
 
 
 def _utc(value: datetime) -> datetime:
@@ -68,7 +70,7 @@ async def _human_steps(session: AsyncSession, principal: Principal) -> list[Pend
                 due_at=_utc(own.request.due_at) if own.request.due_at else None,
                 decision=PendingDecision(
                     path=f"/work-items/{own.item.id}/decisions",
-                    url=_console(f"/p/{own.project.slug}/items/{own.item.id}#decision"),
+                    url=await _console(own.org, f"/p/{own.project.slug}/items/{own.item.id}#decision"),
                 ),
             )
         )
@@ -119,7 +121,7 @@ async def _governed_actions(session: AsyncSession, principal: Principal) -> list
                 since=_utc(action.created_at),
                 decision=PendingDecision(
                     path=f"/projects/{project.id}/actions/{action.id}/decision",
-                    url=_console(f"/p/{project.slug}/actions/{action.id}"),
+                    url=await _console(org, f"/p/{project.slug}/actions/{action.id}"),
                 ),
             )
         )
@@ -157,7 +159,7 @@ async def _conversation_actions(session: AsyncSession, principal: Principal) -> 
                 since=_utc(action.created_at),
                 decision=PendingDecision(
                     path=f"/me/conversations/{action.conversation_id}/actions/{action.id}/confirm",
-                    url=confirm_url(action.conversation_id, action.id),
+                    url=confirm_url(action.conversation_id, action.id, await org_base_url(org)),
                 ),
             )
         )

@@ -52,6 +52,7 @@ from ..temporal import (
     signal_memory_loop,
     train_id,
 )
+from ..tenant_host import org_base_url_of_id
 
 router = APIRouter(tags=["webhooks"], prefix="/webhooks")
 logger = get_logger("choregos.webhooks")
@@ -241,7 +242,7 @@ async def _answer_tracker_command(
     and a tracker that cannot be reached or built never fails the delivery."""
     verb = str(event.payload.get("verb") or "")
     by = event.payload.get("by")
-    base = get_settings().public_url.rstrip("/")
+    base = await org_base_url_of_id(session, project.org_id)
     answered_by_a_member = False
     if verb in DECISION_VERBS:
         link = f"{base}/inbox"

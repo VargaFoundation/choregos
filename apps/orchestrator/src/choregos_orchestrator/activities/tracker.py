@@ -30,6 +30,7 @@ from temporalio import activity
 from ..config import get_settings
 from ..markdown import STATUS_MARKER, StageLine, StatusComment, render_human_request
 from .base import (
+    console_base,
     db,
     load_work_item,
     notification_target,
@@ -199,6 +200,7 @@ async def update_status_comment(payload: dict[str, Any]) -> dict[str, str]:
                     )
                 )
 
+        console = await console_base(bundle)
         totals = item.totals or {}
         engine = bundle.engine
         budget_usd = engine.budget_ticket(item.size)
@@ -213,7 +215,7 @@ async def update_status_comment(payload: dict[str, Any]) -> dict[str, str]:
             budget_eur=round(budget_usd * settings.fx_usd_eur, 2),
             spent_eur=float(totals.get("cost_eur", 0.0)),
             pr_url=item.pr_url,
-            run_url=f"{settings.public_url}/p/{bundle.slug}/items/{item.id}",
+            run_url=f"{console}/p/{bundle.slug}/items/{item.id}",
             estimate_eur=estimate,
             over_estimate=bool(payload.get("over_estimate")),
             findings=finding_labels,
@@ -230,7 +232,7 @@ async def update_status_comment(payload: dict[str, Any]) -> dict[str, str]:
                 "Cost (€)": round(float(totals.get("cost_eur", 0.0)), 2),
                 "Size": item.size or "",
                 "Risk": item.risk or "",
-                "Run": f"{settings.public_url}/p/{bundle.slug}/items/{item.id}",
+                "Run": f"{console}/p/{bundle.slug}/items/{item.id}",
             },
         )
         return {"markdown": markdown}
@@ -239,7 +241,6 @@ async def update_status_comment(payload: dict[str, Any]) -> dict[str, str]:
 @activity.defn(name="create_human_request")
 async def create_human_request(payload: dict[str, Any]) -> dict[str, Any]:
     """Create the human request, post it on the work item and notify; idempotent by transition."""
-    settings = get_settings()
     async with db() as session:
         bundle = await project_bundle(session, payload["project_id"])
         item = await load_work_item(session, payload["work_item_id"])
@@ -274,7 +275,8 @@ async def create_human_request(payload: dict[str, Any]) -> dict[str, Any]:
             if is_marked(item)
             else payload.get("payload", {})
         )
-        markdown = render_human_request(payload["kind"], outward, settings.public_url, item.tracker_key)
+        console = await console_base(bundle)
+        markdown = render_human_request(payload["kind"], outward, console, item.tracker_key)
         await bundle.adapters.tracker.comment(item.tracker_key, markdown)
         channel = notification_target(bundle)
         # The notification is a COURTESY, not the request. The request exists (in the database)
@@ -296,7 +298,7 @@ async def create_human_request(payload: dict[str, Any]) -> dict[str, Any]:
                 Message(
                     title=f"Choregos — {payload['kind']} on {item.tracker_key}",
                     body=WITHHELD if is_marked(item) else item.title,
-                    url=f"{settings.public_url}/p/{bundle.slug}/items/{item.id}",
+                    url=f"{console}/p/{bundle.slug}/items/{item.id}",
                     severity="warning",
                     actions=[
                         MessageAction(id="approve", label="Approve", style="primary", value=row.id),

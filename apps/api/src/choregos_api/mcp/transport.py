@@ -35,7 +35,9 @@ from ..config import Settings
 from ..deps import Config, Db, resolve_project
 from ..errors import ApiError
 from ..logging import get_logger
+from ..origin_guard import tenant_origin_allowed
 from ..rbac import Permission
+from ..tenant_host import org_base_url, request_base_url
 from .assistants import prompt_get, prompt_list, resolve_connector
 from .caller import Caller, Refusal, identify
 from .limits import RATE_LIMITER, WRITES_PER_DAY, truncate, writes_today
@@ -63,6 +65,7 @@ def _http_refusal(
     oauth_error: str | None = None,
     settings: Settings | None = None,
     path: str | None = None,
+    base: str | None = None,
 ) -> JSONResponse:
     path = path or "/mcp"
     headers = {}
@@ -71,7 +74,9 @@ def _http_refusal(
         if settings is not None and settings.mcp_oauth_enabled:
             # Claude reads this pointer on a 401 to find the identity provider (RFC 9728). The document
             # is that of the door called: its `resource` must be the URL the client typed.
-            document = f"{settings.public_url.rstrip('/')}/.well-known/oauth-protected-resource{path}"
+            document = (
+                f"{(base or settings.public_url).rstrip('/')}/.well-known/oauth-protected-resource{path}"
+            )
             value += f', resource_metadata="{document}"'
         if oauth_error:
             value += f', error="{oauth_error}"'
@@ -81,11 +86,12 @@ def _http_refusal(
 
 @router.get("/.well-known/oauth-protected-resource")
 @router.get("/.well-known/oauth-protected-resource/{path:path}")
-async def resource_metadata_of_the_door(settings: Config, path: str = "mcp") -> Response:
+async def resource_metadata_of_the_door(request: Request, settings: Config, path: str = "mcp") -> Response:
     """The door's RFC 9728 metadata; 404 until OAuth is switched on."""
     if not settings.mcp_oauth_enabled:
         return Response(status_code=404)
-    return JSONResponse(metadata(settings, "/" + path.strip("/")))
+    base = await request_base_url(request.headers, settings)
+    return JSONResponse(metadata(settings, "/" + path.strip("/"), base))
 
 
 def _fault(request_id: Any, code: int, message: str, status: int = 200) -> JSONResponse:
@@ -124,7 +130,11 @@ async def _serve(
     requested_assistant: str | None = None,
 ) -> Response:
     origin = request.headers.get("origin")
-    if origin and origin not in _allowed_origins(settings):
+    if (
+        origin
+        and origin not in _allowed_origins(settings)
+        and not await tenant_origin_allowed(origin, request, settings)
+    ):
         # A web page open in the person's browser does not speak in their place (DNS rebinding).
         return _http_refusal(403, f"origin refused: {origin}")
     length = request.headers.get("content-length")
@@ -136,7 +146,12 @@ async def _serve(
         caller = await identify(session, request, settings)
     except Refusal as refusal:
         return _http_refusal(
-            refusal.status, str(refusal), oauth_error=refusal.error, settings=settings, path=request.url.path
+            refusal.status,
+            str(refusal),
+            oauth_error=refusal.error,
+            settings=settings,
+            path=request.url.path,
+            base=await request_base_url(request.headers, settings),
         )
     admitted, wait = RATE_LIMITER.admits(caller.key)
     if not admitted:
@@ -159,7 +174,7 @@ async def _serve(
         caller=caller,
         project=project,
         org=org,
-        console=settings.public_url.rstrip("/"),
+        console=await org_base_url(org, settings),
         user_agent=(request.headers.get("user-agent") or "")[:100] or None,
     )
     if requested_assistant is not None and not await _pin_assistant(ctx, requested_assistant):
