@@ -40,7 +40,7 @@ services:
 
   litellm:
     # The chart's image (`charts/choregos/charts/litellm/values.yaml`).
-    image: ghcr.io/berriai/litellm-database:v1.105.5@sha256:87a881738240d0458a47588dd45cd819b00966ae3565786a7818e6d17d837921
+    image: ghcr.io/berriai/litellm-database:v1.109.1@sha256:932c54440654f8f8466a85887612d95dcfb04ae2fc01257844332f4bf3b96986
     command: ["--config", "/etc/litellm/config.yaml", "--port", "4000"]
     user: "1000:1000"
     environment:

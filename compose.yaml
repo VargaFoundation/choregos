@@ -88,7 +88,7 @@ services:
     # `default` namespace is listed but every `start_workflow` answers "Namespace default is not
     # found", for minutes. `auto-setup` on PostgreSQL is what `trials/local-start` measured
     # healthy in 18–21 s.
-    image: temporalio/auto-setup:1.26.2@sha256:e9245820522233ec6a59ad69c6512ae4450705ee02bf6894fc61ba13b238c1c0
+    image: temporalio/auto-setup:1.29.3@sha256:9be7b8d98f60d00f4f2ff74731c071a17848d8182bbc8429e314a24c94ea105b
     depends_on:
       postgres: { condition: service_healthy }
     environment:
@@ -107,7 +107,7 @@ services:
   temporal-ui:
     # Optional: `docker compose --profile temporal-ui up`, then http://localhost:8233.
     profiles: [temporal-ui]
-    image: temporalio/ui:2.32.0@sha256:82bf98dbe005a831b6bc5dc12ccd7bffd606af2032dae4821ae133caaa943d3d
+    image: temporalio/ui:2.58.1@sha256:ac3c13eddb4547d830991bb5eee93a5d97140134522b7297fdb2be1fe25ef925
     environment:
       TEMPORAL_ADDRESS: temporal:7233
     ports: ["127.0.0.1:${CHOREGOS_PORT_TEMPORAL_UI:-8233}:8080"]
@@ -131,7 +131,7 @@ services:
     restart: "no"
 
   litellm:
-    image: ghcr.io/berriai/litellm-database:v1.105.5@sha256:87a881738240d0458a47588dd45cd819b00966ae3565786a7818e6d17d837921
+    image: ghcr.io/berriai/litellm-database:v1.109.1@sha256:932c54440654f8f8466a85887612d95dcfb04ae2fc01257844332f4bf3b96986
     command: ["--config", "/litellm/config.yaml", "--port", "4000"]
     environment:
       LITELLM_MASTER_KEY: sk-local-install-only
