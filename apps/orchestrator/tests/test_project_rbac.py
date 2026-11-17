@@ -32,7 +32,7 @@ def _uses() -> set[tuple[str, str]]:
 
 def _project_role() -> dict[str, set[str]]:
     config = ProjectConfig(
-        slug="billing", org="varga", repo=RepoConfig(url="https://github.com/varga/billing.git")
+        slug="billing", org="northwind", repo=RepoConfig(url="https://github.com/northwind/billing.git")
     )
     files = render_project_manifests("billing", config, load_preset("team"))
     roles = [

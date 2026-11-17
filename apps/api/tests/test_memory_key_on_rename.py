@@ -35,15 +35,15 @@ def memory(monkeypatch: pytest.MonkeyPatch) -> FakeMemory:
 async def platform_admin(admin: str) -> Any:
     from choregos_api.edition import reset
 
-    await declare_administrator({"admin@varga.dev"})
+    await declare_administrator({"admin@northwind.dev"})
     yield
     reset()
 
 
 def test_the_key_is_the_slug_until_a_rename_pins_it() -> None:
-    assert memory_key(SimpleNamespace(slug="varga", settings=None)) == "varga"
-    assert memory_key(SimpleNamespace(slug="varga", settings={})) == "varga"
-    assert memory_key(SimpleNamespace(slug="globex", settings={"memory_key": "varga"})) == "varga"
+    assert memory_key(SimpleNamespace(slug="northwind", settings=None)) == "northwind"
+    assert memory_key(SimpleNamespace(slug="northwind", settings={})) == "northwind"
+    assert memory_key(SimpleNamespace(slug="globex", settings={"memory_key": "northwind"})) == "northwind"
     assert memory_key(SimpleNamespace(slug="x", settings={"memory_key": ""})) == "x"
 
 
@@ -60,18 +60,18 @@ async def test_a_global_memory_survives_a_rename_and_a_second_one(
         await client.post(f"{ORG}/memories", json={"slug": "lessons", "display_name": "L"})
     ).status_code == 201
     await memory.write_fact(
-        "org:varga#memory:lessons", Fact(kind="decision", subject="tls", content="Pin TLS 1.2.")
+        "org:northwind#memory:lessons", Fact(kind="decision", subject="tls", content="Pin TLS 1.2.")
     )
-    assert await _seed_and_search(client, memory, "varga") == ["Pin TLS 1.2."]
+    assert await _seed_and_search(client, memory, "northwind") == ["Pin TLS 1.2."]
 
-    renamed = await client.patch(f"{ORGS}/varga", json={"slug": "globex", "name": "Globex"})
+    renamed = await client.patch(f"{ORGS}/northwind", json={"slug": "globex", "name": "Globex"})
     assert renamed.status_code == 200, renamed.text
     assert await _seed_and_search(client, memory, "globex") == ["Pin TLS 1.2."], "the memory followed"
 
     again = await client.patch(f"{ORGS}/globex", json={"slug": "dia"})
     assert again.status_code == 200, again.text
     assert await _seed_and_search(client, memory, "dia") == ["Pin TLS 1.2."]
-    assert set(memory.facts) == {"org:varga#memory:lessons"}, "nothing was ever written under another key"
+    assert set(memory.facts) == {"org:northwind#memory:lessons"}, "nothing was ever written under another key"
 
     from choregos_api.db.models import Organization
     from choregos_api.db.session import session_scope
@@ -79,7 +79,7 @@ async def test_a_global_memory_survives_a_rename_and_a_second_one(
 
     async with session_scope(orgs="*") as session:
         row = (await session.execute(select(Organization).where(Organization.slug == "dia"))).scalar_one()
-        assert row.settings["memory_key"] == "varga", "the SECOND rename kept the FIRST key"
+        assert row.settings["memory_key"] == "northwind", "the SECOND rename kept the FIRST key"
 
 
 async def test_an_organisation_never_renamed_uses_its_slug(
@@ -87,24 +87,24 @@ async def test_an_organisation_never_renamed_uses_its_slug(
 ) -> None:
     await client.post(f"{ORG}/memories", json={"slug": "lessons", "display_name": "L"})
     await memory.write_fact(
-        "org:varga#memory:lessons", Fact(kind="decision", subject="tls", content="Pin TLS.")
+        "org:northwind#memory:lessons", Fact(kind="decision", subject="tls", content="Pin TLS.")
     )
     # A name or currency change is not a slug change: no key is pinned.
-    assert (await client.patch(f"{ORGS}/varga", json={"name": "Varga", "currency": "USD"})).status_code == 200
+    assert (await client.patch(f"{ORGS}/northwind", json={"name": "Northwind", "currency": "USD"})).status_code == 200
     from choregos_api.db.models import Organization
     from choregos_api.db.session import session_scope
     from sqlalchemy import select
 
     async with session_scope(orgs="*") as session:
-        row = (await session.execute(select(Organization).where(Organization.slug == "varga"))).scalar_one()
+        row = (await session.execute(select(Organization).where(Organization.slug == "northwind"))).scalar_one()
         assert "memory_key" not in (row.settings or {})
-    assert await _seed_and_search(client, memory, "varga") == ["Pin TLS."]
+    assert await _seed_and_search(client, memory, "northwind") == ["Pin TLS."]
 
 
 async def test_an_old_slug_kept_as_a_memory_key_is_not_free(
     client: AsyncClient, admin: str, platform_admin: None, memory: FakeMemory
 ) -> None:
-    """Else a new organisation named `varga` would read the renamed one's memories."""
-    assert (await client.patch(f"{ORGS}/varga", json={"slug": "globex"})).status_code == 200
-    taken = await client.post(ORGS, json={"slug": "varga", "name": "Another"})
+    """Else a new organisation named `northwind` would read the renamed one's memories."""
+    assert (await client.patch(f"{ORGS}/northwind", json={"slug": "globex"})).status_code == 200
+    taken = await client.post(ORGS, json={"slug": "northwind", "name": "Another"})
     assert taken.status_code == 409, taken.text

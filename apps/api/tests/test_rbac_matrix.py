@@ -43,28 +43,28 @@ def _routes(project_id: str, workflow_yaml: str, policy_yaml: str) -> list[tuple
         ("item:control", "POST", f"/api/v1/projects/{project_id}/work-items", {"title": "T", "start": False}),
         ("train:operate", "POST", f"/api/v1/projects/{project_id}/trains/prod/freeze", {"reason": "test"}),
         ("memory:write", "POST", f"/api/v1/projects/{project_id}/memory/reimport", {}),
-        ("member:manage", "POST", "/api/v1/orgs/varga/members", {"email": "x@varga.dev", "role": "viewer"}),
-        ("member:read", "GET", "/api/v1/orgs/varga/members", None),
+        ("member:manage", "POST", "/api/v1/orgs/northwind/members", {"email": "x@northwind.dev", "role": "viewer"}),
+        ("member:read", "GET", "/api/v1/orgs/northwind/members", None),
         ("audit:read", "GET", "/api/v1/audit", None),
         ("platform:admin", "PUT", "/api/v1/platform/backends", {"name": "claude-code", "enabled": True}),
         ("project:delete", "DELETE", f"/api/v1/projects/{project_id}", None),
-        ("agent:manage", "POST", "/api/v1/orgs/varga/agent-catalogue/triager/install", {}),
+        ("agent:manage", "POST", "/api/v1/orgs/northwind/agent-catalogue/triager/install", {}),
         # Outposts (S65-11, ADR 0147 §4): the organisation administrator's, read or written.
-        ("outpost:manage", "GET", "/api/v1/orgs/varga/outposts", None),
+        ("outpost:manage", "GET", "/api/v1/orgs/northwind/outposts", None),
         # The organisation's groups (S66-40, ADR 0160): the administrator writes them, every member reads.
         (
             "group:manage",
             "POST",
-            "/api/v1/orgs/varga/groups",
+            "/api/v1/orgs/northwind/groups",
             {"slug": "release-captains", "name": "Captains"},
         ),
-        ("member:read", "GET", "/api/v1/orgs/varga/groups", None),
+        ("member:read", "GET", "/api/v1/orgs/northwind/groups", None),
         # Agent scopes (S39-09, ADR 0061): a personal agent is every working role's, a project's agent
         # its owner's, an organisation agent (`agent:manage`, above) the administrator's.
         (
             "agent:create_personal",
             "POST",
-            "/api/v1/orgs/varga/agents",
+            "/api/v1/orgs/northwind/agents",
             {
                 "slug": "my-helper",
                 "display_name": "Mine",
@@ -75,7 +75,7 @@ def _routes(project_id: str, workflow_yaml: str, policy_yaml: str) -> list[tuple
         (
             "agent:project_manage",
             "POST",
-            "/api/v1/orgs/varga/agents",
+            "/api/v1/orgs/northwind/agents",
             {
                 "slug": "project-helper",
                 "display_name": "Project's",
@@ -95,7 +95,7 @@ def _routes(project_id: str, workflow_yaml: str, policy_yaml: str) -> list[tuple
         (
             "skill:import",
             "POST",
-            "/api/v1/orgs/varga/skills/import-git/preview",
+            "/api/v1/orgs/northwind/skills/import-git/preview",
             {"repo_url": "https://github.com/anthropics/skills", "ref": "main", "path": "skills"},
         ),
     ]
@@ -107,7 +107,7 @@ async def _member(email: str, role: Role) -> None:
     from sqlalchemy import select
 
     async with session_scope() as session:
-        org = (await session.execute(select(Organization).where(Organization.slug == "varga"))).scalar_one()
+        org = (await session.execute(select(Organization).where(Organization.slug == "northwind"))).scalar_one()
         user = (await session.execute(select(User).where(User.email == email))).scalar_one_or_none()
         if user is None:
             user = User(email=email, display_name=email.split("@", maxsplit=1)[0])
@@ -133,7 +133,7 @@ async def test_each_role_gets_exactly_its_permissions(
 
     # the dev sign-in must neither demote nor promote: the role is set in the database, then we
     # sign in as that member (no dev admin, so the default `developers` is ignored)
-    monkeypatch.setenv("CHOREGOS_DEV_ADMIN_EMAILS", "admin@varga.dev")
+    monkeypatch.setenv("CHOREGOS_DEV_ADMIN_EMAILS", "admin@northwind.dev")
     reset_settings_cache()
     workflow_yaml = (await client.get(f"/api/v1/projects/{project['id']}/workflow")).json()["yaml"]
     policy_yaml = (await client.get(f"/api/v1/projects/{project['id']}/policy")).json()["yaml"]
@@ -142,7 +142,7 @@ async def test_each_role_gets_exactly_its_permissions(
         f"/api/v1/projects/{project['id']}/connectors/tracker", json={"type": "internal", "config": {}}
     )
 
-    email = f"{role}@varga.dev"
+    email = f"{role}@northwind.dev"
     await _member(email, role)
     async with AsyncClient(transport=ASGITransport(app=client._transport.app), base_url="http://test") as c:  # type: ignore[attr-defined]
         await login(c, email)

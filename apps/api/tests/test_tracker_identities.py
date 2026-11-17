@@ -11,13 +11,13 @@ from .conftest import login
 
 
 async def _member(client: AsyncClient, email: str, role: str) -> str:
-    added = await client.post("/api/v1/orgs/varga/members", json={"email": email, "role": role})
+    added = await client.post("/api/v1/orgs/northwind/members", json={"email": email, "role": role})
     assert added.status_code == 201, added.text
     return str(added.json()["user_id"])
 
 
 def _url(user_id: str, tracker: str = "github") -> str:
-    return f"/api/v1/orgs/varga/members/{user_id}/tracker-identities/{tracker}"
+    return f"/api/v1/orgs/northwind/members/{user_id}/tracker-identities/{tracker}"
 
 
 async def test_an_admin_links_a_github_identity_and_a_developer_cannot(
@@ -26,8 +26,8 @@ async def test_an_admin_links_a_github_identity_and_a_developer_cannot(
     from choregos_api.db.models import AuditLog
     from choregos_api.db.session import session_scope
 
-    dev = await _member(client, "dev@varga.dev", "developer")
-    other = await _member(client, "other@varga.dev", "developer")
+    dev = await _member(client, "dev@northwind.dev", "developer")
+    other = await _member(client, "other@northwind.dev", "developer")
 
     linked = await client.put(_url(dev), json={"external_id": "1001", "login": "devon"})
     assert linked.status_code == 200, linked.text
@@ -36,7 +36,7 @@ async def test_an_admin_links_a_github_identity_and_a_developer_cannot(
 
     again = await client.put(_url(dev), json={"external_id": "1002", "login": "devon"})
     assert again.status_code == 200 and again.json()["external_id"] == "1002", "a member has one link"
-    listed = await client.get(f"/api/v1/orgs/varga/members/{dev}/tracker-identities")
+    listed = await client.get(f"/api/v1/orgs/northwind/members/{dev}/tracker-identities")
     assert [row["external_id"] for row in listed.json()] == ["1002"]
 
     taken = await client.put(_url(other), json={"external_id": "1002", "login": "devon"})
@@ -45,9 +45,9 @@ async def test_an_admin_links_a_github_identity_and_a_developer_cannot(
         refused = await client.put(_url(dev), json={"external_id": bad, "login": "devon"})
         assert refused.status_code == 422, bad
 
-    await login(client, "dev@varga.dev")
+    await login(client, "dev@northwind.dev")
     assert (await client.put(_url(other), json={"external_id": "7", "login": "x"})).status_code == 403
-    assert (await client.get(f"/api/v1/orgs/varga/members/{dev}/tracker-identities")).status_code == 403
+    assert (await client.get(f"/api/v1/orgs/northwind/members/{dev}/tracker-identities")).status_code == 403
     assert (await client.delete(_url(dev))).status_code == 403
 
     await login(client, admin)
@@ -66,8 +66,8 @@ async def test_a_project_member_is_not_an_organisation_member(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
     added = await client.post(
-        "/api/v1/orgs/varga/members",
-        json={"email": "scoped@varga.dev", "role": "developer", "project_slug": "billing-api"},
+        "/api/v1/orgs/northwind/members",
+        json={"email": "scoped@northwind.dev", "role": "developer", "project_slug": "billing-api"},
     )
     assert added.status_code == 201, added.text
     linked = await client.put(_url(added.json()["user_id"]), json={"external_id": "9", "login": "scoped"})

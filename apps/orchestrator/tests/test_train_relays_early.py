@@ -176,7 +176,7 @@ async def test_a_train_relays_right_after_its_departure(temporal_env: Any, worke
             id="train-departure-prod",
             task_queue="test",
             start_signal="merged",
-            start_signal_args=[{"work_item_key": "varga/billing-api#9", "sha": "a9"}],
+            start_signal_args=[{"work_item_key": "northwind/billing-api#9", "sha": "a9"}],
         )
         new_run = await _first_run_relays(train)
         first = temporal_env.client.get_workflow_handle("train-departure-prod", run_id=train.result_run_id)
@@ -209,7 +209,7 @@ async def test_an_auto_sync_train_relays(temporal_env: Any, worker_factory: Any)
             id="train-sync-dev",
             task_queue="test",
             start_signal="merged",
-            start_signal_args=[{"work_item_key": "varga/billing-api#10", "sha": "b10"}],
+            start_signal_args=[{"work_item_key": "northwind/billing-api#10", "sha": "b10"}],
         )
         # Without the fix, the sync relays only at 15,000: the run waits for a ticket, endlessly.
         new_run = await _first_run_relays(train, timeout=30)

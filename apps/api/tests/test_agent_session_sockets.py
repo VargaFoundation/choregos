@@ -338,7 +338,7 @@ async def test_another_person_cannot_take_the_session(
     quick: None,  # noqa: F811
 ) -> None:
     socket, pod = await _opened(client, pod_http)
-    async with as_person(client, "maintainer@varga.dev", "org_admin") as other:
+    async with as_person(client, "maintainer@northwind.dev", "org_admin") as other:
         with pytest.raises(Closed) as refused:
             async with _socket(other, _resume(pod.session_id, 0)):
                 pass

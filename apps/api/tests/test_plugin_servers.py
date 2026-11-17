@@ -28,10 +28,10 @@ from sqlalchemy import func, select
 
 from .agent_scopes_kit import add_member, as_user, make_project
 
-ORG = "/api/v1/orgs/varga"
+ORG = "/api/v1/orgs/northwind"
 HELLO = Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "plugins" / "hello"
 INSTALL = {"source": "offline", "name": "hello", "version": "1.0.0"}
-SECOND = "second-admin@varga.dev"
+SECOND = "second-admin@northwind.dev"
 
 
 @pytest.fixture
@@ -78,7 +78,7 @@ async def _install(client: AsyncClient) -> None:
     await as_user(client, SECOND)
     approved = await client.post(f"{ORG}/plugin-approvals/{asked.json()['approval_id']}/approve")
     assert approved.status_code == 200, approved.text
-    await as_user(client, "admin@varga.dev")
+    await as_user(client, "admin@northwind.dev")
 
 
 async def _connector() -> Any:
@@ -112,7 +112,7 @@ async def test_install_runs_the_server_under_the_pod_rules(
     deployment = _only(kube, "deployments")
     pod = deployment["spec"]["template"]["spec"]
     container = pod["containers"][0]
-    assert container["image"].startswith(PUBLISHING.image("choregos-agents/hello-mcp@sha256:"))
+    assert container["image"].startswith(PUBLISHING.image("tranibor-agents/hello-mcp@sha256:"))
     assert pod["automountServiceAccountToken"] is False
     assert pod["securityContext"]["runAsNonRoot"] is True
     assert pod["runtimeClassName"] == "gvisor"
@@ -499,7 +499,7 @@ async def test_with_a_second_administrator_the_requester_still_cannot_approve(
     asked = await _ask(client)
     approval = asked.json()["approval_id"]
     await add_member(client, SECOND, "org_admin")
-    await as_user(client, "admin@varga.dev")
+    await as_user(client, "admin@northwind.dev")
     own = await client.post(f"{ORG}/plugin-approvals/{approval}/approve")
     assert own.status_code == 403, own.text
     await as_user(client, SECOND)
@@ -513,7 +513,7 @@ async def test_a_member_who_is_not_an_administrator_cannot_approve(
     client: AsyncClient, admin: str, kube: FakeKubernetesApi
 ) -> None:
     asked = await _ask(client)
-    await add_member(client, "dev@varga.dev", "viewer")
-    await as_user(client, "dev@varga.dev")
+    await add_member(client, "dev@northwind.dev", "viewer")
+    await as_user(client, "dev@northwind.dev")
     denied = await client.post(f"{ORG}/plugin-approvals/{asked.json()['approval_id']}/approve")
     assert denied.status_code == 403, denied.text

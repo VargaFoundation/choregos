@@ -10,7 +10,7 @@ from httpx import AsyncClient
 from . import knowledge_fixtures as fx
 from .conftest import login
 
-BASE = "/api/v1/orgs/varga/knowledge"
+BASE = "/api/v1/orgs/northwind/knowledge"
 
 
 async def _base(client: AsyncClient, slug: str = "architecture", **fields: Any) -> dict[str, Any]:
@@ -143,11 +143,11 @@ async def test_the_upload_answers_pending_and_converts_outside_the_request(
     sent = await _upload(client, "notes.md", b"# Notes\n")
     assert sent.status_code == 202, sent.text
     assert sent.json()["status"] == "pending"
-    assert scheduled == [("varga", sent.json()["id"])]
+    assert scheduled == [("northwind", sent.json()["id"])]
     assert (await client.get(f"{BASE}/architecture/documents/{sent.json()['id']}")).json()["markdown"] is None
 
-    assert await conversion.convert_document("varga", sent.json()["id"]) == "ready"
-    assert await conversion.convert_document("varga", sent.json()["id"]) == "", "claimed once, not twice"
+    assert await conversion.convert_document("northwind", sent.json()["id"]) == "ready"
+    assert await conversion.convert_document("northwind", sent.json()["id"]) == "", "claimed once, not twice"
     read = (await client.get(f"{BASE}/architecture/documents/{sent.json()['id']}")).json()
     assert read["status"] == "ready" and read["markdown"].startswith("# Notes")
 
@@ -288,8 +288,8 @@ async def test_a_stopped_replica_leaves_nothing_behind(client: AsyncClient, admi
 
 async def test_only_an_org_admin_curates(client: AsyncClient, admin: str) -> None:
     await _base(client)
-    await client.post("/api/v1/orgs/varga/members", json={"email": "dev@varga.dev", "role": "developer"})
-    await login(client, "dev@varga.dev")
+    await client.post("/api/v1/orgs/northwind/members", json={"email": "dev@northwind.dev", "role": "developer"})
+    await login(client, "dev@northwind.dev")
     assert (await client.post(BASE, json={"slug": "mine", "name": "Mine"})).status_code == 403
     assert (await _upload(client, "notes.md", b"# Notes\n")).status_code == 403
     assert (await client.patch(f"{BASE}/architecture", json={"name": "x"})).status_code == 403
@@ -303,10 +303,10 @@ async def test_a_base_outside_the_callers_scope_does_not_exist_for_it(
     await _base(client, "billing-only", scope="projects", projects=["billing-api"])
     await _base(client, "auditors", scope="groups", groups=["auditors"])
     await _base(client, "everyone")
-    await login(client, "dev@varga.dev")
+    await login(client, "dev@northwind.dev")
     assert [b["slug"] for b in (await client.get(BASE)).json()] == ["billing-only", "everyone"]
     assert (await client.get(f"{BASE}/auditors")).status_code == 404, "a session carries no IdP group yet"
-    await login(client, "admin@varga.dev")
+    await login(client, "admin@northwind.dev")
     assert {b["slug"] for b in (await client.get(BASE)).json()} == {"auditors", "billing-only", "everyone"}
 
 
@@ -321,15 +321,15 @@ def test_scope_decides_who_reads_and_which_runs_are_served() -> None:
     projects = SimpleNamespace(scope="projects", projects=["billing-api"], groups=[], status="active")
     groups = SimpleNamespace(scope="groups", projects=[], groups=["auditors"], status="active")
     org = SimpleNamespace(scope="org", projects=[], groups=[], status="active")
-    web_only = Principal(user_id="u", email="w@x", project_roles={"varga/web": Role.DEVELOPER})
-    billing_only = Principal(user_id="u", email="b@x", project_roles={"varga/billing-api": Role.VIEWER})
-    auditor = Principal(user_id="u", email="a@x", org_roles={"varga": Role.VIEWER}, groups=["auditors"])
+    web_only = Principal(user_id="u", email="w@x", project_roles={"northwind/web": Role.DEVELOPER})
+    billing_only = Principal(user_id="u", email="b@x", project_roles={"northwind/billing-api": Role.VIEWER})
+    auditor = Principal(user_id="u", email="a@x", org_roles={"northwind": Role.VIEWER}, groups=["auditors"])
     other_org = Principal(user_id="u", email="o@x", org_roles={"other": Role.ORG_ADMIN})
 
-    assert visible_to(billing_only, "varga", projects) and not visible_to(web_only, "varga", projects)
-    assert not visible_to(billing_only, "varga", org), "org-wide reading needs an org role"
-    assert visible_to(auditor, "varga", groups) and visible_to(auditor, "varga", org)
-    assert not visible_to(other_org, "varga", org)
+    assert visible_to(billing_only, "northwind", projects) and not visible_to(web_only, "northwind", projects)
+    assert not visible_to(billing_only, "northwind", org), "org-wide reading needs an org role"
+    assert visible_to(auditor, "northwind", groups) and visible_to(auditor, "northwind", org)
+    assert not visible_to(other_org, "northwind", org)
     assert served_to_project(org, "web") and served_to_project(projects, "billing-api")
     assert not served_to_project(projects, "web")
     assert not served_to_project(groups, "billing-api"), "a run carries no group"

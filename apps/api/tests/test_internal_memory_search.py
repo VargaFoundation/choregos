@@ -11,8 +11,8 @@ from httpx import AsyncClient
 from .agent_scopes_kit import ORG, make_project
 
 URL = "/api/v1/internal/runs"
-SEC = "org:varga#memory:security-lessons"
-ARCH = "org:varga#memory:architecture-decisions"
+SEC = "org:northwind#memory:security-lessons"
+ARCH = "org:northwind#memory:architecture-decisions"
 
 
 @pytest.fixture(autouse=True)
@@ -23,7 +23,7 @@ def real_adapters(monkeypatch: pytest.MonkeyPatch) -> None:
 def _memory() -> Any:
     from choregos_adapters import build
 
-    return build("memory", "lexical", {"org": "varga"})
+    return build("memory", "lexical", {"org": "northwind"})
 
 
 async def _setup(client: AsyncClient) -> None:
@@ -147,7 +147,7 @@ async def test_a_failing_memory_contributes_nothing_and_the_others_answer(
         "run-g",
         [
             _m("global:security-lessons", SEC),
-            _m("global:architecture-decisions", "org:varga#memory:vanished"),
+            _m("global:architecture-decisions", "org:northwind#memory:vanished"),
         ],
     )
     answer = await client.post(f"{URL}/run-g/memory/search", json={"query": "tls"}, headers=headers)

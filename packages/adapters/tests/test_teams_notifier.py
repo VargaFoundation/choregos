@@ -19,7 +19,7 @@ URL = "https://prod-12.westeurope.logic.azure.com/workflows/SECRETPATH123/trigge
 
 
 def _policy(*hosts: str) -> EgressPolicy:
-    return EgressPolicy(org="varga", rules=tuple(AllowedRule(h) for h in hosts), mode="enforce")
+    return EgressPolicy(org="northwind", rules=tuple(AllowedRule(h) for h in hosts), mode="enforce")
 
 
 def _notifier(fake: FakeTeamsWebhook) -> TeamsNotifier:

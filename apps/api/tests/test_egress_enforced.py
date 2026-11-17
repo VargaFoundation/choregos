@@ -149,7 +149,7 @@ async def test_a_web_sync_with_the_host_absent_fails_the_source_and_sends_nothin
     from choregos_adapters.documents import WebCrawlSource
     from choregos_api.knowledge.sync import sync_source
 
-    base = "/api/v1/orgs/varga/knowledge"
+    base = "/api/v1/orgs/northwind/knowledge"
     assert (
         await client.post(base, json={"slug": "docs", "name": "Docs", "serving_mode": "index"})
     ).status_code == 201
@@ -177,12 +177,12 @@ async def test_a_web_sync_with_the_host_absent_fails_the_source_and_sends_nothin
             resolver=_public,
         )
 
-    await sync_source("varga", source_id, adapter=crawler())
+    await sync_source("northwind", source_id, adapter=crawler())
     assert sent, "while the host is open, the crawler reaches it"
     await _revoke(client, "docs.example.test")
     sent.clear()
     with pytest.raises(Exception, match="egress refused"):
-        await sync_source("varga", source_id, adapter=crawler())
+        await sync_source("northwind", source_id, adapter=crawler())
     assert sent == [], "no HTTP request was made"
     source = (await client.get(f"{base}/docs")).json()["sources"][0]
     assert source["status"] == "failed" and "egress refused" in source["last_error"]
@@ -247,7 +247,7 @@ async def test_creating_a_web_source_checks_its_start_url_inside_the_organisatio
             super().__init__(*args, **kwargs)
 
     monkeypatch.setattr(web, "WebCrawlSource", Recorded)
-    base = "/api/v1/orgs/varga/knowledge"
+    base = "/api/v1/orgs/northwind/knowledge"
     assert (await client.post(base, json={"slug": "site", "name": "Site"})).status_code == 201
     created = await client.post(
         f"{base}/site/sources",

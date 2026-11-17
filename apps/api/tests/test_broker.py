@@ -19,7 +19,7 @@ TOOLS: list[dict[str, Any]] = [
     {"name": "stock", "description": "the stock", "inputSchema": {"type": "object"},
      "annotations": {"readOnlyHint": True}},
 ]  # fmt: skip
-ORG = "/api/v1/orgs/varga"
+ORG = "/api/v1/orgs/northwind"
 
 
 @pytest.fixture
@@ -62,7 +62,7 @@ async def _prepare(
     assert agent.status_code == 201, agent.text
 
     async with session_scope() as session:
-        item = WorkItem(project_id=project["id"], tracker_key="varga/x#1", title="T", state="ready")
+        item = WorkItem(project_id=project["id"], tracker_key="northwind/x#1", title="T", state="ready")
         session.add(item)
         await session.flush()
         session.add(
@@ -78,7 +78,7 @@ async def _prepare(
             )
         )
     token = mint_run_token(
-        "run-courtier-1", project_slug="billing-api", work_item_key="varga/x#1", ttl_minutes=30
+        "run-courtier-1", project_slug="billing-api", work_item_key="northwind/x#1", ttl_minutes=30
     )
     return "/api/v1/internal/runs/run-courtier-1/tools", {"Authorization": f"Bearer {token}"}
 
@@ -333,7 +333,7 @@ async def test_a_job_run_sees_the_operations_its_workflow_names(
                 stage_input={"job": {"command": ["x"], "tools": {"fournisseur": ["stock"]}}},
             )
         )
-    token = mint_run_token("run-job-1", project_slug="billing-api", work_item_key="varga/x#1", ttl_minutes=30)
+    token = mint_run_token("run-job-1", project_slug="billing-api", work_item_key="northwind/x#1", ttl_minutes=30)
     headers = {"Authorization": f"Bearer {token}"}
     job = "/api/v1/internal/runs/run-job-1/tools"
     names = [o["name"] for o in (await client.get(job, headers=headers)).json()["tools"]]

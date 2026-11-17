@@ -9,7 +9,7 @@ from httpx import AsyncClient
 
 from . import knowledge_fixtures as fx
 
-BASE = "/api/v1/orgs/varga/knowledge"
+BASE = "/api/v1/orgs/northwind/knowledge"
 
 
 async def _run(
@@ -52,7 +52,7 @@ async def _pinned(
     from sqlalchemy import select
 
     async with session_scope() as session:
-        org = (await session.execute(select(Organization).where(Organization.slug == "varga"))).scalar_one()
+        org = (await session.execute(select(Organization).where(Organization.slug == "northwind"))).scalar_one()
         project_id = (
             await session.execute(
                 select(Project.id).where(Project.org_id == org.id, Project.slug == project["slug"])
@@ -118,7 +118,7 @@ async def test_an_agent_names_its_knowledge_bases_without_changing_older_digests
     assert before == digest(AgentSpec(instructions="x", knowledge=[])), "an empty list changes nothing"
     assert before != digest(AgentSpec.model_validate({"instructions": "x", "knowledge": [{"slug": "kb"}]}))
     created = await client.post(
-        "/api/v1/orgs/varga/agents",
+        "/api/v1/orgs/northwind/agents",
         json={
             "slug": "architect",
             "display_name": "Architect",

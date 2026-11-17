@@ -16,7 +16,7 @@ from .test_plugin_tracker import HOOK, SECRET, _ready
 
 kube = plugin_tracker.kube  # the fake plugin tracker's fixture, reused
 
-REPO = {"full_name": "varga/billing-api"}
+REPO = {"full_name": "northwind/billing-api"}
 
 
 async def _issue(client: AsyncClient, delivery: str, action: str, labels: list[str]) -> Any:
@@ -38,7 +38,7 @@ async def test_an_event_for_an_ended_interpreter_is_kept(
 
     opened = await _issue(client, "e0", "opened", ["agent-ready"])
     assert opened.status_code == 202, opened.text
-    get_temporal().gone.add(interpreter_id("billing-api", "varga/billing-api#7"))  # type: ignore[attr-defined]
+    get_temporal().gone.add(interpreter_id("billing-api", "northwind/billing-api#7"))  # type: ignore[attr-defined]
     first = await _issue(client, "e1", "labeled", ["hotfix"])
     assert first.status_code == 202, first.text
     assert first.json()["duplicate"] is False

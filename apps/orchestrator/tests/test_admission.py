@@ -92,7 +92,7 @@ async def test_the_check_receives_what_it_needs_to_decide(setup: Fixture, extens
     assert prepared["run_id"]
     (request,) = extension["seen"]
     assert (request.org, request.project, request.work_item) == (
-        "varga",
+        "northwind",
         setup.project_slug,
         setup.tracker_key,
     )
@@ -106,12 +106,12 @@ async def test_a_refusal_stops_the_stage_without_retry_and_without_a_key(
     from choregos_api.db.models import GatewayKeyRow, Run
     from temporalio.exceptions import ApplicationError
 
-    extension["suspended"].add("varga")
+    extension["suspended"].add("northwind")
     with pytest.raises(ApplicationError) as refusal:
         await _prepare(setup)
     assert refusal.value.type == "admission_refused" and refusal.value.non_retryable
     # The reason names the check AND says what to do: it is what the work item displays.
-    assert "suspension : organisation varga is suspended — reactivate it" in str(refusal.value)
+    assert "suspension : organisation northwind is suspended — reactivate it" in str(refusal.value)
     assert await _count(GatewayKeyRow) == 0, "a key was issued for a refused run"
     assert await _count(Run) == 0, "a run was created although it was refused"
 
@@ -119,7 +119,7 @@ async def test_a_refusal_stops_the_stage_without_retry_and_without_a_key(
 async def test_an_already_prepared_run_is_never_refused_afterwards(setup: Fixture, extension: Any) -> None:
     """Replaying `prepare_stage` (Temporal resume) after a suspension does not kill what is running."""
     first = await _prepare(setup)
-    extension["suspended"].add("varga")
+    extension["suspended"].add("northwind")
     replayed = await _prepare(setup)
     assert replayed["reused"] and replayed["run_id"] == first["run_id"]
 

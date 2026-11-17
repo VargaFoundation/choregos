@@ -9,7 +9,7 @@ from typing import Any
 import pytest
 from httpx import AsyncClient
 
-BASE = "/api/v1/orgs/varga/knowledge"
+BASE = "/api/v1/orgs/northwind/knowledge"
 SECTION = "Every {topic} change is reviewed by its owner and recorded in the register before release."
 
 
@@ -179,12 +179,12 @@ async def test_a_base_bigger_than_a_prompt_is_distilled_in_passes(
 
     base_id = await _base(client, FOUR, monkeypatch)
     distiller = Counting()
-    outcome = await distill("varga", base_id, "admin@varga.dev", distiller=distiller)
+    outcome = await distill("northwind", base_id, "admin@northwind.dev", distiller=distiller)
     assert outcome["status"] == "pending_review", outcome
     assert outcome["parts_total"] == len(distiller.parts) > 1 and outcome["phase"] == "publish"
     assert distiller.merges >= 1
     assert sorted({name for part in distiller.parts for name in part}) == sorted(FOUR)
-    files = (await client.get("/api/v1/orgs/varga/skills/architecture-principles/versions/1")).json()["files"]
+    files = (await client.get("/api/v1/orgs/northwind/skills/architecture-principles/versions/1")).json()["files"]
     for name in FOUR:
         assert f"`{name}`" in files["references/sources.md"]
 
@@ -211,9 +211,9 @@ async def test_a_replayed_distillation_makes_no_second_call_and_no_second_versio
 
     base_id = await _base(client, FOUR, monkeypatch)
     first = Counting()
-    await distill("varga", base_id, "admin@varga.dev", distiller=first)
+    await distill("northwind", base_id, "admin@northwind.dev", distiller=first)
     again = Counting()
-    outcome = await distill("varga", base_id, "admin@varga.dev", distiller=again)
+    outcome = await distill("northwind", base_id, "admin@northwind.dev", distiller=again)
     assert first.parts and not again.parts and again.merges == 0, "every call was kept by its digest"
     assert outcome["status"] == "pending_review" and outcome["version"] == 1
     assert outcome["spent_usd"] == 0
@@ -226,7 +226,7 @@ async def test_a_changed_document_pays_for_its_own_part_only(
 
     base_id = await _base(client, FOUR, monkeypatch)
     first = Counting()
-    await distill("varga", base_id, "admin@varga.dev", distiller=first)
+    await distill("northwind", base_id, "admin@northwind.dev", distiller=first)
     listed = (await client.get(f"{BASE}/architecture")).json()["documents"]
     old = next(d for d in listed if d["filename"] == "d2.md")
     assert (await client.delete(f"{BASE}/architecture/documents/{old['id']}")).status_code == 204
@@ -236,7 +236,7 @@ async def test_a_changed_document_pays_for_its_own_part_only(
 
     await conversions.drain()
     second = Counting()
-    outcome = await distill("varga", base_id, "admin@varga.dev", distiller=second)
+    outcome = await distill("northwind", base_id, "admin@northwind.dev", distiller=second)
     assert outcome["status"] == "pending_review" and outcome["version"] == 2
     assert second.parts and all("d2.md" in part for part in second.parts)
     assert len(second.parts) < len(first.parts)
@@ -252,11 +252,11 @@ async def test_the_budget_stops_the_run_before_the_next_call_and_publishes_nothi
     await _price(0.01, 0.03)
     monkeypatch.setattr(get_settings(), "knowledge_distill_budget_usd", 5.0)
     greedy = Counting({"input_tokens": 100_000, "output_tokens": 100_000})  # $4 a call, estimated far less
-    outcome = await distill("varga", base_id, "admin@varga.dev", distiller=greedy)
+    outcome = await distill("northwind", base_id, "admin@northwind.dev", distiller=greedy)
     assert outcome["status"] == "failed" and outcome["code"] == "over_budget", outcome
     assert len(greedy.parts) == 2 and greedy.merges == 0
     assert outcome["spent_usd"] == pytest.approx(8.0)
-    assert (await client.get("/api/v1/orgs/varga/skills/architecture-principles")).status_code == 404
+    assert (await client.get("/api/v1/orgs/northwind/skills/architecture-principles")).status_code == 404
 
 
 async def test_a_part_that_the_gateway_refuses_fails_the_run_and_publishes_nothing(
@@ -269,9 +269,9 @@ async def test_a_part_that_the_gateway_refuses_fails_the_run_and_publishes_nothi
             raise DistillationError("the gateway answered 503: down")
 
     base_id = await _base(client, FOUR, monkeypatch)
-    outcome = await distill("varga", base_id, "admin@varga.dev", distiller=Down())
+    outcome = await distill("northwind", base_id, "admin@northwind.dev", distiller=Down())
     assert outcome["status"] == "failed" and outcome["code"] == "gateway" and "503" in outcome["error"]
-    assert (await client.get("/api/v1/orgs/varga/skills/architecture-principles")).status_code == 404
+    assert (await client.get("/api/v1/orgs/northwind/skills/architecture-principles")).status_code == 404
 
 
 async def test_a_part_keeps_only_the_principles_citing_its_own_documents(
@@ -292,10 +292,10 @@ async def test_a_part_keeps_only_the_principles_citing_its_own_documents(
             }  # fmt: skip
 
     base_id = await _base(client, FOUR, monkeypatch)
-    outcome = await distill("varga", base_id, "admin@varga.dev", distiller=Wandering())
+    outcome = await distill("northwind", base_id, "admin@northwind.dev", distiller=Wandering())
     assert outcome["status"] == "pending_review"
     assert any("Other" in line for line in outcome["dropped"])
-    skill = (await client.get("/api/v1/orgs/varga/skills/architecture-principles/versions/1")).json()
+    skill = (await client.get("/api/v1/orgs/northwind/skills/architecture-principles/versions/1")).json()
     assert "Rule of another part." not in skill["files"]["SKILL.md"]
 
 

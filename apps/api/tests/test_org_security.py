@@ -17,8 +17,8 @@ from choregos_api.extensions import GestureRequest, check_gesture
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 
-ADMIN = "admin@varga.dev"
-MEMBER = "member@varga.dev"
+ADMIN = "admin@northwind.dev"
+MEMBER = "member@northwind.dev"
 
 
 async def _browser(app: Any, email: str) -> AsyncClient:
@@ -37,14 +37,14 @@ async def _drop_memberships(email: str) -> None:
 
 
 async def test_the_administrator_sets_and_reads_the_freshness(client: AsyncClient, admin: str) -> None:
-    assert (await client.get("/api/v1/orgs/varga/security")).json() == {"approval_freshness_s": None}
-    put = await client.put("/api/v1/orgs/varga/security", json={"approval_freshness_s": 300})
+    assert (await client.get("/api/v1/orgs/northwind/security")).json() == {"approval_freshness_s": None}
+    put = await client.put("/api/v1/orgs/northwind/security", json={"approval_freshness_s": 300})
     assert put.status_code == 200, put.text
-    assert (await client.get("/api/v1/orgs/varga/security")).json() == {"approval_freshness_s": 300}
+    assert (await client.get("/api/v1/orgs/northwind/security")).json() == {"approval_freshness_s": 300}
     assert (
-        await client.put("/api/v1/orgs/varga/security", json={"approval_freshness_s": 30})
+        await client.put("/api/v1/orgs/northwind/security", json={"approval_freshness_s": 30})
     ).status_code == 422
-    cleared = await client.put("/api/v1/orgs/varga/security", json={"approval_freshness_s": None})
+    cleared = await client.put("/api/v1/orgs/northwind/security", json={"approval_freshness_s": None})
     assert cleared.status_code == 200
     async with session_scope(orgs="*") as session:
         actions = (await session.execute(select(AuditLog.action))).scalars().all()
@@ -54,9 +54,9 @@ async def test_the_administrator_sets_and_reads_the_freshness(client: AsyncClien
 async def test_a_non_administrator_cannot_touch_the_security(app: Any, org: str, admin: str) -> None:
     member = await _browser(app, MEMBER)
     try:
-        assert (await member.get("/api/v1/orgs/varga/security")).status_code == 403
+        assert (await member.get("/api/v1/orgs/northwind/security")).status_code == 403
         assert (
-            await member.put("/api/v1/orgs/varga/security", json={"approval_freshness_s": 300})
+            await member.put("/api/v1/orgs/northwind/security", json={"approval_freshness_s": 300})
         ).status_code == 403
     finally:
         await member.aclose()
@@ -73,7 +73,7 @@ async def test_an_old_authentication_cannot_approve_where_the_organisation_asks(
 ) -> None:
     approve = {"decision": "approve"}
     await _check(org, "workitem.decision", approve, None)  # nothing asked yet: passes
-    await client.put("/api/v1/orgs/varga/security", json={"approval_freshness_s": 300})
+    await client.put("/api/v1/orgs/northwind/security", json={"approval_freshness_s": 300})
     now = int(time.time())
 
     await _check(org, "workitem.decision", approve, now - 60)  # recent: passes
@@ -102,16 +102,16 @@ async def test_the_administrator_ends_every_session_of_a_member(
 ) -> None:
     laptop = await _browser(app, MEMBER)
     phone = await _browser(app, MEMBER)
-    other = await _browser(app, "someone@varga.dev")
+    other = await _browser(app, "someone@northwind.dev")
     try:
         assert (await laptop.get("/api/v1/me")).status_code == 200
         denied = await laptop.post(
-            f"/api/v1/orgs/varga/members/{MEMBER}/sessions/revocation", json={"reason": "left the team"}
+            f"/api/v1/orgs/northwind/members/{MEMBER}/sessions/revocation", json={"reason": "left the team"}
         )
         assert denied.status_code == 403  # a member cannot revoke, not even their own
 
         done = await client.post(
-            f"/api/v1/orgs/varga/members/{MEMBER}/sessions/revocation", json={"reason": "left the team"}
+            f"/api/v1/orgs/northwind/members/{MEMBER}/sessions/revocation", json={"reason": "left the team"}
         )
         assert done.status_code == 200, done.text
         assert done.json() == {"revoked": MEMBER, "ended": 2}
@@ -139,10 +139,10 @@ async def test_a_person_outside_the_organisation_cannot_be_revoked_through_it(
     app: Any, org: str, admin: str, client: AsyncClient
 ) -> None:
     stranger = await _browser(app, MEMBER)
-    await _drop_memberships(MEMBER)  # signed in, but no membership of varga
+    await _drop_memberships(MEMBER)  # signed in, but no membership of northwind
     try:
         refused = await client.post(
-            f"/api/v1/orgs/varga/members/{MEMBER}/sessions/revocation", json={"reason": "no reason"}
+            f"/api/v1/orgs/northwind/members/{MEMBER}/sessions/revocation", json={"reason": "no reason"}
         )
         assert refused.status_code == 404
         assert (await stranger.get("/api/v1/me")).status_code == 200

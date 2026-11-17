@@ -22,7 +22,7 @@ from sqlalchemy import select
 
 from .conftest import login
 
-ORG = "/api/v1/orgs/varga"
+ORG = "/api/v1/orgs/northwind"
 
 
 @pytest.fixture
@@ -58,7 +58,7 @@ async def _configure(client: AsyncClient, forge: FakeForge, name: str = "github"
 
 async def _start(client: AsyncClient, instance: str = "github", provider: str = "github") -> str:
     started = await client.post(
-        f"/api/v1/me/linked-accounts/{provider}/start", params={"org": "varga", "instance": instance}
+        f"/api/v1/me/linked-accounts/{provider}/start", params={"org": "northwind", "instance": instance}
     )
     assert started.status_code == 200, started.text
     return str(started.json()["authorization_url"])
@@ -91,15 +91,15 @@ async def _audit(action: str) -> list[Any]:
 async def test_a_member_links_their_github_account_and_it_is_verified(
     client: AsyncClient, admin: str, forge: FakeForge
 ) -> None:
-    await _member(client, "dev@varga.dev")
+    await _member(client, "dev@northwind.dev")
     await _configure(client, forge)
     forge.user("devon", 583231)
 
-    await login(client, "dev@varga.dev")
+    await login(client, "dev@northwind.dev")
     offered = await _mine(client)
     assert offered["items"] == []
     assert offered["instances"] == [
-        {"org": "varga", "instance": "github", "provider": "github", "base_url": "https://github.com"}
+        {"org": "northwind", "instance": "github", "provider": "github", "base_url": "https://github.com"}
     ]
     url = await _start(client)
     query = {k: v[0] for k, v in parse_qs(urlparse(url).query).items()}
@@ -118,7 +118,7 @@ async def test_a_member_links_their_github_account_and_it_is_verified(
     assert link["external_id"] == "583231" and link["login"] == "devon"
     assert link["verified"] is True and link["verified_at"] and link["connector"] == "github"
     assert link["base_url"] == "https://github.com" and link["profile_url"] == "https://github.com/devon"
-    assert link["avatar_url"] and link["created_by"] == "dev@varga.dev"
+    assert link["avatar_url"] and link["created_by"] == "dev@northwind.dev"
     exchange = parse_qs(forge.requests[0].content.decode())
     assert exchange["client_secret"] == [forge.client_secret], "the sealed secret reached the token endpoint"
     challenge = base64.urlsafe_b64encode(hashlib.sha256(exchange["code_verifier"][0].encode()).digest())
@@ -131,11 +131,11 @@ async def test_a_member_links_their_github_account_and_it_is_verified(
 async def test_a_state_that_is_not_this_sessions_is_refused_before_the_forge_is_called(
     client: AsyncClient, admin: str, forge: FakeForge
 ) -> None:
-    await _member(client, "dev@varga.dev")
-    await _member(client, "eve@varga.dev")
+    await _member(client, "dev@northwind.dev")
+    await _member(client, "eve@northwind.dev")
     await _configure(client, forge)
 
-    await login(client, "dev@varga.dev")
+    await login(client, "dev@northwind.dev")
     url = await _start(client)
     redirect = forge.authorize(url, "devon")
     parsed = urlparse(redirect)
@@ -151,10 +151,10 @@ async def test_a_state_that_is_not_this_sessions_is_refused_before_the_forge_is_
     tampered = f"{parsed.path}?code={params['code'][0]}&state={params['state'][0][:-2]}xx"
     assert await _callback(client, f"https://api.test{tampered}") == {"link_error": ["handshake"]}
     # Another person, in their own session, replaying the redirect meant for dev.
-    await login(client, "eve@varga.dev")
+    await login(client, "eve@northwind.dev")
     assert await _callback(client, redirect) == {"link_error": ["handshake"]}
     # The forge said no.
-    await login(client, "dev@varga.dev")
+    await login(client, "dev@northwind.dev")
     denied = f"{parsed.path}?error=access_denied&state={params['state'][0]}"
     assert await _callback(client, f"https://api.test{denied}") == {"link_error": ["denied"]}
 
@@ -166,8 +166,8 @@ async def test_a_state_that_is_not_this_sessions_is_refused_before_the_forge_is_
 async def test_an_administrator_declares_a_link_that_is_not_verified(
     client: AsyncClient, admin: str, forge: FakeForge
 ) -> None:
-    dev = await _member(client, "dev@varga.dev")
-    other = await _member(client, "other@varga.dev")
+    dev = await _member(client, "dev@northwind.dev")
+    other = await _member(client, "other@northwind.dev")
     declared = await client.post(
         f"{ORG}/members/{dev}/linked-accounts",
         json={"provider": "gitlab", "external_id": "77", "login": "devon"},
@@ -193,7 +193,7 @@ async def test_an_administrator_declares_a_link_that_is_not_verified(
     ):
         assert (await client.post(f"{ORG}/members/{dev}/linked-accounts", json=refused)).status_code == 422
 
-    await login(client, "dev@varga.dev")
+    await login(client, "dev@northwind.dev")
     own = await client.get(f"{ORG}/members/{dev}/linked-accounts")
     assert own.status_code == 200 and {r["provider"] for r in own.json()} == {"gitlab", "forgejo"}
     assert all(r["verified"] is False for r in own.json())
@@ -206,8 +206,8 @@ async def test_an_administrator_declares_a_link_that_is_not_verified(
 async def test_one_forge_account_belongs_to_one_member(
     client: AsyncClient, admin: str, forge: FakeForge
 ) -> None:
-    dev = await _member(client, "dev@varga.dev")
-    other = await _member(client, "other@varga.dev")
+    dev = await _member(client, "dev@northwind.dev")
+    other = await _member(client, "other@northwind.dev")
     await _configure(client, forge)
     forge.user("devon", 1001)
     declared = await client.post(
@@ -222,14 +222,14 @@ async def test_one_forge_account_belongs_to_one_member(
     assert taken.status_code == 409, "a declaration never takes an account another member holds"
 
     # Another member proves the same account through the forge: refused, the declaration is not overruled.
-    await login(client, "other@varga.dev")
+    await login(client, "other@northwind.dev")
     assert await _callback(client, forge.authorize(await _start(client), "devon")) == {
         "link_error": ["taken"]
     }
     assert (await _mine(client))["items"] == []
 
     # The member it was declared for proves it: the same row, now verified.
-    await login(client, "dev@varga.dev")
+    await login(client, "dev@northwind.dev")
     assert await _callback(client, forge.authorize(await _start(client), "devon")) == {"linked": ["github"]}
     [link] = (await _mine(client))["items"]
     assert link["id"] == declared.json()["id"] and link["verified"] is True
@@ -246,8 +246,8 @@ async def test_one_forge_account_belongs_to_one_member(
 async def test_a_member_unlinks_their_own_account_and_only_theirs(
     client: AsyncClient, admin: str, forge: FakeForge
 ) -> None:
-    dev = await _member(client, "dev@varga.dev")
-    other = await _member(client, "other@varga.dev")
+    dev = await _member(client, "dev@northwind.dev")
+    other = await _member(client, "other@northwind.dev")
     ids = {}
     for user_id, external in ((dev, "1"), (other, "2")):
         made = await client.post(
@@ -256,7 +256,7 @@ async def test_a_member_unlinks_their_own_account_and_only_theirs(
         )
         ids[user_id] = made.json()["id"]
 
-    await login(client, "dev@varga.dev")
+    await login(client, "dev@northwind.dev")
     assert (await client.delete(f"/api/v1/me/linked-accounts/{ids[other]}")).status_code == 404
     assert (await client.delete(f"/api/v1/me/linked-accounts/{ids[dev]}")).status_code == 204
     assert (await _mine(client))["items"] == []
@@ -270,14 +270,14 @@ async def test_a_member_unlinks_their_own_account_and_only_theirs(
 async def test_gitlab_and_forgejo_instances_are_linked_the_same_way(
     client: AsyncClient, admin: str, forge: FakeForge
 ) -> None:
-    await _member(client, "dev@varga.dev")
+    await _member(client, "dev@northwind.dev")
     await _configure(
         client, forge, name="gitlab-corp", provider="gitlab", base_url="https://gitlab.corp.example"
     )
     await _configure(client, forge, name="forge", provider="forgejo", base_url="https://forge.corp.example")
     forge.user("devon", 42)
 
-    await login(client, "dev@varga.dev")
+    await login(client, "dev@northwind.dev")
     for instance, provider in (("gitlab-corp", "gitlab"), ("forge", "forgejo")):
         url = await _start(client, instance, provider)
         assert await _callback(client, forge.authorize(url, "devon")) == {"linked": [provider]}
@@ -293,6 +293,6 @@ async def test_gitlab_and_forgejo_instances_are_linked_the_same_way(
     assert paths == ["/oauth/token", "/api/v4/user", "/login/oauth/access_token", "/api/v1/user"]
     # The provider in the route must be the instance's.
     wrong = await client.post(
-        "/api/v1/me/linked-accounts/github/start", params={"org": "varga", "instance": "gitlab-corp"}
+        "/api/v1/me/linked-accounts/github/start", params={"org": "northwind", "instance": "gitlab-corp"}
     )
     assert wrong.status_code == 404

@@ -50,13 +50,13 @@ def test_problems() -> None:
 
 def test_namespaces_of_bindings() -> None:
     def ns(binding: Binding, agent: str | None = "architect") -> str | None:
-        return namespace_of_binding("varga", "billing", agent, binding)
+        return namespace_of_binding("northwind", "billing", agent, binding)
 
     assert ns(Binding("project", "shared")) == "billing"
     assert ns(Binding("project", "own")) == "billing#agent:architect"
     assert ns(Binding("project", "own"), None) is None
     assert ns(Binding("project", "decisions")) == "billing#memory:decisions"
-    assert ns(Binding("global", "lessons")) == "org:varga#memory:lessons"
+    assert ns(Binding("global", "lessons")) == "org:northwind#memory:lessons"
 
 
 def _item(subject: str, score: float, kind: str = "decision", content: str = "x" * 40) -> MemoryItem:

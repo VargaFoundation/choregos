@@ -62,13 +62,13 @@ async def test_the_step_is_answered_by_this_projects_maintainers_only(
 ) -> None:
     slug = project["slug"]
     item_id = await _waiting(client, project["id"])
-    await _member(client, "other@varga.dev", "project_owner", ["atlas-maintainers"])
-    await _member(client, "lead@varga.dev", "project_owner", [f"{slug}-maintainers"])
+    await _member(client, "other@northwind.dev", "project_owner", ["atlas-maintainers"])
+    await _member(client, "lead@northwind.dev", "project_owner", [f"{slug}-maintainers"])
 
-    refused = await _decide(app, "other@varga.dev", item_id)
+    refused = await _decide(app, "other@northwind.dev", item_id)
     assert refused.status_code == 403, refused.text
     assert f"`{slug}-maintainers`" in refused.text, "the refusal names the project's group, resolved"
-    answered = await _decide(app, "lead@varga.dev", item_id)
+    answered = await _decide(app, "lead@northwind.dev", item_id)
     assert answered.status_code in {200, 202}, answered.text
 
 
@@ -77,12 +77,12 @@ async def test_the_group_is_resolved_for_the_project_in_validation_and_members(
 ) -> None:
     slug, pid = project["slug"], project["id"]
     path = f"/api/v1/projects/{pid}/workflows/validate"
-    await _member(client, "other@varga.dev", "project_owner", ["atlas-maintainers"])
+    await _member(client, "other@northwind.dev", "project_owner", ["atlas-maintainers"])
     warned = (await client.post(path, json={"yaml": WORKFLOW})).json()
     unknown = [w for w in warned["warnings"] if w["code"] == "actor.group_unknown"]
     assert unknown and f"`{slug}-maintainers`" in unknown[0]["message"], warned["warnings"]
 
-    await _member(client, "lead@varga.dev", "project_owner", [f"{slug}-maintainers"])
+    await _member(client, "lead@northwind.dev", "project_owner", [f"{slug}-maintainers"])
     known = (await client.post(path, json={"yaml": WORKFLOW})).json()
     assert not [w for w in known["warnings"] if w["code"] == "actor.group_unknown"], known["warnings"]
 
@@ -90,4 +90,4 @@ async def test_the_group_is_resolved_for_the_project_in_validation_and_members(
     assert members.status_code == 200, members.text
     body = members.json()
     assert body["group"] == f"{slug}-maintainers"
-    assert [m["email"] for m in body["members"]] == ["lead@varga.dev"]
+    assert [m["email"] for m in body["members"]] == ["lead@northwind.dev"]

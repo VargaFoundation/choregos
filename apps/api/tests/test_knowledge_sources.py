@@ -11,7 +11,7 @@ from httpx import AsyncClient
 
 from . import knowledge_fixtures as fx
 
-BASE = "/api/v1/orgs/varga/knowledge"
+BASE = "/api/v1/orgs/northwind/knowledge"
 
 
 async def _sharepoint(
@@ -22,7 +22,7 @@ async def _sharepoint(
     created = await client.post(BASE, json={"slug": "framework", "name": "Framework", "serving_mode": mode})
     assert created.status_code == 201, created.text
     connector = await client.post(
-        "/api/v1/orgs/varga/connectors",
+        "/api/v1/orgs/northwind/connectors",
         json={
             "name": "sharepoint",
             "kind": "documents",
@@ -44,7 +44,7 @@ async def _sharepoint(
 async def _sync(source_id: str) -> dict[str, Any]:
     from choregos_api.knowledge.sync import sync_source
 
-    return await sync_source("varga", source_id)
+    return await sync_source("northwind", source_id)
 
 
 async def _search(client: AsyncClient, query: str) -> set[str]:
@@ -189,7 +189,7 @@ async def test_a_failed_sync_says_why_and_keeps_its_cursor(
             raise AssertionError
 
     with pytest.raises(RuntimeError):
-        await sync_source("varga", source["id"], adapter=Broken())
+        await sync_source("northwind", source["id"], adapter=Broken())
     async with session_scope() as session:
         row = await session.get(KnowledgeSource, source["id"])
         assert row is not None
@@ -233,7 +233,7 @@ async def test_the_loop_starts_with_the_source_and_syncs_on_demand(
     source = await _sharepoint(client, monkeypatch, mode="files")
     temporal: Any = get_temporal()
     loop = f"knowledge-sync-{source['id']}"
-    assert temporal.started[loop] == {"org": "varga", "source_id": source["id"], "interval_seconds": 1800}
+    assert temporal.started[loop] == {"org": "northwind", "source_id": source["id"], "interval_seconds": 1800}
     assert (await client.post(f"{BASE}/framework/sources/{source['id']}/sync")).status_code == 202
     assert (loop, "sync_now", {}) in temporal.signals
     assert (await client.delete(f"{BASE}/framework/sources/{source['id']}")).status_code == 204
@@ -271,7 +271,7 @@ async def test_a_source_is_refused_before_its_first_sync(
 
 async def _declare(client: AsyncClient, name: str, kind: str, type_: str) -> None:
     created = await client.post(
-        "/api/v1/orgs/varga/connectors", json={"name": name, "kind": kind, "type": type_, "config": {}}
+        "/api/v1/orgs/northwind/connectors", json={"name": name, "kind": kind, "type": type_, "config": {}}
     )
     assert created.status_code == 201, created.text
 
@@ -400,7 +400,7 @@ async def test_the_activity_skips_a_pass_that_is_not_due(
     )
     source_id = created.json()["id"]
     fake_source(source_id).put("a", "a.md", b"# A\n")
-    payload = {"org": "varga", "source_id": source_id}
+    payload = {"org": "northwind", "source_id": source_id}
 
     first = await sync_knowledge_source(payload)
     assert first["added"] == 1
@@ -432,7 +432,7 @@ async def _confluence(
     )
     assert created.status_code == 201, created.text
     declared = await client.post(
-        "/api/v1/orgs/varga/connectors",
+        "/api/v1/orgs/northwind/connectors",
         json={
             "name": "wiki",
             "kind": "documents",
@@ -564,7 +564,7 @@ async def test_a_confluence_source_is_refused_before_its_first_sync(
 ) -> None:
     await client.post(BASE, json={"slug": "framework", "name": "Framework", "serving_mode": "index"})
     declared = await client.post(
-        "/api/v1/orgs/varga/connectors",
+        "/api/v1/orgs/northwind/connectors",
         json={"name": "wiki", "kind": "documents", "type": "confluence",
               "config": {"base_url": "https://x.atlassian.net", "email": "a@b.c"},
               "secret_refs": {"api_token": "env:CONNECTOR_KB_CONFLUENCE_TOKEN"}},
@@ -601,7 +601,7 @@ async def test_the_confluence_connector_type_is_listed_with_its_secret_field(
     assert spec["secret_fields"] == ["api_token"] and spec["capabilities"] == ["documents"]
     assert set(spec["config_schema"]["required"]) == {"base_url", "email"}
     clear = await client.post(
-        "/api/v1/orgs/varga/connectors",
+        "/api/v1/orgs/northwind/connectors",
         json={"name": "w", "kind": "documents", "type": "confluence",
               "config": {"base_url": "https://x.atlassian.net", "email": "a@b.c", "api_token": "plain"}},
     )  # fmt: skip
@@ -641,9 +641,9 @@ async def test_a_crawl_that_suddenly_lists_nothing_deletes_nothing(client: Async
 
     from choregos_api.knowledge.sync import sync_source
 
-    assert (await sync_source("varga", source_id, adapter=crawl()))["added"] == 3
+    assert (await sync_source("northwind", source_id, adapter=crawl()))["added"] == 3
     state["up"] = False
-    second = await sync_source("varga", source_id, adapter=crawl())
+    second = await sync_source("northwind", source_id, adapter=crawl())
     assert second["deleted"] == 0, second
     assert len((await client.get(f"{BASE}/framework")).json()["documents"]) == 3
 
@@ -689,7 +689,7 @@ async def test_a_web_source_keeps_its_exclusions_and_refuses_a_bad_one(
 
 async def _git_connector(client: AsyncClient, name: str = "globex-github") -> None:
     created = await client.post(
-        "/api/v1/orgs/varga/connectors",
+        "/api/v1/orgs/northwind/connectors",
         json={"name": name, "kind": "documents", "type": "git", "config": {"host": "github.com"},
               "secret_refs": {"token": "env:CONNECTOR_KB_GIT_TOKEN"}},
     )  # fmt: skip
@@ -801,7 +801,7 @@ async def _web_connector(
 ) -> None:
     monkeypatch.setenv("CONNECTOR_KB_WEB_TOKEN", "t" + "0k")
     created = await client.post(
-        "/api/v1/orgs/varga/connectors",
+        "/api/v1/orgs/northwind/connectors",
         json={"name": "intranet", "kind": "documents", "type": "web",
               "config": {"host": host, "auth": "bearer"},
               "secret_refs": {"secret": "env:CONNECTOR_KB_WEB_TOKEN"}},

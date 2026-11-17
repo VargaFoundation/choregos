@@ -91,7 +91,7 @@ async def test_without_outpost_manage_every_route_answers_403(
     kit.switch_on(monkeypatch)
     await kit.create(client)
     instance = await kit.enrolled_instance(client)
-    email = f"{role}@varga.dev"
+    email = f"{role}@northwind.dev"
     await _member(email, role)
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as member:
         await login(member, email)
@@ -137,7 +137,7 @@ def test_an_outposts_instance_is_a_principal_without_membership_or_role() -> Non
     assert (principal.org_roles, principal.project_roles, principal.groups) == ({}, {}, [])
     assert principal.authenticated_at is None and principal.session_id is None, "it holds no session"
     assert principal.user_id == "outpost:outpost-1:instance-1" and principal.email == ""
-    assert not any(principal.can(permission, "varga") for permission in Permission)
+    assert not any(principal.can(permission, "northwind") for permission in Permission)
     assert not principal.is_platform_admin()
 
 
@@ -147,11 +147,11 @@ def test_an_outpost_holds_no_permission_whatever_roles_it_is_handed() -> None:
     from choregos_api.rbac import Permission, outpost_principal
 
     principal = outpost_principal(outpost_id="outpost-1", instance_id="instance-1")
-    principal.org_roles = {"varga": Role.ORG_ADMIN}
-    principal.project_roles = {"varga/billing-api": Role.PROJECT_OWNER}
-    assert principal.permissions("varga") == frozenset()
-    assert principal.permissions("varga", "billing-api") == frozenset()
-    assert not any(principal.can(permission, "varga", "billing-api") for permission in Permission)
+    principal.org_roles = {"northwind": Role.ORG_ADMIN}
+    principal.project_roles = {"northwind/billing-api": Role.PROJECT_OWNER}
+    assert principal.permissions("northwind") == frozenset()
+    assert principal.permissions("northwind", "billing-api") == frozenset()
+    assert not any(principal.can(permission, "northwind", "billing-api") for permission in Permission)
     assert not principal.is_platform_admin()
 
 
@@ -207,14 +207,14 @@ async def test_the_a2a_door_refuses_a_request_that_carries_an_outposts_signature
     """An outpost executes what the platform decided and starts nothing (ADR 0147 §3)."""
     token = (await client.post("/api/v1/me/tokens", json={"name": "p", "scopes": ["a2a"]})).json()["token"]
     client.cookies.clear()
-    card = "/a2a/orgs/varga/.well-known/agent-card.json"
+    card = "/a2a/orgs/northwind/.well-known/agent-card.json"
     bearer = {"Authorization": f"Bearer {token}"}
     assert (await client.get(card, headers=bearer)).status_code == 200
     refused = await client.get(card, headers=bearer | {SIGNATURE_HEADER: _signature()})
     assert refused.status_code == 403 and "outposts' door only" in refused.json()["error"], refused.text
     message = {"jsonrpc": "2.0", "id": 1, "method": "message/send", "params": {}}
     sent = await client.post(
-        "/a2a/orgs/varga", json=message, headers=bearer | {SIGNATURE_HEADER: _signature()}
+        "/a2a/orgs/northwind", json=message, headers=bearer | {SIGNATURE_HEADER: _signature()}
     )
     assert sent.status_code == 403
     as_a_token = await client.get(card, headers={"Authorization": f"Bearer {_signature()}"})

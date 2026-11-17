@@ -5,7 +5,7 @@ import { encodeContext } from "@/lib/embed";
 import { clearEmbedToken, EMBED_HEADER, SIGNED_IN_MESSAGE } from "@/lib/embed-token";
 
 // The embedded component (S63-12): a conversation of the installation in a host's iframe, and what it tells the host.
-const ORIGIN = "https://app.varga.test";
+const ORIGIN = "https://app.northwind.test";
 const conversation = {
   id: "c1",
   agent: "coach",
@@ -44,12 +44,12 @@ function fakeApi(options: { signedIn?: boolean; resumable?: boolean; needsToken?
     const token = (init?.headers as Record<string, string> | undefined)?.[EMBED_HEADER];
     calls.push({ path, method, body: init?.body ? JSON.parse(String(init.body)) : undefined, token });
     // A frame under another site: the cookie never comes, only a live frame token opens the routes.
-    if (options.needsToken && path !== "/public/assistants/varga/coach/embed" && (!token || options.expired)) {
+    if (options.needsToken && path !== "/public/assistants/northwind/coach/embed" && (!token || options.expired)) {
       return new Response("{}", { status: 401 });
     }
-    if (path === "/public/assistants/varga/coach/embed") return Response.json({ embed_origins: [ORIGIN] });
+    if (path === "/public/assistants/northwind/coach/embed") return Response.json({ embed_origins: [ORIGIN] });
     if (path === "/me") return options.signedIn === false ? new Response("{}", { status: 401 }) : Response.json({});
-    if (path === "/me/assistants/varga/coach/conversations") return Response.json(conversation, { status: 201 });
+    if (path === "/me/assistants/northwind/coach/conversations") return Response.json(conversation, { status: 201 });
     if (path === "/me/conversations/c1" && options.resumable) {
       return Response.json({ ...conversation, messages: [{ role: "user", content: "Earlier" }] });
     }
@@ -94,7 +94,7 @@ afterEach(() => {
 
 const mount = (extra: Partial<Parameters<typeof EmbeddedAssistant>[0]> = {}) =>
   render(
-    <EmbeddedAssistant org="varga" installation="coach" rawContext={null} signinRequired={false} memorySpaces={[]} {...extra} />,
+    <EmbeddedAssistant org="northwind" installation="coach" rawContext={null} signinRequired={false} memorySpaces={[]} {...extra} />,
   );
 
 describe("the embedded assistant (S63-12)", () => {
@@ -103,7 +103,7 @@ describe("the embedded assistant (S63-12)", () => {
     const context = { client_id: "C-9" };
     mount({ rawContext: encodeContext(context) });
     await screen.findByLabelText("Message");
-    const open = calls.find((c) => c.path === "/me/assistants/varga/coach/conversations");
+    const open = calls.find((c) => c.path === "/me/assistants/northwind/coach/conversations");
     expect(open?.body).toEqual({ context });
     await waitFor(() =>
       expect(host.postMessage).toHaveBeenCalledWith(
@@ -204,7 +204,7 @@ describe("the embedded assistant (S63-12)", () => {
     vi.stubGlobal("location", {
       ...window.location,
       assign,
-      pathname: "/embed/assistants/varga/coach",
+      pathname: "/embed/assistants/northwind/coach",
       search: "?context=e30",
     });
     const first = mount();
@@ -212,7 +212,7 @@ describe("the embedded assistant (S63-12)", () => {
     const url = new URL(String(assign.mock.calls[0]?.[0]), "http://localhost:3000");
     expect(url.pathname).toBe("/api/v1/auth/login");
     expect(url.searchParams.get("silent")).toBe("1");
-    expect(url.searchParams.get("redirect_to")).toBe("/embed/assistants/varga/coach?context=e30");
+    expect(url.searchParams.get("redirect_to")).toBe("/embed/assistants/northwind/coach?context=e30");
     first.unmount();
     mount({ signinRequired: true });
     expect(await screen.findByRole("button", { name: "Sign in" })).toBeInTheDocument();
@@ -233,7 +233,7 @@ describe("the embedded assistant (S63-12)", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Sign in" }));
     // The popup lands on the page that mints the token for THIS installation.
     expect(String(open.mock.calls[0]?.[0])).toContain(
-      encodeURIComponent("/embed/signed-in?org=varga&installation=coach"),
+      encodeURIComponent("/embed/signed-in?org=northwind&installation=coach"),
     );
     // A message from another origin is ignored; the popup's own is taken.
     window.dispatchEvent(
@@ -256,7 +256,7 @@ describe("the embedded assistant (S63-12)", () => {
   it("asks the person again, and does not navigate, when its token expired", async () => {
     const calls = fakeApi({ needsToken: true, expired: true });
     const assign = vi.fn();
-    vi.stubGlobal("location", { ...window.location, assign, pathname: "/embed/assistants/varga/coach", search: "" });
+    vi.stubGlobal("location", { ...window.location, assign, pathname: "/embed/assistants/northwind/coach", search: "" });
     mount({ signinRequired: true });
     await screen.findByRole("button", { name: "Sign in" });
     window.dispatchEvent(
@@ -271,7 +271,7 @@ describe("the embedded assistant (S63-12)", () => {
   it("does not go round the identity provider twice when the frame cannot keep the cookie", async () => {
     fakeApi({ signedIn: false });
     const assign = vi.fn();
-    vi.stubGlobal("location", { ...window.location, assign, pathname: "/embed/assistants/varga/coach", search: "" });
+    vi.stubGlobal("location", { ...window.location, assign, pathname: "/embed/assistants/northwind/coach", search: "" });
     const first = mount();
     await waitFor(() => expect(assign).toHaveBeenCalledOnce());
     first.unmount();

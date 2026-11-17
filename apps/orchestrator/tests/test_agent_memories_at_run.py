@@ -9,8 +9,8 @@ from choregos_core.domain import Fact, Provenance
 
 from .conftest import Fixture
 
-SEC = "org:varga#memory:security-lessons"
-ARCH = "org:varga#memory:architecture-decisions"
+SEC = "org:northwind#memory:security-lessons"
+ARCH = "org:northwind#memory:architecture-decisions"
 DECISIONS = "billing-api#memory:decisions"
 SHARED = "billing-api"
 FULL = [
@@ -420,7 +420,7 @@ async def test_a_renamed_organisation_keeps_its_global_namespaces_at_run_time(se
     await _agent(setup, FULL)
     async with session_scope(orgs="*") as session:
         org = (await session.execute(select(Organization))).scalar_one()
-        org.settings = {**(org.settings or {}), "memory_key": "varga"}
+        org.settings = {**(org.settings or {}), "memory_key": "northwind"}
         org.slug = "globex"
         project = await session.get(Project, setup.project_id)
         assert project is not None

@@ -76,7 +76,7 @@ async def test_the_standard_claims_and_the_job_title_are_stored_at_sign_in(
         client,
         {
             "sub": "u-1",
-            "email": "ada@varga.dev",
+            "email": "ada@northwind.dev",
             "name": "Ada Lovelace",
             "given_name": "Ada",
             "family_name": "Lovelace",
@@ -86,7 +86,7 @@ async def test_the_standard_claims_and_the_job_title_are_stored_at_sign_in(
         },
     )
     assert done.status_code == 307, done.text
-    ada = await _user("ada@varga.dev")
+    ada = await _user("ada@northwind.dev")
     assert (ada.given_name, ada.family_name, ada.job_title, ada.department) == (
         "Ada",
         "Lovelace",
@@ -100,11 +100,11 @@ async def test_the_standard_claims_and_the_job_title_are_stored_at_sign_in(
 async def test_a_later_sign_in_replaces_what_it_carries_and_keeps_the_rest(
     client: AsyncClient, org: str
 ) -> None:
-    first = {"sub": "u-2", "email": "bob@varga.dev", "given_name": "Bob", "job_title": "Engineer"}
+    first = {"sub": "u-2", "email": "bob@northwind.dev", "given_name": "Bob", "job_title": "Engineer"}
     assert (await _sign_in(client, first)).status_code == 307
-    later = {"sub": "u-2", "email": "bob@varga.dev", "given_name": "Robert", "family_name": "Smith"}
+    later = {"sub": "u-2", "email": "bob@northwind.dev", "given_name": "Robert", "family_name": "Smith"}
     assert (await _sign_in(client, later)).status_code == 307
-    bob = await _user("bob@varga.dev")
+    bob = await _user("bob@northwind.dev")
     assert (bob.given_name, bob.family_name, bob.job_title) == ("Robert", "Smith", "Engineer")
 
 
@@ -115,7 +115,7 @@ async def test_an_extension_sign_in_stores_the_profile_it_maps(client: AsyncClie
     async with session_scope(orgs="*") as session:
         await terminer_la_connexion(
             session,
-            email="cy@varga.dev",
+            email="cy@northwind.dev",
             nom="Cy",
             sujet="saml-1",
             groupes=[],
@@ -123,7 +123,7 @@ async def test_an_extension_sign_in_stores_the_profile_it_maps(client: AsyncClie
             canal="saml",
             profile={"given_name": "Cy", "family_name": "Young", "department": "Ops", "picture": "x"},
         )
-    cy = await _user("cy@varga.dev")
+    cy = await _user("cy@northwind.dev")
     assert (cy.given_name, cy.family_name, cy.job_title, cy.department) == ("Cy", "Young", None, "Ops")
 
 

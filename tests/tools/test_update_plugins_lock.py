@@ -9,7 +9,7 @@ import shutil
 import tarfile
 from pathlib import Path
 
-from tools.plugins.update_lock import INDEX, problems, read
+from tools.plugins.update_lock import problems, read
 
 ROOT = Path(__file__).resolve().parents[2]
 OFFLINE = ROOT / "plugins" / "offline"
@@ -17,11 +17,12 @@ OFFLINE = ROOT / "plugins" / "offline"
 
 def test_the_archives_are_what_the_lock_says() -> None:
     assert problems(OFFLINE) == []
-    _, locked = read(OFFLINE)
+    index, locked = read(OFFLINE)
     assert set(locked) == {"software-delivery", "netops", "authoring", "mcp-clients", "requests"}
     for entry in locked.values():
-        # Beside the index the publishing identity names (ADR 0156).
-        assert entry.source == f"{INDEX.rsplit('/', 1)[0]}/{entry.name}:{entry.version}"
+        # Beside the index the lock itself records: it stays the frozen source's until `make
+        # plugins-lock` refreshes it from the one the publishing identity names (ADR 0186).
+        assert entry.source == f"{index.rsplit('/', 1)[0]}/{entry.name}:{entry.version}"
 
 
 def test_a_changed_archive_or_an_unlisted_one_is_caught(tmp_path: Path) -> None:

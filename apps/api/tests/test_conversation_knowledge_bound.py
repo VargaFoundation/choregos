@@ -25,7 +25,7 @@ from .test_agent_sessions import Upstream, _agent, upstream  # noqa: F401
 pytestmark = pytest.mark.usefixtures("synthetic_installation")
 
 AUDIENCE = "analysts"
-READER = "reader@varga.dev"
+READER = "reader@northwind.dev"
 TEXTS = {
     "coach-policies": "# Refund policy\n\nA customer is refunded within 14 days of the return.\n",
     "public-notes": "# Market notes\n\nThe house expects rates to stay flat this quarter.\n",
@@ -52,7 +52,7 @@ async def _setup() -> dict[str, Any]:
         reader = (await session.execute(select(User).where(User.email == READER))).scalar_one()
         reader.groups = [AUDIENCE]
         ids["reader"] = reader.id
-        org = (await session.execute(select(Organization).where(Organization.slug == "varga"))).scalar_one()
+        org = (await session.execute(select(Organization).where(Organization.slug == "northwind"))).scalar_one()
         ids["org"] = org.id
         installation = AssistantInstallation(
             org_id=org.id, slug="analyst", plugin="p", plugin_version="1", manifest_digest="sha256:0",
@@ -86,7 +86,7 @@ async def _setup() -> dict[str, Any]:
             await session.flush()
             ids[slug] = document.id
     for slug in TEXTS:
-        assert await index_document("varga", ids[slug]) > 0
+        assert await index_document("northwind", ids[slug]) > 0
     return ids
 
 
@@ -118,7 +118,7 @@ async def test_a_bound_base_is_searched_and_cited_by_its_slug(
     upstream.model.call("knowledge_search", {"base": "public-notes", "query": "rates this quarter"}).call(
         "knowledge_get", {"base": "public-notes", "document_id": ids["public-notes"]}
     ).say("Rates stay flat [PUBLIC-NOTES, v3].")
-    conversation = await _open("varga", READER, installation_id=ids["installation"])
+    conversation = await _open("northwind", READER, installation_id=ids["installation"])
     answer = await _say(client, conversation, "What about rates?")
     assert answer.status_code == 200, answer.text
     assert "coach-policies" in _offered(upstream, 0) and "public-notes" in _offered(upstream, 0)
@@ -140,7 +140,7 @@ async def test_a_person_who_may_not_read_a_bound_base_gets_nothing_of_it_until_a
     upstream.model.call("knowledge_search", {"base": "board-notes", "query": "merger"}).call(
         "knowledge_search", {"query": "confidential merger closes"}
     ).call("knowledge_get", {"base": "public-notes", "document_id": ids["board-notes"]}).say("nothing")
-    conversation = await _open("varga", READER, installation_id=ids["installation"])
+    conversation = await _open("northwind", READER, installation_id=ids["installation"])
     assert (await _say(client, conversation, "Any merger?")).status_code == 200
     assert "board-notes" not in _offered(upstream, 0)
     named, searched, by_id = _tool_results(upstream)
@@ -173,7 +173,7 @@ async def test_a_disabled_binding_is_never_served(
     async with session_scope(orgs="*") as session:
         await session.execute(update(AssistantKnowledgeBinding).values(enabled=False))
     upstream.model.say("hello")
-    conversation = await _open("varga", READER, installation_id=ids["installation"])
+    conversation = await _open("northwind", READER, installation_id=ids["installation"])
     assert (await _say(client, conversation, "hi")).status_code == 200
     offered = _offered(upstream, 0)
     assert "coach-policies" in offered and "public-notes" not in offered and "board-notes" not in offered

@@ -74,7 +74,7 @@ async def test_the_investment_assistant_converses_end_to_end(
     from choregos_api.db.models import AgentSessionEvent, MemoryFact
     from choregos_api.db.session import session_scope
 
-    await _member(client, "reader@varga.dev", [AUDIENCE])
+    await _member(client, "reader@northwind.dev", [AUDIENCE])
     await _plugin(client)
     for need in ("news-feed", "markets"):
         await _served(client, need)
@@ -87,7 +87,7 @@ async def test_the_investment_assistant_converses_end_to_end(
     readiness = await client.get(f"{ORG}/assistants/investment-assistant/readiness")
     assert readiness.json() == {"status": "ready", "items": []}
 
-    reader = await _as(app, "reader@varga.dev")
+    reader = await _as(app, "reader@northwind.dev")
     opened = await reader.post(OPEN, json={})
     assert opened.status_code == 201, opened.text
     conversation = opened.json()["id"]

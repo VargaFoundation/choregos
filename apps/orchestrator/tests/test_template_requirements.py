@@ -104,9 +104,9 @@ async def test_the_labels_step_adds_the_templates_without_touching_the_platforms
 def test_the_pr_carries_the_release_notes_in_english() -> None:
     from choregos_orchestrator.activities.scm import _pr_body
 
-    item = SimpleNamespace(tracker_key="varga/billing-api#7", body_snapshot="The total ignores credits.")
+    item = SimpleNamespace(tracker_key="northwind/billing-api#7", body_snapshot="The total ignores credits.")
     body = _pr_body(item, {"release_notes_markdown": "- Credits are now deducted from the total."})
     assert "## Release notes\n- Credits are now deducted from the total." in body
-    assert body.startswith("Work item: varga/billing-api#7")
+    assert body.startswith("Work item: northwind/billing-api#7")
     assert "Ticket :" not in body and "ouverte" not in body  # lang: fr-ok
     assert "## Release notes" not in _pr_body(item, {}), "no empty section"

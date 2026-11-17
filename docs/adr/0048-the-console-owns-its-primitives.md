@@ -1,5 +1,7 @@
 # 0048 — The console owns its primitives: it looks like Temporal's UI, writes in sentence case, and no longer depends on the Varga Foundation design system
 
+> **Amended by [ADR 0186](0186-the-publisher-is-graal-systems-sas.md)** (2026-11-18): the publisher is GRAAL.SYSTEMS SAS and the product no longer names the Varga Foundation; the text below is kept as the history of the earlier decision.
+
 - **Status**: accepted, 2026-10-12
 - **Concerns**: the web console (`apps/web`): its components, its case, its type and its shapes;
   supersedes [ADR 0042](0042-the-interface-s-letter-case.md) and §1, §4 (the type of buttons and

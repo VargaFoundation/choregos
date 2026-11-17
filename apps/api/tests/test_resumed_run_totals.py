@@ -19,7 +19,7 @@ async def test_a_resumed_run_is_served_with_its_totals(client: AsyncClient, proj
     from choregos_api.db.session import session_scope
 
     created = await client.post(
-        "/api/v1/orgs/varga/agents", json={"slug": "writer", "display_name": "Writer", "spec": {}}
+        "/api/v1/orgs/northwind/agents", json={"slug": "writer", "display_name": "Writer", "spec": {}}
     )
     assert created.status_code == 201, created.text
     async with session_scope() as session:
@@ -55,5 +55,5 @@ async def test_a_resumed_run_is_served_with_its_totals(client: AsyncClient, proj
     assert listed.status_code == 200, listed.text
     assert [r["id"] for r in listed.json()] == ["run-resumed"]
 
-    by_agent = await client.get("/api/v1/orgs/varga/agents/writer/runs")
+    by_agent = await client.get("/api/v1/orgs/northwind/agents/writer/runs")
     assert by_agent.status_code == 200, by_agent.text

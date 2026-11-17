@@ -17,7 +17,7 @@ async def run_with_events(
     from choregos_core import utcnow
 
     async with session_scope() as session:
-        item = WorkItem(project_id=project["id"], tracker_key=f"varga/x#{run_id}", title="T", state="ready")
+        item = WorkItem(project_id=project["id"], tracker_key=f"northwind/x#{run_id}", title="T", state="ready")
         session.add(item)
         await session.flush()
         session.add(

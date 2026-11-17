@@ -57,11 +57,11 @@ async def test_the_ticket_that_wakes_the_train_stays_in_the_batch(
                 id=f"train-{setup.project_slug}-prod",
                 task_queue="test",
                 start_signal="merged",
-                start_signal_args=[{"work_item_key": "varga/billing-api#4", "sha": "a4"}],
+                start_signal_args=[{"work_item_key": "northwind/billing-api#4", "sha": "a4"}],
             )
             state = await wait_until_state(train, "status_query", lambda s: s["status"] == "collecting")
-            assert state["pending_items"] == ["varga/billing-api#4"], state
-            await train.signal("merged", {"work_item_key": "varga/billing-api#4", "sha": "a4"})
+            assert state["pending_items"] == ["northwind/billing-api#4"], state
+            await train.signal("merged", {"work_item_key": "northwind/billing-api#4", "sha": "a4"})
             state = await wait_until_state(train, "status_query", lambda s: s["status"] == "collecting")
             assert state["batch_size"] == 1, "a second boarding of the same ticket does not double it"
             await train.signal("abort", {"by": "test"})
@@ -79,7 +79,7 @@ async def test_a_batch_without_requirement_leaves_without_approval_when_the_poli
     with temporal_env.auto_time_skipping_disabled():
         async with worker_factory():
             train = await start_prod_train(temporal_env, setup)
-            await train.signal("merged", {"work_item_key": "varga/billing-api#1", "sha": "a1"})
+            await train.signal("merged", {"work_item_key": "northwind/billing-api#1", "sha": "a1"})
             await train.signal("depart_now", {"by": "augustin"})
             await wait_until_state(
                 train, "status_query", lambda s: s["status"] == "collecting" and s["release_id"]
@@ -98,9 +98,9 @@ async def test_a_ticket_that_requires_approval_holds_the_whole_batch(
     with temporal_env.auto_time_skipping_disabled():
         async with worker_factory():
             train = await start_prod_train(temporal_env, setup)
-            await train.signal("merged", {"work_item_key": "varga/billing-api#1", "sha": "a1"})
+            await train.signal("merged", {"work_item_key": "northwind/billing-api#1", "sha": "a1"})
             await train.signal(
-                "merged", {"work_item_key": "varga/billing-api#2", "sha": "a2", "approval": CAPTAINS}
+                "merged", {"work_item_key": "northwind/billing-api#2", "sha": "a2", "approval": CAPTAINS}
             )
             await train.signal("depart_now", {"by": "augustin"})
             await wait_until_state(train, "status_query", lambda s: s["status"] == "awaiting_approval")
@@ -126,9 +126,9 @@ async def test_the_requirement_brought_by_a_second_boarding_is_added(
     with temporal_env.auto_time_skipping_disabled():
         async with worker_factory():
             train = await start_prod_train(temporal_env, setup)
-            await train.signal("merged", {"work_item_key": "varga/billing-api#1", "sha": "a1"})
+            await train.signal("merged", {"work_item_key": "northwind/billing-api#1", "sha": "a1"})
             await train.signal(
-                "merged", {"work_item_key": "varga/billing-api#1", "sha": "a1", "approval": CAPTAINS}
+                "merged", {"work_item_key": "northwind/billing-api#1", "sha": "a1", "approval": CAPTAINS}
             )
             await wait_until_state(train, "status_query", lambda s: s["batch_size"] == 1)
             await train.signal("depart_now", {"by": "augustin"})
@@ -328,7 +328,7 @@ async def test_an_express_departure_takes_the_approval_of_the_express_lane(
 ) -> None:
     await _express_lane(setup, approval_required=approval_required, lane=lane)
     setup.adapters.cd.set_health("billing-api", "Healthy")
-    boarding: dict[str, Any] = {"work_item_key": "varga/billing-api#9", "sha": "f1", "labels": ["hotfix"]}
+    boarding: dict[str, Any] = {"work_item_key": "northwind/billing-api#9", "sha": "f1", "labels": ["hotfix"]}
     if ticket is not None:
         boarding["approval"] = ticket
     with temporal_env.auto_time_skipping_disabled():
@@ -432,7 +432,7 @@ async def test_the_express_lane_is_recognised_by_the_policy_label(
         async with worker_factory():
             train = await start_prod_train(temporal_env, setup)
             await train.signal(
-                "merged", {"work_item_key": "varga/billing-api#11", "sha": "u1", "labels": ["urgent"]}
+                "merged", {"work_item_key": "northwind/billing-api#11", "sha": "u1", "labels": ["urgent"]}
             )
             await wait_until_state(train, "status_query", lambda s: s["status"] == "awaiting_approval")
             await train.signal("abort", {"by": "test"})
@@ -452,7 +452,7 @@ async def test_hotfix_does_not_take_an_express_lane_with_another_name(
         async with worker_factory():
             train = await start_prod_train(temporal_env, setup)
             await train.signal(
-                "merged", {"work_item_key": "varga/billing-api#12", "sha": "h1", "labels": ["hotfix"]}
+                "merged", {"work_item_key": "northwind/billing-api#12", "sha": "h1", "labels": ["hotfix"]}
             )
             await wait_until_state(train, "status_query", lambda s: s["batch_size"] == 1)
             await asyncio.sleep(3)  # a hotfix taken for express would already have departed
@@ -478,13 +478,13 @@ async def test_a_labelled_duplicate_boarding_triggers_the_express_lane(
     with temporal_env.auto_time_skipping_disabled():
         async with worker_factory():
             train = await start_prod_train(temporal_env, setup)
-            await train.signal("merged", {"work_item_key": "varga/billing-api#13", "sha": "d1", "labels": []})
+            await train.signal("merged", {"work_item_key": "northwind/billing-api#13", "sha": "d1", "labels": []})
             await wait_until_state(train, "status_query", lambda s: s["batch_size"] == 1)
             # The configuration is loaded (the first window check, which follows it, set `next_departure`):
             # the duplicate goes through the signal. A fixed one-second sleep raced it on a busy runner.
             await wait_until_state(train, "status_query", lambda s: s["next_departure"] is not None)
             await train.signal(
-                "merged", {"work_item_key": "varga/billing-api#13", "sha": "d1", "labels": ["hotfix"]}
+                "merged", {"work_item_key": "northwind/billing-api#13", "sha": "d1", "labels": ["hotfix"]}
             )
             await wait_until_state(train, "status_query", lambda s: s["status"] == "awaiting_approval")
             await train.signal("abort", {"by": "test"})
@@ -510,7 +510,7 @@ async def test_an_express_lane_that_keeps_the_schedule_holds_the_departure(
         async with worker_factory():
             train = await start_prod_train(temporal_env, setup)
             await train.signal(
-                "merged", {"work_item_key": "varga/billing-api#15", "sha": "s1", "labels": ["hotfix"]}
+                "merged", {"work_item_key": "northwind/billing-api#15", "sha": "s1", "labels": ["hotfix"]}
             )
             await wait_until_state(train, "status_query", lambda s: s["batch_size"] == 1)
             await asyncio.sleep(3)  # an express that ignores the schedule would already have departed
@@ -535,7 +535,7 @@ async def test_an_express_lane_that_keeps_the_schedule_leaves_when_it_is_due(
         async with worker_factory():
             train = await start_prod_train(temporal_env, setup)
             await train.signal(
-                "merged", {"work_item_key": "varga/billing-api#16", "sha": "s2", "labels": ["hotfix"]}
+                "merged", {"work_item_key": "northwind/billing-api#16", "sha": "s2", "labels": ["hotfix"]}
             )
             await wait_until_state(train, "status_query", lambda s: s["status"] == "awaiting_approval")
             await train.signal("abort", {"by": "test"})

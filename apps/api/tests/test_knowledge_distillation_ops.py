@@ -53,7 +53,7 @@ async def test_every_call_made_is_booked_as_distill_on_the_organisation_without_
     base_id = await _base(client, FOUR, monkeypatch)
     await _price(0.01, 0.03)
     distiller = Counting(CAPPED)
-    outcome = await distill("varga", base_id, "admin@varga.dev", distiller=distiller)
+    outcome = await distill("northwind", base_id, "admin@northwind.dev", distiller=distiller)
     rows = await _ledger()
     # one line per part call, and one for the whole merge phase (a tree of calls)
     assert outcome["status"] == "pending_review" and len(rows) == len(distiller.parts) + 1 > 2
@@ -74,7 +74,7 @@ async def test_a_base_with_an_owning_project_books_on_that_project(
 
     base_id = await _base(client, FOUR, monkeypatch)
     await _set_record(None, owner_project=project["slug"])
-    await distill("varga", base_id, "admin@varga.dev", distiller=Counting(CAPPED))
+    await distill("northwind", base_id, "admin@northwind.dev", distiller=Counting(CAPPED))
     rows = await _ledger()
     assert rows and {(r.project_id, r.org_id) for r in rows} == {(project["id"], None)}
     mine = (await client.get(f"/api/v1/projects/{project['id']}/costs?kind=distill&group_by=kind")).json()
@@ -88,7 +88,7 @@ async def test_an_owning_project_that_no_longer_exists_falls_back_to_the_organis
 
     base_id = await _base(client, FOUR, monkeypatch)
     await _set_record(None, owner_project="deleted-project")
-    await distill("varga", base_id, "admin@varga.dev", distiller=Counting(CAPPED))
+    await distill("northwind", base_id, "admin@northwind.dev", distiller=Counting(CAPPED))
     rows = await _ledger()
     assert rows and all(r.project_id is None and r.org_id for r in rows)
 
@@ -99,9 +99,9 @@ async def test_a_replay_and_a_relaunch_book_only_what_they_call(
     from choregos_api.knowledge.distill import distill
 
     base_id = await _base(client, FOUR, monkeypatch)
-    await distill("varga", base_id, "admin@varga.dev", distiller=Counting(CAPPED))
+    await distill("northwind", base_id, "admin@northwind.dev", distiller=Counting(CAPPED))
     booked = len(await _ledger())
-    await distill("varga", base_id, "admin@varga.dev", distiller=Counting(CAPPED))
+    await distill("northwind", base_id, "admin@northwind.dev", distiller=Counting(CAPPED))
     assert len(await _ledger()) == booked, "every call was kept: nothing is paid, nothing is booked"
 
 
@@ -112,15 +112,15 @@ async def test_the_organisation_report_shows_the_spend_and_the_project_report_do
 
     base_id = await _base(client, FOUR, monkeypatch)
     await _price(0.01, 0.03)
-    outcome = await distill("varga", base_id, "admin@varga.dev", distiller=Counting(CAPPED))
-    by_kind = (await client.get("/api/v1/orgs/varga/costs?group_by=kind")).json()
+    outcome = await distill("northwind", base_id, "admin@northwind.dev", distiller=Counting(CAPPED))
+    by_kind = (await client.get("/api/v1/orgs/northwind/costs?group_by=kind")).json()
     assert [r["key"] for r in by_kind["rows"]] == ["distill"]
     assert by_kind["total"]["cost_usd"] == pytest.approx(outcome["spent_usd"], abs=1e-4)
-    by_project = (await client.get("/api/v1/orgs/varga/costs?group_by=project&kind=distill")).json()
+    by_project = (await client.get("/api/v1/orgs/northwind/costs?group_by=project&kind=distill")).json()
     assert [r["key"] for r in by_project["rows"]] == ["—"]
-    assert (await client.get("/api/v1/orgs/varga/costs?kind=model")).json()["rows"] == []
+    assert (await client.get("/api/v1/orgs/northwind/costs?kind=model")).json()["rows"] == []
     assert (await client.get(f"/api/v1/projects/{project['id']}/costs?kind=distill")).json()["rows"] == []
-    assert (await client.get("/api/v1/orgs/varga/costs.csv?kind=distill")).status_code == 200
+    assert (await client.get("/api/v1/orgs/northwind/costs.csv?kind=distill")).status_code == 200
 
 
 async def test_a_ledger_line_needs_a_project_or_an_organisation(client: AsyncClient, admin: str) -> None:
@@ -191,7 +191,7 @@ async def test_a_stopped_run_makes_no_further_call_and_publishes_nothing(
 
     base_id = await _base(client, FOUR, monkeypatch)
     await _set_record(
-        {"status": "running", "started_at": "2026-10-26T10:00:00+00:00", "requested_by": "admin@varga.dev"}
+        {"status": "running", "started_at": "2026-10-26T10:00:00+00:00", "requested_by": "admin@northwind.dev"}
     )
 
     class StopsAfterTheFirstPart(Counting):
@@ -203,19 +203,19 @@ async def test_a_stopped_run_makes_no_further_call_and_publishes_nothing(
             return answer
 
     distiller = StopsAfterTheFirstPart(CAPPED)
-    outcome = await distill("varga", base_id, "admin@varga.dev", distiller=distiller)
+    outcome = await distill("northwind", base_id, "admin@northwind.dev", distiller=distiller)
     assert (outcome["status"], outcome["code"]) == ("stopped", "cancelled"), outcome
     assert len(distiller.parts) == 1 and distiller.merges == 0
     assert len(await _ledger()) == 1, "the call that was in flight is booked, none after it"
-    assert (await _outcome(client))["stopped_by"] == "admin@varga.dev"
-    assert (await client.get("/api/v1/orgs/varga/skills/architecture-principles")).status_code == 404
+    assert (await _outcome(client))["stopped_by"] == "admin@northwind.dev"
+    assert (await client.get("/api/v1/orgs/northwind/skills/architecture-principles")).status_code == 404
 
 
 STOPPED = {
     "status": "stopped",
     "code": "cancelled",
     "started_at": "2026-10-26T10:00:00+00:00",
-    "stopped_by": "admin@varga.dev",
+    "stopped_by": "admin@northwind.dev",
 }
 
 
@@ -238,7 +238,7 @@ async def test_a_progress_write_never_resurrects_a_run_stopped_meanwhile(
         return row
 
     monkeypatch.setattr(AsyncSession, "get", read_then_stopped)
-    await module._progress("varga", base_id, phase="map", parts_done=1)
+    await module._progress("northwind", base_id, phase="map", parts_done=1)
     assert (await _outcome(client))["status"] == "stopped"
     assert (await client.post(KB + "/distill/stop")).status_code == 409
 
@@ -249,7 +249,7 @@ async def test_a_stop_just_before_publishing_publishes_nothing(
     from choregos_api.knowledge import distill as module
 
     base_id = await _base(client, FOUR, monkeypatch)
-    await _set_record({**STOPPED, "status": "running", "requested_by": "admin@varga.dev"})
+    await _set_record({**STOPPED, "status": "running", "requested_by": "admin@northwind.dev"})
     progress = module._progress
 
     async def stopped_at_publish(org: str, base: str, **values: Any) -> None:
@@ -258,9 +258,9 @@ async def test_a_stop_just_before_publishing_publishes_nothing(
             await _set_record(STOPPED)
 
     monkeypatch.setattr(module, "_progress", stopped_at_publish)
-    outcome = await module.distill("varga", base_id, "admin@varga.dev", distiller=Counting(CAPPED))
+    outcome = await module.distill("northwind", base_id, "admin@northwind.dev", distiller=Counting(CAPPED))
     assert (outcome["status"], outcome["code"]) == ("stopped", "cancelled"), outcome
-    assert (await client.get("/api/v1/orgs/varga/skills/architecture-principles")).status_code == 404
+    assert (await client.get("/api/v1/orgs/northwind/skills/architecture-principles")).status_code == 404
 
 
 async def test_a_write_lands_only_on_the_run_that_is_still_running(
@@ -291,7 +291,7 @@ async def test_a_cancelled_answer_does_not_overwrite_a_new_running_record(
     base_id = await _base(client, FOUR, monkeypatch)
     now = {"status": "running", "started_at": "2026-10-26T11:00:00+00:00", "requested_by": "me"}
     await _set_record(now)
-    answered = await step_fail("varga", base_id, "cancelled", "stopped", "me", 1.0)
+    answered = await step_fail("northwind", base_id, "cancelled", "stopped", "me", 1.0)
     assert answered["status"] == "running" and (await _outcome(client))["status"] == "running"
 
 
@@ -308,7 +308,7 @@ async def test_a_relaunch_keeps_the_last_run_s_settings_and_its_outcome_joins_th
         "status": "failed",
         "code": "gateway",
         "error": "ReadTimeout",
-        "requested_by": "someone@varga.dev",
+        "requested_by": "someone@northwind.dev",
         "started_at": "2026-10-26T10:00:00+00:00",
         "spent_usd": 4.2,
         "exclude": ["d3.md"],
@@ -319,7 +319,7 @@ async def test_a_relaunch_keeps_the_last_run_s_settings_and_its_outcome_joins_th
     relaunched = await client.post(KB + "/distill/relaunch")
     assert relaunched.status_code == 202, relaunched.text
     record = relaunched.json()["distillation"]
-    assert record["status"] == "running" and record["requested_by"] == "admin@varga.dev"
+    assert record["status"] == "running" and record["requested_by"] == "admin@northwind.dev"
     assert (record["exclude"], record["max_usd"]) == (["d3.md"], 7.5)
     assert [h["status"] for h in record["history"]] == ["failed"]
     assert record["history"][0]["spent_usd"] == 4.2 and "junk" not in record["history"][0]
@@ -353,7 +353,7 @@ async def test_a_relaunch_after_a_finished_run_reuses_every_stored_part_and_book
     from choregos_api.knowledge.distill import distill
 
     base_id = await _base(client, FOUR, monkeypatch)
-    await distill("varga", base_id, "admin@varga.dev", distiller=Counting(CAPPED))
+    await distill("northwind", base_id, "admin@northwind.dev", distiller=Counting(CAPPED))
     booked = len(await _ledger())
     await client.post(KB + "/distill/relaunch")
     await conversions.drain()

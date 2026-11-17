@@ -31,9 +31,9 @@ async def _files_base() -> dict[str, str]:
 
     ids: dict[str, str] = {}
     async with session_scope(orgs="*") as session:
-        admin = (await session.execute(select(User).where(User.email == "admin@varga.dev"))).scalar_one()
+        admin = (await session.execute(select(User).where(User.email == "admin@northwind.dev"))).scalar_one()
         admin.groups = [AUDIENCE]
-        org = (await session.execute(select(Organization).where(Organization.slug == "varga"))).scalar_one()
+        org = (await session.execute(select(Organization).where(Organization.slug == "northwind"))).scalar_one()
         installation = AssistantInstallation(
             org_id=org.id, slug="coach", plugin="p", plugin_version="1", manifest_digest="sha256:0",
             assistant_name="coach", audience_groups=[AUDIENCE],
@@ -70,7 +70,7 @@ async def test_a_files_base_is_listed_and_read_whole_and_a_restricted_one_is_ser
     upstream.model.call("knowledge_list", {}).call(
         "knowledge_get", {"base": "coach-guides", "document_id": ids["document"]}
     ).call("knowledge_search", {"query": "plain words"}).say("ok")
-    conversation = await _open("varga", admin, installation_id=ids["installation"])
+    conversation = await _open("northwind", admin, installation_id=ids["installation"])
     assert (await _say(client, conversation, "tone?")).status_code == 200
     (_, first) = upstream.model.requests[0]
     assert {t["function"]["name"] for t in first["tools"]} == {"knowledge_list", "knowledge_get"}, (
@@ -111,7 +111,7 @@ async def test_a_withdrawn_document_is_neither_listed_nor_read_in_a_conversation
     upstream.model.call("knowledge_list", {}).call(
         "knowledge_get", {"base": "coach-guides", "document_id": old_id}
     ).say("ok")
-    conversation = await _open("varga", admin, installation_id=ids["installation"])
+    conversation = await _open("northwind", admin, installation_id=ids["installation"])
     assert (await _say(client, conversation, "tone?")).status_code == 200
     (_, last) = upstream.model.requests[-1]
     listed, read = [m["content"] for m in last["messages"] if m["role"] == "tool"]

@@ -18,7 +18,7 @@ from httpx import AsyncClient
 
 from .conftest import login
 
-ORG = "/api/v1/orgs/varga/connectors"
+ORG = "/api/v1/orgs/northwind/connectors"
 VALUE_1 = "vendor-key-AAAA-1111"
 VALUE_2 = "vendor-key-BBBB-2222"
 TOOLS: list[dict[str, Any]] = [{"name": "order_status", "inputSchema": {"type": "object"}}]
@@ -83,7 +83,7 @@ async def test_a_typed_secret_is_sealed_never_returned_and_never_audited(
     assert body["secret_refs"] == {"token": "store:connector/vendor/token"}
     (state,) = body["secrets"]
     assert (state["field"], state["source"], state["version"]) == ("token", "store", 1)
-    assert state["rotated_by"] == "admin@varga.dev" and state["rotated_at"]
+    assert state["rotated_by"] == "admin@northwind.dev" and state["rotated_at"]
     assert "reference" not in state or state["reference"] is None
 
     # nowhere in what the API returns...
@@ -160,14 +160,14 @@ async def test_only_the_organisation_administrator_sets_an_organisation_secret(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
     await client.post(ORG, json=_declare(secret_values={"token": VALUE_1}))
-    members = "/api/v1/orgs/varga/members"
+    members = "/api/v1/orgs/northwind/members"
     assert (
         await client.post(
-            members, json={"email": "po@varga.dev", "role": "project_owner", "project_slug": "billing-api"}
+            members, json={"email": "po@northwind.dev", "role": "project_owner", "project_slug": "billing-api"}
         )
     ).status_code == 201
     client.cookies.clear()
-    await login(client, "po@varga.dev")
+    await login(client, "po@northwind.dev")
     for call in (
         client.put(f"{ORG}/vendor/secrets/token", json={"value": VALUE_2}),
         client.delete(f"{ORG}/vendor/secrets/token"),
@@ -370,11 +370,11 @@ async def test_a_developer_cannot_set_a_project_secret(
     pid = project["id"]
     await client.put(f"/api/v1/projects/{pid}/connectors/tracker", json={"type": "probe", "config": {}})
     await client.post(
-        "/api/v1/orgs/varga/members",
-        json={"email": "dev@varga.dev", "role": "developer", "project_slug": "billing-api"},
+        "/api/v1/orgs/northwind/members",
+        json={"email": "dev@northwind.dev", "role": "developer", "project_slug": "billing-api"},
     )
     client.cookies.clear()
-    await login(client, "dev@varga.dev")
+    await login(client, "dev@northwind.dev")
     refused = await client.put(
         f"/api/v1/projects/{pid}/connectors/tracker/secrets/api_token", json={"value": VALUE_1}
     )
@@ -419,7 +419,7 @@ async def test_a_sharepoint_source_syncs_with_a_store_held_secret(
     from choregos_api.knowledge import sync as sync_module
 
     created = await client.post(
-        "/api/v1/orgs/varga/knowledge",
+        "/api/v1/orgs/northwind/knowledge",
         json={"slug": "framework", "name": "Framework", "serving_mode": "index"},
     )
     assert created.status_code == 201, created.text
@@ -436,7 +436,7 @@ async def test_a_sharepoint_source_syncs_with_a_store_held_secret(
     assert connector.status_code == 201, connector.text
     source = (
         await client.post(
-            "/api/v1/orgs/varga/knowledge/framework/sources",
+            "/api/v1/orgs/northwind/knowledge/framework/sources",
             json={
                 "kind": "sharepoint",
                 "name": "Site",
@@ -456,7 +456,7 @@ async def test_a_sharepoint_source_syncs_with_a_store_held_secret(
         return real_build(kind, type_name, config)
 
     monkeypatch.setattr(sync_module, "build", spy)
-    summary = await sync_module.sync_source("varga", source["id"])
+    summary = await sync_module.sync_source("northwind", source["id"])
     assert summary["added"] == 1, summary
     assert seen and seen[0]["client_secret"] == VALUE_1
 
@@ -496,12 +496,12 @@ async def test_a_sharepoint_service_account_password_is_sealed_like_the_client_s
     assert VALUE_2 not in declared.text and declared.json()["config"]["username"] == "reader@example.com"
 
     await client.post(
-        "/api/v1/orgs/varga/knowledge",
+        "/api/v1/orgs/northwind/knowledge",
         json={"slug": "framework", "name": "Framework", "serving_mode": "index"},
     )
     source = (
         await client.post(
-            "/api/v1/orgs/varga/knowledge/framework/sources",
+            "/api/v1/orgs/northwind/knowledge/framework/sources",
             json={
                 "kind": "sharepoint",
                 "name": "Site",
@@ -520,7 +520,7 @@ async def test_a_sharepoint_service_account_password_is_sealed_like_the_client_s
         return real_build(kind, type_name, resolved)
 
     monkeypatch.setattr(sync_module, "build", spy)
-    assert (await sync_module.sync_source("varga", source["id"]))["added"] == 1
+    assert (await sync_module.sync_source("northwind", source["id"]))["added"] == 1
     assert seen[0]["username"] == "reader@example.com" and seen[0]["password"] == VALUE_2
 
 
@@ -530,11 +530,11 @@ async def test_a_project_owner_types_values_but_does_not_write_references(
     """Sealed values are the normal way for a tenant role; `env:` references stay the
     administrator's (S39-06b)."""
     await client.post(
-        "/api/v1/orgs/varga/members",
-        json={"email": "po@varga.dev", "role": "project_owner", "project_slug": "billing-api"},
+        "/api/v1/orgs/northwind/members",
+        json={"email": "po@northwind.dev", "role": "project_owner", "project_slug": "billing-api"},
     )
     client.cookies.clear()
-    await login(client, "po@varga.dev")
+    await login(client, "po@northwind.dev")
     url = f"/api/v1/projects/{project['id']}/connectors/tracker"
     by_reference = await client.put(
         url, json={"type": "probe", "config": {}, "secret_refs": {"api_token": "env:CONNECTOR_X"}}
@@ -621,7 +621,7 @@ async def test_an_organisation_gateway_with_a_typed_key_is_built_with_it(
     real_build = gateway_module.build
     monkeypatch.setattr(gateway_module, "build", lambda k, t, c: built.append(c) or real_build(k, t, c))
     async with session_scope(orgs="*") as session:
-        org = (await session.execute(select(Organization).where(Organization.slug == "varga"))).scalar_one()
+        org = (await session.execute(select(Organization).where(Organization.slug == "northwind"))).scalar_one()
         kind, _ = await gateway_module.org_gateway_and_type(session, org.id)
     assert kind == "litellm"
     assert built[0]["master_key"] == VALUE_1
@@ -659,7 +659,7 @@ async def test_a_pooled_field_takes_one_key_per_slot_and_resolves_to_the_list(
     assert cleared.status_code in (200, 204), cleared.text
 
     async with session_scope(orgs="*") as session:
-        org = (await session.execute(select(Organization).where(Organization.slug == "varga"))).scalar_one()
+        org = (await session.execute(select(Organization).where(Organization.slug == "northwind"))).scalar_one()
         row = (await session.execute(select(OrgConnector).where(OrgConnector.name == "search"))).scalar_one()
         config = await resolved_configuration(
             session, org.id, row.kind, row.type, row.config, row.secret_refs

@@ -18,7 +18,7 @@ from httpx import AsyncClient
 
 from .conftest import login
 
-BASE = "/api/v1/orgs/varga/mcp-catalogue"
+BASE = "/api/v1/orgs/northwind/mcp-catalogue"
 TOOLS: list[dict[str, Any]] = [
     {"name": "search", "description": "search", "inputSchema": {"type": "object"},
      "annotations": {"readOnlyHint": True}},
@@ -58,7 +58,7 @@ async def test_a_member_lists_the_catalogue_and_nothing_is_installed(client: Asy
     assert len(body["entries"]) == len(shipped.entries) >= 90
     assert {e["state"] for e in body["entries"]} == {"available"}
     assert all(e["installed_as"] == [] for e in body["entries"])
-    assert (await client.get("/api/v1/orgs/varga/connectors")).json() == [], "listing enables nothing"
+    assert (await client.get("/api/v1/orgs/northwind/connectors")).json() == [], "listing enables nothing"
     github = _by_id(body)["github"]
     assert github["install"] == "installable" and github["official"] is True
     assert github["remote"]["url"] == "https://api.githubcopilot.com/mcp/"
@@ -100,9 +100,9 @@ async def test_install_declares_a_closed_connector_with_a_reference(
     assert connector["catalogue_entry"] == f"github@{version}"
     assert connector["operations"] == [], "no operation is declared: they are discovered"
 
-    discovered = await client.post("/api/v1/orgs/varga/connectors/github/discover")
+    discovered = await client.post("/api/v1/orgs/northwind/connectors/github/discover")
     assert discovered.status_code == 200, discovered.text
-    operations = (await client.get("/api/v1/orgs/varga/connectors/github")).json()["operations"]
+    operations = (await client.get("/api/v1/orgs/northwind/connectors/github")).json()["operations"]
     assert {o["name"]: o["policy"] for o in operations} == {
         "search": "forbidden",
         "create_issue": "forbidden",
@@ -133,14 +133,14 @@ async def test_install_leaves_an_audit_row_naming_the_entry(client: AsyncClient,
 
 async def test_only_the_administrator_installs(client: AsyncClient, admin: str) -> None:
     member = await client.post(
-        "/api/v1/orgs/varga/members", json={"email": "po@varga.dev", "role": "project_owner"}
+        "/api/v1/orgs/northwind/members", json={"email": "po@northwind.dev", "role": "project_owner"}
     )
     assert member.status_code in {200, 201}
-    await login(client, "po@varga.dev")
+    await login(client, "po@northwind.dev")
     assert (await client.get(BASE)).status_code == 200, "a member browses"
     refused = await client.post(f"{BASE}/exa/install", json={})
     assert refused.status_code == 403
-    assert (await client.get("/api/v1/orgs/varga/connectors")).json() == []
+    assert (await client.get("/api/v1/orgs/northwind/connectors")).json() == []
 
 
 async def test_an_oauth_entry_and_a_hosted_process_are_refused_with_the_reason(
@@ -151,7 +151,7 @@ async def test_an_oauth_entry_and_a_hosted_process_are_refused_with_the_reason(
     hosting = await client.post(f"{BASE}/playwright/install", json={})
     assert hosting.status_code == 422 and "local process" in hosting.text
     assert (await client.post(f"{BASE}/no-such-server/install", json={})).status_code == 404
-    assert (await client.get("/api/v1/orgs/varga/connectors")).json() == []
+    assert (await client.get("/api/v1/orgs/northwind/connectors")).json() == []
 
 
 async def test_a_taken_name_is_a_conflict_and_the_name_defaults_to_the_id(
@@ -175,7 +175,7 @@ async def test_a_secret_in_clear_or_a_missing_one_is_refused(client: AsyncClient
     assert missing.status_code == 422 and "secret_refs.token" in missing.text
     unwanted = await client.post(f"{BASE}/exa/install", json={"secret_refs": {"token": "env:CONNECTOR_X"}})
     assert unwanted.status_code == 422 and "no credential" in unwanted.text
-    assert (await client.get("/api/v1/orgs/varga/connectors")).json() == []
+    assert (await client.get("/api/v1/orgs/northwind/connectors")).json() == []
 
 
 async def test_atlassian_rovo_installs_with_a_service_account_key(
@@ -191,7 +191,7 @@ async def test_atlassian_rovo_installs_with_a_service_account_key(
     )
     assert installed.status_code == 201, installed.text
     assert installed.json()["config"] == {"url": "https://mcp.atlassian.com/v2/mcp"}
-    discovered = await client.post("/api/v1/orgs/varga/connectors/atlassian/discover")
+    discovered = await client.post("/api/v1/orgs/northwind/connectors/atlassian/discover")
     assert discovered.status_code == 200, discovered.text
     for _, headers, _ in vendor.received:
         assert headers["authorization"] == "Bearer vendor-key"
@@ -334,7 +334,7 @@ async def test_a_header_entry_installs_with_its_header_and_the_key_travels_in_it
     )
     assert installed.status_code == 201, installed.text
     assert installed.json()["config"] == {"url": "https://mcp.keyed.example/mcp", "auth_header": "X-API-Key"}
-    assert (await client.post("/api/v1/orgs/varga/connectors/keyed/discover")).status_code == 200
+    assert (await client.post("/api/v1/orgs/northwind/connectors/keyed/discover")).status_code == 200
     assert server.received
     for method, headers, _ in server.received:
         assert headers["x-api-key"] == "the-raw-key", method

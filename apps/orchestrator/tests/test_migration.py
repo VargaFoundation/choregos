@@ -141,7 +141,7 @@ async def test_a_parked_ticket_migrates_and_ends_on_its_new_definition(
                 "workflow_def_id": arrival,
                 "workflow": signal,
                 "state_mapping": {"parked": "request"},
-                "by": "admin@varga.dev",
+                "by": "admin@northwind.dev",
             },
         )
         # Without a wake-up, a parked ticket would never have migrated: the test says so, not waits.
@@ -262,7 +262,7 @@ async def test_a_reroute_does_not_wait_for_the_person_who_was_asked(
                 "workflow_def_id": arrival,
                 "workflow": signal,
                 "state_mapping": {"review": "request"},
-                "by": "lead@varga.dev",
+                "by": "lead@northwind.dev",
             },
         )
         result = await asyncio.wait_for(handle.result(), timeout=120)
@@ -273,7 +273,7 @@ async def test_a_reroute_does_not_wait_for_the_person_who_was_asked(
         request = await session.get(HumanRequest, asked["pending_request"])
         assert request is not None and request.decided_at is not None
         assert (request.decided_by, request.decision["superseded"]) == (
-            "lead@varga.dev",
+            "lead@northwind.dev",
             "the work item changed workflow",
         )
         item = await session.get(WorkItem, setup.work_item_id)

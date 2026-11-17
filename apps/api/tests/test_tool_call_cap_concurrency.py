@@ -341,7 +341,7 @@ async def test_a_place_in_flight_is_not_a_call_in_the_access_record_or_the_costs
     assert [(line["target"], line["requests"]) for line in tools] == [(TOOL, 1)], tools
     assert access.json()["tool_cost_eur"] == pytest.approx(0.02)
 
-    for url in (f"/api/v1/projects/{project['id']}/costs", "/api/v1/orgs/varga/costs"):
+    for url in (f"/api/v1/projects/{project['id']}/costs", "/api/v1/orgs/northwind/costs"):
         report = await client.get(url, params={"group_by": "kind", "kind": "tool"})
         assert report.status_code == 200, report.text
         assert [(row["key"], row["runs"]) for row in report.json()["rows"]] == [("tool", 1)], report.text

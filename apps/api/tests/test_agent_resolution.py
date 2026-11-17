@@ -9,7 +9,7 @@ from typing import Any
 
 from httpx import ASGITransport, AsyncClient
 
-ORG = "/api/v1/orgs/varga"
+ORG = "/api/v1/orgs/northwind"
 
 
 async def _agent(client: AsyncClient, slug: str, **extra: Any) -> None:

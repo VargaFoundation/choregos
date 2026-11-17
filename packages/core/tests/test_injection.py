@@ -46,7 +46,7 @@ def test_the_known_patterns_are_spotted(text: str, pattern: str) -> None:
             "Chef de projet data pour une mission de 6 mois, "  # lang: fr-ok
             "démarrage en octobre, télétravail partiel."  # lang: fr-ok
         ),
-        "See https://github.com/varga/billing-api/pull/12 for the previous attempt.",
+        "See https://github.com/northwind/billing-api/pull/12 for the previous attempt.",
     ],
 )
 def test_an_ordinary_ticket_triggers_nothing(text: str) -> None:

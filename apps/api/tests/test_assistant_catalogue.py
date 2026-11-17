@@ -43,7 +43,7 @@ async def test_my_assistants_carry_their_memory_spaces_tasks_and_needs(
     app: Any,
     offline: Path,  # noqa: F811
 ) -> None:
-    await _member(client, "reader@varga.dev", ["investors"])
+    await _member(client, "reader@northwind.dev", ["investors"])
     await _plugin(client)
     await _install(client, audience_groups=["investors"])
     await _connector("news-feed", NEWS)
@@ -51,7 +51,7 @@ async def test_my_assistants_carry_their_memory_spaces_tasks_and_needs(
     await _bind(client, "news", "news-feed")
     await _bind(client, "market_data", "markets")
     reader = AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
-    await login(reader, "reader@varga.dev")
+    await login(reader, "reader@northwind.dev")
     mine = await reader.get("/api/v1/me/assistants")
     assert mine.status_code == 200, mine.text
     (item,) = mine.json()["items"]
@@ -73,7 +73,7 @@ async def test_a_conversation_names_its_organisation_and_its_assistant(
     app: Any,
     offline: Path,  # noqa: F811
 ) -> None:
-    await _member(client, "reader@varga.dev", ["investors"])
+    await _member(client, "reader@northwind.dev", ["investors"])
     await _plugin(client)
     await _install(client, audience_groups=["investors"])
     await _connector("news-feed", NEWS)
@@ -81,12 +81,12 @@ async def test_a_conversation_names_its_organisation_and_its_assistant(
     await _bind(client, "news", "news-feed")
     await _bind(client, "market_data", "markets")
     reader = AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
-    await login(reader, "reader@varga.dev")
-    opened = await reader.post("/api/v1/me/assistants/varga/investment-assistant/conversations", json={})
+    await login(reader, "reader@northwind.dev")
+    opened = await reader.post("/api/v1/me/assistants/northwind/investment-assistant/conversations", json={})
     assert opened.status_code == 201, opened.text
-    assert (opened.json()["org"], opened.json()["assistant"]) == ("varga", "investment-assistant")
+    assert (opened.json()["org"], opened.json()["assistant"]) == ("northwind", "investment-assistant")
     # A conversation read from anywhere (the list, a link) says the same: no `?assistant=` is needed.
     read = await reader.get(f"/api/v1/me/conversations/{opened.json()['id']}")
-    assert (read.json()["org"], read.json()["assistant"]) == ("varga", "investment-assistant")
+    assert (read.json()["org"], read.json()["assistant"]) == ("northwind", "investment-assistant")
     (row,) = (await reader.get("/api/v1/me/conversations")).json()["items"]
-    assert (row["org"], row["assistant"]) == ("varga", "investment-assistant")
+    assert (row["org"], row["assistant"]) == ("northwind", "investment-assistant")

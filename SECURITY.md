@@ -2,7 +2,7 @@
 
 ## Reporting a vulnerability
 
-Write to **security@varga.foundation**, or open a private security advisory on GitHub. Please do
+Write to **security@graal.systems**, or open a private security advisory on GitHub. Please do
 not open a public issue: we would rather fix before we publish.
 
 Include the version or commit, what you observed, how to reproduce it, and the impact you

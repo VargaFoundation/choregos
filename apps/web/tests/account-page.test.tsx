@@ -11,7 +11,7 @@ import { ThemeProvider } from "@/lib/theme";
 const memberships = vi.hoisted(() => ({ list: [] as unknown[] }));
 vi.mock("@/lib/session", () => ({
   useSession: () => ({
-    org: "varga",
+    org: "northwind",
     me: {
       display_name: "Vincent Devillers",
       email: "v@example.test",
@@ -58,9 +58,9 @@ function wrap(Page: () => React.ReactNode = AccountPage) {
 describe("my account, your roles", () => {
   beforeEach(() => {
     memberships.list = [
-      row("varga", "org_admin"),
-      row("varga", "project_owner", "essai-it4it"),
-      row("varga", "project_owner", "billing"),
+      row("northwind", "org_admin"),
+      row("northwind", "project_owner", "essai-it4it"),
+      row("northwind", "project_owner", "billing"),
     ];
   });
 
@@ -75,17 +75,17 @@ describe("my account, your roles", () => {
         "project/essai-it4it : project_owner",
       ]),
     );
-    expect(within(list).queryByText(/varga/)).toBeNull();
-    expect(within(rolesCard()).queryByText("varga")).toBeNull();
+    expect(within(list).queryByText(/northwind/)).toBeNull();
+    expect(within(rolesCard()).queryByText("northwind")).toBeNull();
   });
 
   it("enterprise: the organisation named once, 'organisation : org_admin', a group per organisation", async () => {
     memberships.list = [...memberships.list, row("acme", "developer")];
     vi.mocked(api.edition).mockResolvedValue({ edition: "enterprise", features: ["multi_org"] } as never);
     wrap();
-    const list = await screen.findByRole("list", { name: "Your roles in varga" });
+    const list = await screen.findByRole("list", { name: "Your roles in northwind" });
     expect(within(list).getAllByTestId("membership")[0]!.textContent).toBe("organisation : org_admin");
-    expect(within(rolesCard()).getAllByText("varga")).toHaveLength(1);
+    expect(within(rolesCard()).getAllByText("northwind")).toHaveLength(1);
     expect(screen.getByRole("list", { name: "Your roles in acme" })).toBeTruthy();
   });
 
@@ -151,7 +151,7 @@ const SESSIONS = [
 
 describe("my account, your sessions (ADR 0130)", () => {
   beforeEach(() => {
-    memberships.list = [row("varga", "org_admin")];
+    memberships.list = [row("northwind", "org_admin")];
     vi.mocked(api.edition).mockResolvedValue({ edition: "community", features: [] } as never);
   });
 

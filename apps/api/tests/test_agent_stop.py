@@ -15,7 +15,7 @@ from httpx import ASGITransport, AsyncClient
 
 from .conftest import login
 
-ORG = "/api/v1/orgs/varga"
+ORG = "/api/v1/orgs/northwind"
 AGENTS = f"{ORG}/agents"
 SLUG = "onboarding-coordinator"
 DONE = {"schema": "choregos/StageResult/v1", "status": "done", "summary": "implemented"}
@@ -33,9 +33,9 @@ async def _second_project(client: AsyncClient) -> dict[str, Any]:
         "name": "Billing web",
         "config": {
             "slug": "billing-web",
-            "org": "varga",
+            "org": "northwind",
             "repo": {
-                "url": "https://github.com/varga/billing-web.git",
+                "url": "https://github.com/northwind/billing-web.git",
                 "default_branch": "main",
                 "language": "python",
                 "test_command": "make test",
@@ -198,7 +198,7 @@ async def test_a_stop_cancels_every_run_of_the_agent_in_every_project_and_closes
     for run_id in ("run-1", "run-2"):
         status, result = runs[run_id]
         assert status == "cancelled", run_id
-        assert result["summary"] == "run stopped by admin@varga.dev: it deletes branches"
+        assert result["summary"] == "run stopped by admin@northwind.dev: it deletes branches"
     assert runs["run-other"] == ("running", None), "another agent's run is not touched"
     assert runs["run-done"] == ("succeeded", DONE), "an ended run keeps how it ended"
     assert _cancellations() == {"run-cancel-run-1", "run-cancel-run-2"}
@@ -235,7 +235,7 @@ async def _member(email: str, role: str, project_id: str | None = None) -> None:
     from sqlalchemy import select
 
     async with session_scope() as session:
-        org = (await session.execute(select(Organization).where(Organization.slug == "varga"))).scalar_one()
+        org = (await session.execute(select(Organization).where(Organization.slug == "northwind"))).scalar_one()
         user = (await session.execute(select(User).where(User.email == email))).scalar_one_or_none()
         if user is None:
             user = User(email=email, display_name=email.split("@", maxsplit=1)[0])
@@ -251,11 +251,11 @@ async def test_the_agent_managers_right_stops_runs_in_projects_where_they_cannot
     The owner of a personal agent (developer in another project, viewer of the organisation) stops
     its run in `billing-api`, where stopping that run alone is refused."""
     second = await _second_project(client)
-    await _member("owner@varga.dev", "viewer")
-    await _member("owner@varga.dev", "developer", second["id"])
+    await _member("owner@northwind.dev", "viewer")
+    await _member("owner@northwind.dev", "developer", second["id"])
     owner = AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
     try:
-        await login(owner, "owner@varga.dev")
+        await login(owner, "owner@northwind.dev")
         created = await owner.post(AGENTS, json={"slug": "mine", "display_name": "mine", "scope": "personal"})
         assert created.status_code == 201, created.text
         await _run(project["id"], "run-personal", slug="mine")
@@ -276,10 +276,10 @@ async def test_a_member_who_cannot_manage_the_agent_gets_403(
     await _agent(client)
     await _run(project["id"], "run-keep")
     session_id = await _open_session(project["id"])
-    await client.post(f"{ORG}/members", json={"email": "dev@varga.dev", "role": "developer"})
+    await client.post(f"{ORG}/members", json={"email": "dev@northwind.dev", "role": "developer"})
     developer = AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
     try:
-        await login(developer, "dev@varga.dev")
+        await login(developer, "dev@northwind.dev")
         assert (await developer.get(f"{AGENTS}/{SLUG}")).status_code == 200, "the developer sees it"
         refused = await developer.post(f"{AGENTS}/{SLUG}/stop", json={"reason": "curious"})
     finally:

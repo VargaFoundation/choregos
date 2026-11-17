@@ -1,5 +1,7 @@
 # 0064 — A theme is data the console applies
 
+> **Amended by [ADR 0186](0186-the-publisher-is-graal-systems-sas.md)** (2026-11-18): the publisher is GRAAL.SYSTEMS SAS and the product no longer names the Varga Foundation; the text below is kept as the history of the earlier decision.
+
 - **Status**: accepted, 2026-10-15
 - **Concerns**: the API contract (`GET /api/v1/theme`), the plugin seams (`declare_theme_provider`),
   the console's layout, the chart; amends [ADR 0048](0048-the-console-owns-its-primitives.md) §6;

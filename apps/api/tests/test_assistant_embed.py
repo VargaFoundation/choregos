@@ -19,13 +19,13 @@ from httpx import ASGITransport, AsyncClient, Response
 
 from .kits.assistant_install import ORG, _install, _plugin, offline  # noqa: F401
 
-EMBED = "/api/v1/public/assistants/varga/investment-assistant/embed"
-ORIGINS = ["https://app.varga.dev", "http://localhost:3100"]
+EMBED = "/api/v1/public/assistants/northwind/investment-assistant/embed"
+ORIGINS = ["https://app.northwind.dev", "http://localhost:3100"]
 
 
 async def _installed(client: AsyncClient, **config: Any) -> None:
     await _plugin(client)
-    installed = await _install(client, config={"house_name": "Varga", **config})
+    installed = await _install(client, config={"house_name": "Northwind", **config})
     assert installed.status_code == 201, installed.text
 
 
@@ -35,12 +35,12 @@ async def test_the_public_route_serves_the_installations_origins_to_anyone(
     app: Any,
     offline: Path,  # noqa: F811
 ) -> None:
-    await _installed(client, embed_origins=[*ORIGINS, "https://APP.varga.dev:443", "https://app.varga.dev/"])
+    await _installed(client, embed_origins=[*ORIGINS, "https://APP.northwind.dev:443", "https://app.northwind.dev/"])
     stranger = AsyncClient(transport=ASGITransport(app=app), base_url="http://test")  # no session at all
     response = await stranger.get(EMBED)
     assert response.status_code == 200, response.text
     assert response.json() == {"embed_origins": ORIGINS}, "normalised, de-duplicated, nothing else"
-    missing = await stranger.get("/api/v1/public/assistants/varga/nobody/embed")
+    missing = await stranger.get("/api/v1/public/assistants/northwind/nobody/embed")
     assert missing.status_code == 404
     assert (
         await stranger.get("/api/v1/public/assistants/nowhere/investment-assistant/embed")
@@ -60,9 +60,9 @@ async def test_an_installation_without_origins_is_framed_by_nobody(
     "bad",
     [
         ["*"],
-        ["https://*.varga.dev"],
-        ["https://app.varga.dev/path"],
-        ["http://app.varga.dev"],
+        ["https://*.northwind.dev"],
+        ["https://app.northwind.dev/path"],
+        ["http://app.northwind.dev"],
         "https://x.dev",
         [3],
     ],
@@ -74,7 +74,7 @@ async def test_embed_origins_must_be_plain_origins(
     bad: Any,
 ) -> None:
     await _installed(client)
-    refused = await _install(client, slug="second", config={"house_name": "Varga", "embed_origins": bad})
+    refused = await _install(client, slug="second", config={"house_name": "Northwind", "embed_origins": bad})
     assert refused.status_code == 422, refused.text
     assert "embed_origins" in refused.text
     changed = await client.patch(
@@ -89,13 +89,13 @@ async def test_origins_can_be_changed_later(
     org: str,
     offline: Path,  # noqa: F811
 ) -> None:
-    await _installed(client, embed_origins=["https://app.varga.dev"])
+    await _installed(client, embed_origins=["https://app.northwind.dev"])
     changed = await client.patch(
         f"{ORG}/assistants/investment-assistant",
-        json={"config": {"house_name": "Varga", "embed_origins": ["https://intranet.varga.dev"]}},
+        json={"config": {"house_name": "Northwind", "embed_origins": ["https://intranet.northwind.dev"]}},
     )
     assert changed.status_code == 200, changed.text
-    assert (await client.get(EMBED)).json() == {"embed_origins": ["https://intranet.varga.dev"]}
+    assert (await client.get(EMBED)).json() == {"embed_origins": ["https://intranet.northwind.dev"]}
 
 
 ISSUER = "https://idp.example.test/realms/x"
@@ -130,7 +130,7 @@ def idp(org: str, monkeypatch: pytest.MonkeyPatch) -> Any:
 async def _silent(client: AsyncClient) -> dict[str, list[str]]:
     start = await client.get(
         "/api/v1/auth/login",
-        params={"silent": "1", "redirect_to": "/embed/assistants/varga/coach?context=e30"},
+        params={"silent": "1", "redirect_to": "/embed/assistants/northwind/coach?context=e30"},
     )
     assert start.status_code == 307, start.text
     return parse_qs(urlparse(start.headers["location"]).query)
@@ -149,7 +149,7 @@ async def test_an_idp_that_cannot_answer_silently_sends_the_browser_back_with_si
     parameters = await _silent(client)
     back = await client.get("/api/v1/auth/callback", params={"error": error, "state": parameters["state"][0]})
     assert back.status_code == 307, back.text
-    assert back.headers["location"] == "/embed/assistants/varga/coach?context=e30&signin=required"
+    assert back.headers["location"] == "/embed/assistants/northwind/coach?context=e30&signin=required"
     assert not client.cookies.get("choregos_session"), "no session was opened"
 
 

@@ -84,7 +84,7 @@ async def test_the_first_model_request_carries_the_config_and_the_preferences_ne
     (_, body) = upstream.model.requests[0]
     system = _system(body)
     assert system == (
-        "You serve Varga from the equities desk. The person's risk tolerance is low. Horizon: 7 years."
+        "You serve Northwind from the equities desk. The person's risk tolerance is low. Horizon: 7 years."
     )
 
 
@@ -99,7 +99,7 @@ async def test_a_person_without_a_profile_reads_empty_preferences_not_a_sample(
     await _say(client, conversation, "Hello")
 
     system = _system(upstream.model.requests[0][1])
-    assert system == "You serve Varga from the equities desk. The person's risk tolerance is ."
+    assert system == "You serve Northwind from the equities desk. The person's risk tolerance is ."
     assert "<risk_tolerance>" not in system, "the publication sample never reaches the model"
 
 
@@ -128,7 +128,7 @@ async def test_a_policy_without_memory_renders_no_preferences(
     upstream.model.say("Noted.")
     await _say(client, conversation, "Hello")
     system = _system(upstream.model.requests[0][1])
-    assert system == "You serve Varga from the equities desk. The person's risk tolerance is .", system
+    assert system == "You serve Northwind from the equities desk. The person's risk tolerance is .", system
 
 
 async def test_a_resumed_conversation_takes_the_installation_config_as_it_is_now(
@@ -139,17 +139,17 @@ async def test_a_resumed_conversation_takes_the_installation_config_as_it_is_now
     conversation = await _open(installation)
     upstream.model.say("Noted.").say("Again.").say("Still.")
     await _say(client, conversation, "Hello")
-    assert _system(upstream.model.requests[0][1]).startswith("You serve Varga from")
+    assert _system(upstream.model.requests[0][1]).startswith("You serve Northwind from")
 
     # Resumed with nothing changed: the same instructions, nothing journaled.
     soon = utcnow() + timedelta(hours=5)  # past the default idle window of four hours
     monkeypatch.setattr("choregos_api.services.conversations.utcnow", lambda: soon)
     await _say(client, conversation, "Back")
-    assert _system(upstream.model.requests[-1][1]).startswith("You serve Varga from")
+    assert _system(upstream.model.requests[-1][1]).startswith("You serve Northwind from")
     assert "conversation.instructions_rendered" not in await _events(conversation)
 
     changed = await client.patch(
-        f"{ORG}/assistants/investment-assistant", json={"config": {"house_name": "Varga Capital"}}
+        f"{ORG}/assistants/investment-assistant", json={"config": {"house_name": "Northwind Capital"}}
     )
     assert changed.status_code == 200, changed.text
     later = utcnow() + timedelta(hours=10)  # idle again
@@ -157,7 +157,7 @@ async def test_a_resumed_conversation_takes_the_installation_config_as_it_is_now
     await _say(client, conversation, "Still there?")
 
     system = _system(upstream.model.requests[-1][1])
-    assert system.startswith("You serve Varga Capital from the equities desk."), system
+    assert system.startswith("You serve Northwind Capital from the equities desk."), system
     assert "conversation.instructions_rendered" in await _events(conversation)
 
 
@@ -173,5 +173,5 @@ async def test_a_plugin_agent_converses_without_the_work_item_context_of_a_run(
     await _say(client, conversation, "Hello")
 
     first = str(upstream.model.requests[0][1]["messages"][0]["content"])
-    assert first.startswith("You help the people of Varga understand markets"), first[:200]
+    assert first.startswith("You help the people of Northwind understand markets"), first[:200]
     assert "## Work item" not in first and "{{" not in first and "{%" not in first

@@ -1,4 +1,4 @@
-# The platform's and the runners' images are signed by the foundation and referenced by
+# The platform's and the runners' images are signed by the publisher and referenced by
 # digest. An unsigned image does not start — it is a mechanism, not a guideline.
 apiVersion: kyverno.io/v1
 kind: ClusterPolicy
@@ -35,7 +35,7 @@ spec:
           attestors:
             - entries:
                 - keyless:
-                    subject: "https://github.com/VargaFoundation/choregos/.github/workflows/*"
+                    subject: "https://github.com/graalsystems/tranibor/.github/workflows/*"
                     issuer: "https://token.actions.githubusercontent.com"
                     rekor: { url: "https://rekor.sigstore.dev" }
           mutateDigest: true
@@ -44,12 +44,12 @@ spec:
           attestors:
             - entries:
                 - keyless:
-                    subject: "https://github.com/VargaFoundation/ecphoria/.github/workflows/*"
+                    subject: "https://github.com/graalsystems/ecphoria/.github/workflows/*"
                     issuer: "https://token.actions.githubusercontent.com"
                     rekor: { url: "https://rekor.sigstore.dev" }
           mutateDigest: true
           required: true
-        # Ecphoria belongs to the foundation but not to this repository: its images are signed by
+        # Ecphoria belongs to the publisher but not to this repository: its images are signed by
         # the workflows of `graalsystems/ecphoria`. With the pattern above alone, the glob
         # `ghcr.io/graalsystems/*` caught `ghcr.io/graalsystems/ecphoria` and demanded a
         # signature issued by a repository that never produced it — the platform's memory would

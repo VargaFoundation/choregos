@@ -101,7 +101,7 @@ async def test_the_output_schema_follows_the_server_on_rediscovery_without_closi
     for tool in server.tools:
         if tool["name"] == "stock":
             del tool["outputSchema"]
-    assert (await client.post("/api/v1/orgs/varga/connectors/fournisseur/discover")).status_code == 200
+    assert (await client.post("/api/v1/orgs/northwind/connectors/fournisseur/discover")).status_code == 200
     async with session_scope() as session:
         stock = (
             await session.execute(select(ConnectorOperation).where(ConnectorOperation.name == "stock"))
@@ -137,7 +137,7 @@ async def test_a_governed_write_result_is_masked_too(
 
     base, headers = await _prepare(client, project, ["*"])
     opened = await client.patch(
-        "/api/v1/orgs/varga/connectors/fournisseur/operations/commander_poste", json={"policy": "allowed"}
+        "/api/v1/orgs/northwind/connectors/fournisseur/operations/commander_poste", json={"policy": "allowed"}
     )
     assert opened.status_code == 200, opened.text
     first = (
@@ -210,7 +210,7 @@ async def test_a_job_reads_an_oversized_answer_whole_and_masked(
             )
         )
     token = mint_run_token(
-        "run-job-bars", project_slug="billing-api", work_item_key="varga/x#1", ttl_minutes=30
+        "run-job-bars", project_slug="billing-api", work_item_key="northwind/x#1", ttl_minutes=30
     )
     answer = await client.post(
         "/api/v1/internal/runs/run-job-bars/tools/fournisseur__stock",

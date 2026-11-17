@@ -55,7 +55,7 @@ async def test_the_reference_client_initialises_lists_and_calls(
             assert "create_work_item" not in names, "a read token does not see writing"
             result = await session.call_tool("list_projects", {})
             assert not result.is_error
-            assert "varga:billing-api" in result.content[0].text
+            assert "northwind:billing-api" in result.content[0].text
     finally:
         server.should_exit = True
         await task

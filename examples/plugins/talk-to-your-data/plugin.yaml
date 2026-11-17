@@ -3,7 +3,7 @@ kind: Plugin
 metadata:
   name: talk-to-your-data
   version: 0.1.0
-  publisher: Varga Foundation
+  publisher: GRAAL.SYSTEMS SAS
   license: Apache-2.0
   description: >-
     "Talk to your data": a person asks a question in natural language, the agent finds the right

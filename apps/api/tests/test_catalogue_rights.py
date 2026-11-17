@@ -18,14 +18,14 @@ from httpx import AsyncClient
 from .agent_scopes_kit import add_member, as_user, make_project
 from .catalogue_kit import project_only
 
-ORG = "varga"
-BASE = "/api/v1/orgs/varga"
+ORG = "northwind"
+BASE = "/api/v1/orgs/northwind"
 
 
 def _who(user: str, org: Role | None = None, **projects: Role) -> Principal:
     return Principal(
         user_id=user,
-        email=f"{user}@varga.dev",
+        email=f"{user}@northwind.dev",
         org_roles={ORG: org} if org else {},
         project_roles={f"{ORG}/{slug}": role for slug, role in projects.items()},
     )
@@ -87,10 +87,10 @@ def test_projects_where_keeps_the_projects_the_caller_may_act_in() -> None:
 async def _world(client: AsyncClient, org: str) -> None:
     await make_project(client, "billing")
     await make_project(client, "checkout")
-    await add_member(client, "owner@varga.dev", "project_owner", "billing")
-    await add_member(client, "dev@varga.dev", "developer", "billing")
-    await project_only(client, "owner@varga.dev")
-    await project_only(client, "dev@varga.dev")
+    await add_member(client, "owner@northwind.dev", "project_owner", "billing")
+    await add_member(client, "dev@northwind.dev", "developer", "billing")
+    await project_only(client, "owner@northwind.dev")
+    await project_only(client, "dev@northwind.dev")
 
 
 def _by_id(body: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -100,7 +100,7 @@ def _by_id(body: dict[str, Any]) -> dict[str, dict[str, Any]]:
 async def test_a_project_only_member_reads_both_catalogues(client: AsyncClient, org: str) -> None:
     """A developer on one project, no organisation role: 403 before ADR 0074."""
     await _world(client, org)
-    await project_only(client, "dev@varga.dev")
+    await project_only(client, "dev@northwind.dev")
     mcp = await client.get(f"{BASE}/mcp-catalogue")
     assert mcp.status_code == 200, mcp.text
     connectors = await client.get(f"{BASE}/connector-catalogue")
@@ -116,11 +116,11 @@ async def test_a_stranger_reads_neither(client: AsyncClient, org: str) -> None:
 
 async def test_install_is_the_administrators_and_the_entry_says_so(client: AsyncClient, org: str) -> None:
     await _world(client, org)
-    await as_user(client, "admin@varga.dev")
+    await as_user(client, "admin@northwind.dev")
     admin_view = _by_id((await client.get(f"{BASE}/mcp-catalogue")).json())["github"]
     assert admin_view["can"]["install"] is True and admin_view["cannot_reason"] is None
 
-    await project_only(client, "owner@varga.dev")
+    await project_only(client, "owner@northwind.dev")
     owner_view = _by_id((await client.get(f"{BASE}/mcp-catalogue")).json())["github"]
     assert owner_view["can"]["install"] is False
     assert "administrator" in owner_view["cannot_reason"]
@@ -134,7 +134,7 @@ async def test_an_entry_that_cannot_be_installed_says_why_even_to_the_administra
     client: AsyncClient, org: str
 ) -> None:
     await _world(client, org)
-    await as_user(client, "admin@varga.dev")
+    await as_user(client, "admin@northwind.dev")
     notion = _by_id((await client.get(f"{BASE}/mcp-catalogue")).json())["notion"]
     assert notion["install"] == "needs_oauth"
     assert notion["can"]["install"] is False and "OAuth" in notion["cannot_reason"]
@@ -142,7 +142,7 @@ async def test_an_entry_that_cannot_be_installed_says_why_even_to_the_administra
 
 async def test_enable_projects_follow_the_caller(client: AsyncClient, org: str) -> None:
     await _world(client, org)
-    await as_user(client, "admin@varga.dev")
+    await as_user(client, "admin@northwind.dev")
     declared = await client.post(
         f"{BASE}/mcp-catalogue/github/install",
         json={"secret_refs": {"token": "env:CONNECTOR_RIGHTS_TEST"}, "availability": "selected_projects"},
@@ -153,15 +153,15 @@ async def test_enable_projects_follow_the_caller(client: AsyncClient, org: str) 
         return _by_id((await client.get(f"{BASE}/mcp-catalogue")).json())["github"]["can"]["enable_projects"]
 
     assert await enable_projects() == ["billing", "checkout"]
-    await project_only(client, "owner@varga.dev")
+    await project_only(client, "owner@northwind.dev")
     assert await enable_projects() == ["billing"]
-    await project_only(client, "dev@varga.dev")
+    await project_only(client, "dev@northwind.dev")
     assert await enable_projects() == []
 
 
 async def test_all_projects_connectors_offer_no_enablement(client: AsyncClient, org: str) -> None:
     await _world(client, org)
-    await as_user(client, "admin@varga.dev")
+    await as_user(client, "admin@northwind.dev")
     await client.post(
         f"{BASE}/mcp-catalogue/github/install", json={"secret_refs": {"token": "env:CONNECTOR_RIGHTS_TEST"}}
     )
@@ -174,7 +174,7 @@ async def test_all_projects_connectors_offer_no_enablement(client: AsyncClient, 
 
 async def test_the_connector_catalogue_lists_the_registry_by_family(client: AsyncClient, org: str) -> None:
     await _world(client, org)
-    await as_user(client, "admin@varga.dev")
+    await as_user(client, "admin@northwind.dev")
     body = (await client.get(f"{BASE}/connector-catalogue")).json()
     entries = {(e["kind"], e["type"]): e for e in body["entries"]}
     kinds = {kind for kind, _ in entries}
@@ -197,7 +197,7 @@ async def test_the_connector_catalogue_lists_the_registry_by_family(client: Asyn
 
 async def test_the_connector_catalogue_filters(client: AsyncClient, org: str) -> None:
     await _world(client, org)
-    await as_user(client, "admin@varga.dev")
+    await as_user(client, "admin@northwind.dev")
     only_org = (await client.get(f"{BASE}/connector-catalogue", params={"scope": "organisation"})).json()
     assert only_org["entries"] and {e["scope"] for e in only_org["entries"]} == {"organisation"}
     docs = (await client.get(f"{BASE}/connector-catalogue", params={"family": "Documents"})).json()
@@ -208,7 +208,7 @@ async def test_the_connector_catalogue_filters(client: AsyncClient, org: str) ->
 
 async def test_configured_in_lists_only_projects_the_caller_sees(client: AsyncClient, org: str) -> None:
     await _world(client, org)
-    await as_user(client, "admin@varga.dev")
+    await as_user(client, "admin@northwind.dev")
     project = (await client.get(f"{BASE}/projects")).json()["items"]
     configured = {p["slug"]: p for p in project}
     assert configured, "the helper created projects"
@@ -227,5 +227,5 @@ async def test_configured_in_lists_only_projects_the_caller_sees(client: AsyncCl
         ]
 
     assert configured_in((await client.get(f"{BASE}/connector-catalogue")).json()) == ["billing", "checkout"]
-    await project_only(client, "owner@varga.dev")
+    await project_only(client, "owner@northwind.dev")
     assert configured_in((await client.get(f"{BASE}/connector-catalogue")).json()) == ["billing"]

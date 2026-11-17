@@ -10,7 +10,7 @@ from httpx import AsyncClient
 
 from .conftest import login
 
-ENDPOINT = "/a2a/orgs/varga"
+ENDPOINT = "/a2a/orgs/northwind"
 CARD = f"{ENDPOINT}/.well-known/agent-card.json"
 OPT_IN = "a2a:\n  skill: ship-a-change\n  description: Ship a change through review and release.\n"
 
@@ -93,7 +93,7 @@ async def test_the_account_is_listed_with_its_tokens_and_never_their_value(
     entry = listed.json()[0]
     assert entry["address"].endswith("@machines.choregos.invalid")
     assert entry["tokens"][0]["scopes"] == ["a2a"]
-    assert entry["tokens"][0]["project"] == "varga:billing-api"
+    assert entry["tokens"][0]["project"] == "northwind:billing-api"
     assert entry["tokens"][0]["expires_at"] is not None
 
 
@@ -106,7 +106,7 @@ async def test_it_outlives_the_person_who_created_it(client: AsyncClient, projec
     _, token = await _machine(client, project)
     client.cookies.clear()
     async with session_scope(orgs="*") as session:
-        creator = (await session.execute(select(User).where(User.email == "admin@varga.dev"))).scalar_one()
+        creator = (await session.execute(select(User).where(User.email == "admin@northwind.dev"))).scalar_one()
         await session.execute(delete(Membership).where(Membership.user_id == creator.id))
     assert (await client.get(CARD, headers=_bearer(token))).status_code == 200
 
@@ -244,18 +244,18 @@ async def test_a_member_who_cannot_manage_members_cannot_create_one(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
     added = await client.post(
-        "/api/v1/orgs/varga/members",
-        json={"email": "dev@varga.dev", "role": "developer", "project_slug": "billing-api"},
+        "/api/v1/orgs/northwind/members",
+        json={"email": "dev@northwind.dev", "role": "developer", "project_slug": "billing-api"},
     )
     assert added.status_code in (200, 201), added.text
     client.cookies.clear()
-    await login(client, "dev@varga.dev")
+    await login(client, "dev@northwind.dev")
     refused = await client.post(_base(project), json={"slug": "partner-app"})
     assert refused.status_code == 403, refused.text
 
 
 async def test_it_is_not_in_the_members_list(client: AsyncClient, project: dict[str, Any]) -> None:
     account, _ = await _machine(client, project)
-    members = await client.get("/api/v1/orgs/varga/members")
+    members = await client.get("/api/v1/orgs/northwind/members")
     assert members.status_code == 200, members.text
     assert account["address"] not in members.text

@@ -16,7 +16,7 @@ from httpx import AsyncClient
 
 from .helpers import package_files, sign_in
 
-GATE = "/mcp/projects/varga:infra"
+GATE = "/mcp/projects/northwind:infra"
 PARAMS = {"key": "disk-full", "source": "healthcheck", "check": "disk-usage", "severity": "low"}
 
 
@@ -44,7 +44,7 @@ async def _ontology(http: AsyncClient, project: dict[str, Any], root: pathlib.Pa
 
 
 async def _member(http: AsyncClient, email: str, role: str) -> None:
-    response = await http.post("/api/v1/orgs/varga/members", json={"email": email, "role": role})
+    response = await http.post("/api/v1/orgs/northwind/members", json={"email": email, "role": role})
     assert response.status_code in {200, 201}, response.text
 
 
@@ -54,8 +54,8 @@ async def test_an_action_reserved_to_owners_is_not_announced_to_a_developer(
     before, after = "propose: [role:contributor, system]", "propose: [role:owner, system]"
     mutate("actions/open_finding.yaml", before, after)
     await _ontology(client, project, core_ref)
-    await _member(client, "dev@varga.dev", "developer")
-    await sign_in(client, "dev@varga.dev")
+    await _member(client, "dev@northwind.dev", "developer")
+    await sign_in(client, "dev@northwind.dev")
     token = await _token(client)
     client.cookies.clear()
 
@@ -102,8 +102,8 @@ async def test_the_proposal_carries_the_persons_name_and_waits_in_the_console(
     assert waiting["decision_url"].endswith(f"/p/infra/actions/{proposal}"), "the page of the core's actions"
     assert waiting["can_decide"] is False, "who proposes does not decide (separation of duties)"
 
-    await sign_in(client, "admin@varga.dev")
+    await sign_in(client, "admin@northwind.dev")
     read = await client.get(f"/api/v1/projects/{project['id']}/proposals/{proposal}")
     assert read.status_code == 200, read.text
-    assert read.json()["proposed_by"] == {"kind": "user", "id": "admin@varga.dev", "via": "mcp"}
+    assert read.json()["proposed_by"] == {"kind": "user", "id": "admin@northwind.dev", "via": "mcp"}
     assert read.json()["status"] == "pending_approval"

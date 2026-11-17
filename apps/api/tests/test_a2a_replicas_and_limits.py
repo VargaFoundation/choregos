@@ -162,7 +162,7 @@ async def test_a_host_closed_after_registration_is_refused_at_delivery(
     token = await _ready(client, project)
     task = await _send(client, token)
     async with session_scope(orgs="*") as session:
-        org = (await session.execute(select(Organization).where(Organization.slug == "varga"))).scalar_one()
+        org = (await session.execute(select(Organization).where(Organization.slug == "northwind"))).scalar_one()
         session.add(OrgEgressRule(org_id=org.id, host="hooks.partner.example", status="allowed"))
     assert "result" in await _set(client, token, task["id"])
     async with session_scope(orgs="*") as session:

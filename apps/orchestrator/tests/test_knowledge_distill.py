@@ -16,9 +16,9 @@ HISTORY = (
     Path(__file__).resolve().parents[3] / "tests" / "replay" / "histories" / "knowledge-distill-S42-10.json"
 )
 PAYLOAD = {
-    "org": "varga",
+    "org": "northwind",
     "base_id": "kb-1",
-    "requested_by": "admin@varga.dev",
+    "requested_by": "admin@northwind.dev",
     "exclude": ["*.xlsx"],
     "max_usd": 5,
 }

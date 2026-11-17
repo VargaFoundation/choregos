@@ -76,11 +76,11 @@ async def test_an_invisible_global_memory_is_unknown_not_forbidden(client: Async
     )
     assert made.status_code == 201
     spec = AgentSpec.model_validate({"memories": [{"scope": "global", "slug": "billing-only"}]})
-    outsider = Principal(user_id="u", email="u@x", project_roles={"varga/checkout-web": Role.DEVELOPER})
-    insider = Principal(user_id="v", email="v@x", project_roles={"varga/billing-api": Role.DEVELOPER})
+    outsider = Principal(user_id="u", email="u@x", project_roles={"northwind/checkout-web": Role.DEVELOPER})
+    insider = Principal(user_id="v", email="v@x", project_roles={"northwind/billing-api": Role.DEVELOPER})
     async with session_scope() as session:
         organisation = (
-            await session.execute(select(Organization).where(Organization.slug == "varga"))
+            await session.execute(select(Organization).where(Organization.slug == "northwind"))
         ).scalar_one()
         await check_bindings_at_publish(session, insider, organisation, spec)
         try:
@@ -175,7 +175,7 @@ async def test_a_fork_copies_the_bindings_and_a_trial_validates_them(client: Asy
     version = (await client.get(f"{ORG}/agents/architect-two/versions/1")).json()
     assert version["spec"]["memories"] == FOUR
     # The trial of a draft that binds an unknown memory is refused before any run starts.
-    await as_user(client, "admin@varga.dev")
+    await as_user(client, "admin@northwind.dev")
     trial = await client.post(
         f"{ORG}/agent-trials",
         json={

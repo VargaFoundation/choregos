@@ -19,7 +19,7 @@ from temporalio.testing import ActivityEnvironment
 
 from .test_hosted_sources import AGENT, AGENT_ZIP, ORG, _create, _runtime, _upload, _zip
 
-REPOSITORY = "registry.internal/choregos-builds/varga"
+REPOSITORY = "registry.internal/choregos-builds/northwind"
 OTHER_ZIP = _zip({"main.py": AGENT + "# the second one\n", "requirements.txt": "httpx==0.28.1\n"})
 THIRD_ZIP = _zip({"main.py": AGENT + "# the third one\n", "requirements.txt": "httpx==0.28.1\n"})
 

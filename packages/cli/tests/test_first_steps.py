@@ -122,7 +122,7 @@ def test_an_api_error_reads_clearly(profile: Path) -> None:
 
 
 def test_no_default_organisation_is_invented(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """A profile without an organisation and no CHOREGOS_ORG: a clear error, not `varga`."""
+    """A profile without an organisation and no CHOREGOS_ORG: a clear error, not `northwind`."""
     path = tmp_path / "config.json"
     path.write_text(json.dumps({"api_url": API, "token": "chg_x"}))
     monkeypatch.setattr("choregos_cli.client.CONFIG_PATH", path)
@@ -131,7 +131,7 @@ def test_no_default_organisation_is_invented(tmp_path: Path, monkeypatch: pytest
         result = _run("projects", "list")
     assert result.exit_code != 0
     assert "--org" in result.output and "CHOREGOS_ORG" in result.output
-    assert "varga" not in result.output
+    assert "northwind" not in result.output
     assert not respx.calls
 
 

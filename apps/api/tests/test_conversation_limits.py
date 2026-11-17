@@ -43,7 +43,7 @@ async def test_a_turn_streams_one_delta_per_chunk_the_model_sent(
 ) -> None:
     await _agent(client)
     upstream.model.say_chunks("Order ", "42 ", "shipped.")
-    conversation = await _open("varga", admin)
+    conversation = await _open("northwind", admin)
     streamed = await client.post(f"{ME}/{conversation}/messages", json={"input": "Where?", "stream": True})
     assert streamed.status_code == 200, streamed.text
     events = _sse(streamed.text)
@@ -68,7 +68,7 @@ async def test_a_streamed_turn_keeps_its_tool_calls_journaled(
     """The tool call is assembled from streamed fragments and goes through the loop, which journals it."""
     await _agent(client)
     upstream.model.call("lookup", {"order": 42}).say_chunks("Not ", "available.")
-    conversation = await _open("varga", admin)
+    conversation = await _open("northwind", admin)
     streamed = await client.post(f"{ME}/{conversation}/messages", json={"input": "Where?", "stream": True})
     events = _sse(streamed.text)
     assert [d["delta"] for n, d in events if n == "response.output_text.delta"] == ["Not ", "available."]
@@ -87,7 +87,7 @@ async def test_a_streamed_turn_the_cap_refuses_is_409_before_the_stream(
     upstream: Upstream,  # noqa: F811
 ) -> None:
     await _agent(client)
-    conversation = await _open("varga", admin, max_turns=1)
+    conversation = await _open("northwind", admin, max_turns=1)
     upstream.model.say("Ok.")
     assert (await _say(client, conversation, "One")).status_code == 200
     refused = await client.post(f"{ME}/{conversation}/messages", json={"input": "Two", "stream": True})
@@ -105,7 +105,7 @@ async def test_the_turn_past_max_turns_is_refused_before_the_model(
 ) -> None:
     await _agent(client)
     upstream.model.say("One.").say("Two.").say("Three.")
-    conversation = await _open("varga", admin, max_turns=2)
+    conversation = await _open("northwind", admin, max_turns=2)
     assert (await _say(client, conversation, "a")).status_code == 200
     assert (await _say(client, conversation, "b")).status_code == 200
     calls, keys = len(upstream.model.requests), len(await _key_rows())
@@ -123,8 +123,8 @@ async def test_retention_until_moves_forward_at_each_turn(
 ) -> None:
     await _agent(client)
     upstream.model.say("One.").say("Two.")
-    custom = await _open("varga", admin, retention_days=10)
-    default = await _open("varga", admin)
+    custom = await _open("northwind", admin, retention_days=10)
+    default = await _open("northwind", admin)
     opened = (await _record(custom)).retention_until
     assert opened is not None, "set at the opening, so a conversation with no turn is purged too (S63-16)"
     await asyncio.sleep(0.05)
@@ -165,7 +165,7 @@ async def test_a_long_history_is_summarised_and_the_model_gets_the_summary(
 
     monkeypatch.setattr(conversation_turns, "COMPRESS_AFTER_TOKENS", 300)
     await _agent(client)
-    conversation = await _open("varga", admin)
+    conversation = await _open("northwind", admin)
     for number in range(6):
         upstream.model.say(f"Answer {number} " + "y" * 200)
         sent = await _say(client, conversation, f"Question {number} " + "x" * 200)
@@ -209,7 +209,7 @@ async def test_cancel_stops_a_slow_turn_and_books_its_spend(
     # The first call asks for a tool the agent was not offered (journaled), the second hangs.
     upstream.model.call("lookup", {"order": 42}).say("never read")
     transport = _slow(upstream, after=1)
-    conversation = await _open("varga", admin)
+    conversation = await _open("northwind", admin)
     turn = asyncio.ensure_future(_say(client, conversation, "Where is order 42?"))
     await asyncio.wait_for(transport.waiting.wait(), 10)
     cancelled = await client.post(f"{ME}/{conversation}/cancel")

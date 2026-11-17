@@ -32,7 +32,7 @@ def remote() -> Iterator[FakeA2aAgent]:
     yield from remote_agent()
 
 
-BASE = "/api/v1/orgs/varga/remote-credentials"
+BASE = "/api/v1/orgs/northwind/remote-credentials"
 
 
 async def _create_oauth(client: AsyncClient, remote: FakeA2aAgent, name: str = "rovo-oauth") -> Any:
@@ -223,11 +223,11 @@ async def test_only_an_org_admin_manages_remote_credentials(
 ) -> None:
     await _create_oauth(client, remote)
     await client.post(
-        "/api/v1/orgs/varga/members",
-        json={"email": "dev@varga.dev", "role": "developer", "project_slug": "billing-api"},
+        "/api/v1/orgs/northwind/members",
+        json={"email": "dev@northwind.dev", "role": "developer", "project_slug": "billing-api"},
     )
     client.cookies.clear()
-    await login(client, "dev@varga.dev")
+    await login(client, "dev@northwind.dev")
     assert (await client.get(BASE)).status_code == 403
     assert (await _create_oauth(client, remote, "another")).status_code == 403
     assert (await client.post(f"{BASE}/rovo-oauth/authorize")).status_code == 403

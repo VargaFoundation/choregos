@@ -89,7 +89,7 @@ def test_by_default_no_signer_no_policy_and_the_log_is_checked() -> None:
 
 
 def test_a_plugin_source_s_signatures_have_a_writable_trust_root() -> None:
-    """The default `varga` source is checked by cosign, keyless: without TUF_ROOT on a writable path,
+    """The default `northwind` source is checked by cosign, keyless: without TUF_ROOT on a writable path,
     cosign failed on `mkdir ~/.sigstore` and the source could never be read (choregos#1327)."""
     assert _env(_api())["TUF_ROOT"].startswith("/tmp/"), "the default plugin source has no trust root"
 

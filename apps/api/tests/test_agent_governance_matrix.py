@@ -19,13 +19,13 @@ from choregos_api.services.agent_governance import (
 )
 from choregos_contracts import Role
 
-ORG = "varga"
+ORG = "northwind"
 
 
 def _who(user: str, org: Role | None = None, **projects: Role) -> Principal:
     return Principal(
         user_id=user,
-        email=f"{user}@varga.dev",
+        email=f"{user}@northwind.dev",
         org_roles={ORG: org} if org else {},
         project_roles={f"{ORG}/{slug}": role for slug, role in projects.items()},
     )

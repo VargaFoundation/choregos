@@ -10,7 +10,7 @@ from typing import Any
 _KEYS = itertools.count(1)
 
 #: What the work item holds before anything is posted late: the next attempt's material.
-PR_URL = "https://github.com/varga/billing-api/pull/41"
+PR_URL = "https://github.com/northwind/billing-api/pull/41"
 ALLOWED_PATHS = ["src/orders/**", "tests/orders/**"]
 DOCUMENTS = {"spec_markdown": "# The spec the next attempt reads"}
 
@@ -25,7 +25,7 @@ LATE_RESULT: dict[str, Any] = {
         "allowed_paths": ["**"],
         "spec_markdown": "# A spec rewritten by a run nobody waits for",
     },
-    "artifacts": {"pr_url": "https://github.com/varga/billing-api/pull/999"},
+    "artifacts": {"pr_url": "https://github.com/northwind/billing-api/pull/999"},
 }
 
 
@@ -42,11 +42,11 @@ async def a_run(project: dict[str, Any], *, status: str = "running", **columns: 
     from choregos_api.db.session import session_scope
 
     number = next(_KEYS)
-    run_id = f"varga-billing-api-{number}-t-implement-1"
+    run_id = f"northwind-billing-api-{number}-t-implement-1"
     async with session_scope(orgs="*") as session:
         item = WorkItem(
             project_id=project["id"],
-            tracker_key=f"varga/billing-api#{number}",
+            tracker_key=f"northwind/billing-api#{number}",
             title="Credit notes are not deducted from the total",
             state="in_progress",
             size="M",
@@ -78,7 +78,7 @@ def token_of(run_id: str) -> dict[str, str]:
     from choregos_api.security import mint_run_token
 
     token = mint_run_token(
-        run_id, project_slug="billing-api", work_item_key="varga/billing-api#1", ttl_minutes=30
+        run_id, project_slug="billing-api", work_item_key="northwind/billing-api#1", ttl_minutes=30
     )
     return {"Authorization": f"Bearer {token}"}
 

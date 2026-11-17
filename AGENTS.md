@@ -7,7 +7,7 @@
 > refuses to let it be emptied again.
 
 ## Context
-A general-purpose platform of governed agents (Varga Foundation, Apache 2.0; ADR 0029): workflows
+A general-purpose platform of governed agents (GRAAL.SYSTEMS SAS, Apache 2.0; ADR 0029): workflows
 from any trade, carried by agents and humans, under measured guarantees. Plan and status:
 `docs/plan/`. Reference documentation: `docs/`. Structural decisions: `docs/adr/`.
 Contracts: `packages/contracts` — **do not modify without a `contract-change` PR** (ADR 0001).

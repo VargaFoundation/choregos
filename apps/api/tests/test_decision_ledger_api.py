@@ -11,8 +11,8 @@ import choregos_contracts as contracts
 import pytest
 from httpx import AsyncClient
 
-REPO = {"full_name": "varga/billing-api"}
-KEY = "varga/billing-api#7"
+REPO = {"full_name": "northwind/billing-api"}
+KEY = "northwind/billing-api#7"
 
 
 async def _work_item(project: dict[str, Any], key: str = KEY, *, closed: bool = False) -> tuple[str, str]:

@@ -84,7 +84,7 @@ async def test_full_cycle_on_a_real_ticket(tracker: GitLabTracker) -> None:
     assert "choregos:fields" not in with_fields.body, "the metadata does not pollute the body"
 
     # The fallback polling finds the ticket by its label.
-    config = ProjectConfig(slug="sandbox", org="varga", repo=RepoConfig(url="https://gitlab.com/x/y.git"))
+    config = ProjectConfig(slug="sandbox", org="northwind", repo=RepoConfig(url="https://gitlab.com/x/y.git"))
     assert key in await tracker.list_candidates(config)
 
     # Cleanup: the ticket is closed, not left open in the project.
@@ -98,9 +98,9 @@ async def test_full_cycle_on_a_real_ticket(tracker: GitLabTracker) -> None:
 async def test_a_missing_project_gives_a_readable_error(tracker: GitLabTracker) -> None:
     from choregos_adapters.errors import UpstreamError
 
-    absent = GitLabTracker(tracker.client, "varga/this-project-does-not-exist-999")
+    absent = GitLabTracker(tracker.client, "northwind/this-project-does-not-exist-999")
     with pytest.raises(UpstreamError) as error:
-        await absent.fetch_item("varga/this-project-does-not-exist-999#1")
+        await absent.fetch_item("northwind/this-project-does-not-exist-999#1")
     assert "gitlab" in str(error.value)
     assert error.value.status_code in {403, 404}
 

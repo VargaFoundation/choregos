@@ -19,7 +19,7 @@ from .test_agent_release_channels import agent_of, new_agent, only_project_roles
 pytestmark = pytest.mark.usefixtures("admin")
 
 APPROVAL = {"on_publish": "candidate", "stable": {"approvals": 1}}
-CAROL, DAVE, ERIN = "carol@varga.dev", "dave@varga.dev", "erin@varga.dev"
+CAROL, DAVE, ERIN = "carol@northwind.dev", "dave@northwind.dev", "erin@northwind.dev"
 
 
 async def org_admins(client: AsyncClient, *emails: str) -> None:
@@ -212,7 +212,7 @@ async def test_the_inbox_lists_only_the_agents_the_caller_may_see(client: AsyncC
     await make_project(client, "dev")
     await make_project(client, "ops")
     await add_member(client, CAROL, "project_owner", project="ops")
-    await add_member(client, "owner@varga.dev", "project_owner", project="dev")
+    await add_member(client, "owner@northwind.dev", "project_owner", project="dev")
     await as_user(client, ADMIN)
     policy = {"on_publish": "candidate", "stable": {"approvals": 1}}
     shared = await create_agent(client, "reviewer", spec={"instructions": "Review."}, release_policy=policy)
@@ -235,7 +235,7 @@ async def test_the_inbox_lists_only_the_agents_the_caller_may_see(client: AsyncC
     await only_project_roles()
     visible = (await client.get(f"{ORG}/agent-releases", params={"status": "pending_approval"})).json()
     assert [r["agent"] for r in visible] == ["reviewer"], "a member of ops does not see dev's agent"
-    await as_user(client, "owner@varga.dev")
+    await as_user(client, "owner@northwind.dev")
     await only_project_roles()
     owner = (await client.get(f"{ORG}/agent-releases", params={"status": "pending_approval"})).json()
     assert "dev-helper" in {r["agent"] for r in owner}
@@ -247,13 +247,13 @@ async def test_a_project_owner_decides_for_their_project_agent_but_not_for_an_or
     client: AsyncClient,
 ) -> None:
     await make_project(client, "dev")
-    await add_member(client, "owner@varga.dev", "project_owner", project="dev")
+    await add_member(client, "owner@northwind.dev", "project_owner", project="dev")
     await as_user(client, ADMIN)
     policy = {"on_publish": "candidate", "stable": {"approvals": 1}}
     await new_agent(client, policy=policy)
     await save(client, "reviewer", 2)
     waiting = (await release(client, "reviewer", channel="stable", version=2)).json()
-    await as_user(client, "owner@varga.dev")
+    await as_user(client, "owner@northwind.dev")
     refused = await decide(client, waiting["id"], "approve")
     assert refused.status_code == 403, "approvers hold the release right on the agent"
 

@@ -172,7 +172,7 @@ async def test_an_operation_whose_cap_an_administrator_raised_reaches_both_doors
         {**rule, "tracker": f"{copy}{rule['tracker']}"} for copy in range(1, 5) for rule in rules
     ]
     base, headers = await _run(client, project)
-    operation = "/api/v1/orgs/varga/connectors/pfsense/operations/list_firewall_rules"
+    operation = "/api/v1/orgs/northwind/connectors/pfsense/operations/list_firewall_rules"
 
     default = (await client.post(f"{base}/pfsense__list_firewall_rules", headers=headers, json={})).json()
     assert default["result_max_bytes"] == 65_536 and "truncated" in default["result"], "cut at the default"

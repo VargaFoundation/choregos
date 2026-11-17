@@ -42,7 +42,7 @@ def test_existing_hosts_are_seeded_and_the_table_goes_away_on_downgrade(
         command.upgrade(_config(url), BEFORE)
         engine = create_engine(url)
         with engine.begin() as connection:
-            _row(connection, "organizations", id="o1", slug="varga", name="V", settings="{}")
+            _row(connection, "organizations", id="o1", slug="northwind", name="V", settings="{}")
             skill_sources = {"skill_sources": ["gitlab.com/group", "github.com/obra"]}
             _row(
                 connection,
@@ -120,14 +120,14 @@ def test_existing_hosts_are_seeded_and_the_table_goes_away_on_downgrade(
     seeded = {
         (slug, host): (json.loads(ports), json.loads(used_by)) for slug, host, ports, used_by, *_ in rows
     }
-    assert seeded[("varga", "mcp.x.test")] == ([8443], ["api", "workers"])
-    assert seeded[("varga", "graph.microsoft.com")] == ([443], ["api", "workers"])
+    assert seeded[("northwind", "mcp.x.test")] == ([8443], ["api", "workers"])
+    assert seeded[("northwind", "graph.microsoft.com")] == ([443], ["api", "workers"])
     # a SharePoint connector also opens where a download is redirected to
-    assert seeded[("varga", "login.microsoftonline.com")] == ([443], ["api", "workers"])
-    assert seeded[("varga", "*.sharepoint.com")] == ([443], ["api", "workers"])
-    assert seeded[("varga", "docs.x.test")] == ([443], ["api", "workers"])
+    assert seeded[("northwind", "login.microsoftonline.com")] == ([443], ["api", "workers"])
+    assert seeded[("northwind", "*.sharepoint.com")] == ([443], ["api", "workers"])
+    assert seeded[("northwind", "docs.x.test")] == ([443], ["api", "workers"])
     # the default skill source is github.com/anthropics/skills: GitHub's hosts are open
-    assert {h for (s, h) in seeded if s == "varga"} >= {"github.com", "api.github.com", "codeload.github.com"}
+    assert {h for (s, h) in seeded if s == "northwind"} >= {"github.com", "api.github.com", "codeload.github.com"}
     # an organisation's own list decides: gitlab and github both appear for `other`
     assert {h for (s, h) in seeded if s == "other"} == {
         "gitlab.com",

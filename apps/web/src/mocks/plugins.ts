@@ -26,7 +26,7 @@ const digest = (seed: string) => `sha256:${seed.repeat(64).slice(0, 64)}`;
 const CATALOGUE: Record<string, { description: string; publisher: string; servers: string[]; contents: InstalledPlugin["contents"] }> = {
   servicenow: {
     description: "ServiceNow as a tracker and a governed system: incidents, changes, the CMDB.",
-    publisher: "Varga Foundation",
+    publisher: "GRAAL.SYSTEMS SAS",
     servers: ["servicenow"],
     contents: {
       agents: ["incident-triager", "change-author"],
@@ -39,7 +39,7 @@ const CATALOGUE: Record<string, { description: string; publisher: string; server
   },
   triage: {
     description: "Sorts incoming work items by size and risk, and says why.",
-    publisher: "Varga Foundation",
+    publisher: "GRAAL.SYSTEMS SAS",
     servers: [],
     contents: {
       agents: ["triage-bot", "triage-lead"],
@@ -52,7 +52,7 @@ const CATALOGUE: Record<string, { description: string; publisher: string; server
   },
   hello: {
     description: "A plugin that ships one of everything a plugin may ship.",
-    publisher: "Varga Foundation",
+    publisher: "GRAAL.SYSTEMS SAS",
     servers: ["hello"],
     contents: {
       agents: ["greeter"],
@@ -73,7 +73,7 @@ const CATALOGUE: Record<string, { description: string; publisher: string; server
 
 export const pluginSources: PluginSource[] = [
   {
-    name: "varga",
+    name: "northwind",
     index: PLUGIN_INDEX.replace(/:latest$/, ":stable"),
     trust: {
       mode: "keyless",
@@ -151,15 +151,15 @@ function plugin(name: string, version: string, source: string, extra: Partial<In
 }
 
 export const installedPlugins: InstalledPlugin[] = [
-  plugin("servicenow", "0.1.0", "varga", { default: true, installed_by: null, latest: "0.2.0" }),
-  plugin("triage", "1.0.0", "varga", { latest: "1.2.0" }),
+  plugin("servicenow", "0.1.0", "northwind", { default: true, installed_by: null, latest: "0.2.0" }),
+  plugin("triage", "1.0.0", "northwind", { latest: "1.2.0" }),
 ];
 
 export const pluginApprovals: PluginApproval[] = [
   {
     id: "pa-1",
     action: "install",
-    source: "varga",
+    source: "northwind",
     name: "hello",
     version: "1.0.0",
     digest: digest("1100ab"),

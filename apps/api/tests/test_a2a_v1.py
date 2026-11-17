@@ -92,7 +92,7 @@ async def test_send_message_is_message_send(client: AsyncClient, project: dict[s
     message = task["status"]["message"]
     assert message["role"] == "ROLE_AGENT"
     assert all("kind" not in p for p in message["parts"]), "a 1.0 part says what it is by its field"
-    assert task["metadata"]["choregos"]["project"] == "varga:billing-api"
+    assert task["metadata"]["choregos"]["project"] == "northwind:billing-api"
     same = await _send(client, token, message_id="m-42")
     assert same["id"] == task["id"], "the same messageId is the same task in either version"
     read = (await _call(client, token, "GetTask", {"id": task["id"]})).json()["result"]

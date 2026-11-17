@@ -72,7 +72,7 @@ async def _connector(name: str, type_: str, config: dict[str, Any], outpost_id: 
 
     async with session_scope(orgs="*") as session:
         org_id = (
-            await session.execute(select(Organization.id).where(Organization.slug == "varga"))
+            await session.execute(select(Organization.id).where(Organization.slug == "northwind"))
         ).scalar_one()
         connector = OrgConnector(org_id=org_id, name=name, kind="mcp", type=type_, config=config)
         connector.outpost_id = outpost_id
@@ -192,7 +192,7 @@ async def test_an_outpost_the_organisation_does_not_have_is_never_named(
         session.add(outpost)
         await session.flush()
         their_id = outpost.id
-    # A row edited behind the API: a connector of `varga` that names, and routes to, `acme`'s outpost.
+    # A row edited behind the API: a connector of `northwind` that names, and routes to, `acme`'s outpost.
     await _connector("borrowed", "mcp-outpost", {"outpost": theirs, "endpoint": ALIAS}, outpost_id=their_id)
     await _operations("borrowed", "search_issues")
     await _agent(client, ["borrowed"])

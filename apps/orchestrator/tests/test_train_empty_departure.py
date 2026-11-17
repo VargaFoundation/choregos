@@ -87,11 +87,11 @@ async def test_a_departure_on_an_empty_train_does_not_make_it_spin(
         assert description.run_id == train.result_run_id, "the train relayed: it spun"
 
         # The request is not carried over: an item that boards waits for its window, it does not leave.
-        await train.signal("merged", {"work_item_key": "varga/billing-api#9", "sha": "f9"})
+        await train.signal("merged", {"work_item_key": "northwind/billing-api#9", "sha": "f9"})
         await temporal_env.sleep(timedelta(minutes=3))
         state = await train.query("status_query")
         assert state["status"] == "collecting", state
-        assert state["pending_items"] == ["varga/billing-api#9"], state
+        assert state["pending_items"] == ["northwind/billing-api#9"], state
 
         await train.signal("abort", {"by": "test"})
         await train.result()
@@ -119,7 +119,7 @@ async def test_a_departure_on_a_frozen_train_does_not_make_it_spin(
             id="train-frozen-staging",
             task_queue="test",
         )
-        await train.signal("merged", {"work_item_key": "varga/billing-api#10", "sha": "f10"})
+        await train.signal("merged", {"work_item_key": "northwind/billing-api#10", "sha": "f10"})
         state = await train.query("status_query")
         assert state["frozen"] and state["batch_size"] == 1, state
 
@@ -136,7 +136,7 @@ async def test_a_departure_on_a_frozen_train_does_not_make_it_spin(
         await temporal_env.sleep(timedelta(minutes=3))
         state = await train.query("status_query")
         assert state["status"] == "collecting", state
-        assert state["pending_items"] == ["varga/billing-api#10"], state
+        assert state["pending_items"] == ["northwind/billing-api#10"], state
 
         await train.signal("abort", {"by": "test"})
         await train.result()
@@ -166,7 +166,7 @@ async def test_a_hotfix_on_a_frozen_train_waits_without_spinning_and_leaves_at_t
         state = await train.query("status_query")
         before = len(looks)
         await train.signal(
-            "merged", {"work_item_key": "varga/billing-api#11", "sha": "f11", "labels": ["hotfix"]}
+            "merged", {"work_item_key": "northwind/billing-api#11", "sha": "f11", "labels": ["hotfix"]}
         )
         await temporal_env.sleep(timedelta(minutes=10))
         after = len(looks) - before

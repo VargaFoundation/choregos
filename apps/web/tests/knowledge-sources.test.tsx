@@ -29,7 +29,7 @@ const connector = (name: string, kind: string, type: string) => ({ name, kind, t
 const view = (sources: KnowledgeSource[] = [], onChange = vi.fn()) =>
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <KnowledgeSources org="varga" slug="framework" sources={sources} onChange={onChange} />
+      <KnowledgeSources org="northwind" slug="framework" sources={sources} onChange={onChange} />
     </QueryClientProvider>,
   );
 /** The form is behind a button: the existing sources come first. */
@@ -90,7 +90,7 @@ describe("the sources of a base (S33-04)", () => {
     expect(list).toHaveTextContent("2 added · 1 deleted");
     expect(list).toHaveTextContent("token refused (401)");
     fireEvent.click(screen.getByRole("button", { name: "Sync now" }));
-    await waitFor(() => expect(api.syncKnowledgeSource).toHaveBeenCalledWith("varga", "framework", "src-1"));
+    await waitFor(() => expect(api.syncKnowledgeSource).toHaveBeenCalledWith("northwind", "framework", "src-1"));
     expect(onChange).toHaveBeenCalled();
   });
 
@@ -104,7 +104,7 @@ describe("the sources of a base (S33-04)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add source" }));
     await waitFor(() =>
       expect(api.createKnowledgeSource).toHaveBeenCalledWith(
-        "varga",
+        "northwind",
         "framework",
         expect.objectContaining({ kind: "web", config: { url: "https://example.com/offer", max_depth: 0, max_pages: 1 } }),
       ),
@@ -119,7 +119,7 @@ describe("the sources of a base (S33-04)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add source" }));
     await waitFor(() =>
       expect(api.createKnowledgeSource).toHaveBeenLastCalledWith(
-        "varga",
+        "northwind",
         "framework",
         expect.objectContaining({ config: { url: "https://example.com/offer", max_depth: 1, max_pages: 50, include_documents: true } }),
       ),
@@ -135,7 +135,7 @@ describe("the sources of a base (S33-04)", () => {
     fireEvent.change(screen.getByLabelText("site or drive id"), { target: { value: "acme.sharepoint.com,1,2" } });
     fireEvent.click(screen.getByRole("button", { name: "Add source" }));
     await waitFor(() =>
-      expect(api.createKnowledgeSource).toHaveBeenCalledWith("varga", "framework", {
+      expect(api.createKnowledgeSource).toHaveBeenCalledWith("northwind", "framework", {
         kind: "sharepoint",
         name: "SharePoint / OneDrive",
         connector: "sharepoint",
@@ -200,7 +200,7 @@ describe("the sources of a base (S33-04)", () => {
     fireEvent.change(within(screen.getByRole("form", { name: "Edit refresh" })).getByLabelText("refresh mode"), { target: { value: "manual" } });
     fireEvent.click(screen.getByRole("button", { name: "Save refresh" }));
     await waitFor(() =>
-      expect(api.updateKnowledgeSource).toHaveBeenCalledWith("varga", "framework", "src-1", { refresh_mode: "manual" }),
+      expect(api.updateKnowledgeSource).toHaveBeenCalledWith("northwind", "framework", "src-1", { refresh_mode: "manual" }),
     );
     expect(api.updateKnowledgeSource).toHaveBeenCalledTimes(1);
 
@@ -246,7 +246,7 @@ describe("the sources of a base (S33-04)", () => {
     expect(form.getByTestId("refresh-summary")).toHaveTextContent("Syncs every Monday and Thursday at 18:30, UTC time.");
     fireEvent.click(screen.getByRole("button", { name: "Save refresh" }));
     await waitFor(() =>
-      expect(api.updateKnowledgeSource).toHaveBeenCalledWith("varga", "framework", "src-1", {
+      expect(api.updateKnowledgeSource).toHaveBeenCalledWith("northwind", "framework", "src-1", {
         refresh_mode: "cron",
         refresh_cron: "30 18 * * 1,4",
         refresh_timezone: "UTC",
@@ -268,7 +268,7 @@ describe("the sources of a base (S33-04)", () => {
     vi.mocked(api.syncKnowledgeBase).mockResolvedValue({} as never);
     view([source]);
     fireEvent.click(screen.getByRole("button", { name: "Sync all now" }));
-    await waitFor(() => expect(api.syncKnowledgeBase).toHaveBeenCalledWith("varga", "framework"));
+    await waitFor(() => expect(api.syncKnowledgeBase).toHaveBeenCalledWith("northwind", "framework"));
   });
 
   it("adds a Confluence space or page tree through its connector (S39-20)", async () => {
@@ -288,7 +288,7 @@ describe("the sources of a base (S33-04)", () => {
     expect(screen.getByText(/everything the connector/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Add source" }));
     await waitFor(() =>
-      expect(api.createKnowledgeSource).toHaveBeenCalledWith("varga", "framework", {
+      expect(api.createKnowledgeSource).toHaveBeenCalledWith("northwind", "framework", {
         kind: "confluence",
         name: "Confluence space or page tree",
         connector: "wiki",
@@ -326,7 +326,7 @@ describe("the sources of a base (S33-04)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add source" }));
     await waitFor(() =>
       expect(api.createKnowledgeSource).toHaveBeenCalledWith(
-        "varga",
+        "northwind",
         "framework",
         expect.objectContaining({ config: { space_key: "ENG", page_ids: ["1", "2"], descendants: false, include_attachments: false } }),
       ),
@@ -350,7 +350,7 @@ describe("the sources of a base (S33-04)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add source" }));
     await waitFor(() =>
       expect(api.createKnowledgeSource).toHaveBeenCalledWith(
-        "varga",
+        "northwind",
         "framework",
         expect.objectContaining({ kind: "git", connector: "acme-github" }),
       ),
@@ -374,7 +374,7 @@ describe("the sources of a base (S33-04)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add source" }));
     await waitFor(() =>
       expect(api.createKnowledgeSource).toHaveBeenCalledWith(
-        "varga",
+        "northwind",
         "framework",
         expect.objectContaining({
           kind: "web",
@@ -396,7 +396,7 @@ describe("the sources of a base (S33-04)", () => {
     fireEvent.change(screen.getByLabelText("http headers"), { target: { value: "" } });
     fireEvent.click(screen.getByRole("button", { name: "Add source" }));
     await waitFor(() =>
-      expect(api.createKnowledgeSource).toHaveBeenCalledWith("varga", "framework", expect.objectContaining({ kind: "web", connector: null })),
+      expect(api.createKnowledgeSource).toHaveBeenCalledWith("northwind", "framework", expect.objectContaining({ kind: "web", connector: null })),
     );
   });
 });
@@ -467,7 +467,7 @@ describe("a readable sources card", () => {
   it("a reader sees the sources and no gesture", () => {
     render(
       <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-        <KnowledgeSources org="varga" slug="framework" sources={[source]} onChange={vi.fn()} canEdit={false} />
+        <KnowledgeSources org="northwind" slug="framework" sources={[source]} onChange={vi.fn()} canEdit={false} />
       </QueryClientProvider>,
     );
     expect(screen.getByTestId("knowledge-sources")).toHaveTextContent("Architecture site");
@@ -478,7 +478,7 @@ describe("a readable sources card", () => {
 
 describe("reading a git source through the GitHub App", () => {
   const meAs = (role: string) =>
-    vi.mocked(api.me).mockResolvedValue({ memberships: [{ org: "varga", project_slug: null, role }] } as never);
+    vi.mocked(api.me).mockResolvedValue({ memberships: [{ org: "northwind", project_slug: null, role }] } as never);
   const gitSource = { ...source, id: "src-git", kind: "git", connector: null, config: { url: "https://github.com/acme/docs", ref: "main", paths: ["*.md"] } } as KnowledgeSource;
   const fillGit = (url: string) => {
     fireEvent.change(screen.getByLabelText("source kind"), { target: { value: "git" } });
@@ -519,7 +519,7 @@ describe("reading a git source through the GitHub App", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add source" }));
     await waitFor(() =>
       expect(api.createKnowledgeSource).toHaveBeenCalledWith(
-        "varga", "framework",
+        "northwind", "framework",
         expect.objectContaining({ config: expect.objectContaining({ url: "https://github.com/acme/docs", github_app: true }) }),
       ),
     );
@@ -542,7 +542,7 @@ describe("reading a git source through the GitHub App", () => {
     fireEvent.click(await screen.findByLabelText("Read through the GitHub App"));
     fireEvent.click(screen.getByRole("button", { name: "Save refresh" }));
     await waitFor(() =>
-      expect(api.updateKnowledgeSource).toHaveBeenCalledWith("varga", "framework", "src-git", expect.objectContaining({ config: { ...gitSource.config, github_app: true } })),
+      expect(api.updateKnowledgeSource).toHaveBeenCalledWith("northwind", "framework", "src-git", expect.objectContaining({ config: { ...gitSource.config, github_app: true } })),
     );
   });
 
@@ -556,7 +556,7 @@ describe("reading a git source through the GitHub App", () => {
     fireEvent.click(box);
     fireEvent.click(screen.getByRole("button", { name: "Save refresh" }));
     await waitFor(() =>
-      expect(api.updateKnowledgeSource).toHaveBeenCalledWith("varga", "framework", "src-git", expect.objectContaining({ config: expect.objectContaining({ github_app: false }) })),
+      expect(api.updateKnowledgeSource).toHaveBeenCalledWith("northwind", "framework", "src-git", expect.objectContaining({ config: expect.objectContaining({ github_app: false }) })),
     );
     vi.mocked(api.updateKnowledgeSource).mockClear();
     fireEvent.click(screen.getByRole("button", { name: "Edit refresh" }));

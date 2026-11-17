@@ -47,6 +47,9 @@ HISTORY = (
     "docs/plan/",
     "apps/api/src/choregos_api/migrations/versions/",
     "trials/",
+    # The archives shipped offline and their lock record who signed them: the old source, until
+    # `make plugins-lock` refreshes them from the new one (ADR 0186).
+    "plugins/offline/",
 )
 
 #: Code reads the definition; it is never a derived file, unless a generator writes it from one.
@@ -110,8 +113,11 @@ DERIVED: tuple[str, ...] = (
     "templates/github-tekton-argo-k8s/tekton/pipeline-agent.yaml",
     "templates/github-tekton-argo-k8s/tekton/pipeline-ci.yaml",
     # The plugins: the offline lock, the contract's examples, the test fixtures mirrored from them.
-    "plugins/offline/plugins.lock",
     "packages/contracts/schemas/examples/plugin-index.example.json",
+    "packages/contracts/schemas/examples/plugin-server.example.json",
+    "tests/fixtures/plugin_fakes/servicenow.json",
+    "infra/policies/tests/plugin-servers/resources.yaml",
+    "docker/api.Dockerfile",
     "packages/contracts/schemas/examples/plugin.example.json",
     "tests/fixtures/plugins/desk/plugin.yaml",
     "tests/fixtures/plugins/hello/plugin.yaml",

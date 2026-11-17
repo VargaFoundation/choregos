@@ -10,7 +10,7 @@ from httpx import AsyncClient
 
 from .conftest import login
 
-BASE = "/api/v1/orgs/varga/models"
+BASE = "/api/v1/orgs/northwind/models"
 MODELS = [
     GatewayModel(
         model_name="platform/standard", litellm_model="anthropic/claude-sonnet-5", provider="anthropic"
@@ -78,8 +78,8 @@ async def test_the_deployment_gateway_is_an_environment_setting_whose_address_on
         "one organisation: its admin is the platform's"
     )
 
-    await client.post("/api/v1/orgs/varga/members", json={"email": "po@varga.dev", "role": "project_owner"})
-    await login(client, "po@varga.dev")
+    await client.post("/api/v1/orgs/northwind/members", json={"email": "po@northwind.dev", "role": "project_owner"})
+    await login(client, "po@northwind.dev")
     seen = (await client.get(BASE)).json()["gateway"]
     assert seen["source"] == "deployment"
     assert seen["base_url"] is None
@@ -93,8 +93,8 @@ async def test_the_organisations_own_gateway_shows_its_address_to_its_members(
 
     monkeypatch.setattr("choregos_api.routers.model_catalogue.org_brings_its_gateway", brings)
     gateway.base_url = "https://llm.acme.example/v1"  # type: ignore[attr-defined]
-    await client.post("/api/v1/orgs/varga/members", json={"email": "po@varga.dev", "role": "project_owner"})
-    await login(client, "po@varga.dev")
+    await client.post("/api/v1/orgs/northwind/members", json={"email": "po@northwind.dev", "role": "project_owner"})
+    await login(client, "po@northwind.dev")
     seen = (await client.get(BASE)).json()["gateway"]
     assert seen == {
         "type": "scripted",
@@ -248,7 +248,7 @@ async def test_only_an_org_admin_changes_the_catalogue_and_every_change_is_audit
     await client.post(f"{BASE}/sync")
     entry = (await _entries(client))["platform/standard"]
     owner = await client.post(
-        "/api/v1/orgs/varga/members", json={"email": "po@varga.dev", "role": "project_owner"}
+        "/api/v1/orgs/northwind/members", json={"email": "po@northwind.dev", "role": "project_owner"}
     )
     assert owner.status_code in {200, 201}
     patched = await client.patch(f"{BASE}/{entry['id']}", json={"enabled": False})
@@ -258,7 +258,7 @@ async def test_only_an_org_admin_changes_the_catalogue_and_every_change_is_audit
     actions = {row["action"] for row in audit}
     assert {"models.catalogue.sync", "models.catalogue.update", "models.catalogue.settings"} <= actions
 
-    await login(client, "po@varga.dev")
+    await login(client, "po@northwind.dev")
     assert (await client.get(BASE)).status_code == 200, "every member reads"
     assert (await client.patch(f"{BASE}/{entry['id']}", json={"enabled": True})).status_code == 403
     assert (await client.post(f"{BASE}/sync")).status_code == 403
@@ -272,14 +272,14 @@ async def test_publishing_an_agent_on_a_disabled_model_is_refused_naming_it(
     entry = (await _entries(client))["platform/standard"]
     await client.patch(f"{BASE}/{entry['id']}", json={"enabled": False})
     create = {"slug": "worker", "display_name": "Worker", "spec": SPEC}
-    refused = await client.post("/api/v1/orgs/varga/agents", json=create)
+    refused = await client.post("/api/v1/orgs/northwind/agents", json=create)
     assert refused.status_code == 422, refused.text
     assert "platform/standard" in refused.text and "disabled" in refused.text
     # a model that is enabled passes, and so does a new version after re-enabling
     await client.patch(f"{BASE}/{entry['id']}", json={"enabled": True})
-    assert (await client.post("/api/v1/orgs/varga/agents", json=create)).status_code == 201
+    assert (await client.post("/api/v1/orgs/northwind/agents", json=create)).status_code == 201
     await client.patch(f"{BASE}/{entry['id']}", json={"enabled": False})
-    version = await client.post("/api/v1/orgs/varga/agents/worker/versions", json=SPEC)
+    version = await client.post("/api/v1/orgs/northwind/agents/worker/versions", json=SPEC)
     assert version.status_code == 422, version.text
 
 
@@ -294,7 +294,7 @@ async def test_a_profile_is_checked_through_the_tier_it_resolves_to(
     ).status_code == 200
     await client.patch(f"{BASE}/{entries['acme/tiered']['id']}", json={"enabled": False})
     refused = await client.post(
-        "/api/v1/orgs/varga/agents", json={"slug": "tiered", "display_name": "T", "spec": SPEC}
+        "/api/v1/orgs/northwind/agents", json={"slug": "tiered", "display_name": "T", "spec": SPEC}
     )
     assert refused.status_code == 422 and "acme/tiered" in refused.text
 
@@ -306,7 +306,7 @@ async def test_a_trial_on_a_disabled_model_is_refused(
     entry = (await _entries(client))["platform/standard"]
     await client.patch(f"{BASE}/{entry['id']}", json={"enabled": False})
     trial = await client.post(
-        "/api/v1/orgs/varga/agent-trials",
+        "/api/v1/orgs/northwind/agent-trials",
         json={"project": "billing-api", "spec": SPEC, "input": {"title": "t", "body": "b"}},
     )
     assert trial.status_code == 422, trial.text
@@ -330,7 +330,7 @@ async def test_the_curation_preview_lists_what_would_be_refused(
 ) -> None:
     await client.post(f"{BASE}/sync")
     entry = (await _entries(client))["platform/standard"]
-    await client.post("/api/v1/orgs/varga/agents", json={"slug": "worker", "display_name": "W", "spec": SPEC})
+    await client.post("/api/v1/orgs/northwind/agents", json={"slug": "worker", "display_name": "W", "spec": SPEC})
     await client.patch(f"{BASE}/{entry['id']}", json={"enabled": False})
     preview = (await client.get(f"{BASE}/curate-preview")).json()
     assert preview["refused"] == [{"kind": "agent", "ref": "worker", "model": "platform/standard"}]
@@ -392,10 +392,10 @@ async def test_indexing_is_refused_when_the_embedding_model_lost_its_usage(
     from sqlalchemy import select
 
     await client.post(
-        "/api/v1/orgs/varga/knowledge", json={"slug": "kb", "name": "KB", "serving_mode": "index"}
+        "/api/v1/orgs/northwind/knowledge", json={"slug": "kb", "name": "KB", "serving_mode": "index"}
     )
     sent = await client.post(
-        "/api/v1/orgs/varga/knowledge/kb/documents",
+        "/api/v1/orgs/northwind/knowledge/kb/documents",
         files={"file": ("a.md", b"# A\n\nTLS 1.3 is required.\n")},
     )
     assert sent.status_code == 202
@@ -403,12 +403,12 @@ async def test_indexing_is_refused_when_the_embedding_model_lost_its_usage(
     async with session_scope() as session:
         document_id = (await session.execute(select(KnowledgeDocument.id))).scalars().first()
     assert document_id is not None
-    assert await index_document("varga", document_id) > 0, "open mode: indexed"
+    assert await index_document("northwind", document_id) > 0, "open mode: indexed"
 
     # the embedding model is in the catalogue and no longer carries the `embed` usage
     await client.post(BASE, json={"model_name": embedding_model(get_settings()), "usages": ["agent"]})
     with pytest.raises(ModelNotAllowedError, match="/admin/models"):
-        await index_document("varga", document_id)
+        await index_document("northwind", document_id)
 
 
 async def test_distillation_is_refused_when_its_model_lost_its_usage(
@@ -416,14 +416,14 @@ async def test_distillation_is_refused_when_its_model_lost_its_usage(
 ) -> None:
     from choregos_api.knowledge.conversion import conversions
 
-    await client.post("/api/v1/orgs/varga/knowledge", json={"slug": "kb", "name": "KB"})
+    await client.post("/api/v1/orgs/northwind/knowledge", json={"slug": "kb", "name": "KB"})
     await client.post(
-        "/api/v1/orgs/varga/knowledge/kb/documents",
+        "/api/v1/orgs/northwind/knowledge/kb/documents",
         files={"file": ("a.md", b"# A\n\n## B\n\nTLS 1.3 is required.\n")},
     )
     await conversions.drain()
     await client.post(BASE, json={"model_name": "fake/distiller", "usages": ["agent"]})
-    await client.post("/api/v1/orgs/varga/knowledge/kb/distill")
+    await client.post("/api/v1/orgs/northwind/knowledge/kb/distill")
     await conversions.drain()
-    outcome = (await client.get("/api/v1/orgs/varga/knowledge/kb")).json()["distillation"]
+    outcome = (await client.get("/api/v1/orgs/northwind/knowledge/kb")).json()["distillation"]
     assert outcome["status"] == "failed" and "/admin/models" in outcome["error"], outcome

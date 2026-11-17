@@ -67,7 +67,7 @@ async def test_without_the_development_login_the_dev_code_is_refused(
                     },
                 )
             )
-            start = await client.get("/api/v1/auth/login", params={"as": "admin@varga.dev"})
+            start = await client.get("/api/v1/auth/login", params={"as": "admin@northwind.dev"})
             assert start.status_code == 307
             # `?as=` ignored: we go to the IdP, with PKCE
             assert start.headers["location"].startswith(f"{ISSUER}/authorize?")
@@ -76,7 +76,7 @@ async def test_without_the_development_login_the_dev_code_is_refused(
             # the `dev:` branch is closed: the code goes to the IdP, which does not know it
             mock.post(f"{ISSUER}/token").mock(return_value=Response(400, json={"error": "invalid_grant"}))
             refused = await client.get(
-                "/api/v1/auth/callback", params={"code": "dev:admin@varga.dev", "state": state}
+                "/api/v1/auth/callback", params={"code": "dev:admin@northwind.dev", "state": state}
             )
             assert refused.status_code == 401
     finally:
@@ -90,8 +90,8 @@ async def test_an_email_that_starts_with_admin_is_not_admin(client: AsyncClient,
     me = (await client.get("/api/v1/me")).json()
     assert [m["role"] for m in me["memberships"]] == ["developer"]
     created = await client.post(
-        "/api/v1/orgs/varga/projects",
-        json={"slug": "x", "name": "x", "config": {"slug": "x", "org": "varga"}},
+        "/api/v1/orgs/northwind/projects",
+        json={"slug": "x", "name": "x", "config": {"slug": "x", "org": "northwind"}},
     )
     assert created.status_code == 403
 
@@ -126,19 +126,19 @@ async def test_a_project_role_does_not_cross_organisations(
     from choregos_api.config import reset_settings_cache
 
     # the development login gives a role only in the default organisation
-    monkeypatch.setenv("CHOREGOS_OIDC_DEFAULT_ORG", "varga")
+    monkeypatch.setenv("CHOREGOS_OIDC_DEFAULT_ORG", "northwind")
     reset_settings_cache()
     other_id = await _second_organisation()
     invited = await client.post(
-        "/api/v1/orgs/varga/members",
-        json={"email": "dev@varga.dev", "role": "developer", "project_slug": "billing-api"},
+        "/api/v1/orgs/northwind/members",
+        json={"email": "dev@northwind.dev", "role": "developer", "project_slug": "billing-api"},
     )
     assert invited.status_code in {200, 201}, invited.text
 
-    await login(client, "dev@varga.dev")
+    await login(client, "dev@northwind.dev")
     me = (await client.get("/api/v1/me")).json()
     roles = {(m["org"], m.get("project_slug")): m["role"] for m in me["memberships"]}
-    assert roles[("varga", "billing-api")] == "developer"
+    assert roles[("northwind", "billing-api")] == "developer"
     assert ("other", "billing-api") not in roles
 
     assert (await client.get(f"/api/v1/projects/{project['id']}")).status_code == 200
@@ -158,7 +158,7 @@ async def test_a_project_role_does_not_cross_organisations(
         )
     else:
         assert alone.status_code == 404 and "ambiguous" in alone.json()["detail"]
-    assert (await client.get("/api/v1/projects/varga:billing-api")).status_code == 200
+    assert (await client.get("/api/v1/projects/northwind:billing-api")).status_code == 200
     reset_settings_cache()
 
 
@@ -167,13 +167,13 @@ async def test_the_oidc_groups_are_attached_to_their_organisation() -> None:
     from choregos_contracts import Role
 
     roles = roles_from_groups(
-        ["choregos:varga:developers", "choregos:other:org-admins", "developers", "unrelated"],
+        ["choregos:northwind:developers", "choregos:other:org-admins", "developers", "unrelated"],
         default_org="",
     )
-    assert roles == {"varga": Role.DEVELOPER, "other": Role.ORG_ADMIN}
+    assert roles == {"northwind": Role.DEVELOPER, "other": Role.ORG_ADMIN}
     # a bare group holds only for the default organisation, and the highest one wins
-    roles = roles_from_groups(["developers", "choregos:varga:product-owners"], default_org="varga")
-    assert roles == {"varga": Role.PROJECT_OWNER}
+    roles = roles_from_groups(["developers", "choregos:northwind:product-owners"], default_org="northwind")
+    assert roles == {"northwind": Role.PROJECT_OWNER}
 
 
 # ───────────────────────── OIDC: state, PKCE, redirection ─────────────────────────
@@ -216,9 +216,9 @@ async def test_the_oidc_flow_checks_state_and_pkce_and_bounds_the_redirection(
                     200,
                     json={
                         "sub": "u-1",
-                        "email": "jo@varga.dev",
+                        "email": "jo@northwind.dev",
                         "name": "Jo",
-                        "groups": ["choregos:varga:release-captains"],
+                        "groups": ["choregos:northwind:release-captains"],
                     },
                 )
             )
@@ -242,8 +242,8 @@ async def test_the_oidc_flow_checks_state_and_pkce_and_bounds_the_redirection(
             assert expected == challenge
 
             me = (await client.get("/api/v1/me")).json()
-            assert me["email"] == "jo@varga.dev"
-            assert {(m["org"], m["role"]) for m in me["memberships"]} == {("varga", "release_captain")}
+            assert me["email"] == "jo@northwind.dev"
+            assert {(m["org"], m["role"]) for m in me["memberships"]} == {("northwind", "release_captain")}
 
             # 4. the same `state` does not serve twice: the handshake cookie is gone
             again = await client.get("/api/v1/auth/callback", params={"code": "c", "state": state})

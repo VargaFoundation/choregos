@@ -51,7 +51,7 @@ async def test_verify_and_remote_reviews_are_not_counted(
     """A verify run and a remote reviewer are not what `review.cross_backend` swaps."""
     await _runs(
         project["id"],
-        "varga/billing-api#1",
+        "northwind/billing-api#1",
         [("implement", "claude-code", 0), ("review", "a2a", 1), ("verify", "codex", 2)],
     )
 
@@ -65,7 +65,7 @@ async def test_verify_and_remote_reviews_are_not_counted(
 async def test_a_fixed_runtime_review_is_not_counted(client: AsyncClient, project: dict[str, Any]) -> None:
     await _runs(
         project["id"],
-        "varga/billing-api#2",
+        "northwind/billing-api#2",
         [("implement", "claude-code", 0), ("review", "code", 1), ("review", "prompt", 2)],
     )
 
@@ -79,7 +79,7 @@ async def test_a_review_by_a_coding_agent_still_counts(client: AsyncClient, proj
     """The scope is narrowed to coding agents, not emptied: the same item's coding-agent reviews count."""
     await _runs(
         project["id"],
-        "varga/billing-api#3",
+        "northwind/billing-api#3",
         [
             ("implement", "claude-code", 0),
             ("review", "a2a", 1),
@@ -106,7 +106,7 @@ async def test_a_review_is_compared_with_the_implementer_of_its_time(
     """
     await _runs(
         project["id"],
-        "varga/billing-api#4",
+        "northwind/billing-api#4",
         [("implement", "claude-code", 0), ("review", "codex", 1), ("implement", "codex", 2)],
     )
 

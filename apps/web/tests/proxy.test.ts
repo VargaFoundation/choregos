@@ -54,27 +54,27 @@ describe("the embedded component's frame-ancestors (S63-12)", () => {
   it("frames every other page by nobody", async () => {
     const fetcher = api(new Response("{}"));
     expect((await directives("/p/billing-api")).get("frame-ancestors")).toEqual(["'none'"]);
-    expect((await directives("/embed/assistants/varga/coach/extra")).get("frame-ancestors")).toEqual(["'none'"]);
+    expect((await directives("/embed/assistants/northwind/coach/extra")).get("frame-ancestors")).toEqual(["'none'"]);
     expect(fetcher).not.toHaveBeenCalled();
   });
 
   it("lets the installation's origins, and only them, frame its embed page", async () => {
-    const fetcher = api(Response.json({ embed_origins: ["https://app.varga.test", "http://localhost:3100"] }));
-    const response = await proxy(new NextRequest("https://choregos.example/embed/assistants/varga/coach?context=e30"));
+    const fetcher = api(Response.json({ embed_origins: ["https://app.northwind.test", "http://localhost:3100"] }));
+    const response = await proxy(new NextRequest("https://choregos.example/embed/assistants/northwind/coach?context=e30"));
     expect(response.headers.get("Content-Security-Policy")).toContain(
-      "frame-ancestors https://app.varga.test http://localhost:3100",
+      "frame-ancestors https://app.northwind.test http://localhost:3100",
     );
-    expect(String((fetcher.mock.calls as unknown as string[][])[0]![0])).toContain("/api/v1/public/assistants/varga/coach/embed");
+    expect(String((fetcher.mock.calls as unknown as string[][])[0]![0])).toContain("/api/v1/public/assistants/northwind/coach/embed");
   });
 
   it("drops anything that is not a plain origin, and frames nobody when the API is silent or says none", async () => {
     api(Response.json({ embed_origins: ["https://ok.test", "*", "https://x.test; script-src *"] }));
-    expect((await directives("/embed/assistants/varga/coach")).get("frame-ancestors")).toEqual(["https://ok.test"]);
+    expect((await directives("/embed/assistants/northwind/coach")).get("frame-ancestors")).toEqual(["https://ok.test"]);
     api(Response.json({ embed_origins: [] }));
-    expect((await directives("/embed/assistants/varga/coach")).get("frame-ancestors")).toEqual(["'none'"]);
+    expect((await directives("/embed/assistants/northwind/coach")).get("frame-ancestors")).toEqual(["'none'"]);
     api(new Response("nope", { status: 404 }));
-    expect((await directives("/embed/assistants/varga/coach")).get("frame-ancestors")).toEqual(["'none'"]);
+    expect((await directives("/embed/assistants/northwind/coach")).get("frame-ancestors")).toEqual(["'none'"]);
     api(new Error("down"));
-    expect((await directives("/embed/assistants/varga/coach")).get("frame-ancestors")).toEqual(["'none'"]);
+    expect((await directives("/embed/assistants/northwind/coach")).get("frame-ancestors")).toEqual(["'none'"]);
   });
 });

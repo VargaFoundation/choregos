@@ -3,7 +3,7 @@
   "displayName": "Choregos",
   "version": "0.27.12",
   "description": "Connect Claude Code to Choregos: follow work items, open requests, see what waits for your decision.",
-  "author": { "name": "Varga Foundation", "url": "https://github.com/graalsystems" },
+  "author": { "name": "GRAAL.SYSTEMS SAS", "url": "https://github.com/graalsystems" },
   "homepage": "https://github.com/graalsystems/tranibor/blob/main/docs/integrations.md",
   "repository": "https://github.com/graalsystems/tranibor",
   "license": "Apache-2.0",

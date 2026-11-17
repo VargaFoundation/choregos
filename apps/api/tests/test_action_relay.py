@@ -73,13 +73,13 @@ async def _stranded(client: AsyncClient, app: Any, pid: str, monkeypatch: pytest
     from choregos_core import utcnow
 
     member = await client.post(
-        "/api/v1/orgs/varga/members", json={"email": "dev@varga.dev", "role": "developer"}
+        "/api/v1/orgs/northwind/members", json={"email": "dev@northwind.dev", "role": "developer"}
     )
     assert member.status_code in {200, 201}, member.text
     dev = AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
     ids: list[str] = []
     try:
-        await login(dev, "dev@varga.dev")
+        await login(dev, "dev@northwind.dev")
         for n in range(2):
             body = {"kind": "test.noop", "title": f"Nothing {n}", "params": {}, "effects": EFFECTS}
             proposed = await dev.post(f"/api/v1/projects/{pid}/actions", json=body)

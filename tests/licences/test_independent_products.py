@@ -10,7 +10,8 @@ in a chart or a template that only works against graal. So the test reads every 
 code, charts, templates, demo and deployment trees for the name itself, and allows three things:
 
   * the MCP catalogue file: a data platform's entry there is optional data (S14-01);
-  * the enterprise edition's branding (GraalSystems publishes it, ADR 0024): a name, not a runtime;
+  * the publisher's name (GRAAL.SYSTEMS SAS publishes the core and the enterprise edition, ADR 0024 and
+    ADR 0186): a name, not a runtime;
   * the `graalpy` wheel tags of third-party packages.
 
 A coupling can also arrive without the name: a data platform's API key pasted in a default, or a
@@ -52,8 +53,9 @@ TREES = (
 #: Optional data: a catalogue entry for a data platform does not make Choregos need it.
 ALLOWED_FILES = frozenset({"packages/core/src/choregos_core/mcp_catalogue/catalogue.yaml"})
 
-#: The name, unless it is a wheel tag, the edition's publisher or the edition's product name.
-GRAAL = re.compile(r"graal(?!py|systems|\s+agentic\s+platform)", re.IGNORECASE)
+#: The name, unless it is a wheel tag, the publisher (`graalsystems`, `graal.systems`, GRAAL.SYSTEMS SAS,
+#: ADR 0186) or the edition's product name.
+GRAAL = re.compile(r"graal(?!py|systems|\.systems|\s+agentic\s+platform)", re.IGNORECASE)
 
 #: A data platform's private surface: the prefix of its API keys and the path of its model
 #: endpoint. Either one in what ships is a direct coupling, whatever the name around it. No
@@ -93,7 +95,7 @@ def test_there_is_code_to_check() -> None:
 def test_the_pattern_catches_a_dependency_and_spares_the_branding() -> None:
     caught = (
         "GRAAL_API_URL",
-        "https://api.graal.systems/v1",
+        "https://api.graal.example/v1",
         "from choregos_adapters.graal import GraalClient",
         "graal-mcp:8080",
     )

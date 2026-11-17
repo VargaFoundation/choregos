@@ -11,7 +11,7 @@ from httpx import AsyncClient
 from . import knowledge_fixtures as fx
 from .conftest import SUITE_ON_POSTGRES, without_postgres
 
-BASE = "/api/v1/orgs/varga/knowledge"
+BASE = "/api/v1/orgs/northwind/knowledge"
 #: How the index ranks on the database the suite runs on: in the process on SQLite; on PostgreSQL,
 #: hybrid when pgvector is there (required where the image carries it), full-text otherwise.
 MODES = (
@@ -258,7 +258,7 @@ async def test_a_reindex_keeps_every_document_it_can_embed(
         base_id = (
             await session.execute(select(KnowledgeBase.id).where(KnowledgeBase.slug == base["slug"]))
         ).scalar_one()
-    assert await index.reindex_base("varga", base_id) > 0
+    assert await index.reindex_base("northwind", base_id) > 0
     rebuilt = (await client.get(f"{BASE}/framework")).json()
     assert rebuilt["index"]["documents"] == 4, rebuilt["index"]
 
@@ -341,8 +341,8 @@ async def test_a_run_searches_only_the_bases_it_is_served(
     await client.patch(f"{BASE}/framework", json={"scope": "projects", "projects": ["billing-api"]})
     assert await bases_found("TLS") == {"framework"}
     await client.post(
-        "/api/v1/orgs/varga/projects",
-        json={"slug": "web", "name": "Web", "config": {"slug": "web", "org": "varga"}},
+        "/api/v1/orgs/northwind/projects",
+        json={"slug": "web", "name": "Web", "config": {"slug": "web", "org": "northwind"}},
     )
     await client.patch(f"{BASE}/framework", json={"projects": ["web"]})
     assert await bases_found("TLS") == set(), "a base no longer served to the project answers nothing"

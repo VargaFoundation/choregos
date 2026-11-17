@@ -42,7 +42,7 @@ def test_the_migration_adds_nullable_columns_and_keeps_old_rows_without_a_messag
             connection.execute(
                 text(
                     "INSERT INTO agent_versions (id, agent_id, org_id, version, spec, checksum, created_by) "
-                    "VALUES ('v1', 'a1', 'org', 1, '{}', 'sha256:x', 'alice@varga.dev')"
+                    "VALUES ('v1', 'a1', 'org', 1, '{}', 'sha256:x', 'alice@northwind.dev')"
                 )
             )
         command.upgrade(_config(url), AFTER)

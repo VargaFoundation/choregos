@@ -579,7 +579,7 @@ An organisation's own look (S42-13) follows the person, not only the instance:
   characters at most) is ignored, and the theme is memoised per organisation for 60 s in a
   bounded cache (32 entries).
 - The footer sentence, the attribution line and the favicon follow the theme the client holds, so
-  they change with the organisation once it is swapped in. The attribution to the foundation stays.
+  they change with the organisation once it is swapped in. The attribution to the publisher stays.
 - A long product name is cut in the header and shows whole in a tooltip.
 - A logo is a file the organisation uploads, never a URL (the console's CSP serves images from
   `'self'`, `data:` and `blob:` only). A theme editor in an edition offers it as a form field of
@@ -1258,26 +1258,26 @@ where plugins come from, which ones every organisation gets, and which ones are 
 global:
   plugins:
     sources:                      # the chart's default: the platform's own agents
-      - name: varga
-        index: oci://ghcr.io/vargafoundation/choregos-agents/index:latest   # or https://…/index.yaml
+      - name: tranibor
+        index: oci://ghcr.io/graalsystems/tranibor-agents/index:latest   # or https://…/index.yaml
         trust:                    # a keyless cosign signer (regular expressions, matched whole)…
-          identity: https://github\.com/VargaFoundation/choregos-agents/\.github/workflows/publish\.yml@refs/heads/main
+          identity: https://github\.com/graalsystems/tranibor-agents/\.github/workflows/publish\.yml@refs/heads/main
           issuer: https://token\.actions\.githubusercontent\.com
           # key: /etc/choregos/plugins-keys/acme.pub   # …or a public key, mounted with api.extraVolumes
         egress: []                # hosts its fetches may reach beyond the index's own
     defaultPlugins:               # the chart's default: the built-in agents (ADR 0093 §6)
-      - { source: varga, name: software-delivery, version: "^1.0", preapproved: true }
-      - { source: varga, name: netops, version: "^1.0", preapproved: true }
-      - { source: varga, name: authoring, version: "^1.0", preapproved: true }
-      - { source: varga, name: mcp-clients, version: "^1.0", preapproved: true }
-      - { source: varga, name: requests, version: "^1.0" }
+      - { source: tranibor, name: software-delivery, version: "^1.0", preapproved: true }
+      - { source: tranibor, name: netops, version: "^1.0", preapproved: true }
+      - { source: tranibor, name: authoring, version: "^1.0", preapproved: true }
+      - { source: tranibor, name: mcp-clients, version: "^1.0", preapproved: true }
+      - { source: tranibor, name: requests, version: "^1.0" }
     offline: /opt/choregos/plugins   # plugins baked into the image: air-gapped, demo, CI
 ```
 
 The chart renders these values into the ConfigMap `choregos-plugins`, mounted read-only in the API at
 `/etc/choregos/plugins/plugins.yaml` and named by `CHOREGOS_PLUGINS_CONFIG`. By default they install the
 platform's own agents — `software-delivery`, `netops`, `authoring`, `mcp-clients` and `requests` of
-[`VargaFoundation/choregos-agents`](https://github.com/VargaFoundation/choregos-agents) — from the image's
+[`graalsystems/tranibor-agents`](https://github.com/graalsystems/tranibor-agents) — from the image's
 offline directory, where the API image ships them pinned by `plugins.lock`: no network is needed at
 start-up. `defaultPlugins: []` installs none (the agent catalogue still offers them, one by one);
 `sources: []`, `defaultPlugins: []` and `offline: ""` render nothing at all. A source without `trust`
@@ -1315,10 +1315,10 @@ later, at its creation:
 
 **Upgrading from 0.20.** The built-in agents left the core: the migration `b8d0f2a4c6e1` rewrites
 their provenance (`catalogue:<slug>@<v>` → `plugin:<plugin>/<slug>@<v>`) and records an `org_plugins`
-row (source `varga`) for each plugin an organisation held agents of, so upgrades keep reaching them; an
+row (source `tranibor`) for each plugin an organisation held agents of, so upgrades keep reaching them; an
 agent the organisation changed is still offered updates, never overwritten. A deployment that keeps
-`defaultPlugins: []` and no `varga` source still lists the agents in the catalogue; upgrading those rows
-then needs the `varga` source declared.
+`defaultPlugins: []` and no `northwind` source still lists the agents in the catalogue; upgrading those rows
+then needs the `northwind` source declared.
 
 What the reconcile installed is listed with `default: true` and `installed_by: null`. The summary of
 each pass is the log line `plugin.default.reconciled` (installed, waiting, failed).
@@ -1338,7 +1338,7 @@ global:
     servers:
       enabled: true
       namespace: { name: choregos-plugins, create: false }   # create: true renders the Namespace too
-      registries: [ghcr.io/vargafoundation/choregos-agents]   # where a server's image may come from
+      registries: [ghcr.io/graalsystems/tranibor-agents]   # where a server's image may come from
       runtimeClass: ""          # empty: global.runner.runtimeClass, else the cluster's runtime
       egress: networkpolicy     # or cilium: a CiliumNetworkPolicy names the exact hosts
       resources: { limits: { cpu: 500m, memory: 512Mi } }

@@ -16,8 +16,8 @@ from sqlalchemy import select
 
 from .conftest import login
 
-KEY_URL = "/api/v1/orgs/varga/mcp-gateway/assertion-key"
-JWKS_URL = "/api/v1/orgs/varga/mcp-gateway/jwks.json"
+KEY_URL = "/api/v1/orgs/northwind/mcp-gateway/assertion-key"
+JWKS_URL = "/api/v1/orgs/northwind/mcp-gateway/jwks.json"
 
 
 @pytest.fixture
@@ -33,7 +33,7 @@ async def _anonymous(app: Any, url: str) -> Any:
         return await http.get(url)
 
 
-async def _organisation(slug: str = "varga") -> Any:
+async def _organisation(slug: str = "northwind") -> Any:
     from choregos_api.db.models import Organization
     from choregos_api.db.session import session_scope
 
@@ -79,16 +79,16 @@ async def test_a_minted_assertion_verifies_against_the_jwks(
     async with session_scope() as session:
         kid, pem = await gw.signing_key(session, organisation)
     who = gw.CallIdentity(
-        org="varga", org_id=organisation.id, subject="run:r1", purpose="tool_call", run="r1", agent="a@1"
+        org="northwind", org_id=organisation.id, subject="run:r1", purpose="tool_call", run="r1", agent="a@1"
     )
-    first = gw.mint_assertion(kid, pem, issuer=gw.issuer_of("varga"), audience="gw", identity=who)
-    second = gw.mint_assertion(kid, pem, issuer=gw.issuer_of("varga"), audience="gw", identity=who)
+    first = gw.mint_assertion(kid, pem, issuer=gw.issuer_of("northwind"), audience="gw", identity=who)
+    second = gw.mint_assertion(kid, pem, issuer=gw.issuer_of("northwind"), audience="gw", identity=who)
     claims = jwt.decode(
         first,
         jwt.PyJWK(jwks["keys"][0]).key,
         algorithms=["ES256"],
         audience="gw",
-        issuer=gw.issuer_of("varga"),
+        issuer=gw.issuer_of("northwind"),
     )
     assert claims["exp"] - claims["iat"] == 60
     assert claims["sub"] == "run:r1" and claims["org_id"] == organisation.id and claims["run"] == "r1"
@@ -127,7 +127,7 @@ async def test_the_jwks_of_an_unknown_or_keyless_org_is_the_same_404(app: Any, o
     unknown = await _anonymous(app, "/api/v1/orgs/nope/mcp-gateway/jwks.json")
     keyless = await _anonymous(app, JWKS_URL)
     assert unknown.status_code == keyless.status_code == 404
-    same = json.dumps(keyless.json()).replace("varga", "nope")
+    same = json.dumps(keyless.json()).replace("northwind", "nope")
     assert json.dumps(unknown.json()) == same
 
 
@@ -171,12 +171,12 @@ async def test_a_renamed_organisation_keeps_its_issuer_and_jwks_url(
     organisation = await _organisation()
     async with session_scope() as session:
         kid, pem = await gw.signing_key(session, organisation)
-    renamed = await client.patch("/api/v1/orgs/varga", json={"slug": "varga2"})
+    renamed = await client.patch("/api/v1/orgs/northwind", json={"slug": "northwind2"})
     assert renamed.status_code == 200, renamed.text
     assert (await _anonymous(app, JWKS_URL)).status_code == 200
-    after = await _organisation("varga2")
+    after = await _organisation("northwind2")
     assert gw.assertion_state(after).issuer == before["issuer"]
-    who = gw.CallIdentity(org="varga2", org_id=after.id, subject="s", purpose="tool_call")
+    who = gw.CallIdentity(org="northwind2", org_id=after.id, subject="s", purpose="tool_call")
     token = gw.mint_assertion(kid, pem, issuer=gw.issuer_of(after), audience="gw", identity=who)
     assert jwt.decode(token, options={"verify_signature": False})["iss"] == before["issuer"]
     assert gw.assertion_state(after).jwks_url == before["jwks_url"]

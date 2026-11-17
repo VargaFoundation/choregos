@@ -19,7 +19,7 @@ from sqlalchemy import select
 from .conftest import login
 
 ISSUER = "https://idp.example.test/realms/x"
-EMAIL = "jo@varga.dev"
+EMAIL = "jo@northwind.dev"
 
 
 @pytest.fixture
@@ -110,9 +110,9 @@ async def _source(slug: str, email: str = EMAIL) -> str | None:
 async def test_a_group_withdrawn_at_the_idp_withdraws_the_role(
     client: AsyncClient, org: str, idp: dict[str, Any]
 ) -> None:
-    await _sign_in(client, idp, ["choregos:varga:release-captains"])
-    assert await _memberships(client) == {("varga", "release_captain")}
-    assert await _source("varga") == "idp"
+    await _sign_in(client, idp, ["choregos:northwind:release-captains"])
+    assert await _memberships(client) == {("northwind", "release_captain")}
+    assert await _source("northwind") == "idp"
     await _sign_in(client, idp, [])
     assert await _memberships(client) == set()
     revoked = await _revocations()
@@ -128,8 +128,8 @@ async def test_a_role_moved_to_another_org_at_the_idp_moves(
 
     async with session_scope() as session:
         session.add(Organization(slug="autre", name="Autre"))
-    await _sign_in(client, idp, ["choregos:varga:developers"])
-    assert await _memberships(client) == {("varga", "developer")}
+    await _sign_in(client, idp, ["choregos:northwind:developers"])
+    assert await _memberships(client) == {("northwind", "developer")}
     await _sign_in(client, idp, ["choregos:autre:developers"])
     assert await _memberships(client) == {("autre", "developer")}
 
@@ -137,34 +137,34 @@ async def test_a_role_moved_to_another_org_at_the_idp_moves(
 async def test_a_manual_membership_survives_a_sign_in_without_groups(
     client: AsyncClient, org: str, idp: dict[str, Any]
 ) -> None:
-    await _seed("varga", "org_admin", "manual")
+    await _seed("northwind", "org_admin", "manual")
     await _sign_in(client, idp, [])
-    assert await _memberships(client) == {("varga", "org_admin")}
+    assert await _memberships(client) == {("northwind", "org_admin")}
     assert await _revocations() == []
 
 
 async def test_a_bootstrap_admin_mapped_by_the_idp_stays_manual(
     client: AsyncClient, org: str, idp: dict[str, Any]
 ) -> None:
-    await _seed("varga", "org_admin", "manual")
-    await _seed("varga", "org_admin", "manual", email="other@varga.dev")
-    await _sign_in(client, idp, ["choregos:varga:developers"])
-    assert await _memberships(client) == {("varga", "developer")}  # the role follows the provider
-    assert await _source("varga") == "manual"
+    await _seed("northwind", "org_admin", "manual")
+    await _seed("northwind", "org_admin", "manual", email="other@northwind.dev")
+    await _sign_in(client, idp, ["choregos:northwind:developers"])
+    assert await _memberships(client) == {("northwind", "developer")}  # the role follows the provider
+    assert await _source("northwind") == "manual"
     await _sign_in(client, idp, [])
-    assert await _memberships(client) == {("varga", "developer")}
-    assert await _source("varga") == "manual"
+    assert await _memberships(client) == {("northwind", "developer")}
+    assert await _source("northwind") == "manual"
     assert await _revocations() == []
 
 
 async def test_the_last_org_admin_granted_by_the_idp_is_kept_and_logged(
     client: AsyncClient, org: str, idp: dict[str, Any]
 ) -> None:
-    await _sign_in(client, idp, ["choregos:varga:org-admins"])
-    assert await _memberships(client) == {("varga", "org_admin")}
+    await _sign_in(client, idp, ["choregos:northwind:org-admins"])
+    assert await _memberships(client) == {("northwind", "org_admin")}
     with structlog.testing.capture_logs() as logs:
         await _sign_in(client, idp, [])
-    assert await _memberships(client) == {("varga", "org_admin")}
+    assert await _memberships(client) == {("northwind", "org_admin")}
     assert any(entry["event"] == "idp revocation skipped: last org_admin" for entry in logs)
     assert await _revocations() == []
 
@@ -172,20 +172,20 @@ async def test_the_last_org_admin_granted_by_the_idp_is_kept_and_logged(
 async def test_an_idp_org_admin_goes_when_another_administrator_exists(
     client: AsyncClient, org: str, idp: dict[str, Any]
 ) -> None:
-    await _seed("varga", "org_admin", "manual", email="other@varga.dev")
-    await _sign_in(client, idp, ["choregos:varga:org-admins"])
+    await _seed("northwind", "org_admin", "manual", email="other@northwind.dev")
+    await _sign_in(client, idp, ["choregos:northwind:org-admins"])
     await _sign_in(client, idp, [])
     assert await _memberships(client) == set()
     assert len(await _revocations()) == 1
 
 
 async def test_the_development_login_revokes_nothing(client: AsyncClient, org: str) -> None:
-    await _seed("varga", "release_captain", "idp", email="dev@varga.dev")
-    await login(client, "dev@varga.dev")
+    await _seed("northwind", "release_captain", "idp", email="dev@northwind.dev")
+    await login(client, "dev@northwind.dev")
     first = await _memberships(client)
-    await login(client, "dev@varga.dev")
+    await login(client, "dev@northwind.dev")
     assert await _memberships(client) == first
-    assert await _source("varga", "dev@varga.dev") == "idp"
+    assert await _source("northwind", "dev@northwind.dev") == "idp"
     assert await _revocations() == []
 
 
@@ -196,17 +196,17 @@ async def test_an_instance_sign_in_leaves_an_organisation_with_its_own_provider_
     from choregos_api import tenant_sign_in
     from choregos_api.tenant_sign_in import OidcProvider, TenantSignIn
 
-    await _sign_in(client, idp, ["choregos:varga:developers"])
+    await _sign_in(client, idp, ["choregos:northwind:developers"])
 
     async def resolver(_session: Any, hint: Any) -> TenantSignIn | None:
-        if hint.org == "varga":
-            return TenantSignIn(org="varga", oidc=OidcProvider(issuer=ISSUER, client_id="c"))
+        if hint.org == "northwind":
+            return TenantSignIn(org="northwind", oidc=OidcProvider(issuer=ISSUER, client_id="c"))
         return None
 
     tenant_sign_in.declare_sign_in_resolver(resolver)
     try:
         await _sign_in(client, idp, [])
-        assert await _memberships(client) == {("varga", "developer")}
+        assert await _memberships(client) == {("northwind", "developer")}
         assert await _revocations() == []
     finally:
         tenant_sign_in.reset()
@@ -217,10 +217,10 @@ async def test_a_group_naming_a_former_slug_keeps_its_role(
 ) -> None:
     from .test_org_slug_aliases import _rename
 
-    # The administrator who renames `varga` signs in through the provider (the development login is off).
-    await _sign_in(client, idp, ["choregos:varga:org-admins"])
+    # The administrator who renames `northwind` signs in through the provider (the development login is off).
+    await _sign_in(client, idp, ["choregos:northwind:org-admins"])
     await _rename(client)
-    await _sign_in(client, idp, ["choregos:varga:developers"])
-    await _sign_in(client, idp, ["choregos:varga:developers"])
+    await _sign_in(client, idp, ["choregos:northwind:developers"])
+    await _sign_in(client, idp, ["choregos:northwind:developers"])
     assert await _memberships(client) == {("fondation", "developer")}
     assert await _revocations() == []

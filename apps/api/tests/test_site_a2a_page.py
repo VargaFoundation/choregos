@@ -22,7 +22,7 @@ from httpx import AsyncClient
 from .site_pages import run_cli
 
 PAGE = Path(__file__).resolve().parents[3] / "docs" / "site" / "integrate" / "a2a.md"
-ENDPOINT = "/a2a/orgs/varga"
+ENDPOINT = "/a2a/orgs/northwind"
 CARD = f"{ENDPOINT}/.well-known/agent-card.json"
 #: A `curl` call of the page to the door: from `curl` to the body's closing `}'`.
 CALL = re.compile(r"^curl [^\n]*\"\$A2A\"[^\n]*-d '(\{.*?^\})'", re.M | re.S)

@@ -347,7 +347,7 @@ async def test_a_caught_up_issue_keeps_who_filed_it(setup: Fixture) -> None:
     """The tracker's reporter is recorded at birth (#1179): the agent checks the requester on it."""
     clear_fake_signals()
     key = setup.adapters.tracker.seed(
-        "Access to billing", labels=["agent-ready"], author="Jean Martin <jmartin@varga.dev>"
+        "Access to billing", labels=["agent-ready"], author="Jean Martin <jmartin@northwind.dev>"
     )
 
     await tracker_activities.reconcile_tracker({"project_slug": setup.project_slug})
@@ -358,7 +358,7 @@ async def test_a_caught_up_issue_keeps_who_filed_it(setup: Fixture) -> None:
 
     async with session_scope() as session:
         row = (await session.execute(select(WorkItem).where(WorkItem.tracker_key == key))).scalar_one()
-        assert row.reporter == "Jean Martin <jmartin@varga.dev>"
+        assert row.reporter == "Jean Martin <jmartin@northwind.dev>"
 
 
 async def test_a_plugin_tracker_s_poll_starts_only_agent_ready_or_a_start_rule(setup: Fixture) -> None:

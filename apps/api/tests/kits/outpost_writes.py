@@ -141,7 +141,7 @@ async def action(project_id: str, effects: list[dict[str, Any]], status: str = "
             effects=effects,
             proposed_by={"kind": "agent", "id": "agent:coordinator", "run_id": run.id},
             approval={},
-            decisions=[{"by": "ops@varga.dev", "decision": "approve"}],
+            decisions=[{"by": "ops@northwind.dev", "decision": "approve"}],
             status=status,
         )
         session.add(row)

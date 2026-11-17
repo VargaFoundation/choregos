@@ -65,7 +65,7 @@ def test_the_engine_s_expectations(pod: dict[str, Any], result: str) -> None:
 
 
 def test_the_api_s_own_server_passes() -> None:
-    image = PUBLISHING.image("choregos-agents/servicenow-mcp@sha256:" + "0" * 64)
+    image = PUBLISHING.image("tranibor-agents/servicenow-mcp@sha256:" + "0" * 64)
     d = ServerDeployment("s-1", "choregos-plugins", image, 8080, "/healthz", {"A": "b"}, {})
     deployment = next(o for o in server_manifests(d) if o["kind"] == "Deployment")
     assert _admitted({"spec": deployment["spec"]["template"]["spec"]})

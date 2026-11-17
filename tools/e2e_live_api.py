@@ -42,11 +42,11 @@ def main(argv: list[str]) -> None:
     os.environ["CHOREGOS_DATABASE_URL"] = f"sqlite+aiosqlite:///{database}"
     # `?as=<email>` signs in without an identity provider; refused outside dev and test.
     os.environ["CHOREGOS_DEV_LOGIN_ENABLED"] = "true"
-    os.environ.setdefault("CHOREGOS_DEV_ADMIN_EMAILS", "admin@varga.dev")
+    os.environ.setdefault("CHOREGOS_DEV_ADMIN_EMAILS", "admin@northwind.dev")
     # The organisation a fresh install creates at its first start, and its administrator.
-    os.environ.setdefault("CHOREGOS_BOOTSTRAP_ORG", "varga")
-    os.environ.setdefault("CHOREGOS_BOOTSTRAP_ORG_NAME", "Varga Foundation")
-    os.environ.setdefault("CHOREGOS_BOOTSTRAP_ADMINS", "admin@varga.dev")
+    os.environ.setdefault("CHOREGOS_BOOTSTRAP_ORG", "northwind")
+    os.environ.setdefault("CHOREGOS_BOOTSTRAP_ORG_NAME", "Northwind")
+    os.environ.setdefault("CHOREGOS_BOOTSTRAP_ADMINS", "admin@northwind.dev")
 
     import choregos_adapters
     import uvicorn

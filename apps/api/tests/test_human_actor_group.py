@@ -63,9 +63,9 @@ async def test_a_project_owner_outside_the_group_cannot_answer_its_step(
     client: AsyncClient, project: dict[str, Any], app: Any
 ) -> None:
     item_id = await _waiting_ticket(client, project["id"])
-    await _member(client, "owner@varga.dev", "project_owner", ["platform-team"])
-    await _member(client, "dev@varga.dev", "developer", [])
-    for outsider in ("owner@varga.dev", "dev@varga.dev"):
+    await _member(client, "owner@northwind.dev", "project_owner", ["platform-team"])
+    await _member(client, "dev@northwind.dev", "developer", [])
+    for outsider in ("owner@northwind.dev", "dev@northwind.dev"):
         refused = await _decide(app, outsider, item_id)
         assert refused.status_code == 403 and GROUP in refused.text, (outsider, refused.text)
 
@@ -88,8 +88,8 @@ async def test_a_member_answers_and_an_administrator_overrides_with_an_audit_tra
     from sqlalchemy import select
 
     item_id = await _waiting_ticket(client, project["id"])
-    await _member(client, "cap@varga.dev", "developer", [GROUP])
-    answered = await _decide(app, "cap@varga.dev", item_id)
+    await _member(client, "cap@northwind.dev", "developer", [GROUP])
+    answered = await _decide(app, "cap@northwind.dev", item_id)
     assert answered.status_code == 202, answered.text
     async with session_scope() as session:
         overrides = (
@@ -148,7 +148,7 @@ async def test_a_group_nobody_carries_is_warned_about_at_validation(
         and unknown["warnings"][0]["path"] == "/actors/captain/group"
     )
 
-    await _member(client, "cap@varga.dev", "developer", [GROUP])
+    await _member(client, "cap@northwind.dev", "developer", [GROUP])
     known = (await client.post(path, json={"yaml": WORKFLOW})).json()
     assert known["warnings"] == []
 
@@ -171,16 +171,16 @@ async def test_a_group_namespaced_for_the_organisation_counts_as_its_bare_name(
     from sqlalchemy import select
 
     path = f"/api/v1/projects/{project['id']}/workflows/validate"
-    await _member(client, "other@varga.dev", "developer", [f"choregos:other-org:{GROUP}"])
+    await _member(client, "other@northwind.dev", "developer", [f"choregos:other-org:{GROUP}"])
     other = (await client.post(path, json={"yaml": WORKFLOW})).json()
     assert [w["code"] for w in other["warnings"]] == ["actor.group_unknown"], "another org's group"
 
-    await _member(client, "cap@varga.dev", "developer", [f"choregos:varga:{GROUP}"])
+    await _member(client, "cap@northwind.dev", "developer", [f"choregos:northwind:{GROUP}"])
     ours = (await client.post(path, json={"yaml": WORKFLOW})).json()
     assert ours["warnings"] == []
     async with session_scope() as session:
         org_id = (
-            await session.execute(select(Organization.id).where(Organization.slug == "varga"))
+            await session.execute(select(Organization.id).where(Organization.slug == "northwind"))
         ).scalar_one()
         assert GROUP in await groups_known_in(session, org_id)
 
@@ -189,11 +189,11 @@ async def test_a_namespaced_group_answers_the_step_only_for_its_own_organisation
     client: AsyncClient, project: dict[str, Any], app: Any
 ) -> None:
     item_id = await _waiting_ticket(client, project["id"])
-    await _member(client, "foreign@varga.dev", "developer", [f"choregos:other:{GROUP}"])
-    refused = await _decide(app, "foreign@varga.dev", item_id)
+    await _member(client, "foreign@northwind.dev", "developer", [f"choregos:other:{GROUP}"])
+    refused = await _decide(app, "foreign@northwind.dev", item_id)
     assert refused.status_code == 403, refused.text
-    await _member(client, "cap@varga.dev", "developer", [f"choregos:varga:{GROUP}"])
-    answered = await _decide(app, "cap@varga.dev", item_id)
+    await _member(client, "cap@northwind.dev", "developer", [f"choregos:northwind:{GROUP}"])
+    answered = await _decide(app, "cap@northwind.dev", item_id)
     assert answered.status_code == 202, answered.text
 
 
@@ -201,7 +201,7 @@ def test_groups_for_org_keeps_bare_names_and_unwraps_only_its_own_prefix() -> No
     from choregos_api.services.human_groups import groups_for_org
 
     got = groups_for_org(
-        ["architects", "choregos:varga:pm", "choregos:other:ops", "choregos:varga:"], "varga"
+        ["architects", "choregos:northwind:pm", "choregos:other:ops", "choregos:northwind:"], "northwind"
     )
     assert {"architects", "pm"} <= got and "ops" not in got and "" not in got
 
@@ -216,9 +216,9 @@ def test_knowledge_group_scope_and_grants_read_namespaced_groups_for_their_org()
     grant = SimpleNamespace(subject_type="group", subject="architects", role="viewer")
 
     def person(group: str) -> Principal:
-        return Principal(user_id="u", email="u@x.dev", org_roles={"varga": Role.DEVELOPER}, groups=[group])
+        return Principal(user_id="u", email="u@x.dev", org_roles={"northwind": Role.DEVELOPER}, groups=[group])
 
-    assert access._reaches(person("choregos:varga:architects"), "varga", base)
-    assert not access._reaches(person("choregos:other:architects"), "varga", base)
-    assert access._holds(person("choregos:varga:architects"), "varga", grant)
-    assert not access._holds(person("choregos:other:architects"), "varga", grant)
+    assert access._reaches(person("choregos:northwind:architects"), "northwind", base)
+    assert not access._reaches(person("choregos:other:architects"), "northwind", base)
+    assert access._holds(person("choregos:northwind:architects"), "northwind", grant)
+    assert not access._holds(person("choregos:other:architects"), "northwind", grant)

@@ -45,7 +45,7 @@ async def _post(client: AsyncClient, event: str, delivery: str, body: dict[str, 
 
 
 async def _merged_work_item(client: AsyncClient, number: int, labels: list[str]) -> None:
-    repo = {"full_name": "varga/billing-api"}
+    repo = {"full_name": "northwind/billing-api"}
     issue = {"number": number, "title": f"work item {number}", "labels": [{"name": n} for n in labels]}
     who = {"login": "a"}
     labeling = {"action": "labeled", "repository": repo, "issue": issue, "label": {"name": "agent-ready"}}
@@ -53,7 +53,7 @@ async def _merged_work_item(client: AsyncClient, number: int, labels: list[str])
     pr = {
         "number": 100 + number,
         "merged": True,
-        "html_url": f"https://github.com/varga/billing-api/pull/{number}",
+        "html_url": f"https://github.com/northwind/billing-api/pull/{number}",
         "head": {"ref": f"choregos/{number}-x", "sha": f"sha{number}"},
         "base": {"ref": "main"},
         "labels": [],
@@ -96,15 +96,15 @@ async def test_each_merged_work_item_boards_the_train_of_its_own_workflow(
     trains = _boardings()
     assert set(trains) == {"train-billing-api-prod", "train-billing-api-staging"}, trains
     (prod,) = trains["train-billing-api-prod"]
-    assert prod["work_item_key"] == "varga/billing-api#1"
+    assert prod["work_item_key"] == "northwind/billing-api#1"
     assert prod["approval"] == {"required": True, "group": "release-captains"}, (
         "the captain of default-simple"
     )
     (staging,) = trains["train-billing-api-staging"]
-    assert staging["work_item_key"] == "varga/billing-api#3", (
+    assert staging["work_item_key"] == "northwind/billing-api#3", (
         "the careful delivery goes through staging first"
     )
     assert staging["approval"] == {"required": False, "group": None}
-    assert all(c["work_item_key"] != "varga/billing-api#2" for cs in trains.values() for c in cs), (
+    assert all(c["work_item_key"] != "northwind/billing-api#2" for cs in trains.values() for c in cs), (
         "a study that merges an ADR goes nowhere"
     )

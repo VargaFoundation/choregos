@@ -32,9 +32,9 @@ describe("client API", () => {
     }
   });
 
-  it("starts on an organisation that is not the foundation's (ADR 0048)", async () => {
+  it("starts on an organisation that is not the publisher's (ADR 0048)", async () => {
     const { defaultOrg, DEFAULT_ORG } = await import("@/lib/api");
-    expect(DEFAULT_ORG).not.toBe("varga");
+    expect(DEFAULT_ORG).not.toBe("northwind");
     expect(defaultOrg(undefined, true)).toBe("acme");
     expect(defaultOrg(undefined, false)).toBe("default");
     expect(defaultOrg("  ", false)).toBe("default");
@@ -89,7 +89,7 @@ describe("a decision that asks for a recent authentication", () => {
   it("a 401 in the embedded component never navigates: the console's login refuses to be framed (S63-12)", async () => {
     const assign = vi.fn();
     vi.stubGlobal("window", {
-      location: { pathname: "/embed/assistants/varga/coach", search: "?signin=required", origin: "http://c", assign },
+      location: { pathname: "/embed/assistants/northwind/coach", search: "?signin=required", origin: "http://c", assign },
     });
     vi.stubGlobal(
       "fetch",

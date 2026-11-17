@@ -86,7 +86,7 @@ async def test_without_an_organisation_the_edition_is_not_what_refuses(client: A
     from choregos_api.db.session import session_scope
     from sqlalchemy import delete
 
-    await login(client, "admin@varga.dev")
+    await login(client, "admin@northwind.dev")
     async with session_scope(orgs="*") as session:
         await session.execute(delete(Organization))
 

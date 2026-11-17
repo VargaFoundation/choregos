@@ -58,7 +58,7 @@ async def test_a_runs_token_gives_the_proxy_its_effective_network_and_nobody_els
 
     network = await source.get("run-edge-1", _token(mine))
     assert network.allow == ["pypi.org"] and network.implied == ["github.com"]
-    assert (network.org, network.project, network.run_id) == ("varga", "billing-api", "run-edge-1")
+    assert (network.org, network.project, network.run_id) == ("northwind", "billing-api", "run-edge-1")
 
     with pytest.raises(UnknownRunError):
         await source.get("run-edge-1", _token(other))  # another run's token: 403

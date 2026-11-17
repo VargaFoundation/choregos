@@ -34,7 +34,7 @@ async def test_an_mcp_token_is_refused_by_the_rest_api(client: AsyncClient, admi
     header = {"Authorization": f"Bearer {created['token']}"}
     for method, path, body in (
         ("GET", "/api/v1/me", None),
-        ("GET", "/api/v1/orgs/varga/projects", None),
+        ("GET", "/api/v1/orgs/northwind/projects", None),
         ("POST", "/api/v1/me/tokens", {"name": "another one"}),
     ):
         response = await client.request(method, path, headers=header, json=body)
@@ -48,22 +48,22 @@ async def test_the_whole_api_scope_does_not_combine(client: AsyncClient, admin: 
 
 
 async def test_a_project_only_bounds_an_mcp_token(client: AsyncClient, project: dict[str, Any]) -> None:
-    response = await _mint(client, scopes=["*"], project="varga:billing-api")
+    response = await _mint(client, scopes=["*"], project="northwind:billing-api")
     assert response.status_code == 422, response.text
 
 
 async def test_an_mcp_token_bound_to_a_project(client: AsyncClient, project: dict[str, Any]) -> None:
-    created = await _mint(client, scopes=["mcp:write"], project="varga:billing-api")
+    created = await _mint(client, scopes=["mcp:write"], project="northwind:billing-api")
     assert created.status_code == 201, created.text
-    assert created.json()["project"] == "varga:billing-api"
+    assert created.json()["project"] == "northwind:billing-api"
     listed = (await client.get("/api/v1/me/tokens")).json()
-    assert [(t["scopes"], t["project"]) for t in listed] == [(["mcp:write"], "varga:billing-api")]
+    assert [(t["scopes"], t["project"]) for t in listed] == [(["mcp:write"], "northwind:billing-api")]
 
 
 async def test_an_unknown_or_unreadable_project_is_not_bound(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    response = await _mint(client, scopes=["mcp:read"], project="varga:does-not-exist")
+    response = await _mint(client, scopes=["mcp:read"], project="northwind:does-not-exist")
     assert response.status_code == 404, response.text
 
 

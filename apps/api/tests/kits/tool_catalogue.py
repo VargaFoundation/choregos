@@ -101,7 +101,7 @@ async def run_with_catalogue(
         config = dict(row.config or {})
         config["tools"] = [t for t in tools.split(",") if t]
         row.config = config
-        item = WorkItem(project_id=project["id"], tracker_key="varga/x#9", title="T", state="ready")
+        item = WorkItem(project_id=project["id"], tracker_key="northwind/x#9", title="T", state="ready")
         session.add(item)
         await session.flush()
         run = Run(
@@ -114,7 +114,7 @@ async def run_with_catalogue(
         )
         session.add(run)
 
-    token = mint_run_token(run_id, project_slug="billing-api", work_item_key="varga/x#9", ttl_minutes=30)
+    token = mint_run_token(run_id, project_slug="billing-api", work_item_key="northwind/x#9", ttl_minutes=30)
     return run_id, {"Authorization": f"Bearer {token}"}
 
 
@@ -143,7 +143,7 @@ async def project_with_mcp(
         config["tools"] = ["rechercher_entreprise"]
         config["groups"] = groups
         row.config = config
-        item = WorkItem(project_id=project["id"], tracker_key="varga/x#11", title="T", state="ready")
+        item = WorkItem(project_id=project["id"], tracker_key="northwind/x#11", title="T", state="ready")
         session.add(item)
         await session.flush()
         session.add(
@@ -157,6 +157,6 @@ async def project_with_mcp(
         )
 
     token = mint_run_token(
-        "run-mcp-1", project_slug="billing-api", work_item_key="varga/x#11", ttl_minutes=30
+        "run-mcp-1", project_slug="billing-api", work_item_key="northwind/x#11", ttl_minutes=30
     )
     return "run-mcp-1", {"Authorization": f"Bearer {token}"}

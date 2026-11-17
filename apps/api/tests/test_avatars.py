@@ -11,7 +11,7 @@ from PIL import Image
 
 from .conftest import login
 
-ORG = "/api/v1/orgs/varga"
+ORG = "/api/v1/orgs/northwind"
 
 
 def _image(fmt: str, size: tuple[int, int] = (64, 48), **save: object) -> bytes:
@@ -84,12 +84,12 @@ async def test_the_photo_is_read_by_a_shared_organisation_only(
     from choregos_api.db.models import Organization
     from choregos_api.db.session import session_scope
 
-    await _member(client, "dev@varga.dev")
+    await _member(client, "dev@northwind.dev")
     status, body = await _put(client, _image("PNG"))
     assert status == 200
     url = str(body["avatar_url"])
 
-    await login(client, "dev@varga.dev")
+    await login(client, "dev@northwind.dev")
     assert (await client.get(url)).status_code == 200, "a member of the same organisation sees it"
 
     # The development sign-in lands a new person in every organisation unless a default one is set.

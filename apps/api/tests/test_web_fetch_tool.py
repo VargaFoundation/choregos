@@ -119,9 +119,9 @@ async def test_the_repository_host_alone_does_not_offer_it_but_is_readable_once_
     names = [t["name"] for t in (await client.get(base, headers=headers)).json()["tools"]]
     assert "web_fetch" not in names, "the implied repository host is for git, not for browsing"
     base, headers = await _ready(client, project, ["docs.example.com"], run="run-web-2")
-    web.add("https://github.com/varga/billing-api/blob/main/README.md", "<p>readme</p>")
+    web.add("https://github.com/northwind/billing-api/blob/main/README.md", "<p>readme</p>")
     answer = await _fetch(
-        client, base, headers, url="https://github.com/varga/billing-api/blob/main/README.md"
+        client, base, headers, url="https://github.com/northwind/billing-api/blob/main/README.md"
     )
     assert answer["status_code"] == 200, "the repository host is part of the run's network"
 

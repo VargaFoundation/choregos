@@ -21,7 +21,7 @@ async def test_recovery_after_an_outage_without_double_cost(platform: Platform) 
     async with session_scope() as session:
         item = WorkItem(
             project_id=platform.project_id,
-            tracker_key="varga/billing-api#500",
+            tracker_key="northwind/billing-api#500",
             title="Replayed ticket",
             state="ready",
             size="M",
@@ -117,9 +117,9 @@ async def test_project_manifests_lock_the_network(platform: Platform) -> None:
     config = ProjectConfig.model_validate(
         {
             "slug": "billing-api",
-            "org": "varga",
-            "repo": {"url": "https://github.com/varga/billing-api.git", "default_branch": "main"},
-            "gitops": {"repo_url": "https://github.com/varga/gitops.git", "apps": ["billing-api"]},
+            "org": "northwind",
+            "repo": {"url": "https://github.com/northwind/billing-api.git", "default_branch": "main"},
+            "gitops": {"repo_url": "https://github.com/northwind/gitops.git", "apps": ["billing-api"]},
         }
     )
     files = render_project_manifests("billing-api", config, load_preset("team"))
@@ -147,7 +147,7 @@ async def test_cancelling_a_run_is_clean(platform: Platform) -> None:
     async with session_scope() as session:
         item = WorkItem(
             project_id=platform.project_id,
-            tracker_key="varga/billing-api#501",
+            tracker_key="northwind/billing-api#501",
             title="Stopped ticket",
             state="ready",
             size="S",

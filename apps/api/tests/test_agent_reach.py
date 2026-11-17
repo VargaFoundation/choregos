@@ -23,7 +23,7 @@ pytestmark = pytest.mark.asyncio
 #: The installed extension (a fixture of its own file); a test asks for it BEFORE `client`.
 extension_tools = _kit.installed_extension
 
-AGENTS = "/api/v1/orgs/varga/agents"
+AGENTS = "/api/v1/orgs/northwind/agents"
 CATALOGUE = """
 tools:
   - name: lookup
@@ -105,7 +105,7 @@ async def _run(project: dict[str, Any], slug: str) -> tuple[str, dict[str, str]]
     _n[0] += 1
     run_id = f"run-{slug}-{_n[0]}"
     async with session_scope() as session:
-        item = WorkItem(project_id=project["id"], tracker_key=f"varga/x#{run_id}", title="T", state="ready")
+        item = WorkItem(project_id=project["id"], tracker_key=f"northwind/x#{run_id}", title="T", state="ready")
         session.add(item)
         await session.flush()
         session.add(
@@ -120,7 +120,7 @@ async def _run(project: dict[str, Any], slug: str) -> tuple[str, dict[str, str]]
             )
         )
     token = mint_run_token(
-        run_id, project_slug="billing-api", work_item_key=f"varga/x#{run_id}", ttl_minutes=30
+        run_id, project_slug="billing-api", work_item_key=f"northwind/x#{run_id}", ttl_minutes=30
     )
     return run_id, {"Authorization": f"Bearer {token}"}
 

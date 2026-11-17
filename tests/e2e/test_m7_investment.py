@@ -42,7 +42,7 @@ from .conftest import Platform, login
 
 pytestmark = [pytest.mark.e2e, pytest.mark.asyncio]
 
-ORG = "/api/v1/orgs/varga"
+ORG = "/api/v1/orgs/northwind"
 KEY = "free-market-data-key"
 ATTESTATION = (
     "I read the product memos and the backtest report; this is an internal research decision, not advice"
@@ -296,7 +296,7 @@ async def _organisation(client: AsyncClient) -> dict[str, Any]:
     created = await client.post(
         f"{ORG}/projects",
         json={"slug": "research", "name": "Research", "template_ref": "investment-research",
-              "config": {"slug": "research", "org": "varga"}},
+              "config": {"slug": "research", "org": "northwind"}},
     )  # fmt: skip
     assert created.status_code == 201, created.text
     project = dict(created.json())

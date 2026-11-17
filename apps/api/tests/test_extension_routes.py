@@ -127,11 +127,11 @@ async def test_the_extension_route_is_guarded_by_the_cores_authentication(
     anonymous = await client_with_extension.get("/api/v1/extension/me")
     assert anonymous.status_code == 401, anonymous.text
 
-    start = await client_with_extension.get("/api/v1/auth/login", params={"as": "admin@varga.dev"})
+    start = await client_with_extension.get("/api/v1/auth/login", params={"as": "admin@northwind.dev"})
     await client_with_extension.get(start.headers["location"])
     signed_in = await client_with_extension.get("/api/v1/extension/me")
     assert signed_in.status_code == 200, signed_in.text
-    assert signed_in.json() == {"email": "admin@varga.dev"}
+    assert signed_in.json() == {"email": "admin@northwind.dev"}
 
 
 async def test_the_extension_route_appears_in_the_openapi(client_with_extension: AsyncClient) -> None:

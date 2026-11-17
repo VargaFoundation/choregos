@@ -16,7 +16,7 @@ from httpx import AsyncClient
 from .conftest import login
 
 ORG = "/api/v1/orgs"
-AGENTS = f"{ORG}/varga/agents"
+AGENTS = f"{ORG}/northwind/agents"
 INCOMPLETE = {"instructions": "Answer the question.", "model": "m"}
 COMPLETE = {
     **INCOMPLETE,
@@ -32,13 +32,13 @@ async def _stored() -> dict[str, Any]:
 
     async with session_scope(orgs="*") as session:
         organisation = (
-            await session.execute(select(Organization).where(Organization.slug == "varga"))
+            await session.execute(select(Organization).where(Organization.slug == "northwind"))
         ).scalar_one()
         return dict(organisation.settings or {})
 
 
 async def _require(client: AsyncClient, value: str | None) -> None:
-    switched = await client.patch(f"{ORG}/varga", json={"complete_agents": value})
+    switched = await client.patch(f"{ORG}/northwind", json={"complete_agents": value})
     assert switched.status_code == 200, switched.text
     assert switched.json()["complete_agents"] == value
 
@@ -113,10 +113,10 @@ async def test_null_lifts_the_requirement(client: AsyncClient, admin: str) -> No
 async def test_only_its_administrator_requires_it(
     client: AsyncClient, admin: str, project: dict[str, Any]
 ) -> None:
-    member = {"email": "lead@varga.dev", "role": "project_owner"}
-    assert (await client.post(f"{ORG}/varga/members", json=member)).status_code in {200, 201}
-    await login(client, "lead@varga.dev")
-    refused = await client.patch(f"{ORG}/varga", json={"complete_agents": "required"})
+    member = {"email": "lead@northwind.dev", "role": "project_owner"}
+    assert (await client.post(f"{ORG}/northwind/members", json=member)).status_code in {200, 201}
+    await login(client, "lead@northwind.dev")
+    refused = await client.patch(f"{ORG}/northwind", json={"complete_agents": "required"})
     assert refused.status_code == 403, refused.text
     assert ORG_SETTING not in await _stored()
 

@@ -1,6 +1,6 @@
 """An organisation's slug is an alias; its id is its identity (ADR 0090).
 
-Each test renames `varga` to `fondation` and proves that an address, a group or a session that
+Each test renames `northwind` to `fondation` and proves that an address, a group or a session that
 carried the OLD slug still reaches the organisation. Every one fails without the alias table.
 """
 
@@ -14,7 +14,7 @@ ORG = "/api/v1/orgs"
 
 
 async def _rename(client: AsyncClient, slug: str = "fondation") -> None:
-    done = await client.patch(f"{ORG}/varga", json={"slug": slug})
+    done = await client.patch(f"{ORG}/northwind", json={"slug": slug})
     assert done.status_code == 200, done.text
 
 
@@ -22,13 +22,13 @@ async def test_an_old_url_still_reaches_the_organisation_and_names_the_canonical
     client: AsyncClient, admin: str, project: dict[str, Any]
 ) -> None:
     await _rename(client)
-    old = await client.get(f"{ORG}/varga/projects")
+    old = await client.get(f"{ORG}/northwind/projects")
     assert old.status_code == 200, old.text
     assert [p["slug"] for p in old.json()["items"]] == ["billing-api"]
     assert old.headers["link"] == f'<{ORG}/fondation/projects>; rel="canonical"'
     assert "link" not in (await client.get(f"{ORG}/fondation/projects")).headers
     # a write through the old address lands on the same organisation
-    renamed = await client.patch(f"{ORG}/varga", json={"name": "Fondation"})
+    renamed = await client.patch(f"{ORG}/northwind", json={"name": "Fondation"})
     assert renamed.status_code == 200 and renamed.json()["slug"] == "fondation"
 
 
@@ -39,11 +39,11 @@ async def test_an_old_qualified_id_and_mcp_address_still_resolve_to_the_project(
     from choregos_api.deps import resolve_project
 
     await _rename(client)
-    for address in ("varga:billing-api", "varga/billing-api", "fondation:billing-api"):
+    for address in ("northwind:billing-api", "northwind/billing-api", "fondation:billing-api"):
         async with session_scope(orgs="*") as session:
             found, org_slug = await resolve_project(session, address)
         assert (found.id, org_slug) == (project["id"], "fondation"), address
-    assert (await client.get("/api/v1/projects/varga:billing-api")).status_code == 200
+    assert (await client.get("/api/v1/projects/northwind:billing-api")).status_code == 200
 
 
 async def test_an_old_idp_group_still_maps_and_the_current_one_too(client: AsyncClient, admin: str) -> None:
@@ -58,7 +58,7 @@ async def test_an_old_idp_group_still_maps_and_the_current_one_too(client: Async
         user = User(email="nouvelle@idp.test", display_name="n")
         session.add(user)
         await session.flush()
-        await _map_groups_to_roles(session, user, ["choregos:varga:developers"], Settings())
+        await _map_groups_to_roles(session, user, ["choregos:northwind:developers"], Settings())
         await session.flush()
         org = (await session.execute(select(Organization))).scalar_one()
         rows = (
@@ -67,7 +67,7 @@ async def test_an_old_idp_group_still_maps_and_the_current_one_too(client: Async
         assert [(m.org_id, m.role) for m in rows] == [(org.id, "developer")]
         # the old and the new group name of one organisation: the higher role wins, one membership
         await _map_groups_to_roles(
-            session, user, ["choregos:varga:developers", "choregos:fondation:org-admins"], Settings()
+            session, user, ["choregos:northwind:developers", "choregos:fondation:org-admins"], Settings()
         )
         await session.flush()
         rows = (
@@ -88,7 +88,7 @@ async def test_a_session_and_a_token_issued_before_the_rename_keep_working(
         got = await by_token.get(ORG, headers={"Authorization": f"Bearer {token}"})
         assert got.status_code == 200, got.text
         assert [o["slug"] for o in got.json()] == ["fondation"]
-        old = await by_token.get(f"{ORG}/varga/projects", headers={"Authorization": f"Bearer {token}"})
+        old = await by_token.get(f"{ORG}/northwind/projects", headers={"Authorization": f"Bearer {token}"})
         assert old.status_code == 200, "the token's old address resolves too"
     finally:
         await by_token.aclose()
@@ -101,7 +101,7 @@ async def test_a_restart_with_the_old_bootstrap_slug_does_not_create_a_second_or
     from choregos_api.config import Settings
 
     await _rename(client)
-    done = await bootstrap_installation(Settings(bootstrap_org="varga", bootstrap_admins="x@varga.dev"))
+    done = await bootstrap_installation(Settings(bootstrap_org="northwind", bootstrap_admins="x@northwind.dev"))
     assert done == {"organisations": [], "administrateurs": []}
     assert [o["slug"] for o in (await client.get(ORG)).json()] == ["fondation"]
 
@@ -115,7 +115,7 @@ async def _other_organisation(slug: str, *, admin_too: bool = True) -> None:
         other = Organization(slug=slug, name=slug)
         session.add(other)
         await session.flush()
-        me = (await session.execute(select(User).where(User.email == "admin@varga.dev"))).scalar_one()
+        me = (await session.execute(select(User).where(User.email == "admin@northwind.dev"))).scalar_one()
         if admin_too:
             session.add(Membership(user_id=me.id, org_id=other.id, role="org_admin"))
 
@@ -124,12 +124,12 @@ async def test_no_other_organisation_can_take_an_alias_but_its_owner_can_take_it
     client: AsyncClient, admin: str
 ) -> None:
     await _other_organisation("autre")
-    await _rename(client)  # `varga` is now an alias of `fondation`
-    taken = await client.patch(f"{ORG}/autre", json={"slug": "varga"})
+    await _rename(client)  # `northwind` is now an alias of `fondation`
+    taken = await client.patch(f"{ORG}/autre", json={"slug": "northwind"})
     assert taken.status_code == 409, taken.text
-    created = await client.post(ORG, json={"slug": "varga", "name": "Squat"})
+    created = await client.post(ORG, json={"slug": "northwind", "name": "Squat"})
     assert created.status_code in {403, 409}, created.text
-    back = await client.patch(f"{ORG}/fondation", json={"slug": "varga"})
+    back = await client.patch(f"{ORG}/fondation", json={"slug": "northwind"})
     assert back.status_code == 200, back.text
     assert back.json()["aliases"] == ["fondation"], "the slug it takes back stops being an alias"
 
@@ -139,11 +139,11 @@ async def test_listing_shows_the_aliases_and_releasing_one_frees_it(
 ) -> None:
     await _rename(client)
     (org,) = (await client.get(ORG)).json()
-    assert org["aliases"] == ["varga"]
+    assert org["aliases"] == ["northwind"]
     # releasing an alias is a platform-administrator act: on an instance with two organisations, the
     # admin of one of them is not one
     await _other_organisation("autre", admin_too=False)
-    assert (await client.delete(f"{ORG}/fondation/aliases/varga")).status_code == 403
+    assert (await client.delete(f"{ORG}/fondation/aliases/northwind")).status_code == 403
 
 
 async def test_releasing_an_alias_makes_the_old_address_a_404(
@@ -153,14 +153,14 @@ async def test_releasing_an_alias_makes_the_old_address_a_404(
 
     await _rename(client)
     reset()
-    declare_platform_administrator(lambda session, principal: principal.email == "admin@varga.dev")
+    declare_platform_administrator(lambda session, principal: principal.email == "admin@northwind.dev")
     try:
-        gone = await client.delete(f"{ORG}/fondation/aliases/varga")
+        gone = await client.delete(f"{ORG}/fondation/aliases/northwind")
         assert gone.status_code == 204, gone.text
-        assert (await client.get(f"{ORG}/varga/projects")).status_code == 404
-        assert (await client.delete(f"{ORG}/fondation/aliases/varga")).status_code == 404
+        assert (await client.get(f"{ORG}/northwind/projects")).status_code == 404
+        assert (await client.delete(f"{ORG}/fondation/aliases/northwind")).status_code == 404
         assert (await client.get(ORG)).json()[0]["aliases"] == []
-        assert (await client.patch(f"{ORG}/fondation", json={"slug": "varga"})).status_code == 200
+        assert (await client.patch(f"{ORG}/fondation", json={"slug": "northwind"})).status_code == 200
     finally:
         reset()
 
@@ -168,7 +168,7 @@ async def test_releasing_an_alias_makes_the_old_address_a_404(
 async def test_the_project_config_follows_the_rename(
     client: AsyncClient, admin: str, project: dict[str, Any]
 ) -> None:
-    assert project["config"]["org"] == "varga"
+    assert project["config"]["org"] == "northwind"
     await _rename(client)
     read = await client.get("/api/v1/projects/fondation:billing-api")
     assert read.json()["config"]["org"] == "fondation"
@@ -185,7 +185,7 @@ async def test_a_background_scope_written_with_the_old_slug_resolves_to_the_orga
     from sqlalchemy import select
 
     await _rename(client)
-    async with session_scope(orgs=["varga"]) as session:
+    async with session_scope(orgs=["northwind"]) as session:
         assert (await session.execute(select(Project.slug))).scalars().all() == ["billing-api"]
-        found = await organisation_by_slug_or_alias(session, "varga")
+        found = await organisation_by_slug_or_alias(session, "northwind")
         assert found is not None and found.slug == "fondation"

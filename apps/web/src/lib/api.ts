@@ -260,7 +260,7 @@ export const API_BASE = "/api/v1";
 export const IS_MOCK = process.env.NEXT_PUBLIC_API_MODE === "mock";
 /**
  * The starting organisation, before the session says more (demo mode, first render). It is
- * no longer the foundation's (`varga`, ADR 0048): the demo's sample organisation is `acme`, and a
+ * no longer a third party's (ADR 0048): the demo's sample organisation is `acme`, and a
  * live console without `NEXT_PUBLIC_DEFAULT_ORG` starts on `default` until `/me` names the person's.
  */
 export const DEFAULT_ORG = defaultOrg(process.env.NEXT_PUBLIC_DEFAULT_ORG, IS_MOCK);

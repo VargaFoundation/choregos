@@ -29,7 +29,7 @@ budgets:
 
 
 async def _ceiling(client: AsyncClient, ceiling: Any = CEILING) -> Any:
-    return await client.put("/api/v1/orgs/varga/policy-ceiling", json={"ceiling": ceiling})
+    return await client.put("/api/v1/orgs/northwind/policy-ceiling", json={"ceiling": ceiling})
 
 
 async def test_a_policy_wider_than_the_organisation_is_refused(
@@ -83,10 +83,10 @@ async def test_the_orchestrator_runs_the_clamped_policy(client: AsyncClient, pro
 
 
 async def test_only_an_org_admin_sets_the_ceiling(client: AsyncClient, admin: str) -> None:
-    await client.post("/api/v1/orgs/varga/members", json={"email": "dev@varga.dev", "role": "developer"})
-    await login(client, "dev@varga.dev")
+    await client.post("/api/v1/orgs/northwind/members", json={"email": "dev@northwind.dev", "role": "developer"})
+    await login(client, "dev@northwind.dev")
     assert (await _ceiling(client)).status_code == 403
-    assert (await client.get("/api/v1/orgs/varga/policy-ceiling")).json()["ceiling"] is None
+    assert (await client.get("/api/v1/orgs/northwind/policy-ceiling")).json()["ceiling"] is None
 
 
 @pytest.mark.parametrize(
@@ -104,8 +104,8 @@ async def test_a_ceiling_that_is_not_one_is_refused(client: AsyncClient, admin: 
 async def test_a_ceiling_is_read_audited_and_removed(client: AsyncClient, admin: str) -> None:
     set_ = (await _ceiling(client)).json()
     assert set_["ceiling"]["budgets"]["ticket_usd"] == {"M": 20.0}
-    assert set_["updated_by"] == "admin@varga.dev" and set_["updated_at"]
-    assert (await client.get("/api/v1/orgs/varga/policy-ceiling")).json()["ceiling"] == set_["ceiling"]
+    assert set_["updated_by"] == "admin@northwind.dev" and set_["updated_at"]
+    assert (await client.get("/api/v1/orgs/northwind/policy-ceiling")).json()["ceiling"] == set_["ceiling"]
     assert (await _ceiling(client, None)).json()["ceiling"] is None
 
 
@@ -114,7 +114,7 @@ async def test_a_policy_offering_tool_scripts_under_a_ceiling_that_forbids_them_
 ) -> None:
     """S57-05 (ADR 0122 §6, ADR 0101): refused at PUT like every widening, each offer named."""
     assert (await _ceiling(client, {"tools": {"scripts": "off"}})).status_code == 200
-    stored = (await client.get("/api/v1/orgs/varga/policy-ceiling")).json()["ceiling"]
+    stored = (await client.get("/api/v1/orgs/northwind/policy-ceiling")).json()["ceiling"]
     assert stored == {"tools": {"scripts": "off"}}
     offering = _policy() + "tools:\n  scripts: offer\n  per_role:\n    review: { scripts: off }\n"
     refused = await client.put(f"/api/v1/projects/{project['id']}/policy", json={"yaml": offering})

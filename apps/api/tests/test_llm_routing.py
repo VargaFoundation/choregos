@@ -289,7 +289,7 @@ DECIDER = "platform/decide"
 
 async def _decider(client: AsyncClient, *usages: str) -> None:
     """The catalogue entry of the decision model, created or changed to these usages."""
-    base = "/api/v1/orgs/varga/models"
+    base = "/api/v1/orgs/northwind/models"
     entry = await client.post(base, json={"model_name": DECIDER, "usages": list(usages)})
     if entry.status_code == 409:
         listed = (await client.get(base)).json()

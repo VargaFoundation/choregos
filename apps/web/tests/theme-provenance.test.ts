@@ -65,7 +65,7 @@ describe("the provenance of the console's colours", () => {
   it("no stylesheet of the console declares a colour role outside its theme", () => {
     const elsewhere = sourceFiles(join(import.meta.dirname, "../src"))
       .filter((path) => path.endsWith(".css") && path !== THEME_SHEET)
-      .flatMap((path) => [...readFileSync(path, "utf8").matchAll(/^\s*(--(?:choregos|varga)-[a-z0-9-]+)\s*:/gm)].map((m) => m[1]!));
+      .flatMap((path) => [...readFileSync(path, "utf8").matchAll(/^\s*(--(?:choregos|northwind)-[a-z0-9-]+)\s*:/gm)].map((m) => m[1]!));
     expect(elsewhere).toEqual([]);
   });
 });

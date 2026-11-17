@@ -82,7 +82,7 @@ async def test_a_batch_waiting_for_its_window_passes_to_the_next_run(
             id="train-repos-prod",
             task_queue="test",
         )
-        await train.signal("merged", {"work_item_key": "varga/billing-api#7", "sha": "f7"})
+        await train.signal("merged", {"work_item_key": "northwind/billing-api#7", "sha": "f7"})
         new_run = await _first_run_relays(train)
         first_run = temporal_env.client.get_workflow_handle("train-repos-prod", run_id=train.result_run_id)
         history = await first_run.fetch_history()
@@ -90,7 +90,7 @@ async def test_a_batch_waiting_for_its_window_passes_to_the_next_run(
         next_run = temporal_env.client.get_workflow_handle("train-repos-prod", run_id=new_run)
         state = await next_run.query("status_query")
         assert state["status"] == "collecting", state
-        assert state["pending_items"] == ["varga/billing-api#7"], "the relay lost the batch"
+        assert state["pending_items"] == ["northwind/billing-api#7"], "the relay lost the batch"
         await next_run.signal("abort", {"by": "test"})
         await next_run.result()
 
@@ -99,7 +99,7 @@ async def test_a_batch_waiting_for_its_window_passes_to_the_next_run(
     continued_input = json.loads(
         relay.workflow_execution_continued_as_new_event_attributes.input.payloads[0].data
     )
-    assert continued_input["carried_items"] == [{"work_item_key": "varga/billing-api#7", "sha": "f7"}]
+    assert continued_input["carried_items"] == [{"work_item_key": "northwind/billing-api#7", "sha": "f7"}]
     assert continued_input["batch_no"] == 3 and continued_input["relay_threshold"] == THRESHOLD
 
     # The history of the relay replays against the current code, and is archived for those to come.

@@ -49,13 +49,13 @@ async def test_a_model_disabled_after_publication_stops_the_stage_without_a_key(
         enabled=False,
         allowed_roles=[],
         usages=["agent"],
-        updated_by="ada@varga.dev",
+        updated_by="ada@northwind.dev",
     )
     with pytest.raises(ApplicationError) as refused:
         await _prepare(setup)
     assert refused.value.non_retryable
     assert refused.value.type == "ModelResolutionError"
-    assert "disabled by ada@varga.dev" in str(refused.value)
+    assert "disabled by ada@northwind.dev" in str(refused.value)
     assert setup.adapters.gateway.keys == {}, "no key was minted"
 
 

@@ -6,12 +6,12 @@ import { expect, test } from "@playwright/test";
  * here the API stores it, the page reads it back after a reload, and the API's own refusal (a cap
  * above the deployment's ceiling) reaches the administrator.
  */
-const CONNECTORS = "/api/v1/orgs/varga/connectors";
+const CONNECTORS = "/api/v1/orgs/northwind/connectors";
 // A fresh connector per run: a reused API keeps the previous run's.
 const NAME = `supplier-${Date.now()}`;
 
 test("the cap set in the console is the one the API keeps, and the API's refusal is shown", async ({ page }) => {
-  await page.goto("/api/v1/auth/login?as=admin@varga.dev");
+  await page.goto("/api/v1/auth/login?as=admin@northwind.dev");
   const created = await page.request.post(CONNECTORS, {
     data: { name: NAME, type: "mcp", config: { url: "https://supplier.test/mcp" } },
   });

@@ -38,7 +38,7 @@ kind: Plugin
 metadata:
   name: hello                 # [a-z0-9-], unique within a source
   version: 1.0.0              # semver; a published version is immutable
-  publisher: Varga Foundation
+  publisher: GRAAL.SYSTEMS SAS
   license: Apache-2.0
   description: A test plugin that ships one of everything a plugin may ship.
   homepage: https://github.com/graalsystems/tranibor
@@ -468,7 +468,7 @@ upgrade disabled is enabled again by binding the need (`PUT …/bindings/{need}`
 
 ```
 POST  /api/v1/orgs/{org}/assistants      {"plugin": "investment-assistant", "assistant": "investment-assistant",
-                                          "slug": "invest", "config": {"house_name": "Varga"},
+                                          "slug": "invest", "config": {"house_name": "Northwind"},
                                           "owner_groups": ["investment-owners"], "audience_groups": ["grp-investors"]}
 GET   /api/v1/orgs/{org}/assistants                         # those you manage
 GET, PATCH, DELETE /api/v1/orgs/{org}/assistants/{slug}
@@ -766,7 +766,7 @@ An organisation administrator installs, upgrades and uninstalls (ADR 0074); ever
 
 ```
 GET    /api/v1/orgs/{org}/plugins
-POST   /api/v1/orgs/{org}/plugins/install        {"source": "varga", "name": "hello", "version": "^1"}
+POST   /api/v1/orgs/{org}/plugins/install        {"source": "tranibor", "name": "hello", "version": "^1"}
 POST   /api/v1/orgs/{org}/plugins/{name}/upgrade {"version": "1.1.0"}   # absent: the newest
 DELETE /api/v1/orgs/{org}/plugins/{name}
 GET    /api/v1/orgs/{org}/plugin-approvals
@@ -1003,7 +1003,7 @@ approves it — unless the entry says `preapproved: true`.
 ### The built-in agents
 
 The platform's own agents left the core (ADR 0093 §6, S43-09) for the open-source repository
-[`VargaFoundation/choregos-agents`](https://github.com/VargaFoundation/choregos-agents):
+[`graalsystems/tranibor-agents`](https://github.com/graalsystems/tranibor-agents):
 
 | Plugin | What it ships |
 |---|---|
@@ -1013,8 +1013,8 @@ The platform's own agents left the core (ADR 0093 §6, S43-09) for the open-sour
 | `mcp-clients` | the six MCP clients of the Integrations page (ChatGPT, Claude, Copilot, Cursor) |
 | `requests` | `brief-writer` (role `brief`) and `assistant` (role `deliver`), the agents of `default-request` (ADR 0110) |
 
-They are published, signed, to `ghcr.io/vargafoundation/choregos-agents/<plugin>:<version>` with the
-index `oci://ghcr.io/vargafoundation/choregos-agents/index:latest`. The core ships their archives
+They are published, signed, to `ghcr.io/graalsystems/tranibor-agents/<plugin>:<version>` with the
+index `oci://ghcr.io/graalsystems/tranibor-agents/index:latest`. The core ships their archives
 offline in `plugins/offline/`, pinned by `plugins.lock` (`make plugins-lock` refreshes them, with the
 network; `make plugins-check` checks them without), and the API image copies them to
 `/opt/choregos/plugins`. The chart installs all five by default; the first four pre-approved (`madr-4` links to
@@ -1037,17 +1037,17 @@ writes it from its `global.plugins` values, [deployment](deployment.md#plugins))
 
 ```yaml
 sources:
-  - name: varga
-    index: oci://ghcr.io/vargafoundation/choregos-agents/index:latest   # or https://…/index.yaml
+  - name: tranibor
+    index: oci://ghcr.io/graalsystems/tranibor-agents/index:latest   # or https://…/index.yaml
     trust:                      # a keyless signer, regular expressions matched whole…
-      identity: https://github\.com/VargaFoundation/choregos-agents/\.github/workflows/publish\.yml@refs/heads/main
+      identity: https://github\.com/graalsystems/tranibor-agents/\.github/workflows/publish\.yml@refs/heads/main
       issuer: https://token\.actions\.githubusercontent\.com
-      # key: /etc/choregos/plugins/varga.pub   # …or a public key cosign reads
+      # key: /etc/choregos/plugins/tranibor.pub   # …or a public key cosign reads
       # tlog: false             # only for a key whose signatures never reached Rekor
     egress: [registry.acme.example]   # hosts beyond the index's own
 defaultPlugins:
-  - {source: varga, name: servicenow, version: "^0.1"}
-  - {source: varga, name: software-delivery, version: "^1.0", preapproved: true}
+  - {source: tranibor, name: servicenow, version: "^0.1"}
+  - {source: tranibor, name: software-delivery, version: "^1.0", preapproved: true}
 offline: /opt/choregos/plugins  # or CHOREGOS_PLUGINS_OFFLINE; both, and different: the API does not start
 ```
 

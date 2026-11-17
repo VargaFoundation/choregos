@@ -60,11 +60,11 @@ async def test_a_new_project_on_the_preset_warns_of_nothing(client: AsyncClient,
     human review: it promises nothing any more, and its policy raises no warning at birth."""
     with structlog.testing.capture_logs() as events:
         response = await client.post(
-            "/api/v1/orgs/varga/projects",
+            "/api/v1/orgs/northwind/projects",
             json={
                 "slug": "no-promise",
                 "name": "No promise",
-                "config": {"slug": "no-promise", "org": "varga"},
+                "config": {"slug": "no-promise", "org": "northwind"},
             },
         )
         assert response.status_code == 201, response.text

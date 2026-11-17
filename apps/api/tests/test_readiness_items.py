@@ -41,7 +41,7 @@ NOW = datetime(2026, 10, 16, 12, 0, tzinfo=UTC)
 
 
 def facts(**changes: Any) -> Facts:
-    config = changes.pop("config", None) or ProjectConfig.model_validate({"slug": "dev", "org": "varga"})
+    config = changes.pop("config", None) or ProjectConfig.model_validate({"slug": "dev", "org": "northwind"})
     base: dict[str, Any] = {
         "slug": "dev",
         "status": "active",
@@ -177,7 +177,7 @@ def test_stale_test_is_to_check() -> None:
 
 
 def test_a_github_owner_without_a_claimed_installation_is_to_do() -> None:
-    owners = (("scm", "stranger", False), ("tracker", "varga", True))
+    owners = (("scm", "stranger", False), ("tracker", "northwind", True))
     got = states(item_github_app(facts(github_app=True, github_owners=owners)))
     assert got == {"github-app-scm": "todo", "github-app-tracker": "done"}
     assert states(item_github_app(facts(github_app=False, github_owners=owners))) == {
@@ -192,12 +192,12 @@ def test_a_github_owner_without_a_claimed_installation_is_to_do() -> None:
 def test_no_test_command_is_to_check() -> None:
     required = (("scm", ("an agent works in a repository",)),)
     bare = ProjectConfig.model_validate(
-        {"slug": "dev", "org": "varga", "repo": {"url": "https://github.com/a/b"}}
+        {"slug": "dev", "org": "northwind", "repo": {"url": "https://github.com/a/b"}}
     )
     measured = ProjectConfig.model_validate(
         {
             "slug": "dev",
-            "org": "varga",
+            "org": "northwind",
             "repo": {"url": "https://github.com/a/b", "test_command": "pytest -q"},
         }
     )
@@ -227,7 +227,7 @@ def test_without_a_repository_the_workflow_that_asks_for_one_is_named_and_can_be
     published = facts(requirements=required, workflows=("default-simple", "default-request"))
     assert item_repository(published)[0].fix.href == "/p/dev/workflows", "published: make it the default"
     with_repo = ProjectConfig.model_validate(
-        {"slug": "dev", "org": "varga", "repo": {"url": "https://github.com/varga/dev.git"}}
+        {"slug": "dev", "org": "northwind", "repo": {"url": "https://github.com/northwind/dev.git"}}
     )
     (scm,) = item_connectors(facts(requirements=required[:1], config=with_repo))
     assert scm.fix.href == "/p/dev/settings#connections", "a project with a repository connects it"
@@ -237,7 +237,7 @@ def test_the_dod_facts_count_as_measured_checks() -> None:
     config = ProjectConfig.model_validate(
         {
             "slug": "dev",
-            "org": "varga",
+            "org": "northwind",
             "repo": {"url": "https://github.com/a/b"},
             "dod": {"facts": {"ok": "true"}},
         }
@@ -248,7 +248,7 @@ def test_the_dod_facts_count_as_measured_checks() -> None:
 
 def test_a_backend_the_deployment_does_not_enable_is_to_do() -> None:
     config = ProjectConfig.model_validate(
-        {"slug": "dev", "org": "varga", "agent": {"default_backend": "opencode"}}
+        {"slug": "dev", "org": "northwind", "agent": {"default_backend": "opencode"}}
     )
     assert item_backend(facts(config=config, usable_backends=frozenset({"claude-code"})))[0].state == "todo"
     assert item_backend(facts(config=config, usable_backends=frozenset({"opencode"})))[0].state == "done"
@@ -262,7 +262,7 @@ def test_an_unproven_pairing_is_to_check_unless_unvalidated_is_allowed() -> None
     f = facts(profiles_used=1, profiles_unvalidated=("standard",))
     assert item_models(f)[0].state == "check"
     allowed = ProjectConfig.model_validate(
-        {"slug": "dev", "org": "varga", "models": {"allow_unvalidated": True}}
+        {"slug": "dev", "org": "northwind", "models": {"allow_unvalidated": True}}
     )
     assert (
         item_models(facts(profiles_used=1, profiles_unvalidated=("standard",), config=allowed))[0].state
@@ -311,7 +311,7 @@ def test_a_notify_connector_without_a_channel_is_to_do_then_done_with_one() -> N
     slack = connector("notify", "slack", "ok")
     assert item_notifications(facts(has_release_train=True, connectors={"notify": slack}))[0].state == "todo"
     with_channel = ProjectConfig.model_validate(
-        {"slug": "dev", "org": "varga", "notify": {"slack_channel": "#choregos"}}
+        {"slug": "dev", "org": "northwind", "notify": {"slack_channel": "#choregos"}}
     )
     got = item_notifications(facts(has_release_train=True, connectors={"notify": slack}, config=with_channel))
     assert got[0].state == "done"
@@ -324,7 +324,7 @@ def test_a_notify_connector_without_a_channel_is_to_do_then_done_with_one() -> N
 
 def test_tools_are_informational_never_to_do() -> None:
     assert item_tools(facts())[0].state == "done"
-    opened = ProjectConfig.model_validate({"slug": "dev", "org": "varga", "tools": ["*"]})
+    opened = ProjectConfig.model_validate({"slug": "dev", "org": "northwind", "tools": ["*"]})
     assert "whole catalogue" in item_tools(facts(config=opened))[0].detail
 
 

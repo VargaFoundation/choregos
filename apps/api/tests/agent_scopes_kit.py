@@ -8,9 +8,9 @@ from httpx import AsyncClient
 
 from .conftest import login
 
-ORG = "/api/v1/orgs/varga"
+ORG = "/api/v1/orgs/northwind"
 SPEC: dict[str, Any] = {"instructions": "Review the change and say what you found."}
-ADMIN = "admin@varga.dev"
+ADMIN = "admin@northwind.dev"
 
 
 async def as_user(client: AsyncClient, email: str) -> None:
@@ -27,9 +27,9 @@ async def make_project(client: AsyncClient, slug: str) -> dict[str, Any]:
             "name": slug,
             "config": {
                 "slug": slug,
-                "org": "varga",
+                "org": "northwind",
                 "repo": {
-                    "url": f"https://github.com/varga/{slug}.git",
+                    "url": f"https://github.com/northwind/{slug}.git",
                     "default_branch": "main",
                     "language": "python",
                     "test_command": "make test",

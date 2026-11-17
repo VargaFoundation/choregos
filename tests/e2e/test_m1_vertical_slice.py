@@ -33,7 +33,7 @@ async def test_issue_agent_ready_becomes_a_green_pr(platform: Platform, worker: 
     # ── 1. an issue is labelled `agent-ready` on GitHub ──
     payload = {
         "action": "labeled",
-        "repository": {"full_name": "varga/billing-api"},
+        "repository": {"full_name": "northwind/billing-api"},
         "issue": {
             "number": 123,
             "title": "Credit notes are not deducted from the total",
@@ -56,16 +56,16 @@ async def test_issue_agent_ready_becomes_a_green_pr(platform: Platform, worker: 
     assert response.status_code == 202, response.text
     assert response.json()["events"] == 1
 
-    item = await platform.work_item("varga/billing-api#123")
+    item = await platform.work_item("northwind/billing-api#123")
     assert item is not None, "the webhook created the ticket"
     assert item.temporal_wf_id, "a WorkflowInterpreter was started (deterministic ID)"
 
     # ── 2. the orchestrator runs the workflow, the agents produce their results ──
     platform.adapters.tracker.items.setdefault(
-        "varga/billing-api#123", _fake_tracker_item("varga/billing-api#123", item.title)
+        "northwind/billing-api#123", _fake_tracker_item("northwind/billing-api#123", item.title)
     )
     platform.adapters.scm.set_diff(
-        "varga/billing-api",
+        "northwind/billing-api",
         "main",
         "choregos/123",
         [("src/orders/total.py", 24, 6), ("tests/orders/test_total.py", 38, 0)],
@@ -122,7 +122,7 @@ async def test_issue_agent_ready_becomes_a_green_pr(platform: Platform, worker: 
         )
         assert decision.status_code == 202, decision.text
         await handle.signal(
-            "human_decision", {"approved": True, "decided_by": "augustin@varga.dev", "kind": "approval"}
+            "human_decision", {"approved": True, "decided_by": "augustin@northwind.dev", "kind": "approval"}
         )
 
         # ── 4. the PR opens, the CI and the review arrive ──
@@ -155,7 +155,7 @@ async def test_issue_agent_ready_becomes_a_green_pr(platform: Platform, worker: 
         assert outcome["state"] == "deployed_prod"
 
     # ── 6. what the platform must have produced ──
-    comment = platform.adapters.tracker.status_comment("varga/billing-api#123")
+    comment = platform.adapters.tracker.status_comment("northwind/billing-api#123")
     assert comment is not None
     assert "Tranibor — progress" in comment
     assert "agent refine" in comment and "agent implement" in comment
@@ -176,11 +176,11 @@ async def test_issue_agent_ready_becomes_a_green_pr(platform: Platform, worker: 
     ).json()
     assert {row["key"] for row in costs["rows"]} >= {"refine", "implement"}
 
-    updated = await platform.work_item("varga/billing-api#123")
+    updated = await platform.work_item("northwind/billing-api#123")
     assert updated.pr_url, "a PR was opened"
     assert updated.state == "deployed_prod"
     assert updated.closed_at is not None, "the ticket is closed once in production"
-    assert platform.adapters.tracker.items["varga/billing-api#123"].state == "Done"
+    assert platform.adapters.tracker.items["northwind/billing-api#123"].state == "Done"
 
 
 async def test_webhook_with_an_invalid_signature_is_refused(platform: Platform) -> None:
@@ -188,7 +188,7 @@ async def test_webhook_with_an_invalid_signature_is_refused(platform: Platform) 
 
     settings = get_settings()
     settings.github_webhook_secret = "s3cr3t"
-    body = json.dumps({"action": "opened", "repository": {"full_name": "varga/billing-api"}}).encode()
+    body = json.dumps({"action": "opened", "repository": {"full_name": "northwind/billing-api"}}).encode()
     good = "sha256=" + hmac.new(b"s3cr3t", body, hashlib.sha256).hexdigest()
     ok = await platform.client.post(
         "/api/v1/webhooks/github",

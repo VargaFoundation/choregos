@@ -29,12 +29,12 @@ async def directory(client: AsyncClient, project: dict[str, Any], monkeypatch: p
     monkeypatch.setenv("CONNECTOR_ENTRA_CLIENT_SECRET", "connector-secret")
     body = {"name": "entra-acme", "type": "entra", "config": {"tenant_id": "acme", "client_id": "choregos"},
              "secret_refs": {"client_secret": "env:CONNECTOR_ENTRA_CLIENT_SECRET"}}  # fmt: skip
-    created = await client.post("/api/v1/orgs/varga/connectors", json=body)
+    created = await client.post("/api/v1/orgs/northwind/connectors", json=body)
     assert created.status_code == 201, created.text
 
 
 async def _member(client: AsyncClient, email: str, role: str) -> None:
-    response = await client.post("/api/v1/orgs/varga/members", json={"email": email, "role": role})
+    response = await client.post("/api/v1/orgs/northwind/members", json={"email": email, "role": role})
     assert response.status_code in {200, 201}, response.text
 
 
@@ -63,14 +63,14 @@ async def test_an_approved_action_goes_to_temporal_with_no_effect_in_the_request
     from choregos_api.temporal import FakeTemporal, get_temporal
 
     pid = project["id"]
-    await _member(client, "dev@varga.dev", "developer")
-    dev = await _open_session(app, "dev@varga.dev")
+    await _member(client, "dev@northwind.dev", "developer")
+    dev = await _open_session(app, "dev@northwind.dev")
     try:
         action = await _propose(dev, pid)
     finally:
         await dev.aclose()
     assert action["status"] == "pending_approval"
-    assert action["proposed_by"] == {"kind": "user", "id": "dev@varga.dev", "via": "api"}
+    assert action["proposed_by"] == {"kind": "user", "id": "dev@northwind.dev", "via": "api"}
 
     decided = await client.post(
         f"/api/v1/projects/{pid}/actions/{action['id']}/decision", json={"decision": "approve"}
@@ -83,7 +83,7 @@ async def test_an_approved_action_goes_to_temporal_with_no_effect_in_the_request
     fake = get_temporal()
     assert isinstance(fake, FakeTemporal)
     assert fake.started[f"action-{action['id']}"] == {"action_id": action["id"]}
-    assert body["decisions"][0]["by"] == "admin@varga.dev"
+    assert body["decisions"][0]["by"] == "admin@northwind.dev"
     assert body["decisions"][0]["auth_age_seconds"] is not None
 
 
@@ -99,8 +99,8 @@ async def test_a_rejection_says_why_and_a_decided_action_is_not_decided_again(
     client: AsyncClient, project: dict[str, Any], app: Any
 ) -> None:
     pid = project["id"]
-    await _member(client, "dev@varga.dev", "developer")
-    dev = await _open_session(app, "dev@varga.dev")
+    await _member(client, "dev@northwind.dev", "developer")
+    dev = await _open_session(app, "dev@northwind.dev")
     try:
         action = await _propose(dev, pid)
     finally:
@@ -117,9 +117,9 @@ async def test_a_developer_does_not_decide_and_neither_does_an_api_token(
 ) -> None:
     pid = project["id"]
     action = await _propose(client, pid)
-    await _member(client, "dev@varga.dev", "developer")
+    await _member(client, "dev@northwind.dev", "developer")
     token = (await client.post("/api/v1/me/tokens", json={"name": "ci", "scopes": ["*"]})).json()["token"]
-    dev = await _open_session(app, "dev@varga.dev")
+    dev = await _open_session(app, "dev@northwind.dev")
     try:
         base = f"/api/v1/projects/{pid}/actions/{action['id']}/decision"
         assert (await dev.post(base, json={"decision": "approve"})).status_code == 403
@@ -143,8 +143,8 @@ async def test_a_session_that_is_too_old_must_authenticate_again(
     from choregos_api import freshness
 
     pid = project["id"]
-    await _member(client, "dev@varga.dev", "developer")
-    dev = await _open_session(app, "dev@varga.dev")
+    await _member(client, "dev@northwind.dev", "developer")
+    dev = await _open_session(app, "dev@northwind.dev")
     try:
         action = await _propose(dev, pid)
     finally:
@@ -167,9 +167,9 @@ async def test_two_are_needed_when_the_rule_asks_for_two(
     from choregos_api.temporal import get_temporal
 
     pid = project["id"]
-    await _member(client, "po@varga.dev", "project_owner")
-    await _member(client, "dev@varga.dev", "developer")
-    dev = await _open_session(app, "dev@varga.dev")
+    await _member(client, "po@northwind.dev", "project_owner")
+    await _member(client, "dev@northwind.dev", "developer")
+    dev = await _open_session(app, "dev@northwind.dev")
     try:
         action = await _propose(dev, pid, approval={"approvers": [{"role": "project_owner", "min": 2}]})
     finally:
@@ -181,7 +181,7 @@ async def test_two_are_needed_when_the_rule_asks_for_two(
     assert (await client.post(base, json={"decision": "approve"})).status_code == 409, (
         "not twice the same one"
     )
-    po = await _open_session(app, "po@varga.dev")
+    po = await _open_session(app, "po@northwind.dev")
     try:
         second = await po.post(base, json={"decision": "approve"})
     finally:
@@ -196,14 +196,14 @@ async def test_of_two_simultaneous_approvals_only_one_starts_the_action(
     from choregos_api.temporal import get_temporal
 
     pid = project["id"]
-    await _member(client, "po@varga.dev", "project_owner")
-    await _member(client, "dev@varga.dev", "developer")
-    dev = await _open_session(app, "dev@varga.dev")
+    await _member(client, "po@northwind.dev", "project_owner")
+    await _member(client, "dev@northwind.dev", "developer")
+    dev = await _open_session(app, "dev@northwind.dev")
     try:
         action = await _propose(dev, pid)
     finally:
         await dev.aclose()
-    po = await _open_session(app, "po@varga.dev")
+    po = await _open_session(app, "po@northwind.dev")
     try:
         base = f"/api/v1/projects/{pid}/actions/{action['id']}/decision"
         responses = await asyncio.gather(
@@ -250,8 +250,8 @@ async def test_a_rule_without_step_up_does_not_demand_a_recent_authentication(
     from choregos_api.db.session import session_scope
 
     pid = project["id"]
-    await _member(client, "dev@varga.dev", "developer")
-    dev = await _open_session(app, "dev@varga.dev")
+    await _member(client, "dev@northwind.dev", "developer")
+    dev = await _open_session(app, "dev@northwind.dev")
     try:
         action = await _propose(dev, pid)
     finally:

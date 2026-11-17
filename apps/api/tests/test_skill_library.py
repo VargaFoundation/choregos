@@ -31,29 +31,29 @@ def _zip(files: dict[str, str], *, link: str | None = None) -> bytes:
 
 async def _import(client: AsyncClient, content: bytes) -> Any:
     return await client.post(
-        "/api/v1/orgs/varga/skills/import", content=content, headers={"Content-Type": "application/zip"}
+        "/api/v1/orgs/northwind/skills/import", content=content, headers={"Content-Type": "application/zip"}
     )
 
 
 async def test_a_skill_is_born_and_its_versions_are_not_rewritten(client: AsyncClient, admin: str) -> None:
-    created = await client.post("/api/v1/orgs/varga/skills", json={"files": SKILL_FILES})
+    created = await client.post("/api/v1/orgs/northwind/skills", json={"files": SKILL_FILES})
     assert created.status_code == 201, created.text
     assert (created.json()["slug"], created.json()["latest_version"]) == ("procedure-onboarding", 1)
-    v1 = (await client.get("/api/v1/orgs/varga/skills/procedure-onboarding/versions/1")).json()
+    v1 = (await client.get("/api/v1/orgs/northwind/skills/procedure-onboarding/versions/1")).json()
     assert v1["files"] == SKILL_FILES and v1["digest"].startswith("sha256:")
     v2 = await client.post(
-        "/api/v1/orgs/varga/skills/procedure-onboarding/versions",
+        "/api/v1/orgs/northwind/skills/procedure-onboarding/versions",
         json={"files": {**SKILL_FILES, "references/groups.md": "- all-staff\n"}},
     )
     assert v2.status_code == 201 and v2.json()["version"] == 2
-    assert (await client.get("/api/v1/orgs/varga/skills/procedure-onboarding/versions/1")).json() == v1
-    assert (await client.post("/api/v1/orgs/varga/skills", json={"files": SKILL_FILES})).status_code == 409
+    assert (await client.get("/api/v1/orgs/northwind/skills/procedure-onboarding/versions/1")).json() == v1
+    assert (await client.post("/api/v1/orgs/northwind/skills", json={"files": SKILL_FILES})).status_code == 409
 
 
 async def test_an_archive_with_its_root_folder_imports(client: AsyncClient, admin: str) -> None:
     imported = await _import(client, _zip({f"procedure-onboarding/{c}": t for c, t in SKILL_FILES.items()}))
     assert imported.status_code == 201, imported.text
-    files = (await client.get("/api/v1/orgs/varga/skills/procedure-onboarding/versions/1")).json()["files"]
+    files = (await client.get("/api/v1/orgs/northwind/skills/procedure-onboarding/versions/1")).json()["files"]
     assert set(files) == {"SKILL.md", "references/groups.md"}
     # The same archive, imported again: the next version, not a duplicate.
     assert (await _import(client, _zip(SKILL_FILES))).json()["latest_version"] == 2
@@ -84,22 +84,22 @@ async def test_what_an_archive_does_not_let_through(
     refused = await _import(client, content)
     assert refused.status_code == 422, refused.text
     assert reason in refused.text
-    assert (await client.get("/api/v1/orgs/varga/skills")).json() == [], "nothing is created"
+    assert (await client.get("/api/v1/orgs/northwind/skills")).json() == [], "nothing is created"
 
 
 async def test_the_name_of_the_next_version_must_be_the_skills(client: AsyncClient, admin: str) -> None:
-    await client.post("/api/v1/orgs/varga/skills", json={"files": SKILL_FILES})
+    await client.post("/api/v1/orgs/northwind/skills", json={"files": SKILL_FILES})
     other = {"SKILL.md": SKILL_MD.replace("name: procedure-onboarding", "name: something-else")}
     refused = await client.post(
-        "/api/v1/orgs/varga/skills/procedure-onboarding/versions", json={"files": other}
+        "/api/v1/orgs/northwind/skills/procedure-onboarding/versions", json={"files": other}
     )
     assert refused.status_code == 422 and "must match" in refused.text
 
 
 async def test_a_skill_says_which_agents_carry_it(client: AsyncClient, admin: str) -> None:
-    await client.post("/api/v1/orgs/varga/skills", json={"files": SKILL_FILES})
+    await client.post("/api/v1/orgs/northwind/skills", json={"files": SKILL_FILES})
     agent = await client.post(
-        "/api/v1/orgs/varga/agents",
+        "/api/v1/orgs/northwind/agents",
         json={
             "slug": "onboarding-coordinator",
             "display_name": "Coordinator",
@@ -107,7 +107,7 @@ async def test_a_skill_says_which_agents_carry_it(client: AsyncClient, admin: st
         },
     )
     assert agent.status_code == 201, agent.text
-    skill = (await client.get("/api/v1/orgs/varga/skills/procedure-onboarding")).json()
+    skill = (await client.get("/api/v1/orgs/northwind/skills/procedure-onboarding")).json()
     assert skill["used_by"] == ["onboarding-coordinator@1"]
 
 
@@ -119,7 +119,7 @@ async def test_the_runner_reads_the_skills_of_its_run_and_of_no_other(
     from choregos_api.db.session import session_scope
     from choregos_api.security import mint_run_token
 
-    created = (await client.post("/api/v1/orgs/varga/skills", json={"files": SKILL_FILES})).json()
+    created = (await client.post("/api/v1/orgs/northwind/skills", json={"files": SKILL_FILES})).json()
     digest = created["versions"][0]["digest"]
     async with session_scope() as session:
         item = WorkItem(project_id=project["id"], tracker_key="BILLING-9", title="T", state="ready")

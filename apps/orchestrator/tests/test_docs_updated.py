@@ -17,7 +17,7 @@ async def test_the_diff_reaches_the_documentation_gate(setup: Any) -> None:
 
     payload = {"project_id": setup.project_id, "work_item_id": setup.work_item_id, "gates": [RULE]}
     setup.adapters.scm.set_diff(
-        "varga/billing-api",
+        "northwind/billing-api",
         "main",
         "choregos/123",
         [("src/x.py", 10, 0), ("docs/x.md", 5, 0, PATCH)],
@@ -26,7 +26,7 @@ async def test_the_diff_reaches_the_documentation_gate(setup: Any) -> None:
     assert ok["passed"] is True, ok["detail"]
     assert "diff unavailable" not in ok["detail"]
 
-    setup.adapters.scm.set_diff("varga/billing-api", "main", "choregos/123", [("src/x.py", 10, 0)])
+    setup.adapters.scm.set_diff("northwind/billing-api", "main", "choregos/123", [("src/x.py", 10, 0)])
     [refused] = await evaluate_gates(payload)
     assert refused["passed"] is False
     assert "diff unavailable" not in refused["detail"]

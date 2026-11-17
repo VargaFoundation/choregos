@@ -60,7 +60,7 @@ async def test_a_required_unbound_launch_is_incomplete_and_binding_it_makes_it_r
         "project": "billing-api",
         "workflow": WORKFLOW,
         "enabled": True,
-        "bound_by": "admin@varga.dev",
+        "bound_by": "admin@northwind.dev",
     }
     assert (await client.get(f"{SLUG}/readiness")).json() == {"status": "ready", "items": []}
 
@@ -89,9 +89,9 @@ async def test_binding_needs_the_right_to_create_work_items_in_the_project(
     await install(client, offline)
     await publish_review(client, project["id"])
     # An owner of the installation (its owner groups) who only reads the project.
-    await add_member(client, "owner@varga.dev", "viewer")
-    await set_groups("owner@varga.dev", [OWNERS])
-    await as_user(client, "owner@varga.dev")
+    await add_member(client, "owner@northwind.dev", "viewer")
+    await set_groups("owner@northwind.dev", [OWNERS])
+    await as_user(client, "owner@northwind.dev")
     refused = await bind_launch(client)
     assert refused.status_code == 403, refused.text
     assert "create work items" in refused.text
@@ -99,11 +99,11 @@ async def test_binding_needs_the_right_to_create_work_items_in_the_project(
     assert after["launches"][0]["project"] is None and after["status"] == "incomplete"
 
     # The same owner, now a developer of the project: the binding is theirs to make.
-    await add_member(client, "owner@varga.dev", "developer", project="billing-api")
-    await as_user(client, "owner@varga.dev")
+    await add_member(client, "owner@northwind.dev", "developer", project="billing-api")
+    await as_user(client, "owner@northwind.dev")
     accepted = await bind_launch(client)
     assert accepted.status_code == 200, accepted.text
-    assert accepted.json()["launches"][0]["bound_by"] == "owner@varga.dev"
+    assert accepted.json()["launches"][0]["bound_by"] == "owner@northwind.dev"
 
 
 async def test_a_developer_of_the_project_who_does_not_manage_the_assistant_cannot_bind(
@@ -111,8 +111,8 @@ async def test_a_developer_of_the_project_who_does_not_manage_the_assistant_cann
 ) -> None:
     await install(client, offline)
     await publish_review(client, project["id"])
-    await add_member(client, "dev@varga.dev", "developer", project="billing-api")
-    await as_user(client, "dev@varga.dev")
+    await add_member(client, "dev@northwind.dev", "developer", project="billing-api")
+    await as_user(client, "dev@northwind.dev")
     assert (await bind_launch(client)).status_code == 403
 
 
@@ -121,7 +121,7 @@ async def test_a_project_of_another_organisation_or_none_is_not_a_project(
 ) -> None:
     await install(client, offline)
     unknown = await bind_launch(client, project="no-such-project")
-    assert unknown.status_code == 422 and "is not a project of varga" in unknown.text
+    assert unknown.status_code == 422 and "is not a project of northwind" in unknown.text
 
 
 async def test_a_missing_workflow_inputs_it_cannot_take_and_a_personal_space_are_refused(
@@ -153,7 +153,7 @@ async def test_a_missing_workflow_inputs_it_cannot_take_and_a_personal_space_are
 
     async with session_scope(orgs="*") as session:
         organisation = (await session.execute(select(Organization))).scalar_one()
-        user = (await session.execute(select(User).where(User.email == "admin@varga.dev"))).scalar_one()
+        user = (await session.execute(select(User).where(User.email == "admin@northwind.dev"))).scalar_one()
         space = (await personal_space(session, organisation, user)).slug
     personal = await bind_launch(client, project=space)
     assert personal.status_code == 422 and "personal space" in personal.text

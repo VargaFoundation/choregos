@@ -18,7 +18,7 @@ from httpx import AsyncClient
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 FIXTURES = pathlib.Path(__file__).parent / "fixtures" / "joiners-leavers-v1"
-ORG = "/api/v1/orgs/varga"
+ORG = "/api/v1/orgs/northwind"
 
 
 def _load() -> Any:
@@ -74,7 +74,7 @@ async def tenant(client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatc
             "slug": "rh",
             "name": "rh",
             "template_ref": "joiners-leavers",
-            "config": {"slug": "rh", "org": "varga"},
+            "config": {"slug": "rh", "org": "northwind"},
         },
     )
     assert created.status_code == 201, created.text
@@ -89,7 +89,7 @@ async def tenant(client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatc
     )
     assert narrowed.status_code == 200, narrowed.text
     monkeypatch.setenv("CHOREGOS_TEMPLATES_DIR", str(ROOT / "templates"))
-    return tool.Tenant(client, "varga", "https://console.test"), pid
+    return tool.Tenant(client, "northwind", "https://console.test"), pid
 
 
 def _kinds(report: Any) -> list[str]:
@@ -199,7 +199,7 @@ async def test_hand_made_labels_are_translated_and_state_ids_are_untouched(
         json={
             "slug": "preuve",
             "name": "Preuve",
-            "config": {"slug": "preuve", "org": "varga"},
+            "config": {"slug": "preuve", "org": "northwind"},
         },  # lang: fr-ok
     )
     assert created.status_code == 201, created.text

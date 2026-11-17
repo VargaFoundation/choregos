@@ -1,5 +1,5 @@
 name: hello
-image: ghcr.io/graalsystems/choregos-agents/hello-mcp@sha256:3f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c4b5a69788796a5b4c3d2e1f0
+image: ghcr.io/graalsystems/tranibor-agents/hello-mcp@sha256:3f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c4b5a69788796a5b4c3d2e1f0
 port: 8080
 protocol: mcp-http
 paths: {mcp: /mcp, health: /healthz}

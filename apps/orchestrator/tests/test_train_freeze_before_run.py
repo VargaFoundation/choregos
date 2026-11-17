@@ -69,7 +69,7 @@ async def test_a_freeze_delivered_with_the_start_blocks_the_departure(
             start_signal="freeze",
             start_signal_args=[{"reason": "incident", "by": "marie"}],
         )
-        await train.signal("merged", {"work_item_key": "varga/billing-api#20", "sha": "f20"})
+        await train.signal("merged", {"work_item_key": "northwind/billing-api#20", "sha": "f20"})
         await train.signal("depart_now", {"by": "test"})
         await temporal_env.sleep(timedelta(minutes=5))
         state = await train.query("status_query")

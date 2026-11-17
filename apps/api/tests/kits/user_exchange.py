@@ -21,7 +21,7 @@ from ..test_broker import TOOLS
 AUDIENCE = "supplier-mcp"
 
 
-EMAIL = "admin@varga.dev"
+EMAIL = "admin@northwind.dev"
 
 
 SUBJECT = f"dev|{EMAIL}"
@@ -59,7 +59,7 @@ async def _person() -> tuple[str, str]:
 
     async with session_scope(orgs=ALL_ORGS) as session:
         user = (await session.execute(select(User).where(User.email == EMAIL))).scalar_one()
-        org = (await session.execute(select(Organization).where(Organization.slug == "varga"))).scalar_one()
+        org = (await session.execute(select(Organization).where(Organization.slug == "northwind"))).scalar_one()
         return user.id, org.id
 
 

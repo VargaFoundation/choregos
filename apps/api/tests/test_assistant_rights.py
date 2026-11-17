@@ -49,7 +49,7 @@ async def _ready(client: AsyncClient, **extra: Any) -> None:
     await _bind(client, "news", "news-feed")
     ready = await _bind(client, "market_data", "markets")
     assert ready.json()["status"] == "ready", ready.text
-    await as_user(client, "admin@varga.dev")
+    await as_user(client, "admin@northwind.dev")
 
 
 async def _groups(email: str, groups: list[str]) -> None:
@@ -98,20 +98,20 @@ async def test_a_person_outside_the_audience_neither_lists_nor_opens_the_assista
     app: Any,
     offline: Path,  # noqa: F811
 ) -> None:
-    await _member(client, "reader@varga.dev", [AUDIENCE])
-    await _member(client, "outsider@varga.dev", ["somebody-else"])
+    await _member(client, "reader@northwind.dev", [AUDIENCE])
+    await _member(client, "outsider@northwind.dev", ["somebody-else"])
     await _ready(client)
-    reader = await _as(app, "reader@varga.dev")
-    outsider = await _as(app, "outsider@varga.dev")
+    reader = await _as(app, "reader@northwind.dev")
+    outsider = await _as(app, "outsider@northwind.dev")
 
     listed = (await reader.get(f"{ME}/assistants")).json()["items"]
     assert [(a["org"], a["slug"], a["name"], a["display_name"]) for a in listed] == [
-        ("varga", "investment-assistant", "investment-assistant", "Investment assistant")
+        ("northwind", "investment-assistant", "investment-assistant", "Investment assistant")
     ]
     assert listed[0]["description"].startswith("Explains markets") and listed[0]["status"] == "ready"
     assert (await outsider.get(f"{ME}/assistants")).json()["items"] == []
     assert (await outsider.post(OPEN, json={})).status_code == 404, "404, not 403: it is not revealed"
-    missing = await outsider.post(f"{ME}/assistants/varga/no-such-assistant/conversations", json={})
+    missing = await outsider.post(f"{ME}/assistants/northwind/no-such-assistant/conversations", json={})
     assert missing.status_code == 404, "the same answer as for an assistant that does not exist"
     # The organisation's administrator is not in the audience: being an administrator is not using.
     assert (await client.get(f"{ME}/assistants")).json()["items"] == []
@@ -125,11 +125,11 @@ async def test_an_installation_that_is_not_ready_refuses_to_open(
     app: Any,
     offline: Path,  # noqa: F811
 ) -> None:
-    await _member(client, "reader@varga.dev", [AUDIENCE])
+    await _member(client, "reader@northwind.dev", [AUDIENCE])
     await _plugin(client)
     installed = await _install(client, audience_groups=[AUDIENCE])
     assert installed.status_code == 201, installed.text
-    reader = await _as(app, "reader@varga.dev")
+    reader = await _as(app, "reader@northwind.dev")
 
     refused = await reader.post(OPEN, json={})
     assert refused.status_code == 409, refused.text
@@ -149,9 +149,9 @@ async def test_the_opening_context_is_checked_and_reaches_the_agent_as_data(
     offline: Path,  # noqa: F811
     upstream: Upstream,  # noqa: F811
 ) -> None:
-    await _member(client, "reader@varga.dev", [AUDIENCE])
+    await _member(client, "reader@northwind.dev", [AUDIENCE])
     await _ready(client)
-    reader = await _as(app, "reader@varga.dev")
+    reader = await _as(app, "reader@northwind.dev")
 
     bad = await reader.post(OPEN, json={"context": {"instrument": 42}})
     assert bad.status_code == 422, bad.text
@@ -177,14 +177,14 @@ async def test_removing_an_idp_group_cuts_the_next_turn_and_deletes_nothing(
     offline: Path,  # noqa: F811
     upstream: Upstream,  # noqa: F811
 ) -> None:
-    await _member(client, "reader@varga.dev", [AUDIENCE])
+    await _member(client, "reader@northwind.dev", [AUDIENCE])
     await _ready(client)
-    reader = await _as(app, "reader@varga.dev")
+    reader = await _as(app, "reader@northwind.dev")
     upstream.model.say("First.").say("Second.")
     conversation = await _open(reader)
     assert (await _turn(reader, conversation, "One")).status_code == 200
 
-    await _groups("reader@varga.dev", [])
+    await _groups("reader@northwind.dev", [])
     cut = await _turn(reader, conversation, "Two")
     assert cut.status_code == 404, cut.text
     assert len(upstream.model.requests) == 1, "the model was not called"
@@ -192,7 +192,7 @@ async def test_removing_an_idp_group_cuts_the_next_turn_and_deletes_nothing(
 
     kept = await reader.get(f"{ME}/conversations/{conversation}")
     assert kept.status_code == 200 and [m["content"] for m in kept.json()["messages"]] == ["One", "First."]
-    await _groups("reader@varga.dev", [AUDIENCE])
+    await _groups("reader@northwind.dev", [AUDIENCE])
     assert (await _turn(reader, conversation, "Two")).status_code == 200, "back in the group, back in"
 
 
@@ -200,10 +200,10 @@ async def test_removing_an_idp_group_cuts_the_next_turn_and_deletes_nothing(
 
 
 async def _one_turn(client: AsyncClient, app: Any, upstream: Upstream) -> float:  # noqa: F811
-    """A probe: what one turn costs, spent by `probe@varga.dev` (so in the installation's month)."""
+    """A probe: what one turn costs, spent by `probe@northwind.dev` (so in the installation's month)."""
     upstream.tokens_in, upstream.tokens_out = 10_000, 2_000
     upstream.model.say("Ok.")
-    probe = await _as(app, "probe@varga.dev")
+    probe = await _as(app, "probe@northwind.dev")
     conversation = await _open(probe)
     assert (await _turn(probe, conversation)).status_code == 200
     spent = (await _record(conversation)).cost_usd
@@ -218,12 +218,12 @@ async def test_the_per_conversation_cap_refuses_the_turn_that_exceeds_it(
     offline: Path,  # noqa: F811
     upstream: Upstream,  # noqa: F811
 ) -> None:
-    await _member(client, "probe@varga.dev", [AUDIENCE])
+    await _member(client, "probe@northwind.dev", [AUDIENCE])
     await _ready(client)
     one = await _one_turn(client, app, upstream)
 
     await _budget(client, per_conversation_usd=one + 0.001)
-    person = await _as(app, "probe@varga.dev")
+    person = await _as(app, "probe@northwind.dev")
     conversation = await _open(person)
     assert (await _record(conversation)).max_usd == pytest.approx(one + 0.001)
     upstream.model.say("Ok.").say("Never said.")
@@ -241,13 +241,13 @@ async def test_the_per_user_month_cap_refuses_the_turn_that_exceeds_it(
     offline: Path,  # noqa: F811
     upstream: Upstream,  # noqa: F811
 ) -> None:
-    await _member(client, "probe@varga.dev", [AUDIENCE])
-    await _member(client, "other@varga.dev", [AUDIENCE])
+    await _member(client, "probe@northwind.dev", [AUDIENCE])
+    await _member(client, "other@northwind.dev", [AUDIENCE])
     await _ready(client)
     one = await _one_turn(client, app, upstream)  # the probe has spent one turn this month
 
     await _budget(client, per_user_month_usd=one * 2 + 0.001)
-    person = await _as(app, "probe@varga.dev")
+    person = await _as(app, "probe@northwind.dev")
     conversation = await _open(person)
     upstream.model.say("Ok.").say("Never said.").say("Other's.")
     assert (await _turn(person, conversation)).status_code == 200
@@ -256,7 +256,7 @@ async def test_the_per_user_month_cap_refuses_the_turn_that_exceeds_it(
     assert refused.status_code == 409, refused.text
     assert len(upstream.model.requests) == calls, "refused before the model"
     # The cap is the person's: someone else's month on the same assistant is their own.
-    other = await _as(app, "other@varga.dev")
+    other = await _as(app, "other@northwind.dev")
     assert (await _turn(other, await _open(other))).status_code == 200
 
 
@@ -267,13 +267,13 @@ async def test_the_per_installation_month_cap_refuses_the_turn_that_exceeds_it(
     offline: Path,  # noqa: F811
     upstream: Upstream,  # noqa: F811
 ) -> None:
-    await _member(client, "probe@varga.dev", [AUDIENCE])
-    await _member(client, "other@varga.dev", [AUDIENCE])
+    await _member(client, "probe@northwind.dev", [AUDIENCE])
+    await _member(client, "other@northwind.dev", [AUDIENCE])
     await _ready(client)
     one = await _one_turn(client, app, upstream)  # another person's turn, in the installation's month
 
     await _budget(client, per_installation_month_usd=one * 2 + 0.001)
-    other = await _as(app, "other@varga.dev")
+    other = await _as(app, "other@northwind.dev")
     conversation = await _open(other)
     upstream.model.say("Ok.").say("Never said.")
     assert (await _turn(other, conversation)).status_code == 200
@@ -290,10 +290,10 @@ async def test_deleting_a_conversation_does_not_give_its_spend_back(
     offline: Path,  # noqa: F811
     upstream: Upstream,  # noqa: F811
 ) -> None:
-    await _member(client, "probe@varga.dev", [AUDIENCE])
+    await _member(client, "probe@northwind.dev", [AUDIENCE])
     await _ready(client)
     one = await _one_turn(client, app, upstream)
-    person = await _as(app, "probe@varga.dev")
+    person = await _as(app, "probe@northwind.dev")
     (listed,) = (await person.get(f"{ME}/conversations")).json()["items"]
     assert (await person.delete(f"{ME}/conversations/{listed['id']}")).status_code == 204
 
@@ -321,8 +321,8 @@ async def test_the_three_permissions(client: AsyncClient, org: str, offline: Pat
         row = (await session.execute(select(AssistantInstallation))).scalar_one()
 
         def who(*groups: str, role: Role | None = None) -> Principal:
-            roles = {"varga": role} if role else {"varga": Role.VIEWER}
-            return Principal(user_id="u", email="u@varga.dev", org_roles=roles, groups=list(groups))
+            roles = {"northwind": role} if role else {"northwind": Role.VIEWER}
+            return Principal(user_id="u", email="u@northwind.dev", org_roles=roles, groups=list(groups))
 
         owner, member, admin, officer = (
             who(OWNERS),
@@ -332,22 +332,22 @@ async def test_the_three_permissions(client: AsyncClient, org: str, offline: Pat
         )
         stranger = who("elsewhere")
         manage, use, audit = Permission.ASSISTANT_MANAGE, Permission.ASSISTANT_USE, Permission.ASSISTANT_AUDIT
-        assert [holds(p, manage, "varga", row) for p in (owner, member, admin, officer, stranger)] == [
+        assert [holds(p, manage, "northwind", row) for p in (owner, member, admin, officer, stranger)] == [
             True, False, True, False, False,
         ]  # fmt: skip
-        assert [holds(p, use, "varga", row) for p in (owner, member, admin, officer, stranger)] == [
+        assert [holds(p, use, "northwind", row) for p in (owner, member, admin, officer, stranger)] == [
             False, True, False, False, False,
         ]  # fmt: skip
-        assert [holds(p, audit, "varga", row) for p in (owner, member, admin, officer, stranger)] == [
+        assert [holds(p, audit, "northwind", row) for p in (owner, member, admin, officer, stranger)] == [
             True, False, True, False, False,
         ]  # fmt: skip
         settings = get_settings()
         settings.assistant_privacy_officer_groups = ["privacy-officers"]
         try:
-            assert holds(officer, audit, "varga", row), "a privacy officer audits"
-            assert not holds(officer, manage, "varga", row), "and does not manage"
-            assert not holds(stranger, audit, "varga", row)
+            assert holds(officer, audit, "northwind", row), "a privacy officer audits"
+            assert not holds(officer, manage, "northwind", row), "and does not manage"
+            assert not holds(stranger, audit, "northwind", row)
         finally:
             settings.assistant_privacy_officer_groups = []
         # A group of another organisation's installation grants nothing here.
-        assert not holds(Principal(user_id="u", email="u@x", groups=[AUDIENCE]), use, "varga", row)
+        assert not holds(Principal(user_id="u", email="u@x", groups=[AUDIENCE]), use, "northwind", row)

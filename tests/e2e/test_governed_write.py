@@ -17,7 +17,7 @@ from .conftest import Platform, login
 
 pytestmark = [pytest.mark.e2e, pytest.mark.asyncio]
 
-ORG = "/api/v1/orgs/varga"
+ORG = "/api/v1/orgs/northwind"
 
 
 def _order(arguments: dict[str, Any]) -> dict[str, Any]:
@@ -63,7 +63,7 @@ async def _prepare(platform: Platform, monkeypatch: pytest.MonkeyPatch) -> tuple
     assert agent.status_code == 201, agent.text
     async with session_scope() as session:
         item = WorkItem(
-            project_id=platform.project_id, tracker_key="varga/billing-api#9", title="A PC", state="ready"
+            project_id=platform.project_id, tracker_key="northwind/billing-api#9", title="A PC", state="ready"
         )
         session.add(item)
         await session.flush()
@@ -82,7 +82,7 @@ async def _prepare(platform: Platform, monkeypatch: pytest.MonkeyPatch) -> tuple
     token = mint_run_token(
         "run-ecriture-1",
         project_slug=platform.project_slug,
-        work_item_key="varga/billing-api#9",
+        work_item_key="northwind/billing-api#9",
         ttl_minutes=30,
     )
     return "/api/v1/internal/runs/run-ecriture-1/tools", {"Authorization": f"Bearer {token}"}, server

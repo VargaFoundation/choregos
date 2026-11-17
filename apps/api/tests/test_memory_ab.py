@@ -14,11 +14,11 @@ async def _project(client: AsyncClient, slug: str, *, memory: bool) -> str:
         "name": slug,
         "config": {
             "slug": slug,
-            "org": "varga",
-            "repo": {"url": f"https://github.com/varga/{slug}.git", "default_branch": "main"},
+            "org": "northwind",
+            "repo": {"url": f"https://github.com/northwind/{slug}.git", "default_branch": "main"},
         },
     }
-    response = await client.post("/api/v1/orgs/varga/projects", json=payload)
+    response = await client.post("/api/v1/orgs/northwind/projects", json=payload)
     assert response.status_code == 201, response.text
     project_id = str(response.json()["id"])
 
@@ -44,7 +44,7 @@ async def _tickets(project_id: str, *, count: int, attempts: int, cost: float) -
         for index in range(count):
             item = WorkItem(
                 project_id=project_id,
-                tracker_key=f"varga/x#{index}",
+                tracker_key=f"northwind/x#{index}",
                 title=f"work item {index}",
                 state="deployed_prod",
                 closed_at=utcnow() - timedelta(days=3),
@@ -68,7 +68,7 @@ async def test_without_enough_work_items_the_report_refuses_to_conclude(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
     await _tickets(project["id"], count=2, attempts=1, cost=1.0)
-    report = (await client.get("/api/v1/orgs/varga/memory/ab-report")).json()
+    report = (await client.get("/api/v1/orgs/northwind/memory/ab-report")).json()
     assert report["verdict"] == "not enough data"
     assert "10 are needed on each side" in report["detail"]
 
@@ -79,7 +79,7 @@ async def test_memory_pays_off_when_it_improves_the_first_pass(client: AsyncClie
     await _tickets(with_memory, count=12, attempts=1, cost=1.0)
     await _tickets(without_memory, count=12, attempts=2, cost=2.0)
 
-    report = (await client.get("/api/v1/orgs/varga/memory/ab-report")).json()
+    report = (await client.get("/api/v1/orgs/northwind/memory/ab-report")).json()
 
     assert report["with_memory"]["projects"] == ["with-memory"]
     assert report["without_memory"]["projects"] == ["without-memory"]
@@ -97,7 +97,7 @@ async def test_memory_does_not_pay_off_when_it_costs_more_without_gain(
     await _tickets(with_memory, count=12, attempts=1, cost=6.0)
     await _tickets(without_memory, count=12, attempts=1, cost=2.0)
 
-    report = (await client.get("/api/v1/orgs/varga/memory/ab-report")).json()
+    report = (await client.get("/api/v1/orgs/northwind/memory/ab-report")).json()
 
     assert report["verdict"] == "memory does not pay off", report["detail"]
     assert report["with_memory"]["cost_per_ticket_usd"] == 6.0
@@ -113,6 +113,6 @@ async def test_an_unknown_organisation_claims_nothing(client: AsyncClient, admin
 async def test_the_window_is_adjustable(client: AsyncClient, admin: str) -> None:
     with_memory = await _project(client, "with-memory", memory=True)
     await _tickets(with_memory, count=3, attempts=1, cost=1.0)
-    report = (await client.get("/api/v1/orgs/varga/memory/ab-report", params={"weeks": 1})).json()
+    report = (await client.get("/api/v1/orgs/northwind/memory/ab-report", params={"weeks": 1})).json()
     assert report["weeks"] == 1
     assert report["with_memory"]["tickets"] == 3, "three days is within the week"

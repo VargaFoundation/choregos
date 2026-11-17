@@ -19,7 +19,7 @@ from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
 from httpx import AsyncClient
 from sqlalchemy import select
 
-ORG = "varga"
+ORG = "northwind"
 BASE = f"/api/v1/orgs/{ORG}/outposts"
 ORIGIN = "https://outposts.example.com"
 

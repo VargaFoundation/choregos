@@ -42,7 +42,7 @@ async def test_a_tool_under_validation_proposes_an_action_and_nothing_reaches_th
     assert call.json()["result"]["decision_path"] == f"/p/billing-api/actions/{action_id}"
     assert supplier.calls == [], "nothing reaches the server before the decision"
 
-    inbox = (await client.get("/api/v1/orgs/varga/actions", params={"status": "pending_approval"})).json()
+    inbox = (await client.get("/api/v1/orgs/northwind/actions", params={"status": "pending_approval"})).json()
     (waiting,) = [a for a in inbox if a["id"] == action_id]
     assert waiting["origin"] == "tool"
     assert waiting["proposed_by"]["id"] == "agent:coordinateur"
@@ -58,12 +58,12 @@ async def test_a_tool_under_validation_proposes_an_action_and_nothing_reaches_th
     assert refused.status_code == 422 and "separation of duties" in refused.text
 
     member = await client.post(
-        "/api/v1/orgs/varga/members", json={"email": "hr@varga.dev", "role": "project_owner"}
+        "/api/v1/orgs/northwind/members", json={"email": "hr@northwind.dev", "role": "project_owner"}
     )
     assert member.status_code in {200, 201}
     hr = AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
     try:
-        await login(hr, "hr@varga.dev")
+        await login(hr, "hr@northwind.dev")
         approved = await hr.post(decision_url, json={"decision": "approve"})
     finally:
         await hr.aclose()
@@ -128,7 +128,7 @@ async def test_a_job_steps_proposal_names_its_job_and_no_agent_owner_is_kept_out
     )
     assert call.status_code == 200 and call.json()["status_code"] == 202, call.text
     action_id = call.json()["result"]["action"]
-    inbox = (await client.get("/api/v1/orgs/varga/actions", params={"status": "pending_approval"})).json()
+    inbox = (await client.get("/api/v1/orgs/northwind/actions", params={"status": "pending_approval"})).json()
     (waiting,) = [a for a in inbox if a["id"] == action_id]
     assert waiting["proposed_by"] == {"kind": "job", "id": "job:snapshot", "run_id": "run-courtier-1"}
     assert waiting["justification"] == "proposed by the job step snapshot in run run-courtier-1"

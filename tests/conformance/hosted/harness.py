@@ -694,7 +694,7 @@ def hosted_stage_input(
     return StageInput(
         run_id=f"conformance-hosted-{uuid.uuid4().hex[:6]}",
         attempt=1,
-        project=ProjectRef(slug="conformance", org="varga"),
+        project=ProjectRef(slug="conformance", org="northwind"),
         work_item=WorkItemRef(key="ACME-1", title="Checkout fails with an error after payment"),
         transition=TransitionRef(id="t-triage", role="triage", **{"from": "inbox"}, to="triaged"),
         agent=AgentRef(backend="hosted"),

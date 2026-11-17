@@ -20,7 +20,7 @@ from choregos_api.services import plugin_supply as supply_module
 from choregos_api.services.plugin_supply import SourcesSupply
 from choregos_core.plugins.sources import PluginsConfig, SourceConfig, Trust
 
-REMOTE = SourceConfig("varga", "oci://registry.invalid/agents/index:latest", Trust("none"))
+REMOTE = SourceConfig("northwind", "oci://registry.invalid/agents/index:latest", Trust("none"))
 
 
 @pytest.fixture(autouse=True)
@@ -50,28 +50,28 @@ class _UnreachableSource(SourcesSupply):
 async def test_a_list_is_answered_without_waiting_for_a_source() -> None:
     supply = _UnreachableSource()
     answers = await asyncio.wait_for(
-        asyncio.gather(*(supply.latest("varga", name, wait=False) for name in ("a", "b", "c", "d"))),
+        asyncio.gather(*(supply.latest("northwind", name, wait=False) for name in ("a", "b", "c", "d"))),
         timeout=1,
     )
     assert answers == [None, None, None, None]
     assert supply.reads == 1, "each plugin of the list started its own read of the source"
     supply.release.set()
-    await supply_module._index_refresh["varga"]
+    await supply_module._index_refresh["northwind"]
 
 
 async def test_an_unreadable_source_is_read_once_for_every_plugin() -> None:
     supply = _UnreachableSource()
     supply.release.set()
     for name in ("a", "b", "c", "d"):
-        assert await supply.latest("varga", name) is None
+        assert await supply.latest("northwind", name) is None
     assert supply.reads == 1, "an unreadable source was read again for each plugin"
 
 
 async def test_an_expired_index_is_served_and_read_again_behind_the_reader() -> None:
     supply = _UnreachableSource()
-    supply_module._index_cache["varga"] = (time.monotonic() - 3600, None)
-    assert await asyncio.wait_for(supply.latest("varga", "a"), timeout=1) is None
+    supply_module._index_cache["northwind"] = (time.monotonic() - 3600, None)
+    assert await asyncio.wait_for(supply.latest("northwind", "a"), timeout=1) is None
     await asyncio.sleep(0)
     assert supply.reads == 1, "an expired index was not read again"
     supply.release.set()
-    await supply_module._index_refresh["varga"]
+    await supply_module._index_refresh["northwind"]

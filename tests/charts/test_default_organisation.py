@@ -1,7 +1,7 @@
 """The web chart sets no organisation (S42-01).
 
 `NEXT_PUBLIC_*` variables are inlined when the image is built (`apps/web/src/lib/api.ts`), so a
-runtime `NEXT_PUBLIC_DEFAULT_ORG` changes nothing -- and the chart used to set it to `varga`, which
+runtime `NEXT_PUBLIC_DEFAULT_ORG` changes nothing -- and the chart used to set it to `northwind`, which
 read as a promise that a fresh deployment shows that organisation. The console shows the visitor's
 last choice, else the first organisation of `GET /orgs`; the first one is named at bootstrap
 (`global.bootstrap.org`).
@@ -39,7 +39,7 @@ def _env_du_web(*surcharges: str) -> dict[str, str]:
 def test_the_web_sets_no_default_organisation() -> None:
     env = _env_du_web()
     assert "NEXT_PUBLIC_DEFAULT_ORG" not in env
-    assert "varga" not in env.values()
+    assert "northwind" not in env.values()
 
 
 def test_a_value_that_never_existed_does_not_come_back() -> None:

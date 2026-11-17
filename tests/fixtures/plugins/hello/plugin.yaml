@@ -3,7 +3,7 @@ kind: Plugin
 metadata:
   name: hello
   version: 1.0.0
-  publisher: Varga Foundation
+  publisher: GRAAL.SYSTEMS SAS
   license: Apache-2.0
   description: A test plugin that ships one of everything a plugin may ship.
   homepage: https://github.com/graalsystems/tranibor

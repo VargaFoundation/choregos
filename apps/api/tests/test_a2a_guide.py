@@ -17,7 +17,7 @@ import yaml
 from httpx import AsyncClient
 
 GUIDE = pathlib.Path(__file__).resolve().parents[3] / "docs" / "starting-a-workflow-from-outside.md"
-ENDPOINT = "/a2a/orgs/varga"
+ENDPOINT = "/a2a/orgs/northwind"
 CARD = f"{ENDPOINT}/.well-known/agent-card.json"
 #: A `curl` body of the guide: `-d '{ … }'`, closed at the start of a line.
 BODY = re.compile(r"\"\$A2A\".*?-d '(\{.*?^\})'", re.M | re.S)

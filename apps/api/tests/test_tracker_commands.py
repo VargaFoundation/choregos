@@ -14,8 +14,8 @@ from choregos_adapters.tracker.github_events import parse_command
 from httpx import AsyncClient
 from sqlalchemy import select
 
-KEY = "varga/billing-api#7"
-REPO = {"full_name": "varga/billing-api"}
+KEY = "northwind/billing-api#7"
+REPO = {"full_name": "northwind/billing-api"}
 
 
 @pytest.fixture
@@ -51,7 +51,7 @@ async def _post(client: AsyncClient, event: str, delivery: str, body: dict[str, 
 async def _routed_item(client: AsyncClient, project: dict[str, Any]) -> None:
     put = await client.put(
         f"/api/v1/projects/{project['id']}/connectors/tracker",
-        json={"type": "github-issues", "config": {"repo": "varga/billing-api"}},
+        json={"type": "github-issues", "config": {"repo": "northwind/billing-api"}},
     )
     assert put.status_code == 200, put.text
     issue = {"number": 7, "title": "Credit notes fail", "labels": [{"name": "agent-ready"}]}

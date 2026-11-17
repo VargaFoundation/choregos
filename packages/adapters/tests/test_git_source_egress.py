@@ -29,7 +29,7 @@ def spy(monkeypatch: pytest.MonkeyPatch) -> Spy:
 
 
 async def test_the_fetch_forbids_redirects_and_names_its_host(spy: Spy) -> None:
-    policy = EgressPolicy(org="varga", rules=(AllowedRule("github.com", used_by=("workers",)),))
+    policy = EgressPolicy(org="northwind", rules=(AllowedRule("github.com", used_by=("workers",)),))
     with use_policy(policy, "workers"):
         await GitSource(url="https://github.com/acme/docs.git", ref="main").changes(None)
     fetch = next(a for a in spy.argv if "fetch" in a)
@@ -37,7 +37,7 @@ async def test_the_fetch_forbids_redirects_and_names_its_host(spy: Spy) -> None:
 
 
 async def test_a_host_absent_from_the_policy_raises_before_any_subprocess(spy: Spy) -> None:
-    policy = EgressPolicy(org="varga", rules=(AllowedRule("github.com", used_by=("workers",)),))
+    policy = EgressPolicy(org="northwind", rules=(AllowedRule("github.com", used_by=("workers",)),))
     with use_policy(policy, "workers"), pytest.raises(EgressRefusedError) as refused:
         await GitSource(url="https://gitlab.example.test/acme/docs.git", ref="main").changes(None)
     assert refused.value.host == "gitlab.example.test"

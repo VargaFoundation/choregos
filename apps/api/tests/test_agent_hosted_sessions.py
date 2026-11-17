@@ -20,7 +20,7 @@ from httpx import ASGITransport, AsyncClient
 
 from .test_agent_sessions import Upstream, _ledger, _supplier, supplier, upstream  # noqa: F401
 
-ORG = "/api/v1/orgs/varga"
+ORG = "/api/v1/orgs/northwind"
 RESPONSES = f"{ORG}/agents/triager/responses"
 REF = "ghcr.io/acme/triager:1.2"
 

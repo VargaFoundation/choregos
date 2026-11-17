@@ -50,7 +50,7 @@ async def run_loop(answers: list[Any], *, wake: bool = True) -> tuple[dict[str, 
         ):
             handle = await environment.client.start_workflow(
                 "KnowledgeSync",
-                {"org": "varga", "source_id": "src-1", "interval_seconds": 600},
+                {"org": "northwind", "source_id": "src-1", "interval_seconds": 600},
                 id="knowledge-sync-src-1",
                 task_queue="test",
                 execution_timeout=timedelta(days=1),
@@ -69,7 +69,7 @@ async def test_the_loop_syncs_until_its_source_is_gone() -> None:
         [{"status": "synced", "added": 1, "interval_seconds": 900}, {"status": "gone"}]
     )
     assert result == {"passes": 2, "gone": True}
-    assert stub.calls == [{"org": "varga", "source_id": "src-1"}] * 2
+    assert stub.calls == [{"org": "northwind", "source_id": "src-1"}] * 2
 
 
 async def test_a_pass_that_is_not_due_sleeps_until_the_next_one() -> None:

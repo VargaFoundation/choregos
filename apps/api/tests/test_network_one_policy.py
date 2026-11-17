@@ -38,7 +38,7 @@ async def test_opening_a_host_the_ceiling_denies_is_a_422_and_opens_nothing(
 async def test_approving_a_request_the_ceiling_denies_is_a_422_and_the_request_waits(
     client: AsyncClient, admin: str
 ) -> None:
-    async with as_person(client, "dev@varga.dev", "developer") as dev:
+    async with as_person(client, "dev@northwind.dev", "developer") as dev:
         asked = await dev.post(f"{ORG}/egress/requests", json={"host": "blocked.example.test"})
         assert asked.status_code == 201, asked.text
     await _ceiling(client, {"allow_domains": ["vendor.example"]})

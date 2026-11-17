@@ -39,13 +39,13 @@ def supplier(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
 async def _declare(client: AsyncClient) -> None:
     body = {"name": "supplier", "type": "mcp", "config": {"url": "https://supplier.test/mcp"},
              "secret_refs": {"token": "env:CONNECTOR_TEST_KEY_SUPPLIER"}}  # fmt: skip
-    created = await client.post("/api/v1/orgs/varga/connectors", json=body)
+    created = await client.post("/api/v1/orgs/northwind/connectors", json=body)
     assert created.status_code == 201, created.text
     assert created.json()["operations"] == [], "an MCP server declares nothing: it is discovered"
 
 
 async def _operations(client: AsyncClient) -> dict[str, dict[str, Any]]:
-    instance = (await client.get("/api/v1/orgs/varga/connectors/supplier")).json()
+    instance = (await client.get("/api/v1/orgs/northwind/connectors/supplier")).json()
     return {o["name"]: o for o in instance["operations"]}
 
 
@@ -53,7 +53,7 @@ async def test_a_discovered_tool_is_born_closed(
     client: AsyncClient, project: dict[str, Any], supplier: Any
 ) -> None:
     await _declare(client)
-    diff = await client.post("/api/v1/orgs/varga/connectors/supplier/discover")
+    diff = await client.post("/api/v1/orgs/northwind/connectors/supplier/discover")
     assert diff.status_code == 200, diff.text
     assert sorted(diff.json()["added"]) == ["cancel_order", "order_device", "track_order"]
     operations = await _operations(client)
@@ -67,19 +67,19 @@ async def test_a_discovered_tool_is_born_closed(
 
 async def test_a_drifting_schema_closes_the_operation(client: AsyncClient, admin: str, supplier: Any) -> None:
     await _declare(client)
-    await client.post("/api/v1/orgs/varga/connectors/supplier/discover")
+    await client.post("/api/v1/orgs/northwind/connectors/supplier/discover")
     opened = await client.patch(
-        "/api/v1/orgs/varga/connectors/supplier/operations/order_device", json={"policy": "approval"}
+        "/api/v1/orgs/northwind/connectors/supplier/operations/order_device", json={"policy": "approval"}
     )
     assert opened.status_code == 200
-    nothing = (await client.post("/api/v1/orgs/varga/connectors/supplier/discover")).json()
+    nothing = (await client.post("/api/v1/orgs/northwind/connectors/supplier/discover")).json()
     assert nothing == {"added": [], "changed": [], "removed": [], "unchanged": 3}
     assert (await _operations(client))["order_device"]["policy"] == "approval", "nothing moved"
 
     # The server widens `order_device` (a quantity) and removes `cancel_order`.
     supplier.tools[1]["inputSchema"]["properties"]["quantity"] = {"type": "integer"}
     supplier.tools.pop(2)
-    diff = (await client.post("/api/v1/orgs/varga/connectors/supplier/discover")).json()
+    diff = (await client.post("/api/v1/orgs/northwind/connectors/supplier/discover")).json()
     assert diff == {
         "added": [],
         "changed": ["order_device"],
@@ -95,15 +95,15 @@ async def test_only_the_connectors_key_goes_to_the_server(
     client: AsyncClient, admin: str, supplier: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     await _declare(client)
-    assert (await client.post("/api/v1/orgs/varga/connectors/supplier/discover")).status_code == 200
+    assert (await client.post("/api/v1/orgs/northwind/connectors/supplier/discover")).status_code == 200
     for method, headers, _ in supplier.received:
         assert headers["authorization"] == "Bearer supplier-key", method
         assert "cookie" not in headers and "chg_" not in str(headers), method
 
     monkeypatch.delenv("CONNECTOR_TEST_KEY_SUPPLIER")
-    outage = await client.post("/api/v1/orgs/varga/connectors/supplier/discover")
+    outage = await client.post("/api/v1/orgs/northwind/connectors/supplier/discover")
     assert outage.status_code == 502 and "CONNECTOR_TEST_KEY_SUPPLIER" in outage.text
-    assert (await client.get("/api/v1/orgs/varga/connectors/supplier")).json()["status"] == "error"
+    assert (await client.get("/api/v1/orgs/northwind/connectors/supplier")).json()["status"] == "error"
 
 
 async def test_discovering_is_an_administrators_gesture(
@@ -111,8 +111,8 @@ async def test_discovering_is_an_administrators_gesture(
 ) -> None:
     await _declare(client)
     member = await client.post(
-        "/api/v1/orgs/varga/members", json={"email": "po@varga.dev", "role": "project_owner"}
+        "/api/v1/orgs/northwind/members", json={"email": "po@northwind.dev", "role": "project_owner"}
     )
     assert member.status_code in {200, 201}
-    await login(client, "po@varga.dev")
-    assert (await client.post("/api/v1/orgs/varga/connectors/supplier/discover")).status_code == 403
+    await login(client, "po@northwind.dev")
+    assert (await client.post("/api/v1/orgs/northwind/connectors/supplier/discover")).status_code == 403

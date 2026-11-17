@@ -56,7 +56,7 @@ async def test_a_request_created_in_the_demo_project_starts_its_workflow(
     from choregos_api.temporal import get_temporal
 
     await seed_local_demo(_settings())
-    await login(client, "admin@varga.dev")  # a dev admin of every organisation of the bench
+    await login(client, "admin@northwind.dev")  # a dev admin of every organisation of the bench
     created = await client.post(
         "/api/v1/projects/demo:demo/work-items", json={"title": "Plan the team offsite", "body": "Lyon, May."}
     )
@@ -193,7 +193,7 @@ async def test_the_first_sign_in_finds_the_demo_project_with_one_running_work_it
 
     report = await seed_local_demo(_settings())
     assert report["work_items"] == ["DEMO-1"]
-    await login(client, "admin@varga.dev")
+    await login(client, "admin@northwind.dev")
     projects = (await client.get("/api/v1/orgs/demo/projects")).json()["items"]
     assert [p["slug"] for p in projects] == ["demo"]
     items = (await client.get("/api/v1/projects/demo:demo/work-items")).json()["items"]

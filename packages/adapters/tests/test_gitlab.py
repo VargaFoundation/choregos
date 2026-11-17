@@ -17,8 +17,8 @@ from choregos_adapters.tracker.gitlab_events import parse_gitlab_event
 from choregos_contracts import InboundEventType, ProjectConfig, RepoConfig, Risk, Size
 from choregos_core.domain import NewItem, TrackerStateMapping
 
-PROJECT = "varga/billing-api"
-ENCODED = "varga%2Fbilling-api"
+PROJECT = "northwind/billing-api"
+ENCODED = "northwind%2Fbilling-api"
 
 
 def tracker(handler: Any) -> GitLabTracker:
@@ -64,7 +64,7 @@ async def test_reading_a_ticket_with_metadata(block: str) -> None:
                 "description": description,
                 "state": "opened",
                 "labels": ["agent-ready", "choregos::implement"],
-                "web_url": "https://gitlab.com/varga/billing-api/-/issues/12",
+                "web_url": "https://gitlab.com/northwind/billing-api/-/issues/12",
                 "author": {"username": "augustin"},
                 "assignees": [{"username": "marie"}],
             },
@@ -85,7 +85,7 @@ async def test_les_candidats_sont_les_issues_agent_ready() -> None:
         vu.update(dict(request.url.params))
         return httpx.Response(200, json=[{"iid": 7}, {"iid": 9}])
 
-    config = ProjectConfig(slug="billing-api", org="varga", repo=RepoConfig(url="https://x/y.git"))
+    config = ProjectConfig(slug="billing-api", org="northwind", repo=RepoConfig(url="https://x/y.git"))
     keys = await tracker(handler).list_candidates(config)
 
     assert keys == [f"{PROJECT}#7", f"{PROJECT}#9"]
@@ -297,7 +297,7 @@ async def test_the_poll_also_searches_the_labels_of_the_start_rules() -> None:
     config = ProjectConfig.model_validate(
         {
             "slug": "billing-api",
-            "org": "varga",
+            "org": "northwind",
             "start_rules": [{"labels_all": ["ops"], "labels_any": ["p1", "p2"]}],
         }
     )

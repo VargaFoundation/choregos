@@ -15,8 +15,8 @@ from typing import Any
 import pytest
 from httpx import AsyncClient
 
-REPO = {"full_name": "varga/billing-api"}
-KEY = "varga/billing-api#7"
+REPO = {"full_name": "northwind/billing-api"}
+KEY = "northwind/billing-api#7"
 JIRA_KEY = "BILL-42"
 SECRET = "s3cret"
 
@@ -39,7 +39,7 @@ async def _ended(project_id: str, key: str, state: str = "deployed_prod") -> str
             title="Kernel 6.1 is end of life",
             state=state,
             closed_at=datetime.now(UTC),
-            pr_url="https://github.com/varga/billing-api/pull/3",
+            pr_url="https://github.com/northwind/billing-api/pull/3",
             documents={"deployed_release": "rel-1", "labels": ["agent-ready"]},
         )
         session.add(item)
@@ -110,7 +110,7 @@ async def test_a_reopened_github_issue_restarts_its_ended_work_item_once(
     assert (item.recurrence, item.state, item.closed_at) == (1, "inbox", None)
     assert item.recurred_at is not None and item.pr_url is None
     assert "deployed_release" not in item.documents and item.documents["labels"] == ["agent-ready"]
-    workflow_id = "wi-billing-api-varga_billing-api-7"
+    workflow_id = "wi-billing-api-northwind_billing-api-7"
     assert _temporal().restarted[restarted:] == [workflow_id]
     assert _temporal().started[workflow_id] == {
         "project_id": project["id"],
@@ -192,8 +192,8 @@ async def bill(client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch)
 
     monkeypatch.setattr(get_settings(), "generic_webhook_secret", SECRET)
     created = await client.post(
-        "/api/v1/orgs/varga/projects",
-        json={"slug": "bill", "name": "bill", "config": {"slug": "bill", "org": "varga"}},
+        "/api/v1/orgs/northwind/projects",
+        json={"slug": "bill", "name": "bill", "config": {"slug": "bill", "org": "northwind"}},
     )
     assert created.status_code == 201, created.text
     return dict(created.json())
@@ -286,11 +286,11 @@ async def _desk(client: AsyncClient) -> dict[str, Any]:
     """A project with an internal tracker and one keyed trigger, `incident`."""
     trigger = {"name": "incident", "title": "{/number}", "key": "/sys_id", "workflow": "incident"}
     created = await client.post(
-        "/api/v1/orgs/varga/projects",
+        "/api/v1/orgs/northwind/projects",
         json={
             "slug": "desk",
             "name": "desk",
-            "config": {"slug": "desk", "org": "varga", "triggers": [trigger]},
+            "config": {"slug": "desk", "org": "northwind", "triggers": [trigger]},
         },
     )
     assert created.status_code == 201, created.text
@@ -310,7 +310,7 @@ async def _token(client: AsyncClient, project: dict[str, Any]) -> str:
 
 async def _call(client: AsyncClient, token: str, payload: dict[str, Any]) -> Any:
     return await client.post(
-        "/api/v1/webhooks/triggers/varga/desk/incident",
+        "/api/v1/webhooks/triggers/northwind/desk/incident",
         json=payload,
         headers={"Authorization": f"Bearer {token}"},
     )

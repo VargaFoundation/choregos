@@ -22,7 +22,7 @@ def remote() -> Iterator[FakeA2aAgent]:
     yield from remote_agent()
 
 
-BASE = "/api/v1/orgs/varga/remote-credentials"
+BASE = "/api/v1/orgs/northwind/remote-credentials"
 
 
 async def _connected(client: AsyncClient, remote: FakeA2aAgent) -> str:

@@ -13,7 +13,7 @@ from httpx import AsyncClient
 
 from .test_knowledge_files import _pinned, _run
 
-BASE = "/api/v1/orgs/varga/knowledge"
+BASE = "/api/v1/orgs/northwind/knowledge"
 
 IMPORTED = (
     "---\n"

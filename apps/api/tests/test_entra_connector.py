@@ -11,7 +11,7 @@ from typing import Any
 import pytest
 from httpx import AsyncClient
 
-ORG = "/api/v1/orgs/varga"
+ORG = "/api/v1/orgs/northwind"
 
 
 @pytest.fixture
@@ -47,7 +47,7 @@ async def _run(
     assert created.status_code == 201, created.text
     async with session_scope() as session:
         item = WorkItem(
-            project_id=project["id"], tracker_key="varga/hr#1", title="Arrival of Lea", state="plan"
+            project_id=project["id"], tracker_key="northwind/hr#1", title="Arrival of Lea", state="plan"
         )
         session.add(item)
         await session.flush()
@@ -64,7 +64,7 @@ async def _run(
             )
         )
     token = mint_run_token(
-        "run-entra-1", project_slug="billing-api", work_item_key="varga/hr#1", ttl_minutes=30
+        "run-entra-1", project_slug="billing-api", work_item_key="northwind/hr#1", ttl_minutes=30
     )
     return "/api/v1/internal/runs/run-entra-1/tools", {"Authorization": f"Bearer {token}"}
 

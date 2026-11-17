@@ -48,13 +48,13 @@ def _before(connection: Any) -> None:
             connection,
             "users",
             id=user,
-            email=f"{user}@varga.dev",
+            email=f"{user}@northwind.dev",
             display_name=user,
             is_service=False,
             groups="[]",
         )
     _row(connection, "tracker_identities", id="t1", org_id="o1", user_id="u1", tracker="github",
-         external_id="1001", login="devon", created_by="admin@varga.dev")  # fmt: skip
+         external_id="1001", login="devon", created_by="admin@northwind.dev")  # fmt: skip
     _row(connection, "tracker_identities", id="t2", org_id="o2", user_id="u2", tracker="github",
          external_id="1001", login="other", created_by=None)  # fmt: skip
 
@@ -70,7 +70,7 @@ def _linked(connection: Any) -> list[tuple[Any, ...]]:
 
 
 EXPECTED = [
-    ("t1", "o1", "u1", "github", "https://github.com", "1001", "devon", False, None, None, "admin@varga.dev"),
+    ("t1", "o1", "u1", "github", "https://github.com", "1001", "devon", False, None, None, "admin@northwind.dev"),
     ("t2", "o2", "u2", "github", "https://github.com", "1001", "other", False, None, None, None),
 ]
 

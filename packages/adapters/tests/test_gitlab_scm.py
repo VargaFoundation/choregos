@@ -13,7 +13,7 @@ from choregos_adapters.http import RestClient
 from choregos_adapters.scm.gitlab import GitLabScm
 from choregos_core.domain import PrRef
 
-BASE = "https://gitlab.com/api/v4/projects/varga%2Fbilling-api"
+BASE = "https://gitlab.com/api/v4/projects/northwind%2Fbilling-api"
 #: The commit the gates judged, and the one a later push put at the head.
 JUDGED = "a" * 40
 LATER = "b" * 40
@@ -21,7 +21,7 @@ LATER = "b" * 40
 
 def adapter() -> GitLabScm:
     client = RestClient("https://gitlab.com", headers={"PRIVATE-TOKEN": "tok"}, service="gitlab")
-    return GitLabScm(client, "varga/billing-api")
+    return GitLabScm(client, "northwind/billing-api")
 
 
 def body_of(route: respx.Route) -> dict[str, object]:
@@ -38,7 +38,7 @@ async def test_mint_token_asks_for_write_repository_until_tomorrow() -> None:
     created = respx.post(f"{BASE}/access_tokens").mock(
         return_value=httpx.Response(201, json={"token": "glpat-run"})
     )
-    token = await adapter().mint_token("varga/billing-api", 3600, ["contents"])
+    token = await adapter().mint_token("northwind/billing-api", 3600, ["contents"])
     sent = body_of(created)
     assert token == "glpat-run"
     assert sent["scopes"] == ["write_repository"]
@@ -63,7 +63,7 @@ async def test_mint_token_cleans_expired_run_tokens() -> None:
     live = respx.delete(f"{BASE}/access_tokens/2").mock(return_value=httpx.Response(204))
     other = respx.delete(f"{BASE}/access_tokens/3").mock(return_value=httpx.Response(204))
     respx.post(f"{BASE}/access_tokens").mock(return_value=httpx.Response(201, json={"token": "t"}))
-    await adapter().mint_token("varga/billing-api", 3600, [])
+    await adapter().mint_token("northwind/billing-api", 3600, [])
     assert old.called and not live.called and not other.called
 
 
@@ -71,7 +71,7 @@ async def test_mint_token_cleans_expired_run_tokens() -> None:
 async def test_a_failing_cleanup_does_not_keep_a_run_from_its_token() -> None:
     respx.get(f"{BASE}/access_tokens").mock(return_value=httpx.Response(403, json={"message": "no"}))
     respx.post(f"{BASE}/access_tokens").mock(return_value=httpx.Response(201, json={"token": "t"}))
-    assert await adapter().mint_token("varga/billing-api", 3600, []) == "t"
+    assert await adapter().mint_token("northwind/billing-api", 3600, []) == "t"
 
 
 @respx.mock
@@ -79,7 +79,7 @@ async def test_an_existing_branch_is_not_an_error() -> None:
     route = respx.post(f"{BASE}/repository/branches").mock(
         return_value=httpx.Response(400, json={"message": "Branch already exists"})
     )
-    await adapter().ensure_branch("varga/billing-api", "feat/x", "main")
+    await adapter().ensure_branch("northwind/billing-api", "feat/x", "main")
     assert body_of(route) == {"branch": "feat/x", "ref": "main"}
 
 
@@ -87,8 +87,8 @@ async def test_an_existing_branch_is_not_an_error() -> None:
 async def test_branch_exists_distinguishes_absence_from_failure() -> None:
     respx.get(f"{BASE}/repository/branches/feat%2Fx").mock(return_value=httpx.Response(200, json={}))
     respx.get(f"{BASE}/repository/branches/gone").mock(return_value=httpx.Response(404))
-    assert await adapter().branch_exists("varga/billing-api", "feat/x") is True
-    assert await adapter().branch_exists("varga/billing-api", "gone") is False
+    assert await adapter().branch_exists("northwind/billing-api", "feat/x") is True
+    assert await adapter().branch_exists("northwind/billing-api", "gone") is False
 
 
 @respx.mock
@@ -97,9 +97,9 @@ async def test_open_pr_then_auto_merge() -> None:
     created = respx.post(f"{BASE}/merge_requests").mock(
         return_value=httpx.Response(201, json={"iid": 7, "web_url": "https://gitlab.com/mr/7"})
     )
-    ref = await adapter().open_pr("varga/billing-api", "feat/x", "main", "Add x", "body", True)
+    ref = await adapter().open_pr("northwind/billing-api", "feat/x", "main", "Add x", "body", True)
     assert ref == PrRef(
-        repo="varga/billing-api", number=7, url="https://gitlab.com/mr/7", head="feat/x", base="main"
+        repo="northwind/billing-api", number=7, url="https://gitlab.com/mr/7", head="feat/x", base="main"
     )
     assert body_of(created)["title"] == "Draft: Add x"
     respx.get(f"{BASE}/merge_requests/7").mock(
@@ -129,7 +129,7 @@ async def test_commit_files_sends_create_and_update_actions() -> None:
         return_value=httpx.Response(201, json={"id": "abc123"})
     )
     sha = await adapter().commit_files(
-        "varga/billing-api",
+        "northwind/billing-api",
         "feat/x",
         {"new.txt": "hello", "dir/old.txt": "after", "same.txt": "same"},
         "msg",
@@ -168,7 +168,7 @@ async def test_get_pr_builds_the_state_from_the_merge_request_and_its_pipeline()
     respx.get(f"{BASE}/merge_requests/7/diffs").mock(
         return_value=httpx.Response(200, json=[{"new_path": "a.py", "old_path": "a.py"}])
     )
-    state = await adapter().get_pr(PrRef(repo="varga/billing-api", number=7))
+    state = await adapter().get_pr(PrRef(repo="northwind/billing-api", number=7))
     assert state.draft and not state.merged and state.mergeable is True and state.head_sha == "abc"
     assert [(c.status, c.conclusion) for c in state.checks] == [("completed", "failure")]
     assert state.files == ["a.py"] and state.labels == ["a"]
@@ -184,7 +184,7 @@ async def test_request_review_resolves_usernames_to_ids() -> None:
         return_value=httpx.Response(200, json=[])
     )
     put = respx.put(f"{BASE}/merge_requests/7").mock(return_value=httpx.Response(200, json={}))
-    await adapter().request_review(PrRef(repo="varga/billing-api", number=7), ["ann", "ghost", "org/team"])
+    await adapter().request_review(PrRef(repo="northwind/billing-api", number=7), ["ann", "ghost", "org/team"])
     assert body_of(put) == {"reviewer_ids": [11]}
 
 
@@ -208,7 +208,7 @@ async def test_compare_maps_files_into_a_diff_summary() -> None:
             },
         )
     )
-    summary = await adapter().compare("varga/billing-api", "main", "feat/x")
+    summary = await adapter().compare("northwind/billing-api", "main", "feat/x")
     assert route.calls[0].request.url.params["from"] == "main"
     assert route.calls[0].request.url.params["to"] == "feat/x"
     assert [(f.path, f.status, f.additions, f.deletions) for f in summary.files] == [
@@ -222,7 +222,7 @@ async def test_compare_maps_files_into_a_diff_summary() -> None:
 
 def test_parse_webhook_delegates_merge_request_payloads() -> None:
     body = (
-        b'{"object_kind": "merge_request", "project": {"path_with_namespace": "varga/billing-api"},'
+        b'{"object_kind": "merge_request", "project": {"path_with_namespace": "northwind/billing-api"},'
         b' "object_attributes": {"iid": 7, "action": "open", "source_branch": "feat/x",'
         b' "target_branch": "main"}}'
     )
@@ -249,10 +249,10 @@ async def test_the_head_of_a_branch_is_the_commit_of_the_branch() -> None:
     )
     respx.get(f"{BASE}/repository/branches/gone").mock(return_value=httpx.Response(404))
     respx.get(f"{BASE}/repository/branches/closed").mock(return_value=httpx.Response(403, json={}))
-    assert await adapter().head_of("varga/billing-api", "feat/x") == JUDGED
-    assert await adapter().head_of("varga/billing-api", "gone") is None, "no branch is no commit"
+    assert await adapter().head_of("northwind/billing-api", "feat/x") == JUDGED
+    assert await adapter().head_of("northwind/billing-api", "gone") is None, "no branch is no commit"
     with pytest.raises(UpstreamError):
-        await adapter().head_of("varga/billing-api", "closed")
+        await adapter().head_of("northwind/billing-api", "closed")
 
 
 @respx.mock
@@ -265,7 +265,7 @@ async def test_a_head_that_moved_is_refused_before_anything_is_asked() -> None:
     )
     merge = respx.put(f"{BASE}/merge_requests/7/merge").mock(return_value=httpx.Response(200, json={}))
     with pytest.raises(HeadMovedError) as moved:
-        await adapter().enqueue_merge(PrRef(repo="varga/billing-api", number=7), JUDGED)
+        await adapter().enqueue_merge(PrRef(repo="northwind/billing-api", number=7), JUDGED)
     assert (moved.value.expected, moved.value.actual) == (JUDGED, LATER)
     assert not merge.called, "nothing was asked of the forge"
 
@@ -283,7 +283,7 @@ async def test_a_merge_the_forge_refuses_on_its_sha_is_a_moved_head() -> None:
         return_value=httpx.Response(409, json={"message": "SHA does not match HEAD of source branch"})
     )
     with pytest.raises(HeadMovedError) as moved:
-        await adapter().enqueue_merge(PrRef(repo="varga/billing-api", number=7), JUDGED)
+        await adapter().enqueue_merge(PrRef(repo="northwind/billing-api", number=7), JUDGED)
     assert moved.value.expected == JUDGED
     assert body_of(merge)["sha"] == JUDGED, "the forge refused the commit it was sent"
     assert merge.call_count == 1, "one merge, not a second without it"
@@ -301,7 +301,7 @@ async def test_another_refusal_of_the_merge_is_not_a_moved_head() -> None:
         return_value=httpx.Response(405, json={"message": "405 Method Not Allowed"})
     )
     with pytest.raises(UpstreamError) as refused:
-        await adapter().enqueue_merge(PrRef(repo="varga/billing-api", number=7), JUDGED)
+        await adapter().enqueue_merge(PrRef(repo="northwind/billing-api", number=7), JUDGED)
     assert not isinstance(refused.value, HeadMovedError)
 
 
@@ -314,10 +314,10 @@ async def test_a_merge_request_already_merged_at_the_commit_is_not_merged_again(
         return_value=httpx.Response(200, json={"iid": 7, "state": "merged", "sha": JUDGED})
     )
     merge = respx.put(f"{BASE}/merge_requests/7/merge").mock(return_value=httpx.Response(405, json={}))
-    await adapter().enqueue_merge(PrRef(repo="varga/billing-api", number=7), JUDGED)
+    await adapter().enqueue_merge(PrRef(repo="northwind/billing-api", number=7), JUDGED)
     assert merged.called and not merge.called, "a replayed merge asks nothing"
     with pytest.raises(HeadMovedError):
-        await adapter().enqueue_merge(PrRef(repo="varga/billing-api", number=7), LATER)
+        await adapter().enqueue_merge(PrRef(repo="northwind/billing-api", number=7), LATER)
 
 
 def test_the_adapter_says_it_merges_at_a_commit() -> None:

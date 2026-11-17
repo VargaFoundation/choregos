@@ -32,7 +32,7 @@ async def _collect(setup: Fixture, run_id: str, files: list[tuple[Any, ...]]) ->
     from choregos_api.db.session import session_scope
     from choregos_orchestrator.activities.scm import collect_run_artifacts
 
-    setup.adapters.scm.set_diff("varga/billing-api", "main", "choregos/123", files)
+    setup.adapters.scm.set_diff("northwind/billing-api", "main", "choregos/123", files)
     async with session_scope() as session:
         session.add(
             Run(

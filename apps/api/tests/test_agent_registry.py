@@ -25,7 +25,7 @@ SPEC: dict[str, Any] = {
 
 async def _create(client: AsyncClient, slug: str = "onboarding-coordinator", **extra: Any) -> Any:
     return await client.post(
-        "/api/v1/orgs/varga/agents",
+        "/api/v1/orgs/northwind/agents",
         json={"slug": slug, "display_name": "Onboarding coordinator", "spec": SPEC, **extra},
     )
 
@@ -41,7 +41,7 @@ async def test_an_agent_is_born_with_its_version_1(client: AsyncClient, admin: s
         admin,
     )
     assert agent["versions"][0]["spec"]["budget"] == {"run_usd": 2.0, "daily_usd": 20.0, "monthly_usd": None}
-    assert [a["slug"] for a in (await client.get("/api/v1/orgs/varga/agents")).json()] == [
+    assert [a["slug"] for a in (await client.get("/api/v1/orgs/northwind/agents")).json()] == [
         "onboarding-coordinator"
     ]
     assert (await _create(client)).status_code == 409, "one slug per organisation"
@@ -49,29 +49,29 @@ async def test_an_agent_is_born_with_its_version_1(client: AsyncClient, admin: s
 
 async def test_publishing_never_rewrites_a_version(client: AsyncClient, admin: str) -> None:
     await _create(client)
-    v1 = (await client.get("/api/v1/orgs/varga/agents/onboarding-coordinator/versions/1")).json()
+    v1 = (await client.get("/api/v1/orgs/northwind/agents/onboarding-coordinator/versions/1")).json()
     stricter = {**SPEC, "budget": {"run_usd": 1.0, "daily_usd": 10.0}}
-    v2 = await client.post("/api/v1/orgs/varga/agents/onboarding-coordinator/versions", json=stricter)
+    v2 = await client.post("/api/v1/orgs/northwind/agents/onboarding-coordinator/versions", json=stricter)
     assert v2.status_code == 201 and v2.json()["version"] == 2, v2.text
     assert v2.json()["checksum"] != v1["checksum"]
     # Where a revision sits (`channels`) moves; what it IS never does (ADR 0071).
-    v1_after = (await client.get("/api/v1/orgs/varga/agents/onboarding-coordinator/versions/1")).json()
+    v1_after = (await client.get("/api/v1/orgs/northwind/agents/onboarding-coordinator/versions/1")).json()
     assert v1_after.pop("channels") == [] and v1.pop("channels") == ["stable"]
     assert v1_after == v1
-    agent = (await client.get("/api/v1/orgs/varga/agents/onboarding-coordinator")).json()
+    agent = (await client.get("/api/v1/orgs/northwind/agents/onboarding-coordinator")).json()
     assert [v["version"] for v in agent["versions"]] == [2, 1] and agent["latest_version"] == 2
 
 
 async def test_revocation_is_final(client: AsyncClient, admin: str) -> None:
     await _create(client)
     revoked = await client.patch(
-        "/api/v1/orgs/varga/agents/onboarding-coordinator", json={"status": "revoked"}
+        "/api/v1/orgs/northwind/agents/onboarding-coordinator", json={"status": "revoked"}
     )
     assert revoked.status_code == 200 and revoked.json()["revoked_at"], revoked.text
-    publish = await client.post("/api/v1/orgs/varga/agents/onboarding-coordinator/versions", json=SPEC)
+    publish = await client.post("/api/v1/orgs/northwind/agents/onboarding-coordinator/versions", json=SPEC)
     assert publish.status_code == 409
     reactivate = await client.patch(
-        "/api/v1/orgs/varga/agents/onboarding-coordinator", json={"status": "active"}
+        "/api/v1/orgs/northwind/agents/onboarding-coordinator", json={"status": "active"}
     )
     assert reactivate.status_code == 409
 
@@ -81,14 +81,14 @@ async def test_a_developer_reads_the_registry_but_does_not_write_to_it(
 ) -> None:
     await _create(client)
     member = await client.post(
-        "/api/v1/orgs/varga/members", json={"email": "dev@varga.dev", "role": "developer"}
+        "/api/v1/orgs/northwind/members", json={"email": "dev@northwind.dev", "role": "developer"}
     )
     assert member.status_code in {200, 201}
-    await login(client, "dev@varga.dev")
-    assert (await client.get("/api/v1/orgs/varga/agents")).status_code == 200
+    await login(client, "dev@northwind.dev")
+    assert (await client.get("/api/v1/orgs/northwind/agents")).status_code == 200
     assert (await _create(client, slug="other")).status_code == 403
     assert (
-        await client.post("/api/v1/orgs/varga/agents/onboarding-coordinator/versions", json=SPEC)
+        await client.post("/api/v1/orgs/northwind/agents/onboarding-coordinator/versions", json=SPEC)
     ).status_code == 403
 
 
@@ -145,7 +145,7 @@ async def test_instructions_that_do_not_render_are_refused_at_publication(
         assert refused.status_code == 422, (instructions, refused.text)
     assert (await _create(client)).status_code == 201
     escape = {**SPEC, "instructions": "{{ cycler.__init__.__globals__ }}"}
-    publish = await client.post("/api/v1/orgs/varga/agents/onboarding-coordinator/versions", json=escape)
+    publish = await client.post("/api/v1/orgs/northwind/agents/onboarding-coordinator/versions", json=escape)
     assert publish.status_code == 422, publish.text
 
 
@@ -178,7 +178,7 @@ async def test_the_metrics_of_an_agent_count_its_failures_and_its_tools(
             session.add(
                 CostLedger(project_id=project["id"], run_id="run-0", kind=kind_, cost_usd=amount, ts=utcnow())
             )
-    metrics = (await client.get("/api/v1/orgs/varga/agents/onboarding-coordinator/metrics")).json()
+    metrics = (await client.get("/api/v1/orgs/northwind/agents/onboarding-coordinator/metrics")).json()
     assert (metrics["runs"], metrics["succeeded"], metrics["failed"]) == (3, 2, 1)
     assert metrics["success_rate"] == pytest.approx(2 / 3, abs=1e-3), "a failed run lowers the rate"
     assert metrics["cost_by_kind"] == {"model": 1.0, "tool": 0.25}, "a tool call counts in the cost"

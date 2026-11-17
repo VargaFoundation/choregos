@@ -10,5 +10,5 @@ home: https://github.com/graalsystems/tranibor
 sources:
   - https://github.com/graalsystems/tranibor
 maintainers:
-  - name: Varga Foundation
+  - name: GRAAL.SYSTEMS SAS
 keywords: [agents, outpost, mcp]

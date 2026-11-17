@@ -15,8 +15,8 @@ from httpx import AsyncClient
 
 async def _project(client: AsyncClient, slug: str) -> dict[str, Any]:
     created = await client.post(
-        "/api/v1/orgs/varga/projects",
-        json={"slug": slug, "name": slug, "config": {"slug": slug, "org": "varga"}},
+        "/api/v1/orgs/northwind/projects",
+        json={"slug": slug, "name": slug, "config": {"slug": slug, "org": "northwind"}},
     )
     assert created.status_code == 201, created.text
     return dict(created.json())

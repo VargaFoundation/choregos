@@ -259,7 +259,7 @@ def french_identifier_words(identifier: str) -> list[str]:
 # ───────────────────────────── the shipped-text detector (ADR 0039) ─────────────────────────────
 
 #: Proper names keep their accents in what the platform ships.
-SHIPPED_PROPER_NAMES = ("Léa", "Hélène", "Zoé", "Varga")  # lang: fr-ok
+SHIPPED_PROPER_NAMES = ("Léa", "Hélène", "Zoé", "Northwind")  # lang: fr-ok
 _SHIPPED_ACCENTS = re.compile(r"[àâçéèêëîïôûùüÿœÀÂÇÉÈÊËÎÏÔÛÙÜŸŒ«»]")  # lang: fr-ok
 _SHIPPED_FUNCTION_WORDS = re.compile(
     r"\b(les|des|une|est|sont|vers|pour|dans|avec|aux|pas|qui|que|leur|chaque|ne|ou|au|du|sur|par)\b",

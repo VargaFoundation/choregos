@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 from httpx import AsyncClient
 
-AGENTS = "/api/v1/orgs/varga/agents"
+AGENTS = "/api/v1/orgs/northwind/agents"
 REFERENCE = "registry.example/agents/ticket-triager@sha256:" + "d" * 64
 
 

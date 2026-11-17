@@ -23,10 +23,10 @@ from .test_interpreter import _runs, _wait_state, _wait_until, scripted, start
 pytestmark = pytest.mark.asyncio
 
 HISTORIES = pathlib.Path(__file__).resolve().parents[3] / "tests" / "replay" / "histories"
-PRIMARY_URL = "https://github.com/varga/billing-api.git"
+PRIMARY_URL = "https://github.com/northwind/billing-api.git"
 DIAMCTL = {
     "name": "diamctl",
-    "url": "https://git.acme.example/varga/diamctl.git",
+    "url": "https://git.acme.example/northwind/diamctl.git",
     "default_branch": "trunk",
     "branch_prefix": "fix/",
     "test_command": "go test ./...",
@@ -189,16 +189,16 @@ async def test_the_branch_the_pull_request_and_the_guarantees_are_diamctl_s(setu
     scm = setup.adapters.scm
 
     assert await ensure_branch(ids) == {"branch": "fix/123"}
-    assert scm.branches["varga/diamctl"] == {"fix/123": "trunk"}
-    assert "varga/billing-api" not in scm.branches
+    assert scm.branches["northwind/diamctl"] == {"fix/123": "trunk"}
+    assert "northwind/billing-api" not in scm.branches
     assert (await _item(setup)).documents["repository_fixed"] == "diamctl"
 
     await open_pull_request(ids)
     (pr,) = scm.prs.values()
-    assert (pr.ref.repo, pr.ref.head, pr.ref.base) == ("varga/diamctl", "fix/123", "trunk")
+    assert (pr.ref.repo, pr.ref.head, pr.ref.base) == ("northwind/diamctl", "fix/123", "trunk")
 
     # The diff guarantees read diamctl's branch: a file outside the item's scope there is seen.
-    scm.set_diff("varga/diamctl", "trunk", "fix/123", [("cmd/root.go", 3, 1)])
+    scm.set_diff("northwind/diamctl", "trunk", "fix/123", [("cmd/root.go", 3, 1)])
     [scope] = await evaluate_gates({**ids, "gates": [{"name": "scope_respected", "params": {}}]})
     assert scope["passed"] is False and "cmd/root.go" in scope["annotations"], scope
     assert await check_scope_violations(ids) == ["cmd/root.go"]
@@ -208,7 +208,7 @@ async def test_the_branch_the_pull_request_and_the_guarantees_are_diamctl_s(setu
     [ci] = await evaluate_gates({**ids, "gates": [{"name": "ci_green", "params": {}}]})
     assert ci["passed"] is True and not ci["pending"], ci
 
-    assert scm.check_runs == [] or all(c["repo"] == "varga/diamctl" for c in scm.check_runs)
+    assert scm.check_runs == [] or all(c["repo"] == "northwind/diamctl" for c in scm.check_runs)
 
 
 async def test_the_diff_shown_for_a_run_is_the_target_s(setup: Fixture) -> None:
@@ -219,7 +219,7 @@ async def test_the_diff_shown_for_a_run_is_the_target_s(setup: Fixture) -> None:
     from .conftest import stage_result
 
     await _scene(setup, fields={"repository": "diamctl"})
-    setup.adapters.scm.set_diff("varga/diamctl", "trunk", "fix/123", [("cmd/root.go", 3, 1)])
+    setup.adapters.scm.set_diff("northwind/diamctl", "trunk", "fix/123", [("cmd/root.go", 3, 1)])
     async with session_scope() as session:
         session.add(
             Run(
@@ -396,11 +396,11 @@ async def test_a_target_of_another_owner_gets_that_owner_s_installation(
         project = await session.get(Project, setup.project_id)
         assert project is not None
         session.add(
-            Connector(project_id=project.id, kind="scm", type="github", config={"repo": "varga/billing-api"})
+            Connector(project_id=project.id, kind="scm", type="github", config={"repo": "northwind/billing-api"})
         )
         for kind in KINDS:
             session.add(Connector(project_id=project.id, kind=kind, type="probe", config={}))
-        for installation, owner in ((55, "varga"), (77, "acme-tools")):
+        for installation, owner in ((55, "northwind"), (77, "acme-tools")):
             session.add(
                 GitHubInstallation(
                     id=installation,
@@ -417,7 +417,7 @@ async def test_a_target_of_another_owner_gets_that_owner_s_installation(
         async with session_scope(orgs="*") as session:
             bundle = await load_project(session, setup.project_id)
             assert built[-1]["installation_id"] == 55, "the project's adapter: its connector's owner"
-            same_owner = await scm_for(session, bundle, "https://github.com/varga/diamctl.git")
+            same_owner = await scm_for(session, bundle, "https://github.com/northwind/diamctl.git")
             assert same_owner is bundle.adapters.scm, "one owner, one installation: the same adapter"
             count = len(built)
             await scm_for(session, bundle, "https://github.com/acme-tools/diamctl.git")

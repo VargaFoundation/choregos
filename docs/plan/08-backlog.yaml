@@ -5513,3 +5513,11 @@ stories:
     size: M
     depends_on: [S75-01]
     notes: "One shared helper for the four env_prefix settings classes and the direct os.environ reads; one warning per variable naming the new one, never the value; the charts render TRANIBOR_*."
+  - id: S80-10
+    title: "chore: the publisher is GRAAL.SYSTEMS SAS and the product no longer names the Varga Foundation (ADR 0186)"
+    stream: S80
+    sprint: 1
+    priority: 2
+    size: L
+    depends_on: []
+    notes: "Decision of 2026-11-18. NOTICE, licence headers, console footer, publishing identity (security contact, commit address, plugin repository and index) and docs name GRAAL.SYSTEMS SAS; the default plugin source varga becomes tranibor (migration, old name still resolved); guarded by tests/licences/test_no_varga.py."

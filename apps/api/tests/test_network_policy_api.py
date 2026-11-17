@@ -9,8 +9,8 @@ from httpx import AsyncClient
 
 from .conftest import login
 
-AGENTS = "/api/v1/orgs/varga/agents"
-CEILING_URL = "/api/v1/orgs/varga/policy-ceiling"
+AGENTS = "/api/v1/orgs/northwind/agents"
+CEILING_URL = "/api/v1/orgs/northwind/policy-ceiling"
 
 # The digest of this spec, computed on the base branch BEFORE `AgentSpec.network` existed.
 LEGACY_SPEC = {"instructions": "You are an architect.", "model": "m", "memory": "agent"}
@@ -112,7 +112,7 @@ async def test_the_project_network_shows_the_clamps_the_deny_list_and_the_implie
     assert body["effective"]["allow"] == ["github.com"]
     assert body["effective"]["deny"] == ["tracker.example"]
     assert body["effective"]["implied"] == ["github.com"], (
-        "the host of https://github.com/varga/billing-api.git"
+        "the host of https://github.com/northwind/billing-api.git"
     )
     assert body["clamps"] == [
         "network.allow_domains: `api.stripe.com` is outside the organisation's allowed hosts"
@@ -143,7 +143,7 @@ async def test_an_agent_cannot_name_a_host_outside_the_ceiling_at_create_publish
     assert "denied by the organisation" in published.text
 
     trial = await client.post(
-        "/api/v1/orgs/varga/agent-trials",
+        "/api/v1/orgs/northwind/agent-trials",
         json={"project": "billing-api", "spec": outside, "input": {"title": "t", "body": "b"}},
     )
     assert trial.status_code == 422, trial.text
@@ -210,7 +210,7 @@ async def test_a_run_reads_its_own_effective_network_with_its_own_token_only(
     assert body["implied"] == ["github.com"]
     assert (body["per_host_per_minute"], body["org_per_host_per_minute"]) == (10, 60)
     assert (body["org"], body["project"], body["agent"], body["listed"]) == (
-        "varga",
+        "northwind",
         "billing-api",
         "pip",
         True,
@@ -332,7 +332,7 @@ async def test_network_activity_groups_by_host_and_is_refused_without_audit_read
         url = f"/api/v1/internal/runs/{run_id}/network/decisions"
         await client.post(url, headers=headers, json=_batch({**ALLOWED, "count": 2}, {**DENIED, "count": 3}))
 
-    activity = await client.get("/api/v1/orgs/varga/network-activity")
+    activity = await client.get("/api/v1/orgs/northwind/network-activity")
     assert activity.status_code == 200, activity.text
     rows = {(r["host"], r["decision"]): r for r in activity.json()["rows"]}
     assert rows[("pypi.org", "allowed")]["count"] == 4 and rows[("pypi.org", "allowed")]["runs"] == 2
@@ -340,22 +340,22 @@ async def test_network_activity_groups_by_host_and_is_refused_without_audit_read
     assert rows[("evil.example", "denied")]["agents"] == ["pip"]
     assert rows[("evil.example", "denied")]["layer"] == "proxy"
 
-    only = (await client.get("/api/v1/orgs/varga/network-activity", params={"decision": "denied"})).json()
+    only = (await client.get("/api/v1/orgs/northwind/network-activity", params={"decision": "denied"})).json()
     assert [r["host"] for r in only["rows"]] == ["evil.example"]
     future = {
         "since": (
             __import__("datetime").datetime.now(__import__("datetime").UTC) + timedelta(days=1)
         ).isoformat()
     }
-    assert (await client.get("/api/v1/orgs/varga/network-activity", params=future)).json() == {"rows": []}
-    assert (await client.get("/api/v1/orgs/varga/network-activity", params={"project": "nope"})).json() == {
+    assert (await client.get("/api/v1/orgs/northwind/network-activity", params=future)).json() == {"rows": []}
+    assert (await client.get("/api/v1/orgs/northwind/network-activity", params={"project": "nope"})).json() == {
         "rows": []
     }
 
     added = await client.post(
-        "/api/v1/orgs/varga/members", json={"email": "dev@varga.dev", "role": "developer"}
+        "/api/v1/orgs/northwind/members", json={"email": "dev@northwind.dev", "role": "developer"}
     )
     assert added.status_code in (200, 201), added.text
-    await login(client, "dev@varga.dev")
-    refused = await client.get("/api/v1/orgs/varga/network-activity")
+    await login(client, "dev@northwind.dev")
+    refused = await client.get("/api/v1/orgs/northwind/network-activity")
     assert refused.status_code == 403, refused.text

@@ -18,13 +18,13 @@ from choregos_adapters.tracker.jira_events import parse_jira_event
 from choregos_contracts import InboundEventType, Risk, Size
 from choregos_core.domain import NewItem, TrackerStateMapping
 
-BASE = "https://varga.atlassian.net"
+BASE = "https://northwind.atlassian.net"
 
 
 def tracker(handler: Any) -> JiraTracker:
     client = RestClient(
         BASE,
-        auth=("bot@varga.dev", "token"),
+        auth=("bot@northwind.dev", "token"),
         client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
         service="jira",
     )
@@ -71,7 +71,7 @@ async def test_the_candidates_go_through_a_jql_query() -> None:
 
     from choregos_contracts import ProjectConfig, RepoConfig
 
-    config = ProjectConfig(slug="bill", org="varga", repo=RepoConfig(url="https://x/y.git"))
+    config = ProjectConfig(slug="bill", org="northwind", repo=RepoConfig(url="https://x/y.git"))
     assert await tracker(handler).list_candidates(config) == ["BILL-7", "BILL-9"]
     assert 'project = "BILL"' in vu["jql"]
     assert 'labels = "agent-ready"' in vu["jql"]
@@ -307,7 +307,7 @@ async def test_english_fields_go_into_the_french_fields_of_an_older_project() ->
 
 
 def test_an_older_configuration_naming_the_former_size_stands_for_size() -> None:
-    client = RestClient(BASE, auth=("bot@varga.dev", "token"), service="jira")
+    client = RestClient(BASE, auth=("bot@northwind.dev", "token"), service="jira")
     jira = JiraTracker(client, "BILL", field_names={"Taille": "T-shirt"})
     assert jira.field_names["Size"] == "T-shirt" and "Taille" not in jira.field_names
 
@@ -427,7 +427,7 @@ async def test_the_poll_also_asks_for_the_project_s_start_rules() -> None:
     config = ProjectConfig.model_validate(
         {
             "slug": "bill",
-            "org": "varga",
+            "org": "northwind",
             "start_rules": [
                 {"item_type": "Incident", "states": ["New", "1"]},
                 {"labels_any": ["payroll", 'x" OR project = "OTHER']},
@@ -535,7 +535,7 @@ def test_a_scoped_jira_opens_the_gateway_in_its_egress() -> None:
     from choregos_adapters.registry import egress_hosts
 
     hosts = egress_hosts("tracker", "jira", {"base_url": BASE, "auth": "scoped"})
-    assert ("api.atlassian.com", 443) in hosts and ("varga.atlassian.net", 443) in hosts
+    assert ("api.atlassian.com", 443) in hosts and ("northwind.atlassian.net", 443) in hosts
 
 
 async def test_a_connector_jql_selects_the_candidates_without_the_agent_ready_label() -> None:
@@ -552,7 +552,7 @@ async def test_a_connector_jql_selects_the_candidates_without_the_agent_ready_la
     adapter = _jira_tracker(
         {
             "base_url": BASE,
-            "email": "bot@varga.dev",
+            "email": "bot@northwind.dev",
             "api_token": "token",
             "project_key": "BILL",
             "candidates_jql": " parent = BILL-1 AND labels in (form-a, form-b) ",
@@ -560,7 +560,7 @@ async def test_a_connector_jql_selects_the_candidates_without_the_agent_ready_la
     )
     adapter.client._client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
 
-    keys = await adapter.list_candidates(ProjectConfig(slug="bill", org="varga"))
+    keys = await adapter.list_candidates(ProjectConfig(slug="bill", org="northwind"))
 
     assert keys == ["BILL-12"]
     assert seen == [
@@ -580,7 +580,7 @@ async def test_without_a_connector_jql_the_candidates_are_the_agent_ready_issues
 
     jira = tracker(handler)
     jira.candidates_jql = None
-    await jira.list_candidates(ProjectConfig(slug="bill", org="varga"))
+    await jira.list_candidates(ProjectConfig(slug="bill", org="northwind"))
 
     assert seen == [
         'project = "BILL" AND labels = "agent-ready" AND statusCategory != Done ORDER BY updated DESC'
@@ -589,13 +589,13 @@ async def test_without_a_connector_jql_the_candidates_are_the_agent_ready_issues
 
 async def test_the_reporter_is_named_with_their_email_when_the_site_shows_it() -> None:
     """Who filed the issue reaches the work item (#1179): an access request is checked against it."""
-    shown = {"displayName": "Jean Martin", "emailAddress": "jmartin@varga.dev", "accountId": "712020:abc"}
+    shown = {"displayName": "Jean Martin", "emailAddress": "jmartin@northwind.dev", "accountId": "712020:abc"}
 
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json=issue_payload(reporter=shown))
 
     item = await tracker(handler).fetch_item("BILL-42")
-    assert item.author == "Jean Martin <jmartin@varga.dev>"
+    assert item.author == "Jean Martin <jmartin@northwind.dev>"
 
 
 async def test_a_hidden_email_leaves_the_reporter_s_name() -> None:
@@ -615,11 +615,11 @@ def test_a_created_issue_carries_its_reporter() -> None:
                 "fields": {
                     "summary": "titre",
                     "labels": ["agent-ready"],
-                    "reporter": {"displayName": "Jean Martin", "emailAddress": "jmartin@varga.dev"},
+                    "reporter": {"displayName": "Jean Martin", "emailAddress": "jmartin@northwind.dev"},
                 },
             },
         },
     )
 
     assert events[0].type is InboundEventType.ITEM_CREATED
-    assert events[0].payload["reporter"] == "Jean Martin <jmartin@varga.dev>"
+    assert events[0].payload["reporter"] == "Jean Martin <jmartin@northwind.dev>"

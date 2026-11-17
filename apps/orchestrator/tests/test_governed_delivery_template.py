@@ -44,7 +44,7 @@ async def _governed_project(setup: Fixture) -> str:
     from sqlalchemy import select
 
     async with session_scope() as session:
-        org = (await session.execute(select(Organization).where(Organization.slug == "varga"))).scalar_one()
+        org = (await session.execute(select(Organization).where(Organization.slug == "northwind"))).scalar_one()
         project = Project(
             org_id=org.id,
             slug="dev",
@@ -53,7 +53,7 @@ async def _governed_project(setup: Fixture) -> str:
             template_ref="software-delivery-governed@1.0.0",
             config={
                 "slug": "dev",
-                "org": "varga",
+                "org": "northwind",
                 "repo": {"url": f"https://github.com/{REPOSITORY}.git", "default_branch": "main"},
                 "notify": {"slack_channel": "#dev"},
             },

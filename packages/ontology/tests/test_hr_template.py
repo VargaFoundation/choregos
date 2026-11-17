@@ -37,12 +37,12 @@ ARRIVAL = {
 
 async def _hr_project(client: AsyncClient) -> dict[str, Any]:
     created = await client.post(
-        "/api/v1/orgs/varga/projects",
+        "/api/v1/orgs/northwind/projects",
         json={
             "slug": "hr",
             "name": "HR",
             "template_ref": "joiners-leavers",
-            "config": {"slug": "hr", "org": "varga"},
+            "config": {"slug": "hr", "org": "northwind"},
         },
     )
     assert created.status_code == 201, created.text

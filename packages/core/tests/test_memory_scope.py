@@ -35,18 +35,18 @@ def test_round_trips() -> None:
         "decisions",
         None,
     )
-    glob = parse_namespace(global_store_namespace("varga", "lessons"))
-    assert (glob.kind, glob.org, glob.store, glob.project) == ("global_store", "varga", "lessons", None)
+    glob = parse_namespace(global_store_namespace("northwind", "lessons"))
+    assert (glob.kind, glob.org, glob.store, glob.project) == ("global_store", "northwind", "lessons", None)
 
 
-@pytest.mark.parametrize("namespace", ["billing#memory:decisions", "org:varga#memory:lessons"])
+@pytest.mark.parametrize("namespace", ["billing#memory:decisions", "org:northwind#memory:lessons"])
 def test_split_namespace_refuses_the_new_forms(namespace: str) -> None:
     """Answering `(project, None)` would read a named memory as the project's shared one."""
     with pytest.raises(ValueError, match="parse_namespace"):
         split_namespace(namespace)
 
 
-@pytest.mark.parametrize("namespace", ["", "org:varga", "org:#memory:x", "billing#memory:", "billing#agent:"])
+@pytest.mark.parametrize("namespace", ["", "org:northwind", "org:#memory:x", "billing#memory:", "billing#agent:"])
 def test_malformed_namespaces_raise(namespace: str) -> None:
     with pytest.raises(ValueError):
         parse_namespace(namespace)
@@ -59,9 +59,9 @@ class _Org:
 
 
 def test_the_memory_key_is_the_first_slug_else_the_slug() -> None:
-    assert memory_key(_Org("varga", None)) == "varga"
-    assert memory_key(_Org("varga", {})) == "varga"
-    assert memory_key(_Org("globex", {MEMORY_KEY_SETTING: "varga"})) == "varga"
+    assert memory_key(_Org("northwind", None)) == "northwind"
+    assert memory_key(_Org("northwind", {})) == "northwind"
+    assert memory_key(_Org("globex", {MEMORY_KEY_SETTING: "northwind"})) == "northwind"
     assert memory_key(_Org("globex", {MEMORY_KEY_SETTING: ""})) == "globex"
-    namespace = global_store_namespace(memory_key(_Org("globex", {MEMORY_KEY_SETTING: "varga"})), "lessons")
-    assert parse_namespace(namespace).org == "varga"
+    namespace = global_store_namespace(memory_key(_Org("globex", {MEMORY_KEY_SETTING: "northwind"})), "lessons")
+    assert parse_namespace(namespace).org == "northwind"

@@ -11,7 +11,7 @@ from choregos_contracts import InboundEventType
 def _comment(user: dict[str, Any]) -> dict[str, Any]:
     return {
         "action": "created",
-        "repository": {"full_name": "varga/billing-api"},
+        "repository": {"full_name": "northwind/billing-api"},
         "issue": {"number": 7, "title": "Credit notes fail"},
         "comment": {"body": "/choregos pause", "user": user},
         "sender": user,

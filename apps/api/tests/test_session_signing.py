@@ -303,7 +303,7 @@ async def test_a_remote_oauth_handshake_is_bound_to_its_purposes(
     """Through the real routes: what `authorize` hands out is no session and no OIDC value."""
     from choregos_api.security import read_session
 
-    base = "/api/v1/orgs/varga/remote-credentials"
+    base = "/api/v1/orgs/northwind/remote-credentials"
     created = await client.post(
         base, json={"name": "rovo-oauth", "type": "oauth2_authorization_code", "card_url": remote.card_url}
     )

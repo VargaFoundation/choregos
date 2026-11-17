@@ -37,9 +37,9 @@ async def _bases() -> dict[str, Any]:
     ids: dict[str, Any] = {}
     async with session_scope(orgs="*") as session:
         # `assistant:use` is the membership AND a group of the installation's audience (S63-15)
-        admin = (await session.execute(select(User).where(User.email == "admin@varga.dev"))).scalar_one()
+        admin = (await session.execute(select(User).where(User.email == "admin@northwind.dev"))).scalar_one()
         admin.groups = [AUDIENCE]
-        org = (await session.execute(select(Organization).where(Organization.slug == "varga"))).scalar_one()
+        org = (await session.execute(select(Organization).where(Organization.slug == "northwind"))).scalar_one()
         installation = AssistantInstallation(
             org_id=org.id, slug="coach", plugin="p", plugin_version="1", manifest_digest="sha256:0",
             assistant_name="coach", audience_groups=[AUDIENCE],
@@ -65,7 +65,7 @@ async def _bases() -> dict[str, Any]:
             await session.flush()
             ids[slug] = document.id
     for slug in ("coach-policies", "hr-secrets"):
-        assert await index_document("varga", ids[slug]) > 0
+        assert await index_document("northwind", ids[slug]) > 0
     return ids
 
 
@@ -85,7 +85,7 @@ async def test_the_agent_searches_its_installations_knowledge_and_cites_it(
     upstream.model.call("knowledge_search", {"query": "refund delay after return"}).say(
         "Refunds take 14 days [COACH-POLICIES, v7]."
     )
-    conversation = await _open("varga", admin, installation_id=ids["installation"])
+    conversation = await _open("northwind", admin, installation_id=ids["installation"])
     answer = await _say(client, conversation, "How long is a refund?")
     assert answer.status_code == 200, answer.text
     assert "[COACH-POLICIES, v7]" in answer.json()["output_text"]
@@ -109,7 +109,7 @@ async def test_a_base_outside_the_installation_is_never_offered_nor_searchable(
     upstream.model.call("knowledge_search", {"base": "hr-secrets", "query": "salary bands"}).call(
         "knowledge_search", {"query": "confidential salary bands"}
     ).say("done")
-    conversation = await _open("varga", admin, installation_id=ids["installation"])
+    conversation = await _open("northwind", admin, installation_id=ids["installation"])
     assert (await _say(client, conversation, "salaries?")).status_code == 200
     (_, first) = upstream.model.requests[0]
     described = json.dumps(first["tools"])
@@ -118,7 +118,7 @@ async def test_a_base_outside_the_installation_is_never_offered_nor_searchable(
     assert "no knowledge base `hr-secrets` is offered" in refused and "salary bands" not in refused
     assert "confidential" not in unfound and "hr-secrets" not in unfound
     # The person may read the base through the knowledge routes: that changes nothing here.
-    assert (await client.get("/api/v1/orgs/varga/knowledge/hr-secrets")).status_code == 200
+    assert (await client.get("/api/v1/orgs/northwind/knowledge/hr-secrets")).status_code == 200
 
 
 async def test_knowledge_get_refuses_a_document_of_another_base(
@@ -132,7 +132,7 @@ async def test_knowledge_get_refuses_a_document_of_another_base(
     upstream.model.call("knowledge_get", {"base": "coach-policies", "document_id": ids["hr-secrets"]}).call(
         "knowledge_get", {"base": "coach-policies", "document_id": ids["coach-policies"]}
     ).say("ok")
-    conversation = await _open("varga", admin, installation_id=ids["installation"])
+    conversation = await _open("northwind", admin, installation_id=ids["installation"])
     assert (await _say(client, conversation, "read it")).status_code == 200
     refused, read = _tool_results(upstream)
     assert refused == "no such document in this knowledge base"
@@ -148,7 +148,7 @@ async def test_a_conversation_without_installation_is_offered_no_knowledge(
     await _bases()
     await _agent(client)
     upstream.model.say("hello")
-    conversation = await _open("varga", admin)
+    conversation = await _open("northwind", admin)
     assert (await _say(client, conversation, "hi")).status_code == 200
     (_, first) = upstream.model.requests[0]
     assert not first.get("tools")

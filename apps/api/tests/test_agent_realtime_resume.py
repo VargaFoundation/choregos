@@ -144,7 +144,7 @@ async def test_another_person_cannot_take_the_session(
     voice.model.say(GREETING)
     async with _socket(client) as socket:
         session_id, read_up_to = await _greeted(socket)
-        async with as_person(client, "maintainer@varga.dev", "org_admin") as other:
+        async with as_person(client, "maintainer@northwind.dev", "org_admin") as other:
             with pytest.raises(Closed) as refused:
                 async with _socket(other, _resume(session_id, read_up_to)):
                     pass
@@ -213,12 +213,12 @@ async def test_a_caller_who_lost_the_project_cannot_resume(
 ) -> None:
     await _agent(client)
     voice.model.say(GREETING)
-    async with as_person(client, "dev@varga.dev", "developer") as person:
+    async with as_person(client, "dev@northwind.dev", "developer") as person:
         socket = _socket(person)
         await socket.__aenter__()
         session_id, read_up_to = await _greeted(socket)
         await socket.drop()
-        await _demote("dev@varga.dev", "viewer")
+        await _demote("dev@northwind.dev", "viewer")
         with pytest.raises(Closed) as refused:
             async with _socket(person, _resume(session_id, read_up_to)):
                 pass

@@ -80,9 +80,9 @@ def _project(slug: str) -> dict[str, Any]:
         "name": slug,
         "config": {
             "slug": slug,
-            "org": "varga",
+            "org": "northwind",
             "repo": {
-                "url": f"https://github.com/varga/{slug}.git",
+                "url": f"https://github.com/northwind/{slug}.git",
                 "default_branch": "main",
                 "language": "python",
             },
@@ -103,15 +103,15 @@ async def test_one_project_too_many_is_refuseded_before_it_is_created(
 ) -> None:
     extension["max_projects"] = 1
     before = await _count_projects()
-    refused = await client.post("/api/v1/orgs/varga/projects", json=_project("second"))
+    refused = await client.post("/api/v1/orgs/northwind/projects", json=_project("second"))
     assert refused.status_code == 409, refused.text
-    assert "cap: varga reached its project cap" in refused.text
+    assert "cap: northwind reached its project cap" in refused.text
     assert await _count_projects() == before
     (request,) = extension["seen"]
-    assert (request.gesture, request.org, request.target) == ("project.create", "varga", {"slug": "second"})
+    assert (request.gesture, request.org, request.target) == ("project.create", "northwind", {"slug": "second"})
 
     extension["max_projects"] = None
-    assert (await client.post("/api/v1/orgs/varga/projects", json=_project("second"))).status_code == 201
+    assert (await client.post("/api/v1/orgs/northwind/projects", json=_project("second"))).status_code == 201
 
 
 async def _human_request(client: AsyncClient, project: dict[str, Any]) -> str:

@@ -19,7 +19,7 @@ from choregos_api.services import workflow_catalogue
 from choregos_api.services.plugin_supply import Shipped, SourcesSupply
 from httpx import AsyncClient
 
-BASE = "/api/v1/orgs/varga/workflow-catalogue"
+BASE = "/api/v1/orgs/northwind/workflow-catalogue"
 
 
 @pytest.fixture(autouse=True)

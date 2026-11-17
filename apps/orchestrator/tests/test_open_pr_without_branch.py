@@ -26,7 +26,7 @@ from .test_restarted_interpreter_resumes import _state_changes
 pytestmark = pytest.mark.asyncio
 
 HISTORIES = pathlib.Path(__file__).resolve().parents[3] / "tests" / "replay" / "histories"
-REPO = "varga/billing-api"
+REPO = "northwind/billing-api"
 BRANCH = "choregos/123"
 NO_BRANCH = "no branch: the implementation changed nothing"
 

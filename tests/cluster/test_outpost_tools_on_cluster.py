@@ -63,7 +63,7 @@ SLUG = "factory-floor"
 ALIAS = "tracker"
 CONNECTOR = "tracker"
 RUN = "run-outpost-cluster"
-ORG = "/api/v1/orgs/varga"
+ORG = "/api/v1/orgs/northwind"
 OUTPOST = f"{ORG}/outposts/{SLUG}"
 SEARCH = f"/api/v1/internal/runs/{RUN}/tools/{CONNECTOR}__search_issues"
 #: What selects the daemon's pods (the chart's `selectorLabels`).
@@ -156,7 +156,7 @@ def _platform(namespace: str) -> str:
         {"name": "CHOREGOS_FAKES", "value": "1"},
         {"name": "CHOREGOS_ENV", "value": "test"},
         {"name": "CHOREGOS_DEV_LOGIN_ENABLED", "value": "true"},
-        {"name": "CHOREGOS_DEV_ADMIN_EMAILS", "value": "admin@varga.dev"},
+        {"name": "CHOREGOS_DEV_ADMIN_EMAILS", "value": "admin@northwind.dev"},
         {"name": "CHOREGOS_DATABASE_URL", "value": database},
         {"name": "CHOREGOS_SESSION_SECRET", "value": _seed("the session secret").hex()},
         {"name": "CHOREGOS_RECONCILE_INTERVAL_SECONDS", "value": "0"},
@@ -255,11 +255,11 @@ from choregos_api.services import ensure_defaults
 
 async def main():
     async with session_scope(orgs="*") as session:
-        org = Organization(slug="varga", name="Varga Foundation")
+        org = Organization(slug="northwind", name="Northwind")
         session.add(org)
         await session.flush()
-        repo = {"url": "https://github.com/varga/billing-api.git", "default_branch": "main"}
-        config = {"slug": "billing-api", "org": "varga", "repo": repo}
+        repo = {"url": "https://github.com/northwind/billing-api.git", "default_branch": "main"}
+        config = {"slug": "billing-api", "org": "northwind", "repo": repo}
         project = Project(
             org_id=org.id, slug="billing-api", name="Billing API", status="active", config=config
         )
@@ -279,13 +279,13 @@ from choregos_api.security import mint_run_token
 
 async def main():
     async with session_scope(orgs="*") as session:
-        item = WorkItem(project_id="{project}", tracker_key="varga/billing-api#7", title="T", state="ready")
+        item = WorkItem(project_id="{project}", tracker_key="northwind/billing-api#7", title="T", state="ready")
         session.add(item)
         await session.flush()
         session.add(Run(id="{run}", work_item_id=item.id, project_id="{project}", stage_role="plan",
                         transition_id="t-plan", status="running", agent_slug="coordinator", agent_version=1,
-                        initiated_by="person:admin@varga.dev"))
-    token = mint_run_token("{run}", project_slug="billing-api", work_item_key="varga/billing-api#7",
+                        initiated_by="person:admin@northwind.dev"))
+    token = mint_run_token("{run}", project_slug="billing-api", work_item_key="northwind/billing-api#7",
                            ttl_minutes=30)
     print(json.dumps({{"token": token}}))
 
@@ -478,7 +478,7 @@ def site() -> Iterator[Site]:
         project_id = _in_the_api(platform, SEED_ORGANISATION)["project"]
         forward, port = _port_forward(platform)
         http = httpx.Client(base_url=f"http://127.0.0.1:{port}", timeout=60.0)
-        login = http.get("/api/v1/auth/login", params={"as": "admin@varga.dev"})
+        login = http.get("/api/v1/auth/login", params={"as": "admin@northwind.dev"})
         http.get(login.headers["location"])
 
         # A person creates the outpost and issues a token for one instance.

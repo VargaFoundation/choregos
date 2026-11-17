@@ -17,9 +17,9 @@ MEM = f"{ORG}/memories"
 async def _two_projects(client: AsyncClient) -> tuple[dict[str, Any], dict[str, Any]]:
     billing = await make_project(client, "billing-api")
     checkout = await make_project(client, "checkout-web")
-    await add_member(client, "owner@varga.dev", "project_owner", "billing-api")
-    await add_member(client, "dev@varga.dev", "developer", "billing-api")
-    await add_member(client, "other@varga.dev", "project_owner", "checkout-web")
+    await add_member(client, "owner@northwind.dev", "project_owner", "billing-api")
+    await add_member(client, "dev@northwind.dev", "developer", "billing-api")
+    await add_member(client, "other@northwind.dev", "project_owner", "checkout-web")
     return billing, checkout
 
 
@@ -40,8 +40,8 @@ async def test_an_org_admin_creates_a_global_memory_and_a_developer_cannot(
     assert (
         await client.post(MEM, json={"slug": "security-lessons", "display_name": "Again"})
     ).status_code == 409
-    await add_member(client, "dev@varga.dev", "developer")
-    await as_user(client, "dev@varga.dev")
+    await add_member(client, "dev@northwind.dev", "developer")
+    await as_user(client, "dev@northwind.dev")
     refused = await client.post(MEM, json={"slug": "other-one", "display_name": "x"})
     assert refused.status_code == 403, refused.text
     assert (await client.patch(f"{MEM}/security-lessons", json={"display_name": "x"})).status_code == 403
@@ -68,7 +68,7 @@ async def test_a_project_owner_creates_a_project_memory_and_others_cannot(
 ) -> None:
     billing, _ = await _two_projects(client)
     url = f"/api/v1/projects/{billing['id']}/memories"
-    await as_user(client, "owner@varga.dev")
+    await as_user(client, "owner@northwind.dev")
     created = await client.post(url, json={"slug": "decisions", "display_name": "Decisions"})
     assert created.status_code == 201, created.text
     body = created.json()
@@ -79,9 +79,9 @@ async def test_a_project_owner_creates_a_project_memory_and_others_cannot(
     assert (await client.patch(f"{url}/decisions", json={"reach": "org"})).status_code == 422
     renamed = await client.patch(f"{url}/decisions", json={"display_name": "Billing decisions"})
     assert renamed.status_code == 200 and renamed.json()["display_name"] == "Billing decisions"
-    await as_user(client, "dev@varga.dev")
+    await as_user(client, "dev@northwind.dev")
     assert (await client.post(url, json={"slug": "more-one", "display_name": "x"})).status_code == 403
-    await as_user(client, "other@varga.dev")
+    await as_user(client, "other@northwind.dev")
     assert (await client.post(url, json={"slug": "more-one", "display_name": "x"})).status_code == 403
     assert (await client.patch(f"{url}/decisions", json={"status": "archived"})).status_code == 403
 
@@ -159,8 +159,8 @@ def _principal(org_role: Role | None = None, **projects: Role) -> Principal:
     return Principal(
         user_id="u",
         email="u@x",
-        org_roles={"varga": org_role} if org_role else {},
-        project_roles={f"varga/{slug}": role for slug, role in projects.items()},
+        org_roles={"northwind": org_role} if org_role else {},
+        project_roles={f"northwind/{slug}": role for slug, role in projects.items()},
     )
 
 
@@ -176,12 +176,12 @@ def test_visibility_follows_the_reach() -> None:
     billing_dev = _principal(None, **{"billing-api": Role.DEVELOPER})
     checkout_dev = _principal(None, **{"checkout-web": Role.DEVELOPER})
     nobody = _principal()
-    assert all(visible_to(admin, "varga", s) for s in (org_wide, scoped, mine))
-    assert visible_to(billing_dev, "varga", scoped) and visible_to(billing_dev, "varga", mine)
-    assert not visible_to(checkout_dev, "varga", scoped), "another project's member does not see it"
-    assert not visible_to(checkout_dev, "varga", mine)
-    assert visible_to(checkout_dev, "varga", org_wide)
-    assert not any(visible_to(nobody, "varga", s) for s in (org_wide, scoped, mine))
+    assert all(visible_to(admin, "northwind", s) for s in (org_wide, scoped, mine))
+    assert visible_to(billing_dev, "northwind", scoped) and visible_to(billing_dev, "northwind", mine)
+    assert not visible_to(checkout_dev, "northwind", scoped), "another project's member does not see it"
+    assert not visible_to(checkout_dev, "northwind", mine)
+    assert visible_to(checkout_dev, "northwind", org_wide)
+    assert not any(visible_to(nobody, "northwind", s) for s in (org_wide, scoped, mine))
 
 
 def test_which_runs_reach_which_memory() -> None:

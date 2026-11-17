@@ -32,7 +32,7 @@ describe("where a connector is read", () => {
 describe("a knowledge source says which connector it syncs through", () => {
   it("links the connector, with its type", async () => {
     vi.mocked(api.orgConnectors).mockResolvedValue([org("sp-docs", "documents", "sharepoint")]);
-    wrap(<KnowledgeSources org="varga" slug="base" sources={[source("a", "sharepoint", "sp-docs")]} onChange={vi.fn()} canEdit={false} />);
+    wrap(<KnowledgeSources org="northwind" slug="base" sources={[source("a", "sharepoint", "sp-docs")]} onChange={vi.fn()} canEdit={false} />);
     const line = await screen.findByText(/\(sharepoint\)/);
     const tag = line.closest("[data-testid='source-connector-a']") as HTMLElement;
     expect(tag).toHaveTextContent("via connector sp-docs (sharepoint)");
@@ -41,7 +41,7 @@ describe("a knowledge source says which connector it syncs through", () => {
 
   it("a member who cannot read the organisation's connectors still sees its name, without a link", async () => {
     vi.mocked(api.orgConnectors).mockRejectedValue(new Error("403"));
-    wrap(<KnowledgeSources org="varga" slug="base" sources={[source("a", "confluence", "wiki")]} onChange={vi.fn()} canEdit={false} />);
+    wrap(<KnowledgeSources org="northwind" slug="base" sources={[source("a", "confluence", "wiki")]} onChange={vi.fn()} canEdit={false} />);
     const tag = await screen.findByTestId("source-connector-a");
     await vi.waitFor(() => expect(within(tag).queryByRole("link")).toBeNull());
     expect(tag).toHaveTextContent("via connector wiki");
@@ -51,7 +51,7 @@ describe("a knowledge source says which connector it syncs through", () => {
     vi.mocked(api.orgConnectors).mockResolvedValue([]);
     wrap(
       <KnowledgeSources
-        org="varga"
+        org="northwind"
         slug="base"
         sources={[source("a", "confluence", "gone"), source("b", "web", null)]}
         onChange={vi.fn()}
@@ -67,7 +67,7 @@ describe("a git source read through the platform's GitHub App", () => {
   it("says it reads private repositories, not that the repository is public", async () => {
     vi.mocked(api.orgConnectors).mockResolvedValue([]);
     const app = { ...source("c", "git", null), config: { url: "https://github.com/acme/private", github_app: true } } as KnowledgeSource;
-    wrap(<KnowledgeSources org="varga" slug="base" sources={[app, source("d", "git", null)]} onChange={vi.fn()} canEdit={false} />);
+    wrap(<KnowledgeSources org="northwind" slug="base" sources={[app, source("d", "git", null)]} onChange={vi.fn()} canEdit={false} />);
     const tag = await screen.findByTestId("source-connector-c");
     expect(tag).toHaveTextContent("through the platform's GitHub App: private repositories too");
     expect(tag).not.toHaveTextContent("public repository");
@@ -95,7 +95,7 @@ describe("a memory says which store holds it", () => {
       org("alpha-memory", "memory", "lexical"),
       org("sp-docs", "documents", "sharepoint"),
     ]);
-    wrap(<OrganisationMemoryStore org="varga" />);
+    wrap(<OrganisationMemoryStore org="northwind" />);
     const store = await screen.findByTestId("memory-store");
     expect(store).toHaveTextContent("Stored in the organisation's memory connector alpha-memory (lexical).");
     expect(within(store).getByRole("link", { name: "alpha-memory" })).toHaveAttribute(

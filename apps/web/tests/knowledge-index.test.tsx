@@ -62,7 +62,7 @@ describe("an index base (S33-03)", () => {
       ],
     });
     const onChange = vi.fn();
-    render(<KnowledgeIndex org="varga" base={base} onChange={onChange} />);
+    render(<KnowledgeIndex org="northwind" base={base} onChange={onChange} />);
     expect(screen.getByTestId("knowledge-index-state")).toHaveTextContent("5 document(s) in 12 chunks · full-text only");
     expect(screen.getByTestId("knowledge-recall")).toHaveTextContent("recall@5: 80 %");
     fireEvent.change(screen.getByLabelText("Search the knowledge base"), { target: { value: "TLS" } });
@@ -70,19 +70,19 @@ describe("an index base (S33-03)", () => {
     const hits = await screen.findByTestId("knowledge-hits");
     expect(hits).toHaveTextContent("Encryption standard");
     expect(hits).toHaveTextContent("encryption.docx — Encryption standard > In transit");
-    expect(api.searchKnowledgeBase).toHaveBeenCalledWith("varga", "framework", "TLS");
+    expect(api.searchKnowledgeBase).toHaveBeenCalledWith("northwind", "framework", "TLS");
   });
 
   it("saves the eval set and measures recall", async () => {
     vi.mocked(api.putKnowledgeEvalSet).mockResolvedValue(base);
     vi.mocked(api.runKnowledgeEval).mockResolvedValue(base);
-    render(<KnowledgeIndex org="varga" base={base} onChange={vi.fn()} />);
+    render(<KnowledgeIndex org="northwind" base={base} onChange={vi.fn()} />);
     fireEvent.change(screen.getByLabelText("Eval set"), { target: { value: "Who owns backups? | owners.xlsx" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() =>
-      expect(api.putKnowledgeEvalSet).toHaveBeenCalledWith("varga", "framework", [{ question: "Who owns backups?", expected: ["owners.xlsx"] }]),
+      expect(api.putKnowledgeEvalSet).toHaveBeenCalledWith("northwind", "framework", [{ question: "Who owns backups?", expected: ["owners.xlsx"] }]),
     );
     fireEvent.click(screen.getByRole("button", { name: "Measure recall" }));
-    await waitFor(() => expect(api.runKnowledgeEval).toHaveBeenCalledWith("varga", "framework"));
+    await waitFor(() => expect(api.runKnowledgeEval).toHaveBeenCalledWith("northwind", "framework"));
   });
 });

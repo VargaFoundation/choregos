@@ -147,7 +147,7 @@ RUN hubble version
 WORKDIR /app
 COPY --from=builder --chown=1000:1000 /app /app
 # The plugins the platform ships (ADR 0093 §6, S43-09): the built-in agents left the core for
-# `VargaFoundation/choregos-agents`, and their signed archives, pinned by `plugins.lock`, are the
+# `graalsystems/tranibor-agents`, and their signed archives, pinned by `plugins.lock`, are the
 # offline directory the chart's `global.plugins.offline` names by default and the catalogue reads.
 # Read only: a plugin is never changed in place.
 COPY plugins/offline /opt/choregos/plugins

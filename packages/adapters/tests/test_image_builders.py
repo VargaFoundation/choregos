@@ -19,7 +19,7 @@ from choregos_adapters.fakes import FakeImageBuilder, FakeRegistryClient
 from choregos_adapters.oci import BuildctlBuilder, BuildError, BuildRequest, LocalDockerBuilder
 
 KEY = "sha256:" + "b" * 64
-REPOSITORY = "registry.internal/choregos-builds/varga"
+REPOSITORY = "registry.internal/choregos-builds/northwind"
 DIGEST = "sha256:" + "d" * 64
 DOCKERFILE = "FROM python:3.13-slim@sha256:" + "a" * 64 + "\nCOPY . /app\n"
 

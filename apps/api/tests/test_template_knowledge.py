@@ -16,7 +16,7 @@ import pytest
 import yaml
 from httpx import AsyncClient
 
-ORG = "/api/v1/orgs/varga"
+ORG = "/api/v1/orgs/northwind"
 KB = f"{ORG}/knowledge"
 REPO = "https://github.com/acme/billing.git"
 
@@ -48,7 +48,7 @@ MANIFEST: dict[str, Any] = {
                     {
                         "name": "Style guide",
                         "kind": "git",
-                        "config": {"url": "https://github.com/varga-foundation/style.git", "ref": "v2"},
+                        "config": {"url": "https://github.com/northwind/style.git", "ref": "v2"},
                         "refresh_mode": "cron",
                         "refresh_cron": "0 6 * * 1-5",
                         "refresh_timezone": "Europe/Paris",
@@ -79,7 +79,7 @@ def templates(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> pathli
 async def _born(
     client: AsyncClient, slug: str = "billing", repo: str | None = REPO, inputs: dict[str, Any] | None = None
 ) -> Any:
-    config: dict[str, Any] = {"slug": slug, "org": "varga"}
+    config: dict[str, Any] = {"slug": slug, "org": "northwind"}
     if repo:
         config["repo"] = {"url": repo, "default_branch": "main", "language": "python"}
     body: dict[str, Any] = {"slug": slug, "name": slug, "template_ref": "kb-flow", "config": config}
@@ -145,7 +145,7 @@ async def test_a_project_born_of_the_template_gets_its_bases_served_owned_and_sy
     style = await _base(client, "house-style")
     (guide,) = style["sources"]
     assert guide["config"] == {
-        "url": "https://github.com/varga-foundation/style.git",
+        "url": "https://github.com/northwind/style.git",
         "ref": "v2",
         "paths": ["*.md"],
     }
@@ -156,11 +156,11 @@ async def test_a_project_born_of_the_template_gets_its_bases_served_owned_and_sy
     # Each source's loop started once the project was committed: its first pass syncs.
     assert _loops() == {
         f"knowledge-sync-{source['id']}": {
-            "org": "varga",
+            "org": "northwind",
             "source_id": source["id"],
             "interval_seconds": 1800,
         },
-        f"knowledge-sync-{guide['id']}": {"org": "varga", "source_id": guide["id"], "interval_seconds": 3600},
+        f"knowledge-sync-{guide['id']}": {"org": "northwind", "source_id": guide["id"], "interval_seconds": 3600},
     }
     assert len(await _audit(client, "knowledge.create")) == 2
     assert {a["payload"]["via"] for a in await _audit(client, "knowledge.source.create")} == {
@@ -172,7 +172,7 @@ async def test_a_project_born_of_the_template_gets_its_bases_served_owned_and_sy
     from choregos_api.knowledge.sync import sync_source
 
     fake_source(source["id"]).put("docs/setup.md", "docs-setup.md", b"# Setup\n\nRun make.\n")
-    await sync_source("varga", source["id"])
+    await sync_source("northwind", source["id"])
     assert [d["filename"] for d in (await _base(client, "product-docs"))["documents"]] == ["docs-setup.md"]
 
 

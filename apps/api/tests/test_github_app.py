@@ -12,7 +12,7 @@ from httpx import AsyncClient
 
 from .github_app_kit import add_organisation, claim_for
 
-STATUS = "/api/v1/orgs/varga/github"
+STATUS = "/api/v1/orgs/northwind/github"
 RETURN_TO = "/p/billing-api/settings#connections"
 
 
@@ -27,17 +27,17 @@ async def _state(client: AsyncClient) -> str:
 async def test_single_org_claims_every_installation_on_sync(
     client: AsyncClient, admin: str, github: Any
 ) -> None:
-    github.add_installation(1, "varga-inc")
+    github.add_installation(1, "northwind-inc")
     github.add_installation(2, "Other-Co", account_type="User", repository_selection="all")
     refreshed = (await client.post(f"{STATUS}/refresh")).json()
     assert refreshed["configured"] is True and refreshed["multi_org_claim"] == "implicit"
     assert refreshed["app_slug"] == "choregos-bot"
     assert refreshed["install_url"] == "https://github.com/apps/choregos-bot/installations/new"
     got = {i["account_login"]: i for i in refreshed["installations"]}
-    assert set(got) == {"varga-inc", "Other-Co"}, "the only organisation claims what the App sees"
+    assert set(got) == {"northwind-inc", "Other-Co"}, "the only organisation claims what the App sees"
     assert all(i["claimed"] for i in got.values())
     assert got["Other-Co"]["settings_url"] == "https://github.com/settings/installations/2"
-    assert got["varga-inc"]["settings_url"].endswith("/organizations/varga-inc/settings/installations/1")
+    assert got["northwind-inc"]["settings_url"].endswith("/organizations/northwind-inc/settings/installations/1")
     # a read does not need a refresh: the installation that disappears from GitHub disappears here
     github.remove_installation(2)
     assert {i["id"] for i in (await client.post(f"{STATUS}/refresh")).json()["installations"]} == {1}
@@ -53,7 +53,7 @@ async def test_a_deployment_without_an_app_says_so(client: AsyncClient, admin: s
 async def test_the_install_link_carries_a_signed_state_and_the_setup_returns_to_the_settings(
     client: AsyncClient, admin: str, github: Any
 ) -> None:
-    github.add_installation(7, "varga-inc")
+    github.add_installation(7, "northwind-inc")
     url = (await client.post(f"{STATUS}/install-link", json={"return_to": RETURN_TO})).json()["url"]
     assert url.startswith("https://github.com/apps/choregos-bot/installations/new?state=")
     state = parse_qs(urlsplit(url).query)["state"][0]
@@ -71,7 +71,7 @@ async def test_a_forged_state_is_refused(client: AsyncClient, admin: str, github
     from choregos_api.services.github_app import sign_state
 
     # One organisation: a forged state that got through WOULD claim implicitly, so a 403 is the guard.
-    github.add_installation(7, "varga-inc")
+    github.add_installation(7, "northwind-inc")
     good = await _state(client)
     payload, _, _sig = good.partition(".")
 
@@ -82,9 +82,9 @@ async def test_a_forged_state_is_refused(client: AsyncClient, admin: str, github
 
     assert (await setup(f"{payload}.{'A' * 43}")).status_code == 403, "a bad signature"
     assert (await setup("not-a-state")).status_code == 403
-    expired = sign_state(org="varga", project=None, user=admin, return_to="/p/x", now=time.time() - 7200)
+    expired = sign_state(org="northwind", project=None, user=admin, return_to="/p/x", now=time.time() - 7200)
     assert (await setup(expired)).status_code == 403, "an expired state"
-    other_user = sign_state(org="varga", project=None, user="someone@else.dev", return_to="/p/x")
+    other_user = sign_state(org="northwind", project=None, user="someone@else.dev", return_to="/p/x")
     assert (await setup(other_user)).status_code == 403, "the state names the person who started it"
     from choregos_api.db.models import GitHubInstallation
     from choregos_api.db.session import session_scope
@@ -98,7 +98,7 @@ async def test_a_forged_state_is_refused(client: AsyncClient, admin: str, github
 
 async def test_multi_org_claim_requires_oauth_proof(client: AsyncClient, admin: str, github: Any) -> None:
     await add_organisation("globex")
-    github.add_installation(1, "varga-inc")
+    github.add_installation(1, "northwind-inc")
     state = await _state(client)
 
     async def setup(**extra: Any) -> Any:
@@ -139,39 +139,39 @@ async def test_an_installation_claimed_by_another_org_is_not_reclaimed(
         follow_redirects=False,
     )
     assert taken.status_code == 409, taken.text
-    assert (await client.get(STATUS)).json()["installations"] == [], "and varga does not see it"
+    assert (await client.get(STATUS)).json()["installations"] == [], "and northwind does not see it"
 
 
 async def test_repositories_lists_only_claimed_installations(
     client: AsyncClient, admin: str, github: Any
 ) -> None:
     globex = await add_organisation("globex")
-    varga = (await client.get("/api/v1/orgs")).json()
-    assert varga, "the administrator is signed in"
+    northwind = (await client.get("/api/v1/orgs")).json()
+    assert northwind, "the administrator is signed in"
     from choregos_api.db.models import Organization
     from choregos_api.db.session import session_scope
     from sqlalchemy import select
 
     async with session_scope(orgs="*") as session:
-        varga_id = (
-            await session.execute(select(Organization.id).where(Organization.slug == "varga"))
+        northwind_id = (
+            await session.execute(select(Organization.id).where(Organization.slug == "northwind"))
         ).scalar_one()
-    github.add_installation(1, "varga-inc")
+    github.add_installation(1, "northwind-inc")
     github.add_installation(2, "globex-inc")
     github.add_installation(3, "free-co")
-    github.add_repository(1, "varga-inc/billing", private=True, default_branch="trunk")
-    github.add_repository(1, "varga-inc/Web")
+    github.add_repository(1, "northwind-inc/billing", private=True, default_branch="trunk")
+    github.add_repository(1, "northwind-inc/Web")
     github.add_repository(2, "globex-inc/secret")
     github.add_repository(3, "free-co/anything")
-    await claim_for(1, "varga-inc", varga_id)
+    await claim_for(1, "northwind-inc", northwind_id)
     await claim_for(2, "globex-inc", globex)
     await claim_for(3, "free-co", None)
     listed = (await client.get(f"{STATUS}/repositories")).json()
-    assert [r["full_name"] for r in listed["items"]] == ["varga-inc/billing", "varga-inc/Web"]
+    assert [r["full_name"] for r in listed["items"]] == ["northwind-inc/billing", "northwind-inc/Web"]
     assert listed["items"][0]["default_branch"] == "trunk" and listed["items"][0]["installation_id"] == 1
     assert listed["meta"]["has_more"] is False
     found = (await client.get(f"{STATUS}/repositories", params={"q": "WEB"})).json()["items"]
-    assert [r["full_name"] for r in found] == ["varga-inc/Web"]
+    assert [r["full_name"] for r in found] == ["northwind-inc/Web"]
     foreign = (await client.get(f"{STATUS}/repositories", params={"installation": 2})).json()
     assert foreign["items"] == [], "an installation id of another organisation lists nothing"
 
@@ -182,15 +182,15 @@ async def test_the_listing_is_for_people_who_manage_connectors(
     from .conftest import login
 
     for body in (
-        {"email": "dev@varga.dev", "role": "developer", "project_slug": "billing-api"},
-        {"email": "po@varga.dev", "role": "project_owner", "project_slug": "billing-api"},
+        {"email": "dev@northwind.dev", "role": "developer", "project_slug": "billing-api"},
+        {"email": "po@northwind.dev", "role": "project_owner", "project_slug": "billing-api"},
     ):
-        assert (await client.post("/api/v1/orgs/varga/members", json=body)).status_code == 201
+        assert (await client.post("/api/v1/orgs/northwind/members", json=body)).status_code == 201
     client.cookies.clear()
-    await login(client, "dev@varga.dev")
+    await login(client, "dev@northwind.dev")
     assert (await client.get(STATUS)).status_code == 403
     client.cookies.clear()
-    await login(client, "po@varga.dev")
+    await login(client, "po@northwind.dev")
     assert (await client.get(STATUS)).status_code == 200, "connector:write on a project of the organisation"
 
 
@@ -200,7 +200,7 @@ async def test_installation_webhook_marks_it_suspended_and_deleted(
     def event(action: str, delivery: str) -> Any:
         installation = {
             "id": 5,
-            "account": {"login": "varga-inc", "id": 50, "type": "Organization"},
+            "account": {"login": "northwind-inc", "id": 50, "type": "Organization"},
             "repository_selection": "all",
             "app_id": 1,
         }
@@ -213,7 +213,7 @@ async def test_installation_webhook_marks_it_suspended_and_deleted(
     async def listed() -> list[dict[str, Any]]:
         return list((await client.get(STATUS)).json()["installations"])
 
-    github.add_installation(5, "varga-inc")  # keeps the lazy sync honest: GitHub still has it
+    github.add_installation(5, "northwind-inc")  # keeps the lazy sync honest: GitHub still has it
     assert (await event("created", "d1")).status_code == 202
     assert [(i["id"], i["suspended"]) for i in await listed()] == [(5, False)]
     assert (await event("suspend", "d2")).status_code == 202
@@ -262,7 +262,7 @@ async def test_a_browser_without_a_session_is_sent_to_sign_in_and_back(
     client: AsyncClient, org: str, github: Any
 ) -> None:
     """S42-16: GitHub sends a browser here; without a console session it answered a JSON 401 page."""
-    github.add_installation(7, "varga-inc")
+    github.add_installation(7, "northwind-inc")
     query = {"code": "839a3c", "installation_id": 7, "setup_action": "install"}
     back = await client.get("/api/v1/github/setup", params=query, follow_redirects=False)
     assert back.status_code == 302, back.text
@@ -278,7 +278,7 @@ async def test_an_installation_started_on_github_claims_nothing_and_goes_to_the_
     client: AsyncClient, admin: str, github: Any
 ) -> None:
     """S42-16: no `state` means the console did not start it; GitHub's id alone proves nothing (ADR 0073)."""
-    github.add_installation(7, "varga-inc")
+    github.add_installation(7, "northwind-inc")
     back = await client.get(
         "/api/v1/github/setup",
         params={"installation_id": 7, "setup_action": "install", "code": "839a3c"},

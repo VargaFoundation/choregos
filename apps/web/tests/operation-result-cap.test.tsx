@@ -5,7 +5,7 @@ import OrgConnectorsPage from "@/app/admin/connectors/page";
 import type { OrgConnector } from "@/lib/types";
 
 vi.mock("next/navigation", () => ({ usePathname: () => "/admin/connectors", useSearchParams: () => new URLSearchParams() }));
-vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "varga" }) }));
+vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "northwind" }) }));
 
 const { journaux, miseAJour } = vi.hoisted(() => ({
   journaux: {
@@ -58,13 +58,13 @@ describe("the result cap of an operation (S40-17b)", () => {
     fireEvent.change(empty, { target: { value: "4096" } });
     fireEvent.click(submitOf(empty));
     await waitFor(() =>
-      expect(miseAJour).toHaveBeenCalledWith("varga", "logs", "lookup", { result_max_bytes: 4096 }),
+      expect(miseAJour).toHaveBeenCalledWith("northwind", "logs", "lookup", { result_max_bytes: 4096 }),
     );
 
     fireEvent.change(stored, { target: { value: " " } });
     fireEvent.click(submitOf(stored));
     await waitFor(() =>
-      expect(miseAJour).toHaveBeenLastCalledWith("varga", "logs", "read_logs", { result_max_bytes: null }),
+      expect(miseAJour).toHaveBeenLastCalledWith("northwind", "logs", "read_logs", { result_max_bytes: null }),
     );
   });
 

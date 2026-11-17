@@ -14,7 +14,7 @@ async def test_an_agent_s_runs_are_listed_newest_first(client: AsyncClient, proj
     from choregos_core import utcnow
 
     created = await client.post(
-        "/api/v1/orgs/varga/agents", json={"slug": "writer", "display_name": "Writer", "spec": {}}
+        "/api/v1/orgs/northwind/agents", json={"slug": "writer", "display_name": "Writer", "spec": {}}
     )
     assert created.status_code == 201, created.text
     async with session_scope() as session:
@@ -37,10 +37,10 @@ async def test_an_agent_s_runs_are_listed_newest_first(client: AsyncClient, proj
                     created_at=now - timedelta(minutes=10 - rank),
                 )
             )
-    response = await client.get("/api/v1/orgs/varga/agents/writer/runs")
+    response = await client.get("/api/v1/orgs/northwind/agents/writer/runs")
     assert response.status_code == 200, response.text
     assert [(r["id"], r["status"], r["project_slug"]) for r in response.json()] == [
         ("run-a1", "failed", "billing-api"),
         ("run-a0", "succeeded", "billing-api"),
     ]
-    assert (await client.get("/api/v1/orgs/varga/agents/absent/runs")).status_code == 404
+    assert (await client.get("/api/v1/orgs/northwind/agents/absent/runs")).status_code == 404

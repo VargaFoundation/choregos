@@ -13,7 +13,7 @@ from typing import Any
 import pytest
 from httpx import AsyncClient
 
-ORG = "/api/v1/orgs/varga"
+ORG = "/api/v1/orgs/northwind"
 KEY = "cle-marketdata-du-coffre"
 
 
@@ -52,7 +52,7 @@ async def _prepare(client: AsyncClient, project: dict[str, Any]) -> tuple[str, d
     )
     assert agent.status_code == 201, agent.text
     async with session_scope() as session:
-        item = WorkItem(project_id=project["id"], tracker_key="varga/x#7", title="T", state="ready")
+        item = WorkItem(project_id=project["id"], tracker_key="northwind/x#7", title="T", state="ready")
         session.add(item)
         await session.flush()
         session.add(
@@ -68,7 +68,7 @@ async def _prepare(client: AsyncClient, project: dict[str, Any]) -> tuple[str, d
             )
         )
     token = mint_run_token(
-        "run-marketdata-1", project_slug="billing-api", work_item_key="varga/x#7", ttl_minutes=30
+        "run-marketdata-1", project_slug="billing-api", work_item_key="northwind/x#7", ttl_minutes=30
     )
     return "/api/v1/internal/runs/run-marketdata-1/tools", {"Authorization": f"Bearer {token}"}
 

@@ -34,5 +34,5 @@ def test_no_installation_id_is_ever_a_request_field() -> None:
 
 async def test_the_routes_need_a_signed_in_person(client: Any) -> None:
     """The stubs of S40-04a became real routes in S40-04b: they answer, and they need a session."""
-    response = await client.get("/api/v1/orgs/varga/github")
+    response = await client.get("/api/v1/orgs/northwind/github")
     assert response.status_code == 401

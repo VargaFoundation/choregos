@@ -260,7 +260,7 @@ def _pr_ref(setup: Fixture) -> Any:
     prs = list(setup.adapters.scm.prs.values())
     if prs:
         return prs[0].ref
-    return PrRef(repo="varga/billing-api", number=1)
+    return PrRef(repo="northwind/billing-api", number=1)
 
 
 async def _wait_until(handle: Any, description: str, predicate: Any, *, timeout: int = 60) -> None:

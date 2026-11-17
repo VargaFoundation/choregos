@@ -126,12 +126,12 @@ async def test_a_fresh_signed_in_principal_is_refused_when_its_credential_is_not
         user_id="u1", email="a@b.test", kind="user", credential=credential, authenticated_at=utcnow()
     )  # type: ignore[arg-type]
     with pytest.raises(ApiError) as decision:
-        await actions.decide(None, None, "varga", "a1", "approve", None, principal)  # type: ignore[arg-type]
+        await actions.decide(None, None, "northwind", "a1", "approve", None, principal)  # type: ignore[arg-type]
     with pytest.raises(ApiError) as settlement:
         await actions.settle(
             None,  # type: ignore[arg-type]
             None,  # type: ignore[arg-type]
-            "varga",
+            "northwind",
             "a1",
             ActionSettlementBody(outcome="made", note="found it"),
             principal,
@@ -143,6 +143,6 @@ async def test_a_token_does_not_decide_an_agent_release(client: AsyncClient, app
     await as_user(client, ADMIN)
     async with await token_client(app, client) as machine:
         refused = await machine.post(
-            "/api/v1/orgs/varga/agents/none/releases/r1/decision", json={"decision": "approve"}
+            "/api/v1/orgs/northwind/agents/none/releases/r1/decision", json={"decision": "approve"}
         )
     assert refused.status_code == 403 and refused.json()["code"] == CODE

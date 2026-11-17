@@ -509,13 +509,13 @@ global:
     # Each source: an index (`oci://…` or `https://…/index.yaml`) and a trust policy, a keyless cosign
     # identity and issuer (regular expressions, matched whole), or `key:` a public key file mounted in
     # the API (`api.extraVolumes`). Never unsigned. `egress`: hosts its fetches may reach beyond the
-    # index's own. `varga` is where the platform's own agents are published (ADR 0093 §6): signed by
-    # the publish workflow of VargaFoundation/choregos-agents on main, and nothing else.
+    # index's own. `northwind` is where the platform's own agents are published (ADR 0093 §6): signed by
+    # the publish workflow of graalsystems/tranibor-agents on main, and nothing else.
     sources:
-      - name: varga
-        index: oci://ghcr.io/vargafoundation/choregos-agents/index:latest
+      - name: tranibor
+        index: oci://ghcr.io/graalsystems/tranibor-agents/index:latest
         trust:
-          identity: https://github\.com/VargaFoundation/choregos-agents/\.github/workflows/publish\.yml@refs/heads/main
+          identity: https://github\.com/graalsystems/tranibor-agents/\.github/workflows/publish\.yml@refs/heads/main
           issuer: https://token\.actions\.githubusercontent\.com
     # Installed in every organisation at start-up and at its creation, idempotently. One the gate sends
     # to a second administrator (a server, a high-risk skill) waits for that approval, unless the entry
@@ -529,11 +529,11 @@ global:
     # `default-request` workflow (ADR 0110); nothing in it goes to a second administrator. Set
     # `defaultPlugins: []` to install none.
     defaultPlugins:
-      - { source: varga, name: software-delivery, version: "^1.0", preapproved: true }
-      - { source: varga, name: netops, version: "^1.0", preapproved: true }
-      - { source: varga, name: authoring, version: "^1.0", preapproved: true }
-      - { source: varga, name: mcp-clients, version: "^1.0", preapproved: true }
-      - { source: varga, name: requests, version: "^1.0" }
+      - { source: tranibor, name: software-delivery, version: "^1.0", preapproved: true }
+      - { source: tranibor, name: netops, version: "^1.0", preapproved: true }
+      - { source: tranibor, name: authoring, version: "^1.0", preapproved: true }
+      - { source: tranibor, name: mcp-clients, version: "^1.0", preapproved: true }
+      - { source: tranibor, name: requests, version: "^1.0" }
     # A directory of plugins inside the image (air-gapped installs, demos, CI); empty: none. The API
     # image ships the built-in agents' plugins there, pinned by its `plugins.lock`.
     offline: /opt/choregos/plugins
@@ -549,7 +549,7 @@ global:
       # Where a server's image may come from, as registry or repository prefixes matched by path
       # segment (the rule of `global.images.hostedRegistries`). Empty: no server runs. Images are
       # pinned by digest (the plugin contract) and signed per `global.images.hostedCosign`.
-      #   registries: [ghcr.io/vargafoundation/choregos-agents]
+      #   registries: [ghcr.io/graalsystems/tranibor-agents]
       registries: []
       # The RuntimeClass of the servers' pods; empty: `global.runner.runtimeClass`, else the cluster's.
       runtimeClass: ""

@@ -10,7 +10,7 @@ from httpx import AsyncClient
 
 from . import knowledge_fixtures as fx
 
-BASE = "/api/v1/orgs/varga/knowledge"
+BASE = "/api/v1/orgs/northwind/knowledge"
 ZONING = fx.pptx([("Network zoning", "Every zone has its own firewall. Owners review rules monthly.")])
 ENCRYPTION = b"# Encryption standard\n\n## In transit\n\nTLS 1.3 is required for every connection.\n"
 
@@ -43,7 +43,7 @@ async def test_the_skill_cites_the_documents_it_came_from(client: AsyncClient, a
     assert outcome["status"] == "pending_review", outcome
     assert (outcome["skill"], outcome["version"]) == ("architecture-principles", 1)
 
-    version = (await client.get("/api/v1/orgs/varga/skills/architecture-principles/versions/1")).json()
+    version = (await client.get("/api/v1/orgs/northwind/skills/architecture-principles/versions/1")).json()
     skill_md, sources = version["files"]["SKILL.md"], version["files"]["references/sources.md"]
     assert skill_md.startswith("---\nname: architecture-principles\n")
     assert "Every zone has its own firewall." in skill_md
@@ -59,12 +59,12 @@ async def test_a_distilled_version_waits_for_a_person_then_is_approved(
     """Machine-written guidance is `pending_review` whatever its tier; a person approves it."""
     await _framework(client)
     await _distilled(client)
-    skill = (await client.get("/api/v1/orgs/varga/skills/architecture-principles")).json()
+    skill = (await client.get("/api/v1/orgs/northwind/skills/architecture-principles")).json()
     assert skill["review_status"] == "pending_review"
     assert skill["risk"] != "high", "it waits although the gate alone would have let it through"
-    approved = await client.post("/api/v1/orgs/varga/skills/architecture-principles/versions/1/approve")
+    approved = await client.post("/api/v1/orgs/northwind/skills/architecture-principles/versions/1/approve")
     assert approved.status_code == 200, approved.text
-    assert (await client.get("/api/v1/orgs/varga/skills/architecture-principles")).json()[
+    assert (await client.get("/api/v1/orgs/northwind/skills/architecture-principles")).json()[
         "review_status"
     ] == "approved"
 
@@ -96,13 +96,13 @@ async def test_a_principle_citing_nothing_of_the_base_is_dropped_and_said(
     await _framework(client)
     async with session_scope() as session:
         base_id = (await session.execute(select(KnowledgeBase.id))).scalar_one()
-    outcome = await distill("varga", base_id, "admin@varga.dev", distiller=Inventive())
+    outcome = await distill("northwind", base_id, "admin@northwind.dev", distiller=Inventive())
     assert outcome["principles"] == 1
     assert outcome["dropped"] == [
         "“Quantum”: cites no document of the base",
         "“Unsourced”: cites no document of the base",
     ]
-    files = (await client.get("/api/v1/orgs/varga/skills/architecture-principles/versions/1")).json()["files"]
+    files = (await client.get("/api/v1/orgs/northwind/skills/architecture-principles/versions/1")).json()["files"]
     assert "quantum" not in files["SKILL.md"].lower()
 
 
@@ -116,8 +116,8 @@ async def test_only_an_org_admin_distils(client: AsyncClient, admin: str) -> Non
     from .conftest import login
 
     await client.post(BASE, json={"slug": "architecture", "name": "Architecture framework"})
-    await client.post("/api/v1/orgs/varga/members", json={"email": "dev@varga.dev", "role": "developer"})
-    await login(client, "dev@varga.dev")
+    await client.post("/api/v1/orgs/northwind/members", json={"email": "dev@northwind.dev", "role": "developer"})
+    await login(client, "dev@northwind.dev")
     assert (await client.post(f"{BASE}/architecture/distill")).status_code == 403
 
 

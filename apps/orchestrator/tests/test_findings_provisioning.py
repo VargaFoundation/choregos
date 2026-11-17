@@ -104,7 +104,7 @@ async def test_provisioning_runs_steps_and_resumes(
             {
                 "project_id": setup.project_id,
                 "project_slug": setup.project_slug,
-                "org": "varga",
+                "org": "northwind",
                 "template_ref": "github-tekton-argo-k8s@1.0.0",
             },
             id=f"prov-{setup.project_slug}",

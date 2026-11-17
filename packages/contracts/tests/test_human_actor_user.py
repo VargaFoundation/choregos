@@ -28,8 +28,8 @@ def _workflow_with(owner: dict[str, Any]) -> dict[str, Any]:
     ("owner", "accepted"),
     [
         ({"type": "human", "group": "product-owners"}, True),
-        ({"type": "human", "user": "lea@varga.dev"}, True),
-        ({"type": "human", "user": "lea@varga.dev", "group": "product-owners", "sla_hours": 4}, True),
+        ({"type": "human", "user": "lea@northwind.dev"}, True),
+        ({"type": "human", "user": "lea@northwind.dev", "group": "product-owners", "sla_hours": 4}, True),
         ({"type": "human", "sla_hours": 4}, False),
         ({"type": "human", "user": "not an e-mail"}, False),
     ],

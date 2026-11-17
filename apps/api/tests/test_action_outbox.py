@@ -34,13 +34,13 @@ def noop_effect() -> Iterator[None]:
 async def _proposed(client: AsyncClient, app: Any, pid: str, count: int = 1) -> list[str]:
     """Actions proposed by a developer: who proposes does not decide."""
     member = await client.post(
-        "/api/v1/orgs/varga/members", json={"email": "dev@varga.dev", "role": "developer"}
+        "/api/v1/orgs/northwind/members", json={"email": "dev@northwind.dev", "role": "developer"}
     )
     assert member.status_code in {200, 201}, member.text
     dev = AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
     ids: list[str] = []
     try:
-        await login(dev, "dev@varga.dev")
+        await login(dev, "dev@northwind.dev")
         for n in range(count):
             body = {"kind": "test.noop", "title": f"Nothing {n}", "params": {}, "effects": EFFECTS}
             proposed = await dev.post(f"/api/v1/projects/{pid}/actions", json=body)

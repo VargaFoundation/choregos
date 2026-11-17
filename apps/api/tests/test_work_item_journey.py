@@ -193,7 +193,7 @@ async def _life_of_the_work_item(project: dict[str, Any], item: dict[str, Any]) 
             payload={"summary": "Approve the pull request"},
             requested_at=next(instant),
             decided_at=next(instant),
-            decided_by="marie@varga.dev",
+            decided_by="marie@northwind.dev",
             decision={"kind": "approval", "approved": True, "reason": "looks good"},
         )
         session.add(request)
@@ -289,7 +289,7 @@ async def test_the_journey_attaches_each_move_and_each_step_to_its_transition(
         ids["request"],
         "maintainers",
         "approved",
-        "marie@varga.dev",
+        "marie@northwind.dev",
     )
     train = next(p for p in steps if p["transition_id"] == "t-stage")
     assert (train["id"], train["status"], train["actor"]) == (ids["release"], "verified", "release_train")

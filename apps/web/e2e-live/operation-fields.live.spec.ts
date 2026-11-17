@@ -6,14 +6,14 @@ import { expect, test } from "@playwright/test";
  * cap: each field is read back from the API and from the page after a reload, so a field the
  * console names differently from the API (accepted with a 200, then ignored) shows up here.
  */
-const CONNECTORS = "/api/v1/orgs/varga/connectors";
+const CONNECTORS = "/api/v1/orgs/northwind/connectors";
 // A fresh connector per run: a reused API keeps the previous run's.
 const NAME = `supplier-${Date.now()}`;
 
 type Operation = { name: string; policy: string; groups: string[]; approver_group: string | null };
 
 test("the policy, groups and approver set in the console are the ones the API keeps", async ({ page }) => {
-  await page.goto("/api/v1/auth/login?as=admin@varga.dev");
+  await page.goto("/api/v1/auth/login?as=admin@northwind.dev");
   const created = await page.request.post(CONNECTORS, {
     data: { name: NAME, type: "mcp", config: { url: "https://supplier.test/mcp" } },
   });

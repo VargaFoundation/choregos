@@ -72,7 +72,7 @@ async def _assistant(client: AsyncClient, *, with_markets: bool = False) -> str:
     await _agent(client)  # the agent of the conversations, unless the test made its own first
     await _plugin(client)
     assert (await _install(client, audience_groups=[AUDIENCE])).status_code == 201
-    await _groups("admin@varga.dev", [AUDIENCE])  # `assistant:use` needs a group of the audience (S63-15)
+    await _groups("admin@northwind.dev", [AUDIENCE])  # `assistant:use` needs a group of the audience (S63-15)
     if with_markets:
         body = {"name": "markets", "type": "mcp", "config": {"url": "https://markets.test/mcp"},
                 "secret_refs": {"token": "env:CONNECTOR_TEST_MARKETS_KEY"}}  # fmt: skip
@@ -89,7 +89,7 @@ async def _assistant(client: AsyncClient, *, with_markets: bool = False) -> str:
         return (await session.execute(select(AssistantInstallation.id))).scalar_one()
 
 
-async def _open(installation_id: str, email: str = "admin@varga.dev", agent: str = "helper") -> str:
+async def _open(installation_id: str, email: str = "admin@northwind.dev", agent: str = "helper") -> str:
     from choregos_api.db.models import Organization, User
     from choregos_api.db.session import session_scope
     from choregos_api.rbac import Principal
@@ -149,7 +149,7 @@ async def _stored(space: str) -> list[Any]:
         return found
 
 
-async def _profile(installation_id: str, document: dict[str, Any], email: str = "admin@varga.dev") -> None:
+async def _profile(installation_id: str, document: dict[str, Any], email: str = "admin@northwind.dev") -> None:
     """An active version of the person's `investor_profile`, as the memory page writes one."""
     from choregos_api.db.models import AssistantInstallation, MemoryProfile, User
     from choregos_api.db.session import session_scope

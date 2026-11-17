@@ -17,8 +17,8 @@ from .conftest import login
 
 @pytest.fixture
 def land_in_acme(project: dict[str, Any], monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    """Once the varga project exists: the dev login makes a new user a developer of EVERY organisation
-    unless a default one is set; here it lands in `acme`, so a varga role is only the one a test grants.
+    """Once the northwind project exists: the dev login makes a new user a developer of EVERY organisation
+    unless a default one is set; here it lands in `acme`, so a northwind role is only the one a test grants.
     """
     from choregos_api.config import reset_settings_cache
 
@@ -55,7 +55,7 @@ async def _member(email: str, org_slug: str, role: Role, project_slug: str | Non
         session.add(Membership(user_id=user.id, org_id=org.id, project_id=project_id, role=str(role)))
 
 
-async def _members_as(client: AsyncClient, email: str, org: str = "varga") -> Any:
+async def _members_as(client: AsyncClient, email: str, org: str = "northwind") -> Any:
     app = client._transport.app  # type: ignore[attr-defined]
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as other:
         await login(other, email)
@@ -67,26 +67,26 @@ async def test_a_member_of_another_organisation_gets_403(client: AsyncClient) ->
     await _member("stranger@acme.dev", "acme", Role.VIEWER)
     response = await _members_as(client, "stranger@acme.dev")
     assert response.status_code == 403, response.text
-    assert "admin@varga.dev" not in response.text
+    assert "admin@northwind.dev" not in response.text
     unknown = await _members_as(client, "stranger@acme.dev", "nowhere")
     assert unknown.status_code == 403, "an organisation's existence is not told to a stranger"
 
 
 @pytest.mark.usefixtures("land_in_acme")
 async def test_a_viewer_of_the_organisation_reads_every_member(client: AsyncClient) -> None:
-    await _member("viewer@varga.dev", "varga", Role.VIEWER)
-    response = await _members_as(client, "viewer@varga.dev")
+    await _member("viewer@northwind.dev", "northwind", Role.VIEWER)
+    response = await _members_as(client, "viewer@northwind.dev")
     assert response.status_code == 200, response.text
-    assert {"admin@varga.dev", "viewer@varga.dev"} <= {m["email"] for m in response.json()}
+    assert {"admin@northwind.dev", "viewer@northwind.dev"} <= {m["email"] for m in response.json()}
 
 
 @pytest.mark.usefixtures("land_in_acme")
 async def test_a_project_member_reads_only_the_members_of_its_project(client: AsyncClient) -> None:
-    await _member("dev@varga.dev", "varga", Role.DEVELOPER, "billing-api")
-    response = await _members_as(client, "dev@varga.dev")
+    await _member("dev@northwind.dev", "northwind", Role.DEVELOPER, "billing-api")
+    response = await _members_as(client, "dev@northwind.dev")
     assert response.status_code == 200, response.text
     rows = response.json()
-    assert "dev@varga.dev" in {m["email"] for m in rows}
+    assert "dev@northwind.dev" in {m["email"] for m in rows}
     # the project's creator is its owner too; the organisation-wide `org_admin` row is not shown
     assert {m["project_slug"] for m in rows} == {"billing-api"}, "not the organisation-wide memberships"
     assert "org_admin" not in {m["role"] for m in rows}

@@ -14,7 +14,7 @@ from httpx import AsyncClient
 from .conftest import login
 from .test_knowledge_rights import ORG, _as, _uid
 
-READER, STRANGER = "reader@varga.dev", "stranger@varga.dev"
+READER, STRANGER = "reader@northwind.dev", "stranger@northwind.dev"
 MEMBER = {"projects": {"billing-api": "developer"}}
 
 
@@ -30,7 +30,7 @@ async def _marked(
     assert created.status_code == 201, created.text
     reader = await _uid(client, READER, **MEMBER)
     await _uid(client, STRANGER, **MEMBER)
-    await login(client, "admin@varga.dev")
+    await login(client, "admin@northwind.dev")
     granted = await client.put(
         f"{ORG}/hr/grants", json={"grants": [{"subject_type": "user", "subject": reader, "role": "viewer"}]}
     )
@@ -42,7 +42,7 @@ async def _marked(
             title="Salary bands",
             state="review",
             body_snapshot="the brief",
-            reporter="Jean Martin <jmartin@varga.dev>",
+            reporter="Jean Martin <jmartin@northwind.dev>",
             restricted_knowledge=["hr"] if marks is None else marks,
         )
         session.add(item)
@@ -110,7 +110,7 @@ async def test_the_list_shows_the_marked_work_item_without_its_content(
     async with _as(client, READER, **MEMBER) as reader:
         (entry,) = (await reader.get(url)).json()["items"]
     assert entry["redacted"] is False
-    assert entry["reporter"] == "Jean Martin <jmartin@varga.dev>"
+    assert entry["reporter"] == "Jean Martin <jmartin@northwind.dev>"
     assert entry["pending_request"]["payload"]["question"] == "Publish the bands of each grade?"
 
 
@@ -122,7 +122,7 @@ async def test_the_bases_are_read_as_they_are_now(
         assert (await reader.get(f"/api/v1/work-items/{item['id']}")).status_code == 404, (
             "a base that no longer exists keeps the work item closed"
         )
-    await login(client, "admin@varga.dev")
+    await login(client, "admin@northwind.dev")
     assert (await client.get(f"/api/v1/work-items/{item['id']}")).status_code == 200, (
         "an administrator reads it"
     )
@@ -261,7 +261,7 @@ async def test_an_external_tracker_receives_a_neutral_issue_for_a_marked_child(
     monkeypatch.setattr(tickets, "project_tracker", with_the_fake)
     connected = await client.put(
         f"/api/v1/projects/{project['id']}/connectors/tracker",
-        json={"type": "github-issues", "config": {"repo": "varga/billing-api"}},
+        json={"type": "github-issues", "config": {"repo": "northwind/billing-api"}},
     )
     assert connected.status_code == 200, connected.text
     async with session_scope() as session:

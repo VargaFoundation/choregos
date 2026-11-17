@@ -15,7 +15,7 @@ from .conftest import Fixture
 
 pytestmark = pytest.mark.asyncio
 
-REPOSITORY = "varga/billing-api"
+REPOSITORY = "northwind/billing-api"
 #: Inside the fixture's work item scope (`src/orders/**`), and denied by the policy below.
 GENERATED = "src/orders/generated/client.py"
 DENY = [".github/workflows/**", "src/orders/generated/**"]

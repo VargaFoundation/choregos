@@ -1,6 +1,6 @@
 // @vitest-environment node
 /**
- * The console owns its primitives (ADR 0048): the Varga Foundation design system is not a dependency
+ * The console owns its primitives (ADR 0048): a third-party design system is not a dependency
  * of `apps/web` — not a package, not a stylesheet, not a Tailwind `@source` — and eslint refuses an
  * import from it, in the code as in the fixtures and the tests.
  */
@@ -19,16 +19,16 @@ function sourceFiles(dir: string): string[] {
   });
 }
 
-describe("the console without the foundation's design system", () => {
+describe("the console without the publisher's design system", () => {
   it("package.json does not depend on it", () => {
     const pkg = JSON.parse(readFileSync(join(WEB, "package.json"), "utf8")) as Record<string, Record<string, string>>;
     const deps = { ...pkg.dependencies, ...pkg.devDependencies };
-    expect(Object.keys(deps).filter((name) => name.startsWith("@varga/"))).toEqual([]);
+    expect(Object.keys(deps).filter((name) => name.startsWith("@third-party/"))).toEqual([]);
   });
 
   it("no source, stylesheet or config names it", () => {
     const files = [...sourceFiles(join(WEB, "src")), join(WEB, "next.config.mjs")];
-    const offenders = files.filter((path) => /@varga\/|node_modules\/@varga/.test(readFileSync(path, "utf8")));
+    const offenders = files.filter((path) => /@third-party\/|node_modules\/@third-party/.test(readFileSync(path, "utf8")));
     expect(offenders.map((path) => relative(WEB, path))).toEqual([]);
   });
 
@@ -36,7 +36,7 @@ describe("the console without the foundation's design system", () => {
     "eslint refuses an import from it in %s",
     async (file) => {
       const eslint = new ESLint({ cwd: WEB });
-      const [result] = await eslint.lintText('import { Card } from "@varga/design-system";\nexport const C = Card;\n', {
+      const [result] = await eslint.lintText('import { Card } from "@third-party/design-system";\nexport const C = Card;\n', {
         filePath: join(WEB, file),
       });
       const rules = result!.messages.map((m) => m.ruleId);

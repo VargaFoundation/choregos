@@ -23,7 +23,7 @@ from .test_broker import TOOLS, _prepare
 
 pytestmark = pytest.mark.asyncio
 
-OPERATION = "/api/v1/orgs/varga/connectors/fournisseur/operations/suivi_commande"
+OPERATION = "/api/v1/orgs/northwind/connectors/fournisseur/operations/suivi_commande"
 LINE = "line of a very long log\n"
 
 
@@ -153,7 +153,7 @@ async def test_a_governed_write_result_is_held_to_its_operation_cap(
 
     base, headers = await _prepare(client, project, ["*"])
     opened = await client.patch(
-        "/api/v1/orgs/varga/connectors/fournisseur/operations/commander_poste",
+        "/api/v1/orgs/northwind/connectors/fournisseur/operations/commander_poste",
         json={"policy": "allowed", "result_max_bytes": 4096},
     )
     assert opened.status_code == 200, opened.text

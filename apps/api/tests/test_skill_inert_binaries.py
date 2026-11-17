@@ -33,7 +33,7 @@ def _zip(files: dict[str, str | bytes]) -> bytes:
 
 async def _upload(client: AsyncClient, content: bytes) -> Any:
     return await client.post(
-        "/api/v1/orgs/varga/skills/import", content=content, headers={"Content-Type": "application/zip"}
+        "/api/v1/orgs/northwind/skills/import", content=content, headers={"Content-Type": "application/zip"}
     )
 
 
@@ -44,7 +44,7 @@ async def test_a_zip_with_an_image_is_stored_as_base64_and_digested_on_its_bytes
         client, _zip({"SKILL.md": SKILL_MD, "assets/logo.png": PNG, "assets/a.webp": WEBP})
     )
     assert created.status_code == 201, created.text
-    version = (await client.get("/api/v1/orgs/varga/skills/branded/versions/1")).json()
+    version = (await client.get("/api/v1/orgs/northwind/skills/branded/versions/1")).json()
     assert version["files"]["assets/logo.png"] == base64.b64encode(PNG).decode()
     assert skill_file_bytes("assets/logo.png", version["files"]["assets/logo.png"]) == PNG
     assert version["digest"] == skill_digest(version["files"])
@@ -77,7 +77,7 @@ async def test_what_a_binary_must_hold_or_the_skill_is_refused(
     refused = await _upload(client, _zip({"SKILL.md": SKILL_MD, **files}))
     assert refused.status_code == 422, refused.text
     assert reason in refused.text
-    assert (await client.get("/api/v1/orgs/varga/skills")).json() == []
+    assert (await client.get("/api/v1/orgs/northwind/skills")).json() == []
 
 
 async def test_a_file_stored_directly_must_be_valid_base64_of_the_right_type(
@@ -85,11 +85,11 @@ async def test_a_file_stored_directly_must_be_valid_base64_of_the_right_type(
 ) -> None:
     for value in ("not base64 !!", "iVBORw0KGgo"):  # junk; valid-looking but unpadded and not a full PNG
         refused = await client.post(
-            "/api/v1/orgs/varga/skills", json={"files": {"SKILL.md": SKILL_MD, "a.png": value}}
+            "/api/v1/orgs/northwind/skills", json={"files": {"SKILL.md": SKILL_MD, "a.png": value}}
         )
         assert refused.status_code == 422, refused.text
     ok = await client.post(
-        "/api/v1/orgs/varga/skills",
+        "/api/v1/orgs/northwind/skills",
         json={"files": {"SKILL.md": SKILL_MD, "a.png": base64.b64encode(PNG).decode()}},
     )
     assert ok.status_code == 201, ok.text
@@ -99,7 +99,7 @@ async def test_svg_stays_text_and_a_text_file_may_start_with_base64(client: Asyn
     svg = '<svg xmlns="http://www.w3.org/2000/svg"/>'
     created = await _upload(client, _zip({"SKILL.md": SKILL_MD, "a.svg": svg, "notes.md": "base64:abc\n"}))
     assert created.status_code == 201, created.text
-    files = (await client.get("/api/v1/orgs/varga/skills/branded/versions/1")).json()["files"]
+    files = (await client.get("/api/v1/orgs/northwind/skills/branded/versions/1")).json()["files"]
     assert files["a.svg"] == svg and files["notes.md"] == "base64:abc\n"
 
 
@@ -134,7 +134,7 @@ async def test_a_git_import_accepts_a_font_and_refuses_a_fake_or_other_binary(
     client: AsyncClient, admin: str, fake: Any
 ) -> None:
     preview = await client.post(
-        "/api/v1/orgs/varga/skills/import-git/preview",
+        "/api/v1/orgs/northwind/skills/import-git/preview",
         json={"repo_url": ANTHROPICS, "ref": SHA1, "path": "skills"},
     )
     assert preview.status_code == 200, preview.text
@@ -145,7 +145,7 @@ async def test_a_git_import_accepts_a_font_and_refuses_a_fake_or_other_binary(
     assert "not UTF-8" in by_path["skills/blob"]["problem"]
     imported = await _import(client, skills=["branded"])
     assert imported.status_code in (200, 201), imported.text
-    files = (await client.get("/api/v1/orgs/varga/skills/branded/versions/1")).json()["files"]
+    files = (await client.get("/api/v1/orgs/northwind/skills/branded/versions/1")).json()["files"]
     assert skill_file_bytes("font.woff2", files["font.woff2"]).startswith(b"wOF2")
 
 

@@ -124,7 +124,7 @@ async def test_a_decision_settles_the_pending_human_request(
         f"/api/v1/work-items/{item['id']}/decisions", json={"kind": "answer", "answer": "yes, in euros"}
     )
     assert response.status_code == 202, response.text
-    assert response.json()["decided_by"] == "admin@varga.dev"
+    assert response.json()["decided_by"] == "admin@northwind.dev"
     again = await client.post(f"/api/v1/work-items/{item['id']}/decisions", json={"kind": "approve"})
     assert again.status_code == 409, "already settled"
 
@@ -343,7 +343,7 @@ async def test_the_costs_of_an_organisation_read_per_project(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
     await _spends(client, project)
-    report = (await client.get("/api/v1/orgs/varga/costs", params={"group_by": "project"})).json()
+    report = (await client.get("/api/v1/orgs/northwind/costs", params={"group_by": "project"})).json()
     assert [r["key"] for r in report["rows"]] == ["billing-api"], "the identifier is translated to a slug"
     assert (await client.get("/api/v1/orgs/unknown/costs")).status_code == 404
 
@@ -416,7 +416,7 @@ async def test_a_release_is_approved_and_aborted(client: AsyncClient, project: d
     assert (
         await client.post(f"/api/v1/releases/{release_id}/approve", json={"note": "ok"})
     ).status_code == 202
-    assert (await client.get(f"/api/v1/releases/{release_id}")).json()["approved_by"] == "admin@varga.dev"
+    assert (await client.get(f"/api/v1/releases/{release_id}")).json()["approved_by"] == "admin@northwind.dev"
     assert (
         await client.post(f"/api/v1/releases/{release_id}/abort", json={"reason": "smoke KO"})
     ).status_code == 202
@@ -601,7 +601,7 @@ async def test_backends_and_executors_are_listed_and_set(client: AsyncClient, ad
 
 
 async def test_the_platform_settings_are_reserved_to_administrators(client: AsyncClient, org: str) -> None:
-    await login(client, "dev@varga.dev")
+    await login(client, "dev@northwind.dev")
     assert (
         await client.put("/api/v1/platform/backends", json={"name": "codex", "enabled": False})
     ).status_code == 403
@@ -629,7 +629,7 @@ async def test_the_timeline_tells_runs_decisions_states_and_findings(
                 payload={"summary": "validate?"},
                 requested_at=utcnow(),
                 decided_at=utcnow(),
-                decided_by="marie@varga.dev",
+                decided_by="marie@northwind.dev",
                 decision={"kind": "approve", "reason": "ok"},
             )
         )
@@ -698,8 +698,8 @@ async def test_a_project_without_template_or_repository_is_activated_without_a_w
     from choregos_api.temporal import get_temporal
 
     created = await client.post(
-        "/api/v1/orgs/varga/projects",
-        json={"slug": "hr-desk", "name": "HR desk", "config": {"slug": "hr-desk", "org": "varga"}},
+        "/api/v1/orgs/northwind/projects",
+        json={"slug": "hr-desk", "name": "HR desk", "config": {"slug": "hr-desk", "org": "northwind"}},
     )
     assert created.status_code == 201, created.text
     project = created.json()
@@ -819,17 +819,17 @@ async def test_choregos_admin_mints_a_token_and_replays_the_bootstrap(
         return await asyncio.to_thread(runner.invoke, cli, list(args))
 
     minted = await invoke(
-        "tokens", "create", "--email", "Ops@Varga.dev", "--name", "ci", "--expires-in-days", "7"
+        "tokens", "create", "--email", "Ops@Northwind.dev", "--name", "ci", "--expires-in-days", "7"
     )
     assert minted.exit_code == 0, minted.output
     token = minted.output.strip()
     assert token and len(token) > 20, "the clear text is shown once"
     monkeypatch.setattr(get_settings(), "bootstrap_org", "acme")
     monkeypatch.setattr(get_settings(), "bootstrap_org_name", "ACME")
-    monkeypatch.setattr(get_settings(), "bootstrap_admins", "ops@varga.dev")
+    monkeypatch.setattr(get_settings(), "bootstrap_admins", "ops@northwind.dev")
     bootstrapped = await invoke("orgs", "bootstrap")
     assert bootstrapped.exit_code == 0, bootstrapped.output
-    assert "acme" in bootstrapped.output and "ops@varga.dev" in bootstrapped.output
+    assert "acme" in bootstrapped.output and "ops@northwind.dev" in bootstrapped.output
     again = await invoke("orgs", "bootstrap")
     assert "none" in again.output, "idempotent: the second time creates nothing"
     assert (await invoke()).exit_code != 0, "without a command, the help"

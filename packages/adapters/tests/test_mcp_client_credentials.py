@@ -135,7 +135,7 @@ async def test_a_new_secret_never_reuses_the_token_of_the_former_one(
 async def test_the_token_endpoint_is_held_to_the_egress_list(
     provider: FakeOAuthProvider, server: FakeMcpServer
 ) -> None:
-    only_the_server = EgressPolicy(org="varga", rules=(AllowedRule("data.example.test"),), mode="enforce")
+    only_the_server = EgressPolicy(org="northwind", rules=(AllowedRule("data.example.test"),), mode="enforce")
     with use_policy(only_the_server), pytest.raises(EgressRefusedError) as refused:
         await _client().list_tools()
     assert refused.value.host == "auth.example.test"
@@ -143,7 +143,7 @@ async def test_the_token_endpoint_is_held_to_the_egress_list(
     assert provider.requests == [], "the token request never left"
     assert server.received == [], "nor did the call it was for"
     both = EgressPolicy(
-        org="varga",
+        org="northwind",
         rules=(AllowedRule("data.example.test"), AllowedRule("auth.example.test")),
         mode="enforce",
     )

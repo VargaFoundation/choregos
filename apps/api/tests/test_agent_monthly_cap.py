@@ -12,14 +12,14 @@ from .test_budget_alerts import _alerts, _spend
 async def _agent(client: AsyncClient, monthly: float | None) -> None:
     budget = {"monthly_usd": monthly} if monthly else {}
     created = await client.post(
-        "/api/v1/orgs/varga/agents",
+        "/api/v1/orgs/northwind/agents",
         json={"slug": "coordinator", "display_name": "Coordinator", "spec": {"budget": budget}},
     )
     assert created.status_code == 201, created.text
 
 
 async def _status(client: AsyncClient) -> str:
-    response = await client.get("/api/v1/orgs/varga/agents/coordinator")
+    response = await client.get("/api/v1/orgs/northwind/agents/coordinator")
     return str(response.json()["status"])
 
 

@@ -26,9 +26,9 @@ from sqlalchemy import select
 
 ROOT = Path(__file__).resolve().parents[3]
 OFFLINE = ROOT / "plugins" / "offline"
-ORG = "/api/v1/orgs/varga"
-VARGA = {
-    "name": "varga",
+ORG = "/api/v1/orgs/northwind"
+TRANIBOR = {
+    "name": "tranibor",
     "index": PUBLISHING.plugin_index,
     "trust": {
         "identity": PUBLISHING.plugin_signing_identity.replace(".", r"\."),
@@ -58,7 +58,7 @@ def test_the_api_reads_the_offline_directory_against_its_lock() -> None:
 
 @pytest.fixture
 def deployment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
-    """The chart's configuration: the `varga` source, the offline directory, these defaults; the core
+    """The chart's configuration: the `tranibor` source, the offline directory, these defaults; the core
     reports a release every offline plugin admits (the S60-04 versions require `>=0.25.1`)."""
     from choregos_api.config import reset_settings_cache
     from choregos_api.services import plugin_sources
@@ -72,7 +72,7 @@ def deployment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]
     def write(defaults: list[dict[str, Any]], offline: Path = OFFLINE) -> Any:
         path = tmp_path / "plugins.yaml"
         path.write_text(
-            yaml.safe_dump({"sources": [VARGA], "defaultPlugins": defaults, "offline": str(offline)})
+            yaml.safe_dump({"sources": [TRANIBOR], "defaultPlugins": defaults, "offline": str(offline)})
         )
         monkeypatch.setenv("CHOREGOS_PLUGINS_CONFIG", str(path))
         reset_settings_cache()
@@ -105,7 +105,7 @@ async def test_software_delivery_waits_for_a_second_administrator_without_preapp
 ) -> None:
     from choregos_api.services import plugin_defaults
 
-    deployment([{"source": "varga", "name": "software-delivery", "version": "^1.0"}])
+    deployment([{"source": "tranibor", "name": "software-delivery", "version": "^1.0"}])
     outcomes = await plugin_defaults.reconcile_all()
     assert [(o.plugin, o.outcome) for o in outcomes] == [("software-delivery", "pending_approval")]
     assert "madr-4" in outcomes[0].detail and "high risk" in outcomes[0].detail
@@ -119,13 +119,13 @@ async def test_a_preapproved_default_is_installed_and_the_configuration_is_the_a
     from choregos_api.services import plugin_defaults
 
     fake = deployment(
-        [{"source": "varga", "name": "software-delivery", "version": "^1.0", "preapproved": True}]
+        [{"source": "tranibor", "name": "software-delivery", "version": "^1.0", "preapproved": True}]
     )
     outcomes = await plugin_defaults.reconcile_all()
     assert [(o.plugin, o.outcome) for o in outcomes] == [("software-delivery", "installed")]
     assert fake.calls == [], "taken from the offline directory: no network at start-up"
     row = (await _rows())["software-delivery"]
-    assert (row.source, row.version, row.is_default, row.installed_by) == ("varga", "1.1.1", True, None)
+    assert (row.source, row.version, row.is_default, row.installed_by) == ("northwind", "1.1.1", True, None)
     (approval,) = await _audit("plugin.default.preapproved")
     assert approval.payload["approved_by"] == "deployment configuration"
     assert any("madr-4" in reason for reason in approval.payload["reasons"])
@@ -141,7 +141,7 @@ async def test_requests_is_installed_without_a_second_administrator(
     `preapproved`, so the gate must find nothing in it for a second administrator."""
     from choregos_api.services import plugin_defaults
 
-    fake = deployment([{"source": "varga", "name": "requests", "version": "^1.0"}])
+    fake = deployment([{"source": "tranibor", "name": "requests", "version": "^1.0"}])
     outcomes = await plugin_defaults.reconcile_all()
     assert [(o.plugin, o.outcome) for o in outcomes] == [("requests", "installed")]
     assert fake.calls == [], "taken from the offline directory: no network at start-up"
@@ -170,7 +170,7 @@ async def test_a_default_outside_the_offline_versions_goes_to_its_source(
 ) -> None:
     from choregos_api.services import plugin_defaults
 
-    fake = deployment([{"source": "varga", "name": "netops", "version": "^2.0", "preapproved": True}])
+    fake = deployment([{"source": "tranibor", "name": "netops", "version": "^2.0", "preapproved": True}])
     outcomes = await plugin_defaults.reconcile_all()
     assert [(o.plugin, o.outcome) for o in outcomes] == [("netops", "failed")]
     assert fake.calls, "the declared source was asked"
@@ -225,7 +225,7 @@ async def test_an_installed_version_replaces_the_offline_one_in_the_catalogue(
     (tmp_path / "empty").mkdir()
     async with session_scope() as session:
         org_id = (
-            await session.execute(select(Organization.id).where(Organization.slug == "varga"))
+            await session.execute(select(Organization.id).where(Organization.slug == "northwind"))
         ).scalar_one()
         view = await catalogue_of(session, org_id)
     found = view.entry("netops")
@@ -244,7 +244,7 @@ async def test_without_the_authoring_plugin_the_drafter_says_what_to_install(
     deployment([], tmp_path / "empty")
     async with session_scope() as session:
         org_id = (
-            await session.execute(select(Organization.id).where(Organization.slug == "varga"))
+            await session.execute(select(Organization.id).where(Organization.slug == "northwind"))
         ).scalar_one()
         with pytest.raises(DraftingError, match="plugin `authoring`"):
             await instructions_for_drafter(session, org_id)

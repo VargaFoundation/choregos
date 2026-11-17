@@ -15,7 +15,7 @@ from httpx import AsyncClient
 
 from .conftest import login
 
-CREATE_ACCOUNT = "/api/v1/orgs/varga/connectors/directory-acme/operations/create_account"
+CREATE_ACCOUNT = "/api/v1/orgs/northwind/connectors/directory-acme/operations/create_account"
 
 
 @pytest.fixture
@@ -44,7 +44,7 @@ def directory() -> Iterator[None]:
 async def _declare(client: AsyncClient, **extra: Any) -> Any:
     body = {"name": "directory-acme", "type": "directory", "config": {"tenant": "acme"},
              "secret_refs": {"client_secret": "env:CONNECTOR_DIRECTORY_SECRET"}, **extra}  # fmt: skip
-    return await client.post("/api/v1/orgs/varga/connectors", json=body)
+    return await client.post("/api/v1/orgs/northwind/connectors", json=body)
 
 
 def _policies(operations: list[dict[str, Any]]) -> dict[str, str]:
@@ -64,7 +64,7 @@ async def test_an_instance_is_born_with_its_operations_at_their_default_policy(
     }
     assert (await _declare(client)).status_code == 409
     in_clear = await client.post(
-        "/api/v1/orgs/varga/connectors",
+        "/api/v1/orgs/northwind/connectors",
         json={"name": "another", "type": "directory", "config": {"client_secret": "s3cr3t"}},
     )
     assert in_clear.status_code == 422 and "s3cr3t" not in in_clear.text
@@ -96,7 +96,7 @@ async def test_a_project_narrows_but_never_turns_approval_into_allowed(
     }
 
     # The organisation then hardens: the project follows, its own line does not exempt it.
-    hardened = await client.patch("/api/v1/orgs/varga/connectors/directory-acme/operations/read_user",
+    hardened = await client.patch("/api/v1/orgs/northwind/connectors/directory-acme/operations/read_user",
                                 json={"policy": "forbidden"})  # fmt: skip
     assert hardened.status_code == 200
     assert (
@@ -128,16 +128,16 @@ async def test_a_project_owner_decides_neither_connectors_nor_groups(
 ) -> None:
     assert (await _declare(client)).status_code == 201
     member = await client.post(
-        "/api/v1/orgs/varga/members", json={"email": "po@varga.dev", "role": "project_owner"}
+        "/api/v1/orgs/northwind/members", json={"email": "po@northwind.dev", "role": "project_owner"}
     )
     assert member.status_code in {200, 201}, member.text
-    await login(client, "po@varga.dev")
+    await login(client, "po@northwind.dev")
     groups_response = await client.patch(CREATE_ACCOUNT, json={"groups": ["finance"]})
     assert groups_response.status_code == 403
     assert (await client.patch(CREATE_ACCOUNT, json={"policy": "allowed"})).status_code == 403
     assert (await _declare(client, name="pirate")).status_code == 403
     # He reads, and he narrows his project.
-    assert (await client.get("/api/v1/orgs/varga/connectors")).status_code == 200
+    assert (await client.get("/api/v1/orgs/northwind/connectors")).status_code == 200
     narrowed = await client.put(
         f"/api/v1/projects/{project['id']}/operations/directory-acme/read_user",
         json={"policy": "approval"},
@@ -158,8 +158,8 @@ async def test_another_organisation_does_not_exist(client: AsyncClient, admin: s
                 org_id=other.id, name="secret-of-other", kind="identity", type="directory", config={}
             )
         )
-    # Two organisations: varga's administrator no longer writes an `env:` reference (ADR 0088).
+    # Two organisations: northwind's administrator no longer writes an `env:` reference (ADR 0088).
     assert (await _declare(client, secret_refs={})).status_code == 201
-    names = [c["name"] for c in (await client.get("/api/v1/orgs/varga/connectors")).json()]
+    names = [c["name"] for c in (await client.get("/api/v1/orgs/northwind/connectors")).json()]
     assert names == ["directory-acme"]
     assert (await client.get("/api/v1/orgs/other/connectors")).status_code == 403

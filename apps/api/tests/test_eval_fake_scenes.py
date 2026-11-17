@@ -15,7 +15,7 @@ import pytest
 from choregos_adapters.fakes.scenes import EVAL_FAKE_SCENES_ENV, FAKE_SCENE_FIELD
 from httpx import AsyncClient
 
-ORG = "/api/v1/orgs/varga/connectors"
+ORG = "/api/v1/orgs/northwind/connectors"
 BOUND = {FAKE_SCENE_FIELD: "ssh-exposure"}
 
 

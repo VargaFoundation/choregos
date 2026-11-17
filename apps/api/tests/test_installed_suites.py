@@ -34,7 +34,7 @@ from .kits.assistant_install import _install, _plugin, offline  # noqa: F401
 ANALYST = f"{ORG_URL}/agents/investment-analyst"
 QUOTE = "market_data__get_quote"
 CITED = "It trades at 12.34 EUR (source: market_data, 2026-11-10)."
-ADMIN = "admin@varga.dev"
+ADMIN = "admin@northwind.dev"
 
 
 def _call(name: str) -> dict[str, Any]:
@@ -258,8 +258,8 @@ async def test_only_those_who_manage_the_agent_decide(
 ) -> None:
     await _installed_analyst(client)
     candidate = await _candidate()
-    await add_member(client, "reader@varga.dev", "viewer")
-    await as_user(client, "reader@varga.dev")
+    await add_member(client, "reader@northwind.dev", "viewer")
+    await as_user(client, "reader@northwind.dev")
     for action in ("accept", "dismiss"):
         denied = await client.post(_url(candidate, action), json=ACCEPT)
         assert denied.status_code in (403, 404), denied.text

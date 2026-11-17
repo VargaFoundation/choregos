@@ -13,8 +13,8 @@ from httpx import AsyncClient
 from .conftest import login
 from .conftest_remote import remote_agent, set_sealing_key
 
-AGENTS = "/api/v1/orgs/varga/agents"
-CREDENTIALS = "/api/v1/orgs/varga/remote-credentials"
+AGENTS = "/api/v1/orgs/northwind/agents"
+CREDENTIALS = "/api/v1/orgs/northwind/remote-credentials"
 
 
 @pytest.fixture(autouse=True)
@@ -191,11 +191,11 @@ async def test_only_an_org_admin_creates_a_remote_agent(
 ) -> None:
     remote.security = "none"
     await client.post(
-        "/api/v1/orgs/varga/members",
-        json={"email": "dev@varga.dev", "role": "project_owner", "project_slug": "billing-api"},
+        "/api/v1/orgs/northwind/members",
+        json={"email": "dev@northwind.dev", "role": "project_owner", "project_slug": "billing-api"},
     )
     client.cookies.clear()
-    await login(client, "dev@varga.dev")
+    await login(client, "dev@northwind.dev")
     refused = await client.post(AGENTS, json=_body(remote, credential=None))
     assert refused.status_code == 403
     assert (await client.post(f"{AGENTS}/discover", json={"card_url": remote.card_url})).status_code == 403

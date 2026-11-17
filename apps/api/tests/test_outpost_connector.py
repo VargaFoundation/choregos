@@ -204,7 +204,7 @@ async def test_an_edit_routes_the_connector_to_the_outpost_it_names(client: Asyn
 
 async def test_declaring_one_is_the_administrators(client: AsyncClient, admin: str) -> None:
     await kit.create(client, SLUG)
-    await login(client, "dev@varga.dev")
+    await login(client, "dev@northwind.dev")
     refused = await _declare(client, _config())
     assert refused.status_code == 403, refused.text
 
@@ -349,7 +349,7 @@ async def test_without_a_secrets_key_the_fake_outpost_serves_the_connector_in_me
     instance = await route.connector_row()
 
     async def identity() -> CallIdentity:
-        return CallIdentity(org="varga", org_id=instance.org_id, subject="action:a-1", purpose="action")
+        return CallIdentity(org="northwind", org_id=instance.org_id, subject="action:a-1", purpose="action")
 
     from choregos_adapters.outpost import OutpostNotAdmitted
 

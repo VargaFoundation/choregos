@@ -39,11 +39,11 @@ const iso = (minutesAgo: number) => new Date(now - minutesAgo * 60_000).toISOStr
 export const peopleOps: ProjectDto = {
   id: "p3",
   slug: SLUG,
-  org: "varga",
+  org: "northwind",
   name: "People Ops",
   status: "active",
   template_ref: "joiners-leavers@2.0.0",
-  config: { slug: SLUG, org: "varga" },
+  config: { slug: SLUG, org: "northwind" },
   workflow_name: "onboarding",
   policy_name: "solo",
   // No workflow of the template takes a release train: no trains tab, no trains counter (S30-07).
@@ -191,7 +191,7 @@ function journey(item: WorkItemDto): WorkItemJourney {
             status: "approved",
             started_at: iso(60 * 24 * 2 - 10),
             ended_at: iso(60 * 24 * 2 - 60),
-            decided_by: "augustin@varga.dev",
+            decided_by: "augustin@northwind.dev",
           },
         ]
       : [];
@@ -240,7 +240,7 @@ export function peopleOpsApi(method: string, route: string, body: unknown): unkn
   if (method === "POST" && ticket[2] === "/decisions") {
     // As the API does: the task's values join the ticket's fields, and the request closes.
     const decision = body as { kind: string; values?: Record<string, unknown> };
-    const decided = { ...item.pending_request!, decided_by: "augustin@varga.dev", decided_at: new Date().toISOString(), decision };
+    const decided = { ...item.pending_request!, decided_by: "augustin@northwind.dev", decided_at: new Date().toISOString(), decision };
     if (decision.kind === "complete") {
       Object.assign(item, { fields: { ...item.fields, ...decision.values }, state: "badge_issued", state_display: "Badge handed over" });
     } else {

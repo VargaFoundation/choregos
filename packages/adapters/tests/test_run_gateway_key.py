@@ -262,7 +262,7 @@ def _stage_input() -> StageInput:
         {
             "run_id": "r-1",
             "attempt": 1,
-            "project": {"slug": "demo", "org": "varga"},
+            "project": {"slug": "demo", "org": "northwind"},
             "work_item": {"key": "DEMO-1", "title": "t", "url": "http://t"},
             "transition": {"id": "t", "role": "implement", "from": "a", "to": "b"},
             "agent": {"backend": "claude-code"},

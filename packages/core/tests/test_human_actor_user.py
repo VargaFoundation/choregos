@@ -36,15 +36,15 @@ def test_the_digest_of_a_group_only_workflow_does_not_move() -> None:
 
 def test_the_process_view_says_the_person_is_asked_first() -> None:
     document = _example()
-    document["actors"]["owner"] = {"type": "human", "user": "lea@varga.dev", "group": "product-owners"}
+    document["actors"]["owner"] = {"type": "human", "user": "lea@northwind.dev", "group": "product-owners"}
     workflow = Workflow.model_validate(document)
     steps = [s for s in to_process(workflow) if s["actor"] == "owner"]
-    assert steps and steps[0]["user"] == "lea@varga.dev"
-    assert "`lea@varga.dev`, then a person of group `product-owners`" in steps[0]["who"]
+    assert steps and steps[0]["user"] == "lea@northwind.dev"
+    assert "`lea@northwind.dev`, then a person of group `product-owners`" in steps[0]["who"]
 
-    document["actors"]["owner"] = {"type": "human", "user": "lea@varga.dev"}
+    document["actors"]["owner"] = {"type": "human", "user": "lea@northwind.dev"}
     alone = [s for s in to_process(Workflow.model_validate(document)) if s["actor"] == "owner"]
-    assert alone[0]["who"] == "`lea@varga.dev`" and alone[0]["group"] is None
+    assert alone[0]["who"] == "`lea@northwind.dev`" and alone[0]["group"] is None
 
 
 TRAIN = """
@@ -53,7 +53,7 @@ kind: Workflow
 metadata: {name: ship, version: 1}
 initial: ready
 actors:
-  captain: {type: human, user: lea@varga.dev}
+  captain: {type: human, user: lea@northwind.dev}
 states:
   ready: {display: Ready, kind: wait}
   shipped: {display: Shipped, terminal: true}
@@ -70,5 +70,5 @@ def test_a_train_approver_names_a_group() -> None:
     _, report = parse_workflow(TRAIN, strict=False)
     codes = [issue.code for issue in report.errors]
     assert "actor.train_approver_group" in codes, codes
-    _, grouped = parse_workflow(TRAIN.replace("user: lea@varga.dev", "group: captains"), strict=False)
+    _, grouped = parse_workflow(TRAIN.replace("user: lea@northwind.dev", "group: captains"), strict=False)
     assert "actor.train_approver_group" not in [issue.code for issue in grouped.errors]

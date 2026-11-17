@@ -17,7 +17,7 @@ from choregos_api.knowledge.refresh import (
 from httpx import AsyncClient
 
 NOW = datetime(2026, 10, 16, 8, 0, tzinfo=UTC)
-BASE = "/api/v1/orgs/varga/knowledge"
+BASE = "/api/v1/orgs/northwind/knowledge"
 
 
 def row(**kw: Any) -> SimpleNamespace:

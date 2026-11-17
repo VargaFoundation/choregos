@@ -52,7 +52,7 @@ def per_organisation_mapper(groups, default_org):
     It DELEGATES to the core's mapper for the rest, and that is not a courtesy: a mapper that
     replaces without understanding the core's format makes the deployment lose its own sign-ins.
     This extension's first draft did not delegate, and the development sign-in gave no role at
-    all: `403 ['varga'] is missing` on the creation of an organisation.
+    all: `403 ['northwind'] is missing` on the creation of an organisation.
     """
     from choregos_api.routers.auth import roles_from_groups
 
@@ -194,13 +194,13 @@ def test_the_extension_replaces_the_mapper_and_the_gate(ee_extension_installed: 
     mapper = group_mapper(roles_from_groups)
     assert mapper is not roles_from_groups
     # The enterprise prefix, which the core cannot read.
-    assert mapper(["acme/admin", "noise"], "varga") == {"acme": Role.ORG_ADMIN}
+    assert mapper(["acme/admin", "noise"], "northwind") == {"acme": Role.ORG_ADMIN}
     # And the core does not understand that form, which proves the other one is the one serving.
-    assert roles_from_groups(["acme/admin"], "varga") == {}
+    assert roles_from_groups(["acme/admin"], "northwind") == {}
     # But the CORE's format keeps working: an enterprise mapper DELEGATES, otherwise the
     # deployment loses its own sign-ins (seen while writing this test: 403 on `POST /orgs`).
-    assert mapper(["choregos:varga:org_admin"], "varga") == roles_from_groups(
-        ["choregos:varga:org_admin"], "varga"
+    assert mapper(["choregos:northwind:org_admin"], "northwind") == roles_from_groups(
+        ["choregos:northwind:org_admin"], "northwind"
     )
 
     # The extension's gate is known to the validator: without that, a workflow that uses it is

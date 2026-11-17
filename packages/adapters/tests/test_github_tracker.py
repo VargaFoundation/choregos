@@ -18,7 +18,7 @@ from choregos_core.domain import NewItem, TrackerStateMapping
 from ._transport import Wire
 
 API = "https://api.github.test"
-REPO = "varga/billing"
+REPO = "northwind/billing"
 
 
 def tracker(wire: Wire, **kwargs: Any) -> GitHubTracker:
@@ -67,7 +67,7 @@ async def test_the_candidates_are_the_agent_ready_issues_without_the_prs() -> No
             )
         }
     )
-    keys = await tracker(wire).list_candidates(ProjectConfig(slug="billing", org="varga"))
+    keys = await tracker(wire).list_candidates(ProjectConfig(slug="billing", org="northwind"))
     assert keys == [f"{REPO}#1", f"{REPO}#3"], "GitHub lists PRs among the issues: they are dropped"
     assert wire.requests[0].url.params["labels"] == "agent-ready"
 
@@ -207,7 +207,7 @@ async def test_the_board_receives_the_column_and_creates_the_missing_option() ->
     wire = Wire({("POST", "/graphql"): graphql})
     await tracker(wire, project_number=3).set_state(f"{REPO}#12", TrackerStateMapping(status="In progress"))
     request_bodies = [json.loads(r.content) for r in wire.requests]
-    assert request_bodies[0]["variables"] == {"org": "varga", "number": 3}
+    assert request_bodies[0]["variables"] == {"org": "northwind", "number": 3}
     assert request_bodies[3]["variables"]["options"][-1]["name"] == "In progress", "the option is created"
     assert request_bodies[4]["variables"]["value"] == {"singleSelectOptionId": "O_new"}
     assert request_bodies[4]["variables"]["itemId"] == "I_1"
@@ -491,7 +491,7 @@ async def test_the_poll_also_searches_the_labels_of_the_start_rules() -> None:
     config = ProjectConfig.model_validate(
         {
             "slug": "billing",
-            "org": "varga",
+            "org": "northwind",
             "start_rules": [{"labels_all": ["bug", "triage"]}, {"item_type": "Incident"}],
         }
     )

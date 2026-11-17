@@ -24,7 +24,7 @@ def test_the_site_is_served_where_the_publishing_identity_says() -> None:
     for value in IDENTITY.values():
         if value.startswith("https://") and value != IDENTITY["documentation"]:
             assert value not in config, f"the config spells {value}: it reads the identity"
-    assert "graalsystems" not in config and "varga" not in config.lower()
+    assert "graalsystems" not in config and "northwind" not in config.lower()
 
 
 def test_the_documentation_is_not_hosted_by_a_third_party() -> None:

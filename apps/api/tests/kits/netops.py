@@ -10,7 +10,7 @@ from typing import Any
 
 from httpx import AsyncClient
 
-ORG = "/api/v1/orgs/varga"
+ORG = "/api/v1/orgs/northwind"
 #: Built at run time: no key-shaped literal for the secret scanner to argue about.
 PFSENSE_KEY = "-".join(("pfsense", "key", "of", "the", "org"))
 READER_TOKEN = "-".join(("cilium", "reader", "token", "of", "the", "org"))
@@ -39,7 +39,7 @@ async def netops_run(
     project: dict[str, Any],
     *,
     connector: str | None = None,
-    work_item_key: str = "varga/net#1",
+    work_item_key: str = "northwind/net#1",
 ) -> tuple[str, dict[str, str]]:
     """The catalogue's `netops` agent, installed as is (its selection extended to `connector` when
     given), and a run of it, on the work item `work_item_key`."""

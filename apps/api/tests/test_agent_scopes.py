@@ -20,10 +20,10 @@ from .agent_scopes_kit import (
     make_project,
 )
 
-DEV = "dev@varga.dev"
-OTHER = "other@varga.dev"
-VIEWER = "viewer@varga.dev"
-OWNER = "owner@varga.dev"
+DEV = "dev@northwind.dev"
+OTHER = "other@northwind.dev"
+VIEWER = "viewer@northwind.dev"
+OWNER = "owner@northwind.dev"
 
 
 async def test_a_developer_creates_a_personal_agent_but_not_an_organisation_one(

@@ -74,14 +74,14 @@ async def test_a_remote_agent_opens_its_card_host_for_the_api_and_the_runners(
     remote.security = "none"
     body = _body(remote, credential=None)
     body["spec"]["runtime"].pop("credential")
-    await add_member("root@varga.dev", "org_admin")
+    await add_member("root@northwind.dev", "org_admin")
     asked = await client.post(f"{ORG}/agents", json=body)
     assert asked.status_code == 409 and asked.json()["code"] == "egress_required", asked.text
     assert {(v["host"], v["used_by"]) for v in asked.json()["verdicts"]} == {
         ("a2a.example.test", "api"),
         ("a2a.example.test", "runners"),
     } or len(asked.json()["verdicts"]) == 2
-    async with as_person(client, "owner@varga.dev", "project_owner") as owner:
+    async with as_person(client, "owner@northwind.dev", "project_owner") as owner:
         assert (await owner.post(f"{ORG}/agents?allow_egress=true", json=body)).status_code == 403
     done = await client.post(f"{ORG}/agents?allow_egress=true", json=body)
     assert done.status_code == 201, done.text

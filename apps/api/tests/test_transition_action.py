@@ -19,7 +19,7 @@ from httpx import ASGITransport, AsyncClient
 
 from .conftest import login
 
-ORG = "/api/v1/orgs/varga"
+ORG = "/api/v1/orgs/northwind"
 ARRIVAL = """
 apiVersion: choregos/v1
 kind: Workflow
@@ -120,10 +120,10 @@ async def test_a_changed_field_is_validated_by_its_workflow_and_the_interpreter_
     required = await client.patch(base, json={"fields": {"upn": None}})
     assert required.status_code == 422, "a required field cannot be removed"
 
-    await client.post(f"{ORG}/members", json={"email": "reader@varga.dev", "role": "viewer"})
+    await client.post(f"{ORG}/members", json={"email": "reader@northwind.dev", "role": "viewer"})
     reader = AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
     try:
-        await login(reader, "reader@varga.dev")
+        await login(reader, "reader@northwind.dev")
         assert (await reader.patch(base, json={"fields": {"position": "p16"}})).status_code == 403
     finally:
         await reader.aclose()

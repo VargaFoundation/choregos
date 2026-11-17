@@ -22,7 +22,7 @@ from sqlalchemy import func, select
 
 from .kits.skill_library import SKILL_FILES, SKILL_MD
 
-ORG = "/api/v1/orgs/varga"
+ORG = "/api/v1/orgs/northwind"
 HELLO = Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "plugins" / "hello"
 ALONE = {"source": "offline", "name": "hello", "version": "1.0.0"}
 
@@ -136,7 +136,7 @@ async def test_the_shared_install_path_refuses_before_writing_and_spares_an_exis
 
     what = "the template `hello-flow`"
     async with session_scope() as session:
-        org_id = await org_id_of(session, "varga")
+        org_id = await org_id_of(session, "northwind")
         with pytest.raises(ApiError) as refusal:
             await install_skills_and_agents(
                 session,
@@ -151,12 +151,12 @@ async def test_the_shared_install_path_refuses_before_writing_and_spares_an_exis
     assert "first-one" not in await _skills(), "refused before the first skill was written"
 
     async with session_scope() as session:
-        org_id = await org_id_of(session, "varga")
+        org_id = await org_id_of(session, "northwind")
         session.add(
             Skill(org_id=org_id, slug="catalogue", description="Published before S55-17", status="active")
         )
     async with session_scope() as session:
-        org_id = await org_id_of(session, "varga")
+        org_id = await org_id_of(session, "northwind")
         installed = await install_skills_and_agents(
             session, org_id, [_files("first-one"), _files("catalogue")], [], "template:hello-flow", what=what
         )

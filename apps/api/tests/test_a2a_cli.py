@@ -21,7 +21,7 @@ SKILL = "billing-api/ship-a-change"
 
 
 def _door(app: Any, token: str) -> A2aDoor:
-    return A2aDoor("http://test", "varga", token, transport=ASGITransport(app=app))
+    return A2aDoor("http://test", "northwind", token, transport=ASGITransport(app=app))
 
 
 async def test_the_cli_starts_a_workflow_with_a_file_and_follows_it_across_the_hour_cut(

@@ -24,7 +24,7 @@ from .test_interpreter import _runs, _wait_state, start
 pytestmark = pytest.mark.asyncio
 
 HISTORIES = pathlib.Path(__file__).resolve().parents[3] / "tests" / "replay" / "histories"
-WHO = "ops@varga.dev"
+WHO = "ops@northwind.dev"
 
 
 def keep_the_first_run_running(setup: Fixture) -> None:
@@ -62,7 +62,7 @@ async def stop_as_the_api_does(run_id: str, reason: str) -> dict[str, Any]:
     from choregos_api.rbac import Principal, Role
     from choregos_api.services.run_cancel import cancel_run_now
 
-    principal = Principal(user_id="u-ops", email=WHO, org_roles={"varga": Role.ORG_ADMIN})
+    principal = Principal(user_id="u-ops", email=WHO, org_roles={"northwind": Role.ORG_ADMIN})
     async with session_scope() as session:
         run = await session.get(Run, run_id)
         assert run is not None and run.status in {"queued", "running"}, run and run.status

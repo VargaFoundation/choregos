@@ -64,7 +64,7 @@ def _run(connection: Any, item: str, transition: str, attempt: int, status: str,
 
 def _before(connection: Any) -> None:
     """Two work items as a restart would find them."""
-    _row(connection, "organizations", id="o1", slug="varga", name="V", settings="{}")
+    _row(connection, "organizations", id="o1", slug="northwind", name="V", settings="{}")
     _row(
         connection,
         "projects",

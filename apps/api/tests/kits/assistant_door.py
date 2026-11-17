@@ -16,7 +16,7 @@ import respx
 from cryptography.hazmat.primitives.asymmetric import rsa
 from httpx import AsyncClient
 
-ORG = "/api/v1/orgs/varga"
+ORG = "/api/v1/orgs/northwind"
 FIXTURE = Path(__file__).resolve().parents[4] / "tests" / "fixtures" / "plugins" / "investment-assistant"
 PLUGIN = {"source": "offline", "name": "investment-assistant", "version": "0.1.0"}
 ISSUER = "https://idp.test/realms/platform"
@@ -37,7 +37,7 @@ def offline(tmp_path: Path) -> Iterator[Path]:
 async def install_plugin(client: AsyncClient) -> None:
     from ..agent_scopes_kit import as_user
 
-    await as_user(client, "admin@varga.dev")
+    await as_user(client, "admin@northwind.dev")
     response = await client.post(f"{ORG}/plugins/install", json=PLUGIN)
     assert response.status_code == 201, response.text
 

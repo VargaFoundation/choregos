@@ -10,7 +10,7 @@ from choregos_adapters.scm.github import GitHubScm
 from ._transport import Wire
 
 API = "https://api.github.test"
-REPO = "varga/billing"
+REPO = "northwind/billing"
 
 
 #: The commit the gates judged, and the one a later push put at the head.
@@ -72,7 +72,7 @@ async def test_opening_a_pr_reuses_the_existing_one() -> None:
     wire = Wire({("GET", f"/repos/{REPO}/pulls"): (200, [{"number": 7, "html_url": "https://gh/pr/7"}])})
     ref = await scm(wire).open_pr(REPO, "choregos/12-x", "main", "titre", "request_body", draft=True)
     assert ref.number == 7 and ref.url == "https://gh/pr/7"
-    assert wire.requests[0].url.params["head"] == "varga:choregos/12-x"
+    assert wire.requests[0].url.params["head"] == "northwind:choregos/12-x"
     assert wire.sent("POST") == []
 
 
@@ -261,7 +261,7 @@ async def test_reviewers_are_split_between_people_and_teams() -> None:
     from choregos_core.domain import PrRef
 
     wire = Wire({("POST", f"/repos/{REPO}/pulls/8/requested_reviewers"): (201, {})})
-    await scm(wire).request_review(PrRef(repo=REPO, number=8), ["marie", "varga/maintainers"])
+    await scm(wire).request_review(PrRef(repo=REPO, number=8), ["marie", "northwind/maintainers"])
     assert wire.body(-1) == {"reviewers": ["marie"], "team_reviewers": ["maintainers"]}
     await scm(wire).request_review(PrRef(repo=REPO, number=8), [])
     assert len(wire.requests) == 1, "without a reviewer, no call"

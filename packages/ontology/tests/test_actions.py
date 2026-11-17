@@ -200,7 +200,7 @@ async def test_approving_needs_a_recent_authentication_then_the_platform_opens_t
     assert scm.prs == {}
 
     # The person authenticates again (`?reauth=1`), then approves: the action leaves for Temporal.
-    await sign_in(client, "admin@varga.dev", reauth=True)
+    await sign_in(client, "admin@northwind.dev", reauth=True)
     approved = await _decide(client, project, proposal, "approve")
     assert approved.status_code == 200, approved.text
     assert approved.json()["status"] == "approved", "nothing runs in the request"
@@ -208,7 +208,7 @@ async def test_approving_needs_a_recent_authentication_then_the_platform_opens_t
     assert file["status"] == "succeeded", file.get("error")
 
     decision = file["decisions"][-1]
-    assert (decision["by"], decision["decision"]) == ("admin@varga.dev", "approve")
+    assert (decision["by"], decision["decision"]) == ("admin@northwind.dev", "approve")
     assert decision["auth_age_seconds"] < 60
 
     branch = f"choregos/{proposal}"
@@ -234,10 +234,10 @@ async def test_a_developer_does_not_approve_an_action_that_needs_an_owner(
     app: Any, client: AsyncClient, project: dict[str, Any], it4it: dict[str, str], scm: Any
 ) -> None:
     proposal = (await _propose(client, it4it))["result"]["proposal"]
-    member = {"email": "dev@varga.dev", "role": "developer"}
-    assert (await client.post("/api/v1/orgs/varga/members", json=member)).status_code in {200, 201}
+    member = {"email": "dev@northwind.dev", "role": "developer"}
+    assert (await client.post("/api/v1/orgs/northwind/members", json=member)).status_code in {200, 201}
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as developer:
-        await sign_in(developer, "dev@varga.dev")
+        await sign_in(developer, "dev@northwind.dev")
         refusal = await _decide(developer, project, proposal, "approve")
     assert refusal.status_code == 403, refusal.text
     assert scm.prs == {}
@@ -519,15 +519,15 @@ async def test_a_human_proposal_respects_the_parameters_and_the_roles(
     path = f"/api/v1/projects/{project['id']}/proposals"
     wrong = {"action_type": "register_host", "params": {"id": "x"}, "justification": "test"}
     assert (await client.post(path, json=wrong)).status_code == 422
-    member = {"email": "reader@varga.dev", "role": "viewer"}
-    assert (await client.post("/api/v1/orgs/varga/members", json=member)).status_code in {200, 201}
+    member = {"email": "reader@northwind.dev", "role": "viewer"}
+    assert (await client.post("/api/v1/orgs/northwind/members", json=member)).status_code in {200, 201}
     body = {
         "action_type": "register_host",
         "params": {"id": "node-8", "name": "node-8", "os": "debian", "ip": "10.0.0.18"},
         "justification": "test",
     }
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as reader:
-        await sign_in(reader, "reader@varga.dev")
+        await sign_in(reader, "reader@northwind.dev")
         refusal = await reader.post(path, json=body)
     assert refusal.status_code == 403, refusal.text
     assert "node-8" not in await stored_objects(project["id"], "host")

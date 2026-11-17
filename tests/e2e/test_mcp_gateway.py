@@ -24,7 +24,7 @@ from .conftest import Platform, login
 
 pytestmark = [pytest.mark.e2e, pytest.mark.asyncio]
 
-ORG = "/api/v1/orgs/varga"
+ORG = "/api/v1/orgs/northwind"
 GATEWAY = f"{ORG}/mcp-gateway"
 RUN = "run-gw-1"
 BASE = f"/api/v1/internal/runs/{RUN}/tools"
@@ -140,7 +140,7 @@ async def _prepare(platform: Platform, monkeypatch: pytest.MonkeyPatch, store: A
     assert agent.status_code == 201, agent.text
     async with session_scope() as session:
         item = WorkItem(
-            project_id=platform.project_id, tracker_key="varga/billing-api#11", title="A PC", state="ready"
+            project_id=platform.project_id, tracker_key="northwind/billing-api#11", title="A PC", state="ready"
         )
         session.add(item)
         await session.flush()
@@ -154,13 +154,13 @@ async def _prepare(platform: Platform, monkeypatch: pytest.MonkeyPatch, store: A
                 status="running",
                 agent_slug="buyer",
                 agent_version=1,
-                initiated_by="person:admin@varga.dev",
+                initiated_by="person:admin@northwind.dev",
             )
         )
     token = mint_run_token(
         RUN,
         project_slug=platform.project_slug,
-        work_item_key="varga/billing-api#11",
+        work_item_key="northwind/billing-api#11",
         ttl_minutes=30,
     )
     return Bench(gateway, {"Authorization": f"Bearer {token}"}, issuer, store)
@@ -185,9 +185,9 @@ async def test_a_read_goes_through_the_gateway_with_the_runs_identity(
     assert call.claims is not None
     assert {k: call.claims.get(k) for k in ("run", "work_item", "agent", "initiator", "tool", "iss")} == {
         "run": RUN,
-        "work_item": "varga/billing-api#11",
+        "work_item": "northwind/billing-api#11",
         "agent": "buyer@1",
-        "initiator": "person:admin@varga.dev",
+        "initiator": "person:admin@northwind.dev",
         "tool": "order_status",
         "iss": bench.issuer,
     }
@@ -234,9 +234,9 @@ async def test_an_approval_gated_write_waits_for_a_person_and_carries_their_name
     decision = f"/api/v1/projects/{platform.project_id}/actions/{action_id}/decision"
     own = await client.post(decision, json={"decision": "approve"})
     assert own.status_code == 422 and "separation of duties" in own.text
-    member = await client.post(f"{ORG}/members", json={"email": "rh@varga.dev", "role": "project_owner"})
+    member = await client.post(f"{ORG}/members", json={"email": "rh@northwind.dev", "role": "project_owner"})
     assert member.status_code in {200, 201}, member.text
-    await login(client, "rh@varga.dev")
+    await login(client, "rh@northwind.dev")
     async with worker():
         approved = await client.post(decision, json={"decision": "approve"})
         assert approved.status_code == 200 and approved.json()["status"] == "approved", approved.text
@@ -247,7 +247,7 @@ async def test_an_approval_gated_write_waits_for_a_person_and_carries_their_name
     assert _called(bench.upstream) == [("order_monitor", {"model": "m27"})]
     (call,) = bench.tool_calls()
     assert call.claims is not None
-    assert call.claims["approved_by"] == ["rh@varga.dev"]
+    assert call.claims["approved_by"] == ["rh@northwind.dev"]
     assert call.claims["action"] == action_id
 
 

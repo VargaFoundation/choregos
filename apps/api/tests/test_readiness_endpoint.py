@@ -12,15 +12,15 @@ from .conftest import login
 
 async def _project(client: AsyncClient) -> dict[str, Any]:
     created = await client.post(
-        "/api/v1/orgs/varga/projects",
+        "/api/v1/orgs/northwind/projects",
         json={
             "slug": "dev",
             "name": "Development",
             "template_ref": "github-software-delivery@1.0.0",
             "config": {
                 "slug": "dev",
-                "org": "varga",
-                "repo": {"url": "https://github.com/varga/sandbox.git", "default_branch": "main"},
+                "org": "northwind",
+                "repo": {"url": "https://github.com/northwind/sandbox.git", "default_branch": "main"},
             },
         },
     )
@@ -68,8 +68,8 @@ async def test_a_project_with_only_a_tracker_and_a_repository_is_not_ready(
     project = await _project(client)
     await _activate(project["id"])
     for kind, type_, config in (
-        ("tracker", "github-issues", {"repo": "varga/sandbox"}),
-        ("scm", "github", {"repo": "varga/sandbox"}),
+        ("tracker", "github-issues", {"repo": "northwind/sandbox"}),
+        ("scm", "github", {"repo": "northwind/sandbox"}),
     ):
         put = await client.put(
             f"/api/v1/projects/{project['id']}/connectors/{kind}", json={"type": type_, "config": config}
@@ -115,8 +115,8 @@ async def test_configuring_cd_and_notify_moves_the_items(client: AsyncClient, ad
     body = await _readiness(client, pid)
     assert "notifications" not in _by_state(body, "todo")
     members = await client.post(
-        "/api/v1/orgs/varga/members",
-        json={"email": "rc@varga.dev", "role": "release_captain", "project_slug": "dev"},
+        "/api/v1/orgs/northwind/members",
+        json={"email": "rc@northwind.dev", "role": "release_captain", "project_slug": "dev"},
     )
     assert members.status_code == 201, members.text
     body = await _readiness(client, pid)
@@ -129,12 +129,12 @@ async def test_a_viewer_reads_it_and_it_is_visible_to_no_more_than_the_project(
     project = await _project(client)
     pid = project["id"]
     added = await client.post(
-        "/api/v1/orgs/varga/members",
-        json={"email": "viewer@varga.dev", "role": "viewer", "project_slug": "dev"},
+        "/api/v1/orgs/northwind/members",
+        json={"email": "viewer@northwind.dev", "role": "viewer", "project_slug": "dev"},
     )
     assert added.status_code == 201, added.text
     client.cookies.clear()
-    await login(client, "viewer@varga.dev")
+    await login(client, "viewer@northwind.dev")
     assert (await client.get(f"/api/v1/projects/{pid}/readiness")).status_code == 200, "project:read suffices"
     client.cookies.clear()
     await login(client, "stranger@elsewhere.dev")
@@ -151,11 +151,11 @@ async def test_a_github_owner_without_an_installation_is_to_do(
 ) -> None:
     project = await _project(client)
     pid = project["id"]
-    github.add_installation(1, "varga")
+    github.add_installation(1, "northwind")
     assert (
         await client.put(
             f"/api/v1/projects/{pid}/connectors/scm",
-            json={"type": "github", "config": {"repo": "varga/sandbox"}},
+            json={"type": "github", "config": {"repo": "northwind/sandbox"}},
         )
     ).status_code == 200
     body = await _readiness(client, pid)
@@ -231,12 +231,12 @@ async def test_readiness_of_a_project_that_writes_files_lists_the_object_store(
     readiness.forget_object_store_probe()
     try:
         created = await client.post(
-            "/api/v1/orgs/varga/projects",
+            "/api/v1/orgs/northwind/projects",
             json={
                 "slug": "quant",
                 "name": "Quant",
                 "template_ref": "investment-research@0.1.0",
-                "config": {"slug": "quant", "org": "varga"},
+                "config": {"slug": "quant", "org": "northwind"},
             },
         )
         assert created.status_code == 201, created.text
@@ -281,12 +281,12 @@ async def test_a_workflow_copied_before_its_template_was_fixed_is_flagged_until_
     from pathlib import Path
 
     created = await client.post(
-        "/api/v1/orgs/varga/projects",
+        "/api/v1/orgs/northwind/projects",
         json={
             "slug": "research",
             "name": "Research",
             "template_ref": "investment-research@0.1.0",
-            "config": {"slug": "research", "org": "varga"},
+            "config": {"slug": "research", "org": "northwind"},
         },
     )
     assert created.status_code == 201, created.text
@@ -324,12 +324,12 @@ async def test_a_workflow_published_by_hand_or_a_project_with_no_template_is_not
     from pathlib import Path
 
     created = await client.post(
-        "/api/v1/orgs/varga/projects",
+        "/api/v1/orgs/northwind/projects",
         json={
             "slug": "research",
             "name": "Research",
             "template_ref": "investment-research@0.1.0",
-            "config": {"slug": "research", "org": "varga"},
+            "config": {"slug": "research", "org": "northwind"},
         },
     )
     assert created.status_code == 201, created.text
@@ -346,8 +346,8 @@ async def test_a_workflow_published_by_hand_or_a_project_with_no_template_is_not
     assert item is not None and item["state"] == "done" and "`campaign`" not in item["detail"], item
 
     bare = await client.post(
-        "/api/v1/orgs/varga/projects",
-        json={"slug": "bare", "name": "Bare", "config": {"slug": "bare", "org": "varga"}},
+        "/api/v1/orgs/northwind/projects",
+        json={"slug": "bare", "name": "Bare", "config": {"slug": "bare", "org": "northwind"}},
     )
     assert bare.status_code == 201, bare.text
     await _activate(bare.json()["id"])
@@ -364,7 +364,7 @@ async def test_a_plugin_server_is_not_a_direct_connector(client: AsyncClient, ad
     try:
         project = await _project(client)
         put = await client.put(
-            "/api/v1/orgs/varga/mcp-gateway",
+            "/api/v1/orgs/northwind/mcp-gateway",
             json={
                 "mode": "required",
                 "endpoint": "https://gw.example.test/{server}/mcp",
@@ -376,7 +376,7 @@ async def test_a_plugin_server_is_not_a_direct_connector(client: AsyncClient, ad
         assert put.status_code == 200, put.text
         async with session_scope(orgs="*") as session:
             org = (
-                await session.execute(select(Organization).where(Organization.slug == "varga"))
+                await session.execute(select(Organization).where(Organization.slug == "northwind"))
             ).scalar_one()
             session.add(OrgConnector(org_id=org.id, name="crm", kind="mcp", type="mcp", config={}))
             session.add(

@@ -8,7 +8,7 @@ import httpx
 import pytest
 from httpx import AsyncClient
 
-BASE = "/api/v1/orgs/varga/knowledge"
+BASE = "/api/v1/orgs/northwind/knowledge"
 
 
 async def _public(host: str) -> list[str]:
@@ -60,7 +60,7 @@ async def test_the_activity_syncs_as_the_workers_family(
     monkeypatch.setenv("CHOREGOS_EGRESS_MODE", "enforce")
     reset_settings_cache()
     source_id = await _source(client)
-    payload = {"org": "varga", "source_id": source_id}
+    payload = {"org": "northwind", "source_id": source_id}
     # the API family is declared, the workers' is not: it is unknown, so only the org list governs
     monkeypatch.setenv("CHOREGOS_EGRESS_CEILING", '{"api": ["elsewhere.example.test"]}')
     reset_settings_cache()
@@ -71,5 +71,5 @@ async def test_the_activity_syncs_as_the_workers_family(
     monkeypatch.setenv("CHOREGOS_EGRESS_CEILING", '{"workers": ["elsewhere.example.test"]}')
     reset_settings_cache()
     with pytest.raises(Exception, match="outside the platform's declared network for the workers"):
-        await sync_source("varga", source_id)  # what the activity runs on its next due pass
+        await sync_source("northwind", source_id)  # what the activity runs on its next due pass
     assert crawler == [], "ceiling_outside: nothing was sent"

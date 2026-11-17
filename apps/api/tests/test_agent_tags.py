@@ -18,9 +18,9 @@ from .agent_scopes_kit import (
     make_project,
 )
 
-DEV = "dev@varga.dev"
-OTHER = "other@varga.dev"
-OWNER = "owner@varga.dev"
+DEV = "dev@northwind.dev"
+OTHER = "other@northwind.dev"
+OWNER = "owner@northwind.dev"
 
 
 async def _tags(client: AsyncClient, **params: Any) -> list[str]:

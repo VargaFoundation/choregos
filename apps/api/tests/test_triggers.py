@@ -66,8 +66,8 @@ SNOW = {
 
 async def _project(client: AsyncClient, slug: str = "desk") -> dict[str, Any]:
     created = await client.post(
-        "/api/v1/orgs/varga/projects",
-        json={"slug": slug, "name": slug, "config": {"slug": slug, "org": "varga", "triggers": TRIGGERS}},
+        "/api/v1/orgs/northwind/projects",
+        json={"slug": slug, "name": slug, "config": {"slug": slug, "org": "northwind", "triggers": TRIGGERS}},
     )
     assert created.status_code == 201, created.text
     project = dict(created.json())
@@ -87,7 +87,7 @@ async def _token(client: AsyncClient, project: dict[str, Any], name: str) -> dic
 
 async def _call(client: AsyncClient, name: str, token: str, payload: Any, **headers: str) -> Any:
     return await client.post(
-        f"/api/v1/webhooks/triggers/varga/desk/{name}",
+        f"/api/v1/webhooks/triggers/northwind/desk/{name}",
         json=payload,
         headers={"Authorization": f"Bearer {token}", **headers},
     )
@@ -129,7 +129,7 @@ async def test_a_call_opens_and_starts_a_work_item_in_the_trigger_s_workflow(
     project = await _project(client)
     minted = await _token(client, project, "incident")
     assert minted["token"].startswith("chtrg_")
-    assert minted["url"].endswith("/api/v1/webhooks/triggers/varga/desk/incident")
+    assert minted["url"].endswith("/api/v1/webhooks/triggers/northwind/desk/incident")
 
     answer = await _call(client, "incident", minted["token"], SNOW)
 
@@ -212,7 +212,7 @@ async def test_a_wrong_token_or_an_unknown_trigger_is_refused_and_records_nothin
     token = (await _token(client, project, "incident"))["token"]
 
     wrong = await _call(client, "incident", token + "x", SNOW)
-    none = await client.post("/api/v1/webhooks/triggers/varga/desk/incident", json=SNOW)
+    none = await client.post("/api/v1/webhooks/triggers/northwind/desk/incident", json=SNOW)
     no_token_yet = await _call(client, "routed", token, {"summary": "x"})
     unknown = await _call(client, "nope", token, SNOW)
     other_org = await client.post(
@@ -231,11 +231,11 @@ async def test_a_rotated_token_replaces_the_old_one(client: AsyncClient, admin: 
 
     assert (await _call(client, "incident", old, SNOW)).status_code == 401
     by_header = await client.post(
-        "/api/v1/webhooks/triggers/varga/desk/incident", json=SNOW, headers={"X-Choregos-Token": new}
+        "/api/v1/webhooks/triggers/northwind/desk/incident", json=SNOW, headers={"X-Choregos-Token": new}
     )
     assert by_header.status_code == 202, by_header.text
     by_query = await client.post(
-        f"/api/v1/webhooks/triggers/varga/desk/incident?token={new}", json=SNOW | {"sys_id": "other"}
+        f"/api/v1/webhooks/triggers/northwind/desk/incident?token={new}", json=SNOW | {"sys_id": "other"}
     )
     assert by_query.status_code == 202, by_query.text
 
@@ -250,7 +250,7 @@ async def test_a_refused_call_answers_why_and_is_recorded_without_the_payload(
     again = await _call(client, "incident", token, {"number": "INC1", "short_description": "secret text"})
     no_number = await _call(client, "incident", token, {"sys_id": "abc", "short_description": "secret text"})
     not_json = await client.post(
-        "/api/v1/webhooks/triggers/varga/desk/incident",
+        "/api/v1/webhooks/triggers/northwind/desk/incident",
         content=b"short_description=secret text",
         headers={"Authorization": f"Bearer {token}"},
     )
@@ -295,7 +295,7 @@ async def test_a_person_fires_the_trigger_by_hand(client: AsyncClient, admin: st
 
     assert fired.status_code == 200, fired.text
     item = await _item(client, project, fired.json()["work_item_key"])
-    assert item["initiated_by"] == "person:admin@varga.dev"
+    assert item["initiated_by"] == "person:admin@northwind.dev"
     (row,) = await _received(client, project)
     assert row["event_type"] == "trigger.manual" and row["outcome"] == "created_work_item"
 
@@ -324,10 +324,10 @@ async def test_a_viewer_mints_no_token_and_fires_nothing(client: AsyncClient, ad
 
     project = await _project(client)
     added = await client.post(
-        "/api/v1/orgs/varga/members", json={"email": "viewer@varga.dev", "role": "viewer"}
+        "/api/v1/orgs/northwind/members", json={"email": "viewer@northwind.dev", "role": "viewer"}
     )
     assert added.status_code in {200, 201}, added.text
-    await login(client, "viewer@varga.dev")
+    await login(client, "viewer@northwind.dev")
 
     minted = await client.post(f"/api/v1/projects/{project['id']}/triggers/incident/token")
     fired = await client.post(f"/api/v1/projects/{project['id']}/triggers/incident/fire", json=SNOW)
@@ -368,7 +368,7 @@ async def test_a_signed_trigger_takes_the_signature_and_not_the_token(
     secret = minted["signing_secret"].encode()
     body = json.dumps({"summary": "Signed"}).encode()
     mac = hmac.new(secret, body, hashlib.sha256)
-    url = "/api/v1/webhooks/triggers/varga/desk/signed"
+    url = "/api/v1/webhooks/triggers/northwind/desk/signed"
 
     def post(headers: dict[str, str], content: bytes = body) -> Any:
         return client.post(url, content=content, headers={"Content-Type": "application/json", **headers})

@@ -15,7 +15,7 @@ from httpx import AsyncClient, Response
 
 from .conftest import login
 
-ADMIN = "admin@varga.dev"
+ADMIN = "admin@northwind.dev"
 
 
 async def _token(client: AsyncClient, *scopes: str, project: str | None = None) -> str:
@@ -165,7 +165,7 @@ async def test_a_projects_door_does_not_ask_for_the_project(
 ) -> None:
     token = await _token(client, "mcp:write")
     client.cookies.clear()
-    tools = (await _rpc(client, token, "tools/list", path="/mcp/projects/varga:billing-api")).json()[
+    tools = (await _rpc(client, token, "tools/list", path="/mcp/projects/northwind:billing-api")).json()[
         "result"
     ]["tools"]
     create = next(o for o in tools if o["name"] == "create_work_item")
@@ -181,7 +181,7 @@ async def test_list_projects_returns_the_console_links(client: AsyncClient, proj
     result = (await _tool(client, token, "list_projects"))["result"]
     assert result["isError"] is False
     projects = result["structuredContent"]["projects"]
-    assert [p["project"] for p in projects] == ["varga:billing-api"]
+    assert [p["project"] for p in projects] == ["northwind:billing-api"]
     assert projects[0]["console_url"].endswith("/p/billing-api")
 
 
@@ -192,7 +192,7 @@ async def test_create_work_item_opens_a_work_item_in_the_persons_name(
     token = await _token(client, "mcp:write")
     client.cookies.clear()
     result = (
-        await _tool(client, token, "create_work_item", project="varga:billing-api", title="From Claude")
+        await _tool(client, token, "create_work_item", project="northwind:billing-api", title="From Claude")
     )["result"]
     assert result["isError"] is False, result
     key = result["structuredContent"]["key"]
@@ -231,12 +231,12 @@ async def test_an_external_tracker_files_the_issue_through_mcp(
     monkeypatch.setattr(tickets, "project_tracker", with_the_fake)
     response = await client.put(
         f"/api/v1/projects/{project['id']}/connectors/tracker",
-        json={"type": "github-issues", "config": {"repo": "varga/billing-api"}},
+        json={"type": "github-issues", "config": {"repo": "northwind/billing-api"}},
     )
     assert response.status_code == 200, response.text
     token = await _token(client, "mcp:write")
     client.cookies.clear()
-    result = (await _tool(client, token, "create_work_item", project="varga:billing-api", title="x"))[
+    result = (await _tool(client, token, "create_work_item", project="northwind:billing-api", title="x"))[
         "result"
     ]
     assert result.get("isError") is not True, result
@@ -248,15 +248,15 @@ async def test_a_token_bound_to_a_project_sees_only_that_project(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
     other = await client.post(
-        "/api/v1/orgs/varga/projects",
-        json={"slug": "other", "name": "Other", "config": {"slug": "other", "org": "varga"}},
+        "/api/v1/orgs/northwind/projects",
+        json={"slug": "other", "name": "Other", "config": {"slug": "other", "org": "northwind"}},
     )
     assert other.status_code == 201, other.text
-    token = await _token(client, "mcp:read", project="varga:billing-api")
+    token = await _token(client, "mcp:read", project="northwind:billing-api")
     client.cookies.clear()
     projects = (await _tool(client, token, "list_projects"))["result"]["structuredContent"]["projects"]
-    assert [p["project"] for p in projects] == ["varga:billing-api"]
-    elsewhere = await _rpc(client, token, "tools/list", path="/mcp/projects/varga:other")
+    assert [p["project"] for p in projects] == ["northwind:billing-api"]
+    elsewhere = await _rpc(client, token, "tools/list", path="/mcp/projects/northwind:other")
     assert elsewhere.status_code == 403, elsewhere.text
 
 
@@ -305,7 +305,7 @@ async def test_the_budget_of_writes_of_the_day(client: AsyncClient, project: dic
     async with session_scope() as session:
         admin_id = (await session.execute(select(User.id).where(User.email == ADMIN))).scalar_one()
         org_id = (
-            await session.execute(select(Organization.id).where(Organization.slug == "varga"))
+            await session.execute(select(Organization.id).where(Organization.slug == "northwind"))
         ).scalar_one()
         for _ in range(WRITES_PER_DAY):
             session.add(
@@ -321,7 +321,7 @@ async def test_the_budget_of_writes_of_the_day(client: AsyncClient, project: dic
             )
     token = await _token(client, "mcp:write")
     client.cookies.clear()
-    result = (await _tool(client, token, "create_work_item", project="varga:billing-api", title="x"))[
+    result = (await _tool(client, token, "create_work_item", project="northwind:billing-api", title="x"))[
         "result"
     ]
     assert result["isError"] is True

@@ -15,7 +15,7 @@ from sqlalchemy.exc import IntegrityError
 
 API = pathlib.Path(__file__).resolve().parents[1]
 BEFORE = "e6b8d0f2a4c5"
-ORG_SQL = "INSERT INTO organizations (id, slug, name, settings) VALUES ('o1', 'varga', 'Varga', '{}')"
+ORG_SQL = "INSERT INTO organizations (id, slug, name, settings) VALUES ('o1', 'northwind', 'Northwind', '{}')"
 
 
 def _config(url: str) -> Config:
@@ -38,7 +38,7 @@ def _seed_old_facts(url: str) -> None:
     engine = create_engine(url)
     with engine.begin() as db:
         db.execute(
-            text("INSERT INTO organizations (id, slug, name, settings) VALUES ('o1', 'varga', 'Varga', '{}')")
+            text("INSERT INTO organizations (id, slug, name, settings) VALUES ('o1', 'northwind', 'Northwind', '{}')")
         )
         db.execute(
             text(
@@ -77,7 +77,7 @@ def test_a_fact_needs_a_home(database: str) -> None:
     engine = create_engine(database)
     with engine.begin() as db:
         db.execute(
-            text("INSERT INTO organizations (id, slug, name, settings) VALUES ('o1', 'varga', 'V', '{}')")
+            text("INSERT INTO organizations (id, slug, name, settings) VALUES ('o1', 'northwind', 'V', '{}')")
         )
     with pytest.raises(IntegrityError, match=r"ck_memory_facts_has_a_home|CHECK"), engine.begin() as db:
         db.execute(
@@ -94,7 +94,7 @@ def test_downgrade_refuses_while_a_global_memory_holds_facts(database: str) -> N
     engine = create_engine(database)
     with engine.begin() as db:
         db.execute(
-            text("INSERT INTO organizations (id, slug, name, settings) VALUES ('o1', 'varga', 'V', '{}')")
+            text("INSERT INTO organizations (id, slug, name, settings) VALUES ('o1', 'northwind', 'V', '{}')")
         )
         db.execute(
             text(

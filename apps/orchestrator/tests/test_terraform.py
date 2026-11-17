@@ -11,7 +11,7 @@ from .conftest import Fixture
 
 pytestmark = pytest.mark.asyncio
 
-INFRA_PR = "https://github.com/varga/billing-api-infra/pull/7"
+INFRA_PR = "https://github.com/northwind/billing-api-infra/pull/7"
 
 
 async def _release(setup: Fixture, *, with_infra: bool) -> str:
@@ -53,8 +53,8 @@ async def _enable_atlantis(project_id: str) -> None:
 def _seed_pr(setup: Fixture) -> None:
     from choregos_core.domain import PrRef, PrState
 
-    ref = PrRef(repo="varga/billing-api-infra", number=7, url=INFRA_PR)
-    setup.adapters.scm.prs[("varga/billing-api-infra", 7)] = PrState(ref=ref, title="infra")
+    ref = PrRef(repo="northwind/billing-api-infra", number=7, url=INFRA_PR)
+    setup.adapters.scm.prs[("northwind/billing-api-infra", 7)] = PrState(ref=ref, title="infra")
 
 
 async def test_the_apply_is_triggered_on_the_infra_pr(setup: Fixture) -> None:
@@ -69,7 +69,7 @@ async def test_the_apply_is_triggered_on_the_infra_pr(setup: Fixture) -> None:
 
     assert outcome["ok"] is True
     assert outcome["applied"] == [INFRA_PR]
-    assert ("varga/billing-api-infra", 7, "atlantis apply") in setup.adapters.scm.comments
+    assert ("northwind/billing-api-infra", 7, "atlantis apply") in setup.adapters.scm.comments
 
 
 async def test_a_failed_apply_stops_the_departure(setup: Fixture) -> None:

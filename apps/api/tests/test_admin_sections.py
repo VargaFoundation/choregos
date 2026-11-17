@@ -93,10 +93,10 @@ async def test_the_administrator_sees_the_sections_the_developer_does_not(
     assert sections[0]["blocks"][2]["secret_field"] == "token"
 
     member = await client.post(
-        "/api/v1/orgs/varga/members", json={"email": "dev@varga.dev", "role": "developer"}
+        "/api/v1/orgs/northwind/members", json={"email": "dev@northwind.dev", "role": "developer"}
     )
     assert member.status_code in {200, 201}, member.text
-    await login(client, "dev@varga.dev")
+    await login(client, "dev@northwind.dev")
     assert (await client.get("/api/v1/ui/admin-sections")).json() == [], (
         "neither member:manage nor the platform"
     )
@@ -196,7 +196,7 @@ async def test_an_organisation_section_that_asks_for_the_platform_shows_only_to_
         "a single organisation: its administrator has the instance"
     )
 
-    # A second organisation: the administrator of `varga` no longer administers the instance.
+    # A second organisation: the administrator of `northwind` no longer administers the instance.
     async with session_scope() as session:
         session.add(Organization(slug="other", name="Other"))
     ids = [s["id"] for s in (await client.get("/api/v1/ui/admin-sections")).json()]

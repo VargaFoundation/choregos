@@ -78,7 +78,7 @@ async def setup(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator
     set_adapters_override(adapters)
 
     async with db_session.session_scope() as session:
-        org = Organization(slug="varga", name="Varga Foundation")
+        org = Organization(slug="northwind", name="Northwind")
         session.add(org)
         await session.flush()
         project = Project(
@@ -88,14 +88,14 @@ async def setup(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator
             status="active",
             config={
                 "slug": "billing-api",
-                "org": "varga",
+                "org": "northwind",
                 "repo": {
-                    "url": "https://github.com/varga/billing-api.git",
+                    "url": "https://github.com/northwind/billing-api.git",
                     "default_branch": "main",
                     "language": "python",
                     "test_command": "make test",
                 },
-                "gitops": {"repo_url": "https://github.com/varga/gitops.git", "apps": ["billing-api"]},
+                "gitops": {"repo_url": "https://github.com/northwind/gitops.git", "apps": ["billing-api"]},
                 "notify": {"slack_channel": "#billing"},
             },
         )
@@ -104,7 +104,7 @@ async def setup(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator
         await ensure_defaults(session, project)
         item = WorkItem(
             project_id=project.id,
-            tracker_key="varga/billing-api#123",
+            tracker_key="northwind/billing-api#123",
             title="Les avoirs ne sont pas déduits du total",  # lang: fr-ok (asserted verbatim)
             body_snapshot="Quand une commande a un avoir, le total affiché ignore la remise.",  # lang: fr-ok
             state="inbox",
@@ -125,7 +125,7 @@ async def setup(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator
     # the fake tracker knows the same work item, so the state mirror works
     adapters.tracker.items[fixture.tracker_key] = _fake_item(fixture.tracker_key, item.title)
     adapters.scm.set_diff(
-        "varga/billing-api",
+        "northwind/billing-api",
         "main",
         "choregos/123",
         [("src/orders/total.py", 20, 4), ("tests/orders/test_total.py", 30, 0)],

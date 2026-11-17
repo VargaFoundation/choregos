@@ -62,12 +62,12 @@ def test_the_migration_sorts_catalogue_agents_from_the_organisations_own(
         command.upgrade(_config(url), BEFORE)
         engine = create_engine(url)
         with engine.begin() as connection:
-            _agent(connection, "a-catalogue", "developer", "catalogue:developer@1", "alice@varga.dev")
-            _agent(connection, "a-written", "onboarding", "alice@varga.dev", None)
+            _agent(connection, "a-catalogue", "developer", "catalogue:developer@1", "alice@northwind.dev")
+            _agent(connection, "a-written", "onboarding", "alice@northwind.dev", None)
             # a template's agent is the organisation's, whatever its author
             _agent(connection, "a-template", "reviewer", "template:software-delivery", None)
             # `catalogue:` on a LATER version only: the organisation's own agent
-            _agent(connection, "a-late", "planner", "bob@varga.dev", "catalogue:planner@2")
+            _agent(connection, "a-late", "planner", "bob@northwind.dev", "catalogue:planner@2")
         # this revision only: the later backfill of S39-25 moves template-installed catalogue agents
         command.upgrade(_config(url), AFTER)
         with engine.connect() as connection:
@@ -153,10 +153,10 @@ def test_the_backfill_gives_template_installed_catalogue_agents_their_provenance
             # a hand-published v2 on top of the catalogue's text
             agent(connection, "a-edited", "triager",
                   [("template:x@1", digest(AgentSpec.model_validate(triager.document["spec"])), "{}"),
-                   ("alice@varga.dev", "sha256:by-hand", "{}")])  # fmt: skip
+                   ("alice@northwind.dev", "sha256:by-hand", "{}")])  # fmt: skip
             # an agent outside the catalogue, and a catalogue name that a person wrote
             agent(connection, "a-own", "my-own", [("template:x@1", "sha256:x", "{}")])
-            agent(connection, "a-written", "developer", [("alice@varga.dev", "sha256:x", "{}")])
+            agent(connection, "a-written", "developer", [("alice@northwind.dev", "sha256:x", "{}")])
         command.upgrade(_config(url), "head")
         command.upgrade(_config(url), "head")  # idempotent
         with engine.connect() as connection:
@@ -178,4 +178,4 @@ def test_the_backfill_gives_template_installed_catalogue_agents_their_provenance
     assert rows["triager"].created_by == f"plugin:software-delivery/triager@{triager.version}!diverged"
     assert rows["triager"].scope == "platform"
     assert (rows["my-own"].created_by, rows["my-own"].scope) == ("template:x@1", "org")
-    assert (rows["developer"].created_by, rows["developer"].scope) == ("alice@varga.dev", "org")
+    assert (rows["developer"].created_by, rows["developer"].scope) == ("alice@northwind.dev", "org")

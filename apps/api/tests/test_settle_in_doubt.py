@@ -42,7 +42,7 @@ FOLLOW_UP = {"title": "follow-up of {{ effects[1].key }}"}
 #: What the person read in the tracker, for the write whose answer never came.
 FOUND = {"key": "OPS-8", "changed": True}
 NOTE = "OPS-8 is in the tracker, changed at 10:02 by the outpost's service account"
-OPS = "ops@varga.dev"
+OPS = "ops@northwind.dev"
 
 
 @pytest.fixture(autouse=True)
@@ -51,7 +51,7 @@ def door(monkeypatch: pytest.MonkeyPatch) -> outposts_kit.Door:
 
 
 async def _member(client: AsyncClient, email: str, role: str) -> None:
-    response = await client.post("/api/v1/orgs/varga/members", json={"email": email, "role": role})
+    response = await client.post("/api/v1/orgs/northwind/members", json={"email": email, "role": role})
     assert response.status_code in {200, 201}, response.text
 
 
@@ -243,9 +243,9 @@ async def test_a_developer_and_an_api_token_do_not_settle(
     client: AsyncClient, project: dict[str, Any], app: Any
 ) -> None:
     _served, _fake, _daemon, action_id = await _in_doubt(client, project)
-    await _member(client, "dev@varga.dev", "developer")
+    await _member(client, "dev@northwind.dev", "developer")
     dev = AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
-    await login(dev, "dev@varga.dev")
+    await login(dev, "dev@northwind.dev")
     try:
         refused = await dev.post(_path(project, action_id), json={"outcome": "made", "note": NOTE})
         assert refused.status_code == 403 and "approver's rank" in refused.text, refused.text

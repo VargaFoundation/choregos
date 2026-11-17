@@ -64,7 +64,7 @@ def instant(moment: dt.datetime) -> str:
 
 def assertion(
     *,
-    org: str = "varga",
+    org: str = "northwind",
     request_id: str,
     email: str = "ann@globex.example",
     groups: tuple[str, ...] = ("Admins",),
@@ -115,7 +115,7 @@ def assertion(
 
 
 def response(
-    inner: Any, *, org: str = "varga", destination: str | None = None, status: str | None = None
+    inner: Any, *, org: str = "northwind", destination: str | None = None, status: str | None = None
 ) -> Any:
     root = etree.Element(
         f"{{{SAMLP}}}Response", nsmap={"samlp": SAMLP, "saml": SAML}, ID="_response-1", Version="2.0"

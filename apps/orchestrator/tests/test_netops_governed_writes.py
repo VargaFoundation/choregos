@@ -87,7 +87,7 @@ async def _action(setup: Fixture, effects: list[dict[str, Any]], status: str = "
             effects=effects,
             proposed_by={"kind": "agent", "id": "agent:netops"},
             approval={},
-            decisions=[{"by": "lea@varga.test", "decision": "approve"}] if status == "approved" else [],
+            decisions=[{"by": "lea@northwind.test", "decision": "approve"}] if status == "approved" else [],
             status=status,
         )
         session.add(action)

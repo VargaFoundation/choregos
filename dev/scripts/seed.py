@@ -61,10 +61,10 @@ async def main() -> int:
 
     async with session_scope(orgs="*") as session:
         org = (
-            await session.execute(select(Organization).where(Organization.slug == "varga"))
+            await session.execute(select(Organization).where(Organization.slug == "northwind"))
         ).scalar_one_or_none()
         if org is None:
-            org = Organization(slug="varga", name="Varga Foundation")
+            org = Organization(slug="northwind", name="Northwind")
             session.add(org)
             await session.flush()
 
@@ -80,15 +80,15 @@ async def main() -> int:
                 template_ref="github-tekton-argo-k8s@1.0.0",
                 config={
                     "slug": "billing-api",
-                    "org": "varga",
+                    "org": "northwind",
                     "repo": {
-                        "url": "https://github.com/varga/billing-api.git",
+                        "url": "https://github.com/northwind/billing-api.git",
                         "default_branch": "main",
                         "language": "python",
                         "test_command": "make test",
                     },
                     "gitops": {
-                        "repo_url": "https://github.com/varga/billing-gitops.git",
+                        "repo_url": "https://github.com/northwind/billing-gitops.git",
                         "apps": ["billing-api"],
                     },
                     "notify": {"slack_channel": "#billing"},
@@ -108,10 +108,10 @@ async def main() -> int:
         for index, ((title, size, risk), state) in enumerate(zip(TITLES, STATES, strict=True), start=120):
             item = WorkItem(
                 project_id=project.id,
-                tracker_key=f"varga/billing-api#{index}",
+                tracker_key=f"northwind/billing-api#{index}",
                 title=title,
                 body_snapshot="Demo ticket created by `make dev-seed`.",
-                url=f"https://github.com/varga/billing-api/issues/{index}",
+                url=f"https://github.com/northwind/billing-api/issues/{index}",
                 size=size,
                 risk=risk,
                 state=state,
@@ -199,7 +199,7 @@ async def main() -> int:
                     )
                 )
             if state == "pr_open":
-                item.pr_url = f"https://github.com/varga/billing-api/pull/{index + 300}"
+                item.pr_url = f"https://github.com/northwind/billing-api/pull/{index + 300}"
 
         session.add(
             Finding(
@@ -219,12 +219,12 @@ async def main() -> int:
                 env="prod",
                 batch_no=41,
                 status="collecting",
-                items=[{"work_item_key": "varga/billing-api#125", "sha": "a1b2c3", "title": TITLES[5][0]}],
+                items=[{"work_item_key": "northwind/billing-api#125", "sha": "a1b2c3", "title": TITLES[5][0]}],
                 started_at=utcnow() - timedelta(minutes=20),
             )
         )
 
-    print("✓ seed : organisation `varga`, projet `billing-api`, 10 tickets, 1 finding, 1 lot en collecte")
+    print("✓ seed : organisation `northwind`, projet `billing-api`, 10 tickets, 1 finding, 1 lot en collecte")
     print("  front : http://localhost:3000/p/billing-api/board")
     return 0
 

@@ -24,9 +24,9 @@ os.environ.setdefault("CHOREGOS_FAKES", "1")
 # The egress allowlist (S39-22) only warns in the suites: the tests that prove it ask for `enforce`.
 os.environ.setdefault("CHOREGOS_EGRESS_MODE", "warn")
 # The registry the test plugins' servers come from (ADR 0096): the tests that prove the allowlist set another.
-os.environ.setdefault("CHOREGOS_PLUGIN_SERVERS_REGISTRIES", json.dumps([PUBLISHING.image("choregos-agents")]))
+os.environ.setdefault("CHOREGOS_PLUGIN_SERVERS_REGISTRIES", json.dumps([PUBLISHING.image("tranibor-agents")]))
 os.environ.setdefault("CHOREGOS_DEV_LOGIN_ENABLED", "true")
-os.environ.setdefault("CHOREGOS_DEV_ADMIN_EMAILS", "admin@varga.dev")
+os.environ.setdefault("CHOREGOS_DEV_ADMIN_EMAILS", "admin@northwind.dev")
 # The suites build prod and https apps, which refuse a short or default session secret at start.
 os.environ.setdefault("CHOREGOS_SESSION_SECRET", "test-session-secret-" + "x" * 32)
 # A run's write is a governed action that Temporal plays (#241); here `FakeTemporal` does not play
@@ -94,8 +94,8 @@ async def org(app: Any) -> str:
     from choregos_api.db.session import session_scope
 
     async with session_scope() as session:
-        session.add(Organization(slug="varga", name="Varga Foundation"))
-    return "varga"
+        session.add(Organization(slug="northwind", name="Northwind"))
+    return "northwind"
 
 
 async def login(client: AsyncClient, email: str) -> None:
@@ -109,8 +109,8 @@ async def login(client: AsyncClient, email: str) -> None:
 
 @pytest.fixture
 async def admin(client: AsyncClient, org: str) -> str:
-    await login(client, "admin@varga.dev")
-    return "admin@varga.dev"
+    await login(client, "admin@northwind.dev")
+    return "admin@northwind.dev"
 
 
 @pytest.fixture
@@ -120,16 +120,16 @@ async def project(client: AsyncClient, admin: str) -> dict[str, Any]:
         "name": "Billing API",
         "config": {
             "slug": "billing-api",
-            "org": "varga",
+            "org": "northwind",
             "repo": {
-                "url": "https://github.com/varga/billing-api.git",
+                "url": "https://github.com/northwind/billing-api.git",
                 "default_branch": "main",
                 "language": "python",
                 "test_command": "make test",
             },
         },
     }
-    response = await client.post("/api/v1/orgs/varga/projects", json=payload)
+    response = await client.post("/api/v1/orgs/northwind/projects", json=payload)
     assert response.status_code == 201, response.text
     return dict(response.json())
 

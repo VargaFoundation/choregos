@@ -21,7 +21,7 @@ from httpx import AsyncClient
 from .egress_support import as_person
 from .test_broker import TOOLS
 
-ORG = "/api/v1/orgs/varga"
+ORG = "/api/v1/orgs/northwind"
 RESPONSES = f"{ORG}/agents/helper/responses"
 INSTRUCTIONS = "You answer questions about orders. Be brief."
 
@@ -154,7 +154,7 @@ async def test_a_session_calls_the_organisations_own_gateway(
     from sqlalchemy import select
 
     async with session_scope(orgs="*") as session:
-        org = (await session.execute(select(Organization).where(Organization.slug == "varga"))).scalar_one()
+        org = (await session.execute(select(Organization).where(Organization.slug == "northwind"))).scalar_one()
         session.add(
             OrgConnector(
                 org_id=org.id, name="acme-llm", kind="gateway", type="openai-compatible",
@@ -268,12 +268,12 @@ async def test_a_viewer_is_refused_and_a_session_is_its_openers_alone(
 ) -> None:
     await _agent(client)
     upstream.model.say("Hi.")
-    async with as_person(client, "viewer@varga.dev", "viewer") as viewer:
+    async with as_person(client, "viewer@northwind.dev", "viewer") as viewer:
         refused = await viewer.post(RESPONSES, json={"project": "billing-api", "input": "Hi"})
         assert refused.status_code == 403, refused.text
     assert upstream.gateway.keys == {}, "no key for a refused caller"
     session_id = (await _ask(client, "Hi")).json()["session_id"]
-    async with as_person(client, "dev@varga.dev", "developer") as other:
+    async with as_person(client, "dev@northwind.dev", "developer") as other:
         assert (await other.get(f"{ORG}/agent-sessions/{session_id}")).status_code == 404
         assert (await other.delete(f"{ORG}/agent-sessions/{session_id}")).status_code == 404
         hijack = await other.post(

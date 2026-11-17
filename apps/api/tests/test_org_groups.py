@@ -12,7 +12,7 @@ from httpx import AsyncClient
 
 from .kits.human_actor import _decide, _member, _session
 
-ORG = "varga"
+ORG = "northwind"
 BASE = f"/api/v1/orgs/{ORG}/groups"
 GROUP = "release-captains"
 WORKFLOW = f"""
@@ -96,7 +96,7 @@ async def test_an_administrator_creates_reads_updates_and_deletes_an_internal_gr
     assert created.status_code == 201, created.text
     body = created.json()
     assert body["slug"] == GROUP and body["source"] == "internal" and body["member_count"] == 0
-    assert body["description"] == "Who ships" and body["created_by"] == "admin@varga.dev"
+    assert body["description"] == "Who ships" and body["created_by"] == "admin@northwind.dev"
 
     again = await _create(client)
     assert again.status_code == 409 and again.json()["code"] == "group_exists", again.text
@@ -121,9 +121,9 @@ async def test_a_developer_reads_the_groups_and_writes_none_of_them(
     client: AsyncClient, project: dict[str, Any], app: Any
 ) -> None:
     assert (await _create(client)).status_code == 201
-    await _member(client, "dev@varga.dev", "developer", [])
-    dev_id = await _user_id("dev@varga.dev")
-    developer = await _session(app, "dev@varga.dev")
+    await _member(client, "dev@northwind.dev", "developer", [])
+    dev_id = await _user_id("dev@northwind.dev")
+    developer = await _session(app, "dev@northwind.dev")
     try:
         assert (await developer.get(BASE)).status_code == 200
         assert (await developer.get(f"{BASE}/{GROUP}/members")).status_code == 200
@@ -162,26 +162,26 @@ async def test_only_a_member_of_the_organisation_joins_a_group(
     client: AsyncClient, project: dict[str, Any], app: Any
 ) -> None:
     assert (await _create(client)).status_code == 201
-    await _member(client, "dev@varga.dev", "developer", [])
-    dev_id = await _user_id("dev@varga.dev")
+    await _member(client, "dev@northwind.dev", "developer", [])
+    dev_id = await _user_id("dev@northwind.dev")
     members = f"{BASE}/{GROUP}/members"
 
     # someone who exists in the instance but not in the organisation, and someone who does not exist
     await _session_user("outsider@elsewhere.dev")
-    for body in ({"email": "outsider@elsewhere.dev"}, {"email": "nobody@varga.dev"}, {"user_id": "nope"}):
+    for body in ({"email": "outsider@elsewhere.dev"}, {"email": "nobody@northwind.dev"}, {"user_id": "nope"}):
         refused = await client.post(members, json=body)
         assert refused.status_code == 422 and "not a member" in refused.text, refused.text
-    both = await client.post(members, json={"email": "dev@varga.dev", "user_id": dev_id})
+    both = await client.post(members, json={"email": "dev@northwind.dev", "user_id": dev_id})
     assert both.status_code == 422
 
-    added = await client.post(members, json={"email": "dev@varga.dev"})
+    added = await client.post(members, json={"email": "dev@northwind.dev"})
     assert added.status_code == 201, added.text
-    assert added.json()["user_id"] == dev_id and added.json()["added_by"] == "admin@varga.dev"
+    assert added.json()["user_id"] == dev_id and added.json()["added_by"] == "admin@northwind.dev"
     assert (await client.post(members, json={"user_id": dev_id})).status_code == 201, (
         "adding twice changes nothing"
     )
     listed = (await client.get(members)).json()["items"]
-    assert [m["email"] for m in listed] == ["dev@varga.dev"]
+    assert [m["email"] for m in listed] == ["dev@northwind.dev"]
     assert (await client.get(f"{BASE}/{GROUP}")).json()["member_count"] == 1
     assert [p["user_id"] for p in await _audited("group.member.add")] == [dev_id]
 
@@ -194,8 +194,8 @@ async def test_only_a_member_of_the_organisation_joins_a_group(
 async def test_a_group_the_identity_provider_pushes_is_read_only_here(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    await _member(client, "dev@varga.dev", "developer", [])
-    dev_id = await _user_id("dev@varga.dev")
+    await _member(client, "dev@northwind.dev", "developer", [])
+    dev_id = await _user_id("dev@northwind.dev")
     await _scim_group([dev_id])
     one = f"{BASE}/platform-team"
     read = (await client.get(one)).json()
@@ -203,7 +203,7 @@ async def test_a_group_the_identity_provider_pushes_is_read_only_here(
     writes = [
         await client.patch(one, json={"name": "Renamed"}),
         await client.delete(one),
-        await client.post(f"{one}/members", json={"email": "admin@varga.dev"}),
+        await client.post(f"{one}/members", json={"email": "admin@northwind.dev"}),
         await client.delete(f"{one}/members/{dev_id}"),
     ]
     for refused in writes:
@@ -224,9 +224,9 @@ async def test_upsert_external_group_creates_then_replaces_the_group_and_its_mem
     from choregos_api.services.org_groups import upsert_external_group
     from sqlalchemy import select
 
-    for email in ("a@varga.dev", "b@varga.dev", "c@varga.dev"):
+    for email in ("a@northwind.dev", "b@northwind.dev", "c@northwind.dev"):
         await _member(client, email, "developer", [])
-    a, b, c = [await _user_id(f"{x}@varga.dev") for x in "abc"]
+    a, b, c = [await _user_id(f"{x}@northwind.dev") for x in "abc"]
     org_id = await _org_id()
 
     await _scim_group([a, b], slug="ops", external_id="okta-42")
@@ -312,13 +312,13 @@ async def test_a_member_of_the_internal_group_answers_a_step_addressed_to_it_wit
     client: AsyncClient, project: dict[str, Any], app: Any
 ) -> None:
     item_id = await _waiting_ticket(client, project["id"])
-    await _member(client, "cap@varga.dev", "developer", [])  # no group in the identity provider's claim
-    refused = await _decide(app, "cap@varga.dev", item_id)
+    await _member(client, "cap@northwind.dev", "developer", [])  # no group in the identity provider's claim
+    refused = await _decide(app, "cap@northwind.dev", item_id)
     assert refused.status_code == 403 and GROUP in refused.text, refused.text
 
     assert (await _create(client)).status_code == 201
-    assert (await client.post(f"{BASE}/{GROUP}/members", json={"email": "cap@varga.dev"})).status_code == 201
-    answered = await _decide(app, "cap@varga.dev", item_id)
+    assert (await client.post(f"{BASE}/{GROUP}/members", json={"email": "cap@northwind.dev"})).status_code == 201
+    answered = await _decide(app, "cap@northwind.dev", item_id)
     assert answered.status_code == 202, answered.text
     assert await _audited("workitem.decision.group_override") == [], (
         "a member of the group is not an override"
@@ -328,9 +328,9 @@ async def test_a_member_of_the_internal_group_answers_a_step_addressed_to_it_wit
 async def test_the_principal_carries_the_table_groups_namespaced_and_only_while_a_member(
     client: AsyncClient, project: dict[str, Any], app: Any
 ) -> None:
-    await _member(client, "cap@varga.dev", "developer", ["from-the-idp"])
+    await _member(client, "cap@northwind.dev", "developer", ["from-the-idp"])
     assert (await _create(client)).status_code == 201
-    assert (await client.post(f"{BASE}/{GROUP}/members", json={"email": "cap@varga.dev"})).status_code == 201
+    assert (await client.post(f"{BASE}/{GROUP}/members", json={"email": "cap@northwind.dev"})).status_code == 201
 
     from choregos_api.db.models import User
     from choregos_api.db.session import session_scope
@@ -338,14 +338,14 @@ async def test_the_principal_carries_the_table_groups_namespaced_and_only_while_
     from sqlalchemy import select
 
     async with session_scope() as session:
-        user = (await session.execute(select(User).where(User.email == "cap@varga.dev"))).scalar_one()
+        user = (await session.execute(select(User).where(User.email == "cap@northwind.dev"))).scalar_one()
         principal = await principal_for_user(session, user, narrow=False)
     assert principal.groups == ["from-the-idp", f"choregos:{ORG}:{GROUP}"]
 
-    cap_id = await _user_id("cap@varga.dev")
+    cap_id = await _user_id("cap@northwind.dev")
     assert (await client.delete(f"/api/v1/orgs/{ORG}/members/{cap_id}")).status_code == 204
     async with session_scope() as session:
-        user = (await session.execute(select(User).where(User.email == "cap@varga.dev"))).scalar_one()
+        user = (await session.execute(select(User).where(User.email == "cap@northwind.dev"))).scalar_one()
         principal = await principal_for_user(session, user, narrow=False)
     assert principal.groups == ["from-the-idp"], "out of the organisation, out of its groups"
     assert (await client.get(f"{BASE}/{GROUP}")).json()["member_count"] == 0
@@ -365,12 +365,12 @@ async def test_an_internal_group_with_a_member_is_known_and_its_members_are_list
     empty = (await client.post(path, json={"yaml": WORKFLOW})).json()["warnings"]
     assert [w["code"] for w in empty] == ["actor.group_unknown"], "an empty group is carried by nobody"
 
-    await _member(client, "cap@varga.dev", "developer", [])
-    assert (await client.post(f"{BASE}/{GROUP}/members", json={"email": "cap@varga.dev"})).status_code == 201
+    await _member(client, "cap@northwind.dev", "developer", [])
+    assert (await client.post(f"{BASE}/{GROUP}/members", json={"email": "cap@northwind.dev"})).status_code == 201
     assert (await client.post(path, json={"yaml": WORKFLOW})).json()["warnings"] == []
 
     org_id = await _org_id()
     async with session_scope() as session:
         assert GROUP in await groups_known_in(session, org_id)
         found = await members_of_group(session, org_id, ORG, project["id"], GROUP)
-    assert [(user.email, decides) for user, decides in found] == [("cap@varga.dev", True)]
+    assert [(user.email, decides) for user, decides in found] == [("cap@northwind.dev", True)]

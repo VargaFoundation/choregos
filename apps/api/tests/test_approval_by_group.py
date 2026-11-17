@@ -13,7 +13,7 @@ from httpx import ASGITransport, AsyncClient
 
 from .conftest import login
 
-ORG = "/api/v1/orgs/varga"
+ORG = "/api/v1/orgs/northwind"
 GROUP = "netops-approvers"
 
 
@@ -66,14 +66,14 @@ async def _proposed_rule_change(client: AsyncClient, project: dict[str, Any], gr
     )
     assert agent.status_code == 201, agent.text
     async with session_scope() as session:
-        item = WorkItem(project_id=project["id"], tracker_key="varga/net#2", title="open 9443", state="ready")
+        item = WorkItem(project_id=project["id"], tracker_key="northwind/net#2", title="open 9443", state="ready")
         session.add(item)
         await session.flush()
         run = Run(id="run-group-1", work_item_id=item.id, project_id=project["id"], stage_role="x",
                   transition_id="t", status="running", agent_slug="netops", agent_version=1)  # fmt: skip
         session.add(run)
     token = mint_run_token(
-        "run-group-1", project_slug="billing-api", work_item_key="varga/net#2", ttl_minutes=30
+        "run-group-1", project_slug="billing-api", work_item_key="northwind/net#2", ttl_minutes=30
     )
     called = await client.post(
         "/api/v1/internal/runs/run-group-1/tools/pfsense__update_firewall_rule",
@@ -94,10 +94,10 @@ async def test_only_a_member_of_the_named_group_approves_a_firewall_rule(
     action = (await client.get(path)).json()
     assert action["approval"]["approvers"] == [{"role": "developer", "group": GROUP, "min": 1}]
 
-    await _member(client, "owner@varga.dev", "project_owner", ["platform-team"])
-    await _member(client, "dev@varga.dev", "developer", [])
-    await _member(client, "net@varga.dev", "developer", [GROUP, "platform-team"])
-    for outsider in ("owner@varga.dev", "dev@varga.dev"):
+    await _member(client, "owner@northwind.dev", "project_owner", ["platform-team"])
+    await _member(client, "dev@northwind.dev", "developer", [])
+    await _member(client, "net@northwind.dev", "developer", [GROUP, "platform-team"])
+    for outsider in ("owner@northwind.dev", "dev@northwind.dev"):
         session = await _session(app, outsider)
         try:
             refused = await session.post(f"{path}/decision", json={"decision": "approve"})
@@ -107,7 +107,7 @@ async def test_only_a_member_of_the_named_group_approves_a_firewall_rule(
         assert GROUP in refused.text
     assert (await client.get(path)).json()["status"] == "pending_approval"
 
-    member = await _session(app, "net@varga.dev")
+    member = await _session(app, "net@northwind.dev")
     try:
         approved = await member.post(f"{path}/decision", json={"decision": "approve"})
     finally:
@@ -145,15 +145,15 @@ async def test_the_identity_provider_s_groups_are_kept_at_sign_in_and_replaced_a
     async def sign_in(groups: list[str]) -> list[str]:
         async with session_scope() as session:
             await terminer_la_connexion(
-                session, email="net@varga.dev", nom="Net", sujet="idp|net", groupes=groups, cible="/",
+                session, email="net@northwind.dev", nom="Net", sujet="idp|net", groupes=groups, cible="/",
                 canal="test", settings=get_settings(),
             )  # fmt: skip
         async with session_scope() as session:
-            user = (await session.execute(select(User).where(User.email == "net@varga.dev"))).scalar_one()
+            user = (await session.execute(select(User).where(User.email == "net@northwind.dev"))).scalar_one()
             return list(user.groups)
 
-    assert await sign_in([GROUP, "choregos:varga:developers"]) == ["choregos:varga:developers", GROUP]
-    assert await sign_in(["choregos:varga:developers"]) == ["choregos:varga:developers"], (
+    assert await sign_in([GROUP, "choregos:northwind:developers"]) == ["choregos:northwind:developers", GROUP]
+    assert await sign_in(["choregos:northwind:developers"]) == ["choregos:northwind:developers"], (
         "a group withdrawn at the IdP is withdrawn at the next sign-in"
     )
 
@@ -169,15 +169,15 @@ async def test_a_rule_naming_the_project_is_approved_by_that_projects_group(
     action = (await client.get(path)).json()
     assert action["approval"]["approvers"] == [{"role": "developer", "group": resolved, "min": 1}]
 
-    await _member(client, "other@varga.dev", "developer", ["other-maintainers"])
-    await _member(client, "lead@varga.dev", "developer", [resolved])
-    other = await _session(app, "other@varga.dev")
+    await _member(client, "other@northwind.dev", "developer", ["other-maintainers"])
+    await _member(client, "lead@northwind.dev", "developer", [resolved])
+    other = await _session(app, "other@northwind.dev")
     try:
         refused = await other.post(f"{path}/decision", json={"decision": "approve"})
     finally:
         await other.aclose()
     assert refused.status_code == 403 and resolved in refused.text, refused.text
-    lead = await _session(app, "lead@varga.dev")
+    lead = await _session(app, "lead@northwind.dev")
     try:
         approved = await lead.post(f"{path}/decision", json={"decision": "approve"})
     finally:

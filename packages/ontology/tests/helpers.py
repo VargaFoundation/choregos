@@ -25,11 +25,11 @@ async def sign_in(http: AsyncClient, email: str, *, reauth: bool = False) -> Non
 
 async def create_project(http: AsyncClient, slug: str) -> dict[str, Any]:
     response = await http.post(
-        "/api/v1/orgs/varga/projects",
+        "/api/v1/orgs/northwind/projects",
         json={
             "slug": slug,
             "name": slug,
-            "config": {"slug": slug, "org": "varga", "repo": {"url": f"https://github.com/varga/{slug}.git"}},
+            "config": {"slug": slug, "org": "northwind", "repo": {"url": f"https://github.com/northwind/{slug}.git"}},
         },
     )
     assert response.status_code == 201, response.text
@@ -79,7 +79,7 @@ async def create_run(project: dict[str, Any], run_id: str) -> dict[str, str]:
     from choregos_api.db.session import session_scope
     from choregos_api.security import mint_run_token
 
-    key = f"varga/{run_id}#1"
+    key = f"northwind/{run_id}#1"
     async with session_scope() as session:
         item = WorkItem(project_id=project["id"], tracker_key=key, title="T", state="ready")
         session.add(item)
