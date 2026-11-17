@@ -2647,6 +2647,14 @@
     ],
     "config_schema": {
       "properties": {
+        "key_rotation": {
+          "default": "failover",
+          "description": "with several keys (`api_key.2` …): `failover` uses the first that answers, `round_robin` spreads the calls",
+          "enum": [
+            "failover",
+            "round_robin"
+          ]
+        },
         "timeout_s": {
           "default": 20,
           "type": "number"
@@ -2717,7 +2725,9 @@
         "platform_arguments": []
       }
     ],
-    "pooled_fields": [],
+    "pooled_fields": [
+      "api_key"
+    ],
     "secret_fields": [
       "api_key"
     ],
@@ -2837,7 +2847,8 @@
     ],
     "pooled_fields": [
       "stooq_api_key",
-      "alphavantage_api_key"
+      "alphavantage_api_key",
+      "tiingo_api_key"
     ],
     "secret_fields": [
       "stooq_api_key",
