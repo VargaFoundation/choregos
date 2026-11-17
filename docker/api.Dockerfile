@@ -6,10 +6,10 @@
 # not exist at the first build and that afterwards comes from the **previous** commit — the
 # workers would have shipped yesterday's code without anything saying so. Two targets
 # (`--target api`, `--target worker`) of one build settle both.
-FROM python:3.12-slim-bookworm AS builder
+FROM python:3.12-slim-bookworm@sha256:935c3c5b12357a7e10caa9c1e6ca5692344d97cf229832ef584be2cec9fc03df AS builder
 
 ENV UV_LINK_MODE=copy UV_COMPILE_BYTECODE=1 UV_PYTHON_DOWNLOADS=never
-COPY --from=ghcr.io/astral-sh/uv:0.5.11 /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.5.11@sha256:0ac957607303916420297a4c9c213bb33fbd3c888f9cd7f4f7273596ebf42b85 /uv /usr/local/bin/uv
 WORKDIR /app
 
 # The metadata first: the dependency cache survives code changes.
@@ -57,9 +57,9 @@ RUN uv sync --frozen --no-dev --all-packages \
 # dependencies (LangGraph, YARA…) are not the platform's, and the API runs it as a child process,
 # offline, through `choregos_api/scanners/skillspector_offline.py`. Pinned to the commit of v2.13.1;
 # a bump re-runs `apps/api/tests/test_skill_scanner.py` against the new release.
-FROM python:3.12-slim-bookworm AS skillspector
+FROM python:3.12-slim-bookworm@sha256:935c3c5b12357a7e10caa9c1e6ca5692344d97cf229832ef584be2cec9fc03df AS skillspector
 ENV UV_LINK_MODE=copy UV_COMPILE_BYTECODE=1 UV_PYTHON_DOWNLOADS=never
-COPY --from=ghcr.io/astral-sh/uv:0.5.11 /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.5.11@sha256:0ac957607303916420297a4c9c213bb33fbd3c888f9cd7f4f7273596ebf42b85 /uv /usr/local/bin/uv
 ARG SKILLSPECTOR_COMMIT=f3b25697d76256998ca9d42c198d256258d4c035
 RUN uv venv /opt/skillspector --python /usr/local/bin/python3.12 \
  && VIRTUAL_ENV=/opt/skillspector uv pip install \
@@ -120,14 +120,14 @@ RUN set -eu; \
 # firewall. The whole of `docs` enters this throwaway stage because `docs/site` may not exist yet (a
 # COPY of a missing path fails the build); only its `.md` and `.mdx` files reach the image. Nothing
 # serves images through the door, so none is carried. An empty result: "no bundled documentation".
-FROM python:3.12-slim-bookworm AS docs
+FROM python:3.12-slim-bookworm@sha256:935c3c5b12357a7e10caa9c1e6ca5692344d97cf229832ef584be2cec9fc03df AS docs
 COPY docs /src/docs
 RUN mkdir -p /out \
  && if [ -d /src/docs/site ]; then cd /src/docs/site \
     && find . -type f \( -name '*.md' -o -name '*.mdx' \) -exec cp --parents {} /out/ \; ; fi
 
 # Base common to both targets (stage `commun`): nothing that decides what the container does.
-FROM python:3.12-slim-bookworm AS commun
+FROM python:3.12-slim-bookworm@sha256:935c3c5b12357a7e10caa9c1e6ca5692344d97cf229832ef584be2cec9fc03df AS commun
 # `PIP_PYTHON`: the enterprise edition's image is built FROM this one and adds its wheel
 # (ADR 0024). The venv, created by uv, has no `pip`; the one on the PATH is the system's. Without
 # this line, `pip install --no-deps choregos_ee-*.whl` succeeds and drops the wheel in `~/.local`,
@@ -190,7 +190,7 @@ CMD ["uvicorn", "choregos_api.main:app", "--host", "0.0.0.0", "--port", "8000"]
 # `docker`. Only the local install builds this target; the published `worker` stays without it.
 # Defined BEFORE `worker`, so that a build without `--target` still produces `worker`.
 FROM commun AS worker-local
-COPY --from=docker:28.5.1-cli /usr/local/bin/docker /usr/local/bin/docker
+COPY --from=docker:28.5.1-cli@sha256:9190b0613792e658a7783cf14b2d5ace5941bb68ede7276922ea36ee457d76ad /usr/local/bin/docker /usr/local/bin/docker
 CMD ["python", "-m", "choregos_orchestrator.worker", "--queues", "orchestrator,executor,tracker,memory"]
 
 # --- Target `worker`: the Temporal workers.

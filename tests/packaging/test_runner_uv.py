@@ -22,7 +22,9 @@ def _runtime() -> str:
 def test_uv_is_pinned_and_python_3_13_is_installed_at_build_time() -> None:
     runtime = _runtime()
     assert re.search(
-        r"^COPY --from=ghcr\.io/astral-sh/uv:\d+\.\d+\.\d+ /uv /uvx /usr/local/bin/$", runtime, re.M
+        r"^COPY --from=ghcr\.io/astral-sh/uv:\d+\.\d+\.\d+@sha256:[0-9a-f]{64} /uv /uvx /usr/local/bin/$",
+        runtime,
+        re.M,
     )
     assert "uv python install 3.13" in runtime
     assert "UV_PYTHON_DOWNLOADS=never uv python find 3.13" in runtime, (

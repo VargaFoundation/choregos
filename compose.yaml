@@ -57,7 +57,7 @@ x-platform-image: &platform-image
 
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:16-alpine@sha256:81e77a4833487b8132fe4b00bedd39dc3f74b8641e387f19312a48f7de218c2e
     # No fsync: a laptop install trades crash safety for start-up time. Measured on 2026-10-12
     # (WSL2): the first start's initdb checkpoint took 20 s to 60 s+ to sync, and once outlived
     # `pg_ctl`'s 60 s shutdown timeout, which killed the container. A host crash can corrupt this
@@ -88,7 +88,7 @@ services:
     # `default` namespace is listed but every `start_workflow` answers "Namespace default is not
     # found", for minutes. `auto-setup` on PostgreSQL is what `trials/local-start` measured
     # healthy in 18–21 s.
-    image: temporalio/auto-setup:1.26.2
+    image: temporalio/auto-setup:1.26.2@sha256:e9245820522233ec6a59ad69c6512ae4450705ee02bf6894fc61ba13b238c1c0
     depends_on:
       postgres: { condition: service_healthy }
     environment:
@@ -107,7 +107,7 @@ services:
   temporal-ui:
     # Optional: `docker compose --profile temporal-ui up`, then http://localhost:8233.
     profiles: [temporal-ui]
-    image: temporalio/ui:2.32.0
+    image: temporalio/ui:2.32.0@sha256:82bf98dbe005a831b6bc5dc12ccd7bffd606af2032dae4821ae133caaa943d3d
     environment:
       TEMPORAL_ADDRESS: temporal:7233
     ports: ["127.0.0.1:${CHOREGOS_PORT_TEMPORAL_UI:-8233}:8080"]
@@ -131,7 +131,7 @@ services:
     restart: "no"
 
   litellm:
-    image: ghcr.io/berriai/litellm-database:v1.105.5
+    image: ghcr.io/berriai/litellm-database:v1.105.5@sha256:87a881738240d0458a47588dd45cd819b00966ae3565786a7818e6d17d837921
     command: ["--config", "/litellm/config.yaml", "--port", "4000"]
     environment:
       LITELLM_MASTER_KEY: sk-local-install-only
@@ -265,7 +265,7 @@ services:
     # Optional: `docker compose --profile memory up`. Its embeddings need an OpenAI key in `.env`:
     # LiteLLM serves `platform/embed` only then (Anthropic has no embeddings), #438.
     profiles: [memory]
-    image: ghcr.io/vargafoundation/ecphoria:0.2.5-memory
+    image: ghcr.io/vargafoundation/ecphoria:0.2.5-memory@sha256:1ca5011d0012ad5f6b2133a23ac26ca7752b97145d06511eeea40b53f0faa402
     environment:
       ECPHORIA_EMBEDDING__PROVIDER: openai_compatible
       ECPHORIA_EMBEDDING__OPENAI_BASE_URL: http://litellm:4000/v1

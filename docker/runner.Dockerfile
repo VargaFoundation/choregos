@@ -5,9 +5,9 @@
 #   2. **pinned versions** — the ACP agents come from `versions.lock`, Renovate proposes the
 #      bumps, the conformance suite validates them;
 #   3. **non-root, no capability** — the cluster's sandbox does the rest.
-FROM python:3.12-slim-bookworm AS builder
+FROM python:3.12-slim-bookworm@sha256:935c3c5b12357a7e10caa9c1e6ca5692344d97cf229832ef584be2cec9fc03df AS builder
 ENV UV_LINK_MODE=copy UV_COMPILE_BYTECODE=1 UV_PYTHON_DOWNLOADS=never
-COPY --from=ghcr.io/astral-sh/uv:0.5.11 /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.5.11@sha256:0ac957607303916420297a4c9c213bb33fbd3c888f9cd7f4f7273596ebf42b85 /uv /usr/local/bin/uv
 WORKDIR /app
 COPY pyproject.toml uv.lock README.md ./
 COPY packages packages
@@ -23,7 +23,7 @@ RUN mkdir -p apps/api/src apps/orchestrator/src \
 # arm64 under QEMU. So arm64 is cross-compiled against bookworm's glibc. The runtime stage below
 # runs the result. BuildKit sets `BUILDPLATFORM`. The legacy builder (no buildx) does not, and
 # falls back to an amd64 build host.
-FROM --platform=${BUILDPLATFORM:-linux/amd64} rust:1.99-slim-bookworm AS rtk
+FROM --platform=${BUILDPLATFORM:-linux/amd64} rust:1.99-slim-bookworm@sha256:f2c004e3d2d8b547e8cf7ffbc29205385f4e71d23e53e4e383065db5e9f822cd AS rtk
 ARG TARGETARCH
 COPY packages/runner/src/choregos_runner/backends/versions.lock /tmp/versions.lock
 WORKDIR /src
@@ -74,8 +74,8 @@ RUN git clone --quiet --depth 1 --branch "${GITLEAKS_VERSION}" https://github.co
 # never meets the runner's. `--require-hashes` checks every wheel against
 # `docker/headroom/requirements.txt` (`make headroom-lock`). The Kompress model is fetched here, at
 # the revision headroom pins, then loaded again with the network forbidden: a run never downloads it.
-FROM python:3.12-slim-bookworm AS headroom
-COPY --from=ghcr.io/astral-sh/uv:0.5.11 /uv /usr/local/bin/uv
+FROM python:3.12-slim-bookworm@sha256:935c3c5b12357a7e10caa9c1e6ca5692344d97cf229832ef584be2cec9fc03df AS headroom
+COPY --from=ghcr.io/astral-sh/uv:0.5.11@sha256:0ac957607303916420297a4c9c213bb33fbd3c888f9cd7f4f7273596ebf42b85 /uv /usr/local/bin/uv
 ENV UV_PYTHON_DOWNLOADS=never UV_COMPILE_BYTECODE=1 HF_HOME=/opt/headroom/models
 COPY docker/headroom/requirements.txt /tmp/headroom-requirements.txt
 RUN uv venv /opt/headroom --python /usr/local/bin/python3.12 \
@@ -86,8 +86,12 @@ RUN set -eux; \
     /opt/headroom/bin/python -c "$warm" online; \
     HEADROOM_OFFLINE=1 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 /opt/headroom/bin/python -c "$warm" offline
 
-FROM python:3.12-slim-bookworm AS runtime
+FROM python:3.12-slim-bookworm@sha256:935c3c5b12357a7e10caa9c1e6ca5692344d97cf229832ef584be2cec9fc03df AS runtime
 ARG NODE_VERSION=22
+# npm and pnpm at exact versions, never `@latest` (S80-04): the image another day must be the same
+# image. npm is raised above the one Node ships with for the CVE in its `tar` (see below).
+ARG NPM_VERSION=12.2.2
+ARG PNPM_VERSION=12.21.0
 # `RTK_TELEMETRY_DISABLED`: rtk carries an HTTP client for its usage telemetry, and a runner
 # reports to nobody but Choregos. `HEADROOM_OFFLINE`: headroom's one switch for all its egress
 # (beacon, update check, usage reporter, model downloads); its models are under `HF_HOME`. It does
@@ -112,7 +116,7 @@ RUN apt-get update && apt-get upgrade -y --no-install-recommends \
       ca-certificates curl git gnupg jq ripgrep make build-essential tini unzip nginx \
  && curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | bash - \
  && apt-get install -y --no-install-recommends nodejs \
- && npm install -g npm@latest pnpm@latest \
+ && npm install -g "npm@${NPM_VERSION}" "pnpm@${PNPM_VERSION}" \
  && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
       -o /usr/share/keyrings/githubcli.gpg \
  && echo "deb [signed-by=/usr/share/keyrings/githubcli.gpg] https://cli.github.com/packages stable main" \
@@ -201,7 +205,7 @@ RUN set -eux; \
 # under `/opt/uv-python`, readable by uid 1000, and `UV_PYTHON_DOWNLOADS=never` keeps a run from
 # fetching an interpreter (the sandbox reaches package registries at most, never GitHub's releases).
 # `python3` stays the image's 3.12 (#713): uv picks 3.13 only for a project that asks for it.
-COPY --from=ghcr.io/astral-sh/uv:0.9.18 /uv /uvx /usr/local/bin/
+COPY --from=ghcr.io/astral-sh/uv:0.9.18@sha256:5713fa8217f92b80223bc83aac7db36ec80a84437dbc0d04bbc659cae030d8c9 /uv /uvx /usr/local/bin/
 ENV UV_PYTHON_INSTALL_DIR=/opt/uv-python UV_PYTHON_BIN_DIR=/opt/uv-python/bin
 RUN set -eux; \
     export UV_CACHE_DIR=/tmp/uv-build-cache; \

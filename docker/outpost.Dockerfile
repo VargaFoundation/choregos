@@ -4,9 +4,9 @@
 # servers its policy file names; it listens on nothing, so the image has neither `EXPOSE` nor
 # `HEALTHCHECK`. Nothing of the operator's is baked in: the policy file, the keys and the
 # credentials are mounted, and the image carries no secret and no address.
-FROM python:3.12-slim-bookworm AS builder
+FROM python:3.12-slim-bookworm@sha256:935c3c5b12357a7e10caa9c1e6ca5692344d97cf229832ef584be2cec9fc03df AS builder
 ENV UV_LINK_MODE=copy UV_COMPILE_BYTECODE=1 UV_PYTHON_DOWNLOADS=never
-COPY --from=ghcr.io/astral-sh/uv:0.5.11 /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.5.11@sha256:0ac957607303916420297a4c9c213bb33fbd3c888f9cd7f4f7273596ebf42b85 /uv /usr/local/bin/uv
 WORKDIR /app
 COPY pyproject.toml uv.lock README.md ./
 COPY packages packages
@@ -19,7 +19,7 @@ COPY apps/orchestrator/pyproject.toml apps/orchestrator/
 RUN mkdir -p apps/api/src apps/orchestrator/src \
  && uv sync --frozen --no-dev --no-editable --package choregos-outpost
 
-FROM python:3.12-slim-bookworm AS runtime
+FROM python:3.12-slim-bookworm@sha256:935c3c5b12357a7e10caa9c1e6ca5692344d97cf229832ef584be2cec9fc03df AS runtime
 ENV PYTHONUNBUFFERED=1 PATH="/app/.venv/bin:$PATH" \
     CHOREGOS_OUTPOST_POLICY=/etc/choregos-outpost/policy.yaml \
     CHOREGOS_OUTPOST_STATE_DIR=/var/lib/choregos-outpost

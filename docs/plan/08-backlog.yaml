@@ -5409,3 +5409,11 @@ stories:
     size: L
     depends_on: [S80-07a]
     notes: "Plan workstream P4. values/single-node.yaml, the chart's backup and restore CronJobs, the guard's singleNode exception, tools/single-node/{proof,restore}.sh, the restore runbook. Not done: the proof as a nightly CI job; an embedded object store or OIDC provider; network isolation of agent pods on this profile."
+  - id: S80-04
+    title: "ci: the supply chain is pinned: actions by commit SHA, images by digest, no latest, a test that refuses a reference that moves"
+    stream: S80
+    sprint: 1
+    priority: 4
+    size: S
+    depends_on: []
+    notes: "Plan workstream S5, phase 1. Every uses: at a 40-character SHA with its version in a comment, every FROM / COPY --from / compose / CI service / docker run / kind image at tag@sha256:<index digest>, the runner's npm and pnpm at exact versions; Dependabot extended to the new pins. Not done (later phases): a signed chart, a release blocked on HIGH, SAST."
