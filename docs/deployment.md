@@ -1422,20 +1422,32 @@ Temporal's SQLite file, the memory's files, the object store when asked, a `MANI
 (`backup.target.kind: volume`) is accepted, and is a backup only if that volume is not on the
 machine's own disk. Restore: [the runbook](runbooks/single-node-restore.md), `tools/single-node/restore.sh`.
 
+**The agents are confined** (S80-07c). Agent stages run as Jobs in the release namespace
+(`k8s_job`; there is no agent-sandbox operator), beside the embedded dependencies. The chart's
+NetworkPolicies, rendered for that layout, let an agent pod reach DNS, the API, the model gateway, the
+memory and the per-run egress proxy (`global.egress.enabled`), and nothing else: not PostgreSQL, not
+Temporal, not the outside except through the proxy, which asks the API which hosts that run may reach.
+PostgreSQL and Temporal also admit only the platform's pods that use them. The platform's own pods go
+out freely (`networkPolicies.platformEgress`: the OIDC provider, the model provider, the Kubernetes
+API, the backup bucket). The chart refuses the profile with `networkPolicies.enabled` or
+`global.egress.enabled` off. k3s enforces NetworkPolicies unless it was started with
+`--disable-network-policy`: do not start it so, or the isolation is gone without a word (the proof
+checks it).
+
 **What it does not have**, said before anyone signs:
 
 - no high availability: the machine is a single point of failure, and a reboot or a k3s upgrade is a
   downtime;
 - a recovery point of 24 hours: what happened since the last backup is lost on a restore;
-- agent stages run as Jobs in the release namespace (`k8s_job`, no agent-sandbox operator), without
-  the per-project egress proxy and without the chart's NetworkPolicies, which assume the
-  dependencies in their own namespaces: an agent pod can reach the embedded PostgreSQL on the network;
+- the egress proxy never reaches a private address: a git host or a tracker on the site's LAN is out
+  of an agent's reach (the platform's own pods reach it);
 - the backup holds no application secret: restoring without the same `secrets-keks` opens no sealed
   connector secret.
 
 **The proof.** `tools/single-node/proof.sh` installs from a blank node (k3s in Docker with k3d, or
-k3s itself on a throwaway VM with `PROOF_CLUSTER=k3s`), takes one work item to `approved` (its agent
-simulated), backs up, destroys the node, installs on a new one, restores, and reads the work item
+k3s itself on a throwaway VM with `PROOF_CLUSTER=k3s`), checks from a pod with an agent's labels that
+the API, the gateway, the memory and the egress proxy open and PostgreSQL and Temporal do not, takes
+one work item to `approved` (its agent simulated), backs up, destroys the node, installs on a new one, restores, and reads the work item
 back. It is not yet run every night by CI; `docs/plan/STATUS.md` says when it last ran.
 
 ## A single-node bench in twenty minutes
