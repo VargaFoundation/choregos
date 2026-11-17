@@ -23,7 +23,7 @@ RUN mkdir -p apps/api/src apps/orchestrator/src \
 # arm64 under QEMU. So arm64 is cross-compiled against bookworm's glibc. The runtime stage below
 # runs the result. BuildKit sets `BUILDPLATFORM`. The legacy builder (no buildx) does not, and
 # falls back to an amd64 build host.
-FROM --platform=${BUILDPLATFORM:-linux/amd64} rust:1.99-slim-bookworm AS rtk
+FROM --platform=${BUILDPLATFORM:-linux/amd64} rust:1.100-slim-bookworm AS rtk
 ARG TARGETARCH
 COPY packages/runner/src/choregos_runner/backends/versions.lock /tmp/versions.lock
 WORKDIR /src
@@ -58,7 +58,7 @@ RUN set -eux; \
 # CVE-2026-56857 (CRITICAL, fixed in Go 1.26.9 and 1.27.2) that the images job's Trivy gate refuses
 # (S41-14c). The tag is checked against its commit; the modules are fetched by the pinned Go and
 # checked against the tag's `go.sum` (`-mod=readonly`). Cross-compiled on the build platform.
-FROM --platform=${BUILDPLATFORM:-linux/amd64} golang:1.27.3-bookworm@sha256:d9b6a1beb9474adc2a1ce842573639b44b2a0dd49b6669f51d3821baf9ec37c9 AS gitleaks
+FROM --platform=${BUILDPLATFORM:-linux/amd64} golang:1.27.4-bookworm@sha256:4fa7c968ba93f1635670522dbb01a2c78150443e1385746924566079f36570ea AS gitleaks
 ARG GITLEAKS_VERSION=v8.30.1
 ARG GITLEAKS_COMMIT=83d9cd684c87d95d656c1458ef04895a7f1cbd8e
 ARG TARGETARCH
