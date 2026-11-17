@@ -5342,5 +5342,5 @@ stories:
     priority: 2
     size: L
     depends_on: [S74-01]
-    notes: "Out of scope of S74-01. Must match the host against the verified table, require the ingress to overwrite a client-supplied X-Forwarded-Host, and implement the not-a-member page of ADR 0175 point 5."
+    notes: "Delivered by the S74-02 PR (core side; Keycloak redirect URIs stay an operator step, the not-a-member page and the switcher are console follow-ups). Was out of scope of S74-01. Must match the host against the verified table, require the ingress to overwrite a client-supplied X-Forwarded-Host, and implement the not-a-member page of ADR 0175 point 5."
 

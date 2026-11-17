@@ -2,7 +2,7 @@
 
 - **Status**: accepted, 2026-11-17; S74-01 delivers points 1 to 3 and 6 (the seam, the theme, the sign-in
   page's organisation) with the enterprise edition's claims; the sign-in on a tenant host (points 4 and 5) is
-  the next step and is not delivered
+  the next step; S74-02 delivers it (amendment below)
 - **Concerns**: `choregos_api.tenant_host` (`declare_host_resolver`, `resolve_host`, `normalise_host`),
   `GET /api/v1/theme` (`routers/theme.py`), the console's first paint (`served-theme-server.ts`,
   `layout.tsx`, `served-theme.tsx`, `/login`); amends [ADR 0108](0108-each-organisation-signs-in-with-its-own-identity-provider.md)
@@ -82,10 +82,49 @@ what this record keeps out: no wildcard, and a host is served only once its owne
 
 ## Not decided here (next steps, each its own story)
 
-Sign-in on the host: OIDC `redirect_uri` per host, host-only session cookies, the origin and CORS allowlist
-at runtime (`CHOREGOS_PUBLIC_HOSTS` grows with claims), Keycloak redirect URIs, SAML assertion consumer
-service per host. A per-organisation public URL for links, MCP, A2A and notifications. The chart, ingress and
-TLS (HTTP-01 issuance is infra#1595).
+Sign-in on the host was this list's first item and is the amendment below (S74-02). Still open: a
+per-organisation public URL for links, MCP, A2A and notifications (S74-03); the chart, ingress and TLS
+(HTTP-01 issuance is infra#1595, S74-04); SAML assertion consumer service per host.
+
+## Amendment, S74-02: signing in on a verified host
+
+Points 4 and 5 hold; this fixes how they are enforced. The host that counts is `X-Forwarded-Host` (first
+entry), else `Host` (`tenant_host.request_host`), and it counts only once the resolver says it is VERIFIED
+(`tenant_host.tenant_door`). The ingress MUST overwrite a client-supplied `X-Forwarded-Host`; the console's
+relay already sets it.
+
+1. **OIDC.** On a verified host `/auth/login` implies the host's organisation (its own provider if it has
+   one, else the instance's), whatever `?org=` says, and sends `redirect_uri=https://<host>/api/v1/auth/callback`
+   (the instance's scheme, no port). The host is signed into the `state` (`h`); the callback runs only on that
+   host, which must still be verified, and exchanges the code with the same `redirect_uri`. A sign-in begun on
+   one host and answered on another, on an unverified one, or after the claim was withdrawn is refused (401)
+   before the code is exchanged. An unverified host, or any spoofed header, behaves as before: the canonical
+   callback, no `h`.
+2. **Cookies.** The handshake cookie and the session cookie carry no `Domain`: valid on the host that set
+   them, no sub-domain, no sibling. A session opened on a tenant host is therefore not valid on the
+   canonical one, and the reverse.
+3. **Redirect target.** A relative path, or an absolute URL on the instance's origin; on a verified host also
+   that host's own origin (same scheme, no port), and an empty target goes to the host's root, not the
+   instance's. Another tenant's host, a claimed one, a lookalike, `//x` and `/\x` are refused. A sign-in on
+   the instance never follows a tenant host (no valid cookie there).
+4. **Another organisation's member** (point 5). After the roles of the sign-in are applied, a person with no
+   membership in the host's organisation is refused with 403 and nothing of theirs is stored (the transaction
+   ends with the error). The page that says so with a sign-out button is not built: the console shows the API's
+   problem detail until a follow-up gives it a page. The organisation switcher restricted to the host's
+   organisation is the console's, not done here; the session itself is not confined to one organisation.
+5. **Origin and run API guards.** `origin_guard` accepts the Origin of a verified host at runtime, without
+   `CHOREGOS_CORS_ORIGINS`: it must equal the host this request was made for, share the instance's scheme,
+   carry no port. `internal_api_guard` treats a verified host as public, so `/api/v1/internal/*` is not
+   served there. Both ask the resolver through `tenant_host.verified_host_cached` (own session, 30 s memo,
+   bounded at 1024 hosts, a failure is "not verified"): a claim proved or withdrawn takes effect within 30 s.
+6. **SAML stays canonical.** Its entity id and assertion consumer service derive from `CHOREGOS_API_URL`, one
+   per organisation, and an identity provider registers one. On a tenant host a SAML organisation is
+   redirected to the canonical start route and signs in on the canonical host (target forced to the
+   instance's). A per-host SAML service is a later decision.
+7. **Provider-side registration (operator).** Each verified host's callback must be accepted by the provider:
+   for the platform Keycloak client `choregos`, add `https://<host>/api/v1/auth/callback` to its valid
+   redirect URIs (`platform-realm.json` in the infra repository) and, if used, the host to its web origins; an
+   organisation with its own provider (ADR 0108) registers the same URI there. The core does not do it.
 
 ## Alternatives discarded
 
