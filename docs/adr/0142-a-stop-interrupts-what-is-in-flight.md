@@ -1,6 +1,6 @@
 # 0142 — What is running is one list, and a stop interrupts what is in flight
 
-- **Status**: proposed, 2026-11-11
+- **Status**: accepted, 2026-11-17 (product owner's review, after S64-01..S64-10 implemented it; proposed 2026-11-11)
 - **Concerns**: `POST /work-items/{id}/actions` (`stop`), `services/work_item_controls.apply_control`, the
   interpreter's `control` signal and stage loop (`workflows/interpreter.py`,
   `interpreter_parts/stages.py`), the `cancel_run` and `await_run` activities
