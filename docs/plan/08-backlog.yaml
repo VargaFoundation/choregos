@@ -5343,4 +5343,12 @@ stories:
     size: L
     depends_on: [S74-01]
     notes: "Delivered by the S74-02 PR (core side; Keycloak redirect URIs stay an operator step, the not-a-member page and the switcher are console follow-ups). Was out of scope of S74-01. Must match the host against the verified table, require the ingress to overwrite a client-supplied X-Forwarded-Host, and implement the not-a-member page of ADR 0175 point 5."
+  - id: S74-04
+    title: "feat(charts): global.customHosts serves an organisation's own hosts (routing to the console and the API, a cert-manager Certificate by HTTP-01, NGINX Inc. master/minion or plain Ingress or HTTPRoute)"
+    stream: S74
+    sprint: 1
+    priority: 4
+    size: M
+    depends_on: [S74-02]
+    notes: "ADR 0175 amendment S74-04. The hosts also go to CHOREGOS_PUBLIC_HOSTS (a routed host is public before its proof). Operator side: infra#1595 (namespaced HTTP-01 Issuer choregos-issuer, solver image exception; its solver Ingress probably needs ingressTemplate nginx.org/mergeable-ingress-type minion for NGINX Inc.), then DiametralGroup/choregos-deploy values once a chart release carries the value. Not proved without a cluster."
 

@@ -807,6 +807,63 @@ global:
     cidrs: [203.0.113.0/24]
 ```
 
+## A customer's own host, end to end (ADR 0175, S74-04)
+
+A customer who wants `agentic.client.com` to open the instance on its organisation points a CNAME at
+the instance. Four things make it work, in this order; the chart does the third and nothing else.
+
+1. **Claim the host in the console** (enterprise edition: the organisation's claims). The console shows a
+   DNS TXT challenge: the customer creates `_choregos-challenge.agentic.client.com` with the token it
+   shows. A host is served as the organisation's only once that proof is verified (within 30 seconds of
+   the proof, and withdrawn as fast). Without the proof the host still answers, with the instance's own
+   look and sign-in.
+2. **DNS, on the customer's side**: `agentic.client.com. CNAME <the instance's host>.`, with no `AAAA` and
+   no `CAA` record that excludes the issuer; the ingress's port 80 must be reachable from the Internet,
+   because the certificate is issued by HTTP-01 (so: one certificate per host, never a wildcard).
+3. **The chart value**, in `global.customHosts` (rendered by `templates/custom-hosts.yaml`):
+
+   ```yaml
+   global:
+     customHosts:
+       hosts: [agentic.client.com]
+       kind: nginx-mergeable        # ingress | nginx-mergeable | httproute
+       className: nginx
+       certificate:
+         issuerRef: { name: choregos-issuer, kind: Issuer }   # the tenant's namespaced HTTP-01 Issuer
+   ```
+
+   | Value | Default | What it does |
+   | :-- | :-- | :-- |
+   | `hosts` | `[]` | bare lower-case DNS names, with a dot. No scheme, port, path or wildcard. A name the chart already routes (console, API, run door, outposts' door, `publicUrl`, `apiUrl`) fails the render, and so do two hosts that give the same object name |
+   | `kind` | `ingress` | `ingress`: one Ingress per host (TLS, API paths, then the console). `nginx-mergeable`: NGINX Inc. (`nginx.org`) accepts one Ingress per host, so each host gets a **master** (host and TLS secret, no path) and two **minions** (the API's paths, the console's). `httproute`: one HTTPRoute per host on the Gateway; the Gateway listener and its certificate are then the operator's (a route cannot add a listener) |
+   | `className` | `choregos-api.ingress.className` | `ingressClassName` of the Ingresses |
+   | `annotations`, `minionAnnotations` | `{}` | the Ingress's (the master's) own annotations, and the minions' (`kind: nginx-mergeable`). `nginx.org/mergeable-ingress-type` is the chart's and cannot be overridden |
+   | `gateway`, `gatewayNamespace` | the API's | `kind: httproute` only |
+   | `certificate.enabled` | `true` | one cert-manager `Certificate` per host, `choregos-host-<host with dashes>`, whose secret `<name>-tls` the Ingress terminates TLS with. Off: bring the secrets |
+   | `certificate.issuerRef` | name empty | the Issuer (name, kind `Issuer`, group). Required when `certificate.enabled`: the render fails without a name |
+
+   The routes are the canonical host's: the API's paths (`/api`, `/mcp`, `/a2a`, `/healthz`, `/readyz`,
+   `/downloads`, the OAuth metadata and the two install scripts), everything else to the console. A test
+   (`tests/charts/test_custom_hosts.py`) fails if they drift from `choregos-api`'s own route.
+   **Guards are not weakened**: the hosts are added to `CHOREGOS_PUBLIC_HOSTS`, so the run's API
+   (`/api/v1/internal`) is closed on them as on the canonical host **before** any proof, and the
+   verified hosts follow at run time (origin guard, redirect targets), with no setting. The ingress must
+   overwrite a client-supplied `X-Forwarded-Host` (NGINX Inc. sets it from the request's host by default; check your controller's behaviour, the chart cannot).
+4. **The identity provider**: add `https://agentic.client.com/api/v1/auth/callback` to the valid redirect
+   URIs of the Keycloak client `choregos` (and the host to its web origins; `platform-realm.json` of the
+   infrastructure repository), or to the customer's own provider if the organisation has one. SAML
+   organisations keep signing in on the canonical host.
+
+What is **not** automated: the TXT proof, the CNAME, the Keycloak entry, and the Issuer itself (a
+namespaced HTTP-01 Issuer for the tenant, with the policy exception for the solver pod, is the
+infrastructure repository's: `docs/ACME-CUSTOMER-DOMAINS.md`). **With NGINX Inc.** the solver Ingress that
+cert-manager creates for the challenge lands on a host that already belongs to the master: the Issuer's
+HTTP-01 solver must make it a minion too
+(`ingressTemplate.metadata.annotations: {nginx.org/mergeable-ingress-type: minion}`), or the controller
+answers "All hosts are taken by other resources". That interaction, and whether the controller serves a
+master whose TLS secret does not exist yet, are not proved by the chart's tests (no cluster): try one
+host on dev first.
+
 ## Outposts (ADRs 0147-0149)
 
 An outpost is a place an organisation's administrator enrols, which only dials out to the platform
@@ -2269,7 +2326,7 @@ you changed it. The API therefore guards these routes by the name a request arri
 | Setting | Chart value | Default | What it does |
 | :-- | :-- | :-- | :-- |
 | `CHOREGOS_INTERNAL_API_GUARD` | `choregos-api.internalApiGuard` | `warn` | `off`: nothing. `warn`: a request for the run's API that arrives under a public hostname is served and logged (`internal_api.would_refuse`). `enforce`: it gets the 404 of an unknown route, before any token is read (`internal_api.refused`) |
-| `CHOREGOS_PUBLIC_HOSTS` | `choregos-api.ingress.hostnames` when the chart renders the route, plus `choregos-api.publicHostnames` | code: `[]`; chart: the route's hostnames | public hostnames beyond the hosts of `global.publicUrl`, `global.apiUrl` and `choregos-api.corsOrigins`, which always count. Put in `publicHostnames` a name the chart cannot know: a route made outside it, a second name on a load balancer. `*.` may lead |
+| `CHOREGOS_PUBLIC_HOSTS` | `choregos-api.ingress.hostnames` when the chart renders the route, plus `choregos-api.publicHostnames` and `global.customHosts.hosts` | code: `[]`; chart: the route's hostnames | public hostnames beyond the hosts of `global.publicUrl`, `global.apiUrl` and `choregos-api.corsOrigins`, which always count. Put in `publicHostnames` a name the chart cannot know: a route made outside it, a second name on a load balancer. `*.` may lead |
 | `CHOREGOS_RUN_DOOR_HOSTS` | `choregos-api.runDoor.hostnames` | `[]` | run doors: hostnames the run's API answers under although they are public. The chart renders their route, `choregos-run-door` |
 | — | `choregos-api.runDoor.annotations` | `{}` | the door Ingress's own annotations (`ingress.kind: ingress`) |
 | `CHOREGOS_INTERNAL_API_URL` | `global.internalApiUrl` | `http://choregos-api:8000` | where runs call back: the workers hand it to each run, the per-run egress proxy uses it, and the API reads it so that the guard never refuses that address |

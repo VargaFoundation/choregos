@@ -562,3 +562,29 @@ true
 {{- printf "tcp://choregos-buildkitd:%d" (int ((.Values.global.buildkitd | default dict).port | default 1234)) -}}
 {{- end -}}
 {{- end -}}
+
+{{/*
+The paths a custom host (`global.customHosts`, S74-04) sends to the API: the same as `choregos-api`'s
+own route (`charts/api/templates/httproute.yaml`), which `tests/charts/test_custom_hosts.py` compares.
+Prefix paths, then the exact ones; everything else goes to the console.
+*/}}
+{{- define "choregos.customHostApiPaths" -}}
+["/api", "/mcp", "/healthz", "/readyz", "/.well-known/oauth-protected-resource", "/a2a", "/downloads"]
+{{- end }}
+{{- define "choregos.customHostApiExactPaths" -}}
+["/cli/install.sh", "/cli/install.ps1"]
+{{- end }}
+{{- define "choregos.customHostApiRules" -}}
+{{- range (include "choregos.customHostApiPaths" . | fromYamlArray) }}
+- path: {{ . }}
+  pathType: Prefix
+  backend:
+    service: { name: choregos-api, port: { number: {{ $.port }} } }
+{{- end }}
+{{- range (include "choregos.customHostApiExactPaths" . | fromYamlArray) }}
+- path: {{ . }}
+  pathType: Exact
+  backend:
+    service: { name: choregos-api, port: { number: {{ $.port }} } }
+{{- end }}
+{{- end }}

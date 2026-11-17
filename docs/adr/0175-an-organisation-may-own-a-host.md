@@ -84,7 +84,7 @@ what this record keeps out: no wildcard, and a host is served only once its owne
 
 Sign-in on the host was this list's first item and is the amendment below (S74-02). Still open: a
 per-organisation public URL for links, MCP, A2A and notifications (S74-03); the chart, ingress and TLS
-(HTTP-01 issuance is infra#1595, S74-04); SAML assertion consumer service per host.
+(HTTP-01 issuance is infra#1595, S74-04, delivered: amendment below); SAML assertion consumer service per host.
 
 ## Amendment, S74-02: signing in on a verified host
 
@@ -125,6 +125,34 @@ relay already sets it.
    for the platform Keycloak client `choregos`, add `https://<host>/api/v1/auth/callback` to its valid
    redirect URIs (`platform-realm.json` in the infra repository) and, if used, the host to its web origins; an
    organisation with its own provider (ADR 0108) registers the same URI there. The core does not do it.
+
+## Amendment, S74-04: the chart serves the hosts
+
+The chart carries a host an organisation owns as `global.customHosts` (`templates/custom-hosts.yaml`;
+`docs/deployment.md`, "A customer's own host, end to end"). Decisions:
+
+1. **Routing and TLS only.** Per host: the console and the API routed exactly as the canonical host
+   (the API's paths, then `/` to the console; a test compares them with the API's own route), and a
+   cert-manager `Certificate` (HTTP-01, so one per host, no wildcard) from a configurable namespaced
+   Issuer (infra#1595: `choregos-issuer`). The chart never decides which organisation a host belongs to:
+   that stays the verified claim read at run time (point 2).
+2. **Hosts are also handed to the API as public names** (`CHOREGOS_PUBLIC_HOSTS`), although S74-02 treats a
+   VERIFIED host as public at run time. A host the chart routes is reachable from the Internet whether
+   its owner has proved it or not (a CNAME is enough), and until the proof the run-time guard does not know
+   it: `/api/v1/internal` would be served there. Listing it closes that window, and costs nothing once
+   the host is verified. The chart does not add the hosts to CORS origins: an origin is accepted only
+   from a verified host.
+3. **Three shapes**, because the deployments differ: one Ingress per host with `tls`; NGINX Inc.
+   (`nginx.org`) mergeable Ingresses, where every host needs its own master (host and TLS secret, no path)
+   and two minions; a Gateway API HTTPRoute per host, whose listener and certificate stay the operator's.
+   The operator's annotations cannot change the master's type.
+4. **The render refuses** a name that is not a bare lower-case DNS name (wildcard, scheme, port, upper
+   case), a name the chart already routes (so a custom host cannot shadow the console, the API, a run
+   door or the outposts' door), two hosts with one object name, and an enabled certificate without an
+   Issuer.
+5. **Not decided by the chart**: DNS, the TXT proof, the Keycloak redirect URI, the Issuer and its policy
+   exception, and (NGINX Inc.) the solver Ingress's need to be a minion of the host's master: documented,
+   not proved without a cluster.
 
 ## Alternatives discarded
 
