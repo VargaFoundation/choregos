@@ -91,7 +91,7 @@ spec:
     spec:
       containers:
         - name: git
-          image: alpine/git:latest
+          image: alpine/git:v2.54.1@sha256:2306e2b05ee0ef99f5d25b0779f645b24ae9f91ba187107503592fcdfe78da3a
           command: ["sh", "/init/init.sh"]
           ports: [{ name: git, containerPort: 9418 }]
           readinessProbe:

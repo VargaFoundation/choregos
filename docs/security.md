@@ -117,7 +117,8 @@ or another organisation.
 - **The origin guard is a browser's wall only.** A request without `Origin` and `Sec-Fetch-Site` (a CLI) passes, and bearer tokens are not cookie-bound.
 - **The guard of the run's API is a wall only once it enforces, and only for the names the deployment
   declared.** Its default is `warn`: until an operator sets `enforce`, `/api/v1/internal/*` still
-  answers on the public hostnames to whoever presents a valid token. It reads names: a caller inside
+  answers on the public hostnames to whoever presents a valid token. Turning the shipped `staging` and
+  `prod` presets to `enforce` is due after two to four weeks of observation (S80-03); it is not done. It reads names: a caller inside
   the cluster uses the Service's name and is not stopped by it (the tokens and the network policies
   are), a hostname routed to the API that nobody declared stays served
   (`choregos-api.publicHostnames`), and a proxy that rewrites `Host` without writing
@@ -183,6 +184,13 @@ or another organisation.
   creates `choregos_app` at initdb for that reason.
 - **Development login opens the API** to anyone who can reach it. It exists for benches
   without an identity provider (`values/local.yaml`), nowhere else.
+- **The fakes are a bench's switch, refused where the deployment says it is production.**
+  `CHOREGOS_FAKES` (ADR 0005) relaxes the egress control to `warn` and lets the API keep connector
+  secrets in memory. In `staging` and `prod` the chart refuses to render with it (`global.fakes`, or
+  `CHOREGOS_FAKES` in `choregos-orchestrator.runner.env`), and the API, the outposts' door, the
+  orchestrator's workers and the runner refuse to start on it (`choregos_core/production.py`, S80-03).
+  The guard believes `CHOREGOS_ENV`: a production installation that leaves `global.environment` at its
+  default, `dev`, is not refused anything (the same holds for the superuser and the development login).
 
 ## Egress: three layers, and what is not guarded
 
@@ -206,7 +214,7 @@ bounds):
    platform team applies it.
 
 `CHOREGOS_EGRESS_MODE` is `enforce` (the default), `warn` (log `egress.would_refuse` and pass; the
-default under `CHOREGOS_FAKES=1`) or `off`. In `enforce`, a guarded call with no policy in context
+default under `CHOREGOS_FAKES=1`, which no process accepts in `staging` or `prod`) or `off`. In `enforce`, a guarded call with no policy in context
 is refused: a forgotten call site fails loudly. **Guarded**: the MCP client, the web, Confluence and
 Graph knowledge sources, the git skill fetch; a `git` source checks its host up front and forbids
 redirects, because a subprocess cannot be wrapped. **Not guarded**: the deployment's own
@@ -896,6 +904,33 @@ what the person who runs an outpost is told is in [Running an outpost](outpost-o
   one process, and on a test cluster where the outpost chart's NetworkPolicy drops a connection
   opened from the platform's namespace towards the outpost's.
 
+## Temporal: TLS and encrypted payloads ([ADR 0183](adr/0183-temporal-over-tls-payloads-encrypted.md))
+
+Temporal's histories hold what the workflows carry: ticket text, agents' results, people's decisions, on an
+HR workflow a salary. Until S80-06 every process connected in clear and wrote JSON payloads in clear.
+
+- **One way to connect.** `choregos_core.temporal_connection.connect_temporal` is the only caller of
+  `Client.connect` in the shipped code (`tests/architecture/test_one_temporal_connection.py`); the API, the
+  workers and the orchestrator's activities that start or signal workflows all go through it, so they share
+  TLS and the data converter (`apps/orchestrator/tests/test_temporal_connection_reaches_every_client.py`).
+- **TLS**, with the CA of the frontend's certificate and, for mutual TLS, a client certificate and key,
+  mounted from a Secret by the chart (`docs/deployment.md`).
+- **Payload encryption**: AES-256-GCM over each payload, a random nonce per payload, the key id in the
+  payload's metadata and bound as associated data; several keys decrypt, the first encrypts. Failure
+  messages and stack traces are encrypted too. A run with the codec on leaves no ticket text in its exported
+  history, and that history replays with the key and not without it (`tests/replay/test_replay_with_codec.py`).
+
+What it does **not** protect, and is said so:
+
+- Both are **off by default**; a production deployment without them starts, and the worker logs `tls=false`
+  and `payload_codec=false` at start-up.
+- **One key per deployment**: it protects the histories from whoever reads Temporal's database, backups or
+  wire, not one organisation's data from an operator of the deployment. A key per organisation, from a KMS,
+  is phase 2.
+- Workflow ids (which carry a ticket's key, never its text), search attributes, type and queue names,
+  timers and headers stay in clear: Temporal reads them.
+- No codec server for the Temporal UI: payloads show encrypted there.
+
 ## Secrets
 
 - Never in Git, never in an image, never in a workspace.
@@ -1028,8 +1063,17 @@ signed, digest references enforced by Kyverno, Tekton Chains signing `PipelineRu
 image is verified by cosign at publication, on its pinned digest, by the operator's key or keyless
 identity, and, with `global.images.hostedCosignPolicy`, again by Kyverno at admission, init containers
 included ([`hosted-agents.md`](hosted-agents.md#signatures-by-cosign-s41-14)).
-Renovate proposes bumps; every agent bump goes through conformance. A nightly CRITICAL in
-the dependency scan fails the night and opens an issue.
+Dependabot proposes bumps (`.github/dependabot.yml`); every agent bump goes through conformance.
+A nightly CRITICAL in the dependency scan fails the night and opens an issue.
+
+What the build pulls is pinned to bytes, not to a name (S80-04): every GitHub Action to its full
+commit SHA with the version in a trailing comment (`@<sha> # v7.0.1`), every base image, `COPY
+--from` source, compose, CI service and demo image to `tag@sha256:<index digest>`, and the runner's
+npm and pnpm to exact versions, never `latest`. Dependabot reads the comment and the tag and moves
+the pin. `tests/architecture/test_supply_chain_pinned.py` refuses a reference that moves, and keeps
+its exceptions (an image built locally, a `FROM` an argument, `trials/`) written with their reason.
+Not done yet: a signed Helm chart, a release blocked on a HIGH vulnerability (the gate stops at
+CRITICAL), and static analysis (SAST) in CI.
 
 ## Default skills and MCP servers
 

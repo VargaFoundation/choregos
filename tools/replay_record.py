@@ -40,9 +40,17 @@ async def main() -> int:
     )
     args = parser.parse_args()
 
-    from temporalio.client import Client
+    from choregos_core.temporal_connection import TemporalSecurity, connect_temporal
 
-    client = await Client.connect(args.address, namespace=args.namespace)
+    # TLS as the deployment has it (ADR 0183). An encrypted history is not archived: CI replays the
+    # archives without any key, and the archive would also have to be decrypted to be reviewed.
+    security = TemporalSecurity.from_env()
+    if security.encrypts:
+        parser.error(
+            "the payload codec is configured (CHOREGOS_TEMPORAL_CODEC_KEYS*): archive demonstration "
+            "histories from a deployment without it"
+        )
+    client = await connect_temporal(args.address, args.namespace, security=security)
     ids = list(args.workflow_ids)
     if args.all_interpreters:
         async for wf in client.list_workflows(

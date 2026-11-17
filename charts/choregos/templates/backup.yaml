@@ -1,0 +1,494 @@
+{{- /*
+The scheduled backup of what the chart embeds (ADR 0184, S80-07b). One pod per run, its steps in
+order as init containers, each writing into `/backup/<stamp>/`:
+
+  prepare   draws the UTC stamp and creates the directory;
+  database  `pg_dump -Fc --create` of every database of the embedded PostgreSQL, plus the roles
+            without their passwords (`globals.sql`, for reference: a restore re-creates the roles
+            from the chart's init scripts);
+  files     an online SQLite copy of the embedded Temporal (`temporal.db`), and the embedded
+            memory's files;
+  objects   a copy of the object store, when `backup.objectStore` is on;
+  ship      (the main container) writes `MANIFEST` and `COMPLETE`, copies the directory to the S3
+            target when there is one, and keeps the `keep` newest complete backups.
+
+The embedded volumes are ReadWriteOnce: the backup pod mounts them beside their owner, which a
+single node allows and a multi-node cluster does not guarantee. That is the profile it serves.
+*/ -}}
+{{- if .Values.backup.enabled }}
+{{- $g := .Values.global }}
+{{- $b := .Values.backup }}
+{{- $name := printf "%s-backup" .Release.Name }}
+{{- $kind := $b.target.kind | default "volume" }}
+{{- if not (has $kind (list "volume" "s3")) }}
+{{- fail (printf "backup.target.kind=%s unknown: `volume` or `s3`." $kind) }}
+{{- end }}
+{{- if and (eq $kind "s3") (not $b.target.s3.url) }}
+{{- fail "backup.target.kind=s3 needs backup.target.s3.url (s3://bucket/prefix): the backup would be written nowhere." }}
+{{- end }}
+{{- if and $b.objectStore (not $g.objectStore.secretRef) }}
+{{- fail "backup.objectStore=true needs global.objectStore.secretRef: the backup reads the object store with the platform's own keys." }}
+{{- end }}
+{{- if not (or $g.database.embedded $g.temporal.embedded $g.memory.embedded $b.objectStore) }}
+{{- fail "backup.enabled=true with nothing to back up: no embedded database, Temporal or memory, and backup.objectStore is off. An external dependency is backed up by whoever runs it." }}
+{{- end }}
+{{- $pg := index .Values "choregos-postgresql" | default dict }}
+{{- $pgImage := $b.images.postgres | default (printf "%s:%s" (($pg.image | default dict).repository | default "pgvector/pgvector") (($pg.image | default dict).tag | default "0.8.1-pg16")) }}
+{{- $tools := include "choregos.image" (dict "global" $g "image" (index .Values "choregos-api").image) }}
+{{- $temporalVolume := and $g.temporal.embedded (ne ((index .Values "choregos-temporal" | default dict).persistence | default dict).enabled false) }}
+{{- $memoryVolume := and $g.memory.embedded (ne ((index .Values "choregos-ecphoria" | default dict).persistence | default dict).enabled false) }}
+{{- $env := list (dict "name" "HOME" "value" "/tmp") (dict "name" "RCLONE_CONFIG" "value" "/tmp/rclone.conf") }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $name }}
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backup
+data:
+  prepare.sh: |
+    set -eu
+    stamp=$(date -u +%Y%m%dT%H%M%SZ)
+    mkdir -p "/backup/$stamp"
+    echo "$stamp" > /backup/.current
+    echo "backup $stamp started"
+  database.sh: |
+    set -eu
+    dir="/backup/$(cat /backup/.current)/postgres"
+    mkdir -p "$dir"
+    pg_dumpall --globals-only --no-role-passwords > "$dir/globals.sql"
+    for db in $(psql -d postgres -Atc "SELECT datname FROM pg_database WHERE NOT datistemplate AND datname <> 'postgres' ORDER BY 1"); do
+      pg_dump -Fc --create -d "$db" -f "$dir/$db.dump"
+      echo "database $db: $(wc -c < "$dir/$db.dump") bytes"
+    done
+  files.py: |
+    import pathlib
+    import shutil
+    import sqlite3
+
+    root = pathlib.Path("/backup") / pathlib.Path("/backup/.current").read_text().strip()
+
+
+    def sqlite_copy(source: pathlib.Path, target: pathlib.Path) -> None:
+        # The online backup API: a consistent copy while the owner keeps writing (WAL included).
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with sqlite3.connect(source) as live, sqlite3.connect(target) as copy:
+            live.backup(copy)
+        print(f"{source} -> {target}: {target.stat().st_size} bytes")
+
+
+    temporal = pathlib.Path("/temporal/temporal.db")
+    if temporal.exists():
+        sqlite_copy(temporal, root / "temporal" / "temporal.db")
+    memory = pathlib.Path("/memory")
+    if memory.is_dir():
+        for path in sorted(memory.iterdir()):
+            if not path.is_file() or path.name.endswith(("-shm", "-wal", "-journal")):
+                continue
+            target = root / "memory" / path.name
+            if path.suffix == ".db":
+                sqlite_copy(path, target)
+            else:
+                # DuckDB files: a plain copy, consistent only between two checkpoints (ADR 0184).
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(path, target)
+                for wal in memory.glob(path.name + ".wal"):
+                    shutil.copy2(wal, target.parent / wal.name)
+                print(f"{path} -> {target}: {target.stat().st_size} bytes")
+  objects.sh: |
+    set -eu
+    dir="/backup/$(cat /backup/.current)/objects"
+    mkdir -p "$dir"
+    rclone copy "objects:$OBJECTS_PATH" "$dir"
+    echo "objects: $(find "$dir" -type f | wc -l) files"
+  ship.sh: |
+    set -eu
+    stamp=$(cat /backup/.current)
+    dir="/backup/$stamp"
+    {
+      echo "stamp: $stamp"
+      echo "release: $RELEASE"
+      echo "namespace: $NAMESPACE"
+      echo "chart: $CHART"
+      echo "files:"
+      (cd "$dir" && find . -type f | sort | while read -r f; do echo "  - $f $(wc -c < "$f")"; done)
+    } > "$dir/MANIFEST"
+    touch "$dir/COMPLETE"
+    if [ "$TARGET_KIND" = s3 ]; then
+      rclone copy "$dir" "target:$TARGET_PATH/$stamp"
+      root="target:$TARGET_PATH"
+      # The local staging copy is an emptyDir: nothing to prune here.
+    else
+      root=/backup
+    fi
+    # Keep the $KEEP newest COMPLETE backups; a directory without COMPLETE that is older than this
+    # one is a run that failed half-way, and is removed as well.
+    kept=0
+    for s in $(rclone lsf --dirs-only "$root" | sed 's#/$##' | grep -E '^[0-9]{8}T[0-9]{6}Z$' | sort -r); do
+      if [ -n "$(rclone lsf "$root/$s" --include COMPLETE)" ]; then
+        kept=$((kept + 1))
+        if [ "$kept" -gt "$KEEP" ]; then
+          echo "retention: removing $s"
+          rclone purge "$root/$s"
+        fi
+      elif [ "$s" \< "$stamp" ]; then
+        echo "retention: removing the incomplete $s"
+        rclone purge "$root/$s"
+      fi
+    done
+    echo "backup $stamp complete"
+  fetch.sh: |
+    set -eu
+    if [ "$TARGET_KIND" = s3 ]; then root="target:$TARGET_PATH"; else root=/backup; fi
+    stamp="${STAMP:-}"
+    if [ -z "$stamp" ]; then
+      for s in $(rclone lsf --dirs-only "$root" | sed 's#/$##' | grep -E '^[0-9]{8}T[0-9]{6}Z$' | sort -r); do
+        if [ -n "$(rclone lsf "$root/$s" --include COMPLETE)" ]; then stamp="$s"; break; fi
+      done
+    fi
+    if [ -z "$stamp" ] || [ -z "$(rclone lsf "$root/$stamp" --include COMPLETE)" ]; then
+      echo "no complete backup ${stamp:-at all} under $root: nothing restored" >&2
+      exit 1
+    fi
+    if [ "$TARGET_KIND" = s3 ]; then
+      rclone copy "$root/$stamp" "/restore/$stamp"
+      echo "/restore/$stamp" > /restore/.dir
+    else
+      echo "/backup/$stamp" > /restore/.dir
+    fi
+    echo "restoring $stamp"
+    cat "$(cat /restore/.dir)/MANIFEST"
+  restore-database.sh: |
+    set -eu
+    dir="$(cat /restore/.dir)/postgres"
+    for dump in "$dir"/*.dump; do
+      [ -e "$dump" ] || continue
+      db=$(basename "$dump" .dump)
+      psql -v ON_ERROR_STOP=1 -d postgres -c "DROP DATABASE IF EXISTS \"$db\" WITH (FORCE)"
+      pg_restore --create --exit-on-error -d postgres "$dump"
+      echo "database $db restored"
+    done
+  restore-files.py: |
+    import pathlib
+    import shutil
+
+    root = pathlib.Path(pathlib.Path("/restore/.dir").read_text().strip())
+
+
+    def replace(source: pathlib.Path, target: pathlib.Path) -> None:
+        # A stale `-wal` or `-shm` beside a restored file would be replayed over it.
+        for suffix in ("-wal", "-shm", "-journal", ".wal"):
+            pathlib.Path(str(target) + suffix).unlink(missing_ok=True)
+        shutil.copy2(source, target)
+        print(f"{source} -> {target}")
+
+
+    temporal = root / "temporal" / "temporal.db"
+    if temporal.exists() and pathlib.Path("/temporal").is_dir():
+        replace(temporal, pathlib.Path("/temporal/temporal.db"))
+    memory = root / "memory"
+    if memory.is_dir() and pathlib.Path("/memory").is_dir():
+        for path in sorted(memory.iterdir()):
+            if not path.name.endswith(".wal"):
+                replace(path, pathlib.Path("/memory") / path.name)
+        for wal in memory.glob("*.wal"):
+            shutil.copy2(wal, pathlib.Path("/memory") / wal.name)
+  restore-objects.sh: |
+    set -eu
+    dir="$(cat /restore/.dir)/objects"
+    if [ -d "$dir" ]; then
+      rclone copy "$dir" "objects:$OBJECTS_PATH"
+      echo "objects restored"
+    fi
+{{- if and (eq $kind "volume") (not $b.target.volume.existingClaim) }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $name }}
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backup
+  annotations:
+    # A `helm uninstall` must not take the backups with it.
+    helm.sh/resource-policy: keep
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- with $b.target.volume.storageClass }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources: { requests: { storage: {{ $b.target.volume.size }} } }
+{{- end }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ $name }}
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backup
+spec:
+  schedule: {{ $b.schedule | quote }}
+  # Two backups at once would write the same volumes' copies twice and race on the retention.
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: {{ $b.activeDeadlineSeconds | int }}
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: choregos-backup
+            app.kubernetes.io/instance: {{ .Release.Name }}
+            app.kubernetes.io/component: backup
+        spec:
+          restartPolicy: Never
+          {{- include "choregos.imagePullSecrets" $ | nindent 10 }}
+          securityContext: {{- toYaml $g.podSecurityContext | nindent 12 }}
+          initContainers:
+            - name: prepare
+              image: {{ $b.images.rclone }}
+              command: ["sh", "/scripts/prepare.sh"]
+              env: {{- toYaml $env | nindent 16 }}
+              resources: {{- toYaml $b.resources | nindent 16 }}
+              securityContext: {{- toYaml $g.securityContext | nindent 16 }}
+              volumeMounts:
+                - { name: scripts, mountPath: /scripts, readOnly: true }
+                - { name: backup, mountPath: /backup }
+                - { name: tmp, mountPath: /tmp }
+            {{- if $g.database.embedded }}
+            - name: database
+              image: {{ $pgImage }}
+              command: ["sh", "/scripts/database.sh"]
+              env:
+                {{- toYaml $env | nindent 16 }}
+                - { name: PGHOST, value: {{ printf "%s-postgresql" .Release.Name | quote }} }
+                - { name: PGPORT, value: "5432" }
+                - name: PGUSER
+                  valueFrom: { secretKeyRef: { name: {{ printf "%s-postgresql" .Release.Name }}, key: username } }
+                - name: PGPASSWORD
+                  valueFrom: { secretKeyRef: { name: {{ printf "%s-postgresql" .Release.Name }}, key: password } }
+              resources: {{- toYaml $b.resources | nindent 16 }}
+              securityContext: {{- toYaml $g.securityContext | nindent 16 }}
+              volumeMounts:
+                - { name: scripts, mountPath: /scripts, readOnly: true }
+                - { name: backup, mountPath: /backup }
+                - { name: tmp, mountPath: /tmp }
+            {{- end }}
+            {{- if or $temporalVolume $memoryVolume }}
+            - name: files
+              image: {{ $tools }}
+              command: ["python", "/scripts/files.py"]
+              env: {{- toYaml $env | nindent 16 }}
+              resources: {{- toYaml $b.resources | nindent 16 }}
+              securityContext: {{- toYaml $g.securityContext | nindent 16 }}
+              volumeMounts:
+                - { name: scripts, mountPath: /scripts, readOnly: true }
+                - { name: backup, mountPath: /backup }
+                - { name: tmp, mountPath: /tmp }
+                {{- if $temporalVolume }}
+                # Read-write: SQLite's online backup takes a shared lock through the `-shm` file.
+                - { name: temporal, mountPath: /temporal }
+                {{- end }}
+                {{- if $memoryVolume }}
+                - { name: memory, mountPath: /memory }
+                {{- end }}
+            {{- end }}
+            {{- if $b.objectStore }}
+            - name: objects
+              image: {{ $b.images.rclone }}
+              command: ["sh", "/scripts/objects.sh"]
+              env:
+                {{- toYaml $env | nindent 16 }}
+                {{- include "choregos.backupRemote" (dict "remote" "OBJECTS" "endpoint" $g.objectStore.endpoint "region" $g.objectStore.region "secretRef" $g.objectStore.secretRef) | nindent 16 }}
+                - { name: OBJECTS_PATH, value: {{ trimPrefix "s3://" $g.objectStore.url | quote }} }
+              resources: {{- toYaml $b.resources | nindent 16 }}
+              securityContext: {{- toYaml $g.securityContext | nindent 16 }}
+              volumeMounts:
+                - { name: scripts, mountPath: /scripts, readOnly: true }
+                - { name: backup, mountPath: /backup }
+                - { name: tmp, mountPath: /tmp }
+            {{- end }}
+          containers:
+            - name: ship
+              image: {{ $b.images.rclone }}
+              command: ["sh", "/scripts/ship.sh"]
+              env:
+                {{- toYaml $env | nindent 16 }}
+                - { name: RELEASE, value: {{ .Release.Name | quote }} }
+                - { name: NAMESPACE, value: {{ .Release.Namespace | quote }} }
+                - { name: CHART, value: {{ printf "%s-%s" .Chart.Name .Chart.Version | quote }} }
+                - { name: KEEP, value: {{ $b.keep | int | quote }} }
+                - { name: TARGET_KIND, value: {{ $kind | quote }} }
+                {{- if eq $kind "s3" }}
+                - { name: TARGET_PATH, value: {{ trimPrefix "s3://" $b.target.s3.url | quote }} }
+                {{- include "choregos.backupRemote" (dict "remote" "TARGET" "endpoint" $b.target.s3.endpoint "region" $b.target.s3.region "secretRef" $b.target.s3.secretRef) | nindent 16 }}
+                {{- end }}
+              resources: {{- toYaml $b.resources | nindent 16 }}
+              securityContext: {{- toYaml $g.securityContext | nindent 16 }}
+              volumeMounts:
+                - { name: scripts, mountPath: /scripts, readOnly: true }
+                - { name: backup, mountPath: /backup }
+                - { name: tmp, mountPath: /tmp }
+          volumes:
+            - name: scripts
+              configMap: { name: {{ $name }} }
+            - name: tmp
+              emptyDir: {}
+            - name: backup
+              {{- if eq $kind "volume" }}
+              persistentVolumeClaim: { claimName: {{ $b.target.volume.existingClaim | default $name }} }
+              {{- else }}
+              emptyDir: {}
+              {{- end }}
+            {{- if $temporalVolume }}
+            - name: temporal
+              persistentVolumeClaim: { claimName: {{ printf "%s-temporal" .Release.Name }} }
+            {{- end }}
+            {{- if $memoryVolume }}
+            - name: memory
+              persistentVolumeClaim: { claimName: {{ printf "%s-ecphoria" .Release.Name }} }
+            {{- end }}
+---
+# The restore, as a job to start by hand and never on a schedule (`suspend: true`):
+#   kubectl create job --from=cronjob/{{ printf "%s-restore" .Release.Name }} restore-1
+# with every writer stopped first. `tools/single-node/restore.sh` does both, and
+# `docs/runbooks/single-node-restore.md` says when. It restores the newest complete backup, or the
+# one named by the key `stamp` of the optional ConfigMap `{{ printf "%s-restore" .Release.Name }}`.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ printf "%s-restore" .Release.Name }}
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+    app.kubernetes.io/component: restore
+spec:
+  # February 31st: never. The job is only ever created from this template.
+  schedule: "0 0 31 2 *"
+  suspend: true
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: {{ $b.activeDeadlineSeconds | int }}
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: choregos-restore
+            app.kubernetes.io/instance: {{ .Release.Name }}
+            app.kubernetes.io/component: restore
+        spec:
+          restartPolicy: Never
+          {{- include "choregos.imagePullSecrets" $ | nindent 10 }}
+          securityContext: {{- toYaml $g.podSecurityContext | nindent 12 }}
+          initContainers:
+            - name: fetch
+              image: {{ $b.images.rclone }}
+              command: ["sh", "/scripts/fetch.sh"]
+              env:
+                {{- toYaml $env | nindent 16 }}
+                - { name: TARGET_KIND, value: {{ $kind | quote }} }
+                - name: STAMP
+                  valueFrom: { configMapKeyRef: { name: {{ printf "%s-restore" .Release.Name }}, key: stamp, optional: true } }
+                {{- if eq $kind "s3" }}
+                - { name: TARGET_PATH, value: {{ trimPrefix "s3://" $b.target.s3.url | quote }} }
+                {{- include "choregos.backupRemote" (dict "remote" "TARGET" "endpoint" $b.target.s3.endpoint "region" $b.target.s3.region "secretRef" $b.target.s3.secretRef) | nindent 16 }}
+                {{- end }}
+              resources: {{- toYaml $b.resources | nindent 16 }}
+              securityContext: {{- toYaml $g.securityContext | nindent 16 }}
+              volumeMounts:
+                - { name: scripts, mountPath: /scripts, readOnly: true }
+                - { name: restore, mountPath: /restore }
+                - { name: tmp, mountPath: /tmp }
+                {{- if eq $kind "volume" }}
+                - { name: backup, mountPath: /backup, readOnly: true }
+                {{- end }}
+            {{- if $g.database.embedded }}
+            - name: database
+              image: {{ $pgImage }}
+              command: ["sh", "/scripts/restore-database.sh"]
+              env:
+                {{- toYaml $env | nindent 16 }}
+                - { name: PGHOST, value: {{ printf "%s-postgresql" .Release.Name | quote }} }
+                - { name: PGPORT, value: "5432" }
+                - name: PGUSER
+                  valueFrom: { secretKeyRef: { name: {{ printf "%s-postgresql" .Release.Name }}, key: username } }
+                - name: PGPASSWORD
+                  valueFrom: { secretKeyRef: { name: {{ printf "%s-postgresql" .Release.Name }}, key: password } }
+              resources: {{- toYaml $b.resources | nindent 16 }}
+              securityContext: {{- toYaml $g.securityContext | nindent 16 }}
+              volumeMounts:
+                - { name: scripts, mountPath: /scripts, readOnly: true }
+                - { name: restore, mountPath: /restore }
+                - { name: tmp, mountPath: /tmp }
+                {{- if eq $kind "volume" }}
+                - { name: backup, mountPath: /backup, readOnly: true }
+                {{- end }}
+            {{- end }}
+            {{- if or $temporalVolume $memoryVolume }}
+            - name: files
+              image: {{ $tools }}
+              command: ["python", "/scripts/restore-files.py"]
+              env: {{- toYaml $env | nindent 16 }}
+              resources: {{- toYaml $b.resources | nindent 16 }}
+              securityContext: {{- toYaml $g.securityContext | nindent 16 }}
+              volumeMounts:
+                - { name: scripts, mountPath: /scripts, readOnly: true }
+                - { name: restore, mountPath: /restore }
+                - { name: tmp, mountPath: /tmp }
+                {{- if eq $kind "volume" }}
+                - { name: backup, mountPath: /backup, readOnly: true }
+                {{- end }}
+                {{- if $temporalVolume }}
+                - { name: temporal, mountPath: /temporal }
+                {{- end }}
+                {{- if $memoryVolume }}
+                - { name: memory, mountPath: /memory }
+                {{- end }}
+            {{- end }}
+            {{- if $b.objectStore }}
+            - name: objects
+              image: {{ $b.images.rclone }}
+              command: ["sh", "/scripts/restore-objects.sh"]
+              env:
+                {{- toYaml $env | nindent 16 }}
+                {{- include "choregos.backupRemote" (dict "remote" "OBJECTS" "endpoint" $g.objectStore.endpoint "region" $g.objectStore.region "secretRef" $g.objectStore.secretRef) | nindent 16 }}
+                - { name: OBJECTS_PATH, value: {{ trimPrefix "s3://" $g.objectStore.url | quote }} }
+              resources: {{- toYaml $b.resources | nindent 16 }}
+              securityContext: {{- toYaml $g.securityContext | nindent 16 }}
+              volumeMounts:
+                - { name: scripts, mountPath: /scripts, readOnly: true }
+                - { name: restore, mountPath: /restore }
+                - { name: tmp, mountPath: /tmp }
+                {{- if eq $kind "volume" }}
+                - { name: backup, mountPath: /backup, readOnly: true }
+                {{- end }}
+            {{- end }}
+          containers:
+            - name: done
+              image: {{ $b.images.rclone }}
+              command: ["sh", "-c", "echo \"restored from $(cat /restore/.dir)\""]
+              env: {{- toYaml $env | nindent 16 }}
+              resources: {{- toYaml $b.resources | nindent 16 }}
+              securityContext: {{- toYaml $g.securityContext | nindent 16 }}
+              volumeMounts:
+                - { name: restore, mountPath: /restore }
+                - { name: tmp, mountPath: /tmp }
+          volumes:
+            - name: scripts
+              configMap: { name: {{ $name }} }
+            - name: tmp
+              emptyDir: {}
+            - name: restore
+              emptyDir: {}
+            {{- if eq $kind "volume" }}
+            - name: backup
+              persistentVolumeClaim: { claimName: {{ $b.target.volume.existingClaim | default $name }} }
+            {{- end }}
+            {{- if $temporalVolume }}
+            - name: temporal
+              persistentVolumeClaim: { claimName: {{ printf "%s-temporal" .Release.Name }} }
+            {{- end }}
+            {{- if $memoryVolume }}
+            - name: memory
+              persistentVolumeClaim: { claimName: {{ printf "%s-ecphoria" .Release.Name }} }
+            {{- end }}
+{{- end }}

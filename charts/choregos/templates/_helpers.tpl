@@ -3,6 +3,29 @@
 {{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
 
+{{/*
+An rclone S3 remote named by environment variables (`RCLONE_CONFIG_<REMOTE>_*`), for the backup
+(ADR 0184): no configuration file, the keys read from a Secret with `access-key` and `secret-key`.
+An empty endpoint means AWS; any other is an S3-compatible store addressed by path.
+*/}}
+{{- define "choregos.backupRemote" -}}
+- { name: RCLONE_CONFIG_{{ .remote }}_TYPE, value: s3 }
+- { name: RCLONE_CONFIG_{{ .remote }}_PROVIDER, value: {{ ternary "Other" "AWS" (not (empty .endpoint)) }} }
+- { name: RCLONE_CONFIG_{{ .remote }}_REGION, value: {{ .region | default "us-east-1" | quote }} }
+{{- with .endpoint }}
+- { name: RCLONE_CONFIG_{{ $.remote }}_ENDPOINT, value: {{ . | quote }} }
+- { name: RCLONE_CONFIG_{{ $.remote }}_FORCE_PATH_STYLE, value: "true" }
+{{- end }}
+{{- if .secretRef }}
+- name: RCLONE_CONFIG_{{ .remote }}_ACCESS_KEY_ID
+  valueFrom: { secretKeyRef: { name: {{ .secretRef }}, key: access-key } }
+- name: RCLONE_CONFIG_{{ .remote }}_SECRET_ACCESS_KEY
+  valueFrom: { secretKeyRef: { name: {{ .secretRef }}, key: secret-key } }
+{{- else }}
+- { name: RCLONE_CONFIG_{{ .remote }}_ENV_AUTH, value: "true" }
+{{- end }}
+{{- end -}}
+
 {{- define "choregos.labels" -}}
 app.kubernetes.io/name: {{ include "choregos.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
@@ -379,6 +402,81 @@ right — in the parent chart only.
 {{- else -}}
 {{ .Values.global.temporal.address }}
 {{- end -}}
+{{- end -}}
+
+{{/*
+Temporal over TLS and its payload codec (ADR 0183), for the API and the workers: every process that
+holds a Temporal client must hold the SAME converter, or one side writes what the other cannot read.
+Off by default (dev, kind, compose). Three templates, one switch each: the variables, the mounts and
+the volumes, so a pod that gets the variables always gets the files they name.
+*/}}
+{{- define "choregos.temporalTlsDir" -}}/etc/choregos/temporal-tls{{- end -}}
+{{- define "choregos.temporalCodecDir" -}}/etc/choregos/temporal-codec{{- end -}}
+
+{{- define "choregos.temporalSecurityEnv" -}}
+{{- $t := .Values.global.temporal | default dict }}
+{{- $tls := $t.tls | default dict }}
+{{- $codec := $t.codec | default dict }}
+{{- $owned := list }}
+{{- if $tls.enabled }}
+{{- if not $tls.secretName }}
+{{- fail "global.temporal.tls.enabled needs global.temporal.tls.secretName: the Secret holding ca.crt (and tls.crt, tls.key for mutual TLS)" }}
+{{- end }}
+{{- $owned = concat $owned (list "CHOREGOS_TEMPORAL_TLS" "CHOREGOS_TEMPORAL_TLS_CA_FILE" "CHOREGOS_TEMPORAL_TLS_CERT_FILE" "CHOREGOS_TEMPORAL_TLS_KEY_FILE" "CHOREGOS_TEMPORAL_TLS_SERVER_NAME") }}
+- name: CHOREGOS_TEMPORAL_TLS
+  value: "true"
+- name: CHOREGOS_TEMPORAL_TLS_CA_FILE
+  value: {{ printf "%s/ca.crt" (include "choregos.temporalTlsDir" .) | quote }}
+{{- if $tls.mutual }}
+- name: CHOREGOS_TEMPORAL_TLS_CERT_FILE
+  value: {{ printf "%s/tls.crt" (include "choregos.temporalTlsDir" .) | quote }}
+- name: CHOREGOS_TEMPORAL_TLS_KEY_FILE
+  value: {{ printf "%s/tls.key" (include "choregos.temporalTlsDir" .) | quote }}
+{{- end }}
+{{- with $tls.serverName }}
+- name: CHOREGOS_TEMPORAL_TLS_SERVER_NAME
+  value: {{ . | quote }}
+{{- end }}
+{{- end }}
+{{- if $codec.enabled }}
+{{- if not $codec.secretName }}
+{{- fail "global.temporal.codec.enabled needs global.temporal.codec.secretName: the Secret holding the codec keys (`id:base64,...`)" }}
+{{- end }}
+{{- $owned = concat $owned (list "CHOREGOS_TEMPORAL_CODEC_KEYS" "CHOREGOS_TEMPORAL_CODEC_KEYS_FILE") }}
+- name: CHOREGOS_TEMPORAL_CODEC_KEYS_FILE
+  value: {{ printf "%s/%s" (include "choregos.temporalCodecDir" .) ($codec.key | default "keys") | quote }}
+{{- end }}
+{{- range (.Values.global.extraEnv | default list) }}
+{{- if has .name $owned }}
+{{- fail (printf "global.extraEnv: %s is set by global.temporal.tls / global.temporal.codec; two values for the same name, Kubernetes would keep the last one without saying anything" .name) }}
+{{- end }}
+{{- end }}
+{{- end -}}
+
+{{- define "choregos.temporalSecurityMounts" -}}
+{{- $t := .Values.global.temporal | default dict }}
+{{- if ($t.tls | default dict).enabled }}
+- { name: temporal-tls, mountPath: {{ include "choregos.temporalTlsDir" . }}, readOnly: true }
+{{- end }}
+{{- if ($t.codec | default dict).enabled }}
+- { name: temporal-codec, mountPath: {{ include "choregos.temporalCodecDir" . }}, readOnly: true }
+{{- end }}
+{{- end -}}
+
+{{- define "choregos.temporalSecurityVolumes" -}}
+{{- $t := .Values.global.temporal | default dict }}
+{{- with ($t.tls | default dict) }}
+{{- if .enabled }}
+- name: temporal-tls
+  secret: { secretName: {{ .secretName }} }
+{{- end }}
+{{- end }}
+{{- with ($t.codec | default dict) }}
+{{- if .enabled }}
+- name: temporal-codec
+  secret: { secretName: {{ .secretName }} }
+{{- end }}
+{{- end }}
 {{- end -}}
 
 {{- /* The namespace a tracing address points into (`<service>.<namespace>.svc[...]`), so the

@@ -53,6 +53,7 @@ streams:
   S65: "Outposts: tools that live where the platform cannot reach, behind a place that only dials out (ADRs 0147-0149)"
   S68: "The editor is a surface of the platform: a code editor extension that converses, shows what runs and what waits, and runs nothing locally (ADR 0155)"
   S75: "The core is named Tranibor: visible name, packages, images and charts, environment variables (ADR 0176)"
+  S80: "From engine to product: the plan of 2026-11-16"
 
 stories:
 
@@ -5362,6 +5363,92 @@ stories:
     size: S
     depends_on: []
     notes: "The decision of 2026-11-15 (D6) and 2026-11-17; what is never renamed (wire contracts, stored state, third-party-visible tokens) is listed with its reason; amends 0048, 0064, 0079, 0156."
+
+  # ───────────── S80 — from engine to product: the plan of 2026-11-16 ─────────────
+  - id: S80-01
+    title: "docs(plan,adr): one quarter of depth, the scope is frozen (ADR 0180); the technical roadmap; the triage of the partial stories"
+    stream: S80
+    sprint: 1
+    priority: 1
+    size: M
+    depends_on: []
+    notes: "Plan workstreams G1 and O3, and the first two weeks. ADR 0180: no new stream after 2026-11-20 but S80, each stream in flight finished or frozen by name, human review on contracts, security and migrations (CODEOWNERS and the PR template, no CI gate), two decisions due in December. PLAN-2026-11-17-engine-to-product.md (technical only) and TRIAGE-2026-11-17.md, guarded by tests/docs/test_partial_triage.py, test_scope_freeze.py and test_human_review.py."
+  - id: S80-05
+    title: "feat(api): a tamper-evident audit log: hash chaining, an append-only table, a verifier"
+    stream: S80
+    sprint: 1
+    priority: 5
+    size: L
+    depends_on: []
+    notes: "Plan workstream S3. A migration that cannot be undone: human review (ADR 0180). Done when an update to the log by the API's database role is refused."
+  - id: S80-03
+    title: "fix(api,orchestrator,runner,charts): the fakes are refused in staging and prod: the render fails, and the API, the outposts' door, the workers and the runner refuse to start"
+    stream: S80
+    sprint: 1
+    priority: 3
+    size: S
+    depends_on: []
+    notes: "Plan workstream S2, first part. Production is CHOREGOS_ENV staging or prod (the notion that already refuses the superuser and the development sign-in), in choregos_core/production.py. The workers now pass CHOREGOS_ENV to every run. The internal API guard keeps warn as its default: the flip of the shipped presets is S80-03b."
+  - id: S80-03b
+    title: "chore(charts): the run's API guard enforces in the staging and prod presets, after two to four weeks of observation in warn"
+    stream: S80
+    sprint: 3
+    priority: 3
+    size: XS
+    depends_on: [S80-03]
+    notes: "Plan workstream S2, second part. The switch exists (CHOREGOS_INTERNAL_API_GUARD, choregos-api.internalApiGuard, ADR 0144); what is due is the default of values/staging.yaml then values/prod.yaml, once internal_api.would_refuse has been read on a release in warn (docs/deployment.md, 'The run's API and the run door'). Not before mid-December 2026."
+  - id: S80-07a
+    title: "feat(orchestrator,charts): the worker's concurrency is a setting (activities, workflow tasks, local activities, sticky cache), chart values per queue"
+    stream: S80
+    sprint: 1
+    priority: 7
+    size: S
+    depends_on: []
+    notes: "Plan workstream P3, first part. max_concurrent_activities=20 was a literal in worker.py and the other slots the SDK's defaults; the defaults are unchanged (20/100/100/1000). Not done: a load test, waiting for runs without polling, the import ceiling (the rest of P3)."
+  - id: S80-08
+    title: "docs(adr): the contracts speak no trade: inventory, neutral names, a software-delivery pack, the O4 options, decided before the 1.0 freeze (ADR 0181)"
+    stream: S80
+    sprint: 1
+    priority: 8
+    size: S
+    depends_on: []
+    notes: "Plan workstreams A1 (decision) and O4 (decision); proposed, the project lead decides in December 2026. Docs only: no contract changes. The contract-change rounds C0, C1 (in the same minor as ADR 0176 R2) and C2 are tracked by issue #1832."
+  - id: S80-02
+    title: "docs(plan): STATUS.md becomes an index of per-stream status files, and the install guide names the current version"
+    stream: S80
+    sprint: 1
+    priority: 1
+    size: M
+    depends_on: []
+    acceptance:
+      - "docs/plan/STATUS.md is at most 300 lines, none over 300 characters, and lists every stream file of docs/plan/status/"
+      - "every story of 08-backlog.yaml has exactly one status row across docs/plan/status/, each in its stream's file"
+      - "the helm install and upgrade commands of docs/deployment.md and docs/site/ name the version of pyproject.toml, and tools/bump_version.py rewrites them"
+    notes: "Workstream A6 of the 2026-11-16 plan. The rows and the narrative move unchanged; the 27 backlog stories that had no row get one, read from the code and the log."
+  - id: S80-06
+    title: "feat(core,orchestrator,api,charts): Temporal over TLS and an AES-256-GCM payload codec, one connection factory for every client and worker (ADR 0183)"
+    stream: S80
+    sprint: 1
+    priority: 6
+    size: M
+    depends_on: []
+    notes: "Plan workstream S4, phase 1. Every Client.connect now goes through choregos_core.temporal_connection.connect_temporal (TLS from a mounted Secret, opt-in codec with key rotation); off by default. Not done: a key per organisation from a KMS (phase 2), a codec server for the Temporal UI, refusing clear text in production, a proof against a real Temporal frontend over TLS."
+  - id: S80-07b
+    title: "feat(charts): a supported single-node installation, one k3s machine with a nightly backup and its restore (ADR 0184)"
+    stream: S80
+    sprint: 1
+    priority: 7
+    size: L
+    depends_on: [S80-07a]
+    notes: "Plan workstream P4. values/single-node.yaml, the chart's backup and restore CronJobs, the guard's singleNode exception, tools/single-node/{proof,restore}.sh, the restore runbook. Not done: the proof as a nightly CI job; an embedded object store or OIDC provider; network isolation of agent pods on this profile."
+  - id: S80-04
+    title: "ci: the supply chain is pinned: actions by commit SHA, images by digest, no latest, a test that refuses a reference that moves"
+    stream: S80
+    sprint: 1
+    priority: 4
+    size: S
+    depends_on: []
+    notes: "Plan workstream S5, phase 1. Every uses: at a 40-character SHA with its version in a comment, every FROM / COPY --from / compose / CI service / docker run / kind image at tag@sha256:<index digest>, the runner's npm and pnpm at exact versions; Dependabot extended to the new pins. Not done (later phases): a signed chart, a release blocked on HIGH, SAST."
   # ───────────── S76 — the corpus's own structure is a retrieval key (ADR 0051, update of 2026-11-16) ─────────────
   - id: S76-01
     title: "feat(knowledge): a document's outline, listed in a files base's index.md (ADR 0051 decisions 28-29)"

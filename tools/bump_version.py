@@ -6,8 +6,8 @@
 
 What "everywhere" means: the nine `pyproject.toml`, the umbrella's `Chart.yaml` (its
 version, its appVersion, the version of each of its dependencies), each subchart's
-`Chart.yaml`, the outpost chart's, and the image tags (global `imageTag`, the subcharts'
-`image.tag`).
+`Chart.yaml`, the outpost chart's, the image tags (global `imageTag`, the subcharts'
+`image.tag`), and the versions the install pages tell a reader to install (`install_docs`).
 
 Before 2026-09-24 nothing did this: the pyprojects stayed at 0.1.0, the chart at 1.0.0,
 and `release.yml` rewrote `imageTag` with `sed` at build time — so the repository
@@ -82,7 +82,45 @@ def _files() -> list[tuple[pathlib.Path, list[tuple[re.Pattern[str], str]]]]:
     # The Claude Code plugin (ADR 0030): its version pins what users install.
     plugin = ROOT / "integrations" / "claude-code" / ".claude-plugin" / "plugin.json"
     targets.append((plugin, [(re.compile(r'^(  "version": ")[^"]+(",)$', re.M), r"\g<1>{v}\g<2>")]))
+    targets.extend(install_docs())
     return targets
+
+
+#: A chart version after `--version` (semver, a pre-release allowed), and a wheel's (PEP 440, no hyphen).
+_CHART_VERSION = r"\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?"
+_WHEEL_VERSION = r"\d+\.\d+\.\d+[0-9A-Za-z.]*"
+
+
+def install_docs() -> list[tuple[pathlib.Path, list[tuple[re.Pattern[str], str]]]]:
+    """The pages whose install and upgrade commands name the release (S80-02).
+
+    `docs/deployment.md` told an operator to install chart 0.4.1 while the chart was at 0.27: the
+    release rewrote the files above and nothing else, and the `docs/site/` pages were edited by hand in
+    each release commit. They follow the release here, and `tests/docs/test_install_version.py`
+    refuses a page whose version is not the repository's.
+    """
+    helm = (re.compile(rf"(--version ){_CHART_VERSION}(?= )"), r"\g<1>{v}")
+    wheel = (re.compile(rf"(choregos_[a-z_]+-){_WHEEL_VERSION}(-py3-none-any\.whl)"), r"\g<1>{v}\g<2>")
+    docs = ROOT / "docs"
+    return [
+        (
+            docs / "deployment.md",
+            [
+                helm,
+                (
+                    re.compile(rf'(\{{"edition":"community","features":\[\],"version":"){_CHART_VERSION}(")'),
+                    r"\g<1>{v}\g<2>",
+                ),
+            ],
+        ),
+        (docs / "site" / "host" / "install.md", [helm]),
+        (docs / "site" / "host" / "upgrades.md", [helm]),
+        (
+            docs / "site" / "cli" / "install.md",
+            [wheel, (re.compile(rf"(\(here ){_WHEEL_VERSION}(\))"), r"\g<1>{v}\g<2>")],
+        ),
+        (docs / "site" / "build" / "agents.md", [wheel]),
+    ]
 
 
 def apply(version: str, *, check: bool) -> int:

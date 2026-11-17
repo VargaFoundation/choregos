@@ -360,7 +360,7 @@ dependencies = [
     { name = "asyncpg" },
     { name = "authlib" },
     { name = "choregos-adapters" },
-    { name = "choregos-core", extra = ["telemetry"] },
+    { name = "choregos-core", extra = ["telemetry", "temporal"] },
     { name = "fastapi" },
     { name = "itsdangerous" },
     { name = "markitdown", extra = ["docx", "pdf", "pptx", "xlsx"] },
@@ -387,6 +387,7 @@ requires-dist = [
     { name = "authlib", specifier = ">=1.3" },
     { name = "choregos-adapters", editable = "packages/adapters" },
     { name = "choregos-core", extras = ["telemetry"], editable = "packages/core" },
+    { name = "choregos-core", extras = ["temporal"], editable = "packages/core" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "itsdangerous", specifier = ">=2.2" },
     { name = "markitdown", extras = ["docx", "pdf", "pptx", "xlsx"], specifier = "==0.1.9" },
@@ -461,10 +462,15 @@ telemetry = [
     { name = "opentelemetry-exporter-otlp-proto-http" },
     { name = "opentelemetry-sdk" },
 ]
+temporal = [
+    { name = "cryptography" },
+    { name = "temporalio" },
+]
 
 [package.metadata]
 requires-dist = [
     { name = "choregos-contracts", editable = "packages/contracts" },
+    { name = "cryptography", marker = "extra == 'temporal'", specifier = ">=43.0" },
     { name = "jinja2", specifier = ">=3.1" },
     { name = "jsonschema", specifier = ">=4.23" },
     { name = "opentelemetry-exporter-otlp-proto-http", marker = "extra == 'telemetry'", specifier = "==1.45.2" },
@@ -472,8 +478,9 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.9" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "structlog", specifier = ">=24.4" },
+    { name = "temporalio", marker = "extra == 'temporal'", specifier = ">=1.8" },
 ]
-provides-extras = ["telemetry"]
+provides-extras = ["telemetry", "temporal"]
 
 [[package]]
 name = "choregos-ontology"
@@ -510,7 +517,7 @@ source = { editable = "apps/orchestrator" }
 dependencies = [
     { name = "choregos-adapters" },
     { name = "choregos-api" },
-    { name = "choregos-core", extra = ["telemetry"] },
+    { name = "choregos-core", extra = ["telemetry", "temporal"] },
     { name = "prometheus-client" },
     { name = "pydantic-settings" },
     { name = "structlog" },
@@ -522,6 +529,7 @@ requires-dist = [
     { name = "choregos-adapters", editable = "packages/adapters" },
     { name = "choregos-api", editable = "apps/api" },
     { name = "choregos-core", extras = ["telemetry"], editable = "packages/core" },
+    { name = "choregos-core", extras = ["temporal"], editable = "packages/core" },
     { name = "prometheus-client", specifier = ">=0.21" },
     { name = "pydantic-settings", specifier = ">=2.6" },
     { name = "structlog", specifier = ">=24.4" },

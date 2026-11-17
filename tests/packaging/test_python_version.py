@@ -19,8 +19,8 @@ import tomllib
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 DOCKER = ROOT / "docker"
-#: `FROM python:3.12-slim-bookworm AS builder`
-IMAGE = re.compile(r"^FROM python:(\d+\.\d+)[-\w.]*\s", re.M)
+#: `FROM python:3.12-slim-bookworm@sha256:<digest> AS builder` (the digest is the S80-04 pin)
+IMAGE = re.compile(r"^FROM python:(\d+\.\d+)[-\w.]*(?:@sha256:[0-9a-f]{64})?\s", re.M)
 #: `requires-python = ">=3.12,<3.13"`
 REQUIREMENT = re.compile(r">=\s*(\d+\.\d+)")
 

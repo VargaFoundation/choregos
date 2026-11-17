@@ -7,6 +7,8 @@ license = { text = "Apache-2.0" }
 dependencies = [
     # Spans (ADR 0018): `choregos_core.telemetry` needs the extra.
     "choregos-core[telemetry]",
+    # The Temporal connection every client and worker shares (ADR 0183).
+    "choregos-core[temporal]",
     "choregos-adapters",
     "fastapi>=0.115",
     "uvicorn[standard]>=0.32",

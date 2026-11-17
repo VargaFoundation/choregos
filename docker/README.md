@@ -43,6 +43,12 @@ Node 25 also removed corepack, which `web.Dockerfile` uses to enable pnpm: a bas
 cost a rewrite, not just a line. Node 26 inherits that — its image no longer has `corepack`
 (`corepack enable` exits with 127 there); moving to 26 will require installing pnpm another way.
 
+Every base is pinned to its digest as well as its tag (`python:3.12-slim-bookworm@sha256:…`, S80-04):
+a rebuilt tag changes nothing until a Dependabot PR moves the digest, which then passes the images
+job and its Trivy gate like any change. `tests/architecture/test_supply_chain_pinned.py` refuses a
+`FROM` or a `COPY --from=` without one. To pin a new image, take the digest of its multi-arch index
+(`crane digest <image>:<tag>`, or `docker buildx imagetools inspect`), not that of one platform.
+
 ## Signature and provenance
 
 The images published on `main` are signed with cosign (keyless, GitHub OIDC) and come with an

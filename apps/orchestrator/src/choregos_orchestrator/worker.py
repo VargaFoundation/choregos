@@ -6,13 +6,13 @@ from __future__ import annotations
 import argparse
 import asyncio
 import contextlib
-from typing import Any
+from typing import Any, TypedDict
 
 from choregos_api.logging import configure_logging, get_logger
 from choregos_core import telemetry
 
 from .activities import ALL_ACTIVITIES
-from .config import ALL_QUEUES, get_settings
+from .config import ALL_QUEUES, OrchestratorSettings, get_settings
 from .queues import ACTIVITIES_BY_QUEUE
 from .workflows import ALL_WORKFLOWS, WORKFLOW_ACTIVITIES
 
@@ -114,9 +114,26 @@ async def start_knowledge_sync_loops() -> list[str]:
     return started
 
 
+class ConcurrencyOptions(TypedDict):
+    max_concurrent_activities: int
+    max_concurrent_workflow_tasks: int
+    max_concurrent_local_activities: int
+    max_cached_workflows: int
+
+
+def concurrency_options(settings: OrchestratorSettings) -> ConcurrencyOptions:
+    """The `Worker` keywords that bound one process's load (S80-07a): settings, not literals."""
+    return {
+        "max_concurrent_activities": settings.worker_max_concurrent_activities,
+        "max_concurrent_workflow_tasks": settings.worker_max_concurrent_workflow_tasks,
+        "max_concurrent_local_activities": settings.worker_max_concurrent_local_activities,
+        "max_cached_workflows": settings.worker_max_cached_workflows,
+    }
+
+
 async def run_worker(queues: list[str]) -> None:
     from choregos_adapters import load_extensions
-    from temporalio.client import Client
+    from choregos_core.temporal_connection import TemporalSecurity, connect_temporal
     from temporalio.worker import Worker
 
     # Extensions also declare EFFECTS of governed actions (ADR 0035): the API knows them in order
@@ -124,18 +141,29 @@ async def run_worker(queues: list[str]) -> None:
     # extension's effect was "unknown" in the very place where it had to run (S20-08).
     load_extensions()  # lang: fr-ok (renamed by S45-10)
     settings = get_settings()
-    client = await Client.connect(settings.temporal_address, namespace=settings.temporal_namespace)
+    # Before anything connects: no fakes in staging and prod (S80-03).
+    settings.refuse_fakes_in_production()
+    # The workers decode what the clients encode: one converter for the whole deployment (ADR 0183).
+    security = TemporalSecurity.from_env()
+    client = await connect_temporal(settings.temporal_address, settings.temporal_namespace, security=security)
     workers = [
         Worker(
             client,
             task_queue=queue,
             workflows=ALL_WORKFLOWS if queue == "orchestrator" else [],
             activities=activities_for(queue),
-            max_concurrent_activities=20,
+            **concurrency_options(settings),
         )
         for queue in queues
     ]
-    logger.info("workers started", queues=queues, address=settings.temporal_address)
+    logger.info(
+        "workers started",
+        queues=queues,
+        address=settings.temporal_address,
+        **concurrency_options(settings),
+        tls=security.tls,
+        payload_codec=security.encrypts,
+    )
     async with contextlib.AsyncExitStack() as stack:
         for worker in workers:
             await stack.enter_async_context(worker)

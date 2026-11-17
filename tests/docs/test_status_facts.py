@@ -9,11 +9,11 @@ a row by its id and at its numbers, not at the words around them.
 
 from __future__ import annotations
 
+import importlib.util
 import pathlib
 import re
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-STATUS = ROOT / "docs" / "plan" / "STATUS.md"
 HISTORIES = ROOT / "tests" / "replay" / "histories"
 RUNBOOKS = ROOT / "docs" / "runbooks"
 
@@ -23,11 +23,14 @@ EMPTY_WORDS = ("est vide", "is empty")  # lang: fr-ok
 
 
 def _row(story: str) -> str:
-    rows = [
-        line for line in STATUS.read_text(encoding="utf-8").splitlines() if line.startswith(f"| {story} | ")
-    ]
-    assert len(rows) == 1, f"STATUS must carry exactly one row for {story}, found {len(rows)}"
-    return rows[0]
+    """The story's row, in whichever stream file holds it (S80-02 moved the rows out of STATUS.md)."""
+    spec = importlib.util.spec_from_file_location("status_total", ROOT / "tools" / "status_total.py")
+    assert spec and spec.loader
+    tool = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(tool)
+    rows = [row.line for row in tool.rows() if row.story == story]
+    assert len(rows) == 1, f"the status files must carry exactly one row for {story}, found {len(rows)}"
+    return str(rows[0])
 
 
 def test_the_replay_row_does_not_say_empty() -> None:

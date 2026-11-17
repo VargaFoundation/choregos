@@ -4,8 +4,10 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import Literal
 
 from choregos_core.images import check_image_map
+from choregos_core.production import FAKES_VARIABLE, refuse_fakes_in_production
 from choregos_core.publishing import PUBLISHING
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -20,6 +22,10 @@ ALL_QUEUES = (QUEUE_ORCHESTRATOR, QUEUE_EXECUTOR, QUEUE_TRACKER, QUEUE_MEMORY)
 class OrchestratorSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="CHOREGOS_", env_file=".env", extra="ignore")
 
+    #: The deployment's environment, the API's `CHOREGOS_ENV` (the chart's `global.environment`):
+    #: `staging` and `prod` are production, where the workers refuse the fakes (S80-03) and the
+    #: runners they start are told where they run.
+    env: Literal["dev", "staging", "prod", "test"] = "dev"
     temporal_address: str = "localhost:7233"
     temporal_namespace: str = "default"
     fakes: bool = Field(default=False, validation_alias="CHOREGOS_FAKES")
@@ -101,6 +107,16 @@ class OrchestratorSettings(BaseSettings):
         check_image_map("CHOREGOS_AGENT_IMAGES", self.agent_images, require_digest=self.require_image_digest)
         return self
 
+    def refuse_fakes_in_production(self) -> None:
+        """The workers do not start on the fakes in staging and prod, nor hand them to every run
+        through `CHOREGOS_RUNNER_ENV` (S80-03)."""
+        refuse_fakes_in_production(environment=self.env, fakes=self.fakes, process="orchestrator's workers")
+        refuse_fakes_in_production(
+            environment=self.env,
+            fakes=self.runner_env.get(FAKES_VARIABLE),
+            process="orchestrator's workers (CHOREGOS_RUNNER_ENV gives every run the fakes)",
+        )
+
     @property
     def callback_url(self) -> str:
         """What the runner receives in `callbacks.api_url`, without the internal API suffix."""
@@ -134,6 +150,16 @@ class OrchestratorSettings(BaseSettings):
     heartbeat_seconds: int = 60
     # The tracker's fallback polling (S3-06): 0 disables the catch-up.
     reconcile_interval_seconds: int = 60
+    #: How much one worker process takes on at once (S80-07a). The first was a literal in
+    #: `worker.py`, the others the Temporal SDK's silent defaults; the defaults are those same values,
+    #: so a deployment that sets nothing behaves as before. An executor activity holds a run's stage
+    #: for its whole length: 20 activities x 2 executor replicas is the ~40 simultaneous runs of a
+    #: default install. `CHOREGOS_WORKER_MAX_CONCURRENT_ACTIVITIES`, and so on.
+    worker_max_concurrent_activities: int = Field(default=20, ge=1)
+    worker_max_concurrent_workflow_tasks: int = Field(default=100, ge=1)
+    worker_max_concurrent_local_activities: int = Field(default=100, ge=1)
+    #: Workflows kept in the worker's sticky cache; `0` turns the cache off.
+    worker_max_cached_workflows: int = Field(default=1000, ge=0)
 
 
 @lru_cache(maxsize=1)

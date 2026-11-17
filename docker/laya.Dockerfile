@@ -4,8 +4,8 @@
 # The multilingual checkpoint (`convaiinnovations/laya-multilingual`, mmBERT-base, 322M parameters,
 # Apache-2.0) is fetched HERE, at the commit Laya itself lists as reviewed, then loaded again with the
 # network forbidden: the running server never downloads anything (`HF_HUB_OFFLINE=1`).
-FROM python:3.12-slim-bookworm AS builder
-COPY --from=ghcr.io/astral-sh/uv:0.5.11 /uv /usr/local/bin/uv
+FROM python:3.12-slim-bookworm@sha256:935c3c5b12357a7e10caa9c1e6ca5692344d97cf229832ef584be2cec9fc03df AS builder
+COPY --from=ghcr.io/astral-sh/uv:0.5.11@sha256:0ac957607303916420297a4c9c213bb33fbd3c888f9cd7f4f7273596ebf42b85 /uv /usr/local/bin/uv
 # `LAYA_REVISION`: the commit `laya.revisions.PINNED_REVISIONS` names for
 # `convaiinnovations/laya-multilingual`; `LAYA_EXTRA_MODELS` makes it the only repository loaded. The
 # same two values at run time make the offline load resolve to exactly this snapshot.
@@ -31,7 +31,7 @@ RUN set -eux; \
 # "corrupted tree cache" at every start (seen on the first build).
 RUN chmod -R a+rX /opt/laya/models
 
-FROM python:3.12-slim-bookworm AS runtime
+FROM python:3.12-slim-bookworm@sha256:935c3c5b12357a7e10caa9c1e6ca5692344d97cf229832ef584be2cec9fc03df AS runtime
 # Debian's security fixes first: the base image may carry a package already fixed in
 # `bookworm-security` (see `tools.Dockerfile`).
 RUN apt-get update && apt-get upgrade -y --no-install-recommends \

@@ -22,7 +22,7 @@ Optional but recommended in production: a model gateway (LiteLLM), a memory serv
 
 ```bash
 helm upgrade --install choregos oci://ghcr.io/graalsystems/charts/choregos \
-  --version 0.4.1 --namespace choregos --create-namespace \
+  --version 0.27.12 --namespace choregos --create-namespace \
   -f my-values.yaml
 ```
 
@@ -79,6 +79,46 @@ probes the bucket when a workflow declares a file output and names the cause.
 
 Turning all four on gives a self-contained bench on a single node:
 `-f charts/choregos/values/local.yaml`.
+
+### Temporal over TLS, payloads encrypted ([ADR 0183](adr/0183-temporal-over-tls-payloads-encrypted.md))
+
+Temporal keeps every workflow's inputs, results, signals and failure messages: ticket text, agents'
+results, people's decisions. Both protections are **off by default** (dev, kind, compose) and are switched
+on in the chart; the API and every worker queue receive the same settings, because a payload one process
+encrypts must be decrypted by the others.
+
+```yaml
+global:
+  temporal:
+    address: temporal-frontend.choregos-temporal.svc:7233
+    tls:
+      enabled: true
+      secretName: temporal-client   # `ca.crt`; with `mutual: true` also `tls.crt` and `tls.key`
+      mutual: true
+      serverName: ""                # when the frontend's certificate does not name the address's host
+    codec:
+      enabled: true
+      secretName: temporal-codec    # entry `key` (default `keys`): `k2:<base64 32 bytes>,k1:<...>`
+      key: keys
+```
+
+- The TLS Secret is mounted at `/etc/choregos/temporal-tls`; a cert-manager `Certificate` issued by the
+  CA the Temporal frontend trusts produces exactly `ca.crt`, `tls.crt` and `tls.key`.
+- The codec Secret is mounted at `/etc/choregos/temporal-codec`. Generate a key with
+  `echo "k1:$(head -c 32 /dev/urandom | base64)"`. The **first** key encrypts, every listed key decrypts.
+  To rotate: put the new key first, roll the API and the workers, and drop the old key only once no open
+  workflow history still carries it (a payload under a key no longer listed fails with the key's name).
+  **Losing the key loses the histories written under it**: keep it in the vault with the other platform
+  secrets.
+- Switching the codec on in a running deployment is safe: payloads written in clear before stay readable.
+  Switching it off again is not, while histories written with it are open.
+- The Temporal UI shows encrypted payloads; no codec server is shipped. `tools/replay_record.py` refuses
+  to archive a history while the codec is configured.
+- Outside the chart, the variables are `CHOREGOS_TEMPORAL_TLS`, `CHOREGOS_TEMPORAL_TLS_CA_FILE`,
+  `CHOREGOS_TEMPORAL_TLS_CERT_FILE`, `CHOREGOS_TEMPORAL_TLS_KEY_FILE`, `CHOREGOS_TEMPORAL_TLS_SERVER_NAME`,
+  and `CHOREGOS_TEMPORAL_CODEC_KEYS` (the keys themselves) or `CHOREGOS_TEMPORAL_CODEC_KEYS_FILE`.
+- One key serves every organisation of the deployment in this phase; per-organisation keys from a KMS are
+  phase 2.
 
 ## Secrets
 
@@ -508,7 +548,7 @@ are where backends and executors are configured; *Administration → Platform* o
 A project that names its own `agent` or `models` keeps them. When a runner pod dies before it can
 report — an image it cannot pull, a backend it cannot reach — the run says so: the runner's exit
 code and what it means (`30`: agent backend unreachable, `50`: a skill missing or with a wrong
-digest, `60`: an input that does not match its digest, `80`: the context reduction the policy requires did not start, `90`: confinement required and the kernel cannot confine the agent, ADR 0094…), or why the container never started.
+digest, `60`: an input that does not match its digest, `80`: the context reduction the policy requires did not start, `90`: confinement required and the kernel cannot confine the agent, ADR 0094, `120`: the fakes are on in staging or prod…), or why the container never started.
 
 ## Theme
 
@@ -753,7 +793,7 @@ global:
   `{{snippet_urlencoded}}`. Choregos can prefill an issue; it cannot open a pull request.
 - **`mode`**: `enforce` refuses a host the organisation has not allowed (and a call with no policy
   in context); `warn` logs `egress.would_refuse` and passes; the code default under
-  `CHOREGOS_FAKES=1` is `warn`.
+  `CHOREGOS_FAKES=1` is `warn` (and no process starts on the fakes in `staging` or `prod`).
 - **Upgrading**: the migration seeds an `allowed` rule for every host an organisation already calls
   (connectors, web and git knowledge sources, skill sources). Review them in `/admin/egress`.
 
@@ -1344,6 +1384,60 @@ When the database is embedded it does not exist before the release, so the hook 
 itself on SQLite, a development convenience; on PostgreSQL the migrations are the single
 source, and a test compares them against the models on every run.
 
+## A single node
+
+A supported installation on ONE machine running k3s, with a nightly backup ([ADR 0184](adr/0184-a-supported-single-node-installation.md)).
+It is the bench's chart, not the bench: production environment, the site's own secrets and identity
+provider, and a backup without which the chart refuses to render.
+
+**The machine.** 8 vCPU, 32 GiB of memory, 250 GB of SSD, a recent Linux with k3s
+(`curl -sfL https://get.k3s.io | sh -`; k3s brings Traefik and the `local-path` volumes). The platform
+requests 2 CPU and 6 GiB; up to four agent runs at once take at most 2 CPU and 4 GiB each.
+
+**What the chart embeds** (and backs up): PostgreSQL with pgvector, Temporal (one process on SQLite),
+the LiteLLM gateway, the Ecphoria memory. **What the site brings**:
+
+| What | Where it goes |
+| :-- | :-- |
+| An OIDC provider (people sign in through it; there is no development sign-in) | `global.oidc.*`, secret `choregos-oidc` |
+| The application secrets (run-token key, session secret, `secrets-keks`), kept in the site's vault | secret `choregos-api-secrets`, [Secrets](#secrets) |
+| The model provider's key | `choregos-litellm.upstream.apiKeySecret` |
+| An S3 bucket **off the machine** for the backups | `backup.target.s3.*`, secret `choregos-backup-target` (`access-key`, `secret-key`) |
+| An object store, if workflows produce files | `global.objectStore.*`, then `backup.objectStore: true` |
+
+```bash
+helm install choregos charts/choregos -n choregos --create-namespace \
+  -f charts/choregos/values/single-node.yaml -f my-site.yaml
+```
+
+`my-site.yaml` sets `global.domain`, `global.publicUrl`, `global.apiUrl`, the hostnames of
+`choregos-api.ingress` and `choregos-web.ingress`, `global.oidc`, `global.bootstrap` and
+`backup.target.s3.{url,endpoint,region}`.
+
+**The backup.** The CronJob `choregos-backup` runs every night at 02:00 UTC (`backup.schedule`) and
+writes one directory per run: a `pg_dump -Fc --create` of every database, an online copy of
+Temporal's SQLite file, the memory's files, the object store when asked, a `MANIFEST` and a
+`COMPLETE` marker; it keeps the 7 newest complete backups (`backup.keep`). To take one now:
+`kubectl -n choregos create job --from=cronjob/choregos-backup backup-now`. A `volume` target
+(`backup.target.kind: volume`) is accepted, and is a backup only if that volume is not on the
+machine's own disk. Restore: [the runbook](runbooks/single-node-restore.md), `tools/single-node/restore.sh`.
+
+**What it does not have**, said before anyone signs:
+
+- no high availability: the machine is a single point of failure, and a reboot or a k3s upgrade is a
+  downtime;
+- a recovery point of 24 hours: what happened since the last backup is lost on a restore;
+- agent stages run as Jobs in the release namespace (`k8s_job`, no agent-sandbox operator), without
+  the per-project egress proxy and without the chart's NetworkPolicies, which assume the
+  dependencies in their own namespaces: an agent pod can reach the embedded PostgreSQL on the network;
+- the backup holds no application secret: restoring without the same `secrets-keks` opens no sealed
+  connector secret.
+
+**The proof.** `tools/single-node/proof.sh` installs from a blank node (k3s in Docker with k3d, or
+k3s itself on a throwaway VM with `PROOF_CLUSTER=k3s`), takes one work item to `approved` (its agent
+simulated), backs up, destroys the node, installs on a new one, restores, and reads the work item
+back. It is not yet run every night by CI; `docs/plan/STATUS.md` says when it last ran.
+
 ## A single-node bench in twenty minutes
 
 The bench runs real agents on a one-node kind cluster, with every dependency embedded. It
@@ -1840,7 +1934,7 @@ scenario against it.
 
 ```bash
 curl -s https://<api-host>/edition
-{"edition":"community","features":[],"version":"0.4.1","publisher":null,"edition_version":null}
+{"edition":"community","features":[],"version":"0.27.12","publisher":null,"edition_version":null}
 ```
 
 `version` is the core's. `publisher` and `edition_version` are announced by the edition's plugin:
@@ -1944,6 +2038,18 @@ If the API refuses to start with `réglages non résolus`, fix the source of the
 is missing where it is stored, not where it is read.
 
 ## Upgrading past 0.27.3
+
+**The fakes are refused in staging and prod** (S80-03). `CHOREGOS_FAKES` (`global.fakes`, ADR 0005)
+switches the whole platform to its in-memory fakes: on, the egress control only warns and the API's secret
+store is an in-memory one when no key is configured. Nothing refused it in a serious environment. Now, when
+`CHOREGOS_ENV` (`global.environment`) is `staging` or `prod`: the chart fails to render with `global.fakes`
+on, or with `CHOREGOS_FAKES` in `choregos-orchestrator.runner.env`, naming the value; the API, the outposts'
+door served alone and the orchestrator's workers refuse to start, naming both settings; the runner exits
+with code 120 (`FAKES_IN_PRODUCTION`) before it runs anything. The workers now hand every run the
+deployment's `CHOREGOS_ENV`, which is how the runner knows. A bench (`values/dev.yaml`, `values/local.yaml`,
+`docker compose`, `make demo`, the end-to-end suite) runs as before: none of them says `staging` or `prod`.
+A deployment with `global.environment: prod` and `global.fakes: true` was running on fakes: turn them off
+and give it its real dependencies and its secrets key (`secrets-keks`) before upgrading.
 
 A workflow may no longer name an agent of kind `external` — a client of the MCP door — as a step's actor
 ([ADR 0163](adr/0163-a-client-prepares-a-person-s-decision-the-person-decides.md) §1, S65-20). Such a
@@ -2194,8 +2300,9 @@ What the chart does for a multi-node installation, and the knobs behind it:
 | A node drain must not take the API, the front or a worker queue down | one `PodDisruptionBudget` per component, and per orchestrator queue — rendered only when there is more than one replica (a budget on a single replica blocks the drain and protects nothing) | `choregos-api.podDisruptionBudget`, `choregos-web.podDisruptionBudget`, `choregos-orchestrator.podDisruptionBudget` |
 | Two replicas must not share a node | pod anti-affinity on `kubernetes.io/hostname`: `soft` (preferred, the default — a one-node bench still schedules), `hard` (one replica per node, or no pod), `none` | `global.antiAffinity` |
 | The database must not be exhausted under load | a **bounded** connection pool per process: at most `size + maxOverflow` connections, a short wait beyond. Size PostgreSQL's `max_connections` as (API replicas + workers) × (size + maxOverflow), plus room for migrations and an operator | `global.database.pool.{size,maxOverflow,timeoutSeconds}` |
-| A serious environment must not run on bench dependencies | the chart **refuses to render** in `staging` and `prod` when any `embedded` dependency, `devSecrets`, `devLogin` or `demoFakes` is on, and names the value | `templates/guard.yaml` |
+| A serious environment must not run on bench dependencies | the chart **refuses to render** in `staging` and `prod` when any `embedded` dependency, `devSecrets`, `devLogin`, `demoFakes`, the fakes (`global.fakes`) or fakes handed to every run (`choregos-orchestrator.runner.env.CHOREGOS_FAKES`) is on, and names the value; the API, the outposts' door, the workers and the runner refuse to start on `CHOREGOS_FAKES` there too (S80-03) | `templates/guard.yaml`, `choregos_core/production.py` |
 | A worker must not stay attached to a dead node | tolerations of 20 s instead of Kubernetes' 300 s | `choregos-orchestrator.unreachableTolerationSeconds` |
+| A worker pod's load is bounded, and the bound is yours to set | the Temporal worker's slots, as `CHOREGOS_WORKER_MAX_CONCURRENT_ACTIVITIES` / `_WORKFLOW_TASKS` / `_LOCAL_ACTIVITIES` and `CHOREGOS_WORKER_MAX_CACHED_WORKFLOWS`. Defaults 20 / 100 / 100 / 1000, the values the worker always had. An executor activity holds a run's stage for its whole length, so `activities` × executor replicas bounds the simultaneous runs (20 × 2 = 40 by default) | `choregos-orchestrator.concurrency.{activities,workflowTasks,localActivities,cachedWorkflows}`, overridden per queue by `queues[].concurrency` |
 | An agent must not reach the Internet except where the policy says | in **per-project runner namespaces** the provisioning deploys a **Squid proxy per project** with the policy's `allow_domains` (project-level, host-level, no per-agent wall), and every agent pod gets `HTTPS_PROXY` pointing to it. No allowed domain, no proxy, no door. In the **release namespace** (the `agent_sandbox` executor) the chart's **`choregos-egress`** proxy is per run: it knows which run is calling, applies the agent ∩ project ∩ organisation network, and reports every decision ([ADR 0070](adr/0070-network-access-is-bounded-and-enforced-per-run.md)) | `policy.sandbox.network.allow_domains`, `choregos-orchestrator.runner.egressProxy` (empty on a bench), `runner.egressImage` to pin by digest; `global.egress.*` for `choregos-egress` |
 | Temporal must be restorable | it holds the position of every ticket in flight; `docs/runbooks/temporal-backup.md` says what to copy and how to reconcile afterwards | — |
 
@@ -2405,6 +2512,10 @@ choregos-api:
    flight keeps the address it was started with.
 4. Set `choregos-api.internalApiGuard: enforce`, staging first. `internal_api.refused` then counts what
    is refused. To go back, set `warn`: nothing else changes.
+
+The default stays `warn` in the code, the chart and every preset. Turning the shipped `staging` and
+`prod` presets to `enforce` is planned once a release in `warn` has been observed for two to four weeks
+(S80-03, `docs/plan/STATUS.md`); until then the switch is the operator's, as above.
 
 An installation that decides to keep its runs on a public hostname sets `off`: `warn` logs one line
 per call back.

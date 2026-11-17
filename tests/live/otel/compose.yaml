@@ -8,7 +8,7 @@
 name: s4020b
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:16-alpine@sha256:81e77a4833487b8132fe4b00bedd39dc3f74b8641e387f19312a48f7de218c2e
     environment:
       POSTGRES_USER: litellm
       POSTGRES_PASSWORD: local-dev-only
@@ -19,7 +19,7 @@ services:
       retries: 30
 
   tempo:
-    image: grafana/tempo:2.6.1
+    image: grafana/tempo:2.6.1@sha256:ef4384fce6e8ad22b95b243d8fc165628cda655376fd50e7850536ad89d71d50
     command: ["-config.file=/etc/tempo/tempo.yaml"]
     volumes:
       - ./tempo.yaml:/etc/tempo/tempo.yaml:ro
@@ -32,7 +32,7 @@ services:
 
   collector:
     # The chart 0.111.0's appVersion, the image `infra/bootstrap/otel-collector.yaml` runs.
-    image: otel/opentelemetry-collector-contrib:0.115.1
+    image: otel/opentelemetry-collector-contrib:0.115.1@sha256:d2da12c4336a79758826700be9e21ecf4a9f7d945b7f8a58ba55ee3fa45427c8
     command: ["--config=/etc/otelcol/relay.yaml"]
     environment:
       MY_POD_IP: 0.0.0.0
@@ -45,7 +45,7 @@ services:
 
   litellm:
     # The chart's image (`charts/choregos/charts/litellm/values.yaml`).
-    image: ghcr.io/berriai/litellm-database:v1.105.5
+    image: ghcr.io/berriai/litellm-database:v1.105.5@sha256:87a881738240d0458a47588dd45cd819b00966ae3565786a7818e6d17d837921
     command: ["--config", "/etc/litellm/config.yaml", "--port", "4000"]
     user: "1000:1000"
     environment:

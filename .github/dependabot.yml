@@ -8,7 +8,9 @@
 # decision, not four.
 version: 2
 updates:
-  # Third-party CI actions: supply-chain hygiene.
+  # Third-party CI actions: supply-chain hygiene. Every `uses:` is pinned to a commit SHA with its
+  # version in a trailing comment (S80-04, `tests/architecture/test_supply_chain_pinned.py`):
+  # Dependabot reads the comment and moves the SHA and the comment together.
   - package-ecosystem: github-actions
     directory: /
     schedule:
@@ -59,11 +61,13 @@ updates:
         patterns: ["*"]
         update-types: ["minor", "patch"]
 
-  # Base images of the five Dockerfiles. A single PR: four share `python:3.12-slim`, the
+  # Base images of the Dockerfiles. A single PR: most share `python:3.12-slim`, the
   # console starts from `node:24`, and moving them out of step with each other makes no sense. An upgrade to
   # a Node version that is not LTS gets closed: the rule is in `docker/README.md`.
+  # Every `FROM` is pinned to `tag@sha256:<digest>` (S80-04): Dependabot bumps the digest of a tag
+  # that was rebuilt, and the tag and the digest together on a version bump.
   - package-ecosystem: docker
-    directory: /docker
+    directories: ["/docker", "/examples/agents/*", "/tests/cluster/assets"]
     schedule:
       interval: weekly
     groups:
@@ -78,3 +82,13 @@ updates:
         versions: [">=3.13"]
       - dependency-name: "node"
         versions: [">=25"]
+
+  # The third-party images of the compose files (the local install, the dev stack, the live tests),
+  # pinned by digest like the Dockerfiles (S80-04). One PR: they are one stack.
+  - package-ecosystem: docker-compose
+    directories: ["/", "/dev", "/tests/live/*"]
+    schedule:
+      interval: weekly
+    groups:
+      compose-images:
+        patterns: ["*"]
