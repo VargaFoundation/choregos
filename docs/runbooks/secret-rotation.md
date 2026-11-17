@@ -50,10 +50,26 @@ openssl ecparam -genkey -name prime256v1 -noout -out run-token.pem
 openssl ec -in run-token.pem -pubout -out run-token.pub
 ```
 
-1. Write the new pair into `choregos/api` (`run-token-private-key-next`).
-2. Deploy: new tokens are signed with the new key, old ones stay verifiable.
-3. After `max_minutes + 15` (2 h is enough), promote the new pair and delete the old one.
+The platform holds **one** pair at a time. The orchestrator signs run tokens with
+`run-token-private-key`; the API verifies them with `run-token-public-key`, or, when that entry is
+absent, with the public half derived from the private key (`apps/api/src/choregos_api/security.py`).
+There is no second key and no key id (`kid`): a token signed by the old key fails verification
+under the new one. Nothing reads a `-next` entry. A token lives `max_minutes + 15` minutes, and a
+run's agent holds its token for as long as the run lasts, so the rotation is a **replacement in a
+quiet window**, not a transition.
 
+1. Pick a window with no run in flight (`choregos runs list`, or the runs that are not terminal on
+   the console), and stop the intake of new ones if you can. A run still active when the key is
+   replaced gets `401` ("Signature verification failed") on its next `/internal` call and fails.
+   Those runs can be retried afterwards; nothing else is lost.
+2. Replace `run-token-private-key` in `choregos/api` with the new key. Replace
+   `run-token-public-key` too, or delete it so that it is derived: a stale public key next to a new
+   private key makes the API reject every token the orchestrator signs.
+3. Let External Secrets sync, then restart **together** the API and the orchestrator workers (the
+   keys are read from the environment at start): a pair with one process on each key rejects every
+   token.
+4. Start one real ticket and check that its run passes. A `401` on `/internal` in the API logs
+   after the restart means a process still runs on the old key.
 ## Connector secrets key (`secrets-keks`)
 
 `CHOREGOS_SECRETS_KEKS` is a list `id:base64`; each sealed secret records the id of the key that
