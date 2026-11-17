@@ -114,7 +114,7 @@ describe("on a host an organisation owns, the host's look is not swapped (ADR 01
     );
     await new Promise((r) => setTimeout(r, 20));
     expect(fetcher).not.toHaveBeenCalled();
-    expect(screen.getByTestId("name").textContent).toBe("Choregos");
+    expect(screen.getByTestId("name").textContent).toBe("Tranibor");
   });
 });
 
