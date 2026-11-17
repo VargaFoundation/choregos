@@ -7,7 +7,7 @@
         "0.1.0": {
           "digest": "sha256:9a8b7c6d5e4f30211203f4e5d6c7b8a99a8b7c6d5e4f30211203f4e5d6c7b8a9",
           "core": ">=0.21.0,<0.23.0",
-          "oci": "ghcr.io/graalsystems/choregos-agents/plugins/servicenow:0.1.0"
+          "oci": "ghcr.io/vargafoundation/choregos-agents/plugins/servicenow:0.1.0"
         }
       }
     },

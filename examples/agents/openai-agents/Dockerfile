@@ -1,7 +1,7 @@
 # The openai-agents example, FROM the runner image (ADR 0063). Build from the repository root:
 #   docker build -f examples/agents/openai-agents/Dockerfile \
 #     --build-arg RUNNER_IMAGE=ghcr.io/graalsystems/choregos-runner:<tag> -t my-registry/openai-agents-triager .
-ARG RUNNER_IMAGE=ghcr.io/graalsystems/choregos-runner:0.17.15
+ARG RUNNER_IMAGE=ghcr.io/vargafoundation/choregos-runner:0.17.15
 FROM ghcr.io/astral-sh/uv:0.5.11 AS uv
 
 FROM ${RUNNER_IMAGE}

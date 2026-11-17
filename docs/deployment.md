@@ -1177,7 +1177,7 @@ global:
 The chart renders these values into the ConfigMap `choregos-plugins`, mounted read-only in the API at
 `/etc/choregos/plugins/plugins.yaml` and named by `CHOREGOS_PLUGINS_CONFIG`. By default they install the
 platform's own agents — `software-delivery`, `netops`, `authoring`, `mcp-clients` and `requests` of
-[`graalsystems/choregos-agents`](https://github.com/VargaFoundation/choregos-agents) — from the image's
+[`VargaFoundation/choregos-agents`](https://github.com/VargaFoundation/choregos-agents) — from the image's
 offline directory, where the API image ships them pinned by `plugins.lock`: no network is needed at
 start-up. `defaultPlugins: []` installs none (the agent catalogue still offers them, one by one);
 `sources: []`, `defaultPlugins: []` and `offline: ""` render nothing at all. A source without `trust`
@@ -1238,7 +1238,7 @@ global:
     servers:
       enabled: true
       namespace: { name: choregos-plugins, create: false }   # create: true renders the Namespace too
-      registries: [ghcr.io/graalsystems/choregos-agents]   # where a server's image may come from
+      registries: [ghcr.io/vargafoundation/choregos-agents]   # where a server's image may come from
       runtimeClass: ""          # empty: global.runner.runtimeClass, else the cluster's runtime
       egress: networkpolicy     # or cilium: a CiliumNetworkPolicy names the exact hosts
       resources: { limits: { cpu: 500m, memory: 512Mi } }

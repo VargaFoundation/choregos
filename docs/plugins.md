@@ -1003,7 +1003,7 @@ approves it — unless the entry says `preapproved: true`.
 ### The built-in agents
 
 The platform's own agents left the core (ADR 0093 §6, S43-09) for the open-source repository
-[`graalsystems/choregos-agents`](https://github.com/VargaFoundation/choregos-agents):
+[`VargaFoundation/choregos-agents`](https://github.com/VargaFoundation/choregos-agents):
 
 | Plugin | What it ships |
 |---|---|
@@ -1013,7 +1013,7 @@ The platform's own agents left the core (ADR 0093 §6, S43-09) for the open-sour
 | `mcp-clients` | the six MCP clients of the Integrations page (ChatGPT, Claude, Copilot, Cursor) |
 | `requests` | `brief-writer` (role `brief`) and `assistant` (role `deliver`), the agents of `default-request` (ADR 0110) |
 
-They are published, signed, to `ghcr.io/graalsystems/choregos-agents/<plugin>:<version>` with the
+They are published, signed, to `ghcr.io/vargafoundation/choregos-agents/<plugin>:<version>` with the
 index `oci://ghcr.io/vargafoundation/choregos-agents/index:latest`. The core ships their archives
 offline in `plugins/offline/`, pinned by `plugins.lock` (`make plugins-lock` refreshes them, with the
 network; `make plugins-check` checks them without), and the API image copies them to
