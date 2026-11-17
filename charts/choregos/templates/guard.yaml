@@ -19,17 +19,29 @@ network side. It is said here, where the value is written.
 {{- if not (has ($g.edition | default "community") (list "community" "enterprise")) }}
 {{- fail (printf "global.edition=%s unknown: `community` or `enterprise`." $g.edition) }}
 {{- end }}
+{{- /*
+The single-node profile (ADR 0184) is the one exception to the embedded dependencies, and only
+with its backup: one node, no high availability, a recovery point of one backup interval. Without
+the backup it would be the bench under a production label. The bench values (development secrets
+and sign-in, the demonstration fakes) stay refused whatever the profile.
+*/ -}}
+{{- $singleNode := (.Values.singleNode | default dict).enabled }}
+{{- if and $singleNode (not (.Values.backup | default dict).enabled) }}
+{{- fail "singleNode.enabled=true needs backup.enabled=true: a single node without a scheduled backup loses everything with its disk (ADR 0184)." }}
+{{- end }}
 {{- if has $g.environment (list "staging" "prod") }}
 {{- $fautes := list }}
+{{- if not $singleNode }}
 {{- if $g.database.embedded }}{{ $fautes = append $fautes "global.database.embedded" }}{{ end }}
 {{- if $g.temporal.embedded }}{{ $fautes = append $fautes "global.temporal.embedded" }}{{ end }}
 {{- if $g.gateway.embedded }}{{ $fautes = append $fautes "global.gateway.embedded" }}{{ end }}
 {{- if $g.memory.embedded }}{{ $fautes = append $fautes "global.memory.embedded" }}{{ end }}
+{{- end }}
 {{- if $g.devSecrets }}{{ $fautes = append $fautes "global.devSecrets" }}{{ end }}
 {{- if ($g.devLogin | default dict).enabled }}{{ $fautes = append $fautes "global.devLogin.enabled" }}{{ end }}
 {{- if ($.Values.demoFakes | default dict).enabled }}{{ $fautes = append $fautes "demoFakes.enabled" }}{{ end }}
 {{- if $fautes }}
-{{- fail (printf "global.environment=%s refused: %s. These values are those of a bench (values/local.yaml); a serious environment brings its own dependencies and secrets." $g.environment (join ", " $fautes)) }}
+{{- fail (printf "global.environment=%s refused: %s. These values are those of a bench (values/local.yaml); a serious environment brings its own dependencies and secrets, or is the single-node profile with its backup (values/single-node.yaml, ADR 0184)." $g.environment (join ", " $fautes)) }}
 {{- end }}
 {{- end }}
 {{- /*

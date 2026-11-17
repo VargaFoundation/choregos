@@ -781,6 +781,55 @@ choregos-tools:
   # The sidecar image is published here; the Tekton Task references it in each project.
   publishTask: true
 
+# Single-node installation (ADR 0184, `values/single-node.yaml`): the embedded dependencies are
+# accepted in `staging` and `prod` only when this is on AND `backup.enabled` is on. One node, no
+# high availability, a recovery point of one backup interval (24 h by default). Off everywhere else:
+# a serious multi-node installation still brings its own dependencies.
+singleNode:
+  enabled: false
+
+# Scheduled backup of what the chart embeds (ADR 0184, S80-07b): a CronJob that writes, per run, a
+# directory `<UTC stamp>/` holding `pg_dump -Fc --create` of every database of the embedded
+# PostgreSQL, an online copy of the embedded Temporal's SQLite file, the embedded memory's files,
+# optionally a copy of the object store, a `MANIFEST` and a `COMPLETE` marker; then keeps the `keep`
+# newest complete backups. Restore: `docs/runbooks/single-node-restore.md`. Every embedded volume is
+# mounted by the backup pod: this works on ONE node (a ReadWriteOnce volume is per node), which is
+# the only place it is supported.
+backup:
+  enabled: false
+  schedule: "0 2 * * *"
+  keep: 7
+  # A backup that runs longer than this is killed and counted as failed.
+  activeDeadlineSeconds: 3600
+  target:
+    # `volume`: a PersistentVolumeClaim (on the same machine unless it is a network volume: it does
+    # not survive the loss of the machine). `s3`: a bucket off the machine, through rclone.
+    kind: volume
+    volume:
+      # Empty: the chart creates `<release>-backup` with `size` and `storageClass`.
+      existingClaim: ""
+      size: 100Gi
+      storageClass: ""
+    s3:
+      # `s3://bucket/prefix`: each backup lands under `<prefix>/<stamp>/`.
+      url: ""
+      # An S3-compatible endpoint; empty means AWS.
+      endpoint: ""
+      region: us-east-1
+      # Secret with the keys `access-key` and `secret-key`.
+      secretRef: ""
+  # Copy the platform's object store (`global.objectStore`, read with its `secretRef`) into each
+  # backup. Off: the object store is backed up by whoever runs it.
+  objectStore: false
+  images:
+    # Empty: the embedded PostgreSQL's own image, so `pg_dump` has the server's major version.
+    postgres: ""
+    # The S3 client that copies the object store and ships to an `s3` target.
+    rclone: rclone/rclone:1.68.2
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { cpu: "1", memory: 1Gi }
+
 monitoring:
   # `prometheus` renders `monitoring.coreos.com` objects; `victoriametrics` renders
   # `operator.victoriametrics.com/v1beta1` ones. An operator that does not know the type does not see

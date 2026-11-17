@@ -3,6 +3,29 @@
 {{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
 
+{{/*
+An rclone S3 remote named by environment variables (`RCLONE_CONFIG_<REMOTE>_*`), for the backup
+(ADR 0184): no configuration file, the keys read from a Secret with `access-key` and `secret-key`.
+An empty endpoint means AWS; any other is an S3-compatible store addressed by path.
+*/}}
+{{- define "choregos.backupRemote" -}}
+- { name: RCLONE_CONFIG_{{ .remote }}_TYPE, value: s3 }
+- { name: RCLONE_CONFIG_{{ .remote }}_PROVIDER, value: {{ ternary "Other" "AWS" (not (empty .endpoint)) }} }
+- { name: RCLONE_CONFIG_{{ .remote }}_REGION, value: {{ .region | default "us-east-1" | quote }} }
+{{- with .endpoint }}
+- { name: RCLONE_CONFIG_{{ $.remote }}_ENDPOINT, value: {{ . | quote }} }
+- { name: RCLONE_CONFIG_{{ $.remote }}_FORCE_PATH_STYLE, value: "true" }
+{{- end }}
+{{- if .secretRef }}
+- name: RCLONE_CONFIG_{{ .remote }}_ACCESS_KEY_ID
+  valueFrom: { secretKeyRef: { name: {{ .secretRef }}, key: access-key } }
+- name: RCLONE_CONFIG_{{ .remote }}_SECRET_ACCESS_KEY
+  valueFrom: { secretKeyRef: { name: {{ .secretRef }}, key: secret-key } }
+{{- else }}
+- { name: RCLONE_CONFIG_{{ .remote }}_ENV_AUTH, value: "true" }
+{{- end }}
+{{- end -}}
+
 {{- define "choregos.labels" -}}
 app.kubernetes.io/name: {{ include "choregos.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
