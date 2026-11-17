@@ -22,7 +22,7 @@ Optional but recommended in production: a model gateway (LiteLLM), a memory serv
 
 ```bash
 helm upgrade --install choregos oci://ghcr.io/graalsystems/charts/choregos \
-  --version 0.4.1 --namespace choregos --create-namespace \
+  --version 0.27.12 --namespace choregos --create-namespace \
   -f my-values.yaml
 ```
 
@@ -1840,7 +1840,7 @@ scenario against it.
 
 ```bash
 curl -s https://<api-host>/edition
-{"edition":"community","features":[],"version":"0.4.1","publisher":null,"edition_version":null}
+{"edition":"community","features":[],"version":"0.27.12","publisher":null,"edition_version":null}
 ```
 
 `version` is the core's. `publisher` and `edition_version` are announced by the edition's plugin:

@@ -30,6 +30,8 @@ PAGES = (
     "docs/plan/PRODUCT-REVIEW-2026-10-07.md",
     "README.md",
     "apps/web/README.md",
+    # S80-02: STATUS's rows and narrative, one file per stream.
+    *sorted(path.relative_to(ROOT).as_posix() for path in (ROOT / "docs" / "plan" / "status").glob("*.md")),
 )
 LINK = re.compile(r"\]\(([^)\s]+)\)")
 

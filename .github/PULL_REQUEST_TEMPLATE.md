@@ -11,7 +11,7 @@ Commands run, test results, screenshots for the front end
 ## Findings filed
 - #…
 ## STATUS row
-What this PR proves, and what it does not prove. The integrator copies it into `docs/plan/STATUS.md` (stories of `docs/plan/PLAN-2026-10-27.md` do not edit STATUS themselves).
+What this PR proves, and what it does not prove. It goes in the story's stream file, `docs/plan/status/<stream>.md` (the rule is at the top of `docs/plan/STATUS.md`, which is an index and holds no row).
 ## Release note
 Operator-visible change, or "none".
 ## Rename table

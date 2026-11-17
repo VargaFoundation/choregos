@@ -63,7 +63,7 @@ Assumption: 1 integrator human + N Claude Code sessions in parallel (one per act
 ## 7.5 Claude Code operating mode (or any ACP agent)
 
 1. **One session per stream**, in a dedicated worktree: `git worktree add ../choregos-S3 -b stream/S3 && cd ../choregos-S3 && claude`. Opening prompt: "Read `docs/plan/00-index.md`, `docs/plan/01-architecture-and-contracts.md` and the section of your stream (*Sections* column of table 7.2). Take the `stream: S3` stories of `docs/plan/08-backlog.yaml` in `sprint`, `priority` order. For each story: plan (plan mode), implementation, tests, a separate PR titled `[S3-04] …`, tick the `acceptance` in the description. Do not modify `packages/contracts`: if a contract is missing, open a `contract-change` issue and continue with a local workaround marked `TODO(contract)`."
-2. **Integrator session** (human + Claude): reviews the PRs, runs `make ci`, merges through the merge queue, updates `docs/plan/STATUS.md` (stories → state table), settles the `contract-change`s, runs the milestone e2es.
+2. **Integrator session** (human + Claude): reviews the PRs, runs `make ci`, merges through the merge queue, updates the story rows of `docs/plan/status/` (indexed by `docs/plan/STATUS.md`), settles the `contract-change`s, runs the milestone e2es.
 3. **PR conventions**: one story = one PR; description = template (section 7.7); the body cites the ticked acceptance criteria; green CI mandatory; no force-push on `main`.
 4. **When a session is blocked**: it writes `docs/plan/BLOCKERS.md` (stream, story, cause, proposed workaround) and moves on to the next non-dependent story.
 5. **Sub-agents**: allowed for exploration and reviews; writing stays in the stream's worktree.
@@ -93,7 +93,7 @@ Agentic delivery platform (Varga Foundation, Apache 2.0). Full plan: `docs/plan/
 - Logs: JSON, keys `project`, `work_item`, `run_id`, `stage` when available.
 
 ## Definition of done (blocking)
-Green tests (`make ci`), green typing, green lint, docs up to date (`docs/` or docstrings), the story's acceptance criteria ticked in the PR, no `TODO` without a linked issue, `docs/plan/STATUS.md` updated by the integrator.
+Green tests (`make ci`), green typing, green lint, docs up to date (`docs/` or docstrings), the story's acceptance criteria ticked in the PR, no `TODO` without a linked issue, the story's row in `docs/plan/status/<stream>.md` updated (the rule is at the top of `docs/plan/STATUS.md`).
 
 ## Out of scope
 If you discover a problem outside your story: do not touch it, open a `finding` issue with `origin: <story>`, evidence and a proposal. If you need a contract: a `contract-change` issue.

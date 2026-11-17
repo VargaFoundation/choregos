@@ -5381,3 +5381,15 @@ stories:
     size: S
     depends_on: []
     notes: "Plan workstreams A1 (decision) and O4 (decision); proposed, the project lead decides in December 2026. Docs only: no contract changes. The contract-change rounds C0, C1 (in the same minor as ADR 0176 R2) and C2 are tracked by issue #1832."
+  - id: S80-02
+    title: "docs(plan): STATUS.md becomes an index of per-stream status files, and the install guide names the current version"
+    stream: S80
+    sprint: 1
+    priority: 1
+    size: M
+    depends_on: []
+    acceptance:
+      - "docs/plan/STATUS.md is at most 300 lines, none over 300 characters, and lists every stream file of docs/plan/status/"
+      - "every story of 08-backlog.yaml has exactly one status row across docs/plan/status/, each in its stream's file"
+      - "the helm install and upgrade commands of docs/deployment.md and docs/site/ name the version of pyproject.toml, and tools/bump_version.py rewrites them"
+    notes: "Workstream A6 of the 2026-11-16 plan. The rows and the narrative move unchanged; the 27 backlog stories that had no row get one, read from the code and the log."
