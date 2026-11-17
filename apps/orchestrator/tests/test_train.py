@@ -6,10 +6,14 @@ import asyncio
 from typing import Any
 
 import pytest
+from choregos_orchestrator.activities import train as train_activities
 
 from .conftest import Fixture
 
 pytestmark = pytest.mark.asyncio
+
+#: What the train's cron answers in a test that must not depend on the wall clock.
+CRON_DUE = False
 
 
 async def start_train(env: Any, setup: Fixture, env_name: str = "prod", queue: str = "test") -> Any:
@@ -117,8 +121,12 @@ async def test_broken_canary_rolls_back_and_freezes(
 
 
 async def test_rejected_approval_returns_batch(
-    setup: Fixture, temporal_env: Any, worker_factory: Any
+    setup: Fixture, temporal_env: Any, worker_factory: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # No scheduled departure during the test: run at a minute the preset's cron names (prod
+    # `0 10,14,17 * * 1-4`), the batch sent back left again at once, and `collecting` was over
+    # before the next poll (failed on CI on a Tuesday at 10:00 UTC).
+    monkeypatch.setattr(train_activities, "_cron_due", lambda schedule, now: CRON_DUE)
     setup.adapters.cd.set_health("billing-api", "Healthy")
     with temporal_env.auto_time_skipping_disabled():
         async with worker_factory():
