@@ -216,10 +216,14 @@ async def test_gemini_paths_reach_the_gateway_with_the_runs_key_and_model_and_no
             await agent.get(GEMINI, headers={"x-goog-api-key": LOOPBACK_KEY}),
             await agent.post("/v1beta/models/m:embedContent", headers={"x-goog-api-key": LOOPBACK_KEY}),
             await agent.post("/v1beta/files", headers={"x-goog-api-key": LOOPBACK_KEY}),
+            await agent.post("/v1beta/models/m:batchEmbedContents", headers={"x-goog-api-key": LOOPBACK_KEY}),
+            await agent.post(
+                "/gemini/v1beta/models/m:embedContent", headers={"x-goog-api-key": LOOPBACK_KEY}
+            ),
         ]
 
     assert [a.status_code for a in (header, query, counted)] == [200, 200, 200]
-    assert [a.status_code for a in refused] == [401, 401, 401, 405, 404, 404]
+    assert [a.status_code for a in refused] == [401, 401, 401, 405, 404, 404, 404, 404]
     assert len(gateway.requests) == 3, "nothing refused is forwarded"
     model = step.model.litellm_model
     assert [r.url.path for r in gateway.requests] == [
