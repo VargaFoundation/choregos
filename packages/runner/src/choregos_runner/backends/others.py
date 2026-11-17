@@ -50,7 +50,6 @@ class CodexBackend(Backend):
 
 class GeminiCliBackend(Backend):
     name: ClassVar[str] = "gemini-cli"
-    loopback_model: ClassVar[bool] = False
     skills_dir: ClassVar[str | None] = ".gemini/skills"
     capabilities: ClassVar[frozenset[str]] = frozenset({"acp", "mcp"})
 
