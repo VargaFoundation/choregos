@@ -30,7 +30,8 @@ def _version(tag: str) -> tuple[int, ...]:
 
 def _compose_tag(compose: pathlib.Path = COMPOSE) -> str:
     image = yaml.safe_load(compose.read_text())["services"]["litellm"]["image"]
-    repository, _, tag = image.partition(":")
+    # `name:tag@sha256:<digest>` (S80-04): the tag is what the chart and the compose files agree on.
+    repository, _, tag = image.split("@", 1)[0].partition(":")
     assert repository == REPOSITORY, image
     return str(tag)
 
