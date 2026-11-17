@@ -27,3 +27,4 @@ removed in 0.24.0 (S45-49).
 | `live-eval-matrix.md` | measuring rtk and headroom on real models before a default-on decision |
 | `refresh-catalogues.md` | refreshing the shipped MCP server and skills catalogues from their sources |
 | `mcp-gateway-down.md` | the organisation's MCP gateway is down, or refuses tool calls |
+| `single-node-restore.md` | a single-node installation (ADR 0184) is lost, or must go back to last night's backup |

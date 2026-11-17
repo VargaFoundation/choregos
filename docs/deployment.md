@@ -1384,6 +1384,60 @@ When the database is embedded it does not exist before the release, so the hook 
 itself on SQLite, a development convenience; on PostgreSQL the migrations are the single
 source, and a test compares them against the models on every run.
 
+## A single node
+
+A supported installation on ONE machine running k3s, with a nightly backup ([ADR 0184](adr/0184-a-supported-single-node-installation.md)).
+It is the bench's chart, not the bench: production environment, the site's own secrets and identity
+provider, and a backup without which the chart refuses to render.
+
+**The machine.** 8 vCPU, 32 GiB of memory, 250 GB of SSD, a recent Linux with k3s
+(`curl -sfL https://get.k3s.io | sh -`; k3s brings Traefik and the `local-path` volumes). The platform
+requests 2 CPU and 6 GiB; up to four agent runs at once take at most 2 CPU and 4 GiB each.
+
+**What the chart embeds** (and backs up): PostgreSQL with pgvector, Temporal (one process on SQLite),
+the LiteLLM gateway, the Ecphoria memory. **What the site brings**:
+
+| What | Where it goes |
+| :-- | :-- |
+| An OIDC provider (people sign in through it; there is no development sign-in) | `global.oidc.*`, secret `choregos-oidc` |
+| The application secrets (run-token key, session secret, `secrets-keks`), kept in the site's vault | secret `choregos-api-secrets`, [Secrets](#secrets) |
+| The model provider's key | `choregos-litellm.upstream.apiKeySecret` |
+| An S3 bucket **off the machine** for the backups | `backup.target.s3.*`, secret `choregos-backup-target` (`access-key`, `secret-key`) |
+| An object store, if workflows produce files | `global.objectStore.*`, then `backup.objectStore: true` |
+
+```bash
+helm install choregos charts/choregos -n choregos --create-namespace \
+  -f charts/choregos/values/single-node.yaml -f my-site.yaml
+```
+
+`my-site.yaml` sets `global.domain`, `global.publicUrl`, `global.apiUrl`, the hostnames of
+`choregos-api.ingress` and `choregos-web.ingress`, `global.oidc`, `global.bootstrap` and
+`backup.target.s3.{url,endpoint,region}`.
+
+**The backup.** The CronJob `choregos-backup` runs every night at 02:00 UTC (`backup.schedule`) and
+writes one directory per run: a `pg_dump -Fc --create` of every database, an online copy of
+Temporal's SQLite file, the memory's files, the object store when asked, a `MANIFEST` and a
+`COMPLETE` marker; it keeps the 7 newest complete backups (`backup.keep`). To take one now:
+`kubectl -n choregos create job --from=cronjob/choregos-backup backup-now`. A `volume` target
+(`backup.target.kind: volume`) is accepted, and is a backup only if that volume is not on the
+machine's own disk. Restore: [the runbook](runbooks/single-node-restore.md), `tools/single-node/restore.sh`.
+
+**What it does not have**, said before anyone signs:
+
+- no high availability: the machine is a single point of failure, and a reboot or a k3s upgrade is a
+  downtime;
+- a recovery point of 24 hours: what happened since the last backup is lost on a restore;
+- agent stages run as Jobs in the release namespace (`k8s_job`, no agent-sandbox operator), without
+  the per-project egress proxy and without the chart's NetworkPolicies, which assume the
+  dependencies in their own namespaces: an agent pod can reach the embedded PostgreSQL on the network;
+- the backup holds no application secret: restoring without the same `secrets-keks` opens no sealed
+  connector secret.
+
+**The proof.** `tools/single-node/proof.sh` installs from a blank node (k3s in Docker with k3d, or
+k3s itself on a throwaway VM with `PROOF_CLUSTER=k3s`), takes one work item to `approved` (its agent
+simulated), backs up, destroys the node, installs on a new one, restores, and reads the work item
+back. It is not yet run every night by CI; `docs/plan/STATUS.md` says when it last ran.
+
 ## A single-node bench in twenty minutes
 
 The bench runs real agents on a one-node kind cluster, with every dependency embedded. It

@@ -1,0 +1,151 @@
+# SINGLE-NODE installation (ADR 0184, S80-07b): the chart on one k3s machine, with its scheduled
+# backup. Supported, with what it does not have said in the ADR: no high availability, a recovery
+# point of one backup interval (24 h), a restore measured in tens of minutes.
+#
+#   helm install choregos charts/choregos -n choregos --create-namespace \
+#     -f charts/choregos/values/single-node.yaml -f my-site.yaml
+#
+# Sized for ONE machine of 8 vCPU, 32 GiB of memory and 250 GB of SSD: the platform requests 2 CPU
+# and 6 GiB, and up to 4 agent runs at once take at most 2 CPU and 4 GiB each
+# (`tests/charts/test_single_node_profile.py` holds the sum).
+#
+# Embedded by the chart (and backed up by it): PostgreSQL (with pgvector), Temporal (one process on
+# SQLite), the LiteLLM gateway, the Ecphoria memory. NOT embedded, provided by the site (see
+# `docs/deployment.md`, "A single node"): the OIDC provider (`global.oidc`), the object store
+# (`global.objectStore`, only needed by workflows that produce files), the model provider's key
+# (`choregos-litellm.upstream`), the application secrets (`global.apiSecretRef`), and an off-machine
+# place for the backups (`backup.target.s3`): a backup on the machine's own disk does not survive it.
+#
+# What `my-site.yaml` must set: `global.domain`, `global.publicUrl`, `global.apiUrl`, the two
+# ingresses' `hostnames`, `global.oidc`, `global.bootstrap`, and `backup.target`.
+global:
+  environment: prod
+  domain: choregos.example.com
+  publicUrl: https://choregos.example.com
+  apiUrl: https://choregos.example.com
+  # No agent-sandbox operator on a bare k3s: each agent stage is a Job of the release namespace.
+  runner:
+    executor: k8s_job
+  database:
+    embedded: true
+  temporal:
+    embedded: true
+  gateway:
+    embedded: true
+    # Empty: the chart generates the master key and keeps it from one update to the next.
+    secretRef: ""
+  memory:
+    embedded: true
+  # One node: there is no other node to spread over.
+  antiAffinity: none
+  externalSecrets:
+    enabled: false
+  rbac:
+    # No Tekton on this machine: nothing to read at cluster scale.
+    clusterScoped: false
+    # The orchestrator creates the agent Jobs in its own namespace.
+    jobRunner: true
+
+# Accepts the embedded dependencies in `prod`, and only together with the backup below.
+singleNode:
+  enabled: true
+
+backup:
+  enabled: true
+  # Every night at 02:00 UTC: the recovery point is 24 hours.
+  schedule: "0 2 * * *"
+  keep: 7
+  target:
+    # Off the machine. `volume` is accepted, and is a backup only if the volume is not on this disk.
+    kind: s3
+    s3:
+      url: ""          # s3://bucket/prefix — the site's
+      endpoint: ""     # empty for AWS
+      region: us-east-1
+      secretRef: choregos-backup-target
+  # On when `global.objectStore` is set: the files the workflows produced are part of the state.
+  objectStore: false
+
+choregos-api:
+  replicaCount: 1
+  autoscaling: { enabled: false }
+  podDisruptionBudget: { enabled: false }
+  resources:
+    requests: { cpu: 250m, memory: 768Mi }
+    limits: { cpu: "2", memory: 2Gi }
+  migrations:
+    # The database is embedded: it does not exist before the installation.
+    hook: post-install,post-upgrade
+  ingress:
+    enabled: true
+    kind: ingress
+    # k3s ships Traefik.
+    className: traefik
+    hostnames: ["choregos.example.com"]
+
+choregos-web:
+  replicaCount: 1
+  podDisruptionBudget: { enabled: false }
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { cpu: "1", memory: 512Mi }
+  ingress:
+    enabled: true
+    kind: ingress
+    className: traefik
+    hostnames: ["choregos.example.com"]
+
+choregos-orchestrator:
+  podDisruptionBudget: { enabled: false }
+  queues:
+    - { name: orchestrator, replicas: 1, resources: { requests: { cpu: 200m, memory: 512Mi }, limits: { cpu: "1", memory: 1Gi } } }
+    - { name: executor, replicas: 1, resources: { requests: { cpu: 200m, memory: 512Mi }, limits: { cpu: "1", memory: 1Gi } } }
+    - { name: tracker, replicas: 1, resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: 500m, memory: 512Mi } } }
+    - { name: memory, replicas: 1, resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: 500m, memory: 512Mi } } }
+  runner:
+    # The agents run in the release namespace (the chart's default namespace name).
+    namespacePattern: choregos
+    # No per-project egress proxy on this profile: the agents go out directly (ADR 0184, limits).
+    egressProxy: ""
+    # At most four agent runs at once; the next ones wait without a pod.
+    maxActive: 4
+    limits: { cpu: "2", memory: 4Gi }
+
+choregos-postgresql:
+  persistence: { enabled: true, size: 50Gi, storageClass: local-path }
+  resources:
+    requests: { cpu: 500m, memory: 2Gi }
+    limits: { cpu: "2", memory: 4Gi }
+
+choregos-temporal:
+  persistence: { enabled: true, size: 10Gi, storageClass: local-path }
+  resources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits: { cpu: "1", memory: 2Gi }
+
+choregos-litellm:
+  resources:
+    requests: { cpu: 200m, memory: 512Mi }
+    limits: { cpu: "1", memory: 2Gi }
+
+choregos-ecphoria:
+  persistence: { enabled: true, size: 10Gi, storageClass: local-path }
+  resources:
+    requests: { cpu: 100m, memory: 512Mi }
+    limits: { cpu: "1", memory: 2Gi }
+
+# The tools sidecar is a Tekton Task: no Tekton here.
+choregos-tools:
+  enabled: false
+
+# No Prometheus operator on a bare k3s.
+monitoring:
+  serviceMonitor: false
+  alerts: false
+  dashboards: false
+
+# The chart's policies open the dependencies in their own namespaces (choregos-data,
+# choregos-temporal, ...); embedded, they live in the release namespace, which those policies do
+# not open. Off on this profile until they do (ADR 0184, limits).
+networkPolicies:
+  enabled: false

@@ -5401,3 +5401,11 @@ stories:
     size: M
     depends_on: []
     notes: "Plan workstream S4, phase 1. Every Client.connect now goes through choregos_core.temporal_connection.connect_temporal (TLS from a mounted Secret, opt-in codec with key rotation); off by default. Not done: a key per organisation from a KMS (phase 2), a codec server for the Temporal UI, refusing clear text in production, a proof against a real Temporal frontend over TLS."
+  - id: S80-07b
+    title: "feat(charts): a supported single-node installation, one k3s machine with a nightly backup and its restore (ADR 0184)"
+    stream: S80
+    sprint: 1
+    priority: 7
+    size: L
+    depends_on: [S80-07a]
+    notes: "Plan workstream P4. values/single-node.yaml, the chart's backup and restore CronJobs, the guard's singleNode exception, tools/single-node/{proof,restore}.sh, the restore runbook. Not done: the proof as a nightly CI job; an embedded object store or OIDC provider; network isolation of agent pods on this profile."
