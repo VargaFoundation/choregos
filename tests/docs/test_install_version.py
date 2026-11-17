@@ -15,6 +15,8 @@ import re
 import tomllib
 from types import ModuleType
 
+from choregos_core.publishing import PUBLISHING
+
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 #: Every version an install or upgrade command names: `helm … --version X`, a release wheel's file name.
 NAMED = (
@@ -63,7 +65,7 @@ def test_the_deployment_guide_installs_the_chart_of_the_repository() -> None:
     version = re.search(r"^version: (\S+)$", chart, re.M)
     assert version, "charts/choregos/Chart.yaml lost its version"
     guide = (ROOT / "docs" / "deployment.md").read_text("utf-8")
-    assert f"oci://ghcr.io/graalsystems/charts/choregos \\\n  --version {version.group(1)} " in guide
+    assert f"oci://{PUBLISHING.registry}/charts/choregos \\\n  --version {version.group(1)} " in guide
 
 
 def test_the_release_bump_rewrites_every_install_page() -> None:
