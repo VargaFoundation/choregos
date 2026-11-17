@@ -1063,8 +1063,17 @@ signed, digest references enforced by Kyverno, Tekton Chains signing `PipelineRu
 image is verified by cosign at publication, on its pinned digest, by the operator's key or keyless
 identity, and, with `global.images.hostedCosignPolicy`, again by Kyverno at admission, init containers
 included ([`hosted-agents.md`](hosted-agents.md#signatures-by-cosign-s41-14)).
-Renovate proposes bumps; every agent bump goes through conformance. A nightly CRITICAL in
-the dependency scan fails the night and opens an issue.
+Dependabot proposes bumps (`.github/dependabot.yml`); every agent bump goes through conformance.
+A nightly CRITICAL in the dependency scan fails the night and opens an issue.
+
+What the build pulls is pinned to bytes, not to a name (S80-04): every GitHub Action to its full
+commit SHA with the version in a trailing comment (`@<sha> # v7.0.1`), every base image, `COPY
+--from` source, compose, CI service and demo image to `tag@sha256:<index digest>`, and the runner's
+npm and pnpm to exact versions, never `latest`. Dependabot reads the comment and the tag and moves
+the pin. `tests/architecture/test_supply_chain_pinned.py` refuses a reference that moves, and keeps
+its exceptions (an image built locally, a `FROM` an argument, `trials/`) written with their reason.
+Not done yet: a signed Helm chart, a release blocked on a HIGH vulnerability (the gate stops at
+CRITICAL), and static analysis (SAST) in CI.
 
 ## Default skills and MCP servers
 
