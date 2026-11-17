@@ -1,4 +1,4 @@
-"""The Jira tracker: what Choregos sends on the wire, and what it understands in return.
+"""The Jira tracker: what Tranibor sends on the wire, and what it understands in return.
 
 The tests speak the HTTP protocol documented by Atlassian through a simulated transport:
 they prove the shape of the requests, not that a real Jira instance accepts them.
@@ -253,7 +253,7 @@ async def test_the_status_table_goes_out_as_adf() -> None:
         sent_body.update(jsonlib.loads(request.content))
         return httpx.Response(201, json={"id": "9"})
 
-    markdown = "### Choregos\n\n| Step | Cost |\n| --- | --- |\n| implement | 0.42 EUR |"
+    markdown = "### Tranibor\n\n| Step | Cost |\n| --- | --- |\n| implement | 0.42 EUR |"
     await tracker(handler).upsert_status_comment("BILL-42", markdown)
 
     document = sent_body["body"]

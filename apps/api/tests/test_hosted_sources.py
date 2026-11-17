@@ -233,7 +233,7 @@ BASE_313 = (
     "@sha256:a1165e272e578941b84abc79e4ab38a0305cd12803a5c4247979ac7655f4d641"
 )
 GOLDEN = f"""\
-# Written by Choregos (ADR 0080 §9, template 2). The zip's own Dockerfile,
+# Written by Tranibor (ADR 0080 §9, template 2). The zip's own Dockerfile,
 # if it has one, is not read.
 FROM {BASE_313}
 ARG SOURCE_DATE_EPOCH
@@ -254,7 +254,7 @@ BASE_NODE = (
     "@sha256:c3de60bf2f9dd0ac6370e6117950ff62d6e339527e7472301c9c78a017978392"
 )
 GOLDEN_NODE = f"""\
-# Written by Choregos (ADR 0080 §9, template 2). The zip's own Dockerfile,
+# Written by Tranibor (ADR 0080 §9, template 2). The zip's own Dockerfile,
 # if it has one, is not read.
 FROM {BASE_NODE}
 ARG SOURCE_DATE_EPOCH
@@ -276,7 +276,7 @@ ASPNET = (
     "@sha256:d5633778c754e89a386882eddf8dbee6942447a8a4b8267c19cf1e1158d0b0ac"
 )
 GOLDEN_DOTNET = f"""\
-# Written by Choregos (ADR 0080 §9, template 2). The zip's own Dockerfile,
+# Written by Tranibor (ADR 0080 §9, template 2). The zip's own Dockerfile,
 # if it has one, is not read.
 FROM {SDK} AS build
 ARG SOURCE_DATE_EPOCH

@@ -206,18 +206,18 @@ describe("the Models page", () => {
     );
   });
 
-  it("says that budgets are enforced by Choregos only when the gateway cannot cap a key", async () => {
+  it("says that budgets are enforced by Tranibor only when the gateway cannot cap a key", async () => {
     vi.mocked(api.modelCatalogue).mockResolvedValue(
       catalogue({ gateway: { type: "openai-compatible", capabilities: ["list_models"] } }),
     );
     show();
-    expect(await screen.findByText("Budgets are enforced by Choregos only: this gateway cannot cap a key.")).toBeInTheDocument();
+    expect(await screen.findByText("Budgets are enforced by Tranibor only: this gateway cannot cap a key.")).toBeInTheDocument();
   });
 
   it("does not say it when the gateway can", async () => {
     show();
     await screen.findByTestId("gateway");
-    expect(screen.queryByText(/enforced by Choregos only/)).toBeNull();
+    expect(screen.queryByText(/enforced by Tranibor only/)).toBeNull();
   });
 
   it("syncs from the gateway and adds a model by hand", async () => {

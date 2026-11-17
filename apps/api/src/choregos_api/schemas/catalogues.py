@@ -67,7 +67,7 @@ class McpCatalogueEntryDto(Dto):
     stars: int | None = None
     stars_as_of: date | None = None
     install: Literal["installable", "needs_oauth", "needs_hosting"]
-    #: How this organisation can install the entry: `direct` (Choregos alone) and/or `gateway`.
+    #: How this organisation can install the entry: `direct` (Tranibor alone) and/or `gateway`.
     install_routes: list[Literal["direct", "gateway"]] = Field(default_factory=list)
     hosting: dict[str, Any] | None = None
     state: Literal["available", "installed", "update"]

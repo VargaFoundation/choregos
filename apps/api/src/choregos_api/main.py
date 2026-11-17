@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""The Choregos FastAPI application."""
+"""The Tranibor FastAPI application."""
 
 from __future__ import annotations
 

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
- * A scriptable fake of the Choregos API (ADR 0005), served over real HTTP on the loopback so the client's
+ * A scriptable fake of the Tranibor API (ADR 0005), served over real HTTP on the loopback so the client's
  * headers, redirects, problem documents and server-sent events go through a real `fetch`.
  *
  *   const api = await FakeApi.start();

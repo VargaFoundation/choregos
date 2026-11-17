@@ -1,12 +1,12 @@
 ---
 title: Concepts
-description: The words Choregos uses, what each one means, and how they fit together.
+description: The words Tranibor uses, what each one means, and how they fit together.
 sidebar_position: 2
 ---
 
 # Concepts
 
-This page explains the ideas behind every screen of Choregos. Read it once before your first
+This page explains the ideas behind every screen of Tranibor. Read it once before your first
 project; come back to it when a word in the console is unclear.
 
 **What you will be able to do**
@@ -45,7 +45,7 @@ lands in the journal and the cost ledger.
 
 ## Organisation
 
-The organisation is your company or team on a Choregos instance. It holds the projects, the people,
+The organisation is your company or team on a Tranibor instance. It holds the projects, the people,
 the agents, the skills, the knowledge bases and the connectors that projects share. An organisation
 administrator manages it under **Admin**.
 
@@ -106,7 +106,7 @@ rules (by label, by type) choose one for each incoming work item.
 
 ## Work item
 
-A work item is one request: an issue on GitHub or GitLab, a Jira ticket, or a request filed in Choregos
+A work item is one request: an issue on GitHub or GitLab, a Jira ticket, or a request filed in Tranibor
 itself. It is pinned to one version of one workflow when it starts. Its page shows where it is, what
 it waits for, its journey, its cost per stage and what each step produced (its **artifacts**: a
 specification, a report, a deck).
@@ -198,8 +198,8 @@ projects' runs are served it; its **grants** say who may change it. See [Knowled
 
 ## Connectors
 
-A connector is how Choregos talks to an outside system: the **tracker** where requests live (GitHub
-Issues, Jira, GitLab, or Choregos itself), the **repository** (GitHub), the **deployment** (Argo CD),
+A connector is how Tranibor talks to an outside system: the **tracker** where requests live (GitHub
+Issues, Jira, GitLab, or Tranibor itself), the **repository** (GitHub), the **deployment** (Argo CD),
 **notifications** (Slack, e-mail), documents, an identity directory. A **connector type** is an entry
 of the catalogue; a **connector** is one the organisation or a project has installed and configured.
 A project needs only what its workflows read, and its settings say which ones. See
@@ -207,7 +207,7 @@ A project needs only what its workflows read, and its settings say which ones. S
 
 ## Human decisions
 
-A workflow names the points where a person decides. Choregos never guesses past them:
+A workflow names the points where a person decides. Tranibor never guesses past them:
 
 - an **approval**: approve, or send back with a reason;
 - a **question** an agent asked: answer it, and the work resumes where it stopped;
@@ -220,7 +220,7 @@ Every human step has a deadline and an escalation. What waits for you is in the 
 
 ## Evidence, journal and audit
 
-Choregos keeps three kinds of trace:
+Tranibor keeps three kinds of trace:
 
 - **Evidence**: what a step measured and left behind: tests run and passed, lint, coverage, diff size,
   and the business **facts** a workflow names. Gates read it; the run page shows it, marked as
@@ -248,7 +248,7 @@ write, forbidden commands, the hosts a run may reach, release trains. An organis
   under **My account › Access tokens**. Its **scope** limits what it opens: `*` (the API and the CLI),
   `mcp:read` or `mcp:write` (an AI assistant at the MCP door), or `a2a` (the A2A door). An MCP or A2A
   token can be limited to one project. A token is shown once, expires, and can be revoked.
-- An **application** (a machine account) is how another system calls Choregos under its own name, not
+- An **application** (a machine account) is how another system calls Tranibor under its own name, not
   a person's. It belongs to one project (**Settings › People › Applications**), has its own daily
   budget, and outlives the person who created it. An application starts work; it never takes a
   decision.
@@ -268,4 +268,4 @@ write, forbidden commands, the hosts a run may reach, release trains. An organis
 
 - [Get started](get-started.md): try it, then run a first project.
 - [Concepts in depth](../concepts.md), the reference page these concepts come from.
-- [Where Choregos sits](../positioning.md) against other agent platforms, runtimes and tool brokers.
+- [Where Tranibor sits](../positioning.md) against other agent platforms, runtimes and tool brokers.

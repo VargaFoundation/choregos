@@ -335,7 +335,7 @@ _SHIPPED_SPECS: dict[tuple[str, str], ConnectorTypeSpec] = {
         ),
         ("webhook_secret",),
     ),
-    ("tracker", "internal"): ConnectorTypeSpec("internal (Choregos holds the work items)", ("tracker",)),
+    ("tracker", "internal"): ConnectorTypeSpec("internal (Tranibor holds the work items)", ("tracker",)),
     ("tracker", "jira"): ConnectorTypeSpec(
         "Jira Cloud",
         ("tracker",),

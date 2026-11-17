@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
-"""A fake MCP gateway, scriptable (ADR 0005): an organisation's own MCP gateway as Choregos sees
-it. Choregos consumes such a gateway and never is one (ADR 0105).
+"""A fake MCP gateway, scriptable (ADR 0005): an organisation's own MCP gateway as Tranibor sees
+it. Tranibor consumes such a gateway and never is one (ADR 0105).
 
-This is not a product, and Choregos never serves it to an organisation: it exists so that the
+This is not a product, and Tranibor never serves it to an organisation: it exists so that the
 gateway connector, its credentials and its failures are tested without a real gateway, and so
 that the local install has a gateway in front of the demo fakes.
 
@@ -20,7 +20,7 @@ What it does:
 - it can be stateless, forget the sessions it issued (as another replica would), and revoke the
   tokens it issued.
 
-The gateway, never Choregos, holds the upstream servers' credentials: the caller's credential is
+The gateway, never Tranibor, holds the upstream servers' credentials: the caller's credential is
 dropped, and the upstream receives the gateway's own (`GatewayUpstream.token`).
 
 Served alone, as the local install's gateway: `python -m choregos_adapters.fakes.mcp_gateway`,

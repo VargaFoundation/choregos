@@ -2,7 +2,7 @@
 """The Open Knowledge Format at the edge of a knowledge base (ADR 0174, OKF v0.2).
 
 OKF is a directory of markdown files, each opening with a YAML header whose only required key is
-`type`. Choregos neither stores nor trusts it: the database stays the store, rights stay ADR 0081's.
+`type`. Tranibor neither stores nor trusts it: the database stays the store, rights stay ADR 0081's.
 It is read where a document comes in and written where a document goes out to an agent:
 
 - `split()` reads a document's header when it has one (a `.md` file from git, SharePoint or an

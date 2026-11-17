@@ -175,7 +175,7 @@ function CreateForm({ status }: { status: GitHubAppRegistrationStatus }) {
           <label className="flex items-start gap-2 text-sm">
             <input type="radio" name={`${groupId}-visibility`} checked={visibility === "private"} onChange={() => setVisibility("private")} />
             <span>
-              <strong>Private</strong>: only on the account that owns it. Enough when every repository Choregos works in belongs
+              <strong>Private</strong>: only on the account that owns it. Enough when every repository Tranibor works in belongs
               to that account.
             </span>
           </label>

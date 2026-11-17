@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import type { ConnectorDto } from "@/lib/types";
 
-/** Where a project's work items live: in Choregos itself, or in an outside tracker. */
+/** Where a project's work items live: in Tranibor itself, or in an outside tracker. */
 export interface TrackerInfo {
   external: boolean;
   type: string;
@@ -13,7 +13,7 @@ const INTERNAL = new Set(["internal", "fake"]);
 
 /**
  * The project's tracker, read from its connectors. No tracker row means internal, as for the API
- * (a fresh project files its work items in Choregos): the board must not hide its button then.
+ * (a fresh project files its work items in Tranibor): the board must not hide its button then.
  */
 export function trackerOf(connectors: readonly ConnectorDto[] | undefined): TrackerInfo {
   const row = (connectors ?? []).find((c) => c.kind === "tracker");

@@ -96,7 +96,7 @@ async def test_the_runner_registers_what_it_wrote_before_the_agent_starts(
         assert paragraphs(text), section
         assert {section_of.get(paragraph_digest(paragraph)) for paragraph in paragraphs(text)} == {section}
     sent = json.dumps(registered)
-    assert CANARY not in sent and "credit note" not in sent and "Instructions (Choregos)" not in sent
+    assert CANARY not in sent and "credit note" not in sent and "Instructions (Tranibor)" not in sent
 
 
 async def test_the_gateway_recognises_what_the_runner_registered_in_a_claude_code_request(

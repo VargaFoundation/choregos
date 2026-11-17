@@ -950,7 +950,7 @@ approval).
   the tool, the key and the text): a Temporal retry replays the same key and the server answers the
   first write (`created: false`, `written: false`). The same comment twice on an item is written once.
   `tracker_upsert_status` adds a note only when the latest one with that `marker` differs (journals that
-  cannot be edited); Choregos's markers (`<!-- choregos:status -->`) reach the server as their name
+  cannot be edited); Tranibor's markers (`<!-- choregos:status -->`) reach the server as their name
   (`choregos:status`).
 - **Platform calls, audited, not governed.** The adapter calls the server through the platform's client
   of it (the Service URL the platform wrote, the server's bearer token, no redirect), not through an

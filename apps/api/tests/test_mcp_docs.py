@@ -60,7 +60,7 @@ def _write(path: Path, text: str) -> None:
 
 def _tree(root: Path) -> Path:
     site = root / "site"
-    _write(site / "index.md", "---\ntitle: Choregos\n---\n\nThe overview of governed agents.\n")
+    _write(site / "index.md", "---\ntitle: Tranibor\n---\n\nThe overview of governed agents.\n")
     _write(site / "01-use" / "workflows.md", f"---\ntitle: Workflows\nsidebar_position: 2\n---\n{WORKFLOWS}")
     _write(site / "03-integrate" / "triggers.md", TRIGGERS)
     _write(site / "concepts" / "index.md", "# Concepts\n\nAgents and people, under gates.\n")
@@ -173,7 +173,7 @@ async def test_an_index_page_has_the_folders_url(client: AsyncClient, admin: str
         **overview["pages"][0],
         "slug": "",
         "url": f"{BASE}/",
-        "title": "Choregos",
+        "title": "Tranibor",
     }
 
 

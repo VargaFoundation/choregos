@@ -114,7 +114,7 @@ def _pr_body(item: Any, documents: dict[str, Any]) -> str:
             parts += ["", documents.get(name, item.body_snapshot or "")]
         elif documents.get(name):
             parts += ["", f"## {title}", documents[name]]
-    parts += ["", "---", "_Opened by Choregos; the cost and the evidence are on the work item._"]
+    parts += ["", "---", "_Opened by Tranibor; the cost and the evidence are on the work item._"]
     return "\n".join(parts)
 
 

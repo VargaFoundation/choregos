@@ -296,7 +296,7 @@ async def create_human_request(payload: dict[str, Any]) -> dict[str, Any]:
             await bundle.adapters.notify.send(
                 channel,
                 Message(
-                    title=f"Choregos — {payload['kind']} on {item.tracker_key}",
+                    title=f"Tranibor — {payload['kind']} on {item.tracker_key}",
                     body=WITHHELD if is_marked(item) else item.title,
                     url=f"{console}/p/{bundle.slug}/items/{item.id}",
                     severity="warning",
@@ -489,7 +489,7 @@ async def _close_delivered_item(session: Any, bundle: Any, item: WorkItem) -> bo
     name = await _release_name(session, release) if release is not None else str(release_id)
     env = f" to `{release.env}`" if release is not None else ""
     text = (
-        f"{DELIVERED_MARKER}\n### Choregos — delivered\n"
+        f"{DELIVERED_MARKER}\n### Tranibor — delivered\n"
         f"Delivered{env} in release `{name}` and closed as **{state.display}**."
     )
     try:
@@ -538,7 +538,7 @@ async def _close_already_fixed_item(session: Any, bundle: Any, item: WorkItem) -
         else ""
     )
     text = (
-        f"{ALREADY_FIXED_MARKER}\n### Choregos — already fixed\n"
+        f"{ALREADY_FIXED_MARKER}\n### Tranibor — already fixed\n"
         "The implementation changed nothing: the fix is already on the default branch. "
         "Evidence measured by the platform, not reported by the agent:\n"
         "- change: 0 files, 0 lines, no commit, no branch pushed;\n"

@@ -54,7 +54,7 @@ DEFAULT_SELECTORS = {
     "runners": "app.kubernetes.io/name=choregos-runner",
 }
 DEFAULT_TEMPLATE = """\
-# Allow egress from the Choregos {{family}} pods ({{selector}}) to:
+# Allow egress from the Tranibor {{family}} pods ({{selector}}) to:
 toFQDNs:
 {{#fqdns}}
   - {{.}}

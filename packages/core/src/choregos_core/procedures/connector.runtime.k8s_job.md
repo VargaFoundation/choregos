@@ -27,7 +27,7 @@ The orchestrator needs rights to create and read `Job`s and `Secret`s in the run
 set `runner.limits` below the per-container ceiling, or the pod is rejected and the Job waits without
 saying why.
 
-## In Choregos
+## In Tranibor
 
 Nothing to type: the executor is chosen by the chart. `maxActive` caps concurrent runs per namespace;
 beyond it a Job is created suspended (no pod, no image pull, no quota) and admitted in arrival order.

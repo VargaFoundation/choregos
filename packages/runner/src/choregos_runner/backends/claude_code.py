@@ -126,7 +126,7 @@ def _rtk_config(stage_input: StageInput) -> str:
     entries = ", ".join(json.dumps(command) for command in excluded)
     return "\n".join(
         [
-            "# Written by Choregos for this run (ADR 0055).",
+            "# Written by Tranibor for this run (ADR 0055).",
             "[hooks]",
             f"exclude_commands = [{entries}]",
             "",
@@ -201,7 +201,7 @@ case "$rel" in
 esac
 case "$rel" in
   .choregos/*)
-    refuse "the agent cannot change the Choregos configuration (only .choregos/result.json is expected)" ;;
+    refuse "the agent cannot change the Tranibor configuration (only .choregos/result.json is expected)" ;;
 esac
 # The project's policy forbids these paths whatever the allowed paths say (scope.deny_paths).
 for pattern in @DENY_PATHS@; do
@@ -227,7 +227,7 @@ refuse "path outside the allowed paths: $rel (see .choregos/allowed_paths.txt)"
 def _claude_md(stage_input: StageInput) -> str:
     return "\n".join(
         [
-            "# Instructions (Choregos)",
+            "# Instructions (Tranibor)",
             "",
             "This repository follows `AGENTS.md`. In addition, for this step:",
             "",

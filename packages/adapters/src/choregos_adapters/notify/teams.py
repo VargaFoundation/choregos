@@ -56,7 +56,7 @@ def card(message: Message) -> dict[str, Any]:
         body.append({"type": "FactSet", "facts": facts})
     content: dict[str, Any] = {"$schema": CARD_SCHEMA, "type": "AdaptiveCard", "version": "1.4", "body": body}
     if message.url:
-        content["actions"] = [{"type": "Action.OpenUrl", "title": "Open in Choregos", "url": message.url}]
+        content["actions"] = [{"type": "Action.OpenUrl", "title": "Open in Tranibor", "url": message.url}]
     return {
         "type": "message",
         "attachments": [{"contentType": CARD_TYPE, "contentUrl": None, "content": content}],

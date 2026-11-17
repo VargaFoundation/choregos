@@ -56,8 +56,8 @@ describe("the edition names its publisher", () => {
   it("the footer says the enterprise edition is by its publisher, built on the core", async () => {
     vi.mocked(api.edition).mockResolvedValue(ENTERPRISE);
     renderFooter();
-    expect(await screen.findByText(/Choregos Enterprise edition by GraalSystems\b/)).toHaveTextContent(
-      "Choregos Enterprise edition by GraalSystems · built on Choregos by Varga Foundation (Apache 2.0)",
+    expect(await screen.findByText(/Enterprise edition by GraalSystems\b/)).toHaveTextContent(
+      "Enterprise edition by GraalSystems · built on Tranibor by Varga Foundation (Apache 2.0)",
     );
     expect(screen.getByTestId("footer-foundation")).toBeInTheDocument();
   });
@@ -65,17 +65,17 @@ describe("the edition names its publisher", () => {
   it("a renamed instance shows its product, the publisher and the foundation in one line", async () => {
     vi.mocked(api.edition).mockResolvedValue(ENTERPRISE);
     renderFooter("Graal Agentic Platform");
-    expect(await screen.findByText(/Choregos Enterprise edition by GraalSystems\b/)).toHaveTextContent(
-      "Graal Agentic Platform · Choregos Enterprise edition by GraalSystems · built on Choregos by Varga Foundation (Apache 2.0)",
+    expect(await screen.findByText(/Enterprise edition by GraalSystems\b/)).toHaveTextContent(
+      "Graal Agentic Platform · Enterprise edition by GraalSystems · built on Tranibor by Varga Foundation (Apache 2.0)",
     );
   });
 
   it("the footer keeps the foundation's line in the community edition", async () => {
     vi.mocked(api.edition).mockResolvedValue(COMMUNITY);
     renderFooter();
-    expect(screen.getByTestId("footer-foundation")).toHaveTextContent("Choregos by Varga Foundation · Apache 2.0");
+    expect(screen.getByTestId("footer-foundation")).toHaveTextContent("Tranibor by Varga Foundation · Apache 2.0");
     await vi.waitFor(() => expect(api.edition).toHaveBeenCalled());
-    expect(screen.getByTestId("footer-foundation")).toHaveTextContent("Choregos by Varga Foundation · Apache 2.0");
+    expect(screen.getByTestId("footer-foundation")).toHaveTextContent("Tranibor by Varga Foundation · Apache 2.0");
   });
 
   it("the footer line follows the product name of the theme the client holds (S42-13)", async () => {
@@ -87,7 +87,7 @@ describe("the edition names its publisher", () => {
         </ServedThemeProvider>
       </QueryClientProvider>,
     );
-    expect(screen.getByTestId("footer-foundation")).toHaveTextContent("Acme Labs, built on Choregos by Varga Foundation");
+    expect(screen.getByTestId("footer-foundation")).toHaveTextContent("Acme Labs, built on Tranibor by Varga Foundation");
     await vi.waitFor(() => expect(api.edition).toHaveBeenCalled());
   });
 

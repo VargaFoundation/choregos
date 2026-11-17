@@ -214,7 +214,7 @@ class GuardRails:
         if normalized.startswith(".choregos/"):
             return Decision(
                 False,
-                "the agent cannot change the Choregos configuration "
+                "the agent cannot change the Tranibor configuration "
                 "(only `.choregos/result.json` is expected)",
                 "write",
                 path,

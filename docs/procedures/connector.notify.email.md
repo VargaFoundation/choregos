@@ -12,16 +12,16 @@ For a project owner. Procedure `connector.notify.email`, version 1, reviewed 202
 
 ## At your mail provider
 
-1. Create an account or an app password dedicated to Choregos, so you can revoke it alone.
+1. Create an account or an app password dedicated to Tranibor, so you can revoke it alone.
 2. Note the host, the port and the TLS mode.
 3. Check that the sending address is allowed for that account.
 
 ## Permissions
 
 - The account only needs to send mail. Give it no mailbox access.
-- The password is a write-only secret: Choregos seals it and never shows it again.
+- The password is a write-only secret: Tranibor seals it and never shows it again.
 
-## In Choregos
+## In Tranibor
 
 1. Project settings, Connectors, **Notify**, type **E-mail (SMTP)**.
 2. `host`, `port` and the TLS mode: keep `starttls` on for port 587, or turn on `use_ssl` for port 465.
@@ -35,7 +35,7 @@ For a project owner. Procedure `connector.notify.email`, version 1, reviewed 202
 ## Test it
 
 Trigger a notification, for example a release train departure, and look in the recipients' inbox. The
-subject starts with `[Choregos]`.
+subject starts with `[Tranibor]`.
 
 ## When it fails
 

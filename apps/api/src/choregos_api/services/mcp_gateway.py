@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """An organisation's MCP gateway: the setting, its checks, the client it builds (S46-08, ADR 0105).
 
-Choregos consumes a gateway the organisation already runs; it never is one. The setting is a key of
+Tranibor consumes a gateway the organisation already runs; it never is one. The setting is a key of
 `Organization.settings`; its credential is sealed in the organisation's secret store (ADR 0058), is
 write-only, and leaves the store only inside `client_config`'s headers provider, one request at a time.
 Fail closed: a gateway that cannot be reached with its credential (no secrets key, the credential or the
@@ -249,7 +249,7 @@ def validate_put(body: McpGatewayPut, previous: GatewaySetting | None, secret_kn
     if body.identity_header and not body.audience:
         raise refuse(["audience"], "an `identity_header` needs `audience`")
     if auth.type == "jwt_assertion" and body.secret is not None:
-        raise refuse(["secret"], "the `jwt_assertion` auth is signed by Choregos: it has no secret")
+        raise refuse(["secret"], "the `jwt_assertion` auth is signed by Tranibor: it has no secret")
     if auth.type in _NEEDS_SECRET and body.secret is None:
         unchanged = previous is not None and previous.auth.type == auth.type and secret_known
         if not unchanged:

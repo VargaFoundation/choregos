@@ -13,7 +13,7 @@ rights.
 **What you will be able to do:** install the CLI, check what you downloaded, sign in to your instance,
 and keep the CLI at your instance's version.
 
-**Before you start:** the address of your Choregos instance (here `https://choregos.example.com`) and
+**Before you start:** the address of your Tranibor instance (here `https://choregos.example.com`) and
 an account on it.
 
 ## From your instance

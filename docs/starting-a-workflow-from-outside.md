@@ -1,6 +1,6 @@
 # Starting a workflow from outside
 
-An application, a script, a monitoring tool or another agent can start a Choregos workflow and hand it
+An application, a script, a monitoring tool or another agent can start a Tranibor workflow and hand it
 its data, without anyone opening the console. There are four ways in. This page says which one to take
 and walks through the one that follows the work to its end.
 
@@ -348,7 +348,7 @@ curl -s "$CHOREGOS_API_URL/api/v1/work-items/<id>" -H "Authorization: Bearer $CH
 
 A **trigger** turns any JSON into a work item, with its own token and no person behind it: declare it in
 the project, mint its token, hand over the URL. It maps the payload with JSON pointers, so the sender does
-not have to know Choregos. It answers with the work item's id and reports nothing afterwards. The set-up is
+not have to know Tranibor. It answers with the work item's id and reports nothing afterwards. The set-up is
 in [Usage](usage.md#work-items-opened-by-another-system-http-triggers) and
 [ADR 0113](adr/0113-a-workflow-starts-from-a-trigger.md).
 

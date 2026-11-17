@@ -6,7 +6,7 @@ sidebar_position: 3
 
 # Work items
 
-A work item is one request moving through a workflow: an issue, a ticket, a request filed in Choregos.
+A work item is one request moving through a workflow: an issue, a ticket, a request filed in Tranibor.
 This page shows how to start one, follow it, read what each step produced, and step in.
 
 **What you will be able to do**
@@ -38,12 +38,12 @@ webhook is lost, a catch-up pass finds the labelled issues nobody saw, within ab
 3. Optionally, set a **Budget in USD**. It can only tighten the workflow's own budget.
 4. Press **Create and start**.
 
-With GitHub, Jira or GitLab as the tracker, Choregos creates the issue there first, then follows it.
-With Choregos as the tracker, it gives the work item its key itself.
+With GitHub, Jira or GitLab as the tracker, Tranibor creates the issue there first, then follows it.
+With Tranibor as the tracker, it gives the work item its key itself.
 
 ### From the command line
 
-On a project whose tracker is Choregos itself:
+On a project whose tracker is Tranibor itself:
 
 ```bash
 choregos items create onboarding --title "Arrival of a data engineer on 3 March" --size M
@@ -60,7 +60,7 @@ Work can also start on a schedule, from a webhook or from another system: see
 The **Board**'s columns are the workflow's states. A card shows the work item's key and title; open it for the rest. Columns with no work item are hidden; press **Show empty columns** to see
 them.
 
-The board on your tracker (GitHub Projects, Jira) follows Choregos, not the reverse: moving a card
+The board on your tracker (GitHub Projects, Jira) follows Tranibor, not the reverse: moving a card
 there does not move the work item. Move it from the console.
 
 ### On its page
@@ -159,7 +159,7 @@ finding turned into a ticket becomes a new work item, the others are marked dupl
 | Symptom | Likely cause | What to do |
 | :-- | :-- | :-- |
 | The work item is in **Needs a human** | A step failed its gates too many times, an agent asked a question, the budget ran out, or a step timed out | Open the step's run to see which; answer, replay the stage, or stop it |
-| A `/choregos approve` comment on the issue did nothing | Decisions are taken in the console, not in tracker comments | Follow the link Choregos replies with |
+| A `/choregos approve` comment on the issue did nothing | Decisions are taken in the console, not in tracker comments | Follow the link Tranibor replies with |
 | "Replay the stage" is refused | The work item's budget is spent | Replay with a top-up, from the command line |
 | The run failed before the agent said anything | The sandbox did not start: an image, memory, the network | Read **Pod logs**: they say how the sandbox ended |
 

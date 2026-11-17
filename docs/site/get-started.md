@@ -1,18 +1,18 @@
 ---
 title: Get started
-description: Try Choregos on your machine in ten minutes, then take a real development project from an issue to a merged pull request.
+description: Try Tranibor on your machine in ten minutes, then take a real development project from an issue to a merged pull request.
 sidebar_position: 3
 ---
 
 # Get started
 
-This page has two parts. First, try Choregos on your own machine: one command, nothing to configure,
+This page has two parts. First, try Tranibor on your own machine: one command, nothing to configure,
 a demo work item waiting for your approval. Then run a real development project end to end: create it
 from a template, connect its repository, open an issue, let agents work, approve, merge.
 
 **What you will be able to do**
 
-- Run Choregos locally and approve your first work item.
+- Run Tranibor locally and approve your first work item.
 - Create a development project from the `github-software-delivery` template.
 - Send an issue through the workflow and take the decisions it asks of you.
 
@@ -85,18 +85,18 @@ features from an issue to production, with a person deciding at the points that 
 
 ### Before you start
 
-- **An instance of Choregos** your organisation runs. To install one, see
-  [Host Choregos](host/index.md).
+- **An instance of Tranibor** your organisation runs. To install one, see
+  [Host Tranibor](host/index.md).
 - **The organisation admin role.** Only an organisation administrator creates a project. Ask one if
   you are not.
-- **The Choregos GitHub App installed** on the repository's owner. You can do it from the console, on
+- **The Tranibor GitHub App installed** on the repository's owner. You can do it from the console, on
   the way (step 4).
 - **Groups from your identity provider** for the people who decide: `product-owners`, `maintainers`,
   `release-captains` and `architects`. A human step is answered only by a member of its group.
 - **A deployment connector** for the release train: Argo CD for real, or the `demo` type for a trial
   where nothing is deployed.
 - **Branch protection** on the repository's default branch: required status checks, but no required
-  review. People decide in Choregos; the platform merges.
+  review. People decide in Tranibor; the platform merges.
 
 ### 1. Create the project
 
@@ -127,7 +127,7 @@ resumes where it stopped.
 Open the project's **Settings**. The readiness list at the top says what the project still lacks, item
 by item, and who can fix each one. Work through it:
 
-1. **Settings › Connections**: the **Source code** card shows "The Choregos App is not installed" until
+1. **Settings › Connections**: the **Source code** card shows "The Tranibor App is not installed" until
    the App is there; press **Install on GitHub**, install it on the repository, and come back. Press
    **Test** on each card until it reads **Connected**.
 2. On the **Deployment (CD)** card, press **Configure** and choose Argo CD, or `demo` for a trial.
@@ -149,7 +149,7 @@ you expect. Add two labels: `feature` (it routes the issue to `dev-complex`) and
 starts the work). Nothing starts without `agent-ready`.
 
 Within a minute, the work item appears on the project's **Board**, and the issue gets a status comment
-that Choregos keeps up to date.
+that Tranibor keeps up to date.
 
 ### 4. Follow the agents
 
@@ -178,7 +178,7 @@ to a person.
 
 The platform then opens the pull request, and the work item waits in **Pull request to approve** for
 the `maintainers`. Read the diff on GitHub or in the run's **Diff**, then press **Approve** in
-Choregos. When the repository's checks are green, the platform merges the pull request and the work
+Tranibor. When the repository's checks are green, the platform merges the pull request and the work
 item reaches **Merged**.
 
 ### 7. Release

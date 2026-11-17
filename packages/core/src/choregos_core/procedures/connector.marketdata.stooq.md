@@ -28,7 +28,7 @@ answer a "get your apikey" page instead of data. Get the key there and put it in
 
 None: it only reads public market data. Nothing is written.
 
-## In Choregos
+## In Tranibor
 
 Connectors, **Market data**, type **Stooq**. `suffix_map` maps your tickers to Stooq's market suffixes
 (for example the empty suffix to `.us`, `.L` to `.uk`). `timeout_s` defaults to 20.

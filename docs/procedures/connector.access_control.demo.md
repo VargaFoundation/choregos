@@ -17,7 +17,7 @@ There is no vendor. Nothing is created anywhere.
 
 None: nothing leaves the platform. Nothing is stored beyond the process's memory, so it forgets on restart.
 
-## In Choregos
+## In Tranibor
 
 Declare the connector with type `demo`. Leave `url` empty to run the fakes in the same process, or give
 the address of the one process that serves them for several replicas.

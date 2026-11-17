@@ -48,7 +48,7 @@ describe("an organisation's own theme replaces the instance's after hydration (S
     vi.stubGlobal("fetch", vi.fn(async () => new Response("nope", { status: 500 })));
     const style = page();
     await new Promise((r) => setTimeout(r, 20));
-    expect(screen.getByTestId("name").textContent).toBe("Choregos");
+    expect(screen.getByTestId("name").textContent).toBe("Tranibor");
     expect(style.textContent).toBe("");
   });
 

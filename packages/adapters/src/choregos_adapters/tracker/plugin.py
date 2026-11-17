@@ -40,7 +40,7 @@ log = structlog.get_logger(__name__)
 
 PROFILE_SCHEMA = "plugin-tracker-profile.schema.json"
 #: What `close_item` writes as the close notes: the delivered item's review already happened.
-CLOSE_NOTES = "Closed by Choregos: the work item was delivered."
+CLOSE_NOTES = "Closed by Tranibor: the work item was delivered."
 
 Audit = Callable[[str, dict[str, Any]], Awaitable[None]]
 
@@ -67,7 +67,7 @@ def action_key(tool: str, *parts: str) -> str:
 class PluginTracker:
     """A plugin server that serves the tracker profile, as a `TrackerAdapter`."""
 
-    #: The items live in the server's system (ServiceNow…): Choregos reflects them.
+    #: The items live in the server's system (ServiceNow…): Tranibor reflects them.
     owns_items = True
 
     def __init__(self, client: ToolClient, plugin: str, server: str, *, audit: Audit | None = None) -> None:
@@ -227,7 +227,7 @@ class PluginTracker:
         log.info("tracker.plugin.link_skipped", plugin=self.plugin, server=self.server, a=a, b=b)
 
     async def set_fields(self, key: str, fields: dict[str, Any]) -> None:
-        """Not in the profile (the cost, size and risk fields Choregos writes to Jira): the status
+        """Not in the profile (the cost, size and risk fields Tranibor writes to Jira): the status
         comment carries them. A field write is an agent's governed operation of the server."""
         log.debug("tracker.plugin.fields_skipped", plugin=self.plugin, server=self.server, key=key)
 
@@ -253,7 +253,7 @@ class PluginTracker:
 
 
 def _marker(marker: str) -> str:
-    """The profile's marker alphabet (`[A-Za-z0-9._:-]{1,80}`): Choregos's markers are HTML comments
+    """The profile's marker alphabet (`[A-Za-z0-9._:-]{1,80}`): Tranibor's markers are HTML comments
     (`<!-- choregos:status -->`), reduced to their name."""
     bare = marker.strip().removeprefix("<!--").removesuffix("-->").strip()
     cleaned = "".join(ch for ch in bare if ch.isascii() and (ch.isalnum() or ch in "._:-"))

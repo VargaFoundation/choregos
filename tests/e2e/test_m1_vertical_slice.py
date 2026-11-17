@@ -157,7 +157,7 @@ async def test_issue_agent_ready_becomes_a_green_pr(platform: Platform, worker: 
     # ── 6. what the platform must have produced ──
     comment = platform.adapters.tracker.status_comment("varga/billing-api#123")
     assert comment is not None
-    assert "Choregos — progress" in comment
+    assert "Tranibor — progress" in comment
     assert "agent refine" in comment and "agent implement" in comment
     assert "€" in comment, "the cost is written in the ticket"
 

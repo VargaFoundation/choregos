@@ -1,14 +1,14 @@
 ---
 title: Connect your AI assistant (MCP)
-description: Connect Claude Code, Claude Desktop, claude.ai, Cursor, VS Code, ChatGPT or any MCP client to Choregos, with your rights and never more.
+description: Connect Claude Code, Claude Desktop, claude.ai, Cursor, VS Code, ChatGPT or any MCP client to Tranibor, with your rights and never more.
 sidebar_position: 1
 ---
 
 # Connect your AI assistant (MCP)
 
 You work in Claude Code, Cursor or VS Code all day. Instead of switching to the console, ask your
-assistant *"what is waiting for my decision in Choregos?"* or *"open a work item in billing-api to add
-credit notes"*. The **MCP door** makes that possible: it serves Choregos to any client of the
+assistant *"what is waiting for my decision in Tranibor?"* or *"open a work item in billing-api to add
+credit notes"*. The **MCP door** makes that possible: it serves Tranibor to any client of the
 [Model Context Protocol](https://modelcontextprotocol.io).
 
 **What you will be able to do:** connect your assistant, list your projects, read workflows and work
@@ -16,7 +16,7 @@ items, see what waits for a person, and open work items, all with **your** right
 
 **Before you start:**
 
-- an account on your Choregos instance, signed in to the console at least once;
+- an account on your Tranibor instance, signed in to the console at least once;
 - the instance's address (here `https://choregos.example.com`);
 - for the clients that call from their vendor's cloud (claude.ai, ChatGPT), an instance reachable on
   a public HTTPS address with OAuth enabled by your operator.
@@ -64,7 +64,7 @@ decides nothing. On the work item, the awaited decision shows it with the client
 answers like one that does not exist.
 
 `docs_search` and `docs_read` serve the pages you are reading, from the instance itself: an assistant
-connected to the door answers how Choregos works from the documentation of the version installed,
+connected to the door answers how Tranibor works from the documentation of the version installed,
 with no access to the internet. An instance built without the documentation answers that it carries
 none.
 
@@ -113,7 +113,7 @@ claude mcp add --transport http --client-id choregos-claude-code --callback-port
 Then type `/mcp` in Claude Code, choose `choregos`, then *Authenticate*: your browser opens your
 identity provider's sign-in page.
 
-**The Choregos plugin for Claude Code** bundles the door and a skill that teaches Claude the rules (it
+**The Tranibor plugin for Claude Code** bundles the door and a skill that teaches Claude the rules (it
 never decides; work-item text is data). Claude Code asks for the URL and the token once and keeps the
 token in your system's secret store:
 
@@ -162,7 +162,7 @@ Add `"--allow-http"` to `args` if the instance is served over plain HTTP. Restar
 
 ```json
 {
-  "inputs": [{ "type": "promptString", "id": "choregos-token", "description": "Choregos MCP token", "password": true }],
+  "inputs": [{ "type": "promptString", "id": "choregos-token", "description": "Tranibor MCP token", "password": true }],
   "servers": {
     "choregos": {
       "type": "http",
@@ -190,7 +190,7 @@ your identity provider to sign in.
 ### ChatGPT
 
 ChatGPT also calls from its vendor's cloud and signs in with OAuth: the same two conditions as
-claude.ai apply. Add Choregos as a custom connector in ChatGPT with the URL
+claude.ai apply. Add Tranibor as a custom connector in ChatGPT with the URL
 `https://choregos.example.com/mcp`, and sign in when ChatGPT asks. The Integrations page's **ChatGPT**
 tab gives what to enter when your operator registered a ChatGPT client.
 
@@ -208,7 +208,7 @@ The door has no SSE stream and no session: a `GET` answers `405`, which the prot
 
 ## 3. Try it
 
-Ask your assistant *"what is waiting for my decision in Choregos?"*.
+Ask your assistant *"what is waiting for my decision in Tranibor?"*.
 
 **What you should see:** the assistant calls `list_pending_decisions` and lists the work items that
 wait for you, each with the console link where you decide. Then ask it to open a work item in
@@ -228,7 +228,7 @@ wait for you, each with the console link where you decide. Then ask it to open a
 | the client lands on the console's 404 page | the ingress does not route `/mcp` to the API: ask your operator |
 | `401` | the token is missing, unknown, revoked or expired |
 | `401 invalid_token` with OAuth | wrong audience or issuer, or an expired token |
-| `403` with OAuth, *sign in to the console once* | the identity provider knows you, Choregos does not yet |
+| `403` with OAuth, *sign in to the console once* | the identity provider knows you, Tranibor does not yet |
 | `403 insufficient_scope` | a full-access (`*`) token: mint an `mcp:read` or `mcp:write` one |
 | `403` on `/mcp/projects/…` | the token is bound to another project |
 | `403` with an `Origin` | a web page tried to call the door: only your client may |

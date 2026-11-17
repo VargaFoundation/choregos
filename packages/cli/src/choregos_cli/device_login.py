@@ -29,7 +29,7 @@ class DeviceSignInError(RuntimeError):
 
 def client_name() -> str:
     """What the console shows the person before they approve: this tool, its version and where it runs."""
-    return f"choregos {__version__} on {socket.gethostname()}"[:80]
+    return f"tranibor {__version__} on {socket.gethostname()}"[:80]
 
 
 def start(http: httpx.Client, *, org: str | None) -> dict[str, Any]:

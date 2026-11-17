@@ -5,7 +5,7 @@ and you are reading this to decide whether to install its daemon. This page says
 does and what it cannot do, what it asks of you, and what stays yours. Whoever operates the
 platform, or administers your organisation on it, reads [Outposts](outposts.md) instead.
 
-An **outpost** is a place of your organisation that the platform (Choregos) cannot connect to, and
+An **outpost** is a place of your organisation that the platform (Tranibor) cannot connect to, and
 that connects out to it. The daemon `choregos-outpost` runs there. It polls one hostname of the
 platform, the **door**, for tool calls the platform has already decided; it makes the ones your own
 policy file allows, against MCP servers of your network; and it sends the answers back. The

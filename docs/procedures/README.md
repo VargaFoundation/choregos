@@ -54,7 +54,7 @@ One procedure per connector type, knowledge source kind, MCP-door client and ext
 | [The demo carrier (demonstration only)](connector.shipping.demo.md) | anyone | `shipping/demo` | 2026-10-16 |
 | [Use GitHub Issues and Projects v2 as the board](connector.tracker.github-issues.md) | a project owner | `tracker/github-issues` | 2026-11-12 |
 | [Use GitLab Issues as the board](connector.tracker.gitlab-issues.md) | a project owner | `tracker/gitlab-issues` | 2026-10-16 |
-| [Let Choregos hold the work items](connector.tracker.internal.md) | a project owner | `tracker/internal` | 2026-10-16 |
+| [Let Tranibor hold the work items](connector.tracker.internal.md) | a project owner | `tracker/internal` | 2026-10-16 |
 | [Use Jira Cloud as the board](connector.tracker.jira.md) | a project owner | `tracker/jira` | 2026-11-01 |
 | [Use a plugin's server as the board](connector.tracker.plugin.md) | a project owner | `tracker/plugin` | 2026-10-28 |
 | [Search the web through Brave Search API](connector.web_search.brave.md) | an organisation administrator | `web_search/brave` | 2026-10-20 |
@@ -75,15 +75,15 @@ One procedure per connector type, knowledge source kind, MCP-door client and ext
 
 | Procedure | For | Applies to | Reviewed |
 | :-- | :-- | :-- | :-- |
-| [Connect ChatGPT to Choregos](agent.door.chatgpt.md) | anyone | `chatgpt` | 2026-10-16 |
-| [Connect claude.ai to Choregos](agent.door.claude-ai.md) | anyone | `claude-ai` | 2026-10-16 |
-| [Connect Claude Code to Choregos](agent.door.claude-code.md) | anyone | `claude-code` | 2026-10-16 |
-| [Connect Claude Desktop to Choregos](agent.door.claude-desktop.md) | anyone | `claude-desktop` | 2026-10-16 |
-| [Use the Choregos CLI](agent.door.cli.md) | anyone | `cli` | 2026-10-16 |
-| [Connect Cursor to Choregos](agent.door.cursor.md) | anyone | `cursor` | 2026-10-16 |
-| [Connect another MCP client to Choregos](agent.door.other.md) | anyone | `other` | 2026-10-16 |
-| [Use the Choregos REST API](agent.door.rest.md) | anyone | `rest` | 2026-10-16 |
-| [Connect VS Code to Choregos](agent.door.vscode.md) | anyone | `vscode` | 2026-10-16 |
+| [Connect ChatGPT to Tranibor](agent.door.chatgpt.md) | anyone | `chatgpt` | 2026-10-16 |
+| [Connect claude.ai to Tranibor](agent.door.claude-ai.md) | anyone | `claude-ai` | 2026-10-16 |
+| [Connect Claude Code to Tranibor](agent.door.claude-code.md) | anyone | `claude-code` | 2026-10-16 |
+| [Connect Claude Desktop to Tranibor](agent.door.claude-desktop.md) | anyone | `claude-desktop` | 2026-10-16 |
+| [Use the Tranibor CLI](agent.door.cli.md) | anyone | `cli` | 2026-10-16 |
+| [Connect Cursor to Tranibor](agent.door.cursor.md) | anyone | `cursor` | 2026-10-16 |
+| [Connect another MCP client to Tranibor](agent.door.other.md) | anyone | `other` | 2026-10-16 |
+| [Use the Tranibor REST API](agent.door.rest.md) | anyone | `rest` | 2026-10-16 |
+| [Connect VS Code to Tranibor](agent.door.vscode.md) | anyone | `vscode` | 2026-10-16 |
 
 ## External agents
 

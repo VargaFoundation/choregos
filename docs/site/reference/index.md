@@ -13,4 +13,4 @@ The pages to look things up in, once you know what you want to do.
   they refuse.
 - [API overview](api.md): the REST API's conventions and resources, and its OpenAPI document.
 - [CLI reference](../cli/reference.md): every command, generated from the CLI.
-- [Glossary](glossary.md): the words Choregos uses.
+- [Glossary](glossary.md): the words Tranibor uses.

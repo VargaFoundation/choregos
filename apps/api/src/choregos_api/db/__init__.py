@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""The persistence layer of Choregos."""
+"""The persistence layer of Tranibor."""
 
 from __future__ import annotations
 

@@ -289,7 +289,7 @@ function Field({
       </Select>
     );
   } else if (propriete.format === "github-repo") {
-    // A repository picked from what the Choregos GitHub App sees, never an installation id (ADR 0073).
+    // A repository picked from what the Tranibor GitHub App sees, never an installation id (ADR 0073).
     control = (
       <GitHubRepoField
         id={id}

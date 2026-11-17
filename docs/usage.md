@@ -90,9 +90,9 @@ presses *Allow and continue*: the hosts are opened and the connector created in 
 sees who the administrators are and presses *Ask an administrator*; the request waits in the
 administrators' inbox and the person retries once it is approved. When the cluster's network also
 needs a change, the modal shows it (a snippet to copy, and a prefilled issue when the deployment
-configures one): Choregos cannot apply it. `/admin/egress` (**Administration → Network**) is the
+configures one): Tranibor cannot apply it. `/admin/egress` (**Administration → Network**) is the
 organisation's network in one page (S44-04): what its agents may reach (the ceiling's `network`
-section), the hosts Choregos calls (rules, requests, the deployment's ceiling, what the platform must
+section), the hosts Tranibor calls (rules, requests, the deployment's ceiling, what the platform must
 still open) and, for an `org_admin`, the outbound proxy and the network activity. The API: `allow_egress` on the add endpoints, `409 egress_required`, `/orgs/{org}/egress`.
 The list is one half of the organisation's network policy; the other half is its **bounds**, the
 `network` section of its policy ceiling (see *The ceiling's `network` section* below, [ADR 0070](adr/0070-network-access-is-bounded-and-enforced-per-run.md)):
@@ -173,7 +173,7 @@ replace a key without a gap: type the new one in a free slot, test, clear the ol
 vendor allows several keys is yours to check: the free market-data sources allow one per person.
 
 **GitHub: no installation id.** A GitHub connector asks for a repository, not for an installation
-([ADR 0073](adr/0073-github-app-installations-are-discovered-not-typed.md)). The Choregos GitHub App is
+([ADR 0073](adr/0073-github-app-installations-are-discovered-not-typed.md)). The Tranibor GitHub App is
 installed from the console (*Install on GitHub*, which returns to the settings page); the platform
 discovers the installation and your organisation claims it. The repository field is a picker over the
 repositories the App sees (`GET /orgs/{org}/github/repositories?q=`); an owner the App is not installed
@@ -187,7 +187,7 @@ the repositories the App can see, each marked private or public. When the organi
 yet, the field says so and offers *Install on GitHub* (it opens GitHub in the same tab and returns to the
 settings page) and *Refresh*. *Type it instead* switches to a text input for a repository the App cannot
 list; an owner without an installation is warned about on the spot, with the same install action. A GitHub
-card reads "via the Choregos App on `<account>`", and a save refused with `422` shows *Install on GitHub*
+card reads "via the Tranibor App on `<account>`", and a save refused with `422` shows *Install on GitHub*
 under the error. No screen asks for an installation id.
 
 Until a project can run, its overview opens on a **getting started** list, which is the project's
@@ -408,7 +408,7 @@ and on its `execute_tool` span (`choregos.tool.origin`, `choregos.tool.script_sh
 attribution: no authorisation reads them, and every refusal of the route (unknown tool, cap, catalogue
 write, arguments, a proposal for a write under approval) is the same for every door (ADR 0122 §2, §4).
 
-`memory: lexical` keeps the project's memory in Choregos's own database — no extra service,
+`memory: lexical` keeps the project's memory in Tranibor's own database — no extra service,
 and a lexical, not semantic, search: there is no `vector` extension behind it. It was called
 `pgvector` until 2026-09-26, which promised something the code does not do; that name still
 works as a deprecated alias.
@@ -640,7 +640,7 @@ list from `lg` up): **Readiness** (on top), **General**, **Connections**, **Agen
 - **Readiness** is the list above, drawn from `GET /projects/{id}/readiness`: a summary ("9 of 13 ready, 3
   to check"), the items grouped by section, and a *Fix* link to the section or page that fixes each open
   one. When the viewer cannot fix an item it says whom to ask (a project owner, the organisation admin, the
-  platform operator, or "done outside Choregos") instead of the link. The overview's *Getting started* card
+  platform operator, or "done outside Tranibor") instead of the link. The overview's *Getting started* card
   is the same list and disappears when nothing is to do.
 - **General**: name, template (read-only, with "a newer version exists" when the manifest has one),
   environments, labels, the repository (URL, default branch, language, branch prefix, clone depth, its name in
@@ -930,7 +930,7 @@ not reach it by itself. To adopt one (for instance `dev-complex` version 2 of
 `github-software-delivery` 1.1.0, which adds a documentation step), publish the template's YAML as
 the workflow's next version, from the console's YAML tab or the API with the version you are
 replacing as `base_version`; the catalogue agents the workflow names install themselves
-(ADR 0040). The running Choregos must already know the gates the YAML uses, or validation refuses
+(ADR 0040). The running Tranibor must already know the gates the YAML uses, or validation refuses
 it.
 
 ```bash
@@ -1368,7 +1368,7 @@ Three properties worth knowing before you wire an external provider:
 | | |
 | :-- | :-- |
 | The agent never holds a provider credential | The platform makes the call; the agent's egress stays closed |
-| Your run token never reaches the provider | It authenticates the agent *to Choregos*, nowhere else |
+| Your run token never reaches the provider | It authenticates the agent *to Tranibor*, nowhere else |
 | The agent chooses neither URL nor method | It names a catalogue tool; the rest is written in the catalogue |
 
 An unauthorised tool answers **404, not 403**: an agent has no business discovering the
@@ -1638,7 +1638,7 @@ when you create an agent.
 *Why not a clone of Microsoft's Agent Builder or Copilot Studio?* We took what fits and left the rest.
 Kept: a short first step in which the author says what the agent is for, one form for the details with
 the advanced fields folded, a test pane beside it, and draft-then-publish. Not kept: a conversational
-"describe" turn (one round, describe then edit the form, is enough), starter prompts (a Choregos agent
+"describe" turn (one round, describe then edit the form, is enough), starter prompts (a Tranibor agent
 is a stage worker invoked on a work item, not a chat assistant, so its equivalent is the eval suite
 and the trial's sample input), topics, triggers and channels (workflows are the triggers, and the AI
 clients page is the channel), and a visual canvas (the definition stays data, YAML or JSON, with a
@@ -1674,7 +1674,7 @@ beyond them is dropped and listed in `notes`, limits are clamped, and instructio
 variable outside the sandbox's list are emptied with a note. Ten drafts a minute per person (429 with
 `Retry-After`); a gateway failure is a 502. The slug `new` is reserved (422): `/agents/new` is the
 console's page. The drafting model call appears in the gateway's logs under `agent-drafter`, not in
-Choregos' spend ledger.
+Tranibor's spend ledger.
 
 A skill **declares no permission**: an `allowed-tools` field is refused, because what an agent may
 call is decided by its version and its project, never by a file it reads. An archive that leaves
@@ -2866,7 +2866,7 @@ the endpoint is not `host:port` or no kind is chosen. **Test the proxy** fetches
 the sealed password. The API's refusals (409 without a secrets key, 422) are shown as returned.
 
 **MCP gateway.** [ADR 0105](adr/0105-choregos-consumes-an-mcp-gateway-it-never-is-one.md): **Administration →
-MCP gateway** (`org_admin` only) sets, tests and removes the organisation's MCP gateway: Choregos calls a
+MCP gateway** (`org_admin` only) sets, tests and removes the organisation's MCP gateway: Tranibor calls a
 gateway that fronts MCP servers, it never is one. The **Mode** is `off` (kept, unused), `available` (a connector
 may go through it) or `required` (new direct `mcp` connectors are refused and existing ones are not called; the
 card lists the ones it stops, and a plugin's server is never stopped). The **Endpoint** is an http(s) URL without
@@ -2886,7 +2886,7 @@ too). **Remove** asks first; it is refused while connectors go through the gatew
 servers** offers *Through your MCP gateway* for every entry whose install routes include it, including entries
 that run as a local process or need OAuth, which cannot be installed directly. An entry that only goes through the
 gateway carries that badge. When both routes exist the install drawer has a **Route** choice: *Directly*
-(Choregos holds the credential, the default) or *Through the organisation's MCP gateway* (the gateway holds it).
+(Tranibor holds the credential, the default) or *Through the organisation's MCP gateway* (the gateway holds it).
 The gateway route hides the secret field and asks for the **Server name at the gateway** (the entry id by
 default; letters, digits, dots, dashes and underscores); it sends the route and that name, never a secret. The
 result is a connector of type `mcp-gateway` with the config `{server}`. **Administration → Connectors** marks it
@@ -3031,7 +3031,7 @@ retrying recovers one minute after it stops. Governed writes are checked against
 Every request carries `User-Agent: Choregos/<version> (+<contact>)`: the ceiling's `user_agent_contact`,
 else the deployment's `CHOREGOS_USER_AGENT_CONTACT`, else the project's page. It is sent on MCP calls,
 web crawls, git knowledge fetches and skill downloads. A web crawl also waits between two pages for the
-longer of the site's `Crawl-delay` (read under the names `ChoregosKnowledge` and `Choregos`) and
+longer of the site's `Crawl-delay` (read under the names `ChoregosKnowledge` and `Tranibor`) and
 `60 / per_host_per_minute` seconds, and stops, keeping every page it did not reach, when the site
 answers 429 (or 503 with `Retry-After`).
 
@@ -3091,7 +3091,7 @@ field unknown** (their terms were not reviewed), and an unknown value fails ever
 To use one under a cap, state your contract in the connector's **Data handling** fields (Admin, Connectors:
 retention in days, reuse yes or no, region, and the terms reference, for example retention 0, reuse no,
 terms "contract ref, §4"; stored as `data_handling` in the connector's configuration). The form shows what
-Choregos declares for the backend and refuses a widening or a missing terms reference; a declaration can
+Tranibor declares for the backend and refuses a widening or a missing terms reference; a declaration can
 only be made stricter, and the terms reference is required. A project's policy can narrow (`web_search:
 {mode: deny}`, a shorter `max_query_retention_days`) but never widen the ceiling; the `regulated` preset
 sets `max_query_retention_days: 0` and `allow_query_reuse: false`.
@@ -3309,7 +3309,7 @@ curl -X POST $API/projects/acme:hr/actions/<id>/decision -d '{"decision": "appro
   action says what it could not undo. Parameters are Jinja (sandboxed) over `params` and the results
   of earlier `effects`; a compensation also sees its own effect's `result`.
 - **In doubt**: one effect cannot be made idempotent by the platform, a write through an
-  [outpost](integrations.md#a-tool-server-at-an-outpost-adr-0149), whose server Choregos does not
+  [outpost](integrations.md#a-tool-server-at-an-outpost-adr-0149), whose server Tranibor does not
   see. It is delivered **at most once**. When an instance of the outpost took the write and its
   answer never came back, nobody knows whether the server made it: the effect and the action end
   **`in_doubt`**, where the platform stops, as at `succeeded`, `failed` and `rejected`
@@ -3469,7 +3469,7 @@ long after signing in — and the journal, key by key.
 
 ## 5. Let a ticket run
 
-Label a ticket `agent-ready` in your tracker (or create it in Choregos with
+Label a ticket `agent-ready` in your tracker (or create it in Tranibor with
 `tracker: internal`). The platform starts one workflow per ticket, with a deterministic id —
 so a webhook delivered twice starts nothing twice. If a webhook is lost, a reconciliation
 pass every 60 seconds catches up.
@@ -3482,20 +3482,20 @@ credentials need the right to create issues (GitHub App: *Issues: read and write
 issue on the project; GitLab: `api` scope). If the tracker refuses, you get a 502 and nothing is created.
 
 A `/choregos approve`, `reject`, `answer` or `scope` comment on a routed ticket does nothing to the
-workflow: a decision stays in the console, after a fresh sign-in. Choregos replies on the ticket with a
+workflow: a decision stays in the console, after a fresh sign-in. Tranibor replies on the ticket with a
 link to the inbox and records a `tracker.command.redirected` audit entry (ADR 0102).
 
 `/choregos pause`, `resume` and `stop` are honoured in one case only: a GitHub comment, in a delivery
 verified by its HMAC (`CHOREGOS_GITHUB_WEBHOOK_SECRET` is set), by a github.com account linked to a member
 of the project's organisation. The command runs with that member's own rights (a developer or
 above), is audited as `workitem.pause`, `workitem.resume` or `workitem.stop` on the channel `tracker`,
-and Choregos confirms on the ticket. A login is never matched, so a renamed account inherits nothing.
+and Tranibor confirms on the ticket. A login is never matched, so a renamed account inherits nothing.
 Jira and GitLab comments, and any delivery that carries only the shared secret, are never honoured: a
 display name or a username is not a stable identity. Anyone else gets the console link, with a note on
 how to link their account. A reply that cannot be posted never fails the webhook.
 
 Moving a card on the tracker board (GitHub Projects, Jira) does not move the work item: the board
-follows Choregos, not the reverse (ADR 0102). Move a work item from the console.
+follows Tranibor, not the reverse (ADR 0102). Move a work item from the console.
 
 ```bash
 choregos items list billing-api

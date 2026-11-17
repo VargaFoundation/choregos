@@ -337,15 +337,15 @@ def _card(door: Door, settings: Settings, served: list[Skill]) -> dict[str, Any]
             for version in (v1.V10, v1.V03)
         ],
         "protocolVersion": PROTOCOL_VERSION,
-        "name": f"Choregos — {door.org.name}",
+        "name": f"Tranibor — {door.org.name}",
         "description": (
             f"The governed workflows of {door.org.name} that opted in as A2A skills. A task is a work "
-            "item: it may wait for a person, who decides in the Choregos console, never over A2A."
+            "item: it may wait for a person, who decides in the Tranibor console, never over A2A."
         ),
         "url": url,
         "preferredTransport": "JSONRPC",
         "version": __version__,
-        "provider": {"organization": "Choregos", "url": door.console},
+        "provider": {"organization": "Tranibor", "url": door.console},
         "capabilities": {
             "streaming": True,
             "pushNotifications": True,
@@ -663,7 +663,7 @@ async def _send(door: Door, params: dict[str, Any]) -> dict[str, Any]:
         item, project = await _task(door, message["taskId"])
         raise Fault(
             UNSUPPORTED_OPERATION,
-            "a work item is not continued over A2A: a decision is taken by a person in the Choregos "
+            "a work item is not continued over A2A: a decision is taken by a person in the Tranibor "
             f"console, at {_console_url(door, project, item)}",
             {"decision_url": _console_url(door, project, item)},
         )
@@ -823,7 +823,7 @@ async def task_of(door: Door, item: WorkItem, project: Project) -> dict[str, Any
             {
                 "kind": "text",
                 "text": (
-                    f"Waiting for a person's {waiting.kind}. It is decided in the Choregos console, "
+                    f"Waiting for a person's {waiting.kind}. It is decided in the Tranibor console, "
                     f"never over A2A: {link}" + (f"\n\n{str(question)[:1000]}" if question else "")
                 ),
             },

@@ -19,7 +19,7 @@ A request someone else built, which the platform does not see being built (an AC
 gateway's callback, ADR 0141 §4), is matched by **digest**: the runner registers, per section, the
 sha256 of each paragraph it wrote (`register`), never the text; a paragraph of the request whose digest
 is registered counts in that section, the rest is `backend`. `choregos_core.llm_spans` carries a copy
-of this matching (the gateway's image has no Choregos package), and a test keeps the two equal.
+of this matching (the gateway's image has no Tranibor package), and a test keeps the two equal.
 """
 
 from __future__ import annotations

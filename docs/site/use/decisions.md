@@ -6,7 +6,7 @@ sidebar_position: 4
 
 # Decisions
 
-A workflow names the points where a person decides. Choregos never guesses past them: the work item
+A workflow names the points where a person decides. Tranibor never guesses past them: the work item
 waits, with a deadline, until someone with the right role and group decides. This page shows where to
 find what waits for you and how to answer each kind of request.
 
@@ -89,7 +89,7 @@ If the task cannot be done, write why in **Why it cannot be done** and press **C
 
 ## Approve a governed action
 
-A write into a system that is not Choregos (create an account, order a laptop, deactivate a badge) is a
+A write into a system that is not Tranibor (create an account, order a laptop, deactivate a badge) is a
 **governed action**. An agent or a workflow proposes it; the people its approval rule names decide; then
 the platform runs it, step by step, and undoes what it did if a step fails.
 
@@ -156,7 +156,7 @@ the audit log as an override (`workitem.decision.group_override`), with the grou
 
 ## Decisions stay in the console
 
-A `/choregos approve`, `reject` or `answer` comment on an issue does not decide anything. Choregos
+A `/choregos approve`, `reject` or `answer` comment on an issue does not decide anything. Tranibor
 replies on the issue with a link to the inbox. A decision is taken by a signed-in person, in the
 console or with their own token.
 

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import * as vscode from "vscode";
 
-/** The views of the Choregos container (ADR 0155 §2); `package.json` declares the same ids. */
+/** The views of the Tranibor container (ADR 0155 §2); `package.json` declares the same ids. */
 export const VIEWS = {
   live: "choregos.live",
   decisions: "choregos.decisions",

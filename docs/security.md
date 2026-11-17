@@ -17,7 +17,7 @@ organisations must assume **a member of one will try to read another**.
 | writing outside the allowed paths | ACP permission refused → diff verified after the run → revert → gate `scope_respected` | `guardrails.py`, `scope.py`, `gates/` |
 | a skill that carries an attack (injection, exfiltration, a vulnerable dependency) | the supply-chain gate's pattern scan ([ADR 0050](adr/0050-skill-supply-chain-gate.md)), then SkillSpector offline on every version a person publishes ([ADR 0095](adr/0095-skillspector-behind-the-skill-gate-offline.md)): AST, taint, YARA, MCP tool poisoning, OSV advisories from a local mirror, no call leaving the pod; a HIGH finding or `DO_NOT_INSTALL` holds the version for a second administrator, a failed scan holds it too | `services/skill_gate.py`, `services/skill_scanner.py`, `scanners/`, `apps/api/tests/test_skill_gate.py`, `apps/api/tests/test_skill_scanner.py` |
 | exfiltrating data, or polluting the internet | egress is closed and bounded in three scopes that only narrow one another — organisation ceiling, project policy, agent version — with a deny list that always wins and IP literals refused (ADR 0070). **Enforced by layer**: a **per-run egress proxy** (S40-01c) is the wall for host, port and connection rate; the tool broker and the platform's own fetchers (MCP connectors, knowledge crawls, git skill sources) are a wall for what the platform requests: the ceiling is read at declaration and again at every call, a refusal is a 403 journaled with layer `broker`, calls to one host are throttled organisation-wide and carry an identifying User-Agent (S40-01d); the built-in `web_fetch` tool is the one place where method, robots.txt, User-Agent and politeness hold for what an agent reads (S40-01f); the runner's guardrails and the backend's settings are a net (S40-01b). Every decision is journaled per run (`network_decisions`), and `network` is part of an agent version's digest only when set. The per-project Squid of the GitOps provisioning (allowlist = `allow_domains`, `CONNECT` to 443 only) stays for per-project namespaces: host-level, project-level | `choregos_core/network.py`, `services/network.py`, `services/platform_network.py`, `services/web_fetch.py`, `apps/api/tests/test_platform_network.py`, `apps/api/tests/test_web_fetch_tool.py`, `gitops.py` (`render_egress_proxy`), `tests/cluster/test_egress_proxy.py`, `tests/cluster/test_sandbox_egress.py` |
-| deciding from a tracker comment | a `/choregos approve\|reject\|answer\|scope\|pause\|resume\|stop` comment is answered on the tracker with a console link, audited as `tracker.command.redirected`, and never signalled to the workflow: a tracker login is not a Choregos principal, and decisions need the console and its fresh sign-in ([ADR 0102](adr/0102-a-tracker-comment-carries-no-decision.md)) | `routers/webhooks.py` (`_answer_tracker_command`), `apps/api/tests/test_tracker_commands.py` |
+| deciding from a tracker comment | a `/choregos approve\|reject\|answer\|scope\|pause\|resume\|stop` comment is answered on the tracker with a console link, audited as `tracker.command.redirected`, and never signalled to the workflow: a tracker login is not a Tranibor principal, and decisions need the console and its fresh sign-in ([ADR 0102](adr/0102-a-tracker-comment-carries-no-decision.md)) | `routers/webhooks.py` (`_answer_tracker_command`), `apps/api/tests/test_tracker_commands.py` |
 | using credentials | there are none in the workspace; the agent never holds the run token: the proxy variables it inherits carry an egress token that opens its run's network routes and no other ([ADR 0115](adr/0115-the-agent-never-holds-the-run-token.md)), and the proxy's reports also need the proxy's own key, which no run's pod receives, so the agent cannot rewrite its run's network counters ([ADR 0145](adr/0145-the-proxy-reports-with-a-key-the-agent-does-not-hold.md)); and on every executor the agent, the project's checks (which run the code it wrote) and the runner's git start from the runner's environment without any `CHOREGOS_RUN_*` variable but the run id (`agent_base_environment`, S57-02); a job (ADR 0056) receives the run token on purpose, by name, and it never leaves for a third party (tool catalogue, ADR 0014) | `docker/runner.Dockerfile`, `catalogue.py`, `apps/api/tests/test_egress_token.py`, `tests/charts/test_egress_proxy_chart.py`, `packages/runner/tests/test_egress_env.py`, `packages/runner/tests/test_agent_holds_no_run_token.py` |
 | pushing a secret | `no_secrets` on the diff, sensitive files refused, gitleaks in CI | `gates/`, `guardrails.py`, `.gitleaks.toml` |
 | leaking a secret through a pod log | the tail of a run's pod log is archived only after `redact` (known token shapes, bearer/basic credentials, URL user-info, values of secret-named keys) — a floor, not a scanner (ADR 0054) | `choregos_core/redaction.py`, `executor/log_archive.py` |
@@ -34,7 +34,7 @@ organisations must assume **a member of one will try to read another**.
 | prompt injection through what the agent reads | lexical detection over the ticket, its documents and the memory pack **before** the run: `sandbox.prompt_injection: warn` journals a security event on the ticket, `block` (the `regulated` preset) stops the stage before any run with the reason — a net against the crude cases, not an understanding; the walls remain the ones below | `choregos_core/injection.py`, `activities/stage.py` |
 | a secret the agent read leaving for the model provider | with `sandbox.llm_security_analyzer` (the `team` and `regulated` presets) the run's and the hosted session's gateway key are minted marked, and LiteLLM's `pre_call` guardrail masks known token shapes, long bearer/basic credentials and URL user-info in the request **before** the provider call, and its `post_call` guardrail masks them in the model's answer (text, tool arguments and reasoning, streamed or not, on `/chat/completions`, `/v1/messages` and `/v1/responses`; a signature or encrypted reasoning left as is) before the agent or the record sees it, and withholds an answer it fails on; never in the agent's process, never turned on or off by the request. Only the LiteLLM gateway enforces it: with `direct` or `openai-compatible` the flag refuses the stage and the session; a filter, not a scanner (ADR 0084) | `choregos_core/llm_guardrail.py`, `charts/choregos/charts/litellm`, `activities/run_key.py` |
 | a tool server flooding or steering the agent through its answer | every broker result is checked against the `outputSchema` its server declared (422 without the payload), its secrets masked with `redact`, and cut with a marker to its operation's cap (`CHOREGOS_BROKER_RESULT_MAX_BYTES` unless an organisation administrator set one), never above `CHOREGOS_BROKER_RESULT_CEILING_BYTES`, its data counted once (a text block that serializes its `structuredContent` is not counted again, #1374); the injection guard then reads what is left (#755, S40-17). A catalogue or plugin tool's answer is masked and cut the same way, to the cap its catalogue entry declares or the default, without a schema (#759), then read by the same injection guard (S40-18); `web_fetch`'s page and `web_search`'s results are masked and cut the same way, at the default (#1383), and the API names the bound it applied (`result_max_bytes`), up to which the run's tool server shows the model the result. The guard reads an MCP answer's `structuredContent` as well as its text, and a hosted session's tool answers as a run's (S40-18b); a session's model reads a `structuredContent` its text does not serialize, masked, capped and guarded with it (S40-18c) | `services/broker.py` (former name `services/courtier.py`), `apps/api/tests/test_broker_result_bounds.py`, `apps/api/tests/test_catalogue_plugin_result_bounds.py`, `apps/api/tests/test_operation_result_cap.py`, `apps/api/tests/test_catalogue_plugin_injection_guard.py`, `apps/api/tests/test_guard_structured_content.py`, `apps/api/tests/test_result_bound_both_doors.py` |
-| an MCP gateway widening what an agent may do, or an agent reaching it | the organisation's gateway is consumed, never run by Choregos: it holds the upstream credential, Choregos holds a sealed gateway credential and signs a 60-second ES256 assertion per call; the internal-hosts rule refuses an endpoint inside the cluster; its host is denied to runs and refused for the runners family; a connector's approvals, result bounds and injection guard are unchanged; mode `required` refuses direct connectors before any action exists (ADR 0105) | `services/mcp_gateway.py`, `services/mcp_gateway_identity.py`, `tests/licences/test_mcp_gateway_boundary.py` |
+| an MCP gateway widening what an agent may do, or an agent reaching it | the organisation's gateway is consumed, never run by Tranibor: it holds the upstream credential, Tranibor holds a sealed gateway credential and signs a 60-second ES256 assertion per call; the internal-hosts rule refuses an endpoint inside the cluster; its host is denied to runs and refused for the runners family; a connector's approvals, result bounds and injection guard are unchanged; mode `required` refuses direct connectors before any action exists (ADR 0105) | `services/mcp_gateway.py`, `services/mcp_gateway_identity.py`, `tests/licences/test_mcp_gateway_boundary.py` |
 | lying about evidence | the runner **runs** the tests and overwrites declared evidence; gates read the diff, not the prose | `dod.py`, `result.py`, `gates/` |
 | reading another organisation | PostgreSQL row-level security, **fail-closed**: every session declares the organisations it may see, an undeclared session sees nothing | `db/session.py`, `deps.py`, migrations `b2d4f6a8c0e1` and `c3e5a7f9b1d4` |
 | reading another organisation's audit trail | `audit_log` carries an organisation and is under the same policy; `GET /audit` additionally restricts to the organisations where the caller really holds `audit:read` — being a member is not enough. Platform-level rows (`org_id IS NULL`: logins, API tokens) are returned only when that right covers every organisation of the instance | `routers/admin.py`, `audit.py`, migration `c3e5a7f9b1d4` |
@@ -140,12 +140,12 @@ or another organisation.
   backend keeps of a query is **declared, not verified**: the shipped backends declare nothing, and an
   organisation's `data_handling` override is believed on its `terms_ref`.
   Claude Code's own `WebSearch` runs **at the model provider**, outside
-  every Choregos network layer: the only lever is to deny the tool (`builtin_web_tools`), and that is
+  every Tranibor network layer: the only lever is to deny the tool (`builtin_web_tools`), and that is
   a setting in the pod, not a wall. The runner's guardrails are a **net**: the agent shares the pod,
   and a `curl` from Bash is not a URL permission request. On one operator's tenant the infra's FQDN
   policy lets runner pods reach eight hosts directly and its baseline policy lets every pod of the
   namespace reach every other one (PostgreSQL and Temporal included): until infra changes that, the
-  Choregos proxy is bypassable for those hosts.
+  Tranibor proxy is bypassable for those hosts.
 - **`choregos-egress` limits.** Its rate limits count per replica and per connection; it stops a
   name that resolves to a private address and connects to the address it resolved (one resolution), but
   a wall also needs the chart's NetworkPolicies (or the platform's) to stop runner pods going out
@@ -410,8 +410,8 @@ Two kinds of writes reach a tracker, under two different accounts ([ADR
 - **The bookkeeping** — the state, the status comment, the Cost, Size, Risk and Run fields, the
   questions to a person, the close-out — is written by the platform, through the project's tracker
   connector and the vendor's REST API, under that connector's account: the Jira connector's `email`,
-  the Choregos GitHub App, the owner of the GitLab token, a plugin's server. The tracker connector's
-  card says "Choregos writes as …"; each state change and question it wrote is recorded with `via:
+  the Tranibor GitHub App, the owner of the GitLab token, a plugin's server. The tracker connector's
+  card says "Tranibor writes as …"; each state change and question it wrote is recorded with `via:
   {type, account}` and shown on the work item's timeline.
 - **An agent's own actions** go through the MCP tools its version names. The broker calls them with
   each organisation connector's credential, which never reaches the agent's pod; a run lists them,
@@ -689,15 +689,15 @@ An organisation may put its MCP servers behind a gateway it runs
 [Integrations](integrations.md#your-organisations-mcp-gateway-adr-0105). This is what it changes for
 security.
 
-**Trust boundaries.** There are two policy points, and neither replaces the other: Choregos (the
+**Trust boundaries.** There are two policy points, and neither replaces the other: Tranibor (the
 broker, approvals, per-tool permissions, result bounds, egress) and the gateway (its own access rules
-and the upstream's). A call is allowed only if both allow it. Choregos never routes, aggregates or
+and the upstream's). A call is allowed only if both allow it. Tranibor never routes, aggregates or
 re-serves third-party servers. A plugin's server (ADR 0096, `services/plugin_servers.py`) is not an
 upstream: it is never reached through the gateway and `required` mode does not refuse it; the boundary
 test whitelists exactly those two modules and `choregos_adapters.plugin_servers`
 (`tests/licences/test_mcp_gateway_boundary.py`).
 
-**Credentials.** The upstream credential is held by the gateway only, and never enters Choregos. The
+**Credentials.** The upstream credential is held by the gateway only, and never enters Tranibor. The
 gateway credential (bearer, header, OAuth client secret) is sealed in the organisation's secret store
 and never shown again; a `jwt_assertion` sign-in has none (`services/mcp_gateway.py`).
 
@@ -722,7 +722,7 @@ process (API, workers): nothing is shared.
   name an IP address, a name without a domain, or a private name, unless an operator lists the host in
   `CHOREGOS_MCP_GATEWAY_INTERNAL_HOSTS`; plain http is only for a listed host (`services/mcp_gateway.py`).
 - *A compromised gateway.* Its results are still capped, checked, masked and read by the injection
-  guard, and a write still needs its approval, decided in Choregos (`services/broker.py`). It cannot
+  guard, and a write still needs its approval, decided in Tranibor (`services/broker.py`). It cannot
   widen what an agent may call.
 - *Replay of an assertion.* `exp` is 60 seconds and `jti` is unique: a gateway that remembers `jti`
   refuses a second use.
@@ -788,7 +788,7 @@ can sign calls that the outposts which pin it will make, within what each outpos
 key that authenticates the nonces is derived from it, so replicas agree with no further secret; after a
 rotation a daemon's nonce is stale once, and the refusal that says so carries a fresh one.
 
-**Why this door does not make Choregos a gateway** (ADR 0148 §12): it serves assignments and never MCP,
+**Why this door does not make Tranibor a gateway** (ADR 0148 §12): it serves assignments and never MCP,
 it has no route that names a connector or a server, and it imports no broker module. Each of the three
 is a test (`tests/licences/test_mcp_gateway_boundary.py`).
 
@@ -1000,7 +1000,7 @@ What it does **not** protect, and is said so:
 - The organisation's model catalogue (ADR 0060) limits which models an agent may name; it is a
   governance control in front of the gateway, not a replacement for the key's own model list. With an
   OpenAI-compatible gateway the `run_key` is shared by runs: scope it at the gateway (a consumer with
-  a token rate limit), since Choregos cannot cap it.
+  a token rate limit), since Tranibor cannot cap it.
 - Gateway key: one per run, capped. `prepare_stage` reserves its cap (a `gateway_keys` row named
   `reserved:<run_id>`); `start_run` mints it and the executor puts it in the run's Secret next to
   the run token (`k8s_job`, `tekton`: Secret key `gateway-key`; `agent_sandbox`: sealed in the

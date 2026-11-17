@@ -30,7 +30,7 @@ For the person who operates the platform. Procedure `agent.code`, version 1, rev
   directly works and **skips the guard**: no permission request, no journal line, no turn count.
 - The sandbox (RuntimeClass, network policy, egress proxy) bounds what your code reaches.
 
-## In Choregos
+## In Tranibor
 
 1. **The operator names the image**: `global.images.agents` in the chart maps a name to a reference
    **pinned by digest**. By default (`global.images.requireDigest: true`) a tag-only reference stops the API and

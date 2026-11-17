@@ -25,7 +25,7 @@ reader (see the `documents/web` connector's procedure).
 Without a connector the crawl is anonymous: it reads only what any visitor reads. With one, it reads what
 the connector's credential reads, and the credential is sent only to the connector's host.
 
-## In Choregos
+## In Tranibor
 
 1. **Knowledge**, the base, **Add source**, kind **Web**.
 2. `url`, `max_depth` and `max_pages`. For a single page tick **This page only** (depth 0, one page). Tick **Include linked documents** to also read the PDF, Word, PowerPoint and Excel files linked from the pages, on the same host (at most 5 MiB each).

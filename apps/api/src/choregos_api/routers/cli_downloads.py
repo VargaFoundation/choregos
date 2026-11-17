@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """The `choregos` CLI, served by the instance it talks to (S62-08).
 
-A person installs the CLI from their own Choregos, in the exact version it runs, through the host
+A person installs the CLI from their own Tranibor, in the exact version it runs, through the host
 of the console: no firewall to open towards GitHub, and it works on a network without internet.
 The native binaries (S62-07) lie in `CHOREGOS_CLI_DIR` (`/opt/choregos/cli` in the API image) with
 `SHA256SUMS` and `manifest.json` (the shared contract of S62-07/08):
@@ -80,7 +80,7 @@ def _no_cli_bundled() -> ApiError:
     return ApiError(
         status.HTTP_404_NOT_FOUND,
         "No CLI bundled",
-        f"this build of Choregos bundles no `choregos` CLI; download version {__version__} from "
+        f"this build of Tranibor bundles no `choregos` CLI; download version {__version__} from "
         f"{release_url()}",
         type_="https://choregos.dev/problems/no-cli-bundled",
         extra={"code": "no_cli_bundled", "version": __version__, "release_url": release_url()},

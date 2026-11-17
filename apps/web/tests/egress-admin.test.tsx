@@ -107,7 +107,7 @@ describe("/admin/egress (S39-22)", () => {
     vi.mocked(api.orgEgress).mockResolvedValue(overview(true));
     view();
     expect(await screen.findByRole("heading", { name: "What agents may reach" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Hosts Choregos calls" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Hosts Tranibor calls" })).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "Outbound proxy" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Network activity" })).toBeInTheDocument();
   });

@@ -11,7 +11,7 @@ const SHOTS = process.env.GITHUB_SHOTS;
 test("configure the scm GitHub connector without ever seeing an installation id", async ({ page }) => {
   await page.goto("/p/dev/settings/connections");
   const scm = page.getByTestId("connector-kind-scm");
-  await expect(scm.getByTestId("github-via")).toHaveText("via the Choregos App on globex");
+  await expect(scm.getByTestId("github-via")).toHaveText("via the Tranibor App on globex");
   await scm.getByRole("button", { name: "Edit" }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByTestId("github-repo-field")).toBeVisible();
@@ -22,7 +22,7 @@ test("configure the scm GitHub connector without ever seeing an installation id"
   await dialog.getByRole("button", { name: /acme\/billing-api/ }).click();
   await dialog.getByRole("button", { name: "Save" }).click();
   await expect(dialog).toHaveCount(0);
-  await expect(scm.getByTestId("github-via")).toHaveText("via the Choregos App on acme");
+  await expect(scm.getByTestId("github-via")).toHaveText("via the Tranibor App on acme");
   await expect(scm).toContainText("acme/billing-api");
   expect(await page.content()).not.toMatch(/installation id/i);
 });

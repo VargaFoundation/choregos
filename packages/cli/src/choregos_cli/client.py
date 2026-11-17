@@ -95,7 +95,7 @@ class ApiError(RuntimeError):
 
 
 class Client:
-    """Calls to the Choregos API. Every CLI command goes through here."""
+    """Calls to the Tranibor API. Every CLI command goes through here."""
 
     def __init__(self, profile: Profile | None = None) -> None:
         self.profile = profile or Profile.load()

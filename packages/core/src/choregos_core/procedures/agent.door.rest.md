@@ -1,6 +1,6 @@
 ---
 id: agent.door.rest
-title: Use the Choregos REST API
+title: Use the Tranibor REST API
 applies_to: {door_client: rest}
 audience: everyone
 version: 1
@@ -25,7 +25,7 @@ with this platform's address filled in; open it with the link below the panel.
 A **full-access** token (scope `*`) that you mint yourself, sent as `Authorization: Bearer <token>`. A
 token with an MCP scope is refused here. The API applies **your** rights to every call.
 
-## In Choregos
+## In Tranibor
 
 Mint a token from Integrations, store it where your program keeps secrets, and give it an expiry.
 

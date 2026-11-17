@@ -1,6 +1,6 @@
 """A Jira delivery reaches the project whose tracker connector holds its project key.
 
-The Jira project key (`XXX` in `XXX-42`) is not the Choregos project's slug. The webhook routed by the
+The Jira project key (`XXX` in `XXX-42`) is not the Tranibor project's slug. The webhook routed by the
 slug, so a project named otherwise never saw an event: the only trace was a log line, and the backup
 poll hid it by still starting `agent-ready` issues.
 """
@@ -142,7 +142,7 @@ async def test_an_archived_project_no_longer_takes_the_key_of_its_successor(
 async def test_labels_tell_apart_two_projects_sharing_one_jira_project(
     client: AsyncClient, admin: str
 ) -> None:
-    """S59-03: one Jira project (FON) feeds two Choregos projects. The issue labelled `iris` goes to the
+    """S59-03: one Jira project (FON) feeds two Tranibor projects. The issue labelled `iris` goes to the
     project whose connector claims that label; one without it goes to the project that claims none."""
     fondation = await _project(client, "fon")
     iris = await _project(client, "iris")

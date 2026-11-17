@@ -5,11 +5,11 @@
 The `agent-ready` label has been on the ticket for several minutes, and:
 
 - the ticket does not appear in `/p/{slug}` nor in `GET /projects/{id}/work-items`;
-- no Choregos status comment was written on the ticket;
+- no Tranibor status comment was written on the ticket;
 - on GitHub, *Settings → Webhooks → Recent Deliveries* shows a red delivery (401, 5xx,
   timeout) — or no delivery at all.
 
-If the ticket **exists** in Choregos but stays in `inbox`, this is not the runbook: see
+If the ticket **exists** in Tranibor but stays in `inbox`, this is not the runbook: see
 [stuck-run.md](stuck-run.md).
 
 ## What should happen by itself
@@ -62,7 +62,7 @@ App has access to the repository. An expired private key shows up in
 ## Check it is fixed
 
 - `GET /projects/{id}/work-items` lists the ticket;
-- the ticket carries a Choregos status comment;
+- the ticket carries a Tranibor status comment;
 - the delivery replayed from GitHub answers 202.
 
 ## Do not

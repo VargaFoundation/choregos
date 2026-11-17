@@ -27,7 +27,7 @@ export function hasInstallationOn(status: GitHubAppStatus | undefined, owner: st
 }
 
 /**
- * Sends the person to GitHub to install the Choregos App, and back to this page afterwards. The link
+ * Sends the person to GitHub to install the Tranibor App, and back to this page afterwards. The link
  * carries a signed state made by the API (ADR 0073); it opens in the same tab, since GitHub returns to
  * the Setup URL, which redirects here.
  */
@@ -64,7 +64,7 @@ export function useGitHubStatus() {
 }
 
 /**
- * The repository of a GitHub connector: picked from what the Choregos App can see, never typed together
+ * The repository of a GitHub connector: picked from what the Tranibor App can see, never typed together
  * with an installation id (ADR 0073). A repository the App cannot list (a GitHub Enterprise host, a
  * fake) is typed instead; an owner without an installation is warned about, with the way to install.
  */
@@ -124,7 +124,7 @@ export function GitHubRepoField({
         )}
         {configured && owner && !hasInstallationOn(status.data, owner) && (
           <div className="flex flex-wrap items-center gap-2 text-xs text-warn" role="status">
-            <span>The Choregos App is not installed on {owner} for this organisation.</span>
+            <span>The Tranibor App is not installed on {owner} for this organisation.</span>
             <InstallOnGitHub />
           </div>
         )}
@@ -146,7 +146,7 @@ export function GitHubRepoField({
       )}
       {status.isSuccess && !installed ? (
         <div className="space-y-2 rounded-md border border-line bg-surface-sunken p-3 text-xs text-ink-muted">
-          <p>The Choregos App is not installed on any GitHub account of this organisation.</p>
+          <p>The Tranibor App is not installed on any GitHub account of this organisation.</p>
           <div className="flex flex-wrap gap-2">
             <InstallOnGitHub />
             <Button size="sm" disabled={refreshing} onClick={() => void refresh()}>

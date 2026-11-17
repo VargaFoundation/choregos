@@ -63,7 +63,7 @@ async def propose_change(
     commit = await target.scm.commit_files(target.repo, branch, files, title)
     body = (
         f"{rationale}\n\n"
-        f"Proposed by a governed action of Choregos (key `{action_key}`)"
+        f"Proposed by a governed action of Tranibor (key `{action_key}`)"
         + (f" for {work_item_key}" if work_item_key else "")
         + ". Merge it through the repository's review; production follows the release train."
     )

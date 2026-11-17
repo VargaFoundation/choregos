@@ -189,7 +189,7 @@ BOARD_FIELDS = ["Status", "Cost (€)", "Size", "Risk", "Run"]
 
 
 async def _github_ensure_project_board(params: dict[str, Any], bundle: Any, settings: Any) -> str:
-    """The board fields exist under their English name; a field that a Choregos older than S22-21
+    """The board fields exist under their English name; a field that a Tranibor older than S22-21
     created in French (`Taille`) is renamed, not doubled: its values stay on the cards."""
     fields = [str(name) for name in params.get("fields") or BOARD_FIELDS]
     ensure = getattr(bundle.adapters.tracker, "ensure_project_fields", None)
@@ -227,7 +227,7 @@ async def _memory_create_tenant(params: dict[str, Any], bundle: Any, settings: A
         Fact(
             kind="convention",
             subject=f"convention:{bundle.slug}:bootstrap",
-            content=f"Project {bundle.slug} provisioned by Choregos.",
+            content=f"Project {bundle.slug} provisioned by Tranibor.",
             provenance=Provenance(source="provisioning"),
         ),
     )
@@ -273,7 +273,7 @@ async def _notify_test_message(params: dict[str, Any], bundle: Any, settings: An
     # `run_provision_step` records as repairable with its remediation.
     await bundle.adapters.notify.send(
         notification_target(bundle),
-        Message(title=f"Choregos — project {bundle.slug} provisioned", severity="success"),
+        Message(title=f"Tranibor — project {bundle.slug} provisioned", severity="success"),
     )
     return "test message sent"
 
@@ -382,7 +382,7 @@ async def _write_manifests(bundle: Any, params: dict[str, Any], settings: Any) -
 def _remediation(step: str) -> str:
     return {
         "github.install_app": (
-            "Install the Choregos GitHub App from the console (Settings, Connections, Install on GitHub), "
+            "Install the Tranibor GitHub App from the console (Settings, Connections, Install on GitHub), "
             "then retry. The installation is discovered: nobody types an installation id."
         ),
         "github.ensure_project_board": "Create the Projects v2 board and give its number to the connector.",

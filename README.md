@@ -1,8 +1,13 @@
-# Choregos
+# Tranibor
 
-> χορηγός — the one who leads the chorus and gives it the means to perform.
+> Formerly Choregos (χορηγός, the one who leads the chorus and gives it the means to perform). The name
+> changes in rounds, and the commands, packages, images and variables keep working while it does
+> ([ADR 0176](docs/adr/0176-the-core-is-named-tranibor.md)).
 
-**Choregos** is the governed-agent platform of the [Varga Foundation](https://github.com/graalsystems)
+graal is the company (GRAAL.SYSTEMS SAS), the **graal Agentic Platform** is its commercial product, and
+Tranibor is the Apache-2.0 core that platform is built on.
+
+**Tranibor** is the governed-agent platform of the [Varga Foundation](https://github.com/graalsystems)
 (ADR 0029): workflows from any trade — software delivery, operations, joiners and leavers,
 data change — that agents and humans move forward under measured guarantees. It
 directs a chorus of agents (Claude Code, Codex, Gemini CLI, Goose, OpenCode…) behind a single
@@ -18,7 +23,7 @@ Licence: Apache 2.0. Complete execution plan: [`docs/plan/00-index.md`](docs/pla
 ## Principles
 
 1. **The tracker is the human interface.** GitHub Issues/Projects, Jira or GitLab remains
-   the place where decisions are made; Choregos writes the state, the cost and the evidence there.
+   the place where decisions are made; Tranibor writes the state, the cost and the evidence there.
 2. **The orchestrator plans, it never calls a model.** The Temporal workflows decide
    which stage to launch; only the runners talk to the agents.
 3. **The runner is disposable; memory and results are durable.**

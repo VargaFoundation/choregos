@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """TrackerAdapter GitHub : Issues (REST) + Projects v2 (GraphQL).
 
-The board is the human view: Choregos writes the state, the cost, the size, the risk and the link
-to the run there. Provisioning creates the missing fields and renames those that a Choregos from
+The board is the human view: Tranibor writes the state, the cost, the size, the risk and the link
+to the run there. Provisioning creates the missing fields and renames those that a Tranibor from
 before S22-21 had created in French (`ensure_project_fields`); a write to a field the board does
 not have creates nothing.
 """
@@ -112,7 +112,7 @@ mutation(
 }
 """
 
-#: The type of each field Choregos creates; an unknown field is a text. *Status* is native to
+#: The type of each field Tranibor creates; an unknown field is a text. *Status* is native to
 #: every Projects v2 board: it is never created.
 FIELD_TYPES: dict[str, tuple[str, tuple[str, ...]]] = {
     COST: ("NUMBER", ()),

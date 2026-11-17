@@ -7,7 +7,7 @@ For a project owner. Procedure `connector.scm.github`, version 2, reviewed 2026-
 ## Before you start
 
 - The same **GitHub App** as the tracker (see "Use GitHub Issues and Projects v2 as the board"): one App
-  serves both. The person who operates Choregos creates it from the console (*Administration, GitHub
+  serves both. The person who operates Tranibor creates it from the console (*Administration, GitHub
   App*, from a manifest with the permissions and events below) or sets its id, private key and webhook
   secret as platform settings.
 - The repository the agents change. They work on a branch and open a pull request; nothing is pushed to
@@ -45,7 +45,7 @@ Subscribe to these events: `issues`, `issue_comment`, `projects_v2_item`, `pull_
 
 Add `workflows: write` only if agents edit `.github/workflows`.
 
-## In Choregos
+## In Tranibor
 
 1. Project settings, Connectors, **SCM**, type **GitHub (App)**.
 2. `repo`: pick the repository in the list (what the App's installations claimed by your organisation

@@ -1,6 +1,6 @@
 """A `/choregos ...` tracker comment is answered with a console link and audited, never signalled (ADR 0102).
 
-A tracker login is not a Choregos principal: the decision verbs and the controls are done in the console.
+A tracker login is not a Tranibor principal: the decision verbs and the controls are done in the console.
 """
 
 from __future__ import annotations

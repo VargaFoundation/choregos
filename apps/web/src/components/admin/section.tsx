@@ -330,7 +330,7 @@ function BlocSecret({ bloc, org }: { bloc: AdminSecretOnce; org: string }) {
       {bloc.description && <p className="mb-3 text-sm text-ink-muted">{bloc.description}</p>}
       {secret ? (
         <div className="space-y-2" data-testid="secret-once">
-          <p className="text-sm text-warn">Copy it now: it is shown once, and Choregos does not keep it.</p>
+          <p className="text-sm text-warn">Copy it now: it is shown once, and Tranibor does not keep it.</p>
           <Input readOnly aria-label={`${bloc.label}: the secret`} value={secret} className="w-full font-mono" />
           <Button size="sm" onClick={() => setSecret(null)}>
             I have copied it

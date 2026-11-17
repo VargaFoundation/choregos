@@ -30,14 +30,14 @@ describe("who writes, and with which account (S42-06g, ADR 0107)", () => {
         />
       </ul>,
     );
-    expect(screen.getByTestId("writes-as")).toHaveTextContent("Choregos writes as bot@acme.example");
+    expect(screen.getByTestId("writes-as")).toHaveTextContent("Tranibor writes as bot@acme.example");
   });
 
   it("names the credential when the configuration names no account, and nothing for the internal tracker", () => {
     const { rerender, container } = render(<WritesAs type="gitlab-issues" config={{}} />);
     expect(screen.getByTestId("writes-as")).toHaveTextContent("the account that owns the connector's GitLab token");
     rerender(<WritesAs type="github-issues" config={{ repo: "acme/app" }} />);
-    expect(screen.getByTestId("writes-as")).toHaveTextContent("the Choregos GitHub App");
+    expect(screen.getByTestId("writes-as")).toHaveTextContent("the Tranibor GitHub App");
     rerender(<WritesAs type="internal" />);
     expect(container).toBeEmptyDOMElement();
   });
@@ -60,7 +60,7 @@ describe("who writes, and with which account (S42-06g, ADR 0107)", () => {
     expect(within(card).getByTestId("tracker-reporter")).toHaveTextContent("Ada Lovelace <ada@acme.example>");
     expect(card).toHaveTextContent("Filed by Ada Lovelace");
     expect(card).toHaveTextContent("Started by a Jira webhook");
-    expect(card).toHaveTextContent("Choregos writes to Jira as bot@acme.example");
+    expect(card).toHaveTextContent("Tranibor writes to Jira as bot@acme.example");
     expect(within(card).getByRole("link", { name: "tracker connector" })).toHaveAttribute(
       "href",
       "/p/yyy/settings/connections",
@@ -86,12 +86,12 @@ describe("who writes, and with which account (S42-06g, ADR 0107)", () => {
     const card = screen.getByTestId("tracker-card");
     expect(within(card).queryByTestId("tracker-reporter")).toBeNull();
     expect(card).toHaveTextContent("Started by vincent@acme.example");
-    expect(card).toHaveTextContent("Choregos writes to no external tracker");
+    expect(card).toHaveTextContent("Tranibor writes to no external tracker");
   });
 
   it("a timeline entry names its tracker write", () => {
     expect(viaInWords({ type: "jira", account: "bot@acme.example" })).toBe("via Jira as bot@acme.example");
-    expect(viaInWords({ type: "github-issues", account: null })).toBe("via GitHub Issues as the Choregos GitHub App");
+    expect(viaInWords({ type: "github-issues", account: null })).toBe("via GitHub Issues as the Tranibor GitHub App");
   });
 
   it("an initiator reads in words", () => {

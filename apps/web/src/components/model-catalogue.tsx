@@ -16,7 +16,7 @@ export const USAGES = ["agent", "embed", "distill", "eval", "route", "decide"] a
 export const TIERS = ["cheap", "standard", "strong", "aux", "embed", "local"] as const;
 
 /** What a gateway that cannot cap a key means for the budget, said where the gateway is named. */
-export const NO_HARD_BUDGET = "Budgets are enforced by Choregos only: this gateway cannot cap a key.";
+export const NO_HARD_BUDGET = "Budgets are enforced by Tranibor only: this gateway cannot cap a key.";
 
 const when = (iso?: string | null) => (iso ? new Date(iso).toLocaleDateString() : "never");
 const price = (entry: ModelCatalogueEntry) =>

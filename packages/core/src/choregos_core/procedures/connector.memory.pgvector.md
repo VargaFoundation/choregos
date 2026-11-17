@@ -22,7 +22,7 @@ Nothing to create.
 
 Same as the lexical memory: the platform's own tables only.
 
-## In Choregos
+## In Tranibor
 
 Change the project's memory connector to `lexical` (same behaviour) or `ecphoria` (semantic memory).
 

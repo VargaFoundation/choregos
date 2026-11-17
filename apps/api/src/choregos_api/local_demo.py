@@ -14,7 +14,7 @@ project's runtime and gateway connectors, and its agent backend, switch between 
 model when a key is added to (or removed from) `.env` — unless they were changed in the console,
 in which case they are left alone.
 
-Fakes mode (no model key): the tracker is Choregos itself (`internal`), the agent is simulated
+Fakes mode (no model key): the tracker is Tranibor itself (`internal`), the agent is simulated
 (`fake` runtime with `simulate`: every declared output filled, no model called), the rest are
 in-memory fakes. The work item still goes through the real path: Temporal, the database, the
 gates, the human decision.
@@ -412,7 +412,7 @@ def write_litellm_config(directory: pathlib.Path, env: Mapping[str, str]) -> Pro
         encoding="utf-8",
     )
     (directory / "provider").write_text(provider or "fakes", encoding="utf-8")
-    # LiteLLM's image has no Choregos package: the guard travels as a file, stdlib only.
+    # LiteLLM's image has no Tranibor package: the guard travels as a file, stdlib only.
     guard_source = pathlib.Path(llm_guardrail.__file__).read_text(encoding="utf-8")
     (directory / f"{GUARDRAIL_MODULE}.py").write_text(guard_source, encoding="utf-8")
     return provider

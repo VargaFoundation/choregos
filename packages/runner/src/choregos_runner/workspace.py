@@ -500,7 +500,7 @@ class Workspace:
         if not lines:
             return
         with exclude.open("a", encoding="utf-8") as handle:
-            handle.write("\n# Choregos — files outside the repository\n" + "\n".join(lines) + "\n")
+            handle.write("\n# Tranibor — files outside the repository\n" + "\n".join(lines) + "\n")
 
     def write_context_files(self, stage_input: StageInput, context: ContextPack | None) -> None:
         """Write `.choregos/task.md` and `.choregos/context.md`: what the agent must read."""

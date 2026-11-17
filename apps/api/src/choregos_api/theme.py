@@ -150,7 +150,7 @@ class Theme(_Strict):
 
 DEFAULT_THEME: dict[str, Any] = {
     "id": "default",
-    "product_name": "Choregos",
+    "product_name": "Tranibor",
     "default_mode": "dark",
     "tokens": {"dark": {}, "light": {}},
 }

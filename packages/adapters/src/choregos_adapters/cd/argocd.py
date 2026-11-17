@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """The Argo CD + Argo Rollouts CdAdapter: promotion by GitOps PR, health, canary, abort.
 
-Choregos **never** runs `kubectl apply`: it writes to the GitOps repository and Argo applies.
+Tranibor **never** runs `kubectl apply`: it writes to the GitOps repository and Argo applies.
 That is what makes a promotion auditable and reversible.
 """
 
@@ -121,7 +121,7 @@ class ArgoCdAdapter:
         )
 
     async def set_sync_window(self, app: str, windows: list[Window]) -> None:
-        """A declarative guard rail: even if Choregos goes down, Argo refuses outside the window."""
+        """A declarative guard rail: even if Tranibor goes down, Argo refuses outside the window."""
         payload = {
             "spec": {
                 "syncWindows": [
@@ -289,7 +289,7 @@ def _promotion_body(env: str, release: str, changes: list[Change]) -> str:
         "|:--|:--|",
         *[f"| {change.app} | `{change.tag or change.image}` |" for change in changes],
         "",
-        "_PR opened by Choregos' release train. The batch, the tickets and the risks",
+        "_PR opened by Tranibor's release train. The batch, the tickets and the risks",
         "are detailed in `releases/{env}/manifest.yaml`._".replace("{env}", env),
     ]
     return "\n".join(lines)

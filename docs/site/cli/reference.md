@@ -542,7 +542,7 @@ Options:
 ```text
 Usage: choregos items create [OPTIONS] {project}
 
-  File a request in Choregos (a project with the internal tracker) and start
+  File a request in Tranibor (a project with the internal tracker) and start
   its interpreter.
 
 Arguments:
@@ -1162,7 +1162,7 @@ Options:
   --template <str>
   --org <str>
   --language <str>  [default: python]
-  --tracker <str>   `internal`: requests are filed in Choregos. Without
+  --tracker <str>   `internal`: requests are filed in Tranibor. Without
                     `--repo` the default is `internal`; with `--repo` it is
                     written only when given
   --help            Show this message and exit.

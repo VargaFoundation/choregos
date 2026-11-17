@@ -38,7 +38,7 @@ async def test_a_message_reaches_the_smtp_server(smtp: tuple[FakeSmtpServer, int
     assert sender == "choregos@acme.dev"
     assert recipients == ["po@acme.dev"]
     parsed = message_from_bytes(data)
-    assert parsed["Subject"] == "[Choregos] Train departed"
+    assert parsed["Subject"] == "[Tranibor] Train departed"
     assert "https://c/x" in str(parsed.get_payload())
 
 

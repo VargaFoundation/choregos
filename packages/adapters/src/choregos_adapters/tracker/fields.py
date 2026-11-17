@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""The structured fields Choregos writes in a tracker, and their former names (S22-21).
+"""The structured fields Tranibor writes in a tracker, and their former names (S22-21).
 
 Until S22-21, the orchestrator wrote `Coût (€)`, `Taille` and `Risque`, and the templates created
 the GitHub Projects board under those names. Everything a user reads is in English (ADR 0039): the
@@ -8,7 +8,7 @@ block created before keeps its French names: provisioning renames the board's fi
 then each adapter writes in whichever of the two exists rather than lose the value.
 
 The only French literals of this module are those former names: names that a tracker still
-carries, not text that Choregos produces.
+carries, not text that Tranibor produces.
 """
 
 from __future__ import annotations

@@ -227,7 +227,7 @@ async def test_development_sign_in_is_refused_outside_a_development_environment(
 
 
 def test_the_local_gateway_loads_the_llm_guard_next_to_its_config(tmp_path: pathlib.Path) -> None:
-    """S40-21 (ADR 0084): LiteLLM's image has no Choregos package; the guard travels as a file."""
+    """S40-21 (ADR 0084): LiteLLM's image has no Tranibor package; the guard travels as a file."""
     import choregos_core.llm_guardrail
 
     write_litellm_config(tmp_path, {})

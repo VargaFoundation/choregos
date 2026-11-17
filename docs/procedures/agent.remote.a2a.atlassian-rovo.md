@@ -8,7 +8,7 @@ For an organisation administrator. Procedure `agent.remote.a2a.atlassian-rovo`, 
 
 - An Atlassian site with **Rovo**, and an Atlassian organisation administrator.
 - A **dedicated Atlassian account** (for example `choregos-bot@your-domain`) licensed for Rovo, whose Jira
-  and Confluence permissions are exactly what Rovo may do for Choregos. Rovo acts **as that user**. There
+  and Confluence permissions are exactly what Rovo may do for Tranibor. Rovo acts **as that user**. There
   are no service accounts for A2A.
 - This calls the Rovo **agent**. To give your own agents Rovo's **tools** (search, Jira, Confluence) use
   the Rovo MCP Server procedure instead; they are two different things.
@@ -22,16 +22,16 @@ For an organisation administrator. Procedure `agent.remote.a2a.atlassian-rovo`, 
    `https://a2a.atlassian.com/v1/rovo`, A2A 0.3.0. It is **one agent with two skills**:
    `work-in-jira` and `work-in-confluence`. Agents built in Rovo Studio are **not** individually
    addressable.
-3. You register no client: the card advertises dynamic client registration and Choregos registers itself.
+3. You register no client: the card advertises dynamic client registration and Tranibor registers itself.
 
 ## Permissions
 
 - OAuth 2.0 authorization code with PKCE and dynamic client registration, nothing else: no API token.
   Scopes: `read:me`, `offline_access`, `full_access:chat:rovo`.
-- The callback address Choregos registers is `<api_url>/api/v1/remote-credentials/oauth/callback`.
+- The callback address Tranibor registers is `<api_url>/api/v1/remote-credentials/oauth/callback`.
 - The agent can do whatever the dedicated account can do in Jira and Confluence.
 
-## In Choregos
+## In Tranibor
 
 1. Administration, **Remote agents**, **Connect**: card URL `https://a2a.atlassian.com/.well-known/agent.json`.
    Atlassian's consent page opens: sign in **as the dedicated account** and accept. The credential shows
@@ -52,7 +52,7 @@ human review. The answer is the step's `response.md`.
 - `access_denied` at consent: A2A connections are not allowed in Atlassian Administration.
 - `401` when the token is refreshed: it was revoked. Reconnect the credential.
 - `remote_card_changed`: Atlassian changed the card. Publish a new version to accept it.
-- A cut at about 30 s on a synchronous call: Choregos streams; Rovo has no push notifications.
+- A cut at about 30 s on a synchronous call: Tranibor streams; Rovo has no push notifications.
 - A refusal naming `a2a.atlassian.com` or `auth.atlassian.com`: the stage's allowed domains or the
   egress allowlist.
 

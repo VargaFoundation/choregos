@@ -100,7 +100,7 @@ describe("the readiness panel (S40-06c)", () => {
     expect(screen.getByTestId("readiness-item-a").textContent).toContain("Ask a project owner");
     expect(screen.getByTestId("readiness-item-b").textContent).toContain("Ask your organisation admin");
     expect(screen.getByTestId("readiness-item-c").textContent).toContain("Ask the platform operator");
-    expect(screen.getByTestId("readiness-item-d").textContent).toContain("Done outside Choregos");
+    expect(screen.getByTestId("readiness-item-d").textContent).toContain("Done outside Tranibor");
     expect(screen.queryByText("Fix")).toBeNull();
   });
 

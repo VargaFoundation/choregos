@@ -1028,7 +1028,7 @@ def _check_unenforced_review(wf: Workflow, report: ValidationReport, source: Any
         if t.review.humans and t.review.humans.required != "never":
             report.error(
                 "review.humans_not_enforced",
-                "`review.humans` is not enforced: Choregos asks no one for this review. "
+                "`review.humans` is not enforced: Tranibor asks no one for this review. "
                 "Declare a human actor and a transition it answers (ADR 0044).",
                 ["transitions", index, "review", "humans"],
                 source,

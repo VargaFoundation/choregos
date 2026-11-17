@@ -25,7 +25,7 @@ grant the app the site.
 The source reads what the app was granted on that site, with delta sync. Everything it reads becomes
 readable by everyone the base is open to, whatever the document's own permissions say.
 
-## In Choregos
+## In Tranibor
 
 1. **Knowledge**, the base, **Add source**, kind **SharePoint**.
 2. Pick the **connector**. With none in the list, the form links to Administration, Connectors, to declare

@@ -9,7 +9,7 @@ For the person who operates the platform. Procedure `connector.gateway.openai-co
 - Any gateway that serves `GET {base_url}/models` and `/chat/completions` (Portkey, Kong AI Gateway, Envoy
   AI Gateway, OpenRouter, a vLLM router...).
 - Read the limits first. This adapter gives **discovery only**: no per-run virtual key, no hard budget at
-  the source, no measured cost (spend is "not measured", not "free"). Choregos alone holds the budget
+  the source, no measured cost (spend is "not measured", not "free"). Tranibor alone holds the budget
   (the reservation, turns and minutes).
 
 ## At the gateway
@@ -23,7 +23,7 @@ limit.
 `api_key` only lists models. `run_key` can call the models you allow: that is where the damage is bounded,
 so bound it there.
 
-## In Choregos
+## In Tranibor
 
 Chart (`global.gateway.type: openai-compatible`) or Connectors, **Gateway**: `base_url`, optional `headers`
 and `timeout_s`, then `api_key` and `run_key` in their password fields.

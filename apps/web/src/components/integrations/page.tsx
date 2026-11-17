@@ -17,7 +17,7 @@ import { ClientTabs, IntegrationsPanel } from "./panel";
 /**
  * The Integrations page, at the scale of the organisation or of a project (ADR 0030).
  *
- * "How do I connect to Choregos from my Claude?" The product owner's question on
+ * "How do I connect to Tranibor from my Claude?" The product owner's question on
  * 2026-10-05. The answer fits on this page: a tab per client, a token minted for it,
  * the snippet to paste, and the finding that it connected.
  */
@@ -28,7 +28,7 @@ export function IntegrationsPage({ client, projet }: { client: string; projet?: 
     <div className="space-y-6">
       {!projet && (
         <div className="space-y-2">
-          <OrgPageHeader title="Integrations" description="Plug Claude, any MCP client, an application or another agent into Choregos. Your agent lists your projects, opens and follows work items, and tells you what waits for your decision — with your rights, never more. It never decides: you do, in the console." />
+          <OrgPageHeader title="Integrations" description="Plug Claude, any MCP client, an application or another agent into Tranibor. Your agent lists your projects, opens and follows work items, and tells you what waits for your decision — with your rights, never more. It never decides: you do, in the console." />
           <Glossary ici="clients" />
         </div>
       )}

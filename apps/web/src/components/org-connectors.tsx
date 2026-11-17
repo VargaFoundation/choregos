@@ -13,7 +13,7 @@ import type { ConnectorDto, OrgConnector, ProjectDto } from "@/lib/types";
  * The organisation's connectors fall into two families (review of 7 Oct: "it mixes
  * agents, MCPs and API connectors"): the business systems, which DECLARE their
  * operations, and the MCP servers, whose tools are DISCOVERED. A supplier's agent served
- * over MCP is, for Choregos, an MCP server.
+ * over MCP is, for Tranibor, an MCP server.
  */
 export function groupConnectors(instances: OrgConnector[]): { metier: OrgConnector[]; mcp: OrgConnector[] } {
   return {

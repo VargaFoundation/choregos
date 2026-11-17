@@ -1,6 +1,6 @@
 """A tracker card move is logged and never signalled to a workflow (ADR 0102).
 
-A board status change has no Choregos principal behind it: moving a work item is done in the console.
+A board status change has no Tranibor principal behind it: moving a work item is done in the console.
 """
 
 from __future__ import annotations

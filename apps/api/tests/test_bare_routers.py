@@ -19,7 +19,7 @@ from .conftest import login
 
 
 async def _internal(client: AsyncClient, project: dict[str, Any]) -> dict[str, Any]:
-    """The test project receives its requests IN Choregos, and a first one is placed."""
+    """The test project receives its requests IN Tranibor, and a first one is placed."""
     put = await client.put(
         f"/api/v1/projects/{project['id']}/connectors/tracker", json={"type": "internal", "config": {}}
     )

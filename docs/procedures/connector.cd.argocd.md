@@ -6,7 +6,7 @@ For the person who operates the platform. Procedure `connector.cd.argocd`, versi
 
 ## Before you start
 
-- Argo CD, and a **GitOps repository** it watches. Choregos never runs `kubectl apply`: a promotion is a
+- Argo CD, and a **GitOps repository** it watches. Tranibor never runs `kubectl apply`: a promotion is a
   pull request on that repository, and Argo CD applies it.
 - The GitHub App of the platform installed on the GitOps repository (see the GitHub procedures): the
   writes go through it.
@@ -26,7 +26,7 @@ For the person who operates the platform. Procedure `connector.cd.argocd`, versi
 - The API token: `get` on applications, nothing more. Writes never use it.
 - The GitHub App: `contents` and `pull_requests` write on the GitOps repository.
 
-## In Choregos
+## In Tranibor
 
 1. Project settings, Connectors, **CD**, type **Argo CD**.
 2. `gitops_repo`: `owner/repo`. `base_url`: the Argo CD server's address. `path_prefix` and `app_pattern`

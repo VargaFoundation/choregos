@@ -8,7 +8,7 @@ when the connector is saved. A connector stored before this, which relied on the
 
 `site` is the `site:` operator; `recency` is `tbs` (`qdr:d`, `qdr:w`, `qdr:m`, `qdr:y`).
 **No `scrapeOptions` is ever sent**: with them Firecrawl fetches each result from its own
-infrastructure, outside the run's allowlist and robots.txt as Choregos reads them (ADR 0083,
+infrastructure, outside the run's allowlist and robots.txt as Tranibor reads them (ADR 0083,
 "Alternatives rejected"). Reading a result goes through `web_fetch`.
 
 Data handling: **not declared**. "Local" does not mean the query never leaves: a self-hosted
@@ -37,7 +37,7 @@ def checked_base_url(raw: object) -> str:
     text = str(raw or "").strip()
     if not text:
         raise SearchError(
-            "firecrawl: base_url is required. Choregos talks to a self-hosted Firecrawl only "
+            "firecrawl: base_url is required. Tranibor talks to a self-hosted Firecrawl only "
             "(decision of 2026-10-23, ADR 0086): set the address of your instance"
         )
     try:
@@ -49,7 +49,7 @@ def checked_base_url(raw: object) -> str:
         raise SearchError("firecrawl: base_url must be an http(s) URL with a host")
     if host == CLOUD_DOMAIN or host.endswith(f".{CLOUD_DOMAIN}"):
         raise SearchError(
-            f"firecrawl: `{host}` is Firecrawl's cloud, which Choregos refuses: Firecrawl must be "
+            f"firecrawl: `{host}` is Firecrawl's cloud, which Tranibor refuses: Firecrawl must be "
             "self-hosted, not SaaS (decision of 2026-10-23, ADR 0086). Point base_url at your own instance"
         )
     return text.rstrip("/")

@@ -1,11 +1,11 @@
-# Where Choregos sits
+# Where Tranibor sits
 
 An honest comparison, written on 2026-09-25 from public sources. It says what others do
 better; that is the part worth reading.
 
 ## In one sentence
 
-Choregos is a **general-purpose platform for governed agents** (ADR 0029, 2026-10-05): any
+Tranibor is a **general-purpose platform for governed agents** (ADR 0029, 2026-10-05): any
 business process — software delivery, IT operations, joiners and leavers, a data change — carried
 by agents and people through workflows whose gates refuse, whose evidence the platform measures,
 and whose writes to third-party systems wait for a re-authenticated approval. It runs inside the
@@ -20,14 +20,14 @@ Until then this page described a *delivery layer* — ticket in, controlled prod
 with skills, MCP servers as connectors, connectors by capability, and governed actions in the
 core. The comparisons below were written for the delivery layer and still hold for it; the new
 competitors are the agent builders of the large platforms (Microsoft Copilot Studio, Google
-Agentspace, Dataiku's agent management). Against them Choregos claims only what they do not ship
+Agentspace, Dataiku's agent management). Against them Tranibor claims only what they do not ship
 together: open source, self-hosted, any agent, and governance by mechanisms rather than prompts.
 Each claim becomes true story by story (streams S15 to S20); until a story is delivered, this page
 does not count it.
 
 ## Against the runtimes
 
-| | google/ax | kubernetes-sigs/agent-sandbox | Choregos |
+| | google/ax | kubernetes-sigs/agent-sandbox | Tranibor |
 | :-- | :-- | :-- | :-- |
 | What it is | Task / Workspace / Gateway / Model primitives on GKE | `Sandbox`, warm pools, suspend/resume, `RuntimeClass` | stages, gates, evidence, ledger, trains |
 | BYO agent | image | image | any ACP agent (ADR 0002) |
@@ -38,13 +38,13 @@ does not count it.
 | Stages, gates, evidence, cost, trains | no | no | yes |
 | Control plane | cluster-scoped, unsupported by vendor | cluster-scoped, v1beta1 | namespaced; a tenant can install it |
 
-Reading: ax and agent-sandbox solve problems Choregos has (density, suspend), and Choregos
+Reading: ax and agent-sandbox solve problems Tranibor has (density, suspend), and Tranibor
 solves problems they do not have (what is a stage, who signed off, what did it cost). The
 `agent_sandbox` executor (ADR 0016) is the proof of that layering, when it ships.
 
 ## Against the agent platforms
 
-| | OpenHands | Tembo | Copilot / Codex / Devin / Factory / Cursor | Choregos |
+| | OpenHands | Tembo | Copilot / Codex / Devin / Factory / Cursor | Tranibor |
 | :-- | :-- | :-- | :-- | :-- |
 | Agent | its own | several harnesses | locked | any ACP agent |
 | Trigger | chat, issue | ticket | chat, issue | ticket, with a workflow per ticket |
@@ -57,21 +57,21 @@ solves problems they do not have (what is a stage, who signed off, what did it c
 | Non-code work | no | no | no | yes (ADR 0012) |
 
 Reading: OpenHands' injection detection and the mature HITL chat of the products are ahead.
-Choregos' answer to injection today is mechanical (scope refused, diff reverted, secrets
+Tranibor's answer to injection today is mechanical (scope refused, diff reverted, secrets
 gated), not detective.
 
 ## Frameworks live inside a step
 
-Choregos orchestrates; it is not an agent framework and does not ship one. A step may run a coding
+Tranibor orchestrates; it is not an agent framework and does not ship one. A step may run a coding
 agent, a prompt agent or code written on LangGraph, the OpenAI Agents SDK, Pydantic AI or any other
 framework: the workflow (Temporal) owns durable state, retries and human gates, the step owns its own
-control flow. The only thing a code agent needs from Choregos is the run contract, through four
+control flow. The only thing a code agent needs from Tranibor is the run contract, through four
 standards: ACP to the runner, MCP for tools, an OpenAI-compatible endpoint for the model, and the
 result file. See [agents written in code](code-agents.md#why-no-choregos-framework).
 
 ## Against the tool brokers
 
-| | treg | Obot / Docker MCP Gateway | Choregos catalogue (ADR 0014) |
+| | treg | Obot / Docker MCP Gateway | Tranibor catalogue (ADR 0014) |
 | :-- | :-- | :-- | :-- |
 | Breadth | ~2,900 endpoints | MCP servers | what the deployment declares — a few tools |
 | Credentials | server-side, one token per member | brokered | server-side, the agent holds only its run token |
@@ -85,12 +85,12 @@ a PR a human merges.
 
 A gateway is also something the table does not show: a hosting and credential layer. It runs the servers
 that speak stdio, holds their upstream credentials and OAuth grants, and applies the network rules of the
-servers' side. Choregos can sit behind the one an organisation already runs: its broker calls the gateway's
-servers with the same approvals, ledger and journal as for any other connector, and Choregos holds none of
+servers' side. Tranibor can sit behind the one an organisation already runs: its broker calls the gateway's
+servers with the same approvals, ledger and journal as for any other connector, and Tranibor holds none of
 the credentials of the servers it serves. It never replaces a gateway and never becomes one ([ADR 0105](adr/0105-choregos-consumes-an-mcp-gateway-it-never-is-one.md)).
 
 For tools in a network nothing outside may connect to, and for an organisation with no gateway there,
-Choregos ships an **outpost** ([ADR 0147](adr/0147-an-outpost-only-dials-out.md); [Outposts](outposts.md)).
+Tranibor ships an **outpost** ([ADR 0147](adr/0147-an-outpost-only-dials-out.md); [Outposts](outposts.md)).
 Like a forge's self-hosted runner, it is a program installed inside that connects out; unlike one, it
 runs no job and no code the platform sends, only the tool calls its own policy file allows, against
 MCP servers its operator runs. It is not a tunnel either: the platform names an alias and a tool,
@@ -112,6 +112,6 @@ only so far, gives no data residency, and has not run on a real network yet.
 
 ## What to take away
 
-Choose Choregos when the question is *"what did the agent do, under which contract, who
+Choose Tranibor when the question is *"what did the agent do, under which contract, who
 signed off, what did it cost, and can I prove it?"* — and expect to bring, or wait for, a
 runtime for density and suspend, a detector for injection, and breadth for tools.

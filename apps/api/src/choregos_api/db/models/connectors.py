@@ -141,7 +141,7 @@ class GitHubInstallation(Base, TimestampMixin):
 
     The primary key is GitHub's installation id, which nobody types: it is discovered by polling
     `GET /app/installations`, by the Setup URL redirect after an install, and by webhooks. `org_id`
-    is the Choregos organisation that CLAIMED it; a token for `owner/repo` is only minted through an
+    is the Tranibor organisation that CLAIMED it; a token for `owner/repo` is only minted through an
     installation claimed by the project's organisation. Unclaimed rows are visible to the platform
     scope only."""
 

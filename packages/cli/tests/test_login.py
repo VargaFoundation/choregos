@@ -87,7 +87,7 @@ def test_login_shows_the_code_waits_and_keeps_the_session_without_printing_it(
     assert SECRET not in result.output, "the credential is never printed"
     sent = json.loads(start.calls[0].request.content)
     assert (
-        sent["client_kind"] == "cli" and sent["org"] == "acme" and sent["client_name"].startswith("choregos ")
+        sent["client_kind"] == "cli" and sent["org"] == "acme" and sent["client_name"].startswith("tranibor ")
     )
     assert json.loads(profile.read_text())["token"] == SECRET
     assert oct(profile.stat().st_mode & 0o777) == "0o600"

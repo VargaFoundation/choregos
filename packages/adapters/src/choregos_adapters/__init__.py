@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Choregos adapters: everything that talks to the outside world.
+"""Tranibor adapters: everything that talks to the outside world.
 
 An adapter implements a `Protocol` of `base.py` and **has no business logic**: the decision is in
 `packages/core`, the orchestration in `apps/orchestrator`.

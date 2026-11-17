@@ -196,7 +196,7 @@ async def _by_oauth(
     if user is None:
         raise Refusal(
             403,
-            "user unknown to Choregos: sign in to the console once",
+            "user unknown to Tranibor: sign in to the console once",
             error="invalid_token",
         )
     if user.is_service:

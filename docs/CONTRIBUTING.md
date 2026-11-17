@@ -1,4 +1,4 @@
-# Contributing to Choregos
+# Contributing to Tranibor
 
 ## In five minutes
 
@@ -105,7 +105,7 @@ A new connector type, knowledge source kind or MCP-door client comes with its se
 Markdown file in `packages/core/src/choregos_core/procedures/` (see
 [the procedures](procedures/README.md) and [ADR 0067](adr/0067-a-procedure-per-connector-and-agent-type.md)):
 `tests/procedures/test_coverage.py` is red without it. Write what a person does at the vendor, then in
-Choregos, and where you could not check a vendor fact, say so in the text. Then `make procedures` and
+Tranibor, and where you could not check a vendor fact, say so in the text. Then `make procedures` and
 commit `docs/procedures/`.
 
 ## Out of scope
@@ -115,5 +115,5 @@ the origin, the proof and a proposal. It is exactly what we ask of agents.
 
 ## The repository is its own client
 
-Since M1, `choregos` is a Choregos project: stories go through the platform. When you work
+Since M1, `choregos` is a Tranibor project: stories go through the platform. When you work
 here, you also work on the tool that reviews you.

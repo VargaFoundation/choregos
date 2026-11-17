@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """The fake MCP gateway (S46-04, ADR 0005, ADR 0105): it routes by path or by header, checks every
-auth mode Choregos speaks, holds the upstream credentials, records who called, forgets sessions as
+auth mode Tranibor speaks, holds the upstream credentials, records who called, forgets sessions as
 another replica would, and is served alone as an ASGI application.
 
 `FakeMcpServer`'s fields are French until S45 renames them: they are read in `_server()` and
@@ -156,7 +156,7 @@ async def test_the_upstream_gets_the_gateway_s_credential_never_choregos_s(
     assert received
     assert all(headers.get("authorization") == "Bearer upstream-key" for _, headers, _ in received)
     assert all("x-api-key" not in headers for _, headers, _ in received), "the API-key header is dropped"
-    assert "gw-secret" not in json.dumps(received), "Choregos's credential never reaches the upstream"
+    assert "gw-secret" not in json.dumps(received), "Tranibor's credential never reaches the upstream"
     assert gw.calls[0].headers[seen] == ("Bearer gw-secret" if auth == "bearer" else "gw-secret")
 
 

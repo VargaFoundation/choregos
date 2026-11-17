@@ -150,7 +150,7 @@ function Entry({
             </p>
           )}
           {entry.licence && <p>Licence {entry.licence}</p>}
-          {entry.reference && <p>Usually unnecessary in a Choregos run: the run already has a shell, git and files.</p>}
+          {entry.reference && <p>Usually unnecessary in a Tranibor run: the run already has a shell, git and files.</p>}
           {host && entry.egress === "open" && <p>Host declared reachable: {host}</p>}
           {host && entry.egress === "undeclared" && (
             <p className="text-waiting-ink">Host not declared reachable from the API: {host}</p>
@@ -309,7 +309,7 @@ function InstallForm({ org, entry, onDone }: { org: string; entry: McpCatalogueE
           <legend className="text-xs text-ink-muted">Route</legend>
           <label className="flex items-center gap-2">
             <input type="radio" name="route" checked={route === "direct"} onChange={() => setRoute("direct")} />
-            Directly (Choregos holds the credential)
+            Directly (Tranibor holds the credential)
           </label>
           <label className="flex items-center gap-2">
             <input type="radio" name="route" checked={route === "gateway"} onChange={() => setRoute("gateway")} />

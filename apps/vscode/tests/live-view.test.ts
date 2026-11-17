@@ -107,7 +107,7 @@ describe("the status line", () => {
   });
 
   it("asks to sign in when nobody is", () => {
-    expect(statusText(feedWith({ kind: "signed-out" })).text).toBe("$(account) Choregos: sign in");
+    expect(statusText(feedWith({ kind: "signed-out" })).text).toBe("$(account) Tranibor: sign in");
   });
 });
 
@@ -134,7 +134,7 @@ describe("the extension, end to end on the fake API", () => {
   it("signs in, then shows what runs in the Live view and the status line", async () => {
     const status = fake.statusItems.get("choregos.status");
     await vi.waitFor(() => {
-      expect(status?.text).toBe("$(account) Choregos: sign in");
+      expect(status?.text).toBe("$(account) Tranibor: sign in");
     });
     expect(status?.command).toBe(COMMANDS.signIn);
 
@@ -160,7 +160,7 @@ describe("the extension, end to end on the fake API", () => {
 
     await fake.commands.get(COMMANDS.signOut)?.();
     await vi.waitFor(() => {
-      expect(status?.text).toBe("$(account) Choregos: sign in");
+      expect(status?.text).toBe("$(account) Tranibor: sign in");
     });
     expect(extension.live.getChildren()).toEqual([]);
   });

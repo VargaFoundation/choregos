@@ -78,7 +78,7 @@ def redirect_url(settings: Settings) -> str:
 
 def suggested_name(settings: Settings) -> str:
     host = urlsplit(settings.public_url).hostname or "instance"
-    return f"Choregos {host}"[:NAME_MAX].rstrip(" .-")
+    return f"Tranibor {host}"[:NAME_MAX].rstrip(" .-")
 
 
 def build_manifest(settings: Settings, *, name: str, public: bool, webhook_active: bool) -> dict[str, Any]:
@@ -91,7 +91,7 @@ def build_manifest(settings: Settings, *, name: str, public: bool, webhook_activ
     return {
         "name": name,
         "url": settings.public_url.rstrip("/"),
-        "description": "Choregos: governed agents and human steps on this organisation's repositories.",
+        "description": "Tranibor: governed agents and human steps on this organisation's repositories.",
         "hook_attributes": {"url": webhook_url(settings), "active": webhook_active},
         "redirect_url": redirect_url(settings),
         "callback_urls": [callback_url(settings)],

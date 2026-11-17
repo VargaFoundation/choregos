@@ -3,7 +3,7 @@
 
 The train is the second of the three locks: the merge queue keeps `main` green, the train keeps
 the environment, and the declarative guard rails (Argo windows, GitHub Environments) hold even if
-Choregos goes down.
+Tranibor goes down.
 """
 
 from __future__ import annotations

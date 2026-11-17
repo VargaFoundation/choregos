@@ -1,6 +1,6 @@
 ---
 title: Glossary
-description: The words Choregos uses, in one line each.
+description: The words Tranibor uses, in one line each.
 sidebar_position: 5
 ---
 
@@ -16,12 +16,12 @@ sidebar_position: 5
 | **Artefact** | a document or file a step produced, stored with its digest |
 | **Backend** | the coding agent that runs a step (`claude-code`, `codex`, `gemini-cli`, …) |
 | **Budget** | what a run, a work item, a project or an agent may spend, in USD, enforced at the model gateway |
-| **Connector** | Choregos's link to an external system: a tracker, a repository, CI, a directory, an MCP server |
+| **Connector** | Tranibor's link to an external system: a tracker, a repository, CI, a directory, an MCP server |
 | **Decision** | a person's choice at a human step (approve, reject, answer), taken in the console, never by a token |
 | **Egress** | the network a run or the platform may reach; opened host by host ([Tools](../build/tools.md#network)) |
 | **Gate** | a check a transition requires, read from evidence rather than from what an agent says ([list](workflow-yaml.md#gates)) |
 | **Integrations page** | the console page that gives each client (assistants, CLI, REST, A2A) its exact setup |
-| **MCP door** | the endpoint that serves Choregos to AI assistants over the Model Context Protocol ([guide](../integrate/mcp.md)) |
+| **MCP door** | the endpoint that serves Tranibor to AI assistants over the Model Context Protocol ([guide](../integrate/mcp.md)) |
 | **MCP server** | a server of tools an agent may call, added by the organisation and governed tool by tool |
 | **Organisation** | the tenant: its members, projects, agents, skills and connectors, isolated from the others |
 | **Plugin** | a versioned package of agents, skills, templates and servers ([guide](../build/plugins.md)) |

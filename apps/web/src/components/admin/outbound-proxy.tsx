@@ -121,7 +121,7 @@ function ProxyForm({ org, stored }: { org: string; stored: OutboundProxy | null 
         </Field>
         <Field
           label="Username"
-          hint="Provider options such as a country or a sticky session go in the username, as your provider documents them (for example user-…-country-fr-session-…). Choregos does not build them."
+          hint="Provider options such as a country or a sticky session go in the username, as your provider documents them (for example user-…-country-fr-session-…). Tranibor does not build them."
           error={username.length > 512 ? "At most 512 characters." : null}
         >
           {(props) => <Input {...props} value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="off" />}

@@ -81,7 +81,7 @@ class SlackNotifier:
             elements.append(
                 {
                     "type": "button",
-                    "text": {"type": "plain_text", "text": "Open in Choregos"},
+                    "text": {"type": "plain_text", "text": "Open in Tranibor"},
                     "url": message.url,
                     "action_id": "choregos:open",
                 }

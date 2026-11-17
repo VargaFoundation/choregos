@@ -8,7 +8,7 @@ sidebar_position: 3
 
 Your release-notes agent works well in `billing-api`; the payments team wants it too, in its own
 organisation. A **plugin** packages agents and what they need (skills, project templates, evals,
-setup procedures, MCP servers) in one versioned, digest-identified package that any Choregos
+setup procedures, MCP servers) in one versioned, digest-identified package that any Tranibor
 organisation can install.
 
 **What you will be able to do:** lay out a plugin, validate and pack it with the CLI, publish it in a
@@ -50,7 +50,7 @@ contents:
   skills: [skills/release-notes-style]
 ```
 
-`metadata.version` is semver and a published version never changes; `core` is the range of Choregos
+`metadata.version` is semver and a published version never changes; `core` is the range of Tranibor
 versions the plugin was checked against. `contents` may also list `templates`, `evals`, `procedures`,
 `servers` and `matrix_cases`.
 

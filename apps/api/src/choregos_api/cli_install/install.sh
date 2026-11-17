@@ -1,7 +1,7 @@
 #!/bin/sh
 # SPDX-License-Identifier: Apache-2.0
 #
-# Installs the `choregos` CLI from a Choregos instance, in the version that instance runs.
+# Installs the `choregos` CLI from a Tranibor instance, in the version that instance runs.
 #
 #   curl -fsSL __CHOREGOS_INSTANCE_URL__/cli/install.sh | sh
 #   curl -fsSL __CHOREGOS_INSTANCE_URL__/cli/install.sh | sh -s -- --prefix "$HOME/tools"

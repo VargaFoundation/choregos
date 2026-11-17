@@ -249,7 +249,7 @@ def _written_id(payload: dict[str, Any]) -> str:
 def _fact_body(fact: Fact) -> dict[str, Any]:
     """The Ecphoria write body.
 
-    `kind`, `paths` and `provenance` are Choregos notions: Ecphoria carries them in `metadata`,
+    `kind`, `paths` and `provenance` are Tranibor notions: Ecphoria carries them in `metadata`,
     and that is where the context pack reads them back to filter by type and by allowed path.
     Sending them at the root amounted to losing them silently.
     """
@@ -300,7 +300,7 @@ def _memory_item(payload: dict[str, Any]) -> MemoryItem:
 
 
 def _memory(payload: dict[str, Any]) -> Memory:
-    """An Ecphoria memory → the Choregos model.
+    """An Ecphoria memory → the Tranibor model.
 
     Ecphoria stores the type, the paths and the provenance in `metadata`, and names its life cycle
     `state` (`active` / `pending` / `superseded` / `expired`). Both are translated.

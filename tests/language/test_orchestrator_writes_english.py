@@ -95,12 +95,12 @@ def test_the_tracking_comment_and_a_human_request_read_in_english() -> None:
         workflow="dev-simple", workflow_version=1, size="S", risk="low", state_display="Implemented",
         budget_eur=9.2, spent_eur=0.42, estimate_eur=0.5, lines=[line],
     ).render()  # fmt: skip
-    assert "### Choregos — progress" in rendered
+    assert "### Tranibor — progress" in rendered
     assert "**Size** S · **Risk** low · **State** Implemented" in rendered
     assert "| # | Step | Actor |" in rendered and "€0.42" in rendered and "2 h 3 min" in rendered
     assert "estimated €0.50" in rendered
     request = render_human_request("approval", {}, "https://choregos.example/p/dev/items/1", "dev#1")
-    assert "### Choregos — approval requested" in request
+    assert "### Tranibor — approval requested" in request
     assert "Approve or refuse in the console: https://choregos.example/p/dev/items/1" in request
 
 

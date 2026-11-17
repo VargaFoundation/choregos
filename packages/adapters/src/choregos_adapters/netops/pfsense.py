@@ -8,7 +8,7 @@ the v2 API is an envelope `{code, status, response_id, message, data}`; the conn
 agent `data`, nothing of the envelope and never the key.
 
 Authentication is an API key in `X-API-Key`: a key carries the privileges of the pfSense user who
-generated it, so the key given to Choregos belongs to a user whose privileges are the pages this
+generated it, so the key given to Tranibor belongs to a user whose privileges are the pages this
 connector reads (`WebCfg - Firewall: Rules`, `… Aliases`, `… NAT: Port Forward`, `Status: Gateways`,
 `Interfaces`) and nothing else. TLS is verified (`tls.py`).
 """

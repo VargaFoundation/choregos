@@ -7,7 +7,7 @@ version: 4
 reviewed: 2026-11-14
 vendor_docs:
   - {title: "MCP specification: transports (Streamable HTTP)", url: "https://modelcontextprotocol.io/specification/2025-06-18/basic/transports"}
-egress: ["none: Choregos opens no connection for it; the outpost calls the server from inside its own network"]
+egress: ["none: Tranibor opens no connection for it; the outpost calls the server from inside its own network"]
 fields:
   outpost: "the name of an outpost of your organisation"
   endpoint: "the alias the outpost's policy file gives the server (a name, never an address)"
@@ -17,11 +17,11 @@ fields:
 ## Before you start
 
 - The server lives in a network nothing outside may connect to. An **outpost** is installed there:
-  the daemon `choregos-outpost`, which only dials out to Choregos and makes the calls it is handed.
-- An organisation administrator has created the outpost in Choregos, and a person has approved an
+  the daemon `choregos-outpost`, which only dials out to Tranibor and makes the calls it is handed.
+- An organisation administrator has created the outpost in Tranibor, and a person has approved an
   instance of it against the fingerprint the daemon printed. Without an approved instance that
   polls, the connector answers "offline".
-- **An outpost does not keep data where it is.** A tool's result travels to Choregos, is bounded and
+- **An outpost does not keep data where it is.** A tool's result travels to Tranibor, is bounded and
   screened there, and is read by a model. A result that must not leave that network must not be a
   tool's answer.
 - An organisation administrator declares the connector. What an agent may then call is decided tool
@@ -30,7 +30,7 @@ fields:
 ## At your outpost
 
 The address of the server and the credential that opens it are written in the outpost's own policy
-file, by whoever runs the outpost. **Choregos never holds either**: it names an alias, and the
+file, by whoever runs the outpost. **Tranibor never holds either**: it names an alias, and the
 outpost decides alone what that alias reaches.
 
 1. In the policy file, under `endpoints`, give the server an alias: its `url` (reachable from the
@@ -44,21 +44,21 @@ outpost decides alone what that alias reaches.
 ## Permissions
 
 - The connector's tools act with the credential **the outpost** holds for that alias; nothing in
-  Choregos can widen it. Prefer an account whose rights are exactly what the agents should have.
+  Tranibor can widen it. Prefer an account whose rights are exactly what the agents should have.
 - Tools are **born closed**: after discovery each tool is `forbidden` until an administrator opens
   it. A read can be `allowed`.
-- **A write is delivered at most once, and may end in doubt.** Choregos does not see the outpost's
+- **A write is delivered at most once, and may end in doubt.** Tranibor does not see the outpost's
   server: when an instance took a write and its answer never comes back, nobody knows whether the
-  server made it. Choregos then never sends it again and undoes nothing by itself: the action stops
+  server made it. Tranibor then never sends it again and undoes nothing by itself: the action stops
   as `in doubt`, for a person to check. So a write is opened only when its rule says one of two
   things, and the request that says neither is refused:
-  - **the tool takes Choregos's idempotency key**: it has an argument named `action_key` and makes
-    the same call harmless when it arrives twice with the same key. Choregos fills the key, and after
+  - **the tool takes Tranibor's idempotency key**: it has an argument named `action_key` and makes
+    the same call harmless when it arrives twice with the same key. Tranibor fills the key, and after
     a doubt it sends the write again with it;
   - **an in-doubt outcome is accepted** for this tool, explicitly.
 - A project sees only the tools its groups are opened to, and can only tighten them.
 
-## In Choregos
+## In Tranibor
 
 1. Administration, **Connectors**, **Declare**: capability **MCP**, type **MCP server at an
    outpost**, a lowercase name.

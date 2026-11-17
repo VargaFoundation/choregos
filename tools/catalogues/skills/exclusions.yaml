@@ -5,7 +5,7 @@ names:
   - { pattern: "pdf", reason: "proprietary: Anthropic's document skills are governed by an agreement, not an open licence" }
   - { pattern: "pptx", reason: "proprietary: Anthropic's document skills are governed by an agreement, not an open licence" }
   - { pattern: "xlsx", reason: "proprietary: Anthropic's document skills are governed by an agreement, not an open licence" }
-  - { pattern: "setup-*", reason: "installs tooling or hooks of one coding assistant: nothing for a Choregos run to do" }
+  - { pattern: "setup-*", reason: "installs tooling or hooks of one coding assistant: nothing for a Tranibor run to do" }
   - { pattern: "*-plugin-*", reason: "plumbing of one assistant's plugin system" }
   - { pattern: "skill-installer", reason: "installs skills outside the catalogue and its gate" }
   - { pattern: "using-git-worktrees", reason: "manages worktrees of a developer's machine; a run has its own workspace" }

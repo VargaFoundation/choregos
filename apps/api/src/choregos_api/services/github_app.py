@@ -3,7 +3,7 @@
 
 Nobody types an installation id. The platform learns installations by polling the App
 (`GET /app/installations`), from the Setup URL redirect after an install, and from webhooks. A
-Choregos organisation CLAIMS an installation, and a token for `owner/repo` is only minted through an
+Tranibor organisation CLAIMS an installation, and a token for `owner/repo` is only minted through an
 installation its organisation claimed. On an instance with one organisation (the community edition,
 ADR 0024) every installation is claimed implicitly; with several, the claim needs proof that the
 person installing manages the installation (GitHub user authorization).
@@ -412,7 +412,7 @@ async def checked_config(
     with contextlib.suppress(UpstreamError):
         link = install_page((await app.app_info()).get("slug"))
     raise unprocessable(
-        f"The Choregos GitHub App is not installed on `{owner}` for this organisation. "
+        f"The Tranibor GitHub App is not installed on `{owner}` for this organisation. "
         + (f"Install it: {link}" if link else "Install it from Settings, Connections.")
     )
 
@@ -434,6 +434,6 @@ async def pin_for_runtime(
     from choregos_adapters.errors import ConfigurationError
 
     raise ConfigurationError(
-        f"The Choregos GitHub App is not installed on `{owner}` for this organisation: "
+        f"The Tranibor GitHub App is not installed on `{owner}` for this organisation: "
         "install it from Settings, Connections, then retry."
     )

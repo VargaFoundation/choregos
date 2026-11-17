@@ -31,7 +31,7 @@ platform mints a one-hour installation token limited to that repository and to `
 - The credential travels to git in the environment, never on a command line, in an error message or in
   `.git/config`.
 
-## In Choregos
+## In Tranibor
 
 1. Administration, **Connectors**, **Declare**: capability **Documents**, type **Git over https**.
 2. `host`: `github.com` (the default) or your host.

@@ -1,10 +1,10 @@
 # choregos-agent-sdk
 
 **This is not an agent framework: bring yours.** It is the run contract between an agent written in
-Python and the Choregos runner (ACP, MCP tools through the runner's permission check, the gateway as
+Python and the Tranibor runner (ACP, MCP tools through the runner's permission check, the gateway as
 the model, the result file). LangGraph, the OpenAI Agents SDK, Pydantic AI or plain Python run inside it.
 
-Write a [Choregos](https://github.com/graalsystems/tranibor) agent in Python. An agent is one
+Write a [Tranibor](https://github.com/graalsystems/tranibor) agent in Python. An agent is one
 async function; the SDK speaks the Agent Client Protocol (ACP) to the platform's runner, so the
 agent runs under the same guarantees as any coding agent: its tool calls and writes go through the
 runner's permission path, its turns are counted, it is journaled, it can be cancelled, and its
@@ -29,7 +29,7 @@ if __name__ == "__main__":
     run.serve()
 ```
 
-Package it in an image built `FROM` the Choregos runner image, give the image a name in the
+Package it in an image built `FROM` the Tranibor runner image, give the image a name in the
 platform's `CHOREGOS_AGENT_IMAGES`, and register the agent with
 `runtime: {kind: code, image: <name>, command: [python, -m, my_agent]}`. The full guide is
 [docs/code-agents.md](https://github.com/graalsystems/tranibor/blob/main/docs/code-agents.md).

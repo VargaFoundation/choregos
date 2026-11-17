@@ -1,6 +1,6 @@
 ---
 title: Install with Helm
-description: Install Choregos on Kubernetes with its Helm chart, give it a first values file, create the first organisation and token, and check it works.
+description: Install Tranibor on Kubernetes with its Helm chart, give it a first values file, create the first organisation and token, and check it works.
 sidebar_position: 2
 ---
 

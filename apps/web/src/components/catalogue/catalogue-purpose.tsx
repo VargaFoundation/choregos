@@ -16,7 +16,7 @@ const PURPOSE: Record<
   connectors: {
     title: "What it is for: the platform's own integrations",
     who:
-      "Choregos calls these systems through their APIs to run your workflows: it reads and moves tickets, " +
+      "Tranibor calls these systems through their APIs to run your workflows: it reads and moves tickets, " +
       "comments on them, opens pull requests, runs pipelines, deploys, and syncs knowledge sources. Their " +
       "events (a ticket labelled agent-ready, a pipeline result) reach the workflow by webhook.",
     account:

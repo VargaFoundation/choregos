@@ -34,7 +34,7 @@ from .plugins import plugin_app
 from .self_update import self_app
 
 app = typer.Typer(
-    add_completion=True, help="Choregos — a work item comes in, a controlled release comes out."
+    add_completion=True, help="Tranibor — a work item comes in, a controlled release comes out."
 )
 projects_app = typer.Typer(help="Projects")
 items_app = typer.Typer(help="Work items")
@@ -74,7 +74,7 @@ console = Console()
 
 def _print_version(value: bool) -> None:
     if value:
-        typer.echo(f"choregos {__version__}")
+        typer.echo(f"tranibor {__version__}")
         raise typer.Exit()
 
 
@@ -535,7 +535,7 @@ def projects_create(
     tracker: Annotated[
         str | None,
         typer.Option(
-            help="`internal`: requests are filed in Choregos. Without `--repo` the default is `internal`; "
+            help="`internal`: requests are filed in Tranibor. Without `--repo` the default is `internal`; "
             "with `--repo` it is written only when given"
         ),
     ] = None,
@@ -654,7 +654,7 @@ def items_create(
         typer.Option("--field", help="`key=value` (repeatable), validated by the workflow's `inputs`"),
     ] = None,
 ) -> None:
-    """File a request in Choregos (a project with the internal tracker) and start its interpreter."""
+    """File a request in Tranibor (a project with the internal tracker) and start its interpreter."""
     request: dict[str, Any] = {"title": title, "body": body, "size": size, "start": not no_start}
     if workflow:
         request["workflow"] = workflow

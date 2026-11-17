@@ -100,7 +100,7 @@ def test_the_pattern_catches_a_dependency_and_spares_the_branding() -> None:
     spared = (
         "jiter-0.17.0-graalpy312-graalpy250_312_native",
         'publisher: "GraalSystems"',
-        "Graal Agentic Platform · Choregos Enterprise edition",
+        "Graal Agentic Platform · Enterprise edition by GraalSystems · built on Tranibor",
     )
     assert all(GRAAL.search(text) for text in caught), "the pattern no longer sees graal"
     assert not any(GRAAL.search(text) for text in spared), "the pattern flags the branding"

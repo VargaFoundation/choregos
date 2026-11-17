@@ -32,7 +32,7 @@ class McpGatewayAssertion(Dto):
 
 
 class McpGatewayAuth(Dto):
-    """How Choregos authenticates to the gateway. The credential itself is `McpGatewayPut.secret`."""
+    """How Tranibor authenticates to the gateway. The credential itself is `McpGatewayPut.secret`."""
 
     type: GatewayAuthType
     header_name: HeaderName | None = None

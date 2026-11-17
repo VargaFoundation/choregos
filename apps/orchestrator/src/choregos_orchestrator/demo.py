@@ -18,7 +18,7 @@ if TYPE_CHECKING:  # the fakes expose staging methods (seed, set_diff...)
 
 BANNER = """
   ┌─────────────────────────────────────────────────────────────────────┐
-  │  Choregos — offline demonstration                                   │
+  │  Tranibor — offline demonstration                                   │
   │  A work item comes in, a controlled production release comes out.  │
   └─────────────────────────────────────────────────────────────────────┘
 """

@@ -30,7 +30,7 @@ Request a key at alphavantage.co (the support page above). It is shown once on t
 
 The key only reads market data. It is yours: do not share one key between organisations.
 
-## In Choregos
+## In Tranibor
 
 Connectors, **Market data**, type **Alpha Vantage**. `api_key` in the password field (sealed, shown once).
 

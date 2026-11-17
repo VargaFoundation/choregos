@@ -18,7 +18,7 @@ tested and what has not.
 ## Before an outpost: your organisation's own MCP gateway
 
 If the servers you want agents to reach are already behind an MCP gateway your organisation runs,
-and the platform can reach that gateway, **you need no outpost**. Choregos consumes the gateway as it
+and the platform can reach that gateway, **you need no outpost**. Tranibor consumes the gateway as it
 is ([ADR 0105](adr/0105-choregos-consumes-an-mcp-gateway-it-never-is-one.md)): set it up as
 [Integrations](integrations.md#your-organisations-mcp-gateway-adr-0105) describes, and nothing below
 applies to you. Look there first:

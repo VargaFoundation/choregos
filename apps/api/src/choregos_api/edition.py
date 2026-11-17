@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Which edition runs here, and what it allows itself.
 
-Choregos exists in two editions ([ADR 0024](../../../docs/adr/0024-two-editions.md)):
+Tranibor exists in two editions ([ADR 0024](../../../docs/adr/0024-two-editions.md)):
 
 * **community**: this repository, Apache-2.0, **a single organisation**;
 * **enterprise**: proprietary, in a separate repository, which unlocks multi-organisation

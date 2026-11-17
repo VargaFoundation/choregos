@@ -31,7 +31,7 @@ const LOOPBACK = new Set(["localhost", "127.0.0.1", "[::1]"]);
 /** The origin of the instance, or a refusal that says why it cannot be used. */
 export function instanceOrigin(instanceUrl: string): URL {
   const raw = instanceUrl.trim();
-  if (!raw) throw new ClientRefusal("no Choregos instance is configured (setting `choregos.instanceUrl`)");
+  if (!raw) throw new ClientRefusal("no Tranibor instance is configured (setting `choregos.instanceUrl`)");
   let url: URL;
   try {
     url = new URL(raw);

@@ -292,7 +292,7 @@ async def install_mcp_catalogue_entry(
     if route == "gateway":
         if body.secret_refs or body.secret_values or body.auth_header:
             raise unprocessable(
-                "through the gateway the server's credential is the gateway's: Choregos stores none"
+                "through the gateway the server's credential is the gateway's: Tranibor stores none"
             )
         return await declare_org_connector(
             session,

@@ -142,7 +142,7 @@ async def test_polling_faster_than_the_interval_is_told_to_slow_down(org: str, a
 async def test_an_approved_code_gives_a_session_of_the_person_and_only_once(
     org: str, anyone: AsyncClient, browsers: Any
 ) -> None:
-    codes = await _start(anyone, client_kind="editor", client_name="Choregos for VS Code")
+    codes = await _start(anyone, client_kind="editor", client_name="Tranibor for VS Code")
     person = await browsers(ALICE)
     assert (await _approve(person, codes)).status_code == 204
     done = await _poll(anyone, codes)
@@ -344,12 +344,12 @@ async def test_a_sign_in_is_approved_with_the_persons_own_console_session_only(
 async def test_the_console_reads_what_a_code_asks_for_before_the_person_approves(
     org: str, anyone: AsyncClient, browsers: Any
 ) -> None:
-    codes = await _start(anyone, client_kind="editor", client_name="Choregos for VS Code", org="varga")
+    codes = await _start(anyone, client_kind="editor", client_name="Tranibor for VS Code", org="varga")
     person = await browsers(ALICE)
     seen = await person.get(f"/api/v1/auth/device/requests/{codes['user_code'].lower().replace('-', ' ')}")
     assert seen.status_code == 200, seen.text
     assert seen.json()["client_kind"] == "editor" and seen.json()["org"] == "varga"
-    assert seen.json()["client_name"] == "Choregos for VS Code"
+    assert seen.json()["client_name"] == "Tranibor for VS Code"
     assert (await person.get("/api/v1/auth/device/requests/ZZZZ-ZZZZ")).status_code == 404
     assert (await _approve(person, codes)).status_code == 204
     assert (await _approve(person, codes)).status_code == 409

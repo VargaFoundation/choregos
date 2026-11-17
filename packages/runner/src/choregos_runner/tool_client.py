@@ -354,7 +354,7 @@ def _bridge() -> _Bridge:
             url = _os.environ.get(BRIDGE_VARIABLE, "")
             if not url:
                 raise RuntimeError(
-                    f"{BRIDGE_VARIABLE} is not set: this process is not an agent's of a Choregos run "
+                    f"{BRIDGE_VARIABLE} is not set: this process is not an agent's of a Tranibor run "
                     "offered tool scripts"
                 )
             _STATE["bridge"] = _Bridge(url)

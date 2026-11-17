@@ -75,7 +75,7 @@ export function OperationStatements({
           It takes the platform&apos;s idempotency key (<code>action_key</code>)
           <span id={`${id}-key-help`} className="block text-xs text-ink-muted">
             {keyArgument
-              ? "The tool has an `action_key` argument and makes a call that arrives twice with the same key harmless. Choregos fills it; after a doubt the write may be delivered again with the same key. Choregos does not verify that the server honours it."
+              ? "The tool has an `action_key` argument and makes a call that arrives twice with the same key harmless. Tranibor fills it; after a doubt the write may be delivered again with the same key. Tranibor does not verify that the server honours it."
               : "The tool's input schema has no `action_key` argument: the platform cannot hand it one."}
           </span>
           {refused?.fields.platform_arguments && (

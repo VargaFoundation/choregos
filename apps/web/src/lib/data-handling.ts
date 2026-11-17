@@ -15,7 +15,7 @@ export type DataHandling = {
 const FIELDS = ["query_retention_days", "query_reuse", "region", "terms_ref"];
 
 /**
- * What Choregos declares for a backend type, mirrored from `choregos_adapters.web_search.declared`
+ * What Tranibor declares for a backend type, mirrored from `choregos_adapters.web_search.declared`
  * (the API does not serve it; `tests/docs/test_web_search_declared_mirror.py` refuses a difference).
  * A type not in the table declares nothing: everything unknown.
  */

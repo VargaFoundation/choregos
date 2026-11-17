@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Setup procedures (ADR 0067): what to do at the vendor, then in Choregos, to add one thing."""
+"""Setup procedures (ADR 0067): what to do at the vendor, then in Tranibor, to add one thing."""
 
 from __future__ import annotations
 

@@ -22,7 +22,7 @@ import type { McpGateway, McpGatewayAssertion, McpGatewayPut, McpGatewayTest } f
 const message = (cause: unknown) => (cause instanceof Error ? cause.message : "refused");
 
 /**
- * The organisation's MCP gateway (ADR 0105): Choregos consumes one, it never is one. The secret is
+ * The organisation's MCP gateway (ADR 0105): Tranibor consumes one, it never is one. The secret is
  * write-only (ADR 0058): the field never holds the stored one, an empty field keeps it, and only
  * `secret_set` comes back. Administrators only: the API refuses the others (403), so the card does
  * not render for them.
@@ -153,7 +153,7 @@ function GatewayForm({ org, stored }: { org: string; stored: McpGateway | null }
   return (
     <div className="space-y-3 text-sm">
       <p className="text-ink-muted">
-        One MCP gateway for {org}. Choregos calls the gateway, which fronts the MCP servers; it never is one. The secret is typed once,
+        One MCP gateway for {org}. Tranibor calls the gateway, which fronts the MCP servers; it never is one. The secret is typed once,
         sealed in the secret store and never shown again.
       </p>
       <div className="grid gap-3 sm:grid-cols-2 [&>*]:min-w-0">
@@ -332,13 +332,13 @@ function CopyButton({ text, label }: { text: string; label: string }) {
   );
 }
 
-/** What to give the gateway so it can verify the identity Choregos signs, and the keys behind it (ADR 0105). */
+/** What to give the gateway so it can verify the identity Tranibor signs, and the keys behind it (ADR 0105). */
 function AssertionBlock({ org, assertion }: { org: string; assertion: McpGatewayAssertion }) {
   const client = useQueryClient();
   return (
     <div className="mt-4 space-y-2 border-t border-line pt-3 text-sm">
       <h3 className="font-medium">Signed assertion</h3>
-      <p className="text-ink-muted">Give the gateway the issuer and the JWKS URL so it can verify the identity Choregos signs.</p>
+      <p className="text-ink-muted">Give the gateway the issuer and the JWKS URL so it can verify the identity Tranibor signs.</p>
       <dl className="space-y-1">
         <div className="flex flex-wrap items-center gap-2">
           <dt className="text-ink-muted">Issuer</dt>

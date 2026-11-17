@@ -350,7 +350,7 @@ def item_github_app(f: Facts) -> list[ReadinessItem]:
                     "connections",
                     title,
                     "todo",
-                    f"the Choregos GitHub App is not installed on `{owner}` for this organisation.",
+                    f"the Tranibor GitHub App is not installed on `{owner}` for this organisation.",
                     fix,
                 )
             )

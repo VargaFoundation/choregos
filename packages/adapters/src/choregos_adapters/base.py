@@ -46,11 +46,11 @@ from .oci.signatures import SignatureVerdict
 
 @runtime_checkable
 class TrackerAdapter(Protocol):
-    """The tracker is the human interface: Choregos reflects the state, the cost and the proofs in it.
+    """The tracker is the human interface: Tranibor reflects the state, the cost and the proofs in it.
 
     `owns_items` says **who holds the ticket**. With GitHub or Jira, the ticket lives outside:
-    Choregos reads it back, reflects it, and discovers through `list_candidates` what is assigned
-    to it. With the internal tracker there is no outside: Choregos' database IS the tracker.
+    Tranibor reads it back, reflects it, and discovers through `list_candidates` what is assigned
+    to it. With the internal tracker there is no outside: Tranibor's database IS the tracker.
     Without this distinction, a ticket created by the platform (a promoted finding, a request
     typed in the front end) was never discovered: `list_candidates` returned an empty list, and
     the ticket stayed in `inbox` forever. Seen on the bench of 2026-09-23.
@@ -59,7 +59,7 @@ class TrackerAdapter(Protocol):
     tracker (ADR 0059): the work item is then recorded under the key it returns.
     """
 
-    #: False when Choregos' database is the source (see `tracker: internal`).
+    #: False when Tranibor's database is the source (see `tracker: internal`).
     owns_items: bool
 
     async def fetch_item(self, key: str) -> WorkItemData: ...

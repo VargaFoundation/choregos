@@ -40,7 +40,7 @@ Create it.
 
 Least privilege.
 
-## In Choregos
+## In Tranibor
 
 Paste it.
 

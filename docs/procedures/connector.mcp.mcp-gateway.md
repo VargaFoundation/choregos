@@ -6,8 +6,8 @@ For an organisation administrator. Procedure `connector.mcp.mcp-gateway`, versio
 
 ## Before you start
 
-- Your organisation runs an **MCP gateway**, and an administrator has set it in Choregos (the
-  gateway's address and how Choregos signs in to it). Without that, this connector cannot be used.
+- Your organisation runs an **MCP gateway**, and an administrator has set it in Tranibor (the
+  gateway's address and how Tranibor signs in to it). Without that, this connector cannot be used.
 - The server is already registered at the gateway, under a name. Ask the gateway's owner for it.
 - An organisation administrator declares the connector. What an agent may then call is decided tool by
   tool, below.
@@ -15,19 +15,19 @@ For an organisation administrator. Procedure `connector.mcp.mcp-gateway`, versio
 ## At your MCP gateway
 
 Register the server there under a name, and give the gateway the server's credential or OAuth setup.
-**Choregos never holds that credential**: it asks the gateway for the server by its name, and the
+**Tranibor never holds that credential**: it asks the gateway for the server by its name, and the
 gateway reaches the server with its own access. Prefer an account whose rights are exactly what the
 agents should have.
 
 ## Permissions
 
 - The connector's tools act with the permissions the **gateway** grants for that server, nothing in
-  Choregos can widen them.
+  Tranibor can widen them.
 - Tools are **born closed**: after discovery each tool is `forbidden` until an administrator
   opens it. A read can be `allowed`; a write is a governed action that waits for approval.
 - A project sees only the tools its groups are opened to, and can only tighten them.
 
-## In Choregos
+## In Tranibor
 
 1. Administration, **Connectors**, **Declare**: capability **MCP**, type **MCP server through the
    organisation's MCP gateway**, a lowercase name.
@@ -38,14 +38,14 @@ agents should have.
 ## Test it
 
 **Discover** asks the server, through the gateway, for its tools. A list of tools proves the gateway
-setting, Choregos's sign-in to the gateway and the server's name.
+setting, Tranibor's sign-in to the gateway and the server's name.
 
 ## When it fails
 
 - `409 gateway_not_configured`: no gateway is set for the organisation. An administrator sets it first.
-- `409 gateway_assertion_key_missing`: the gateway is set, but the key Choregos signs its requests
+- `409 gateway_assertion_key_missing`: the gateway is set, but the key Tranibor signs its requests
   with is not. An administrator finishes the gateway setting.
-- `401` from the gateway: the gateway refused Choregos's sign-in, or the caller is not allowed to use
+- `401` from the gateway: the gateway refused Tranibor's sign-in, or the caller is not allowed to use
   that server. Check the gateway's own logs.
 - `404` for an unknown server name: the name is not registered at the gateway; check the spelling
   against the gateway's list.

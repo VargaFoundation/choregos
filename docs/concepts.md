@@ -19,7 +19,7 @@ A **catalogue** is what the platform *offers*; a **connector** is what an organi
 entry enables nothing, and installing one goes through the same governance as declaring it by hand
 ([ADR 0065](adr/0065-catalogues-of-mcp-servers-and-skills.md)).
 
-`tracker: internal` means there is no outside tracker: Choregos' own database holds the
+`tracker: internal` means there is no outside tracker: Tranibor's own database holds the
 tickets, assigns their keys and discovers them. Use it for work that exists nowhere else —
 an HR request, a file to process — or for a bench. A work item filed from the console or MCP on
 a project with an external tracker is created in that tracker first, then mirrored (ADR 0059).
@@ -330,7 +330,7 @@ The agent never holds a provider credential, never chooses a URL, and never sees
 tool's real name. Your run token never reaches a third party. Each tool opens to groups, and
 a project both declares what it uses and belongs to the groups that entitle it.
 
-The list is written and reviewed like code. Choregos does not ask a remote server what it
+The list is written and reviewed like code. Tranibor does not ask a remote server what it
 offers: an inventory that updates itself is not an access control.
 
 ## Network access

@@ -1,4 +1,4 @@
-# apps/web — the Choregos front end
+# apps/web — the Tranibor front end
 
 Next.js 15 (App Router), React 19, TypeScript strict, Tailwind, TanStack Query.
 The front end **talks only to the API** (`packages/contracts/openapi.yaml`): the types come

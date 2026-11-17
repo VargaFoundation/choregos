@@ -1,6 +1,6 @@
 ---
 title: Upgrades
-description: Upgrade a Choregos instance with Helm, in the right order, with its migrations, and know what to do when it goes wrong.
+description: Upgrade a Tranibor instance with Helm, in the right order, with its migrations, and know what to do when it goes wrong.
 sidebar_position: 5
 ---
 

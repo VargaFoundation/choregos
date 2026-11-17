@@ -40,7 +40,7 @@ def _base(delivery_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     return {
         "source": "jira",
         "delivery_id": delivery_id,
-        # The Choregos project carries the same slug as the Jira project key, in lower case.
+        # The Tranibor project carries the same slug as the Jira project key, in lower case.
         "project_slug": str(key).split("-")[0].lower() if key else None,
         "work_item_key": key,
         "actor": user.get("displayName") or user.get("accountId"),

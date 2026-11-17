@@ -56,7 +56,7 @@ curl -s "$CHOREGOS_API_URL/api/v1/orgs/acme/connectors" -H "Authorization: Beare
 - The key is write-only: it is sealed and never shown again. It is sent as `Authorization: Bearer`
   (add `"auth_scheme": "basic"` and a `username` for Basic). A server that only accepts short-lived
   OAuth tokens takes `"auth_scheme": "oauth_client_credentials"` with a `token_url` and a `client_id`
-  in `config`, and its `client_secret` in `secret_values`: Choregos fetches and renews the token, and
+  in `config`, and its `client_secret` in `secret_values`: Tranibor fetches and renews the token, and
   `allow_egress` opens the token endpoint's host too.
 - `allow_egress: true` opens the server's host in the organisation's network list in the same call;
   without it, a host that is not open answers `409 egress_required`, and the console shows the
@@ -67,7 +67,7 @@ curl -s "$CHOREGOS_API_URL/api/v1/orgs/acme/connectors" -H "Authorization: Beare
 
 ## 2. Discover its tools, then open them
 
-Choose **Discover** on the server (**Admin › Installed connectors**). Choregos lists the tools the
+Choose **Discover** on the server (**Admin › Installed connectors**). Tranibor lists the tools the
 server offers. **A new tool is born closed** (`forbidden`): a server never adds a capability behind
 your back. A tool whose input schema changes later is closed again.
 

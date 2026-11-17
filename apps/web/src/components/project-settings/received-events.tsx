@@ -40,7 +40,7 @@ export function ReceivedEvents({ slug }: { slug: string }) {
     <Card title="Received events" data-testid="received-events">
       <p className="mb-3 text-sm text-ink-muted">
         The webhook events the project&apos;s tools sent (tracker, repository, CI, deployment, alerts), the calls to its
-        HTTP triggers and the firings of its schedules, and what Choregos did with each. Only what reached this project
+        HTTP triggers and the firings of its schedules, and what Tranibor did with each. Only what reached this project
         is listed; nothing a person wrote is kept.
       </p>
       {pages.error ? (

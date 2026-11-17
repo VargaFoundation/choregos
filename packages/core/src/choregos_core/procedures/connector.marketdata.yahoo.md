@@ -25,7 +25,7 @@ Nothing to create: there is no key.
 
 None: it reads public data.
 
-## In Choregos
+## In Tranibor
 
 Connectors, **Market data**, type **Yahoo**. The only option is `timeout_s` (20 by default).
 

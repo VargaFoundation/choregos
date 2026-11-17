@@ -194,7 +194,7 @@ function AddCredential({ org, onAdded }: { org: string; onAdded: () => void }) {
         {type === "oauth2_authorization_code" && (
           <Field
             label="Agent card URL"
-            hint="Choregos registers itself at the registration endpoint the card advertises, then you connect it."
+            hint="Tranibor registers itself at the registration endpoint the card advertises, then you connect it."
           >
             {(props) => (
               <Input

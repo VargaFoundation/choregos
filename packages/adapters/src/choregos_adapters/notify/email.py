@@ -51,7 +51,7 @@ class EmailNotifier:
                 "email", "no recipient: set notify.emails on the project or `to` on the connector"
             )
         msg = EmailMessage()
-        msg["Subject"] = "[Choregos] " + message.title
+        msg["Subject"] = "[Tranibor] " + message.title
         msg["From"] = self.from_address
         msg["To"] = ", ".join(recipients)
         lines = [message.body] if message.body else []

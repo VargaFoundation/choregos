@@ -224,7 +224,7 @@ hand-written version of the same builds.
 **An agent written for Foundry runs unchanged (S41-19).** `examples/hosted/agent-framework-foundry`
 is the triager as a Foundry deployment holds it: Agent Framework's `FoundryChatClient` with
 azure-identity's `DefaultAzureCredential`, served by Foundry's own hosting adapter
-(`ResponsesHostServer`), no Choregos variable for the model. The container gets:
+(`ResponsesHostServer`), no Tranibor variable for the model. The container gets:
 
 | Variable | Value |
 | --- | --- |

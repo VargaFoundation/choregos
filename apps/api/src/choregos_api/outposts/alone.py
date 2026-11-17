@@ -138,7 +138,7 @@ def create_app() -> FastAPI:
     check_the_door(settings)
     # No document, and so no explorer of one: the door's contract is `packages/contracts/outpost-door.yaml`.
     app = FastAPI(
-        title="Choregos, the outposts' door", version=__version__, lifespan=lifespan, openapi_url=None
+        title="Tranibor, the outposts' door", version=__version__, lifespan=lifespan, openapi_url=None
     )
     install_error_handlers(app)
 

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Setup procedures: what a person does at the vendor, then in Choregos, to add one thing (ADR 0067).
+"""Setup procedures: what a person does at the vendor, then in Tranibor, to add one thing (ADR 0067).
 
 A procedure is a Markdown file with a YAML front matter, shipped in this package, one per connector
 type, knowledge source kind, MCP-door client and external agent kind. The API serves it with this
@@ -9,7 +9,7 @@ writes the same files to `docs/procedures/`.
 The body has fixed sections, in this order, so that a test can hold every procedure to the same
 shape and a person always finds "when it fails" in the same place:
 
-    ## Before you start / ## At <vendor> / ## Permissions / ## In Choregos / ## Test it /
+    ## Before you start / ## At <vendor> / ## Permissions / ## In Tranibor / ## Test it /
     ## When it fails / (## On this platform, added by the deployment)
 
 A deployment adds to them through a directory (`CHOREGOS_PROCEDURES_EXTRA`, a ConfigMap in the
@@ -45,10 +45,11 @@ SHIPPED = pathlib.Path(__file__).resolve().parent
 SECTION_KEYS = ("before", "at", "permissions", "in_choregos", "test", "fails")
 SITE_KEY = "site"
 SITE_TITLE = "On this platform"
+_LEGACY_IN_TITLE = "In Choregos"
 _TITLES = {
     "before": "Before you start",
     "permissions": "Permissions",
-    "in_choregos": "In Choregos",
+    "in_choregos": "In Tranibor",
     "test": "Test it",
     "fails": "When it fails",
 }
@@ -360,6 +361,8 @@ def _key_of(title: str) -> str:
         return SITE_KEY
     if title.startswith("At "):
         return "at"
+    if title == _LEGACY_IN_TITLE:
+        return "in_choregos"  # plugins in the field ship the pre-rename heading (ADR 0176)
     for key, wanted in _TITLES.items():
         if title == wanted:
             return key

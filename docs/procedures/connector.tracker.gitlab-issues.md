@@ -8,7 +8,7 @@ For a project owner. Procedure `connector.tracker.gitlab-issues`, version 2, rev
 
 - A GitLab project where you are a Maintainer (to create a token and a webhook).
 - The platform's shared webhook secret (`CHOREGOS_GENERIC_WEBHOOK_SECRET`), held by whoever operates
-  Choregos: GitLab sends it as the webhook's secret token, and without it the endpoint refuses every
+  Tranibor: GitLab sends it as the webhook's secret token, and without it the endpoint refuses every
   delivery.
 
 ## At GitLab
@@ -25,14 +25,14 @@ For a project owner. Procedure `connector.tracker.gitlab-issues`, version 2, rev
   and changes labels. A narrower scope cannot write.
 - The token is project-scoped: it cannot touch another project.
 
-**What Choregos writes, and as whom.** The workflow's bookkeeping goes through this connector, through
+**What Tranibor writes, and as whom.** The workflow's bookkeeping goes through this connector, through
 GitLab's REST API, as the account that owns the token (a project access token writes as its bot user):
 the labels, the status comment, the questions to a person, the close-out. Each line of a work item's
 timeline that wrote to GitLab says "via GitLab Issues". An agent's own actions do not go through this
 connector: they go through the MCP tools its version names, under each tool connector's account,
 listed on its run.
 
-## In Choregos
+## In Tranibor
 
 1. Project settings, Connectors, **Tracker**, type **GitLab Issues**.
 2. `base_url`: `https://gitlab.com` (the default) or your self-managed address. `project`: the project's

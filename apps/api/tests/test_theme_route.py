@@ -31,7 +31,7 @@ async def test_without_a_provider_the_community_default_is_served(client: AsyncC
     response = await client.get("/api/v1/theme")  # no session: the route is public
     assert response.status_code == 200
     body = response.json()
-    assert body["id"] == "default" and body["product_name"] == "Choregos"
+    assert body["id"] == "default" and body["product_name"] == "Tranibor"
     assert body["default_mode"] == "dark" and body["tokens"] == {"dark": {}, "light": {}}
     assert response.headers["x-choregos-theme"] == "default"
     assert response.headers["cache-control"] == "no-cache"

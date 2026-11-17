@@ -17,7 +17,7 @@ import type { EgressRule, EgressVerdict } from "@/lib/types";
 
 /**
  * The organisation's network, in one place (S44-04): what its agents may reach (ADR 0070), the hosts
- * Choregos may call for it (S39-22, ADR 0066: who asked, who decided, what the platform must still
+ * Tranibor may call for it (S39-22, ADR 0066: who asked, who decided, what the platform must still
  * open; revoking closes a host from the next call), its outbound proxy (ADR 0087) and the network
  * activity. These cards were spread over the administration's overview, next to the session and the
  * tokens, and read as one confused block.
@@ -60,11 +60,11 @@ export default function EgressPage() {
 
       <section className="space-y-4" aria-labelledby="network-hosts">
       <Heading as="h2" size="lg" id="network-hosts">
-        Hosts Choregos calls
+        Hosts Tranibor calls
       </Heading>
       <p className="max-w-3xl text-sm text-ink-muted">
-        The hosts Choregos may call for {org} — an MCP server, a git repository, a web site. Adding one of those asks
-        for the host first; an administrator allows it, anyone else asks. Choregos cannot change the cluster&apos;s
+        The hosts Tranibor may call for {org} — an MCP server, a git repository, a web site. Adding one of those asks
+        for the host first; an administrator allows it, anyone else asks. Tranibor cannot change the cluster&apos;s
         network policy: what the platform must still open is listed below, never applied.
       </p>
       {error && <ErrorNote>{error}</ErrorNote>}

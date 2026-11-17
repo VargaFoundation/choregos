@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""The identity assertion Choregos signs for an organisation's MCP gateway (S46-07, ADR 0105).
+"""The identity assertion Tranibor signs for an organisation's MCP gateway (S46-07, ADR 0105).
 
 Each organisation has its own ES256 key, never the deployment-wide run-token key (ADR 0077). The
 private key is sealed in the organisation's secret store (ADR 0058); the public keys live in

@@ -1,6 +1,6 @@
 # Deployment
 
-Choregos ships as a Helm umbrella chart with four workloads — API, web, Temporal workers,
+Tranibor ships as a Helm umbrella chart with four workloads — API, web, Temporal workers,
 and an optional MCP tools sidecar — plus four dependencies it can either **embed** or
 **consume**.
 
@@ -746,7 +746,7 @@ catalogue does not stop the API from starting.
   **Two locks that say different things**: the deployment says *who is entitled*, the project
   says *what it uses*. Without the first, the project's own list would be the only control —
   and the project team can edit it. A tool with no `groups` restricts nothing.
-- **The list does not discover itself.** Choregos never asks the remote server what it
+- **The list does not discover itself.** Tranibor never asks the remote server what it
   offers. The catalogue is written and reviewed in a pull request, and does not grow because
   a provider shipped something new.
 
@@ -793,7 +793,7 @@ global:
   `{{ports}}`, `{{reason}}`, `{{origin}}`, `{{requested_by}}`, `{{#hosts}}…{{.}}…{{/hosts}}` and
   `{{#fqdns}}` (`matchName: "h"` lines). Without one, the console shows a neutral Cilium `toFQDNs`
   fragment per family. `issueUrl` takes the same placeholders, URL-encoded, plus
-  `{{snippet_urlencoded}}`. Choregos can prefill an issue; it cannot open a pull request.
+  `{{snippet_urlencoded}}`. Tranibor can prefill an issue; it cannot open a pull request.
 - **`mode`**: `enforce` refuses a host the organisation has not allowed (and a call with no policy
   in context); `warn` logs `egress.would_refuse` and passes; the code default under
   `CHOREGOS_FAKES=1` is `warn` (and no process starts on the fakes in `staging` or `prod`).
@@ -1552,7 +1552,7 @@ approves a short code, and the CLI holds a session of that person, listed and en
 organisation is approved only by a member of it, and, for an account bound to a tenant's own identity provider
 (ADR 0108), only by that tenant's.
 
-A project with no repository takes its requests from Choregos itself:
+A project with no repository takes its requests from Tranibor itself:
 
 ```bash
 choregos projects create staffing --name "Staffing"            # no --repo: tracker `internal`
@@ -1605,7 +1605,7 @@ sign-in and its `sub` must equal userinfo's; otherwise the sign-in is refused (4
 
 Roles come from **groups**, and a group names its organisation:
 
-| Group in the IdP | Role in Choregos |
+| Group in the IdP | Role in Tranibor |
 |---|---|
 | `choregos:<org>:org-admins` | `org_admin` on `<org>` |
 | `choregos:<org>:product-owners` | `project_owner` |
@@ -1803,7 +1803,7 @@ of the SDK apply. `global.tracing.otlpEndpoint` sets it on the API, each worker,
 and the embedded gateway (S40-20b); `choregos-allow-platform` already lets them reach port 4318 in
 the collector's namespace. The collector the bootstrap installs (`infra/bootstrap/otel-collector.yaml`) listens
 at `http://otel-collector.monitoring.svc:4318`, sends every span to Tempo and derives the span
-metrics of the `Choregos — Traces` dashboard. An install that set the variable through
+metrics of the `Tranibor — Traces` dashboard. An install that set the variable through
 `global.extraEnv` still renders, as long as `global.tracing.otlpEndpoint` is empty.
 
 ```yaml
@@ -1821,7 +1821,7 @@ policies are off and the tenant's own policies open those two ports to the API, 
 gateway and the drift job only, never to the agent pods (#946): `choregos-egress-traces-otlp` and
 `choregos-egress-traces-query`, applied on dev on 2026-10-26.
 
-Without the collector, the `Choregos — Traces` dashboard reads Tempo's own span metrics (S40-20f):
+Without the collector, the `Tranibor — Traces` dashboard reads Tempo's own span metrics (S40-20f):
 each panel has two targets, the collector's (`traces_span_metrics_*`, latency in milliseconds,
 `service_name`) and Tempo's metrics generator's (`traces_spanmetrics_*`, latency in seconds,
 `service`), and an install has data in one of the two. Tempo must run the `span-metrics` processor
@@ -1912,7 +1912,7 @@ global:
   imagePullSecrets: [harbor-prive]
 ```
 
-Every pod the chart renders carries it — the four Choregos components **and** the embedded
+Every pod the chart renders carries it — the four Tranibor components **and** the embedded
 dependencies, because a platform that admits a single registry sends every image through it, not
 only ours. The runner pods the chart does not render carry it too: the `agent_sandbox` template, the
 `choregos-runner` ServiceAccount and every `k8s_job` runner pod, so a job step's own image pulls
@@ -2270,12 +2270,12 @@ readers `read_only: true`; move writers to an organisation MCP connector.
 ### Webhooks and tracker commands (S47-13, S47-14, S47-38, ADR 0102)
 - Unsigned GitHub and Tekton webhooks are refused on any https instance, even with
   `CHOREGOS_ENV=dev`: set `CHOREGOS_GITHUB_WEBHOOK_SECRET` and `CHOREGOS_GENERIC_WEBHOOK_SECRET`.
-- A `/choregos ...` comment on a tracker ticket no longer reaches the workflow: Choregos replies with
+- A `/choregos ...` comment on a tracker ticket no longer reaches the workflow: Tranibor replies with
   a console link and audits it. A webhook for an ended interpreter no longer fails.
 - `/choregos pause|resume|stop` in a signed GitHub delivery applies with the rights of the member
   whose GitHub numeric user id an organisation administrator linked. Decisions still need the console.
 - Moving a card on a GitHub Projects or Jira board no longer moves the work item: move it from the
-  console. The board follows Choregos, not the reverse.
+  console. The board follows Tranibor, not the reverse.
 
 ### Project allowlist of backends (S47-20)
 `agent.allowed_backends` is now enforced at stage start. A stage on a backend the project does not
@@ -2368,14 +2368,14 @@ invisible to it, and one tunnel can carry many HTTP/2 requests. It is a wall onl
 traffic through it.
 
 **Reading a `502`.** `choregos-egress: <host>:<port> is allowed for this run but could not be reached`
-means Choregos allowed the host and something *below* it blocked or lost the connection: the node's
+means Tranibor allowed the host and something *below* it blocked or lost the connection: the node's
 network, an egress firewall, a Cilium FQDN rule that does not list the host, DNS. It shows in Network
 activity as `unreachable`. A `403` names the reason (`not_allowed`, `denied:<pattern>`, `ip_literal`,
 `port_not_allowed`, `private_address`), a `429` comes with `Retry-After`, and a `407` means the proxy
 credentials are not a live run's.
 
 **On a platform whose infrastructure owns egress** with Cilium FQDN policies (one operator's case), runner pods may reach eight
-hosts directly, identically for every project and agent, so the Choregos proxy is a net there until infra
+hosts directly, identically for every project and agent, so the Tranibor proxy is a net there until infra
 (1) gives the `choregos-egress` pods an FQDN egress rule for the hosts the instance allows and (2) removes
 the runner entry's direct FQDNs. Until then a `502 unreachable` also appears if the proxy pod itself has no
 FQDN rule. The deploy repository sets `global.egress.enabled` and `runner.egressProxy` only after that.
@@ -2592,7 +2592,7 @@ configured. The organisation's model catalogue (`/admin/models`, [ADR 0060](adr/
 | `pricing` | the catalogue carries prices | yes | no | no |
 
 With `openai-compatible` (Portkey, Kong AI Gateway, Envoy AI Gateway, OpenRouter, a vLLM router...)
-the budget is enforced by Choregos only (the reservation, turns and minutes): there is no cap at
+the budget is enforced by Tranibor only (the reservation, turns and minutes): there is no cap at
 the source and no measured cost. Configure two secrets, `api_key` (discovery) and `run_key` (what
 runs receive, the same for every run: scope it at the gateway with its own rate limit).
 
@@ -3129,7 +3129,7 @@ workflow fingerprint) is unchanged.
 | `ModelesMemoire`, `LexicalMemory.modeles` | `MemoryModels`, `LexicalMemory.models` | Nothing: internal names, aliases keep working. <!-- lang: fr-ok --> |
 | `OPERATIONS_MDM`, `OPERATIONS_EXPEDITION`, `OPERATIONS_CONTROLE_D_ACCES`, `FAMILLES` | `MDM_OPERATIONS`, `SHIPPING_OPERATIONS`, `ACCESS_CONTROL_OPERATIONS`, `FAMILIES` | Nothing: internal names, aliases keep working. <!-- lang: fr-ok --> |
 | `executer(operation, params)` of the demo desks, `EntraIdentity`, the market data providers and the netops adapters | `execute(operation, params)` | Nothing: the connector seam still calls `executer`, which is kept as a class alias until S45-10 switches its callers. <!-- lang: fr-ok --> |
-| The Slack button "Ouvrir dans Choregos" and the error "ni `bot_token` ni `webhook_url` configurés" | "Open in Choregos" and "neither `bot_token` nor `webhook_url` is configured" | Nothing; a message you matched on, if any, now reads in English. <!-- lang: fr-ok --> |
+| The Slack button "Ouvrir dans Tranibor" and the error "ni `bot_token` ni `webhook_url` configurés" | "Open in Tranibor" and "neither `bot_token` nor `webhook_url` is configured" | Nothing; a message you matched on, if any, now reads in English. <!-- lang: fr-ok --> |
 
 The HR fake keeps answering the former tenant tool names (`commander_poste`, `suivi_commande`, the
 `modele` parameter): they are tenant names, not renamed here. Two messages of the fakes stay French

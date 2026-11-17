@@ -27,7 +27,7 @@ class FakeGitHubApp:
 
     def reset(self) -> None:
         self.slug = "choregos-bot"
-        self.name = "Choregos Bot"
+        self.name = "Tranibor Bot"
         #: A deployment without an App: tests that exercise the App set this to True.
         self.configured = False
         self.oauth_enabled = False
@@ -131,7 +131,7 @@ class FakeManifestConversion:
             "id": app_id,
             "slug": slug,
             "node_id": f"A_{app_id}",
-            "name": fields.pop("name", "Choregos test"),
+            "name": fields.pop("name", "Tranibor test"),
             "owner": fields.pop("owner", {"login": "acme", "type": "Organization"}),
             "html_url": fields.pop("html_url", f"https://github.com/apps/{slug}"),
             "client_id": fields.pop("client_id", f"Iv1.{app_id:016x}"),

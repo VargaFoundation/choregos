@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Choregos core: domain, workflow DSL, policies, gates, model resolution.
+"""Tranibor core: domain, workflow DSL, policies, gates, model resolution.
 
 This package does **no** input/output: it is pure, strictly typed and testable without a service.
 Everything that talks to the outside world lives in `packages/adapters`.

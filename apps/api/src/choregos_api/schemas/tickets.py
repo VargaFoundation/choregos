@@ -13,7 +13,7 @@ from .base import Dto, PageMeta
 
 
 class WorkItemCreate(Dto):
-    """A request made INSIDE Choregos, when the tracker is internal (`tracker: internal`)."""
+    """A request made INSIDE Tranibor, when the tracker is internal (`tracker: internal`)."""
 
     title: str = Field(min_length=1, max_length=500)
     body: str = ""

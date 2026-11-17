@@ -136,7 +136,7 @@ describe("the catalogue through the MCP gateway (ADR 0105)", () => {
     fireEvent.click(within(card).getByRole("button", { name: "Install" }));
     const drawer = screen.getByRole("dialog");
     const direct = within(drawer).getByLabelText(
-      "Directly (Choregos holds the credential)",
+      "Directly (Tranibor holds the credential)",
     );
     const gateway = within(drawer).getByLabelText(
       "Through the organisation's MCP gateway (the gateway holds it)",

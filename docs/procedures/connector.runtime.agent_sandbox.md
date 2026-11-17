@@ -25,7 +25,7 @@ For the person who operates the platform. Procedure `connector.runtime.agent_san
 so only the orchestrator's workers reach the assignment port; where the platform forbids a tenant's
 NetworkPolicy, set `runner.sandbox.assignmentNetworkPolicy: false` and close that port yourself.
 
-## In Choregos
+## In Tranibor
 
 Chart values; the connector's `pool_image`, `max_active` and the rest are optional. A step that names its
 own image is refused in a pool: use `k8s_job` for such steps.

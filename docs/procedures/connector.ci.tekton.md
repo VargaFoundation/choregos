@@ -27,7 +27,7 @@ For the person who operates the platform. Procedure `connector.ci.tekton`, versi
 - A `Role` granting `get`, `list` on `pipelineruns` in the namespace, bound to the API's service account.
 - The shared webhook secret is the only credential of the sink. Treat the URL as a secret.
 
-## In Choregos
+## In Tranibor
 
 1. Project settings, Connectors, **CI**, type **Tekton Pipelines**.
 2. `namespace`: where the runs live. `pipeline`: the Pipeline's name, `choregos-ci` by default.

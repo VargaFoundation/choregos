@@ -5481,3 +5481,35 @@ stories:
     size: L
     depends_on: [S74-01, S74-02]
     notes: "Delivered by the S74-03 PR (core side; ADR 0175 amendment). Needs the EE reverse resolver (choregos-ee hote_de). Return URLs of consent, forge and GitHub App stay canonical (a later story, with per-host provider registration)."
+  - id: S75-01
+    title: "feat(cli,web,api,docs): R1, the visible name is Tranibor; the CLI answers to tranibor and still to choregos (ADR 0176)"
+    stream: S75
+    sprint: 1
+    priority: 1
+    size: L
+    depends_on: [S75-00]
+    notes: "Documentation, console strings and default product name, procedures, CLI help and version, NOTICE and the trademark page. No identifier, package, path, variable, image, header or stored value moves. Guard: tests/docs/test_the_visible_name_is_tranibor.py."
+  - id: S75-02
+    title: "refactor(packages): R2, tranibor_* distributions and import packages, choregos_* shims for one minor (ADR 0176 point 3)"
+    stream: S75
+    sprint: 2
+    priority: 2
+    size: L
+    depends_on: [S75-01]
+    notes: "Shim = sys.modules alias plus a meta-path finder for submodules, one DeprecationWarning; old distributions republished as empty wheels depending on the new ones; a test imports every public module through both names; the EE and the plugins move during the cycle."
+  - id: S75-03
+    title: "chore(publishing): R3, tranibor-* images, charts and CLI files published beside the old names (ADR 0176 point 4)"
+    stream: S75
+    sprint: 2
+    priority: 2
+    size: L
+    depends_on: [S75-01]
+    notes: "Order: infra Kyverno admits both names, this repository publishes both (one digest, same signing identity), choregos-deploy switches values per environment, choregos-ee rebuilds, old names dropped two minors later. The image prefix joins publishing.json (ADR 0156 amendment)."
+  - id: S75-04
+    title: "feat(core,api,orchestrator,runner): R4, TRANIBOR_* environment variables read first, CHOREGOS_* fallback with a warning (ADR 0176 point 5)"
+    stream: S75
+    sprint: 3
+    priority: 3
+    size: M
+    depends_on: [S75-01]
+    notes: "One shared helper for the four env_prefix settings classes and the direct os.environ reads; one warning per variable naming the new one, never the value; the charts render TRANIBOR_*."

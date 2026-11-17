@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Running as a Choregos job step (ADR 0056): paths from the workspace, results in `job.json`.
+"""Running as a Tranibor job step (ADR 0056): paths from the workspace, results in `job.json`.
 
 In a job, the runner gives the engine a workspace and nothing else:
 

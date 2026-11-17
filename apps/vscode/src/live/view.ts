@@ -97,7 +97,7 @@ export class LiveTree implements vscode.TreeDataProvider<LiveNode>, vscode.Dispo
 export function statusText(feed: LiveFeed): { text: string; tooltip: string } {
   const state = feed.state;
   if (state.kind === "signed-out") {
-    return { text: "$(account) Choregos: sign in", tooltip: "Sign in to your Choregos instance" };
+    return { text: "$(account) Tranibor: sign in", tooltip: "Sign in to your Tranibor instance" };
   }
   const live = state.kind === "live";
   const text = [

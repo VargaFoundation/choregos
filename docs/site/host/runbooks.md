@@ -1,6 +1,6 @@
 ---
 title: Runbooks
-description: The short list of runbooks for a Choregos instance, and the symptom each one answers.
+description: The short list of runbooks for a Tranibor instance, and the symptom each one answers.
 sidebar_position: 8
 ---
 

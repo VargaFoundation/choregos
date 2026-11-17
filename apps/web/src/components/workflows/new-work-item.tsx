@@ -70,7 +70,7 @@ export function NewWorkItemForm({
       <p className="text-ink-muted" data-testid="tracker-notice">
         {tracker.external
           ? `Creates the issue in ${tracker.type}${tracker.where ? ` (${tracker.where})` : ""} and starts it here.`
-          : "Filed in Choregos: the platform gives it its key."}
+          : "Filed in Tranibor: the platform gives it its key."}
       </p>
       <label className="block space-y-1">
         <span className="text-ink-muted">Workflow</span>

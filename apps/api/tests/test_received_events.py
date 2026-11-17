@@ -144,7 +144,7 @@ async def test_a_stranger_reads_none(client: AsyncClient, admin: str) -> None:
 async def test_a_jira_project_named_otherwise_sees_its_events(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The owner's case: Jira project XXX, Choregos project yyy (routed by the connector, #1088)."""
+    """The owner's case: Jira project XXX, Tranibor project yyy (routed by the connector, #1088)."""
     monkeypatch.setenv("CONNECTOR_JIRA_TEST_TOKEN", "t")
     project = await _project(client, "yyy")
     put = await client.put(

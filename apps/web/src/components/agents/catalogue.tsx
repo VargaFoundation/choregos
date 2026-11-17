@@ -188,7 +188,7 @@ function ClientDuCatalogue({ org, entry }: { org: string; entry: AgentCatalogueE
       )}
       {connexion?.oauth_client_id && (
         <p className="text-sm" role="status">
-          Registered as an external agent: add Choregos in {entry.display_name} with the address {url} — it signs you
+          Registered as an external agent: add Tranibor in {entry.display_name} with the address {url} — it signs you
           in.
         </p>
       )}

@@ -238,7 +238,7 @@ async def _register_client(
     _https(card.dcr_url, "registration endpoint")
     redirect = _redirect_uri(settings)
     payload = {
-        "client_name": "Choregos",
+        "client_name": "Tranibor",
         "redirect_uris": [redirect],
         "grant_types": ["authorization_code", "refresh_token"],
         "response_types": ["code"],

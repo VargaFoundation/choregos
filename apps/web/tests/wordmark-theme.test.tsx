@@ -8,7 +8,7 @@ import { SAMPLE_THEME } from "@/mocks/theme-sample";
 describe("the wordmark follows the served theme (S39-03b)", () => {
   it("is the console's own, in the default theme and without a provider", () => {
     const { container } = render(<Wordmark />);
-    expect(screen.getByText("Choregos")).toBeTruthy();
+    expect(screen.getByText("Tranibor")).toBeTruthy();
     expect(container.querySelector("svg")).not.toBeNull();
     expect(container.querySelector("img")).toBeNull();
   });

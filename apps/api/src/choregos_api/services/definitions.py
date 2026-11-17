@@ -349,7 +349,7 @@ async def ensure_defaults(
     Nothing is rewritten for a project that already has an active workflow or a policy.
 
     `refuse_unenforced` (project creation only) refuses a template whose policy promises guards
-    Choregos does not enforce (ADR 0101). Lazy provisioning from read paths leaves it off, so a
+    Tranibor does not enforce (ADR 0101). Lazy provisioning from read paths leaves it off, so a
     GET never answers 422.
     """
     from .templates import delivery, template_manifest
@@ -385,7 +385,7 @@ async def ensure_defaults(
         refused = unenforced_governance(parsed_policy) if refuse_unenforced else []
         if refused:
             raise unprocessable(
-                f"template `{project.template_ref}` ships a policy with guards Choregos does not "
+                f"template `{project.template_ref}` ships a policy with guards Tranibor does not "
                 "enforce (ADR 0101): " + "; ".join(i.message for i in refused),
                 [
                     {"loc": ["policy", *(i.path or "").split(".")], "msg": i.message, "code": i.code}

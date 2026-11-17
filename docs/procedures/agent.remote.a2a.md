@@ -7,7 +7,7 @@ For an organisation administrator. Procedure `agent.remote.a2a`, version 1, revi
 ## Before you start
 
 - A **remote agent** runs elsewhere: a workflow step calls it over the A2A protocol and takes its answer
-  as the step's result. It is the reverse of the MCP door. Choregos reads its **card** and pins it.
+  as the step's result. It is the reverse of the MCP door. Tranibor reads its **card** and pins it.
 - You need the **agent card URL** (A2A 0.3 serves `/.well-known/agent.json`; newer versions an
   `agent-card.json`), the protocol version it speaks, the **skill** to call and how it authenticates.
 - An organisation administrator does the first part (the credential); whoever builds agents does the
@@ -30,7 +30,7 @@ For an organisation administrator. Procedure `agent.remote.a2a`, version 1, revi
 - The refresh token is sealed in the platform's secret store and never shown again; reconnecting replaces
   it.
 
-## In Choregos
+## In Tranibor
 
 1. Administration, **Remote agents**, **Connect**: give the card URL, then sign in **as the account the
    agent will act as** and accept. The credential shows `connected` and who it is authorised as.
@@ -53,7 +53,7 @@ Add a two-step workflow: the remote agent, then a human review of its answer. Th
 - `remote_input_required`: the agent asked a question. It is shown; answering it from the console is not
   supported yet.
 - `remote_timeout`: the remote task is cancelled; raise the timeout or narrow the task.
-- A cut at about 30 s on a synchronous call: Choregos streams, so a long task still works.
+- A cut at about 30 s on a synchronous call: Tranibor streams, so a long task still works.
 - A refusal naming a host: it is not in the stage's allowed domains, or the platform's egress allowlist
   does not open it.
 

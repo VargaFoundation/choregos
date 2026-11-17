@@ -32,7 +32,7 @@ afterEach(async () => {
 function everythingVisible(): string {
   return JSON.stringify({
     settings: [...fake.settings.entries()],
-    log: fake.outputs.get("Choregos")?.lines,
+    log: fake.outputs.get("Tranibor")?.lines,
     messages: fake.messages,
   });
 }

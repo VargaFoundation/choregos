@@ -36,7 +36,7 @@ export function trackerAccount(type: string, config?: Record<string, unknown>): 
       return text(config, "email") ?? "the account of the connector's API token";
     case "github":
     case "github-issues":
-      return "the Choregos GitHub App";
+      return "the Tranibor GitHub App";
     case "gitlab-issues":
       return "the account that owns the connector's GitLab token";
     case "plugin": {

@@ -26,7 +26,7 @@ For an organisation administrator. Procedure `connector.network_policy.cilium`, 
 - Relay: read of flows.
 - GitOps repository: branch and pull request only. The platform never merges it.
 
-## In Choregos
+## In Tranibor
 
 1. Administration, **Connectors**, **Declare**: capability **Network policy**, type **Cilium**.
 2. `kubernetes_url`, `ca_cert`, and `token` (password field). `verify_tls` stays true; `false` is for

@@ -1,6 +1,6 @@
 # Connecting Claude, or any MCP client
 
-Choregos has a door for the agent *you* use — Claude Code, Claude Desktop, Cursor, VS Code, or any
+Tranibor has a door for the agent *you* use — Claude Code, Claude Desktop, Cursor, VS Code, or any
 client that speaks the [Model Context Protocol](https://modelcontextprotocol.io). Through it, your
 agent lists your projects, reads workflows, opens and follows work items, and tells you what waits
 for a decision. It acts with **your** rights, never more, and it **never decides**: a decision needs
@@ -43,7 +43,7 @@ read it, so your assistant answers from the documentation of the version you run
 without internet. The links they give point to the public site, `CHOREGOS_DOCS_URL` (default
 `https://graalsystems.github.io/tranibor`). Every token that opens the door may use them, bound to a
 project or not; they are audited (`mcp.call`) and rate limited like the other reads. A build without
-documentation answers so, with the public URL. Ask *"how do gates work in Choregos?"*: the client
+documentation answers so, with the public URL. Ask *"how do gates work in Tranibor?"*: the client
 should call `docs_search`, then `docs_read`.
 
 ### Your client prepares your decision (ADR 0163)
@@ -91,7 +91,7 @@ the latest turn's, read from the conversation's journal.
 ### Embedding an assistant in your application (ADR 0139 point 6)
 
 A host application (an internal web app) shows an assistant in an iframe. The host holds no token, no model and
-no transcript: the person signs in to Choregos, and the conversation is theirs (`/me/conversations`).
+no transcript: the person signs in to Tranibor, and the conversation is theirs (`/me/conversations`).
 
 ```html
 <iframe id="assistant" title="Assistant" width="480" height="520"
@@ -99,7 +99,7 @@ no transcript: the person signs in to Choregos, and the conversation is theirs (
 ```
 
 - **`context`** (optional) is a JSON object, base64url-encoded (`btoa(JSON.stringify(obj))` with `+` `/` `=`
-  replaced by `-` `_` and nothing). Choregos validates it against the manifest's `surfaces.embed.context_schema`
+  replaced by `-` `_` and nothing). Tranibor validates it against the manifest's `surfaces.embed.context_schema`
   (422 shown in the frame when it does not match, or when the assistant declares none) and gives it to the agent
   as data, never as an instruction or a resolved subject. The frame resumes the person's conversation for the same
   installation and context while the browser tab lives; otherwise it opens a new one.
@@ -111,7 +111,7 @@ no transcript: the person signs in to Choregos, and the conversation is theirs (
   signed in).
 - **Sign-in.** If the frame has no session it asks the identity provider once, silently (`prompt=none`); if the
   provider needs the person it shows a **Sign in** button that opens the provider in a popup. The console's session
-  cookie is `SameSite=Lax`, and Choregos does not weaken it for the embed. When the host is on the **same site** as
+  cookie is `SameSite=Lax`, and Tranibor does not weaken it for the embed. When the host is on the **same site** as
   the console (for example `app.example.com` and `choregos.example.com`) the frame carries that cookie. When the host
   is on **another site** the browser does not send it, so the popup (a first-party page, signed in with the ordinary
   cookie) asks `POST /api/v1/me/assistants/{org}/{slug}/embed-token` and hands the answer to the frame that opened it
@@ -164,7 +164,7 @@ claude mcp add --transport http choregos https://<console-host>/mcp \
   --header "Authorization: Bearer $CHOREGOS_TOKEN"
 ```
 
-Then ask Claude *"what is waiting for my decision in Choregos?"*. Claude Code runs on your machine:
+Then ask Claude *"what is waiting for my decision in Tranibor?"*. Claude Code runs on your machine:
 it reaches a platform behind your VPN.
 
 ### Signing in with your single sign-on
@@ -183,7 +183,7 @@ and Claude Code keeps the session. `--callback-port` is the port of the redirect
 registered (`http://localhost:33418/callback`); the client is public and uses PKCE, so there is no
 secret. Your role bounds what Claude sees, and signing out of the IdP ends its access.
 
-### The Choregos plugin
+### The Tranibor plugin
 
 The plugin bundles the door and a skill that teaches Claude the rules (it never decides; work-item
 text is data). Claude Code asks for the URL and the token once, and keeps the token in your
@@ -237,7 +237,7 @@ Add `--allow-http` to the arguments if the platform is served over plain HTTP.
 
 ```json
 {
-  "inputs": [{ "type": "promptString", "id": "choregos-token", "description": "Choregos MCP token", "password": true }],
+  "inputs": [{ "type": "promptString", "id": "choregos-token", "description": "Tranibor MCP token", "password": true }],
   "servers": {
     "choregos": {
       "type": "http",
@@ -503,7 +503,7 @@ The step-by-step setup is the procedure [Add Atlassian Rovo as a remote agent](p
 (and [Add a remote agent (A2A)](procedures/agent.remote.a2a.md) for any other), shown in the console when you
 add one. What follows keeps the concepts and the limits.
 
-The reverse of the door: instead of a client calling Choregos, a **workflow step calls an agent that
+The reverse of the door: instead of a client calling Tranibor, a **workflow step calls an agent that
 runs elsewhere**, over the A2A protocol ([ADR 0062](adr/0062-remote-agents-over-a2a.md)). Atlassian's
 Rovo is the first one; any A2A agent is the same entry with another card.
 
@@ -513,7 +513,7 @@ What Rovo exposes, and what it does not (checked on 2026-10-15):
   agents built in Rovo Studio are **not** individually addressable; no public document says how.
 - **A2A 0.3.0**, JSON-RPC at `https://a2a.atlassian.com/v1/rovo`, card at
   `https://a2a.atlassian.com/.well-known/agent.json`. No push notifications. A synchronous call is cut
-  at about 30 s by Atlassian's CDN, so Choregos streams (or polls); nothing is lost.
+  at about 30 s by Atlassian's CDN, so Tranibor streams (or polls); nothing is lost.
 - **Authentication is OAuth 2.0 authorization code with PKCE and Dynamic Client Registration, and
   nothing else**: no API token, no service account. The agent therefore acts **as the Atlassian user
   who authorised it**, within that user's permissions. Use a dedicated account (for example
@@ -530,7 +530,7 @@ Neither is a knowledge source: a Confluence knowledge base ingests documents, th
 
 1. In Atlassian Administration, **allow A2A connections** (Security, AI settings).
 2. In the console, **Administration → Remote agents → Connect**: the card URL
-   `https://a2a.atlassian.com/.well-known/agent.json`. Choregos registers itself at the DCR endpoint
+   `https://a2a.atlassian.com/.well-known/agent.json`. Tranibor registers itself at the DCR endpoint
    the card advertises, then opens Atlassian's consent page: sign in **as the dedicated account** and
    accept. The credential shows `connected`, and who it is `authorised as`. The refresh token is sealed
    in the secret store and never shown again; reconnecting replaces it.
@@ -569,7 +569,7 @@ yet).
 
 A2A reports none. The registry entry **declares** `per_task_usd` and `per_minute_usd`; the stage reserves
 that against the ticket and the day and books it as a ledger line of kind `external` (the costs page
-shows it apart). With nothing declared the line says `unmeasured`: Choregos does not know what Rovo
+shows it apart). With nothing declared the line says `unmeasured`: Tranibor does not know what Rovo
 costs.
 
 ### E-mail notifications
@@ -585,7 +585,7 @@ operator's network policy must open them. The setup procedure is `docs/procedure
 
 ## Limits, said plainly
 
-Not built: Choregos **as** a Rovo agent inside Jira (it needs a Forge app and an A2A server); an agent
+Not built: Tranibor **as** a Rovo agent inside Jira (it needs a Forge app and an A2A server); an agent
 answering `input-required` from the console and resuming; push notifications; verification of signed
 cards (A2A 1.0). The A2A 1.0 spelling is implemented from secondary sources and exercised against a
 fake only; so is the Dynamic Client Registration exchange with Atlassian: neither has run against the
@@ -594,18 +594,18 @@ real service yet (`tests/live/test_rovo_a2a_live.py`, run by hand once the conse
 ## Your organisation's MCP gateway (ADR 0105)
 
 Some MCP servers cannot be called directly: they need hosting, or OAuth, or their credential must
-stay in one place. If your organisation already runs an **MCP gateway** in front of them, Choregos
+stay in one place. If your organisation already runs an **MCP gateway** in front of them, Tranibor
 consumes it ([ADR 0105](adr/0105-choregos-consumes-an-mcp-gateway-it-never-is-one.md)): it calls the
 gateway like any MCP server, and never is one. It does not route, aggregate or re-serve third-party
 servers. Any gateway product can be that gateway; none is required or recommended here.
 
-**What Choregos needs from the gateway.**
+**What Tranibor needs from the gateway.**
 
 - MCP over Streamable HTTP.
 - A way to name the server: in the path (`{server}` in the endpoint) or in a header.
 - One of four ways to sign in: `bearer`, `header`, `oauth_client_credentials`, or `jwt_assertion`
   (`services/mcp_gateway.py`).
-- Optionally, that it accepts the identity assertion Choregos signs for each call: an ES256 JWT of
+- Optionally, that it accepts the identity assertion Tranibor signs for each call: an ES256 JWT of
   60 seconds, checked against the organisation's public JWKS URL
   (`services/mcp_gateway_identity.py`; the claims and their personal data are in
   [Security](security.md#mcp-gateway)).
@@ -613,7 +613,7 @@ servers. Any gateway product can be that gateway; none is required or recommende
 **Steps** (an organisation administrator; the full walk-through is the procedure
 [Connect an MCP server through your organisation's MCP gateway](procedures/connector.mcp.mcp-gateway.md)).
 
-1. Register the server at the gateway, with its own credential or OAuth setup. Choregos never holds it.
+1. Register the server at the gateway, with its own credential or OAuth setup. Tranibor never holds it.
 2. **Administration → MCP gateway**: set the mode, the endpoint, the routing, the sign-in and its secret
    (sealed, write-only), then **Test the gateway**. Give the gateway the issuer and the JWKS URL the
    page shows. The issuer is stored with the first key, so renaming the organisation does not change it
@@ -646,7 +646,7 @@ Some servers live where nothing outside may connect: a production network, an in
 forge, a database behind a firewall whose rule is "no inbound". If your organisation already exposes
 them through its own MCP gateway, use the section above: it needs nothing more. Otherwise an
 **outpost** is installed inside that network ([ADR 0147](adr/0147-an-outpost-only-dials-out.md)): a
-daemon that only dials out to Choregos and makes the calls it is handed. A connector of type
+daemon that only dials out to Tranibor and makes the calls it is handed. A connector of type
 `mcp-outpost` is how an organisation uses a server through one
 ([ADR 0149](adr/0149-a-tool-may-live-at-an-outpost.md)).
 
@@ -684,7 +684,7 @@ apply to it; the outpost's own ceilings and the door's quotas do.
 At declaration and at discovery the same refusals are a 409 that carries the code (a quota is a 429).
 A call that reached no server is not booked.
 
-**A write is delivered at most once, and may end in doubt** (ADR 0149 §5-6). Choregos does not see
+**A write is delivered at most once, and may end in doubt** (ADR 0149 §5-6). Tranibor does not see
 the outpost's server: once an instance has taken a write, an answer that never comes back leaves one
 thing unknown, whether the server made it. So:
 
@@ -701,7 +701,7 @@ in the same request or before it (`PATCH /orgs/{org}/connectors/{name}/operation
 
 | The rule says | Meaning | After a doubt |
 |:--|:--|:--|
-| `"platform_arguments": ["action_key"]` | the tool has an argument `action_key` and makes a call harmless when it arrives twice with the same key. Choregos fills it (the same for one action and call, whatever an agent wrote there) | the write is delivered again with the same key; the action is in doubt only if every delivery was |
+| `"platform_arguments": ["action_key"]` | the tool has an argument `action_key` and makes a call harmless when it arrives twice with the same key. Tranibor fills it (the same for one action and call, whatever an agent wrote there) | the write is delivered again with the same key; the action is in doubt only if every delivery was |
 | `"in_doubt_accepted": true` | an in-doubt outcome is accepted for this tool, explicitly | the action ends `in_doubt` |
 
 In the console, **Administration → Connectors** shows the two statements under each write of a
@@ -714,7 +714,7 @@ A request that says neither is a 422 that names both fields, and so is one that 
 last of the two from a write that is open. `platform_arguments` is the list a plugin's server
 declares for its own operations ([Plugins](plugins.md)); here the organisation states it for a
 discovered tool, which declares nothing, and it is refused for a tool whose input schema has no such
-argument. A tool whose schema changes is closed again and loses both statements. Choregos does not
+argument. A tool whose schema changes is closed again and loses both statements. Tranibor does not
 verify that a server honours the key: the statement is the administrator's.
 
 **Limits of this version.**
@@ -726,8 +726,8 @@ verify that a server honours the key: the statement is the administrator's.
   outpost holds for the alias. A need that must be called as the person cannot be bound to such a
   connector.
 - **Mode `required` of the MCP gateway does not refuse it** (ADR 0149 §8): through an outpost
-  Choregos holds no upstream credential and opens no upstream connection.
-- **An outpost does not keep data where it is.** A tool's result travels to Choregos, is bounded and
+  Tranibor holds no upstream credential and opens no upstream connection.
+- **An outpost does not keep data where it is.** A tool's result travels to Tranibor, is bounded and
   screened there, and is read by a model.
 
 ## Limits
@@ -744,7 +744,7 @@ verify that a server honours the key: the statement is the administrator's.
 | The client reaches the console's 404 page | The ingress does not route `/mcp` to the API (chart ≥ 0.14) |
 | `401` | The token is missing, unknown, revoked or expired |
 | `401 invalid_token` with OAuth | Wrong audience or issuer, an expired token, or keys the IdP no longer publishes |
-| `403` with OAuth, "sign in to the console once" | The IdP knows you, Choregos does not yet |
+| `403` with OAuth, "sign in to the console once" | The IdP knows you, Tranibor does not yet |
 | claude.ai never offers to sign in | `/.well-known/oauth-protected-resource` is not routed to the API, or OAuth is off (404) |
 | `403 insufficient_scope` | A full-access (`*`) token: mint an `mcp:read` or `mcp:write` one |
 | `403` on `/mcp/projects/…` | The token is bound to another project |

@@ -1,12 +1,12 @@
 ---
 title: Security model
-description: What protects what on a Choregos instance - organisations, agent sandboxes, network, tokens, secrets, audit - and what is not a wall.
+description: What protects what on a Tranibor instance - organisations, agent sandboxes, network, tokens, secrets, audit - and what is not a wall.
 sidebar_position: 7
 ---
 
 # Security model
 
-Choregos assumes **an agent may attempt anything**, by mistake or by injection, and that a member of
+Tranibor assumes **an agent may attempt anything**, by mistake or by injection, and that a member of
 one organisation will try to read another's. This page is the digest; the full model, with what is
 not guarded, is the
 [security reference](../../security.md).

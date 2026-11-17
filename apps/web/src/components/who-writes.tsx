@@ -20,7 +20,7 @@ export function WritesAs({ type, config }: { type: string; config?: Record<strin
   if (!account) return null;
   return (
     <p className="text-xs text-ink-muted" data-testid="writes-as">
-      Choregos writes as <span className="text-ink">{account}</span>
+      Tranibor writes as <span className="text-ink">{account}</span>
     </p>
   );
 }
@@ -90,14 +90,14 @@ export function TrackerCard({
         )}
         {account && tracker ? (
           <p className="text-ink-muted">
-            Choregos writes to {trackerName(tracker.type)} as <span className="text-ink">{account}</span>, through the
+            Tranibor writes to {trackerName(tracker.type)} as <span className="text-ink">{account}</span>, through the
             project&apos;s <Link href={projectConnectionsHref(slug)}>tracker connector</Link>: the state, the status
             comment, the Cost, Size, Risk and Run fields, the questions. An agent&apos;s own actions go through its MCP
             tools, under each tool&apos;s account: see its runs.
           </p>
         ) : (
           <p className="text-ink-muted">
-            This work item lives in the internal tracker: Choregos writes to no external tracker.
+            This work item lives in the internal tracker: Tranibor writes to no external tracker.
           </p>
         )}
       </div>

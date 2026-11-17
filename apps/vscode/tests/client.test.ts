@@ -133,7 +133,7 @@ describe("the instance's address", () => {
   });
 
   it.each([
-    ["", "no Choregos instance is configured"],
+    ["", "no Tranibor instance is configured"],
     ["not a url", "is not an address"],
     ["http://choregos.example.com", "would carry your credential in clear"],
     ["https://ada:pw@choregos.example.com", "must not hold a user name"],

@@ -34,7 +34,7 @@ reasoning and refusal, a tool call's arguments (a legacy `function_call`'s too),
 block's text, JSON or thinking, a Responses event's `delta`. Each chunk is then masked whole on its
 way out, for the fields no channel holds.
 
-Stdlib only: LiteLLM's image has no Choregos package. When LiteLLM is importable the class is a
+Stdlib only: LiteLLM's image has no Tranibor package. When LiteLLM is importable the class is a
 `CustomGuardrail`; otherwise a plain class the tests drive the same way.
 """
 

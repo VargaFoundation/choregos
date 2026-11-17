@@ -39,11 +39,11 @@ fields:
 
 - Webhook mode needs nothing else: the webhook can post to the one channel you picked.
 - Bot mode needs `chat:write`. Nothing else is read from the workspace.
-- Do not enable Interactivity: Choregos exposes no Slack interactivity endpoint today, so a message's
+- Do not enable Interactivity: Tranibor exposes no Slack interactivity endpoint today, so a message's
   decision buttons do not post back. The button that opens the item in the console is a plain link and
   works; decisions are taken in the console.
 
-## In Choregos
+## In Tranibor
 
 1. Project settings, Connectors, **Notify**, type **Slack** (or an organisation connector).
 2. `channel`: for example `#choregos`.

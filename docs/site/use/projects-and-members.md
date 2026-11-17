@@ -34,7 +34,7 @@ page shows how to create one and who can do what in it.
 3. **Identifier (slug)**: lowercase letters, digits and dashes, for example `billing-api`. It is in
    every address and cannot be changed later. **Display name**: what people read.
 4. For software: the **Repository** (`owner/name` or an https address) and the **Main language**.
-5. **Tracker (where tickets come from)**: **Choregos (requests are filed here)**, **GitHub Issues /
+5. **Tracker (where tickets come from)**: **Tranibor (requests are filed here)**, **GitHub Issues /
    Projects**, **Jira** or **GitLab**. A Slack channel for notifications is optional.
 6. Read the summary and press **Create and provision** (with a template) or **Create**.
 
@@ -48,7 +48,7 @@ choregos projects create billing-api --name "Billing API" --repo https://github.
 choregos projects provision billing-api --follow
 ```
 
-A project without a repository files its requests in Choregos itself:
+A project without a repository files its requests in Tranibor itself:
 
 ```bash
 choregos projects create onboarding --name "Employee onboarding"
@@ -85,7 +85,7 @@ The card's header sums it up: **Ready to run**, or how many lines are left to do
 
 Each open line has a **Fix** link to the page that fixes it. When you cannot fix it yourself, the line
 says whom to ask: a project owner, the organisation admin, the platform operator, or someone outside
-Choregos (your identity provider, a vendor). The project's **Overview** shows the same list as a
+Tranibor (your identity provider, a vendor). The project's **Overview** shows the same list as a
 **Getting started** card until nothing is left to do.
 
 ```bash
@@ -136,7 +136,7 @@ organisation.
 People also carry groups from your identity provider, read at each sign-in. Workflows address their
 human steps to groups (`maintainers`, `product-owners`). The readiness list warns when a workflow names
 a group that nobody has ever carried at sign-in. Groups are managed in your identity provider, not in
-Choregos; when your provider withdraws a role it granted, Choregos removes it at the person's next
+Tranibor; when your provider withdraws a role it granted, Tranibor removes it at the person's next
 sign-in.
 
 ## Give an application its own account

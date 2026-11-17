@@ -115,7 +115,7 @@ def judge_case(path: Path, model: str) -> dict[str, Any]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Choregos playbook evals")
+    parser = argparse.ArgumentParser(description="Tranibor playbook evals")
     parser.add_argument("--all", action="store_true", help="every case in `cases/`")
     parser.add_argument("--role", action="append", default=[], help="limit to one or more roles")
     parser.add_argument("--judge", action="store_true", help="add the scoring by a model")

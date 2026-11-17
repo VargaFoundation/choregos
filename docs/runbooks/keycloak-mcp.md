@@ -79,5 +79,5 @@ answers. The person's role still bounds what they see; no decision goes through 
 ## Rotating Keycloak's keys
 
 The door caches the realm's keys for an hour and reloads them as soon as a token names a key it
-does not know: a rotation needs nothing on Choregos' side. Keep the old key *passive* (not
+does not know: a rotation needs nothing on Tranibor's side. Keep the old key *passive* (not
 disabled) until the tokens it signed have expired — five minutes by default.

@@ -51,8 +51,8 @@ describe("activation", () => {
 
   it("writes to its own output channel, which the log command shows", async () => {
     start();
-    const channel = fake.outputs.get("Choregos");
-    expect(channel?.lines).toEqual(["Choregos 1.2.3 activated"]);
+    const channel = fake.outputs.get("Tranibor");
+    expect(channel?.lines).toEqual(["Tranibor 1.2.3 activated"]);
     await fake.commands.get(COMMANDS.showLog)?.();
     expect(channel?.shown).toBe(true);
   });

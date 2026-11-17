@@ -42,12 +42,12 @@ secret, the token endpoint's address, and the scope or audience the server expec
 
 ## Permissions
 
-- The connector's tools act with **that account's permissions**, nothing in Choregos can widen them.
+- The connector's tools act with **that account's permissions**, nothing in Tranibor can widen them.
 - Tools are **born closed**: after discovery each tool is `forbidden` until an administrator
   opens it. A read can be `allowed`; a write is a governed action that waits for approval.
 - A project sees only the tools its groups are opened to, and can only tighten them.
 
-## In Choregos
+## In Tranibor
 
 1. Administration, **Connectors**, **Declare**: capability **MCP**, type **MCP server**, a lowercase name.
 2. `url`: the endpoint.

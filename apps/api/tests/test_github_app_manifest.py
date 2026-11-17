@@ -86,7 +86,7 @@ def _settings_again() -> None:
 
 async def _start(client: AsyncClient, **body: Any) -> dict[str, Any]:
     response = await client.post(
-        "/api/v1/platform/github-app/manifest", json={"name": "Choregos test", "public": False} | body
+        "/api/v1/platform/github-app/manifest", json={"name": "Tranibor test", "public": False} | body
     )
     assert response.status_code == 200, response.text
     return dict(response.json())
@@ -138,13 +138,13 @@ async def test_the_manifest_asks_for_what_the_adapters_use_and_points_at_this_in
 ) -> None:
     from choregos_adapters.github import APP_EVENTS, APP_PERMISSIONS
 
-    start = await _start(client, name="Choregos acme", public=True, webhook_active=False)
+    start = await _start(client, name="Tranibor acme", public=True, webhook_active=False)
     manifest = start["manifest"]
     assert manifest["default_permissions"] == APP_PERMISSIONS
     assert manifest["default_events"] == list(APP_EVENTS)
     assert "installation" not in manifest["default_events"], "GitHub delivers it to every App, unsubscribable"
     assert manifest["public"] is True
-    assert manifest["name"] == "Choregos acme"
+    assert manifest["name"] == "Tranibor acme"
     assert manifest["url"] == PUBLIC_URL
     assert manifest["hook_attributes"] == {"url": f"{API_URL}/api/v1/webhooks/github", "active": False}
     assert manifest["redirect_url"] == f"{API_URL}/api/v1/github/manifest/callback"
@@ -161,7 +161,7 @@ async def test_the_manifest_asks_for_what_the_adapters_use_and_points_at_this_in
 
 
 async def test_public_or_private_is_an_explicit_choice(client: AsyncClient, admin: str) -> None:
-    response = await client.post("/api/v1/platform/github-app/manifest", json={"name": "Choregos test"})
+    response = await client.post("/api/v1/platform/github-app/manifest", json={"name": "Tranibor test"})
     assert response.status_code == 422, response.text
     assert "public" in response.text
 
@@ -178,7 +178,7 @@ async def test_the_status_says_what_a_new_app_would_get(client: AsyncClient, adm
     assert status["permissions"] == APP_PERMISSIONS
     assert status["events"] == list(APP_EVENTS)
     assert status["webhook_url"] == f"{API_URL}/api/v1/webhooks/github"
-    assert status["suggested_name"] == "Choregos choregos.example.test"[:34].rstrip(" .-")
+    assert status["suggested_name"] == "Tranibor choregos.example.test"[:34].rstrip(" .-")
 
 
 async def test_only_a_platform_administrator_reads_or_starts_it(client: AsyncClient, org: str) -> None:

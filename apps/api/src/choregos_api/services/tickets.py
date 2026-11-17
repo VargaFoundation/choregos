@@ -411,7 +411,7 @@ async def create_work_item(  # noqa: PLR0913 - one creation path, the birth fact
     item_id: str | None = None,
     restricted_knowledge: list[str] | None = None,
 ) -> WorkItem:
-    """Files a work item in Choregos, whatever the project's tracker (ADR 0059).
+    """Files a work item in Tranibor, whatever the project's tracker (ADR 0059).
 
     The only creation path of a person's request: the REST route and the MCP door (ADR 0030) both
     use it, so a work item created from Claude differs in nothing from one created in the console.
@@ -532,14 +532,14 @@ async def _file_in_tracker(
     tracker_type: str, adapter: Any, principal: Principal, request: WorkItemCreate
 ) -> tuple[str, str | None]:
     """Creates the issue in the external tracker; returns its key and, best effort, its URL."""
-    body = f"{request.body or ''}\n\n{ORIGIN_MARKER}Filed from Choregos by {principal.email}".strip()
+    body = f"{request.body or ''}\n\n{ORIGIN_MARKER}Filed from Tranibor by {principal.email}".strip()
     labels = [*dict.fromkeys([*request.labels, FILED_LABEL])]
     try:
         key = str(await adapter.create_item(NewItem(title=request.title, body=body, labels=labels)))
     except (AdapterError, SecretNotFound, httpx.HTTPError) as error:
         raise upstream(
             tracker_type,
-            f"the tracker {tracker_type} refused the issue: {error}. Nothing was created in Choregos.",
+            f"the tracker {tracker_type} refused the issue: {error}. Nothing was created in Tranibor.",
         ) from error
     try:
         return key, (await adapter.fetch_item(key)).url

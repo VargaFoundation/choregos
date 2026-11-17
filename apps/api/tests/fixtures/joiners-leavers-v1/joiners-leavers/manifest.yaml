@@ -13,7 +13,7 @@ metadata:
     and the badge cut; the laptop is collected, received and wiped. Every write to the directory, the
     fleet, the carrier or the badge readers is a governed action.
 requires:
-  # Le projet : ses tickets vivent dans Choregos.
+  # Le projet : ses tickets vivent dans Tranibor.
   connectors:
     tracker: internal
   # L'organisation : les connecteurs que les workflows appellent, par leur NOM, et leur capacité.

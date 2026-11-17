@@ -2,13 +2,13 @@
 """A gateway that only speaks the OpenAI API (`/v1/models`, `/v1/chat/completions`).
 
 Portkey, Kong AI Gateway, Envoy AI Gateway, OpenRouter, a vLLM router, Azure API Management...
-all expose that surface. It gives Choregos discovery (`list_models`) and nothing else:
+all expose that surface. It gives Tranibor discovery (`list_models`) and nothing else:
 
 - **no virtual keys**: every run receives the same configured `run_key`. The operator must scope
   it at the gateway (a consumer with its own token rate limit), which is why it is a different
   secret from the `api_key` used for discovery;
 - **no hard budget, no measured cost**: `spend` is an empty `Spend`, which means "not measured",
-  not "free". The budget of a step is then held by Choregos alone (the reservation, turns and
+  not "free". The budget of a step is then held by Tranibor alone (the reservation, turns and
   minutes), never by the gateway.
 """
 

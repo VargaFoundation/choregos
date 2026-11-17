@@ -84,7 +84,7 @@ async def test_the_agreed_version_travels_on_every_later_request() -> None:
 
 
 async def test_a_server_that_speaks_only_today_s_versions_is_reached() -> None:
-    """Choregos's own servers (the sidecar, the API's door) do not speak 2026-07-28: they refuse the
+    """Tranibor's own servers (the sidecar, the API's door) do not speak 2026-07-28: they refuse the
     header of a version they do not know, and answer an offer of it with their newest."""
     seen: Seen = []
 

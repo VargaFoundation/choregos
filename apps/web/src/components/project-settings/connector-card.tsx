@@ -47,14 +47,14 @@ function GitHubVia({ repo }: { repo: string }) {
   if (installation) {
     return (
       <p className="text-xs text-ink-muted" data-testid="github-via">
-        via the Choregos App on {installation.account_login}
+        via the Tranibor App on {installation.account_login}
       </p>
     );
   }
   if (hasInstallationOn(status.data, owner)) return null;
   return (
     <div className="flex flex-wrap items-center gap-2 text-xs text-warn" data-testid="github-via">
-      <span>The Choregos App is not installed on {owner}.</span>
+      <span>The Tranibor App is not installed on {owner}.</span>
       <InstallOnGitHub />
     </div>
   );
