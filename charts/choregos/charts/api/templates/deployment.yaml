@@ -250,6 +250,7 @@ spec:
             {{- end }}
             {{- end }}
             {{- include "choregos.commonEnv" . | nindent 12 }}
+            {{- include "choregos.temporalSecurityEnv" . | nindent 12 }}
             {{- with (.Values.global.egress | default dict).denyDomains }}
             # Hosts no run of this deployment may reach (ADR 0070): the effective network of a run
             # always carries them, so the console and the egress proxy agree.
@@ -388,6 +389,7 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            {{- include "choregos.temporalSecurityMounts" . | nindent 12 }}
             {{- with .Values.global.toolCatalog.configMap }}
             - { name: catalogue, mountPath: {{ $.Values.global.toolCatalog.mountPath }}, readOnly: true }
             {{- end }}
@@ -417,6 +419,7 @@ spec:
       volumes:
         - name: tmp
           emptyDir: {}
+        {{- include "choregos.temporalSecurityVolumes" . | nindent 8 }}
         {{- with .Values.global.toolCatalog.configMap }}
         - name: catalogue
           configMap: { name: {{ . }} }

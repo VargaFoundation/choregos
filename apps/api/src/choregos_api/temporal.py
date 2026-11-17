@@ -281,9 +281,10 @@ class RealTemporal:
         if self._client is None:
             async with self._lock:
                 if self._client is None:
-                    from temporalio.client import Client
+                    # TLS and the payload codec, as the workers have them (ADR 0183).
+                    from choregos_core.temporal_connection import connect_temporal
 
-                    self._client = await Client.connect(self.address, namespace=self.namespace)
+                    self._client = await connect_temporal(self.address, self.namespace)
         return self._client
 
     async def _start(self, workflow: str, workflow_id: str, payload: dict[str, Any]) -> str:

@@ -133,7 +133,7 @@ def concurrency_options(settings: OrchestratorSettings) -> ConcurrencyOptions:
 
 async def run_worker(queues: list[str]) -> None:
     from choregos_adapters import load_extensions
-    from temporalio.client import Client
+    from choregos_core.temporal_connection import TemporalSecurity, connect_temporal
     from temporalio.worker import Worker
 
     # Extensions also declare EFFECTS of governed actions (ADR 0035): the API knows them in order
@@ -141,7 +141,9 @@ async def run_worker(queues: list[str]) -> None:
     # extension's effect was "unknown" in the very place where it had to run (S20-08).
     load_extensions()  # lang: fr-ok (renamed by S45-10)
     settings = get_settings()
-    client = await Client.connect(settings.temporal_address, namespace=settings.temporal_namespace)
+    # The workers decode what the clients encode: one converter for the whole deployment (ADR 0183).
+    security = TemporalSecurity.from_env()
+    client = await connect_temporal(settings.temporal_address, settings.temporal_namespace, security=security)
     workers = [
         Worker(
             client,
@@ -157,6 +159,8 @@ async def run_worker(queues: list[str]) -> None:
         queues=queues,
         address=settings.temporal_address,
         **concurrency_options(settings),
+        tls=security.tls,
+        payload_codec=security.encrypts,
     )
     async with contextlib.AsyncExitStack() as stack:
         for worker in workers:

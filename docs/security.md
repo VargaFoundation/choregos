@@ -896,6 +896,33 @@ what the person who runs an outpost is told is in [Running an outpost](outpost-o
   one process, and on a test cluster where the outpost chart's NetworkPolicy drops a connection
   opened from the platform's namespace towards the outpost's.
 
+## Temporal: TLS and encrypted payloads ([ADR 0183](adr/0183-temporal-over-tls-payloads-encrypted.md))
+
+Temporal's histories hold what the workflows carry: ticket text, agents' results, people's decisions, on an
+HR workflow a salary. Until S80-06 every process connected in clear and wrote JSON payloads in clear.
+
+- **One way to connect.** `choregos_core.temporal_connection.connect_temporal` is the only caller of
+  `Client.connect` in the shipped code (`tests/architecture/test_one_temporal_connection.py`); the API, the
+  workers and the orchestrator's activities that start or signal workflows all go through it, so they share
+  TLS and the data converter (`apps/orchestrator/tests/test_temporal_connection_reaches_every_client.py`).
+- **TLS**, with the CA of the frontend's certificate and, for mutual TLS, a client certificate and key,
+  mounted from a Secret by the chart (`docs/deployment.md`).
+- **Payload encryption**: AES-256-GCM over each payload, a random nonce per payload, the key id in the
+  payload's metadata and bound as associated data; several keys decrypt, the first encrypts. Failure
+  messages and stack traces are encrypted too. A run with the codec on leaves no ticket text in its exported
+  history, and that history replays with the key and not without it (`tests/replay/test_replay_with_codec.py`).
+
+What it does **not** protect, and is said so:
+
+- Both are **off by default**; a production deployment without them starts, and the worker logs `tls=false`
+  and `payload_codec=false` at start-up.
+- **One key per deployment**: it protects the histories from whoever reads Temporal's database, backups or
+  wire, not one organisation's data from an operator of the deployment. A key per organisation, from a KMS,
+  is phase 2.
+- Workflow ids (which carry a ticket's key, never its text), search attributes, type and queue names,
+  timers and headers stay in clear: Temporal reads them.
+- No codec server for the Temporal UI: payloads show encrypted there.
+
 ## Secrets
 
 - Never in Git, never in an image, never in a workspace.

@@ -58,6 +58,7 @@ spec:
           args: ["--queues", {{ .name | quote }}]
           env:
             {{- include "choregos.commonEnv" $root | nindent 12 }}
+            {{- include "choregos.temporalSecurityEnv" $root | nindent 12 }}
             - name: CHOREGOS_RUNNER_IMAGE
               # The runner tag follows the deployment's when it is not pinned: pinned,
               # it pointed at `1.0.0` in a 0.1.0 installation — a missing image, and an
@@ -207,6 +208,7 @@ spec:
           resources: {{- toYaml .resources | nindent 12 }}
           volumeMounts:
             - { name: tmp, mountPath: /tmp }
+            {{- include "choregos.temporalSecurityMounts" $root | nindent 12 }}
             {{- if (($root.Values.global.buildkitd | default dict).tls | default dict).clientSecret }}
             - { name: buildkit-client, mountPath: /etc/choregos/buildkit, readOnly: true }
             {{- end }}
@@ -218,6 +220,7 @@ spec:
             {{- end }}
       volumes:
         - { name: tmp, emptyDir: {} }
+        {{- include "choregos.temporalSecurityVolumes" $root | nindent 8 }}
         {{- with (($root.Values.global.buildkitd | default dict).tls | default dict).clientSecret }}
         - name: buildkit-client
           secret: { secretName: {{ . }} }
