@@ -5365,6 +5365,22 @@ stories:
     notes: "The decision of 2026-11-15 (D6) and 2026-11-17; what is never renamed (wire contracts, stored state, third-party-visible tokens) is listed with its reason; amends 0048, 0064, 0079, 0156."
 
   # ───────────── S80 — from engine to product: the plan of 2026-11-16 ─────────────
+  - id: S80-01
+    title: "docs(plan,adr): one quarter of depth, the scope is frozen (ADR 0180); the technical roadmap; the triage of the partial stories"
+    stream: S80
+    sprint: 1
+    priority: 1
+    size: M
+    depends_on: []
+    notes: "Plan workstreams G1 and O3, and the first two weeks. ADR 0180: no new stream after 2026-11-20 but S80, each stream in flight finished or frozen by name, human review on contracts, security and migrations (CODEOWNERS and the PR template, no CI gate), two decisions due in December. PLAN-2026-11-17-engine-to-product.md (technical only) and TRIAGE-2026-11-17.md, guarded by tests/docs/test_partial_triage.py, test_scope_freeze.py and test_human_review.py."
+  - id: S80-05
+    title: "feat(api): a tamper-evident audit log: hash chaining, an append-only table, a verifier"
+    stream: S80
+    sprint: 1
+    priority: 5
+    size: L
+    depends_on: []
+    notes: "Plan workstream S3. A migration that cannot be undone: human review (ADR 0180). Done when an update to the log by the API's database role is refused."
   - id: S80-03
     title: "fix(api,orchestrator,runner,charts): the fakes are refused in staging and prod: the render fails, and the API, the outposts' door, the workers and the runner refuse to start"
     stream: S80

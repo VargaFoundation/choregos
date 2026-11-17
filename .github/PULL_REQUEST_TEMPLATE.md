@@ -8,6 +8,10 @@
 Commands run, test results, screenshots for the front end
 ## Contracts
 - [ ] No change in `packages/contracts` (otherwise a linked `contract-change` PR: #…)
+## Human review (ADR 0180)
+- [ ] This PR touches none of the paths of the "Human review" block of `CODEOWNERS` (contracts, migrations, security guards)
+- [ ] Or it does, and a human other than the author read it: …
+- [ ] Or it does, no second human reviewer exists yet, and it carries the label `human-review-owed`
 ## Findings filed
 - #…
 ## STATUS row
