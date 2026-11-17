@@ -7,6 +7,38 @@ global:
   # (e.g. an internal HTTP ingress behind a VPN). Empty: derived from `domain`.
   publicUrl: ""
   apiUrl: ""
+  # Hosts an organisation owns (ADR 0175, S74-04): `agentic.client.com`, a CNAME the customer points at
+  # this instance. Each host is routed to the console and to the API exactly like the canonical host,
+  # and gets its own cert-manager Certificate (HTTP-01, so no wildcard). The chart renders ROUTING and
+  # TLS only: whether a host is served as an organisation's (its theme, its sign-in) is decided at run
+  # time by the edition's verified claims (a DNS TXT proof in the console), never by this list. The
+  # hosts are also handed to the API as public names (`CHOREGOS_PUBLIC_HOSTS`), so that the run's
+  # internal API stays closed on them from the first request, claimed and proved or not.
+  customHosts:
+    # Bare lower-case DNS names: no scheme, port, path or wildcard. A name already routed elsewhere in
+    # this chart (console, API, run door, outposts' door) fails the render.
+    hosts: []
+    # `ingress`: one Ingress per host (tls + console + API). `nginx-mergeable`: NGINX Inc. (nginx.org)
+    # takes one Ingress per host, so each host gets a master (the host and its TLS secret) and two
+    # minions (the API's paths, the console's). `httproute`: one HTTPRoute per host on the Gateway
+    # named below; the listener's TLS is the operator's (a Gateway listener cannot be added by a route).
+    kind: ingress
+    # Empty: `choregos-api.ingress.className`. Serves `ingress` and `nginx-mergeable`.
+    className: ""
+    # Extra annotations on the Ingress (`ingress`), or on the master (`nginx-mergeable`).
+    annotations: {}
+    # `nginx-mergeable` only: the minions' own annotations, added to `nginx.org/mergeable-ingress-type`.
+    minionAnnotations: {}
+    # `httproute` only. Empty: `choregos-api.ingress.gateway` and `.gatewayNamespace`.
+    gateway: ""
+    gatewayNamespace: ""
+    # One Certificate per host, secret `<name>-tls`. Off: the operator brings the secrets.
+    certificate:
+      enabled: true
+      issuerRef:
+        name: ""
+        kind: Issuer
+        group: cert-manager.io
   # Where runs call back (`CHOREGOS_INTERNAL_API_URL`, what a runner receives as `callbacks.api_url`),
   # and where the per-run egress proxy asks for a run's network. Empty: the API's in-cluster Service,
   # `http://choregos-api:8000`, which is right whenever agent stages run in the release namespace. Runner

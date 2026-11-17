@@ -1,0 +1,176 @@
+{{- /*
+The hosts an organisation owns (ADR 0175, S74-04): `global.customHosts`. For each host the chart
+renders the routing to the console and the API, as the canonical host has it, and a cert-manager
+Certificate issued by HTTP-01 through the configured Issuer.
+
+It renders routing and TLS and nothing else. It does not decide whether a host is served as an
+organisation's: that is the edition's verified claim, read at run time (ADR 0175 §2). It does not
+weaken the run's API guard either: the hosts are handed to the API as public names
+(`CHOREGOS_PUBLIC_HOSTS`, in the API's Deployment), so `/api/v1/internal` is closed on them whether
+the claim is proved or not.
+
+The API's paths below are the ones of `choregos-api`'s own route (`charts/api/templates/httproute.yaml`);
+`tests/charts/test_custom_hosts.py` fails if the two lists drift.
+*/ -}}
+{{- $ch := .Values.global.customHosts | default dict }}
+{{- $hosts := compact ($ch.hosts | default list) }}
+{{- if $hosts }}
+{{- $api := index .Values "choregos-api" | default dict }}
+{{- $web := index .Values "choregos-web" | default dict }}
+{{- $apiIngress := $api.ingress | default dict }}
+{{- $kind := $ch.kind | default "ingress" }}
+{{- if not (has $kind (list "ingress" "nginx-mergeable" "httproute")) }}
+{{- fail (printf "global.customHosts.kind: %q is not ingress, nginx-mergeable or httproute" $kind) }}
+{{- end }}
+{{- $cert := $ch.certificate | default dict }}
+{{- $issuer := $cert.issuerRef | default dict }}
+{{- $certOn := ne (toString (hasKey $cert "enabled" | ternary $cert.enabled true)) "false" }}
+{{- if and $certOn (not $issuer.name) }}
+{{- fail "global.customHosts.certificate.issuerRef.name is empty: name the cert-manager Issuer that issues the hosts' certificates by HTTP-01 (e.g. choregos-issuer), or set certificate.enabled=false and bring the TLS secrets yourself" }}
+{{- end }}
+{{- $className := $ch.className | default $apiIngress.className }}
+{{- $apiPort := (($api.service | default dict).port | default 8000) }}
+{{- $webPort := (($web.service | default dict).port | default 3000) }}
+{{- /* A custom host is a name of its own: not one the chart already routes, and not twice. */ -}}
+{{- $taken := dict }}
+{{- range (compact ($apiIngress.hostnames | default list)) }}{{- $_ := set $taken (lower .) "choregos-api.ingress.hostnames" }}{{- end }}
+{{- range (compact (($web.ingress | default dict).hostnames | default list)) }}{{- $_ := set $taken (lower .) "choregos-web.ingress.hostnames" }}{{- end }}
+{{- range (compact (($api.runDoor | default dict).hostnames | default list)) }}{{- $_ := set $taken (lower .) "choregos-api.runDoor.hostnames" }}{{- end }}
+{{- range (compact ((($.Values.global.outposts | default dict).door | default dict).hostnames | default list)) }}{{- $_ := set $taken (lower .) "global.outposts.door.hostnames" }}{{- end }}
+{{- $_ := set $taken (lower ((urlParse (.Values.global.apiUrl | default (printf "https://api.%s" .Values.global.domain))).hostname | default "")) "global.apiUrl" }}
+{{- $_ := set $taken (lower ((urlParse (.Values.global.publicUrl | default (printf "https://app.%s" .Values.global.domain))).hostname | default "")) "global.publicUrl" }}
+{{- $names := dict }}
+{{- range $hosts }}
+{{- if not (regexMatch "^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$" .) }}
+{{- fail (printf "global.customHosts.hosts: %q is not a bare lower-case DNS name with at least one dot (no scheme, port, path or wildcard: HTTP-01 cannot issue a wildcard)" .) }}
+{{- end }}
+{{- if hasKey $taken . }}
+{{- fail (printf "global.customHosts.hosts: %q is already routed by %s; a custom host is a name of its own" . (get $taken .)) }}
+{{- end }}
+{{- $slug := . | replace "." "-" }}
+{{- if hasKey $names $slug }}
+{{- fail (printf "global.customHosts.hosts: %q and %q give the same object name (choregos-host-%s)" . (get $names $slug) $slug) }}
+{{- end }}
+{{- $_ := set $names $slug . }}
+{{- end }}
+{{- range $host := $hosts }}
+{{- $name := printf "choregos-host-%s" ($host | replace "." "-") }}
+{{- $secret := printf "%s-tls" $name }}
+{{- $labels := include "choregos.labels" $ }}
+---
+{{- if eq $kind "httproute" }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ $name }}
+  labels: {{- $labels | nindent 4 }}
+spec:
+  parentRefs:
+    - name: {{ $ch.gateway | default $apiIngress.gateway }}
+      namespace: {{ $ch.gatewayNamespace | default $apiIngress.gatewayNamespace | default "gateway" }}
+  hostnames:
+    - {{ $host | quote }}
+  rules:
+    - matches:
+        {{- range (include "choregos.customHostApiPaths" $ | fromYamlArray) }}
+        - path: { type: PathPrefix, value: {{ . }} }
+        {{- end }}
+        {{- range (include "choregos.customHostApiExactPaths" $ | fromYamlArray) }}
+        - path: { type: Exact, value: {{ . }} }
+        {{- end }}
+      backendRefs:
+        - name: choregos-api
+          port: {{ $apiPort }}
+    - backendRefs:
+        - name: choregos-web
+          port: {{ $webPort }}
+{{- else if eq $kind "nginx-mergeable" }}
+{{- /* NGINX Inc. refuses two plain Ingresses on a host ("All hosts are taken by other resources"): the
+     master holds the host and its TLS secret, with no path; the API and the console are its minions. */}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $name }}
+  labels: {{- $labels | nindent 4 }}
+  annotations:
+    {{- $master := merge (dict "nginx.org/mergeable-ingress-type" "master") ($ch.annotations | default dict) }}
+    {{- toYaml $master | nindent 4 }}
+spec:
+  {{- with $className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  tls:
+    - hosts: [{{ $host | quote }}]
+      secretName: {{ $secret }}
+  rules:
+    - host: {{ $host | quote }}
+{{- range $part := list "api" "web" }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $name }}-{{ $part }}
+  labels: {{- $labels | nindent 4 }}
+  annotations:
+    {{- $minion := merge (dict "nginx.org/mergeable-ingress-type" "minion") ($ch.minionAnnotations | default dict) }}
+    {{- toYaml $minion | nindent 4 }}
+spec:
+  {{- with $className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  rules:
+    - host: {{ $host | quote }}
+      http:
+        paths:
+          {{- if eq $part "api" }}
+          {{- include "choregos.customHostApiRules" (dict "port" $apiPort) | nindent 10 }}
+          {{- else }}
+          - path: /
+            pathType: Prefix
+            backend:
+              service: { name: choregos-web, port: { number: {{ $webPort }} } }
+          {{- end }}
+{{- end }}
+{{- else }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $name }}
+  labels: {{- $labels | nindent 4 }}
+  {{- with $ch.annotations }}
+  annotations: {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with $className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  tls:
+    - hosts: [{{ $host | quote }}]
+      secretName: {{ $secret }}
+  rules:
+    - host: {{ $host | quote }}
+      http:
+        paths:
+          {{- include "choregos.customHostApiRules" (dict "port" $apiPort) | nindent 10 }}
+          - path: /
+            pathType: Prefix
+            backend:
+              service: { name: choregos-web, port: { number: {{ $webPort }} } }
+{{- end }}
+{{- if $certOn }}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ $name }}
+  labels: {{- $labels | nindent 4 }}
+spec:
+  secretName: {{ $secret }}
+  dnsNames: [{{ $host | quote }}]
+  issuerRef:
+    name: {{ $issuer.name }}
+    kind: {{ $issuer.kind | default "Issuer" }}
+    group: {{ $issuer.group | default "cert-manager.io" }}
+{{- end }}
+{{- end }}
+{{- end }}
