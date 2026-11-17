@@ -52,6 +52,7 @@ streams:
   S63: "Assistants: a plugin ships one, an organisation installs it for an audience, a person converses with their own identity (ADRs 0133-0140)"
   S65: "Outposts: tools that live where the platform cannot reach, behind a place that only dials out (ADRs 0147-0149)"
   S68: "The editor is a surface of the platform: a code editor extension that converses, shows what runs and what waits, and runs nothing locally (ADR 0155)"
+  S75: "The core is named Tranibor: visible name, packages, images and charts, environment variables (ADR 0176)"
 
 stories:
 
@@ -5352,3 +5353,12 @@ stories:
     depends_on: [S74-02]
     notes: "ADR 0175 amendment S74-04. The hosts also go to CHOREGOS_PUBLIC_HOSTS (a routed host is public before its proof). Operator side: infra#1595 (namespaced HTTP-01 Issuer choregos-issuer, solver image exception; its solver Ingress probably needs ingressTemplate nginx.org/mergeable-ingress-type minion for NGINX Inc.), then DiametralGroup/choregos-deploy values once a chart release carries the value. Not proved without a cluster."
 
+  # ───────────── S75 — the core is named Tranibor (ADR 0176) ─────────────
+  - id: S75-00
+    title: "docs(adr): the core is named Tranibor, in rounds, with a compatibility rule for each (ADR 0176)"
+    stream: S75
+    sprint: 1
+    priority: 1
+    size: S
+    depends_on: []
+    notes: "The decision of 2026-11-15 (D6) and 2026-11-17; what is never renamed (wire contracts, stored state, third-party-visible tokens) is listed with its reason; amends 0048, 0064, 0079, 0156."

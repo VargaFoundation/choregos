@@ -65,3 +65,9 @@ product owner chose on 2026-10-20: the products stay autonomous.
   shared value. Each chart stays installable alone; a deployment repository may install both.
 - **One OIDC realm, required.** Simpler to document, and it would forbid the customer who runs
   Choregos against Entra and graal against its own Keycloak.
+
+## Amendment (2026-11-17, ADR 0176): the name of this product
+
+"Choregos" in this record is the product now named Tranibor (ADR 0176); the decision and the guard are
+unchanged. `tests/licences/test_independent_products.py` still allows exactly its three names, and its
+pattern is about "graal", not about this product's name.
