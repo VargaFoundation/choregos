@@ -71,7 +71,8 @@ or external: the external aliases' window closed with 0.23.0 and S45-49 removed 
 
 ## Definition of done (blocking)
 `make ci` green, docs up to date, acceptance criteria checked in the PR, no `TODO` without a linked
-issue, `docs/plan/STATUS.md` updated **saying what the PR proves and what it does not prove**.
+issue, the story's row in `docs/plan/status/<stream>.md` updated **saying what the PR proves and
+what it does not prove** (`docs/plan/STATUS.md` is their index and says where a row goes).
 
 **Nothing is declared ✅ without a test that fails in its absence.** A feature whose guard can
 be removed without turning the suite red is not delivered, it is hoped for.

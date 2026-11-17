@@ -9,7 +9,7 @@
 1. Create the `VargaFoundation/choregos` monorepo and copy this plan into `docs/plan/` (one file per section, `08-backlog.yaml` as is).
 2. Copy `AGENTS.md` and `CLAUDE.md` from section 7.6 to the root.
 3. Start **one Claude Code session per work stream** (section 7.2), each in its own `git worktree`, with this instruction: "Read `docs/plan/00-index.md`, then the section of your stream, then your stories in `docs/plan/08-backlog.yaml` (filter `stream: Sx`). Work story by story, one PR per story, tests included. Never modify `packages/contracts` without a dedicated PR tagged `contract-change`."
-4. An **integrator** session reviews, runs the CI, merges through the merge queue and updates `docs/plan/STATUS.md`.
+4. An **integrator** session reviews, runs the CI, merges through the merge queue and updates the status: [STATUS.md](STATUS.md) is the index of the streams, each stream's rows are in [status/](status/) (`status/<stream>.md`).
 5. The sections are self-contained: an agent that reads only its own and the contracts (section 1) must be able to deliver.
 
 ## 0.2 The name
