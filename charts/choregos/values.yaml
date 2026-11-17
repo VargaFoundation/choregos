@@ -874,3 +874,8 @@ netops:
 
 networkPolicies:
   enabled: true
+  # Egress entries (NetworkPolicy `egress` rules, as written) added for the platform's own pods, in
+  # `choregos-allow-platform`: never the runner pods, the egress proxy or the builder, which that
+  # policy leaves out. Empty on a cluster, whose platform team opens the outside its own way (the
+  # egress ceiling above says what it opened); the single-node profile opens it here (ADR 0184).
+  platformEgress: []

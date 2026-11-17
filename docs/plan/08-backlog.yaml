@@ -5440,7 +5440,15 @@ stories:
     priority: 7
     size: L
     depends_on: [S80-07a]
-    notes: "Plan workstream P4. values/single-node.yaml, the chart's backup and restore CronJobs, the guard's singleNode exception, tools/single-node/{proof,restore}.sh, the restore runbook. Not done: the proof as a nightly CI job; an embedded object store or OIDC provider; network isolation of agent pods on this profile."
+    notes: "Plan workstream P4. values/single-node.yaml, the chart's backup and restore CronJobs, the guard's singleNode exception, tools/single-node/{proof,restore}.sh, the restore runbook. Not done: the proof as a nightly CI job; an embedded object store or OIDC provider; network isolation of agent pods on this profile (S80-07c)."
+  - id: S80-07c
+    title: "fix(charts): on the single-node profile an agent pod reaches nothing it should not: the NetworkPolicies for the embedded layout and the egress proxy (ADR 0184)"
+    stream: S80
+    sprint: 1
+    priority: 7
+    size: M
+    depends_on: [S80-07b]
+    notes: "Follow-up of S80-07b's known limit. The chart's policies named each dependency by its namespace; embedded, they are pods of the release namespace, so the profile turned the policies off. Now each dependency is opened by namespace or, embedded, by pod; the embedded PostgreSQL and Temporal admit their clients by name only; the profile turns the policies and the per-run egress proxy on, opens the outside to the platform's own pods (networkPolicies.platformEgress), and the guard refuses the profile without either. Not done: the proof on a real k3s (tools/single-node/proof.sh gained the isolation step, not run)."
   - id: S80-04
     title: "ci: the supply chain is pinned: actions by commit SHA, images by digest, no latest, a test that refuses a reference that moves"
     stream: S80

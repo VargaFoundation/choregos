@@ -86,7 +86,7 @@ skills from git or adding a web or git knowledge source checks the hosts first. 
 console opens a **network access** modal listing each host, whether this organisation allows it
 (`allowed` / `requested by X` / `not allowed`) and whether the platform's network does (`declared
 open` / `outside the declared ceiling` / `not declared by this deployment`). An administrator
-presses *Allow and install*: the hosts are opened and the connector created in one call. Anyone else
+presses *Allow and continue*: the hosts are opened and the connector created in one call. Anyone else
 sees who the administrators are and presses *Ask an administrator*; the request waits in the
 administrators' inbox and the person retries once it is approved. When the cluster's network also
 needs a change, the modal shows it (a snippet to copy, and a prefilled issue when the deployment

@@ -119,6 +119,38 @@ install() {
   for d in $(k get deploy -o name); do k rollout status "$d" --timeout=900s; done
 }
 
+# A pod with the labels the `k8s_job` executor puts on an agent pod tries one TCP connection; prints
+# `open` or `closed`. Its image is the API's, already on the node: nothing is pulled.
+probe() {
+  local name="probe-$1-$2" image phase
+  image=$(k get deploy choregos-api -o jsonpath='{.spec.template.spec.containers[0].image}')
+  k run "$name" --restart=Never --image="$image" --image-pull-policy=IfNotPresent \
+    --labels=app.kubernetes.io/name=choregos-runner,app.kubernetes.io/component=runner,choregos/run-id=proof \
+    --command -- python -c 'import socket, sys; socket.create_connection((sys.argv[1], int(sys.argv[2])), timeout=10)' \
+    "$1" "$2" >/dev/null
+  for _ in $(seq 60); do
+    phase=$(k get pod "$name" -o jsonpath='{.status.phase}')
+    case "$phase" in Succeeded | Failed) break ;; esac
+    sleep 2
+  done
+  k delete pod "$name" --wait=false >/dev/null
+  case "$phase" in Succeeded) echo open ;; Failed) echo closed ;; *) echo "undecided ($phase)" ;; esac
+}
+
+# ADR 0184, S80-07c: an agent pod reaches the API, the model gateway, the memory and the egress
+# proxy, and never the embedded PostgreSQL or Temporal. k3s enforces the chart's NetworkPolicies.
+isolation() {
+  local failed=0 target want got
+  for target in choregos-api:8000:open choregos-litellm:4000:open choregos-ecphoria:8432:open \
+    choregos-egress:3128:open choregos-postgresql:5432:closed choregos-temporal:7233:closed; do
+    IFS=: read -r host port want <<<"$target"
+    got=$(probe "$host" "$port")
+    echo "  agent pod -> $host:$port: $got (expected $want)"
+    [ "$got" = "$want" ] || failed=1
+  done
+  return $failed
+}
+
 token() {
   k exec deploy/choregos-api -- choregos-admin tokens create --email "$ADMIN" --name proof --expires-in-days 1
 }
@@ -135,6 +167,8 @@ node_up
 vault
 step "install the chart (values/single-node.yaml)"
 install
+step "an agent pod reaches what a run uses, and not the database or Temporal"
+isolation
 step "one work item to completion"
 TOKEN=$(token)
 ITEM=$(k exec -i deploy/choregos-api -- python - run "$ORG" "$TOKEN" <"$ROOT/tools/single-node/work_item.py")

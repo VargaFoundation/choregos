@@ -40,6 +40,10 @@ global:
   antiAffinity: none
   externalSecrets:
     enabled: false
+  # The per-run egress proxy (ADR 0070): an agent pod gets out through it and nowhere else, to the
+  # hosts its organisation opened for runners. The NetworkPolicies below make it the only way out.
+  egress:
+    enabled: true
   rbac:
     # No Tekton on this machine: nothing to read at cluster scale.
     clusterScoped: false
@@ -105,8 +109,8 @@ choregos-orchestrator:
   runner:
     # The agents run in the release namespace (the chart's default namespace name).
     namespacePattern: choregos
-    # No per-project egress proxy on this profile: the agents go out directly (ADR 0184, limits).
-    egressProxy: ""
+    # The release's per-run egress proxy (`global.egress`), in the agents' namespace.
+    egressProxy: "http://choregos-egress.{namespace}.svc:3128"
     # At most four agent runs at once; the next ones wait without a pod.
     maxActive: 4
     limits: { cpu: "2", memory: 4Gi }
@@ -144,8 +148,17 @@ monitoring:
   alerts: false
   dashboards: false
 
-# The chart's policies open the dependencies in their own namespaces (choregos-data,
-# choregos-temporal, ...); embedded, they live in the release namespace, which those policies do
-# not open. Off on this profile until they do (ADR 0184, limits).
+# The chart's NetworkPolicies, for the embedded layout (ADR 0184, S80-07c). An agent pod (label
+# `app.kubernetes.io/name: choregos-runner`, which the executor sets) reaches DNS, the API, the
+# model gateway, the memory and the egress proxy, and nothing else: not PostgreSQL, not Temporal,
+# not the outside directly. PostgreSQL and Temporal also take connections only from the platform's
+# pods that use them. k3s enforces NetworkPolicies (its embedded kube-router) unless it was started
+# with `--disable-network-policy`: do not.
 networkPolicies:
-  enabled: false
+  enabled: true
+  # The platform's own pods (never the agents) go wherever the site's services are: the OIDC
+  # provider, the model provider (LiteLLM), the trackers and git hosts, the object store, the backup
+  # bucket, and the Kubernetes API (on k3s the node's address, port 6443, which a NetworkPolicy sees
+  # after the Service's translation). On a cluster, a platform team opens these; here nobody else does.
+  platformEgress:
+    - to: [{ ipBlock: { cidr: 0.0.0.0/0 } }]

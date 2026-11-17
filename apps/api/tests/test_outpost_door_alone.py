@@ -525,6 +525,8 @@ async def test_it_does_not_serve_as_a_superuser_outside_development(
     monkeypatch.setenv("CHOREGOS_DATABASE_URL", PG_URL)
     monkeypatch.setenv("CHOREGOS_ENV", env)
     monkeypatch.setenv("CHOREGOS_DEV_LOGIN_ENABLED", "false")  # the settings refuse it outside development
+    # The suite runs on the fakes, which staging and prod refuse first (S80-03): this test is about the role.
+    monkeypatch.setenv("CHOREGOS_FAKES", "false")
     reset_settings_cache()
     await db_session.dispose_engine()
     try:
