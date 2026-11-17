@@ -7,7 +7,7 @@ import { rememberedOrg } from "@/lib/remembered-org";
 import { useSession } from "@/lib/session";
 import { DEFAULT_SERVED_THEME, sanitizeTheme, themeCss, type ServedTheme } from "@/lib/served-theme";
 
-type State = { theme: ServedTheme; apply: (theme: ServedTheme) => void };
+type State = { theme: ServedTheme; apply: (theme: ServedTheme) => void; hostOrg: string | null };
 
 const ServedThemeContext = createContext<State | null>(null);
 
@@ -18,10 +18,24 @@ export const THEME_STYLE_ID = "choregos-theme";
  * The theme the layout fetched on the server (the instance's), for everything that draws a name, a
  * logo or a title. Without a provider (a unit test, a story) the default theme.
  */
-export function ServedThemeProvider({ initial, children }: { initial: ServedTheme; children: ReactNode }) {
+export function ServedThemeProvider({
+  initial,
+  hostOrg = null,
+  children,
+}: {
+  initial: ServedTheme;
+  /** The organisation that owns the host the page was served on (ADR 0175), null on the instance's own. */
+  hostOrg?: string | null;
+  children: ReactNode;
+}) {
   const [theme, apply] = useState<ServedTheme>(initial);
-  const value = useMemo(() => ({ theme, apply }), [theme]);
+  const value = useMemo(() => ({ theme, apply, hostOrg }), [theme, hostOrg]);
   return <ServedThemeContext.Provider value={value}>{children}</ServedThemeContext.Provider>;
+}
+
+/** The organisation the host belongs to, or null: the sign-in page implies it, the theme is already its own. */
+export function useHostOrg(): string | null {
+  return useContext(ServedThemeContext)?.hostOrg ?? null;
 }
 
 export function useServedTheme(): ServedTheme {
@@ -57,11 +71,13 @@ export function OrganisationTheme() {
   const state = useContext(ServedThemeContext);
   const { org, orgs } = useSession();
   const apply = state?.apply;
+  // On a host an organisation owns the look is the host's: the server drew it, nothing swaps it.
+  const hostOrg = state?.hostOrg ?? null;
   const known = (orgs ?? []).length > 0;
   // Read after hydration (an effect), never during the render: the server cannot see localStorage.
   const target = known ? org : null;
   useEffect(() => {
-    if (IS_MOCK || !apply) return;
+    if (IS_MOCK || !apply || hostOrg) return;
     const slug = target ?? rememberedOrg();
     if (!slug) return;
     const controller = new AbortController();
@@ -82,6 +98,6 @@ export function OrganisationTheme() {
       }
     })();
     return () => controller.abort();
-  }, [target, apply]);
+  }, [target, apply, hostOrg]);
   return null;
 }

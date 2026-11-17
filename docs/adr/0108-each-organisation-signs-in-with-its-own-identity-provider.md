@@ -86,4 +86,6 @@ may grant is a security property the core must hold whatever the edition does.
   is run by the operator; a tenant's is run by a customer. Treating them alike is the takeover this record
   exists to prevent.
 - **One sub-domain per tenant.** Needs wildcard DNS and Ingress and a cookie per host; the address domain
-  and a link per organisation need neither.
+  and a link per organisation need neither. *Amended by [ADR 0175](0175-an-organisation-may-own-a-host.md):
+  this holds for routing a sign-in; an organisation that wants a host of its own may claim ONE, proved by a
+  DNS challenge, with no wildcard.*

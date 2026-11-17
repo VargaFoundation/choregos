@@ -3,12 +3,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SAMPLE_THEME } from "@/mocks/theme-sample";
 
 let cookie: string | undefined;
+let incoming: Record<string, string> = {};
 vi.mock("next/headers", () => ({
   cookies: async () => ({ get: (name: string) => (name === "choregos_org" && cookie ? { value: cookie } : undefined) }),
+  headers: async () => ({ get: (name: string) => incoming[name] ?? null }),
 }));
 
 beforeEach(async () => {
   cookie = undefined;
+  incoming = {};
   vi.resetModules();
   vi.stubEnv("NEXT_PUBLIC_API_MODE", "live");
 });
@@ -101,3 +104,84 @@ describe("the instance theme, read on the server (S39-03b)", () => {
     expect((await instanceTheme()).id).toBe("default");
   });
 });
+
+describe("a host an organisation owns lands on that organisation, theme first (ADR 0175)", () => {
+  const ACME = { ...SAMPLE_THEME, id: "acme", product_name: "Acme Agentic" };
+  /** An API that knows one tenant host, like the enterprise edition's resolver would. */
+  function api() {
+    return vi.fn(async (_url: string, init?: RequestInit) => {
+      const forwarded = new Headers(init?.headers).get("x-forwarded-host");
+      return forwarded === "agentic.client.com"
+        ? new Response(JSON.stringify(ACME), { headers: { "x-choregos-host-org": "acme" } })
+        : new Response(JSON.stringify(SAMPLE_THEME));
+    });
+  }
+
+  it("forwards the visitor's host to the API and draws the host's organisation, with its name", async () => {
+    vi.stubEnv("CHOREGOS_API_URL", "http://api.test");
+    const fetcher = api();
+    vi.stubGlobal("fetch", fetcher);
+    incoming = { "x-forwarded-host": "Agentic.Client.com:443", host: "web.svc:3000" };
+    const { servedLook } = await import("@/lib/served-theme-server");
+    const look = await servedLook();
+    expect(look.theme.product_name).toBe("Acme Agentic");
+    expect(look.hostOrg).toBe("acme");
+    const [, init] = fetcher.mock.calls[0] as unknown as [string, RequestInit];
+    expect(new Headers(init.headers).get("x-forwarded-host")).toBe("agentic.client.com");
+  });
+
+  it("prefers the host's organisation over the remembered one, and keys the memo by host", async () => {
+    vi.stubEnv("CHOREGOS_API_URL", "http://api.test");
+    const fetcher = api();
+    vi.stubGlobal("fetch", fetcher);
+    incoming = { host: "agentic.client.com" };
+    const { servedLook } = await import("@/lib/served-theme-server");
+    cookie = "other-org";
+    expect((await servedLook()).hostOrg).toBe("acme");
+    // Another remembered organisation on the same host: served from the host's own entry, no new fetch.
+    cookie = "third-org";
+    const again = await servedLook();
+    expect(again.theme.product_name).toBe("Acme Agentic");
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it("never serves a tenant host's look to another host, nor the instance's look to the tenant host", async () => {
+    vi.stubEnv("CHOREGOS_API_URL", "http://api.test");
+    vi.stubGlobal("fetch", api());
+    const { servedLook } = await import("@/lib/served-theme-server");
+    incoming = { host: "agentic.client.com" };
+    expect((await servedLook()).theme.product_name).toBe("Acme Agentic");
+    incoming = { host: "console.example.com" };
+    const instance = await servedLook();
+    expect(instance.theme.product_name).toBe("Sample");
+    expect(instance.hostOrg).toBeNull();
+    incoming = { host: "agentic.client.com" };
+    expect((await servedLook()).theme.product_name).toBe("Acme Agentic");
+  });
+
+  it.each(["10.0.0.1", "localhost:3000", "a b.example.com", "x/../y.example.com"])(
+    "forwards nothing that is not a DNS name (%s)",
+    async (host) => {
+      vi.stubEnv("CHOREGOS_API_URL", "http://api.test");
+      const fetcher = api();
+      vi.stubGlobal("fetch", fetcher);
+      incoming = { host };
+      const { servedLook } = await import("@/lib/served-theme-server");
+      await servedLook();
+      const [, init] = fetcher.mock.calls[0] as unknown as [string, RequestInit];
+      expect(new Headers(init.headers).get("x-forwarded-host")).toBeNull();
+    },
+  );
+
+  it("takes the organisation from the header only when it is a slug", async () => {
+    vi.stubEnv("CHOREGOS_API_URL", "http://api.test");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify(SAMPLE_THEME), { headers: { "x-choregos-host-org": "../Admin" } })),
+    );
+    incoming = { host: "agentic.client.com" };
+    const { servedLook } = await import("@/lib/served-theme-server");
+    expect((await servedLook()).hostOrg).toBeNull();
+  });
+});
+

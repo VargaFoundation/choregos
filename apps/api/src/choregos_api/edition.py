@@ -26,7 +26,7 @@ import re
 from collections.abc import Iterable
 from typing import Any, Final
 
-from . import tenant_sign_in
+from . import tenant_host, tenant_sign_in
 
 COMMUNITY: Final = "community"
 ENTERPRISE: Final = "enterprise"
@@ -213,3 +213,4 @@ def reset() -> None:
     _SESSION_VALIDATIONS.clear()
     _PLATFORM_ADMINISTRATORS.clear()
     tenant_sign_in.reset()
+    tenant_host.reset()

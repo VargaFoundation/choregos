@@ -100,3 +100,21 @@ describe("an organisation's own theme replaces the instance's after hydration (S
     expect(fetcher).not.toHaveBeenCalled();
   });
 });
+
+describe("on a host an organisation owns, the host's look is not swapped (ADR 0175)", () => {
+  it("asks for nothing after hydration: the server drew the host's organisation", async () => {
+    const fetcher = vi.fn(async (_url: string) => new Response(JSON.stringify(SAMPLE_THEME), { status: 200 }));
+    vi.stubGlobal("fetch", fetcher);
+    window.localStorage.setItem("choregos.org", "other");
+    render(
+      <ServedThemeProvider initial={DEFAULT_SERVED_THEME} hostOrg="acme">
+        <OrganisationTheme />
+        <Name />
+      </ServedThemeProvider>,
+    );
+    await new Promise((r) => setTimeout(r, 20));
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(screen.getByTestId("name").textContent).toBe("Choregos");
+  });
+});
+
