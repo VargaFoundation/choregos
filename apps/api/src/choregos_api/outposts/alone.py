@@ -40,6 +40,7 @@ from typing import Final
 
 from choregos_adapters import load_extensions
 from choregos_contracts.outpost import MAX_WAIT_S
+from choregos_core.production import refuse_fakes_in_production
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
@@ -88,6 +89,8 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     configure_logging(settings.log_level, settings.log_json)
     logger.info("the outposts' door starts, served alone", env=settings.env)
+    # The same rule as the API's start-up (S80-03): no fakes in staging and prod.
+    refuse_fakes_in_production(environment=settings.env, fakes=settings.fakes, process="outposts' door")
     relay: PostgresRelay | None = None
     if not settings.is_sqlite:
         await _refuse_the_superuser(settings)

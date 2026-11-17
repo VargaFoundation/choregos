@@ -38,6 +38,8 @@ class Exit(IntEnum):
     #: A file the runner writes into the agent's tree stands behind a link or a second name the agent left
     #: (a workspace kept across a person's answer): the runner follows neither and stops (S65-04b).
     WORKSPACE_UNSAFE = 110
+    #: `CHOREGOS_FAKES` is on and `CHOREGOS_ENV` is staging or prod: the runner does not start (S80-03).
+    FAKES_IN_PRODUCTION = 120
 
     @property
     def explanation(self) -> str:
@@ -55,6 +57,7 @@ class Exit(IntEnum):
             Exit.CONFINEMENT_UNAVAILABLE: "confinement required, the kernel cannot confine the agent",
             Exit.AGENT_ISOLATION_UNAVAILABLE: "the agent's own container is required and has no launcher",
             Exit.WORKSPACE_UNSAFE: "a link or a second name in the workspace stands where the runner writes",
+            Exit.FAKES_IN_PRODUCTION: "the fakes are on in staging or prod: the runner refuses to start",
         }[self]
 
 

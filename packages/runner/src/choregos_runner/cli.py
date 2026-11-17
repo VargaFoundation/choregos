@@ -10,6 +10,7 @@ from typing import Annotated
 
 import typer
 from choregos_core import telemetry
+from choregos_core.production import FakesInProductionError, refuse_fakes_in_this_environment
 
 from .assignment import AssignmentServer
 from .backends import backend_version, known_backends
@@ -21,6 +22,24 @@ app = typer.Typer(
     add_completion=False,
     help="Choregos runner: runs an agent step and publishes its StageResult.",
 )
+
+#: The name the runner gives itself when it refuses to start.
+PROCESS = "runner"
+
+
+@app.callback()
+def _refuse_fakes_in_production() -> None:
+    """No command starts on the fakes in staging and prod (S80-03): under `CHOREGOS_FAKES` the
+    egress control only warns. The orchestrator tells every run its `CHOREGOS_ENV`."""
+    _stop_on_fakes_in_production()
+
+
+def _stop_on_fakes_in_production() -> None:
+    try:
+        refuse_fakes_in_this_environment(PROCESS)
+    except FakesInProductionError as error:
+        typer.echo(str(error), err=True)
+        raise typer.Exit(int(Exit.FAKES_IN_PRODUCTION)) from None
 
 
 @app.command()
@@ -111,6 +130,8 @@ async def _serve_then_run(port: int, workspace: Path | None) -> tuple[RunOutcome
         # The run's environment (proxy, model, deployment-wide credentials) applies to this
         # process and to the agent it starts, as a pod's `env` would have.
         os.environ.update(assignment.env)
+        # The assignment may be what says this is staging or prod, or what turns the fakes on.
+        _stop_on_fakes_in_production()
         reset_settings_cache()
         settings = get_settings()
         settings.run_id = assignment.run_id

@@ -548,7 +548,7 @@ are where backends and executors are configured; *Administration → Platform* o
 A project that names its own `agent` or `models` keeps them. When a runner pod dies before it can
 report — an image it cannot pull, a backend it cannot reach — the run says so: the runner's exit
 code and what it means (`30`: agent backend unreachable, `50`: a skill missing or with a wrong
-digest, `60`: an input that does not match its digest, `80`: the context reduction the policy requires did not start, `90`: confinement required and the kernel cannot confine the agent, ADR 0094…), or why the container never started.
+digest, `60`: an input that does not match its digest, `80`: the context reduction the policy requires did not start, `90`: confinement required and the kernel cannot confine the agent, ADR 0094, `120`: the fakes are on in staging or prod…), or why the container never started.
 
 ## Theme
 
@@ -793,7 +793,7 @@ global:
   `{{snippet_urlencoded}}`. Choregos can prefill an issue; it cannot open a pull request.
 - **`mode`**: `enforce` refuses a host the organisation has not allowed (and a call with no policy
   in context); `warn` logs `egress.would_refuse` and passes; the code default under
-  `CHOREGOS_FAKES=1` is `warn`.
+  `CHOREGOS_FAKES=1` is `warn` (and no process starts on the fakes in `staging` or `prod`).
 - **Upgrading**: the migration seeds an `allowed` rule for every host an organisation already calls
   (connectors, web and git knowledge sources, skill sources). Review them in `/admin/egress`.
 
@@ -2039,6 +2039,18 @@ is missing where it is stored, not where it is read.
 
 ## Upgrading past 0.27.3
 
+**The fakes are refused in staging and prod** (S80-03). `CHOREGOS_FAKES` (`global.fakes`, ADR 0005)
+switches the whole platform to its in-memory fakes: on, the egress control only warns and the API's secret
+store is an in-memory one when no key is configured. Nothing refused it in a serious environment. Now, when
+`CHOREGOS_ENV` (`global.environment`) is `staging` or `prod`: the chart fails to render with `global.fakes`
+on, or with `CHOREGOS_FAKES` in `choregos-orchestrator.runner.env`, naming the value; the API, the outposts'
+door served alone and the orchestrator's workers refuse to start, naming both settings; the runner exits
+with code 120 (`FAKES_IN_PRODUCTION`) before it runs anything. The workers now hand every run the
+deployment's `CHOREGOS_ENV`, which is how the runner knows. A bench (`values/dev.yaml`, `values/local.yaml`,
+`docker compose`, `make demo`, the end-to-end suite) runs as before: none of them says `staging` or `prod`.
+A deployment with `global.environment: prod` and `global.fakes: true` was running on fakes: turn them off
+and give it its real dependencies and its secrets key (`secrets-keks`) before upgrading.
+
 A workflow may no longer name an agent of kind `external` — a client of the MCP door — as a step's actor
 ([ADR 0163](adr/0163-a-client-prepares-a-person-s-decision-the-person-decides.md) §1, S65-20). Such a
 workflow ran the client's version as if the platform ran it. After the upgrade its next publication is
@@ -2288,7 +2300,7 @@ What the chart does for a multi-node installation, and the knobs behind it:
 | A node drain must not take the API, the front or a worker queue down | one `PodDisruptionBudget` per component, and per orchestrator queue — rendered only when there is more than one replica (a budget on a single replica blocks the drain and protects nothing) | `choregos-api.podDisruptionBudget`, `choregos-web.podDisruptionBudget`, `choregos-orchestrator.podDisruptionBudget` |
 | Two replicas must not share a node | pod anti-affinity on `kubernetes.io/hostname`: `soft` (preferred, the default — a one-node bench still schedules), `hard` (one replica per node, or no pod), `none` | `global.antiAffinity` |
 | The database must not be exhausted under load | a **bounded** connection pool per process: at most `size + maxOverflow` connections, a short wait beyond. Size PostgreSQL's `max_connections` as (API replicas + workers) × (size + maxOverflow), plus room for migrations and an operator | `global.database.pool.{size,maxOverflow,timeoutSeconds}` |
-| A serious environment must not run on bench dependencies | the chart **refuses to render** in `staging` and `prod` when any `embedded` dependency, `devSecrets`, `devLogin` or `demoFakes` is on, and names the value | `templates/guard.yaml` |
+| A serious environment must not run on bench dependencies | the chart **refuses to render** in `staging` and `prod` when any `embedded` dependency, `devSecrets`, `devLogin`, `demoFakes`, the fakes (`global.fakes`) or fakes handed to every run (`choregos-orchestrator.runner.env.CHOREGOS_FAKES`) is on, and names the value; the API, the outposts' door, the workers and the runner refuse to start on `CHOREGOS_FAKES` there too (S80-03) | `templates/guard.yaml`, `choregos_core/production.py` |
 | A worker must not stay attached to a dead node | tolerations of 20 s instead of Kubernetes' 300 s | `choregos-orchestrator.unreachableTolerationSeconds` |
 | A worker pod's load is bounded, and the bound is yours to set | the Temporal worker's slots, as `CHOREGOS_WORKER_MAX_CONCURRENT_ACTIVITIES` / `_WORKFLOW_TASKS` / `_LOCAL_ACTIVITIES` and `CHOREGOS_WORKER_MAX_CACHED_WORKFLOWS`. Defaults 20 / 100 / 100 / 1000, the values the worker always had. An executor activity holds a run's stage for its whole length, so `activities` × executor replicas bounds the simultaneous runs (20 × 2 = 40 by default) | `choregos-orchestrator.concurrency.{activities,workflowTasks,localActivities,cachedWorkflows}`, overridden per queue by `queues[].concurrency` |
 | An agent must not reach the Internet except where the policy says | in **per-project runner namespaces** the provisioning deploys a **Squid proxy per project** with the policy's `allow_domains` (project-level, host-level, no per-agent wall), and every agent pod gets `HTTPS_PROXY` pointing to it. No allowed domain, no proxy, no door. In the **release namespace** (the `agent_sandbox` executor) the chart's **`choregos-egress`** proxy is per run: it knows which run is calling, applies the agent ∩ project ∩ organisation network, and reports every decision ([ADR 0070](adr/0070-network-access-is-bounded-and-enforced-per-run.md)) | `policy.sandbox.network.allow_domains`, `choregos-orchestrator.runner.egressProxy` (empty on a bench), `runner.egressImage` to pin by digest; `global.egress.*` for `choregos-egress` |
@@ -2500,6 +2512,10 @@ choregos-api:
    flight keeps the address it was started with.
 4. Set `choregos-api.internalApiGuard: enforce`, staging first. `internal_api.refused` then counts what
    is refused. To go back, set `warn`: nothing else changes.
+
+The default stays `warn` in the code, the chart and every preset. Turning the shipped `staging` and
+`prod` presets to `enforce` is planned once a release in `warn` has been observed for two to four weeks
+(S80-03, `docs/plan/STATUS.md`); until then the switch is the operator's, as above.
 
 An installation that decides to keep its runs on a public hostname sets `off`: `warn` logs one line
 per call back.
