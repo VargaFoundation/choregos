@@ -2,7 +2,7 @@
 
 This directory is the cluster's **single source of truth**: nobody, neither human nor API,
 applies a manifest by hand. It is meant to live in a separate repository
-(`VargaFoundation/choregos-infra`); it is delivered here so that the deployment is
+(`graalsystems/choregos-infra`); it is delivered here so that the deployment is
 reproducible from day one.
 
 ```

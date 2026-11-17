@@ -11,7 +11,7 @@ sidebar_position: 5
 ## Before you upgrade
 
 1. **Read the release notes** of every version between yours and the target, on the
-   [GitHub releases](https://github.com/VargaFoundation/choregos/releases), and the "Upgrading to …"
+   [GitHub releases](https://github.com/graalsystems/tranibor/releases), and the "Upgrading to …"
    sections of the
    [deployment reference](../../deployment.md#upgrading-to-024).
    A breaking change says what to rename or set before you upgrade.
@@ -24,7 +24,7 @@ sidebar_position: 5
 The same command as the install, with the new version:
 
 ```shell
-helm upgrade --install choregos oci://ghcr.io/vargafoundation/charts/choregos \
+helm upgrade --install choregos oci://ghcr.io/graalsystems/charts/choregos \
   --version 0.27.11 --namespace choregos -f my-values.yaml
 ```
 

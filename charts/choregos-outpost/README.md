@@ -29,7 +29,7 @@ NetworkPolicies, if you want the one this chart renders to hold.
 ```bash
 kubectl create namespace outposts
 kubectl -n outposts create secret generic factory-floor-enrolment --from-literal=token=<the token>
-helm install factory-floor oci://ghcr.io/vargafoundation/charts/choregos-outpost \
+helm install factory-floor oci://ghcr.io/graalsystems/charts/choregos-outpost \
   --namespace outposts --values my-outpost.yaml
 ```
 

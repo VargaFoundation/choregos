@@ -3,7 +3,7 @@
 ## In five minutes
 
 ```bash
-git clone https://github.com/VargaFoundation/choregos && cd choregos
+git clone https://github.com/graalsystems/tranibor && cd choregos
 make setup          # uv sync + pnpm install
 make demo           # the whole chain, no cluster: start here
 make ci             # what blocks a PR

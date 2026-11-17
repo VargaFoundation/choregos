@@ -33,7 +33,7 @@ describe("the edition names its publisher", () => {
 
   it("the admin card shows the edition version, the publisher and the core version", () => {
     render(<EditionCard edition={ENTERPRISE} />);
-    expect(screen.getByText(/published by GraalSystems/)).toBeInTheDocument();
+    expect(screen.getByText(/published by GraalSystems\b/)).toBeInTheDocument();
     expect(screen.getByText("0.2.0")).toBeInTheDocument();
     expect(screen.getByText("0.17.16")).toBeInTheDocument();
     expect(screen.getByText(/core/)).toBeInTheDocument();
@@ -56,7 +56,7 @@ describe("the edition names its publisher", () => {
   it("the footer says the enterprise edition is by its publisher, built on the core", async () => {
     vi.mocked(api.edition).mockResolvedValue(ENTERPRISE);
     renderFooter();
-    expect(await screen.findByText(/Choregos Enterprise edition by GraalSystems/)).toHaveTextContent(
+    expect(await screen.findByText(/Choregos Enterprise edition by GraalSystems\b/)).toHaveTextContent(
       "Choregos Enterprise edition by GraalSystems · built on Choregos by Varga Foundation (Apache 2.0)",
     );
     expect(screen.getByTestId("footer-foundation")).toBeInTheDocument();
@@ -65,7 +65,7 @@ describe("the edition names its publisher", () => {
   it("a renamed instance shows its product, the publisher and the foundation in one line", async () => {
     vi.mocked(api.edition).mockResolvedValue(ENTERPRISE);
     renderFooter("Graal Agentic Platform");
-    expect(await screen.findByText(/Choregos Enterprise edition by GraalSystems/)).toHaveTextContent(
+    expect(await screen.findByText(/Choregos Enterprise edition by GraalSystems\b/)).toHaveTextContent(
       "Graal Agentic Platform · Choregos Enterprise edition by GraalSystems · built on Choregos by Varga Foundation (Apache 2.0)",
     );
   });

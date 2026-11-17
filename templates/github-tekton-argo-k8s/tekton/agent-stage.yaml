@@ -12,8 +12,8 @@ spec:
   params:
     - { name: run-id, type: string }
     - { name: api-url, type: string }
-    - { name: runner-image, type: string, default: "ghcr.io/vargafoundation/choregos-runner:1.0.0" }
-    - { name: tools-image, type: string, default: "ghcr.io/vargafoundation/choregos-tools:1.0.0" }
+    - { name: runner-image, type: string, default: "ghcr.io/graalsystems/choregos-runner:1.0.0" }
+    - { name: tools-image, type: string, default: "ghcr.io/graalsystems/choregos-tools:1.0.0" }
   workspaces:
     - name: source
       description: The run's ephemeral workspace (PVC volumeClaimTemplate)

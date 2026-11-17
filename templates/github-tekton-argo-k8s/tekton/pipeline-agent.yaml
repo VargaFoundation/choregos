@@ -10,7 +10,7 @@ spec:
     - { name: api-url, type: string }
     - { name: repo-url, type: string }
     - { name: revision, type: string, default: main }
-    - { name: runner-image, type: string, default: "ghcr.io/vargafoundation/choregos-runner:1.0.0" }
+    - { name: runner-image, type: string, default: "ghcr.io/graalsystems/choregos-runner:1.0.0" }
   workspaces:
     - name: source
   results:

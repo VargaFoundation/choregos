@@ -8,7 +8,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/VargaFoundation/choregos-infra.git
+    repoURL: https://github.com/graalsystems/choregos-infra.git
     path: bootstrap
     targetRevision: HEAD
     directory: { recurse: true, exclude: "app-of-apps.yaml" }

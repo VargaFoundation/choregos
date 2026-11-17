@@ -488,7 +488,7 @@ jobs:
           # Off main nothing is pushed, so the image is loaded into the runner's Docker (a single
           # platform, linux/amd64) for the Trivy step below to scan under the same tag (S40-16e).
           load: ${{ github.ref != 'refs/heads/main' }}
-          tags: ghcr.io/vargafoundation/choregos-${{ matrix.image }}:${{ github.sha }}
+          tags: ghcr.io/graalsystems/choregos-${{ matrix.image }}:${{ github.sha }}
           build-args: REVISION=${{ github.sha }}
           labels: org.opencontainers.image.revision=${{ github.sha }}
           # SBOM and SLSA provenance attached to the image (BuildKit attestations). SECURITY.md
@@ -504,7 +504,7 @@ jobs:
           # Its one exception: a third-party SDK's docstrings inside SkillSpector (ADR 0095).
           TRIVY_SECRET_CONFIG: trivy-secret.yaml
         with:
-          image-ref: ghcr.io/vargafoundation/choregos-${{ matrix.image }}:${{ github.sha }}
+          image-ref: ghcr.io/graalsystems/choregos-${{ matrix.image }}:${{ github.sha }}
           exit-code: "1"
           severity: CRITICAL
           ignore-unfixed: true
@@ -512,7 +512,7 @@ jobs:
         if: github.ref == 'refs/heads/main'
       - name: keyless signature
         if: github.ref == 'refs/heads/main'
-        run: cosign sign --yes ghcr.io/vargafoundation/choregos-${{ matrix.image }}@${{ steps.build.outputs.digest }}
+        run: cosign sign --yes ghcr.io/graalsystems/choregos-${{ matrix.image }}@${{ steps.build.outputs.digest }}
 
   local-install:
     # `docker compose up` on a clean runner, then one work item through it in fakes mode (S28-04):

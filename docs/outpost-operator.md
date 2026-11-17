@@ -491,7 +491,7 @@ How long you keep it is your decision. Mind where it lives: when its disk is ful
 
 ## Installing with the chart `choregos-outpost`
 
-The daemon ships as a container image, `ghcr.io/vargafoundation/choregos-outpost`, and as a Helm
+The daemon ships as a container image, `ghcr.io/graalsystems/choregos-outpost`, and as a Helm
 chart for your own cluster, `charts/choregos-outpost`, which each release publishes beside the
 platform's, at the same version. The chart is not a subchart of the platform's and shares no value
 with it. Its page, `charts/choregos-outpost/README.md`, holds every value, and
@@ -500,7 +500,7 @@ with it. Its page, `charts/choregos-outpost/README.md`, holds every value, and
 ```bash
 kubectl create namespace outposts
 kubectl -n outposts create secret generic factory-floor-enrolment --from-literal=token=<token>
-helm install factory-floor oci://ghcr.io/vargafoundation/charts/choregos-outpost --namespace outposts --values my-outpost.yaml
+helm install factory-floor oci://ghcr.io/graalsystems/charts/choregos-outpost --namespace outposts --values my-outpost.yaml
 kubectl -n outposts logs factory-floor-choregos-outpost-0 -c enrol
 ```
 
@@ -563,7 +563,7 @@ The daemon never upgrades itself, and no message of the platform makes it downlo
    ([Security](security.md#supply-chain)):
 
    ```bash
-   cosign verify ghcr.io/vargafoundation/choregos-outpost:<version> --certificate-identity https://github.com/VargaFoundation/choregos/.github/workflows/release.yml@refs/tags/v<version> --certificate-oidc-issuer https://token.actions.githubusercontent.com
+   cosign verify ghcr.io/graalsystems/choregos-outpost:<version> --certificate-identity https://github.com/graalsystems/tranibor/.github/workflows/release.yml@refs/tags/v<version> --certificate-oidc-issuer https://token.actions.githubusercontent.com
    ```
 
    Its output names the digest that was signed (`docker-manifest-digest`).

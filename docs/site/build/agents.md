@@ -209,7 +209,7 @@ pip install ./choregos_agent_sdk-0.27.11-py3-none-any.whl ./choregos_contracts-0
 ```
 
 The SDK's wheel and the contracts it validates against are attached to each
-[GitHub release](https://github.com/VargaFoundation/choregos/releases); take the version of your
+[GitHub release](https://github.com/graalsystems/tranibor/releases); take the version of your
 instance.
 
 ```python

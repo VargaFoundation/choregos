@@ -6,7 +6,7 @@ metadata:
   publisher: Varga Foundation
   license: Apache-2.0
   description: A test plugin whose server is a project's tracker (the tracker profile, S43-07).
-  homepage: https://github.com/VargaFoundation/choregos
+  homepage: https://github.com/graalsystems/tranibor
   core: ">=0.20.0"
 requires:
   plugins: []

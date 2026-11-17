@@ -218,7 +218,7 @@ services:
       <<: *platform-env
       # A project with no runtime connector runs its agents as local containers.
       CHOREGOS_EXECUTOR_KIND: local_docker
-      CHOREGOS_RUNNER_IMAGE: ghcr.io/vargafoundation/choregos-runner:${CHOREGOS_RUNNER_VERSION:-0.17.12}
+      CHOREGOS_RUNNER_IMAGE: ghcr.io/graalsystems/choregos-runner:${CHOREGOS_RUNNER_VERSION:-0.17.12}
     depends_on:
       keys: { condition: service_completed_successfully }
       migrate: { condition: service_completed_successfully }

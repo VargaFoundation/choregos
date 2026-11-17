@@ -30,7 +30,7 @@ from a template, connect its repository, open an issue, let agents work, approve
 1. Fetch the source and start everything:
 
    ```bash
-   git clone https://github.com/VargaFoundation/choregos.git
+   git clone https://github.com/graalsystems/tranibor.git
    cd choregos
    cp .env.example .env
    docker compose up

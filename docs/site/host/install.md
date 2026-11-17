@@ -63,12 +63,12 @@ For a single-node bench with every dependency embedded, start from the chart's
 ## 2. Install
 
 ```shell
-helm upgrade --install choregos oci://ghcr.io/vargafoundation/charts/choregos \
+helm upgrade --install choregos oci://ghcr.io/graalsystems/charts/choregos \
   --version 0.27.11 --namespace choregos --create-namespace -f my-values.yaml
 ```
 
 The chart's version is the product's version; the images
-(`ghcr.io/vargafoundation/choregos-api`, `-web`, `-orchestrator`, `-tools`, `-runner`) follow it, are
+(`ghcr.io/graalsystems/choregos-api`, `-web`, `-orchestrator`, `-tools`, `-runner`) follow it, are
 multi-arch and signed. The database migrations run as a Helm hook before the API starts.
 
 Install the admission policies once per cluster, from a checkout of the repository at the same tag:

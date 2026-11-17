@@ -3528,7 +3528,7 @@
     "vendor_docs": [
       {
         "title": "Writing a plugin: the tracker profile",
-        "url": "https://github.com/VargaFoundation/choregos/blob/main/docs/plugins.md"
+        "url": "https://github.com/graalsystems/tranibor/blob/main/docs/plugins.md"
       }
     ],
     "origin": "shipped"

@@ -190,7 +190,7 @@ text is data). Claude Code asks for the URL and the token once, and keeps the to
 system's secret store:
 
 ```text
-/plugin marketplace add VargaFoundation/choregos
+/plugin marketplace add graalsystems/choregos
 /plugin install choregos@choregos
 ```
 

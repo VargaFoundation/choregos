@@ -22,8 +22,8 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/VargaFoundation/choregos"
-Documentation = "https://github.com/VargaFoundation/choregos/blob/main/docs/code-agents.md"
+Homepage = "https://github.com/graalsystems/tranibor"
+Documentation = "https://github.com/graalsystems/tranibor/blob/main/docs/code-agents.md"
 
 [build-system]
 requires = ["hatchling"]

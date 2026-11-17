@@ -229,7 +229,7 @@ tests:
           path: spec.template.spec.containers[0].env
           content:
             name: CHOREGOS_RUNNER_IMAGE
-            value: ghcr.io/vargafoundation/choregos-runner:9.9.9
+            value: ghcr.io/graalsystems/choregos-runner:9.9.9
 
   - it: the agents call back the internal service, never the public URL
     template: charts/choregos-orchestrator/templates/deployments.yaml

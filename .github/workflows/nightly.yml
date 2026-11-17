@@ -116,7 +116,7 @@ jobs:
     # services, and the optional companions of a required one (the realtime model), are
     # skipped when their secret is missing — and say so — rather than an empty green dot.
     # Forks have no secrets: the job only runs on the repository itself.
-    if: github.repository == 'VargaFoundation/choregos'
+    if: github.repository == 'graalsystems/tranibor'
     runs-on: ubuntu-latest
     env:
       # The services the night must cover, from the repository variable of the same name (for

@@ -99,6 +99,6 @@ The site is built with Docusaurus 3, which reads every page as MDX:
 
 ## How it is published
 
-The documentation site (VargaFoundation/docs) imports this folder at the **latest release tag** of
+The documentation site (graalsystems/docs) imports this folder at the **latest release tag** of
 Choregos, on a schedule and on demand, and opens a pull request there. A change merged here reaches the
 site with the next release. The site's "Edit this page" link opens the file here, on `main`.

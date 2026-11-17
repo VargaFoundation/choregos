@@ -14,7 +14,7 @@ global:
   # An executor that runs OUTSIDE the cluster (`aca`) needs a URL it can reach: give it a run door,
   # `choregos-api.runDoor.hostnames`, and write that URL here (ADR 0144).
   internalApiUrl: ""
-  imageRegistry: ghcr.io/vargafoundation
+  imageRegistry: ghcr.io/graalsystems
   imageTag: "0.27.11"
   imagePullPolicy: IfNotPresent
   # Images are referenced by digest in staging and prod (Kyverno policy).

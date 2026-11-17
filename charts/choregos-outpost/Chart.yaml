@@ -6,9 +6,9 @@ description: >-
 type: application
 version: 0.27.11
 appVersion: "0.27.11"
-home: https://github.com/VargaFoundation/choregos
+home: https://github.com/graalsystems/tranibor
 sources:
-  - https://github.com/VargaFoundation/choregos
+  - https://github.com/graalsystems/tranibor
 maintainers:
   - name: Varga Foundation
 keywords: [agents, outpost, mcp]

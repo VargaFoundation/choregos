@@ -68,7 +68,7 @@ chmod +x choregos-linux-x86_64 && mv choregos-linux-x86_64 ~/.local/bin/choregos
 
 On macOS, `shasum -a 256` gives the same digest. The same files, a `SHA256SUMS` file and their
 signatures are also attached to each
-[GitHub release](https://github.com/VargaFoundation/choregos/releases), under the same names.
+[GitHub release](https://github.com/graalsystems/tranibor/releases), under the same names.
 
 An instance built without the CLI says so on its Integrations page; ask your operator, or use the
 GitHub release.
@@ -86,7 +86,7 @@ choregos self update
 
 This works on every version, and is the way on 0.25.3 and earlier. It needs Python 3.12 and
 [uv](https://docs.astral.sh/uv/). Download three wheels of your instance's version from its
-[GitHub release](https://github.com/VargaFoundation/choregos/releases) (here 0.27.11):
+[GitHub release](https://github.com/graalsystems/tranibor/releases) (here 0.27.11):
 `choregos_cli-0.27.11-py3-none-any.whl`, `choregos_core-0.27.11-py3-none-any.whl` and
 `choregos_contracts-0.27.11-py3-none-any.whl`. Then:
 

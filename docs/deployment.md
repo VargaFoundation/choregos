@@ -21,12 +21,12 @@ Optional but recommended in production: a model gateway (LiteLLM), a memory serv
 ## Install
 
 ```bash
-helm upgrade --install choregos oci://ghcr.io/vargafoundation/charts/choregos \
+helm upgrade --install choregos oci://ghcr.io/graalsystems/charts/choregos \
   --version 0.4.1 --namespace choregos --create-namespace \
   -f my-values.yaml
 ```
 
-Images are published under `ghcr.io/vargafoundation/choregos-{api,orchestrator,web,tools,runner}`,
+Images are published under `ghcr.io/graalsystems/choregos-{api,orchestrator,web,tools,runner}`,
 multi-arch and signed. The chart's `global.imageTag` follows the chart version.
 
 ## Dependencies: embedded or external
@@ -1034,7 +1034,7 @@ same name, a disruption budget, and the route then leads there.
 ### The outpost's side: the chart `choregos-outpost`
 
 Whoever runs an outpost installs the daemon in THEIR cluster with a chart of its own, published
-beside the platform's (`oci://ghcr.io/vargafoundation/charts/choregos-outpost`). It is not a subchart
+beside the platform's (`oci://ghcr.io/graalsystems/charts/choregos-outpost`). It is not a subchart
 of this one and shares no value with it: its page is `charts/choregos-outpost/README.md`, and a
 complete example is `charts/choregos-outpost/values/example.yaml`. What you hand its operator is
 what the management API returns with an enrolment token: the door's origin (`policy.control_plane`),
@@ -1778,7 +1778,7 @@ curl -s https://<api-host>/edition
 
 `version` is the core's. `publisher` and `edition_version` are announced by the edition's plugin:
 on the enterprise edition they say who publishes it and which version of the plugin runs
-(`"publisher":"GraalSystems","edition_version":"0.2.0"`), and the admin page and the footer show
+(`"publisher":"Example Corp","edition_version":"0.2.0"`), and the admin page and the footer show
 them. They are `null` on the community edition, and absent from an older core.
 
 Three more fields feed the console's **About** entry (sidebar, bottom left; the mobile menu has
@@ -1990,7 +1990,7 @@ group `choregos.plugins`, the Grafana dashboard uids and the French ticket fixtu
 ### Extension authors: the extension and edition API
 
 Every name below raised a `DeprecationWarning` naming its replacement until 0.23.0; it is now gone.
-The choregos-ee coordination is [#1229](https://github.com/VargaFoundation/choregos/issues/1229).
+The choregos-ee coordination is [#1229](https://github.com/graalsystems/tranibor/issues/1229).
 
 | Removed | Replacement |
 | :-- | :-- |
@@ -2436,7 +2436,7 @@ global:
 
 What it renders:
 
-- **`<release>-laya`**, a Deployment of `ghcr.io/vargafoundation/choregos-laya` (`docker/laya.Dockerfile`):
+- **`<release>-laya`**, a Deployment of `ghcr.io/graalsystems/choregos-laya` (`docker/laya.Dockerfile`):
   `laya-serve` with the checkpoint baked in at a pinned commit, `HF_HUB_OFFLINE=1`, nothing fetched at
   run time. It asks for 2 GiB of memory (measured on 2026-11-03: 1.6 GiB resident with the checkpoint loaded, 1.95 GiB after a reload) and opens its port
   only once the checkpoint is loaded; the probes read `GET /health`, which answers without a credential.

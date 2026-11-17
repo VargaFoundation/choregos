@@ -49,7 +49,7 @@ there), gVisor as a `RuntimeClass` for agent pods, and a memory service (Ecphori
 ## Try it on your machine first
 
 To see Choregos before installing it on a cluster, run it with Docker Compose from the repository:
-`git clone https://github.com/VargaFoundation/choregos.git`, `cp .env.example .env`, then
+`git clone https://github.com/graalsystems/tranibor.git`, `cp .env.example .env`, then
 `docker compose up`, and open `http://localhost:3000`. It listens on `127.0.0.1` only and is not a
 deployment.
 

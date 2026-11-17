@@ -6,7 +6,7 @@ audience: project_owner
 version: 2
 reviewed: 2026-10-28
 vendor_docs:
-  - {title: "Writing a plugin: the tracker profile", url: "https://github.com/VargaFoundation/choregos/blob/main/docs/plugins.md"}
+  - {title: "Writing a plugin: the tracker profile", url: "https://github.com/graalsystems/tranibor/blob/main/docs/plugins.md"}
 egress: []
 values: []
 fields:

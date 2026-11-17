@@ -62,4 +62,4 @@ system the plugin connects and watch it appear on the board.
 
 ## Vendor documentation
 
-- [Writing a plugin: the tracker profile](https://github.com/VargaFoundation/choregos/blob/main/docs/plugins.md)
+- [Writing a plugin: the tracker profile](https://github.com/graalsystems/tranibor/blob/main/docs/plugins.md)

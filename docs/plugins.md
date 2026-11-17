@@ -41,7 +41,7 @@ metadata:
   publisher: Varga Foundation
   license: Apache-2.0
   description: A test plugin that ships one of everything a plugin may ship.
-  homepage: https://github.com/VargaFoundation/choregos
+  homepage: https://github.com/graalsystems/tranibor
   core: ">=0.20.0"            # the core versions it was validated against
 requires:
   plugins: []                 # [{name, version: "^1"}]

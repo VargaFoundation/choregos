@@ -477,7 +477,7 @@ names; the `legacy_alertname` label that carried their former names was removed 
   labels: { severity: critical }
   annotations:
     summary: "More than 1 % of 5xx on the Choregos API"
-    runbook_url: "https://github.com/VargaFoundation/choregos/blob/main/docs/runbooks/api-5xx.md"
+    runbook_url: "https://github.com/graalsystems/tranibor/blob/main/docs/runbooks/api-5xx.md"
 - alert: ChoregosBacklogTemporal
   expr: sum(temporal_task_queue_backlog{namespace="default"}) > 100
   for: 10m
@@ -502,7 +502,7 @@ names; the `legacy_alertname` label that carried their former names was removed 
   labels: { severity: warning }
   annotations:
     summary: "A release train has been frozen for 2 hours"
-    runbook_url: "https://github.com/VargaFoundation/choregos/blob/main/docs/runbooks/train-frozen.md"
+    runbook_url: "https://github.com/graalsystems/tranibor/blob/main/docs/runbooks/train-frozen.md"
 {{- end }}
 
 {{/*
