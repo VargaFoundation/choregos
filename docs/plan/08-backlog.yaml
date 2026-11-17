@@ -5365,6 +5365,22 @@ stories:
     notes: "The decision of 2026-11-15 (D6) and 2026-11-17; what is never renamed (wire contracts, stored state, third-party-visible tokens) is listed with its reason; amends 0048, 0064, 0079, 0156."
 
   # ───────────── S80 — from engine to product: the plan of 2026-11-16 ─────────────
+  - id: S80-03
+    title: "fix(api,orchestrator,runner,charts): the fakes are refused in staging and prod: the render fails, and the API, the outposts' door, the workers and the runner refuse to start"
+    stream: S80
+    sprint: 1
+    priority: 3
+    size: S
+    depends_on: []
+    notes: "Plan workstream S2, first part. Production is CHOREGOS_ENV staging or prod (the notion that already refuses the superuser and the development sign-in), in choregos_core/production.py. The workers now pass CHOREGOS_ENV to every run. The internal API guard keeps warn as its default: the flip of the shipped presets is S80-03b."
+  - id: S80-03b
+    title: "chore(charts): the run's API guard enforces in the staging and prod presets, after two to four weeks of observation in warn"
+    stream: S80
+    sprint: 3
+    priority: 3
+    size: XS
+    depends_on: [S80-03]
+    notes: "Plan workstream S2, second part. The switch exists (CHOREGOS_INTERNAL_API_GUARD, choregos-api.internalApiGuard, ADR 0144); what is due is the default of values/staging.yaml then values/prod.yaml, once internal_api.would_refuse has been read on a release in warn (docs/deployment.md, 'The run's API and the run door'). Not before mid-December 2026."
   - id: S80-07a
     title: "feat(orchestrator,charts): the worker's concurrency is a setting (activities, workflow tasks, local activities, sticky cache), chart values per queue"
     stream: S80
