@@ -9,7 +9,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/VargaFoundation/choregos.git
+    repoURL: https://github.com/graalsystems/tranibor.git
     path: charts/choregos
     targetRevision: HEAD
     helm:

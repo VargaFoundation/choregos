@@ -1,5 +1,5 @@
 # The platform's Python base image: system dependencies, non-root user, uv.
-# Published as `ghcr.io/vargafoundation/choregos-python-base`.
+# Published as `ghcr.io/graalsystems/choregos-python-base`.
 FROM python:3.12-slim-bookworm AS base
 
 ENV PYTHONUNBUFFERED=1 \

@@ -30,7 +30,7 @@ spec:
         workspaces: [{ name: source }]
         steps:
           - name: test
-            image: ghcr.io/vargafoundation/choregos-ci-$(params.language):1.0.0
+            image: ghcr.io/graalsystems/choregos-ci-$(params.language):1.0.0
             workingDir: $(workspaces.source.path)
             script: |
               #!/usr/bin/env bash
@@ -43,7 +43,7 @@ spec:
         workspaces: [{ name: source }]
         steps:
           - name: lint
-            image: ghcr.io/vargafoundation/choregos-ci-$(params.language):1.0.0
+            image: ghcr.io/graalsystems/choregos-ci-$(params.language):1.0.0
             workingDir: $(workspaces.source.path)
             script: |
               #!/usr/bin/env bash

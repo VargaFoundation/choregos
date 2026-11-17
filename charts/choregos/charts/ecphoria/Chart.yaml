@@ -1,6 +1,6 @@
 apiVersion: v2
 name: choregos-ecphoria
-description: Agent memory (VargaFoundation/ecphoria, memory edition), single instance.
+description: Agent memory (graalsystems/ecphoria, memory edition), single instance.
 type: application
 version: 0.27.11
 appVersion: "0.27.11"

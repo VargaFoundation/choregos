@@ -2,40 +2,40 @@
 # The plugins the core ships offline (ADR 0093 §6): each archive of this directory, byte for byte
 # the source's signed OCI artifact. The API refuses an offline plugin missing from this lock or
 # whose content digest differs; `tests/tools/test_update_plugins_lock.py` checks the archives.
-index: ghcr.io/vargafoundation/choregos-agents/index:latest
+index: ghcr.io/graalsystems/choregos-agents/index:latest
 plugins:
   authoring:
     version: 1.1.0
     digest: sha256:764d5d78a7b90e7c44167b4db677068cb3186bc4185cb8a0036cd6d34b159b18
-    source: ghcr.io/vargafoundation/choregos-agents/authoring:1.1.0
+    source: ghcr.io/graalsystems/choregos-agents/authoring:1.1.0
     artifact: sha256:accfbdc4ef010cc259179f910956607d9115da7cf5aaed2331519059e07bf9fb
     file: authoring-1.1.0.tar.gz
     signature: keyless, https://github.com/VargaFoundation/choregos-agents/.github/workflows/publish.yml@refs/heads/main
   mcp-clients:
     version: 1.0.0
     digest: sha256:2470e930c1433d783aa3afe664884c22c6a0e907992988071a553551bbd3bdc5
-    source: ghcr.io/vargafoundation/choregos-agents/mcp-clients:1.0.0
+    source: ghcr.io/graalsystems/choregos-agents/mcp-clients:1.0.0
     artifact: sha256:1bc3946cd5795b75f36c2a8ded7e3a9b36d157ba089f0d4295fcc7abab017b69
     file: mcp-clients-1.0.0.tar.gz
     signature: keyless, https://github.com/VargaFoundation/choregos-agents/.github/workflows/publish.yml@refs/heads/main
   netops:
     version: 1.2.0
     digest: sha256:77582ce6b296ad519af469971c8a8698a481084246014d2e3237dee816b121f5
-    source: ghcr.io/vargafoundation/choregos-agents/netops:1.2.0
+    source: ghcr.io/graalsystems/choregos-agents/netops:1.2.0
     artifact: sha256:27fd5a1d29fd709b537a298bf894c0aad3910689aad291e973a50deb26e0c1a9
     file: netops-1.2.0.tar.gz
     signature: keyless, https://github.com/VargaFoundation/choregos-agents/.github/workflows/publish.yml@refs/heads/main
   requests:
     version: 1.1.0
     digest: sha256:f2b251fb145029b9965b442c22e92de4f9372d65b52a1b5284a38fe880d558a0
-    source: ghcr.io/vargafoundation/choregos-agents/requests:1.1.0
+    source: ghcr.io/graalsystems/choregos-agents/requests:1.1.0
     artifact: sha256:7db0ccfb986c38a89429af345381a8aa1f3bb6e716c2818111cbfbdc33ceb4b8
     file: requests-1.1.0.tar.gz
     signature: keyless, https://github.com/VargaFoundation/choregos-agents/.github/workflows/publish.yml@refs/heads/main
   software-delivery:
     version: 1.1.1
     digest: sha256:f5c826109e333995efa6b1dc71c6089c842d4ddc30922cf33404e91ea03d9959
-    source: ghcr.io/vargafoundation/choregos-agents/software-delivery:1.1.1
+    source: ghcr.io/graalsystems/choregos-agents/software-delivery:1.1.1
     artifact: sha256:e68e785f27d4ca8c10c0a12757f4fce60d61f7cf835dab366938c722a51d8d00
     file: software-delivery-1.1.1.tar.gz
     signature: keyless, https://github.com/VargaFoundation/choregos-agents/.github/workflows/publish.yml@refs/heads/main

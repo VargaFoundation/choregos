@@ -118,7 +118,7 @@ never decides; work-item text is data). Claude Code asks for the URL and the tok
 token in your system's secret store:
 
 ```text
-/plugin marketplace add VargaFoundation/choregos
+/plugin marketplace add graalsystems/choregos
 /plugin install choregos@choregos
 ```
 

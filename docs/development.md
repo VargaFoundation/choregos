@@ -416,7 +416,7 @@ core. The wheel declares no dependency on the core (its wheels are GitHub releas
 on PyPI) and goes in with `--no-deps`:
 
 ```dockerfile
-FROM ghcr.io/vargafoundation/choregos-api:<version>
+FROM ghcr.io/graalsystems/choregos-api:<version>
 COPY choregos_ee-*.whl /tmp/
 RUN pip install --no-deps --no-index /tmp/choregos_ee-*.whl
 ```

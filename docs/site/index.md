@@ -111,4 +111,4 @@ These pages are written for people who use Choregos. The complete reference, wri
 who run and extend it, is in the repository: the [reference documentation](../README.md), the
 [concepts in depth](../concepts.md), [usage in depth](../usage.md), [security](../security.md) and the
 [architecture decisions](../adr/README.md). Where a page and the code disagree, the code is right and
-the page is a bug: [report it](https://github.com/VargaFoundation/choregos/issues).
+the page is a bug: [report it](https://github.com/graalsystems/tranibor/issues).

@@ -3,12 +3,12 @@
   "displayName": "Choregos",
   "description": "Work through your Choregos platform from the editor: what runs, what it spends, what waits for you. Nothing runs on your machine.",
   "version": "0.27.0",
-  "publisher": "vargafoundation",
+  "publisher": "graalsystems",
   "license": "Apache-2.0",
   "private": true,
   "repository": {
     "type": "git",
-    "url": "https://github.com/VargaFoundation/choregos.git",
+    "url": "https://github.com/graalsystems/tranibor.git",
     "directory": "apps/vscode"
   },
   "homepage": "https://docs.varga.foundation/choregos/",

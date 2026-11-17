@@ -22,15 +22,15 @@ size) and a cosign bundle per file (`<file>.sigstore.json`). Download one, check
 PATH:
 
 ```sh
-curl -fsSLO https://github.com/VargaFoundation/choregos/releases/download/v<version>/choregos-linux-x86_64
-curl -fsSLO https://github.com/VargaFoundation/choregos/releases/download/v<version>/SHA256SUMS
+curl -fsSLO https://github.com/graalsystems/tranibor/releases/download/v<version>/choregos-linux-x86_64
+curl -fsSLO https://github.com/graalsystems/tranibor/releases/download/v<version>/SHA256SUMS
 sha256sum --ignore-missing -c SHA256SUMS          # macOS: shasum -a 256 --ignore-missing -c SHA256SUMS
 install -m 0755 choregos-linux-x86_64 ~/.local/bin/choregos
 choregos --version
 ```
 
 `cosign verify-blob --bundle SHA256SUMS.sigstore.json --certificate-identity
-https://github.com/VargaFoundation/choregos/.github/workflows/release.yml@refs/tags/v<version>
+https://github.com/graalsystems/tranibor/.github/workflows/release.yml@refs/tags/v<version>
 --certificate-oidc-issuer https://token.actions.githubusercontent.com SHA256SUMS` proves the sums
 come from the release workflow. The Windows and macOS files are not yet signed by a platform
 vendor (`docs/plan/BLOCKERS.md`): Windows SmartScreen warns, and a macOS browser download needs

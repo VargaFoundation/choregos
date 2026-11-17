@@ -218,7 +218,7 @@ services:
       <<: *platform-env
       # A project with no runtime connector runs its agents as local containers.
       CHOREGOS_EXECUTOR_KIND: local_docker
-      CHOREGOS_RUNNER_IMAGE: ghcr.io/vargafoundation/choregos-runner:${CHOREGOS_RUNNER_VERSION:-0.17.12}
+      CHOREGOS_RUNNER_IMAGE: ghcr.io/graalsystems/choregos-runner:${CHOREGOS_RUNNER_VERSION:-0.17.12}
     depends_on:
       keys: { condition: service_completed_successfully }
       migrate: { condition: service_completed_successfully }
@@ -265,7 +265,7 @@ services:
     # Optional: `docker compose --profile memory up`. Its embeddings need an OpenAI key in `.env`:
     # LiteLLM serves `platform/embed` only then (Anthropic has no embeddings), #438.
     profiles: [memory]
-    image: ghcr.io/vargafoundation/ecphoria:0.2.5-memory
+    image: ghcr.io/graalsystems/ecphoria:0.2.5-memory
     environment:
       ECPHORIA_EMBEDDING__PROVIDER: openai_compatible
       ECPHORIA_EMBEDDING__OPENAI_BASE_URL: http://litellm:4000/v1

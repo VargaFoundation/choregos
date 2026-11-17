@@ -80,3 +80,22 @@ The core names no operator, and the place it is published from is configuration,
 - The check is case-insensitive and matches whole names: a new value that also appears in unrelated
   text (an address used as an example, a registry path in a test) is reported there, and that text is
   reworded or listed.
+
+## Amendment (2026-11-17, S73-01): the publication moves to `graalsystems`
+
+Decided by the maintainer on 2026-11-17: the repositories move to the `graalsystems` organisation under
+their community names (`graalsystems/tranibor`, `graalsystems/tranibor-agents`, `graalsystems/ecphoria`).
+The definition changes `owner`, `registry` and `source_repository`; the rewrite carried them into the
+derived files. By hand, as the consequences above foresaw:
+
+- the admission policy for the platform's images admits both namespaces, each with the signing identity of
+  the repository as it was named when it signed: the images of 0.27.10 and older stay in
+  `ghcr.io/vargafoundation`, frozen and never deleted;
+- the plugin keys (`plugin_repository`, `plugin_index`) do not move yet: the plugins stay published, and
+  signed, under `VargaFoundation/choregos-agents` until `tranibor-agents` republishes them, and the
+  plugin servers' policy admits `ghcr.io/graalsystems/choregos-agents/` and the frozen namespace;
+- images pinned at a version only the frozen namespace holds (the Ecphoria memory image, the examples'
+  runner, the gVisor installer) keep their address, and leave the derived files.
+
+The product's own names (packages, CLI, images `choregos-*`, the API) are not renamed here.
+

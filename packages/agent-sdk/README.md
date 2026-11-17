@@ -4,7 +4,7 @@
 Python and the Choregos runner (ACP, MCP tools through the runner's permission check, the gateway as
 the model, the result file). LangGraph, the OpenAI Agents SDK, Pydantic AI or plain Python run inside it.
 
-Write a [Choregos](https://github.com/VargaFoundation/choregos) agent in Python. An agent is one
+Write a [Choregos](https://github.com/graalsystems/tranibor) agent in Python. An agent is one
 async function; the SDK speaks the Agent Client Protocol (ACP) to the platform's runner, so the
 agent runs under the same guarantees as any coding agent: its tool calls and writes go through the
 runner's permission path, its turns are counted, it is journaled, it can be cancelled, and its
@@ -32,7 +32,7 @@ if __name__ == "__main__":
 Package it in an image built `FROM` the Choregos runner image, give the image a name in the
 platform's `CHOREGOS_AGENT_IMAGES`, and register the agent with
 `runtime: {kind: code, image: <name>, command: [python, -m, my_agent]}`. The full guide is
-[docs/code-agents.md](https://github.com/VargaFoundation/choregos/blob/main/docs/code-agents.md).
+[docs/code-agents.md](https://github.com/graalsystems/tranibor/blob/main/docs/code-agents.md).
 
 ## What the SDK does for you
 
@@ -63,7 +63,7 @@ tools = await langchain.tools(await ctx.tools())
 ```
 
 Frameworks are never dependencies of this package: each bridge imports its own lazily. See the
-[guide](https://github.com/VargaFoundation/choregos/blob/main/docs/code-agents.md#bring-your-framework).
+[guide](https://github.com/graalsystems/tranibor/blob/main/docs/code-agents.md#bring-your-framework).
 
 ## What it does not do
 

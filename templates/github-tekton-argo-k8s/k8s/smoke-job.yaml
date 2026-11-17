@@ -9,7 +9,7 @@ spec:
     - { name: env, type: string }
   steps:
     - name: smoke
-      image: ghcr.io/vargafoundation/choregos-runner:1.0.0
+      image: ghcr.io/graalsystems/choregos-runner:1.0.0
       script: |
         #!/usr/bin/env bash
         set -euo pipefail

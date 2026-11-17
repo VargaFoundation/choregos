@@ -18,7 +18,7 @@ k8s_yaml(helm(
 
 # ── images, rebuilt on every change ──
 docker_build_with_restart(
-    'ghcr.io/vargafoundation/choregos-api',
+    'ghcr.io/graalsystems/choregos-api',
     context='..',
     dockerfile='../docker/api.Dockerfile',
     # Explicit `target`: without it, buildx builds the **last** stage of the file, which is
@@ -32,7 +32,7 @@ docker_build_with_restart(
 )
 
 docker_build_with_restart(
-    'ghcr.io/vargafoundation/choregos-orchestrator',
+    'ghcr.io/graalsystems/choregos-orchestrator',
     context='..',
     dockerfile='../docker/api.Dockerfile',
     target='worker',
@@ -44,14 +44,14 @@ docker_build_with_restart(
 )
 
 docker_build(
-    'ghcr.io/vargafoundation/choregos-web',
+    'ghcr.io/graalsystems/choregos-web',
     context='..',
     dockerfile='../docker/web.Dockerfile',
     live_update=[sync('../apps/web/src', '/app/apps/web/src')],
 )
 
-docker_build('ghcr.io/vargafoundation/choregos-tools', context='..', dockerfile='../docker/tools.Dockerfile')
-docker_build('ghcr.io/vargafoundation/choregos-runner', context='..', dockerfile='../docker/runner.Dockerfile')
+docker_build('ghcr.io/graalsystems/choregos-tools', context='..', dockerfile='../docker/tools.Dockerfile')
+docker_build('ghcr.io/graalsystems/choregos-runner', context='..', dockerfile='../docker/runner.Dockerfile')
 
 # ── local access ──
 k8s_resource('choregos-api', port_forwards=['8000:8000'], labels=['platform'])

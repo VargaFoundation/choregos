@@ -4,9 +4,9 @@
 #
 # Build from the repository root (until the SDK is on PyPI; then `uv pip install choregos-agent-sdk`):
 #   docker build -f examples/agents/plain/Dockerfile \
-#     --build-arg RUNNER_IMAGE=ghcr.io/vargafoundation/choregos-runner:<tag> -t my-registry/ticket-triager .
+#     --build-arg RUNNER_IMAGE=ghcr.io/graalsystems/choregos-runner:<tag> -t my-registry/ticket-triager .
 # Then pin the pushed image by digest in the operator's `CHOREGOS_AGENT_IMAGES`.
-ARG RUNNER_IMAGE=ghcr.io/vargafoundation/choregos-runner:0.17.15
+ARG RUNNER_IMAGE=ghcr.io/graalsystems/choregos-runner:0.17.15
 FROM ghcr.io/astral-sh/uv:0.5.11 AS uv
 
 FROM ${RUNNER_IMAGE}

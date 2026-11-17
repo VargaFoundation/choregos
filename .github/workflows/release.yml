@@ -198,7 +198,7 @@ jobs:
           # The daemon an outpost's operator runs (ADR 0147): built, signed and attested as its neighbours.
           - { image: outpost, file: docker/outpost.Dockerfile, target: "" }
     env:
-      IMAGE: ghcr.io/vargafoundation/choregos-${{ matrix.image }}
+      IMAGE: ghcr.io/graalsystems/choregos-${{ matrix.image }}
     steps:
       - uses: actions/checkout@v7
       # The signed CLI binaries, for the API image only: the `cli` build context replaces the empty
@@ -265,7 +265,7 @@ jobs:
       matrix:
         image: [api, orchestrator, tools, web, runner, laya, outpost]
     env:
-      IMAGE: ghcr.io/vargafoundation/choregos-${{ matrix.image }}
+      IMAGE: ghcr.io/graalsystems/choregos-${{ matrix.image }}
     steps:
       - uses: docker/setup-buildx-action@v4
       - uses: sigstore/cosign-installer@v3
@@ -347,8 +347,8 @@ jobs:
           # own, published beside the platform's at the same version.
           helm package charts/choregos-outpost --version "$version" --app-version "$version"
           echo "$HELM_TOKEN" | helm registry login ghcr.io -u "$ACTOR" --password-stdin
-          helm push "choregos-$version.tgz" oci://ghcr.io/vargafoundation/charts
-          helm push "choregos-outpost-$version.tgz" oci://ghcr.io/vargafoundation/charts
+          helm push "choregos-$version.tgz" oci://ghcr.io/graalsystems/charts
+          helm push "choregos-outpost-$version.tgz" oci://ghcr.io/graalsystems/charts
 
   pypi:
     # `choregos-agent-sdk` and the `choregos-contracts` it depends on (ADR 0063). OFF until the two

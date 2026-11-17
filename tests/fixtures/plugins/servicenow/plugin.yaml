@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-# FIXTURE, mirrored from VargaFoundation/choregos-agents#8 (`plugins/servicenow`, commit
+# FIXTURE, mirrored from graalsystems/choregos-agents#8 (`plugins/servicenow`, commit
 # 7e9c41754191415ad92e296ba09b6b15c2719790), so that the core's CI plays E3 and C1 of the tool-script
 # matrix offline until that plugin is published with what the core now reads (#1372). Byte for byte:
 # `agents/itsm-triager.yaml`, `skills/servicenow-triage/` and `evals/matrix/*.yaml`. Changed: this

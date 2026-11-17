@@ -1,18 +1,18 @@
 # Default owners: the integrator stream
-*                         @VargaFoundation/integrators
+*                         @graalsystems/integrators
 
 # Contracts — every change goes through a `contract-change` PR
-/packages/contracts/       @VargaFoundation/integrators
-/docs/plan/                @VargaFoundation/integrators
-/docs/adr/                 @VargaFoundation/integrators
+/packages/contracts/       @graalsystems/integrators
+/docs/plan/                @graalsystems/integrators
+/docs/adr/                 @graalsystems/integrators
 
 # Flux
-/packages/core/            @VargaFoundation/stream-s0
-/packages/adapters/        @VargaFoundation/stream-s3
-/packages/runner/          @VargaFoundation/stream-s2
-/packages/tools-mcp/       @VargaFoundation/stream-s2
-/apps/orchestrator/        @VargaFoundation/stream-s1
-/apps/api/                 @VargaFoundation/stream-s6
-/apps/web/                 @VargaFoundation/stream-s5
-/charts/                   @VargaFoundation/stream-s7
-/templates/                @VargaFoundation/stream-s8
+/packages/core/            @graalsystems/stream-s0
+/packages/adapters/        @graalsystems/stream-s3
+/packages/runner/          @graalsystems/stream-s2
+/packages/tools-mcp/       @graalsystems/stream-s2
+/apps/orchestrator/        @graalsystems/stream-s1
+/apps/api/                 @graalsystems/stream-s6
+/apps/web/                 @graalsystems/stream-s5
+/charts/                   @graalsystems/stream-s7
+/templates/                @graalsystems/stream-s8

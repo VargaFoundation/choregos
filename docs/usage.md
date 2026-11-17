@@ -1745,7 +1745,7 @@ supply-chain gate's **risk** at generation time, and its **delivery**:
 - `bundled`: the skill's files are vendored in the image under `bundled/<id>/`, with their licence
   text and a `PROVENANCE.json` of sha256s, so installing needs no network. Only permissive licences
   (MIT, Apache-2.0, BSD, ISC, CC0, CC-BY-4.0) and a low or medium risk are bundled; the image's
-  [third-party notices](https://github.com/VargaFoundation/choregos/blob/main/THIRD_PARTY_NOTICES.md)
+  [third-party notices](https://github.com/graalsystems/tranibor/blob/main/THIRD_PARTY_NOTICES.md)
   list what it redistributes.
 - `git`: everything else (copyleft licences such as MPL-2.0, anything high risk — an outbound URL is
   enough — and large skills): the entry holds the pin, and the install fetches that commit.

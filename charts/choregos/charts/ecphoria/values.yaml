@@ -1,5 +1,5 @@
 image:
-  repository: ghcr.io/vargafoundation/ecphoria
+  repository: ghcr.io/graalsystems/ecphoria
   tag: "0.2.5-memory"
 persistence:
   enabled: true

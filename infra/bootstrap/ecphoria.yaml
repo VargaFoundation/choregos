@@ -1,6 +1,6 @@
 # Ecphoria — the platform's memory, wave 2 (after the operators, before the workloads).
 #
-# The chart lives in `VargaFoundation/ecphoria` (`deploy/helm/ecphoria`): a StatefulSet with three
+# The chart lives in `graalsystems/ecphoria` (`deploy/helm/ecphoria`): a StatefulSet with three
 # Raft replicas, a headless service for peer discovery, a PDB. It was rendered and
 # accepted by a real API server — see `docs/plan/STATUS.md`, S7-06.
 #
@@ -19,7 +19,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/VargaFoundation/ecphoria.git
+    repoURL: https://github.com/graalsystems/ecphoria.git
     # A tag, not `main`: every other application here points at a version (`0.23.0`, `3.3.4`,
     # ...), and the ClusterPolicy `choregos-image-tags` refuses moving image references.
     # Following `main` did exactly what is forbidden elsewhere: a deployment that changes
@@ -38,7 +38,7 @@ spec:
               # recall cost at this corpus size (kb_eval: R@5 86.1% against 84.7%).
               # The upstream default is sized for a corpus ten times larger: measure again
               # with `kb_eval` if ours exceeds ~50,000 memories.
-              # See docs/benchmarks-choregos.md in VargaFoundation/ecphoria.
+              # See docs/benchmarks-choregos.md in graalsystems/ecphoria.
               retrievalScanCap: 512
             governance:
               tenants:

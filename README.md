@@ -2,7 +2,7 @@
 
 > χορηγός — the one who leads the chorus and gives it the means to perform.
 
-**Choregos** is the governed-agent platform of the [Varga Foundation](https://github.com/VargaFoundation)
+**Choregos** is the governed-agent platform of the [Varga Foundation](https://github.com/graalsystems)
 (ADR 0029): workflows from any trade — software delivery, operations, joiners and leavers,
 data change — that agents and humans move forward under measured guarantees. It
 directs a chorus of agents (Claude Code, Codex, Gemini CLI, Goose, OpenCode…) behind a single
@@ -95,7 +95,7 @@ CHOREGOS_PORT=8001 CHOREGOS_FAKES=1 uv run choregos-api
 `CHOREGOS_PORT_{POSTGRES,TEMPORAL,TEMPORAL_UI,LITELLM,KEYCLOAK,MINIO,MINIO_CONSOLE,ECPHORIA}`
 for the stack, `CHOREGOS_PORT` for the API, `PORT` for the front end (`PORT=3001 pnpm -C apps/web dev`).
 
-The Ecphoria image lives on GHCR, `ghcr.io/vargafoundation/ecphoria`. If the package is private, you need to
+The Ecphoria image lives on GHCR, `ghcr.io/graalsystems/ecphoria`. If the package is private, you need to
 authenticate once before the first `up`:
 
 ```bash

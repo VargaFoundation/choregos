@@ -1,7 +1,7 @@
 # The plan asks for Dependabot or Renovate from the day the repository is created
 # (`docs/plan/07-delivery-parallelisation-conventions.md` §Bootstrap).
 #
-# Everything is grouped. The experience next door, on `VargaFoundation/ecphoria`, is clear: without
+# Everything is grouped. The experience next door, on `graalsystems/ecphoria`, is clear: without
 # groups, nineteen open PRs in a month, several impossible to merge on their own —
 # three RustCrypto bumps that were a single change, five actions that were only
 # one runtime migration. An upgrade that touches four packages at once is **one**

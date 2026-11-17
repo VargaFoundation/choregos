@@ -71,7 +71,6 @@ DERIVED: tuple[str, ...] = (
     # Where the images are pushed and signed, and the upstream-only jobs.
     ".github/dependabot.yml",
     ".github/workflows/ci.yml",
-    ".github/workflows/code-agent-examples.yml",
     ".github/workflows/nightly.yml",
     ".github/workflows/release.yml",
     # The charts' defaults: registry, memory image, plugin source, runbook links, chart sources.
@@ -89,7 +88,6 @@ DERIVED: tuple[str, ...] = (
     "infra/bootstrap/agent-sandbox.yaml",
     "infra/bootstrap/app-of-apps.yaml",
     "infra/bootstrap/ecphoria.yaml",
-    "infra/bootstrap/gvisor.yaml",
     "infra/bootstrap/policies.yaml",
     "infra/platform/base/application.yaml",
     "infra/platform/overlays/dev/application.yaml",
@@ -97,14 +95,11 @@ DERIVED: tuple[str, ...] = (
     "infra/platform/overlays/staging/application.yaml",
     "infra/policies/images.yaml",
     "infra/policies/plugin-servers.yaml",
-    "infra/policies/tests/plugin-servers/resources.yaml",
     "infra/projects/applicationset.yaml",
     # Images built FROM the platform's, and the local install.
     ".env.example",
     "compose.yaml",
     "dev/Tiltfile",
-    "dev/compose.yaml",
-    "docker/api.Dockerfile",
     "docker/base.Dockerfile",
     "examples/agents/langgraph/Dockerfile",
     "examples/agents/openai-agents/Dockerfile",
@@ -117,15 +112,10 @@ DERIVED: tuple[str, ...] = (
     # The plugins: the offline lock, the contract's examples, the test fixtures mirrored from them.
     "plugins/offline/plugins.lock",
     "packages/contracts/schemas/examples/plugin-index.example.json",
-    "packages/contracts/schemas/examples/plugin-server.example.json",
     "packages/contracts/schemas/examples/plugin.example.json",
-    "tests/fixtures/plugin_fakes/servicenow.json",
     "tests/fixtures/plugins/desk/plugin.yaml",
-    "tests/fixtures/plugins/desk/servers/desk.yaml",
     "tests/fixtures/plugins/hello/plugin.yaml",
-    "tests/fixtures/plugins/hello/servers/hello.yaml",
     "tests/fixtures/plugins/servicenow/plugin.yaml",
-    "tests/fixtures/plugins/servicenow/servers/servicenow.yaml",
     # The contract's description of the documentation address, and the code generated from it.
     "packages/contracts/openapi.yaml",
     "packages/contracts/ts/api.ts",
