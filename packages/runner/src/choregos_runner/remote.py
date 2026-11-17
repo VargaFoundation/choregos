@@ -335,8 +335,7 @@ def _map(task: A2aTask, stage_input: StageInput, workspace: Path, digest: str) -
         detail = f": {task.message[:500]}" if task.message else ""
         return failure("remote_failed", f"the remote agent ended `{task.state}`{detail}", **base)
 
-    outputs_dir = workspace / OUTPUTS_DIR
-    outputs_dir.mkdir(parents=True, exist_ok=True)
+    outputs_dir = Path(OUTPUTS_DIR)  # below `workspace`: written through `safe_files`, never through a link
     declared = {
         name: None
         for name in stage_input.transition.outputs
@@ -345,9 +344,14 @@ def _map(task: A2aTask, stage_input: StageInput, workspace: Path, digest: str) -
     inline: dict[str, Any] = {}
     facts: dict[str, str | int | float | bool] = {}
     response = task.message
-    for artifact in task.artifacts:
-        _land(artifact, outputs_dir, declared, inline, facts)
-    (outputs_dir / RESPONSE_FILE).write_text(response + ("\n" if response else ""), encoding="utf-8")
+    try:
+        for artifact in task.artifacts:
+            _land(workspace, artifact, outputs_dir, declared, inline, facts)
+        safe_files.write_text(workspace, outputs_dir / RESPONSE_FILE, response + ("\n" if response else ""))
+    except safe_files.LinkRefusedError as exc:
+        # A link or a second name the agent left where the answer lands (a workspace kept across a
+        # person's answer): nothing was written through it, and the step says so.
+        return failure("workspace_unsafe", str(exc), **base)
     # The single inline output nothing named takes the answer: a text-only agent has no other way
     # to fill it, and more than one unfilled leaves the step to fail on `missing_outputs`, honestly.
     unfilled = [name for name in declared if name not in inline]
@@ -366,6 +370,7 @@ def _map(task: A2aTask, stage_input: StageInput, workspace: Path, digest: str) -
 
 
 def _land(
+    workspace: Path,
     artifact: A2aArtifact,
     outputs_dir: Path,
     declared_inline: dict[str, Any],
@@ -375,14 +380,17 @@ def _land(
     """One artifact of the remote agent: a file in `.choregos/outputs/`, an inline output, or facts."""
     for part in artifact.parts:
         if part.kind == "file" and part.content is not None:
-            (outputs_dir / safe_filename(part.name or artifact.name)).write_bytes(part.content)
+            safe_files.write_bytes(
+                workspace, outputs_dir / safe_filename(part.name or artifact.name), part.content
+            )
         elif part.kind == "text":
-            _land_text(artifact, part, outputs_dir, declared_inline, inline)
+            _land_text(workspace, artifact, part, outputs_dir, declared_inline, inline)
         elif part.kind == "data":
-            _land_data(artifact, part, outputs_dir, declared_inline, inline, facts)
+            _land_data(workspace, artifact, part, outputs_dir, declared_inline, inline, facts)
 
 
 def _land_text(
+    workspace: Path,
     artifact: A2aArtifact,
     part: A2aPart,
     outputs_dir: Path,
@@ -392,10 +400,11 @@ def _land_text(
     if artifact.name in declared_inline:
         inline[artifact.name] = part.text
         return
-    (outputs_dir / safe_filename(artifact.name)).write_text(part.text, encoding="utf-8")
+    safe_files.write_text(workspace, outputs_dir / safe_filename(artifact.name), part.text)
 
 
 def _land_data(
+    workspace: Path,
     artifact: A2aArtifact,
     part: A2aPart,
     outputs_dir: Path,
@@ -411,6 +420,8 @@ def _land_data(
                 facts[str(key)] = value
     else:
         name = safe_filename(artifact.name)
-        (outputs_dir / (name if name.endswith(".json") else f"{name}.json")).write_text(
-            json.dumps(part.data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        safe_files.write_text(
+            workspace,
+            outputs_dir / (name if name.endswith(".json") else f"{name}.json"),
+            json.dumps(part.data, ensure_ascii=False, indent=2) + "\n",
         )

@@ -22,6 +22,7 @@ import httpx
 from choregos_contracts import StageInput, StageResult
 from choregos_core.hosted import LOOPBACK_HOST
 
+from . import safe_files
 from .outputs import expected_files
 from .result import load_result
 from .workspace import inline_outputs
@@ -167,8 +168,10 @@ def result_of(stage_input: StageInput, workspace: Path, text: str) -> tuple[Stag
             return None, "the hosted agent answered nothing"
         payload = {"status": "done", "summary": text.strip()[:4000]}
     path = workspace / ".choregos" / "result.json"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    try:
+        safe_files.write_text(workspace, path.relative_to(workspace), json.dumps(payload, ensure_ascii=False))
+    except safe_files.LinkRefusedError as exc:
+        return None, str(exc)
     load = load_result(
         path, inline_outputs(stage_input), list(files.values()), stage_input.transition.artifact_displays
     )

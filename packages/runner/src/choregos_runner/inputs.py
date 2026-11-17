@@ -18,6 +18,8 @@ from typing import Any
 
 from choregos_contracts import artifact_digest
 
+from . import safe_files
+
 INPUTS_DIR = ".choregos/inputs"
 _FILENAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,140}$")
 
@@ -31,8 +33,6 @@ async def mount_inputs(client: Any, workspace: Path) -> list[dict[str, Any]]:
     entries = list(await client.fetch_inputs())
     if not entries:
         return []
-    folder = workspace / INPUTS_DIR
-    folder.mkdir(parents=True, exist_ok=True)
     mounted: list[dict[str, Any]] = []
     for entry in entries:
         filename = str(entry["filename"])
@@ -45,7 +45,7 @@ async def mount_inputs(client: Any, workspace: Path) -> list[dict[str, Any]]:
                 f"input `{entry['name']}` v{entry.get('version')}: received {found}, "
                 f"the platform recorded {entry['digest']}"
             )
-        (folder / filename).write_bytes(data)
+        safe_files.write_bytes(workspace, Path(INPUTS_DIR) / filename, data)
         mounted.append({**entry, "path": f"{INPUTS_DIR}/{filename}"})
     return mounted
 
