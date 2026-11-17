@@ -5373,3 +5373,11 @@ stories:
     size: S
     depends_on: []
     notes: "Plan workstream P3, first part. max_concurrent_activities=20 was a literal in worker.py and the other slots the SDK's defaults; the defaults are unchanged (20/100/100/1000). Not done: a load test, waiting for runs without polling, the import ceiling (the rest of P3)."
+  - id: S80-08
+    title: "docs(adr): the contracts speak no trade: inventory, neutral names, a software-delivery pack, the O4 options, decided before the 1.0 freeze (ADR 0181)"
+    stream: S80
+    sprint: 1
+    priority: 8
+    size: S
+    depends_on: []
+    notes: "Plan workstreams A1 (decision) and O4 (decision); proposed, the project lead decides in December 2026. Docs only: no contract changes. The contract-change rounds C0, C1 (in the same minor as ADR 0176 R2) and C2 are tracked by issue #1832."
