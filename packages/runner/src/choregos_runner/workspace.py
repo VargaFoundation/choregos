@@ -21,6 +21,7 @@ from typing import Any, ClassVar
 
 from choregos_contracts import ArtifactDisplay, ContextPack, StageInput
 
+from . import safe_files
 from .config import agent_base_environment
 from .launcher import NOT_STARTED, Launcher, LauncherError
 
@@ -503,12 +504,13 @@ class Workspace:
 
     def write_context_files(self, stage_input: StageInput, context: ContextPack | None) -> None:
         """Write `.choregos/task.md` and `.choregos/context.md`: what the agent must read."""
-        folder = self.path / ".choregos"
-        folder.mkdir(parents=True, exist_ok=True)
-        (folder / "task.md").write_text(_task_markdown(stage_input), encoding="utf-8")
-        (folder / "context.md").write_text(_context_markdown(context), encoding="utf-8")
-        (folder / "allowed_paths.txt").write_text(
-            "\n".join(stage_input.allowed_paths) + "\n", encoding="utf-8"
+        # On a workspace kept across a person's answer the agent has already worked here: it may have left a
+        # link or a second name in place of one of these files. `safe_files` follows neither (S65-04b).
+        folder = Path(".choregos")
+        safe_files.write_text(self.path, folder / "task.md", _task_markdown(stage_input))
+        safe_files.write_text(self.path, folder / "context.md", _context_markdown(context))
+        safe_files.write_text(
+            self.path, folder / "allowed_paths.txt", "\n".join(stage_input.allowed_paths) + "\n"
         )
 
     def result_path(self) -> Path:

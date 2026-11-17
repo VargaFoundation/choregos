@@ -27,6 +27,7 @@ from typing import Any
 from choregos_contracts import Evidence, StageInput, StageOutputs, StageResult, StageStatus
 from pydantic import ValidationError
 
+from . import safe_files
 from .workspace import run_command
 
 JOB_RESULT = ".choregos/job.json"
@@ -54,9 +55,9 @@ def command_digest(command: list[str]) -> str:
 
 def write_fields(workspace: Path, fields: dict[str, Any]) -> None:
     """The work item's fields (ADR 0031), as the job reads them: a campaign's universe and dates."""
-    path = workspace / FIELDS
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(fields, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+    safe_files.write_text(
+        workspace, FIELDS, json.dumps(fields, ensure_ascii=False, sort_keys=True, indent=2) + "\n"
+    )
 
 
 async def run_job(stage_input: StageInput, workspace: Path, env: dict[str, str]) -> JobRun:

@@ -35,6 +35,9 @@ class Exit(IntEnum):
     #: The deployment says the agent runs in its own container and the runner found no launcher
     #: there: it never starts the agent as its own child instead (ADR 0146 §9).
     AGENT_ISOLATION_UNAVAILABLE = 100
+    #: A file the runner writes into the agent's tree stands behind a link or a second name the agent left
+    #: (a workspace kept across a person's answer): the runner follows neither and stops (S65-04b).
+    WORKSPACE_UNSAFE = 110
 
     @property
     def explanation(self) -> str:
@@ -51,6 +54,7 @@ class Exit(IntEnum):
             Exit.CONTEXT_UNAVAILABLE: "the context reduction the policy requires did not start",
             Exit.CONFINEMENT_UNAVAILABLE: "confinement required, the kernel cannot confine the agent",
             Exit.AGENT_ISOLATION_UNAVAILABLE: "the agent's own container is required and has no launcher",
+            Exit.WORKSPACE_UNSAFE: "a link or a second name in the workspace stands where the runner writes",
         }[self]
 
 

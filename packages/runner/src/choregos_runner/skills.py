@@ -19,6 +19,8 @@ from typing import Any
 import yaml
 from choregos_contracts import SkillRef, is_inert_binary_path, skill_digest, skill_file_bytes
 
+from . import safe_files
+
 FALLBACK_DIR = ".choregos/skills"
 
 
@@ -65,14 +67,15 @@ def place_skills(
             if normalised.startswith(("../", "/")) or normalised == "..":
                 raise InvalidSkill(f"the skill `{ref.slug}` reaches outside its folder: `{path}`")
             relative = f"{root}/{ref.slug}/{normalised}"
-            target = workspace / relative
-            target.parent.mkdir(parents=True, exist_ok=True)
+            # Written without following a link in the tree the agent writes, and refused when the file has
+            # another name (S65-04b). A file of an earlier turn is removed first: its mode is the agent's.
+            safe_files.remove(workspace, relative)
             if is_inert_binary_path(normalised):
                 # A font or an image: the bytes, never an exec bit (a plain 0o644 file).
-                target.write_bytes(skill_file_bytes(normalised, text))
-                target.chmod(0o644)
+                safe_files.write_bytes(workspace, relative, skill_file_bytes(normalised, text), mode=0o644)
+                safe_files.chmod(workspace, relative, 0o644)
             else:
-                target.write_text(text, encoding="utf-8")
+                safe_files.write_text(workspace, relative, text)
             written.append(relative)
         if skills_dir is None:
             description = _description(files.get("SKILL.md", ""))

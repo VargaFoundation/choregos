@@ -18,11 +18,12 @@ a document delivered under either name is refused.
 from __future__ import annotations
 
 import posixpath
-import stat
 from pathlib import Path
 from typing import Any
 
 from choregos_contracts import KnowledgeRef, knowledge_digest
+
+from . import safe_files
 
 ROOT = ".choregos/knowledge"
 INDEX = "index.md"
@@ -44,8 +45,7 @@ def _index(name: str, documents: list[dict[str, Any]]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _read_only(path: Path) -> None:
-    path.chmod(stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH)
+_READ_ONLY = 0o444
 
 
 def lay_out(
@@ -74,14 +74,13 @@ def lay_out(
     for ref in files_mode:
         base = by_slug[ref.slug]
         documents = list(base.get("documents") or [])
-        folder = workspace / ROOT / ref.slug
-        folder.mkdir(parents=True, exist_ok=True)
         for document in [*documents, {"path": INDEX, "markdown": _index(ref.name or ref.slug, documents)}]:
-            target = folder / str(document["path"])
-            if target.exists():
-                target.chmod(stat.S_IRUSR | stat.S_IWUSR)
-            target.write_text(str(document["markdown"]), encoding="utf-8")
-            _read_only(target)
+            target = Path(ROOT) / ref.slug / str(document["path"])
+            # A file of an earlier turn is removed, then written anew: its mode (read-only) and what the
+            # agent made of it (a link, a second name) are not the runner's to honour.
+            safe_files.remove(workspace, target)
+            safe_files.write_text(workspace, target, str(document["markdown"]), mode=_READ_ONLY)
+            safe_files.chmod(workspace, target, _READ_ONLY)
             written.append(f"{ROOT}/{ref.slug}/{document['path']}")
         listed.append(
             f"- **{ref.name or ref.slug}**: `{ROOT}/{ref.slug}/` — {len(documents)} document(s), "

@@ -697,7 +697,10 @@ class Runner:
             await journal.record("run.failed", {"phase": "fields", "error": str(exc)[:500]})
             await journal.flush()
             return RunOutcome(Exit.INPUT_NOT_FOUND, detail=f"work item fields: {exc}")
-        write_fields(workspace.path, dict(ticket.get("fields") or {}))
+        try:
+            write_fields(workspace.path, dict(ticket.get("fields") or {}))
+        except safe_files.LinkRefusedError as exc:
+            return await self._refuse_tree_write(journal, "fields", exc)
         command = list(stage_input.job.command)
         image = stage_input.job.image or "runner"
         await journal.record("job.started", {"command": command, "image": image})
@@ -1235,6 +1238,8 @@ class Runner:
             ecrites, self.skills_index = place_skills(
                 await client.fetch_skills(), stage_input.skills, workspace.path, backend.skills_dir
             )
+        except safe_files.LinkRefusedError as exc:
+            return await self._refuse_tree_write(journal, "skills", exc)
         except InvalidSkill as exc:
             await journal.record("run.failed", {"phase": "skills", "error": str(exc)[:500]})
             await journal.flush()
@@ -1249,16 +1254,21 @@ class Runner:
         """`task.md` and `context.md`, then the declared inputs as files in `.choregos/inputs/`
         (S31-03, ADR 0049), listed in `task.md`. An input that does not match its digest stops the
         run; an API that cannot list them (older than this runner) leaves the agent its prompt."""
-        workspace.write_context_files(stage_input, context)
-        # Deliverables (S31-05) are artifacts, never commits; the task says which files to write.
-        workspace.exclude([f"{OUTPUTS_DIR}/"])
-        task = workspace.path / ".choregos" / "task.md"
-        task.write_text(task.read_text(encoding="utf-8") + outputs_markdown(stage_input), encoding="utf-8")
+        task = Path(".choregos") / "task.md"
+        try:
+            workspace.write_context_files(stage_input, context)
+            # Deliverables (S31-05) are artifacts, never commits; the task says which files to write.
+            workspace.exclude([f"{OUTPUTS_DIR}/"])
+            safe_files.write_text(workspace.path, task, outputs_markdown(stage_input), append=True)
+        except safe_files.LinkRefusedError as exc:
+            return await self._refuse_tree_write(journal, "context", exc)
         if not stage_input.transition.inputs:
             return None
         workspace.exclude([f"{INPUTS_DIR}/"])
         try:
             mounted = await mount_inputs(client, workspace.path)
+        except safe_files.LinkRefusedError as exc:
+            return await self._refuse_tree_write(journal, "inputs", exc)
         except InputInvalidError as exc:
             await journal.record("run.failed", {"phase": "inputs", "error": str(exc)[:500]})
             await journal.flush()
@@ -1268,8 +1278,24 @@ class Runner:
             return None
         await journal.record("inputs.mounted", {"ok": True, "inputs": [m["path"] for m in mounted]})
         if mounted:
-            task.write_text(task.read_text(encoding="utf-8") + inputs_markdown(mounted), encoding="utf-8")
+            try:
+                safe_files.write_text(workspace.path, task, inputs_markdown(mounted), append=True)
+            except safe_files.LinkRefusedError as exc:
+                return await self._refuse_tree_write(journal, "inputs", exc)
         return None
+
+    async def _refuse_tree_write(
+        self, journal: Any, phase: str, exc: safe_files.LinkRefusedError
+    ) -> RunOutcome:
+        """The runner could not write a file of its own into the tree without following a link or a second
+        name the agent left there (a workspace kept across a person's answer). The run stops, the refusal
+        is journaled with the path, and nothing was written through it."""
+        await journal.record(
+            "run.failed",
+            {"phase": phase, "error": str(exc)[:500], "reason": "tree_write_refused", "path": exc.path},
+        )
+        await journal.flush()
+        return RunOutcome(Exit.WORKSPACE_UNSAFE, detail=str(exc))
 
     async def _deliver(
         self, client: Any, journal: Any, workspace: Workspace, stage_input: StageInput, result: StageResult
@@ -1298,6 +1324,8 @@ class Runner:
             written, self.knowledge_index = lay_out(
                 await client.fetch_knowledge(), stage_input.knowledge, workspace.path
             )
+        except safe_files.LinkRefusedError as exc:
+            return await self._refuse_tree_write(journal, "knowledge", exc)
         except (KnowledgeInvalidError, InternalApiError) as exc:
             await journal.record("run.failed", {"phase": "knowledge", "error": str(exc)[:500]})
             await journal.flush()
