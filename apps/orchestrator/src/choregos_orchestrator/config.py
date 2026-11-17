@@ -4,8 +4,10 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import Literal
 
 from choregos_core.images import check_image_map
+from choregos_core.production import FAKES_VARIABLE, refuse_fakes_in_production
 from choregos_core.publishing import PUBLISHING
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -20,6 +22,10 @@ ALL_QUEUES = (QUEUE_ORCHESTRATOR, QUEUE_EXECUTOR, QUEUE_TRACKER, QUEUE_MEMORY)
 class OrchestratorSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="CHOREGOS_", env_file=".env", extra="ignore")
 
+    #: The deployment's environment, the API's `CHOREGOS_ENV` (the chart's `global.environment`):
+    #: `staging` and `prod` are production, where the workers refuse the fakes (S80-03) and the
+    #: runners they start are told where they run.
+    env: Literal["dev", "staging", "prod", "test"] = "dev"
     temporal_address: str = "localhost:7233"
     temporal_namespace: str = "default"
     fakes: bool = Field(default=False, validation_alias="CHOREGOS_FAKES")
@@ -100,6 +106,16 @@ class OrchestratorSettings(BaseSettings):
         check_image_map("CHOREGOS_JOB_IMAGES", self.job_images, require_digest=self.require_image_digest)
         check_image_map("CHOREGOS_AGENT_IMAGES", self.agent_images, require_digest=self.require_image_digest)
         return self
+
+    def refuse_fakes_in_production(self) -> None:
+        """The workers do not start on the fakes in staging and prod, nor hand them to every run
+        through `CHOREGOS_RUNNER_ENV` (S80-03)."""
+        refuse_fakes_in_production(environment=self.env, fakes=self.fakes, process="orchestrator's workers")
+        refuse_fakes_in_production(
+            environment=self.env,
+            fakes=self.runner_env.get(FAKES_VARIABLE),
+            process="orchestrator's workers (CHOREGOS_RUNNER_ENV gives every run the fakes)",
+        )
 
     @property
     def callback_url(self) -> str:

@@ -15,6 +15,7 @@ from typing import Any
 
 from choregos_adapters import load_extensions
 from choregos_core import telemetry
+from choregos_core.production import refuse_fakes_in_production
 from fastapi import APIRouter, FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -128,6 +129,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     configure_logging(settings.log_level, settings.log_json)
     telemetry.configure_tracing("choregos-api")
     logger.info("API starting", env=settings.env, fakes=settings.fakes)
+    # The fakes are a bench's switch: in staging and prod, the API does not start on them (S80-03).
+    refuse_fakes_in_production(environment=settings.env, fakes=settings.fakes, process="API")
     if not settings.is_sqlite:
         await _refuse_the_superuser()
     _warn_without_secrets_key(settings.fakes)

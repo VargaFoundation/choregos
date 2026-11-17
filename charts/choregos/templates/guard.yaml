@@ -40,6 +40,13 @@ and sign-in, the demonstration fakes) stay refused whatever the profile.
 {{- if $g.devSecrets }}{{ $fautes = append $fautes "global.devSecrets" }}{{ end }}
 {{- if ($g.devLogin | default dict).enabled }}{{ $fautes = append $fautes "global.devLogin.enabled" }}{{ end }}
 {{- if ($.Values.demoFakes | default dict).enabled }}{{ $fautes = append $fautes "demoFakes.enabled" }}{{ end }}
+{{- /* S80-03: the fakes (ADR 0005) relax the egress control to `warn` and swap the secret store for
+       an in-memory one. The API, the workers and the runner refuse to start on them here too; the
+       render says it first. Read as the processes read the value: `true`, `"1"`, `"yes"`... */}}
+{{- $truthy := list "1" "true" "yes" "on" "y" "t" }}
+{{- if has (lower (toString ($g.fakes | default false))) $truthy }}{{ $fautes = append $fautes "global.fakes" }}{{ end }}
+{{- $runnerEnv := ((index .Values "choregos-orchestrator" | default dict).runner | default dict).env | default dict }}
+{{- if has (lower (toString (get $runnerEnv "CHOREGOS_FAKES" | default false))) $truthy }}{{ $fautes = append $fautes "choregos-orchestrator.runner.env.CHOREGOS_FAKES" }}{{ end }}
 {{- if $fautes }}
 {{- fail (printf "global.environment=%s refused: %s. These values are those of a bench (values/local.yaml); a serious environment brings its own dependencies and secrets, or is the single-node profile with its backup (values/single-node.yaml, ADR 0184)." $g.environment (join ", " $fautes)) }}
 {{- end }}

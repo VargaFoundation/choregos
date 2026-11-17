@@ -117,7 +117,8 @@ or another organisation.
 - **The origin guard is a browser's wall only.** A request without `Origin` and `Sec-Fetch-Site` (a CLI) passes, and bearer tokens are not cookie-bound.
 - **The guard of the run's API is a wall only once it enforces, and only for the names the deployment
   declared.** Its default is `warn`: until an operator sets `enforce`, `/api/v1/internal/*` still
-  answers on the public hostnames to whoever presents a valid token. It reads names: a caller inside
+  answers on the public hostnames to whoever presents a valid token. Turning the shipped `staging` and
+  `prod` presets to `enforce` is due after two to four weeks of observation (S80-03); it is not done. It reads names: a caller inside
   the cluster uses the Service's name and is not stopped by it (the tokens and the network policies
   are), a hostname routed to the API that nobody declared stays served
   (`choregos-api.publicHostnames`), and a proxy that rewrites `Host` without writing
@@ -183,6 +184,13 @@ or another organisation.
   creates `choregos_app` at initdb for that reason.
 - **Development login opens the API** to anyone who can reach it. It exists for benches
   without an identity provider (`values/local.yaml`), nowhere else.
+- **The fakes are a bench's switch, refused where the deployment says it is production.**
+  `CHOREGOS_FAKES` (ADR 0005) relaxes the egress control to `warn` and lets the API keep connector
+  secrets in memory. In `staging` and `prod` the chart refuses to render with it (`global.fakes`, or
+  `CHOREGOS_FAKES` in `choregos-orchestrator.runner.env`), and the API, the outposts' door, the
+  orchestrator's workers and the runner refuse to start on it (`choregos_core/production.py`, S80-03).
+  The guard believes `CHOREGOS_ENV`: a production installation that leaves `global.environment` at its
+  default, `dev`, is not refused anything (the same holds for the superuser and the development login).
 
 ## Egress: three layers, and what is not guarded
 
@@ -206,7 +214,7 @@ bounds):
    platform team applies it.
 
 `CHOREGOS_EGRESS_MODE` is `enforce` (the default), `warn` (log `egress.would_refuse` and pass; the
-default under `CHOREGOS_FAKES=1`) or `off`. In `enforce`, a guarded call with no policy in context
+default under `CHOREGOS_FAKES=1`, which no process accepts in `staging` or `prod`) or `off`. In `enforce`, a guarded call with no policy in context
 is refused: a forgotten call site fails loudly. **Guarded**: the MCP client, the web, Confluence and
 Graph knowledge sources, the git skill fetch; a `git` source checks its host up front and forbids
 redirects, because a subprocess cannot be wrapped. **Not guarded**: the deployment's own

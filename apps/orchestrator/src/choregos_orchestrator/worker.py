@@ -141,6 +141,8 @@ async def run_worker(queues: list[str]) -> None:
     # extension's effect was "unknown" in the very place where it had to run (S20-08).
     load_extensions()  # lang: fr-ok (renamed by S45-10)
     settings = get_settings()
+    # Before anything connects: no fakes in staging and prod (S80-03).
+    settings.refuse_fakes_in_production()
     # The workers decode what the clients encode: one converter for the whole deployment (ADR 0183).
     security = TemporalSecurity.from_env()
     client = await connect_temporal(settings.temporal_address, settings.temporal_namespace, security=security)
