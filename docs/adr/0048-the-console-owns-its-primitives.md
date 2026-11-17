@@ -80,3 +80,9 @@ console; "by Varga Foundation" stays as a footer line.**
   re-skin, which is the problem this record removes.
 - **Uppercase the first letter in CSS** (`::first-letter`). The accessible name would stay
   lowercase, a screen reader and a test would read one text and a person another.
+
+## Amendment (2026-11-17, ADR 0176): the footer says Tranibor
+
+The product's name in the footer line is Tranibor ("Tranibor by Varga Foundation · Apache 2.0"). The line
+is still the foundation's, still not themable, and its attribution is unchanged: whether "Varga Foundation"
+becomes the new owner is the owner's decision (ADR 0176 point 8), not a rename's.

@@ -99,3 +99,10 @@ derived files. By hand, as the consequences above foresaw:
 
 The product's own names (packages, CLI, images `choregos-*`, the API) are not renamed here.
 
+## Amendment (2026-11-17, ADR 0176): what the identity names next
+
+The definition keeps its eight values. ADR 0176 R3 adds the image and chart name prefix to it (so that
+`choregos-*` becomes `tranibor-*` by one edit and `make publishing-rewrite`), publishes the old names as
+aliases for a deprecation window, and keeps the cosign identities as they are (the repository, hence the
+signing workflow, did not change). `commit_email`, `documentation` and the plugin keys are values the
+publisher chooses and move by editing the definition, not by R1 to R4.

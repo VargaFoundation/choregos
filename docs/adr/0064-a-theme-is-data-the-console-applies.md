@@ -68,3 +68,11 @@ Constraints that shape the answer:
 - **Client-only fetch**: a flash of the default look on every navigation.
 - **Bundling themes into the console**: the CE would ship brand code, and the brand is not Apache-2.0.
 - **Free CSS in the theme**: unbounded, unmeasurable, and an injection surface under a public endpoint.
+
+## Amendment (2026-11-17, ADR 0176): the default product name is Tranibor
+
+`DEFAULT_THEME["product_name"]` and the console's fallback read "Tranibor"; the tab title's suffix for the
+default name is `tranibor`. A renamed instance still says "<product>, built on Tranibor by Varga Foundation".
+An edition that names its publisher says "<product> · Enterprise edition by <publisher> · built on Tranibor
+by Varga Foundation (Apache 2.0)": the edition is not itself named "Tranibor Enterprise". A theme stored
+with the product name "Choregos" keeps it until its organisation changes it: a stored value is data.
