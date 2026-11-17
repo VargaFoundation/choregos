@@ -96,6 +96,7 @@ The gateway key, the egress token and the MCP headers of every backend (`gemini-
 which serves the agent a loopback model, MCP and CONNECT listener (ADR 0146 §7, S65-04f): the agent's
 environment holds the constant loopback key, loopback addresses and no run credential. A plain-HTTP
 request through the proxy variables is refused (405): the listener tunnels CONNECT only.
+The model listener serves the Gemini `generateContent`, `streamGenerateContent` and `countTokens` paths and the OpenAI-format ones, not `embedContent`/`batchEmbedContents` (404): the gateway (LiteLLM 1.105) has no native route for them, only a pass-through that would hand the agent every Google endpoint (ADR 0146 §7).
 
 **Known gaps in the default `process` mode:**
 
