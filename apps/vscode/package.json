@@ -11,7 +11,7 @@
     "url": "https://github.com/graalsystems/tranibor.git",
     "directory": "apps/vscode"
   },
-  "homepage": "https://docs.varga.foundation/choregos/",
+  "homepage": "https://graalsystems.github.io/tranibor/",
   "engines": {
     "vscode": "^1.96.0"
   },

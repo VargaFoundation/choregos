@@ -1,8 +1,8 @@
 # The public user documentation: how to write it
 
 This folder is the source of the public documentation of Choregos, published at
-<https://docs.varga.foundation/choregos/>. This page is for the people who write it. It is not
-published: the import into the documentation site leaves every `README.md` out.
+<https://graalsystems.github.io/tranibor/>. This page is for the people who write it. It is not
+published: the build of the site (`website/`, ADR 0185) leaves every `README.md` out.
 
 The reference pages one level up (`docs/*.md`) stay what they are: complete, precise, written for
 people who run and extend the platform. The pages here are for people who **use** it: a team lead, a
@@ -12,7 +12,7 @@ needs the full detail, link to the reference page.
 ## Where a page goes
 
 The slugs are fixed by the S62 contract. Do not move or rename a page: the console and the API link to
-these addresses (`CHOREGOS_DOCS_URL`, by default `https://docs.varga.foundation/choregos`).
+these addresses (`CHOREGOS_DOCS_URL`, by default `https://graalsystems.github.io/tranibor`).
 
 | Folder | Section | Order |
 | :-- | :-- | :-- |

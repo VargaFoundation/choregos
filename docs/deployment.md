@@ -1231,7 +1231,7 @@ whose value is a path. Outside the chart, the setting is `CHOREGOS_PROCEDURES_EX
 ## Where the console's help links point
 
 The console's **Help** entry, in the top bar, and the "Learn more" links of its pages open the user
-documentation, `https://docs.varga.foundation/choregos` by default. An installation that cannot reach it
+documentation, `https://graalsystems.github.io/tranibor` by default. An installation that cannot reach it
 (air-gapped) or serves its own copy sets `CHOREGOS_DOCS_URL` on the API, with the chart's `extraEnv`:
 
 ```yaml
