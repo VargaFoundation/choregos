@@ -7,9 +7,10 @@ gives it a bare environment): a hostile document reaches a parser, never a datab
 
 MarkItDown (MIT) keeps what matters to an agent reading the corpus: headings of a Word document,
 one `#` title per slide. A workbook is read directly (`xlsx.py`, S42-09c): one table per sheet, cached
-values, a row cap. A PDF yields its text; its headings are not
-recovered (ADR 0051). Structured text (YAML, JSON, TOML; S51-05) is not parsed at all: it is kept
-verbatim in a fenced code block, which the parent heads with the file's path.
+values, a row cap. A PDF yields its text, and its bookmarks, when it has some, become its headings
+(`pdf_outline.py`); a PDF without bookmarks has no headings (ADR 0051). Structured text (YAML, JSON,
+TOML; S51-05) is not parsed at all: it is kept verbatim in a fenced code block, which the parent heads
+with the file's path.
 """
 
 from __future__ import annotations
@@ -52,7 +53,12 @@ def convert(
 
     converter = MarkItDown(enable_plugins=False)
     result = converter.convert_stream(io.BytesIO(data), stream_info=StreamInfo(extension=extension))
-    markdown = _BLANKS.sub("\n\n", result.markdown or "").strip() + "\n"
+    markdown = result.markdown or ""
+    if extension == ".pdf":
+        from .pdf_outline import headed
+
+        markdown = headed(markdown, data)
+    markdown = _BLANKS.sub("\n\n", markdown).strip() + "\n"
     return markdown, (result.title or None), []
 
 

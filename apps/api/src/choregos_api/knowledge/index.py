@@ -325,16 +325,32 @@ async def search(
     return SearchResult(mode=mode, hits=hits)
 
 
+def _headings(text: str) -> list[str]:
+    return [" ".join(part.split()).casefold() for part in text.split(">") if part.strip()]
+
+
+def in_section(heading_path: list[str], section: str) -> bool:
+    """Whether a hit lies under a section named by its headings: the names follow one another somewhere
+    in the hit's heading path, so a chunk of a subsection is in its parent section too."""
+    wanted, path = _headings(section), [" ".join(h.split()).casefold() for h in heading_path]
+    return bool(wanted) and any(
+        path[i : i + len(wanted)] == wanted for i in range(len(path) - len(wanted) + 1)
+    )
+
+
 async def evaluate(session: AsyncSession, base: Any, *, k: int = 5) -> dict[str, Any]:
     """Runs the base's eval set: for each question, are the expected documents in the top `k`?
 
     recall@k = expected documents found in the top `k` hits / expected documents, over all questions.
-    A document is named by its file name or its title.
+    hit@1 = questions whose first hit is an expected document / questions: what a reader who stops at the
+    first passage gets. section recall = questions whose expected section (when the case names one) holds
+    a top-`k` hit of an expected document / questions that name one: whether the right part of the right
+    document is found, not only the document. A document is named by its file name or its title.
     """
     from choregos_core import utcnow
 
     cases: list[dict[str, Any]] = []
-    expected_total = found_total = 0
+    expected_total = found_total = first_total = sectioned = section_total = 0
     mode = IN_PROCESS
     for case in base.eval_set or []:
         result = await search(session, [base], str(case.get("question", "")), k=k)
@@ -344,17 +360,33 @@ async def evaluate(session: AsyncSession, base: Any, *, k: int = 5) -> dict[str,
         found = [name for name in expected if name in returned]
         expected_total += len(expected)
         found_total += len(found)
+        first = result.hits[0] if result.hits else None
+        first_total += first is not None and bool({first.filename, first.document} & set(expected))
+        section = str(case.get("section") or "").strip() or None
+        section_found: bool | None = None
+        if section is not None:
+            sectioned += 1
+            section_found = any(
+                {hit.filename, hit.document} & set(expected) and in_section(hit.heading_path, section)
+                for hit in result.hits
+            )
+            section_total += section_found
         cases.append(
             {
                 "question": case.get("question", ""),
                 "expected": expected,
                 "found": found,
                 "returned": list(dict.fromkeys(hit.filename for hit in result.hits)),
+                "first": first.filename if first is not None else None,
+                "section": section,
+                "section_found": section_found,
             }
         )
     return {
         "k": k,
         "recall": round(found_total / expected_total, 4) if expected_total else None,
+        "hit_at_1": round(first_total / len(cases), 4) if cases else None,
+        "section_recall": round(section_total / sectioned, 4) if sectioned else None,
         "mode": mode,
         "cases": cases,
         "ran_at": utcnow().isoformat(),

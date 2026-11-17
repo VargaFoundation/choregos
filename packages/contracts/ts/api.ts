@@ -3414,6 +3414,10 @@ export type KnowledgeBase = {
     k?: number;
     /** expected documents found in the top k / expected documents */
     recall?: number | null;
+    /** questions whose first hit is an expected document / questions */
+    hit_at_1?: number | null;
+    /** questions whose expected section is found in the top k / questions that name a section; null when none does */
+    section_recall?: number | null;
     mode?: string;
     ran_at?: string;
     cases?: Array<{
@@ -3421,6 +3425,11 @@ export type KnowledgeBase = {
       expected?: Array<string>;
       found?: Array<string>;
       returned?: Array<string>;
+      /** the file name of the first hit */
+      first?: string | null;
+      section?: string | null;
+      /** null when the question names no section */
+      section_found?: boolean | null;
     }>;
   } | null;
 };
@@ -3496,10 +3505,43 @@ export type KnowledgeEvalCase = {
   question: string;
   /** file names or titles */
   expected: Array<string>;
+  /** the section expected to answer, by its headings as a search hit prints them (`Encryption > In transit`, or only `In transit`); a hit of an expected document under those headings, in the top k, finds it */
+  section?: string | null;
 };
 
 export type KnowledgeEvalSet = {
   cases?: Array<KnowledgeEvalCase>;
+};
+
+export type KnowledgeReadRequest = {
+  /** one `index` base of the run */
+  knowledge_base: string;
+  /** as a search hit gives it */
+  document_id: string;
+  /** a number in the document's outline (`2.3`) or a heading path (`Encryption > In transit`); absent, the document from the top */
+  section?: string | null;
+};
+
+export type KnowledgeReading = {
+  /** false when the document has no such section: `outline` then lists the document's */
+  found: boolean;
+  knowledge_base: string;
+  document_id: string;
+  /** the document's title */
+  document: string;
+  filename: string;
+  /** the source's version of the document, else its content digest */
+  version: string;
+  /** the number of the section read; null for the whole document */
+  section?: string | null;
+  heading_path?: Array<string>;
+  /** at most 20 000 characters */
+  text: string;
+  /** the whole length of what was asked for */
+  characters: number;
+  cut: boolean;
+  /** the sections under a cut text, or the document's when the section was not found; empty otherwise */
+  outline: string;
 };
 
 export type KnowledgeSearchRequest = {
@@ -6911,6 +6953,7 @@ export interface Operations {
   putWorkflowRouting: { method: "PUT"; path: "/projects/{id}/workflow-routing"; body: WorkflowRouting; response: WorkflowRouting };
   readAgentNotification: { method: "POST"; path: "/orgs/{org}/agent-notifications/{item_id}/read"; body: never; response: AgentNotificationsRead };
   readAllAgentNotifications: { method: "POST"; path: "/orgs/{org}/agent-notifications/read"; body: never; response: AgentNotificationsRead };
+  readRunKnowledge: { method: "POST"; path: "/internal/runs/{id}/knowledge/read"; body: KnowledgeReadRequest; response: KnowledgeReading };
   readyz: { method: "GET"; path: "/readyz"; body: never; response: void };
   reassignHumanRequest: { method: "POST"; path: "/work-items/{id}/human-requests/{request_id}/assignee"; body: AssigneeChange; response: HumanRequest };
   refreshGitHubInstallations: { method: "POST"; path: "/orgs/{org}/github/refresh"; body: never; response: GitHubAppStatus };

@@ -370,7 +370,11 @@ title, path, version of each ready document) and `knowledge_get`. A base outside
 name, even when the person reads it through the knowledge routes, and a `knowledge_get` of another base's
 document is refused. Each passage is framed as data with its document id, title, path and version
 (`source_version`, else the content digest), and the agent's instructions tell it to cite
-`[document, version]`.
+`[document, version]`. `knowledge_get` takes an optional `section`, by its number in the document's
+outline (`2.3`) or the heading path a search printed (`Encryption > In transit`), and reads that
+section only; a document or a section longer than the 20 000 characters returned ends with its outline,
+so the agent reads the rest section by section
+([ADR 0051](adr/0051-knowledge-bases.md), decision 30).
 
 The bases bound to the installation's knowledge needs are offered too (below), with one difference: each is
 offered at a turn only when the person of the conversation may read it at that moment.

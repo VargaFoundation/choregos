@@ -5362,3 +5362,36 @@ stories:
     size: S
     depends_on: []
     notes: "The decision of 2026-11-15 (D6) and 2026-11-17; what is never renamed (wire contracts, stored state, third-party-visible tokens) is listed with its reason; amends 0048, 0064, 0079, 0156."
+  # ───────────── S76 — the corpus's own structure is a retrieval key (ADR 0051, update of 2026-11-16) ─────────────
+  - id: S76-01
+    title: "feat(knowledge): a document's outline, listed in a files base's index.md (ADR 0051 decisions 28-29)"
+    stream: S76
+    sprint: 1
+    priority: 3
+    size: S
+    depends_on: [S72-01]
+    notes: "After STAIR (arXiv 2609.03874), whose fine-tuned retrieval is rejected. choregos_core.outline: ATX headings, fence-aware, an OKF header skipped, numbered by nesting; index.md lists each document's outline with the line each section starts on; no model, no storage, no contract change."
+  - id: S76-02
+    title: "feat(knowledge): knowledge_get reads by section; a PDF's bookmarks become its headings (ADR 0051 decisions 30-31)"
+    stream: S76
+    sprint: 1
+    priority: 3
+    size: S
+    depends_on: [S76-01]
+    notes: "A section by number or heading path; a text cut at 20 000 characters ends with its outline; an unknown section answers the outline. Bookmarks placed on the lines that say them, in order, linear; one not found invents nothing."
+  - id: S76-03
+    title: "contract(openapi): the eval measures the first hit and the section (ADR 0051 decision 32)"
+    stream: S76
+    sprint: 1
+    priority: 3
+    size: S
+    depends_on: [S76-01]
+    notes: "Additive: KnowledgeEvalCase.section; eval_result hit_at_1, section_recall and, per case, first, section, section_found. Console, CLI and manifest take the section."
+  - id: S76-04
+    title: "feat(knowledge): a run reads the section a search cites (ADR 0051 decision 33)"
+    stream: S76
+    sprint: 2
+    priority: 3
+    size: S
+    depends_on: [S76-02]
+    notes: "Additive contract: POST /internal/runs/{id}/knowledge/read under the reach of the run's knowledge_search; the sidecar's knowledge_read; a deprecated document is not read; a closed run is refused."

@@ -2423,7 +2423,9 @@ When a run is prepared, each named base must exist and be served to the run's pr
 the run does not start (`KnowledgeRefused`). A base served as **files** has its ready documents
 pinned by id and digest; the runner fetches exactly those (`GET /internal/runs/{id}/knowledge`),
 checks the digest (a base changed in between stops the run, exit 51), and lays them read-only under
-`.choregos/knowledge/<slug>/` with an `index.md`, out of the diff. The prompt says where they are
+`.choregos/knowledge/<slug>/` with an `index.md`, out of the diff. `index.md` lists each document
+with its outline: its sections, numbered (`2.3`), with their size and the line each starts on, so the
+agent reads the table of contents, then the section that answers. The prompt says where they are
 and asks the agent to cite the document and section it applies.
 
 The folder is an [Open Knowledge Format](https://github.com/GoogleCloudPlatform/open-knowledge-format)
@@ -2451,13 +2453,25 @@ A base served as an **index** is cut into contextual chunks (each prefixed by it
 and heading path) and embedded through the gateway (`default_model_profiles["embed"]`, else
 `CHOREGOS_KNOWLEDGE_EMBEDDING_MODEL`, `platform/embed`; a deterministic fake under
 `CHOREGOS_FAKES`). Agents search it with the sidecar's `knowledge_search` tool, which answers
-numbered citations — document, section, excerpt — from the bases their run names, while those are
-served to its project. The ranking fuses PostgreSQL full-text and pgvector by reciprocal rank
+numbered citations — document, section, excerpt, document id — from the bases their run names, while
+those are served to its project. When an excerpt is not enough, `knowledge_read(knowledge_base,
+document_id, section?)` reads the cited section whole (by its number in the document's outline or the
+heading path the hit printed), under the same reach; a text past 20 000 characters ends with its
+outline, so the agent reads on section by section. The ranking fuses PostgreSQL full-text and pgvector by reciprocal rank
 (`mode: hybrid`); without pgvector, or without a gateway key, it is full-text only and says so
 (`mode: full-text`). `POST …/search` gives the same answer in the console; `POST …/reindex`
-rebuilds the chunks. Each base keeps an **eval set** (`PUT …/eval`: questions and the documents,
-by file name or title, expected to answer them); `POST …/eval/run` measures **recall@5** and the
-base's page shows it, per question.
+rebuilds the chunks. Each base keeps an **eval set** (`PUT …/eval`: questions, the documents,
+by file name or title, expected to answer them, and optionally the `section` expected to answer, by
+its headings: `Encryption > In transit`); `POST …/eval/run` measures **recall@5**, the share of
+questions whose first hit is right (`hit_at_1`) and the share whose expected section is found
+(`section_recall`), and the base's page shows them, per question. On the page, the section is a third
+column: `question | documents | section`.
+
+A PDF is converted with its headings when it carries bookmarks (its outline, as a word processor or
+LaTeX exports it): each bookmark found in the text becomes a heading, so its chunks get a heading path
+like a Word document's. A scanned PDF, or one printed to PDF without bookmarks, has its text only. A PDF
+uploaded before this change keeps its old text until it is converted again
+(`POST …/documents/{id}/convert`).
 
 A base also **syncs from sources** (`POST …/sources`), each on its own Temporal loop
 (`KnowledgeSync`; the refresh is set per source, see below; now with `POST …/sources/{id}/sync`, or

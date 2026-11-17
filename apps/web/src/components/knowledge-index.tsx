@@ -9,7 +9,8 @@ import type { KnowledgeBase, KnowledgeSearchResult } from "@/lib/types";
 
 /**
  * An `index` knowledge base (ADR 0051): how it ranks here, a search that cites, and its eval set —
- * questions and the documents expected to answer them — with the recall@5 it last measured.
+ * questions, the documents and optionally the section expected to answer them — with the recall@5, the
+ * first hit's precision and the sections found it last measured.
  */
 export function KnowledgeIndex({
   org,
@@ -98,6 +99,8 @@ export function KnowledgeIndex({
         <div className="space-y-2 text-sm">
           <p data-testid="knowledge-recall">
             recall@{evaluation?.k ?? 5}: <strong>{recallLabel(evaluation?.recall)}</strong>
+            {evaluation?.hit_at_1 != null && <> · first hit right: <strong>{recallLabel(evaluation.hit_at_1)}</strong></>}
+            {evaluation?.section_recall != null && <> · right section: <strong>{recallLabel(evaluation.section_recall)}</strong></>}
             {evaluation?.ran_at && <span className="text-xs text-ink-muted"> · {evaluation.mode} · {evaluation.ran_at.slice(0, 16).replace("T", " ")}</span>}
           </p>
           {evaluation?.cases && (
@@ -105,13 +108,16 @@ export function KnowledgeIndex({
               {evaluation.cases.map((c, n) => (
                 <li key={n}>
                   {(c.found ?? []).length === (c.expected ?? []).length ? "✓" : "✗"} {c.question}{" "}
-                  <span className="text-ink-muted">— expected {(c.expected ?? []).join(", ")}; got {(c.returned ?? []).join(", ") || "nothing"}</span>
+                  <span className="text-ink-muted">
+                    — expected {(c.expected ?? []).join(", ")}
+                    {c.section && <> § {c.section} ({c.section_found ? "found" : "not found"})</>}; got {(c.returned ?? []).join(", ") || "nothing"}
+                  </span>
                 </li>
               ))}
             </ul>
           )}
           <label className="block space-y-1">
-            <span className="text-xs text-ink-muted">One question per line: question | expected document, another</span>
+            <span className="text-xs text-ink-muted">One question per line: question | expected document, another | optional section &gt; subsection</span>
             <Textarea aria-label="Eval set" rows={5} value={evalText} readOnly={!canEdit} onChange={(e) => setEvalText(e.target.value)} />
           </label>
           {canEdit && <div className="flex gap-2">

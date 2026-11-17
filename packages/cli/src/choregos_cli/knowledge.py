@@ -71,6 +71,8 @@ class UploadUrl(_Strict):
 class EvalCase(_Strict):
     question: str = Field(min_length=1)
     expected: list[str] = Field(min_length=1)
+    #: the section expected to answer, by its headings (`Encryption > In transit`)
+    section: str | None = None
 
 
 class Manifest(_Strict):
@@ -288,7 +290,10 @@ def _plan_eval(plan: Plan, api: Client, base_path: str, manifest: Manifest, curr
     if manifest.eval is None:
         return
     cases = [c.model_dump() for c in manifest.eval]
-    have = [{"question": c["question"], "expected": c["expected"]} for c in current.get("eval_set") or []]
+    have = [
+        {"question": c["question"], "expected": c["expected"], "section": c.get("section")}
+        for c in current.get("eval_set") or []
+    ]
     label = f"eval set ({len(cases)} questions)"
     if have == cases:
         plan.add("=", label)
@@ -406,7 +411,7 @@ def eval_(
     slug: str,
     org: Annotated[str | None, typer.Option()] = None,
 ) -> None:
-    """Run the base's eval set against its index and print recall@5."""
+    """Run the base's eval set against its index and print recall@5, hit@1 and the sections found."""
     api = _client()
     try:
         base = api.post(f"/orgs/{_org(org)}/knowledge/{slug}/eval/run")
@@ -417,6 +422,12 @@ def eval_(
         api.close()
     result = base.get("eval_result") or {}
     console.print(f"recall@{result.get('k', 5)} = {result.get('recall')} (mode: {result.get('mode')})")
+    if result.get("hit_at_1") is not None:
+        console.print(f"hit@1 = {result['hit_at_1']}")
+    if result.get("section_recall") is not None:
+        console.print(f"section recall = {result['section_recall']}")
     for case in result.get("cases") or []:
         ok = len(case.get("found") or []) == len(case.get("expected") or [])
-        console.print(f"  {'✓' if ok else '✗'} {case.get('question')}")
+        section = case.get("section")
+        where = f" § {section} ({'found' if case.get('section_found') else 'not found'})" if section else ""
+        console.print(f"  {'✓' if ok else '✗'} {case.get('question')}{where}")

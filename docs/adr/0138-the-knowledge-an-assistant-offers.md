@@ -4,6 +4,9 @@
 > existing bases of the organisation by reference, and served at each turn only when the person may read them
 > ([ADR 0159](0159-an-assistant-may-read-the-organisation-s-knowledge-bases-by-reference.md)). Points 1 and 4
 > below hold for seeds and their copies.
+>
+> **Amended (S76-02, 2026-11-16)**: `knowledge_get` takes an optional `section` and ends a text it had to cut
+> with the document's outline ([ADR 0051](0051-knowledge-bases.md), decision 30).
 
 - **Status**: accepted, 2026-11-11 (product owner's review of the same day; proposed 2026-11-10)
 - **Concerns**: `knowledge_bases`, `knowledge_documents` (an `origin`), the plugin installer and upgrade,

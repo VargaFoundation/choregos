@@ -57,6 +57,7 @@ REFUSED: list[tuple[str, str, str, Any]] = [
     ("PUT", "/outputs/{name}", "/outputs/report?type=markdown", None),
     ("GET", "/knowledge", "/knowledge", None),
     ("POST", "/knowledge/search", "/knowledge/search", {"query": "credit notes"}),
+    ("POST", "/knowledge/read", "/knowledge/read", {"knowledge_base": "framework", "document_id": "d1"}),
     ("POST", "/memory/search", "/memory/search", {"query": "credit notes"}),
     ("GET", "/ticket", "/ticket", None),
     ("POST", "/git-token", "/git-token", None),

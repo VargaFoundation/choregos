@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 import pytest
@@ -152,3 +153,49 @@ async def test_a_conversation_without_installation_is_offered_no_knowledge(
     assert (await _say(client, conversation, "hi")).status_code == 200
     (_, first) = upstream.model.requests[0]
     assert not first.get("tools")
+
+
+async def test_a_long_document_ends_with_its_outline_and_one_section_is_read_by_number_or_path(
+    client: AsyncClient,
+    admin: str,
+    project: dict[str, Any],
+    upstream: Upstream,  # noqa: F811
+) -> None:
+    """A document longer than `knowledge_get` returns is not cut blind: its outline follows, and a section
+    is read whole by the number the outline gives or the heading path a search printed (STAIR's point:
+    the corpus's own table of contents is a retrieval key)."""
+    from choregos_api.db.models import KnowledgeDocument
+    from choregos_api.db.session import session_scope
+    from choregos_api.services.conversation_knowledge import DOCUMENT_CHARS
+
+    ids = await _bases()
+    filler = "Background paragraph. " * (DOCUMENT_CHARS // 20)
+    handbook = (
+        "# Refund handbook\n\n## History\n\n" + filler + "\n\n## Delays\n\n### Returns\n\n"
+        "A returned item is refunded within 14 days.\n\n### Damaged goods\n\nRefunded at once.\n"
+    )
+    async with session_scope(orgs="*") as session:
+        document = await session.get(KnowledgeDocument, ids["coach-policies"])
+        assert document is not None
+        document.markdown = handbook
+    get = {"base": "coach-policies", "document_id": ids["coach-policies"]}
+    await _agent(client)
+    upstream.model.call("knowledge_get", get).call("knowledge_get", {**get, "section": "1.2.1"}).call(
+        "knowledge_get", {**get, "section": "coach-policies.md > Refund handbook > Delays > Damaged goods"}
+    ).call("knowledge_get", {**get, "section": "Shipping"}).say("ok")
+    conversation = await _open("varga", admin, installation_id=ids["installation"])
+    assert (await _say(client, conversation, "how long is a refund?")).status_code == 200
+    whole, returns, damaged, unknown = _tool_results(upstream)
+    # Read as it is served, with its OKF header (ADR 0174): longer than the markdown stored.
+    told = re.search(rf"Cut at {DOCUMENT_CHARS} of (\d+) characters", whole)
+    assert told is not None and int(told.group(1)) > len(handbook)
+    assert "<knowledge-passage" in whole and "\n---\n" in whole.split("# Refund handbook")[0]
+    assert "within 14 days" not in whole.split("</knowledge-passage>")[0], "the answer is past the cut"
+    assert "- 1.2 Delays — " in whole and "- 1.2.1 Returns — " in whole
+    assert "within 14 days" in returns and "Refunded at once" not in returns and "Background" not in returns
+    assert (
+        'section="1.2.1"' in returns
+        and 'path="coach-policies.md > Refund handbook > Delays > Returns"' in returns
+    )
+    assert "Refunded at once" in damaged and 'section="1.2.2"' in damaged and "Cut at" not in damaged
+    assert unknown.startswith("no section `Shipping` in this document") and "1.2.2 Damaged goods" in unknown

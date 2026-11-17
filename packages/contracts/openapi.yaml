@@ -5680,7 +5680,7 @@ paths:
     post:
       tags: [knowledge]
       operationId: runKnowledgeEval
-      description: Runs the eval set against the index and records recall@5 (`eval_result`). `agent:manage`, or `project:write` on the owning project (`owner_project`).
+      description: Runs the eval set against the index and records recall@5, the first hit's precision (`hit_at_1`) and the sections found (`section_recall`) in `eval_result`. `agent:manage`, or `project:write` on the owning project (`owner_project`).
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeBase" } } } }
         "409": { $ref: "#/components/responses/Conflict" }
@@ -6216,6 +6216,19 @@ paths:
         content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeSearchRequest" } } }
       responses:
         "200": { description: Citations, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeSearchResult" } } } }
+  /internal/runs/{id}/knowledge/read:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    post:
+      tags: [internal]
+      security: [{ runToken: [] }]
+      operationId: readRunKnowledge
+      description: "The sidecar's `knowledge_read` (ADR 0051 decision 33): one document of an `index` base the run's StageInput names, while it is served to its project, whole or one section (`section`: its number in the outline or a search hit's heading path), cut at 20 000 characters with the outline of what lies under. A base the run does not read, or a document outside it, is 404; a section the document lacks answers `found: false` and the document's outline."
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeReadRequest" } } }
+      responses:
+        "200": { description: The reading, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeReading" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
   /internal/runs/{id}/memory/search:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     post:
@@ -9967,6 +9980,8 @@ components:
           properties:
             k: { type: integer }
             recall: { type: [number, "null"], description: "expected documents found in the top k / expected documents" }
+            hit_at_1: { type: [number, "null"], description: "questions whose first hit is an expected document / questions" }
+            section_recall: { type: [number, "null"], description: "questions whose expected section is found in the top k / questions that name a section; null when none does" }
             mode: { type: string }
             ran_at: { type: string }
             cases:
@@ -9978,6 +9993,9 @@ components:
                   expected: { type: array, items: { type: string } }
                   found: { type: array, items: { type: string } }
                   returned: { type: array, items: { type: string } }
+                  first: { type: [string, "null"], description: the file name of the first hit }
+                  section: { type: [string, "null"] }
+                  section_found: { type: [boolean, "null"], description: null when the question names no section }
     KnowledgeSourceCreate:
       type: object
       required: [kind, name]
@@ -10043,11 +10061,39 @@ components:
       properties:
         question: { type: string, minLength: 1, maxLength: 2000 }
         expected: { type: array, minItems: 1, maxItems: 20, items: { type: string }, description: file names or titles }
+        section:
+          type: [string, "null"]
+          maxLength: 500
+          description: "the section expected to answer, by its headings as a search hit prints them (`Encryption > In transit`, or only `In transit`); a hit of an expected document under those headings, in the top k, finds it"
     KnowledgeEvalSet:
       type: object
       additionalProperties: false
       properties:
         cases: { type: array, maxItems: 200, items: { $ref: "#/components/schemas/KnowledgeEvalCase" } }
+    KnowledgeReadRequest:
+      type: object
+      required: [knowledge_base, document_id]
+      additionalProperties: false
+      properties:
+        knowledge_base: { type: string, description: "one `index` base of the run" }
+        document_id: { type: string, description: "as a search hit gives it" }
+        section: { type: [string, "null"], maxLength: 500, description: "a number in the document's outline (`2.3`) or a heading path (`Encryption > In transit`); absent, the document from the top" }
+    KnowledgeReading:
+      type: object
+      required: [found, knowledge_base, document_id, document, filename, version, text, characters, cut, outline]
+      properties:
+        found: { type: boolean, description: "false when the document has no such section: `outline` then lists the document's" }
+        knowledge_base: { type: string }
+        document_id: { type: string }
+        document: { type: string, description: the document's title }
+        filename: { type: string }
+        version: { type: string, description: "the source's version of the document, else its content digest" }
+        section: { type: [string, "null"], description: "the number of the section read; null for the whole document" }
+        heading_path: { type: array, items: { type: string } }
+        text: { type: string, description: "at most 20 000 characters" }
+        characters: { type: integer, description: the whole length of what was asked for }
+        cut: { type: boolean }
+        outline: { type: string, description: "the sections under a cut text, or the document's when the section was not found; empty otherwise" }
     KnowledgeSearchRequest:
       type: object
       required: [query]
