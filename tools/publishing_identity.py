@@ -142,6 +142,9 @@ DERIVED: tuple[str, ...] = (
     "docs/site/index.md",
     "docs/site/integrate/mcp.md",
     "docs/usage.md",
+    "tests/fixtures/plugins/desk/servers/desk.yaml",
+    "tests/fixtures/plugins/hello/servers/hello.yaml",
+    "tests/fixtures/plugins/servicenow/servers/servicenow.yaml",
 )
 
 #: A character that continues a name: an occurrence is not matched inside a longer word.
