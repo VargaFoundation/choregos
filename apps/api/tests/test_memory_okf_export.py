@@ -2,7 +2,7 @@
 
 The export is one memory's active facts, and only that memory's; `verified` is written only where a
 person accepted the fact through the API, as the audit log says; a backend that cannot list one
-memory apart from the others (Ecphoria) is refused, never approximated.
+memory apart from the others is refused, never approximated.
 """
 
 from __future__ import annotations
@@ -153,12 +153,14 @@ async def test_a_global_memory_exports_for_whoever_may_search_it(client: AsyncCl
 
 
 def test_a_backend_that_cannot_list_one_memory_is_refused() -> None:
-    """Ecphoria ignores the namespace header: a listing would mix every memory of its tenant."""
-    from choregos_adapters.memory.ecphoria import EcphoriaMemory
+    """An adapter without `list_facts` would have to export a search: refused, never approximated."""
     from choregos_api.routers.memory import refuse_unlisted
 
+    class Unlisted:
+        pass
+
     with pytest.raises(Exception) as refused:
-        refuse_unlisted(EcphoriaMemory("http://ecphoria.invalid"))
+        refuse_unlisted(Unlisted())
     assert "cannot list one memory's facts" in str(refused.value.detail)  # type: ignore[attr-defined]
 
 
@@ -182,3 +184,31 @@ def test_a_fact_whose_validity_ended_is_deprecated() -> None:
         fact_markdown(ended.model_copy(update={"valid_to": now + timedelta(days=1)}), None, now)
     )
     assert "status" not in current
+
+
+async def test_only_a_person_s_decision_verifies_a_fact(client: AsyncClient, org: str) -> None:
+    """A token or the system accepting a fact is no person's review: no `verified` from it."""
+    from choregos_api.db.models import AuditLog, Organization
+    from choregos_api.db.session import session_scope
+    from choregos_api.services.memory_export import deciders
+    from sqlalchemy import select
+
+    at = datetime(2026, 11, 17, tzinfo=UTC)
+    async with session_scope(orgs="*") as session:
+        org_id = (await session.execute(select(Organization.id))).scalar_one()
+        for actor_kind, fact in (("user", "m-user"), ("token", "m-token"), ("system", "m-system")):
+            session.add(
+                AuditLog(
+                    org_id=org_id,
+                    actor_id=f"{actor_kind}-1",
+                    actor_kind=actor_kind,
+                    action="memory.accept",
+                    target_type="memory",
+                    target_id=fact,
+                    payload={"found": True},
+                    ts=at,
+                )
+            )
+    async with session_scope(orgs="*") as session:
+        decided = await deciders(session, org_id, ["m-user", "m-token", "m-system"])
+    assert list(decided) == ["m-user"] and decided["m-user"][0] == "user-1"

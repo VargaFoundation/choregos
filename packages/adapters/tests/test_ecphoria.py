@@ -147,11 +147,29 @@ async def test_batch_ingestion_and_the_connection_test() -> None:
     assert (await memory_for(Wire({("GET", "/health"): (503, "down")})).test())["ok"] is False
 
 
-async def test_named_and_global_memories_travel_in_their_own_tenant_and_namespace() -> None:
-    """S40-11: a global memory is the organisation's tenant; every namespace but the project's shared one
-    is sent in full in `X-Ecphoria-Namespace`."""
+@pytest.mark.parametrize(
+    ("configured", "expected"),
+    [
+        (
+            None,
+            ["billing", "billing#agent:architect", "billing#memory:decisions", "org:varga#memory:lessons"],
+        ),
+        (
+            "acme-billing",
+            [
+                "acme-billing",
+                "acme-billing#agent:architect",
+                "acme-billing#memory:decisions",
+                "org:varga#memory:lessons",
+            ],
+        ),
+    ],
+)
+async def test_each_memory_is_its_own_tenant(configured: str | None, expected: list[str]) -> None:
+    """Ecphoria isolates tenants and reads no namespace header: two memories in one tenant would
+    read each other's facts (ADR 0075, update of 2026-11-17)."""
     fil = Wire({("POST", "/api/v1/context-pack"): (200, {})})
-    m = memory_for(fil, tenant="billing")
+    m = memory_for(fil, tenant=configured)
     for namespace in (
         "billing",
         "billing#agent:architect",
@@ -159,13 +177,29 @@ async def test_named_and_global_memories_travel_in_their_own_tenant_and_namespac
         "org:varga#memory:lessons",
     ):
         await m.context_pack(namespace, "q", [], 100)
-    seen = [(r.headers["X-Ecphoria-Tenant"], r.headers.get("X-Ecphoria-Namespace")) for r in fil.requests]
-    assert seen == [
-        ("billing", None),
-        ("billing", "billing#agent:architect"),
-        ("billing", "billing#memory:decisions"),
-        ("org:varga", "org:varga#memory:lessons"),
-    ]
+    assert [r.headers["X-Ecphoria-Tenant"] for r in fil.requests] == expected
+    assert all("X-Ecphoria-Namespace" not in r.headers for r in fil.requests)
+
+
+async def test_the_facts_of_one_memory_are_listed_page_by_page_and_only_the_active_ones() -> None:
+    def item(n: int, state: str = "active") -> dict[str, object]:
+        return {"id": f"m{n}", "content": f"c{n}", "state": state, "metadata": {"kind": "decision"}}
+
+    fil = Wire(
+        {
+            ("GET", "/api/v1/memories"): [
+                (200, {"memories": [item(1), item(2, "superseded")]}),
+                (200, {"memories": [item(3), item(4, "pending")]}),
+                (200, {"memories": []}),
+            ]
+        }
+    )
+    facts = await memory_for(fil).list_facts("billing#memory:decisions")
+    assert [f.id for f in facts] == ["m1", "m3"] and facts[0].kind == "decision"
+    assert [r.url.params["offset"] for r in fil.requests] == ["0", "2", "4"], (
+        "a page shorter than asked is not the last one: Ecphoria clamps it"
+    )
+    assert {r.headers["X-Ecphoria-Tenant"] for r in fil.requests} == {"billing#memory:decisions"}
 
 
 async def test_a_namespace_that_is_none_of_the_four_forms_is_refused() -> None:

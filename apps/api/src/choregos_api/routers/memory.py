@@ -123,8 +123,7 @@ def refuse_unlisted(adapter: Any) -> None:
     if not hasattr(adapter, "list_facts"):
         raise conflict(
             f"the `{type(adapter).__name__}` memory backend cannot list one memory's facts apart from "
-            "the other memories' (Ecphoria does not read the namespace Choregos sends): its export "
-            "is not offered"
+            "the other memories': its export is not offered"
         )
 
 
