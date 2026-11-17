@@ -686,3 +686,24 @@ Prefix paths, then the exact ones; everything else goes to the console.
     service: { name: choregos-api, port: { number: {{ $.port }} } }
 {{- end }}
 {{- end }}
+
+{{/*
+The four dependencies the NetworkPolicies open (`networkpolicies.yaml`), as a YAML list: each one in
+its own namespace on a cluster, or, embedded (ADR 0184), as the chart's pods in the release namespace.
+*/}}
+{{- define "choregos.networkDependencies" -}}
+{{- $g := .Values.global -}}
+- { name: database, port: 5432, namespace: choregos-data, pod: choregos-postgresql, embedded: {{ $g.database.embedded | default false }} }
+- { name: temporal, port: 7233, namespace: choregos-temporal, pod: choregos-temporal, embedded: {{ $g.temporal.embedded | default false }} }
+- { name: gateway, port: 4000, namespace: choregos-gateway, pod: choregos-litellm, embedded: {{ $g.gateway.embedded | default false }} }
+- { name: memory, port: 8432, namespace: choregos-memory, pod: choregos-ecphoria, embedded: {{ $g.memory.embedded | default false }} }
+{{- end -}}
+
+{{/* The NetworkPolicy peer of one of `choregos.networkDependencies`. */}}
+{{- define "choregos.networkDependencyPeer" -}}
+{{- if .dependency.embedded -}}
+{ podSelector: { matchLabels: { app.kubernetes.io/name: {{ .dependency.pod }} } } }
+{{- else -}}
+{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: {{ .dependency.namespace }} } } }
+{{- end -}}
+{{- end -}}

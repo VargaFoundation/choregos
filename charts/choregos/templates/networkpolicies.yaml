@@ -29,14 +29,11 @@ spec:
   egress:
     - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kube-system } } }]
       ports: [{ protocol: UDP, port: 53 }]
-    - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: choregos-data } } }]
-      ports: [{ protocol: TCP, port: 5432 }]
-    - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: choregos-temporal } } }]
-      ports: [{ protocol: TCP, port: 7233 }]
-    - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: choregos-gateway } } }]
-      ports: [{ protocol: TCP, port: 4000 }]
-    - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: choregos-memory } } }]
-      ports: [{ protocol: TCP, port: 8432 }]
+    {{- /* Each dependency in its own namespace, or, embedded, as pods of this one (ADR 0184). */}}
+    {{- range $dependency := include "choregos.networkDependencies" . | fromYamlArray }}
+    - to: [{{ include "choregos.networkDependencyPeer" (dict "root" $ "dependency" $dependency) }}]
+      ports: [{ protocol: TCP, port: {{ $dependency.port }} }]
+    {{- end }}
     # The trace collector, in the namespace `global.tracing.otlpEndpoint` names (S40-20e).
     - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: {{ include "choregos.tracingNamespace" (.Values.global.tracing | default dict).otlpEndpoint }} } } }]
       ports: [{ protocol: TCP, port: 4318 }]
@@ -59,6 +56,11 @@ spec:
     # The fakes served for a demonstration (S20-07): the API and the orchestrator reach them.
     - to: [{ podSelector: { matchLabels: { app.kubernetes.io/name: choregos-demo-fakes } } }]
       ports: [{ protocol: TCP, port: {{ .Values.demoFakes.port }} }]
+    {{- end }}
+    {{- with .Values.networkPolicies.platformEgress }}
+    # What the operator opens for the platform's own pods (`networkPolicies.platformEgress`): the
+    # single-node profile opens the outside here, a cluster's platform team does it its own way.
+    {{- toYaml . | nindent 4 }}
     {{- end }}
 {{- /* ADR 0105: the API and the workers may reach the MCP gateway; runner pods are never selected. */}}
 {{- $gw := .Values.global.mcpGateway | default dict }}
@@ -120,10 +122,13 @@ spec:
     # The API it reports to, never the database or Temporal.
     - to: [{ podSelector: { matchLabels: { app.kubernetes.io/name: choregos-api } } }]
       ports: [{ protocol: TCP, port: {{ $apiPort }} }]
-    - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: choregos-gateway } } }]
-      ports: [{ protocol: TCP, port: 4000 }]
-    - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: choregos-memory } } }]
-      ports: [{ protocol: TCP, port: 8432 }]
+    {{- /* The model gateway and the memory, nothing else of the dependencies (ADR 0070). */}}
+    {{- range $dependency := include "choregos.networkDependencies" . | fromYamlArray }}
+    {{- if has $dependency.name (list "gateway" "memory") }}
+    - to: [{{ include "choregos.networkDependencyPeer" (dict "root" $ "dependency" $dependency) }}]
+      ports: [{ protocol: TCP, port: {{ $dependency.port }} }]
+    {{- end }}
+    {{- end }}
     # Never the trace collector (#946): agent code could forge the gateway's spans, and so a drift,
     # or carry data out past the egress proxy. The runner's own span is not exported.
     {{- if $e.enabled }}
@@ -212,6 +217,43 @@ spec:
     - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: choregos-data } } }]
       ports: [{ protocol: TCP, port: {{ int (.Values.global.database.port | default 5432) }} }]
     {{- end }}
+{{- end }}
+{{- /*
+ADR 0184: the embedded PostgreSQL and Temporal take connections from the platform's pods that use
+them, by name, and from nobody else: not a runner, not the egress proxy, not the builder, not a pod
+the chart does not know. The egress side (`choregos-runner-egress`) already keeps runners away; this
+is the second wall, on the store itself. The gateway and the memory are not walled here: runners
+call them by design (the model, the memory's MCP), with a per-run key.
+*/}}
+{{- $stores := list }}
+{{- if .Values.global.database.embedded }}
+{{- $stores = append $stores (dict "pod" "choregos-postgresql" "port" 5432 "clients" (list "choregos-api" "choregos-orchestrator" "choregos-litellm" "choregos-outposts-door" "choregos-trace-drift" "choregos-backup" "choregos-restore")) }}
+{{- end }}
+{{- if .Values.global.temporal.embedded }}
+{{- $stores = append $stores (dict "pod" "choregos-temporal" "port" 7233 "clients" (list "choregos-api" "choregos-orchestrator")) }}
+{{- end }}
+{{- range $stores }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .pod }}-ingress
+  labels: {{- include "choregos.labels" $ | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .pod }}
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values: {{ toJson .clients }}
+      ports: [{ protocol: TCP, port: {{ .port }} }]
+    # Itself, on any port: a process may reach its own pod's address.
+    - from: [{ podSelector: { matchLabels: { app.kubernetes.io/name: {{ .pod }} } } }]
 {{- end }}
 ---
 apiVersion: networking.k8s.io/v1

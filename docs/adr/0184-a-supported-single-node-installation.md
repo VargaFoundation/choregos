@@ -1,9 +1,10 @@
 # 0184 — A supported single-node installation: one k3s machine, a nightly backup, no high availability
 
 - **Status**: accepted, 2026-11-17; S80-07b delivers the profile, the backup and restore, the chart
-  tests and the proof script; the proof does not run nightly yet (see "What is not done")
+  tests and the proof script; S80-07c (2026-11-18) confines the agent pods; the proof does not run
+  nightly yet (see "What is not done")
 - **Concerns**: `charts/choregos/values/single-node.yaml`, `charts/choregos/templates/backup.yaml`,
-  `charts/choregos/templates/guard.yaml` (`singleNode.enabled`), `tools/single-node/`,
+  `charts/choregos/templates/guard.yaml` (`singleNode.enabled`), `charts/choregos/templates/networkpolicies.yaml`, `tools/single-node/`,
   `docs/runbooks/single-node-restore.md`; builds on [ADR 0072](0072-agent-sandbox-is-the-runtime-of-a-real-deployment.md)
   (which it departs from on one point, below) and on the embedded dependencies of the chart
 
@@ -52,13 +53,27 @@ the existing chart on one k3s node, with a backup.
    - **The site keeps its secrets.** The backup holds no application secret, on purpose (a backup
      that carries the key that seals its own secrets protects nothing): without the same
      `secrets-keks` and run-token key, a restore opens no sealed connector secret.
-   - **Agents run as Jobs, without the per-project egress proxy and without the chart's network
-     policies.** On a bare k3s there is no agent-sandbox operator: this profile departs from
+   - **Agents run as Jobs, confined by the chart's NetworkPolicies and the egress proxy**
+     (S80-07c). On a bare k3s there is no agent-sandbox operator: this profile departs from
      ADR 0072 (the agent-sandbox runtime of a real deployment) and runs agent stages with the
-     `k8s_job` executor, in the release namespace. The chart's NetworkPolicies open the dependencies in
-     their own namespaces (`choregos-data`, `choregos-temporal`, ...) and would cut the embedded ones,
-     so they are off. An agent pod can therefore reach the embedded PostgreSQL on the network; its
-     credentials are not in the pod. A site that runs agents on untrusted inputs is told so before it signs.
+     `k8s_job` executor, in the release namespace, beside the embedded dependencies. The chart's
+     NetworkPolicies name each dependency by its namespace on a cluster and, embedded, by its pods
+     (`app.kubernetes.io/name: choregos-postgresql`, ...). An agent pod (label
+     `app.kubernetes.io/name: choregos-runner`, set by the executor, which the agent cannot change)
+     reaches DNS, the API, the model gateway, the memory and the per-run egress proxy
+     (`global.egress.enabled`, ADR 0070), and nothing else: not PostgreSQL, not Temporal, not the
+     outside but through the proxy, which lets a run reach only the hosts its organisation opened.
+     PostgreSQL and Temporal also admit connections only from the platform's pods that use them, by
+     name: a second wall on the store itself. The platform's own pods go out freely
+     (`networkPolicies.platformEgress`): on one machine no platform team opens the OIDC provider,
+     the model provider, the Kubernetes API or the backup bucket for them. The guard refuses the
+     profile with `networkPolicies.enabled` or `global.egress.enabled` off. k3s enforces
+     NetworkPolicies with its embedded kube-router; a k3s started with `--disable-network-policy`
+     enforces none, and the isolation is then gone: the proof checks it on the machine.
+     What the walls do not cover: the model gateway and the memory are reachable by design (per-run
+     keys; LiteLLM's administration routes on the same port need the master key, which no agent pod
+     holds); the egress proxy never reaches a private address, so a git host or a tracker on the
+     site's LAN is out of an agent's reach.
 7. **The proof.** `tools/single-node/proof.sh` plays, from a blank node: k3s, the chart, one work
    item to `approved` (its agent simulated, the rest of the path real), the backup, the node
    destroyed, a new node, the chart, the restore, and the work item read back `approved`. It runs in
@@ -82,8 +97,11 @@ the existing chart on one k3s node, with a backup.
   twenty minutes). Until one does, the guarantee is only as fresh as the last manual run, recorded
   in STATUS.
 - No embedded object store and no embedded OIDC provider: a site without either brings one.
-- The network isolation of agent pods on this profile (NetworkPolicies for the embedded layout, the
-  egress proxy) is a follow-up.
+- The isolation of agent pods (S80-07c) is proven on the rendered policies, evaluated as a
+  NetworkPolicy implementation does (`tests/charts/test_single_node_agent_network.py`), not yet on a
+  running k3s: `tools/single-node/proof.sh` opens TCP connections from a pod with an agent's labels
+  (the API, the gateway, the memory and the proxy must open; PostgreSQL and Temporal must not), and
+  has not run since.
 
 ## Alternatives considered
 

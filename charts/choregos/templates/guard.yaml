@@ -29,6 +29,14 @@ and sign-in, the demonstration fakes) stay refused whatever the profile.
 {{- if and $singleNode (not (.Values.backup | default dict).enabled) }}
 {{- fail "singleNode.enabled=true needs backup.enabled=true: a single node without a scheduled backup loses everything with its disk (ADR 0184)." }}
 {{- end }}
+{{- /* S80-07c: on one node the agents share the namespace of the embedded database and Temporal; only
+       the chart's NetworkPolicies and the egress proxy keep them away (ADR 0184). */}}
+{{- if and $singleNode (not (.Values.networkPolicies | default dict).enabled) }}
+{{- fail "singleNode.enabled=true needs networkPolicies.enabled=true: without them an agent pod reaches the embedded PostgreSQL and Temporal (ADR 0184)." }}
+{{- end }}
+{{- if and $singleNode (not ($g.egress | default dict).enabled) }}
+{{- fail "singleNode.enabled=true needs global.egress.enabled=true: without the egress proxy an agent pod has no governed way out (ADR 0184)." }}
+{{- end }}
 {{- if has $g.environment (list "staging" "prod") }}
 {{- $fautes := list }}
 {{- if not $singleNode }}
