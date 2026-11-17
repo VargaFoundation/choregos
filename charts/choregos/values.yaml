@@ -420,6 +420,26 @@ global:
     embedded: false
     address: temporal-frontend.choregos-temporal.svc:7233
     namespace: default
+    # TLS to the Temporal frontend, for the API and every worker (ADR 0183). Off by default: dev,
+    # kind and compose talk to Temporal in clear. On, the Secret `secretName` is mounted at
+    # /etc/choregos/temporal-tls: `ca.crt` (the CA that signs the frontend's certificate), and with
+    # `mutual: true` also `tls.crt` and `tls.key` (a cert-manager Certificate's Secret has these keys).
+    tls:
+      enabled: false
+      secretName: ""
+      mutual: false
+      # The name the frontend's certificate is checked against, when it is not the address's host.
+      serverName: ""
+    # Payload encryption (ADR 0183): AES-256-GCM over every payload the API and the workers write to
+    # Temporal (inputs, results, signals, failure messages), so a ticket's text is not readable in a
+    # history. Off by default. On, the Secret `secretName` is mounted at /etc/choregos/temporal-codec
+    # and its entry `key` holds `id:base64,id:base64` (32-byte keys; the FIRST encrypts, every one
+    # decrypts: rotate by putting the new key first and keeping the old one until no open history
+    # carries it). One key for every organisation in this phase; per-organisation keys are phase 2.
+    codec:
+      enabled: false
+      secretName: ""
+      key: keys
   gateway:
     # The gateway adapter: `litellm` (default), `openai-compatible` (discovery only), `direct`.
     type: litellm

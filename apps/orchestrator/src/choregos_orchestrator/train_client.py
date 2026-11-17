@@ -32,6 +32,14 @@ def fake_restarts() -> list[str]:
     return list(_FAKE_RESTARTS)
 
 
+async def _connect() -> Any:
+    """A client the deployment's way: TLS and the payload codec when configured (ADR 0183)."""
+    from choregos_core.temporal_connection import connect_temporal
+
+    settings = get_settings()
+    return await connect_temporal(settings.temporal_address, settings.temporal_namespace)
+
+
 def clear_fake_signals() -> None:
     _FAKE_SIGNALS.clear()
     _FAKE_STARTS.clear()
@@ -56,11 +64,10 @@ async def start_workflow_once(
             return False
         _FAKE_STARTS[workflow_id] = payload
         return True
-    from temporalio.client import Client
     from temporalio.common import WorkflowIDConflictPolicy, WorkflowIDReusePolicy
     from temporalio.exceptions import WorkflowAlreadyStartedError
 
-    client = await Client.connect(settings.temporal_address, namespace=settings.temporal_namespace)
+    client = await _connect()
     try:
         await client.start_workflow(
             name,
@@ -89,10 +96,9 @@ async def restart_interpreter(workflow_id: str, payload: dict[str, Any]) -> None
         _FAKE_STARTS[workflow_id] = payload
         _FAKE_RESTARTS.append(workflow_id)
         return
-    from temporalio.client import Client
     from temporalio.common import WorkflowIDConflictPolicy, WorkflowIDReusePolicy
 
-    client = await Client.connect(settings.temporal_address, namespace=settings.temporal_namespace)
+    client = await _connect()
     await client.start_workflow(
         "WorkflowInterpreter",
         payload,
@@ -146,9 +152,7 @@ async def signal_workflow(
     if settings.fakes:
         _FAKE_SIGNALS[workflow_id].append((name, payload))
         return
-    from temporalio.client import Client
-
-    client = await Client.connect(settings.temporal_address, namespace=settings.temporal_namespace)
+    client = await _connect()
     if start:
         await client.start_workflow(
             start,

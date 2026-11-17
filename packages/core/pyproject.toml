@@ -23,6 +23,13 @@ telemetry = [
     "opentelemetry-sdk==1.45.2",
     "opentelemetry-exporter-otlp-proto-http==1.45.2",
 ]
+# The one way a process connects to Temporal (ADR 0183, `choregos_core.temporal_connection`): TLS and
+# the AES-256-GCM payload codec. An extra for the same reason as `telemetry`: the CLI never talks to
+# Temporal and its native binary carries neither.
+temporal = [
+    "temporalio>=1.8",
+    "cryptography>=43.0",
+]
 
 [build-system]
 requires = ["hatchling"]

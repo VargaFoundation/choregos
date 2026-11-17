@@ -80,6 +80,46 @@ probes the bucket when a workflow declares a file output and names the cause.
 Turning all four on gives a self-contained bench on a single node:
 `-f charts/choregos/values/local.yaml`.
 
+### Temporal over TLS, payloads encrypted ([ADR 0183](adr/0183-temporal-over-tls-payloads-encrypted.md))
+
+Temporal keeps every workflow's inputs, results, signals and failure messages: ticket text, agents'
+results, people's decisions. Both protections are **off by default** (dev, kind, compose) and are switched
+on in the chart; the API and every worker queue receive the same settings, because a payload one process
+encrypts must be decrypted by the others.
+
+```yaml
+global:
+  temporal:
+    address: temporal-frontend.choregos-temporal.svc:7233
+    tls:
+      enabled: true
+      secretName: temporal-client   # `ca.crt`; with `mutual: true` also `tls.crt` and `tls.key`
+      mutual: true
+      serverName: ""                # when the frontend's certificate does not name the address's host
+    codec:
+      enabled: true
+      secretName: temporal-codec    # entry `key` (default `keys`): `k2:<base64 32 bytes>,k1:<...>`
+      key: keys
+```
+
+- The TLS Secret is mounted at `/etc/choregos/temporal-tls`; a cert-manager `Certificate` issued by the
+  CA the Temporal frontend trusts produces exactly `ca.crt`, `tls.crt` and `tls.key`.
+- The codec Secret is mounted at `/etc/choregos/temporal-codec`. Generate a key with
+  `echo "k1:$(head -c 32 /dev/urandom | base64)"`. The **first** key encrypts, every listed key decrypts.
+  To rotate: put the new key first, roll the API and the workers, and drop the old key only once no open
+  workflow history still carries it (a payload under a key no longer listed fails with the key's name).
+  **Losing the key loses the histories written under it**: keep it in the vault with the other platform
+  secrets.
+- Switching the codec on in a running deployment is safe: payloads written in clear before stay readable.
+  Switching it off again is not, while histories written with it are open.
+- The Temporal UI shows encrypted payloads; no codec server is shipped. `tools/replay_record.py` refuses
+  to archive a history while the codec is configured.
+- Outside the chart, the variables are `CHOREGOS_TEMPORAL_TLS`, `CHOREGOS_TEMPORAL_TLS_CA_FILE`,
+  `CHOREGOS_TEMPORAL_TLS_CERT_FILE`, `CHOREGOS_TEMPORAL_TLS_KEY_FILE`, `CHOREGOS_TEMPORAL_TLS_SERVER_NAME`,
+  and `CHOREGOS_TEMPORAL_CODEC_KEYS` (the keys themselves) or `CHOREGOS_TEMPORAL_CODEC_KEYS_FILE`.
+- One key serves every organisation of the deployment in this phase; per-organisation keys from a KMS are
+  phase 2.
+
 ## Secrets
 
 The chart never writes production secrets. It expects them to exist:

@@ -5393,3 +5393,11 @@ stories:
       - "every story of 08-backlog.yaml has exactly one status row across docs/plan/status/, each in its stream's file"
       - "the helm install and upgrade commands of docs/deployment.md and docs/site/ name the version of pyproject.toml, and tools/bump_version.py rewrites them"
     notes: "Workstream A6 of the 2026-11-16 plan. The rows and the narrative move unchanged; the 27 backlog stories that had no row get one, read from the code and the log."
+  - id: S80-06
+    title: "feat(core,orchestrator,api,charts): Temporal over TLS and an AES-256-GCM payload codec, one connection factory for every client and worker (ADR 0183)"
+    stream: S80
+    sprint: 1
+    priority: 6
+    size: M
+    depends_on: []
+    notes: "Plan workstream S4, phase 1. Every Client.connect now goes through choregos_core.temporal_connection.connect_temporal (TLS from a mounted Secret, opt-in codec with key rotation); off by default. Not done: a key per organisation from a KMS (phase 2), a codec server for the Temporal UI, refusing clear text in production, a proof against a real Temporal frontend over TLS."
