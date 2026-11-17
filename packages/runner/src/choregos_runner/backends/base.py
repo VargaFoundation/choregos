@@ -64,7 +64,7 @@ class Backend:
     #: and the run says so.
     shell_filters: ClassVar[frozenset[str]] = frozenset()
     #: Whether the agent's model calls can go through the runner's loopback model listener (ADR 0146 §7):
-    #: it serves the OpenAI and Anthropic shapes, so a backend that speaks another (Gemini's) keeps the
+    #: it serves the OpenAI, Anthropic and Gemini shapes, so a backend that speaks another keeps the
     #: run's key in its container, and the run says so.
     loopback_model: ClassVar[bool] = True
 

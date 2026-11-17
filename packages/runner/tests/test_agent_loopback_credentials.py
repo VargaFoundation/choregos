@@ -78,8 +78,9 @@ def test_the_agent_view_names_the_loopback_and_holds_no_secret(stage_input: Stag
 
 
 def test_a_backend_that_cannot_speak_to_the_model_listener_keeps_its_key(stage_input: StageInput) -> None:
-    """Gemini's API paths are not served by the model listener: its key stays, and the docs say so."""
-    assert get_backend("gemini-cli").loopback_model is False
+    """The mechanism stays for a backend that speaks no shape the listener serves; none does today:
+    `gemini-cli`'s Gemini paths are served since S65-04f."""
+    assert get_backend("gemini-cli").loopback_model is True
     assert get_backend("codex").loopback_model is True
     view = agent_view(_step(stage_input), PORTS, model=False)
     assert view.gateway_key == GATEWAY
@@ -186,6 +187,83 @@ async def test_the_gateways_budget_refusal_is_known_to_the_runner(stage_input: S
     assert proxy.budget_refusal and "Budget has been exceeded" in proxy.budget_refusal
 
 
+GEMINI = "/v1beta/models/gemini-2.5-pro:streamGenerateContent"
+
+
+async def test_gemini_paths_reach_the_gateway_with_the_runs_key_and_model_and_not_the_loopback_key(
+    stage_input: StageInput,
+) -> None:
+    """S65-04f remainder: `gemini-cli`'s API on the loopback, the key injected runner-side (LiteLLM serves
+    `v1beta/models/<m>:<action>` at its root and reads `x-goog-api-key`, checked in litellm 1.105)."""
+    gateway = Gateway()
+    step = _step(stage_input)
+    proxy = ModelProxy(step, _noop, transport=httpx.MockTransport(gateway), count_turns=False, measure=False)
+    body = {"contents": [{"role": "user", "parts": [{"text": "hi"}]}]}
+    async with await _client(proxy) as agent:
+        header = await agent.post(
+            GEMINI, params={"alt": "sse"}, headers={"x-goog-api-key": LOOPBACK_KEY}, json=body
+        )
+        query = await agent.post(
+            "/v1beta/models/other-model:generateContent", params={"key": LOOPBACK_KEY}, json=body
+        )
+        counted = await agent.post(
+            "/v1beta/models/x:countTokens", headers={"authorization": f"Bearer {LOOPBACK_KEY}"}, json=body
+        )
+        refused = [
+            await agent.post(GEMINI, headers={"x-goog-api-key": GATEWAY}, json=body),
+            await agent.post(GEMINI, json=body),
+            await agent.post(GEMINI, params={"key": GATEWAY}, json=body),
+            await agent.get(GEMINI, headers={"x-goog-api-key": LOOPBACK_KEY}),
+            await agent.post("/v1beta/models/m:embedContent", headers={"x-goog-api-key": LOOPBACK_KEY}),
+            await agent.post("/v1beta/files", headers={"x-goog-api-key": LOOPBACK_KEY}),
+        ]
+
+    assert [a.status_code for a in (header, query, counted)] == [200, 200, 200]
+    assert [a.status_code for a in refused] == [401, 401, 401, 405, 404, 404]
+    assert len(gateway.requests) == 3, "nothing refused is forwarded"
+    model = step.model.litellm_model
+    assert [r.url.path for r in gateway.requests] == [
+        f"/v1beta/models/{model}:streamGenerateContent",
+        f"/v1beta/models/{model}:generateContent",
+        f"/v1beta/models/{model}:countTokens",
+    ], "the gateway's root (not under /v1), the run's model whatever the URL named"
+    assert gateway.requests[0].url.params["alt"] == "sse"
+    for forwarded in gateway.requests:
+        assert forwarded.headers["x-goog-api-key"] == GATEWAY
+        assert forwarded.headers["authorization"] == f"Bearer {GATEWAY}"
+        assert "key" not in forwarded.url.params and LOOPBACK_KEY not in str(forwarded.url)
+        assert json.loads(forwarded.content) == body
+
+
+async def test_gemini_generations_are_counted_as_turns_on_a_hosted_step_and_a_gateway_budget_refusal_is_known(
+    stage_input: StageInput,
+) -> None:
+    step = _step(stage_input).model_copy(
+        update={"budget": stage_input.budget.model_copy(update={"max_turns": 2})}
+    )
+    headers = {"x-goog-api-key": LOOPBACK_KEY}
+    hosted = ModelProxy(step, _noop, transport=httpx.MockTransport(Gateway()))
+    async with await _client(hosted) as agent:
+        answers = [(await agent.post(GEMINI, headers=headers, json={})).status_code for _ in range(4)]
+    assert answers == [200, 200, 400, 400]
+
+    refusal = "Budget has been exceeded! Current cost: 5.0012, Max budget: 5.0"
+    proxy = ModelProxy(
+        step,
+        _noop,
+        transport=httpx.MockTransport(Gateway(400, json.dumps({"error": {"message": refusal}}))),
+        count_turns=False,
+        measure=False,
+    )
+    async with await _client(proxy) as agent:
+        answer = await agent.post(GEMINI, headers=headers, json={})
+    assert (
+        answer.status_code == 400
+        and proxy.budget_refusal
+        and "Budget has been exceeded" in proxy.budget_refusal
+    )
+
+
 async def test_the_mcp_header_is_added_by_the_runner_and_a_call_from_the_shell_is_still_judged(
     stage_input: StageInput,
 ) -> None:
@@ -286,13 +364,13 @@ async def test_the_agents_process_holds_neither_the_key_nor_the_egress_token_nor
         assert GATEWAY not in json.dumps(env), argv
 
 
-async def test_a_backend_without_a_loopback_model_keeps_its_key_and_loses_nothing_else(
+async def test_gemini_cli_gets_the_loopback_key_and_address_too(
     stage_input: StageInput,
     runner_settings: Any,
     serving: tuple[int, list[Any]],  # noqa: F811
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The residual gap, in a test: Gemini's own variable carries the key; the rest stays held."""
+    """S65-04f remainder: Gemini's own variables carry the loopback key and address, nothing real."""
     port, _ = serving
     step = _step(stage_input, backend="gemini-cli")
     agent_script({"turns": [{"result": valid_result()}]}, step, runner_settings.workspace)
@@ -316,5 +394,7 @@ async def test_a_backend_without_a_loopback_model_keeps_its_key_and_loses_nothin
     await runner.execute(step, client)  # type: ignore[arg-type]
 
     [env] = seen
-    assert env["GEMINI_API_KEY"] == GATEWAY
+    assert env["GEMINI_API_KEY"] == LOOPBACK_KEY
+    assert env["GOOGLE_GEMINI_BASE_URL"] == loopback_url(runner.loopback_ports[0])
+    assert GATEWAY not in json.dumps(env)
     assert EGRESS not in json.dumps(env) and MCP_HEADER not in json.dumps(env)

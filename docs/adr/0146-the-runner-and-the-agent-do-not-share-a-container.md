@@ -49,8 +49,12 @@ step's agent and hands it a copy of the step with loopback addresses and the loo
 constructor option (`count_turns=False` for an ACP step, which also skips the context measure: the runner
 registers the context itself), and the MCP listener still judges every `tools/call` though the ACP
 permission judged it first, because a `curl` from the shell skips the permission. The `gemini-cli`
-backend speaks API paths the model listener does not serve (`Backend.loopback_model = False`): its key
-stays in the container, and the docs say so. The project's checks start with the
+backend first kept its key (`Backend.loopback_model = False`: its API paths were not served); the model
+listener now serves the Gemini paths it uses (`v1beta/models/<m>:generateContent`, `:streamGenerateContent`,
+`:countTokens`; also under `v1/`), forwards them to the gateway's root with the run's key as `Authorization`
+and `x-goog-api-key` and the run's model in the path, and accepts the loopback key as `x-goog-api-key` or
+`?key=`. The gateway keeps enforcing the run's budget. `loopback_model` stays as a switch, `True` everywhere.
+Not served: `embedContent`, files, tuned models, the Live API (LiteLLM 1.105 exposes the three above only). The project's checks start with the
 same proxy variables as the agent.
 
 **Built after, S65-04b (§6)**: the runner opens what it reads or writes in the agent's tree through `safe_files.py` (each directory from its parent's descriptor, `O_NOFOLLOW`, a regular file only): result, deliverables, inputs, task and context, journal, saved session, the hosted prompt agent's file tools. The ACP `fs/read_text_file` and `fs/write_text_file` handlers go through it too (a path is judged as written, `..` folded, then opened from the workspace root, or the tool-script directory's, with no link followed: a link inside the tree to another file of the tree is refused as well, and a link swapped in after the check is refused by the open). A journal or saved-session write that meets a link is refused with a named event (`journal.local_copy_refused`, `session/save.refused`) and the run goes on: the API still receives every event, so nothing is lost but the local copy, and a resume would start a new conversation. Not covered: the files git walks, and the runner's own pre-run writes of `task.md`, `context.md`, inputs, knowledge and skills. The transcript and `acp-session.json` stay in `.choregos/`: a link there is refused, not moved out of the tree.

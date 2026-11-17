@@ -27,6 +27,7 @@ import re
 import time
 from collections.abc import AsyncIterator, Mapping
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 from choregos_contracts import StageInput
@@ -43,6 +44,9 @@ from . import Record
 
 #: What the container may ask of the model, under `/v1/`.
 PATHS = frozenset({"chat/completions", "responses", "messages", "embeddings", "models"})
+#: Gemini's native API, which `gemini-cli` speaks (S65-04f): `v1beta/models/<model>:<action>`. LiteLLM
+#: serves these three at its root, and reads the key from `x-goog-api-key`, `Authorization` or `?key=`.
+_GEMINI = re.compile(r"^(?:v1beta|v1)/models/[^:]+:(generateContent|streamGenerateContent|countTokens)$")
 #: A Foundry project's OpenAI-compatible root, before the same paths (S41-19).
 _FOUNDRY_ROOT = re.compile(r"^api/projects/[A-Za-z0-9._-]+/openai/")
 #: The conversations API: stored items, not model calls, so not turns.
@@ -104,6 +108,9 @@ class ModelProxy:
             return await self._identity(request)
         path = _FOUNDRY_ROOT.sub("", raw).removeprefix("v1/")
         stored = _CONVERSATIONS.match(path) is not None
+        gemini = _GEMINI.match(path)
+        if gemini is not None:
+            return await self._gemini(request, gemini.group(1))
         if path not in PATHS and not stored:
             return _error(404, "not_found", f"`/{path}` is not served on the loopback model")
         if request.method == "DELETE" and not stored:
@@ -128,6 +135,30 @@ class ModelProxy:
         body["model"] = self.stage_input.model.litellm_model
         return await self._forward(request, path, body)
 
+    async def _gemini(self, request: Request, action: str) -> Response:
+        """A Gemini API call (`gemini-cli`): forwarded to the gateway's `v1beta/models/<run's model>:<action>`
+        with the run's key, the container's loopback key (header or `?key=`) never leaving. The model is the
+        run's, whatever the URL named. A generation is a turn; counting tokens is not."""
+        if request.method != "POST":
+            return _error(405, "method_not_allowed", f"`{request.method}` is not served on the Gemini paths")
+        if _key(request) != LOOPBACK_KEY:
+            return _error(401, "auth_error", "the loopback model accepts the loopback key only")
+        content = await request.body()
+        if action != "countTokens":
+            limit = self.stage_input.budget.max_turns
+            if self.count_turns and self.turns >= limit:
+                self.refused_turns += 1
+                await self.record(
+                    "hosted.model_refused",
+                    {"path": f"models:{action}", "reason": "max_turns", "limit": limit},
+                )
+                return _error(400, "max_turns", f"the step has used its {limit} model calls (max_turns)")
+            self.turns += 1
+        model = quote(self.stage_input.model.litellm_model, safe="/-._~")
+        return await self._forward(
+            request, f"v1beta/models/{model}:{action}", None, content=content, drop_query=("key",)
+        )
+
     async def _identity(self, request: Request) -> Response:
         """App Service's managed identity protocol, which `ManagedIdentityCredential` speaks when
         `IDENTITY_ENDPOINT` and `IDENTITY_HEADER` are set."""
@@ -147,18 +178,32 @@ class ModelProxy:
         )
 
     async def _forward(
-        self, request: Request, path: str, body: dict[str, Any] | None, *, content: bytes | None = None
+        self,
+        request: Request,
+        path: str,
+        body: dict[str, Any] | None,
+        *,
+        content: bytes | None = None,
+        drop_query: tuple[str, ...] = (),
     ) -> Response:
         model = self.stage_input.model
         headers = {name: request.headers[name] for name in _FORWARDED if name in request.headers}
+        base = model.base_url.rstrip("/")
         if self.stage_input.gateway_key:
             headers["authorization"] = f"Bearer {self.stage_input.gateway_key}"
             if path == "messages":
                 headers["x-api-key"] = self.stage_input.gateway_key
+        if path.startswith("v1beta/"):  # Gemini's API sits at the gateway's root, not under `/v1`
+            base = base.removesuffix("/v1")
+            if self.stage_input.gateway_key:
+                headers["x-goog-api-key"] = self.stage_input.gateway_key
+        query: list[tuple[str, str | int | float | bool | None]] = [
+            (k, v) for k, v in request.query_params.multi_items() if k not in drop_query
+        ]
         upstream = self.http.build_request(
             request.method,
-            f"{model.base_url.rstrip('/')}/{path}",
-            params=str(request.query_params),
+            f"{base}/{path}",
+            params=query,
             headers=headers,
             content=json.dumps(body).encode() if body is not None else content or None,
         )
@@ -266,7 +311,12 @@ def _key(request: Request) -> str:
     authorization = request.headers.get("authorization", "")
     if authorization.lower().startswith("bearer "):
         return authorization[7:].strip()
-    return request.headers.get("x-api-key", "").strip()
+    return (
+        request.headers.get("x-api-key")
+        or request.headers.get("x-goog-api-key")
+        or request.query_params.get("key")
+        or ""
+    ).strip()
 
 
 def _error(status: int, type_: str, message: str) -> JSONResponse:
