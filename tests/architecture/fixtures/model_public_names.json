@@ -116,5 +116,7 @@
  "OutpostEnrolment",
  "OutpostInstance",
  "OrgSamlIdp",
- "SamlConsumedAssertion"
+ "SamlConsumedAssertion",
+ "AuditChainHead",
+ "AuditCheckpoint"
 ]

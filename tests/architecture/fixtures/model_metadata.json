@@ -3079,6 +3079,152 @@
    ]
   ]
  },
+ "audit_chain_heads": {
+  "checks": [],
+  "columns": [
+   {
+    "default": null,
+    "name": "chain",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": null,
+    "name": "org_id",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": null,
+    "name": "seq",
+    "nullable": false,
+    "server_default": null,
+    "type": "BigInteger()"
+   },
+   {
+    "default": null,
+    "name": "hash",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=64)"
+   }
+  ],
+  "foreign_keys": [
+   [
+    [
+     "org_id"
+    ],
+    [
+     "organizations.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_audit_chain_heads_org_id_organizations"
+   ]
+  ],
+  "indexes": [
+   [
+    "ix_audit_chain_heads_org_id",
+    [
+     "audit_chain_heads.org_id"
+    ],
+    false
+   ]
+  ],
+  "primary_key": [
+   "chain"
+  ],
+  "uniques": []
+ },
+ "audit_checkpoints": {
+  "checks": [],
+  "columns": [
+   {
+    "default": null,
+    "name": "org_id",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": null,
+    "name": "seq",
+    "nullable": false,
+    "server_default": null,
+    "type": "BigInteger()"
+   },
+   {
+    "default": null,
+    "name": "hash",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=64)"
+   },
+   {
+    "default": null,
+    "name": "kind",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=16)"
+   },
+   {
+    "default": null,
+    "name": "created_at",
+    "nullable": false,
+    "server_default": null,
+    "type": "DateTime(timezone=True)"
+   },
+   {
+    "default": null,
+    "name": "key_id",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=43)"
+   },
+   {
+    "default": null,
+    "name": "signature",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=86)"
+   },
+   {
+    "default": "<function uuid7>",
+    "name": "id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   }
+  ],
+  "foreign_keys": [
+   [
+    [
+     "org_id"
+    ],
+    [
+     "organizations.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_audit_checkpoints_org_id_organizations"
+   ]
+  ],
+  "indexes": [
+   [
+    "ix_audit_checkpoints_org_id",
+    [
+     "audit_checkpoints.org_id"
+    ],
+    false
+   ]
+  ],
+  "primary_key": [
+   "id"
+  ],
+  "uniques": []
+ },
  "audit_log": {
   "checks": [],
   "columns": [
@@ -3139,6 +3285,27 @@
     "type": "DateTime(timezone=True)"
    },
    {
+    "default": null,
+    "name": "seq",
+    "nullable": true,
+    "server_default": null,
+    "type": "BigInteger()"
+   },
+   {
+    "default": null,
+    "name": "prev_hash",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=64)"
+   },
+   {
+    "default": null,
+    "name": "hash",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=64)"
+   },
+   {
     "default": "<function uuid7>",
     "name": "id",
     "nullable": false,
@@ -3171,6 +3338,14 @@
     "ix_audit_log_actor_id",
     [
      "audit_log.actor_id"
+    ],
+    false
+   ],
+   [
+    "ix_audit_log_chain",
+    [
+     "audit_log.org_id",
+     "audit_log.seq"
     ],
     false
    ],
