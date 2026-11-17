@@ -31,7 +31,9 @@ from .conftest import APP_ROLE, PG_URL, login, without_postgres
 pytestmark = [without_postgres, pytest.mark.asyncio]
 
 POOL_SIZE = 2
-POOL_TIMEOUT_S = 2
+# A starved pool still shows: /readyz then waits the whole timeout and fails. 2 s was too tight for a loaded
+# CI runner, which served /readyz in 2.05 to 2.17 s with the pool free (three runs, 2026-11-12).
+POOL_TIMEOUT_S = 5
 HELD = 3
 ORG = "/api/v1/orgs/a"
 
