@@ -125,7 +125,7 @@ async def test_a_preapproved_default_is_installed_and_the_configuration_is_the_a
     assert [(o.plugin, o.outcome) for o in outcomes] == [("software-delivery", "installed")]
     assert fake.calls == [], "taken from the offline directory: no network at start-up"
     row = (await _rows())["software-delivery"]
-    assert (row.source, row.version, row.is_default, row.installed_by) == ("northwind", "1.1.1", True, None)
+    assert (row.source, row.version, row.is_default, row.installed_by) == ("tranibor", "1.1.1", True, None)
     (approval,) = await _audit("plugin.default.preapproved")
     assert approval.payload["approved_by"] == "deployment configuration"
     assert any("madr-4" in reason for reason in approval.payload["reasons"])

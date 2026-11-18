@@ -69,7 +69,7 @@ async def test_an_admin_creates_an_organisation_a_developer_does_not(client: Asy
         again = await client.post("/api/v1/orgs", json={"slug": "subsidiary", "name": "again"})
         assert again.status_code == 409, "a slug already taken stays a conflict"
         slugs = [o["slug"] for o in (await client.get("/api/v1/orgs")).json()]
-        assert slugs == ["subsidiary", "northwind"]
+        assert slugs == ["northwind", "subsidiary"]
 
         await login(client, "dev@northwind.dev")
         assert (await client.post("/api/v1/orgs", json={"slug": "pirate", "name": "x"})).status_code == 403
