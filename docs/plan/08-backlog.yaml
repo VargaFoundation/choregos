@@ -473,17 +473,6 @@ stories:
     acceptance:
       - "Unvalidated combination refused with a link to the matrix; admin `allow_unvalidated` works"
 
-  - id: S4-08
-    title: "Prompt caching on the platform's own model calls — stable prefix, `cache_control` on the Anthropic-family prefix, no-op elsewhere"
-    stream: S4
-    sprint: 2
-    priority: 8
-    size: M
-    depends_on: [S4-02]
-    acceptance:
-      - "Tools sorted, system first, volatile data after the breakpoint; two calls with different volatile input share a byte-identical prefix"
-      - "`cache_control: ephemeral` on the last tool and the last system block for an Anthropic-family model; no cache field for any other provider"
-      - "Cache counters read from `usage`; their ledger columns are S4-07's"
 
   # ───────────────────────── S5 — Front ─────────────────────────
   - id: S5-01
@@ -5679,3 +5668,14 @@ stories:
     size: L
     depends_on: []
     notes: "Decision of 2026-11-18. NOTICE, licence headers, console footer, publishing identity (security contact, commit address, plugin repository and index) and docs name GRAAL.SYSTEMS SAS; the default plugin source varga becomes tranibor (migration, old name still resolved); guarded by tests/licences/test_no_varga.py."
+  - id: S4-08
+    title: "Prompt caching on the platform's own model calls — stable prefix, `cache_control` on the Anthropic-family prefix, no-op elsewhere"
+    stream: S4
+    sprint: 2
+    priority: 8
+    size: M
+    depends_on: [S4-02]
+    acceptance:
+      - "Tools sorted, system first, volatile data after the breakpoint; two calls with different volatile input share a byte-identical prefix"
+      - "`cache_control: ephemeral` on the last tool and the last system block for an Anthropic-family model; no cache field for any other provider"
+      - "Cache counters read from `usage`; their ledger columns are S4-07's"

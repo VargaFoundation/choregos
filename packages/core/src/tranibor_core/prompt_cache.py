@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Prompt caching for the platform's own model calls (S4-08, ADR 0189).
 
 The platform calls models through the LiteLLM gateway on `/chat/completions`. A system prompt, an
