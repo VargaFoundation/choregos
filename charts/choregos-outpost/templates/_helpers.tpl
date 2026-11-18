@@ -3,7 +3,8 @@
 {{- if .Values.fullnameOverride -}}
 {{- .Values.fullnameOverride | trunc 52 | trimSuffix "-" -}}
 {{- else -}}
-{{- $name := default .Chart.Name .Values.nameOverride -}}
+{{- /* Not the chart's name: it is published as `tranibor-outpost` and `choregos-outpost` (ADR 0176 R3). */ -}}
+{{- $name := default "choregos-outpost" .Values.nameOverride -}}
 {{- if contains $name .Release.Name -}}
 {{- .Release.Name | trunc 52 | trimSuffix "-" -}}
 {{- else -}}

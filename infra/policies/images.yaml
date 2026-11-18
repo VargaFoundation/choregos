@@ -29,6 +29,26 @@ spec:
                     rekor: { url: "https://rekor.sigstore.dev" }
           mutateDigest: true
           required: true
+        # The same images under the core's name (ADR 0176 R3): a release pushes one digest under both
+        # names, each signed by its workflow. Each component is named: the glob `tranibor-*` would
+        # catch `ghcr.io/graalsystems/tranibor-agents/<server>`, the plugin servers, which another
+        # repository signs (`plugin-servers.yaml`), and refuse them for a signature they never carry.
+        - imageReferences:
+            - "ghcr.io/graalsystems/tranibor-api*"
+            - "ghcr.io/graalsystems/tranibor-orchestrator*"
+            - "ghcr.io/graalsystems/tranibor-tools*"
+            - "ghcr.io/graalsystems/tranibor-web*"
+            - "ghcr.io/graalsystems/tranibor-runner*"
+            - "ghcr.io/graalsystems/tranibor-laya*"
+            - "ghcr.io/graalsystems/tranibor-outpost*"
+          attestors:
+            - entries:
+                - keyless:
+                    subject: "https://github.com/graalsystems/tranibor/.github/workflows/*"
+                    issuer: "https://token.actions.githubusercontent.com"
+                    rekor: { url: "https://rekor.sigstore.dev" }
+          mutateDigest: true
+          required: true
         # The images published before the publication moved (0.27.10 and older) stay in the frozen
         # namespace and keep their signatures, issued by the repositories as they were then named.
         - imageReferences: ["ghcr.io/vargafoundation/choregos-*"]

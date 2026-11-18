@@ -4,7 +4,7 @@
 
 - **Status**: accepted, 2026-11-17 (decided by the product owner on 2026-11-15, D6, and confirmed on
   2026-11-17: "do the renames now", the trademark gate being skipped); R1 is implemented by S75-01,
-  R2, R3 and R4 are not started
+  R3 steps (a) and (b) by S75-03 (2026-11-18), R2, R4 and the rest of R3 are not started
 - **Concerns**: the whole repository (25,000 occurrences of the old name in 4,600 files, counted on
   2026-11-17), and above all `packages/*` (the distributions and import packages), `publishing.json` and
   `tools/publishing_identity.py`, `charts/`, `docker/`, `infra/policies/`, the `CHOREGOS_*` variables;
@@ -60,9 +60,9 @@ One commit cannot rename all four, and the fourth layer must not be renamed by a
    second one fails when a new module is added to a package whose shim does not cover it. The enterprise
    edition and the plugins move at their own pace during the cycle; the shim is removed in the minor that
    follows, in its own PR.
-4. **R3, the artefact names (not started).** Images and charts become `tranibor-*`
+4. **R3, the artefact names (steps (a) and (b) done by S75-03).** Images and charts become `tranibor-*`
    (`tranibor-api`, `tranibor-web`, `tranibor-orchestrator`, `tranibor-runner`, `tranibor-outpost`,
-   `tranibor-tools`, `tranibor-quant`, `tranibor-laya`, the charts `tranibor` and `tranibor-outpost`, the
+   `tranibor-tools`, `tranibor-laya`, the charts `tranibor` and `tranibor-outpost`, the
    native CLI files `tranibor-<platform>`), through `publishing.json` and
    `tools/publishing_identity.py` (a name prefix next to `registry`, and `make publishing-rewrite`
    carrying it; ADR 0156 §7), never by hand. The old names are published as **aliases** for the whole
@@ -170,3 +170,25 @@ One commit cannot rename all four, and the fourth layer must not be renamed by a
   line and image tag for a reader who knows only one.
 - **One PR for the decision and R1.** Reviewing a 400-file mechanical rename while the plan it applies is
   still being read hides both; the decision is its own PR and R1 stacks on it.
+
+## Amendment (2026-11-18, S75-03): R3 steps (a) and (b), as built
+
+- **(a)** The Diametral platform's `choregos-verify-images` admits `ghcr.io/graalsystems/tranibor-<component>`
+  beside `choregos-*`, with the same signer (DiametralGroup/infra#1600), and so does
+  `infra/policies/images.yaml` here. Each component is named: a glob `tranibor-*` would also catch
+  `ghcr.io/graalsystems/tranibor-agents/<server>`, the plugin servers, which another repository signs.
+- **(b)** The publishing identity gains two values, `image_prefix` (`tranibor`) and `image_alias_prefix`
+  (`choregos`, until step (e) removes it). A prefix is a word that is also the product's name, so the
+  check and the rewrite count it only inside an image or chart name under the registry
+  (`<registry>/<prefix>-<component>`, `<registry>/<prefix>-` before a glob or an expression,
+  `<registry>/charts/<prefix>[-outpost]`). The release builds each image once, gives its manifest list
+  both names, checks that both carry one digest and signs each name; it packages each chart once per
+  name (`tools/package_charts.py`), and the charts no longer take their objects' names from the chart's
+  name, so both names render the same objects (`tests/charts/test_chart_names.py`).
+- `tranibor-quant` is dropped from point 4's list: no such image exists, `quant` is a command of the
+  runner image (#1847).
+- **Not done in (b)**: the native CLI files keep their `choregos-<platform>` names (the install scripts
+  and the self-update must accept both first); the images `main` pushes for each commit keep the former
+  name only; the chart's per-component `repository` defaults (`choregos-api`, …) carry no registry, so
+  the rewrite does not see them, and they switch by hand with the deployments (step (c)), not by the
+  identity.

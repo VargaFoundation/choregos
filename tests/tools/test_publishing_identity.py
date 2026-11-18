@@ -23,7 +23,7 @@ import subprocess
 from dataclasses import asdict
 
 import pytest
-from choregos_core.publishing import PUBLISHING
+from choregos_core.publishing import IMAGE_COMPONENTS, PUBLISHING
 
 from tools import publishing_identity as pi
 
@@ -33,6 +33,8 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 ELSEWHERE = {
     "owner": "ExampleOrg",
     "registry": "registry.example.org/exampleorg",
+    "image_prefix": "exampleware",
+    "image_alias_prefix": "examplelegacy",
     "source_repository": "https://forge.example.org/exampleorg/choregos",
     "documentation": "https://docs.example.org/choregos",
     "security_contact": "security@example.org",
@@ -81,7 +83,9 @@ def test_the_derived_defaults_are_the_definition() -> None:
         "utf-8"
     )
     images = (ROOT / "infra/policies/images.yaml").read_text(encoding="utf-8")
-    assert f'imageReferences: ["{PUBLISHING.registry}/choregos-*"]' in images
+    assert f'imageReferences: ["{PUBLISHING.registry}/{PUBLISHING.image_alias_prefix}-*"]' in images
+    for component in IMAGE_COMPONENTS:
+        assert f'- "{PUBLISHING.registry}/{PUBLISHING.image_prefix}-{component}*"' in images
     assert f'subject: "{PUBLISHING.source_repository}/.github/workflows/*"' in images
     # `plugins/offline/plugins.lock` is history, not derived (ADR 0186): it records the index and the
     # signing identity that produced the archives, and only `make plugins-lock` replaces them.
@@ -122,7 +126,8 @@ def test_a_value_spelled_in_another_case_is_refused(small: pathlib.Path) -> None
     """The rewrite replaces values as the definition spells them; another case would be left behind."""
     _write(small, "docs/x.md", f"docker pull {PUBLISHING.registry.upper()}/choregos-api\n")
     issues = pi.problems(small, derived=["charts/choregos/values.yaml", "docs/x.md"])
-    spelled = PUBLISHING.registry.upper()
+    # The image's name is read whole (the prefix counts inside it), and reported whole.
+    spelled = f"{PUBLISHING.registry.upper()}/choregos-api"
     assert issues == [
         f"docs/x.md:1: `{spelled}` is not spelled as in {pi.CANONICAL}; the rewrite would miss it"
     ]
@@ -208,6 +213,61 @@ def test_moving_the_publication_is_one_edit_and_one_command(tmp_path: pathlib.Pa
         in policy
     )
     assert "@ExampleOrg/integrators" in (root / "CODEOWNERS").read_text(encoding="utf-8")
+    # The images and charts follow their prefixes and their registry, both names of the window.
+    release = (root / ".github/workflows/release.yml").read_text(encoding="utf-8")
+    assert "IMAGE: registry.example.org/exampleorg/exampleware-${{ matrix.image }}" in release
+    assert "ALIAS: registry.example.org/exampleorg/examplelegacy-${{ matrix.image }}" in release
+    images = (root / "infra/policies/images.yaml").read_text(encoding="utf-8")
+    assert '- "registry.example.org/exampleorg/exampleware-api*"' in images
+    assert 'imageReferences: ["registry.example.org/exampleorg/examplelegacy-*"]' in images
+    install = (root / "docs/site/host/install.md").read_text(encoding="utf-8")
+    assert "oci://registry.example.org/exampleorg/charts/examplelegacy" in install
+    # The plugins' images keep their own name under the registry: it is not an image prefix.
+    assert "registry\\\\.example\\\\.org/exampleorg/tranibor-agents|" in policy
+
+
+def test_the_prefixes_count_only_in_an_image_or_chart_name() -> None:
+    """A prefix is a word ("tranibor" is the product's name): it counts only under the registry."""
+    identity = {key: getattr(PUBLISHING, key) for key in ("registry", "image_prefix", "image_alias_prefix")}
+    registry, prefix, alias = identity["registry"], PUBLISHING.image_prefix, PUBLISHING.image_alias_prefix
+    prose = f"{prefix} is the core; {prefix}-api is a package; {registry}/{prefix}-agents/hello-mcp"
+    assert pi.find(prose, identity) == [(1, registry)]
+    names = (
+        f"{registry}/{prefix}-api:1 {registry}/{alias}-runner@sha256 {registry}/{prefix}-* "
+        f"{registry}/{alias}-${{{{ matrix.image }}}} oci://{registry}/charts/{prefix}-outpost"
+    )
+    assert [text for _, text in pi.find(names, identity)] == [
+        f"{registry}/{prefix}-api",
+        f"{registry}/{alias}-runner",
+        f"{registry}/{prefix}-",
+        f"{registry}/{alias}-",
+        f"{registry}/charts/{prefix}-outpost",
+    ]
+    escaped = registry.replace(".", "\\.")
+    assert pi.find(f"^{escaped}/{prefix}-api$", identity) == [(1, f"{escaped}/{prefix}-api")]
+
+
+def test_moving_a_prefix_moves_the_names_and_nothing_else(small: pathlib.Path) -> None:
+    registry, prefix = PUBLISHING.registry, PUBLISHING.image_prefix
+    text = (
+        f"pull {registry}/{prefix}-api:1.0 and oci://{registry}/charts/{prefix}; "
+        f"{prefix} serves {registry}/{prefix}-agents/hello-mcp\n"
+    )
+    _write(small, "docs/x.md", text)
+    old = pi.current_identity(small)
+    new = old | {"image_prefix": "exampleware"}
+    pi.rewrite(small, old, new, derived=["docs/x.md", "charts/choregos/values.yaml"])
+    assert (small / "docs/x.md").read_text(encoding="utf-8") == (
+        f"pull {registry}/exampleware-api:1.0 and oci://{registry}/charts/exampleware; "
+        f"{prefix} serves {registry}/{prefix}-agents/hello-mcp\n"
+    )
+    assert pi.left_behind(small, old, new) == []
+    # A name the rewrite could not see (another case) is what the check refuses.
+    _write(small, "docs/x.md", f"pull {registry}/{prefix.upper()}-api:1.0\n")
+    assert pi.problems(small, derived=["charts/choregos/values.yaml", "docs/x.md"]) == [
+        f"docs/x.md:1: `{registry}/{prefix.upper()}-api` is not spelled as in {pi.CANONICAL}; "
+        "the rewrite would miss it"
+    ]
 
 
 def test_a_rewrite_that_moves_one_value_leaves_the_others(tmp_path: pathlib.Path) -> None:

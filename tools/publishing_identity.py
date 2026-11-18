@@ -10,6 +10,10 @@ The identity is `packages/core/src/choregos_core/publishing.json`. The code read
 cannot read a JSON file — a chart's values, a Kyverno policy, a workflow, a Dockerfile, a page of
 documentation — spells the values out, and is listed in `DERIVED` below.
 
+The image prefixes (`image_prefix`, and `image_alias_prefix` for the deprecation window of ADR 0176
+R3) are words, not addresses: they count only inside an image or chart name under the registry,
+`<registry>/<prefix>-api` or `<registry>/charts/<prefix>`, and are rewritten there with the registry.
+
 The check refuses:
 
 * a tracked file that spells a value of the identity and is neither the definition, its copy, a
@@ -35,6 +39,8 @@ import shutil
 import subprocess
 import sys
 from collections.abc import Iterable, Mapping
+
+from choregos_core.publishing import CHARTS, IMAGE_COMPONENTS
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 GIT = shutil.which("git") or "git"
@@ -192,6 +198,46 @@ def is_owner(key: str) -> bool:
     return key.endswith("owner")
 
 
+def is_prefix(key: str) -> bool:
+    """An image prefix (`image_prefix`, `image_alias_prefix`, or one of them as it was before a move)."""
+    return "prefix" in key
+
+
+def is_registry(key: str) -> bool:
+    return "registry" in key
+
+
+#: What follows a prefix in an image's name: a component the release builds, or nothing more of a
+#: name (`<registry>/<prefix>-*` in a policy, `<registry>/<prefix>-${{ matrix.image }}` in a workflow).
+IMAGE_TAILS = ("-", *(f"-{component}" for component in IMAGE_COMPONENTS))
+
+
+def _named(registry: str, prefix: str) -> list[str]:
+    """The names a prefix gives under one registry: its images, then its charts, in a fixed order."""
+    images = [f"{registry}/{prefix}{tail}" for tail in IMAGE_TAILS]
+    return images + [f"{registry}/charts/{prefix}{suffix}" for suffix in CHARTS]
+
+
+def key_spellings(identity: Mapping[str, str]) -> dict[str, list[str]]:
+    """The ways a file may spell each value of `identity`.
+
+    A prefix is a bare word ("tranibor" is also the product's name in every page), so it counts only
+    inside an image or chart name under a registry of `identity`: `<registry>/<prefix>-api`,
+    `<registry>/<prefix>-` followed by a glob or an expression, `<registry>/charts/<prefix>`. A name
+    of the registry that is not one of those (`<registry>/tranibor-agents/...`, the plugins' images)
+    is the registry's alone.
+    """
+    registries = [value for key, value in identity.items() if is_registry(key)]
+    return {
+        key: (
+            [s for registry in registries for name in _named(registry, value) for s in spellings(name)]
+            if is_prefix(key)
+            else spellings(value)
+        )
+        for key, value in identity.items()
+    }
+
+
 def _owner_place(text: str, start: int, end: int) -> bool:
     """`<owner>/…` (a repository, a team, an image path) or `github.com/<owner>` (the organisation)."""
     return text[end : end + 1] == "/" or text[max(0, start - 11) : start].lower() == "github.com/"
@@ -221,7 +267,7 @@ def _bounded(text: str, start: int, end: int, needle: str) -> bool:
 def find(text: str, identity: Mapping[str, str]) -> list[tuple[int, str]]:
     """(line, text) of every spelling of every value in `text`, in any case, longest first, no overlap."""
     lowered = text.lower()
-    needles = {s.lower(): is_owner(key) for key, value in identity.items() for s in spellings(value)}
+    needles = {s.lower(): is_owner(key) for key, names in key_spellings(identity).items() for s in names}
     candidates: list[tuple[int, int]] = []
     for needle, owner in needles.items():
         start = lowered.find(needle)
@@ -279,7 +325,7 @@ def problems(
     """Why the tree does not follow the definition; empty when it does."""
     identity = dict(identity) if identity is not None else current_identity(root)
     derived = tuple(derived)
-    exact = {s for value in identity.values() for s in spellings(value)}
+    exact = {s for names in key_spellings(identity).values() for s in names}
     found = occurrences(root, identity)
     canonical = (root / CANONICAL).read_text(encoding="utf-8")
     issues: list[str] = []
@@ -323,8 +369,18 @@ def rewrite(
         raise ValueError(f"the identity's keys changed ({sorted(set(old) ^ set(new))}): rewrite by hand")
     mapping: dict[str, str] = {}
     for key, value in old.items():
-        for before, after in zip(_escaped(value), _escaped(new[key]), strict=True):
-            mapping.setdefault(before, after)
+        pairs = [(value, new[key])]
+        if is_prefix(key):
+            # An image or chart name moves with its prefix and its registry at once.
+            registries = [(old[name], new[name]) for name in old if is_registry(name)]
+            pairs = [
+                pair
+                for was, now in registries
+                for pair in zip(_named(was, value), _named(now, new[key]), strict=True)
+            ]
+        for before_value, after_value in pairs:
+            for before, after in zip(_escaped(before_value), _escaped(after_value), strict=True):
+                mapping.setdefault(before, after)
     owners = [s for key, value in old.items() if is_owner(key) for s in spellings(value)]
     pattern = _pattern(mapping, ignore_case=False, owners=owners)
     old_owner, new_owner = old.get("owner", ""), new.get("owner", "")
@@ -358,12 +414,23 @@ def left_behind(root: pathlib.Path, old: Mapping[str, str], new: Mapping[str, st
     moved = {f"former {key} name": value for key, value in old.items() if new.get(key) != value}
     if not moved:
         return []
-    former = {s.lower() for value in moved.values() for s in spellings(value)}
+    both = {**new, **moved}
+    spelled = key_spellings(both)
+    former = {s.lower() for key in moved for s in spelled[key]}
+    # An image name under a former registry is left behind whatever its prefix.
+    gone = tuple(f"{s.lower()}/" for key in moved if is_registry(key) for s in spellings(moved[key]))
+    former |= {
+        s.lower()
+        for key, names in spelled.items()
+        if is_prefix(key)
+        for s in names
+        if gone and s.lower().startswith(gone)
+    }
     # Read with the current identity too: a former value inside a longer current one is the current one
     # (the owner inside an unchanged registry, say), not a value left behind.
     return [
         f"{name}:{number}: `{text}` is the former identity"
-        for name, hits in sorted(occurrences(root, {**new, **moved}).items())
+        for name, hits in sorted(occurrences(root, both).items())
         if not is_history(name)
         for number, text in hits
         if text.lower() in former

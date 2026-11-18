@@ -101,7 +101,8 @@ def test_the_release_builds_signs_and_attests_the_image_as_its_neighbours() -> N
     assert manifest["strategy"]["matrix"]["image"] == matrix["image"], "an image built and never signed"
     signed = [step.get("run", "") for step in manifest["steps"]]
     assert any('cosign sign --yes "${IMAGE}@${digest}"' in run for run in signed)
-    assert images["env"]["IMAGE"] == PUBLISHING.image("choregos-${{ matrix.image }}")
+    assert any('cosign sign --yes "${ALIAS}@${digest}"' in run for run in signed)
+    assert images["env"]["IMAGE"] == PUBLISHING.image(f"{PUBLISHING.image_prefix}-${{{{ matrix.image }}}}")
 
 
 def test_the_ci_builds_and_scans_the_image_on_pull_requests() -> None:
