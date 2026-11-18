@@ -81,9 +81,9 @@ async def test_write_then_find_a_fact(memory: EcphoriaMemory) -> None:
 
 async def test_a_replayed_external_id_does_not_duplicate(memory: EcphoriaMemory) -> None:
     proposition = fact(
-        "ticket:varga/billing-api#7",
+        "ticket:northwind/billing-api#7",
         "ticket #7 was delivered without regression",
-        external_id="varga/billing-api#7",
+        external_id="northwind/billing-api#7",
     )
     first = await memory.write_fact(TENANT, proposition)
     second = await memory.write_fact(TENANT, proposition)

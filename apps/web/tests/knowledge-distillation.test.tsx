@@ -7,7 +7,7 @@ import { api } from "@/lib/api";
 import { distillationLabel, distillationProgress, runLabel } from "@/lib/knowledge";
 import type { KnowledgeBase, KnowledgeDistillEstimate } from "@/lib/types";
 
-vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "varga" }) }));
+vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "northwind" }) }));
 vi.mock("@/lib/api", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/api")>();
   return {
@@ -102,17 +102,17 @@ describe("distillation (S33-05)", () => {
     expect(await screen.findByTestId("estimate-reads")).toHaveTextContent("2,261,896 characters (\u2248 565,474 tokens)");
     expect(screen.getByTestId("estimate-calls")).toHaveTextContent("8 parts, 9 model calls");
     expect(screen.getByTestId("estimate-cost")).toHaveTextContent("$2.00");
-    expect(api.estimateKnowledgeDistillation).toHaveBeenCalledWith("varga", "architecture", []);
+    expect(api.estimateKnowledgeDistillation).toHaveBeenCalledWith("northwind", "architecture", []);
     expect(api.distillKnowledgeBase).not.toHaveBeenCalled();
 
     vi.mocked(api.estimateKnowledgeDistillation).mockResolvedValue({ ...estimate, parts: 1, calls: 1, documents: 2 });
     fireEvent.click(screen.getByRole("checkbox", { name: /budget\.xlsx/ }));
-    await waitFor(() => expect(api.estimateKnowledgeDistillation).toHaveBeenLastCalledWith("varga", "architecture", ["budget.xlsx"]));
+    await waitFor(() => expect(api.estimateKnowledgeDistillation).toHaveBeenLastCalledWith("northwind", "architecture", ["budget.xlsx"]));
     await waitFor(() => expect(screen.getByTestId("estimate-calls")).toHaveTextContent("1 part, 1 model call"));
 
     fireEvent.click(screen.getByRole("button", { name: "Start distillation" }));
     await waitFor(() =>
-      expect(api.distillKnowledgeBase).toHaveBeenCalledWith("varga", "architecture", { exclude: ["budget.xlsx"], max_usd: 2.5 }),
+      expect(api.distillKnowledgeBase).toHaveBeenCalledWith("northwind", "architecture", { exclude: ["budget.xlsx"], max_usd: 2.5 }),
     );
   });
 
@@ -127,7 +127,7 @@ describe("distillation (S33-05)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Distill" }));
     expect(await screen.findByTestId("estimate-cost")).toHaveTextContent("not priced");
     fireEvent.click(screen.getByRole("button", { name: "Start distillation" }));
-    await waitFor(() => expect(api.distillKnowledgeBase).toHaveBeenCalledWith("varga", "architecture", {}));
+    await waitFor(() => expect(api.distillKnowledgeBase).toHaveBeenCalledWith("northwind", "architecture", {}));
   });
 
   it("refuses to start what the platform would refuse, and says why", async () => {
@@ -149,28 +149,28 @@ describe("distillation (S33-05)", () => {
       parts_done: 3,
       parts_total: 8,
       spent_usd: 0.92,
-      requested_by: "admin@varga.dev",
-      history: [{ status: "failed", code: "gateway", parts_done: 7, parts_total: 8, spent_usd: 4.2, requested_by: "admin@varga.dev" }],
+      requested_by: "admin@northwind.dev",
+      history: [{ status: "failed", code: "gateway", parts_done: 7, parts_total: 8, spent_usd: 4.2, requested_by: "admin@northwind.dev" }],
     },
   };
 
   it("monitors a running distillation and stops it on request (S42-10d)", async () => {
-    vi.mocked(api.stopKnowledgeDistillation).mockResolvedValue({ ...base, distillation: { status: "stopped", stopped_by: "admin@varga.dev" } });
+    vi.mocked(api.stopKnowledgeDistillation).mockResolvedValue({ ...base, distillation: { status: "stopped", stopped_by: "admin@northwind.dev" } });
     await open(running);
-    expect(screen.getByTestId("run-now")).toHaveTextContent("map 3/8 \u00b7 $0.92 spent \u00b7 started by admin@varga.dev");
-    expect(screen.getByTestId("run-history")).toHaveTextContent("failed (the model gateway failed) \u00b7 7/8 parts \u00b7 $4.20 \u00b7 by admin@varga.dev");
+    expect(screen.getByTestId("run-now")).toHaveTextContent("map 3/8 \u00b7 $0.92 spent \u00b7 started by admin@northwind.dev");
+    expect(screen.getByTestId("run-history")).toHaveTextContent("failed (the model gateway failed) \u00b7 7/8 parts \u00b7 $4.20 \u00b7 by admin@northwind.dev");
     expect(screen.queryByRole("button", { name: "Relaunch" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Stop" }));
-    await waitFor(() => expect(api.stopKnowledgeDistillation).toHaveBeenCalledWith("varga", "architecture"));
+    await waitFor(() => expect(api.stopKnowledgeDistillation).toHaveBeenCalledWith("northwind", "architecture"));
   });
 
   it("relaunches a failed or stopped distillation, and offers no Stop when nothing runs", async () => {
     vi.mocked(api.relaunchKnowledgeDistillation).mockResolvedValue(running);
-    await open({ ...base, distillation: { status: "stopped", stopped_by: "admin@varga.dev", spent_usd: 1.5 } });
+    await open({ ...base, distillation: { status: "stopped", stopped_by: "admin@northwind.dev", spent_usd: 1.5 } });
     expect(screen.queryByRole("button", { name: "Stop" })).toBeNull();
-    expect(screen.getByTestId("knowledge-distillation")).toHaveTextContent("stopped by admin@varga.dev \u00b7 $1.50 spent");
+    expect(screen.getByTestId("knowledge-distillation")).toHaveTextContent("stopped by admin@northwind.dev \u00b7 $1.50 spent");
     fireEvent.click(screen.getByRole("button", { name: "Relaunch" }));
-    await waitFor(() => expect(api.relaunchKnowledgeDistillation).toHaveBeenCalledWith("varga", "architecture"));
+    await waitFor(() => expect(api.relaunchKnowledgeDistillation).toHaveBeenCalledWith("northwind", "architecture"));
   });
 
   it("says how a past run ended", () => {
@@ -192,6 +192,6 @@ describe("distillation (S33-05)", () => {
     const row = await screen.findByTestId("knowledge-serving");
     expect(row).toHaveTextContent("No size ceiling");
     fireEvent.change(screen.getByLabelText("serving mode"), { target: { value: "index" } });
-    await waitFor(() => expect(api.updateKnowledgeBase).toHaveBeenCalledWith("varga", "architecture", { serving_mode: "index" }));
+    await waitFor(() => expect(api.updateKnowledgeBase).toHaveBeenCalledWith("northwind", "architecture", { serving_mode: "index" }));
   });
 });

@@ -14,8 +14,8 @@ from typing import Any
 import pytest
 from httpx import ASGITransport, AsyncClient, Response
 
-CARD = "/a2a/orgs/varga/.well-known/agent-card.json"
-ENDPOINT = "/a2a/orgs/varga"
+CARD = "/a2a/orgs/northwind/.well-known/agent-card.json"
+ENDPOINT = "/a2a/orgs/northwind"
 OPT_IN = """
 a2a:
   skill: ship-a-change
@@ -150,7 +150,7 @@ async def test_the_card_lists_the_opted_in_workflow_and_parses_as_a2a(
     raw = (await client.get(CARD, headers={"Authorization": f"Bearer {token}"})).json()
     card = parse_card(raw)
     assert card.protocol_version == "0.3.0"
-    assert card.url.endswith("/a2a/orgs/varga")
+    assert card.url.endswith("/a2a/orgs/northwind")
     assert [s.id for s in card.skills] == ["billing-api/ship-a-change"]
     assert AUTH_BEARER in card.auth_types
     assert raw["capabilities"]["streaming"] is True
@@ -171,7 +171,7 @@ async def test_a_resent_message_is_the_same_task(client: AsyncClient, project: d
     other = await _send(client, token, message_id="m-43")
     assert first["id"] == again["id"] != other["id"]
     assert first["status"]["state"] == "working"
-    assert first["metadata"]["choregos"]["project"] == "varga:billing-api"
+    assert first["metadata"]["choregos"]["project"] == "northwind:billing-api"
     async with session_scope() as session:
         items = list((await session.execute(select(WorkItem))).scalars())
         calls = list((await session.execute(select(AuditLog).where(AuditLog.action == "a2a.call"))).scalars())

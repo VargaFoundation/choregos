@@ -51,12 +51,14 @@ async def test_metrics_exposes_the_series_from_the_database(
     from choregos_core import utcnow
 
     async with session_scope() as session:
-        item = WorkItem(project_id=project["id"], tracker_key="varga/billing-api#9", title="T", state="ready")
+        item = WorkItem(
+            project_id=project["id"], tracker_key="northwind/billing-api#9", title="T", state="ready"
+        )
         session.add(item)
         await session.flush()
         session.add(
             Run(
-                id="varga-billing-api-9-t-implement-1",
+                id="northwind-billing-api-9-t-implement-1",
                 work_item_id=item.id,
                 project_id=project["id"],
                 transition_id="t-implement",

@@ -32,7 +32,7 @@ from httpx import AsyncClient
 
 from .test_outbound_proxy import BODY, PASSWORD, Net, _audit, _put
 
-ROUTE = "/api/v1/internal/orgs/varga/outbound-proxy"
+ROUTE = "/api/v1/internal/orgs/northwind/outbound-proxy"
 CLIENT_TOKEN = "relay-client-token-0123456789"
 PUBLIC = "93.184.216.34"
 
@@ -59,13 +59,13 @@ def _bearer(token: str) -> dict[str, str]:
 
 
 def test_a_relay_token_names_one_organisation_and_always_expires() -> None:
-    assert verify_relay_token(mint_relay_token("varga", days=1)) == "varga"
+    assert verify_relay_token(mint_relay_token("northwind", days=1)) == "northwind"
     for days in (0, 401):
         with pytest.raises(ValueError, match="days"):
-            mint_relay_token("varga", days=days)
+            mint_relay_token("northwind", days=days)
     private, _ = run_token_keys()
     endless = jwt.encode(
-        {"iss": "choregos-api", "aud": RELAY_TOKEN_AUDIENCE, "sub": "varga"}, private, "ES256"
+        {"iss": "choregos-api", "aud": RELAY_TOKEN_AUDIENCE, "sub": "northwind"}, private, "ES256"
     )
     with pytest.raises(jwt.MissingRequiredClaimError):
         verify_relay_token(endless)
@@ -76,7 +76,7 @@ def test_a_run_token_and_a_relay_token_are_not_interchangeable() -> None:
     with pytest.raises(jwt.InvalidAudienceError):
         verify_relay_token(run)
     with pytest.raises(jwt.InvalidAudienceError):
-        verify_run_token(mint_relay_token("varga", days=1))
+        verify_run_token(mint_relay_token("northwind", days=1))
 
 
 # ───────────────────────────── the route ─────────────────────────────
@@ -87,7 +87,9 @@ async def test_the_route_gives_the_relay_its_proxy_uncached_and_unaudited(
 ) -> None:
     assert (await _put(client)).status_code == 200
     before = len(await _audit("outbound_proxy.update"))
-    answer = await client.get(f"{ROUTE}/search_engines", headers=_bearer(mint_relay_token("varga", days=1)))
+    answer = await client.get(
+        f"{ROUTE}/search_engines", headers=_bearer(mint_relay_token("northwind", days=1))
+    )
     assert answer.status_code == 200, answer.text
     assert answer.headers["cache-control"] == "no-store"
     assert answer.json() == {
@@ -105,7 +107,7 @@ async def test_the_route_gives_the_relay_its_proxy_uncached_and_unaudited(
 async def test_the_route_answers_null_when_no_proxy_applies(
     client: AsyncClient, admin: str, net: Net
 ) -> None:
-    token = _bearer(mint_relay_token("varga", days=1))
+    token = _bearer(mint_relay_token("northwind", days=1))
     assert (await client.get(f"{ROUTE}/search_engines", headers=token)).json() == {"proxy": None}
     await _put(client, applies_to=["web_fetch"])
     assert (await client.get(f"{ROUTE}/search_engines", headers=token)).json() == {"proxy": None}
@@ -125,7 +127,7 @@ async def test_the_route_refuses_every_credential_but_this_organisations_relay_t
         assert answer.status_code == 403, answer.text
         assert PASSWORD not in answer.text
     assert (
-        await client.get(f"{ROUTE}/agent_runs", headers=_bearer(mint_relay_token("varga", days=1)))
+        await client.get(f"{ROUTE}/agent_runs", headers=_bearer(mint_relay_token("northwind", days=1)))
     ).status_code == 422
 
 
@@ -136,7 +138,9 @@ async def test_the_route_is_a_503_when_the_proxy_applies_but_has_lost_its_passwo
 
     await _put(client)
     set_secret_store(FakeSecretStore())
-    answer = await client.get(f"{ROUTE}/search_engines", headers=_bearer(mint_relay_token("varga", days=1)))
+    answer = await client.get(
+        f"{ROUTE}/search_engines", headers=_bearer(mint_relay_token("northwind", days=1))
+    )
     assert answer.status_code == 503, answer.text
     assert "gate.proxy.example:7000" in answer.text
 
@@ -159,9 +163,9 @@ async def test_the_api_source_reads_the_route_and_fails_on_anything_but_a_200() 
         seen.append(request)
         return answers[request.url.path.rsplit("/", 1)[1]]
 
-    source = ApiProxySource("http://api/api/v1/", "varga", "tok", transport=httpx.MockTransport(handler))
+    source = ApiProxySource("http://api/api/v1/", "northwind", "tok", transport=httpx.MockTransport(handler))
     assert await source.get("search_engines") == ProxyConfig("gate:7000", "http", "u", "p")
-    assert seen[0].url.path == "/api/v1/internal/orgs/varga/outbound-proxy/search_engines"
+    assert seen[0].url.path == "/api/v1/internal/orgs/northwind/outbound-proxy/search_engines"
     assert seen[0].headers["authorization"] == "Bearer tok"
     assert await source.get("web_search") is None
     for failing in ("web_fetch", "knowledge_web", "agent_runs"):
@@ -172,7 +176,7 @@ async def test_the_api_source_reads_the_route_and_fails_on_anything_but_a_200() 
         raise httpx.ConnectError("refused", request=request)
 
     with pytest.raises(ProxySourceError, match="ConnectError"):
-        await ApiProxySource("http://api", "varga", "tok", transport=httpx.MockTransport(down)).get(
+        await ApiProxySource("http://api", "northwind", "tok", transport=httpx.MockTransport(down)).get(
             "web_search"
         )
 
@@ -209,7 +213,7 @@ async def test_the_cache_lasts_its_ttl_and_never_outlives_a_failure() -> None:
 
 def test_the_relay_refuses_to_start_without_its_settings() -> None:
     full = {
-        "CHOREGOS_RELAY_ORG": "varga",
+        "CHOREGOS_RELAY_ORG": "northwind",
         "CHOREGOS_RELAY_API_URL": "http://api",
         "CHOREGOS_RELAY_API_TOKEN": "t",
         "CHOREGOS_RELAY_CLIENT_TOKEN": CLIENT_TOKEN,

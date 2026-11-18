@@ -17,8 +17,8 @@ from .agent_scopes_kit import (
     make_project,
 )
 
-DEV = "dev@varga.dev"
-OWNER = "owner@varga.dev"
+DEV = "dev@northwind.dev"
+OWNER = "owner@northwind.dev"
 VIP = {"name": "vip", "input": {"title": "VIP outage"}, "must_contain": ["Escalate VIP outage"]}
 
 
@@ -180,12 +180,12 @@ async def test_pinned_by_lists_the_projects_the_caller_may_see(client: AsyncClie
 
     # A member of one project only (the dev sign-in gives an organisation role, so the principal is built):
     # the other project's pin stays out of the answer.
-    member = Principal(user_id="u", email="m@varga.dev", project_roles={"varga/dev": Role.DEVELOPER})
+    member = Principal(user_id="u", email="m@northwind.dev", project_roles={"northwind/dev": Role.DEVELOPER})
     async with session_scope(orgs="*") as session:
         from sqlalchemy import select
 
         agent = (await session.execute(select(Agent).where(Agent.slug == "helper"))).scalar_one()
-        assert await agent_pins(session, member, "varga", agent) == {1: ["dev"]}  # type: ignore[arg-type]
+        assert await agent_pins(session, member, "northwind", agent) == {1: ["dev"]}  # type: ignore[arg-type]
 
 
 async def test_platform_written_versions_have_a_message(

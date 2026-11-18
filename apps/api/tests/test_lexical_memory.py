@@ -42,7 +42,7 @@ def _memory(org: str) -> Any:
 async def test_write_search_propose_and_validate_on_the_database(client: AsyncClient, org: str) -> None:
     """The full cycle, on SQLite: governed write, lexical search, an agent's proposal,
     human validation through the API, which reads the project's memory connector."""
-    await login(client, "admin@varga.dev")
+    await login(client, "admin@northwind.dev")
     project_id = await _project(client, org, "billing")
     memory = _memory(org)
 
@@ -175,7 +175,7 @@ async def test_an_agents_own_memory_is_kept_apart_from_the_projects(client: Asyn
     not read it, the agent reads only it, and a fact of the same subject supersedes nothing across."""
     from choregos_core import memory_namespace
 
-    await login(client, "admin@varga.dev")
+    await login(client, "admin@northwind.dev")
     await _project(client, org, "billing")
     memory = _memory(org)
     agent = memory_namespace("billing", "agent", "accountant")

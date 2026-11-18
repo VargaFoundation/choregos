@@ -55,11 +55,11 @@ describe("the spend screen's arithmetic (S29-03)", () => {
 describe("the demo ledger adds up in every grouping", () => {
   it("each grouping has the same total, and the kind filter splits it", () => {
     const totals = ["day", "agent", "workflow", "work_item", "project", "model", "kind"].map(
-      (g) => mockCostReport(`/orgs/varga/costs?group_by=${g}`).total.cost_usd,
+      (g) => mockCostReport(`/orgs/northwind/costs?group_by=${g}`).total.cost_usd,
     );
     expect(new Set(totals).size).toBe(1);
-    const tool = mockCostReport("/orgs/varga/costs?group_by=model&kind=tool").total.cost_usd!;
-    const model = mockCostReport("/orgs/varga/costs?group_by=model&kind=model").total.cost_usd!;
+    const tool = mockCostReport("/orgs/northwind/costs?group_by=model&kind=tool").total.cost_usd!;
+    const model = mockCostReport("/orgs/northwind/costs?group_by=model&kind=model").total.cost_usd!;
     expect(tool + model).toBeCloseTo(totals[0]!);
     expect(mockCostReport("/projects/billing-api/costs?group_by=project").rows.map((r) => r.key)).toEqual(["billing-api"]);
   });

@@ -32,7 +32,7 @@ async def _seed_releases(project_id: str) -> None:
                 env="prod",
                 batch_no=index + 1,
                 status="done" if status == "succeeded" else "rolled_back",
-                items=[{"work_item_key": f"varga/billing-api#{index}", "merged_at": merged.isoformat()}],
+                items=[{"work_item_key": f"northwind/billing-api#{index}", "merged_at": merged.isoformat()}],
                 started_at=started,
                 ended_at=ended,
             )

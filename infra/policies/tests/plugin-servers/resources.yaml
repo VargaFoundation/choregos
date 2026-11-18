@@ -7,7 +7,7 @@ metadata:
 spec:
   containers:
   - name: server
-    image: ghcr.io/vargafoundation/choregos-agents/servicenow-mcp@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    image: ghcr.io/graalsystems/tranibor-agents/servicenow-mcp@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
     securityContext:
       allowPrivilegeEscalation: false
       readOnlyRootFilesystem: true
@@ -30,7 +30,7 @@ metadata:
 spec:
   containers:
   - name: server
-    image: ghcr.io/vargafoundation/choregos-agents/servicenow-mcp:0.1.0
+    image: ghcr.io/graalsystems/tranibor-agents/servicenow-mcp:0.1.0
     securityContext:
       allowPrivilegeEscalation: false
       readOnlyRootFilesystem: true
@@ -76,7 +76,7 @@ metadata:
 spec:
   containers:
   - name: server
-    image: ghcr.io/vargafoundation/choregos-agents-evil/x@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    image: ghcr.io/graalsystems/tranibor-agents-evil/x@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
     securityContext:
       allowPrivilegeEscalation: false
       readOnlyRootFilesystem: true
@@ -99,7 +99,7 @@ metadata:
 spec:
   containers:
   - name: server
-    image: ghcr.io/vargafoundation/choregos-agents/servicenow-mcp@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    image: ghcr.io/graalsystems/tranibor-agents/servicenow-mcp@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
     securityContext: &id001
       allowPrivilegeEscalation: false
       readOnlyRootFilesystem: true

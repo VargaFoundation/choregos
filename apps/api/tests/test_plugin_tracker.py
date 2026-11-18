@@ -27,11 +27,11 @@ from sqlalchemy import select
 
 from .agent_scopes_kit import add_member, as_user
 
-ORG = "/api/v1/orgs/varga"
+ORG = "/api/v1/orgs/northwind"
 DESK = Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "plugins" / "desk"
-SECOND = "second-admin@varga.dev"
+SECOND = "second-admin@northwind.dev"
 SECRET = "desk-secret"
-HOOK = "/api/v1/webhooks/plugins/varga/desk/desk"
+HOOK = "/api/v1/webhooks/plugins/northwind/desk/desk"
 
 
 @pytest.fixture
@@ -64,7 +64,7 @@ async def _install(client: AsyncClient) -> None:
     await as_user(client, SECOND)
     approved = await client.post(f"{ORG}/plugin-approvals/{asked.json()['approval_id']}/approve")
     assert approved.status_code == 200, approved.text
-    await as_user(client, "admin@varga.dev")
+    await as_user(client, "admin@northwind.dev")
 
 
 async def _configure(client: AsyncClient) -> None:
@@ -95,7 +95,7 @@ async def _project(client: AsyncClient, slug: str = "desked") -> httpx.Response:
             "slug": slug,
             "name": slug,
             "template_ref": "plugin:desk/desk-flow",
-            "config": {"slug": slug, "org": "varga"},
+            "config": {"slug": slug, "org": "northwind"},
         },
     )
 
@@ -215,9 +215,9 @@ async def test_an_unknown_plugin_or_server_is_404(
 ) -> None:
     await _ready(client, kube)
     for url in (
-        "/api/v1/webhooks/plugins/varga/nope/desk",
-        "/api/v1/webhooks/plugins/varga/desk/nope",
-        "/api/v1/webhooks/plugins/other/desk/desk",  # another organisation's URL never reaches varga's server
+        "/api/v1/webhooks/plugins/northwind/nope/desk",
+        "/api/v1/webhooks/plugins/northwind/desk/nope",
+        "/api/v1/webhooks/plugins/other/desk/desk",  # another organisation's URL never reaches this server
     ):
         assert (await client.post(url, content=b"{}")).status_code == 404, url
 

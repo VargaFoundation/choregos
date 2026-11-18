@@ -72,7 +72,7 @@ def _session_input(image: str) -> StageInput:
     return StageInput(
         run_id="session-s1",
         attempt=1,
-        project=ProjectRef(slug="demo", org="varga"),
+        project=ProjectRef(slug="demo", org="northwind"),
         work_item=WorkItemRef(key="session:s1", title="Session with triage"),
         transition=TransitionRef(id="session", role="session", **{"from": "open"}, to="open"),
         agent=AgentRef(backend="hosted"),

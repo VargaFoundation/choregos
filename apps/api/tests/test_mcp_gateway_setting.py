@@ -96,7 +96,9 @@ async def _organisation() -> Any:
     from choregos_api.db.session import session_scope
 
     async with session_scope() as session:
-        found = (await session.execute(select(Organization).where(Organization.slug == "varga"))).scalar_one()
+        found = (
+            await session.execute(select(Organization).where(Organization.slug == "northwind"))
+        ).scalar_one()
         session.expunge(found)
         return found
 
@@ -133,7 +135,7 @@ async def test_no_gateway_reads_as_null_with_the_assertion_block(client: AsyncCl
     from choregos_api.config import get_settings
 
     public = get_settings().public_url.rstrip("/")
-    assert state["assertion"]["issuer"] == f"{public}/api/v1/orgs/varga/mcp-gateway"
+    assert state["assertion"]["issuer"] == f"{public}/api/v1/orgs/northwind/mcp-gateway"
     assert state["assertion"]["keys"] == []
 
 
@@ -477,8 +479,8 @@ async def test_a_jwt_gateway_receives_a_verifiable_assertion(
     assert (await _test(client))["ok"] is True
     claims = fake.calls[-1].claims
     assert claims is not None
-    assert claims["org"] == "varga" and claims["purpose"] == "test"
-    assert claims["sub"] == "person:admin@varga.dev" and claims["server"] == "supplier"
+    assert claims["org"] == "northwind" and claims["purpose"] == "test"
+    assert claims["sub"] == "person:admin@northwind.dev" and claims["server"] == "supplier"
 
 
 async def test_an_identity_header_carries_a_second_signed_assertion(
@@ -498,7 +500,7 @@ async def test_an_identity_header_carries_a_second_signed_assertion(
     monkeypatch.setattr(choregos_adapters, "FAKE_MCP_GATEWAY", fake)
     assert (await _test(client))["ok"] is True
     claims = fake.calls[-1].identity_header_claims
-    assert claims is not None and claims["sub"] == "person:admin@varga.dev"
+    assert claims is not None and claims["sub"] == "person:admin@northwind.dev"
     assert fake.calls[-1].headers["authorization"] == f"Bearer {SECRET}"
 
 
@@ -510,7 +512,7 @@ async def test_a_failing_gateway_is_ok_false_not_an_http_error(
     assert (await client.put(URL, json=_body())).status_code == 200
     result = await _test(client)
     assert result["ok"] is False and result["tools"] is None
-    assert "401" in result["error"] and "varga" in result["error"]
+    assert "401" in result["error"] and "northwind" in result["error"]
     assert SECRET not in json.dumps(result)
     assert (await _audit("mcp_gateway.test"))[0]["ok"] is False
 

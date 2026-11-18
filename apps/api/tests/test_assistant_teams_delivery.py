@@ -79,7 +79,7 @@ async def test_the_manager_seals_the_url_and_nobody_reads_it_back(
     from choregos_api.secret_store import get_secret_store
 
     await _ready(client)
-    member = await _subscriber(client, app, "member@varga.dev")
+    member = await _subscriber(client, app, "member@northwind.dev")
     assert (await member.put(TEAMS, json={"webhook_url": URL})).status_code == 403
     assert (await member.get(TEAMS)).status_code == 403
     assert (await member.delete(TEAMS)).status_code == 403
@@ -132,7 +132,7 @@ async def test_a_task_output_is_posted_as_a_card_once_and_only_where_the_organis
 ) -> None:
     await _ready(client)
     _enforce(monkeypatch)
-    mine = await _subscriber(client, app, "mine@varga.dev")
+    mine = await _subscriber(client, app, "mine@northwind.dev")
     await as_admin(client)
     assert (await client.put(TEAMS, json={"webhook_url": URL})).status_code == 200
     await _produced_run(mine)
@@ -160,7 +160,7 @@ async def test_a_channel_nobody_configured_is_recorded_not_silent(
     client: AsyncClient, org: str, app: Any, offline: Path, markets: Any, teams: FakeTeamsWebhook
 ) -> None:
     await _ready(client)
-    mine = await _subscriber(client, app, "mine@varga.dev")
+    mine = await _subscriber(client, app, "mine@northwind.dev")
     await _produced_run(mine)
     await _deliver()
     assert (await _ledger())["teams"]["state"] == "not_configured", "nothing sealed, nothing sent, said so"
@@ -171,7 +171,7 @@ async def test_a_failing_teams_is_retried_and_then_sent_once(
     client: AsyncClient, org: str, app: Any, offline: Path, markets: Any, teams: FakeTeamsWebhook
 ) -> None:
     await _ready(client)
-    mine = await _subscriber(client, app, "mine@varga.dev")
+    mine = await _subscriber(client, app, "mine@northwind.dev")
     await as_admin(client)
     assert (await client.put(TEAMS, json={"webhook_url": URL})).status_code == 200
     teams.fail_with(500)

@@ -20,7 +20,7 @@ from choregos_core.egress import (
 
 def _policy(*rules: AllowedRule, ceiling=None, mode="enforce", requested=()) -> EgressPolicy:
     return EgressPolicy(
-        org="varga", rules=rules, requested=tuple(requested), ceiling=ceiling or {}, mode=mode
+        org="northwind", rules=rules, requested=tuple(requested), ceiling=ceiling or {}, mode=mode
     )
 
 

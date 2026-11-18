@@ -32,17 +32,17 @@ async def test_two_merges_go_out_in_the_same_batch(platform: Platform, worker: A
                 task_queue="e2e",
             )
             await handle.signal(
-                "merged", {"work_item_key": "varga/billing-api#1", "sha": "a1", "title": "one"}
+                "merged", {"work_item_key": "northwind/billing-api#1", "sha": "a1", "title": "one"}
             )
             await handle.signal(
-                "merged", {"work_item_key": "varga/billing-api#2", "sha": "a2", "title": "two"}
+                "merged", {"work_item_key": "northwind/billing-api#2", "sha": "a2", "title": "two"}
             )
             await _train_status(handle, lambda status: status["batch_size"] == 2)
 
             # The operator sends the batch off from the API.
             depart = await platform.client.post(f"/api/v1/projects/{platform.project_id}/trains/prod/depart")
             assert depart.status_code == 202
-            await handle.signal("depart_now", {"by": "augustin@varga.dev"})
+            await handle.signal("depart_now", {"by": "augustin@northwind.dev"})
 
             await _train_status(handle, lambda status: status["status"] == "awaiting_approval")
             releases = (await platform.client.get(f"/api/v1/projects/{platform.project_id}/releases")).json()
@@ -51,7 +51,7 @@ async def test_two_merges_go_out_in_the_same_batch(platform: Platform, worker: A
 
             approval = await platform.client.post(f"/api/v1/releases/{release['id']}/approve", json={})
             assert approval.status_code == 202
-            await handle.signal("approve", {"by": "marie@varga.dev"})
+            await handle.signal("approve", {"by": "marie@northwind.dev"})
 
             await _train_status(
                 handle, lambda status: status["status"] == "collecting" and status["batch_size"] == 0
@@ -91,10 +91,10 @@ async def test_broken_canary_triggers_rollback_and_freeze(platform: Platform, wo
                 id=f"train-{platform.project_slug}-prod",
                 task_queue="e2e",
             )
-            await handle.signal("merged", {"work_item_key": "varga/billing-api#3", "sha": "c1"})
-            await handle.signal("depart_now", {"by": "augustin@varga.dev"})
+            await handle.signal("merged", {"work_item_key": "northwind/billing-api#3", "sha": "c1"})
+            await handle.signal("depart_now", {"by": "augustin@northwind.dev"})
             await _train_status(handle, lambda status: status["status"] == "awaiting_approval")
-            await handle.signal("approve", {"by": "marie@varga.dev"})
+            await handle.signal("approve", {"by": "marie@northwind.dev"})
             await _train_status(handle, lambda status: status["frozen"] is True)
 
             state = (await platform.client.get(f"/api/v1/projects/{platform.project_id}/trains/prod")).json()
@@ -132,7 +132,7 @@ async def test_manual_freeze_blocks_the_departure(platform: Platform, worker: An
             )
             assert frozen.status_code == 202
             await handle.signal("freeze", {"reason": "production incident in progress", "by": "marie"})
-            await handle.signal("merged", {"work_item_key": "varga/billing-api#4", "sha": "d1"})
+            await handle.signal("merged", {"work_item_key": "northwind/billing-api#4", "sha": "d1"})
             await handle.signal("depart_now", {"by": "augustin"})
             status = await _train_status(handle, lambda status: status["frozen"] is True)
             assert status["freeze_reason"] == "production incident in progress"
@@ -157,9 +157,9 @@ async def test_the_terraform_apply_goes_out_with_the_departure_after_approval(
     await login(platform.client)
     from choregos_core.domain import PrRef, PrState
 
-    infra = "https://github.com/varga/billing-api-infra/pull/9"
-    ref = PrRef(repo="varga/billing-api-infra", number=9, url=infra)
-    platform.adapters.scm.prs[("varga/billing-api-infra", 9)] = PrState(ref=ref, title="infra")
+    infra = "https://github.com/northwind/billing-api-infra/pull/9"
+    ref = PrRef(repo="northwind/billing-api-infra", number=9, url=infra)
+    platform.adapters.scm.prs[("northwind/billing-api-infra", 9)] = PrState(ref=ref, title="infra")
     platform.adapters.scm.atlantis("success")
 
     with platform.env.auto_time_skipping_disabled():
@@ -172,17 +172,17 @@ async def test_the_terraform_apply_goes_out_with_the_departure_after_approval(
             )
             await handle.signal(
                 "merged",
-                {"work_item_key": "varga/billing-api#42", "sha": "d1", "infra_pr_url": infra},
+                {"work_item_key": "northwind/billing-api#42", "sha": "d1", "infra_pr_url": infra},
             )
-            await handle.signal("depart_now", {"by": "augustin@varga.dev"})
+            await handle.signal("depart_now", {"by": "augustin@northwind.dev"})
             await _train_status(handle, lambda status: status["status"] == "awaiting_approval")
 
             # Nothing is applied until the approval is given.
             assert platform.adapters.scm.comments == [], platform.adapters.scm.comments
 
-            await handle.signal("approve", {"by": "marie@varga.dev"})
+            await handle.signal("approve", {"by": "marie@northwind.dev"})
             await _train_status(handle, lambda status: status["status"] == "collecting")
             await handle.signal("abort", {"by": "test"})
             await handle.result()
 
-    assert ("varga/billing-api-infra", 9, "atlantis apply") in platform.adapters.scm.comments
+    assert ("northwind/billing-api-infra", 9, "atlantis apply") in platform.adapters.scm.comments

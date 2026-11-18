@@ -28,13 +28,15 @@ WITH_SCRIPT = {"SKILL.md": SKILL_MD, "scripts/fill.py": "print('fill')\n"}
 PLAIN = {"SKILL.md": SKILL_MD.replace("Run `scripts/fill.py` on the form.", "Read the form, then fill it.")}
 
 
-async def _second_admin(email: str = "second@varga.dev") -> None:
+async def _second_admin(email: str = "second@northwind.dev") -> None:
     from choregos_api.db.models import Membership, Organization, User
     from choregos_api.db.session import session_scope
     from sqlalchemy import select
 
     async with session_scope() as session:
-        org = (await session.execute(select(Organization).where(Organization.slug == "varga"))).scalar_one()
+        org = (
+            await session.execute(select(Organization).where(Organization.slug == "northwind"))
+        ).scalar_one()
         user = User(email=email, display_name="second")
         session.add(user)
         await session.flush()
@@ -47,7 +49,7 @@ def _client(client: AsyncClient) -> AsyncClient:
 
 async def _agent(client: AsyncClient, slug: str, skills: list[dict[str, Any]]) -> Any:
     return await client.post(
-        "/api/v1/orgs/varga/agents",
+        "/api/v1/orgs/northwind/agents",
         json={"slug": slug, "display_name": slug, "spec": {"skills": skills}},
     )
 
@@ -132,10 +134,10 @@ def test_a_source_available_licence_is_flagged_not_refused() -> None:
 async def test_a_skill_with_a_script_is_high_risk_and_unusable_until_another_person_approves_it(
     client: AsyncClient, admin: str
 ) -> None:
-    created = await client.post("/api/v1/orgs/varga/skills", json={"files": WITH_SCRIPT})
+    created = await client.post("/api/v1/orgs/northwind/skills", json={"files": WITH_SCRIPT})
     assert created.status_code == 201, created.text
     assert (created.json()["risk"], created.json()["review_status"]) == ("high", "pending_review")
-    version = (await client.get("/api/v1/orgs/varga/skills/fill-forms/versions/1")).json()
+    version = (await client.get("/api/v1/orgs/northwind/skills/fill-forms/versions/1")).json()
     assert "script" in {f["code"] for f in version["findings"]}
 
     # No agent may pin it, nor carry it unpinned: it has no approved version.
@@ -146,18 +148,18 @@ async def test_a_skill_with_a_script_is_high_risk_and_unusable_until_another_per
 
     # With a second administrator in the organisation, the importer cannot approve its own import.
     await _second_admin()
-    own = await client.post("/api/v1/orgs/varga/skills/fill-forms/versions/1/approve")
+    own = await client.post("/api/v1/orgs/northwind/skills/fill-forms/versions/1/approve")
     assert own.status_code == 403 and "second person" in own.text
 
     async with _client(client) as second:
-        await login(second, "second@varga.dev")
-        approved = await second.post("/api/v1/orgs/varga/skills/fill-forms/versions/1/approve")
+        await login(second, "second@northwind.dev")
+        approved = await second.post("/api/v1/orgs/northwind/skills/fill-forms/versions/1/approve")
         assert approved.status_code == 200, approved.text
         assert (approved.json()["review_status"], approved.json()["reviewed_by"]) == (
             "approved",
-            "second@varga.dev",
+            "second@northwind.dev",
         )
-        again = await second.post("/api/v1/orgs/varga/skills/fill-forms/versions/1/approve")
+        again = await second.post("/api/v1/orgs/northwind/skills/fill-forms/versions/1/approve")
         assert again.status_code == 409
 
     assert (await _agent(client, "form-filler", [{"slug": "fill-forms", "version": 1}])).status_code == 201
@@ -168,9 +170,9 @@ async def test_a_skill_with_a_script_is_high_risk_and_unusable_until_another_per
 async def test_the_only_administrator_approves_their_own_high_risk_skill(
     client: AsyncClient, admin: str
 ) -> None:
-    created = await client.post("/api/v1/orgs/varga/skills", json={"files": WITH_SCRIPT})
+    created = await client.post("/api/v1/orgs/northwind/skills", json={"files": WITH_SCRIPT})
     assert created.json()["review_status"] == "pending_review"
-    approved = await client.post("/api/v1/orgs/varga/skills/fill-forms/versions/1/approve")
+    approved = await client.post("/api/v1/orgs/northwind/skills/fill-forms/versions/1/approve")
     assert approved.status_code == 200, approved.text
     assert approved.json()["review_status"] == "approved"
     from choregos_api.db.models import AuditLog
@@ -188,10 +190,10 @@ async def test_the_importer_forces_the_approval_with_a_reason_and_the_audit_says
 ) -> None:
     """With a second administrator who cannot read it in time, the importer may force it: never
     silently, never without a reason."""
-    created = await client.post("/api/v1/orgs/varga/skills", json={"files": WITH_SCRIPT})
+    created = await client.post("/api/v1/orgs/northwind/skills", json={"files": WITH_SCRIPT})
     assert created.json()["review_status"] == "pending_review"
     await _second_admin()
-    url = "/api/v1/orgs/varga/skills/fill-forms/versions/1/approve"
+    url = "/api/v1/orgs/northwind/skills/fill-forms/versions/1/approve"
 
     refused = await client.post(url)
     assert refused.status_code == 403 and "force it with a reason" in refused.text
@@ -216,7 +218,7 @@ async def test_the_importer_forces_the_approval_with_a_reason_and_the_audit_says
 
 async def test_a_low_or_medium_skill_is_usable_at_once(client: AsyncClient, admin: str) -> None:
     created = await client.post(
-        "/api/v1/orgs/varga/skills", json={"files": {**PLAIN, "references/fields.md": "- name\n"}}
+        "/api/v1/orgs/northwind/skills", json={"files": {**PLAIN, "references/fields.md": "- name\n"}}
     )
     assert (created.json()["risk"], created.json()["review_status"]) == ("medium", "approved")
     assert (await _agent(client, "form-filler", [{"slug": "fill-forms"}])).status_code == 201
@@ -231,8 +233,8 @@ async def test_a_new_high_risk_version_does_not_replace_the_approved_one(
     from choregos_api.services.skill_review import unusable_skills
     from sqlalchemy import select
 
-    await client.post("/api/v1/orgs/varga/skills", json={"files": PLAIN})
-    v2 = await client.post("/api/v1/orgs/varga/skills/fill-forms/versions", json={"files": WITH_SCRIPT})
+    await client.post("/api/v1/orgs/northwind/skills", json={"files": PLAIN})
+    v2 = await client.post("/api/v1/orgs/northwind/skills/fill-forms/versions", json={"files": WITH_SCRIPT})
     assert (v2.json()["version"], v2.json()["review_status"]) == (2, "pending_review")
     # Unpinned, an agent still carries v1; pinned to v2, it is refused.
     assert (await _agent(client, "agent-a", [{"slug": "fill-forms"}])).status_code == 201
@@ -255,7 +257,7 @@ async def test_a_zip_with_an_executable_file_is_high_risk(client: AsyncClient, a
         info.external_attr = 0o100755 << 16
         archive.writestr(info, "notes\n")
     imported = await client.post(
-        "/api/v1/orgs/varga/skills/import",
+        "/api/v1/orgs/northwind/skills/import",
         content=buffer.getvalue(),
         headers={"Content-Type": "application/zip"},
     )
@@ -265,11 +267,11 @@ async def test_a_zip_with_an_executable_file_is_high_risk(client: AsyncClient, a
 
 async def test_limits_are_raised_to_256_files_and_5_mib(client: AsyncClient, admin: str) -> None:
     references = {f"references/r{i:03}.md": "x" * 4000 for i in range(200)}
-    created = await client.post("/api/v1/orgs/varga/skills", json={"files": {**PLAIN, **references}})
+    created = await client.post("/api/v1/orgs/northwind/skills", json={"files": {**PLAIN, **references}})
     assert created.status_code == 201, created.text
     too_many = {f"references/r{i:03}.md": "x" for i in range(256)}
     refused = await client.post(
-        "/api/v1/orgs/varga/skills/fill-forms/versions", json={"files": {**PLAIN, **too_many}}
+        "/api/v1/orgs/northwind/skills/fill-forms/versions", json={"files": {**PLAIN, **too_many}}
     )
     assert refused.status_code == 422 and "256" in refused.text
 
@@ -281,7 +283,7 @@ async def test_a_run_never_receives_a_version_waiting_for_review(
     from choregos_api.db.session import session_scope
     from choregos_api.security import mint_run_token
 
-    created = (await client.post("/api/v1/orgs/varga/skills", json={"files": WITH_SCRIPT})).json()
+    created = (await client.post("/api/v1/orgs/northwind/skills", json={"files": WITH_SCRIPT})).json()
     digest = created["versions"][0]["digest"]
     async with session_scope() as session:
         item = WorkItem(project_id=project["id"], tracker_key="BILLING-9", title="T", state="ready")
@@ -308,8 +310,8 @@ async def test_a_run_never_receives_a_version_waiting_for_review(
 
 
 async def test_the_platforms_own_skills_are_assessed_and_approved(client: AsyncClient, admin: str) -> None:
-    installed = await client.post("/api/v1/orgs/varga/agent-catalogue/architect/install", json={})
+    installed = await client.post("/api/v1/orgs/northwind/agent-catalogue/architect/install", json={})
     assert installed.status_code == 201, installed.text
-    version = (await client.get("/api/v1/orgs/varga/skills/madr-4/versions/1")).json()
+    version = (await client.get("/api/v1/orgs/northwind/skills/madr-4/versions/1")).json()
     assert version["risk"] in {"low", "medium", "high"}
     assert (version["review_status"], version["reviewed_by"]) == ("approved", "platform")

@@ -21,9 +21,9 @@ async def test_me_requires_session(client: AsyncClient) -> None:
 
 
 async def test_login_and_me(client: AsyncClient, org: str) -> None:
-    await login(client, "admin@varga.dev")
+    await login(client, "admin@northwind.dev")
     me = (await client.get("/api/v1/me")).json()
-    assert me["email"] == "admin@varga.dev"
+    assert me["email"] == "admin@northwind.dev"
     assert me["memberships"][0]["role"] == "org_admin"
 
 
@@ -83,13 +83,13 @@ async def test_rbac_developer_cannot_write_workflow(client: AsyncClient, project
 
     async with session_scope() as session:
         org_row = (await session.execute(select(Organization))).scalars().first()
-        user = User(email="dev@varga.dev", display_name="dev")
+        user = User(email="dev@northwind.dev", display_name="dev")
         session.add(user)
         await session.flush()
         session.add(Membership(user_id=user.id, org_id=org_row.id, role="developer"))
 
     async with AsyncClient(transport=client._transport, base_url="http://test") as dev_client:
-        await login(dev_client, "dev@varga.dev")
+        await login(dev_client, "dev@northwind.dev")
         response = await dev_client.put(f"/api/v1/projects/{project['id']}/workflow", json={"yaml": "x: 1"})
         assert response.status_code == 403
 
@@ -97,7 +97,7 @@ async def test_rbac_developer_cannot_write_workflow(client: AsyncClient, project
 async def test_connector_crud_and_test(client: AsyncClient, project: dict[str, Any]) -> None:
     response = await client.put(
         f"/api/v1/projects/{project['id']}/connectors/tracker",
-        json={"type": "github-issues", "config": {"repo": "varga/billing-api"}},
+        json={"type": "github-issues", "config": {"repo": "northwind/billing-api"}},
     )
     assert response.status_code == 200
     listed = (await client.get(f"/api/v1/projects/{project['id']}/connectors")).json()
@@ -115,7 +115,7 @@ async def test_github_webhook_signature_and_dedup(client: AsyncClient, project: 
     settings.github_webhook_secret = "s3cr3t"
     payload = {
         "action": "labeled",
-        "repository": {"full_name": "varga/billing-api"},
+        "repository": {"full_name": "northwind/billing-api"},
         "issue": {
             "number": 42,
             "title": "Fix the credit notes",
@@ -152,7 +152,7 @@ async def test_webhook_starts_one_workflow_only(client: AsyncClient, project: di
 
     payload = {
         "action": "labeled",
-        "repository": {"full_name": "varga/billing-api"},
+        "repository": {"full_name": "northwind/billing-api"},
         "issue": {"number": 7, "title": "T", "labels": [{"name": "agent-ready"}]},
         "label": {"name": "agent-ready"},
         "sender": {"login": "a"},
@@ -189,7 +189,9 @@ async def test_internal_run_api(client: AsyncClient, project: dict[str, Any]) ->
         )
     )
     async with session_scope() as session:
-        item = WorkItem(project_id=project["id"], tracker_key="varga/billing-api#1", title="T", state="ready")
+        item = WorkItem(
+            project_id=project["id"], tracker_key="northwind/billing-api#1", title="T", state="ready"
+        )
         session.add(item)
         await session.flush()
         run = Run(
@@ -206,7 +208,7 @@ async def test_internal_run_api(client: AsyncClient, project: dict[str, Any]) ->
         run_id = run.id
 
     token = mint_run_token(
-        run_id, project_slug="billing-api", work_item_key="varga/billing-api#1", ttl_minutes=30
+        run_id, project_slug="billing-api", work_item_key="northwind/billing-api#1", ttl_minutes=30
     )
     headers = {"Authorization": f"Bearer {token}"}
 
@@ -389,7 +391,7 @@ async def test_a_tracker_birth_records_who_filed_the_issue(
     """The issue's author is the work item's reporter (#1179), not the webhook's sender."""
     payload = {
         "action": "labeled",
-        "repository": {"full_name": "varga/billing-api"},
+        "repository": {"full_name": "northwind/billing-api"},
         "issue": {
             "number": 11,
             "title": "Access to billing",
@@ -430,11 +432,11 @@ async def test_a_project_without_a_repository_is_created(client: AsyncClient, ad
     """Limit no. 1 of ADR 0012: a trade that processes case files has no repository, and yet had to
     declare one that served no purpose."""
     response = await client.post(
-        "/api/v1/orgs/varga/projects",
+        "/api/v1/orgs/northwind/projects",
         json={
             "slug": "staffing",
             "name": "Staffing",
-            "config": {"slug": "staffing", "org": "varga"},
+            "config": {"slug": "staffing", "org": "northwind"},
         },
     )
     assert response.status_code == 201, response.text
@@ -457,7 +459,7 @@ async def test_the_access_sheet_folds_the_log(
     from choregos_api.db.session import session_scope
 
     async with session_scope() as session:
-        item = WorkItem(project_id=project["id"], tracker_key="varga/x#7", title="T", state="ready")
+        item = WorkItem(project_id=project["id"], tracker_key="northwind/x#7", title="T", state="ready")
         session.add(item)
         await session.flush()
         run = Run(
@@ -518,7 +520,7 @@ async def test_a_work_item_whose_workflow_is_dead_says_so(
     async with session_scope() as session:
         item = WorkItem(
             project_id=project["id"],
-            tracker_key="varga/billing-api#404",
+            tracker_key="northwind/billing-api#404",
             title="T",
             state="ready",
             temporal_wf_id="wi-billing-api-404",
@@ -575,7 +577,7 @@ transitions:
         ids = {}
         for state in ("declined", "applied", "to_apply"):
             item = WorkItem(
-                project_id=project["id"], tracker_key=f"varga/billing-api#{state}", title="T", state=state
+                project_id=project["id"], tracker_key=f"northwind/billing-api#{state}", title="T", state=state
             )
             session.add(item)
             await session.flush()

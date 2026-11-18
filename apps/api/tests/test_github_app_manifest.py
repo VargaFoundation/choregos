@@ -182,7 +182,7 @@ async def test_the_status_says_what_a_new_app_would_get(client: AsyncClient, adm
 
 
 async def test_only_a_platform_administrator_reads_or_starts_it(client: AsyncClient, org: str) -> None:
-    await login(client, "dev@varga.dev")
+    await login(client, "dev@northwind.dev")
     assert (await client.get("/api/v1/platform/github-app")).status_code == 403
     started = await client.post("/api/v1/platform/github-app/manifest", json={"name": "x", "public": False})
     assert started.status_code == 403
@@ -237,7 +237,7 @@ async def test_a_state_that_is_not_this_persons_is_refused(
     elif case == "expired":
         state = sign_state(user=admin, public=False, webhook_active=True, now=time.time() - 3700)
     else:
-        state = sign_state(user="someone@varga.dev", public=False, webhook_active=True)
+        state = sign_state(user="someone@northwind.dev", public=False, webhook_active=True)
     conversion.register("c0de", pem=PEM)
     response = await client.get("/api/v1/github/manifest/callback", params={"code": "c0de", "state": state})
     assert response.status_code == 403, response.text
@@ -340,7 +340,7 @@ async def test_the_stored_app_is_the_app_of_every_reader(
         return InstallationToken(token="ghs_run", expires_at=time.time() + 3600, repositories=(repo,))
 
     monkeypatch.setattr(GitHubAppAuth, "token_for", mint)
-    run_id = await run_with_repository(project, "https://github.com/varga/billing-api.git")
+    run_id = await run_with_repository(project, "https://github.com/northwind/billing-api.git")
     token = await client.post(f"/api/v1/internal/runs/{run_id}/git-token", headers=run_token_for(run_id))
     assert token.json()["token"] == "ghs_run", token.text
     assert minted == ["4242"]

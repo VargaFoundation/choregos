@@ -27,7 +27,7 @@ RUNNERS = f"proj-{SLUG}-runners"
 def project() -> None:
     """Provision the project with its real manifests, then remove it."""
     config = ProjectConfig(
-        slug=SLUG, org="varga", repo=RepoConfig(url="https://github.com/varga/sandbox.git")
+        slug=SLUG, org="northwind", repo=RepoConfig(url="https://github.com/northwind/sandbox.git")
     )
     manifests = render_project_manifests(SLUG, config, load_preset("team"))
     # The platform chart is not deployed here: only what describes the sandbox is applied,

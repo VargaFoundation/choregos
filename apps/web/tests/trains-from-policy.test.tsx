@@ -6,7 +6,7 @@ import TrainsPage from "@/app/p/[slug]/trains/page";
 import { api } from "@/lib/api";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }), usePathname: () => "/" }));
-vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "varga", me: null }) }));
+vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "northwind", me: null }) }));
 vi.mock("@/lib/api", async (importOriginal) => {
   const reel = await importOriginal<typeof import("@/lib/api")>();
   return {

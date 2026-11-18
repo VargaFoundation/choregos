@@ -58,7 +58,7 @@ async def test_context_pack_injecte_et_trace(platform: Platform) -> None:
     async with session_scope() as session:
         item = WorkItem(
             project_id=platform.project_id,
-            tracker_key="varga/billing-api#400",
+            tracker_key="northwind/billing-api#400",
             title="Rounded totals and credit notes",
             state="ready",
             size="M",
@@ -108,7 +108,7 @@ async def test_a_memory_outage_does_not_block_a_stage(platform: Platform) -> Non
     async with session_scope() as session:
         item = WorkItem(
             project_id=platform.project_id,
-            tracker_key="varga/billing-api#401",
+            tracker_key="northwind/billing-api#401",
             title="Ticket without memory",
             state="ready",
             size="S",

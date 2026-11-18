@@ -41,7 +41,7 @@ const inDoubt = {
 const RECORD = {
   position: 0,
   outcome: "made",
-  by: "ops@varga.dev",
+  by: "ops@northwind.dev",
   at: "2026-11-14T10:05:00Z",
   note: "OPS-8 is in the tracker",
   result: { key: "OPS-8" },
@@ -121,7 +121,7 @@ describe("settling an action in doubt (S65-26)", () => {
     vi.mocked(api.settleAction).mockRejectedValue(
       new ApiError(409, {
         title: "State conflict",
-        detail: "this action was already settled `made` by ops@varga.dev",
+        detail: "this action was already settled `made` by ops@northwind.dev",
         code: "action_already_settled",
       }),
     );
@@ -130,14 +130,14 @@ describe("settling an action in doubt (S65-26)", () => {
     fireEvent.change(note, { target: { value: "nothing there" } });
     await act(async () => fireEvent.click(button));
     expect(
-      await screen.findByText("this action was already settled `made` by ops@varga.dev (action_already_settled)"),
+      await screen.findByText("this action was already settled `made` by ops@northwind.dev (action_already_settled)"),
     ).toBeInTheDocument();
   });
 
   it("the record is shown once settled: who, when, the note and the result stated", () => {
     render(<Settled action={{ ...inDoubt, status: "approved", settlement: RECORD } as unknown as Action} />);
     const shown = screen.getByTestId("settled");
-    expect(shown).toHaveTextContent("Recorded made by ops@varga.dev");
+    expect(shown).toHaveTextContent("Recorded made by ops@northwind.dev");
     expect(shown).toHaveTextContent("OPS-8 is in the tracker");
     expect(shown).toHaveTextContent('{"key":"OPS-8"}');
     const { container } = render(<Settled action={inDoubt} />);

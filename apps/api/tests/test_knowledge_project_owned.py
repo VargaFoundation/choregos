@@ -15,7 +15,7 @@ from httpx import ASGITransport, AsyncClient
 
 from .conftest import login
 
-ORG = "/api/v1/orgs/varga/knowledge"
+ORG = "/api/v1/orgs/northwind/knowledge"
 
 
 async def _member(email: str, role: str, project_slug: str | None = None) -> None:
@@ -24,7 +24,9 @@ async def _member(email: str, role: str, project_slug: str | None = None) -> Non
     from sqlalchemy import select
 
     async with session_scope() as session:
-        org = (await session.execute(select(Organization).where(Organization.slug == "varga"))).scalar_one()
+        org = (
+            await session.execute(select(Organization).where(Organization.slug == "northwind"))
+        ).scalar_one()
         user = (await session.execute(select(User).where(User.email == email))).scalar_one_or_none()
         if user is None:
             user = User(email=email, display_name=email.split("@", maxsplit=1)[0])
@@ -53,15 +55,15 @@ async def _checkout(client: AsyncClient) -> dict[str, Any]:
         "name": "Checkout web",
         "config": {
             "slug": "checkout-web",
-            "org": "varga",
+            "org": "northwind",
             "repo": {
-                "url": "https://github.com/varga/checkout-web.git",
+                "url": "https://github.com/northwind/checkout-web.git",
                 "default_branch": "main",
                 "language": "python",
             },
         },
     }
-    created = await client.post("/api/v1/orgs/varga/projects", json=payload)
+    created = await client.post("/api/v1/orgs/northwind/projects", json=payload)
     assert created.status_code == 201, created.text
     return dict(created.json())
 
@@ -78,16 +80,16 @@ async def _owned_base(owner: AsyncClient, project: dict[str, Any], slug: str = "
 async def owners(client: AsyncClient, project: dict[str, Any]) -> dict[str, Any]:
     """billing-api: an owner and a developer; checkout-web: its own owner."""
     other = await _checkout(client)
-    await _member("owner@varga.dev", "project_owner", "billing-api")
-    await _member("dev@varga.dev", "developer", "billing-api")
-    await _member("other@varga.dev", "project_owner", "checkout-web")
+    await _member("owner@northwind.dev", "project_owner", "billing-api")
+    await _member("dev@northwind.dev", "developer", "billing-api")
+    await _member("other@northwind.dev", "project_owner", "checkout-web")
     return other
 
 
 async def test_a_project_owner_creates_a_base_for_their_project(
     client: AsyncClient, project: dict[str, Any], owners: dict[str, Any]
 ) -> None:
-    async with _as(client, "owner@varga.dev") as owner:
+    async with _as(client, "owner@northwind.dev") as owner:
         created = await owner.post(
             f"/api/v1/projects/{project['id']}/knowledge", json={"slug": "runbooks", "name": "Runbooks"}
         )
@@ -107,7 +109,7 @@ async def test_a_project_owner_creates_a_base_for_their_project(
 async def test_a_developer_cannot(
     client: AsyncClient, project: dict[str, Any], owners: dict[str, Any]
 ) -> None:
-    async with _as(client, "dev@varga.dev") as dev:
+    async with _as(client, "dev@northwind.dev") as dev:
         refused = await dev.post(
             f"/api/v1/projects/{project['id']}/knowledge", json={"slug": "x-1", "name": "X"}
         )
@@ -117,7 +119,7 @@ async def test_a_developer_cannot(
 async def test_the_owner_curates_and_may_widen(
     client: AsyncClient, project: dict[str, Any], owners: dict[str, Any]
 ) -> None:
-    async with _as(client, "owner@varga.dev") as owner:
+    async with _as(client, "owner@northwind.dev") as owner:
         await _owned_base(owner, project)
         sent = await owner.post(f"{ORG}/runbooks/documents", files={"file": ("notes.md", b"# Notes\n")})
         assert sent.status_code == 202, sent.text
@@ -148,9 +150,9 @@ async def test_the_owner_curates_and_may_widen(
 async def test_a_developer_cannot_widen(
     client: AsyncClient, project: dict[str, Any], owners: dict[str, Any]
 ) -> None:
-    async with _as(client, "owner@varga.dev") as owner:
+    async with _as(client, "owner@northwind.dev") as owner:
         await _owned_base(owner, project)
-    async with _as(client, "dev@varga.dev") as dev:
+    async with _as(client, "dev@northwind.dev") as dev:
         for widening in (
             {"scope": "org"},
             {"projects": ["billing-api", "checkout-web"]},
@@ -163,12 +165,12 @@ async def test_a_developer_cannot_widen(
 async def test_an_administrator_widening_still_ends_the_projects_ownership(
     client: AsyncClient, project: dict[str, Any], owners: dict[str, Any]
 ) -> None:
-    async with _as(client, "owner@varga.dev") as owner:
+    async with _as(client, "owner@northwind.dev") as owner:
         await _owned_base(owner, project)
     widened = await client.patch(f"{ORG}/runbooks", json={"scope": "org"})
     assert widened.status_code == 200, widened.text
     assert widened.json()["owner_project"] is None, "an org base is no project's to curate"
-    async with _as(client, "owner@varga.dev") as owner:
+    async with _as(client, "owner@northwind.dev") as owner:
         again = await owner.post(f"{ORG}/runbooks/documents", files={"file": ("more.md", b"# More\n")})
         assert again.status_code == 403, "once the administrator widened it, the owner no longer curates it"
 
@@ -178,9 +180,9 @@ async def test_another_projects_owner_cannot_curate(
 ) -> None:
     """The dev login gives every member the organisation's `developer` role, so the base is
     readable here: what is under test is that owning checkout-web does not curate billing-api's."""
-    async with _as(client, "owner@varga.dev") as owner:
+    async with _as(client, "owner@northwind.dev") as owner:
         await _owned_base(owner, project)
-    async with _as(client, "other@varga.dev") as other:
+    async with _as(client, "other@northwind.dev") as other:
         sent = await other.post(f"{ORG}/runbooks/documents", files={"file": ("x.md", b"# X\n")})
         assert sent.status_code == 403, sent.text
         assert (await other.patch(f"{ORG}/runbooks", json={"name": "x"})).status_code == 403
@@ -190,9 +192,9 @@ async def test_another_projects_owner_cannot_curate(
 async def test_a_developer_reads_an_owned_base_and_cannot_curate_it(
     client: AsyncClient, project: dict[str, Any], owners: dict[str, Any]
 ) -> None:
-    async with _as(client, "owner@varga.dev") as owner:
+    async with _as(client, "owner@northwind.dev") as owner:
         await _owned_base(owner, project)
-    async with _as(client, "dev@varga.dev") as dev:
+    async with _as(client, "dev@northwind.dev") as dev:
         assert (await dev.get(f"{ORG}/runbooks")).status_code == 200
         sent = await dev.post(f"{ORG}/runbooks/documents", files={"file": ("x.md", b"# X\n")})
         assert sent.status_code == 403, sent.text
@@ -201,7 +203,7 @@ async def test_a_developer_reads_an_owned_base_and_cannot_curate_it(
 async def test_an_org_admin_keeps_every_right_over_an_owned_base(
     client: AsyncClient, project: dict[str, Any], owners: dict[str, Any]
 ) -> None:
-    async with _as(client, "owner@varga.dev") as owner:
+    async with _as(client, "owner@northwind.dev") as owner:
         await _owned_base(owner, project)
     sent = await client.post(f"{ORG}/runbooks/documents", files={"file": ("a.md", b"# A\n")})
     assert sent.status_code == 202, sent.text
@@ -212,7 +214,7 @@ async def test_an_owned_base_is_still_served_to_its_project_only(
 ) -> None:
     from choregos_api.knowledge.access import served_to_project
 
-    async with _as(client, "owner@varga.dev") as owner:
+    async with _as(client, "owner@northwind.dev") as owner:
         base = await _owned_base(owner, project)
     from types import SimpleNamespace
 
@@ -234,11 +236,11 @@ async def test_the_owning_project_and_its_curators(client: AsyncClient, admin: s
     from choregos_api.knowledge.access import can_curate
     from choregos_api.rbac import Principal, Role
 
-    owner = Principal(user_id="u", email="o@x", project_roles={"varga/billing-api": Role.PROJECT_OWNER})
-    developer = Principal(user_id="d", email="d@x", project_roles={"varga/billing-api": Role.DEVELOPER})
+    owner = Principal(user_id="u", email="o@x", project_roles={"northwind/billing-api": Role.PROJECT_OWNER})
+    developer = Principal(user_id="d", email="d@x", project_roles={"northwind/billing-api": Role.DEVELOPER})
     mine = SimpleNamespace(owner_project="billing-api")
     unowned = SimpleNamespace(owner_project=None)
-    assert can_curate(owner, "varga", mine)
-    assert not can_curate(owner, "varga", unowned)
-    assert not can_curate(developer, "varga", mine)
-    assert not can_curate(owner, "varga", SimpleNamespace(owner_project="checkout-web"))
+    assert can_curate(owner, "northwind", mine)
+    assert not can_curate(owner, "northwind", unowned)
+    assert not can_curate(developer, "northwind", mine)
+    assert not can_curate(owner, "northwind", SimpleNamespace(owner_project="checkout-web"))

@@ -89,7 +89,7 @@ async def _base(slug: str, *, restricted: bool = False, status: str = "active") 
 
     async with session_scope(orgs="*") as session:
         org_id = (
-            await session.execute(select(Organization.id).where(Organization.slug == "varga"))
+            await session.execute(select(Organization.id).where(Organization.slug == "northwind"))
         ).scalar_one()
         base = KnowledgeBase(
             org_id=org_id, slug=slug, name=slug, scope="org", serving_mode="index", restricted=restricted,
@@ -178,13 +178,13 @@ async def test_the_binder_reads_what_they_bind_and_a_missing_base_answers_alike(
     secret = await _base("secret-notes", restricted=True)
     await _base("old-notes", status="archived")
     await _base("house-notes")
-    await _member(client, "owner@varga.dev", [OWNERS])
-    await as_user(client, "owner@varga.dev")
+    await _member(client, "owner@northwind.dev", [OWNERS])
+    await as_user(client, "owner@northwind.dev")
 
     hidden = await _bind_knowledge(client, ["secret-notes"])
     missing = await _bind_knowledge(client, ["no-such-notes"])
     assert hidden.status_code == missing.status_code == 422, hidden.text
-    assert "`secret-notes` is not a knowledge base of varga you may read" in hidden.text
+    assert "`secret-notes` is not a knowledge base of northwind you may read" in hidden.text
     assert hidden.text.replace("secret-notes", "X") == missing.text.replace("no-such-notes", "X")
     archived = await _bind_knowledge(client, ["old-notes"])
     assert archived.status_code == 422 and "`old-notes` is archived" in archived.text
@@ -193,7 +193,7 @@ async def test_the_binder_reads_what_they_bind_and_a_missing_base_answers_alike(
     assert (await client.get(SLUG)).json()["knowledge_bindings"] == []
 
     async with session_scope(orgs="*") as session:
-        owner = (await session.execute(select(User).where(User.email == "owner@varga.dev"))).scalar_one()
+        owner = (await session.execute(select(User).where(User.email == "owner@northwind.dev"))).scalar_one()
         org_id = (await session.execute(select(Organization.id))).scalar_one()
         session.add(
             KnowledgeGrant(
@@ -212,16 +212,16 @@ async def test_keeping_or_removing_a_base_needs_no_right_on_it(
     await _base("secret-notes", restricted=True)
     await _base("house-notes")
     assert (await _bind_knowledge(client, ["secret-notes"])).status_code == 200  # the administrator reads it
-    await _member(client, "owner@varga.dev", [OWNERS])
-    await as_user(client, "owner@varga.dev")
+    await _member(client, "owner@northwind.dev", [OWNERS])
+    await as_user(client, "owner@northwind.dev")
     kept = await _bind_knowledge(client, ["secret-notes", "house-notes"])
     assert kept.status_code == 200, kept.text
     assert kept.json()["knowledge_bindings"][0]["bases"] == ["house-notes", "secret-notes"]
     removed = await _bind_knowledge(client, ["house-notes"])
     assert removed.json()["knowledge_bindings"][0]["bases"] == ["house-notes"]
     # The audience's members who are not owners do not bind.
-    await _member(client, "someone@varga.dev", ["grp-investors"])
-    await as_user(client, "someone@varga.dev")
+    await _member(client, "someone@northwind.dev", ["grp-investors"])
+    await as_user(client, "someone@northwind.dev")
     assert (await _bind_knowledge(client, [])).status_code == 403
 
 
@@ -248,8 +248,8 @@ async def test_an_upgrade_that_drops_and_adds_knowledge_needs_follows_the_need_c
     _with_need(offline)
     await _plugin(client)
     assert (await _install(client, owner_groups=[OWNERS])).status_code == 201
-    await _member(client, "owner@varga.dev", [OWNERS])
-    await as_user(client, "admin@varga.dev")
+    await _member(client, "owner@northwind.dev", [OWNERS])
+    await as_user(client, "admin@northwind.dev")
     await _tools_bound(client)
     await _base("house-notes")
     assert (await _bind_knowledge(client, ["house-notes"])).json()["status"] == "ready"

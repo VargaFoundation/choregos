@@ -24,7 +24,7 @@ from .conftest import Fixture
 
 pytestmark = pytest.mark.asyncio
 
-REPO = "varga/billing-api"
+REPO = "northwind/billing-api"
 NUMBER = 123
 ENDED = datetime(2026, 11, 2, 9, 0, tzinfo=UTC)
 
@@ -111,7 +111,7 @@ async def test_a_github_issue_reopened_after_the_end_restarts_the_work_item_once
     assert first["reopened"] == [setup.tracker_key], first
     item = await _item(item_id)
     assert (item.recurrence, item.state, item.closed_at) == (1, "inbox", None)
-    workflow_id = "wi-billing-api-varga_billing-api-123"
+    workflow_id = "wi-billing-api-northwind_billing-api-123"
     assert fake_restarts() == [workflow_id]
     assert (
         fake_starts()[workflow_id]["recurrence"] == 1 and fake_starts()[workflow_id]["resume_from"] == "inbox"
@@ -170,7 +170,7 @@ def _jira(status: str, category: str, changed: datetime) -> JiraTracker:
 
     http = httpx.AsyncClient(transport=httpx.MockTransport(reply))
     client = RestClient(
-        "https://varga.atlassian.net", auth=("bot@varga.dev", "t"), client=http, service="jira"
+        "https://northwind.atlassian.net", auth=("bot@northwind.dev", "t"), client=http, service="jira"
     )
     return JiraTracker(client, "BILL")
 

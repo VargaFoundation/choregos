@@ -13,7 +13,7 @@ from httpx import AsyncClient
 from .test_broker import ORG, _prepare, supplier  # noqa: F401  (a fixture, used by name)
 
 CEILING = f"{ORG}/policy-ceiling"
-BASE = "/api/v1/orgs/varga/knowledge"
+BASE = "/api/v1/orgs/northwind/knowledge"
 MCP = {"name": "fournisseur", "type": "mcp", "config": {"url": "https://fournisseur.test/mcp"}}
 
 
@@ -254,7 +254,7 @@ async def test_a_ceiling_tightened_after_creation_stops_the_next_sync(
     assert created.status_code == 201, created.text
     await _ceiling(client, {"deny_domains": ["example.com"]})
     with pytest.raises(SourceUnavailableError, match=r"docs\.example\.com"):
-        await sync_source("varga", created.json()["id"])
+        await sync_source("northwind", created.json()["id"])
     shown = (await client.get(f"{BASE}/framework")).json()["sources"][0]
     assert shown["status"] == "failed" and "denied:example.com" in shown["last_error"]
 
@@ -272,7 +272,7 @@ async def test_a_private_git_source_obeys_a_tightened_ceiling_and_carries_the_us
     monkeypatch.setenv("CONNECTOR_KB_GIT_TOKEN", "t" + "ok")
     await client.post(BASE, json={"slug": "framework", "name": "Framework"})
     connector = await client.post(
-        "/api/v1/orgs/varga/connectors",
+        "/api/v1/orgs/northwind/connectors",
         json={"name": "forge", "kind": "documents", "type": "git", "config": {"host": "github.com"},
               "secret_refs": {"token": "env:CONNECTOR_KB_GIT_TOKEN"}},
     )  # fmt: skip
@@ -294,7 +294,7 @@ async def test_a_private_git_source_obeys_a_tightened_ceiling_and_carries_the_us
     monkeypatch.setenv("CHOREGOS_FAKES", "1")
     await _ceiling(client, {"deny_domains": ["github.com"]})
     with pytest.raises(SourceUnavailableError, match=r"github\.com"):
-        await sync_source("varga", created.json()["id"])
+        await sync_source("northwind", created.json()["id"])
     shown = (await client.get(f"{BASE}/framework")).json()["sources"][0]
     assert shown["status"] == "failed" and "denied:github.com" in shown["last_error"]
 

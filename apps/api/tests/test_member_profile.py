@@ -18,13 +18,13 @@ from httpx import AsyncClient
 
 from .conftest import login
 
-ORG = "/api/v1/orgs/varga"
+ORG = "/api/v1/orgs/northwind"
 
 
 @pytest.fixture
 def elsewhere(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """The development sign-in lands a new person in every organisation unless a default one is set: from
-    here on it lands them in `other`, so a varga role is only one a test grants."""
+    here on it lands them in `other`, so a northwind role is only one a test grants."""
     from choregos_api.config import reset_settings_cache
 
     monkeypatch.setenv("CHOREGOS_OIDC_DEFAULT_ORG", "other")
@@ -87,7 +87,7 @@ async def _work(project_id: str, dev_email: str) -> dict[str, str]:
             project_id=project_id,
             kind="approval",
             requested_at=now,
-            assignee={"user": "someone@varga.dev", "group": "reviewers"},
+            assignee={"user": "someone@northwind.dev", "group": "reviewers"},
         )
         decided = HumanRequest(
             work_item_id=item.id,
@@ -135,12 +135,12 @@ async def _book_spend(project_id: str, user_id: str, cost: float) -> None:
 async def test_an_administrator_reads_the_whole_profile(
     client: AsyncClient, admin: str, project: dict[str, Any]
 ) -> None:
-    dev = await _member(client, "dev@varga.dev")
+    dev = await _member(client, "dev@northwind.dev")
     group = await client.post(f"{ORG}/groups", json={"slug": "reviewers", "name": "Reviewers"})
     assert group.status_code == 201, group.text
     joined = await client.post(f"{ORG}/groups/reviewers/members", json={"user_id": dev})
     assert joined.status_code in (200, 201), joined.text
-    requests = await _work(project["id"], "dev@varga.dev")
+    requests = await _work(project["id"], "dev@northwind.dev")
     await _book_spend(project["id"], dev, 1.25)
 
     response = await _profile(client, dev)
@@ -148,7 +148,7 @@ async def test_an_administrator_reads_the_whole_profile(
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["view"] == "full" and body["status"] == "active"
-    assert body["email"] == "dev@varga.dev" and body["org_role"] == "developer"
+    assert body["email"] == "dev@northwind.dev" and body["org_role"] == "developer"
     assert body["groups"] == [{"slug": "reviewers", "name": "Reviewers", "source": "internal"}]
     assert body["origin"] == "manual", "invited by an administrator, never signed in"
     assert body["sessions"] == {"open": 0, "last_activity_at": None}
@@ -171,17 +171,17 @@ async def test_an_administrator_reads_the_whole_profile(
 async def test_a_member_reads_the_basic_card_of_another_member(
     client: AsyncClient, admin: str, project: dict[str, Any]
 ) -> None:
-    dev = await _member(client, "dev@varga.dev")
-    await _member(client, "viewer@varga.dev", role="viewer")
-    await _work(project["id"], "dev@varga.dev")
+    dev = await _member(client, "dev@northwind.dev")
+    await _member(client, "viewer@northwind.dev", role="viewer")
+    await _work(project["id"], "dev@northwind.dev")
 
-    await login(client, "viewer@varga.dev")
+    await login(client, "viewer@northwind.dev")
     response = await _profile(client, dev)
 
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["view"] == "basic"
-    assert body["email"] == "dev@varga.dev" and body["org_role"] == "developer"
+    assert body["email"] == "dev@northwind.dev" and body["org_role"] == "developer"
     for hidden in ("origin", "last_login_at", "sessions", "work", "administration"):
         assert body[hidden] is None, hidden
 
@@ -189,10 +189,10 @@ async def test_a_member_reads_the_basic_card_of_another_member(
 async def test_the_person_reads_their_own_work_but_not_the_administration(
     client: AsyncClient, admin: str, project: dict[str, Any]
 ) -> None:
-    dev = await _member(client, "dev@varga.dev")
-    requests = await _work(project["id"], "dev@varga.dev")
+    dev = await _member(client, "dev@northwind.dev")
+    requests = await _work(project["id"], "dev@northwind.dev")
 
-    await login(client, "dev@varga.dev")
+    await login(client, "dev@northwind.dev")
     body = (await _profile(client, dev)).json()
 
     assert body["view"] == "full" and body["administration"] is None
@@ -208,13 +208,13 @@ async def test_outside_the_organisation_the_profile_is_refused_and_a_stranger_is
     from choregos_api.db.models import User
     from choregos_api.db.session import session_scope
 
-    dev = await _member(client, "dev@varga.dev")
+    dev = await _member(client, "dev@northwind.dev")
     async with session_scope() as session:
-        stranger = User(email="nobody@varga.dev", display_name="Nobody")
+        stranger = User(email="nobody@northwind.dev", display_name="Nobody")
         session.add(stranger)
         await session.flush()
         stranger_id = stranger.id
-    assert (await _profile(client, stranger_id)).status_code == 404, "not a member of varga"
+    assert (await _profile(client, stranger_id)).status_code == 404, "not a member of northwind"
 
     await _other_organisation()
     await login(client, "eve@other.dev")
@@ -224,9 +224,9 @@ async def test_outside_the_organisation_the_profile_is_refused_and_a_stranger_is
 async def test_a_former_member_is_read_by_an_administrator_only(
     client: AsyncClient, admin: str, project: dict[str, Any]
 ) -> None:
-    dev = await _member(client, "dev@varga.dev")
-    await _member(client, "viewer@varga.dev", role="viewer")
-    await _work(project["id"], "dev@varga.dev")
+    dev = await _member(client, "dev@northwind.dev")
+    await _member(client, "viewer@northwind.dev", role="viewer")
+    await _work(project["id"], "dev@northwind.dev")
     assert (await client.delete(f"{ORG}/members/{dev}")).status_code == 204
 
     body = (await _profile(client, dev)).json()
@@ -235,5 +235,5 @@ async def test_a_former_member_is_read_by_an_administrator_only(
     assert [d["work_item_key"] for d in body["work"]["decisions"]] == ["BILL-1"], "their decisions stay"
     assert {e["action"] for e in body["administration"]["audit"]} >= {"member.add", "member.remove"}
 
-    await login(client, "viewer@varga.dev")
+    await login(client, "viewer@northwind.dev")
     assert (await _profile(client, dev)).status_code == 404

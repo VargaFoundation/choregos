@@ -15,7 +15,7 @@ from httpx import AsyncClient
 
 from .conftest import login
 
-ORG = "/api/v1/orgs/varga"
+ORG = "/api/v1/orgs/northwind"
 SOURCES = f"{ORG}/hosted-sources"
 AGENT = "def answer(text):\n    return text\n"
 
@@ -528,9 +528,9 @@ async def test_an_upload_larger_than_the_cap_is_refused_before_it_is_read_whole(
 async def test_a_member_who_cannot_create_an_agent_cannot_upload(
     client: AsyncClient, admin: str, store: FakeObjectStore
 ) -> None:
-    added = await client.post(f"{ORG}/members", json={"email": "lecteur@varga.dev", "role": "viewer"})
+    added = await client.post(f"{ORG}/members", json={"email": "lecteur@northwind.dev", "role": "viewer"})
     assert added.status_code in {200, 201}, added.text
-    await login(client, "lecteur@varga.dev")
+    await login(client, "lecteur@northwind.dev")
     assert (await _upload(client)).status_code == 403
     assert store.objects == {}
 

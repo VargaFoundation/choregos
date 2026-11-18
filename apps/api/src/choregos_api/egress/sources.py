@@ -92,7 +92,7 @@ class FakeRunNetworkSource:
         self.unavailable = False
 
     def put(self, token: str, **fields: Any) -> RunNetwork:
-        network = RunNetwork(**{"org": "varga", "project": "billing", **fields})
+        network = RunNetwork(**{"org": "northwind", "project": "billing", **fields})
         self.networks[(network.run_id, token)] = network
         return network
 

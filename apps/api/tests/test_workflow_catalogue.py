@@ -10,7 +10,7 @@ from httpx import AsyncClient
 
 from .conftest import login
 
-BASE = "/api/v1/orgs/varga/workflow-catalogue"
+BASE = "/api/v1/orgs/northwind/workflow-catalogue"
 
 GHOST = """apiVersion: choregos/v1
 kind: Workflow
@@ -61,8 +61,10 @@ async def test_the_list_leaves_every_entry_s_yaml_out(client: AsyncClient, admin
 
 
 async def test_a_member_reads_the_catalogue_an_outsider_does_not(client: AsyncClient, admin: str) -> None:
-    await client.post("/api/v1/orgs/varga/members", json={"email": "po@varga.dev", "role": "project_owner"})
-    await login(client, "po@varga.dev")
+    await client.post(
+        "/api/v1/orgs/northwind/members", json={"email": "po@northwind.dev", "role": "project_owner"}
+    )
+    await login(client, "po@northwind.dev")
     assert (await client.get(BASE)).status_code == 200
     from choregos_api.db.models import Organization
     from choregos_api.db.session import session_scope
@@ -158,8 +160,10 @@ async def test_sharing_copies_a_version_and_an_unresolved_agent_refuses_the_adop
 async def test_only_an_administrator_shares(client: AsyncClient, project: dict[str, Any]) -> None:
     listed = (await client.get(f"/api/v1/projects/{project['id']}/workflows")).json()
     assert all(w["can_share"] for w in listed), "the server says an org_admin may share"
-    await client.post("/api/v1/orgs/varga/members", json={"email": "po@varga.dev", "role": "project_owner"})
-    await login(client, "po@varga.dev")
+    await client.post(
+        "/api/v1/orgs/northwind/members", json={"email": "po@northwind.dev", "role": "project_owner"}
+    )
+    await login(client, "po@northwind.dev")
     refused = await client.post(BASE, json={"project": "billing-api", "name": "default-simple"})
     assert refused.status_code == 403
     listed = (await client.get(f"/api/v1/projects/{project['id']}/workflows")).json()
@@ -193,6 +197,6 @@ async def test_the_core_catalogue_offers_development_and_audit_workflows_with_th
     )
     assert adopted.status_code == 201, adopted.text
     assert adopted.json()["origin"] == "core/security-audit@1"
-    agents = (await client.get("/api/v1/orgs/varga/agents")).json()
+    agents = (await client.get("/api/v1/orgs/northwind/agents")).json()
     listed = {a["slug"] for a in (agents["items"] if isinstance(agents, dict) else agents)}
     assert {"secops", "security-reviewer", "compliance"} <= listed, "the adoption installed its agents"

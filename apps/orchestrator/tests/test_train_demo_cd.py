@@ -38,7 +38,7 @@ async def _departure(temporal_env: Any, setup: Fixture) -> Any:
         id=f"train-{setup.project_slug}-prod",
         task_queue="test",
     )
-    await train.signal("merged", {"work_item_key": "varga/billing-api#1", "sha": "a1", "title": "un"})
+    await train.signal("merged", {"work_item_key": "northwind/billing-api#1", "sha": "a1", "title": "un"})
     await train.signal("depart_now", {"by": "augustin"})
     return train
 

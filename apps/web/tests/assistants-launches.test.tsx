@@ -7,7 +7,7 @@ import { api } from "@/lib/api";
 import type { Assistant } from "@/lib/assistants-api";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }), usePathname: () => "/assistants" }));
-vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "varga", me: { memberships: [] } }) }));
+vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "northwind", me: { memberships: [] } }) }));
 vi.mock("@/lib/api", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/api")>();
   return { ...real, api: { ...real.api, projects: vi.fn(), workflows: vi.fn() } };
@@ -60,7 +60,7 @@ beforeEach(() => {
 
 describe("the launches of an installation", () => {
   it("binds a launch to a project's workflow", async () => {
-    wrap(<InstallationLaunches org="varga" slug="invest" assistant={installed([launch])} />);
+    wrap(<InstallationLaunches org="northwind" slug="invest" assistant={installed([launch])} />);
     const row = await screen.findByRole("group", { name: "Launch portfolio_review" });
     expect(within(row).getByText("Not bound")).toBeInTheDocument();
     const bind = within(row).getByRole("button", { name: "Bind" });
@@ -72,7 +72,7 @@ describe("the launches of an installation", () => {
     fireEvent.change(within(row).getByLabelText("Workflow for portfolio_review"), { target: { value: "review" } });
     fireEvent.click(bind);
     await waitFor(() =>
-      expect(mocks.bindLaunch).toHaveBeenCalledWith("varga", "invest", "portfolio_review", {
+      expect(mocks.bindLaunch).toHaveBeenCalledWith("northwind", "invest", "portfolio_review", {
         project: "reviews",
         workflow: "review",
         enabled: true,
@@ -83,12 +83,12 @@ describe("the launches of an installation", () => {
   it("says where a launch is bound, shows a refusal, and switches an optional one off", async () => {
     mocks.bindLaunch.mockRejectedValueOnce(new Error("binding a launch to `reviews` needs the right to create work items there"));
     const bound = { ...launch, required: false, project: "reviews", workflow: "review", enabled: true };
-    wrap(<InstallationLaunches org="varga" slug="invest" assistant={installed([bound])} />);
+    wrap(<InstallationLaunches org="northwind" slug="invest" assistant={installed([bound])} />);
     const row = await screen.findByRole("group", { name: "Launch portfolio_review" });
     expect(within(row).getByText("Bound to review in reviews")).toBeInTheDocument();
     fireEvent.click(within(row).getByRole("button", { name: "Switch off" }));
     expect(await within(row).findByText(/needs the right to create work items/)).toBeInTheDocument();
-    expect(mocks.bindLaunch).toHaveBeenCalledWith("varga", "invest", "portfolio_review", {
+    expect(mocks.bindLaunch).toHaveBeenCalledWith("northwind", "invest", "portfolio_review", {
       project: "reviews",
       workflow: "review",
       enabled: false,
@@ -96,7 +96,7 @@ describe("the launches of an installation", () => {
   });
 
   it("draws nothing for an assistant without launches", () => {
-    const { container } = wrap(<InstallationLaunches org="varga" slug="invest" assistant={installed([])} />);
+    const { container } = wrap(<InstallationLaunches org="northwind" slug="invest" assistant={installed([])} />);
     expect(container).toBeEmptyDOMElement();
   });
 });

@@ -18,7 +18,7 @@ from typing import Any
 import pytest
 from httpx import AsyncClient
 
-BASE = "/api/v1/orgs/varga/knowledge"
+BASE = "/api/v1/orgs/northwind/knowledge"
 #: How long the deliberately CPU-bound step spins.
 SPIN_S = 1.5
 #: Light requests that must be answered before a heavy step ends (an order, not a duration).

@@ -7,7 +7,7 @@
 graal is the company (GRAAL.SYSTEMS SAS), the **graal Agentic Platform** is its commercial product, and
 Tranibor is the Apache-2.0 core that platform is built on.
 
-**Tranibor** is the governed-agent platform of the [Varga Foundation](https://github.com/graalsystems)
+**Tranibor** is the governed-agent platform of the [GRAAL.SYSTEMS SAS](https://github.com/graalsystems)
 (ADR 0029): workflows from any trade — software delivery, operations, joiners and leavers,
 data change — that agents and humans move forward under measured guarantees. It
 directs a chorus of agents (Claude Code, Codex, Gemini CLI, Goose, OpenCode…) behind a single
@@ -65,7 +65,7 @@ To develop the platform:
 make setup          # uv sync + pnpm install
 make ci             # lint + typing + unit tests
 make dev-up         # kind + Tilt (complete dev cluster)
-make dev-seed       # org varga, demo project, 10 tickets, one train
+make dev-seed       # org northwind, demo project, 10 tickets, one train
 make demo           # end-to-end scenario in memory (fakes, no cluster)
 ```
 

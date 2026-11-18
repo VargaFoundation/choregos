@@ -106,7 +106,7 @@ export function EditionCard({ edition }: { edition: Edition | undefined }) {
 }
 
 /**
- * The footer's attribution line. The community text is the foundation's (ADR 0048) and never
+ * The footer's attribution line. The community text is the publisher's (ADR 0048) and never
  * changes; an enterprise edition that announces a publisher is named next to it, and the line says
  * it is built on the community core.
  */
@@ -116,14 +116,14 @@ export function EditionFooterLine({ productName }: { productName?: string }) {
   productName = productName ?? served;
   const edition = useQuery({ queryKey: ["edition"], queryFn: () => api.edition(), staleTime: Infinity, retry: false });
   const publisher = edition.data?.edition === "enterprise" ? edition.data.publisher : null;
-  // The foundation is named here, and only here (ADR 0048). A theme cannot remove this line; a renamed
+  // The publisher is named here, and only here (ADR 0048). A theme cannot remove this line; a renamed
   // instance says what it is built on (ADR 0064), an enterprise edition who publishes it (ADR 0024).
   const product = productName === "Tranibor" ? "" : `${productName} · `;
   return (
     <span data-testid="footer-foundation">
       {publisher
-        ? `${product}Enterprise edition by ${publisher} · built on Tranibor by Varga Foundation (Apache 2.0)`
-        : `${productName === "Tranibor" ? "Tranibor" : `${productName}, built on Tranibor`} by Varga Foundation · Apache 2.0`}
+        ? `${product}Enterprise edition by ${publisher} · built on Tranibor by GRAAL.SYSTEMS SAS (Apache 2.0)`
+        : `${productName === "Tranibor" ? "Tranibor" : `${productName}, built on Tranibor`} by GRAAL.SYSTEMS SAS · Apache 2.0`}
     </span>
   );
 }
@@ -136,7 +136,7 @@ export function FooterText() {
 }
 
 /**
- * Where the core's source lives: the foundation's repository (ADR 0048), as the publishing identity
+ * Where the core's source lives: the publisher's repository (ADR 0048), as the publishing identity
  * names it (ADR 0156). The documentation is the instance's (`docs_url`, S62-11), no longer the
  * repository's `docs/` tree.
  */

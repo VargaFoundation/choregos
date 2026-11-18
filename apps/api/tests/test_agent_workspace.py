@@ -13,7 +13,7 @@ from .test_network_policy_api import AGENTS, LEGACY_DIGEST, LEGACY_SPEC, _policy
 DIGEST = "sha256:" + "c" * 64
 HOSTED = {"kind": "hosted", "source": {"type": "image", "ref": "ghcr.io/acme/triager:1", "digest": DIGEST}}
 A2A = {"kind": "a2a", "card_url": "https://rovo.example/.well-known/agent.json"}
-REPO = {"url": "https://github.com/varga/billing-api.git", "base_branch": "main", "work_branch": "w"}
+REPO = {"url": "https://github.com/northwind/billing-api.git", "base_branch": "main", "work_branch": "w"}
 
 
 # ───────────────────────── the spec ─────────────────────────

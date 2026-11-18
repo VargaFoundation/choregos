@@ -37,7 +37,7 @@ from .kits.assistant_memory import (
 from .kits.synthetic_installation import synthetic_installation  # noqa: F401
 from .test_agent_sessions import Upstream, upstream  # noqa: F401
 
-ME = "/api/v1/me/assistants/varga/investment-assistant"
+ME = "/api/v1/me/assistants/northwind/investment-assistant"
 BY_SUBJECT = {"subject": SUBJECT}
 
 
@@ -195,7 +195,7 @@ async def test_every_tool_call_of_a_conversation_writes_one_line_with_the_subjec
     # The manifest's other required need: a turn is refused (409) while the installation is incomplete.
     await _connector("news-feed", NEWS)
     assert (await _bind(client, "news", "news-feed")).json()["status"] == "ready"
-    await _audience("admin@varga.dev")
+    await _audience("admin@northwind.dev")
     conversation = await _open(installation)
     for tool, text in (("lookup_instrument", "Apple?"), ("get_quote", "Quote?")):
         upstream.model.call(f"markets__{tool}", {}).say("Done.")
@@ -228,7 +228,7 @@ async def test_every_tool_call_of_a_conversation_writes_one_line_with_the_subjec
     assert [r["operation"] for r in second.json()["items"]] == ["lookup_instrument"]
     assert second.json()["meta"]["has_more"] is False
 
-    await as_user(client, "colleague@varga.dev")
+    await as_user(client, "colleague@northwind.dev")
     assert (await client.get(reads_url)).status_code == 403, "a member who is not an auditor reads nothing"
 
 
@@ -242,10 +242,10 @@ async def _two_people(client: AsyncClient) -> tuple[str, str, str]:
     from choregos_api.db.session import session_scope
 
     installation = await _assistant(client)
-    await as_user(client, "colleague@varga.dev")
-    mine = await _open(installation, "admin@varga.dev")
-    theirs = await _open(installation, "colleague@varga.dev")
-    other = await _open(installation, "admin@varga.dev")
+    await as_user(client, "colleague@northwind.dev")
+    mine = await _open(installation, "admin@northwind.dev")
+    theirs = await _open(installation, "colleague@northwind.dev")
+    other = await _open(installation, "admin@northwind.dev")
     for conversation, content in ((mine, "Admin long."), (theirs, "Colleague short.")):
         await _resolved(conversation, messages=True)
         await _remember(conversation, content)
@@ -254,7 +254,7 @@ async def _two_people(client: AsyncClient) -> tuple[str, str, str]:
         assert record is not None
         record.messages = [{"role": "user", "content": "Unrelated."}]
         record.title = "Unrelated"
-    await as_user(client, "admin@varga.dev")
+    await as_user(client, "admin@northwind.dev")
     return mine, theirs, other
 
 
@@ -325,7 +325,7 @@ async def test_a_non_auditor_is_refused_the_erasure_and_the_export(
     client: AsyncClient, admin: str, upstream: Upstream, offline: Path
 ) -> None:
     await _two_people(client)
-    await as_user(client, "colleague@varga.dev")
+    await as_user(client, "colleague@northwind.dev")
     for mode in ("export", "erase"):
         refused = await client.post(
             f"{ORG}/assistants/investment-assistant/erasure", json={**BY_SUBJECT, "mode": mode}
@@ -501,11 +501,11 @@ async def test_an_erasure_by_user_reaches_accounts_delegations_subscriptions_and
 
     installation = await _assistant(client, with_markets=True)
     async with session_scope(orgs="*") as session:
-        me = (await session.execute(select(User).where(User.email == "admin@varga.dev"))).scalar_one()
+        me = (await session.execute(select(User).where(User.email == "admin@northwind.dev"))).scalar_one()
         org = (await session.execute(select(Organization))).scalar_one()
         binding = (await session.execute(select(AssistantToolBinding))).scalars().all()[-1]
         binding.identity = "user_consent"  # the installation reads `markets` as the person
-        colleague = User(email="colleague@varga.dev", display_name="c", oidc_sub="c")
+        colleague = User(email="colleague@northwind.dev", display_name="c", oidc_sub="c")
         session.add(colleague)
         await session.flush()
         for owner in (me, colleague):
@@ -528,8 +528,8 @@ async def test_an_erasure_by_user_reaches_accounts_delegations_subscriptions_and
                     manifest_digest="d",
                 )
             )  # fmt: skip
-    await _task_artifact("admin@varga.dev", installation, "TASK-mine")
-    await _task_artifact("colleague@varga.dev", installation, "TASK-theirs")
+    await _task_artifact("admin@northwind.dev", installation, "TASK-mine")
+    await _task_artifact("colleague@northwind.dev", installation, "TASK-theirs")
 
     gone = await client.delete(ME)
     assert gone.status_code == 200, gone.text
@@ -550,10 +550,10 @@ async def test_an_erasure_by_subject_deletes_the_artifacts_of_the_task_runs_that
     from choregos_api.db.session import session_scope
 
     installation = await _assistant(client)
-    await _task_artifact("admin@varga.dev", installation, "TASK-about", name="brief")
-    await _task_artifact("admin@varga.dev", installation, "TASK-other", name="brief")
+    await _task_artifact("admin@northwind.dev", installation, "TASK-about", name="brief")
+    await _task_artifact("admin@northwind.dev", installation, "TASK-other", name="brief")
     async with session_scope(orgs="*") as session:
-        me = (await session.execute(select(User).where(User.email == "admin@varga.dev"))).scalar_one()
+        me = (await session.execute(select(User).where(User.email == "admin@northwind.dev"))).scalar_one()
         org = (await session.execute(select(Organization))).scalar_one()
         for key, subject_key in (("TASK-about", SUBJECT["key"]), ("TASK-other", "ISIN-OTHER")):
             session.add(
@@ -579,10 +579,10 @@ async def test_the_purge_deletes_old_task_artifacts_and_old_profile_versions(
     from choregos_api.services.assistant_retention import purge_once
 
     installation = await _assistant(client)
-    old = await _task_artifact("admin@varga.dev", installation, "TASK-old")
-    await _task_artifact("admin@varga.dev", installation, "TASK-fresh")
+    old = await _task_artifact("admin@northwind.dev", installation, "TASK-old")
+    await _task_artifact("admin@northwind.dev", installation, "TASK-fresh")
     async with session_scope(orgs="*") as session:
-        me = (await session.execute(select(User).where(User.email == "admin@varga.dev"))).scalar_one()
+        me = (await session.execute(select(User).where(User.email == "admin@northwind.dev"))).scalar_one()
         org = (await session.execute(select(Organization))).scalar_one()
         for artifact in (
             await session.execute(select(ArtifactRecord).where(ArtifactRecord.work_item_id == old))
@@ -628,7 +628,7 @@ async def _read_lines(installation: str, *specs: tuple[str, str, str, int]) -> s
     from choregos_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
-        me = (await session.execute(select(User).where(User.email == "admin@varga.dev"))).scalar_one()
+        me = (await session.execute(select(User).where(User.email == "admin@northwind.dev"))).scalar_one()
         org = (await session.execute(select(Organization))).scalar_one()
         for need, operation, subject_key, days_ago in specs:
             session.add(
@@ -687,7 +687,7 @@ async def test_the_reads_journal_filters_by_need_and_period_and_the_read_is_itse
     assert newest is not None and "A" not in str(newest.payload.values()).replace("'A'", "")
     assert newest.payload["subject_digest"] and newest.payload["subject_digest"] != "A", "never in clear"
 
-    await as_user(client, "colleague@varga.dev")
+    await as_user(client, "colleague@northwind.dev")
     assert (await client.get(url, params={"need": "news"})).status_code == 403
     async with session_scope(orgs="*") as session:
         count = len(
@@ -736,10 +736,10 @@ async def test_an_export_by_subject_lists_the_artifacts_of_the_task_runs_that_re
     from choregos_api.db.session import session_scope
 
     installation = await _assistant(client)
-    await _task_artifact("admin@varga.dev", installation, "TASK-about", name="brief")
-    await _task_artifact("admin@varga.dev", installation, "TASK-other", name="other-brief")
+    await _task_artifact("admin@northwind.dev", installation, "TASK-about", name="brief")
+    await _task_artifact("admin@northwind.dev", installation, "TASK-other", name="other-brief")
     async with session_scope(orgs="*") as session:
-        me = (await session.execute(select(User).where(User.email == "admin@varga.dev"))).scalar_one()
+        me = (await session.execute(select(User).where(User.email == "admin@northwind.dev"))).scalar_one()
         org = (await session.execute(select(Organization))).scalar_one()
         for key, subject_key in (("TASK-about", SUBJECT["key"]), ("TASK-other", "ISIN-OTHER")):
             session.add(
@@ -804,10 +804,10 @@ async def test_an_erasure_by_user_deletes_the_bytes_of_their_file_artifacts_and_
 
     installation = await _assistant(client)
     async with session_scope(orgs="*") as session:
-        session.add(User(email="colleague@varga.dev", display_name="c", oidc_sub="c"))
-    mine = await _task_artifact("admin@varga.dev", installation, "TASK-mine", file_bytes=b"%PDF-mine")
+        session.add(User(email="colleague@northwind.dev", display_name="c", oidc_sub="c"))
+    mine = await _task_artifact("admin@northwind.dev", installation, "TASK-mine", file_bytes=b"%PDF-mine")
     theirs = await _task_artifact(
-        "colleague@varga.dev", installation, "TASK-theirs", file_bytes=b"%PDF-theirs"
+        "colleague@northwind.dev", installation, "TASK-theirs", file_bytes=b"%PDF-theirs"
     )
     assert len(store.objects) == 2
 
@@ -831,10 +831,10 @@ async def test_an_erasure_by_subject_deletes_the_bytes_of_the_file_artifacts_it_
     from choregos_api.db.session import session_scope
 
     installation = await _assistant(client)
-    about = await _task_artifact("admin@varga.dev", installation, "TASK-about", file_bytes=b"%PDF-a")
-    other = await _task_artifact("admin@varga.dev", installation, "TASK-other", file_bytes=b"%PDF-o")
+    about = await _task_artifact("admin@northwind.dev", installation, "TASK-about", file_bytes=b"%PDF-a")
+    other = await _task_artifact("admin@northwind.dev", installation, "TASK-other", file_bytes=b"%PDF-o")
     async with session_scope(orgs="*") as session:
-        me = (await session.execute(select(User).where(User.email == "admin@varga.dev"))).scalar_one()
+        me = (await session.execute(select(User).where(User.email == "admin@northwind.dev"))).scalar_one()
         org = (await session.execute(select(Organization))).scalar_one()
         session.add(
             AssistantRead(
@@ -859,8 +859,8 @@ async def test_the_purge_deletes_the_bytes_of_expired_file_artifacts_and_retries
     from choregos_api.services.assistant_retention import purge_once
 
     installation = await _assistant(client)
-    old = await _task_artifact("admin@varga.dev", installation, "TASK-old", file_bytes=b"%PDF-old")
-    fresh = await _task_artifact("admin@varga.dev", installation, "TASK-fresh", file_bytes=b"%PDF-new")
+    old = await _task_artifact("admin@northwind.dev", installation, "TASK-old", file_bytes=b"%PDF-old")
+    fresh = await _task_artifact("admin@northwind.dev", installation, "TASK-fresh", file_bytes=b"%PDF-new")
     async with session_scope(orgs="*") as session:
         for artifact in (
             await session.execute(select(ArtifactRecord).where(ArtifactRecord.work_item_id == old))
@@ -887,7 +887,7 @@ async def test_a_missing_object_does_not_fail_the_purge(
     from choregos_api.services.assistant_retention import purge_once
 
     installation = await _assistant(client)
-    old = await _task_artifact("admin@varga.dev", installation, "TASK-old", file_bytes=b"%PDF-old")
+    old = await _task_artifact("admin@northwind.dev", installation, "TASK-old", file_bytes=b"%PDF-old")
     for key in list(store.objects):
         store.forget(key)  # the object is already gone (a lifecycle rule, an earlier pass)
     async with session_scope(orgs="*") as session:

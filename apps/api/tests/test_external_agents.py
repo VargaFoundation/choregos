@@ -19,7 +19,7 @@ async def _external_agent(client: AsyncClient, tools: list[str] | None, slug: st
         "mcp_servers": [{"connector": "choregos", "tools": tools}] if tools is not None else []
     }
     created = await client.post(
-        "/api/v1/orgs/varga/agents",
+        "/api/v1/orgs/northwind/agents",
         json={"slug": slug, "kind": "external", "display_name": "Lea's Claude Code", "spec": spec},
     )
     assert created.status_code == 201, created.text
@@ -33,7 +33,7 @@ async def _token(client: AsyncClient, scope: str = "mcp:write") -> tuple[str, st
 
 async def _attach(client: AsyncClient, token_id: str, slug: str = "claude-of-lea") -> Any:
     return await client.post(
-        f"/api/v1/orgs/varga/agents/{slug}/credentials", json={"kind": "token", "token_id": token_id}
+        f"/api/v1/orgs/northwind/agents/{slug}/credentials", json={"kind": "token", "token_id": token_id}
     )
 
 
@@ -75,7 +75,7 @@ async def test_a_revoked_agent_gets_401_on_the_next_call(
     token_id, token = await _token(client)
     await _attach(client, token_id)
     assert (await _tools(client, token)).status_code == 200
-    revoked = await client.patch("/api/v1/orgs/varga/agents/claude-of-lea", json={"status": "revoked"})
+    revoked = await client.patch("/api/v1/orgs/northwind/agents/claude-of-lea", json={"status": "revoked"})
     assert revoked.status_code == 200
     refused = await _tools(client, token)
     assert refused.status_code == 401 and "revoked" in refused.text
@@ -86,12 +86,12 @@ async def test_a_human_without_rights_gives_an_agent_without_rights(
 ) -> None:
     await _external_agent(client, ["list_projects", "create_work_item"])
     member = await client.post(
-        "/api/v1/orgs/varga/members", json={"email": "reader@varga.dev", "role": "viewer"}
+        "/api/v1/orgs/northwind/members", json={"email": "reader@northwind.dev", "role": "viewer"}
     )
     assert member.status_code in {200, 201}
-    await login(client, "reader@varga.dev")
+    await login(client, "reader@northwind.dev")
     token_id, token = await _token(client)
-    await login(client, "admin@varga.dev")
+    await login(client, "admin@northwind.dev")
     assert (await _attach(client, token_id)).status_code == 201
     client.cookies.clear()
     names = {o["name"] for o in (await _tools(client, token)).json()["result"]["tools"]}
@@ -126,7 +126,7 @@ async def test_what_cannot_be_attached(
 ) -> None:
     await _external_agent(client, None)
     assert (
-        await client.post("/api/v1/orgs/varga/agents/claude-of-lea/credentials", json=body)
+        await client.post("/api/v1/orgs/northwind/agents/claude-of-lea/credentials", json=body)
     ).status_code == expected_status
 
 
@@ -159,7 +159,8 @@ async def test_a_token_of_someone_outside_the_organisation_cannot_be_attached(
 
 async def test_an_internal_agent_carries_no_client(client: AsyncClient, admin: str) -> None:
     internal = await client.post(
-        "/api/v1/orgs/varga/agents", json={"slug": "internal", "display_name": "Internal", "kind": "internal"}
+        "/api/v1/orgs/northwind/agents",
+        json={"slug": "internal", "display_name": "Internal", "kind": "internal"},
     )
     assert internal.status_code == 201
     token_id, _ = await _token(client)
@@ -177,7 +178,7 @@ async def test_an_oauth_client_embodies_its_agent(client: AsyncClient, admin: st
 
     await _external_agent(client, ["list_projects"])
     attached = await client.post(
-        "/api/v1/orgs/varga/agents/claude-of-lea/credentials",
+        "/api/v1/orgs/northwind/agents/claude-of-lea/credentials",
         json={"kind": "oauth_client", "client_id": "claude-ai"},
     )
     assert attached.status_code == 201, attached.text
@@ -193,7 +194,7 @@ async def test_an_attached_client_says_when_it_called_and_with_what(client: Asyn
     await _external_agent(client, None)
     token_id, token = await _token(client)
     assert (await _attach(client, token_id)).status_code == 201
-    (before,) = (await client.get("/api/v1/orgs/varga/agents/claude-of-lea/credentials")).json()
+    (before,) = (await client.get("/api/v1/orgs/northwind/agents/claude-of-lea/credentials")).json()
     assert before["token_name"] == "claude-code"
     assert before["last_used_at"] is None and before["last_client"] is None
 
@@ -206,7 +207,7 @@ async def test_an_attached_client_says_when_it_called_and_with_what(client: Asyn
     )
     assert call.status_code == 200, call.text
     client.cookies.update(cookies)
-    (after,) = (await client.get("/api/v1/orgs/varga/agents/claude-of-lea/credentials")).json()
+    (after,) = (await client.get("/api/v1/orgs/northwind/agents/claude-of-lea/credentials")).json()
     assert after["last_used_at"] is not None
     assert after["last_client"] == "claude-code/2.1.0"
 
@@ -219,10 +220,10 @@ async def test_a_client_gets_the_tools_of_the_production_revision_not_the_latest
     await _external_agent(client, ["list_projects"])
     widened = {"mcp_servers": [{"connector": "choregos", "tools": ["list_projects", "search_*"]}]}
     policy = await client.put(
-        "/api/v1/orgs/varga/agents/claude-of-lea/release-policy", json={"on_publish": "none"}
+        "/api/v1/orgs/northwind/agents/claude-of-lea/release-policy", json={"on_publish": "none"}
     )
     assert policy.status_code == 200, policy.text
-    saved = await client.post("/api/v1/orgs/varga/agents/claude-of-lea/versions", json=widened)
+    saved = await client.post("/api/v1/orgs/northwind/agents/claude-of-lea/versions", json=widened)
     assert saved.status_code == 201, saved.text
     token_id, token = await _token(client)
     assert (await _attach(client, token_id)).status_code == 201

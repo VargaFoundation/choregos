@@ -12,11 +12,11 @@ const MOCKS = {
   message: "demo-mode fixtures: load them with import() behind IS_MOCK, never statically (#179)",
 };
 
-// The console owns its primitives (ADR 0048): nothing comes from the Varga Foundation design system
+// The console owns its primitives (ADR 0048): nothing comes from a third-party design system
 // any more — not a component, not a stylesheet. Its look (square corners, mono buttons, lowercase,
-// the foundation's mark) would come back with it.
+// the publisher's mark) would come back with it.
 export const FOUNDATION_DESIGN_SYSTEM = {
-  group: ["@varga/*", "@varga/design-system", "@varga/design-system/*"],
+  group: ["@third-party/*", "@third-party/design-system", "@third-party/design-system/*"],
   message: "ADR 0048: the console owns its primitives — import them from @/components/ui",
 };
 
@@ -55,7 +55,7 @@ const config = [
     },
   },
   {
-    // The fixtures themselves may import each other; the foundation's design system stays refused.
+    // The fixtures themselves may import each other; the publisher's design system stays refused.
     files: ["src/mocks/**", "tests/**", "e2e/**"],
     rules: { "no-restricted-imports": ["error", { patterns: [FOUNDATION_DESIGN_SYSTEM] }] },
   },

@@ -40,7 +40,7 @@ describe("SessionProvider without a session (S63-12)", () => {
   });
 
   it("still renders the embedded component, which asks the person to sign in itself", async () => {
-    renderAt("/embed/assistants/varga/coach");
+    renderAt("/embed/assistants/northwind/coach");
     await waitFor(() => expect(screen.getByText("the page")).toBeInTheDocument());
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(screen.getByText("the page")).toBeInTheDocument();

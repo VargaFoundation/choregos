@@ -196,8 +196,8 @@ async def test_install_refusals(client: AsyncClient, org: str, offline: Path) ->
 
 async def test_rights(client: AsyncClient, org: str, app: Any, offline: Path) -> None:  # noqa: F811
     await _plugin(client)
-    await _member(client, "owner@varga.dev", [OWNERS])
-    await _member(client, "other@varga.dev", ["somebody-else"])
+    await _member(client, "owner@northwind.dev", [OWNERS])
+    await _member(client, "other@northwind.dev", ["somebody-else"])
     await _connector("news-feed", NEWS)
     assert (await _install(client, owner_groups=[OWNERS])).status_code == 201
 
@@ -206,8 +206,8 @@ async def test_rights(client: AsyncClient, org: str, app: Any, offline: Path) ->
         await login(other, email)
         return other
 
-    owner = await session_of("owner@varga.dev")
-    other = await session_of("other@varga.dev")
+    owner = await session_of("owner@northwind.dev")
+    other = await session_of("other@northwind.dev")
     assert (await _install(owner, slug="mine")).status_code == 403
     assert (await _bind(owner, "news", "news-feed")).status_code == 200
     assert (

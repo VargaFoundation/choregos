@@ -18,7 +18,7 @@ from typer.testing import CliRunner, Result
 
 SITE = Path(__file__).resolve().parents[3] / "docs" / "site"
 #: The pages' organisation, and the test fixtures' one.
-PAGE_ORG, TEST_ORG = "acme", "varga"
+PAGE_ORG, TEST_ORG = "acme", "northwind"
 
 
 class _Forward:

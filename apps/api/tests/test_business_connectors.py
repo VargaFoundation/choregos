@@ -11,7 +11,7 @@ from typing import Any
 import pytest
 from httpx import AsyncClient
 
-ORG = "/api/v1/orgs/varga"
+ORG = "/api/v1/orgs/northwind"
 KEY = "fleet-demo-key"
 
 

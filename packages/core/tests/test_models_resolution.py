@@ -30,8 +30,8 @@ def project(**models: object) -> ProjectConfig:
     return ProjectConfig.model_validate(
         {
             "slug": "demo",
-            "org": "varga",
-            "repo": {"url": "https://github.com/varga/demo.git", "default_branch": "main"},
+            "org": "northwind",
+            "repo": {"url": "https://github.com/northwind/demo.git", "default_branch": "main"},
             "models": models or {},
         }
     )

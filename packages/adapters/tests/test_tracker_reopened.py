@@ -9,8 +9,8 @@ from choregos_adapters.tracker.github_events import parse_github_event
 from choregos_adapters.tracker.gitlab_events import parse_gitlab_event
 from choregos_contracts import InboundEventType
 
-REPO = "varga/billing"
-PROJECT = "varga/billing-api"
+REPO = "northwind/billing"
+PROJECT = "northwind/billing-api"
 
 
 def _github(action: str) -> dict[str, Any]:
@@ -116,7 +116,7 @@ async def test_jira_dates_an_open_issue_by_its_status_category_change() -> None:
         return httpx.Response(200, json={"key": "BILL-7", "fields": fields, "names": {}})
 
     http = httpx.AsyncClient(transport=httpx.MockTransport(reply))
-    jira = JiraTracker(RestClient("https://varga.atlassian.net", client=http, service="jira"), "BILL")
+    jira = JiraTracker(RestClient("https://northwind.atlassian.net", client=http, service="jira"), "BILL")
     assert (await jira.fetch_item("BILL-7")).reopened_at == datetime(2026, 11, 5, 8, 0, tzinfo=UTC)
     category["key"] = "done"
     assert (await jira.fetch_item("BILL-7")).reopened_at is None, "a Done issue has not come back"

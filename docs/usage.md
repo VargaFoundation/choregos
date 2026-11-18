@@ -1398,7 +1398,7 @@ what lands in the agent's context, so the broker holds every result, read or wri
 operation — a log reader that needs 256 KiB, a lookup that should never say more than 4 KiB:
 
 ```bash
-curl -X PATCH "$API/api/v1/orgs/varga/connectors/fournisseur/operations/read_logs" \
+curl -X PATCH "$API/api/v1/orgs/northwind/connectors/fournisseur/operations/read_logs" \
   -H 'Content-Type: application/json' -d '{"result_max_bytes": 262144}'
 ```
 

@@ -20,7 +20,7 @@ from choregos_orchestrator.gitops import EGRESS_NAME, KUBE_NS, render_project_ma
 
 def _config() -> ProjectConfig:
     return ProjectConfig(
-        slug="billing", org="varga", repo=RepoConfig(url="https://github.com/varga/billing.git")
+        slug="billing", org="northwind", repo=RepoConfig(url="https://github.com/northwind/billing.git")
     )
 
 

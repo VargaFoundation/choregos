@@ -7,7 +7,7 @@ import { api } from "@/lib/api";
 import { accessLabel, grantKey, grantName, grantsBody, permissionsOf, roleHint } from "@/lib/knowledge";
 import type { KnowledgeBase, KnowledgeGrant } from "@/lib/types";
 
-vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "varga" }) }));
+vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "northwind" }) }));
 vi.mock("@/lib/api", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/api")>();
   return {
@@ -64,9 +64,9 @@ function show(value: KnowledgeBase) {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(api.members).mockResolvedValue([
-    { user_id: "u-ana", email: "ana@varga.dev", org: "varga", role: "developer" },
-    { user_id: "u-ana", email: "ana@varga.dev", org: "varga", project_slug: "billing-api", role: "viewer" },
-    { user_id: "u-bo", email: "bo@varga.dev", org: "varga", role: "viewer" },
+    { user_id: "u-ana", email: "ana@northwind.dev", org: "northwind", role: "developer" },
+    { user_id: "u-ana", email: "ana@northwind.dev", org: "northwind", project_slug: "billing-api", role: "viewer" },
+    { user_id: "u-bo", email: "bo@northwind.dev", org: "northwind", role: "viewer" },
   ] as never);
   vi.mocked(api.projects).mockResolvedValue({ items: [{ slug: "checkout-web", name: "Checkout web" }] } as never);
 });
@@ -108,7 +108,7 @@ describe("the access card (S42-11)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save access" }));
     await waitFor(() => expect(api.putKnowledgeGrants).toHaveBeenCalled());
     expect(vi.mocked(api.putKnowledgeGrants).mock.calls[0]).toEqual([
-      "varga",
+      "northwind",
       "architecture",
       [
         { subject_type: "group", subject: "architects", role: "viewer" },
@@ -123,11 +123,11 @@ describe("the access card (S42-11)", () => {
     await screen.findByTestId("knowledge-grants");
     fireEvent.change(screen.getByLabelText("Grant to"), { target: { value: "user" } });
     await waitFor(() => expect(screen.getByLabelText("Member")).toBeInTheDocument());
-    await waitFor(() => expect(within(screen.getByLabelText("Member")).getAllByRole("option").map((o) => o.textContent)).toEqual(["Choose a member", "ana@varga.dev", "bo@varga.dev"]));
+    await waitFor(() => expect(within(screen.getByLabelText("Member")).getAllByRole("option").map((o) => o.textContent)).toEqual(["Choose a member", "ana@northwind.dev", "bo@northwind.dev"]));
     fireEvent.change(screen.getByLabelText("Grant to"), { target: { value: "email" } });
-    fireEvent.change(screen.getByLabelText("E-mail"), { target: { value: "Later@Varga.dev" } });
+    fireEvent.change(screen.getByLabelText("E-mail"), { target: { value: "Later@Northwind.dev" } });
     fireEvent.click(screen.getByRole("button", { name: "Add" }));
-    expect(screen.getByTestId("knowledge-grants")).toHaveTextContent("later@varga.dev");
+    expect(screen.getByTestId("knowledge-grants")).toHaveTextContent("later@northwind.dev");
     fireEvent.change(screen.getByLabelText("Grant to"), { target: { value: "project" } });
     await waitFor(() => expect(within(screen.getByLabelText("Project")).getByRole("option", { name: "Checkout web" })).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "Remove architects" }));
@@ -144,7 +144,7 @@ describe("the access card (S42-11)", () => {
   });
 
   it("an e-mail with no member yet shows as waiting", async () => {
-    await show({ ...base, grants: [{ subject_type: "user", subject: "later@varga.dev", display: "later@varga.dev", role: "editor", pending: true }] });
+    await show({ ...base, grants: [{ subject_type: "user", subject: "later@northwind.dev", display: "later@northwind.dev", role: "editor", pending: true }] });
     expect(await screen.findByTestId("knowledge-grants")).toHaveTextContent("waiting for sign-in");
   });
 
@@ -152,7 +152,7 @@ describe("the access card (S42-11)", () => {
     vi.mocked(api.updateKnowledgeBase).mockResolvedValue({ ...base, restricted: true });
     await show(base);
     fireEvent.click(await screen.findByRole("checkbox", { name: /Restricted/ }));
-    await waitFor(() => expect(api.updateKnowledgeBase).toHaveBeenCalledWith("varga", "architecture", { restricted: true }));
+    await waitFor(() => expect(api.updateKnowledgeBase).toHaveBeenCalledWith("northwind", "architecture", { restricted: true }));
   });
 
   it("an editor of the owning project cannot widen: no restriction switch, and the owning project is named", async () => {

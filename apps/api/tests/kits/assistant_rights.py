@@ -15,7 +15,7 @@ from ..test_agent_sessions import Upstream, upstream  # noqa: F401
 ME = "/api/v1/me"
 
 
-OPEN = f"{ME}/assistants/varga/investment-assistant/conversations"
+OPEN = f"{ME}/assistants/northwind/investment-assistant/conversations"
 
 
 async def _as(app: Any, email: str) -> AsyncClient:

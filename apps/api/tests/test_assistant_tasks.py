@@ -65,8 +65,8 @@ async def test_each_subscriber_runs_at_their_own_local_hour_once(
     markets: Any,  # noqa: F811
 ) -> None:
     await _ready(client)
-    paris = await _subscriber(client, app, "paris@varga.dev")
-    bogota = await _subscriber(client, app, "bogota@varga.dev")
+    paris = await _subscriber(client, app, "paris@northwind.dev")
+    bogota = await _subscriber(client, app, "bogota@northwind.dev")
     for person, zone in ((paris, "Europe/Paris"), (bogota, "America/Bogota")):
         put = await person.put(f"{TASKS}/morning_brief", json={"kind": "schedule", "timezone": zone})
         assert put.status_code == 200, put.text
@@ -76,7 +76,7 @@ async def test_each_subscriber_runs_at_their_own_local_hour_once(
     # 07:30 in Paris (UTC+1 in winter) is 06:30 UTC: Bogota (UTC-5) is still asleep.
     first = await _pass(at(6, 30))
     assert list(first.values()) == ["schedule:20300107T0630Z"]
-    assert [o for _, o in await _runs()] == ["paris@varga.dev"]
+    assert [o for _, o in await _runs()] == ["paris@northwind.dev"]
     # The same window again, and a minute later: nothing more.
     assert await _pass(at(6, 30)) == {} and await _pass(at(6, 31)) == {}
     assert await _pass(at(12, 0)) == {}
@@ -84,9 +84,9 @@ async def test_each_subscriber_runs_at_their_own_local_hour_once(
     second = await _pass(at(12, 30))
     assert list(second.values()) == ["schedule:20300107T1230Z"]
     runs = await _runs()
-    assert sorted(o for _, o in runs) == ["bogota@varga.dev", "paris@varga.dev"]
-    paris_run = (await _runs("paris@varga.dev"))[0][0]
-    assert paris_run.initiated_by == "person:paris@varga.dev"
+    assert sorted(o for _, o in runs) == ["bogota@northwind.dev", "paris@northwind.dev"]
+    paris_run = (await _runs("paris@northwind.dev"))[0][0]
+    assert paris_run.initiated_by == "person:paris@northwind.dev"
     assert paris_run.documents["task"]["task"] == "morning_brief"
     assert paris_run.documents["labels"] == ["task:investment-assistant:morning_brief"]
     assert paris_run.state == "brief" and paris_run.tracker_key.endswith("20300107T0630Z")
@@ -105,19 +105,19 @@ async def test_a_window_that_passed_before_subscribing_does_not_run(
     from choregos_api.services.assistant_tasks import put_subscription
 
     await _ready(client)
-    await _subscriber(client, app, "late@varga.dev")
+    await _subscriber(client, app, "late@northwind.dev")
     from choregos_api.db.models import User
     from choregos_api.rbac import Principal, Role
 
     async with session_scope(orgs="*") as session:
-        user = (await session.execute(select(User).where(User.email == "late@varga.dev"))).scalar_one()
+        user = (await session.execute(select(User).where(User.email == "late@northwind.dev"))).scalar_one()
         principal = Principal(
-            user_id=user.id, email=user.email, org_roles={"varga": Role.VIEWER}, groups=[AUDIENCE]
+            user_id=user.id, email=user.email, org_roles={"northwind": Role.VIEWER}, groups=[AUDIENCE]
         )
         await put_subscription(
             session,
             principal,
-            "varga",
+            "northwind",
             "investment-assistant",
             "morning_brief",
             TaskSubscriptionPut(kind="schedule", timezone="Europe/Paris"),
@@ -143,7 +143,7 @@ async def test_a_poll_starts_one_run_per_object_and_never_the_same_object_twice(
     from choregos_api.db.session import session_scope
 
     await _ready(client)
-    person = await _subscriber(client, app, "poller@varga.dev")
+    person = await _subscriber(client, app, "poller@northwind.dev")
     put = await person.put(f"{TASKS}/threshold_alert", json={"kind": "poll"})
     assert put.status_code == 200, put.text
 
@@ -183,7 +183,7 @@ async def test_a_poll_whose_read_fails_starts_nothing_and_says_why(
     markets: Any,  # noqa: F811
 ) -> None:
     await _ready(client)
-    person = await _subscriber(client, app, "poller@varga.dev")
+    person = await _subscriber(client, app, "poller@northwind.dev")
     await person.put(f"{TASKS}/threshold_alert", json={"kind": "poll"})
     markets.structured["get_quote"] = {"events": [{"id": "e1", "change_pct": 9}]}
     from choregos_api.db.models import ConnectorOperation
@@ -231,7 +231,7 @@ async def test_a_delegated_task_is_subscribed_but_its_scheduled_run_is_refused(
     markets: Any,  # noqa: F811
 ) -> None:
     await _ready(client)
-    person = await _subscriber(client, app, "delegate@varga.dev")
+    person = await _subscriber(client, app, "delegate@northwind.dev")
     put = await person.put(f"{TASKS}/delegated_brief", json={"kind": "schedule", "timezone": "Europe/Paris"})
     assert put.status_code == 200, put.text
     assert put.json()["delegation"] == "read_only" and put.json()["delegation_id"] is None
@@ -257,8 +257,8 @@ async def test_the_artifact_is_in_the_subscribers_inbox_and_nobody_elses(
     markets: Any,  # noqa: F811
 ) -> None:
     await _ready(client)
-    mine = await _subscriber(client, app, "mine@varga.dev")
-    other = await _subscriber(client, app, "other@varga.dev")
+    mine = await _subscriber(client, app, "mine@northwind.dev")
+    other = await _subscriber(client, app, "other@northwind.dev")
     assert (await mine.get(f"{ME}/inbox")).json() == {"items": []}
     ran = await mine.post(f"{TASKS}/morning_brief/run")
     assert ran.status_code == 201, ran.text
@@ -287,7 +287,7 @@ async def test_the_other_channels_send_each_artifact_once(
     from choregos_api.services.task_delivery import deliver_pending, set_notifier_factory, webhook_secret
 
     await _ready(client)
-    mine = await _subscriber(client, app, "mine@varga.dev")
+    mine = await _subscriber(client, app, "mine@northwind.dev")
     await as_admin(client)
     patched = await client.patch(
         f"{ORG}/assistants/investment-assistant",
@@ -315,7 +315,7 @@ async def test_the_other_channels_send_each_artifact_once(
         set_a2a_transport(None)
 
     assert [(channel, message.title) for channel, message in notifier.sent] == [
-        ("mine@varga.dev", "morning_brief: brief")
+        ("mine@northwind.dev", "morning_brief: brief")
     ]
     assert notifier.sent[0][1].body == "Hello"
     assert len(received) == 1, "the webhook got the artifact once"
@@ -330,7 +330,7 @@ async def test_the_other_channels_send_each_artifact_once(
     )
     sent = json.loads(body)
     assert sent["artifact"]["name"] == "brief" and sent["artifact"]["content"] == "Hello"
-    assert sent["task"] == "morning_brief" and sent["subscriber"] == "mine@varga.dev"
+    assert sent["task"] == "morning_brief" and sent["subscriber"] == "mine@northwind.dev"
     assert request.headers["idempotency-key"] == sent["artifact"]["id"]
 
 
@@ -345,7 +345,7 @@ async def test_a_channel_nobody_configured_is_recorded_not_silent(
     from choregos_api.services.task_delivery import deliver_pending
 
     await _ready(client)
-    mine = await _subscriber(client, app, "mine@varga.dev")
+    mine = await _subscriber(client, app, "mine@northwind.dev")
     run = (await mine.post(f"{TASKS}/morning_brief/run")).json()
     await _produce(run["work_item_id"], brief="Hello")
     async with session_scope(orgs="*") as session:
@@ -367,9 +367,9 @@ async def test_the_subscription_rules(
     markets: Any,  # noqa: F811
 ) -> None:
     await _ready(client)
-    await _member(client, "outsider@varga.dev", ["somebody-else"])
-    outsider = await _as(app, "outsider@varga.dev")
-    person = await _subscriber(client, app, "mine@varga.dev")
+    await _member(client, "outsider@northwind.dev", ["somebody-else"])
+    outsider = await _as(app, "outsider@northwind.dev")
+    person = await _subscriber(client, app, "mine@northwind.dev")
 
     assert (await outsider.put(f"{TASKS}/morning_brief", json={})).status_code == 404
     assert (await person.get(f"{TASKS}/morning_brief")).status_code == 404, "not subscribed yet"
@@ -393,7 +393,7 @@ async def test_the_subscription_rules(
     assert await _pass(at(11, 30)) == {}, "a switched-off subscription never runs"
 
     # Nobody reads another person's subscription.
-    other = await _subscriber(client, app, "other@varga.dev")
+    other = await _subscriber(client, app, "other@northwind.dev")
     assert (await other.get(f"{TASKS}/morning_brief")).status_code == 404
 
     assert (await person.delete(f"{TASKS}/morning_brief")).status_code == 204
@@ -413,7 +413,7 @@ async def test_a_run_is_refused_when_the_subscribers_month_is_spent(
     from choregos_core import utcnow
 
     await _ready(client)
-    mine = await _subscriber(client, app, "mine@varga.dev")
+    mine = await _subscriber(client, app, "mine@northwind.dev")
     await as_admin(client)
     assert (
         await client.patch(
@@ -423,7 +423,7 @@ async def test_a_run_is_refused_when_the_subscribers_month_is_spent(
     ).status_code == 200
     installation = await _installation_id()
     async with session_scope(orgs="*") as session:
-        user = (await session.execute(select(User).where(User.email == "mine@varga.dev"))).scalar_one()
+        user = (await session.execute(select(User).where(User.email == "mine@northwind.dev"))).scalar_one()
         organisation = (await session.execute(select(Organization))).scalar_one()
         session.add(
             CostLedger(
@@ -456,7 +456,7 @@ async def test_the_spend_of_a_task_run_is_attributed_to_the_installation_and_sto
     from choregos_api.services.costs import record_cost
 
     await _ready(client)
-    mine = await _subscriber(client, app, "mine@varga.dev")
+    mine = await _subscriber(client, app, "mine@northwind.dev")
     await as_admin(client)
     assert (
         await client.patch(
@@ -485,13 +485,13 @@ async def test_the_spend_of_a_task_run_is_attributed_to_the_installation_and_sto
         line = (
             await session.execute(select(CostLedger).where(CostLedger.run_id == "run-spend-1"))
         ).scalar_one()
-        user = (await session.execute(select(User).where(User.email == "mine@varga.dev"))).scalar_one()
+        user = (await session.execute(select(User).where(User.email == "mine@northwind.dev"))).scalar_one()
         assert (line.installation_id, line.user_id) == (installation, user.id)
         assert await month_spend(session, installation, user.id) == 1.5
         assert await month_spend(session, installation) == 1.5
     refused = await mine.post(f"{TASKS}/morning_brief/run")
     assert refused.status_code == 409 and "monthly budget" in refused.text
-    other = await _subscriber(client, app, "other@varga.dev")
+    other = await _subscriber(client, app, "other@northwind.dev")
     assert (await other.post(f"{TASKS}/morning_brief/run")).status_code == 201, "another person's month"
 
 
@@ -507,7 +507,7 @@ async def test_the_webhook_key_is_shown_once_to_a_manager_and_rotates(
     from choregos_api.services.task_delivery import deliver_pending, webhook_secret
 
     await _ready(client)
-    mine = await _subscriber(client, app, "mine@varga.dev")
+    mine = await _subscriber(client, app, "mine@northwind.dev")
     route = f"{ORG}/assistants/investment-assistant/webhook-secret"
     assert (await mine.post(route)).status_code == 403, "a member of the audience does not manage"
     await as_admin(client)
@@ -568,12 +568,12 @@ async def test_a_conversation_is_offered_run_task_which_starts_the_task_as_the_p
     from .kits.conversations import _open
 
     await _ready(client)
-    await _subscriber(client, app, "mine@varga.dev")
+    await _subscriber(client, app, "mine@northwind.dev")
     installation = await _installation_id()
     spec = {"instructions": "Help.", "runtime": {"kind": "prompt"}}
     made = await client.post(f"{ORG}/agents", json={"slug": "helper", "display_name": "h", "spec": spec})
     assert made.status_code == 201, made.text
-    conversation = await _open("varga", "mine@varga.dev", installation_id=installation)
+    conversation = await _open("northwind", "mine@northwind.dev", installation_id=installation)
     async with session_scope(orgs="*") as session:
         record = await session.get(AgentSessionRecord, conversation)
         assert record is not None
@@ -589,9 +589,9 @@ async def test_a_conversation_is_offered_run_task_which_starts_the_task_as_the_p
         assert "task not started" in refused
         installation_row = await session.get(AssistantInstallation, installation)
         assert installation_row is not None
-    runs = await _runs("mine@varga.dev")
+    runs = await _runs("mine@northwind.dev")
     ((item, _),) = runs
-    assert item.initiated_by == "person:mine@varga.dev"
+    assert item.initiated_by == "person:mine@northwind.dev"
     task = item.documents["task"]
     assert task["trigger"] == "on_demand" and task["delegation_id"] is None, "no delegation under a tool"
     assert task["task"] == "delegated_brief"
@@ -611,9 +611,9 @@ async def test_run_task_is_called_by_the_model_in_a_turn_and_starts_the_task_as_
     """A scripted model calls `run_task` in a full turn of `POST .../messages`: the tool is offered to the
     model, the work item opens in the person's space with the person as initiator, no delegation."""
     await _ready(client)
-    mine = await _subscriber(client, app, "mine@varga.dev")
-    await _subscriber(client, app, "other@varga.dev")
-    opened = await mine.post(f"{ME}/assistants/varga/investment-assistant/conversations", json={})
+    mine = await _subscriber(client, app, "mine@northwind.dev")
+    await _subscriber(client, app, "other@northwind.dev")
+    opened = await mine.post(f"{ME}/assistants/northwind/investment-assistant/conversations", json={})
     assert opened.status_code == 201, opened.text
     conversation = opened.json()["id"]
     upstream.model.call("run_task", {"task": "morning_brief"}).say("Your brief is on its way.")
@@ -626,10 +626,10 @@ async def test_run_task_is_called_by_the_model_in_a_turn_and_starts_the_task_as_
     told = [m["content"] for m in last["messages"] if m["role"] == "tool"]
     assert told and "was started" in told[0], told
     ((item, owner),) = await _runs()
-    assert owner == "mine@varga.dev" and item.initiated_by == "person:mine@varga.dev"
+    assert owner == "mine@northwind.dev" and item.initiated_by == "person:mine@northwind.dev"
     task = item.documents["task"]
     assert (task["task"], task["trigger"], task["delegation_id"]) == ("morning_brief", "on_demand", None)
-    assert await _runs("other@varga.dev") == [], "nobody else's space got it"
+    assert await _runs("other@northwind.dev") == [], "nobody else's space got it"
 
 
 async def _journal() -> list[Any]:
@@ -651,7 +651,7 @@ async def test_the_reads_of_a_poll_are_journaled_with_the_task_and_the_work_item
     markets: Any,  # noqa: F811
 ) -> None:
     await _ready(client)
-    person = await _subscriber(client, app, "poller@varga.dev")
+    person = await _subscriber(client, app, "poller@northwind.dev")
     assert (await person.put(f"{TASKS}/threshold_alert", json={"kind": "poll"})).status_code == 200
 
     markets.structured["get_quote"] = {"events": [{"id": "e1", "change_pct": 4.2}]}

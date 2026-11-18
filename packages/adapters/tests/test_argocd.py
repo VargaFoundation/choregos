@@ -15,7 +15,7 @@ from ._transport import Wire
 
 ARGO = "https://argo.test"
 GH = "https://api.github.test"
-GITOPS = "varga/gitops"
+GITOPS = "northwind/gitops"
 
 
 def argo(wire: Wire, github: Wire | None = None) -> ArgoCdAdapter:

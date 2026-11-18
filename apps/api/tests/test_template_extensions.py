@@ -14,7 +14,7 @@ from typing import Any
 import pytest
 from httpx import AsyncClient
 
-ORG = "/api/v1/orgs/varga"
+ORG = "/api/v1/orgs/northwind"
 
 
 @pytest.fixture
@@ -51,7 +51,7 @@ async def _create(client: AsyncClient, slug: str = "hr") -> Any:
             "slug": slug,
             "name": slug,
             "template_ref": "trial-ext",
-            "config": {"slug": slug, "org": "varga"},
+            "config": {"slug": slug, "org": "northwind"},
         },
     )
 

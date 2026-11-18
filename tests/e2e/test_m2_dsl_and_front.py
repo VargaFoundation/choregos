@@ -30,7 +30,7 @@ async def test_the_three_templates_are_accepted_by_the_api(platform: Platform, n
         assert refused.status_code == 422, refused.text
         assert {e["code"] for e in refused.json()["errors"]} == {"decision.model_usage"}
         added = await platform.client.post(
-            "/api/v1/orgs/varga/models", json={"model_name": "platform/decide", "usages": ["decide"]}
+            "/api/v1/orgs/northwind/models", json={"model_name": "platform/decide", "usages": ["decide"]}
         )
         assert added.status_code in (200, 201), added.text
 
@@ -57,8 +57,8 @@ async def test_a_card_moved_on_the_board_does_not_move_the_work_item(platform: P
     await login(platform.client)
     payload = {
         "action": "edited",
-        "repository": {"full_name": "varga/billing-api"},
-        "projects_v2_item": {"content_node_id": "varga/billing-api#200", "project_node_id": "PVT_1"},
+        "repository": {"full_name": "northwind/billing-api"},
+        "projects_v2_item": {"content_node_id": "northwind/billing-api#200", "project_node_id": "PVT_1"},
         "changes": {
             "field_value": {
                 "field_name": "Status",
@@ -75,7 +75,7 @@ async def test_a_card_moved_on_the_board_does_not_move_the_work_item(platform: P
         session.add(
             WorkItem(
                 project_id=platform.project_id,
-                tracker_key="varga/billing-api#200",
+                tracker_key="northwind/billing-api#200",
                 title="Ticket moved by hand",
                 state="inbox",
             )
@@ -101,15 +101,15 @@ async def test_a_card_moved_on_the_board_does_not_move_the_work_item(platform: P
 async def test_the_wizard_creates_a_project_and_starts_provisioning(platform: Platform) -> None:
     await login(platform.client)
     created = await platform.client.post(
-        "/api/v1/orgs/varga/projects",
+        "/api/v1/orgs/northwind/projects",
         json={
             "slug": "checkout-web",
             "name": "Checkout Web",
             "template_ref": "github-tekton-argo-k8s@1.0.0",
             "config": {
                 "slug": "checkout-web",
-                "org": "varga",
-                "repo": {"url": "https://github.com/varga/checkout-web.git", "default_branch": "main"},
+                "org": "northwind",
+                "repo": {"url": "https://github.com/northwind/checkout-web.git", "default_branch": "main"},
             },
         },
     )
@@ -139,7 +139,7 @@ async def test_cost_estimate_shown_on_a_ticket(platform: Platform) -> None:
             session.add(
                 WorkItem(
                     project_id=platform.project_id,
-                    tracker_key=f"varga/billing-api#9{index}",
+                    tracker_key=f"northwind/billing-api#9{index}",
                     title="finished ticket",
                     state="deployed_prod",
                     size="M",
@@ -149,7 +149,7 @@ async def test_cost_estimate_shown_on_a_ticket(platform: Platform) -> None:
             )
         current = WorkItem(
             project_id=platform.project_id,
-            tracker_key="varga/billing-api#300",
+            tracker_key="northwind/billing-api#300",
             title="ticket in progress",
             state="in_progress",
             size="M",

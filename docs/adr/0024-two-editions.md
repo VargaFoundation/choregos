@@ -1,5 +1,7 @@
 # 0024 — Two editions: a community core, an enterprise layer
 
+> **Amended by [ADR 0186](0186-the-publisher-is-graal-systems-sas.md)** (2026-11-18): the publisher is GRAAL.SYSTEMS SAS and the product no longer names the Varga Foundation; the text below is kept as the history of the earlier decision.
+
 - **Status**: accepted, 2026-09-26 — reopens decision D1 of `docs/plan/00-index.md`
 - **Concerns**: the licence of the repository, what the API refuses, how the enterprise layer is built and shipped
 

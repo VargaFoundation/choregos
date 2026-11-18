@@ -83,13 +83,13 @@ def stage_input(toy_repo: Path, tmp_path: Path) -> StageInput:
         attempt=1,
         project=ProjectRef(
             slug="demo",
-            org="varga",
+            org="northwind",
             test_command="make test",
             lint_command="make lint",
             typecheck_command="make typecheck",
         ),
         work_item=WorkItemRef(
-            key="varga/demo#1",
+            key="northwind/demo#1",
             title="Corriger le total",
             body="The total ignores credit notes.",
             size="M",

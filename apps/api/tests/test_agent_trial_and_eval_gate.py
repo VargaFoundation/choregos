@@ -12,7 +12,7 @@ from typing import Any
 import pytest
 from httpx import AsyncClient
 
-AGENTS = "/api/v1/orgs/varga/agents"
+AGENTS = "/api/v1/orgs/northwind/agents"
 VIP = {"name": "vip", "input": {"title": "VIP outage"}, "must_contain": ["Escalate VIP outage"]}
 
 
@@ -57,7 +57,7 @@ async def test_a_trial_runs_the_draft_capped_and_off_the_board(
     from choregos_api.temporal import get_temporal
 
     trial = await client.post(
-        "/api/v1/orgs/varga/agent-trials",
+        "/api/v1/orgs/northwind/agent-trials",
         json={
             "project": "billing-api",
             "spec": {**_spec("Escalate {{ ticket.title }}.", [VIP]), "budget": {"run_usd": 3.0}},
@@ -85,7 +85,7 @@ async def test_a_trial_runs_the_draft_capped_and_off_the_board(
 
 async def test_a_trial_s_draft_must_render(client: AsyncClient, project: dict[str, Any]) -> None:
     refuse = await client.post(
-        "/api/v1/orgs/varga/agent-trials",
+        "/api/v1/orgs/northwind/agent-trials",
         json={"project": "billing-api", "spec": _spec("{{ ''.__class__ }}"), "input": {"title": "x"}},
     )
     assert refuse.status_code == 422, refuse.text
@@ -112,7 +112,7 @@ async def test_an_eval_case_plays_a_ticket_filed_from_a_tracker(
     assert created.status_code == 201, created.text
 
     trial = await client.post(
-        "/api/v1/orgs/varga/agent-trials",
+        "/api/v1/orgs/northwind/agent-trials",
         json={"project": "billing-api", "spec": _spec(instructions), "input": cases[1]["input"]},
     )
     assert trial.status_code == 201, trial.text

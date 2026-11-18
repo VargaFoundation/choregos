@@ -35,7 +35,7 @@ test("the sample theme changes the page: colours, title font, name, favicon, def
   await expect(page.locator('link[rel="icon"]')).toHaveAttribute("href", "/api/v1/mock-theme-assets/favicon.svg");
   await expect(page.getByTestId("footer-text")).toHaveText("Operated by Sample");
   // The attribution stays whatever the theme says (ADR 0048).
-  await expect(page.getByTestId("footer-foundation")).toContainText("Varga Foundation");
+  await expect(page.getByTestId("footer-foundation")).toContainText("GRAAL.SYSTEMS SAS");
   expect(await page.title()).toMatch(/· Sample$/);
 
   expect((await font).status()).toBe(200);

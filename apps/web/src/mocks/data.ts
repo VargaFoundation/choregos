@@ -351,7 +351,7 @@ function artifactOf(
     digest: name === "spec_markdown" && version === 1 ? SPEC_V1_DIGEST : digestOf(`${name.length}${version}`),
     size,
     produced_by: { run_id, stage, attempt: 1, agent: agent?.[0] ?? null, agent_version: agent?.[1] ?? null },
-    storage_url: kind === "markdown" || kind === "json" ? null : `s3://choregos/orgs/varga/work-items/w1/artifacts/${name}`,
+    storage_url: kind === "markdown" || kind === "json" ? null : `s3://choregos/orgs/northwind/work-items/w1/artifacts/${name}`,
     created_at: iso(minutesAgo),
   };
 }
@@ -580,8 +580,8 @@ function run(id: string, role: string, status: string, cost: number, summary: st
     // Who it runs as and what it may call (ADR 0107): resolved by the API, never a secret.
     agent_slug: "developer",
     agent_version: 3,
-    initiated_by: "person:augustin@varga.dev",
-    tool_connectors: [{ name: "atlassian", type: "mcp", auth_scheme: "basic", account: "svc-choregos@varga.dev" }],
+    initiated_by: "person:augustin@northwind.dev",
+    tool_connectors: [{ name: "atlassian", type: "mcp", auth_scheme: "basic", account: "svc-choregos@northwind.dev" }],
     result: {
       schema: "choregos/StageResult/v1",
       status: status === "running" ? "done" : "done",
@@ -637,7 +637,7 @@ export const runLogsLive: RunLogs = {
   message: "",
   lines: [
     "runner: fetching the stage input",
-    "runner: cloning https://github.com/varga/billing-api.git",
+    "runner: cloning https://github.com/northwind/billing-api.git",
     "env: GITHUB_TOKEN=[REDACTED]",
     "acp: session started (claude-code)",
   ],
@@ -2380,7 +2380,7 @@ export const knowledgeBase: KnowledgeBase = {
   status: "active",
   document_count: 2,
   documents_by_status: { ready: 2 },
-  created_by: "lea@varga.dev",
+  created_by: "lea@northwind.dev",
   created_at: iso(60 * 24 * 5),
   restricted: false,
   can: { edit: true, distill: true, share: true, archive: true, widen: true },
@@ -2414,7 +2414,7 @@ export const knowledgeBase: KnowledgeBase = {
       digest: "sha256:1d2c3b4a",
       source: "upload",
       status: "ready",
-      created_by: "lea@varga.dev",
+      created_by: "lea@northwind.dev",
       created_at: iso(60 * 24 * 5),
       markdown: "<!-- Slide number: 1 -->\n# Network zoning principles\nEvery zone has a firewall.\n",
     },
@@ -2427,7 +2427,7 @@ export const knowledgeBase: KnowledgeBase = {
       digest: "sha256:5e6f7a8b",
       source: "upload",
       status: "ready",
-      created_by: "lea@varga.dev",
+      created_by: "lea@northwind.dev",
       created_at: iso(60 * 24 * 4),
       okf: { type: "Policy", status: "deprecated", stale_after: null, stale: false },
     },
@@ -2446,7 +2446,7 @@ export const projectKnowledgeBase: KnowledgeBase = {
   status: "active",
   document_count: 0,
   documents_by_status: {},
-  created_by: "lea@varga.dev",
+  created_by: "lea@northwind.dev",
   created_at: iso(60 * 24 * 2),
   restricted: false,
   can: { edit: true, distill: true, share: true, archive: true, widen: true },
@@ -3031,7 +3031,7 @@ function mockMemberProfile(org: string, userId: string): MemberProfile {
     status: "active",
     display_name: self ? me.display_name : local.charAt(0).toUpperCase() + local.slice(1),
     given_name: self ? "Augustin" : null,
-    family_name: self ? "Varga" : null,
+    family_name: self ? "Northwind" : null,
     job_title: self ? "Head of platform" : null,
     department: self ? "Engineering" : null,
     email,
@@ -3242,7 +3242,7 @@ function mcpGatewayApi(method: string, bare: string, body: unknown): unknown {
 /** The demo organisation, kept for the time of the page: the Organisation card on /admin renames it (S40-24). */
 const mockOrg: { slug: string; name: string; role: string; currency: string } = {
   slug: "acme",
-  name: "Varga Foundation",
+  name: "Northwind",
   role: "org_admin",
   currency: "EUR",
 };
@@ -3628,7 +3628,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       ...g,
       display: String(g.subject),
       pending: String(g.subject).includes("@"),
-      created_by: "lea@varga.dev",
+      created_by: "lea@northwind.dev",
     }));
     writtenGrants.set(decodeURIComponent(grantsRoute[1] ?? ""), written);
     return { grants: written } as T;
@@ -4068,7 +4068,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   const accuse = /^\/orgs\/[^/]+\/budget-alerts\/([^/]+)\/acknowledge$/.exec(chemin ?? "");
   if (method === "POST" && accuse) {
     const alerte = budgetAlerts.find((a) => a.id === accuse[1]) ?? budgetAlerts[0]!;
-    return { ...alerte, status: "acknowledged", acknowledged_by: "lea@varga.dev" } as T;
+    return { ...alerte, status: "acknowledged", acknowledged_by: "lea@northwind.dev" } as T;
   }
   if (method === "POST" && /^\/orgs\/[^/]+\/skills\/import$/.test(chemin ?? "")) return skills[0] as T;
   if (method === "POST" && /^\/orgs\/[^/]+\/skills\/import-git\/preview$/.test(chemin ?? "")) return skillGitPreview as T;

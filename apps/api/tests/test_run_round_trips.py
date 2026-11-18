@@ -165,7 +165,7 @@ async def test_the_report_reads_the_routes_and_agrees_with_its_sql(
 
     tool = _report_tool()
     await _seed_window(project["id"])
-    found = await tool.collect(client, "varga", utcnow() - timedelta(days=30))
+    found = await tool.collect(client, "northwind", utcnow() - timedelta(days=30))
     assert (found.skipped_work_items, found.skipped_access) == (0, 0)
     (row,) = tool.aggregate(found.samples)
     assert (row.agent, row.backend, row.runs, row.success_rate) == ("fon-agent", "claude-code", 3, 0.6667)

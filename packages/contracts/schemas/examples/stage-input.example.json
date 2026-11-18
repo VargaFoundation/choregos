@@ -24,7 +24,7 @@
   "allowed_paths": ["src/orders/**", "tests/orders/**"],
   "memory_scope": "project",
   "memories": [
-    { "label": "global:security-lessons", "scope": "global", "slug": "security-lessons", "mode": "read", "namespace": "org:varga#memory:security-lessons" },
+    { "label": "global:security-lessons", "scope": "global", "slug": "security-lessons", "mode": "read", "namespace": "org:northwind#memory:security-lessons" },
     { "label": "project:shared", "scope": "project", "slug": "shared", "mode": "write", "namespace": "billing-api" }
   ],
   "context_pack_url": "s3://choregos/runs/01J8ZQK4C9R7M3N2P5T6V7W8X9/context.json",

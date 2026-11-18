@@ -389,12 +389,12 @@ async def pg_client(pg_app: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncIterat
     from choregos_api.db.session import session_scope
 
     monkeypatch.setenv("CHOREGOS_OIDC_DEFAULT_ORG", kit.ORG)
-    monkeypatch.setenv("CHOREGOS_DEV_ADMIN_EMAILS", "admin@varga.dev")
+    monkeypatch.setenv("CHOREGOS_DEV_ADMIN_EMAILS", "admin@northwind.dev")
     reset_settings_cache()
     async with session_scope(orgs="*") as session:
-        session.add(Organization(slug=kit.ORG, name="Varga Foundation"))
+        session.add(Organization(slug=kit.ORG, name="Northwind"))
     async with AsyncClient(transport=ASGITransport(app=pg_app), base_url="http://test") as http:
-        await login(http, "admin@varga.dev")
+        await login(http, "admin@northwind.dev")
         yield http
 
 

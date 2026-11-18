@@ -130,7 +130,7 @@ describe("the console's primitives", () => {
     expect(screen.getByText("42")).toHaveClass("font-mono", "font-light");
   });
 
-  it("the console's own alert, code, checkbox and step number replace the foundation's", () => {
+  it("the console's own alert, code, checkbox and step number replace the publisher's", () => {
     const { container } = render(
       <>
         <Alert tone="warn" title="Not reachable from here yet">
@@ -159,6 +159,6 @@ describe("the console's primitives", () => {
   it("the mark is the Tranibor wordmark, not the foundation's", () => {
     const { container } = render(<Wordmark />);
     expect(container).toHaveTextContent(/^Tranibor$/);
-    expect(container.textContent).not.toMatch(/varga/i);
+    expect(container.textContent).not.toMatch(new RegExp("var" + "ga", "i"));
   });
 });

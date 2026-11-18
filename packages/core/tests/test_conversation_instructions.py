@@ -21,10 +21,10 @@ def test_a_template_that_reads_preferences_publishes() -> None:
 def test_the_values_are_rendered_and_a_missing_key_renders_empty() -> None:
     rendered = render_conversation_instructions(
         "{{ config.company }} / {{ preferences.brief_length }} / [{{ preferences.language }}]",
-        config={"company": "Varga"},
+        config={"company": "Northwind"},
         preferences={"brief_length": "short"},
     )
-    assert rendered == "Varga / short / []"
+    assert rendered == "Northwind / short / []"
 
 
 def test_no_sample_reaches_a_conversation() -> None:

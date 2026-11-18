@@ -25,19 +25,19 @@ ORG = "/api/v1/orgs"
 async def test_the_slug_changes_and_the_projects_follow(
     client: AsyncClient, admin: str, project: dict[str, Any]
 ) -> None:
-    renamed = await client.patch(f"{ORG}/varga", json={"slug": "trust", "name": "Varga Trust"})
+    renamed = await client.patch(f"{ORG}/northwind", json={"slug": "trust", "name": "Northwind Trust"})
     assert renamed.status_code == 200, renamed.text
     assert renamed.json() == {
         "slug": "trust",
-        "name": "Varga Trust",
+        "name": "Northwind Trust",
         "role": "org_admin",
         "currency": "EUR",
-        "aliases": ["varga"],
+        "aliases": ["northwind"],
         "tool_scripts": None,
         "complete_agents": None,
     }
     # The old slug is an alias now (ADR 0090): the old address still resolves.
-    assert (await client.get(f"{ORG}/varga/projects")).status_code == 200
+    assert (await client.get(f"{ORG}/northwind/projects")).status_code == 200
     projects_of_org = (await client.get(f"{ORG}/trust/projects")).json()["items"]
     assert [p["slug"] for p in projects_of_org] == ["billing-api"]
     read = await client.get("/api/v1/projects/trust:billing-api")
@@ -45,15 +45,15 @@ async def test_the_slug_changes_and_the_projects_follow(
     assert {o["slug"] for o in (await client.get(ORG)).json()} == {"trust"}
     (row,) = [a for a in (await client.get("/api/v1/audit")).json()["items"] if a["action"] == "org.update"]
     assert row["payload"]["before"] == {
-        "slug": "varga",
-        "name": "Varga Foundation",
+        "slug": "northwind",
+        "name": "Northwind",
         "currency": "EUR",
         "tool_scripts": None,
         "complete_agents": None,
     }
     assert row["payload"]["after"] == {
         "slug": "trust",
-        "name": "Varga Trust",
+        "name": "Northwind Trust",
         "currency": "EUR",
         "tool_scripts": None,
         "complete_agents": None,
@@ -61,10 +61,10 @@ async def test_the_slug_changes_and_the_projects_follow(
 
 
 async def test_the_name_alone_changes_without_touching_the_slug(client: AsyncClient, admin: str) -> None:
-    renamed = await client.patch(f"{ORG}/varga", json={"name": "Varga"})
+    renamed = await client.patch(f"{ORG}/northwind", json={"name": "Northwind"})
     assert renamed.status_code == 200, renamed.text
-    assert renamed.json()["slug"] == "varga"
-    assert {o["name"] for o in (await client.get(ORG)).json()} == {"Varga"}
+    assert renamed.json()["slug"] == "northwind"
+    assert {o["name"] for o in (await client.get(ORG)).json()} == {"Northwind"}
 
 
 async def _another_organisation(also_admin: bool) -> None:
@@ -77,7 +77,7 @@ async def _another_organisation(also_admin: bool) -> None:
         session.add(other)
         await session.flush()
         if also_admin:
-            me = (await session.execute(select(User).where(User.email == "admin@varga.dev"))).scalar_one()
+            me = (await session.execute(select(User).where(User.email == "admin@northwind.dev"))).scalar_one()
             session.add(Membership(user_id=me.id, org_id=other.id, role="org_admin"))
 
 
@@ -85,33 +85,33 @@ async def test_the_slug_is_an_instance_gesture(client: AsyncClient, admin: str) 
     """Administering ONE organisation out of two does not administer the instance: the slug is refused,
     the name is changed."""
     await _another_organisation(also_admin=False)
-    refusal = await client.patch(f"{ORG}/varga", json={"slug": "free"})
+    refusal = await client.patch(f"{ORG}/northwind", json={"slug": "free"})
     assert refusal.status_code == 403, refusal.text
-    assert (await client.patch(f"{ORG}/varga", json={"name": "Varga"})).status_code == 200
-    assert {o["slug"] for o in (await client.get(ORG)).json()} == {"varga"}
+    assert (await client.patch(f"{ORG}/northwind", json={"name": "Northwind"})).status_code == 200
+    assert {o["slug"] for o in (await client.get(ORG)).json()} == {"northwind"}
 
 
 async def test_a_taken_slug_is_a_conflict(client: AsyncClient, admin: str) -> None:
     await _another_organisation(also_admin=True)
-    refusal = await client.patch(f"{ORG}/varga", json={"slug": "other"})
+    refusal = await client.patch(f"{ORG}/northwind", json={"slug": "other"})
     assert refusal.status_code == 409, refusal.text
-    assert "varga" in {o["slug"] for o in (await client.get(ORG)).json()}
+    assert "northwind" in {o["slug"] for o in (await client.get(ORG)).json()}
 
 
 async def test_a_project_owner_does_not_rename_the_organisation(
     client: AsyncClient, admin: str, project: dict[str, Any]
 ) -> None:
-    member = {"email": "lead@varga.dev", "role": "project_owner"}
-    assert (await client.post(f"{ORG}/varga/members", json=member)).status_code in {200, 201}
-    await login(client, "lead@varga.dev")
-    refusal = await client.patch(f"{ORG}/varga", json={"name": "My home"})
+    member = {"email": "lead@northwind.dev", "role": "project_owner"}
+    assert (await client.post(f"{ORG}/northwind/members", json=member)).status_code in {200, 201}
+    await login(client, "lead@northwind.dev")
+    refusal = await client.patch(f"{ORG}/northwind", json={"name": "My home"})
     assert refusal.status_code == 403, refusal.text
-    await login(client, "admin@varga.dev")
-    assert {o["name"] for o in (await client.get(ORG)).json()} == {"Varga Foundation"}
+    await login(client, "admin@northwind.dev")
+    assert {o["name"] for o in (await client.get(ORG)).json()} == {"Northwind"}
 
 
 async def test_a_malformed_slug_is_refused(client: AsyncClient, admin: str) -> None:
-    assert (await client.patch(f"{ORG}/varga", json={"slug": "Not Good"})).status_code == 422
+    assert (await client.patch(f"{ORG}/northwind", json={"slug": "Not Good"})).status_code == 422
 
 
 # ── S42-01 : an instance administrator granted by an edition plugin, member of nothing ──
@@ -138,23 +138,23 @@ async def test_a_platform_administrator_who_is_not_a_member_renames_name_and_slu
         await login(client, "platform@example.dev")
         await _remove_the_memberships("platform@example.dev")
         assert (await client.get(ORG)).json() == [], "he belongs to no organisation"
-        renamed = await client.patch(f"{ORG}/varga", json={"name": "Globex", "slug": "globex"})
+        renamed = await client.patch(f"{ORG}/northwind", json={"name": "Globex", "slug": "globex"})
         assert renamed.status_code == 200, renamed.text
         assert renamed.json() == {
             "slug": "globex",
             "name": "Globex",
             "role": None,
             "currency": "EUR",
-            "aliases": ["varga"],
+            "aliases": ["northwind"],
             "tool_scripts": None,
             "complete_agents": None,
         }
-        await login(client, "admin@varga.dev")
+        await login(client, "admin@northwind.dev")
         assert {(o["slug"], o["name"]) for o in (await client.get(ORG)).json()} == {("globex", "Globex")}
         (row,) = [
             a for a in (await client.get("/api/v1/audit")).json()["items"] if a["action"] == "org.update"
         ]
-        assert row["payload"]["before"]["slug"] == "varga"
+        assert row["payload"]["before"]["slug"] == "northwind"
         assert row["payload"]["after"] == {
             "slug": "globex",
             "name": "Globex",
@@ -173,9 +173,9 @@ async def test_a_non_member_without_platform_right_is_refused(client: AsyncClien
     try:
         await login(client, "curious@example.dev")
         await _remove_the_memberships("curious@example.dev")
-        refusal = await client.patch(f"{ORG}/varga", json={"name": "My place"})
+        refusal = await client.patch(f"{ORG}/northwind", json={"name": "My place"})
         assert refusal.status_code == 403, refusal.text
-        await login(client, "admin@varga.dev")
-        assert {o["name"] for o in (await client.get(ORG)).json()} == {"Varga Foundation"}
+        await login(client, "admin@northwind.dev")
+        assert {o["name"] for o in (await client.get(ORG)).json()} == {"Northwind"}
     finally:
         reset()

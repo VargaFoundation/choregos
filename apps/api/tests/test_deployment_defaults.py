@@ -14,7 +14,7 @@ from typing import Any
 import pytest
 from httpx import AsyncClient
 
-ORG = "/api/v1/orgs/varga"
+ORG = "/api/v1/orgs/northwind"
 
 
 @pytest.fixture
@@ -35,7 +35,7 @@ def deployment(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 
 
 async def _project(client: AsyncClient, slug: str, **config: Any) -> dict[str, Any]:
-    body = {"slug": slug, "name": slug, "config": {"slug": slug, "org": "varga", **config}}
+    body = {"slug": slug, "name": slug, "config": {"slug": slug, "org": "northwind", **config}}
     created = await client.post(f"{ORG}/projects", json=body)
     assert created.status_code == 201, created.text
     return dict((await client.get(f"/api/v1/projects/{created.json()['id']}")).json()["config"])

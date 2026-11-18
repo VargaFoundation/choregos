@@ -30,7 +30,7 @@ class Recorder(httpx.AsyncBaseTransport):
 
 def _policy(*hosts: str, mode: str = "enforce", ceiling: dict | None = None) -> EgressPolicy:
     return EgressPolicy(
-        org="varga",
+        org="northwind",
         rules=tuple(AllowedRule(h) for h in hosts),
         ceiling=ceiling or {},
         mode=mode,  # type: ignore[arg-type]

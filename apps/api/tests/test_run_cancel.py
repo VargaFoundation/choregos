@@ -14,7 +14,7 @@ from httpx import ASGITransport, AsyncClient
 
 from .conftest import login
 
-ORG = "/api/v1/orgs/varga"
+ORG = "/api/v1/orgs/northwind"
 DONE = {"schema": "choregos/StageResult/v1", "status": "done", "summary": "implemented"}
 
 
@@ -86,7 +86,7 @@ async def test_a_running_run_is_stopped_with_its_reason_and_who_asked(
     run = stopped.json()
     assert run["status"] == "cancelled"
     assert run["result"]["status"] == "failed" and run["result"]["reason"] == "stopped_by_person"
-    assert run["result"]["summary"] == "run stopped by admin@varga.dev: it is editing the wrong repo"
+    assert run["result"]["summary"] == "run stopped by admin@northwind.dev: it is editing the wrong repo"
     assert run["result"]["diagnostics"]["agent_exit"] == "cancelled"
     assert await _stored(run_id) == ("cancelled", run["result"]), "written, not only answered"
     assert _cancellations() == {
@@ -99,10 +99,10 @@ async def test_a_running_run_is_stopped_with_its_reason_and_who_asked(
 async def test_a_viewer_cannot_stop_a_run(app: Any, client: AsyncClient, project: dict[str, Any]) -> None:
     item = await _item(client, project)
     run_id = await _run(item, "run-stop-viewer")
-    await client.post(f"{ORG}/members", json={"email": "reader@varga.dev", "role": "viewer"})
+    await client.post(f"{ORG}/members", json={"email": "reader@northwind.dev", "role": "viewer"})
     reader = AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
     try:
-        await login(reader, "reader@varga.dev")
+        await login(reader, "reader@northwind.dev")
         assert (await reader.get(f"/api/v1/runs/{run_id}")).status_code == 200, "the reader sees it"
         refused = await reader.post(f"/api/v1/runs/{run_id}/cancel", json={"reason": "curious"})
     finally:
@@ -136,7 +136,7 @@ async def test_a_second_stop_says_the_run_is_already_stopped(
     again = await client.post(f"/api/v1/runs/{run_id}/cancel", json={"reason": "second"})
 
     assert again.status_code == 409, again.text
-    assert "already stopped (run stopped by admin@varga.dev: first)" in again.json()["detail"]
+    assert "already stopped (run stopped by admin@northwind.dev: first)" in again.json()["detail"]
     assert [a["reason"] for a in await _audited("run.cancel")] == ["first"]
 
 
@@ -216,7 +216,7 @@ async def test_a_result_posted_between_the_read_and_the_write_wins(
 
     item = await _item(client, project)
     run_id = await _run(item, "run-stop-race")
-    principal = Principal(user_id="u1", email="ops@varga.dev", org_roles={"varga": Role.ORG_ADMIN})
+    principal = Principal(user_id="u1", email="ops@northwind.dev", org_roles={"northwind": Role.ORG_ADMIN})
 
     async with session_scope() as session:
         stale = await session.get(Run, run_id)
@@ -287,7 +287,7 @@ async def test_stopping_a_work_item_stops_its_run_with_the_same_reason(
     assert stopped.status_code == 202, stopped.text
     status, result = await _stored(current)
     assert status == "cancelled"
-    assert result["summary"] == "run stopped by admin@varga.dev: wrong ticket"
+    assert result["summary"] == "run stopped by admin@northwind.dev: wrong ticket"
     assert (await _stored(over))[0] == "failed", "a run that ended keeps how it ended"
     assert set(_cancellations()) == {f"run-cancel-{current}"}
     fake = get_temporal()
@@ -310,4 +310,4 @@ async def test_a_stop_without_a_reason_still_says_why_the_run_stopped(
 
     assert stopped.status_code == 202, stopped.text
     _, result = await _stored(current)
-    assert result["summary"] == "run stopped by admin@varga.dev: the work item was stopped"
+    assert result["summary"] == "run stopped by admin@northwind.dev: the work item was stopped"

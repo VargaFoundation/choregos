@@ -74,7 +74,7 @@ async def _spend(project_id: str, usd: float, *, agent: str | None = None, run_i
 
 
 async def _alerts(client: AsyncClient, status: str = "open") -> list[dict[str, Any]]:
-    response = await client.get("/api/v1/orgs/varga/budget-alerts", params={"status": status})
+    response = await client.get("/api/v1/orgs/northwind/budget-alerts", params={"status": status})
     assert response.status_code == 200, response.text
     return list(response.json())
 
@@ -104,7 +104,7 @@ async def test_an_agents_daily_budget_raises_its_own_alert(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
     created = await client.post(
-        "/api/v1/orgs/varga/agents",
+        "/api/v1/orgs/northwind/agents",
         json={"slug": "coordinator", "display_name": "Coordinator", "spec": {"budget": {"daily_usd": 4}}},
     )
     assert created.status_code == 201, created.text
@@ -131,14 +131,14 @@ async def test_acknowledging_removes_it_from_the_inbox_and_is_audited(
     await _set_daily_budget(client, project, 10)
     await _spend(project["id"], 9.0)
     (alerte,) = await _alerts(client)
-    done = await client.post(f"/api/v1/orgs/varga/budget-alerts/{alerte['id']}/acknowledge")
-    assert done.status_code == 200 and done.json()["acknowledged_by"] == "admin@varga.dev"
+    done = await client.post(f"/api/v1/orgs/northwind/budget-alerts/{alerte['id']}/acknowledge")
+    assert done.status_code == 200 and done.json()["acknowledged_by"] == "admin@northwind.dev"
     assert await _alerts(client) == []
     assert [a["status"] for a in await _alerts(client, "acknowledged")] == ["acknowledged"]
     assert (
-        await client.post(f"/api/v1/orgs/varga/budget-alerts/{alerte['id']}/acknowledge")
+        await client.post(f"/api/v1/orgs/northwind/budget-alerts/{alerte['id']}/acknowledge")
     ).status_code == 409
-    assert (await client.post("/api/v1/orgs/varga/budget-alerts/nope/acknowledge")).status_code == 404
+    assert (await client.post("/api/v1/orgs/northwind/budget-alerts/nope/acknowledge")).status_code == 404
     audit = (await client.get("/api/v1/audit", params={"target_type": "budget_alert"})).json()["items"]
     assert [e["action"] for e in audit] == ["budget_alert.acknowledge"]
     # Another spend above the threshold does not bring it back: it was acknowledged for the day.
@@ -149,7 +149,7 @@ async def test_acknowledging_removes_it_from_the_inbox_and_is_audited(
 @pytest.mark.parametrize("status", ["bogus"])
 async def test_an_unknown_status_filter_is_refused(client: AsyncClient, admin: str, status: str) -> None:
     assert (
-        await client.get("/api/v1/orgs/varga/budget-alerts", params={"status": status})
+        await client.get("/api/v1/orgs/northwind/budget-alerts", params={"status": status})
     ).status_code == 422
 
 
@@ -159,12 +159,12 @@ async def test_a_run_is_judged_against_the_budget_of_the_revision_it_used(
     """S40-02: a revision published after the run, with a tighter budget, does not make the run's day
     cross a threshold: the run is judged against its own revision (red with the "latest" query)."""
     created = await client.post(
-        "/api/v1/orgs/varga/agents",
+        "/api/v1/orgs/northwind/agents",
         json={"slug": "coordinator", "display_name": "Coordinator", "spec": {"budget": {"daily_usd": 10}}},
     )
     assert created.status_code == 201, created.text
     tighter = await client.post(
-        "/api/v1/orgs/varga/agents/coordinator/versions", json={"budget": {"daily_usd": 1}}
+        "/api/v1/orgs/northwind/agents/coordinator/versions", json={"budget": {"daily_usd": 1}}
     )
     assert tighter.status_code == 201, tighter.text
     # The run below used v1 (10 $ a day): 3.5 $ is far below 80 %. v2 (1 $) is the latest AND

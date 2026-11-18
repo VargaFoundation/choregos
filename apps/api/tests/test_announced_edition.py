@@ -116,7 +116,7 @@ async def test_an_extension_can_replace_the_group_mapping(client: Any, monkeypat
         # And the sign-in really calls it: that is what tells a seam from a decorative setting.
         # The development sign-in REDIRECTS to its callback, and it is the callback that
         # translates the groups. Stopping at the 307 proved nothing.
-        start = await client.get("/api/v1/auth/login", params={"as": "extension@varga.dev"})
+        start = await client.get("/api/v1/auth/login", params={"as": "extension@northwind.dev"})
         assert start.status_code in (302, 307), start.status_code
         await client.get(start.headers["location"])
         assert seen, "the declared mapper was not called by the sign-in"

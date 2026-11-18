@@ -31,8 +31,8 @@ from .kits.assistant_memory import (  # noqa: F401
     markets,
 )
 
-ME = "/api/v1/me/assistants/varga/investment-assistant"
-OWNERS_ROUTE = "/api/v1/orgs/varga/assistants/investment-assistant/memory"
+ME = "/api/v1/me/assistants/northwind/investment-assistant"
+OWNERS_ROUTE = "/api/v1/orgs/northwind/assistants/investment-assistant/memory"
 RULES = "  - { name: my_rules, scope: user, kind: facts, writes: user_only }\n"
 RISK = "risk_tolerance: { enum: [low, medium, high] }"
 
@@ -108,7 +108,7 @@ async def test_the_installation_owners_confirm_or_reject_what_a_conversation_pro
         "active"
     ]
 
-    await as_user(client, "colleague@varga.dev")
+    await as_user(client, "colleague@northwind.dev")
     assert (await client.get(f"{OWNERS_ROUTE}/house_view")).status_code == 403
     assert (
         await client.patch(f"{OWNERS_ROUTE}/house_view", json={"action": "confirm", "fact_id": second["id"]})
@@ -153,14 +153,14 @@ async def test_a_user_only_space_is_written_from_the_page_and_the_person_exports
     exported = await client.get(f"{ME}/memory-export")
     assert exported.status_code == 200, exported.text
     body = exported.json()
-    assert body["installation"] == "investment-assistant" and body["organisation"] == "varga"
+    assert body["installation"] == "investment-assistant" and body["organisation"] == "northwind"
     spaces = {s["space"]: s for s in body["spaces"]}
     assert "house_view" not in spaces, "the export is the person's memory, not the installation's"
     assert spaces["my_rules"]["subjects"][0]["facts"][0]["content"] == "No tobacco."
     assert spaces["instrument_notes"]["subjects"][0]["facts"][0]["content"] == "Bought in 2019."
     assert spaces["investor_profile"]["subjects"][0]["profiles"][0]["document"]["horizon_years"] == 3
 
-    await as_user(client, "colleague@varga.dev")
+    await as_user(client, "colleague@northwind.dev")
     theirs = {s["space"]: s["subjects"] for s in (await client.get(f"{ME}/memory-export")).json()["spaces"]}
     assert all(subjects == [] for subjects in theirs.values()), "another person's export holds none of it"
 
@@ -239,7 +239,7 @@ async def test_a_profile_store_follows_the_schema_of_the_upgraded_manifest_and_k
 
     _publish(offline, "0.2.0", risk="risk_tolerance: { enum: [low, medium, high, extreme] }")
     upgraded = await client.post(
-        "/api/v1/orgs/varga/plugins/investment-assistant/upgrade", json={"version": "0.2.0"}
+        "/api/v1/orgs/northwind/plugins/investment-assistant/upgrade", json={"version": "0.2.0"}
     )
     assert upgraded.status_code == 200, upgraded.text
 
@@ -274,10 +274,10 @@ async def test_a_subject_handed_in_the_opening_context_is_a_hint_that_opens_no_s
     installation = await _assistant(client, with_markets=True)
     async with session_scope(orgs="*") as session:
         organisation = (await session.execute(select(Organization))).scalar_one()
-        user = (await session.execute(select(User).where(User.email == "admin@varga.dev"))).scalar_one()
+        user = (await session.execute(select(User).where(User.email == "admin@northwind.dev"))).scalar_one()
         record = await open_conversation(
             session,
-            Principal(user_id=user.id, email="admin@varga.dev"),
+            Principal(user_id=user.id, email="admin@northwind.dev"),
             organisation,
             "helper",
             installation_id=installation,

@@ -11,7 +11,7 @@ import pytest
 from choregos_core.dsl.flow import PULL_REQUEST_SECTIONS
 from choregos_orchestrator.activities.scm import _pr_body
 
-ITEM = SimpleNamespace(tracker_key="varga/billing-api#7", body_snapshot="The total ignores credits.")
+ITEM = SimpleNamespace(tracker_key="northwind/billing-api#7", body_snapshot="The total ignores credits.")
 
 
 def test_one_section_per_document_present_in_the_declared_order() -> None:
@@ -19,7 +19,7 @@ def test_one_section_per_document_present_in_the_declared_order() -> None:
     body = _pr_body(ITEM, documents)
     positions = [body.index(f"## {title}\ntext of {name}") for name, title in PULL_REQUEST_SECTIONS if title]
     assert positions == sorted(positions)
-    assert body.startswith("Work item: varga/billing-api#7\n\ntext of spec_markdown\n")
+    assert body.startswith("Work item: northwind/billing-api#7\n\ntext of spec_markdown\n")
 
 
 @pytest.mark.parametrize(("name", "title"), [(n, t) for n, t in PULL_REQUEST_SECTIONS if t])

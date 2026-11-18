@@ -105,7 +105,9 @@ async def _member(email: str, role: str) -> None:
     from sqlalchemy import select
 
     async with session_scope() as session:
-        org = (await session.execute(select(Organization).where(Organization.slug == "varga"))).scalar_one()
+        org = (
+            await session.execute(select(Organization).where(Organization.slug == "northwind"))
+        ).scalar_one()
         user = User(email=email, display_name=email.split("@", maxsplit=1)[0])
         session.add(user)
         await session.flush()
@@ -120,7 +122,7 @@ async def _import(
     path: str = "skills",
 ) -> httpx.Response:
     return await client.post(
-        "/api/v1/orgs/varga/skills/import-git",
+        "/api/v1/orgs/northwind/skills/import-git",
         json={"repo_url": repo, "sha": sha, "path": path, "skills": skills or ["onboarding"]},
     )
 
@@ -129,7 +131,7 @@ async def test_the_preview_resolves_a_branch_to_its_commit_and_lists_each_skill(
     client: AsyncClient, admin: str, fake: Any
 ) -> None:
     preview = await client.post(
-        "/api/v1/orgs/varga/skills/import-git/preview",
+        "/api/v1/orgs/northwind/skills/import-git/preview",
         json={"repo_url": ANTHROPICS + ".git", "ref": "main", "path": "skills"},
     )
     assert preview.status_code == 200, preview.text
@@ -153,12 +155,12 @@ async def test_the_preview_resolves_a_branch_to_its_commit_and_lists_each_skill(
     assert "script" in {f["code"] for f in by_path["skills/pdf"]["findings"]}
     assert "declares no permission" in by_path["skills/greedy"]["problem"]
     assert "not UTF-8" in by_path["skills/fonts"]["problem"]
-    assert (await client.get("/api/v1/orgs/varga/skills")).json() == [], "a preview writes nothing"
+    assert (await client.get("/api/v1/orgs/northwind/skills")).json() == [], "a preview writes nothing"
 
 
 async def test_a_link_inside_a_skill_refuses_that_skill(client: AsyncClient, admin: str, fake: Any) -> None:
     preview = await client.post(
-        "/api/v1/orgs/varga/skills/import-git/preview",
+        "/api/v1/orgs/northwind/skills/import-git/preview",
         json={"repo_url": ANTHROPICS, "ref": "v1", "path": "skills"},
     )
     linked = next(s for s in preview.json()["skills"] if s["path"] == "skills/linked")
@@ -176,7 +178,7 @@ async def test_a_branch_a_tag_or_a_short_sha_is_refused(
     assert not [call for call in fake.calls if call[0] == "tarball"], (
         "nothing is fetched for a moving reference"
     )
-    assert (await client.get("/api/v1/orgs/varga/skills")).json() == []
+    assert (await client.get("/api/v1/orgs/northwind/skills")).json() == []
 
 
 async def test_an_import_pins_the_commit_and_records_where_the_skill_comes_from(
@@ -186,7 +188,7 @@ async def test_an_import_pins_the_commit_and_records_where_the_skill_comes_from(
     assert imported.status_code == 201, imported.text
     (skill,) = imported.json()
     assert (skill["slug"], skill["latest_version"]) == ("onboarding", 1)
-    version = (await client.get("/api/v1/orgs/varga/skills/onboarding/versions/1")).json()
+    version = (await client.get("/api/v1/orgs/northwind/skills/onboarding/versions/1")).json()
     assert version["files"] == {
         "SKILL.md": ONBOARDING,
         "references/groups.md": "- everyone\n",
@@ -207,7 +209,7 @@ async def test_a_refused_or_unknown_skill_is_not_imported(client: AsyncClient, a
     greedy = await _import(client, skills=["onboarding", "greedy"])
     assert greedy.status_code == 422 and "declares no permission" in greedy.text
     assert (await _import(client, skills=["absent"])).status_code == 422
-    assert (await client.get("/api/v1/orgs/varga/skills")).json() == [], "all or nothing"
+    assert (await client.get("/api/v1/orgs/northwind/skills")).json() == [], "all or nothing"
 
 
 @pytest.mark.parametrize(
@@ -227,7 +229,7 @@ async def test_only_a_github_or_gitlab_repository_is_fetched(
     client: AsyncClient, admin: str, fake: Any, url: str
 ) -> None:
     refused = await client.post(
-        "/api/v1/orgs/varga/skills/import-git/preview", json={"repo_url": url, "ref": "main"}
+        "/api/v1/orgs/northwind/skills/import-git/preview", json={"repo_url": url, "ref": "main"}
     )
     assert refused.status_code == 422, refused.text
     assert fake.calls == [], "no request leaves for a refused URL"
@@ -237,7 +239,7 @@ async def test_an_unknown_repository_is_an_upstream_failure(
     client: AsyncClient, admin: str, fake: Any
 ) -> None:
     missing = await client.post(
-        "/api/v1/orgs/varga/skills/import-git/preview",
+        "/api/v1/orgs/northwind/skills/import-git/preview",
         json={"repo_url": "https://github.com/anthropics/nothing", "ref": "main"},
     )
     assert missing.status_code == 502, missing.text
@@ -246,12 +248,12 @@ async def test_an_unknown_repository_is_an_upstream_failure(
 async def test_a_project_owner_imports_new_skills_from_the_allowlist_only(
     client: AsyncClient, admin: str, fake: Any
 ) -> None:
-    await _member("owner@varga.dev", "project_owner")
-    await _member("dev@varga.dev", "developer")
+    await _member("owner@northwind.dev", "project_owner")
+    await _member("dev@northwind.dev", "developer")
     async with AsyncClient(
         transport=ASGITransport(app=client._transport.app), base_url="http://test"
     ) as owner:  # type: ignore[attr-defined]
-        await login(owner, "owner@varga.dev")
+        await login(owner, "owner@northwind.dev")
         assert (await _import(owner)).status_code == 201, "anthropics/skills is allowlisted by default"
         elsewhere = await _import(owner, repo="https://github.com/elsewhere/skills", skills=["pdf"])
         assert elsewhere.status_code == 403 and "allowlist" in elsewhere.text
@@ -260,7 +262,7 @@ async def test_a_project_owner_imports_new_skills_from_the_allowlist_only(
             "a new version changes what the agents carrying the skill read: an administrator's call"
         )
     async with AsyncClient(transport=ASGITransport(app=client._transport.app), base_url="http://test") as dev:  # type: ignore[attr-defined]
-        await login(dev, "dev@varga.dev")
+        await login(dev, "dev@northwind.dev")
         assert (await _import(dev, skills=["pdf"])).status_code == 403
     assert (
         await _import(client, repo="https://github.com/elsewhere/skills", skills=["pdf"])
@@ -273,49 +275,50 @@ async def test_the_allowlist_is_the_administrators(
 ) -> None:
     await client.put(
         f"/api/v1/projects/{project['id']}/connectors/scm",
-        json={"type": "github", "config": {"repo": "varga/billing-api"}},
+        json={"type": "github", "config": {"repo": "northwind/billing-api"}},
     )
-    defaults = (await client.get("/api/v1/orgs/varga/skill-sources")).json()
-    assert defaults == {"sources": ["github.com/anthropics/skills", "github.com/varga"], "default": True}
+    defaults = (await client.get("/api/v1/orgs/northwind/skill-sources")).json()
+    assert defaults == {"sources": ["github.com/anthropics/skills", "github.com/northwind"], "default": True}
     written = await client.put(
-        "/api/v1/orgs/varga/skill-sources", json={"sources": ["github.com/elsewhere", "gitlab.com/team/sub"]}
+        "/api/v1/orgs/northwind/skill-sources",
+        json={"sources": ["github.com/elsewhere", "gitlab.com/team/sub"]},
     )
     assert written.status_code == 200, written.text
-    assert (await client.get("/api/v1/orgs/varga/skill-sources")).json()["default"] is False
+    assert (await client.get("/api/v1/orgs/northwind/skill-sources")).json()["default"] is False
     preview = await client.post(
-        "/api/v1/orgs/varga/skills/import-git/preview",
+        "/api/v1/orgs/northwind/skills/import-git/preview",
         json={"repo_url": "https://github.com/elsewhere/skills", "ref": "main", "path": "skills"},
     )
     assert preview.json()["allowed"] is True
-    bad = await client.put("/api/v1/orgs/varga/skill-sources", json={"sources": ["evil.example/x"]})
+    bad = await client.put("/api/v1/orgs/northwind/skill-sources", json={"sources": ["evil.example/x"]})
     assert bad.status_code == 422
-    await _member("owner@varga.dev", "project_owner")
+    await _member("owner@northwind.dev", "project_owner")
     async with AsyncClient(
         transport=ASGITransport(app=client._transport.app), base_url="http://test"
     ) as owner:  # type: ignore[attr-defined]
-        await login(owner, "owner@varga.dev")
-        refused = await owner.put("/api/v1/orgs/varga/skill-sources", json={"sources": ["github.com/x"]})
+        await login(owner, "owner@northwind.dev")
+        refused = await owner.put("/api/v1/orgs/northwind/skill-sources", json={"sources": ["github.com/x"]})
         assert refused.status_code == 403
 
 
 async def test_an_update_is_proposed_never_applied(client: AsyncClient, admin: str, fake: Any) -> None:
     await _import(client)
-    proposal = await client.get("/api/v1/orgs/varga/skills/onboarding/update")
+    proposal = await client.get("/api/v1/orgs/northwind/skills/onboarding/update")
     assert proposal.status_code == 200, proposal.text
     body = proposal.json()
     assert (body["sha"], body["up_to_date"], body["version"]) == (SHA2, False, 1)
     assert (body["added"], body["removed"], body["modified"]) == (["references/vpn.md"], [], ["SKILL.md"])
-    skill = (await client.get("/api/v1/orgs/varga/skills/onboarding")).json()
+    skill = (await client.get("/api/v1/orgs/northwind/skills/onboarding")).json()
     assert skill["latest_version"] == 1, "checking for an update publishes nothing"
-    same = (await client.get("/api/v1/orgs/varga/skills/onboarding/update", params={"ref": "v1"})).json()
+    same = (await client.get("/api/v1/orgs/northwind/skills/onboarding/update", params={"ref": "v1"})).json()
     assert same["up_to_date"] is True and same["sha"] == SHA1
     # Applying it is an import of the proposed SHA, by a person.
     assert (await _import(client, sha=body["sha"])).json()[0]["latest_version"] == 2
 
 
 async def test_a_skill_not_from_git_has_no_update(client: AsyncClient, admin: str, fake: Any) -> None:
-    await client.post("/api/v1/orgs/varga/skills", json={"files": {"SKILL.md": ONBOARDING}})
-    assert (await client.get("/api/v1/orgs/varga/skills/onboarding/update")).status_code == 422
+    await client.post("/api/v1/orgs/northwind/skills", json={"files": {"SKILL.md": ONBOARDING}})
+    assert (await client.get("/api/v1/orgs/northwind/skills/onboarding/update")).status_code == 422
 
 
 # ───────────────────────────── the tarball and the network, alone ─────────────────────────────

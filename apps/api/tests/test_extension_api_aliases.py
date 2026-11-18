@@ -131,7 +131,7 @@ def test_gesture_refused_refuses_the_former_natures(former: str) -> None:
 def test_the_gesture_request_lost_its_former_properties() -> None:
     from choregos_api import extensions
 
-    request = extensions.GestureRequest("project.create", "varga", None, {"slug": "a"})
+    request = extensions.GestureRequest("project.create", "northwind", None, {"slug": "a"})
     assert (request.gesture, request.target) == ("project.create", {"slug": "a"})
     assert not hasattr(request, "geste")  # lang: fr-ok - removed, asserted gone
     assert not hasattr(request, "cible")  # lang: fr-ok - removed, asserted gone

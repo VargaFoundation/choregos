@@ -113,7 +113,7 @@ async def _start(env: Any, setup: Fixture) -> Any:
             "work_item_id": setup.work_item_id,
             "tracker_key": setup.tracker_key,
         },
-        id=f"wi-{setup.project_slug}-varga_billing-api-123",
+        id=f"wi-{setup.project_slug}-northwind_billing-api-123",
         task_queue="test",
     )
 

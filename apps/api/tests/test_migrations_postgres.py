@@ -156,7 +156,7 @@ WINDOW: tuple[tuple[str, tuple[str, ...]], ...] = (
 #: foreign keys. A JSON value is a string: asyncpg sends it as `jsonb` text.
 NOW = datetime.now(UTC)
 SEED: tuple[tuple[str, dict[str, Any]], ...] = (
-    ("organizations", {"id": "o1", "slug": "varga", "name": "Varga", "settings": "{}"}),
+    ("organizations", {"id": "o1", "slug": "northwind", "name": "Northwind", "settings": "{}"}),
     ("users", {"id": "u1", "email": "ada@example.org", "display_name": "Ada", "is_service": False}),
     (
         "projects",

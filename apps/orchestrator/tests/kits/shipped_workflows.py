@@ -19,7 +19,7 @@ from ..conftest import Fixture, stage_result
 from .workers import worker_with
 
 ROOT = Path(__file__).resolve().parents[4]
-REPOSITORY = "varga/billing-api"
+REPOSITORY = "northwind/billing-api"
 BRANCH = "choregos/123"
 ALLOWED = ["src/**", "tests/**", "docs/**", "CHANGELOG.md"]
 

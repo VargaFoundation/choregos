@@ -2,7 +2,7 @@
 // The two fakes of the embedded component's journey (S63-12): a Choregos API that answers what the embed page
 // asks, and two "host applications" (one on an allowed origin, one that is not). Plain node, no dependency.
 //
-//   fake API  127.0.0.1:4100   the installation `varga/coach` allows `http://localhost:3100` only
+//   fake API  127.0.0.1:4100   the installation `northwind/coach` allows `http://localhost:3100` only
 //   host      localhost:3100   an allowed origin   (`/?src=<embed url>`)
 //   host      127.0.0.1:3200   NOT an allowed origin
 //
@@ -46,15 +46,15 @@ createServer(async (req, res) => {
   if (path === "/__calls") return json(res, 200, calls);
   const token = req.headers["x-choregos-embed"];
   calls.push({ method: req.method, path, body: payload, token: token ?? null });
-  if (path === "/public/assistants/varga/coach/embed") return json(res, 200, { embed_origins: ["http://localhost:3100"] });
-  if (path === "/me/assistants/varga/coach/embed-token" && req.method === "POST") {
+  if (path === "/public/assistants/northwind/coach/embed") return json(res, 200, { embed_origins: ["http://localhost:3100"] });
+  if (path === "/me/assistants/northwind/coach/embed-token" && req.method === "POST") {
     if (req.headers["x-fake-session"] !== "ada") return json(res, 401, { title: "Unauthorized" });
     return json(res, 200, { token: TOKEN, expires_in: 900 });
   }
   // The component's own routes: the cookie never comes from a frame, only the token.
   if (token !== TOKEN) return json(res, 401, { title: "Unauthorized" });
-  if (path === "/me") return json(res, 200, { email: "ada@varga.test" });
-  if (path === "/me/assistants/varga/coach/conversations") return json(res, 201, conversation);
+  if (path === "/me") return json(res, 200, { email: "ada@northwind.test" });
+  if (path === "/me/assistants/northwind/coach/conversations") return json(res, 201, conversation);
   if (path === "/me/conversations/c1/actions") return json(res, 200, { items: [] });
   if (path === "/me/conversations/c1/messages") {
     res.writeHead(200, { "Content-Type": "text/event-stream" });

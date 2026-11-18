@@ -23,7 +23,7 @@ from .test_interpreter import _pr_ref, _ticket, _wait_state, scripted, start
 
 pytestmark = pytest.mark.asyncio
 
-REPOSITORY = "varga/billing-api"
+REPOSITORY = "northwind/billing-api"
 BRANCH = "choregos/123"
 #: What the fixture's branch holds: inside the work item's allowed paths.
 IN_SCOPE = [("src/orders/total.py", 20, 4), ("tests/orders/test_total.py", 30, 0)]

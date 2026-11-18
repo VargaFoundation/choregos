@@ -85,10 +85,10 @@ describe("the gate of a skill, in the console (S32-06)", () => {
     vi.mocked(api.importSkillsFromGit).mockResolvedValue([
       { slug: "pdf", status: "active", latest_version: 1, risk: "high", review_status: "pending_review" },
     ]);
-    render(<GitImport org="varga" />);
+    render(<GitImport org="northwind" />);
     fireEvent.click(screen.getByRole("button", { name: "Preview" }));
     await waitFor(() => expect(screen.getByTestId("preview")).toBeTruthy());
-    expect(api.previewSkillsFromGit).toHaveBeenCalledWith("varga", {
+    expect(api.previewSkillsFromGit).toHaveBeenCalledWith("northwind", {
       repo_url: "https://github.com/anthropics/skills",
       ref: "main",
       path: "skills",
@@ -98,7 +98,7 @@ describe("the gate of a skill, in the console (S32-06)", () => {
     fireEvent.click(cases[0]!);
     fireEvent.click(screen.getByRole("button", { name: /^Import 1/ }));
     await waitFor(() => expect(screen.getByRole("status").textContent).toContain("second reviewer"));
-    expect(api.importSkillsFromGit).toHaveBeenCalledWith("varga", {
+    expect(api.importSkillsFromGit).toHaveBeenCalledWith("northwind", {
       repo_url: "https://github.com/anthropics/skills",
       sha: SHA,
       path: "skills",
@@ -129,7 +129,7 @@ describe("a skill cannot take the slug of a console page (S55-17)", () => {
       allowed: true,
       skills: [candidate({ name: "library", path: "skills/library" }), candidate({ name: "pdf", path: "skills/pdf" })],
     });
-    render(<GitImport org="varga" />);
+    render(<GitImport org="northwind" />);
     fireEvent.click(screen.getByRole("button", { name: "Preview" }));
     await waitFor(() => expect(screen.getByTestId("preview")).toBeTruthy());
     const boxes = screen.getAllByRole("checkbox") as HTMLInputElement[];

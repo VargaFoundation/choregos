@@ -8,7 +8,7 @@ import { api } from "@/lib/api";
 import { scopeLabel, statusSummary, stillConverting } from "@/lib/knowledge";
 import type { KnowledgeBase } from "@/lib/types";
 
-vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "varga" }) }));
+vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "northwind" }) }));
 vi.mock("@/lib/api", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/api")>();
   return {
@@ -85,7 +85,7 @@ describe("the knowledge page (S33-01)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Create" }));
     await waitFor(() => expect(api.createKnowledgeBase).toHaveBeenCalled());
     expect(vi.mocked(api.createKnowledgeBase).mock.calls[0]).toEqual([
-      "varga",
+      "northwind",
       { slug: "security", name: "security", scope: "org", serving_mode: "files", projects: [], groups: [] },
     ]);
   });
@@ -125,7 +125,7 @@ describe("the knowledge page (S33-01)", () => {
     const input = await screen.findByLabelText("Documents to upload");
     const deck = new File(["x"], "zoning.pptx");
     fireEvent.change(input, { target: { files: [deck] } });
-    await waitFor(() => expect(api.uploadKnowledgeDocument).toHaveBeenCalledWith("varga", "architecture", deck));
+    await waitFor(() => expect(api.uploadKnowledgeDocument).toHaveBeenCalledWith("northwind", "architecture", deck));
     expect(await screen.findByRole("status")).toHaveTextContent("zoning.pptx: pending");
   });
 });

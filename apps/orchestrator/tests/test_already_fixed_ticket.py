@@ -243,7 +243,7 @@ async def test_the_guarantee_reads_the_branch_from_the_scm(
     from choregos_orchestrator.activities.gates import evaluate_gates
 
     if branch != "pushed":  # the fixture's work item has a scripted branch: here it was never pushed
-        setup.adapters.scm.delete_branch("varga/billing-api", "choregos/123")
+        setup.adapters.scm.delete_branch("northwind/billing-api", "choregos/123")
     if branch == "502":
 
         async def unreadable(repo: str, name: str) -> bool:

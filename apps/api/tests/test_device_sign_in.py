@@ -17,8 +17,8 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select, update
 from starlette.requests import HTTPConnection
 
-ALICE = "alice@varga.dev"
-BOB = "bob@varga.dev"
+ALICE = "alice@northwind.dev"
+BOB = "bob@northwind.dev"
 GRANT = "urn:ietf:params:oauth:grant-type:device_code"
 
 
@@ -344,11 +344,11 @@ async def test_a_sign_in_is_approved_with_the_persons_own_console_session_only(
 async def test_the_console_reads_what_a_code_asks_for_before_the_person_approves(
     org: str, anyone: AsyncClient, browsers: Any
 ) -> None:
-    codes = await _start(anyone, client_kind="editor", client_name="Tranibor for VS Code", org="varga")
+    codes = await _start(anyone, client_kind="editor", client_name="Tranibor for VS Code", org="northwind")
     person = await browsers(ALICE)
     seen = await person.get(f"/api/v1/auth/device/requests/{codes['user_code'].lower().replace('-', ' ')}")
     assert seen.status_code == 200, seen.text
-    assert seen.json()["client_kind"] == "editor" and seen.json()["org"] == "varga"
+    assert seen.json()["client_kind"] == "editor" and seen.json()["org"] == "northwind"
     assert seen.json()["client_name"] == "Tranibor for VS Code"
     assert (await person.get("/api/v1/auth/device/requests/ZZZZ-ZZZZ")).status_code == 404
     assert (await _approve(person, codes)).status_code == 204
@@ -370,16 +370,19 @@ async def _other_organisation_member(email: str, *, subject: str | None) -> None
 async def test_a_session_of_another_organisations_provider_is_refused(
     org: str, anyone: AsyncClient, browsers: Any
 ) -> None:
-    """The request names `other`. Alice, a member of `varga` only, cannot approve it. Bob, a member of `other`
-    whose account is bound to another tenant's provider, cannot either. Carol, bound to `other`'s, can."""
+    """The request names `other`. Alice, a member of `northwind` only, cannot approve it. Bob, a member of
+    `other` whose account is bound to another tenant's provider, cannot either. Carol, bound to `other`'s,
+    can."""
     async with session_scope(orgs="*") as session:
-        varga = (await session.execute(select(Organization).where(Organization.slug == "varga"))).scalar_one()
-        varga_id = varga.id
+        northwind = (
+            await session.execute(select(Organization).where(Organization.slug == "northwind"))
+        ).scalar_one()
+        northwind_id = northwind.id
     alice = await browsers(ALICE)
     bob = await browsers(BOB)
-    carol = await browsers("carol@varga.dev")
-    await _other_organisation_member(BOB, subject=f"tenant:{varga_id}:bob")
-    await _other_organisation_member_again("carol@varga.dev")
+    carol = await browsers("carol@northwind.dev")
+    await _other_organisation_member(BOB, subject=f"tenant:{northwind_id}:bob")
+    await _other_organisation_member_again("carol@northwind.dev")
     codes = await _start(anyone, org="other")
     assert (await _approve(alice, codes)).status_code == 403
     assert (await _approve(bob, codes)).status_code == 403

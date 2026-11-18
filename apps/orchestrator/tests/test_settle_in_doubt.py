@@ -54,7 +54,7 @@ async def _settle(setup: Fixture, action_id: str, outcome: str) -> Any:
             kind="user",
             credential="cookie",  # the person's own console session (S67-06)
             user_id=None,
-            email="ops@varga.dev",
+            email="ops@northwind.dev",
             authenticated_at=time.time(),
             groups=[],
             org_roles={org.slug: "org_admin"},

@@ -14,9 +14,9 @@ from choregos_api.security import sign_session
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 
-ALICE = "alice@varga.dev"
+ALICE = "alice@northwind.dev"
 LINUX_FIREFOX = "Mozilla/5.0 (X11; Linux x86_64) Firefox/140.0"
-BOB = "bob@varga.dev"
+BOB = "bob@northwind.dev"
 
 
 @pytest.fixture(autouse=True)

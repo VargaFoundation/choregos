@@ -1,7 +1,7 @@
 apiVersion: v2
 name: choregos
 description: >-
-  Agentic delivery platform of the Varga Foundation: API, front end, Temporal workers,
+  Agentic delivery platform of GRAAL.SYSTEMS SAS: API, front end, Temporal workers,
   tools sidecar, and the dependencies that make it run.
 type: application
 version: 0.27.12
@@ -10,7 +10,7 @@ home: https://github.com/graalsystems/tranibor
 sources:
   - https://github.com/graalsystems/tranibor
 maintainers:
-  - name: Varga Foundation
+  - name: GRAAL.SYSTEMS SAS
 keywords: [agents, delivery, temporal, tekton, argocd]
 dependencies:
   - name: choregos-api

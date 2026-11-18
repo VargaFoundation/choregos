@@ -28,9 +28,9 @@ from sqlalchemy import select
 
 from .agent_scopes_kit import add_member, as_user
 
-ORG = "/api/v1/orgs/varga"
+ORG = "/api/v1/orgs/northwind"
 FIXTURES = Path(__file__).resolve().parents[3] / "tests" / "fixtures"
-SECOND = "second-admin@varga.dev"
+SECOND = "second-admin@northwind.dev"
 
 
 @pytest.fixture
@@ -66,7 +66,7 @@ async def _install(client: AsyncClient, name: str = "servicenow", version: str =
     await as_user(client, SECOND)
     approved = await client.post(f"{ORG}/plugin-approvals/{asked.json()['approval_id']}/approve")
     assert approved.status_code == 200, approved.text
-    await as_user(client, "admin@varga.dev")
+    await as_user(client, "admin@northwind.dev")
 
 
 async def _connector(name: str = "servicenow") -> Any:

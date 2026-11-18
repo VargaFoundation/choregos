@@ -27,15 +27,15 @@ AGENTS = {
 
 async def _project(client: AsyncClient) -> dict[str, Any]:
     created = await client.post(
-        "/api/v1/orgs/varga/projects",
+        "/api/v1/orgs/northwind/projects",
         json={
             "slug": "dev",
             "name": "Development",
             "template_ref": "github-software-delivery@1.0.0",
             "config": {
                 "slug": "dev",
-                "org": "varga",
-                "repo": {"url": "https://github.com/varga/sandbox.git", "default_branch": "main"},
+                "org": "northwind",
+                "repo": {"url": "https://github.com/northwind/sandbox.git", "default_branch": "main"},
             },
         },
     )
@@ -51,9 +51,9 @@ async def test_a_project_born_from_the_template_receives_its_three_workflows_its
     assert active == {"dev-simple", "study", "dev-complex"}
     assert (await client.get(f"/api/v1/projects/{pid}/policy")).json()["name"] == "software-delivery"
 
-    agents = {a["slug"] for a in (await client.get("/api/v1/orgs/varga/agents")).json()}
+    agents = {a["slug"] for a in (await client.get("/api/v1/orgs/northwind/agents")).json()}
     assert agents >= AGENTS, sorted(AGENTS - agents)
-    skills = {s["slug"] for s in (await client.get("/api/v1/orgs/varga/skills")).json()}
+    skills = {s["slug"] for s in (await client.get("/api/v1/orgs/northwind/skills")).json()}
     assert "madr-4" in skills
 
     # The PR's checks are read from the repository: nothing asks a GitHub Actions project for a Tekton.

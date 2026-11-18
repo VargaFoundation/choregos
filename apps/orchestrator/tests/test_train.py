@@ -36,16 +36,16 @@ async def test_two_merges_make_one_batch(setup: Fixture, temporal_env: Any, work
         async with worker_factory():
             handle = await start_train(temporal_env, setup)
             await handle.signal(
-                "merged", {"work_item_key": "varga/billing-api#1", "sha": "a1", "title": "one"}
+                "merged", {"work_item_key": "northwind/billing-api#1", "sha": "a1", "title": "one"}
             )
             await handle.signal(
-                "merged", {"work_item_key": "varga/billing-api#2", "sha": "a2", "title": "two"}
+                "merged", {"work_item_key": "northwind/billing-api#2", "sha": "a2", "title": "two"}
             )
             await handle.signal(
-                "merged", {"work_item_key": "varga/billing-api#1", "sha": "a1", "title": "one"}
+                "merged", {"work_item_key": "northwind/billing-api#1", "sha": "a1", "title": "one"}
             )
             status = await _wait(handle, lambda s: s["batch_size"] == 2)
-            assert status["pending_items"] == ["varga/billing-api#1", "varga/billing-api#2"]
+            assert status["pending_items"] == ["northwind/billing-api#1", "northwind/billing-api#2"]
 
             await handle.signal("depart_now", {"by": "augustin"})
             await _wait(handle, lambda s: s["status"] == "awaiting_approval", 60)
@@ -72,7 +72,7 @@ async def test_freeze_blocks_departure(setup: Fixture, temporal_env: Any, worker
         async with worker_factory():
             handle = await start_train(temporal_env, setup)
             await handle.signal("freeze", {"reason": "incident in progress", "by": "marie"})
-            await handle.signal("merged", {"work_item_key": "varga/billing-api#3", "sha": "b1"})
+            await handle.signal("merged", {"work_item_key": "northwind/billing-api#3", "sha": "b1"})
             await handle.signal("depart_now", {"by": "augustin"})
             status = await _wait(handle, lambda s: s["frozen"] is True)
             assert status["freeze_reason"] == "incident in progress"
@@ -93,7 +93,7 @@ async def test_broken_canary_rolls_back_and_freezes(
     with temporal_env.auto_time_skipping_disabled():
         async with worker_factory():
             handle = await start_train(temporal_env, setup)
-            await handle.signal("merged", {"work_item_key": "varga/billing-api#4", "sha": "c1"})
+            await handle.signal("merged", {"work_item_key": "northwind/billing-api#4", "sha": "c1"})
             await handle.signal("depart_now", {"by": "augustin"})
             await _wait(handle, lambda s: s["status"] in {"awaiting_approval", "promoting"}, 60)
             if (await handle.query("status_query"))["status"] == "awaiting_approval":
@@ -123,12 +123,12 @@ async def test_rejected_approval_returns_batch(
     with temporal_env.auto_time_skipping_disabled():
         async with worker_factory():
             handle = await start_train(temporal_env, setup)
-            await handle.signal("merged", {"work_item_key": "varga/billing-api#5", "sha": "d1"})
+            await handle.signal("merged", {"work_item_key": "northwind/billing-api#5", "sha": "d1"})
             await handle.signal("depart_now", {"by": "augustin"})
             await _wait(handle, lambda s: s["status"] == "awaiting_approval", 60)
             await handle.signal("reject", {"by": "marie"})
             status = await _wait(handle, lambda s: s["status"] == "collecting" and s["batch_size"] == 1, 60)
-            assert status["pending_items"] == ["varga/billing-api#5"], (
+            assert status["pending_items"] == ["northwind/billing-api#5"], (
                 "the batch leaves again on the next turn"
             )
             await handle.signal("abort", {"by": "test"})
@@ -142,7 +142,7 @@ async def test_hotfix_uses_express_lane(setup: Fixture, temporal_env: Any, worke
         async with worker_factory():
             handle = await start_train(temporal_env, setup)
             await handle.signal(
-                "merged", {"work_item_key": "varga/billing-api#6", "sha": "e1", "labels": ["hotfix"]}
+                "merged", {"work_item_key": "northwind/billing-api#6", "sha": "e1", "labels": ["hotfix"]}
             )
             await _wait(handle, lambda s: s["status"] == "awaiting_approval", 60)
             # The hotfix left outside hours: production is promoted from the departure.

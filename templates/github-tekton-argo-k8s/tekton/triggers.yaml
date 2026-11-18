@@ -32,7 +32,7 @@ spec:
         params:
           - { name: repo-url, value: $(tt.params.repo-url) }
           - { name: revision, value: $(tt.params.revision) }
-          - { name: image, value: "ghcr.io/varga/app:$(tt.params.revision)" }
+          - { name: image, value: "ghcr.io/northwind/app:$(tt.params.revision)" }
         workspaces:
           - name: source
             volumeClaimTemplate:

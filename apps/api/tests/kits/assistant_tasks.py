@@ -33,7 +33,7 @@ AUDIENCE = "investors"
 ME = "/api/v1/me"
 
 
-TASKS = f"{ME}/assistants/varga/investment-assistant/tasks"
+TASKS = f"{ME}/assistants/northwind/investment-assistant/tasks"
 
 
 WORKFLOW = """apiVersion: choregos/v1
@@ -217,7 +217,7 @@ async def _produce(work_item_id: str, **outputs: Any) -> None:
 
 
 async def as_admin(client: AsyncClient) -> None:
-    await login(client, "admin@varga.dev")
+    await login(client, "admin@northwind.dev")
 
 
 async def _installation_id() -> str:

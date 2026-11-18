@@ -80,8 +80,8 @@ def stage_input(tmp_path: Path) -> StageInput:
     return StageInput(
         run_id="conformance-1",
         attempt=1,
-        project=ProjectRef(slug="conformance", org="varga"),
-        work_item=WorkItemRef(key="varga/conformance#1", title="create hello.py and its test"),
+        project=ProjectRef(slug="conformance", org="northwind"),
+        work_item=WorkItemRef(key="northwind/conformance#1", title="create hello.py and its test"),
         transition=TransitionRef(id="t-implement", role="implement", **{"from": "ready"}, to="in_progress"),
         repo=RepoRef(url=str(tmp_path), base_branch="main", work_branch="choregos/1"),
         agent=AgentRef(backend="claude-code", launch=LaunchSpec(command=[sys.executable, str(FAKE_AGENT)])),

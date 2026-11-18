@@ -13,7 +13,7 @@ from typing import Any
 import pytest
 from httpx import AsyncClient
 
-AGENTS = "/api/v1/orgs/varga/agents"
+AGENTS = "/api/v1/orgs/northwind/agents"
 
 
 async def _create(client: AsyncClient, slug: str = "onboarding-coordinator", **extra: Any) -> Any:
@@ -182,14 +182,14 @@ async def test_ownership_moves_and_the_credentials_stay(client: AsyncClient, adm
     )
     async with session_scope() as session:
         org = (await session.execute(select(Organization))).scalar_one()
-        user = User(email="lea@varga.dev", display_name="Lea")
+        user = User(email="lea@northwind.dev", display_name="Lea")
         session.add(user)
         await session.flush()
         session.add(Membership(user_id=user.id, org_id=org.id, role="developer"))
         session.add(User(email="stranger@else.dev", display_name="Stranger"))
-    moved = await client.post(f"{AGENTS}/onboarding-coordinator/owner", json={"email": "Lea@varga.dev"})
+    moved = await client.post(f"{AGENTS}/onboarding-coordinator/owner", json={"email": "Lea@northwind.dev"})
     assert moved.status_code == 200, moved.text
-    assert moved.json()["owner"] == "lea@varga.dev"
+    assert moved.json()["owner"] == "lea@northwind.dev"
     credentials = (await client.get(f"{AGENTS}/onboarding-coordinator/credentials")).json()
     assert len(credentials) == 1 and credentials[0]["revoked_at"] is None
     stranger = await client.post(

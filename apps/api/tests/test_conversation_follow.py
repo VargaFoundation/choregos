@@ -99,7 +99,7 @@ async def _principal(email: str) -> Any:
 
     async with session_scope(orgs="*") as session:
         user = (await session.execute(select(User).where(User.email == email))).scalar_one()
-        return Principal(user_id=user.id, email=email, org_roles={"varga": Role.ORG_ADMIN})
+        return Principal(user_id=user.id, email=email, org_roles={"northwind": Role.ORG_ADMIN})
 
 
 async def _next(stream: AsyncIterator[dict[str, str]]) -> dict[str, str]:
@@ -119,11 +119,11 @@ async def test_the_rest_turn_says_what_the_door_says_for_the_same_turn(
     upstream: Upstream,  # noqa: F811
 ) -> None:
     document_id = await _installation_knowledge()
-    asked = {"assistant": "varga:investment-assistant", "message": "What is the limit per instrument?"}
+    asked = {"assistant": "northwind:investment-assistant", "message": "What is the limit per instrument?"}
     upstream.model.say("Opening turn.")
     opened = await _call(client, installed, "ask_assistant", asked)
     conversation = opened["conversation_id"]
-    await _proposal(conversation, "ines@varga.dev", "Order two laptops")
+    await _proposal(conversation, "ines@northwind.dev", "Order two laptops")
     search = {"base": "policy", "query": "limit per instrument"}
     upstream.model.call("knowledge_search", search).say("At most ten percent [RISK POLICY, v3].")
     upstream.model.call("knowledge_search", search).say_chunks("At most ", "ten percent.")
@@ -159,7 +159,7 @@ async def test_a_client_attached_mid_turn_gets_the_rest_and_a_resume_repeats_no_
     from choregos_api.services.turn_follow import run_of, start_turn
 
     await _agent(client)
-    conversation = await _open("varga", admin)
+    conversation = await _open("northwind", admin)
     upstream.model.say_chunks("one ", "two ", "three ", "four.")
     gate = asyncio.Event()
     _halfway(upstream, "two ", gate)
@@ -197,7 +197,7 @@ async def test_the_events_route_replays_a_turn_and_resumes_after_last_event_id(
     upstream: Upstream,  # noqa: F811
 ) -> None:
     await _agent(client)
-    conversation = await _open("varga", admin)
+    conversation = await _open("northwind", admin)
     upstream.model.say_chunks("a ", "b ", "c.")
     sent = await client.post(f"{ME}/{conversation}/messages", json={"input": "Go", "stream": True})
     sent_events = _events(sent.text)
@@ -227,9 +227,9 @@ async def test_the_events_route_is_the_openers_alone(
     from .egress_support import as_person
 
     await _agent(client)
-    conversation = await _open("varga", admin)
+    conversation = await _open("northwind", admin)
     assert (await client.get(f"{ME}/{conversation}/events")).status_code == 200
-    async with as_person(client, "eve@varga.dev", "project_owner") as eve:
+    async with as_person(client, "eve@northwind.dev", "project_owner") as eve:
         assert (await eve.get(f"{ME}/{conversation}/events")).status_code == 404
     client.cookies.clear()
     assert (await client.get(f"{ME}/{conversation}/events")).status_code == 401
@@ -250,7 +250,7 @@ async def test_a_detached_turn_is_booked_once_when_its_client_left_and_a_plain_o
     principal = await _principal(admin)
 
     # Detached: the client reads the first event and goes away while the model is still streaming.
-    kept = await _open("varga", admin)
+    kept = await _open("northwind", admin)
     upstream.model.say_chunks("one ", "two ", "three.")
     gate = asyncio.Event()
     _halfway(upstream, "one ", gate)
@@ -268,7 +268,7 @@ async def test_a_detached_turn_is_booked_once_when_its_client_left_and_a_plain_o
     assert len([r for r in await _key_rows() if r.spend_usd > 0]) == 1, "booked once"
 
     # Not detached: the client leaving cancels the turn, as before.
-    plain = await _open("varga", admin)
+    plain = await _open("northwind", admin)
     upstream.model.say_chunks("one ", "two ", "three.")
     gate = asyncio.Event()
     _halfway(upstream, "one ", gate)
@@ -286,7 +286,7 @@ async def test_a_detached_client_that_stays_gets_the_answer_it_would_get_without
     upstream: Upstream,  # noqa: F811
 ) -> None:
     await _agent(client)
-    conversation = await _open("varga", admin)
+    conversation = await _open("northwind", admin)
     upstream.model.say("First.").say("Second.")
     plain = await client.post(f"{ME}/{conversation}/messages", json={"input": "a"})
     detached = await client.post(f"{ME}/{conversation}/messages", json={"input": "b", "detach": True})

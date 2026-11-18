@@ -177,14 +177,14 @@ async def test_the_outpost_is_told_who_the_call_is_made_for_and_nothing_it_could
     # The names the gateway route signs into an assertion, minus the server and the tool (ADR 0149 §3).
     assert call["asserted"] == {
         "sub": f"run:{RUN}",
-        "org": "varga",
+        "org": "northwind",
         "org_id": (await kit.outpost_row(SLUG)).org_id,
         "purpose": "tool_call",
         "project": "billing-api",
         "run": RUN,
-        "work_item": "varga/x#1",
+        "work_item": "northwind/x#1",
         "agent": "coordinator@1",
-        "initiator": "person:admin@varga.dev",
+        "initiator": "person:admin@northwind.dev",
         "connector": CONNECTOR,
     }
     # Whether the tool writes is the outpost's to read from its own server (ADR 0147 §6).
@@ -599,7 +599,7 @@ def test_the_asserted_names_are_cut_to_what_the_door_carries() -> None:
     from choregos_contracts.outpost import OutpostAssertedNames
 
     identity = CallIdentity(
-        org="varga",
+        org="northwind",
         org_id="o-1",
         subject="action:" + "a" * 400,
         purpose="action",
@@ -645,7 +645,7 @@ async def test_discovery_through_an_outpost_adds_tools_born_forbidden(
     (listing,) = fake.received
     assert (listing["kind"], listing["endpoint"]) == ("list_tools", ALIAS)
     assert listing["asserted"]["purpose"] == "discovery"
-    assert listing["asserted"]["sub"] == "person:admin@varga.dev"
+    assert listing["asserted"]["sub"] == "person:admin@northwind.dev"
     assert served.calls == [], "a listing calls no tool"
     assert (await route.connector_row()).status == "ok"
     # No project, so no line of the network journal: the audit log carries a discovery.
@@ -752,7 +752,7 @@ async def _effect(project_id: str, operation: str, arguments: dict[str, Any], **
             effects=[],
             proposed_by={},
             approval={},
-            decisions=[{"by": "ops@varga.dev", "decision": "approve"}],
+            decisions=[{"by": "ops@northwind.dev", "decision": "approve"}],
             status="approved",
             **action,
         )
@@ -774,7 +774,7 @@ async def test_an_approved_read_is_played_through_the_outpost_with_its_approvers
     assert done == {"key": "OPS-1", "state": "open"}, "what the tool structured, as for any connector"
     (call,) = fake.received
     assert call["asserted"]["action"] == action_id
-    assert call["asserted"]["approved_by"] == ["ops@varga.dev"]
+    assert call["asserted"]["approved_by"] == ["ops@northwind.dev"]
     assert (call["asserted"]["purpose"], call["asserted"]["sub"]) == ("action", f"action:{action_id}")
     (row,) = _tool_calls(await route.calls())
     assert (row.action_id, row.write, row.state) == (action_id, False, "answered")
@@ -881,7 +881,7 @@ async def _write_client(project_id: str, effect_key: str | None) -> Any:
 
     async def identity() -> CallIdentity:
         return CallIdentity(
-            org="varga",
+            org="northwind",
             org_id=instance.org_id,
             subject="action:a-1",
             purpose="action",

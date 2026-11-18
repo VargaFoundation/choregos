@@ -27,7 +27,7 @@ global:
   # any other e-mail is a developer.
   devLogin:
     enabled: true
-    adminEmails: "admin@varga.dev,admin@demo.dev"
+    adminEmails: "admin@northwind.dev,admin@demo.dev"
   externalSecrets:
     enabled: false
   rbac:

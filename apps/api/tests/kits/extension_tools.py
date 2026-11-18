@@ -64,7 +64,7 @@ async def run_extension_tool(project_id: str) -> tuple[str, dict[str, str]]:
     from choregos_api.security import mint_run_token
 
     async with session_scope() as session:
-        item = WorkItem(project_id=project_id, tracker_key="varga/x#11", title="T", state="ready")
+        item = WorkItem(project_id=project_id, tracker_key="northwind/x#11", title="T", state="ready")
         session.add(item)
         await session.flush()
         session.add(
@@ -77,7 +77,7 @@ async def run_extension_tool(project_id: str) -> tuple[str, dict[str, str]]:
             )
         )
     token = mint_run_token(
-        "run-greffon-1", project_slug="billing-api", work_item_key="varga/x#11", ttl_minutes=30
+        "run-greffon-1", project_slug="billing-api", work_item_key="northwind/x#11", ttl_minutes=30
     )
     headers: dict[str, Any] = {"Authorization": f"Bearer {token}"}
     return "run-greffon-1", headers

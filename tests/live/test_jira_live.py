@@ -100,7 +100,7 @@ async def test_full_cycle_on_a_real_ticket(tracker: JiraTracker) -> None:
 
     # The fallback polling finds the ticket by its label (JQL).
     config = ProjectConfig(
-        slug="sandbox", org="varga", repo=RepoConfig(url="https://example.invalid/x/y.git")
+        slug="sandbox", org="northwind", repo=RepoConfig(url="https://example.invalid/x/y.git")
     )
     assert key in await tracker.list_candidates(config)
 

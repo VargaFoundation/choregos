@@ -13,8 +13,8 @@ from typing import Any
 import pytest
 from httpx import AsyncClient
 
-ADMIN = "admin@varga.dev"
-DOOR = "/mcp/projects/varga:billing-api"
+ADMIN = "admin@northwind.dev"
+DOOR = "/mcp/projects/northwind:billing-api"
 
 
 async def _token(client: AsyncClient, scope: str) -> str:
@@ -85,7 +85,7 @@ async def test_writes_today_counts_write_and_ecriture(  # lang: fr-ok - names th
     async with session_scope() as session:
         user_id = (await session.execute(select(User.id).where(User.email == ADMIN))).scalar_one()
         org_id = (
-            await session.execute(select(Organization.id).where(Organization.slug == "varga"))
+            await session.execute(select(Organization.id).where(Organization.slug == "northwind"))
         ).scalar_one()
         for payload in payloads:
             session.add(

@@ -13,12 +13,12 @@ OPENED = (AllowedRule("mcp.example.test"), AllowedRule("*.wide.example.test"))
 @pytest.mark.parametrize("mode", ["enforce", "warn", "off"])
 def test_a_denied_host_is_refused_in_every_mode_even_when_opened(mode: Mode) -> None:
     bounds = NetworkBounds(deny=("mcp.example.test",))
-    policy = EgressPolicy(org="varga", rules=OPENED, mode=mode, bounds=bounds)
+    policy = EgressPolicy(org="northwind", rules=OPENED, mode=mode, bounds=bounds)
     with pytest.raises(EgressRefusedError) as refused:
         policy.check("mcp.example.test")
     assert refused.value.reason == "network_policy"
     assert refused.value.detail == "denied:mcp.example.test"
-    assert "network policy of organisation varga" in str(refused.value)
+    assert "network policy of organisation northwind" in str(refused.value)
 
 
 def test_outside_the_allowed_set_is_refused_and_inside_follows_the_list() -> None:

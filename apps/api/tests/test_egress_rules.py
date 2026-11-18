@@ -43,7 +43,7 @@ async def test_a_developer_cannot_open_a_host_and_a_duplicate_is_refused(
 ) -> None:
     assert (await _create(client)).status_code == 201
     assert (await _create(client)).status_code == 409, "one live rule per host"
-    async with as_person(client, "dev@varga.dev", "developer") as dev:
+    async with as_person(client, "dev@northwind.dev", "developer") as dev:
         assert (await _create(dev, "other.example.test")).status_code == 403
         assert (await dev.get(f"{ORG}/egress")).status_code == 200, "members read the list"
     assert (await _create(client, "bad host")).status_code == 422
@@ -52,7 +52,7 @@ async def test_a_developer_cannot_open_a_host_and_a_duplicate_is_refused(
 async def test_a_request_is_approved_or_refused_and_the_decision_is_remembered(
     client: AsyncClient, admin: str
 ) -> None:
-    async with as_person(client, "dev@varga.dev", "developer") as dev:
+    async with as_person(client, "dev@northwind.dev", "developer") as dev:
         asked = await dev.post(
             f"{ORG}/egress/requests",
             json={"host": "mcp.example.test", "reason": "need it", "origin": "org-connector:x"},
@@ -84,7 +84,7 @@ async def test_a_host_already_allowed_cannot_be_requested_and_requests_are_cappe
     from choregos_api.services.egress import MAX_OPEN_REQUESTS
 
     assert (await _create(client)).status_code == 201
-    async with as_person(client, "dev@varga.dev", "developer") as dev:
+    async with as_person(client, "dev@northwind.dev", "developer") as dev:
         assert (
             await dev.post(f"{ORG}/egress/requests", json={"host": "mcp.example.test"})
         ).status_code == 409
@@ -128,7 +128,7 @@ async def test_check_derives_the_hosts_and_reports_both_layers(
 
     monkeypatch.setenv("CHOREGOS_EGRESS_CEILING", '{"api": ["api.github.com"]}')
     reset_settings_cache()
-    await add_member("root@varga.dev", "org_admin")
+    await add_member("root@northwind.dev", "org_admin")
     assert (await _create(client)).status_code == 201
     checked = await client.post(
         f"{ORG}/egress/check",
@@ -147,5 +147,5 @@ async def test_check_derives_the_hosts_and_reports_both_layers(
     assert verdict["can_allow"] and body["ok"] is False
     change = verdict["platform_change"]
     assert change["needed"] and "mcp.example.test" in change["snippet"], "the snippet names the host"
-    assert any(a["email"] == "root@varga.dev" for a in verdict["approvers"])
+    assert any(a["email"] == "root@northwind.dev" for a in verdict["approvers"])
     assert (await client.post(f"{ORG}/egress/check", json={})).status_code == 422

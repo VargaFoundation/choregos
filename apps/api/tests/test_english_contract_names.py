@@ -82,7 +82,7 @@ async def _run_with_access(project: dict[str, Any]) -> str:
     from choregos_core import utcnow
 
     async with session_scope() as session:
-        item = WorkItem(project_id=project["id"], tracker_key="varga/x#34", title="T", state="ready")
+        item = WorkItem(project_id=project["id"], tracker_key="northwind/x#34", title="T", state="ready")
         session.add(item)
         await session.flush()
         run = Run(

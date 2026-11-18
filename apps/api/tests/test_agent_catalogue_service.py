@@ -18,7 +18,7 @@ from choregos_api.services.agents import version_errors
 from choregos_core.agent_catalogue import entries, entry
 from httpx import AsyncClient
 
-ORG = "/api/v1/orgs/varga"
+ORG = "/api/v1/orgs/northwind"
 
 
 def _replace_entry(monkeypatch: pytest.MonkeyPatch, new: Any) -> None:
@@ -118,9 +118,9 @@ async def test_an_organisations_own_agent_of_the_same_name_is_never_touched(
 async def test_only_an_administrator_installs(client: AsyncClient, admin: str) -> None:
     from .conftest import login
 
-    member = await client.post(f"{ORG}/members", json={"email": "dev@varga.dev", "role": "developer"})
+    member = await client.post(f"{ORG}/members", json={"email": "dev@northwind.dev", "role": "developer"})
     assert member.status_code in {200, 201}
-    await login(client, "dev@varga.dev")
+    await login(client, "dev@northwind.dev")
     assert (await client.get(f"{ORG}/agent-catalogue")).status_code == 200, "a member reads the catalogue"
     assert (await client.post(f"{ORG}/agent-catalogue/developer/install")).status_code == 403
     assert (await client.post(f"{ORG}/agent-catalogue/nobody/install")).status_code in {403, 404}
@@ -171,7 +171,7 @@ async def test_a_template_can_name_a_catalogue_agent(
         "slug": "hr",
         "name": "hr",
         "template_ref": "catalogue-trial",
-        "config": {"slug": "hr", "org": "varga"},
+        "config": {"slug": "hr", "org": "northwind"},
     }
     refused = await client.post(f"{ORG}/projects", json=body)
     assert refused.status_code == 422 and "catalogue:nobody-knows" in refused.text, (
@@ -209,19 +209,19 @@ async def test_connecting_claude_code_creates_the_agent_mints_an_mcp_token_and_a
 async def test_a_member_joins_a_clients_agent_but_does_not_create_it(client: AsyncClient, admin: str) -> None:
     from .conftest import login
 
-    member = await client.post(f"{ORG}/members", json={"email": "dev@varga.dev", "role": "developer"})
+    member = await client.post(f"{ORG}/members", json={"email": "dev@northwind.dev", "role": "developer"})
     assert member.status_code in {200, 201}
-    await login(client, "dev@varga.dev")
+    await login(client, "dev@northwind.dev")
     assert (await client.post(f"{ORG}/agent-catalogue/cursor/connect")).status_code == 403, (
         "creating takes an administrator"
     )
-    await login(client, "admin@varga.dev")
+    await login(client, "admin@northwind.dev")
     assert (await client.post(f"{ORG}/agent-catalogue/cursor/connect")).status_code == 201
-    await login(client, "dev@varga.dev")
+    await login(client, "dev@northwind.dev")
     joined = await client.post(f"{ORG}/agent-catalogue/cursor/connect", json={"read_only": True})
     assert joined.status_code == 201, joined.text
     assert joined.json()["token"]["scopes"] == ["mcp:read"]
-    await login(client, "admin@varga.dev")
+    await login(client, "admin@northwind.dev")
     assert len((await client.get(f"{ORG}/agents/cursor/credentials")).json()) == 2, "one token per person"
 
 
@@ -242,7 +242,7 @@ async def test_a_client_that_calls_from_the_cloud_is_not_offered_without_oauth_o
     assert refused.status_code == 409 and "not offered" in refused.text
 
     monkeypatch.setenv("CHOREGOS_MCP_OAUTH_ENABLED", "true")
-    monkeypatch.setenv("CHOREGOS_MCP_OAUTH_ISSUER", "https://sso.example/realms/varga")
+    monkeypatch.setenv("CHOREGOS_MCP_OAUTH_ISSUER", "https://sso.example/realms/northwind")
     monkeypatch.setenv(
         "CHOREGOS_MCP_OAUTH_CLIENTS", json.dumps({"chatgpt": {"client_id": "choregos-chatgpt"}})
     )
@@ -284,7 +284,7 @@ async def _project_of_the_template(client: AsyncClient, templates: pathlib.Path)
         "slug": "hr",
         "name": "hr",
         "template_ref": "catalogue-trial",
-        "config": {"slug": "hr", "org": "varga"},
+        "config": {"slug": "hr", "org": "northwind"},
     }
     assert (await client.post(f"{ORG}/projects", json=body)).status_code == 201
 
@@ -329,7 +329,7 @@ async def test_a_diverged_agent_is_not_overwritten_by_the_upgrade(
         first.created_by += "!diverged"
         session.add(
             AgentVersion(agent_id=agent.id, org_id=agent.org_id, version=2, spec=first.spec,
-                         checksum="sha256:by-hand", created_by="alice@varga.dev")
+                         checksum="sha256:by-hand", created_by="alice@northwind.dev")
         )  # fmt: skip
         await session.commit()
     _the_catalogue_moves_to_version_two(monkeypatch, "reviewer")
@@ -382,7 +382,7 @@ async def _hand_version(slug: str, **changes: Any) -> None:
                 version=last.version + 1,
                 spec=spec.model_dump(mode="json"),
                 checksum=digest(spec),
-                created_by="alice@varga.dev",
+                created_by="alice@northwind.dev",
             )
         )
         await session.commit()

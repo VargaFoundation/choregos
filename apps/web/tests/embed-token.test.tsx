@@ -11,7 +11,7 @@ beforeEach(() => {
   window.sessionStorage.clear();
   clearEmbedToken();
   mocks.mint.mockReset();
-  mocks.params = new URLSearchParams("org=varga&installation=coach");
+  mocks.params = new URLSearchParams("org=northwind&installation=coach");
 });
 afterEach(() => vi.unstubAllGlobals());
 
@@ -45,7 +45,7 @@ describe("the page the sign-in popup lands on", () => {
         window.location.origin,
       ),
     );
-    expect(mocks.mint).toHaveBeenCalledWith("varga", "coach");
+    expect(mocks.mint).toHaveBeenCalledWith("northwind", "coach");
   });
 
   it("says so when the token is refused, and does not close", async () => {

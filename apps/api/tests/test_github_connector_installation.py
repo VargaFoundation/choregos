@@ -18,14 +18,14 @@ async def _put(
 async def test_a_github_connector_on_an_uninstalled_owner_gets_422_with_the_install_link(
     client: AsyncClient, project: dict[str, Any], github: Any
 ) -> None:
-    github.add_installation(1, "varga")
+    github.add_installation(1, "northwind")
     refused = await _put(client, project, "scm", "github", {"repo": "stranger/repo"})
     assert refused.status_code == 422, refused.text
     assert "not installed on `stranger`" in refused.text
     assert "https://github.com/apps/choregos-bot/installations/new" in refused.text
     refused_tracker = await _put(client, project, "tracker", "github-issues", {"repo": "stranger/repo"})
     assert refused_tracker.status_code == 422
-    accepted = await _put(client, project, "scm", "github", {"repo": "varga/billing"})
+    accepted = await _put(client, project, "scm", "github", {"repo": "northwind/billing"})
     assert accepted.status_code == 200, accepted.text
 
 
@@ -44,8 +44,10 @@ async def test_an_installation_claimed_by_another_organisation_does_not_open_the
 async def test_a_legacy_installation_id_is_dropped_on_save(
     client: AsyncClient, project: dict[str, Any], github: Any
 ) -> None:
-    github.add_installation(1, "varga")
-    saved = await _put(client, project, "scm", "github", {"repo": "varga/billing", "installation_id": 999})
+    github.add_installation(1, "northwind")
+    saved = await _put(
+        client, project, "scm", "github", {"repo": "northwind/billing", "installation_id": 999}
+    )
     assert saved.status_code == 200, saved.text
     assert "installation_id" not in saved.json()["config"]
     listed = (await client.get(f"/api/v1/projects/{project['id']}/connectors")).json()
@@ -75,8 +77,8 @@ async def test_the_claimed_installation_is_injected_when_the_connector_is_built(
     from choregos_api.secret_store import resolved_configuration
     from sqlalchemy import select
 
-    github.add_installation(41, "varga")
-    assert (await _put(client, project, "scm", "github", {"repo": "varga/billing"})).status_code == 200
+    github.add_installation(41, "northwind")
+    assert (await _put(client, project, "scm", "github", {"repo": "northwind/billing"})).status_code == 200
     async with session_scope(orgs="*") as session:
         row = (await session.execute(select(Connector).where(Connector.kind == "scm"))).scalar_one()
         assert "installation_id" not in row.config, "never stored"

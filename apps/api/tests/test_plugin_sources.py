@@ -378,7 +378,7 @@ async def test_a_member_lists_the_sources(
     monkeypatch.setenv("CHOREGOS_PLUGINS_CONFIG", str(path))
     monkeypatch.setenv("CHOREGOS_PLUGINS_OFFLINE", str(offline))
     reset_settings_cache()
-    response = await client.get("/api/v1/orgs/varga/plugin-sources")
+    response = await client.get("/api/v1/orgs/northwind/plugin-sources")
     assert response.status_code == 200, response.text
     body = response.json()
     jsonschema.validate(body, _schema())
@@ -401,10 +401,10 @@ async def test_a_stranger_cannot_list_the_sources(client: AsyncClient, org: str)
     from choregos_api.db.models import Organization
     from choregos_api.db.session import session_scope
 
-    await login(client, "dev@varga.dev")  # a member of varga only
+    await login(client, "dev@northwind.dev")  # a member of northwind only
     async with session_scope() as session:
         session.add(Organization(slug="other", name="Other"))
-    assert (await client.get("/api/v1/orgs/varga/plugin-sources")).status_code == 200
+    assert (await client.get("/api/v1/orgs/northwind/plugin-sources")).status_code == 200
     response = await client.get("/api/v1/orgs/other/plugin-sources")
     assert response.status_code == 403
 
@@ -418,5 +418,5 @@ async def test_an_invalid_configuration_is_reported(
     path.write_text(yaml.safe_dump({"sources": [{"name": "acme", "index": "oci://x/i:1"}]}))
     monkeypatch.setenv("CHOREGOS_PLUGINS_CONFIG", str(path))
     reset_settings_cache()
-    response = await client.get("/api/v1/orgs/varga/plugin-sources")
+    response = await client.get("/api/v1/orgs/northwind/plugin-sources")
     assert response.status_code == 500 and "trust" in response.json()["detail"]

@@ -114,7 +114,7 @@ async def test_a_degradation_announced_during_the_soak_rolls_back_without_waitin
     with temporal_env.auto_time_skipping_disabled():
         async with worker_factory():
             train = await _train(temporal_env, setup)
-            await train.signal("merged", {"work_item_key": "varga/billing-api#7", "sha": "f1"})
+            await train.signal("merged", {"work_item_key": "northwind/billing-api#7", "sha": "f1"})
             await train.signal("depart_now", {"by": "augustin"})
             await _until(lambda: _truth("soak" in soak.running))
             assert (await _state(train))["status"] == "staging"
@@ -156,7 +156,7 @@ async def test_a_rollout_aborted_during_the_canary_rolls_back(
     with temporal_env.auto_time_skipping_disabled():
         async with worker_factory():
             train = await _train(temporal_env, setup)
-            await train.signal("merged", {"work_item_key": "varga/billing-api#8", "sha": "g1"})
+            await train.signal("merged", {"work_item_key": "northwind/billing-api#8", "sha": "g1"})
             await train.signal("depart_now", {"by": "augustin"})
             await _until(lambda: _has_status(train, "awaiting_approval"))
             await train.signal("approve", {"by": "marie"})
@@ -183,7 +183,7 @@ async def test_the_train_only_listens_to_its_environment_and_its_applications(
     with temporal_env.auto_time_skipping_disabled():
         async with worker_factory():
             train = await _train(temporal_env, setup)
-            await train.signal("merged", {"work_item_key": "varga/billing-api#9", "sha": "h1"})
+            await train.signal("merged", {"work_item_key": "northwind/billing-api#9", "sha": "h1"})
             await train.signal("depart_now", {"by": "augustin"})
             await _until(lambda: _truth("soak" in soak.running))
 
@@ -224,7 +224,7 @@ async def test_an_alert_received_before_the_departure_does_not_roll_it_back(
             train = await _train(temporal_env, setup)
             await _until(lambda: _has_status(train, "collecting"))
             await train.signal("deploy_event", _argocd("cd.app.degraded"))
-            await train.signal("merged", {"work_item_key": "varga/billing-api#10", "sha": "i1"})
+            await train.signal("merged", {"work_item_key": "northwind/billing-api#10", "sha": "i1"})
             await train.signal("depart_now", {"by": "augustin"})
             await _until(lambda: _has_status(train, "awaiting_approval"))
             await train.signal("approve", {"by": "marie"})

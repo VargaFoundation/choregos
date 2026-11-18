@@ -13,7 +13,7 @@ person decides. Every step has a budget it cannot exceed and leaves evidence you
 moves on because an agent says it is done: the platform checks.
 
 Tranibor is open source (Apache 2.0), self-hosted, and works with any agent. It is published by the
-Varga Foundation.
+GRAAL.SYSTEMS SAS.
 
 ## Who it is for
 

@@ -16,7 +16,7 @@ from httpx import AsyncClient, Response
 
 from .conftest import login
 
-ADMIN = "admin@varga.dev"
+ADMIN = "admin@northwind.dev"
 BASE = "https://docs.example.test/choregos"
 
 WORKFLOWS = """# Workflows
@@ -117,7 +117,7 @@ async def test_both_tools_are_announced_read_only_on_every_door(
     client: AsyncClient, project: dict[str, Any], docs_dir: Path
 ) -> None:
     token = await _token(client, "mcp:read")
-    for path in ("/mcp", "/mcp/projects/varga:billing-api"):
+    for path in ("/mcp", "/mcp/projects/northwind:billing-api"):
         tools = (await _rpc(client, token, "tools/list", path=path)).json()["result"]["tools"]
         found = {o["name"]: o for o in tools}
         assert {"docs_search", "docs_read"} <= set(found), path
@@ -131,7 +131,7 @@ async def test_both_tools_are_announced_read_only_on_every_door(
 async def test_a_token_bound_to_a_project_reads_the_documentation_too(
     client: AsyncClient, project: dict[str, Any], docs_dir: Path
 ) -> None:
-    token = await _token(client, "mcp:read", project="varga:billing-api")
+    token = await _token(client, "mcp:read", project="northwind:billing-api")
     result = await _tool(client, token, "docs_search", query="kumquat")
     assert result["isError"] is False
     assert [p["slug"] for p in result["structuredContent"]["pages"]] == ["use/workflows"]
@@ -342,7 +342,9 @@ async def test_every_call_is_audited(client: AsyncClient, admin: str, docs_dir: 
             .all()
         )
         user = (await session.execute(select(User).where(User.email == ADMIN))).scalar_one()
-        org = (await session.execute(select(Organization).where(Organization.slug == "varga"))).scalar_one()
+        org = (
+            await session.execute(select(Organization).where(Organization.slug == "northwind"))
+        ).scalar_one()
     calls = [
         (r.target_type, r.target_id, r.payload["issue"], r.payload["write"], r.actor_id, r.org_id)
         for r in rows

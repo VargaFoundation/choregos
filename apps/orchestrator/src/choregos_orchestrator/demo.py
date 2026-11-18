@@ -43,12 +43,12 @@ async def seed() -> tuple[str, str, Any]:
     executor: FakeExecutor = adapters.executor  # type: ignore[assignment]
     gateway: FakeGateway = adapters.gateway  # type: ignore[assignment]
     cd: FakeCd = adapters.cd  # type: ignore[assignment]
-    tracker.project_slug = "varga/billing-api"
+    tracker.project_slug = "northwind/billing-api"
     gateway.auto_usage = True  # the demo shows believable costs
     set_adapters_override(adapters)
 
     async with session_scope(orgs="*") as session:
-        org = Organization(slug="varga", name="Varga Foundation")
+        org = Organization(slug="northwind", name="Northwind")
         session.add(org)
         await session.flush()
         project = Project(
@@ -58,14 +58,14 @@ async def seed() -> tuple[str, str, Any]:
             status="active",
             config={
                 "slug": "billing-api",
-                "org": "varga",
+                "org": "northwind",
                 "repo": {
-                    "url": "https://github.com/varga/billing-api.git",
+                    "url": "https://github.com/northwind/billing-api.git",
                     "default_branch": "main",
                     "language": "python",
                     "test_command": "make test",
                 },
-                "gitops": {"repo_url": "https://github.com/varga/gitops.git", "apps": ["billing-api"]},
+                "gitops": {"repo_url": "https://github.com/northwind/gitops.git", "apps": ["billing-api"]},
                 "notify": {"slack_channel": "#billing"},
             },
         )
@@ -76,7 +76,7 @@ async def seed() -> tuple[str, str, Any]:
             session,
             project,
             WorkItemBirth(
-                tracker_key="varga/billing-api#123",
+                tracker_key="northwind/billing-api#123",
                 title="Credits are not deducted from the invoice total",
                 body="When an order has a credit, the total shown ignores the discount.",
                 size="M",
@@ -89,7 +89,7 @@ async def seed() -> tuple[str, str, Any]:
 
     tracker.items[key] = WorkItemData(key=key, title=item.title, state="Todo")
     scm.set_diff(
-        "varga/billing-api",
+        "northwind/billing-api",
         "main",
         "choregos/123",
         [("src/orders/total.py", 24, 6), ("tests/orders/test_total.py", 38, 0)],
@@ -150,7 +150,7 @@ async def main_async() -> int:
     print(BANNER)
     project_id, work_item_id, adapters = await seed()
 
-    print("· work item varga/billing-api#123 created, workflow `default-simple` pinned\n")
+    print("· work item northwind/billing-api#123 created, workflow `default-simple` pinned\n")
     seen: dict[str, Any] = {}
 
     async def world(state: str) -> None:
@@ -170,7 +170,7 @@ async def main_async() -> int:
 
     print(trace.summary())
     print("\n── Comment written on the work item ──\n")
-    print(adapters.tracker.status_comment("varga/billing-api#123") or "(none)")
+    print(adapters.tracker.status_comment("northwind/billing-api#123") or "(none)")
 
     findings = [item for item in adapters.tracker.items.values() if "finding" in item.labels]
     print("\n── What the platform produced ──")

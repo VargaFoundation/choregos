@@ -1,5 +1,7 @@
 # 0156 — The publishing identity is one file
 
+> **Amended by [ADR 0186](0186-the-publisher-is-graal-systems-sas.md)** (2026-11-18): the publisher is GRAAL.SYSTEMS SAS and the product no longer names the Varga Foundation; the text below is kept as the history of the earlier decision.
+
 - **Status**: accepted, 2026-11-12; S69-01 implements it
 - **Concerns**: `packages/core/src/choregos_core/publishing.json` and `publishing.py`,
   `apps/web/src/lib/publishing.{json,ts}`, `tools/publishing_identity.py` (`make publishing-check`,
@@ -93,7 +95,7 @@ derived files. By hand, as the consequences above foresaw:
   `ghcr.io/vargafoundation`, frozen and never deleted;
 - the plugin keys (`plugin_repository`, `plugin_index`) do not move yet: the plugins stay published, and
   signed, under `VargaFoundation/choregos-agents` until `tranibor-agents` republishes them, and the
-  plugin servers' policy admits `ghcr.io/graalsystems/choregos-agents/` and the frozen namespace;
+  plugin servers' policy admits `ghcr.io/graalsystems/tranibor-agents/` and the frozen namespace;
 - images pinned at a version only the frozen namespace holds (the Ecphoria memory image, the examples'
   runner, the gVisor installer) keep their address, and leave the derived files.
 

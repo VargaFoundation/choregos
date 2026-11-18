@@ -26,7 +26,7 @@ from sqlalchemy import delete, func, select
 from .agent_scopes_kit import add_member, as_user, make_project
 from .catalogue_kit import project_only
 
-ORG = "/api/v1/orgs/varga"
+ORG = "/api/v1/orgs/northwind"
 HELLO = Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "plugins" / "hello"
 INSTALL = {"source": "offline", "name": "hello", "version": "1.0.0"}
 
@@ -77,7 +77,7 @@ def offline(tmp_path: Path) -> Iterator[Path]:
     use_plugin_supply(None)
 
 
-SECOND = "second-admin@varga.dev"
+SECOND = "second-admin@northwind.dev"
 
 
 async def _install(client: AsyncClient, body: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -89,7 +89,7 @@ async def _install(client: AsyncClient, body: dict[str, Any] | None = None) -> d
     await as_user(client, SECOND)
     approved = await client.post(f"{ORG}/plugin-approvals/{asked.json()['approval_id']}/approve")
     assert approved.status_code == 200, approved.text
-    await as_user(client, "admin@varga.dev")
+    await as_user(client, "admin@northwind.dev")
     listed = (await client.get(f"{ORG}/plugins")).json()["items"]
     return dict(next(p for p in listed if p["name"] == (body or INSTALL)["name"]))
 
@@ -158,7 +158,7 @@ async def _hand_version(slug: str) -> None:
                 version=last.version + 1,
                 spec={**last.spec, "instructions": "Our own greeting."},
                 checksum="sha256:" + "0" * 64,
-                created_by="admin@varga.dev",
+                created_by="admin@northwind.dev",
             )
         )
 
@@ -183,7 +183,7 @@ async def test_install_brings_agents_skills_templates_evals_procedures_and_recor
         "servers": ["hello"],
     }
     # The one who asked installed it; the second administrator approved it.
-    assert body["installed_by"] == "admin@varga.dev" and body["latest"] == "1.1.0"
+    assert body["installed_by"] == "admin@northwind.dev" and body["latest"] == "1.1.0"
     assert body["digest"].startswith("sha256:") and body["default"] is False
     assert await _versions("greeter") == [(1, "plugin:hello/greeter@1")]
     async with session_scope() as session:
@@ -210,7 +210,7 @@ async def test_install_twice_changes_nothing(client: AsyncClient, admin: str, of
     assert again.status_code == 409 and "already installed" in again.text
     # The path the start-up reconcile replays: the same content is a no-op, not a second install.
     async with session_scope() as session:
-        org_id = await plugin_installer.org_id_of(session, "varga")
+        org_id = await plugin_installer.org_id_of(session, "northwind")
         async with OfflineDirectory(offline).obtain("offline", "hello", "1.0.0") as plugin:
             _, changed = await plugin_installer.install(
                 session, org_id, plugin, "offline", get_settings(), SYSTEM
@@ -321,9 +321,11 @@ async def test_an_agent_of_the_organisation_with_the_same_name_wins(
     assert own.status_code == 201, own.text
     installed = await _install(client)
     assert installed["contents"]["agents"] == []
-    assert [by for _, by in await _versions("greeter")] == ["admin@varga.dev"]
+    assert [by for _, by in await _versions("greeter")] == ["admin@northwind.dev"]
     assert (await client.delete(f"{ORG}/plugins/hello")).status_code == 200
-    assert [by for _, by in await _versions("greeter")] == ["admin@varga.dev"], "never the plugin's to remove"
+    assert [by for _, by in await _versions("greeter")] == ["admin@northwind.dev"], (
+        "never the plugin's to remove"
+    )
 
 
 async def test_a_missing_plugin_or_version_is_a_404(client: AsyncClient, admin: str, offline: Path) -> None:
@@ -361,7 +363,7 @@ async def test_an_upgrade_offers_and_never_overwrites_an_agent_the_organisation_
     upgraded = await client.post(f"{ORG}/plugins/hello/upgrade", json={"version": "1.1.0"})
     assert upgraded.status_code == 200, upgraded.text
     assert upgraded.json()["offered"] == ["greeter"]
-    assert await _versions("greeter") == [(1, "plugin:hello/greeter@1"), (2, "admin@varga.dev")]
+    assert await _versions("greeter") == [(1, "plugin:hello/greeter@1"), (2, "admin@northwind.dev")]
 
 
 async def test_an_upgrade_does_not_move_a_project_pin(client: AsyncClient, admin: str, offline: Path) -> None:
@@ -443,7 +445,7 @@ async def test_a_project_is_born_from_a_plugin_template_with_its_files(
             "slug": "greeted",
             "name": "Greeted",
             "template_ref": "plugin:hello/hello-flow",
-            "config": {"slug": "greeted", "org": "varga"},
+            "config": {"slug": "greeted", "org": "northwind"},
         },
     )
     assert created.status_code == 201, created.text
@@ -483,7 +485,7 @@ async def test_an_upgrade_gives_the_projects_born_of_its_template_the_knowledge_
             {
                 "name": "docs",
                 "kind": "git",
-                "config": {"url": "https://github.com/varga-foundation/hello.git", "paths": ["docs/**/*.md"]},
+                "config": {"url": "https://github.com/northwind/hello.git", "paths": ["docs/**/*.md"]},
             }
         ],
     }
@@ -498,7 +500,7 @@ async def test_an_upgrade_gives_the_projects_born_of_its_template_the_knowledge_
             "slug": "greeted",
             "name": "Greeted",
             "template_ref": "plugin:hello/hello-flow",
-            "config": {"slug": "greeted", "org": "varga"},
+            "config": {"slug": "greeted", "org": "northwind"},
         },
     )
     assert created.status_code == 201, created.text
@@ -565,13 +567,13 @@ async def test_only_the_administrator_installs_and_members_read(
     client: AsyncClient, org: str, offline: Path
 ) -> None:
     await make_project(client, "billing")
-    await add_member(client, "dev@varga.dev", "developer", "billing")
-    await project_only(client, "dev@varga.dev")
+    await add_member(client, "dev@northwind.dev", "developer", "billing")
+    await project_only(client, "dev@northwind.dev")
     assert (await client.post(f"{ORG}/plugins/install", json=INSTALL)).status_code == 403
     assert (await client.get(f"{ORG}/plugins")).status_code == 200
-    await as_user(client, "admin@varga.dev")
+    await as_user(client, "admin@northwind.dev")
     await _install(client)
-    await project_only(client, "dev@varga.dev")
+    await project_only(client, "dev@northwind.dev")
     assert (await client.post(f"{ORG}/plugins/hello/upgrade")).status_code == 403
     assert (await client.delete(f"{ORG}/plugins/hello")).status_code == 403
     await project_only(client, "stranger@elsewhere.dev")
@@ -593,7 +595,7 @@ async def test_a_plugin_s_template_workflows_join_the_workflow_catalogue(
     assert entry["name"] == "hello-simple" and entry["needs_repository"] is True
     async with session_scope() as session:
         org_id = (
-            await session.execute(select(Organization.id).where(Organization.slug == "varga"))
+            await session.execute(select(Organization.id).where(Organization.slug == "northwind"))
         ).scalar_one()
         found = await resolutions(session, org_id, {"greeter", "nobody-here"})
     assert (found["greeter"].resolution, found["greeter"].plugin) == ("plugin", "hello")
@@ -610,7 +612,7 @@ async def test_an_unresolved_agent_names_the_plugin_that_ships_it(
     from sqlalchemy import select
 
     async with session_scope() as session:
-        query = select(Organization.id).where(Organization.slug == "varga")
+        query = select(Organization.id).where(Organization.slug == "northwind")
         org_id = (await session.execute(query)).scalar_one()
         found = await resolutions(session, org_id, {"greeter", "nobody-here"})
     assert (found["greeter"].resolution, found["greeter"].plugin) == ("unresolved", "hello 1.1.0 (offline)")
@@ -672,7 +674,7 @@ async def _hand_knowledge(slug: str, **changes: Any) -> None:
                 version=last.version + 1,
                 spec=spec.model_dump(mode="json"),
                 checksum=digest(spec),
-                created_by="alice@varga.dev",
+                created_by="alice@northwind.dev",
             )
         )
         await session.commit()

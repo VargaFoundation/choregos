@@ -25,7 +25,7 @@ from httpx import AsyncClient
 
 from .test_network_policy_api import CEILING_URL, _policy, _run
 
-ORG = "/api/v1/orgs/varga"
+ORG = "/api/v1/orgs/northwind"
 QUERY = "open source feature flag licence"
 LICENCE = "https://flags.example.org/licence"
 INJECTED = "https://reviews.example.net/2026"

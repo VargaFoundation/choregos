@@ -76,8 +76,8 @@ def told() -> Iterator[FakeNotifier]:
 async def _ready(client: AsyncClient, *, bank: bool = False, news_modes: list[str] | None = None) -> None:
     await _plugin(client)
     assert (await _install(client, owner_groups=[OWNERS])).status_code == 201
-    await _member(client, "owner@varga.dev", [OWNERS])
-    await as_user(client, "admin@varga.dev")
+    await _member(client, "owner@northwind.dev", [OWNERS])
+    await as_user(client, "admin@northwind.dev")
     await _connector("news-feed", NEWS, identity_modes=news_modes)
     await _connector("markets", MARKET)
     assert (await _bind(client, "news", "news-feed")).status_code == 200
@@ -107,7 +107,7 @@ async def test_a_need_the_manifest_dropped_has_its_binding_disabled_and_kept(
     kept = (await _bindings(client))["bank_accounts"]
     assert kept["enabled"] is False and kept["connector"] == "bank"
     assert (await client.get(f"{SLUG}/readiness")).json()["status"] == "ready"
-    assert [to for to, _ in told.sent] == ["owner@varga.dev"]
+    assert [to for to, _ in told.sent] == ["owner@northwind.dev"]
     assert "`bank_accounts` is no longer a need" in told.sent[0][1].body
 
 

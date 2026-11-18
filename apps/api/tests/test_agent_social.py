@@ -10,8 +10,8 @@ from httpx import AsyncClient
 
 from .agent_scopes_kit import ADMIN, ORG, SPEC, add_member, as_user, create_agent, install_common
 
-DEV = "dev@varga.dev"
-OTHER = "other@varga.dev"
+DEV = "dev@northwind.dev"
+OTHER = "other@northwind.dev"
 CANDIDATE_POLICY = {"on_publish": "candidate", "stable": {"require_candidate": True}}
 
 

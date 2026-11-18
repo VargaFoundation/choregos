@@ -51,7 +51,7 @@ async def test_in_a_two_org_instance_a_run_gets_no_token_for_another_orgs_reposi
     globex = await add_organisation("globex")
     await claim_for(1, "globex-inc", globex)
     reply = await _token(client, project, "https://github.com/globex-inc/private-repo.git")
-    assert reply["token"] is None, "the installation belongs to globex, the run is varga's"
+    assert reply["token"] is None, "the installation belongs to globex, the run is northwind's"
     assert minted == [], "nothing was minted"
 
 
@@ -64,13 +64,13 @@ async def test_a_run_is_pinned_to_the_installation_its_organisation_claimed(
 
     await add_organisation("globex")
     async with session_scope(orgs="*") as session:
-        varga = (
-            await session.execute(select(Organization.id).where(Organization.slug == "varga"))
+        northwind = (
+            await session.execute(select(Organization.id).where(Organization.slug == "northwind"))
         ).scalar_one()
-    await claim_for(5, "varga-inc", varga)
-    reply = await _token(client, project, "https://github.com/varga-inc/billing.git")
+    await claim_for(5, "northwind-inc", northwind)
+    reply = await _token(client, project, "https://github.com/northwind-inc/billing.git")
     assert reply["token"] == "ghs_run"
-    assert minted == [{"repo": "varga-inc/billing", "pinned": 5, "account": "varga-inc"}]
+    assert minted == [{"repo": "northwind-inc/billing", "pinned": 5, "account": "northwind-inc"}]
 
 
 async def test_a_single_org_instance_still_discovers_an_unclaimed_repository(

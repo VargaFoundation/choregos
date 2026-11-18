@@ -502,7 +502,7 @@ async def test_an_operation_that_takes_the_key_is_delivered_again_with_the_same_
     assert first == second, "the same call, twice"
     key = first[1]["action_key"]
     assert first[0] == "create_ticket" and len(key) == 24 and key != "what-the-agent-wrote"
-    assert first[1] == TITLE | {"action_key": key, "work_item_key": "varga/x#1"}, (
+    assert first[1] == TITLE | {"action_key": key, "work_item_key": "northwind/x#1"}, (
         "what the rule lists, filled"
     )
     lost, answered = await kit.deliveries()
@@ -941,7 +941,7 @@ async def _approved(action_id: str) -> None:
         row = await session.get(Action, action_id)
         assert row is not None
         row.status = "approved"
-        row.decisions = [{"by": "ops@varga.dev", "decision": "approve"}]
+        row.decisions = [{"by": "ops@northwind.dev", "decision": "approve"}]
 
 
 async def test_a_conversation_follows_an_action_in_doubt_without_calling_it_done_or_refused(

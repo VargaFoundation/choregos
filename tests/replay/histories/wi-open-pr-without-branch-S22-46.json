@@ -3837,7 +3837,7 @@
    "eventType": "EVENT_TYPE_ACTIVITY_TASK_FAILED",
    "activityTaskFailedEventAttributes": {
     "failure": {
-     "message": "no branch: the implementation changed nothing \u2014 `choregos/123` was never pushed to varga/billing-api, so there is no pull request to open",
+     "message": "no branch: the implementation changed nothing \u2014 `choregos/123` was never pushed to northwind/billing-api, so there is no pull request to open",
      "stackTrace": "  File \"/src/choregos/.venv/lib/python3.12/site-packages/temporalio/worker/_activity.py\", line 351, in _handle_start_activity_task\n    result = await self._execute_activity(\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n  File \"/src/choregos/.venv/lib/python3.12/site-packages/temporalio/worker/_activity.py\", line 681, in _execute_activity\n    return await impl.execute_activity(input)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n  File \"/src/choregos/.venv/lib/python3.12/site-packages/temporalio/worker/_activity.py\", line 889, in execute_activity\n    return await input.fn(*input.args)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n  File \"/src/choregos/apps/orchestrator/src/choregos_orchestrator/activities/scm.py\", line 56, in open_pull_request\n    raise ApplicationError(\n",
      "applicationFailureInfo": {
       "type": "NoBranch",

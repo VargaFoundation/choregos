@@ -56,9 +56,9 @@ async def test_a_task_run_reads_the_installations_config_and_its_subscribers_pre
     markets: Any,
 ) -> None:
     await _ready(client)
-    mine = await _subscriber(client, app, "mine@varga.dev")
-    await _profile(await _installation_id(), {"risk_tolerance": "low"}, email="mine@varga.dev")
-    await _profile(await _installation_id(), {"risk_tolerance": "high"}, email="admin@varga.dev")
+    mine = await _subscriber(client, app, "mine@northwind.dev")
+    await _profile(await _installation_id(), {"risk_tolerance": "low"}, email="mine@northwind.dev")
+    await _profile(await _installation_id(), {"risk_tolerance": "high"}, email="admin@northwind.dev")
     ran = await mine.post(f"{TASKS}/morning_brief/run")
     assert ran.status_code == 201, ran.text
 
@@ -85,7 +85,7 @@ async def test_a_work_item_that_is_not_a_tasks_has_no_assistant_values(
     markets: Any,
 ) -> None:
     await _ready(client)
-    mine = await _subscriber(client, app, "mine@varga.dev")
+    mine = await _subscriber(client, app, "mine@northwind.dev")
     ran = await mine.post(f"{TASKS}/morning_brief/run")
     assert ran.status_code == 201, ran.text
     from choregos_api.db.models import WorkItem

@@ -16,8 +16,8 @@ from httpx import ASGITransport, AsyncClient
 from .kits.human_actor import _member, _session
 from .kits.human_requests import _request
 
-PERSON = "lea@varga.dev"
-OTHER = "max@varga.dev"
+PERSON = "lea@northwind.dev"
+OTHER = "max@northwind.dev"
 TASK_FORM = {
     "type": "object",
     "properties": {"amount": {"type": "integer", "minimum": 0}, "comment": {"type": "string"}},
@@ -107,8 +107,8 @@ async def test_the_draft_tool_needs_write_and_the_rank_to_decide(
     refused = await _rpc(app, reader, "tools/call", {"name": "draft_decision", "arguments": {}})
     assert refused["error"]["code"] == -32602, "a tool not announced does not exist"
 
-    await _member(client, "viewer@varga.dev", "viewer", [])
-    viewer = await _token(app, "viewer@varga.dev", "mcp:write")
+    await _member(client, "viewer@northwind.dev", "viewer", [])
+    viewer = await _token(app, "viewer@northwind.dev", "mcp:write")
     viewer_names = {t["name"] for t in (await _rpc(app, viewer, "tools/list"))["result"]["tools"]}
     assert "draft_decision" not in viewer_names, "a person who cannot decide gets no draft tool"
 

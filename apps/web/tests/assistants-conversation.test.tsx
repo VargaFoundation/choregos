@@ -7,7 +7,7 @@ import { ConversationView } from "@/components/assistants/conversation-view";
 
 const push = vi.hoisted(() => vi.fn());
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }), usePathname: () => "/assistants" }));
-vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "varga", me: { memberships: [] } }) }));
+vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "northwind", me: { memberships: [] } }) }));
 
 const mocks = vi.hoisted(() => ({
   myAssistants: vi.fn(),
@@ -36,7 +36,7 @@ function wrap(ui: React.ReactNode) {
 }
 
 const assistant = (status = "ready") => ({
-  org: "varga",
+  org: "northwind",
   slug: "invest",
   name: "investment-assistant",
   display_name: "Investment assistant",
@@ -63,8 +63,8 @@ describe("the assistants of my audience", () => {
     expect(await screen.findByText("Investment assistant")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Converse" }));
     await waitFor(() => expect(push).toHaveBeenCalledWith("/conversations/c9"));
-    expect(mocks.openConversation).toHaveBeenCalledWith("varga", "invest");
-    expect(screen.getByRole("link", { name: "Memory, accounts and tasks" })).toHaveAttribute("href", "/assistants/varga/invest");
+    expect(mocks.openConversation).toHaveBeenCalledWith("northwind", "invest");
+    expect(screen.getByRole("link", { name: "Memory, accounts and tasks" })).toHaveAttribute("href", "/assistants/northwind/invest");
   });
 
   it("does not offer to converse with an assistant that is not ready, and says when there is none", async () => {
@@ -107,7 +107,7 @@ describe("a conversation", () => {
     ...summary,
     messages: [
       { role: "user", content: "Why did rates move?" },
-      { role: "assistant", content: "**Rates rose** [Investment policy, 3]. Connect: /me/connected-accounts/bank/connect?org=varga" },
+      { role: "assistant", content: "**Rates rose** [Investment policy, 3]. Connect: /me/connected-accounts/bank/connect?org=northwind" },
     ],
   };
 
@@ -119,12 +119,12 @@ describe("a conversation", () => {
     expect(screen.getByLabelText("Citations")).toHaveTextContent("Investment policy · v3");
     expect(screen.getByRole("link", { name: "Connect your bank account" })).toHaveAttribute(
       "href",
-      "/me/connected-accounts/bank/connect?org=varga",
+      "/me/connected-accounts/bank/connect?org=northwind",
     );
     fireEvent.click(screen.getByRole("button", { name: "Bad answer" }));
     fireEvent.change(screen.getByLabelText("Comment"), { target: { value: "wrong rate" } });
     fireEvent.click(screen.getByRole("button", { name: "Send feedback" }));
-    await waitFor(() => expect(mocks.feedback).toHaveBeenCalledWith("varga", "c1", { rating: "down", comment: "wrong rate" }));
+    await waitFor(() => expect(mocks.feedback).toHaveBeenCalledWith("northwind", "c1", { rating: "down", comment: "wrong rate" }));
     expect(await screen.findByText("Thank you for your feedback.")).toBeInTheDocument();
   });
 
@@ -138,7 +138,7 @@ describe("a conversation", () => {
   });
 
   it("shows the memory proposals of the assistant the conversation carries, with no hint in the link", async () => {
-    mocks.conversation.mockResolvedValue({ ...summary, org: "varga", assistant: "invest", messages: [] });
+    mocks.conversation.mockResolvedValue({ ...summary, org: "northwind", assistant: "invest", messages: [] });
     mocks.memory.mockResolvedValue({
       space: "preferred_sources",
       scope: "user",
@@ -202,7 +202,7 @@ describe("a conversation", () => {
     mocks.conversation.mockResolvedValue({ ...summary, messages: [] });
     mocks.streamTurn.mockImplementation(
       async (_i: string, _t: string, h: { onDone: (a: unknown) => void; onError: (m: string) => void }) => {
-        h.onDone({ status: "failed", missing_accounts: [{ need: "bank", connect_url: "https://x/me/connected-accounts/bank/connect?org=varga" }] });
+        h.onDone({ status: "failed", missing_accounts: [{ need: "bank", connect_url: "https://x/me/connected-accounts/bank/connect?org=northwind" }] });
         h.onError("the turn failed");
       },
     );
@@ -276,7 +276,7 @@ describe("a conversation", () => {
       ],
     });
     mocks.memoryAction.mockResolvedValue({});
-    wrap(<ConversationView id="c1" assistant="varga/invest" />);
+    wrap(<ConversationView id="c1" assistant="northwind/invest" />);
     await screen.findByText("Prefers Reuters");
     const cards = screen.getByTestId("memory-proposals");
     expect(cards).toHaveTextContent("Prefers Reuters");
@@ -285,11 +285,11 @@ describe("a conversation", () => {
     const buttons = cards.querySelectorAll("button");
     fireEvent.click(buttons[0]!);
     await waitFor(() =>
-      expect(mocks.memoryAction).toHaveBeenCalledWith("varga", "invest", "preferred_sources", { action: "confirm", fact_id: "f1" }, undefined),
+      expect(mocks.memoryAction).toHaveBeenCalledWith("northwind", "invest", "preferred_sources", { action: "confirm", fact_id: "f1" }, undefined),
     );
     fireEvent.click(buttons[3]!);
     await waitFor(() =>
-      expect(mocks.memoryAction).toHaveBeenCalledWith("varga", "invest", "preferred_sources", { action: "reject", version: 2 }, undefined),
+      expect(mocks.memoryAction).toHaveBeenCalledWith("northwind", "invest", "preferred_sources", { action: "reject", version: 2 }, undefined),
     );
   });
 });

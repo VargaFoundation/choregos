@@ -33,7 +33,7 @@ async def test_each_turn_mints_its_own_key_which_ends_with_the_turn(
 ) -> None:
     await _agent(client)
     upstream.model.say("Order 42 shipped yesterday.").say("It arrives on Friday.")
-    conversation = await _open("varga", admin)
+    conversation = await _open("northwind", admin)
     assert upstream.gateway.keys == {}, "opening reserves nothing and mints nothing"
 
     first = await _say(client, conversation, "Where is order 42?")
@@ -82,14 +82,14 @@ async def test_the_conversations_cap_holds_across_turns(
     upstream.tokens_in, upstream.tokens_out = 10_000, 2_000  # a turn costs $0.06, over the $0.01 floor
     for _ in range(4):
         upstream.model.say("Ok.")
-    probe = await _open("varga", admin)
+    probe = await _open("northwind", admin)
     assert (await _say(client, probe, "Hi")).status_code == 200
     one_turn = (await _record(probe)).cost_usd
     assert one_turn > 0
     upstream.model.requests.clear()
 
     # A cap of 2.5 turns: the third key is reserved at the half a turn that is left.
-    conversation = await _open("varga", admin, max_usd=one_turn * 2.5)
+    conversation = await _open("northwind", admin, max_usd=one_turn * 2.5)
     first = await _say(client, conversation, "One")
     second = await _say(client, conversation, "Two")
     assert (first.status_code, second.status_code) == (200, 200)
@@ -112,7 +112,7 @@ async def test_a_spent_conversation_refuses_a_turn_before_the_model(
 ) -> None:
     await _agent(client)
     upstream.model.say("Ok.")
-    conversation = await _open("varga", admin, max_usd=0.05)
+    conversation = await _open("northwind", admin, max_usd=0.05)
     from choregos_api.db.models import AgentSessionRecord
     from choregos_api.db.session import session_scope
 
@@ -134,7 +134,7 @@ async def test_a_conversation_keeps_the_revision_it_started_with(
     """A later version that no turn could be reserved under does not reach a conversation of version 1."""
     await _agent(client)
     upstream.model.say("Ok.").say("Still ok.")
-    conversation = await _open("varga", admin)
+    conversation = await _open("northwind", admin)
     assert (await _say(client, conversation, "Hi")).status_code == 200
     spec = {"instructions": "Different.", "runtime": {"kind": "prompt"}, "budget": {"run_usd": 0.001}}
     published = await client.post(f"{ORG}/agents/helper/versions", json=spec)
@@ -157,7 +157,7 @@ async def test_a_conversation_resumed_after_two_hours_has_its_history(
 ) -> None:
     await _agent(client)
     upstream.model.say("Order 42 shipped.").say("On Friday.")
-    conversation = await _open("varga", admin, idle_close_minutes=60)
+    conversation = await _open("northwind", admin, idle_close_minutes=60)
     assert (await _say(client, conversation, "Where is order 42?")).status_code == 200
     assert (await client.get(f"{ME}/{conversation}")).json()["status"] == "open"
 
@@ -187,7 +187,7 @@ async def test_the_default_idle_window_is_four_hours(
 ) -> None:
     await _agent(client)
     upstream.model.say("Ok.")
-    conversation = await _open("varga", admin)
+    conversation = await _open("northwind", admin)
     assert (await _say(client, conversation, "Hi")).status_code == 200
     monkeypatch.setattr(
         "choregos_api.services.conversations.utcnow", lambda: utcnow() + timedelta(hours=3, minutes=59)
@@ -210,9 +210,9 @@ async def test_a_conversation_is_its_openers_alone(
 ) -> None:
     await _agent(client)
     upstream.model.say("Mine.")
-    async with as_person(client, "dev@varga.dev", "developer") as other:
-        mine = await _open("varga", admin)
-        theirs = await _open("varga", "dev@varga.dev")
+    async with as_person(client, "dev@northwind.dev", "developer") as other:
+        mine = await _open("northwind", admin)
+        theirs = await _open("northwind", "dev@northwind.dev")
         assert (await _say(client, mine, "Hi")).status_code == 200
 
         assert [c["id"] for c in (await client.get(ME)).json()["items"]] == [mine]
@@ -235,7 +235,7 @@ async def test_the_listing_is_paginated_and_the_most_recent_first(
 ) -> None:
     await _agent(client)
     upstream.model.say("Ok.")
-    ids = [await _open("varga", admin) for _ in range(3)]
+    ids = [await _open("northwind", admin) for _ in range(3)]
     assert (await _say(client, ids[0], "Touch the oldest")).status_code == 200
     page = (await client.get(ME, params={"limit": 2})).json()
     assert page["items"][0]["id"] == ids[0] and page["meta"]["has_more"] is True
@@ -251,7 +251,7 @@ async def test_deleting_a_conversation_erases_it_and_keeps_the_money(
 ) -> None:
     await _agent(client)
     upstream.model.say("Ok.")
-    conversation = await _open("varga", admin)
+    conversation = await _open("northwind", admin)
     assert (await _say(client, conversation, "Hi")).status_code == 200
     assert (await client.delete(f"{ME}/{conversation}")).status_code == 204
     assert (await client.get(f"{ME}/{conversation}")).status_code == 404
@@ -271,7 +271,7 @@ async def test_a_conversation_is_held_with_a_prompt_agent_only(
 
     await _agent(client, runtime=None)
     with pytest.raises(ApiError) as refused:
-        await _open("varga", admin)
+        await _open("northwind", admin)
     assert refused.value.status_code == 422 and "prompt agent" in str(refused.value.detail)
 
 

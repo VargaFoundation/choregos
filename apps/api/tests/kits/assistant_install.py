@@ -12,7 +12,7 @@ from httpx import AsyncClient
 
 from ..agent_scopes_kit import add_member, as_user
 
-ORG = "/api/v1/orgs/varga"
+ORG = "/api/v1/orgs/northwind"
 FIXTURE = Path(__file__).resolve().parents[4] / "tests" / "fixtures" / "plugins" / "investment-assistant"
 PLUGIN = {"source": "offline", "name": "investment-assistant", "version": "0.1.0"}
 OWNERS = "investment-owners"
@@ -33,7 +33,7 @@ def offline(tmp_path: Path) -> Iterator[Path]:
 
 
 async def _plugin(client: AsyncClient) -> None:
-    await as_user(client, "admin@varga.dev")
+    await as_user(client, "admin@northwind.dev")
     response = await client.post(f"{ORG}/plugins/install", json=PLUGIN)
     assert response.status_code == 201, response.text
 
@@ -65,7 +65,7 @@ async def _install(client: AsyncClient, **extra: Any) -> Any:
     body = {
         "plugin": "investment-assistant",
         "assistant": "investment-assistant",
-        "config": {"house_name": "Varga"},
+        "config": {"house_name": "Northwind"},
     }
     return await client.post(f"{ORG}/assistants", json={**body, **extra})
 

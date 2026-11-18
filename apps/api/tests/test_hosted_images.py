@@ -12,7 +12,7 @@ import structlog
 from choregos_adapters.fakes import FakeImageVerifier, FakeRegistryClient
 from httpx import AsyncClient
 
-AGENTS = "/api/v1/orgs/varga/agents"
+AGENTS = "/api/v1/orgs/northwind/agents"
 REF = "ghcr.io/acme/triager:1.2"
 FORGED = "sha256:" + "f" * 64
 

@@ -66,8 +66,8 @@ async def test_the_definition_of_another_project_is_not_found(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
     other = await client.post(
-        "/api/v1/orgs/varga/projects",
-        json={"slug": "hr", "name": "HR", "config": {"slug": "hr", "org": "varga"}},
+        "/api/v1/orgs/northwind/projects",
+        json={"slug": "hr", "name": "HR", "config": {"slug": "hr", "org": "northwind"}},
     )
     assert other.status_code == 201, other.text
     foreign = await _target(client, other.json())

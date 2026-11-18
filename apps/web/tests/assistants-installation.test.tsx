@@ -12,8 +12,8 @@ const roles = vi.hoisted(() => ({ admin: true }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }), usePathname: () => "/assistants/manage" }));
 vi.mock("@/lib/session", () => ({
   useSession: () => ({
-    org: "varga",
-    me: { memberships: roles.admin ? [{ org: "varga", role: "org_admin", project_slug: null }] : [] },
+    org: "northwind",
+    me: { memberships: roles.admin ? [{ org: "northwind", role: "org_admin", project_slug: null }] : [] },
   }),
 }));
 vi.mock("@/lib/api", async (importOriginal) => {
@@ -92,7 +92,7 @@ const installed = (extra: Record<string, unknown> = {}) => ({
   plugin_version: "1.0.0",
   assistant_name: "investment-assistant",
   display_name: "Investment assistant",
-  config: { house_name: "Varga" },
+  config: { house_name: "Northwind" },
   owner_groups: ["owners"],
   audience_groups: ["investors"],
   channel: "stable",
@@ -134,7 +134,7 @@ describe("installing an assistant", () => {
   it("draws the configuration form from the config schema, suggests the audience, and installs", async () => {
     mocks.install.mockResolvedValue(installed());
     const done = vi.fn();
-    wrap(<InstallAssistant org="varga" onInstalled={done} />);
+    wrap(<InstallAssistant org="northwind" onInstalled={done} />);
     await screen.findByRole("option", { name: /investment-assistant 1.0.0/ });
     fireEvent.change(screen.getByLabelText("Plugin"), { target: { value: "investment-assistant" } });
     await screen.findByRole("option", { name: "Investment assistant" });
@@ -144,16 +144,16 @@ describe("installing an assistant", () => {
     const install = screen.getByRole("button", { name: "Install" });
     expect(install).toBeDisabled();
     expect(screen.getByText("Required: house_name")).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText(/house name/i), { target: { value: "Varga" } });
+    fireEvent.change(screen.getByLabelText(/house name/i), { target: { value: "Northwind" } });
     fireEvent.change(screen.getByLabelText("Owner groups"), { target: { value: "owners, auditors" } });
     fireEvent.change(screen.getByLabelText("Channel"), { target: { value: "candidate" } });
     expect(install).toBeEnabled();
     fireEvent.click(install);
     await waitFor(() =>
-      expect(mocks.install).toHaveBeenCalledWith("varga", {
+      expect(mocks.install).toHaveBeenCalledWith("northwind", {
         plugin: "investment-assistant",
         assistant: "investment-assistant",
-        config: { house_name: "Varga" },
+        config: { house_name: "Northwind" },
         owner_groups: ["owners", "auditors"],
         audience_groups: ["grp-investors"],
         channel: "candidate",
@@ -164,7 +164,7 @@ describe("installing an assistant", () => {
 
   it("shows a refused installation, and a plugin without assistant", async () => {
     mocks.install.mockRejectedValue(new Error("config does not match"));
-    wrap(<InstallAssistant org="varga" />);
+    wrap(<InstallAssistant org="northwind" />);
     await screen.findByRole("option", { name: /investment-assistant 1.0.0/ });
     fireEvent.change(screen.getByLabelText("Plugin"), { target: { value: "investment-assistant" } });
     await screen.findByRole("option", { name: "Investment assistant" });
@@ -178,12 +178,12 @@ describe("installing an assistant", () => {
 
   it("says when no plugin is installed or the plugin ships no assistant", async () => {
     vi.mocked(api.plugins).mockResolvedValue({ items: [] } as never);
-    const first = wrap(<InstallAssistant org="varga" />);
+    const first = wrap(<InstallAssistant org="northwind" />);
     expect(await screen.findByText(/Install a plugin that ships an assistant first/)).toBeInTheDocument();
     first.unmount();
     vi.mocked(api.plugins).mockResolvedValue({ items: [{ name: "empty", version: "1" }] } as never);
     mocks.pluginAssistants.mockResolvedValue({ items: [] });
-    wrap(<InstallAssistant org="varga" />);
+    wrap(<InstallAssistant org="northwind" />);
     await screen.findByRole("option", { name: /empty 1/ });
     fireEvent.change(screen.getByLabelText("Plugin"), { target: { value: "empty" } });
     expect(await screen.findByText("This plugin ships no assistant.")).toBeInTheDocument();
@@ -218,7 +218,7 @@ describe("one installation, for its owners", () => {
     expect(await screen.findByText("need `news` is not bound")).toBeInTheDocument();
     expect(screen.getByText("to fix: the owners")).toBeInTheDocument();
     fireEvent.change(await screen.findByLabelText("Connector for news"), { target: { value: "news-feed" } });
-    await waitFor(() => expect(mocks.bind).toHaveBeenCalledWith("varga", "invest", "news", { connector: "news-feed", enabled: true, approval: null }));
+    await waitFor(() => expect(mocks.bind).toHaveBeenCalledWith("northwind", "invest", "news", { connector: "news-feed", enabled: true, approval: null }));
   });
 
   it("binds a knowledge need to bases the owner reads, keeps one another owner bound, and shows a refusal", async () => {
@@ -237,7 +237,7 @@ describe("one installation, for its owners", () => {
       { slug: "house-notes", name: "House notes", scope: "org", serving_mode: "index", status: "active" },
       { slug: "old-notes", name: "Old notes", scope: "org", serving_mode: "index", status: "archived" },
     ] as never);
-    mocks.bindKnowledge.mockRejectedValueOnce(new Error("`house-notes` is not a knowledge base of varga you may read"));
+    mocks.bindKnowledge.mockRejectedValueOnce(new Error("`house-notes` is not a knowledge base of northwind you may read"));
     mocks.bindKnowledge.mockResolvedValue(installed());
     wrap(<InstallationDetail slug="invest" />);
     expect(await screen.findByText("The house's research notes.")).toBeInTheDocument();
@@ -246,14 +246,14 @@ describe("one installation, for its owners", () => {
     expect(screen.queryByLabelText("old-notes for house_research")).not.toBeInTheDocument();
     fireEvent.click(await screen.findByLabelText("house-notes for house_research"));
     fireEvent.click(screen.getByRole("button", { name: "Bind house_research" }));
-    expect(await screen.findByText("`house-notes` is not a knowledge base of varga you may read")).toBeInTheDocument();
-    expect(mocks.bindKnowledge).toHaveBeenCalledWith("varga", "invest", "house_research", {
+    expect(await screen.findByText("`house-notes` is not a knowledge base of northwind you may read")).toBeInTheDocument();
+    expect(mocks.bindKnowledge).toHaveBeenCalledWith("northwind", "invest", "house_research", {
       bases: ["board-notes", "house-notes"],
     });
     fireEvent.click(screen.getByLabelText("board-notes for house_research"));
     fireEvent.click(screen.getByRole("button", { name: "Bind house_research" }));
     await waitFor(() =>
-      expect(mocks.bindKnowledge).toHaveBeenLastCalledWith("varga", "invest", "house_research", { bases: ["house-notes"] }),
+      expect(mocks.bindKnowledge).toHaveBeenLastCalledWith("northwind", "invest", "house_research", { bases: ["house-notes"] }),
     );
   });
 
@@ -295,20 +295,20 @@ describe("one installation, for its owners", () => {
     wrap(<InstallationDetail slug="invest" />);
     expect(await screen.findByText("Overweight bonds")).toBeInTheDocument();
     expect(mocks.installationMemory).toHaveBeenCalledTimes(1);
-    expect(mocks.installationMemory).toHaveBeenCalledWith("varga", "invest", "house_view"); // a person's space is not listed
+    expect(mocks.installationMemory).toHaveBeenCalledWith("northwind", "invest", "house_view"); // a person's space is not listed
     const card = screen.getByText("Overweight bonds").closest("section")!;
     fireEvent.click(within(card).getByRole("button", { name: "Confirm" }));
     await waitFor(() =>
-      expect(mocks.installationMemoryAction).toHaveBeenCalledWith("varga", "invest", "house_view", { action: "confirm", fact_id: "h1" }),
+      expect(mocks.installationMemoryAction).toHaveBeenCalledWith("northwind", "invest", "house_view", { action: "confirm", fact_id: "h1" }),
     );
     fireEvent.click(within(card).getByRole("button", { name: "Reject" }));
     await waitFor(() =>
-      expect(mocks.installationMemoryAction).toHaveBeenCalledWith("varga", "invest", "house_view", { action: "reject", fact_id: "h1" }),
+      expect(mocks.installationMemoryAction).toHaveBeenCalledWith("northwind", "invest", "house_view", { action: "reject", fact_id: "h1" }),
     );
     fireEvent.change(within(card).getByLabelText("Add a fact"), { target: { value: "Cap equities at 60%" } });
     fireEvent.click(within(card).getByRole("button", { name: "Add" }));
     await waitFor(() =>
-      expect(mocks.installationMemoryAction).toHaveBeenCalledWith("varga", "invest", "house_view", { action: "add", content: "Cap equities at 60%" }),
+      expect(mocks.installationMemoryAction).toHaveBeenCalledWith("northwind", "invest", "house_view", { action: "add", content: "Cap equities at 60%" }),
     );
   });
 
@@ -320,12 +320,12 @@ describe("one installation, for its owners", () => {
     wrap(<InstallationDetail slug="invest" />);
     fireEvent.click(await screen.findByRole("button", { name: "Show the key" }));
     expect(await screen.findByText("chtask_first")).toBeInTheDocument();
-    expect(mocks.webhookSecret).toHaveBeenLastCalledWith("varga", "invest", false);
+    expect(mocks.webhookSecret).toHaveBeenLastCalledWith("northwind", "invest", false);
     fireEvent.click(screen.getByRole("button", { name: "Show the key" }));
     expect(await screen.findByText(/already shown/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Rotate the key" }));
     expect(await screen.findByText("chtask_second")).toBeInTheDocument();
-    expect(mocks.webhookSecret).toHaveBeenLastCalledWith("varga", "invest", true);
+    expect(mocks.webhookSecret).toHaveBeenLastCalledWith("northwind", "invest", true);
   });
 
   it("reveals the URL and key of a trigger task's event door on each click, with a secret warning and a copy", async () => {
@@ -340,7 +340,7 @@ describe("one installation, for its owners", () => {
     fireEvent.click(screen.getByRole("button", { name: "Show the URL and key" }));
     expect(await screen.findByText("chev_one")).toBeInTheDocument();
     expect(screen.getByText("https://api.test/hook/new_ticket/events")).toBeInTheDocument();
-    expect(mocks.taskEventKey).toHaveBeenLastCalledWith("varga", "invest", "new_ticket");
+    expect(mocks.taskEventKey).toHaveBeenLastCalledWith("northwind", "invest", "new_ticket");
     fireEvent.click(screen.getByRole("button", { name: "Copy the key" }));
     await waitFor(() => expect(writeText).toHaveBeenCalledWith("chev_one"));
     fireEvent.click(screen.getByRole("button", { name: "Show the URL and key" }));
@@ -373,14 +373,14 @@ describe("one installation, for its owners", () => {
     mocks.teamsDelivery.mockResolvedValue({ configured: true, version: 1, updated_at: "2026-11-11T08:00:00Z" });
     fireEvent.change(screen.getByLabelText("Teams webhook URL"), { target: { value: "https://example.webhook.office.com/abc" } });
     fireEvent.click(screen.getByRole("button", { name: "Seal the URL" }));
-    await waitFor(() => expect(mocks.putTeamsDelivery).toHaveBeenCalledWith("varga", "invest", "https://example.webhook.office.com/abc"));
+    await waitFor(() => expect(mocks.putTeamsDelivery).toHaveBeenCalledWith("northwind", "invest", "https://example.webhook.office.com/abc"));
     expect(await screen.findByText(/version 1/)).toBeInTheDocument();
     expect(screen.getByLabelText("Teams webhook URL")).toHaveValue("");
     expect(document.body.textContent).not.toContain("example.webhook.office.com");
     mocks.teamsDelivery.mockResolvedValue({ configured: false, version: null, updated_at: null });
     fireEvent.click(screen.getByRole("button", { name: "Remove" }));
     fireEvent.click(await screen.findByRole("button", { name: "Remove" }));
-    await waitFor(() => expect(mocks.deleteTeamsDelivery).toHaveBeenCalledWith("varga", "invest"));
+    await waitFor(() => expect(mocks.deleteTeamsDelivery).toHaveBeenCalledWith("northwind", "invest"));
     expect(await screen.findByText("Not configured")).toBeInTheDocument();
   });
 
@@ -391,7 +391,7 @@ describe("one installation, for its owners", () => {
     mocks.bind.mockRejectedValueOnce(new Error("the connector does not serve place_order"));
     wrap(<InstallationDetail slug="invest" />);
     fireEvent.change(await screen.findByLabelText("Approval for orders"), { target: { value: "inline" } });
-    await waitFor(() => expect(mocks.bind).toHaveBeenCalledWith("varga", "invest", "orders", { connector: "broker", enabled: true, approval: "inline" }));
+    await waitFor(() => expect(mocks.bind).toHaveBeenCalledWith("northwind", "invest", "orders", { connector: "broker", enabled: true, approval: "inline" }));
     expect(await screen.findByText("the connector does not serve place_order")).toBeInTheDocument();
   });
 
@@ -403,8 +403,8 @@ describe("one installation, for its owners", () => {
     fireEvent.change(screen.getByLabelText("Channel"), { target: { value: "candidate" } });
     fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
     await waitFor(() =>
-      expect(mocks.update).toHaveBeenCalledWith("varga", "invest", {
-        config: { house_name: "Varga" },
+      expect(mocks.update).toHaveBeenCalledWith("northwind", "invest", {
+        config: { house_name: "Northwind" },
         audience_groups: ["investors", "partners"],
         owner_groups: ["owners"],
         channel: "candidate",
@@ -439,18 +439,18 @@ describe("one installation, for its owners", () => {
     const first = (await screen.findByText("policy-u1.md")).closest("section")!;
     expect(within(first).getByText("+new line")).toBeInTheDocument();
     fireEvent.click(within(first).getByRole("button", { name: "Accept" }));
-    await waitFor(() => expect(mocks.decideKnowledgeUpdate).toHaveBeenCalledWith("varga", "invest", "u1", { decision: "accept", content: null }));
+    await waitFor(() => expect(mocks.decideKnowledgeUpdate).toHaveBeenCalledWith("northwind", "invest", "u1", { decision: "accept", content: null }));
 
     const second = screen.getByText("policy-u2.md").closest("section")!;
     fireEvent.click(within(second).getByRole("button", { name: "Merge with edits" }));
     fireEvent.change(within(second).getByLabelText("Merged content"), { target: { value: "merged text" } });
     fireEvent.click(within(second).getByRole("button", { name: "Save the merge" }));
-    await waitFor(() => expect(mocks.decideKnowledgeUpdate).toHaveBeenCalledWith("varga", "invest", "u2", { decision: "merge", content: "merged text" }));
+    await waitFor(() => expect(mocks.decideKnowledgeUpdate).toHaveBeenCalledWith("northwind", "invest", "u2", { decision: "merge", content: "merged text" }));
 
     const third = screen.getByText("policy-u3.md").closest("section")!;
     fireEvent.click(within(third).getByRole("button", { name: "Refuse" }));
     expect(await within(third).findByText("already decided")).toBeInTheDocument();
-    expect(mocks.decideKnowledgeUpdate).toHaveBeenLastCalledWith("varga", "invest", "u3", { decision: "refuse", content: null });
+    expect(mocks.decideKnowledgeUpdate).toHaveBeenLastCalledWith("northwind", "invest", "u3", { decision: "refuse", content: null });
   });
 
   it("reads the journal, filtered", async () => {
@@ -463,7 +463,7 @@ describe("one installation, for its owners", () => {
     expect(screen.getByText("instrument: FR001")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("user id"), { target: { value: "u1" } });
     fireEvent.click(screen.getByRole("button", { name: "Filter" }));
-    await waitFor(() => expect(mocks.reads).toHaveBeenLastCalledWith("varga", "invest", { subject_type: "", subject_key: "", user_id: "u1" }));
+    await waitFor(() => expect(mocks.reads).toHaveBeenLastCalledWith("northwind", "invest", { subject_type: "", subject_key: "", user_id: "u1" }));
   });
 
   it("exports then erases by subject, after a confirmation", async () => {
@@ -478,7 +478,7 @@ describe("one installation, for its owners", () => {
     fireEvent.change(within(card).getByLabelText("Subject key"), { target: { value: "FR001" } });
     fireEvent.click(within(card).getByRole("button", { name: "Export" }));
     expect(await within(card).findByLabelText("Export")).toHaveTextContent('"mode": "export"');
-    expect(mocks.eraseSubject).toHaveBeenCalledWith("varga", "invest", { subject: { type: "instrument", key: "FR001" }, mode: "export", conversations: "redact" });
+    expect(mocks.eraseSubject).toHaveBeenCalledWith("northwind", "invest", { subject: { type: "instrument", key: "FR001" }, mode: "export", conversations: "redact" });
 
     fireEvent.change(within(card).getByLabelText("Conversations on erasure"), { target: { value: "delete" } });
     fireEvent.click(within(card).getByRole("button", { name: "Erase" }));
@@ -496,7 +496,7 @@ describe("one installation, for its owners", () => {
     await screen.findByRole("option", { name: "investment-analyst" });
     fireEvent.change(screen.getByLabelText("Agent"), { target: { value: "investment-analyst" } });
     expect(await screen.findByText(/why did it fall/)).toBeInTheDocument();
-    expect(mocks.feedbackCandidates).toHaveBeenCalledWith("varga", "investment-analyst");
+    expect(mocks.feedbackCandidates).toHaveBeenCalledWith("northwind", "investment-analyst");
   });
 
   describe("deciding a candidate (S63-17)", () => {
@@ -523,7 +523,7 @@ describe("one installation, for its owners", () => {
       mocks.feedbackCandidates.mockResolvedValue([]);
       fireEvent.click(screen.getByRole("button", { name: "Add to the suite" }));
       await waitFor(() =>
-        expect(mocks.acceptCandidate).toHaveBeenCalledWith("varga", "investment-analyst", "k1", {
+        expect(mocks.acceptCandidate).toHaveBeenCalledWith("northwind", "investment-analyst", "k1", {
           assertions: { must_not_contain: ["Buy."] },
         }),
       );
@@ -549,7 +549,7 @@ describe("one installation, for its owners", () => {
       mocks.dismissCandidate.mockResolvedValue({ ...candidate, status: "dismissed" });
       await open();
       fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
-      await waitFor(() => expect(mocks.dismissCandidate).toHaveBeenCalledWith("varga", "investment-analyst", "k1"));
+      await waitFor(() => expect(mocks.dismissCandidate).toHaveBeenCalledWith("northwind", "investment-analyst", "k1"));
     });
   });
 
@@ -558,7 +558,7 @@ describe("one installation, for its owners", () => {
     const admin = wrap(<InstallationDetail slug="invest" />);
     fireEvent.click(await screen.findByRole("button", { name: "Uninstall" }));
     fireEvent.click(screen.getByRole("button", { name: "Uninstall" }));
-    await waitFor(() => expect(mocks.uninstall).toHaveBeenCalledWith("varga", "invest"));
+    await waitFor(() => expect(mocks.uninstall).toHaveBeenCalledWith("northwind", "invest"));
     await waitFor(() => expect(push).toHaveBeenCalledWith("/assistants/manage"));
     admin.unmount();
     roles.admin = false;
@@ -582,8 +582,8 @@ describe("one installation: its tokens, its stop and its resume", () => {
     const reads = vi.mocked(api.orgCosts).mock.calls;
     expect(reads.length).toBeGreaterThan(0);
     expect(reads.every(([, , f]) => f?.assistant === "inst-concierge")).toBe(true);
-    const own = mockCostReport("/orgs/varga/costs?group_by=model&assistant=inst-concierge");
-    const all = mockCostReport("/orgs/varga/costs?group_by=assistant");
+    const own = mockCostReport("/orgs/northwind/costs?group_by=model&assistant=inst-concierge");
+    const all = mockCostReport("/orgs/northwind/costs?group_by=assistant");
     expect(own.total.cost_usd).toBeCloseTo(all.rows.find((r) => r.key === "concierge")!.cost_usd);
     expect(own.total.cost_usd).toBeLessThan(all.total.cost_usd!);
     expect(within(panel).getByTestId("panel-model")).toHaveTextContent("claude-haiku");
@@ -605,7 +605,7 @@ describe("one installation: its tokens, its stop and its resume", () => {
   });
 
   it("stops with the reason typed, posts it, and shows the turns cancelled and what was not stopped", async () => {
-    const stopped = { at: "2026-11-12T09:30:00Z", by: "lea@varga.dev", reason: "it quotes stale prices" };
+    const stopped = { at: "2026-11-12T09:30:00Z", by: "lea@northwind.dev", reason: "it quotes stale prices" };
     mocks.stop.mockImplementation(async () => {
       mocks.installation.mockResolvedValue(installed({ status: "suspended", stopped }));
       return {
@@ -628,12 +628,12 @@ describe("one installation: its tokens, its stop and its resume", () => {
     await act(async () => {
       fireEvent.click(confirm);
     });
-    expect(mocks.stop).toHaveBeenCalledWith("varga", "invest", "it quotes stale prices");
+    expect(mocks.stop).toHaveBeenCalledWith("northwind", "invest", "it quotes stale prices");
     const result = await screen.findByTestId("assistant-stop-result");
     expect(result).toHaveTextContent("Stopped. 2 conversation turns cancelled.");
     expect(result).toHaveTextContent("turn c-9: the replica did not answer");
     // The installation read again says who stopped it, when and why, and offers Resume.
-    expect(await screen.findByTestId("assistant-stopped")).toHaveTextContent("Stopped by lea@varga.dev on");
+    expect(await screen.findByTestId("assistant-stopped")).toHaveTextContent("Stopped by lea@northwind.dev on");
     expect(screen.getByTestId("assistant-stopped")).toHaveTextContent("it quotes stale prices");
     expect(screen.getByRole("button", { name: "Resume" })).toBeInTheDocument();
   });
@@ -653,7 +653,7 @@ describe("one installation: its tokens, its stop and its resume", () => {
   });
 
   it("offers Resume only while the assistant is stopped, and resuming clears the notice", async () => {
-    const stopped = { at: "2026-11-12T09:30:00Z", by: "lea@varga.dev", reason: "it quotes stale prices" };
+    const stopped = { at: "2026-11-12T09:30:00Z", by: "lea@northwind.dev", reason: "it quotes stale prices" };
     mocks.installation.mockResolvedValue(installed({ status: "suspended", stopped }));
     mocks.resume.mockImplementation(async () => {
       const ready = installed({ status: "ready", stopped: null });
@@ -662,12 +662,12 @@ describe("one installation: its tokens, its stop and its resume", () => {
     });
     wrap(<InstallationDetail slug="invest" />);
     const notice = await screen.findByTestId("assistant-stopped");
-    expect(notice).toHaveTextContent("Stopped by lea@varga.dev on");
+    expect(notice).toHaveTextContent("Stopped by lea@northwind.dev on");
     expect(screen.queryByRole("button", { name: "Stop the assistant…" })).not.toBeInTheDocument();
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Resume" }));
     });
-    expect(mocks.resume).toHaveBeenCalledWith("varga", "invest");
+    expect(mocks.resume).toHaveBeenCalledWith("northwind", "invest");
     await waitFor(() => expect(screen.queryByTestId("assistant-stopped")).not.toBeInTheDocument());
     expect(screen.queryByRole("button", { name: "Resume" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Stop the assistant…" })).toBeInTheDocument();

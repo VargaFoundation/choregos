@@ -283,7 +283,7 @@ async def test_a_profile_patch_is_validated_against_the_schema_and_confirmed_by_
     assert ok == {"status": "proposed", "version": 1}
     assert (await _tool(conversation, "memory_get_profile", space="investor_profile"))["profile"] is None
 
-    path = "/api/v1/me/assistants/varga/investment-assistant/memory/investor_profile"
+    path = "/api/v1/me/assistants/northwind/investment-assistant/memory/investor_profile"
     page = (await client.get(path)).json()
     (mine,) = page["subjects"]
     assert [(p["version"], p["status"]) for p in mine["profiles"]] == [(1, "proposed")]
@@ -323,7 +323,7 @@ async def test_max_facts_expires_the_oldest_unpinned_first(
         content="fact 0",
         reason="r",
     )
-    path = f"/api/v1/me/assistants/varga/investment-assistant/memory/instrument_notes/{subject['key']}"
+    path = f"/api/v1/me/assistants/northwind/investment-assistant/memory/instrument_notes/{subject['key']}"
     pinned = await client.patch(path, json={"action": "pin", "fact_id": first["id"]})
     assert pinned.status_code == 200, pinned.text
     for n in range(1, 52):  # `max_facts` of the space is 50
@@ -450,7 +450,7 @@ async def test_the_start_of_a_conversation_carries_the_profile_and_facts_framed_
     await _tool(
         conversation, "memory_propose", space="preferred_sources", content="Prefers Reuters.", reason="r"
     )
-    path = "/api/v1/me/assistants/varga/investment-assistant/memory"
+    path = "/api/v1/me/assistants/northwind/investment-assistant/memory"
     await client.patch(f"{path}/investor_profile", json={"action": "confirm", "version": 1})
     facts = (await client.get(f"{path}/preferred_sources")).json()["subjects"][0]["facts"]
     await client.patch(f"{path}/preferred_sources", json={"action": "confirm", "fact_id": facts[0]["id"]})
@@ -487,15 +487,15 @@ async def test_the_start_of_a_conversation_carries_the_profile_and_facts_framed_
 def test_an_assistant_namespace_is_refused_by_the_run_namespace_parsers() -> None:
     from choregos_core.memory_scope import assistant_space_namespace, parse_namespace, split_namespace
 
-    namespace = assistant_space_namespace("varga", "inst1", "user1", ("instrument", "US0378331005"))
-    assert namespace == "org:varga#assistant:inst1#user:user1#subject:instrument:US0378331005"
-    for form in (namespace, assistant_space_namespace("varga", "inst1"), "p#assistant:x"):
+    namespace = assistant_space_namespace("northwind", "inst1", "user1", ("instrument", "US0378331005"))
+    assert namespace == "org:northwind#assistant:inst1#user:user1#subject:instrument:US0378331005"
+    for form in (namespace, assistant_space_namespace("northwind", "inst1"), "p#assistant:x"):
         with pytest.raises(ValueError):
             split_namespace(form)
         with pytest.raises(ValueError):
             parse_namespace(form)
     with pytest.raises(ValueError):
-        assistant_space_namespace("varga", "inst1", None, ("instrument", "k"))
+        assistant_space_namespace("northwind", "inst1", None, ("instrument", "k"))
 
 
 # ───────────────────────── the person's memory page ─────────────────────────
@@ -506,7 +506,7 @@ async def test_the_memory_page_lists_confirms_corrects_and_deletes_for_its_owner
 ) -> None:
     conversation = await _open(await _assistant(client))
     subject = {"type": "instrument", "key": "FR0000120073"}
-    base = "/api/v1/me/assistants/varga/investment-assistant/memory/instrument_notes"
+    base = "/api/v1/me/assistants/northwind/investment-assistant/memory/instrument_notes"
     proposed = await _tool(
         conversation,
         "memory_propose",
@@ -537,19 +537,19 @@ async def test_the_memory_page_lists_confirms_corrects_and_deletes_for_its_owner
     assert (await client.get(f"{base}/OTHER")).status_code == 404
 
     # Another person of the organisation has a page of their own: it holds nothing of this one's.
-    await as_user(client, "colleague@varga.dev")
+    await as_user(client, "colleague@northwind.dev")
     assert (await client.get(base)).json()["subjects"] == []
     assert (await client.delete(f"{base}/{subject['key']}")).status_code == 404
     assert (await client.patch(base, json={"action": "pin", "fact_id": proposed["id"]})).status_code == 404
 
-    await as_user(client, "admin@varga.dev")
+    await as_user(client, "admin@northwind.dev")
     gone = await client.delete(f"{base}/{subject['key']}", params={"fact_id": proposed["id"]})
     assert gone.status_code == 204
     assert (await client.get(f"{base}/{subject['key']}")).json()["subjects"][0]["facts"] == []
     assert (await client.delete(f"{base}/{subject['key']}")).status_code == 204
     assert (await client.get(base)).json()["subjects"] == []
     assert (
-        await client.get("/api/v1/me/assistants/varga/investment-assistant/memory/house_view")
+        await client.get("/api/v1/me/assistants/northwind/investment-assistant/memory/house_view")
     ).status_code == 404, "an installation space is not on a person's page"
 
 

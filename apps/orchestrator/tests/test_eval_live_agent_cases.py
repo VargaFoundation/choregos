@@ -828,7 +828,7 @@ def plugin_runtime(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
 
     monkeypatch.setenv(OFFLINE_ENV, str(FIXTURES / "plugins"))
     monkeypatch.setenv(
-        "CHOREGOS_PLUGIN_SERVERS_REGISTRIES", json.dumps([PUBLISHING.image("choregos-agents")])
+        "CHOREGOS_PLUGIN_SERVERS_REGISTRIES", json.dumps([PUBLISHING.image("tranibor-agents")])
     )
     reset_api_settings()
     kube = FakeKubernetesApi()
@@ -879,7 +879,7 @@ async def _discover_servicenow() -> dict[str, Any]:
         org = (await session.execute(select(Organization))).scalar_one()
         administrator = Principal(
             user_id="admin",
-            email="admin@varga.dev",
+            email="admin@northwind.dev",
             display_name="Admin",
             org_roles={org.slug: Role.ORG_ADMIN},
         )

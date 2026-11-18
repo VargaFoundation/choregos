@@ -118,21 +118,21 @@ def test_explicit_endpoints_are_all_or_none(monkeypatch: pytest.MonkeyPatch) -> 
 
 async def test_an_unverified_email_does_not_take_over_an_account(client: AsyncClient, org: str) -> None:
     async with session_scope(orgs="*") as session:
-        session.add(User(email="victim@varga.dev", display_name="Victim", oidc_sub=None))
+        session.add(User(email="victim@northwind.dev", display_name="Victim", oidc_sub=None))
     response = await _sign_in(
-        client, {"sub": "attacker-sub", "email": "victim@varga.dev", "email_verified": False}
+        client, {"sub": "attacker-sub", "email": "victim@northwind.dev", "email_verified": False}
     )
     assert response.status_code == 401, response.text
     assert "not verified" in response.text
-    (victim,) = [u for u in await _users() if u.email == "victim@varga.dev"]
+    (victim,) = [u for u in await _users() if u.email == "victim@northwind.dev"]
     assert victim.oidc_sub is None
 
 
 async def test_an_email_bound_to_another_subject_is_refused(client: AsyncClient, org: str) -> None:
     async with session_scope(orgs="*") as session:
-        session.add(User(email="victim@varga.dev", display_name="Victim", oidc_sub="victim-sub"))
+        session.add(User(email="victim@northwind.dev", display_name="Victim", oidc_sub="victim-sub"))
     response = await _sign_in(
-        client, {"sub": "attacker-sub", "email": "victim@varga.dev", "email_verified": True}
+        client, {"sub": "attacker-sub", "email": "victim@northwind.dev", "email_verified": True}
     )
     assert response.status_code == 401, response.text
     assert "belongs to another identity" in response.text
@@ -141,7 +141,7 @@ async def test_an_email_bound_to_another_subject_is_refused(client: AsyncClient,
 
 
 async def test_the_id_token_and_userinfo_must_name_the_same_subject(client: AsyncClient, org: str) -> None:
-    response = await _sign_in(client, {"sub": "u-1", "email": "jo@varga.dev"}, token_claims={"sub": "x"})
+    response = await _sign_in(client, {"sub": "u-1", "email": "jo@northwind.dev"}, token_claims={"sub": "x"})
     assert response.status_code == 401, response.text
     assert "two different subjects" in response.text
 
@@ -152,7 +152,7 @@ async def test_the_nonce_is_sent_and_a_wrong_one_is_refused(client: AsyncClient,
         start = await client.get("/api/v1/auth/login")
     assert parse_qs(urlparse(start.headers["location"]).query)["nonce"][0]
     response = await _sign_in(
-        client, {"sub": "u-1", "email": "jo@varga.dev"}, token_claims={"nonce": "another-nonce"}
+        client, {"sub": "u-1", "email": "jo@northwind.dev"}, token_claims={"nonce": "another-nonce"}
     )
     assert response.status_code == 401, response.text
     assert "nonce" in response.text
@@ -170,14 +170,14 @@ async def test_the_nonce_is_sent_and_a_wrong_one_is_refused(client: AsyncClient,
 async def test_an_id_token_for_another_audience_or_issuer_is_refused(
     client: AsyncClient, org: str, claims: dict[str, Any], detail: str
 ) -> None:
-    response = await _sign_in(client, {"sub": "u-1", "email": "jo@varga.dev"}, token_claims=claims)
+    response = await _sign_in(client, {"sub": "u-1", "email": "jo@northwind.dev"}, token_claims=claims)
     assert response.status_code == 401, response.text
     assert detail in response.text
 
 
 async def test_an_audience_list_naming_the_client_is_accepted(client: AsyncClient, org: str) -> None:
     response = await _sign_in(
-        client, {"sub": "u-1", "email": "jo@varga.dev"}, token_claims={"aud": ["x", "choregos"]}
+        client, {"sub": "u-1", "email": "jo@northwind.dev"}, token_claims={"aud": ["x", "choregos"]}
     )
     assert response.status_code == 307, response.text
 
@@ -186,24 +186,24 @@ async def test_a_returning_subject_keeps_its_account_after_an_email_change(
     client: AsyncClient, org: str
 ) -> None:
     async with session_scope(orgs="*") as session:
-        session.add(User(email="old@varga.dev", display_name="Jo", oidc_sub="u-1"))
-    response = await _sign_in(client, {"sub": "u-1", "email": "new@varga.dev", "name": "Jo"})
+        session.add(User(email="old@northwind.dev", display_name="Jo", oidc_sub="u-1"))
+    response = await _sign_in(client, {"sub": "u-1", "email": "new@northwind.dev", "name": "Jo"})
     assert response.status_code == 307, response.text
     (user,) = await _users()
-    assert (user.oidc_sub, user.email) == ("u-1", "new@varga.dev")
+    assert (user.oidc_sub, user.email) == ("u-1", "new@northwind.dev")
 
 
 async def test_a_returning_subject_does_not_adopt_an_unverified_email(client: AsyncClient, org: str) -> None:
     async with session_scope(orgs="*") as session:
-        session.add(User(email="old@varga.dev", display_name="Jo", oidc_sub="u-1"))
-    response = await _sign_in(client, {"sub": "u-1", "email": "ceo@varga.dev", "email_verified": False})
+        session.add(User(email="old@northwind.dev", display_name="Jo", oidc_sub="u-1"))
+    response = await _sign_in(client, {"sub": "u-1", "email": "ceo@northwind.dev", "email_verified": False})
     assert response.status_code == 307, response.text
     (user,) = await _users()
-    assert user.email == "old@varga.dev"
+    assert user.email == "old@northwind.dev"
 
 
 async def test_a_new_account_is_not_created_for_an_unverified_email(client: AsyncClient, org: str) -> None:
-    response = await _sign_in(client, {"sub": "u-9", "email": "new@varga.dev", "email_verified": False})
+    response = await _sign_in(client, {"sub": "u-9", "email": "new@northwind.dev", "email_verified": False})
     assert response.status_code == 401, response.text
     assert "not verified" in response.text
     assert await _users() == []
@@ -211,18 +211,18 @@ async def test_a_new_account_is_not_created_for_an_unverified_email(client: Asyn
 
 async def test_a_verified_email_links_an_unbound_account(client: AsyncClient, org: str) -> None:
     async with session_scope(orgs="*") as session:
-        session.add(User(email="jo@varga.dev", display_name="Jo", oidc_sub=None))
-    response = await _sign_in(client, {"sub": "u-1", "email": "jo@varga.dev", "email_verified": True})
+        session.add(User(email="jo@northwind.dev", display_name="Jo", oidc_sub=None))
+    response = await _sign_in(client, {"sub": "u-1", "email": "jo@northwind.dev", "email_verified": True})
     assert response.status_code == 307, response.text
     (user,) = await _users()
     assert user.oidc_sub == "u-1"
 
 
-@pytest.mark.parametrize("sub", ["dev|jo@varga.dev", "tenant:some-org:u-1"])
+@pytest.mark.parametrize("sub", ["dev|jo@northwind.dev", "tenant:some-org:u-1"])
 async def test_the_instance_provider_cannot_issue_a_reserved_subject(
     client: AsyncClient, org: str, sub: str
 ) -> None:
-    response = await _sign_in(client, {"sub": sub, "email": "jo@varga.dev"})
+    response = await _sign_in(client, {"sub": sub, "email": "jo@northwind.dev"})
     assert response.status_code == 401, response.text
     assert "reserved" in response.text
 
@@ -239,8 +239,8 @@ async def test_an_unreachable_discovery_url_is_a_503_not_a_500(
 async def test_an_invited_account_takes_the_providers_name_at_sign_in(client: AsyncClient, org: str) -> None:
     """An invitation names the account after the address's local part; the provider knows better."""
     async with session_scope(orgs="*") as session:
-        session.add(User(email="vdevillers@varga.dev", display_name="vdevillers", oidc_sub=None))
-    userinfo = {"sub": "u-1", "email": "vdevillers@varga.dev", "email_verified": True}
+        session.add(User(email="vdevillers@northwind.dev", display_name="vdevillers", oidc_sub=None))
+    userinfo = {"sub": "u-1", "email": "vdevillers@northwind.dev", "email_verified": True}
     response = await _sign_in(client, userinfo | {"name": "Vincent Devillers"})
     assert response.status_code == 307, response.text
     (user,) = await _users()
@@ -249,9 +249,9 @@ async def test_an_invited_account_takes_the_providers_name_at_sign_in(client: As
 
 async def test_a_returning_subjects_name_follows_the_provider(client: AsyncClient, org: str) -> None:
     async with session_scope(orgs="*") as session:
-        session.add(User(email="jo@varga.dev", display_name="jo", oidc_sub="u-1"))
+        session.add(User(email="jo@northwind.dev", display_name="jo", oidc_sub="u-1"))
     response = await _sign_in(
-        client, {"sub": "u-1", "email": "jo@varga.dev", "given_name": "Jo", "family_name": "Martin"}
+        client, {"sub": "u-1", "email": "jo@northwind.dev", "given_name": "Jo", "family_name": "Martin"}
     )
     assert response.status_code == 307, response.text
     (user,) = await _users()
@@ -260,8 +260,8 @@ async def test_a_returning_subjects_name_follows_the_provider(client: AsyncClien
 
 async def test_a_provider_without_a_name_leaves_the_name_alone(client: AsyncClient, org: str) -> None:
     async with session_scope(orgs="*") as session:
-        session.add(User(email="jo@varga.dev", display_name="Jo Martin", oidc_sub="u-1"))
-    response = await _sign_in(client, {"sub": "u-1", "email": "jo@varga.dev", "name": "  "})
+        session.add(User(email="jo@northwind.dev", display_name="Jo Martin", oidc_sub="u-1"))
+    response = await _sign_in(client, {"sub": "u-1", "email": "jo@northwind.dev", "name": "  "})
     assert response.status_code == 307, response.text
     (user,) = await _users()
     assert user.display_name == "Jo Martin"

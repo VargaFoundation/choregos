@@ -14,7 +14,7 @@ from httpx import AsyncClient
 
 async def _agent(client: AsyncClient, slug: str, kind: str = "internal") -> None:
     created = await client.post(
-        "/api/v1/orgs/varga/agents",
+        "/api/v1/orgs/northwind/agents",
         json={"slug": slug, "kind": kind, "display_name": slug, "spec": {}},
     )
     assert created.status_code == 201, created.text
@@ -28,11 +28,11 @@ async def test_the_organisation_s_agent_clients_come_in_one_list_with_their_agen
         token = await client.post("/api/v1/me/tokens", json={"name": slug, "scopes": ["mcp:read"]})
         assert token.status_code == 201, token.text
         attached = await client.post(
-            f"/api/v1/orgs/varga/agents/{slug}/credentials",
+            f"/api/v1/orgs/northwind/agents/{slug}/credentials",
             json={"kind": "token", "token_id": token.json()["id"]},
         )
         assert attached.status_code == 201, attached.text
-    listing = await client.get("/api/v1/orgs/varga/agent-credentials")
+    listing = await client.get("/api/v1/orgs/northwind/agent-credentials")
     assert listing.status_code == 200, listing.text
     assert [(c["agent"], c["token_name"]) for c in listing.json()] == [
         ("claude-of-lea", "claude-of-lea"),
@@ -67,7 +67,7 @@ async def test_the_registry_s_metrics_come_in_one_list(client: AsyncClient, proj
         session.add(
             CostLedger(project_id=project["id"], run_id="run-m0", kind="model", cost_usd=0.5, ts=utcnow())
         )
-    rows = {m["agent"]: m for m in (await client.get("/api/v1/orgs/varga/agent-metrics")).json()}
+    rows = {m["agent"]: m for m in (await client.get("/api/v1/orgs/northwind/agent-metrics")).json()}
     assert rows["writer"]["runs"] == 3
     assert rows["writer"]["success_rate"] == pytest.approx(0.5), "a running run is not finished"
     assert rows["writer"]["cost_usd"] == pytest.approx(0.5)

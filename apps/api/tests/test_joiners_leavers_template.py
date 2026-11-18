@@ -13,7 +13,7 @@ from typing import Any
 import pytest
 from httpx import AsyncClient
 
-ORG = "/api/v1/orgs/varga"
+ORG = "/api/v1/orgs/northwind"
 TEMPLATE = pathlib.Path(__file__).resolve().parents[3] / "templates" / "joiners-leavers"
 
 
@@ -22,7 +22,12 @@ async def _project(
 ) -> dict[str, Any]:
     created = await client.post(
         f"{ORG}/projects",
-        json={"slug": slug, "name": slug, "template_ref": template, "config": {"slug": slug, "org": "varga"}},
+        json={
+            "slug": slug,
+            "name": slug,
+            "template_ref": template,
+            "config": {"slug": slug, "org": "northwind"},
+        },
     )
     assert created.status_code == 201, created.text
     return dict(created.json())
@@ -110,7 +115,7 @@ async def test_a_template_skill_reads_nothing_outside_itself(
             "slug": "hr",
             "name": "hr",
             "template_ref": "joiners-leavers",
-            "config": {"slug": "hr", "org": "varga"},
+            "config": {"slug": "hr", "org": "northwind"},
         },
     )
     assert refusal.status_code == 422 and "symbolic link" in refusal.text

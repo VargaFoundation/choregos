@@ -20,7 +20,7 @@ test("an owner grants a role to a group and to an e-mail, and the whole list is 
   await card.getByLabel("Role", { exact: true }).selectOption("editor");
   await card.getByRole("button", { name: "Add" }).click();
   await card.getByLabel("Grant to").selectOption("email");
-  await card.getByLabel("E-mail").fill("Ana@Varga.dev");
+  await card.getByLabel("E-mail").fill("Ana@Northwind.dev");
   await card.getByLabel("Role", { exact: true }).selectOption("viewer");
   await card.getByRole("button", { name: "Add" }).click();
   await card.getByRole("button", { name: "Save access" }).click();
@@ -30,7 +30,7 @@ test("an owner grants a role to a group and to an e-mail, and the whole list is 
   expect(put?.body).toEqual({
     grants: [
       { subject_type: "group", subject: "architects", role: "editor" },
-      { subject_type: "user", subject: "ana@varga.dev", role: "viewer" },
+      { subject_type: "user", subject: "ana@northwind.dev", role: "viewer" },
     ],
   });
   // The next read gives them back, the e-mail still waiting for a member.

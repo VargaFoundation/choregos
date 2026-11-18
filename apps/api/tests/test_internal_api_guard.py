@@ -75,13 +75,15 @@ async def _session_pod(project: dict[str, Any]) -> tuple[str, dict[str, str]]:
     from sqlalchemy import select
 
     async with session_scope() as db:
-        org_id = (await db.execute(select(Organization.id).where(Organization.slug == "varga"))).scalar_one()
+        org_id = (
+            await db.execute(select(Organization.id).where(Organization.slug == "northwind"))
+        ).scalar_one()
         record = AgentSessionRecord(
             org_id=org_id,
             project_id=project["id"],
             agent_slug="triager",
             agent_version=1,
-            user_id="admin@varga.dev",
+            user_id="admin@northwind.dev",
             expires_at=datetime.datetime.now(datetime.UTC) + datetime.timedelta(hours=1),
             stage_input={"run_id": "session-x", "callbacks": {"run_token": "***"}},
         )
@@ -152,7 +154,7 @@ async def test_every_route_under_the_prefix_is_guarded_whatever_declares_it(
 ) -> None:
     """The relay's route lives in another router: the guard reads the path, not the router."""
     _deployed(monkeypatch, "enforce")
-    url = f"{PREFIX}/orgs/varga/outbound-proxy/web_fetch"
+    url = f"{PREFIX}/orgs/northwind/outbound-proxy/web_fetch"
     assert (await _on(client, SERVICE, url, {})).status_code == 401, "the route asks for its token"
     assert (await _on(client, API, url, {})).status_code == 404
     assert (await _on(client, API, PREFIX, {})).status_code == 404

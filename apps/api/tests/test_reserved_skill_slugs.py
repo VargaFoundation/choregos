@@ -31,7 +31,9 @@ def _zip(files: dict[str, str]) -> bytes:
 
 async def _import(client: AsyncClient, files: dict[str, str]) -> Any:
     return await client.post(
-        "/api/v1/orgs/varga/skills/import", content=_zip(files), headers={"Content-Type": "application/zip"}
+        "/api/v1/orgs/northwind/skills/import",
+        content=_zip(files),
+        headers={"Content-Type": "application/zip"},
     )
 
 
@@ -48,12 +50,12 @@ def _reserved(response: Any) -> None:
 async def test_a_new_skill_named_after_a_console_page_is_refused(
     client: AsyncClient, admin: str, slug: str
 ) -> None:
-    _reserved(await client.post("/api/v1/orgs/varga/skills", json={"files": _files(slug)}))
+    _reserved(await client.post("/api/v1/orgs/northwind/skills", json={"files": _files(slug)}))
     _reserved(await _import(client, _files(slug)))
-    listed = {s["slug"] for s in (await client.get("/api/v1/orgs/varga/skills")).json()}
+    listed = {s["slug"] for s in (await client.get("/api/v1/orgs/northwind/skills")).json()}
     assert slug not in listed, "nothing was published"
     # A slug that only starts like one is free.
-    created = await client.post("/api/v1/orgs/varga/skills", json={"files": _files(f"{slug}-tools")})
+    created = await client.post("/api/v1/orgs/northwind/skills", json={"files": _files(f"{slug}-tools")})
     assert created.status_code == 201, created.text
 
 
@@ -66,10 +68,10 @@ async def test_a_skill_published_under_that_slug_before_keeps_its_next_versions(
     with monkeypatch.context() as before:
         before.setattr(skills, "RESERVED_SKILL_SLUGS", frozenset())
         assert (
-            await client.post("/api/v1/orgs/varga/skills", json={"files": _files("library")})
+            await client.post("/api/v1/orgs/northwind/skills", json={"files": _files("library")})
         ).status_code == 201
     again = await client.post(
-        "/api/v1/orgs/varga/skills/library/versions",
+        "/api/v1/orgs/northwind/skills/library/versions",
         json={"files": {**_files("library"), "references/more.md": "- one more\n"}},
     )
     assert again.status_code == 201, again.text

@@ -1,6 +1,6 @@
 """`global.plugins` renders the ConfigMap `choregos-plugins` the API reads (ADR 0093 §5, S43-05).
 
-By default (S43-09) the built-in agents' four plugins are installed from the `varga` source, pre-approved,
+By default (S43-09) the built-in agents' four plugins are installed from the `tranibor` source, pre-approved,
 taken from the image's offline directory; emptied, nothing is rendered or mounted. With values, the file
 is the one `choregos_core.plugins.sources.parse_config` accepts, mounted read-only and named by
 `CHOREGOS_PLUGINS_CONFIG`; a source without a trust policy refuses to render.
@@ -25,7 +25,7 @@ pytestmark = pytest.mark.skipif(shutil.which("helm") is None, reason="helm is mi
 PLUGINS: dict[str, Any] = {
     "sources": [
         {
-            "name": "varga",
+            "name": "tranibor",
             "index": "oci://registry.example/choregos-agents/index:stable",
             "trust": {
                 "identity": "https://github.com/example/choregos-agents/.*",
@@ -33,7 +33,7 @@ PLUGINS: dict[str, Any] = {
             },
         }
     ],
-    "defaultPlugins": [{"source": "varga", "name": "servicenow", "version": "^0.1"}],
+    "defaultPlugins": [{"source": "tranibor", "name": "servicenow", "version": "^0.1"}],
     "offline": "/opt/choregos/plugins",
 }
 
@@ -91,15 +91,15 @@ def test_by_default_the_built_in_agents_are_installed_pre_approved(tmp_path: pat
     assert config_map is not None
     config = parse_config(yaml.safe_load(config_map["data"]["plugins.yaml"]))
     assert [(d.source, d.name, d.version, d.preapproved) for d in config.default_plugins] == [
-        ("varga", name, "^1.0", preapproved) for name, preapproved in BUILT_IN
+        ("tranibor", name, "^1.0", preapproved) for name, preapproved in BUILT_IN
     ]
-    (varga,) = config.sources
+    (tranibor,) = config.sources
     # The chart's default source is the publishing identity's (ADR 0156).
-    assert varga.index == PUBLISHING.plugin_index
+    assert tranibor.index == PUBLISHING.plugin_index
     publish = PUBLISHING.plugin_signing_identity
-    assert re.fullmatch(varga.trust.identity, publish)
-    assert not re.fullmatch(varga.trust.identity, publish.replace("refs/heads/main", "refs/heads/evil"))
-    assert re.fullmatch(varga.trust.issuer, "https://token.actions.githubusercontent.com")
+    assert re.fullmatch(tranibor.trust.identity, publish)
+    assert not re.fullmatch(tranibor.trust.identity, publish.replace("refs/heads/main", "refs/heads/evil"))
+    assert re.fullmatch(tranibor.trust.issuer, "https://token.actions.githubusercontent.com")
     assert config.offline == pathlib.Path("/opt/choregos/plugins")
     dockerfile = (ROOT / "docker" / "api.Dockerfile").read_text(encoding="utf-8")
     assert "COPY plugins/offline /opt/choregos/plugins" in dockerfile, "the image ships what the chart names"
@@ -124,9 +124,9 @@ def test_the_values_become_the_file_the_api_reads(tmp_path: pathlib.Path) -> Non
     document = yaml.safe_load(config_map["data"]["plugins.yaml"])
     assert document == PLUGINS
     config = parse_config(document)
-    assert [s.name for s in config.sources] == ["varga"]
+    assert [s.name for s in config.sources] == ["tranibor"]
     assert [(d.source, d.name, d.version) for d in config.default_plugins] == [
-        ("varga", "servicenow", "^0.1")
+        ("tranibor", "servicenow", "^0.1")
     ]
     assert config.offline == pathlib.Path("/opt/choregos/plugins")
 

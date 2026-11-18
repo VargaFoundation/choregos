@@ -290,7 +290,7 @@ async def test_the_three_doors_are_three_groups_of_the_cost_reports(
             ]
         )  # fmt: skip
 
-    for url in (f"/api/v1/projects/{project['id']}/costs", "/api/v1/orgs/varga/costs"):
+    for url in (f"/api/v1/projects/{project['id']}/costs", "/api/v1/orgs/northwind/costs"):
         report = (await client.get(url, params={"group_by": "origin"})).json()
         assert report["group_by"] == "origin"
         assert {row["key"]: row["runs"] for row in report["rows"]} == {

@@ -43,7 +43,7 @@ def _row(connection: Any, table: str, **columns: object) -> None:
 
 def _before(connection: Any) -> None:
     """One read operation, declared before the cap existed."""
-    _row(connection, "organizations", id="o1", slug="varga", name="V", settings="{}")
+    _row(connection, "organizations", id="o1", slug="northwind", name="V", settings="{}")
     _row(
         connection,
         "org_connectors",

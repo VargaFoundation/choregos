@@ -8,12 +8,12 @@ from choregos_adapters import connector_types
 from choregos_adapters.ci.gitlab import GitLabCi
 from choregos_adapters.http import RestClient
 
-BASE = "https://gitlab.com/api/v4/projects/varga%2Fbilling-api"
+BASE = "https://gitlab.com/api/v4/projects/northwind%2Fbilling-api"
 
 
 def adapter() -> GitLabCi:
     client = RestClient("https://gitlab.com", headers={"PRIVATE-TOKEN": "tok"}, service="gitlab")
-    return GitLabCi(client, "varga/billing-api")
+    return GitLabCi(client, "northwind/billing-api")
 
 
 @respx.mock
@@ -37,7 +37,7 @@ async def test_status_maps_the_latest_pipeline() -> None:
             ],
         )
     )
-    status = await adapter().status_for("varga/billing-api", "abc123")
+    status = await adapter().status_for("northwind/billing-api", "abc123")
     request = pipelines.calls[0].request
     assert request.url.params["sha"] == "abc123" and request.url.params["order_by"] == "id"
     assert request.headers["PRIVATE-TOKEN"] == "tok"
@@ -65,7 +65,7 @@ async def test_logs_return_the_tail_of_the_trace() -> None:
 @respx.mock
 async def test_trigger_posts_a_pipeline_and_returns_its_id() -> None:
     route = respx.post(f"{BASE}/pipeline").mock(return_value=httpx.Response(201, json={"id": 4242}))
-    pipeline_id = await adapter().trigger("varga/billing-api", "main", "")
+    pipeline_id = await adapter().trigger("northwind/billing-api", "main", "")
     request = route.calls[0].request
     assert request.url.params["ref"] == "main"
     assert request.headers["PRIVATE-TOKEN"] == "tok"
@@ -74,7 +74,7 @@ async def test_trigger_posts_a_pipeline_and_returns_its_id() -> None:
 
 def test_parse_event_delegates_pipeline_payloads() -> None:
     body = (
-        b'{"object_kind": "pipeline", "project": {"path_with_namespace": "varga/billing-api"},'
+        b'{"object_kind": "pipeline", "project": {"path_with_namespace": "northwind/billing-api"},'
         b' "object_attributes": {"id": 5, "status": "success", "ref": "main", "sha": "abc"}}'
     )
     events = adapter().parse_event({"X-Gitlab-Event-UUID": "u-1"}, body)

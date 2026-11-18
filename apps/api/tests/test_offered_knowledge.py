@@ -21,7 +21,7 @@ from sqlalchemy import select
 from .agent_scopes_kit import add_member, as_user
 from .kits.assistant_install import FIXTURE, OWNERS, _install, _member, _plugin
 
-ORG = "/api/v1/orgs/varga"
+ORG = "/api/v1/orgs/northwind"
 BASE = "investment-assistant-investment-policy"
 UPDATES = f"{ORG}/assistants/investment-assistant/knowledge/updates"
 
@@ -137,8 +137,8 @@ async def test_an_owner_edits_and_the_document_becomes_local(
     client: AsyncClient, org: str, offline: Path
 ) -> None:
     await _installed(client)
-    await _member(client, "owner@varga.dev", [OWNERS])
-    await as_user(client, "owner@varga.dev")
+    await _member(client, "owner@northwind.dev", [OWNERS])
+    await as_user(client, "owner@northwind.dev")
     await _edit(client, "00-purpose.md", "# Purpose\n\nEdited by the house.\n")
     await _edit(client, "01-extra.md", "# Extra\n\nAdded by the house.\n")
     docs = await _docs()
@@ -254,11 +254,11 @@ async def test_accepting_a_removal_deletes_the_document(client: AsyncClient, org
 async def test_only_the_owners_read_and_decide(client: AsyncClient, org: str, offline: Path) -> None:
     await _scenario(client, offline, "propose_updates")
     proposed = await _updates(client)
-    await add_member(client, "plain@varga.dev", "developer")
-    await as_user(client, "plain@varga.dev")
+    await add_member(client, "plain@northwind.dev", "developer")
+    await as_user(client, "plain@northwind.dev")
     assert (await client.get(UPDATES)).status_code == 403
     assert (await _decide(client, proposed["both.md"], decision="accept")).status_code == 403
-    await _member(client, "owner@varga.dev", [OWNERS])
-    await as_user(client, "owner@varga.dev")
+    await _member(client, "owner@northwind.dev", [OWNERS])
+    await as_user(client, "owner@northwind.dev")
     assert (await client.get(UPDATES)).status_code == 200
     assert (await _decide(client, proposed["both.md"], decision="refuse")).status_code == 200

@@ -11,8 +11,8 @@ from typing import Any
 import pytest
 from httpx import AsyncClient
 
-KEY = "varga/billing-api#12"
-REPO = {"full_name": "varga/billing-api"}
+KEY = "northwind/billing-api#12"
+REPO = {"full_name": "northwind/billing-api"}
 SECRET = "s3cret"
 
 
@@ -38,7 +38,7 @@ async def _github(client: AsyncClient, event: str, delivery: str, body: dict[str
 async def _routed_item(client: AsyncClient, project: dict[str, Any]) -> None:
     put = await client.put(
         f"/api/v1/projects/{project['id']}/connectors/tracker",
-        json={"type": "github-issues", "config": {"repo": "varga/billing-api"}},
+        json={"type": "github-issues", "config": {"repo": "northwind/billing-api"}},
     )
     assert put.status_code == 200, put.text
     issue = {"number": 12, "title": "Refunds", "labels": [{"name": "agent-ready"}]}
@@ -76,8 +76,8 @@ async def test_a_jira_status_change_is_not_signalled(
     monkeypatch.setattr(get_settings(), "generic_webhook_secret", SECRET)
     monkeypatch.setenv("CONNECTOR_JIRA_TEST_TOKEN", "t")
     created = await client.post(
-        "/api/v1/orgs/varga/projects",
-        json={"slug": "yyy", "name": "yyy", "config": {"slug": "yyy", "org": "varga"}},
+        "/api/v1/orgs/northwind/projects",
+        json={"slug": "yyy", "name": "yyy", "config": {"slug": "yyy", "org": "northwind"}},
     )
     assert created.status_code == 201, created.text
     put = await client.put(

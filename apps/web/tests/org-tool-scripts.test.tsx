@@ -10,17 +10,17 @@ import { ApiError, api } from "@/lib/api";
  * organisation; read-only for anyone else.
  */
 const session = vi.hoisted(() => ({ orgs: [] as { slug: string; name: string; tool_scripts?: "enabled" | "disabled" | null }[] }));
-vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "varga", orgs: session.orgs }) }));
+vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "northwind", orgs: session.orgs }) }));
 vi.mock("@/lib/api", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/api")>();
   return { ...real, api: { ...real.api, updateOrg: vi.fn() } };
 });
 
 function wrap(tool_scripts: "enabled" | "disabled" | null, canEdit = true) {
-  session.orgs = [{ slug: "varga", name: "Varga Foundation", tool_scripts }];
+  session.orgs = [{ slug: "northwind", name: "Northwind", tool_scripts }];
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <OrgToolScriptsCard org="varga" canEdit={canEdit} />
+      <OrgToolScriptsCard org="northwind" canEdit={canEdit} />
     </QueryClientProvider>,
   );
 }
@@ -32,7 +32,7 @@ const save = () => fireEvent.click(screen.getByRole("button", { name: "Save tool
 describe("the organisation's Tool scripts card", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(api.updateOrg).mockResolvedValue({ slug: "varga", name: "Varga Foundation" } as never);
+    vi.mocked(api.updateOrg).mockResolvedValue({ slug: "northwind", name: "Northwind" } as never);
   });
 
   it("offers the three choices and shows the deployment's default when the organisation has none", () => {
@@ -55,7 +55,7 @@ describe("the organisation's Tool scripts card", () => {
     pick("disabled");
     expect(screen.getByTestId("org-tool-scripts-meaning")).toHaveTextContent("No run of this organisation is offered them");
     save();
-    await waitFor(() => expect(api.updateOrg).toHaveBeenCalledWith("varga", { tool_scripts: "disabled" }));
+    await waitFor(() => expect(api.updateOrg).toHaveBeenCalledWith("northwind", { tool_scripts: "disabled" }));
     expect(await screen.findByText("Tool scripts saved")).toBeTruthy();
   });
 
@@ -63,7 +63,7 @@ describe("the organisation's Tool scripts card", () => {
     wrap("enabled");
     pick("");
     save();
-    await waitFor(() => expect(api.updateOrg).toHaveBeenCalledWith("varga", { tool_scripts: null }));
+    await waitFor(() => expect(api.updateOrg).toHaveBeenCalledWith("northwind", { tool_scripts: null }));
   });
 
   it("shows a refusal inline", async () => {

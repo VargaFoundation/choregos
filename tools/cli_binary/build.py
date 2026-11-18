@@ -200,7 +200,7 @@ def nuitka_command(python: pathlib.Path, work: pathlib.Path, name: str, version:
         # Unpacked once per build into the user's cache, then reused: a cold start pays the
         # extraction once, every later call starts from the unpacked files.
         f"--onefile-tempdir-spec={{CACHE_DIR}}/choregos/cli-{version}-{source_digest()}",
-        "--company-name=Varga Foundation",
+        "--company-name=GRAAL.SYSTEMS SAS",
         "--product-name=choregos",
         "--file-description=Choregos command line",
         f"--product-version={numeric}",

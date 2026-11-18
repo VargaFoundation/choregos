@@ -50,7 +50,7 @@ async def _declare(setup: Fixture, *, second_org: bool, claimed: bool) -> None:
                     project_id=project.id,
                     kind=kind,
                     type=type_name,
-                    config={"repo": "varga-inc/billing", "installation_id": 999},
+                    config={"repo": "northwind-inc/billing", "installation_id": 999},
                 )
             )
         if second_org:
@@ -59,8 +59,8 @@ async def _declare(setup: Fixture, *, second_org: bool, claimed: bool) -> None:
             session.add(
                 GitHubInstallation(
                     id=55,
-                    account_login="varga-inc",
-                    account_key="varga-inc",
+                    account_login="northwind-inc",
+                    account_key="northwind-inc",
                     account_id=550,
                     account_type="Organization",
                     org_id=project.org_id,
@@ -107,7 +107,7 @@ async def test_a_multi_org_instance_without_a_claim_refuses_to_build(
     try:
         await _declare(setup, second_org=True, claimed=False)
         async with session_scope(orgs="*") as session:
-            with pytest.raises(ConfigurationError, match="not installed on `varga-inc`"):
+            with pytest.raises(ConfigurationError, match="not installed on `northwind-inc`"):
                 await load_project(session, setup.project_id)
     finally:
         reset_settings_cache()

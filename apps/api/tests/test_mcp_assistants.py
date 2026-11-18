@@ -30,7 +30,7 @@ from .kits.mcp_assistants import (
 from .test_agent_sessions import Upstream, upstream  # noqa: F401
 
 INVESTORS = "grp-investors"
-CONNECTOR = "/mcp/assistants/varga:investment-assistant"
+CONNECTOR = "/mcp/assistants/northwind:investment-assistant"
 NEWS = ("search_news", "get_article")
 MARKET = ("get_quote", "get_history", "lookup_instrument")
 
@@ -60,7 +60,7 @@ async def installed(client: AsyncClient, org: str, offline: Path) -> str:  # noq
         json={
             "plugin": "investment-assistant",
             "assistant": "investment-assistant",
-            "config": {"house_name": "Varga"},
+            "config": {"house_name": "Northwind"},
             "audience_groups": [INVESTORS],
         },
     )
@@ -72,7 +72,7 @@ async def installed(client: AsyncClient, org: str, offline: Path) -> str:  # noq
             f"{ORG}/assistants/investment-assistant/bindings/{need}", json={"connector": name}
         )
     assert ready.json()["status"] == "ready", ready.text
-    return await _person(client, "ines@varga.dev", [INVESTORS])
+    return await _person(client, "ines@northwind.dev", [INVESTORS])
 
 
 def _wait(monkeypatch: pytest.MonkeyPatch, seconds: float) -> None:
@@ -116,7 +116,7 @@ async def _installation_knowledge() -> str:
         session.add(document)
         await session.flush()
         document_id = document.id
-    assert await index_document("varga", document_id) > 0
+    assert await index_document("northwind", document_id) > 0
     return str(document_id)
 
 
@@ -130,7 +130,7 @@ async def test_the_answer_cites_the_knowledge_the_turn_read_and_a_turn_without_a
         "At most ten percent [RISK POLICY, v3]."
     )
     upstream.model.say("Nothing to look up.")
-    asked = {"assistant": "varga:investment-assistant", "message": "What is the limit per instrument?"}
+    asked = {"assistant": "northwind:investment-assistant", "message": "What is the limit per instrument?"}
     first = await _call(client, installed, "ask_assistant", asked)
     assert first["status"] == "completed", first
     assert first["citations"] == [
@@ -159,11 +159,14 @@ async def test_a_person_of_the_audience_converses_through_the_door(
     upstream.model.say("The index rose 1.2 % today.").say("Because of the rate decision.")
     assert {"list_assistants", "ask_assistant", "get_conversation"} <= await _names(client, installed)
     listed = await _call(client, installed, "list_assistants", {})
-    assert [a["assistant"] for a in listed["assistants"]] == ["varga:investment-assistant"]
+    assert [a["assistant"] for a in listed["assistants"]] == ["northwind:investment-assistant"]
     assert listed["assistants"][0]["connector_path"] == CONNECTOR
 
     first = await _call(
-        client, installed, "ask_assistant", {"assistant": "varga:investment-assistant", "message": "Why up?"}
+        client,
+        installed,
+        "ask_assistant",
+        {"assistant": "northwind:investment-assistant", "message": "Why up?"},
     )
     assert first["status"] == "completed" and first["text"] == "The index rose 1.2 % today."
     assert first["citations"] == [] and first["pending_actions"] == [] and first["missing_accounts"] == []
@@ -181,7 +184,7 @@ async def test_a_person_of_the_audience_converses_through_the_door(
     assert second["text"] == "Because of the rate decision."
 
     # It is the `/me/conversations` object of the person, in their personal space, tied to the installation.
-    await as_user(client, "ines@varga.dev")
+    await as_user(client, "ines@northwind.dev")
     read = (await client.get(f"/api/v1/me/conversations/{first['conversation_id']}")).json()
     assert read["turns"] == 2 and read["installation_id"] is not None
     assert [m["content"] for m in read["messages"]][-1] == "Because of the rate decision."
@@ -199,7 +202,10 @@ async def test_a_turn_longer_than_the_wait_answers_working_then_the_answer(
     _slow(upstream, 0.6)
     _wait(monkeypatch, 0.05)
     started = await _call(
-        client, installed, "ask_assistant", {"assistant": "varga:investment-assistant", "message": "Slow?"}
+        client,
+        installed,
+        "ask_assistant",
+        {"assistant": "northwind:investment-assistant", "message": "Slow?"},
     )
     assert started["status"] == "working" and started["text"] == ""
     description = next(
@@ -217,7 +223,7 @@ async def test_a_turn_longer_than_the_wait_answers_working_then_the_answer(
         {
             "name": "ask_assistant",
             "arguments": {
-                "assistant": "varga:investment-assistant",
+                "assistant": "northwind:investment-assistant",
                 "message": "More",
                 "conversation_id": started["conversation_id"],
             },
@@ -235,7 +241,7 @@ async def test_a_turn_longer_than_the_wait_answers_working_then_the_answer(
         await asyncio.sleep(0.05)
     assert polled["status"] == "completed" and polled["text"] == "Finally: 42."
     # Nobody else reads it.
-    other = await _person(client, "omar@varga.dev", [INVESTORS])
+    other = await _person(client, "omar@northwind.dev", [INVESTORS])
     refused = await _rpc(
         client,
         other,
@@ -248,7 +254,7 @@ async def test_a_turn_longer_than_the_wait_answers_working_then_the_answer(
 async def test_someone_outside_the_audience_does_not_see_the_assistant(
     client: AsyncClient, installed: str
 ) -> None:
-    outsider = await _person(client, "paul@varga.dev", ["grp-sales"])
+    outsider = await _person(client, "paul@northwind.dev", ["grp-sales"])
     names = await _names(client, outsider)
     assert not names & {"list_assistants", "ask_assistant", "get_conversation"}
     refused = await _rpc(client, outsider, "tools/call", {"name": "list_assistants", "arguments": {}})
@@ -394,13 +400,13 @@ async def test_an_oauth_client_makes_a_turn(
     from sqlalchemy import select
 
     async with session_scope() as session:
-        user = (await session.execute(select(User).where(User.email == "ines@varga.dev"))).scalar_one()
+        user = (await session.execute(select(User).where(User.email == "ines@northwind.dev"))).scalar_one()
         user.oidc_sub = "sub-ines"
     client.cookies.clear()
     token = idp_token(idp, sub="sub-ines")
     upstream.model.say("Hello from the assistant.")
     answer = await _call(
-        client, token, "ask_assistant", {"assistant": "varga:investment-assistant", "message": "Hi"}
+        client, token, "ask_assistant", {"assistant": "northwind:investment-assistant", "message": "Hi"}
     )
     assert answer["status"] == "completed" and answer["text"] == "Hello from the assistant."
 
@@ -425,7 +431,9 @@ async def test_a_token_principal_has_its_groups_re_read_at_every_request(
 
     async def groups(*names: str) -> None:
         async with session_scope() as session:
-            user = (await session.execute(select(User).where(User.email == "ines@varga.dev"))).scalar_one()
+            user = (
+                await session.execute(select(User).where(User.email == "ines@northwind.dev"))
+            ).scalar_one()
             user.groups = list(names)
 
     created = await client.post("/api/v1/me/tokens", json={"name": "rest", "scopes": ["*"]})

@@ -23,6 +23,7 @@ from datetime import date
 from typing import Any
 
 import httpx
+from choregos_core.publishing import PUBLISHING
 
 from ..errors import AdapterError
 from ..http.pool import Pool, Strategy
@@ -33,7 +34,7 @@ DATE_PATTERN = r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
 _SYMBOL = re.compile(SYMBOL_PATTERN)
 _DATE = re.compile(DATE_PATTERN)
 
-USER_AGENT = "choregos-marketdata/1.0 (+https://github.com/varga-foundation/choregos)"
+USER_AGENT = f"choregos-marketdata/1.0 (+{PUBLISHING.source_repository})"
 #: Total attempts for a transient failure (5xx, network): one call, two retries — free tiers are
 #: small, and a retry storm is how a quota is burnt. A 429 is never retried.
 MAX_ATTEMPTS = 3

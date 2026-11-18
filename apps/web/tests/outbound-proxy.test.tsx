@@ -25,7 +25,7 @@ const STORED = {
     password_set: true,
     applies_to: ["web_fetch" as const, "web_search" as const],
   },
-  updated_by: "lea@varga.dev",
+  updated_by: "lea@northwind.dev",
   updated_at: "2026-10-26T10:00:00Z",
 };
 const NONE = { proxy: null, updated_by: null, updated_at: null };

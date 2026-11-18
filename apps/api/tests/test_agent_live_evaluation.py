@@ -260,8 +260,8 @@ async def test_trying_the_agent_is_the_right_an_evaluation_needs(
     from .agent_scopes_kit import add_member
 
     await agent_with(client, [live("only", ["ok"], cost=0.1)])
-    await add_member(client, "viewer@varga.dev", "viewer")
-    await as_user(client, "viewer@varga.dev")
+    await add_member(client, "viewer@northwind.dev", "viewer")
+    await as_user(client, "viewer@northwind.dev")
     refused = await evaluate(client, project["slug"])
     assert refused.status_code == 403
     await as_user(client, ADMIN)

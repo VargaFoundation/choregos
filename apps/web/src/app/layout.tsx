@@ -99,7 +99,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
                     className="flex min-h-12 flex-wrap items-center justify-between gap-x-6 gap-y-1 py-3 text-xs text-ink-muted"
                   >
                     <FooterText />
-                    {/* The foundation is named here, and only here (ADR 0048). A theme cannot remove this
+                    {/* The publisher is named here, and only here (ADR 0048). A theme cannot remove this
                         line; a renamed instance says what it is built on (ADR 0064). */}
                     <EditionFooterLine />
                   </Container>

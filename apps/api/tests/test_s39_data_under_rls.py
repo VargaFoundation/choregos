@@ -51,7 +51,7 @@ def _row(connection: object, table: str, **columns: object) -> None:
 def _left_behind(connection: object) -> str:
     """What the three migrations left on the dev tenant; returns the catalogue slug used."""
     entry = next(iter(entries()))
-    _row(connection, "organizations", id="o1", slug="varga", name="V", settings="{}")
+    _row(connection, "organizations", id="o1", slug="northwind", name="V", settings="{}")
     _row(
         connection,
         "org_connectors",

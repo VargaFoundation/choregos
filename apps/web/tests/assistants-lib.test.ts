@@ -24,11 +24,11 @@ describe("reading an assistant's answer", () => {
   });
 
   it("turns the connect URL of account_not_connected into a console link", () => {
-    const text = "you have not connected your `bank` account: open https://console.example/me/connected-accounts/bank/connect?org=varga, then ask again.";
+    const text = "you have not connected your `bank` account: open https://console.example/me/connected-accounts/bank/connect?org=northwind, then ask again.";
     expect(connectLinksOf(text)).toEqual([
-      { connector: "bank", org: "varga", href: "/me/connected-accounts/bank/connect?org=varga" },
+      { connector: "bank", org: "northwind", href: "/me/connected-accounts/bank/connect?org=northwind" },
     ]);
-    const extra = connectLinksOf("", [{ connect_url: "https://x/me/connected-accounts/broker/connect?org=varga" }, {}]);
+    const extra = connectLinksOf("", [{ connect_url: "https://x/me/connected-accounts/broker/connect?org=northwind" }, {}]);
     expect(extra.map((l) => l.connector)).toEqual(["broker"]);
     expect(connectLinksOf("", [{ connect_url: "https://x/elsewhere" }])).toEqual([]);
   });

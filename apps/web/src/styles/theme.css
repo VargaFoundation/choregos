@@ -3,7 +3,7 @@
  * keeps the colours, the contrast budget and the theme choice of ADR 0043). One accent for actions;
  * colour that orients — eight categorical hues and an info tone — since ADR 0120.
  *
- * The console owns every token here (`--choregos-*`): it no longer depends on the Varga Foundation
+ * The console owns every token here (`--choregos-*`): it depends on no third-party
  * design system, and no other stylesheet declares a colour role. `tests/theme-provenance.test.ts`
  * checks that every role the code reads is declared in this file.
  *
@@ -327,7 +327,7 @@
 
 /*
  * What a bare HTML element already looks like: the console's defaults, in `@layer base` so that a
- * utility class always wins. They used to come from the foundation's `base.css`.
+ * utility class always wins. They used to come from the publisher's `base.css`.
  */
 @layer base {
   html {

@@ -26,7 +26,7 @@ ENVIRONNEMENT_E2E: dict[str, str] = {
     # The development login is OFF by default since 2026-09-24: a test that uses it
     # must say so, and name who is admin.
     "CHOREGOS_DEV_LOGIN_ENABLED": "true",
-    "CHOREGOS_DEV_ADMIN_EMAILS": "admin@varga.dev",
+    "CHOREGOS_DEV_ADMIN_EMAILS": "admin@northwind.dev",
     # Webhooks refuse an empty secret since P0-3: the end-to-end bench sets one.
     "CHOREGOS_GENERIC_WEBHOOK_SECRET": "e2e-webhook-secret",
 }
@@ -199,11 +199,11 @@ async def platform(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncItera
 
     adapters = AdapterSet.fakes()
     adapters.gateway.auto_usage = True
-    adapters.tracker.project_slug = "varga/billing-api"
+    adapters.tracker.project_slug = "northwind/billing-api"
     set_adapters_override(adapters)
 
     async with session_scope() as session:
-        org = Organization(slug="varga", name="Varga Foundation")
+        org = Organization(slug="northwind", name="Northwind")
         session.add(org)
         await session.flush()
         project = Project(
@@ -213,14 +213,14 @@ async def platform(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncItera
             status="active",
             config={
                 "slug": "billing-api",
-                "org": "varga",
+                "org": "northwind",
                 "repo": {
-                    "url": "https://github.com/varga/billing-api.git",
+                    "url": "https://github.com/northwind/billing-api.git",
                     "default_branch": "main",
                     "language": "python",
                     "test_command": "make test",
                 },
-                "gitops": {"repo_url": "https://github.com/varga/gitops.git", "apps": ["billing-api"]},
+                "gitops": {"repo_url": "https://github.com/northwind/gitops.git", "apps": ["billing-api"]},
                 "notify": {"slack_channel": "#billing"},
             },
         )
@@ -267,6 +267,6 @@ def worker(platform: Platform) -> Any:
     return factory
 
 
-async def login(client: Any, email: str = "admin@varga.dev") -> None:
+async def login(client: Any, email: str = "admin@northwind.dev") -> None:
     start = await client.get("/api/v1/auth/login", params={"as": email})
     await client.get(start.headers["location"])

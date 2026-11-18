@@ -181,7 +181,7 @@ def test_commands_deduced_from_the_repository(tmp_path: Path) -> None:
 
     (tmp_path / "package.json").write_text("{}", encoding="utf-8")
     stage_input = _minimal_stage_input(tmp_path)
-    stage_input.project = ProjectRef(slug="demo", org="varga")
+    stage_input.project = ProjectRef(slug="demo", org="northwind")
     commands = commands_for(stage_input, tmp_path)
     assert "npm" in commands["tests"], commands
 
@@ -199,7 +199,7 @@ def test_a_dash_skips_a_check_the_project_does_not_have(tmp_path: Path) -> None:
     (tmp_path / "pyproject.toml").write_text("[project]\nname = 'x'\n", encoding="utf-8")
     stage_input = _minimal_stage_input(tmp_path)
     stage_input.project = ProjectRef(
-        slug="demo", org="varga", typecheck_command="-", lint_command="ruff check ."
+        slug="demo", org="northwind", typecheck_command="-", lint_command="ruff check ."
     )
     commands = commands_for(stage_input, tmp_path)
     assert commands["typecheck"] == "", commands
@@ -211,7 +211,7 @@ async def test_an_absent_command_is_skipped_not_ok(tmp_path: Path) -> None:
     from choregos_contracts import ProjectRef
 
     stage_input = _minimal_stage_input(tmp_path)
-    stage_input.project = ProjectRef(slug="demo", org="varga", test_command="true")
+    stage_input.project = ProjectRef(slug="demo", org="northwind", test_command="true")
     report = await run_checks(stage_input, tmp_path, timeout=30)
     tests = report.get("tests")
     lint = report.get("lint")
@@ -406,8 +406,8 @@ def _minimal_stage_input(path: Path) -> Any:
     return StageInput(
         run_id="run-unit",
         attempt=1,
-        project=ProjectRef(slug="demo", org="varga", test_command="make test"),
-        work_item=WorkItemRef(key="varga/demo#1", title="Titre"),
+        project=ProjectRef(slug="demo", org="northwind", test_command="make test"),
+        work_item=WorkItemRef(key="northwind/demo#1", title="Titre"),
         transition=TransitionRef(id="t", role="implement", **{"from": "ready"}, to="in_progress"),
         repo=RepoRef(url=str(path), base_branch="main", work_branch="choregos/1"),
         agent=AgentRef(backend="codex"),

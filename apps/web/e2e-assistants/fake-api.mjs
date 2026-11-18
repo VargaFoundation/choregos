@@ -2,7 +2,7 @@
 // The fake Choregos API of the assistants journeys (S63-18): what the assistants pages, a conversation and the
 // installation form ask, with fixed answers. Plain node, no dependency. `GET /__calls` returns what it was asked.
 //
-//   fake API  127.0.0.1:4200   the signed-in person is a member of `varga` and `acme`; `coach` is of `acme`
+//   fake API  127.0.0.1:4200   the signed-in person is a member of `northwind` and `acme`; `coach` is of `acme`
 import { createServer } from "node:http";
 
 const calls = [];
@@ -106,7 +106,7 @@ createServer(async (req, res) => {
   if (path === "/__calls") return json(res, 200, calls);
   calls.push({ method: req.method, path, body: payload });
   if (path === "/me") return json(res, 200, { email: "ada@acme.test", memberships: [{ org: "acme", role: "org_admin" }] });
-  if (path === "/orgs") return json(res, 200, [{ slug: "varga", name: "Varga" }, { slug: "acme", name: "Acme" }]);
+  if (path === "/orgs") return json(res, 200, [{ slug: "northwind", name: "Northwind" }, { slug: "acme", name: "Acme" }]);
   if (path === "/me/assistants") return json(res, 200, { items: [coach] });
   if (path === "/me/assistants/acme/coach/conversations") return json(res, 201, conversation);
   if (path === "/me/conversations") return json(res, 200, { items: [conversation], meta: { has_more: false } });

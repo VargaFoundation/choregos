@@ -66,7 +66,9 @@ async def _organisation() -> Any:
     from choregos_api.db.session import session_scope
 
     async with session_scope() as session:
-        found = (await session.execute(select(Organization).where(Organization.slug == "varga"))).scalar_one()
+        found = (
+            await session.execute(select(Organization).where(Organization.slug == "northwind"))
+        ).scalar_one()
         session.expunge(found)
         return found
 
@@ -85,7 +87,7 @@ async def _seed_rule(host: str, used_by: list[str], status: str = "allowed", ori
             status=status,
             reason="seeded",
             origin=origin,
-            requested_by="admin@varga.dev",
+            requested_by="admin@northwind.dev",
         )
         session.add(row)
         await session.flush()
@@ -131,7 +133,7 @@ async def test_a_governed_add_cannot_open_the_gateway_for_runners(client: AsyncC
 
     await _set_gateway(client)
     organisation = await _organisation()
-    principal = Principal(user_id="u", email="admin@varga.dev", org_roles={"varga": "org_admin"})
+    principal = Principal(user_id="u", email="admin@northwind.dev", org_roles={"northwind": "org_admin"})
     async with session_scope() as session:
         with pytest.raises(ApiError) as raised:
             await allow_hosts(

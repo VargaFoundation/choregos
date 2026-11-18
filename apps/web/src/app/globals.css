@@ -1,7 +1,7 @@
 /*
  * The console owns its primitives and its tokens (ADR 0048): Tailwind, the console's theme
  * (`styles/theme.css`, Radix Colors with a contrast budget per mode) and nothing else. The look is
- * an operations console in the manner of Temporal's UI; the Varga Foundation design system is no
+ * an operations console in the manner of Temporal's UI; a third-party design system is no
  * longer a dependency.
  */
 @import "tailwindcss";

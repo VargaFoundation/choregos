@@ -43,7 +43,7 @@ from .conftest import Platform, login
 
 pytestmark = [pytest.mark.e2e, pytest.mark.asyncio]
 
-ORG = "/api/v1/orgs/varga"
+ORG = "/api/v1/orgs/northwind"
 SLUG = "factory-floor"
 OUTPOST = f"{ORG}/outposts/{SLUG}"
 ALIAS = "tracker"
@@ -320,7 +320,7 @@ class Outpost:
                 enrolled_at=datetime.now(UTC).isoformat(),
             ),
         )
-        assert (answer.organisation, answer.outpost, answer.status) == ("varga", SLUG, "pending")
+        assert (answer.organisation, answer.outpost, answer.status) == ("northwind", SLUG, "pending")
         assert answer.fingerprint == own.fingerprint, "nothing on the path rewrote the enrolment"
         self.instance_id = answer.instance_id
         return str(own.fingerprint)
@@ -535,7 +535,10 @@ async def _declared_discovered_and_opened(bench: Bench, *, writes: dict[str, Any
     assert agent.status_code == 201, agent.text
     async with session_scope() as session:
         item = WorkItem(
-            project_id=bench.platform.project_id, tracker_key="varga/billing-api#7", title="T", state="ready"
+            project_id=bench.platform.project_id,
+            tracker_key="northwind/billing-api#7",
+            title="T",
+            state="ready",
         )
         session.add(item)
         await session.flush()
@@ -549,11 +552,11 @@ async def _declared_discovered_and_opened(bench: Bench, *, writes: dict[str, Any
                 status="running",
                 agent_slug="coordinator",
                 agent_version=1,
-                initiated_by="person:admin@varga.dev",
+                initiated_by="person:admin@northwind.dev",
             )
         )
     token = mint_run_token(
-        RUN, project_slug=bench.platform.project_slug, work_item_key="varga/billing-api#7", ttl_minutes=30
+        RUN, project_slug=bench.platform.project_slug, work_item_key="northwind/billing-api#7", ttl_minutes=30
     )
     bench.headers = {"Authorization": f"Bearer {token}"}
 
@@ -677,7 +680,7 @@ async def test_an_outpost_is_enrolled_approved_and_run_and_a_read_through_it_is_
         RUN,
         "billing-api",
         CONNECTOR,
-        "varga",
+        "northwind",
     )
     # Digests only, on both sides: neither log holds the arguments or the result.
     for written in (json.dumps(outpost.lines()), json.dumps(record)):

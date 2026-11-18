@@ -26,11 +26,11 @@ from sqlalchemy import func, select
 
 from .agent_scopes_kit import add_member, as_user
 
-ORG = "/api/v1/orgs/varga"
+ORG = "/api/v1/orgs/northwind"
 HELLO = Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "plugins" / "hello"
 INSTALL = {"source": "offline", "name": "hello", "version": "1.0.0"}
-ADMIN = "admin@varga.dev"
-SECOND = "second-admin@varga.dev"
+ADMIN = "admin@northwind.dev"
+SECOND = "second-admin@northwind.dev"
 
 
 def _edit(path: Path, change: Any) -> None:
@@ -247,7 +247,7 @@ async def test_the_reconcile_installs_each_default_plugin_once(
 
     configure(DEFAULT, server=False)
     first = await plugin_defaults.reconcile_all()
-    assert [(o.org, o.plugin, o.outcome) for o in first] == [("varga", "hello", "installed")]
+    assert [(o.org, o.plugin, o.outcome) for o in first] == [("northwind", "hello", "installed")]
     async with session_scope() as session:
         row = (await session.execute(select(OrgPlugin))).scalar_one()
         assert (row.is_default, row.installed_by, row.version) == (True, None, "1.0.0")

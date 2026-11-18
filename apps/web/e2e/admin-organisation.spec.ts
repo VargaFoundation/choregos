@@ -7,7 +7,7 @@ import { expect, test } from "@playwright/test";
 test("an organisation is renamed from the administration page", async ({ page }) => {
   await page.goto("/admin");
   const name = page.getByLabel("Display name");
-  await expect(name).toHaveValue("Varga Foundation");
+  await expect(name).toHaveValue("Northwind");
   await name.fill("Globex");
   await page.getByLabel("Currency").selectOption("USD");
   await page.getByRole("button", { name: "Save the organisation" }).click();

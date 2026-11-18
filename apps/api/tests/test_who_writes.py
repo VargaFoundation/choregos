@@ -20,7 +20,7 @@ from httpx import AsyncClient
 from .egress_support import as_person
 from .test_broker import TOOLS
 
-ORG = "/api/v1/orgs/varga"
+ORG = "/api/v1/orgs/northwind"
 RUN = "run-who-writes-1"
 
 
@@ -124,7 +124,7 @@ async def test_a_project_reader_sees_the_connectors_without_reading_the_organisa
 ) -> None:
     await _connector(client, "supplier")
     await _run(client, project, [{"connector": "supplier", "tools": ["*"]}])
-    async with as_person(client, "viewer@varga.dev", "viewer") as viewer:
+    async with as_person(client, "viewer@northwind.dev", "viewer") as viewer:
         run = (await viewer.get(f"/api/v1/runs/{RUN}")).json()
     assert [c["name"] for c in run["tool_connectors"]] == ["supplier"]
 

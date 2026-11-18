@@ -65,7 +65,9 @@ def _curls(name: str) -> list[tuple[str, str, Any]]:
             body = words[words.index("-d") + 1] if "-d" in words else None
             method = words[words.index("-X") + 1] if "-X" in words else ("POST" if body else "GET")
             path = (
-                url.removeprefix("$CHOREGOS_API_URL").replace("/acme/", "/varga/").replace("acme:", "varga:")
+                url.removeprefix("$CHOREGOS_API_URL")
+                .replace("/acme/", "/northwind/")
+                .replace("acme:", "northwind:")
             )
             found.append((method, path, json.loads(body) if body else None))
     assert found, f"{name} shows no request any more"
@@ -90,7 +92,7 @@ async def _internal_tracker(client: AsyncClient, project: dict[str, Any]) -> Non
 async def _skill(client: AsyncClient) -> str:
     skill_md = next(b for b in _blocks("build/skills.md", "markdown") if b.startswith("---"))
     created = await client.post(
-        "/api/v1/orgs/varga/skills",
+        "/api/v1/orgs/northwind/skills",
         json={"files": {"SKILL.md": skill_md, "examples/good.md": "- Add credit notes (FIN-42)\n"}},
     )
     assert created.status_code == 201, created.text
@@ -112,12 +114,12 @@ async def test_the_skill_of_the_page_is_taken_then_its_zip_is_the_next_version(
         (p, None) for p in re.findall(r'"\$CHOREGOS_API_URL(/api/v1/[^"]+)"', _page("build/skills.md"))
     ]
     imported = await client.post(
-        path.replace("/acme/", "/varga/"),
+        path.replace("/acme/", "/northwind/"),
         content=archive.getvalue(),
         headers={"Content-Type": "application/zip"},
     )
     assert imported.status_code in {200, 201}, imported.text
-    listed = (await client.get("/api/v1/orgs/varga/skills/release-notes-style")).json()
+    listed = (await client.get("/api/v1/orgs/northwind/skills/release-notes-style")).json()
     assert max(v["version"] for v in listed["versions"]) == 2, listed
 
 
@@ -129,11 +131,12 @@ async def test_the_skill_refusals_the_page_lists_are_the_api_s(client: AsyncClie
         "a skill declares no permission": "---\nname: x-skill\ndescription: d\nallowed-tools: [Bash]\n---\n",
     }
     for message, text in bad.items():
-        answer = await client.post("/api/v1/orgs/varga/skills", json={"files": {"SKILL.md": text}})
+        answer = await client.post("/api/v1/orgs/northwind/skills", json={"files": {"SKILL.md": text}})
         assert answer.status_code == 422 and message in answer.text, answer.text
         assert message.strip("`").split("`")[0] in table
     reserved = await client.post(
-        "/api/v1/orgs/varga/skills", json={"files": {"SKILL.md": "---\nname: library\ndescription: d\n---\n"}}
+        "/api/v1/orgs/northwind/skills",
+        json={"files": {"SKILL.md": "---\nname: library\ndescription: d\n---\n"}},
     )
     assert reserved.status_code == 422 and "skill.slug_reserved" in reserved.text, reserved.text
     assert "skill.slug_reserved" in table
@@ -209,7 +212,7 @@ async def test_the_server_the_grant_and_the_policy_of_the_page_are_taken(
     assert (await client.post(create_path, json=agent)).status_code == 201
     for grant in (json.loads(b) for b in _blocks("build/tools.md", "json")):
         spec = {**agent["spec"], **grant}
-        version = await client.post("/api/v1/orgs/varga/agents/release-notes/versions", json=spec)
+        version = await client.post("/api/v1/orgs/northwind/agents/release-notes/versions", json=spec)
         assert version.status_code in {200, 201}, version.text
 
     policy = next(b for b in _blocks("build/tools.md", "yaml") if "kind: Policy" in b)
@@ -229,11 +232,11 @@ async def test_the_trigger_of_the_page_answers_as_its_table_says(client: AsyncCl
 
     triggers = json.loads(_blocks("integrate/triggers.md", "json")[0])
     created = await client.post(
-        "/api/v1/orgs/varga/projects",
+        "/api/v1/orgs/northwind/projects",
         json={
             "slug": "billing-api",
             "name": "Billing API",
-            "config": {"slug": "billing-api", "org": "varga", "triggers": triggers},
+            "config": {"slug": "billing-api", "org": "northwind", "triggers": triggers},
         },
     )
     assert created.status_code == 201, created.text
@@ -253,12 +256,12 @@ async def test_the_trigger_of_the_page_answers_as_its_table_says(client: AsyncCl
     url = re.search(
         r"POST https://choregos\.example\.com(/api/v1/webhooks/triggers/\S+)", _page("integrate/triggers.md")
     )
-    assert url and minted.json()["url"].endswith(url.group(1).replace("/acme/", "/varga/"))
+    assert url and minted.json()["url"].endswith(url.group(1).replace("/acme/", "/northwind/"))
     client.cookies.clear()
 
     body = json.loads(re.search(r"-d '(\{.*?^\})'", _page("integrate/triggers.md"), re.M | re.S).group(1))  # type: ignore[union-attr]
     headers = {"Authorization": f"Bearer {minted.json()['token']}"}
-    target = url.group(1).replace("/acme/", "/varga/")
+    target = url.group(1).replace("/acme/", "/northwind/")
 
     first = await client.post(target, json=body, headers=headers)
     assert first.status_code == 202, first.text
@@ -286,7 +289,7 @@ async def test_the_trigger_of_the_page_answers_as_its_table_says(client: AsyncCl
 async def _login_back(client: AsyncClient) -> None:
     from .conftest import login
 
-    await login(client, "admin@varga.dev")
+    await login(client, "admin@northwind.dev")
 
 
 # ───────────────────────── integrate/rest.md ─────────────────────────
@@ -322,7 +325,9 @@ async def test_the_rest_page_s_requests_work_with_a_full_access_token(
     assert read.status_code == 200 and read.json()["id"] == created.json()["id"]
     for field in ("state", "state_display", "pending_request", "pr_url", "failure", "totals"):
         assert field in read.json(), field
-    listed = (await client.get("/api/v1/projects/varga:billing-api/work-items?limit=20", headers=auth)).json()
+    listed = (
+        await client.get("/api/v1/projects/northwind:billing-api/work-items?limit=20", headers=auth)
+    ).json()
     assert set(listed) == {"items", "meta"} and {"next_cursor", "has_more"} <= set(listed["meta"])
     refused = await client.post(path, json={"workflow": "ship-a-change"}, headers=auth)
     assert refused.status_code == 422 and refused.json()["title"] == "Invalid request", refused.text

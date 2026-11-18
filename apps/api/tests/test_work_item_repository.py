@@ -11,7 +11,11 @@ from typing import Any
 
 from httpx import AsyncClient
 
-DIAMCTL = {"name": "diamctl", "url": "https://github.com/varga/diamctl.git", "test_command": "go test ./..."}
+DIAMCTL = {
+    "name": "diamctl",
+    "url": "https://github.com/northwind/diamctl.git",
+    "test_command": "go test ./...",
+}
 STRICT = """apiVersion: choregos/v1
 kind: Workflow
 metadata:
@@ -140,7 +144,7 @@ async def test_a_work_item_that_ran_on_a_repository_is_fixed_to_it(
                 stage_role="implement",
                 attempt=1,
                 status="succeeded",
-                stage_input={"repo": {"url": "https://github.com/varga/billing-api.git"}},
+                stage_input={"repo": {"url": "https://github.com/northwind/billing-api.git"}},
             )
         )
     url = f"/api/v1/work-items/{item['id']}"

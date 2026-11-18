@@ -24,8 +24,8 @@ from .kits.memberships import _only
 from .test_agent_sessions import _agent, upstream  # noqa: F401
 
 PENDING = "/api/v1/me/pending"
-LEA = "lea@varga.dev"
-MAX = "max@varga.dev"
+LEA = "lea@northwind.dev"
+MAX = "max@northwind.dev"
 APPROVERS = "netops-approvers"
 
 
@@ -123,7 +123,7 @@ async def test_a_human_step_is_listed_for_its_assignee_and_with_the_route_that_d
     assert _ids(mine, "human_step") == {request_id}, "a step addressed to someone else is not mine"
     (step,) = mine
     assert step["what"] == "Ship 1.2?" and step["where"]["work_item_key"] == key
-    assert step["where"]["project_slug"] == "billing-api" and step["where"]["org"] == "varga"
+    assert step["where"]["project_slug"] == "billing-api" and step["where"]["org"] == "northwind"
     assert step["decision"]["method"] == "POST"
     assert step["decision"]["path"] == f"/work-items/{item_id}/decisions"
     assert step["decision"]["url"].endswith(f"/p/billing-api/items/{item_id}#decision")
@@ -215,7 +215,7 @@ async def test_the_proposals_of_my_conversations_are_mine_alone_and_a_launch_is_
     upstream: Any,  # noqa: F811
 ) -> None:
     await _agent(client)
-    mine = await _open("varga", admin)
+    mine = await _open("northwind", admin)
     write = await _proposal(mine, admin, "Order two laptops")
     launch = await _proposal(mine, admin, "Start the intake of Acme", kind="launch")
 

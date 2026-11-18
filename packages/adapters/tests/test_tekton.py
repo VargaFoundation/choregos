@@ -162,7 +162,7 @@ async def test_ci_aggregates_the_pipelineruns_of_a_sha() -> None:
         ]
     }
     wire = Wire({("GET", f"{TEKTON_API}/namespaces/ci/pipelineruns"): (200, runs)})
-    ci_status = await TektonCi(k8s(wire), namespace="ci").status_for("varga/billing", "abc")
+    ci_status = await TektonCi(k8s(wire), namespace="ci").status_for("northwind/billing", "abc")
     assert ci_status.state == "running" and [c.status for c in ci_status.runs] == ["completed", "in_progress"]
     assert wire.requests[0].url.params["labelSelector"] == "choregos/sha=abc"
     vide = await TektonCi(
@@ -186,12 +186,12 @@ async def test_triggering_a_pipeline_passes_repository_and_revision() -> None:
             )
         }
     )
-    name = await TektonCi(k8s(wire), namespace="ci").trigger("varga/billing", "abc", "")
+    name = await TektonCi(k8s(wire), namespace="ci").trigger("northwind/billing", "abc", "")
     assert name == "choregos-ci-x7"
     body = wire.body(-1)
     assert body["metadata"]["generateName"] == "choregos-ci-"
     assert {p["name"]: p["value"] for p in body["spec"]["params"]} == {
-        "repo-url": "https://github.com/varga/billing.git",
+        "repo-url": "https://github.com/northwind/billing.git",
         "revision": "abc",
     }
 

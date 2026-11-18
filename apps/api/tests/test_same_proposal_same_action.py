@@ -14,7 +14,7 @@ from typing import Any
 import pytest
 from httpx import AsyncClient
 
-ORG = "/api/v1/orgs/varga"
+ORG = "/api/v1/orgs/northwind"
 RUN = "run-same-proposal"
 TOOL = "/api/v1/internal/runs/run-same-proposal/tools/pfsense__update_firewall_rule"
 
@@ -45,7 +45,9 @@ async def _run_token(client: AsyncClient, project: dict[str, Any]) -> str:
     )
     assert agent.status_code == 201, agent.text
     async with session_scope() as session:
-        item = WorkItem(project_id=project["id"], tracker_key="varga/net#9", title="open 9443", state="ready")
+        item = WorkItem(
+            project_id=project["id"], tracker_key="northwind/net#9", title="open 9443", state="ready"
+        )
         session.add(item)
         await session.flush()
         session.add(
@@ -60,7 +62,7 @@ async def _run_token(client: AsyncClient, project: dict[str, Any]) -> str:
                 agent_version=1,
             )
         )
-    return mint_run_token(RUN, project_slug="billing-api", work_item_key="varga/net#9", ttl_minutes=30)
+    return mint_run_token(RUN, project_slug="billing-api", work_item_key="northwind/net#9", ttl_minutes=30)
 
 
 async def test_the_same_call_under_approval_proposes_one_action(

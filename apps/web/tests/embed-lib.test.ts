@@ -18,12 +18,12 @@ describe("the embedded component's opening context (S63-12)", () => {
 });
 
 describe("where the events go (S63-12)", () => {
-  const allowed = ["https://app.varga.test", "https://intranet.varga.test"];
+  const allowed = ["https://app.northwind.test", "https://intranet.northwind.test"];
 
   it("goes to the allowed origin that framed the page", () => {
-    expect(targetOrigins(allowed, "https://intranet.varga.test", null)).toEqual(["https://intranet.varga.test"]);
-    expect(targetOrigins(allowed, undefined, "https://app.varga.test/some/page?x=1")).toEqual([
-      "https://app.varga.test",
+    expect(targetOrigins(allowed, "https://intranet.northwind.test", null)).toEqual(["https://intranet.northwind.test"]);
+    expect(targetOrigins(allowed, undefined, "https://app.northwind.test/some/page?x=1")).toEqual([
+      "https://app.northwind.test",
     ]);
   });
 
@@ -35,13 +35,13 @@ describe("where the events go (S63-12)", () => {
 
   it("posts an enveloped event to each target, and nothing when not framed or nowhere to post", () => {
     const host = { postMessage: vi.fn() };
-    createEmitter("varga", "coach", ["https://app.varga.test"], host)("action.confirmed", { action_id: "a1" });
+    createEmitter("northwind", "coach", ["https://app.northwind.test"], host)("action.confirmed", { action_id: "a1" });
     expect(host.postMessage).toHaveBeenCalledExactlyOnceWith(
-      { source: "choregos.assistant", type: "action.confirmed", org: "varga", installation: "coach", action_id: "a1" },
-      "https://app.varga.test",
+      { source: "choregos.assistant", type: "action.confirmed", org: "northwind", installation: "coach", action_id: "a1" },
+      "https://app.northwind.test",
     );
-    createEmitter("varga", "coach", [], host)("resize");
-    createEmitter("varga", "coach", ["https://app.varga.test"], null)("resize");
+    createEmitter("northwind", "coach", [], host)("resize");
+    createEmitter("northwind", "coach", ["https://app.northwind.test"], null)("resize");
     expect(host.postMessage).toHaveBeenCalledOnce();
   });
 });

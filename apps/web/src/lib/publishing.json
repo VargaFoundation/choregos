@@ -4,8 +4,8 @@
   "registry": "ghcr.io/graalsystems",
   "source_repository": "https://github.com/graalsystems/tranibor",
   "documentation": "https://graalsystems.github.io/tranibor",
-  "security_contact": "security@varga.foundation",
-  "commit_email": "choregos-bot@varga.foundation",
-  "plugin_repository": "https://github.com/VargaFoundation/choregos-agents",
-  "plugin_index": "oci://ghcr.io/vargafoundation/choregos-agents/index:latest"
+  "security_contact": "security@graal.systems",
+  "commit_email": "tranibor-bot@graal.systems",
+  "plugin_repository": "https://github.com/graalsystems/tranibor-agents",
+  "plugin_index": "oci://ghcr.io/graalsystems/tranibor-agents/index:latest"
 }

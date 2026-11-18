@@ -173,7 +173,7 @@ async def test_onto0003_copies_the_proposals_under_forced_rls(
             await session.execute(
                 text(
                     "INSERT INTO organizations (id, slug, name, settings) "
-                    "VALUES ('o1', 'varga', 'Varga', '{}')"
+                    "VALUES ('o1', 'northwind', 'Northwind', '{}')"
                 )
             )
             await session.execute(

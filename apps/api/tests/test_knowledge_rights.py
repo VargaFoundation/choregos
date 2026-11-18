@@ -17,7 +17,7 @@ from httpx import ASGITransport, AsyncClient
 
 from .conftest import login
 
-ORG = "/api/v1/orgs/varga/knowledge"
+ORG = "/api/v1/orgs/northwind/knowledge"
 SOURCE = {"kind": "web", "name": "docs", "config": {"url": "https://example.org/docs"}}
 
 
@@ -27,15 +27,15 @@ async def _checkout(client: AsyncClient) -> None:
         "name": "Checkout web",
         "config": {
             "slug": "checkout-web",
-            "org": "varga",
+            "org": "northwind",
             "repo": {
-                "url": "https://github.com/varga/checkout-web.git",
+                "url": "https://github.com/northwind/checkout-web.git",
                 "default_branch": "main",
                 "language": "python",
             },
         },
     }
-    created = await client.post("/api/v1/orgs/varga/projects", json=payload)
+    created = await client.post("/api/v1/orgs/northwind/projects", json=payload)
     assert created.status_code == 201, created.text
 
 
@@ -44,7 +44,7 @@ async def _shape(
     org_role: str | None,
     projects: dict[str, str],
     groups: list[str],
-    org_slug: str = "varga",
+    org_slug: str = "northwind",
 ) -> str:
     """Gives the user exactly these memberships (the development sign-in adds a developer role)."""
     from choregos_api.db.models import Membership, Organization, Project, User
@@ -160,7 +160,7 @@ PEOPLE: dict[str, dict[str, Any]] = {
 
 
 def _email(who: str) -> str:
-    return who.replace(" ", ".").replace("'", "") + "@varga.dev"
+    return who.replace(" ", ".").replace("'", "") + "@northwind.dev"
 
 
 @pytest.fixture
@@ -179,7 +179,7 @@ async def test_what_each_caller_may_do_and_the_dto_agrees(
         name: await _uid(client, _email(name), **PEOPLE[name])
         for name in ("user editor grant", "user viewer grant", "user owner grant")
     }
-    await login(client, "admin@varga.dev")
+    await login(client, "admin@northwind.dev")
     granted = await _grant(
         client,
         {"subject_type": "user", "subject": ids["user editor grant"], "role": "editor"},
@@ -253,7 +253,7 @@ async def test_a_grant_by_e_mail_does_not_cross_organisations(
         session.add(other)
         await session.flush()
         session.add(KnowledgeBase(org_id=other.id, slug="secret", name="Secret", scope="org"))
-    await login(client, "admin@varga.dev")
+    await login(client, "admin@northwind.dev")
     async with _as(client, "admin@other.dev") as other_admin:  # lands in no organisation of its own
         pass
     async with _as(client, _email("project owner"), **PEOPLE["project owner"]) as person:
@@ -302,11 +302,11 @@ async def test_a_project_grant_gives_its_members_the_role_and_other_projects_not
     await _admin_base(client, two_projects)
     put = await _grant(client, {"subject_type": "project", "subject": "checkout-web", "role": "editor"})
     assert put.status_code == 200, put.text
-    async with _as(client, "member@varga.dev", projects={"checkout-web": "viewer"}) as member:
+    async with _as(client, "member@northwind.dev", projects={"checkout-web": "viewer"}) as member:
         assert (await member.get(f"{ORG}/fiches")).status_code == 200
         assert _ok(await member.post(f"{ORG}/fiches/documents", files={"file": ("n.md", b"# N\n")}))
         assert (await member.put(f"{ORG}/fiches/grants", json={"grants": []})).status_code == 403
-    async with _as(client, "wide@varga.dev", org_role="viewer") as wide:
+    async with _as(client, "wide@northwind.dev", org_role="viewer") as wide:
         # an organisation-wide role is not membership of checkout-web: it reads billing-api's base
         # through the reach, and the project grant does not make it an editor
         assert (await wide.get(f"{ORG}/fiches")).status_code == 200
@@ -326,25 +326,25 @@ async def test_restricted_base_hides_from_project_viewers_and_serves_runs_only_f
         ORG, json={"slug": "architecture", "name": "Architecture", "restricted": True}
     )
     assert created.status_code == 201 and created.json()["restricted"] is True
-    viewer_id = await _uid(client, "reader@varga.dev", org_role="viewer")
-    await login(client, "admin@varga.dev")
-    async with _as(client, "reader@varga.dev", org_role="viewer") as reader:
+    viewer_id = await _uid(client, "reader@northwind.dev", org_role="viewer")
+    await login(client, "admin@northwind.dev")
+    async with _as(client, "reader@northwind.dev", org_role="viewer") as reader:
         assert (await reader.get(f"{ORG}/architecture")).status_code == 404
         assert [b["slug"] for b in (await reader.get(ORG)).json()] == []
-    with pytest.raises(KnowledgeRefusedError, match=r"`reader@varga\.dev` may not read it"):
-        await _pinned(two_projects, "person:reader@varga.dev")
+    with pytest.raises(KnowledgeRefusedError, match=r"`reader@northwind\.dev` may not read it"):
+        await _pinned(two_projects, "person:reader@northwind.dev")
     granted = await client.put(
         f"{ORG}/architecture/grants",
         json={"grants": [{"subject_type": "user", "subject": viewer_id, "role": "viewer"}]},
     )
     assert granted.status_code == 200, granted.text
-    async with _as(client, "reader@varga.dev", org_role="viewer") as reader:
+    async with _as(client, "reader@northwind.dev", org_role="viewer") as reader:
         assert (await reader.get(f"{ORG}/architecture")).status_code == 200
         assert [b["slug"] for b in (await reader.get(ORG)).json()] == ["architecture"]
     # a run started by the reader is served it now (ADR 0097)
-    pinned = await _pinned(two_projects, "person:reader@varga.dev")
+    pinned = await _pinned(two_projects, "person:reader@northwind.dev")
     assert pinned and pinned[0]["slug"] == "architecture"
-    token = await _run(two_projects, pinned, "person:reader@varga.dev")
+    token = await _run(two_projects, pinned, "person:reader@northwind.dev")
     client.cookies.clear()
     served = await client.get(
         "/api/v1/internal/runs/run-kb/knowledge", headers={"Authorization": f"Bearer {token}"}
@@ -369,7 +369,7 @@ async def test_a_grant_never_serves_a_run(client: AsyncClient, two_projects: dic
     assert granted.status_code == 200, granted.text
     with pytest.raises(KnowledgeRefusedError):
         # billing-api holds a role and is not in the reach; the initiator is an administrator
-        await _pinned(two_projects, "person:admin@varga.dev")
+        await _pinned(two_projects, "person:admin@northwind.dev")
 
 
 async def test_widening_still_clears_owner_project_and_restricting_does_not(
@@ -378,7 +378,7 @@ async def test_widening_still_clears_owner_project_and_restricting_does_not(
     await _admin_base(client, two_projects)
     async with _as(client, _email("project developer"), **PEOPLE["project developer"]) as dev:
         assert (await dev.patch(f"{ORG}/fiches", json={"restricted": True})).status_code == 403
-    await login(client, "admin@varga.dev")
+    await login(client, "admin@northwind.dev")
     restricted = await client.patch(f"{ORG}/fiches", json={"restricted": True})
     assert restricted.status_code == 200 and restricted.json()["owner_project"] == "billing-api"
     assert restricted.json()["restricted"] is True
@@ -391,10 +391,10 @@ async def test_the_owner_role_cannot_widen_but_administers_the_rest(
     client: AsyncClient, two_projects: dict[str, Any]
 ) -> None:
     await _admin_base(client, two_projects)
-    uid = await _uid(client, "boss@varga.dev", projects={"checkout-web": "viewer"})
-    await login(client, "admin@varga.dev")
+    uid = await _uid(client, "boss@northwind.dev", projects={"checkout-web": "viewer"})
+    await login(client, "admin@northwind.dev")
     await _grant(client, {"subject_type": "user", "subject": uid, "role": "owner"})
-    async with _as(client, "boss@varga.dev", projects={"checkout-web": "viewer"}) as boss:
+    async with _as(client, "boss@northwind.dev", projects={"checkout-web": "viewer"}) as boss:
         for widening in (
             {"scope": "org"},
             {"projects": ["billing-api", "checkout-web"]},
@@ -409,10 +409,10 @@ async def test_an_editor_cannot_archive_but_can_rename(
     client: AsyncClient, two_projects: dict[str, Any]
 ) -> None:
     await _admin_base(client, two_projects)
-    uid = await _uid(client, "ed@varga.dev", projects={"checkout-web": "viewer"})
-    await login(client, "admin@varga.dev")
+    uid = await _uid(client, "ed@northwind.dev", projects={"checkout-web": "viewer"})
+    await login(client, "admin@northwind.dev")
     await _grant(client, {"subject_type": "user", "subject": uid, "role": "editor"})
-    async with _as(client, "ed@varga.dev", projects={"checkout-web": "viewer"}) as editor:
+    async with _as(client, "ed@northwind.dev", projects={"checkout-web": "viewer"}) as editor:
         assert (await editor.patch(f"{ORG}/fiches", json={"name": "Renamed"})).status_code == 200
         assert (await editor.patch(f"{ORG}/fiches", json={"serving_mode": "index"})).status_code == 200
         assert (await editor.patch(f"{ORG}/fiches", json={"status": "archived"})).status_code == 403
@@ -454,7 +454,7 @@ async def test_grants_put_is_idempotent_and_audited(
     last = events[-1].payload
     assert last["removed"] == ["project:checkout-web"] and last["changed"] == ["group:writers=viewer"]
     assert events[0].payload["added"] == ["group:writers=editor", "project:checkout-web=viewer"]
-    assert (await client.get(f"{ORG}/fiches")).json()["grants"][0]["created_by"] == "admin@varga.dev"
+    assert (await client.get(f"{ORG}/fiches")).json()["grants"][0]["created_by"] == "admin@northwind.dev"
 
 
 async def test_unknown_member_or_project_is_422(client: AsyncClient, two_projects: dict[str, Any]) -> None:
@@ -487,24 +487,24 @@ async def test_a_grant_by_e_mail_waits_for_a_person_invited_later(
     created = await client.post(ORG, json={"slug": "figures", "name": "Figures", "restricted": True})
     assert created.status_code == 201
     put = await _grant(
-        client, {"subject_type": "user", "subject": "Later@Varga.dev", "role": "editor"}, slug="figures"
+        client, {"subject_type": "user", "subject": "Later@Northwind.dev", "role": "editor"}, slug="figures"
     )
     assert put.status_code == 200, put.text
     (waiting,) = put.json()["grants"]
-    assert waiting["subject"] == "later@varga.dev" and waiting["pending"] is True
-    async with _as(client, "later@varga.dev") as later:
+    assert waiting["subject"] == "later@northwind.dev" and waiting["pending"] is True
+    async with _as(client, "later@northwind.dev") as later:
         # signed in, but the development sign-in made them an organisation member: restore "no role"
         pass
-    async with _as(client, "later@varga.dev", org_role="viewer") as later:
+    async with _as(client, "later@northwind.dev", org_role="viewer") as later:
         assert (await later.get(f"{ORG}/figures")).status_code == 200, "the e-mail resolves at membership"
         assert _ok(await later.post(f"{ORG}/figures/documents", files={"file": ("n.md", b"# N\n")}))
     listed = await client.get(f"{ORG}/figures/grants")
     assert listed.json()["grants"][0]["pending"] is False, "no longer waiting once the person is a member"
     # an e-mail that belongs to a member is stored as that member's id
     again = await _grant(
-        client, {"subject_type": "user", "subject": "LATER@varga.dev", "role": "viewer"}, slug="figures"
+        client, {"subject_type": "user", "subject": "LATER@northwind.dev", "role": "viewer"}, slug="figures"
     )
-    assert again.json()["grants"][0]["subject"] != "later@varga.dev"
+    assert again.json()["grants"][0]["subject"] != "later@northwind.dev"
     assert again.json()["grants"][0]["display"]
 
 
@@ -555,13 +555,13 @@ async def test_the_agent_drafter_suggests_only_what_the_caller_reads(
     await client.post(ORG, json={"slug": "private-figures", "name": "Private", "restricted": True})
     await client.post(ORG, json={"slug": "granted", "name": "Granted", "restricted": True})
     await _grant(client, {"subject_type": "group", "subject": "writers", "role": "viewer"}, slug="granted")
-    plain = Principal(user_id="u1", email="p@varga.dev", org_roles={"varga": Role.VIEWER})
+    plain = Principal(user_id="u1", email="p@northwind.dev", org_roles={"northwind": Role.VIEWER})
     writer = Principal(
-        user_id="u2", email="w@varga.dev", org_roles={"varga": Role.VIEWER}, groups=["writers"]
+        user_id="u2", email="w@northwind.dev", org_roles={"northwind": Role.VIEWER}, groups=["writers"]
     )
     async with session_scope() as session:
         organisation = (
-            await session.execute(select(Organization).where(Organization.slug == "varga"))
+            await session.execute(select(Organization).where(Organization.slug == "northwind"))
         ).scalar_one()
         seen = {
             who: [slug for slug, _ in (await context_of(session, organisation, p)).knowledge]
@@ -579,18 +579,18 @@ def test_decide_is_one_function() -> None:
         scope="org", projects=[], groups=[], owner_project=None, restricted=False, status="active"
     )
     grant = SimpleNamespace(subject_type="user", subject="Ana@x.dev", role="editor")
-    ana = Principal(user_id="u", email="ana@x.dev", org_roles={"varga": Role.VIEWER})
-    assert role_of(ana, "varga", base, [grant]) == "editor", "an e-mail grant matches case-insensitively"
-    assert decide(ana, "varga", base, KnowledgeAction.EDIT, [grant]).allowed
-    refused = decide(ana, "varga", base, KnowledgeAction.ARCHIVE, [grant])
+    ana = Principal(user_id="u", email="ana@x.dev", org_roles={"northwind": Role.VIEWER})
+    assert role_of(ana, "northwind", base, [grant]) == "editor", "an e-mail grant matches case-insensitively"
+    assert decide(ana, "northwind", base, KnowledgeAction.EDIT, [grant]).allowed
+    refused = decide(ana, "northwind", base, KnowledgeAction.ARCHIVE, [grant])
     assert not refused.allowed and "owner" in (refused.reason or "")
-    assert not decide(ana, "varga", base, KnowledgeAction.EDIT).allowed
+    assert not decide(ana, "northwind", base, KnowledgeAction.EDIT).allowed
     stranger = Principal(user_id="s", email="ana@x.dev", org_roles={"elsewhere": Role.ORG_ADMIN})
-    assert not visible_to(stranger, "varga", base, [grant]), "a grant never crosses organisations"
-    assert role_of(stranger, "varga", base, [grant]) is None
+    assert not visible_to(stranger, "northwind", base, [grant]), "a grant never crosses organisations"
+    assert role_of(stranger, "northwind", base, [grant]) is None
     restricted = SimpleNamespace(**{**vars(base), "restricted": True})
-    reader = Principal(user_id="r", email="r@x.dev", org_roles={"varga": Role.VIEWER})
-    assert not visible_to(reader, "varga", restricted)
+    reader = Principal(user_id="r", email="r@x.dev", org_roles={"northwind": Role.VIEWER})
+    assert not visible_to(reader, "northwind", restricted)
     assert visible_to(
-        reader, "varga", restricted, [SimpleNamespace(subject_type="user", subject="r", role="viewer")]
+        reader, "northwind", restricted, [SimpleNamespace(subject_type="user", subject="r", role="viewer")]
     )

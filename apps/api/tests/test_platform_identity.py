@@ -110,7 +110,7 @@ async def test_mcp_rows_follow_mcp_oauth_enabled(
 
 async def test_a_member_who_is_not_a_platform_admin_is_refused(client: AsyncClient, admin: str) -> None:
     client.cookies.clear()
-    await login(client, "dev@varga.dev")
+    await login(client, "dev@northwind.dev")
     assert (await client.get(URL)).status_code == 403
 
 
@@ -119,15 +119,15 @@ async def test_a_plugin_authority_grants_access(extended_client: AsyncClient) ->
     from choregos_api.db.session import session_scope
     from sqlalchemy import select
 
-    await connect(extended_client, "admin@varga.dev")
+    await connect(extended_client, "admin@northwind.dev")
     async with session_scope(orgs="*") as session:
         second = Organization(slug="seconde", name="S")
         session.add(second)
         await session.flush()
-        admin = (await session.execute(select(User).where(User.email == "admin@varga.dev"))).scalar_one()
+        admin = (await session.execute(select(User).where(User.email == "admin@northwind.dev"))).scalar_one()
         session.add(Membership(user_id=admin.id, org_id=second.id, role="org_admin"))
-    await connect(extended_client, "ops@varga.dev")
+    await connect(extended_client, "ops@northwind.dev")
     assert (await extended_client.get(URL)).status_code == 403
-    state_of()["admins"].add("ops@varga.dev")
+    state_of()["admins"].add("ops@northwind.dev")
     assert (await extended_client.get(URL)).status_code == 200
     assert "identity_extension" in sys.modules

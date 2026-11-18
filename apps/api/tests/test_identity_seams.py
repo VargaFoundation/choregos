@@ -23,23 +23,23 @@ from .kits.identity_seams import connect, state_of
 
 async def test_the_session_carries_its_authentication_time(extended_client: AsyncClient) -> None:
     before = int(time.time())
-    await connect(extended_client, "admin@varga.dev")
+    await connect(extended_client, "admin@northwind.dev")
     assert (await extended_client.get("/api/v1/me")).status_code == 200
     (payload,) = state_of()["seen"]
     assert before <= payload["iat"] <= int(time.time())
 
 
 async def test_a_revoked_session_is_refused_on_the_next_request(extended_client: AsyncClient) -> None:
-    await connect(extended_client, "admin@varga.dev")
+    await connect(extended_client, "admin@northwind.dev")
     assert (await extended_client.get("/api/v1/me")).status_code == 200
-    state_of()["revoked"].add("admin@varga.dev")
+    state_of()["revoked"].add("admin@northwind.dev")
     refused = await extended_client.get("/api/v1/me")
     assert refused.status_code == 401
     assert "session revoked by the administrator" in refused.text
 
 
 async def test_a_validation_that_is_down_does_not_count_as_acceptance(extended_client: AsyncClient) -> None:
-    await connect(extended_client, "admin@varga.dev")
+    await connect(extended_client, "admin@northwind.dev")
     state_of()["outage"] = True
     # Since S26-02 the failure is answered as a problem+json 500 rather than propagated: still a refusal.
     response = await extended_client.get("/api/v1/me")
@@ -50,26 +50,26 @@ async def test_a_validation_that_is_down_does_not_count_as_acceptance(extended_c
 async def test_an_extension_grants_platform_administration_without_withdrawing_it(
     extended_client: AsyncClient,
 ) -> None:
-    """Two organisations: the core's rule (admin of ALL) refuses the head of `varga` alone; the
+    """Two organisations: the core's rule (admin of ALL) refuses the head of `northwind` alone; the
     extension can grant it to someone else, without withdrawing the right from whom the core gives it."""
     from choregos_api.db.models import Membership, Organization, User
     from choregos_api.db.session import session_scope
     from sqlalchemy import select
 
-    await connect(extended_client, "admin@varga.dev")
+    await connect(extended_client, "admin@northwind.dev")
     # A second organisation, put in the database: the community edition refuses to create it through the API.
     async with session_scope(orgs="*") as session:
         second = Organization(slug="second", name="S")
         session.add(second)
         await session.flush()
-        admin = (await session.execute(select(User).where(User.email == "admin@varga.dev"))).scalar_one()
+        admin = (await session.execute(select(User).where(User.email == "admin@northwind.dev"))).scalar_one()
         session.add(Membership(user_id=admin.id, org_id=second.id, role="org_admin"))
     # The admin administers both: the core grants it, extension or not.
     assert (await extended_client.get("/api/v1/platform/gateway/keys")).status_code == 200
 
-    await connect(extended_client, "ops@varga.dev")
+    await connect(extended_client, "ops@northwind.dev")
     assert (await extended_client.get("/api/v1/platform/gateway/keys")).status_code == 403
-    state_of()["admins"].add("ops@varga.dev")
+    state_of()["admins"].add("ops@northwind.dev")
     assert (await extended_client.get("/api/v1/platform/gateway/keys")).status_code == 200
 
 
@@ -126,10 +126,10 @@ async def acs(session: Db, cible: str = "/"):
     """Like a SAML service, AFTER verifying the assertion (here: nothing to verify)."""
     return await terminer_la_connexion(
         session,
-        email="marie@varga.dev",
+        email="marie@northwind.dev",
         nom="Marie",
         sujet="saml|marie",
-        groupes=["choregos:varga:org-admins"],
+        groupes=["choregos:northwind:org-admins"],
         cible=cible,
         canal="saml",
     )
@@ -169,7 +169,7 @@ async def saml_client(tmp_path: pathlib.Path) -> AsyncIterator[AsyncClient]:
         application = create_app()
         await create_all()
         async with session_scope() as session:
-            session.add(Organization(slug="varga", name="Varga"))
+            session.add(Organization(slug="northwind", name="Northwind"))
         async with AsyncClient(transport=ASGITransport(app=application), base_url="http://test") as http:
             yield http
     finally:
@@ -196,8 +196,8 @@ async def test_another_protocol_opens_a_session_exactly_like_oidc(saml_client: A
     assert payload is not None and isinstance(payload.get("iat"), int)
 
     me = (await saml_client.get("/api/v1/me")).json()
-    assert me["email"] == "marie@varga.dev"
-    assert {(m["org"], m["role"]) for m in me["memberships"]} == {("varga", "org_admin")}
+    assert me["email"] == "marie@northwind.dev"
+    assert {(m["org"], m["role"]) for m in me["memberships"]} == {("northwind", "org_admin")}
     async with session_scope(orgs="*") as session:
         (trail,) = (await session.execute(select(AuditLog).where(AuditLog.action == "auth.login"))).scalars()
     assert trail.payload == {"canal": "saml"}

@@ -47,7 +47,7 @@ ARGUMENTS = {
     "title": "Review of the growth portfolio",
     "inputs": {"portfolio": "growth", "review_date": "2026-12-01"},
 }
-ADMIN = "admin@varga.dev"
+ADMIN = "admin@northwind.dev"
 
 
 async def _bound(client: AsyncClient, project: dict[str, Any], offline_root: Path) -> None:
@@ -59,7 +59,7 @@ async def _bound(client: AsyncClient, project: dict[str, Any], offline_root: Pat
 
 async def _conversation(email: str = ADMIN) -> str:
     await set_groups(email, [AUDIENCE])
-    return await _open("varga", email, installation_id=await installation_id())
+    return await _open("northwind", email, installation_id=await installation_id())
 
 
 async def _propose(client: AsyncClient, upstream: Upstream, conversation: str, arguments: Any = None) -> Any:
@@ -154,10 +154,10 @@ async def test_a_person_without_rights_in_the_project_cannot_start_it(
     from choregos_api.db.session import session_scope
 
     await _bound(client, project, offline)
-    await add_member(client, "dev@varga.dev", "viewer")
-    await add_member(client, "dev@varga.dev", "developer", project="billing-api")
-    conversation = await _conversation("dev@varga.dev")
-    await as_user(client, "dev@varga.dev")
+    await add_member(client, "dev@northwind.dev", "viewer")
+    await add_member(client, "dev@northwind.dev", "developer", project="billing-api")
+    conversation = await _conversation("dev@northwind.dev")
+    await as_user(client, "dev@northwind.dev")
     (action,) = await _propose(client, upstream, conversation)
 
     async with session_scope(orgs="*") as session:
@@ -165,7 +165,7 @@ async def test_a_person_without_rights_in_the_project_cannot_start_it(
             await session.execute(select(Project.id).where(Project.slug == "billing-api"))
         ).scalar_one()
         await session.execute(delete(Membership).where(Membership.project_id == project_id))
-    await as_user(client, "dev@varga.dev")  # a new sign-in carries the roles as they are now
+    await as_user(client, "dev@northwind.dev")  # a new sign-in carries the roles as they are now
     refused = await client.post(f"{ME}/{conversation}/actions/{action['id']}/confirm")
     assert refused.status_code == 403, refused.text
     assert refused.json()["code"] == "launch_forbidden" and "billing-api" in refused.json()["detail"]
@@ -178,9 +178,9 @@ async def test_a_person_who_may_not_create_work_items_is_told_and_nothing_is_pro
     client: AsyncClient, project: dict[str, Any], offline: Path, upstream: Upstream
 ) -> None:
     await _bound(client, project, offline)
-    await add_member(client, "reader@varga.dev", "viewer")
-    conversation = await _conversation("reader@varga.dev")
-    await as_user(client, "reader@varga.dev")
+    await add_member(client, "reader@northwind.dev", "viewer")
+    conversation = await _conversation("reader@northwind.dev")
+    await as_user(client, "reader@northwind.dev")
     assert await _propose(client, upstream, conversation) == []
     assert "may not start work in the project `billing-api`" in _told(upstream)[0]
 

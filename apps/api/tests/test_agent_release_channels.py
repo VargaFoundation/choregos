@@ -417,8 +417,8 @@ async def test_a_personal_agent_is_released_without_a_step_up(
 ) -> None:
     from choregos_api import freshness
 
-    await add_member(client, "dev@varga.dev", "developer")
-    await as_user(client, "dev@varga.dev")
+    await add_member(client, "dev@northwind.dev", "developer")
+    await as_user(client, "dev@northwind.dev")
     await new_agent(client, "mine", policy={"on_publish": "candidate"}, scope="personal")
     await save(client, "mine", 2)
     later = time.time() + 60 * 60
@@ -432,14 +432,14 @@ async def test_a_personal_agent_is_released_without_a_step_up(
 
 async def test_who_may_release(client: AsyncClient) -> None:
     await make_project(client, "dev")
-    await add_member(client, "owner@varga.dev", "project_owner", project="dev")
-    await add_member(client, "dev@varga.dev", "developer")
+    await add_member(client, "owner@northwind.dev", "project_owner", project="dev")
+    await add_member(client, "dev@northwind.dev", "developer")
     await as_user(client, ADMIN)
     await new_agent(client, "shared")
     await save(client, "shared", 2)
-    await as_user(client, "dev@varga.dev")
+    await as_user(client, "dev@northwind.dev")
     await new_agent(client, "private", scope="personal")
-    await as_user(client, "owner@varga.dev")
+    await as_user(client, "owner@northwind.dev")
     shared = await release(client, "shared", channel="candidate", version=2)
     assert shared.status_code == 403 and "organisation agent" in shared.text
     assert (await agent_of(client, "shared"))["can"]["release"] is False
@@ -520,7 +520,7 @@ async def test_the_exposure_lists_who_chose_their_own_revision(client: AsyncClie
     chan = await make_project(client, "on-channel")
     follow = await make_project(client, "following")
     await make_project(client, "plain")
-    await add_member(client, "po@varga.dev", "project_owner", project="pinned")
+    await add_member(client, "po@northwind.dev", "project_owner", project="pinned")
     await as_user(client, ADMIN)
     await new_agent(client, policy=CANDIDATE_POLICY)
     await save(client, "reviewer", 2)
@@ -540,7 +540,7 @@ async def test_the_exposure_lists_who_chose_their_own_revision(client: AsyncClie
         ("on-channel", "pin_channel", 2),
         ("following", "project_channel", 2),
     }
-    await as_user(client, "po@varga.dev")
+    await as_user(client, "po@northwind.dev")
     await only_project_roles()
     visible = (await client.get(f"{ORG}/agents/reviewer/exposure")).json()["projects"]
     assert [p["project"] for p in visible] == ["pinned"], "a project the caller may not read is not listed"
@@ -555,10 +555,10 @@ async def test_the_release_policy_is_the_owners_and_loosening_it_needs_a_fresh_s
     from choregos_api import freshness
 
     await make_project(client, "dev")
-    await add_member(client, "owner@varga.dev", "project_owner", project="dev")
+    await add_member(client, "owner@northwind.dev", "project_owner", project="dev")
     await as_user(client, ADMIN)
     await new_agent(client, policy=CANDIDATE_POLICY)
-    await as_user(client, "owner@varga.dev")
+    await as_user(client, "owner@northwind.dev")
     refused = await client.put(f"{ORG}/agents/reviewer/release-policy", json={"on_publish": "none"})
     assert refused.status_code == 403
     await as_user(client, ADMIN)

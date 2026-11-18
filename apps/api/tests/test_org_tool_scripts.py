@@ -27,7 +27,7 @@ async def _stored() -> dict[str, Any]:
 
     async with session_scope(orgs="*") as session:
         organisation = (
-            await session.execute(select(Organization).where(Organization.slug == "varga"))
+            await session.execute(select(Organization).where(Organization.slug == "northwind"))
         ).scalar_one()
         return dict(organisation.settings or {})
 
@@ -52,7 +52,7 @@ async def test_an_organisation_follows_the_deployment_s_default_until_it_chooses
 async def test_its_administrator_enables_then_disables_then_returns_to_the_default(
     client: AsyncClient, admin: str
 ) -> None:
-    enabled = await client.patch(f"{ORG}/varga", json={"tool_scripts": "enabled"})
+    enabled = await client.patch(f"{ORG}/northwind", json={"tool_scripts": "enabled"})
     assert enabled.status_code == 200, enabled.text
     assert enabled.json()["tool_scripts"] == "enabled"
     assert await _shown(client) == "enabled"
@@ -60,14 +60,14 @@ async def test_its_administrator_enables_then_disables_then_returns_to_the_defau
     assert stored[ORG_SETTING] == "enabled"
     assert org_tool_scripts(stored) == "enabled", "the orchestrator reads what the API wrote"
 
-    renamed = await client.patch(f"{ORG}/varga", json={"name": "Varga"})
+    renamed = await client.patch(f"{ORG}/northwind", json={"name": "Northwind"})
     assert renamed.json()["tool_scripts"] == "enabled", "a request without the field leaves it"
 
-    disabled = await client.patch(f"{ORG}/varga", json={"tool_scripts": "disabled"})
+    disabled = await client.patch(f"{ORG}/northwind", json={"tool_scripts": "disabled"})
     assert disabled.status_code == 200 and disabled.json()["tool_scripts"] == "disabled"
     assert org_tool_scripts(await _stored()) == "disabled"
 
-    default = await client.patch(f"{ORG}/varga", json={"tool_scripts": None})
+    default = await client.patch(f"{ORG}/northwind", json={"tool_scripts": None})
     assert default.status_code == 200 and default.json()["tool_scripts"] is None
     assert ORG_SETTING not in await _stored(), "`null` removes the choice: the deployment's default again"
     assert await _shown(client) is None
@@ -85,7 +85,7 @@ async def test_its_administrator_enables_then_disables_then_returns_to_the_defau
 
 async def test_a_value_outside_the_contract_is_refused(client: AsyncClient, admin: str) -> None:
     for value in ("on", "offer", True, "ENABLED"):
-        refused = await client.patch(f"{ORG}/varga", json={"tool_scripts": value})
+        refused = await client.patch(f"{ORG}/northwind", json={"tool_scripts": value})
         assert refused.status_code == 422, (value, refused.text)
     assert ORG_SETTING not in await _stored()
 
@@ -93,13 +93,13 @@ async def test_a_value_outside_the_contract_is_refused(client: AsyncClient, admi
 async def test_a_project_owner_cannot_change_it_and_nothing_is_audited(
     client: AsyncClient, admin: str, project: dict[str, Any]
 ) -> None:
-    member = {"email": "lead@varga.dev", "role": "project_owner"}
-    assert (await client.post(f"{ORG}/varga/members", json=member)).status_code in {200, 201}
-    await login(client, "lead@varga.dev")
-    refused = await client.patch(f"{ORG}/varga", json={"tool_scripts": "enabled"})
+    member = {"email": "lead@northwind.dev", "role": "project_owner"}
+    assert (await client.post(f"{ORG}/northwind/members", json=member)).status_code in {200, 201}
+    await login(client, "lead@northwind.dev")
+    refused = await client.patch(f"{ORG}/northwind", json={"tool_scripts": "enabled"})
     assert refused.status_code == 403, refused.text
     assert ORG_SETTING not in await _stored()
-    await login(client, "admin@varga.dev")
+    await login(client, "admin@northwind.dev")
     assert await _audit_rows(client) == []
 
 
@@ -107,10 +107,10 @@ async def test_a_member_reads_the_organisation_s_choice(
     client: AsyncClient, admin: str, project: dict[str, Any]
 ) -> None:
     """The project's Tool scripts card says when the organisation has them disabled: a member reads it."""
-    assert (await client.patch(f"{ORG}/varga", json={"tool_scripts": "disabled"})).status_code == 200
-    member = {"email": "dev@varga.dev", "role": "developer", "project_slug": "billing-api"}
-    assert (await client.post(f"{ORG}/varga/members", json=member)).status_code in {200, 201}
-    await login(client, "dev@varga.dev")
+    assert (await client.patch(f"{ORG}/northwind", json={"tool_scripts": "disabled"})).status_code == 200
+    member = {"email": "dev@northwind.dev", "role": "developer", "project_slug": "billing-api"}
+    assert (await client.post(f"{ORG}/northwind/members", json=member)).status_code in {200, 201}
+    await login(client, "dev@northwind.dev")
     assert await _shown(client) == "disabled"
 
 
@@ -135,10 +135,12 @@ async def test_a_platform_administrator_who_is_not_its_administrator_is_refused(
     try:
         await login(client, "platform@example.dev")
         await _remove_the_memberships("platform@example.dev")
-        refused = await client.patch(f"{ORG}/varga", json={"name": "Elsewhere", "tool_scripts": "enabled"})
+        refused = await client.patch(
+            f"{ORG}/northwind", json={"name": "Elsewhere", "tool_scripts": "enabled"}
+        )
         assert refused.status_code == 403, refused.text
         assert "org_admin" in refused.json()["detail"]
-        renamed = await client.patch(f"{ORG}/varga", json={"name": "Elsewhere"})
+        renamed = await client.patch(f"{ORG}/northwind", json={"name": "Elsewhere"})
         assert renamed.status_code == 200, "the name alone is still his to change"
         assert renamed.json()["tool_scripts"] is None
         assert ORG_SETTING not in await _stored()

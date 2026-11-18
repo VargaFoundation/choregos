@@ -30,7 +30,7 @@ SLUG = "billing"
 
 def _files() -> dict[str, str]:
     config = ProjectConfig(
-        slug=SLUG, org="varga", repo=RepoConfig(url="https://github.com/varga/billing.git")
+        slug=SLUG, org="northwind", repo=RepoConfig(url="https://github.com/northwind/billing.git")
     )
     policy = load_preset("team")
     assert policy.sandbox.runtime == "gvisor", "the `team` preset is the one that asks for gVisor"

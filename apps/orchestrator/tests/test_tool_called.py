@@ -17,7 +17,7 @@ async def test_the_gate_sees_the_call_in_the_registry(setup: Any) -> None:
 
     async with session_scope(orgs="*") as session:
         run = Run(
-            id="varga-billing-api-123-t-sourcing-1",
+            id="northwind-billing-api-123-t-sourcing-1",
             work_item_id=setup.work_item_id,
             project_id=setup.project_id,
             transition_id="t-sourcing",
@@ -83,7 +83,7 @@ async def test_a_place_held_under_the_cap_is_not_a_call(setup: Any) -> None:
 
     async with session_scope(orgs="*") as session:
         run = Run(
-            id="varga-billing-api-124-t-sourcing-1",
+            id="northwind-billing-api-124-t-sourcing-1",
             work_item_id=setup.work_item_id,
             project_id=setup.project_id,
             transition_id="t-sourcing",

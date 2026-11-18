@@ -1,5 +1,5 @@
 name: desk
-image: ghcr.io/graalsystems/choregos-agents/desk-mcp@sha256:4a1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c4b5a69788796a5b4c3d2e1f0
+image: ghcr.io/graalsystems/tranibor-agents/desk-mcp@sha256:4a1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c4b5a69788796a5b4c3d2e1f0
 port: 8080
 protocol: mcp-http
 implements: [tracker]

@@ -24,8 +24,8 @@ def _secret(client: AsyncClient, monkeypatch: pytest.MonkeyPatch) -> None:
 
 async def _project(client: AsyncClient, slug: str = "abc") -> dict[str, Any]:
     created = await client.post(
-        "/api/v1/orgs/varga/projects",
-        json={"slug": slug, "name": slug, "config": {"slug": slug, "org": "varga"}},
+        "/api/v1/orgs/northwind/projects",
+        json={"slug": slug, "name": slug, "config": {"slug": slug, "org": "northwind"}},
     )
     assert created.status_code == 201, created.text
     return dict(created.json())

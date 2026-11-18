@@ -5,7 +5,7 @@ import OrgConnectorsPage from "@/app/admin/connectors/page";
 import type { OrgConnector } from "@/lib/types";
 
 vi.mock("next/navigation", () => ({ usePathname: () => "/admin/connectors", useSearchParams: () => new URLSearchParams() }));
-vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "varga" }) }));
+vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "northwind" }) }));
 
 const { pare_feu, miseAJour } = vi.hoisted(() => ({
   pare_feu: {
@@ -51,14 +51,14 @@ describe("the group that approves an operation (ADR 0052)", () => {
     const [valider] = within(field.closest("form") as HTMLElement).getAllByRole("button");
     fireEvent.click(valider!);
     await waitFor(() =>
-      expect(miseAJour).toHaveBeenCalledWith("varga", "pfsense", "update_firewall_rule", {
+      expect(miseAJour).toHaveBeenCalledWith("northwind", "pfsense", "update_firewall_rule", {
         approver_group: "other-approvers",
       }),
     );
 
     fireEvent.change(field, { target: { value: "  " } });
     fireEvent.click(valider!);
-    await waitFor(() => expect(miseAJour).toHaveBeenLastCalledWith("varga", "pfsense", "update_firewall_rule", {
+    await waitFor(() => expect(miseAJour).toHaveBeenLastCalledWith("northwind", "pfsense", "update_firewall_rule", {
       approver_group: null,
     }));
   });

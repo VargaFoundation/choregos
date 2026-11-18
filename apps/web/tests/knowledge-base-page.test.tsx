@@ -7,7 +7,7 @@ import { api } from "@/lib/api";
 import { SERVING_MODES, baseHealth, indexLine, okfBadge, readersLabel, servedRunsLabel } from "@/lib/knowledge";
 import type { KnowledgeBase, KnowledgeDocument, KnowledgeSource } from "@/lib/types";
 
-vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "varga" }) }));
+vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "northwind" }) }));
 vi.mock("@/lib/api", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/api")>();
   return {
@@ -282,7 +282,7 @@ describe("the Open Knowledge Format (ADR 0174)", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: /Download \(OKF\)/ }));
     });
-    expect(api.exportKnowledgeBase).toHaveBeenCalledWith("varga", "handbook");
+    expect(api.exportKnowledgeBase).toHaveBeenCalledWith("northwind", "handbook");
     const link = clicked.mock.contexts[0] as HTMLAnchorElement;
     expect(link.download).toBe("handbook.okf.zip");
     expect(revoked).toHaveBeenCalledWith("blob:bundle");

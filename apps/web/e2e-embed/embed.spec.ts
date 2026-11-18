@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { encodeContext } from "../src/lib/embed";
 
 const CONSOLE = `http://127.0.0.1:${process.env.EMBED_CONSOLE_PORT ?? "3300"}`;
-const EMBED = "/embed/assistants/varga/coach";
+const EMBED = "/embed/assistants/northwind/coach";
 const ALLOWED_HOST = "http://localhost:3100";
 const OTHER_HOST = "http://127.0.0.1:3200";
 const context = { client_id: "C-9" };
@@ -24,7 +24,7 @@ test.describe("frame-ancestors of the embed page (response headers, no browser n
     expect(embed.headers()["content-security-policy"]).not.toContain(OTHER_HOST);
     const login = await request.get("/login");
     expect(login.headers()["content-security-policy"]).toContain("frame-ancestors 'none'");
-    const unknown = await request.get("/embed/assistants/varga/nobody");
+    const unknown = await request.get("/embed/assistants/northwind/nobody");
     expect(unknown.headers()["content-security-policy"]).toContain("frame-ancestors 'none'");
   });
 });
@@ -43,12 +43,12 @@ test.describe("a host application frames the assistant", () => {
 
     // What the sign-in popup does: the first-party session mints the frame token and hands it to the frame
     // (a message from the console's own origin; here the test plays the popup).
-    const minted = await page.request.post(`${FAKE_API}/me/assistants/varga/coach/embed-token`, {
+    const minted = await page.request.post(`${FAKE_API}/me/assistants/northwind/coach/embed-token`, {
       headers: { "X-Fake-Session": "ada" },
     });
     expect(minted.ok()).toBe(true);
     const { token, expires_in } = (await minted.json()) as { token: string; expires_in: number };
-    const inner = page.frames().find((f) => f.url().includes("/embed/assistants/varga/coach"));
+    const inner = page.frames().find((f) => f.url().includes("/embed/assistants/northwind/coach"));
     expect(inner).toBeTruthy();
     await inner!.evaluate(
       ([t, e]) => window.postMessage({ type: "choregos.embed.signed-in", token: t, expires_in: e }, window.location.origin),
@@ -69,7 +69,7 @@ test.describe("a host application frames the assistant", () => {
     for (const event of events) expect(event.origin).toBe(CONSOLE);
 
     calls = await callsOf(page.request);
-    expect(calls.find((c) => c.path === "/me/assistants/varga/coach/conversations")?.body).toEqual({ context });
+    expect(calls.find((c) => c.path === "/me/assistants/northwind/coach/conversations")?.body).toEqual({ context });
     // Every call after the hand-over carried the token, the host's page never saw it.
     const after = calls.slice(calls.findIndex((c) => c.token === token));
     expect(after.filter((c) => c.path.startsWith("/me/conversations") || c.path.endsWith("/conversations")).every((c) => c.token === token)).toBe(true);

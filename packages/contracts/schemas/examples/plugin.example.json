@@ -4,10 +4,10 @@
   "metadata": {
     "name": "servicenow",
     "version": "0.1.0",
-    "publisher": "Varga Foundation",
+    "publisher": "GRAAL.SYSTEMS SAS",
     "license": "Apache-2.0",
     "description": "Triage ServiceNow incidents under human approval.",
-    "homepage": "https://github.com/VargaFoundation/choregos-agents",
+    "homepage": "https://github.com/graalsystems/tranibor-agents",
     "core": ">=0.21.0,<0.23.0"
   },
   "requires": {

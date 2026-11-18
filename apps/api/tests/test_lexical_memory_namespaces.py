@@ -24,7 +24,7 @@ def real_adapters(monkeypatch: pytest.MonkeyPatch) -> None:
 def _memory() -> Any:
     from choregos_adapters import build
 
-    return build("memory", "lexical", {"org": "varga"})
+    return build("memory", "lexical", {"org": "northwind"})
 
 
 async def _setup(client: AsyncClient) -> Any:
@@ -47,7 +47,7 @@ async def test_the_four_namespaces_do_not_mix(client: AsyncClient, admin: str) -
         "shared": "billing-api",
         "own": "billing-api#agent:architect",
         "named": "billing-api#memory:decisions",
-        "global": "org:varga#memory:lessons",
+        "global": "org:northwind#memory:lessons",
     }
     for name, namespace in namespaces.items():
         await memory.write_fact(namespace, _fact(f"rounding rule of the {name} memory"))
@@ -72,10 +72,10 @@ async def test_facts_carry_their_organisation_and_store(client: AsyncClient, adm
     project = await _setup(client)
     memory = _memory()
     await memory.write_fact("billing-api", _fact("shared one"))
-    await memory.write_fact("org:varga#memory:lessons", _fact("global one"))
+    await memory.write_fact("org:northwind#memory:lessons", _fact("global one"))
     async with session_scope() as session:
         org_id = (
-            await session.execute(select(Organization.id).where(Organization.slug == "varga"))
+            await session.execute(select(Organization.id).where(Organization.slug == "northwind"))
         ).scalar_one()
         store_id = (
             await session.execute(select(MemoryStore.id).where(MemoryStore.slug == "lessons"))
@@ -91,7 +91,7 @@ async def test_a_proposal_to_a_global_memory_is_pending_and_decided_only_in_its_
 ) -> None:
     await _setup(client)
     memory = _memory()
-    global_ns = "org:varga#memory:lessons"
+    global_ns = "org:northwind#memory:lessons"
     proposed = await memory.propose_fact(
         global_ns,
         Fact(kind="run_lesson", subject="tls", content="Pin TLS 1.2."),
@@ -114,4 +114,4 @@ async def test_an_unknown_store_raises_instead_of_reading_the_shared_memory(
     with pytest.raises(ValueError, match="unknown project memory"):
         await memory.search("billing-api#memory:nothing", "x", k=1)
     with pytest.raises(ValueError, match="unknown global memory"):
-        await memory.search("org:varga#memory:nothing", "x", k=1)
+        await memory.search("org:northwind#memory:nothing", "x", k=1)

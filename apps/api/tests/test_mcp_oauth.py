@@ -81,7 +81,7 @@ async def _link_admin(sub: str = "sub-admin") -> None:
     from sqlalchemy import select
 
     async with session_scope() as session:
-        admin = (await session.execute(select(User).where(User.email == "admin@varga.dev"))).scalar_one()
+        admin = (await session.execute(select(User).where(User.email == "admin@northwind.dev"))).scalar_one()
         admin.oidc_sub = sub
 
 
@@ -162,7 +162,7 @@ async def test_someone_unknown_to_choregos_is_refused(
 async def test_a_projects_door_publishes_its_own_document(
     idp: dict[str, Any], client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    door = "/mcp/projects/varga:billing-api"
+    door = "/mcp/projects/northwind:billing-api"
     without = await client.post(door, json={"jsonrpc": "2.0", "id": 1, "method": "ping"})
     assert without.status_code == 401
     document = f"/.well-known/oauth-protected-resource{door}"
@@ -189,7 +189,7 @@ async def test_writing_is_asked_for_and_the_call_is_audited_in_the_clients_name(
             "method": "tools/call",
             "params": {
                 "name": "create_work_item",
-                "arguments": {"project": "varga:billing-api", "title": "Through OAuth"},
+                "arguments": {"project": "northwind:billing-api", "title": "Through OAuth"},
             },
         },
         headers={"Authorization": f"Bearer {token}"},
@@ -212,9 +212,9 @@ async def test_another_idp_does_not_find_anyone_by_their_sub(
     reset_settings_cache()
     client.cookies.clear()
     assert (await _tools(client, _token(idp["k1"]))).status_code == 403
-    unverified = _token(idp["k1"], email="admin@varga.dev", email_verified=False)
+    unverified = _token(idp["k1"], email="admin@northwind.dev", email_verified=False)
     assert (await _tools(client, unverified)).status_code == 403, "an unverified e-mail links nobody"
-    verified = _token(idp["k1"], email="admin@varga.dev", email_verified=True)
+    verified = _token(idp["k1"], email="admin@northwind.dev", email_verified=True)
     assert (await _tools(client, verified)).status_code == 200
 
 

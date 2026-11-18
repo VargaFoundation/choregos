@@ -35,15 +35,15 @@ describe("the remembered organisation (S42-13)", () => {
 describe("the remembered organisation follows a rename (ADR 0090)", () => {
   const orgs = [
     { slug: "autre", aliases: [] },
-    { slug: "fondation", aliases: ["varga"] },
+    { slug: "fondation", aliases: ["northwind"] },
   ];
   it("keeps the organisation remembered under its former slug, not the first one", () => {
-    expect(pickOrg(orgs, "varga")).toBe("fondation");
+    expect(pickOrg(orgs, "northwind")).toBe("fondation");
     expect(pickOrg(orgs, "fondation")).toBe("fondation");
   });
   it("falls back to the first organisation for an unknown slug, and to null without any", () => {
     expect(pickOrg(orgs, "inconnue")).toBe("autre");
     expect(pickOrg(orgs, null)).toBe("autre");
-    expect(pickOrg([], "varga")).toBeNull();
+    expect(pickOrg([], "northwind")).toBeNull();
   });
 });

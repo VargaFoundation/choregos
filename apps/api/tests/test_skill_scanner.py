@@ -291,11 +291,11 @@ async def test_a_version_the_scanner_condemns_waits_for_a_second_administrator(
     client: AsyncClient, admin: str, fake_scanner: FakeSkillScanner
 ) -> None:
     fake_scanner.answer = findings_from_report(REPORT)
-    created = await client.post("/api/v1/orgs/varga/skills", json={"files": SKILL})
+    created = await client.post("/api/v1/orgs/northwind/skills", json={"files": SKILL})
     assert created.status_code == 201, created.text
     body = created.json()
     assert (body["risk"], body["review_status"]) == ("high", "pending_review")
-    version = (await client.get("/api/v1/orgs/varga/skills/commit-message/versions/1")).json()
+    version = (await client.get("/api/v1/orgs/northwind/skills/commit-message/versions/1")).json()
     assert "skillspector:SC4" in {f["code"] for f in version["findings"]}
     assert fake_scanner.seen == [SKILL]
 
@@ -304,14 +304,14 @@ async def test_a_version_the_scanner_finds_clean_is_usable_at_once(
     client: AsyncClient, admin: str, fake_scanner: FakeSkillScanner
 ) -> None:
     fake_scanner.answer = Scan(recommendation="SAFE")
-    created = await client.post("/api/v1/orgs/varga/skills", json={"files": SKILL})
+    created = await client.post("/api/v1/orgs/northwind/skills", json={"files": SKILL})
     assert (created.json()["risk"], created.json()["review_status"]) == ("low", "approved")
 
 
 async def test_without_a_scanner_the_gate_is_unchanged(client: AsyncClient, admin: str) -> None:
     assert skill_scanner.get_scanner() is None  # the default outside the image
-    assert (await client.post("/api/v1/orgs/varga/skills", json={"files": SKILL})).status_code == 201
-    version = (await client.get("/api/v1/orgs/varga/skills/commit-message/versions/1")).json()
+    assert (await client.post("/api/v1/orgs/northwind/skills", json={"files": SKILL})).status_code == 201
+    version = (await client.get("/api/v1/orgs/northwind/skills/commit-message/versions/1")).json()
     assert not any(f["code"].startswith("skillspector:") for f in version["findings"])
 
 

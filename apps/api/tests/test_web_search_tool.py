@@ -16,7 +16,7 @@ from httpx import AsyncClient
 
 from .test_network_policy_api import CEILING_URL, _policy, _run
 
-ORG = "/api/v1/orgs/varga"
+ORG = "/api/v1/orgs/northwind"
 KEY = "search-key-from-the-vault"
 #: What an enterprise contract grants: nothing kept, nothing reused.
 ZERO = {"query_retention_days": 0, "query_reuse": False, "terms_ref": "contract BRAVE-2026-07, §4"}

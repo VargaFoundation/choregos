@@ -49,10 +49,10 @@ async def _ready(client: AsyncClient) -> None:
     await _bind(client, "news", "news-feed")
     ready = await _bind(client, "market_data", "markets")
     assert ready.json()["status"] == "ready", ready.text
-    await as_user(client, "admin@varga.dev")
+    await as_user(client, "admin@northwind.dev")
 
 
-async def _person(client: AsyncClient, app: Any, email: str = "probe@varga.dev") -> AsyncClient:
+async def _person(client: AsyncClient, app: Any, email: str = "probe@northwind.dev") -> AsyncClient:
     await _member(client, email, [AUDIENCE])
     return await _as(app, email)
 
@@ -79,7 +79,7 @@ async def test_the_title_is_written_by_the_model_from_the_first_exchange_on_the_
     await _agent(client)
     upstream.model.say("Order 42 shipped yesterday.").say("It arrives on Friday.")
     upstream.model.say_for("conversation_title", '"Order 42 delivery status."')
-    conversation = await _open("varga", admin)
+    conversation = await _open("northwind", admin)
     assert (await _say(client, conversation, "Where is order 42? I ordered it last week")).status_code == 200
     assert (await _record(conversation)).title == "Order 42 delivery status"
     (headers, body) = upstream.model.side_requests[0]
@@ -109,7 +109,7 @@ async def test_a_title_the_model_cannot_write_falls_back_to_the_cut_message(
         upstream.model.say_for("conversation_title", "no budget", status=400)
     else:
         upstream.model.say_for("conversation_title", "   ")
-    conversation = await _open("varga", admin)
+    conversation = await _open("northwind", admin)
     answer = await _say(client, conversation, "Where is my order?")
     assert answer.status_code == 200 and answer.json()["status"] == "completed", "the turn is not failed"
     assert (await _record(conversation)).title == "Where is my order?"
@@ -213,7 +213,7 @@ async def test_two_turns_racing_the_installations_month_cap_are_not_both_admitte
     from choregos_api.services.agent_sessions import set_model_transport
 
     person = await _person(client, app)
-    other = await _person(client, app, "other@varga.dev")
+    other = await _person(client, app, "other@northwind.dev")
     await _ready(client)
     cap = 1.0
     changed = await client.patch(

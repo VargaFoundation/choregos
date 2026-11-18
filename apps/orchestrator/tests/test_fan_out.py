@@ -17,7 +17,7 @@ import pytest
 from .conftest import Fixture, recording_history
 
 HISTORIES = pathlib.Path(__file__).resolve().parents[3] / "tests" / "replay" / "histories"
-PARENT_ID = "wi-billing-api-varga_billing-api-123"
+PARENT_ID = "wi-billing-api-northwind_billing-api-123"
 APPROVE = {"approved": True, "decided_by": "ana", "kind": "approval"}
 REJECT = {"approved": False, "decided_by": "ana", "kind": "approval", "reason": "too volatile"}
 
@@ -193,12 +193,12 @@ async def test_the_parent_waits_for_every_child_then_reads_what_they_concluded(
         async with worker_factory():
             parent = await _start(temporal_env, setup)
             children = await _children_open(setup, 2)
-            assert sorted(children) == ["varga/billing-api#123.1", "varga/billing-api#123.2"]
-            first, second = children["varga/billing-api#123.1"], children["varga/billing-api#123.2"]
-            assert first.title == "Review AAA (varga/billing-api#123)"
+            assert sorted(children) == ["northwind/billing-api#123.1", "northwind/billing-api#123.2"]
+            first, second = children["northwind/billing-api#123.1"], children["northwind/billing-api#123.2"]
+            assert first.title == "Review AAA (northwind/billing-api#123)"
             assert first.fields == {"symbol": "AAA", "dsr": 0.97}, "one expression keeps its type"
             assert first.documents["parent"]["workflow_id"] == PARENT_ID
-            assert first.documents["labels"] == ["parent:varga/billing-api#123"]
+            assert first.documents["labels"] == ["parent:northwind/billing-api#123"]
             for child in (first, second):
                 await _waiting(temporal_env, child.temporal_wf_id)
 
@@ -225,7 +225,10 @@ async def test_the_parent_waits_for_every_child_then_reads_what_they_concluded(
     joined = (await _items(setup))[setup.tracker_key].documents["children"]
     assert joined["total"] == 2 and joined["succeeded"] == 1, joined
     assert joined["states"] == {"adopted": 1, "rejected": 1}
-    assert [c["key"] for c in joined["items"]] == ["varga/billing-api#123.1", "varga/billing-api#123.2"]
+    assert [c["key"] for c in joined["items"]] == [
+        "northwind/billing-api#123.1",
+        "northwind/billing-api#123.2",
+    ]
     signals = [
         e.workflow_execution_signaled_event_attributes.signal_name
         for e in history.events
@@ -309,7 +312,7 @@ async def test_opening_twice_opens_nothing_new(setup: Fixture) -> None:
     }
     first = await env.run(spawn_children, payload)
     again = await env.run(spawn_children, payload)
-    assert first == again == {"children": ["varga/billing-api#123.1", "varga/billing-api#123.2"]}
+    assert first == again == {"children": ["northwind/billing-api#123.1", "northwind/billing-api#123.2"]}
     assert len(await _items(setup)) == 3, "two children, not four"
     assert started == [f"{PARENT_ID}.1", f"{PARENT_ID}.2"] * 2, "the same identifiers: Temporal refuses twice"
 

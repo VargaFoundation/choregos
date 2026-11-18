@@ -12,7 +12,7 @@ import pytest
 
 pytestmark = pytest.mark.asyncio
 
-REPO = "varga/billing-api"
+REPO = "northwind/billing-api"
 BRANCH = "choregos/123"
 RULE = {"name": "scope_respected", "params": {"paths": ["docs/adr/**"]}}
 

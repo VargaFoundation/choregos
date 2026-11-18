@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
  * The console's primitives (ADR 0048): the console owns them, on plain accessible HTML and its own
- * tokens; it no longer depends on the Varga Foundation design system, and an eslint rule refuses an
+ * tokens; it no longer depends on a third-party design system, and an eslint rule refuses an
  * import from it. The look is an operations console in the manner of Temporal's UI: sentence case,
  * sans for what is read and mono only for what is compared, 4–6 px radii, round pills.
  *
@@ -107,7 +107,7 @@ const TEXT: Record<Tone, string> = {
 
 // ───────────────────────────── dots, pills, legends ─────────────────────────────
 
-/** A state's dot: round (the square bullet was the foundation's editorial signature). */
+/** A state's dot: round (the square bullet was the publisher's editorial signature). */
 export function Dot({ tone = "ink", size = 6, className }: { tone?: Tone; size?: 4 | 6 | 8; className?: string }) {
   const dimension = { 4: "size-1", 6: "size-1.5", 8: "size-2" }[size];
   return <span aria-hidden className={cn("inline-block shrink-0 rounded-full", dimension, POINT[tone], className)} />;
@@ -732,7 +732,7 @@ export function StepNumber({ value, className }: { value: number | string; class
 }
 
 /**
- * The console's wordmark: the product's name, in its own letters — not the foundation's mark (ADR
+ * The console's wordmark: the product's name, in its own letters — not the publisher's mark (ADR
  * 0048). The glyph is a plain geometric figure (a stage and its next step), drawn here.
  */
 export function Wordmark({ className, compact = false }: { className?: string; compact?: boolean }) {

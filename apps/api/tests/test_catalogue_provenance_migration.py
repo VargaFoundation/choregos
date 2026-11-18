@@ -26,7 +26,7 @@ AFTER = "b8d0f2a4c6e1"
 #: What an organisation held before S43-09: two catalogue agents (one it changed), its own agent, the
 #: catalogue skill, and a second organisation that holds none.
 SEED: tuple[tuple[str, dict[str, Any]], ...] = (
-    ("organizations", {"id": "o1", "slug": "varga", "name": "Varga", "settings": "{}"}),
+    ("organizations", {"id": "o1", "slug": "northwind", "name": "Northwind", "settings": "{}"}),
     ("organizations", {"id": "o2", "slug": "other", "name": "Other", "settings": "{}"}),
     *(
         (
@@ -50,7 +50,7 @@ SEED: tuple[tuple[str, dict[str, Any]], ...] = (
             ("v-arch-1", "a-arch", 1, "catalogue:architect@1"),
             ("v-arch-2", "a-arch", 2, "catalogue:architect@2"),
             ("v-tri-1", "a-tri", 1, "catalogue:triager@1!diverged"),
-            ("v-tri-2", "a-tri", 2, "alice@varga.dev"),
+            ("v-tri-2", "a-tri", 2, "alice@northwind.dev"),
             ("v-own-1", "a-own", 1, "template:x@1"),
         )
     ),
@@ -71,21 +71,21 @@ EXPECTED_AUTHORS = [
     ("v-arch-2", "plugin:software-delivery/architect@2"),
     ("v-own-1", "template:x@1"),
     ("v-tri-1", "plugin:software-delivery/triager@1!diverged"),
-    ("v-tri-2", "alice@varga.dev"),
+    ("v-tri-2", "alice@northwind.dev"),
 ]
 BEFORE_AUTHORS = [
     ("v-arch-1", "catalogue:architect@1"),
     ("v-arch-2", "catalogue:architect@2"),
     ("v-own-1", "template:x@1"),
     ("v-tri-1", "catalogue:triager@1!diverged"),
-    ("v-tri-2", "alice@varga.dev"),
+    ("v-tri-2", "alice@northwind.dev"),
 ]
 
 
-def check_upgraded(authors: list[Any], skills: list[Any], plugins: list[Any]) -> None:
+def check_upgraded(authors: list[Any], skills: list[Any], plugins: list[Any], source: str = "varga") -> None:
     assert [tuple(r) for r in authors] == EXPECTED_AUTHORS
     assert [tuple(r) for r in skills] == [("sv-madr-1", "plugin:software-delivery/madr-4@1.0.0")]
-    assert [(r[0], r[1], r[2], r[3]) for r in plugins] == [("o1", "software-delivery", "varga", "1.0.0")]
+    assert [(r[0], r[1], r[2], r[3]) for r in plugins] == [("o1", "software-delivery", source, "1.0.0")]
     contents = plugins[0][4] if isinstance(plugins[0][4], dict) else json.loads(plugins[0][4])
     details = plugins[0][5] if isinstance(plugins[0][5], dict) else json.loads(plugins[0][5])
     assert contents["agents"] == ["architect", "triager"] and contents["skills"] == ["madr-4"]
@@ -131,8 +131,9 @@ def test_the_migration_names_the_plugin_and_records_it(
         authors, _, plugins = read()
         assert [tuple(r) for r in authors] == BEFORE_AUTHORS and plugins == []
 
+        # The later migration renames the source the plugin was recorded under (ADR 0186).
         command.upgrade(_config(url), "head")
-        check_upgraded(*read())
+        check_upgraded(*read(), source="tranibor")
     finally:
         engine.dispose()
         get_settings.cache_clear()

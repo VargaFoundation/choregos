@@ -97,8 +97,8 @@ async def _seed_assistants(project_id: str) -> dict[str, str]:
 
     now = datetime.now(UTC)
     async with session_scope() as session:
-        varga = select(Organization.id).where(Organization.slug == "varga")
-        org_id = (await session.execute(varga)).scalar_one()
+        northwind = select(Organization.id).where(Organization.slug == "northwind")
+        org_id = (await session.execute(northwind)).scalar_one()
         investor, support = (
             AssistantInstallation(org_id=org_id, slug=slug, plugin="p", plugin_version="1",
                                   manifest_digest="d", assistant_name=slug)
@@ -141,7 +141,9 @@ async def assistants(items: dict[str, str], project: dict[str, Any]) -> dict[str
 def _url(scope: str, project: dict[str, Any], *, csv: bool = False) -> str:
     suffix = "costs.csv" if csv else "costs"
     return (
-        f"/api/v1/projects/{project['id']}/{suffix}" if scope == "project" else f"/api/v1/orgs/varga/{suffix}"
+        f"/api/v1/projects/{project['id']}/{suffix}"
+        if scope == "project"
+        else f"/api/v1/orgs/northwind/{suffix}"
     )
 
 

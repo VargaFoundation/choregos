@@ -23,7 +23,7 @@ from .test_web_fetch_tool import _ready as _fetch_ready
 from .test_web_search_tool import QUERY, ZERO
 from .test_web_search_tool import _ready as _search_ready
 
-URL = "/api/v1/orgs/varga/outbound-proxy"
+URL = "/api/v1/orgs/northwind/outbound-proxy"
 PASSWORD = "p@ss=w/rd%1&x"
 BODY: dict[str, Any] = {
     "enabled": True,
@@ -227,13 +227,13 @@ async def test_delete_removes_the_setting_and_the_sealed_password(
     async with session_scope() as session:
         org = (await session.execute(select(Organization))).scalar_one()
         assert await get_secret_store().meta(session, org.id, ["org/outbound-proxy/password"]) == {}
-    assert await _resolve("varga", "web_fetch") is None
+    assert await _resolve("northwind", "web_fetch") is None
     deleted = await _audit("outbound_proxy.delete")
     assert deleted[0]["endpoint"] == BODY["endpoint"] and PASSWORD not in json.dumps(deleted)
 
 
 async def test_every_route_needs_org_admin(client: AsyncClient, org: str, net: Net) -> None:
-    await login(client, "admin@varga.dev")
+    await login(client, "admin@northwind.dev")
     await _put(client)
     client.cookies.clear()
     await login(client, "someone@elsewhere.dev")
@@ -242,7 +242,7 @@ async def test_every_route_needs_org_admin(client: AsyncClient, org: str, net: N
     assert (await client.post(f"{URL}/test")).status_code == 403
     assert (await client.delete(URL)).status_code == 403
     client.cookies.clear()
-    await login(client, "admin@varga.dev")
+    await login(client, "admin@northwind.dev")
     assert (await client.get(URL)).json()["proxy"]["endpoint"] == BODY["endpoint"], "nothing was changed"
 
 
@@ -295,13 +295,13 @@ async def test_the_proxy_url_percent_encodes_its_credentials() -> None:
 
 async def test_the_resolver_honours_enabled_and_applies_to(client: AsyncClient, admin: str, net: Net) -> None:
     await _put(client, applies_to=["web_fetch", "knowledge_web"])
-    assert (await _resolve("varga", "web_fetch")) == ProxyConfig(
+    assert (await _resolve("northwind", "web_fetch")) == ProxyConfig(
         "gate.proxy.example:7000", "http", BODY["username"], PASSWORD
     )
-    assert await _resolve("varga", "knowledge_web") is not None
-    assert await _resolve("varga", "web_search") is None, "a kind outside applies_to goes direct"
+    assert await _resolve("northwind", "knowledge_web") is not None
+    assert await _resolve("northwind", "web_search") is None, "a kind outside applies_to goes direct"
     await _put(client, enabled=False, password=None)
-    assert await _resolve("varga", "web_fetch") is None, "disabled goes direct"
+    assert await _resolve("northwind", "web_fetch") is None, "disabled goes direct"
 
 
 async def test_a_proxy_that_applies_but_has_lost_its_password_fails_closed(
@@ -312,7 +312,7 @@ async def test_a_proxy_that_applies_but_has_lost_its_password_fails_closed(
     await _put(client)
     set_secret_store(FakeSecretStore())  # the sealed value is gone
     with pytest.raises(OutboundProxyError, match=r"http://gate\.proxy\.example:7000"):
-        await _resolve("varga", "web_fetch")
+        await _resolve("northwind", "web_fetch")
 
 
 async def test_an_organisation_never_gets_anothers_proxy(client: AsyncClient, admin: str, net: Net) -> None:
@@ -322,7 +322,7 @@ async def test_an_organisation_never_gets_anothers_proxy(client: AsyncClient, ad
     async with session_scope() as session:
         session.add(Organization(slug="other", name="Other"))
     await _put(client)
-    assert (await _resolve("varga", "web_fetch")) is not None
+    assert (await _resolve("northwind", "web_fetch")) is not None
     assert await _resolve("other", "web_fetch") is None
     assert await _resolve("other", "web_search") is None
 
@@ -571,7 +571,7 @@ async def test_the_proxy_never_widens_what_the_crawl_may_reach(
 
     proxy = ProxyConfig(BODY["endpoint"], "http", BODY["username"], PASSWORD)
     crawl = _crawl(net)
-    policy = EgressPolicy(org="varga", rules=(), requested=(), mode="enforce")
+    policy = EgressPolicy(org="northwind", rules=(), requested=(), mode="enforce")
     with (
         use_policy(policy, "api", "test"),
         use_proxies({"knowledge_web": proxy}),
@@ -594,7 +594,7 @@ async def test_the_knowledge_sync_enters_the_organisations_proxy_scope(
         )
 
     monkeypatch.setattr("choregos_api.knowledge.sync.open_source", open_source)
-    base = "/api/v1/orgs/varga/knowledge"
+    base = "/api/v1/orgs/northwind/knowledge"
     await client.post(base, json={"slug": "docs", "name": "Docs", "serving_mode": "index"})
     created = await client.post(
         f"{base}/docs/sources",
@@ -607,16 +607,16 @@ async def test_the_knowledge_sync_enters_the_organisations_proxy_scope(
     )
     source_id = str(created.json()["id"])
     await _put(client, applies_to=["knowledge_web"])
-    await sync_source("varga", source_id)
+    await sync_source("northwind", source_id)
     assert net.via_proxy, "the sync's crawl went through the proxy"
     assert net.direct == [], "and not around it"
     net.via_proxy.clear()
     await _put(client, applies_to=["web_fetch"], password=None)
-    await sync_source("varga", source_id)
+    await sync_source("northwind", source_id)
     assert net.via_proxy == [] and net.direct, "knowledge_web not in applies_to: direct"
     net.direct.clear()
     await _put(client, applies_to=["knowledge_web"], password=None)
     net.proxy_mode = "unreachable"
     with pytest.raises(httpx.HTTPError, match=r"gate\.proxy\.example:7000"):
-        await sync_source("varga", source_id)
+        await sync_source("northwind", source_id)
     assert net.direct == [], "a failing proxy is never bypassed"

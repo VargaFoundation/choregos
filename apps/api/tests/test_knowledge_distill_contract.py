@@ -8,7 +8,7 @@ import choregos_contracts as contracts
 from choregos_api.schemas.knowledge import KnowledgeDistillEstimate, KnowledgeDistillRequest
 from httpx import AsyncClient
 
-BASE = "/api/v1/orgs/varga/knowledge"
+BASE = "/api/v1/orgs/northwind/knowledge"
 
 
 def _schema(name: str) -> dict[str, object]:

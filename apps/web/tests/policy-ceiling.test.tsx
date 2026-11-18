@@ -22,15 +22,15 @@ describe("the organisation's policy ceiling (S27-05)", () => {
   });
 
   it("still saves the raw JSON, under Advanced", async () => {
-    vi.mocked(api.policyCeiling).mockResolvedValue({ ceiling: { budgets: { ticket_usd: { M: 20 } } }, updated_by: "ada@varga.dev", updated_at: "2026-10-13T10:00:00" });
+    vi.mocked(api.policyCeiling).mockResolvedValue({ ceiling: { budgets: { ticket_usd: { M: 20 } } }, updated_by: "ada@northwind.dev", updated_at: "2026-10-13T10:00:00" });
     vi.mocked(api.putPolicyCeiling).mockResolvedValue({ ceiling: null });
-    wrap(<PolicyCeilingCard org="varga" canEdit />);
+    wrap(<PolicyCeilingCard org="northwind" canEdit />);
     const box = await screen.findByLabelText("Policy ceiling");
     await waitFor(() => expect((box as HTMLTextAreaElement).value).toContain('"M": 20'));
-    expect(screen.getByText(/set by ada@varga.dev/)).toBeInTheDocument();
+    expect(screen.getByText(/set by ada@northwind.dev/)).toBeInTheDocument();
     fireEvent.change(box, { target: { value: '{"attempts": {"default_max": 2}}' } });
     fireEvent.click(screen.getByRole("button", { name: "Save the raw JSON" }));
-    await waitFor(() => expect(api.putPolicyCeiling).toHaveBeenCalledWith("varga", { attempts: { default_max: 2 } }));
+    await waitFor(() => expect(api.putPolicyCeiling).toHaveBeenCalledWith("northwind", { attempts: { default_max: 2 } }));
   });
 
   const STORED = {
@@ -41,8 +41,8 @@ describe("the organisation's policy ceiling (S27-05)", () => {
   };
 
   it("prefills the form from the stored ceiling", async () => {
-    vi.mocked(api.policyCeiling).mockResolvedValue({ ceiling: STORED, updated_by: "ada@varga.dev", updated_at: "2026-10-13T10:00:00" });
-    wrap(<PolicyCeilingCard org="varga" canEdit />);
+    vi.mocked(api.policyCeiling).mockResolvedValue({ ceiling: STORED, updated_by: "ada@northwind.dev", updated_at: "2026-10-13T10:00:00" });
+    wrap(<PolicyCeilingCard org="northwind" canEdit />);
     await waitFor(() => expect(screen.getByLabelText("Ticket budget M")).toHaveValue("20"));
     expect(screen.getByLabelText("Max turns default")).toHaveValue("60");
     expect(screen.getByLabelText("Default attempts")).toHaveValue("2");
@@ -53,13 +53,13 @@ describe("the organisation's policy ceiling (S27-05)", () => {
   it("sends the edited fields and keeps the network and unknown keys the ceiling already had", async () => {
     vi.mocked(api.policyCeiling).mockResolvedValue({ ceiling: STORED });
     vi.mocked(api.putPolicyCeiling).mockResolvedValue({ ceiling: null });
-    wrap(<PolicyCeilingCard org="varga" canEdit />);
+    wrap(<PolicyCeilingCard org="northwind" canEdit />);
     await waitFor(() => expect(screen.getByLabelText("Ticket budget M")).toHaveValue("20"));
     fireEvent.change(screen.getByLabelText("Ticket budget M"), { target: { value: "15" } });
     fireEvent.change(screen.getByLabelText("Max turns default"), { target: { value: "40" } });
     fireEvent.click(screen.getByRole("button", { name: "Save the ceiling" }));
     await waitFor(() =>
-      expect(api.putPolicyCeiling).toHaveBeenCalledWith("varga", {
+      expect(api.putPolicyCeiling).toHaveBeenCalledWith("northwind", {
         ...STORED,
         budgets: { ticket_usd: { M: 15 }, max_turns: { default: 40 } },
       }),
@@ -69,26 +69,26 @@ describe("the organisation's policy ceiling (S27-05)", () => {
   it("sends exactly the two edited fields when the stored ceiling was empty", async () => {
     vi.mocked(api.policyCeiling).mockResolvedValue({ ceiling: null });
     vi.mocked(api.putPolicyCeiling).mockResolvedValue({ ceiling: null });
-    wrap(<PolicyCeilingCard org="varga" canEdit />);
+    wrap(<PolicyCeilingCard org="northwind" canEdit />);
     await screen.findByLabelText("Ticket budget M");
     fireEvent.change(screen.getByLabelText("Ticket budget M"), { target: { value: "12.5" } });
     fireEvent.change(screen.getByLabelText("Max turns default"), { target: { value: "30" } });
     fireEvent.click(screen.getByRole("button", { name: "Save the ceiling" }));
     await waitFor(() =>
-      expect(api.putPolicyCeiling).toHaveBeenCalledWith("varga", { budgets: { ticket_usd: { M: 12.5 }, max_turns: { default: 30 } } }),
+      expect(api.putPolicyCeiling).toHaveBeenCalledWith("northwind", { budgets: { ticket_usd: { M: 12.5 }, max_turns: { default: 30 } } }),
     );
   });
 
   it("omits an emptied field, and the section it leaves empty", async () => {
     vi.mocked(api.policyCeiling).mockResolvedValue({ ceiling: STORED });
     vi.mocked(api.putPolicyCeiling).mockResolvedValue({ ceiling: null });
-    wrap(<PolicyCeilingCard org="varga" canEdit />);
+    wrap(<PolicyCeilingCard org="northwind" canEdit />);
     await waitFor(() => expect(screen.getByLabelText("Default attempts")).toHaveValue("2"));
     fireEvent.change(screen.getByLabelText("Default attempts"), { target: { value: "" } });
     fireEvent.change(screen.getByLabelText("Max turns default"), { target: { value: " " } });
     fireEvent.click(screen.getByRole("button", { name: "Save the ceiling" }));
     await waitFor(() =>
-      expect(api.putPolicyCeiling).toHaveBeenCalledWith("varga", {
+      expect(api.putPolicyCeiling).toHaveBeenCalledWith("northwind", {
         budgets: { ticket_usd: { M: 20 } },
         network: STORED.network,
         future_section: STORED.future_section,
@@ -100,19 +100,19 @@ describe("the organisation's policy ceiling (S27-05)", () => {
     vi.mocked(api.policyCeiling).mockResolvedValueOnce({ ceiling: null });
     vi.mocked(api.policyCeiling).mockResolvedValue({ ceiling: { network: { deny_domains: ["x.example"] } } as never }); // the generated type lacks `network` (contract drift)
     vi.mocked(api.putPolicyCeiling).mockResolvedValue({ ceiling: null });
-    wrap(<PolicyCeilingCard org="varga" canEdit />);
+    wrap(<PolicyCeilingCard org="northwind" canEdit />);
     await screen.findByLabelText("Ticket budget M");
     fireEvent.change(screen.getByLabelText("Findings per run"), { target: { value: "0" } });
     fireEvent.click(screen.getByRole("button", { name: "Save the ceiling" }));
     await waitFor(() =>
-      expect(api.putPolicyCeiling).toHaveBeenCalledWith("varga", { findings: { max_per_run: 0 }, network: { deny_domains: ["x.example"] } }),
+      expect(api.putPolicyCeiling).toHaveBeenCalledWith("northwind", { findings: { max_per_run: 0 }, network: { deny_domains: ["x.example"] } }),
     );
   });
 
   it("blocks the save below a minimum and says which field", async () => {
     vi.mocked(api.policyCeiling).mockResolvedValue({ ceiling: null });
     vi.mocked(api.putPolicyCeiling).mockReset();
-    wrap(<PolicyCeilingCard org="varga" canEdit />);
+    wrap(<PolicyCeilingCard org="northwind" canEdit />);
     await screen.findByLabelText("Max turns default");
     fireEvent.change(screen.getByLabelText("Max turns default"), { target: { value: "0" } });
     fireEvent.change(screen.getByLabelText("Daily spend per project"), { target: { value: "0" } });
@@ -136,7 +136,7 @@ describe("the organisation's policy ceiling (S27-05)", () => {
     vi.mocked(api.putPolicyCeiling).mockRejectedValue(
       new ApiError(422, { title: "Unprocessable", detail: "not a policy ceiling", errors: [{ loc: ["ceiling", "budgets", "ticket_usd", "M"], msg: "refused by the server" }, { loc: ["ceiling", "network", "x"], msg: "odd" }] }),
     );
-    wrap(<PolicyCeilingCard org="varga" canEdit />);
+    wrap(<PolicyCeilingCard org="northwind" canEdit />);
     await screen.findByLabelText("Ticket budget M");
     fireEvent.change(screen.getByLabelText("Ticket budget M"), { target: { value: "9" } });
     fireEvent.click(screen.getByRole("button", { name: "Save the ceiling" }));
@@ -147,7 +147,7 @@ describe("the organisation's policy ceiling (S27-05)", () => {
 
   it("is read-only for a member who is not an administrator", async () => {
     vi.mocked(api.policyCeiling).mockResolvedValue({ ceiling: null });
-    wrap(<PolicyCeilingCard org="varga" canEdit={false} />);
+    wrap(<PolicyCeilingCard org="northwind" canEdit={false} />);
     expect(await screen.findByLabelText("Policy ceiling")).toHaveAttribute("readonly");
     expect(screen.getByLabelText("Ticket budget M")).toHaveAttribute("readonly");
     expect(screen.queryByRole("button", { name: "Save the ceiling" })).toBeNull();

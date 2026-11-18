@@ -50,7 +50,7 @@ def signed_response(idp: kit.Idp, *, sign: str = "assertion", **fields: Any) -> 
     """A response whose assertion (or the whole response) is signed by `idp`."""
     fields.setdefault("request_id", REQUEST)
     fields.setdefault("now", NOW)
-    org = fields.get("org", "varga")
+    org = fields.get("org", "northwind")
     inner = kit.assertion(**fields)
     if sign == "assertion":
         return kit.encode(kit.response(idp.sign(inner), org=org))
@@ -60,7 +60,7 @@ def signed_response(idp: kit.Idp, *, sign: str = "assertion", **fields: Any) -> 
 
 
 def verify(idp: kit.Idp, encoded: str, now: dt.datetime = NOW, **changes: Any) -> engine.Identity:
-    return engine.verify_response(encoded, provider(idp, **changes), "varga", REQUEST, now)
+    return engine.verify_response(encoded, provider(idp, **changes), "northwind", REQUEST, now)
 
 
 def refused(idp: kit.Idp, encoded: str, reason: str, now: dt.datetime = NOW, **changes: Any) -> None:
@@ -78,7 +78,7 @@ def test_a_signed_assertion_is_accepted_and_its_groups_are_translated_for_this_o
 ) -> None:
     identity = verify(idp, signed_response(idp, groups=("Admins", "Unknown", "choregos:other:org-admins")))
     assert identity.email == "ann@globex.example"
-    assert identity.groups == ["choregos:varga:org-admins"]  # raw and unmapped groups give nothing
+    assert identity.groups == ["choregos:northwind:org-admins"]  # raw and unmapped groups give nothing
     assert identity.assertion_id == "_assertion-1"
 
 
@@ -310,14 +310,14 @@ def test_an_assertion_that_answers_nothing_is_refused(idp: kit.Idp) -> None:
 
 def test_no_pending_request_means_no_assertion_is_accepted(idp: kit.Idp) -> None:
     with pytest.raises(ApiError):
-        engine.verify_response(signed_response(idp), provider(idp), "varga", "", NOW)
+        engine.verify_response(signed_response(idp), provider(idp), "northwind", "", NOW)
 
 
 # ───────────────────────────── domains ─────────────────────────────
 
 
 def test_an_address_outside_the_provider_s_domains_is_refused(idp: kit.Idp) -> None:
-    refused(idp, signed_response(idp, email="ceo@varga.example"), "domains")
+    refused(idp, signed_response(idp, email="ceo@northwind.example"), "domains")
 
 
 def test_a_look_alike_domain_is_refused(idp: kit.Idp) -> None:
@@ -331,7 +331,7 @@ def test_an_address_without_a_domain_is_refused(idp: kit.Idp) -> None:
 
 # ───────────────────────────── the flow over HTTP ─────────────────────────────
 
-ADMIN = "admin@varga.dev"
+ADMIN = "admin@northwind.dev"
 CONFIG_KEYS = {"idp_entity_id", "sso_url", "certificate_pem", "domains", "group_map", "groups_attribute"}
 
 
@@ -349,7 +349,7 @@ def configuration(idp: kit.Idp, **changes: Any) -> dict[str, Any]:
 
 @pytest.fixture
 async def configured(client: AsyncClient, admin: str, idp: kit.Idp) -> kit.Idp:
-    put = await client.put("/api/v1/orgs/varga/saml", json=configuration(idp))
+    put = await client.put("/api/v1/orgs/northwind/saml", json=configuration(idp))
     assert put.status_code == 200, put.text
     return idp
 
@@ -366,14 +366,14 @@ def request_id_of(location: str) -> str:
 
 async def start(member: AsyncClient) -> str:
     """The sign-in starts; the request id the provider would answer."""
-    started = await member.get("/api/v1/saml/varga/login", params={"redirect_to": "/projects"})
+    started = await member.get("/api/v1/saml/northwind/login", params={"redirect_to": "/projects"})
     assert started.status_code == 307
     assert started.headers["location"].startswith("https://idp.globex.example/sso?SAMLRequest=")
     return request_id_of(started.headers["location"])
 
 
 async def post(member: AsyncClient, encoded: str) -> Any:
-    return await member.post("/api/v1/saml/varga/acs", data={"SAMLResponse": encoded})
+    return await member.post("/api/v1/saml/northwind/acs", data={"SAMLResponse": encoded})
 
 
 def response_for(idp: kit.Idp, request_id: str, **fields: Any) -> str:
@@ -383,16 +383,16 @@ def response_for(idp: kit.Idp, request_id: str, **fields: Any) -> str:
 async def test_the_administrator_configures_reads_and_removes_the_provider(
     client: AsyncClient, admin: str, idp: kit.Idp
 ) -> None:
-    empty = (await client.get("/api/v1/orgs/varga/saml")).json()
+    empty = (await client.get("/api/v1/orgs/northwind/saml")).json()
     assert empty["idp_entity_id"] is None and empty["domains"] == []
-    assert empty["acs_url"] == f"{kit.API}/api/v1/saml/varga/acs"
-    put = await client.put("/api/v1/orgs/varga/saml", json=configuration(idp))
+    assert empty["acs_url"] == f"{kit.API}/api/v1/saml/northwind/acs"
+    put = await client.put("/api/v1/orgs/northwind/saml", json=configuration(idp))
     assert put.status_code == 200 and put.json()["domains"] == ["globex.example"]
-    assert (await client.get("/api/v1/orgs/varga/saml")).json()["certificate_pem"] == idp.certificate_pem
-    metadata = await client.get("/api/v1/saml/varga/metadata")
-    assert metadata.status_code == 200 and f'entityID="{kit.API}/api/v1/saml/varga"' in metadata.text
-    assert (await client.delete("/api/v1/orgs/varga/saml")).status_code == 204
-    assert (await client.get("/api/v1/saml/varga/metadata")).status_code == 404
+    assert (await client.get("/api/v1/orgs/northwind/saml")).json()["certificate_pem"] == idp.certificate_pem
+    metadata = await client.get("/api/v1/saml/northwind/metadata")
+    assert metadata.status_code == 200 and f'entityID="{kit.API}/api/v1/saml/northwind"' in metadata.text
+    assert (await client.delete("/api/v1/orgs/northwind/saml")).status_code == 204
+    assert (await client.get("/api/v1/saml/northwind/metadata")).status_code == 404
     async with session_scope(orgs="*") as session:
         actions = set((await session.execute(select(AuditLog.action))).scalars().all())
     assert {"org.saml", "org.saml.remove"} <= actions
@@ -403,18 +403,18 @@ async def test_the_configuration_is_refused_when_it_is_wrong(
 ) -> None:
     put = client.put
     assert (
-        await put("/api/v1/orgs/varga/saml", json=configuration(idp, certificate_pem="x" * 120))
+        await put("/api/v1/orgs/northwind/saml", json=configuration(idp, certificate_pem="x" * 120))
     ).status_code == 422
     assert (
-        await put("/api/v1/orgs/varga/saml", json=configuration(idp, sso_url="http://plain.example"))
+        await put("/api/v1/orgs/northwind/saml", json=configuration(idp, sso_url="http://plain.example"))
     ).status_code == 422
     assert (
-        await put("/api/v1/orgs/varga/saml", json=configuration(idp, group_map={"A": "root"}))
+        await put("/api/v1/orgs/northwind/saml", json=configuration(idp, group_map={"A": "root"}))
     ).status_code == 422
     assert (
-        await put("/api/v1/orgs/varga/saml", json=configuration(idp, domains=["not a domain"]))
+        await put("/api/v1/orgs/northwind/saml", json=configuration(idp, domains=["not a domain"]))
     ).status_code == 422
-    assert (await put("/api/v1/orgs/varga/saml", json=configuration(idp, domains=[]))).status_code == 422
+    assert (await put("/api/v1/orgs/northwind/saml", json=configuration(idp, domains=[]))).status_code == 422
     assert (await put("/api/v1/orgs/nowhere/saml", json=configuration(idp))).status_code == 404
 
 
@@ -454,7 +454,7 @@ async def second_organisation_administered_by(email: str) -> None:
 
 
 async def test_a_domain_belongs_to_one_organisation(client: AsyncClient, configured: kit.Idp) -> None:
-    await second_organisation_administered_by("admin@varga.dev")
+    await second_organisation_administered_by("admin@northwind.dev")
     clash = await client.put(
         "/api/v1/orgs/acme/saml", json=configuration(configured, domains=["globex.example"])
     )
@@ -463,7 +463,9 @@ async def test_a_domain_belongs_to_one_organisation(client: AsyncClient, configu
         await client.put("/api/v1/orgs/acme/saml", json=configuration(configured, domains=["acme.example"]))
     ).status_code == 200
     # ... and the organisation that holds it keeps it when it saves again.
-    assert (await client.put("/api/v1/orgs/varga/saml", json=configuration(configured))).status_code == 200
+    assert (
+        await client.put("/api/v1/orgs/northwind/saml", json=configuration(configured))
+    ).status_code == 200
 
 
 async def test_a_domain_or_an_organisation_held_by_an_extension_s_provider_is_refused(
@@ -474,13 +476,13 @@ async def test_a_domain_or_an_organisation_held_by_an_extension_s_provider_is_re
 
     async def resolver(session: Any, hint: Any) -> Any:
         oidc = OidcProvider(issuer="https://login.example", client_id="c", client_secret="s")
-        if hint.org == "varga" or hint.email_domain == "taken.example":
-            return TenantSignIn(org="varga" if hint.org else "another", oidc=oidc)
+        if hint.org == "northwind" or hint.email_domain == "taken.example":
+            return TenantSignIn(org="northwind" if hint.org else "another", oidc=oidc)
         return None
 
     declare_sign_in_resolver(resolver)
     try:
-        assert (await client.put("/api/v1/orgs/varga/saml", json=configuration(idp))).status_code == 409
+        assert (await client.put("/api/v1/orgs/northwind/saml", json=configuration(idp))).status_code == 409
     finally:
         reset()
 
@@ -494,10 +496,12 @@ async def test_the_core_announces_saml() -> None:
 async def test_the_sign_in_page_leads_to_the_organisation_s_provider(
     client: AsyncClient, configured: kit.Idp
 ) -> None:
-    by_link = await client.get("/api/v1/auth/login", params={"org": "varga"})
-    assert by_link.status_code == 307 and by_link.headers["location"].startswith("/api/v1/saml/varga/login?")
+    by_link = await client.get("/api/v1/auth/login", params={"org": "northwind"})
+    assert by_link.status_code == 307 and by_link.headers["location"].startswith(
+        "/api/v1/saml/northwind/login?"
+    )
     by_address = await client.get("/api/v1/auth/login", params={"login_hint": "ann@globex.example"})
-    assert by_address.headers["location"].startswith("/api/v1/saml/varga/login?")
+    assert by_address.headers["location"].startswith("/api/v1/saml/northwind/login?")
     async with session_scope(orgs="*") as session:
         from choregos_api.tenant_sign_in import SignInHint, resolve
 
@@ -536,7 +540,9 @@ async def test_a_sign_in_that_maps_no_group_grants_no_membership(app: Any, confi
     member = await browser(app)
     try:
         request_id = await start(member)
-        await post(member, response_for(configured, request_id, groups=("choregos:varga:org-admins", "Nope")))
+        await post(
+            member, response_for(configured, request_id, groups=("choregos:northwind:org-admins", "Nope"))
+        )
     finally:
         await member.aclose()
     async with session_scope(orgs="*") as session:
@@ -579,8 +585,8 @@ async def test_a_sign_in_keeps_the_subject_of_an_existing_account_and_touches_no
     assert user.oidc_sub == "keycloak-ann"  # never replaced by the SAML subject
     assert dict(rows) == {
         "acme": "viewer",
-        "varga": "org_admin",
-    }  # acme untouched; varga from the mapped group
+        "northwind": "org_admin",
+    }  # acme untouched; northwind from the mapped group
 
 
 async def test_the_provider_cannot_start_a_sign_in_by_itself(app: Any, configured: kit.Idp) -> None:
@@ -613,7 +619,7 @@ async def test_an_assertion_is_good_once(app: Any, configured: kit.Idp) -> None:
         member.cookies.set(
             "choregos_saml",
             sign_session(
-                {"id": request_id, "org": "varga", "target": "/", "exp": int(time.time()) + 300},
+                {"id": request_id, "org": "northwind", "target": "/", "exp": int(time.time()) + 300},
                 purpose="saml-request",
             ),
         )
@@ -638,11 +644,12 @@ async def test_the_request_cookie_of_another_organisation_or_purpose_is_refused(
         )
         assert (await post(member, encoded)).status_code == 401
         member.cookies.set(
-            "choregos_saml", sign_session({"id": REQUEST, "org": "varga", "exp": soon})
+            "choregos_saml", sign_session({"id": REQUEST, "org": "northwind", "exp": soon})
         )  # a session-purpose tag
         assert (await post(member, encoded)).status_code == 401
         member.cookies.set(
-            "choregos_saml", sign_session({"id": REQUEST, "org": "varga", "exp": 1}, purpose="saml-request")
+            "choregos_saml",
+            sign_session({"id": REQUEST, "org": "northwind", "exp": 1}, purpose="saml-request"),
         )
         assert (await post(member, encoded)).status_code == 401  # expired
     finally:
@@ -669,7 +676,7 @@ async def test_an_organisation_s_provider_cannot_sign_in_another_organisation_s_
     try:
         request_id = await start(member)
         assert (
-            await post(member, response_for(configured, request_id, email="ceo@varga.dev"))
+            await post(member, response_for(configured, request_id, email="ceo@northwind.dev"))
         ).status_code == 401
     finally:
         await member.aclose()
@@ -679,7 +686,7 @@ async def test_the_login_target_is_a_safe_redirect(app: Any, configured: kit.Idp
     member = await browser(app)
     try:
         started = await member.get(
-            "/api/v1/saml/varga/login", params={"redirect_to": "https://evil.example/x"}
+            "/api/v1/saml/northwind/login", params={"redirect_to": "https://evil.example/x"}
         )
         assert started.status_code == 307
         request_id = request_id_of(started.headers["location"])
@@ -690,13 +697,13 @@ async def test_the_login_target_is_a_safe_redirect(app: Any, configured: kit.Idp
 
 
 async def test_the_authn_request_names_our_service_and_escapes_the_provider_url() -> None:
-    url = engine.authn_request("varga", 'https://idp.example/sso?a=1&b="2"', "_id", NOW)
+    url = engine.authn_request("northwind", 'https://idp.example/sso?a=1&b="2"', "_id", NOW)
     assert url.startswith('https://idp.example/sso?a=1&b="2"&SAMLRequest=')
     xml = zlib.decompress(base64.b64decode(parse_qs(urlparse(url).query)["SAMLRequest"][0]), -15)
     root = etree.fromstring(xml)
     assert (
         root.get("ID") == "_id"
-        and root.get("AssertionConsumerServiceURL") == f"{kit.API}/api/v1/saml/varga/acs"
+        and root.get("AssertionConsumerServiceURL") == f"{kit.API}/api/v1/saml/northwind/acs"
     )
     assert root.get("Destination") == 'https://idp.example/sso?a=1&b="2"'
 

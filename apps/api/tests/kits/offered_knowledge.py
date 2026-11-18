@@ -14,7 +14,7 @@ from sqlalchemy import select
 
 from .assistant_install import FIXTURE, OWNERS, _install, _plugin
 
-ORG = "/api/v1/orgs/varga"
+ORG = "/api/v1/orgs/northwind"
 BASE = "investment-assistant-investment-policy"
 UPDATES = f"{ORG}/assistants/investment-assistant/knowledge/updates"
 

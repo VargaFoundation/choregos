@@ -28,4 +28,4 @@ you may read; it decides nothing.
 
 No telemetry. The extension talks to the instance you configure, and to nobody else.
 
-Apache-2.0, © the Varga Foundation.
+Apache-2.0, © GRAAL.SYSTEMS SAS.

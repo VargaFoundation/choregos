@@ -22,7 +22,9 @@ async def _owner(email: str) -> None:
     from sqlalchemy import select
 
     async with session_scope() as session:
-        org = (await session.execute(select(Organization).where(Organization.slug == "varga"))).scalar_one()
+        org = (
+            await session.execute(select(Organization).where(Organization.slug == "northwind"))
+        ).scalar_one()
         user = User(email=email, display_name="owner")
         session.add(user)
         await session.flush()
@@ -38,16 +40,16 @@ def _config(project: dict[str, Any], **changes: Any) -> dict[str, Any]:
 async def test_a_project_owner_does_not_open_the_group_of_another_trade(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    await _owner("owner@varga.dev")
-    await login(client, "owner@varga.dev")
+    await _owner("owner@northwind.dev")
+    await login(client, "owner@northwind.dev")
     response = await client.patch(f"/api/v1/projects/{project['id']}", json=_config(project, groups=["hr"]))
     assert response.status_code == 403, response.text
 
 
 async def test_he_keeps_control_of_his_tools(client: AsyncClient, project: dict[str, Any]) -> None:
     """The lock only hinders what it must: changing `tools`, with equal groups, stays with the team."""
-    await _owner("owner@varga.dev")
-    await login(client, "owner@varga.dev")
+    await _owner("owner@northwind.dev")
+    await login(client, "owner@northwind.dev")
     response = await client.patch(f"/api/v1/projects/{project['id']}", json=_config(project, tools=["*"]))
     assert response.status_code == 200, response.text
 

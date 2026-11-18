@@ -14,7 +14,7 @@ async def _member(client: AsyncClient, email: str, role: str, groups: list[str])
     from choregos_api.db.session import session_scope
     from sqlalchemy import select
 
-    added = await client.post("/api/v1/orgs/varga/members", json={"email": email, "role": role})
+    added = await client.post("/api/v1/orgs/northwind/members", json={"email": email, "role": role})
     assert added.status_code in {200, 201}, added.text
     async with session_scope() as session:
         user = (await session.execute(select(User).where(User.email == email))).scalar_one()

@@ -16,7 +16,7 @@ from httpx import ASGITransport, AsyncClient
 os.environ.setdefault("CHOREGOS_ENV", "test")
 os.environ.setdefault("CHOREGOS_FAKES", "1")
 os.environ.setdefault("CHOREGOS_DEV_LOGIN_ENABLED", "true")
-os.environ.setdefault("CHOREGOS_DEV_ADMIN_EMAILS", "admin@varga.dev")
+os.environ.setdefault("CHOREGOS_DEV_ADMIN_EMAILS", "admin@northwind.dev")
 
 HERE = Path(__file__).parent
 CORE_REF = HERE / "fixtures" / "core-ref"
@@ -82,16 +82,16 @@ async def app(plugin: None, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
 
 @pytest.fixture
 async def client(app: Any) -> AsyncIterator[AsyncClient]:
-    """An admin of the `varga` organisation, logged in."""
+    """An admin of the `northwind` organisation, logged in."""
     from choregos_api.db.models import Organization
     from choregos_api.db.session import session_scope
 
     from .helpers import sign_in
 
     async with session_scope() as session:
-        session.add(Organization(slug="varga", name="Varga Foundation"))
+        session.add(Organization(slug="northwind", name="Northwind"))
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http:
-        await sign_in(http, "admin@varga.dev")
+        await sign_in(http, "admin@northwind.dev")
         yield http
 
 

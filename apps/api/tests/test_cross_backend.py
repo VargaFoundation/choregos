@@ -22,7 +22,7 @@ async def _review(
     async with session_scope() as session:
         item = WorkItem(
             project_id=project_id,
-            tracker_key=f"varga/billing-api#{index}",
+            tracker_key=f"northwind/billing-api#{index}",
             title=f"ticket {index}",
             state="verifying",
         )
@@ -101,7 +101,10 @@ async def test_a_review_without_a_known_implementer_is_ignored(
 
     async with session_scope() as session:
         item = WorkItem(
-            project_id=project["id"], tracker_key="varga/billing-api#77", title="orphan", state="verifying"
+            project_id=project["id"],
+            tracker_key="northwind/billing-api#77",
+            title="orphan",
+            state="verifying",
         )
         session.add(item)
         await session.flush()

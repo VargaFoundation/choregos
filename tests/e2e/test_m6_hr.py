@@ -27,7 +27,7 @@ from .conftest import Platform, login
 
 pytestmark = [pytest.mark.e2e, pytest.mark.asyncio]
 
-ORG = "/api/v1/orgs/varga"
+ORG = "/api/v1/orgs/northwind"
 KEY_DIRECTORY = "secret-de-l-application-entra"
 KEY_FLEET = "cle-du-parc"
 KEY_SUPPLIER = "jeton-du-fournisseur"
@@ -126,7 +126,7 @@ async def _hr_project(client: AsyncClient) -> dict[str, Any]:
             "slug": "rh",
             "name": "RH",
             "template_ref": "joiners-leavers",
-            "config": {"slug": "rh", "org": "varga"},
+            "config": {"slug": "rh", "org": "northwind"},
         },
     )
     assert cree.status_code == 201, cree.text
@@ -146,7 +146,7 @@ async def _par_claude(platform: Platform, client: AsyncClient, fields: dict[str,
     claude = AsyncClient(transport=client._transport, base_url="http://e2e")
     try:
         call = await claude.post(
-            "/mcp/projects/varga:rh",
+            "/mcp/projects/northwind:rh",
             headers={"Authorization": f"Bearer {token['token']}"},
             json={"jsonrpc": "2.0", "id": 1, "method": "tools/call",
                   "params": {"name": "create_work_item",
@@ -327,7 +327,7 @@ async def test_an_arrival_from_the_request_by_claude_to_the_check_on_d1(
         "onboarding.check": "succeeded",
     }
     assert actions["onboarding.accounts"]["decisions"][0]["by"] == "policy"
-    assert actions["onboarding.sensitive_group"]["decisions"][0]["by"] == "admin@varga.dev"
+    assert actions["onboarding.sensitive_group"]["decisions"][0]["by"] == "admin@northwind.dev"
     assert actions["onboarding.sensitive_group"]["decisions"][0]["auth_age_seconds"] is not None
     chronologie = (await client.get(f"/api/v1/work-items/{ticket['work_item']}/timeline")).text
     assert ATTESTATION_BADGE in chronologie, "the proof of the handover can be read in the case file"

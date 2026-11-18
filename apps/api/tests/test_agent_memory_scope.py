@@ -33,11 +33,11 @@ def test_the_default_scope_leaves_the_digest_of_older_versions_unchanged() -> No
 
 async def test_a_version_declares_its_memory_scope(client: AsyncClient, admin: str) -> None:
     created = await client.post(
-        "/api/v1/orgs/varga/agents",
+        "/api/v1/orgs/northwind/agents",
         json={"slug": "accountant", "display_name": "Accountant", "spec": {"memory": "agent"}},
     )
     assert created.status_code == 201, created.text
-    version = (await client.get("/api/v1/orgs/varga/agents/accountant/versions/1")).json()
+    version = (await client.get("/api/v1/orgs/northwind/agents/accountant/versions/1")).json()
     assert version["spec"]["memory"] == "agent"
-    refused = await client.post("/api/v1/orgs/varga/agents/accountant/versions", json={"memory": "team"})
+    refused = await client.post("/api/v1/orgs/northwind/agents/accountant/versions", json={"memory": "team"})
     assert refused.status_code == 422

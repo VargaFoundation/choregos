@@ -115,7 +115,7 @@ def declare_group_mapper(function: Any) -> None:
     understand**, instead of returning an empty dictionary. It replaces the WHOLE translation: a
     mapper that reads only `<org>/<role>` makes the deployment lose its `choregos:<org>:<role>`
     sign-ins, including the bootstrap one and the development one. Found while proving this seam
-    with an extension installed for real: `403 ... missing ['varga']` on the creation of an
+    with an extension installed for real: `403 ... missing ['northwind']` on the creation of an
     organisation, and the cause was not where the message pointed.
 
         def mine(groups, default_org):

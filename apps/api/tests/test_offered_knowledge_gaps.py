@@ -86,7 +86,7 @@ async def test_a_source_sync_that_rewrites_a_seed_document_makes_it_local(
         source_id = (await session.execute(select(KnowledgeSource.id))).scalar_one()
     site = fake_source(source_id)
     site.put("r1", PURPOSE, b"# Purpose\n\nrewritten by the source\n")
-    summary = await sync_source("varga", source_id, adapter=site)
+    summary = await sync_source("northwind", source_id, adapter=site)
     assert summary["updated"] == 1 and summary["added"] == 0, summary
     found = await docs()
     assert found[PURPOSE] == ("local", "# Purpose\n\nrewritten by the source\n")
@@ -135,15 +135,15 @@ async def test_the_owners_are_told_at_upgrade_time_that_proposals_wait(
 
     publish(offline, "0.1.0", "propose_updates", V1)
     await installed(client)
-    await _member(client, "owner@varga.dev", [OWNERS])
-    await _member(client, "other@varga.dev", ["somewhere-else"])
-    await as_user(client, "admin@varga.dev")
+    await _member(client, "owner@northwind.dev", [OWNERS])
+    await _member(client, "other@northwind.dev", ["somewhere-else"])
+    await as_user(client, "admin@northwind.dev")
     notifier = FakeNotifier()
     set_notifier_factory(lambda row, channel: notifier if channel == "email" else None)
     try:
         publish(offline, "0.2.0", "propose_updates", V2)
         await upgrade(client, "0.2.0")
-        assert [to for to, _ in notifier.sent] == ["owner@varga.dev"], "the owners, nobody else"
+        assert [to for to, _ in notifier.sent] == ["owner@northwind.dev"], "the owners, nobody else"
         message = notifier.sent[0][1]
         assert "knowledge update" in message.title and PURPOSE in message.body and "new.md" in message.body
         notifier.sent.clear()

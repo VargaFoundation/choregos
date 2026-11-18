@@ -45,7 +45,7 @@ async def test_the_added_text_of_the_diff_reaches_the_gate(setup: Any) -> None:
     charge = {"project_id": setup.project_id, "work_item_id": setup.work_item_id, "gates": [RULE]}
     patch_complet = "\n".join(f"+{line}" for line in ADR.splitlines())
     setup.adapters.scm.set_diff(
-        "varga/billing-api", "main", "choregos/123", [("docs/adr/0042-rls.md", 16, 0, patch_complet)]
+        "northwind/billing-api", "main", "choregos/123", [("docs/adr/0042-rls.md", 16, 0, patch_complet)]
     )
     [ok] = await evaluate_gates(charge)
     assert ok["passed"] is True, ok["detail"]
@@ -54,7 +54,7 @@ async def test_the_added_text_of_the_diff_reaches_the_gate(setup: Any) -> None:
         f"+{line}" for line in ADR.split("## Decision Outcome", maxsplit=1)[0].splitlines()
     )
     setup.adapters.scm.set_diff(
-        "varga/billing-api", "main", "choregos/123", [("docs/adr/0042-rls.md", 9, 0, sans_decision)]
+        "northwind/billing-api", "main", "choregos/123", [("docs/adr/0042-rls.md", 9, 0, sans_decision)]
     )
     [refusal] = await evaluate_gates(charge)
     assert refusal["passed"] is False and "Decision Outcome" in refusal["detail"]

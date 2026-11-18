@@ -17,13 +17,14 @@ from collections.abc import Sequence
 from typing import Any, ClassVar, Literal
 
 import httpx
+from choregos_core.publishing import PUBLISHING
 from choregos_core.web_search import DataHandling
 
 from ..errors import AdapterError
 from ..http.pool import Pool, Strategy
 from ..http.proxy import OutboundProxyHttpError, ProxyRoutingTransport
 
-USER_AGENT = "choregos-web-search/1.0 (+https://github.com/varga-foundation/choregos)"
+USER_AGENT = f"choregos-web-search/1.0 (+{PUBLISHING.source_repository})"
 #: The most results one call returns, whatever is asked.
 MAX_RESULTS = 10
 SNIPPET_CHARS = 500

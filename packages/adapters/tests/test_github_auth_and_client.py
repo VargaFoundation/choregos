@@ -47,21 +47,21 @@ async def test_the_installation_token_targets_one_repository_and_is_cached(
     pem, _ = private_key
     wire = Wire(
         {
-            ("GET", "/repos/varga/billing/installation"): (200, {"id": 42}),
+            ("GET", "/repos/northwind/billing/installation"): (200, {"id": 42}),
             ("POST", "/app/installations/42/access_tokens"): (201, {"token": "ghs_short"}),
         }
     )
     auth = GitHubAppAuth(app_id="1", private_key=pem, base_url=API)
     async with wire.client() as client:
-        token = await auth.token_for(client, "varga/billing", permissions=RUNNER_PERMISSIONS, ttl_s=900)
-        again = await auth.token_for(client, "varga/billing", permissions=RUNNER_PERMISSIONS)
+        token = await auth.token_for(client, "northwind/billing", permissions=RUNNER_PERMISSIONS, ttl_s=900)
+        again = await auth.token_for(client, "northwind/billing", permissions=RUNNER_PERMISSIONS)
     assert token.token == "ghs_short" and again is token, "same repository, same permissions: the cache"
     request_body = wire.body(-1)
     assert request_body == {"repositories": ["billing"], "permissions": RUNNER_PERMISSIONS}, (
         "never a broad token: the exact repository and permissions"
     )
     assert wire.requests[1].headers["Authorization"].startswith("Bearer ey")
-    assert not token.expired and token.repositories == ("varga/billing",)
+    assert not token.expired and token.repositories == ("northwind/billing",)
 
 
 async def test_an_expired_token_is_requested_again(private_key: tuple[str, str]) -> None:
@@ -71,9 +71,9 @@ async def test_an_expired_token_is_requested_again(private_key: tuple[str, str])
     )
     auth = GitHubAppAuth(app_id="1", private_key=pem, base_url=API)
     async with wire.client() as client:
-        first = await auth.token_for(client, "varga/x", installation_id=7)
+        first = await auth.token_for(client, "northwind/x", installation_id=7)
         first.expires_at = time.time()  # within the safety margin: stale
-        second = await auth.token_for(client, "varga/x", installation_id=7)
+        second = await auth.token_for(client, "northwind/x", installation_id=7)
     assert (first.token, second.token) == ("a", "b")
 
 
@@ -96,7 +96,9 @@ async def test_a_token_asks_for_statuses_and_does_without_when_the_app_lacks_the
     )
     auth = GitHubAppAuth(app_id="1", private_key=pem, base_url=API)
     async with wire.client() as client:
-        token = await auth.token_for(client, "varga/x", installation_id=7, permissions=DEFAULT_PERMISSIONS)
+        token = await auth.token_for(
+            client, "northwind/x", installation_id=7, permissions=DEFAULT_PERMISSIONS
+        )
     assert token.token == "ghs_without_statuses"
     assert "statuses" in wire.body(0)["permissions"]
     assert "statuses" not in wire.body(1)["permissions"], "asked again without the optional permission"
@@ -106,16 +108,18 @@ async def test_the_client_replays_secondary_limits_and_5xx(monkeypatch: pytest.M
     waits = no_wait(monkeypatch, client_module)
     wire = Wire(
         {
-            ("GET", "/repos/varga/x"): [
+            ("GET", "/repos/northwind/x"): [
                 httpx.Response(403, text="You have exceeded a secondary rate limit"),
                 httpx.Response(502, text="bad gateway"),
                 httpx.Response(429, headers={"retry-after": "3"}, text=""),
-                (200, {"full_name": "varga/x"}),
+                (200, {"full_name": "northwind/x"}),
             ]
         }
     )
     client = GitHubClient(token="t", base_url=API, client=wire.client())
-    assert await client.request("GET", "/repos/varga/x", repo="varga/x") == {"full_name": "varga/x"}
+    assert await client.request("GET", "/repos/northwind/x", repo="northwind/x") == {
+        "full_name": "northwind/x"
+    }
     assert len(waits) == 3 and waits[2] == 3.0
     assert wire.requests[0].headers["X-GitHub-Api-Version"] == "2022-11-28"
 
@@ -124,14 +128,14 @@ async def test_an_ordinary_403_is_an_error_with_the_reset_delay() -> None:
     reset = int(time.time()) + 120
     wire = Wire(
         {
-            ("GET", "/repos/varga/x"): httpx.Response(
+            ("GET", "/repos/northwind/x"): httpx.Response(
                 403, headers={"x-ratelimit-reset": str(reset)}, text="Resource not accessible by integration"
             )
         }
     )
     client = GitHubClient(token="t", base_url=API, client=wire.client())
     with pytest.raises(UpstreamError) as exc:
-        await client.request("GET", "/repos/varga/x")
+        await client.request("GET", "/repos/northwind/x")
     assert (
         exc.value.status_code == 403
         and exc.value.retry_after is not None
@@ -165,10 +169,11 @@ async def test_graphql_raises_the_errors_of_the_body_even_on_a_200() -> None:
 
 async def test_pagination_follows_the_full_pages() -> None:
     full_page = [{"n": i} for i in range(100)]
-    wire = Wire({("GET", "/repos/varga/x/issues"): [(200, full_page), (200, [{"n": 100}])]})
+    wire = Wire({("GET", "/repos/northwind/x/issues"): [(200, full_page), (200, [{"n": 100}])]})
     client = GitHubClient(token="t", base_url=API, client=wire.client())
     assert (
-        len(await client.paginate("/repos/varga/x/issues", repo="varga/x", params={"state": "open"})) == 101
+        len(await client.paginate("/repos/northwind/x/issues", repo="northwind/x", params={"state": "open"}))
+        == 101
     )
     assert [r.url.params["page"] for r in wire.requests] == ["1", "2"]
     assert wire.requests[0].url.params["per_page"] == "100"
@@ -178,10 +183,10 @@ async def test_a_pinned_installation_is_used_without_discovery(private_key: tupl
     pem, _ = private_key
     wire = Wire({("POST", "/app/installations/77/access_tokens"): (201, {"token": "ghs_pinned"})})
     auth = GitHubAppAuth(
-        app_id="1", private_key=pem, base_url=API, pinned_installation=77, pinned_account="Varga"
+        app_id="1", private_key=pem, base_url=API, pinned_installation=77, pinned_account="Northwind"
     )
     async with wire.client() as client:
-        token = await auth.token_for(client, "varga/billing", permissions=RUNNER_PERMISSIONS)
+        token = await auth.token_for(client, "northwind/billing", permissions=RUNNER_PERMISSIONS)
     assert token.token == "ghs_pinned"
     assert wire.sent() == [("POST", "/app/installations/77/access_tokens")], (
         "no GET /repos/.../installation: the claimed installation is not rediscovered"
@@ -194,10 +199,10 @@ async def test_a_pinned_installation_refuses_another_owner(private_key: tuple[st
     pem, _ = private_key
     wire = Wire({("POST", "/app/installations/77/access_tokens"): (201, {"token": "ghs_stolen"})})
     auth = GitHubAppAuth(
-        app_id="1", private_key=pem, base_url=API, pinned_installation=77, pinned_account="varga"
+        app_id="1", private_key=pem, base_url=API, pinned_installation=77, pinned_account="northwind"
     )
     async with wire.client() as client:
-        with pytest.raises(ConfigurationError, match="belongs to `varga`"):
+        with pytest.raises(ConfigurationError, match="belongs to `northwind`"):
             await auth.token_for(client, "othercorp/private-repo")
     assert wire.requests == [], "nothing left for GitHub: no token for a repository of another owner"
 
@@ -223,7 +228,7 @@ def test_the_connector_factory_pins_the_injected_installation(monkeypatch: pytes
 
     monkeypatch.setenv("CHOREGOS_GITHUB_APP_ID", "1")
     monkeypatch.setenv("CHOREGOS_GITHUB_APP_PRIVATE_KEY", "pem")
-    pinned = _github_client({"repo": "varga/billing", "installation_id": 5})
-    assert (pinned.auth.pinned_installation, pinned.auth.pinned_account) == (5, "varga")
-    discovered = _github_client({"repo": "varga/billing"})
+    pinned = _github_client({"repo": "northwind/billing", "installation_id": 5})
+    assert (pinned.auth.pinned_installation, pinned.auth.pinned_account) == (5, "northwind")
+    discovered = _github_client({"repo": "northwind/billing"})
     assert discovered.auth.pinned_installation is None, "no claim injected: discovery, as before"

@@ -11,16 +11,16 @@ The configuration (`CHOREGOS_PLUGINS_CONFIG`, a YAML file the chart writes):
 
 ```yaml
 sources:
-  - name: varga
+  - name: tranibor
     index: oci://registry.example/choregos-agents/index:stable   # or https://…/index.yaml
     trust:                       # a keyless identity and issuer (regular expressions, matched whole)…
       identity: https://github.com/example/choregos-agents/.*
       issuer: https://token.actions.githubusercontent.com
-      # key: /etc/choregos/plugins/varga.pub   # …or a public key cosign reads
+      # key: /etc/choregos/plugins/tranibor.pub   # …or a public key cosign reads
     egress: [pkg-containers.githubusercontent.com]   # hosts beyond the index's own
 defaultPlugins:
-  - {source: varga, name: servicenow, version: "^0.1"}
-  - {source: varga, name: software-delivery, version: "^1.0", preapproved: true}
+  - {source: tranibor, name: servicenow, version: "^0.1"}
+  - {source: tranibor, name: software-delivery, version: "^1.0", preapproved: true}
 offline: /opt/choregos/plugins   # CHOREGOS_PLUGINS_OFFLINE wins over it
 ```
 
@@ -53,6 +53,10 @@ PLUGIN_MEDIA_TYPE = "application/vnd.choregos.plugin.v1.tar+gzip"
 #: The layer media type of an index published as an OCI artifact (`oci://…` sources).
 INDEX_MEDIA_TYPE = "application/vnd.choregos.plugin-index.v1+yaml"
 OFFLINE = "offline"
+#: The name the default source went by before the publisher changed (ADR 0186). A deployment whose values
+#: still say it, and an installation recorded under it, reach the source that replaced it.
+LEGACY_DEFAULT_SOURCE = "varga"
+DEFAULT_SOURCE = "tranibor"
 LOCK = "plugins.lock"
 NAME = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
 SHA = re.compile(r"^[0-9a-f]{40}$")
@@ -160,6 +164,8 @@ class PluginsConfig:
         for source in self.all_sources():
             if source.name == name:
                 return source
+        if name == LEGACY_DEFAULT_SOURCE and name != DEFAULT_SOURCE:
+            return self.source(DEFAULT_SOURCE)
         raise SourceError("not_found", f"no plugin source `{name}` is declared")
 
 
@@ -222,8 +228,11 @@ def parse_config(doc: Any, offline: str | None = None) -> PluginsConfig:
                 Range.parse(version)
             except VersionError as exc:
                 raise SourceError("config", f"default plugin `{raw['name']}`: {exc}") from exc
-        if raw["source"] not in {*names, OFFLINE}:
-            raise SourceError("config", f"default plugin `{raw['name']}`: no source `{raw['source']}`")
+        source = raw["source"]
+        if source == LEGACY_DEFAULT_SOURCE and LEGACY_DEFAULT_SOURCE not in names and DEFAULT_SOURCE in names:
+            source = DEFAULT_SOURCE
+        if source not in {*names, OFFLINE}:
+            raise SourceError("config", f"default plugin `{raw['name']}`: no source `{source}`")
         if set(raw) - {"source", "name", "version", "preapproved"}:
             raise SourceError(
                 "config", f"default plugin `{raw['name']}`: source, name, version and preapproved"
@@ -231,7 +240,7 @@ def parse_config(doc: Any, offline: str | None = None) -> PluginsConfig:
         preapproved = raw.get("preapproved", False)
         if not isinstance(preapproved, bool):
             raise SourceError("config", f"default plugin `{raw['name']}`: `preapproved` is true or false")
-        defaults.append(DefaultPlugin(raw["source"], raw["name"], version, preapproved))
+        defaults.append(DefaultPlugin(source, raw["name"], version, preapproved))
     directory = offline or doc.get("offline") or None
     return PluginsConfig(sources, tuple(defaults), Path(str(directory)) if directory else None)
 

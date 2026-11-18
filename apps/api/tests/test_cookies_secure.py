@@ -57,7 +57,7 @@ async def test_over_https_in_dev_both_cookies_are_secure(
     )
     # a browser returns a Secure cookie over https only
     client.base_url = "https://agentic.dev.example.test"
-    start = await client.get("/api/v1/auth/login", params={"as": "admin@varga.dev"})
+    start = await client.get("/api/v1/auth/login", params={"as": "admin@northwind.dev"})
     assert start.status_code == 307, start.text
     assert "secure" in _flags(start.headers.get_list("set-cookie"), "choregos_oidc")
     end = await client.get(start.headers["location"])
@@ -69,8 +69,8 @@ async def test_over_http_in_dev_cookies_stay_usable_on_a_bench(
     client: AsyncClient, org: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _settings(monkeypatch, public_url="http://localhost:3000", api_url="http://localhost:8000")
-    start = await client.get("/api/v1/auth/login", params={"as": "admin@varga.dev"})
+    start = await client.get("/api/v1/auth/login", params={"as": "admin@northwind.dev"})
     assert "secure" not in _flags(start.headers.get_list("set-cookie"), "choregos_oidc")
     end = await client.get(start.headers["location"])
     assert "secure" not in _flags(end.headers.get_list("set-cookie"), "choregos_session")
-    await login(client, "admin@varga.dev")
+    await login(client, "admin@northwind.dev")

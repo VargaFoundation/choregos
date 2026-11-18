@@ -44,7 +44,7 @@ async def test_without_enforcement_nothing_is_gated(client: AsyncClient, admin: 
 async def test_a_connector_whose_host_is_absent_is_a_409_with_the_verdicts(
     client: AsyncClient, admin: str, enforce: None
 ) -> None:
-    await add_member("root@varga.dev", "org_admin")
+    await add_member("root@northwind.dev", "org_admin")
     refused = await client.post(f"{ORG}/connectors", json=VENDOR)
     assert refused.status_code == 409, refused.text
     body = refused.json()
@@ -57,7 +57,7 @@ async def test_a_connector_whose_host_is_absent_is_a_409_with_the_verdicts(
         True,
     )
     assert verdict["used_by"] == "api"
-    assert any(a["email"] == "root@varga.dev" for a in verdict["approvers"])
+    assert any(a["email"] == "root@northwind.dev" for a in verdict["approvers"])
     assert (await client.get(f"{ORG}/connectors/vendor")).status_code == 404, "nothing was created"
     assert await rules_in_db() == []
 
@@ -112,16 +112,16 @@ async def _import(client: AsyncClient, **extra: Any) -> Any:
 async def test_a_git_skill_import_by_a_project_owner_asks_an_administrator(
     client: AsyncClient, admin: str, fake: Any, enforce: None
 ) -> None:
-    await add_member("root@varga.dev", "org_admin")
-    async with as_person(client, "owner@varga.dev", "project_owner") as owner:
+    await add_member("root@northwind.dev", "org_admin")
+    async with as_person(client, "owner@northwind.dev", "project_owner") as owner:
         asked = await _import(owner)
         assert asked.status_code == 409, asked.text
         verdicts = asked.json()["verdicts"]
         assert {v["host"] for v in verdicts} == {"api.github.com", "codeload.github.com"}
         assert all(not v["can_allow"] for v in verdicts)
-        assert any(a["email"] == "root@varga.dev" for a in verdicts[0]["approvers"])
+        assert any(a["email"] == "root@northwind.dev" for a in verdicts[0]["approvers"])
         forced = await _import(owner, allow_egress=True)
-        assert forced.status_code == 403 and "root@varga.dev" in forced.text, "names who can"
+        assert forced.status_code == 403 and "root@northwind.dev" in forced.text, "names who can"
     assert await rules_in_db() == []
     # the administrator opens them with the same call
     done = await _import(client, allow_egress=True)
@@ -129,12 +129,12 @@ async def test_a_git_skill_import_by_a_project_owner_asks_an_administrator(
     assert {r.host for r in await rules_in_db("allowed")} == {"api.github.com", "codeload.github.com"}
     assert {r.origin for r in await rules_in_db()} == {"skill-import:github.com/anthropics/skills"}
     # once open, the project owner imports without a flag
-    async with as_person(client, "owner@varga.dev") as owner:
+    async with as_person(client, "owner@northwind.dev") as owner:
         assert (await _import(owner, skills=["pdf"])).status_code == 201
 
 
 async def test_a_web_knowledge_source_is_gated(client: AsyncClient, admin: str, enforce: None) -> None:
-    base = "/api/v1/orgs/varga/knowledge"
+    base = "/api/v1/orgs/northwind/knowledge"
     assert (
         await client.post(base, json={"slug": "docs", "name": "Docs", "serving_mode": "index"})
     ).status_code == 201

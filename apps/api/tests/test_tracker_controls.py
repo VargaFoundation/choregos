@@ -15,8 +15,8 @@ from choregos_adapters.fakes.tracker import FakeTracker
 from httpx import AsyncClient
 from sqlalchemy import select
 
-KEY = "varga/billing-api#7"
-REPO = {"full_name": "varga/billing-api"}
+KEY = "northwind/billing-api#7"
+REPO = {"full_name": "northwind/billing-api"}
 SECRET = "s3cr3t"
 
 
@@ -58,7 +58,7 @@ async def _deliver(
 async def _routed_item(client: AsyncClient, project: dict[str, Any], secret: str | None = SECRET) -> None:
     put = await client.put(
         f"/api/v1/projects/{project['id']}/connectors/tracker",
-        json={"type": "github-issues", "config": {"repo": "varga/billing-api"}},
+        json={"type": "github-issues", "config": {"repo": "northwind/billing-api"}},
     )
     assert put.status_code == 200, put.text
     issue = {"number": 7, "title": "Credit notes fail", "labels": [{"name": "agent-ready"}]}
@@ -82,11 +82,11 @@ async def _comment(
 
 
 async def _link(client: AsyncClient, email: str, role: str, external_id: str, login_name: str) -> str:
-    added = await client.post("/api/v1/orgs/varga/members", json={"email": email, "role": role})
+    added = await client.post("/api/v1/orgs/northwind/members", json={"email": email, "role": role})
     assert added.status_code == 201, added.text
     user_id = str(added.json()["user_id"])
     linked = await client.put(
-        f"/api/v1/orgs/varga/members/{user_id}/tracker-identities/github",
+        f"/api/v1/orgs/northwind/members/{user_id}/tracker-identities/github",
         json={"external_id": external_id, "login": login_name},
     )
     assert linked.status_code == 200, linked.text
@@ -134,18 +134,18 @@ async def test_a_linked_developer_pauses_from_a_signed_comment(
     client: AsyncClient, project: dict[str, Any], tracker: FakeTracker, signed: None
 ) -> None:
     await _routed_item(client, project)
-    await _link(client, "dev@varga.dev", "developer", "1001", "devon")
+    await _link(client, "dev@northwind.dev", "developer", "1001", "devon")
 
     answered = await _comment(client, "c1", "/choregos pause", {"login": "devon", "id": 1001})
     assert answered.status_code == 202, answered.text
 
     controls = _controls()
     assert len(controls) == 1
-    assert controls[0][2]["action"] == "pause" and controls[0][2]["by"] == "dev@varga.dev"
+    assert controls[0][2]["action"] == "pause" and controls[0][2]["by"] == "dev@northwind.dev"
     assert await _paused() is True
     audited = await _audit("workitem.pause")
     assert len(audited) == 1 and audited[0].payload["channel"] == "tracker"
-    assert any("Done" in reply and "dev@varga.dev" in reply for reply in _replies(tracker))
+    assert any("Done" in reply and "dev@northwind.dev" in reply for reply in _replies(tracker))
     assert not _decisions()
 
 
@@ -153,7 +153,7 @@ async def test_a_renamed_github_login_does_not_inherit_the_link(
     client: AsyncClient, project: dict[str, Any], tracker: FakeTracker, signed: None
 ) -> None:
     await _routed_item(client, project)
-    await _link(client, "dev@varga.dev", "developer", "1001", "mallory")
+    await _link(client, "dev@northwind.dev", "developer", "1001", "mallory")
 
     await _comment(client, "c2", "/choregos pause", {"login": "mallory", "id": 2002})
 
@@ -169,7 +169,7 @@ async def test_an_unsigned_delivery_honours_nothing(
 
     assert not get_settings().github_webhook_secret
     await _routed_item(client, project, secret=None)
-    await _link(client, "dev@varga.dev", "developer", "1001", "devon")
+    await _link(client, "dev@northwind.dev", "developer", "1001", "devon")
 
     answered = await _comment(client, "c3", "/choregos pause", {"login": "devon", "id": 1001}, secret=None)
     assert answered.status_code == 202, answered.text
@@ -202,7 +202,7 @@ async def test_a_jira_display_name_is_not_an_identity(
         },
     )
     assert put.status_code == 200, put.text
-    await _link(client, "dev@varga.dev", "developer", "1001", "devon")
+    await _link(client, "dev@northwind.dev", "developer", "1001", "devon")
     tracker.items["BILL-7"] = tracker.items[KEY].model_copy(update={"key": "BILL-7"})
     issue = {
         "key": "BILL-7",
@@ -241,7 +241,7 @@ async def test_an_unlinked_id_or_a_viewer_changes_nothing(
     client: AsyncClient, project: dict[str, Any], tracker: FakeTracker, signed: None
 ) -> None:
     await _routed_item(client, project)
-    await _link(client, "viewer@varga.dev", "viewer", "3003", "viola")
+    await _link(client, "viewer@northwind.dev", "viewer", "3003", "viola")
 
     await _comment(client, "c4", "/choregos pause", {"login": "stranger", "id": 4004})
     assert not _controls()
@@ -258,7 +258,7 @@ async def test_a_decision_is_never_taken_from_a_comment(
     client: AsyncClient, project: dict[str, Any], tracker: FakeTracker, signed: None
 ) -> None:
     await _routed_item(client, project)
-    await _link(client, "boss@varga.dev", "org_admin", "5005", "boss")
+    await _link(client, "boss@northwind.dev", "org_admin", "5005", "boss")
 
     await _comment(client, "c6", "/choregos approve", {"login": "boss", "id": 5005})
 
@@ -275,8 +275,8 @@ async def test_two_commands_in_one_delivery_keep_their_own_members(
     from choregos_contracts import InboundEvent, InboundEventType
 
     await _routed_item(client, project)
-    await _link(client, "alice@varga.dev", "developer", "1001", "alice")
-    await _link(client, "bob@varga.dev", "developer", "1002", "bob")
+    await _link(client, "alice@northwind.dev", "developer", "1001", "alice")
+    await _link(client, "bob@northwind.dev", "developer", "1002", "bob")
 
     def command(delivery: str, verb: str, by_id: str) -> InboundEvent:
         return InboundEvent(
@@ -302,10 +302,10 @@ async def test_two_commands_in_one_delivery_keep_their_own_members(
         )
         emails = {u.id: u.email for u in (await session.execute(select(User))).scalars().all()}
     assert [(r.action, emails[r.actor_id]) for r in rows] == [
-        ("workitem.pause", "alice@varga.dev"),
-        ("workitem.resume", "bob@varga.dev"),
+        ("workitem.pause", "alice@northwind.dev"),
+        ("workitem.resume", "bob@northwind.dev"),
     ]
-    assert [c[2]["by"] for c in _controls()] == ["alice@varga.dev", "bob@varga.dev"]
+    assert [c[2]["by"] for c in _controls()] == ["alice@northwind.dev", "bob@northwind.dev"]
 
 
 async def test_a_principal_for_a_webhook_leaves_the_session_unnarrowed(
@@ -315,7 +315,7 @@ async def test_a_principal_for_a_webhook_leaves_the_session_unnarrowed(
     from choregos_api.db.models import User
     from choregos_api.db.session import session_scope
 
-    await _link(client, "alice@varga.dev", "developer", "1001", "alice")
+    await _link(client, "alice@northwind.dev", "developer", "1001", "alice")
     scopes: list[Any] = []
     named: list[str] = []
 
@@ -328,11 +328,11 @@ async def test_a_principal_for_a_webhook_leaves_the_session_unnarrowed(
     monkeypatch.setattr(deps, "limit_to_organisations", limit)
     monkeypatch.setattr(deps, "name_the_user", name)
     async with session_scope() as session:
-        user = (await session.execute(select(User).where(User.email == "alice@varga.dev"))).scalar_one()
+        user = (await session.execute(select(User).where(User.email == "alice@northwind.dev"))).scalar_one()
         await deps.principal_for_user(session, user, narrow=False)
         assert scopes == [deps.ALL_ORGS] and not named, "no narrowing and no attribution to this member"
         await deps.principal_for_user(session, user)
-        assert scopes[-1] == ["varga"] and named == [user.id]
+        assert scopes[-1] == ["northwind"] and named == [user.id]
 
 
 async def test_a_link_as_the_migration_left_it_still_pauses_from_a_signed_comment(
@@ -345,7 +345,7 @@ async def test_a_link_as_the_migration_left_it_still_pauses_from_a_signed_commen
 
     await _routed_item(client, project)
     added = await client.post(
-        "/api/v1/orgs/varga/members", json={"email": "dev@varga.dev", "role": "developer"}
+        "/api/v1/orgs/northwind/members", json={"email": "dev@northwind.dev", "role": "developer"}
     )
     async with session_scope() as session:
         org_id = (await session.execute(select(Organization.id))).scalar_one()
@@ -358,13 +358,13 @@ async def test_a_link_as_the_migration_left_it_still_pauses_from_a_signed_commen
                 external_id="1001",
                 login="devon",
                 verified=False,
-                created_by="admin@varga.dev",
+                created_by="admin@northwind.dev",
             )
         )
 
     await _comment(client, "c7", "/choregos pause", {"login": "devon", "id": 1001})
 
-    assert [c[2]["by"] for c in _controls()] == ["dev@varga.dev"]
+    assert [c[2]["by"] for c in _controls()] == ["dev@northwind.dev"]
     assert await _paused() is True
 
 
@@ -374,11 +374,11 @@ async def test_a_link_on_another_forge_instance_is_not_a_github_com_identity(
     """The same numeric id on a GitLab or a GitHub Enterprise instance is another person's account."""
     await _routed_item(client, project)
     added = await client.post(
-        "/api/v1/orgs/varga/members", json={"email": "dev@varga.dev", "role": "developer"}
+        "/api/v1/orgs/northwind/members", json={"email": "dev@northwind.dev", "role": "developer"}
     )
     for provider, base_url in (("gitlab", None), ("github", "https://ghe.corp.example")):
         declared = await client.post(
-            f"/api/v1/orgs/varga/members/{added.json()['user_id']}/linked-accounts",
+            f"/api/v1/orgs/northwind/members/{added.json()['user_id']}/linked-accounts",
             json={"provider": provider, "base_url": base_url, "external_id": "1001", "login": "devon"},
         )
         assert declared.status_code == 201, declared.text

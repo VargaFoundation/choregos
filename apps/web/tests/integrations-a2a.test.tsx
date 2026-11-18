@@ -48,7 +48,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
   };
 });
 
-vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "varga" }) }));
+vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "northwind" }) }));
 
 const INFOS: Integrations = {
   mcp_url: "https://choregos.example/mcp",
@@ -59,11 +59,11 @@ const INFOS: Integrations = {
 
 const PROJECTS = {
   items: [
-    { id: "p1", slug: "billing-api", org: "varga", name: "Billing API", status: "active", config: {} },
+    { id: "p1", slug: "billing-api", org: "northwind", name: "Billing API", status: "active", config: {} },
     {
       id: "p2",
       slug: "contracts",
-      org: "varga",
+      org: "northwind",
       name: "Contracts",
       status: "active",
       config: { a2a: { max_file_bytes: 25 * 1024 * 1024 } },
@@ -103,11 +103,11 @@ const DEFINITIONS: Record<string, WorkflowDef> = {
   "contracts/review-contract": definition("review-contract", { metadata: { name: "review-contract" } }),
 };
 
-const ADMIN = { id: "u1", email: "ada@varga.dev", memberships: [{ org: "varga", role: "org_admin" }] } as unknown as MeDto;
+const ADMIN = { id: "u1", email: "ada@northwind.dev", memberships: [{ org: "northwind", role: "org_admin" }] } as unknown as MeDto;
 const DEVELOPER = {
   id: "u2",
-  email: "dev@varga.dev",
-  memberships: [{ org: "varga", role: "developer" }],
+  email: "dev@northwind.dev",
+  memberships: [{ org: "northwind", role: "developer" }],
 } as unknown as MeDto;
 
 const ACCOUNT: MachineAccount = {
@@ -168,17 +168,17 @@ describe("Integrations › An application or another agent (A2A), S62-11", () =>
 
   it("shows the card and the endpoint, beside /mcp under the organisation", async () => {
     arrange();
-    render(wrap(<A2aIntegration org="varga" />));
-    expect(await screen.findByText("https://choregos.example/a2a/orgs/varga/.well-known/agent-card.json")).toBeInTheDocument();
-    expect(screen.getByTestId("a2a-endpoint")).toHaveTextContent("https://choregos.example/a2a/orgs/varga");
-    expect(a2aCardUrl("https://choregos.example/mcp/", "varga")).toBe(
-      "https://choregos.example/a2a/orgs/varga/.well-known/agent-card.json",
+    render(wrap(<A2aIntegration org="northwind" />));
+    expect(await screen.findByText("https://choregos.example/a2a/orgs/northwind/.well-known/agent-card.json")).toBeInTheDocument();
+    expect(screen.getByTestId("a2a-endpoint")).toHaveTextContent("https://choregos.example/a2a/orgs/northwind");
+    expect(a2aCardUrl("https://choregos.example/mcp/", "northwind")).toBe(
+      "https://choregos.example/a2a/orgs/northwind/.well-known/agent-card.json",
     );
   });
 
   it("step 1: says which workflows are served, their skill, what they take and require", async () => {
     arrange();
-    render(wrap(<A2aIntegration org="varga" />));
+    render(wrap(<A2aIntegration org="northwind" />));
     const served = await screen.findByTestId("a2a-workflow-ship-a-change");
     expect(within(served).getByText("billing-api/ship-a-change")).toBeInTheDocument();
     expect(served).toHaveTextContent("text/plain, application/json");
@@ -195,7 +195,7 @@ describe("Integrations › An application or another agent (A2A), S62-11", () =>
 
   it("step 1: a workflow that is not served gets its block, prefilled, and a link to its YAML tab", async () => {
     arrange();
-    render(wrap(<A2aIntegration org="varga" projet="billing-api" />));
+    render(wrap(<A2aIntegration org="northwind" projet="billing-api" />));
     const block = await screen.findByTestId("a2a-block-hotfix");
     expect(block).toHaveTextContent("skill: hotfix");
     expect(block).toHaveTextContent("description: Fix production fast.");
@@ -206,7 +206,7 @@ describe("Integrations › An application or another agent (A2A), S62-11", () =>
 
   it("step 2: someone who cannot manage members is told why, and still has the personal token", async () => {
     arrange(DEVELOPER);
-    render(wrap(<A2aIntegration org="varga" projet="billing-api" />));
+    render(wrap(<A2aIntegration org="northwind" projet="billing-api" />));
     expect(await screen.findByTestId("a2a-cannot-manage")).toHaveTextContent("member:manage");
     expect(screen.queryByTestId("machine-accounts")).toBeNull();
     expect(api.machineAccounts).not.toHaveBeenCalled();
@@ -221,7 +221,7 @@ describe("Integrations › An application or another agent (A2A), S62-11", () =>
       created_at: "2026-11-11T10:00:00Z",
       token: "chg_application_once",
     } as ApiTokenCreated);
-    const { unmount } = render(wrap(<A2aIntegration org="varga" projet="billing-api" />));
+    const { unmount } = render(wrap(<A2aIntegration org="northwind" projet="billing-api" />));
     expect(await snippet()).toContain("CHOREGOS_A2A_TOKEN=<token>");
     fireEvent.click(await screen.findByRole("button", { name: "Issue a token" }));
     expect(await screen.findByTestId("machine-token-partner-app")).toHaveTextContent("chg_application_once");
@@ -231,11 +231,11 @@ describe("Integrations › An application or another agent (A2A), S62-11", () =>
       "machine:partner-app.p1@machines.choregos.invalid for Partner app",
     );
     expect(screen.getByTestId("a2a-follow-up")).toHaveTextContent(
-      "choregos machines revoke varga:billing-api partner-app <token id>",
+      "choregos machines revoke northwind:billing-api partner-app <token id>",
     );
     // Shown once: the page keeps it in memory only. Opened again, it is gone, and the examples say `<token>`.
     unmount();
-    render(wrap(<A2aIntegration org="varga" projet="billing-api" />));
+    render(wrap(<A2aIntegration org="northwind" projet="billing-api" />));
     await waitFor(async () => expect(await snippet()).toContain("CHOREGOS_A2A_TOKEN=<token>"));
     expect(document.body.textContent).not.toContain("chg_application_once");
   });
@@ -243,28 +243,28 @@ describe("Integrations › An application or another agent (A2A), S62-11", () =>
   it("step 2: the personal token is of the a2a scope only, bound to the project, and shown once", async () => {
     arrange();
     vi.mocked(api.createToken).mockResolvedValue({ token: "chg_a2a_once" } as ApiTokenCreated);
-    render(wrap(<A2aIntegration org="varga" projet="billing-api" />));
+    render(wrap(<A2aIntegration org="northwind" projet="billing-api" />));
     fireEvent.click(await screen.findByRole("button", { name: "Create an A2A token for me" }));
     expect(await screen.findByTestId("a2a-token")).toHaveTextContent("chg_a2a_once");
     expect(screen.queryByRole("button", { name: "Create an A2A token for me" })).toBeNull();
     const asked = vi.mocked(api.createToken).mock.calls[0]![0];
     expect(asked.scopes).toEqual(["a2a"]);
-    expect(asked.project).toBe("varga:billing-api");
+    expect(asked.project).toBe("northwind:billing-api");
     await waitFor(async () => expect(await snippet()).toContain("chg_a2a_once"));
   });
 
   it("step 3: the examples carry the instance's values, in three tabs", async () => {
     arrange();
-    render(wrap(<A2aIntegration org="varga" />));
+    render(wrap(<A2aIntegration org="northwind" />));
     await screen.findByTestId("a2a-workflow-ship-a-change");
     await waitFor(async () => expect(await snippet()).toContain("billing-api/ship-a-change"));
     const cli = await snippet();
-    expect(cli).toContain("export CHOREGOS_API_URL=https://choregos.example CHOREGOS_ORG=varga");
+    expect(cli).toContain("export CHOREGOS_API_URL=https://choregos.example CHOREGOS_ORG=northwind");
     expect(cli).toContain("choregos a2a send billing-api/ship-a-change");
     expect(cli).toContain("--field 'ticket=<ticket>'");
     fireEvent.click(screen.getByRole("tab", { name: "curl (A2A 0.3.0)" }));
     const curl = await snippet();
-    expect(curl).toContain("export A2A=https://choregos.example/a2a/orgs/varga");
+    expect(curl).toContain("export A2A=https://choregos.example/a2a/orgs/northwind");
     expect(curl).toContain('"method": "message/send"');
     expect(curl).toContain('"skill": "billing-api/ship-a-change"');
     fireEvent.click(screen.getByRole("tab", { name: "A2A 1.0" }));
@@ -276,7 +276,7 @@ describe("Integrations › An application or another agent (A2A), S62-11", () =>
 
   it("each step links to its documentation page, on the instance's site", async () => {
     arrange();
-    render(wrap(<A2aIntegration org="varga" />));
+    render(wrap(<A2aIntegration org="northwind" />));
     await waitFor(() =>
       expect(within(screen.getByTestId("a2a-step-1")).getByTestId("a2a-step-1-docs")).toHaveAttribute(
         "href",
@@ -299,8 +299,8 @@ describe("Integrations › An application or another agent (A2A), S62-11", () =>
 
   it("a project with no served workflow says the examples use a placeholder", async () => {
     arrange();
-    render(wrap(<A2aIntegration org="varga" projet="contracts" />));
-    await waitFor(() => expect(screen.getByTestId("a2a-no-skill")).toHaveTextContent("varga:contracts"));
+    render(wrap(<A2aIntegration org="northwind" projet="contracts" />));
+    await waitFor(() => expect(screen.getByTestId("a2a-no-skill")).toHaveTextContent("northwind:contracts"));
     expect(await snippet()).toContain("choregos a2a send <project>/<skill>");
   });
 });

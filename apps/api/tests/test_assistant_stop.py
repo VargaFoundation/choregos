@@ -44,7 +44,7 @@ from .test_agent_sessions import Upstream, _agent, upstream  # noqa: F401
 
 AUDIENCE = "investors"
 ASSISTANT = f"{ORG}/assistants/investment-assistant"
-PERSON = "probe@varga.dev"
+PERSON = "probe@northwind.dev"
 
 
 def _valid(body: Any, schema: str) -> None:
@@ -65,7 +65,7 @@ async def _ready(client: AsyncClient) -> None:
     await _bind(client, "news", "news-feed")
     ready = await _bind(client, "market_data", "markets")
     assert ready.json()["status"] == "ready", ready.text
-    await as_user(client, "admin@varga.dev")
+    await as_user(client, "admin@northwind.dev")
 
 
 async def _person(client: AsyncClient, app: Any, email: str = PERSON) -> AsyncClient:
@@ -201,7 +201,7 @@ async def test_a_stopped_assistant_refuses_a_new_turn_until_it_is_resumed(
     _valid(stopped.json(), "AssistantStopResult")
     shown = (await client.get(ASSISTANT)).json()
     assert shown["status"] == "suspended"
-    assert shown["stopped"]["by"] == "admin@varga.dev" and shown["stopped"]["reason"] == "leaking quotes"
+    assert shown["stopped"]["by"] == "admin@northwind.dev" and shown["stopped"]["reason"] == "leaking quotes"
     _valid(shown, "Assistant")
 
     calls, keys = len(upstream.model.requests), len(upstream.gateway.revoked)
@@ -336,8 +336,8 @@ async def test_an_agents_stop_cancels_the_turns_of_its_conversations_in_every_pe
     await _member(client, PERSON, [])
     person = await _as(app, PERSON)
     upstream.model.call("lookup", {"order": 42}).say("never said")
-    running = await _open("varga", PERSON)  # the person's space: the admin cannot read it
-    idle = await _open("varga", PERSON)
+    running = await _open("northwind", PERSON)  # the person's space: the admin cannot read it
+    idle = await _open("northwind", PERSON)
     other_agent = await _conversation(PERSON, None, running=True, agent="writer")
     _on_another_replica(monkeypatch)
     held = _hold(upstream)
@@ -380,7 +380,7 @@ async def _conversation(
     now = utcnow()
     async with session_scope(orgs="*") as session:
         organisation = (
-            await session.execute(select(Organization).where(Organization.slug == "varga"))
+            await session.execute(select(Organization).where(Organization.slug == "northwind"))
         ).scalar_one()
         user = (await session.execute(select(User).where(User.email == user_email))).scalar_one()
         space = await personal_space(session, organisation, user)
@@ -416,7 +416,7 @@ async def _installation_ids() -> dict[str, str]:
 
     async with session_scope(orgs="*") as session:
         org_id = (
-            await session.execute(select(Organization.id).where(Organization.slug == "varga"))
+            await session.execute(select(Organization.id).where(Organization.slug == "northwind"))
         ).scalar_one()
         ids = {}
         for slug in ("coach", "tutor"):
@@ -473,8 +473,8 @@ async def test_the_activity_lists_turns_with_the_assistant_filter_to_whoever_may
     activity = f"{ORG}/activity"
     installations = await _installation_ids()
     await _member(client, PERSON, [])
-    await _member(client, "other@varga.dev", [])
-    await _member(client, "auditor@varga.dev", ["coach-owners"])  # owns, so audits, `coach` alone
+    await _member(client, "other@northwind.dev", [])
+    await _member(client, "auditor@northwind.dev", ["coach-owners"])  # owns, so audits, `coach` alone
     coach = await _conversation(PERSON, installations["coach"], running=True)
     tutor = await _conversation(PERSON, installations["tutor"], running=True)
     plain = await _conversation(PERSON, None, running=True, agent="writer")
@@ -520,9 +520,9 @@ async def test_the_activity_lists_turns_with_the_assistant_filter_to_whoever_may
         assert _ids((await person.get(activity, params={"kind": "run"})).json()) == set()
         assert _ids((await person.get(activity, params={"project": "billing-api"})).json()) == set()
 
-    async with _signed_in(app, "other@varga.dev") as other:
+    async with _signed_in(app, "other@northwind.dev") as other:
         assert _ids((await other.get(activity)).json()) == set(), "another person's turns are listed"
-    async with _signed_in(app, "auditor@varga.dev") as auditor:
+    async with _signed_in(app, "auditor@northwind.dev") as auditor:
         seen = (await auditor.get(activity, params={"kind": "turn"})).json()
         assert _ids(seen) == {coach}, "an auditor sees the turns of the assistants it audits, and only those"
         assert seen["in_flight"][0]["can_stop"] is False, "a turn is stopped by its person"
@@ -543,27 +543,27 @@ async def test_the_stream_sends_a_turn_to_whoever_may_see_it(
 
     installations = await _installation_ids()
     await _member(client, PERSON, [])
-    await _member(client, "other@varga.dev", [])
+    await _member(client, "other@northwind.dev", [])
     coach = await _conversation(PERSON, installations["coach"], running=True)
     tool = ChoregosEvent.emit(EventType.TOOL_CALLED, source="/t", subject=coach, session_id=coach)
 
     async with session_scope(orgs="*") as session:
         org_id = (
-            await session.execute(select(Organization.id).where(Organization.slug == "varga"))
+            await session.execute(select(Organization.id).where(Organization.slug == "northwind"))
         ).scalar_one()
         users = dict((await session.execute(select(User.email, User.id))).all())
 
     def reader(email: str, **filters: Any) -> ActivityReader:
-        principal = Principal(user_id=users[email], email=email, org_roles={"varga": Role.DEVELOPER})
+        principal = Principal(user_id=users[email], email=email, org_roles={"northwind": Role.DEVELOPER})
         return ActivityReader(
-            principal=principal, org_id=org_id, org_slug="varga", filters=ActivityFilters(**filters)
+            principal=principal, org_id=org_id, org_slug="northwind", filters=ActivityFilters(**filters)
         )
 
     seen = entry_of_event
-    async with session_scope("varga") as session:
+    async with session_scope("northwind") as session:
         found = await seen(session, reader(PERSON), tool)
         assert found is not None and found[0] == "activity.upsert" and found[1].kind == "turn"
         assert found[1].id == coach
         assert await seen(session, reader(PERSON, assistant=installations["tutor"]), tool) is None
         assert await seen(session, reader(PERSON, kind="session"), tool) is None
-        assert await seen(session, reader("other@varga.dev"), tool) is None
+        assert await seen(session, reader("other@northwind.dev"), tool) is None

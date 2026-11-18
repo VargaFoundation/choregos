@@ -93,8 +93,8 @@ describe("tool calls by door, on the spend pages", () => {
   });
 
   it("the demo ledger groups by door too, and adds up to the same total", () => {
-    const doors = mockCostReport("/orgs/varga/costs?group_by=origin&kind=tool");
+    const doors = mockCostReport("/orgs/northwind/costs?group_by=origin&kind=tool");
     expect(doors.rows.map((r) => r.key).sort()).toEqual(["model", "script", "—"]);
-    expect(doors.total.cost_usd).toBeCloseTo(mockCostReport("/orgs/varga/costs?group_by=model&kind=tool").total.cost_usd!);
+    expect(doors.total.cost_usd).toBeCloseTo(mockCostReport("/orgs/northwind/costs?group_by=model&kind=tool").total.cost_usd!);
   });
 });

@@ -190,11 +190,11 @@ async def test_a_reader_does_not_synchronise(
     app: Any, client: AsyncClient, project: dict[str, Any], ontology: dict[str, Any]
 ) -> None:
     added = await client.post(
-        "/api/v1/orgs/varga/members", json={"email": "reader@varga.dev", "role": "viewer"}
+        "/api/v1/orgs/northwind/members", json={"email": "reader@northwind.dev", "role": "viewer"}
     )
     assert added.status_code in {200, 201}, added.text
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as reader:
-        await sign_in(reader, "reader@varga.dev")
+        await sign_in(reader, "reader@northwind.dev")
         assert (await reader.get(f"/api/v1/projects/{project['id']}/objects/finding")).status_code == 200
         refusal = await post_report(reader, project, WEEK_1)
     assert refusal.status_code == 403, refusal.text
@@ -501,7 +501,7 @@ def test_onto0003_copies_the_proposals_into_the_actions_then_drops_the_table(
         main(["upgrade", "f8a0b2c4d6e9"])
         main(["upgrade", "onto0002"])
         with Session(engine) as session:
-            session.add(Organization(id="o1", slug="varga", name="Varga"))
+            session.add(Organization(id="o1", slug="northwind", name="Northwind"))
             session.flush()
             # Raw SQL: the table is at the revision this test stops at, without later columns.
             session.execute(

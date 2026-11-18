@@ -21,7 +21,7 @@ def real_adapters(monkeypatch: pytest.MonkeyPatch) -> None:
 def _memory() -> Any:
     from choregos_adapters import build
 
-    return build("memory", "lexical", {"org": "varga"})
+    return build("memory", "lexical", {"org": "northwind"})
 
 
 async def _setup(client: AsyncClient) -> str:
@@ -107,7 +107,7 @@ async def test_global_memory_search_pending_and_decision(client: AsyncClient, ad
         f"{ORG}/connectors", json={"name": "memory-org", "type": "lexical", "kind": "memory"}
     )
     assert declared.status_code == 201, declared.text
-    ns = "org:varga#memory:lessons"
+    ns = "org:northwind#memory:lessons"
     memory = _memory()
     await memory.write_fact(ns, Fact(kind="decision", subject="tls", content="Pin TLS 1.2 everywhere."))
     proposed = await memory.propose_fact(
@@ -126,8 +126,8 @@ async def test_global_memory_search_pending_and_decision(client: AsyncClient, ad
         for m in (await client.get(f"{ORG}/memories/lessons/search", params={"q": "HSTS"})).json()
     ] == ["hsts"]
     # Only an administrator decides.
-    await add_member(client, "dev@varga.dev", "developer")
-    await as_user(client, "dev@varga.dev")
+    await add_member(client, "dev@northwind.dev", "developer")
+    await as_user(client, "dev@northwind.dev")
     assert (await client.get(f"{ORG}/memories/lessons/pending")).status_code == 403
     refused = await client.post(f"{ORG}/memories/lessons/pending", json={"id": proposed, "action": "reject"})
     assert refused.status_code == 403

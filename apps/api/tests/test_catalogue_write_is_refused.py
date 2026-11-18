@@ -75,7 +75,7 @@ async def _run(
         config = dict(row.config or {})
         config["tools"] = ["create_ticket", "list_tickets"]
         row.config = config
-        item = WorkItem(project_id=project["id"], tracker_key="varga/x#12", title="T", state="ready")
+        item = WorkItem(project_id=project["id"], tracker_key="northwind/x#12", title="T", state="ready")
         session.add(item)
         await session.flush()
         session.add(
@@ -88,7 +88,7 @@ async def _run(
             )
         )
     token = mint_run_token(
-        "run-write-1", project_slug="billing-api", work_item_key="varga/x#12", ttl_minutes=30
+        "run-write-1", project_slug="billing-api", work_item_key="northwind/x#12", ttl_minutes=30
     )
     return "run-write-1", {"Authorization": f"Bearer {token}"}
 

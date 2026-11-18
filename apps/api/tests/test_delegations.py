@@ -28,12 +28,12 @@ from .conftest import login, without_postgres
 from .kits.assistant_install import FIXTURE, MARKET, NEWS, ORG, _bind, _connector, _install, _member, _plugin
 
 AUDIENCE = "investors"
-EMAIL = "traveller@varga.dev"
+EMAIL = "traveller@northwind.dev"
 SUBJECT = f"dev|{EMAIL}"
 SIGN_IN_REFRESH = "refresh-of-the-traveller"
 ME = "/api/v1/me"
 SLUG = "investment-assistant"
-TASKS = f"{ME}/assistants/varga/{SLUG}/tasks"
+TASKS = f"{ME}/assistants/northwind/{SLUG}/tasks"
 AUDIENCE_OF_SOURCE = "markets-mcp"
 LONG = 3650
 
@@ -186,7 +186,9 @@ async def _user_id(email: str = EMAIL) -> tuple[str, str]:
 
     async with session_scope(orgs="*") as session:
         user = (await session.execute(select(User).where(User.email == email))).scalar_one()
-        org = (await session.execute(select(Organization).where(Organization.slug == "varga"))).scalar_one()
+        org = (
+            await session.execute(select(Organization).where(Organization.slug == "northwind"))
+        ).scalar_one()
         return user.id, org.id
 
 
@@ -219,7 +221,7 @@ async def _traveller(client: AsyncClient, app: Any) -> AsyncClient:
 
 
 def _agreement(**extra: Any) -> dict[str, Any]:
-    return {"org": "varga", "assistant": SLUG, "task": "poll_alert", "agree_to": ["market_data"], **extra}
+    return {"org": "northwind", "assistant": SLUG, "task": "poll_alert", "agree_to": ["market_data"], **extra}
 
 
 async def _agree(person: AsyncClient, **extra: Any) -> dict[str, Any]:
@@ -345,12 +347,12 @@ async def test_what_cannot_be_delegated_is_refused(
     assert none.status_code == 422, "`delegation: none`: nothing to delegate"
     unknown = await person.post(f"{ME}/delegations", json=_agreement(task="nope"))
     assert unknown.status_code == 404
-    outsider = await _as(app, "outsider@varga.dev")
+    outsider = await _as(app, "outsider@northwind.dev")
     assert (await outsider.post(f"{ME}/delegations", json=_agreement())).status_code == 404, (
         "outside the audience"
     )
-    await _member(client, "not-subscribed@varga.dev", [AUDIENCE])
-    other = await _as(app, "not-subscribed@varga.dev")
+    await _member(client, "not-subscribed@northwind.dev", [AUDIENCE])
+    other = await _as(app, "not-subscribed@northwind.dev")
     assert (await other.post(f"{ME}/delegations", json=_agreement())).status_code == 409, "subscribe first"
 
 
@@ -654,8 +656,8 @@ async def test_another_person_never_sees_or_revokes_someones_delegation(
     await _ready(client)
     person = await _traveller(client, app)
     granted = await _agree(person, expires_in_days=LONG)
-    await _member(client, "colleague@varga.dev", [AUDIENCE])
-    colleague = await _as(app, "colleague@varga.dev")
+    await _member(client, "colleague@northwind.dev", [AUDIENCE])
+    colleague = await _as(app, "colleague@northwind.dev")
     assert (await colleague.get(f"{ME}/delegations")).json()["items"] == []
     assert (await client.get(f"{ME}/delegations")).json()["items"] == [], "not even an administrator's"
     assert (await colleague.delete(f"{ME}/delegations/{granted['id']}")).status_code == 404
@@ -671,7 +673,7 @@ async def test_erasing_a_person_from_an_assistant_removes_their_delegations_and_
     granted = await _agree(person, expires_in_days=LONG)
     user_id, _ = await _user_id()
     name = f"user/{user_id}/delegation/{granted['id']}"
-    erased = await person.delete(f"{ME}/assistants/varga/{SLUG}")
+    erased = await person.delete(f"{ME}/assistants/northwind/{SLUG}")
     assert erased.status_code == 200, erased.text
     assert erased.json()["others"]["delegations"] == 1
     assert (await person.get(f"{ME}/delegations")).json()["items"] == []

@@ -17,7 +17,7 @@ from .test_knowledge_files import _pinned, _run
 from .test_knowledge_index import _indexed_base
 from .test_knowledge_rights import ORG, _uid
 
-READER = "person:reader@varga.dev"
+READER = "person:reader@northwind.dev"
 
 
 async def _restricted(client: AsyncClient, slug: str = "architecture", **fields: Any) -> None:
@@ -26,7 +26,7 @@ async def _restricted(client: AsyncClient, slug: str = "architecture", **fields:
 
 
 async def _grant_to(client: AsyncClient, *grants: dict[str, str], slug: str = "architecture") -> None:
-    await login(client, "admin@varga.dev")
+    await login(client, "admin@northwind.dev")
     put = await client.put(f"{ORG}/{slug}/grants", json={"grants": list(grants)})
     assert put.status_code == 200, put.text
 
@@ -52,7 +52,7 @@ async def _parent(project: dict[str, Any], key: str, initiated_by: str | None) -
         "system",
         None,
         "person:",
-        "person:nobody@varga.dev",
+        "person:nobody@northwind.dev",
     ],
 )
 async def test_a_run_with_no_reader_behind_it_is_refused_a_restricted_base(
@@ -79,7 +79,7 @@ async def test_the_initiator_reads_through_a_user_a_group_or_a_project_grant(
     from choregos_api.knowledge.serving import KnowledgeRefusedError
 
     await _restricted(client)
-    uid = await _uid(client, "reader@varga.dev", org_role="viewer", groups=["hr"])
+    uid = await _uid(client, "reader@northwind.dev", org_role="viewer", groups=["hr"])
     with pytest.raises(KnowledgeRefusedError):
         await _pinned(project, READER)
     for grant in (
@@ -92,15 +92,15 @@ async def test_the_initiator_reads_through_a_user_a_group_or_a_project_grant(
     await _grant_to(client, {"subject_type": "project", "subject": project["slug"], "role": "viewer"})
     with pytest.raises(KnowledgeRefusedError):
         await _pinned(project, READER)
-    await _uid(client, "member@varga.dev", projects={project["slug"]: "developer"})
-    assert await _pinned(project, "mcp:member@varga.dev")
+    await _uid(client, "member@northwind.dev", projects={project["slug"]: "developer"})
+    assert await _pinned(project, "mcp:member@northwind.dev")
 
 
 async def test_an_administrator_reads_every_restricted_base(
     client: AsyncClient, admin: str, project: dict[str, Any]
 ) -> None:
     await _restricted(client)
-    assert await _pinned(project, "person:admin@varga.dev")
+    assert await _pinned(project, "person:admin@northwind.dev")
 
 
 async def test_a_fan_out_child_acts_for_its_parents_initiator(
@@ -109,7 +109,7 @@ async def test_a_fan_out_child_acts_for_its_parents_initiator(
     from choregos_api.knowledge.serving import KnowledgeRefusedError
 
     await _restricted(client)
-    uid = await _uid(client, "reader@varga.dev", org_role="viewer")
+    uid = await _uid(client, "reader@northwind.dev", org_role="viewer")
     await _grant_to(client, {"subject_type": "user", "subject": uid, "role": "viewer"})
     await _parent(project, "BILLING-1", READER)
     await _parent(project, "BILLING-2", "work_item:BILLING-1")
@@ -126,7 +126,7 @@ async def test_a_grant_revoked_during_the_run_holds_at_its_next_files_read(
     client: AsyncClient, admin: str, project: dict[str, Any]
 ) -> None:
     await _restricted(client)
-    uid = await _uid(client, "reader@varga.dev", org_role="viewer")
+    uid = await _uid(client, "reader@northwind.dev", org_role="viewer")
     await _grant_to(client, {"subject_type": "user", "subject": uid, "role": "viewer"})
     token = await _run(project, await _pinned(project, READER), READER)
     headers = {"Authorization": f"Bearer {token}"}
@@ -141,7 +141,7 @@ async def test_a_grant_revoked_during_the_run_holds_at_its_next_search(
     client: AsyncClient, admin: str, project: dict[str, Any]
 ) -> None:
     await _indexed_base(client, "architecture", restricted=True)
-    uid = await _uid(client, "reader@varga.dev", org_role="viewer")
+    uid = await _uid(client, "reader@northwind.dev", org_role="viewer")
     await _grant_to(client, {"subject_type": "user", "subject": uid, "role": "viewer"})
     token = await _run(project, [{"slug": "architecture", "mode": "index"}], READER)
     headers = {"Authorization": f"Bearer {token}"}

@@ -15,7 +15,7 @@ from httpx import AsyncClient
 from .github_app_kit import add_organisation, claim_for
 from .test_knowledge_rights import PEOPLE, _admin_base, _as, _email, _uid, two_projects  # noqa: F401
 
-KB = "/api/v1/orgs/varga/knowledge/fiches"
+KB = "/api/v1/orgs/northwind/knowledge/fiches"
 URL = "https://github.com/acme/docs.git"
 ASKED = {"url": URL, "paths": ["docs/**/*.md"], "github_app": True}
 
@@ -40,14 +40,14 @@ def minted(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
     return asked
 
 
-async def _varga_claims(login: str, installation_id: int = 7) -> None:
+async def _northwind_claims(login: str, installation_id: int = 7) -> None:
     from choregos_api.db.models import Organization
     from choregos_api.db.session import session_scope
     from sqlalchemy import select
 
     async with session_scope(orgs="*") as session:
         org_id = (
-            await session.execute(select(Organization.id).where(Organization.slug == "varga"))
+            await session.execute(select(Organization.id).where(Organization.slug == "northwind"))
         ).scalar_one()
     await claim_for(installation_id, login, org_id)
 
@@ -71,7 +71,7 @@ async def test_an_administrator_reads_a_repository_through_the_installation_the_
 
     await _admin_base(client, two_projects)
     await add_organisation("globex")  # two organisations: nothing is implicit
-    await _varga_claims("acme")
+    await _northwind_claims("acme")
     created = await _post(client, ASKED)
     assert created.status_code == 201, created.text
     assert created.json()["config"] == {
@@ -119,7 +119,7 @@ async def test_a_non_administrator_may_not_ask_for_the_app_but_may_add_a_plain_s
 ) -> None:  # fmt: skip
     await _admin_base(client, two_projects)
     await add_organisation("globex")
-    await _varga_claims("acme")
+    await _northwind_claims("acme")
     async with _as(client, _email("project owner"), **PEOPLE["project owner"]) as owner:
         refused = await _post(owner, ASKED)
         assert refused.status_code == 403, refused.text
@@ -157,7 +157,7 @@ async def test_a_patch_keeps_the_app_while_the_url_stays_and_false_removes_it(
 ) -> None:  # fmt: skip
     await _admin_base(client, two_projects)
     await add_organisation("globex")
-    await _varga_claims("acme")
+    await _northwind_claims("acme")
     source = (await _post(client, ASKED)).json()
     path = f"{KB}/sources/{source['id']}"
 

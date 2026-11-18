@@ -57,12 +57,12 @@ def templates(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> Any:
 
 async def _project(client: AsyncClient, template_ref: str, slug: str = "hr") -> Any:
     return await client.post(
-        "/api/v1/orgs/varga/projects",
+        "/api/v1/orgs/northwind/projects",
         json={
             "slug": slug,
             "name": slug,
             "template_ref": template_ref,
-            "config": {"slug": slug, "org": "varga"},
+            "config": {"slug": slug, "org": "northwind"},
         },
     )
 
@@ -141,7 +141,7 @@ async def test_a_faulty_template_gives_no_project(
     refused = await _project(client, "hr@1.0.0")
     assert refused.status_code == 422, refused.text
     assert reason in refused.text
-    projects = (await client.get("/api/v1/orgs/varga/projects")).json()["items"]
+    projects = (await client.get("/api/v1/orgs/northwind/projects")).json()["items"]
     assert "hr" not in {p["slug"] for p in projects}, "nothing is half-created"
 
 

@@ -23,7 +23,9 @@ async def test_a_question_and_a_scope_change_carry_a_due_date(
     example = Path(choregos_contracts.schemas_dir()) / "examples" / "stage-input.example.json"
     stage_input = StageInput.model_validate(json.loads(example.read_text()))
     async with session_scope() as session:
-        item = WorkItem(project_id=project["id"], tracker_key="varga/billing-api#1", title="T", state="ready")
+        item = WorkItem(
+            project_id=project["id"], tracker_key="northwind/billing-api#1", title="T", state="ready"
+        )
         session.add(item)
         await session.flush()
         run = Run(
@@ -39,7 +41,7 @@ async def test_a_question_and_a_scope_change_carry_a_due_date(
         session.add(run)
         run_id = run.id
     token = mint_run_token(
-        run_id, project_slug="billing-api", work_item_key="varga/billing-api#1", ttl_minutes=30
+        run_id, project_slug="billing-api", work_item_key="northwind/billing-api#1", ttl_minutes=30
     )
     headers = {"Authorization": f"Bearer {token}"}
 

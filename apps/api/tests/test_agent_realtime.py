@@ -20,7 +20,7 @@ from .test_agent_sessions import _key_rows, _ledger
 from .test_broker import TOOLS
 from .ws_support import AsgiWebSocket, Closed, cookie_header
 
-ORG = "/api/v1/orgs/varga"
+ORG = "/api/v1/orgs/northwind"
 REALTIME = f"{ORG}/agents/concierge/realtime?project=billing-api"
 MODEL = "openai/gpt-realtime"
 GREETING = "Hello, this is the order desk."
@@ -406,7 +406,7 @@ async def test_a_foreign_origin_and_a_viewer_are_refused_before_any_key(
         async with _socket(client, origin="https://evil.example"):
             pass
     assert foreign.value.code == 1008 and "origin" in foreign.value.reason
-    async with as_person(client, "viewer@varga.dev", "viewer") as viewer:
+    async with as_person(client, "viewer@northwind.dev", "viewer") as viewer:
         with pytest.raises(Closed) as refused:
             async with _socket(viewer):
                 pass
@@ -453,7 +453,7 @@ async def _rate(usd_per_minute: float) -> None:
     from sqlalchemy import select
 
     async with session_scope() as db:
-        org = (await db.execute(select(Organization).where(Organization.slug == "varga"))).scalar_one()
+        org = (await db.execute(select(Organization).where(Organization.slug == "northwind"))).scalar_one()
         db.add(ModelCatalogueRow(org_id=org.id, model_name=MODEL, max_usd_per_minute=usd_per_minute))
 
 

@@ -23,7 +23,7 @@ from jsonschema import Draft202012Validator
 from .conftest import login
 from .kits.memberships import _only
 
-ACTIVITY = "/api/v1/orgs/varga/activity"
+ACTIVITY = "/api/v1/orgs/northwind/activity"
 
 
 @pytest.fixture(autouse=True)
@@ -36,9 +36,9 @@ def _no_spend_remembered() -> Iterator[None]:
 
 
 async def _project(client: AsyncClient, slug: str) -> dict[str, Any]:
-    config = {"slug": slug, "org": "varga", "repo": {"url": f"https://github.com/varga/{slug}.git"}}
+    config = {"slug": slug, "org": "northwind", "repo": {"url": f"https://github.com/northwind/{slug}.git"}}
     response = await client.post(
-        "/api/v1/orgs/varga/projects", json={"slug": slug, "name": slug, "config": config}
+        "/api/v1/orgs/northwind/projects", json={"slug": slug, "name": slug, "config": config}
     )
     assert response.status_code == 201, response.text
     return dict(response.json())
@@ -51,7 +51,9 @@ async def _org_id() -> str:
 
     async with session_scope() as session:
         return str(
-            (await session.execute(select(Organization.id).where(Organization.slug == "varga"))).scalar_one()
+            (
+                await session.execute(select(Organization.id).where(Organization.slug == "northwind"))
+            ).scalar_one()
         )
 
 
@@ -202,7 +204,7 @@ async def test_a_person_who_cannot_read_a_project_sees_none_of_its_runs(
     )
     assert errors == []
 
-    async with _as(client, "viewer@varga.dev", "viewer", "billing-api") as viewer:
+    async with _as(client, "viewer@northwind.dev", "viewer", "billing-api") as viewer:
         seen = await viewer.get(ACTIVITY)
         assert seen.status_code == 200, seen.text
         assert _ids(seen.json()) == {"run-billing"}, "a run of a project the reader cannot read is listed"
@@ -220,9 +222,9 @@ async def test_a_person_who_cannot_read_a_project_sees_none_of_its_runs(
 
 
 async def test_a_session_is_listed_to_its_opener_only(client: AsyncClient, project: dict[str, Any]) -> None:
-    async with _as(client, "dev@varga.dev", "developer", "billing-api") as dev:
-        await _session(project, await _user_id("admin@varga.dev"), "s-admin")
-        await _session(project, await _user_id("dev@varga.dev"), "s-dev")
+    async with _as(client, "dev@northwind.dev", "developer", "billing-api") as dev:
+        await _session(project, await _user_id("admin@northwind.dev"), "s-admin")
+        await _session(project, await _user_id("dev@northwind.dev"), "s-dev")
         assert _ids((await client.get(ACTIVITY)).json()) == {"s-admin"}
         body = (await dev.get(ACTIVITY)).json()
     assert _ids(body) == {"s-dev"}
@@ -239,7 +241,7 @@ async def test_each_filter_keeps_only_its_entries(client: AsyncClient, project: 
     await _run(project["id"], "r-deliver-a", agent="alpha", workflow_def_id=deliver)
     await _run(project["id"], "r-review-b", agent="beta", workflow_def_id=review)
     await _run(vault["id"], "r-vault-a", agent="alpha")
-    await _session(project, await _user_id("admin@varga.dev"), "s-helper", agent="helper")
+    await _session(project, await _user_id("admin@northwind.dev"), "s-helper", agent="helper")
 
     async def listed(**params: str) -> set[str]:
         response = await client.get(ACTIVITY, params=params)
@@ -350,7 +352,9 @@ async def test_the_stream_sends_an_upsert_then_an_ended_for_a_run(
     vault = await _project(client, "vault")
     await _run(vault["id"], "r-hidden")
     await _run(project["id"], "r-live", status="queued")
-    viewer = Principal(user_id="u-v", email="v@varga.dev", project_roles={"varga/billing-api": Role.VIEWER})
+    viewer = Principal(
+        user_id="u-v", email="v@northwind.dev", project_roles={"northwind/billing-api": Role.VIEWER}
+    )
 
     def event(type_: EventType, run_id: str, **data: Any) -> ChoregosEvent:
         return ChoregosEvent.emit(type_, source="/t", subject=run_id, run_id=run_id, **data)
@@ -358,7 +362,7 @@ async def test_the_stream_sends_an_upsert_then_an_ended_for_a_run(
     # The route itself, its response's body read as the server would: ASGITransport would wait for the
     # end of a stream that never ends.
     async with session_scope() as session:
-        response = await stream_org_activity("varga", session, viewer)
+        response = await stream_org_activity("northwind", session, viewer)
     messages = response.body_iterator
     first = asyncio.ensure_future(anext(messages))
     while get_bus().subscriber_count("*") == 0:
@@ -392,15 +396,17 @@ async def test_the_stream_says_a_run_ended_from_its_event_before_the_row_is_read
     from choregos_contracts import ChoregosEvent, EventType
 
     await _run(project["id"], "r-racing", agent="alpha")
-    admin = Principal(user_id="u-a", email="a@varga.dev", org_roles={"varga": Role.ORG_ADMIN})
+    admin = Principal(user_id="u-a", email="a@northwind.dev", org_roles={"northwind": Role.ORG_ADMIN})
     finished = ChoregosEvent.emit(EventType.RUN_FINISHED, source="/t", run_id="r-racing", status="failed")
     org_id = await _org_id()
     async with session_scope() as session:
-        reader = ActivityReader(principal=admin, org_id=org_id, org_slug="varga", filters=ActivityFilters())
+        reader = ActivityReader(
+            principal=admin, org_id=org_id, org_slug="northwind", filters=ActivityFilters()
+        )
         found = await entry_of_event(session, reader, finished)
         assert found is not None
         assert (found[0], found[1].status) == ("activity.ended", "failed")
-        other_agent = ActivityReader(admin, org_id, "varga", ActivityFilters(agent="beta"))
+        other_agent = ActivityReader(admin, org_id, "northwind", ActivityFilters(agent="beta"))
         assert await entry_of_event(session, other_agent, finished) is None, "the stream ignores its filters"
 
 
@@ -413,15 +419,15 @@ async def test_a_late_event_of_an_ended_run_and_a_session_tool_call_reach_the_st
     from choregos_contracts import ChoregosEvent, EventType
 
     await _run(project["id"], "r-done", status="succeeded", ended_ago=timedelta(minutes=1))
-    admin_id = await _user_id("admin@varga.dev")
+    admin_id = await _user_id("admin@northwind.dev")
     await _session(project, admin_id, "s-live")
-    admin = Principal(user_id=admin_id, email="admin@varga.dev", org_roles={"varga": Role.ORG_ADMIN})
-    stranger = Principal(user_id="u-x", email="x@varga.dev", org_roles={"varga": Role.ORG_ADMIN})
+    admin = Principal(user_id=admin_id, email="admin@northwind.dev", org_roles={"northwind": Role.ORG_ADMIN})
+    stranger = Principal(user_id="u-x", email="x@northwind.dev", org_roles={"northwind": Role.ORG_ADMIN})
     late = ChoregosEvent.emit(EventType.RUN_PROGRESS, source="/t", run_id="r-done", events=1)
     tool = ChoregosEvent.emit(EventType.TOOL_CALLED, source="/t", subject="s-live", session_id="s-live")
     org_id = await _org_id()
     async with session_scope() as session:
-        reader = ActivityReader(admin, org_id, "varga", ActivityFilters())
+        reader = ActivityReader(admin, org_id, "northwind", ActivityFilters())
         ended = await entry_of_event(session, reader, late)
         assert ended is not None
         assert (ended[0], ended[1].status) == ("activity.ended", "succeeded"), (
@@ -430,7 +436,7 @@ async def test_a_late_event_of_an_ended_run_and_a_session_tool_call_reach_the_st
         upsert = await entry_of_event(session, reader, tool)
         assert upsert is not None
         assert (upsert[0], upsert[1].kind, upsert[1].id) == ("activity.upsert", "session", "s-live")
-        someone_else = ActivityReader(stranger, org_id, "varga", ActivityFilters())
+        someone_else = ActivityReader(stranger, org_id, "northwind", ActivityFilters())
         assert await entry_of_event(session, someone_else, tool) is None, (
             "another person's session is streamed"
         )

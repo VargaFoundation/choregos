@@ -13,7 +13,7 @@ import pytest
 
 pytestmark = pytest.mark.asyncio
 
-REPOSITORY = "varga/billing-api"
+REPOSITORY = "northwind/billing-api"
 RULE = {"name": "adr_number_free"}
 
 

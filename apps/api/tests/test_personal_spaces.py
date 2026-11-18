@@ -42,8 +42,8 @@ async def test_a_person_has_one_space_per_organisation(client: AsyncClient, admi
     from choregos_api.db.session import session_scope
     from choregos_api.services.personal_spaces import personal_slug
 
-    first = await _space_of("varga", admin)
-    assert await _space_of("varga", admin) == first  # created once, found after
+    first = await _space_of("northwind", admin)
+    assert await _space_of("northwind", admin) == first  # created once, found after
     async with session_scope(orgs="*") as session:
         spaces = (await session.execute(select(Project).where(Project.kind == "personal"))).scalars().all()
     assert [(s.id, s.slug, s.owner_user_id) for s in spaces] == [
@@ -54,8 +54,8 @@ async def test_a_person_has_one_space_per_organisation(client: AsyncClient, admi
 async def test_a_personal_space_is_not_listed_even_to_its_owner(
     client: AsyncClient, admin: str, project: dict[str, Any]
 ) -> None:
-    await _space_of("varga", admin)
-    listing = await client.get("/api/v1/orgs/varga/projects")
+    await _space_of("northwind", admin)
+    listing = await client.get("/api/v1/orgs/northwind/projects")
     assert listing.status_code == 200, listing.text
     assert [p["slug"] for p in listing.json()["items"]] == ["billing-api"]
 
@@ -63,7 +63,7 @@ async def test_a_personal_space_is_not_listed_even_to_its_owner(
 async def test_the_mcp_door_does_not_list_a_personal_space(
     client: AsyncClient, admin: str, project: dict[str, Any]
 ) -> None:
-    await _space_of("varga", admin)
+    await _space_of("northwind", admin)
     token = await client.post("/api/v1/me/tokens", json={"name": "mcp", "scopes": ["mcp:read"]})
     assert token.status_code == 201, token.text
     answer = await client.post(
@@ -73,7 +73,7 @@ async def test_the_mcp_door_does_not_list_a_personal_space(
     )
     assert answer.status_code == 200, answer.text
     listed = answer.json()["result"]["structuredContent"]["projects"]
-    assert [p["project"] for p in listed] == ["varga:billing-api"]
+    assert [p["project"] for p in listed] == ["northwind:billing-api"]
 
 
 @pytest.mark.parametrize("slug", ["personal-0123456789ab", "personal-x"])
@@ -81,8 +81,8 @@ async def test_a_team_project_may_not_take_a_personal_slug(
     client: AsyncClient, admin: str, slug: str
 ) -> None:
     created = await client.post(
-        "/api/v1/orgs/varga/projects",
-        json={"slug": slug, "name": "X", "config": {"slug": slug, "org": "varga"}},
+        "/api/v1/orgs/northwind/projects",
+        json={"slug": slug, "name": "X", "config": {"slug": slug, "org": "northwind"}},
     )
     assert created.status_code == 422, created.text
     assert "reserved" in created.json()["detail"]
@@ -97,7 +97,7 @@ async def test_a_personal_space_has_an_owner_and_a_team_project_none(client: Asy
     with pytest.raises(IntegrityError):
         async with session_scope(orgs="*") as session:
             organisation = (
-                await session.execute(select(Organization).where(Organization.slug == "varga"))
+                await session.execute(select(Organization).where(Organization.slug == "northwind"))
             ).scalar_one()
             session.add(Project(org_id=organisation.id, slug="orphan", name="O", config={}, kind="personal"))
             await session.flush()

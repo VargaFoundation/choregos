@@ -16,7 +16,7 @@ from httpx import AsyncClient
 from .kits.human_actor import _decide, _member, _session
 
 GROUP = "release-captains"
-PERSON = "lea@varga.dev"
+PERSON = "lea@northwind.dev"
 
 
 def _workflow(actor: str) -> str:
@@ -93,8 +93,8 @@ async def test_a_step_addressed_to_a_person_is_answered_by_that_person_only(
 ) -> None:
     item_id, _ = await _waiting_ticket(client, project["id"], PERSON_ONLY)
     await _member(client, PERSON, "developer", [])
-    await _member(client, "cap@varga.dev", "project_owner", [GROUP])
-    refused = await _decide(app, "cap@varga.dev", item_id)
+    await _member(client, "cap@northwind.dev", "project_owner", [GROUP])
+    refused = await _decide(app, "cap@northwind.dev", item_id)
     assert refused.status_code == 403 and PERSON in refused.text, refused.text
 
     shown = (await client.get(f"/api/v1/work-items/{item_id}")).json()["pending_request"]["assignee"]
@@ -108,7 +108,9 @@ async def test_a_step_addressed_to_a_person_is_answered_by_that_person_only(
 async def test_the_person_is_matched_without_regard_to_case(
     client: AsyncClient, project: dict[str, Any], app: Any
 ) -> None:
-    item_id, _ = await _waiting_ticket(client, project["id"], PERSON_ONLY.replace(PERSON, "Lea@Varga.DEV"))
+    item_id, _ = await _waiting_ticket(
+        client, project["id"], PERSON_ONLY.replace(PERSON, "Lea@Northwind.DEV")
+    )
     await _member(client, PERSON, "developer", [])
     answered = await _decide(app, PERSON, item_id)
     assert answered.status_code == 202, answered.text
@@ -139,13 +141,13 @@ async def test_the_person_still_needs_the_rank_to_decide(
 async def test_the_group_waits_for_the_sla_before_answering_a_step_addressed_to_a_person(
     client: AsyncClient, project: dict[str, Any], app: Any
 ) -> None:
-    await _member(client, "cap@varga.dev", "developer", [GROUP])
+    await _member(client, "cap@northwind.dev", "developer", [GROUP])
     item_id, _ = await _waiting_ticket(client, project["id"], PERSON_THEN_GROUP)
-    early = await _decide(app, "cap@varga.dev", item_id)
+    early = await _decide(app, "cap@northwind.dev", item_id)
     assert early.status_code == 403 and "SLA" in early.text and PERSON in early.text, early.text
 
     late_id, _ = await _waiting_ticket(client, project["id"], PERSON_THEN_GROUP, overdue=True)
-    late = await _decide(app, "cap@varga.dev", late_id)
+    late = await _decide(app, "cap@northwind.dev", late_id)
     assert late.status_code == 202, late.text
 
 
@@ -153,9 +155,9 @@ async def test_the_person_answers_before_the_sla_and_an_outsider_never(
     client: AsyncClient, project: dict[str, Any], app: Any
 ) -> None:
     await _member(client, PERSON, "developer", [])
-    await _member(client, "out@varga.dev", "developer", ["platform-team"])
+    await _member(client, "out@northwind.dev", "developer", ["platform-team"])
     item_id, _ = await _waiting_ticket(client, project["id"], PERSON_THEN_GROUP, overdue=True)
-    outsider = await _decide(app, "out@varga.dev", item_id)
+    outsider = await _decide(app, "out@northwind.dev", item_id)
     assert outsider.status_code == 403 and GROUP in outsider.text, outsider.text
     answered = await _decide(app, PERSON, item_id)
     assert answered.status_code == 202, answered.text
@@ -168,8 +170,8 @@ async def test_only_an_organisation_administrator_reassigns_a_waiting_request(
     client: AsyncClient, project: dict[str, Any], app: Any
 ) -> None:
     item_id, request_id = await _waiting_ticket(client, project["id"], PERSON_ONLY)
-    await _member(client, "owner@varga.dev", "project_owner", [])
-    owner = await _session(app, "owner@varga.dev")
+    await _member(client, "owner@northwind.dev", "project_owner", [])
+    owner = await _session(app, "owner@northwind.dev")
     try:
         refused = await owner.post(
             f"/api/v1/work-items/{item_id}/human-requests/{request_id}/assignee",
@@ -190,7 +192,7 @@ async def test_a_reassigned_request_is_audited_and_answered_by_its_new_assignee(
 ) -> None:
     item_id, request_id = await _waiting_ticket(client, project["id"], PERSON_ONLY)
     await _member(client, PERSON, "developer", [])
-    await _member(client, "max@varga.dev", "developer", [])
+    await _member(client, "max@northwind.dev", "developer", [])
     path = f"/api/v1/work-items/{item_id}/human-requests/{request_id}/assignee"
 
     stranger = await client.post(path, json={"user": "nobody@else.dev", "reason": "x"})
@@ -200,20 +202,20 @@ async def test_a_reassigned_request_is_audited_and_answered_by_its_new_assignee(
     silent = await client.post(path, json={"user": PERSON, "reason": "   "})
     assert silent.status_code == 422 and "reason" in silent.text, silent.text
 
-    moved = await client.post(path, json={"user": "Max@varga.dev", "reason": "Léa is on leave"})
+    moved = await client.post(path, json={"user": "Max@northwind.dev", "reason": "Léa is on leave"})
     assert moved.status_code == 200, moved.text
-    assert moved.json()["assignee"] == {"user": "max@varga.dev", "group": None, "reassigned": True}
+    assert moved.json()["assignee"] == {"user": "max@northwind.dev", "group": None, "reassigned": True}
     (entry,) = await _audit("workitem.request.reassign")
     assert entry.payload["before"] == {"user": PERSON, "group": None, "reassigned": False}
-    assert entry.payload["after"] == {"user": "max@varga.dev", "group": None, "reassigned": True}
+    assert entry.payload["after"] == {"user": "max@northwind.dev", "group": None, "reassigned": True}
     assert entry.payload["reason"] == "Léa is on leave" and entry.payload["request_id"] == request_id
 
     shown = (await client.get(f"/api/v1/work-items/{item_id}")).json()["pending_request"]["assignee"]
-    assert shown["user"] == "max@varga.dev" and shown["reassigned"] is True
+    assert shown["user"] == "max@northwind.dev" and shown["reassigned"] is True
 
     former = await _decide(app, PERSON, item_id)
-    assert former.status_code == 403 and "max@varga.dev" in former.text, former.text
-    answered = await _decide(app, "max@varga.dev", item_id)
+    assert former.status_code == 403 and "max@northwind.dev" in former.text, former.text
+    answered = await _decide(app, "max@northwind.dev", item_id)
     assert answered.status_code == 202, answered.text
 
     decided = await client.post(path, json={"group": GROUP, "reason": "too late"})
@@ -224,14 +226,14 @@ async def test_a_request_reassigned_to_a_group_is_answered_by_its_members(
     client: AsyncClient, project: dict[str, Any], app: Any
 ) -> None:
     item_id, request_id = await _waiting_ticket(client, project["id"], PERSON_ONLY)
-    await _member(client, "cap@varga.dev", "developer", [f"{project['slug']}-captains"])
+    await _member(client, "cap@northwind.dev", "developer", [f"{project['slug']}-captains"])
     moved = await client.post(
         f"/api/v1/work-items/{item_id}/human-requests/{request_id}/assignee",
         json={"group": "{project}-captains", "reason": "the captains take it"},
     )
     assert moved.status_code == 200, moved.text
     assert moved.json()["assignee"]["group"] == f"{project['slug']}-captains"
-    answered = await _decide(app, "cap@varga.dev", item_id)
+    answered = await _decide(app, "cap@northwind.dev", item_id)
     assert answered.status_code == 202, answered.text
 
 

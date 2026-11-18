@@ -132,8 +132,10 @@ def code_stage_input(command: list[str], gateway_url: str, workspace: Path) -> S
     return StageInput(
         run_id="conformance-code-1",
         attempt=1,
-        project=ProjectRef(slug="conformance", org="varga"),
-        work_item=WorkItemRef(key="varga/conformance#2", title="Checkout fails with an error after payment"),
+        project=ProjectRef(slug="conformance", org="northwind"),
+        work_item=WorkItemRef(
+            key="northwind/conformance#2", title="Checkout fails with an error after payment"
+        ),
         transition=TransitionRef(id="t-triage", role="triage", **{"from": "inbox"}, to="triaged"),
         agent=AgentRef(backend="code", launch=LaunchSpec(command=command)),
         model=ModelRef(litellm_model="platform/standard", base_url=gateway_url, api_format="openai"),

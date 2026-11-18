@@ -3,7 +3,7 @@ kind: Plugin
 metadata:
   name: desk
   version: 1.0.0
-  publisher: Varga Foundation
+  publisher: GRAAL.SYSTEMS SAS
   license: Apache-2.0
   description: A test plugin whose server is a project's tracker (the tracker profile, S43-07).
   homepage: https://github.com/graalsystems/tranibor

@@ -109,7 +109,7 @@ async def _agent_and_run(client: AsyncClient, project: dict[str, Any], connector
     )
     assert agent.status_code == 201, agent.text
     async with session_scope() as session:
-        item = WorkItem(project_id=project["id"], tracker_key="varga/x#1", title="T", state="ready")
+        item = WorkItem(project_id=project["id"], tracker_key="northwind/x#1", title="T", state="ready")
         session.add(item)
         await session.flush()
         session.add(
@@ -122,10 +122,10 @@ async def _agent_and_run(client: AsyncClient, project: dict[str, Any], connector
                 status="running",
                 agent_slug="coordinateur",
                 agent_version=1,
-                initiated_by="person:admin@varga.dev",
+                initiated_by="person:admin@northwind.dev",
             )
         )
-    token = mint_run_token(RUN, project_slug="billing-api", work_item_key="varga/x#1", ttl_minutes=30)
+    token = mint_run_token(RUN, project_slug="billing-api", work_item_key="northwind/x#1", ttl_minutes=30)
     return {"Authorization": f"Bearer {token}"}
 
 
@@ -254,7 +254,7 @@ async def test_discovery_goes_through_the_gateway_and_tools_are_born_closed(
     assert {op["policy"] for op in operations} == {"forbidden"}
     claims = [c.claims for c in fake.calls if c.claims]
     assert claims and all(
-        c["purpose"] == "discovery" and c["sub"] == "person:admin@varga.dev" for c in claims
+        c["purpose"] == "discovery" and c["sub"] == "person:admin@northwind.dev" for c in claims
     )
     upstream = _upstream(fake)
     assert upstream.received and {h["authorization"] for _, h, _ in upstream.received} == {
@@ -282,9 +282,9 @@ async def test_a_runs_read_reaches_the_server_through_the_gateway_with_its_ident
         k: call.claims.get(k) for k in ("run", "work_item", "agent", "initiator", "tool", "connector")
     } == {
         "run": RUN,
-        "work_item": "varga/x#1",
+        "work_item": "northwind/x#1",
         "agent": "coordinateur@1",
-        "initiator": "person:admin@varga.dev",
+        "initiator": "person:admin@northwind.dev",
         "tool": "suivi_commande",
         "connector": "supplier",
     }
@@ -313,11 +313,11 @@ async def test_an_approved_write_reaches_the_gateway_with_its_approvers(
     client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     fake, _headers = await _prepare_gateway(client, project, monkeypatch)
-    action_id, _done = await _call_effect(project["id"], "commander_poste", approved_by=["rh@varga.dev"])
+    action_id, _done = await _call_effect(project["id"], "commander_poste", approved_by=["rh@northwind.dev"])
     (call,) = [c for c in fake.calls if c.method == "tools/call"]
     assert call.claims is not None
     assert call.claims["action"] == action_id
-    assert call.claims["approved_by"] == ["rh@varga.dev"]
+    assert call.claims["approved_by"] == ["rh@northwind.dev"]
     assert call.claims["purpose"] == "action" and call.claims["run"] == RUN
 
 
@@ -443,7 +443,7 @@ async def test_the_connector_timeout_wins_over_the_gateways(
     async def identity() -> Any:
         from choregos_api.services.mcp_gateway_identity import CallIdentity
 
-        return CallIdentity(org="varga", org_id="x", subject="person:admin@varga.dev", purpose="test")
+        return CallIdentity(org="northwind", org_id="x", subject="person:admin@northwind.dev", purpose="test")
 
     async with session_scope() as session:
         timeouts = {}
@@ -516,7 +516,7 @@ async def test_required_mode_exempts_plugin_servers(
         await as_user(client, SECOND)
         approved = await client.post(f"{ORG}/plugin-approvals/{asked.json()['approval_id']}/approve")
         assert approved.status_code == 200, approved.text
-        await as_user(client, "admin@varga.dev")
+        await as_user(client, "admin@northwind.dev")
         seen: list[httpx.Request] = []
         use_plugin_transport(_mcp_server(["say_hello", "post_greeting"], seen))
         fake = await _install_gateway(client, monkeypatch, "required")

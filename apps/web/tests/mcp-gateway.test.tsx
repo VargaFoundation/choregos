@@ -44,7 +44,7 @@ const STORED: McpGatewayState = {
     timeout_s: 30,
     secret_set: true,
   },
-  updated_by: "lea@varga.dev",
+  updated_by: "lea@northwind.dev",
   updated_at: "2026-10-26T10:00:00Z",
   assertion: ASSERTION,
 };

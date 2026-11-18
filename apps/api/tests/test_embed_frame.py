@@ -31,7 +31,7 @@ ME = "/api/v1/me"
 
 
 async def _ready_and_token(client: AsyncClient, app: Any) -> tuple[AsyncClient, str]:
-    await _member(client, "reader@varga.dev", ["investors"])
+    await _member(client, "reader@northwind.dev", ["investors"])
     await _plugin(client)
     await _install(client, audience_groups=["investors"])
     await _connector("news-feed", NEWS)
@@ -39,8 +39,8 @@ async def _ready_and_token(client: AsyncClient, app: Any) -> tuple[AsyncClient, 
     await _bind(client, "news", "news-feed")
     await _bind(client, "market_data", "markets")
     reader = AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
-    await login(reader, "reader@varga.dev")
-    minted = await reader.post(f"{ME}/assistants/varga/{SLUG}/embed-token")
+    await login(reader, "reader@northwind.dev")
+    minted = await reader.post(f"{ME}/assistants/northwind/{SLUG}/embed-token")
     assert minted.status_code == 200, minted.text
     assert minted.json()["expires_in"] == embed_frame.TTL_S
     return reader, str(minted.json()["token"])
@@ -66,7 +66,7 @@ async def test_a_frame_with_the_token_alone_converses_and_nothing_more(
     assert (await bare.get(ME)).status_code == 401
     assert (await frame.get(ME)).status_code == 200
 
-    opened = await frame.post(f"{ME}/assistants/varga/{SLUG}/conversations", json={})
+    opened = await frame.post(f"{ME}/assistants/northwind/{SLUG}/conversations", json={})
     assert opened.status_code == 201, opened.text
     conversation = opened.json()["id"]
     assert (await frame.get(f"{ME}/conversations/{conversation}")).status_code == 200
@@ -76,8 +76,8 @@ async def test_a_frame_with_the_token_alone_converses_and_nothing_more(
     assert (await frame.get(f"{ME}/assistants")).status_code == 403
     assert (await frame.get(f"{ME}/conversations")).status_code == 403
     assert (await frame.delete(f"{ME}/conversations/{conversation}")).status_code == 403
-    assert (await frame.post(f"{ME}/assistants/varga/{SLUG}/embed-token")).status_code == 403
-    assert (await frame.get("/api/v1/orgs/varga/assistants")).status_code == 403
+    assert (await frame.post(f"{ME}/assistants/northwind/{SLUG}/embed-token")).status_code == 403
+    assert (await frame.get("/api/v1/orgs/northwind/assistants")).status_code == 403
 
 
 async def test_a_bad_expired_or_foreign_token_opens_nothing(
@@ -90,17 +90,17 @@ async def test_a_bad_expired_or_foreign_token_opens_nothing(
     assert (await _frame(app, token + "x").get(ME)).status_code == 401
     assert (await _frame(app, "nonsense").get(ME)).status_code == 401
     settings = get_settings()
-    claims = {"sub": "u", "org": "varga", "slug": SLUG, "inst": "i", "exp": int(time.time()) - 5}
+    claims = {"sub": "u", "org": "northwind", "slug": SLUG, "inst": "i", "exp": int(time.time()) - 5}
     expired = sign_session(claims, settings, purpose=embed_frame.PURPOSE)
     assert (await _frame(app, expired).get(ME)).status_code == 401
     # A session cookie is not a frame token (another purpose never reads as this one).
     cookie_value = reader.cookies.get(settings.session_cookie) or ""
     assert (await _frame(app, cookie_value).get(ME)).status_code == 401
     # A person outside the audience is not given one: the assistant does not exist for them.
-    await _member(client, "outsider@varga.dev", ["nobody"])
+    await _member(client, "outsider@northwind.dev", ["nobody"])
     outsider = AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
-    await login(outsider, "outsider@varga.dev")
-    assert (await outsider.post(f"{ME}/assistants/varga/{SLUG}/embed-token")).status_code == 404
+    await login(outsider, "outsider@northwind.dev")
+    assert (await outsider.post(f"{ME}/assistants/northwind/{SLUG}/embed-token")).status_code == 404
 
 
 async def test_a_token_ends_with_the_browser_session(
@@ -117,13 +117,13 @@ async def test_a_token_ends_with_the_browser_session(
 
 
 def test_a_token_names_one_installation_and_a_few_routes() -> None:
-    token = embed_frame.FrameToken("u", "s", "varga", SLUG, "i1", 0)
+    token = embed_frame.FrameToken("u", "s", "northwind", SLUG, "i1", 0)
     allowed = embed_frame.route_of
-    assert allowed("POST", f"/api/v1/me/assistants/varga/{SLUG}/conversations", token) == (True, None)
+    assert allowed("POST", f"/api/v1/me/assistants/northwind/{SLUG}/conversations", token) == (True, None)
     assert allowed("POST", f"/api/v1/me/assistants/acme/{SLUG}/conversations", token) == (False, None)
-    assert allowed("POST", "/api/v1/me/assistants/varga/other/conversations", token) == (False, None)
+    assert allowed("POST", "/api/v1/me/assistants/northwind/other/conversations", token) == (False, None)
     assert allowed("POST", "/api/v1/me/conversations/c1/messages", token) == (True, "c1")
     assert allowed("POST", "/api/v1/me/conversations/c1/actions/a1/confirm", token) == (True, "c1")
-    assert allowed("GET", f"/api/v1/me/assistants/varga/{SLUG}/memory/notes", token) == (True, None)
+    assert allowed("GET", f"/api/v1/me/assistants/northwind/{SLUG}/memory/notes", token) == (True, None)
     assert allowed("DELETE", "/api/v1/me/conversations/c1", token) == (False, "c1")
     assert allowed("GET", "/api/v1/me/inbox", token) == (False, None)

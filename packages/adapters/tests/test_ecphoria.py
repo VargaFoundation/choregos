@@ -156,7 +156,7 @@ async def test_named_and_global_memories_travel_in_their_own_tenant_and_namespac
         "billing",
         "billing#agent:architect",
         "billing#memory:decisions",
-        "org:varga#memory:lessons",
+        "org:northwind#memory:lessons",
     ):
         await m.context_pack(namespace, "q", [], 100)
     seen = [(r.headers["X-Ecphoria-Tenant"], r.headers.get("X-Ecphoria-Namespace")) for r in fil.requests]
@@ -164,11 +164,11 @@ async def test_named_and_global_memories_travel_in_their_own_tenant_and_namespac
         ("billing", None),
         ("billing", "billing#agent:architect"),
         ("billing", "billing#memory:decisions"),
-        ("org:varga", "org:varga#memory:lessons"),
+        ("org:northwind", "org:northwind#memory:lessons"),
     ]
 
 
 async def test_a_namespace_that_is_none_of_the_four_forms_is_refused() -> None:
     fil = Wire({("POST", "/api/v1/context-pack"): (200, {})})
     with pytest.raises(ValueError, match="malformed"):
-        await memory_for(fil).context_pack("org:varga", "q", [], 100)
+        await memory_for(fil).context_pack("org:northwind", "q", [], 100)

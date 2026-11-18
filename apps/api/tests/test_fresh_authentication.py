@@ -59,7 +59,7 @@ def idp(org: str, monkeypatch: pytest.MonkeyPatch) -> Any:
         )
         mock.post(f"{ISSUER}/token").mock(side_effect=lambda _: Response(200, json=tokens))
         mock.get(f"{ISSUER}/userinfo").mock(
-            return_value=Response(200, json={"sub": "u-1", "email": "jo@varga.dev", "name": "Jo"})
+            return_value=Response(200, json={"sub": "u-1", "email": "jo@northwind.dev", "name": "Jo"})
         )
         yield tokens
     reset_settings_cache()

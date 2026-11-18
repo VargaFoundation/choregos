@@ -3,7 +3,7 @@ kind: Plugin
 metadata:
   name: investment-assistant
   version: 0.1.0
-  publisher: Varga Foundation
+  publisher: GRAAL.SYSTEMS SAS
   license: Apache-2.0
   description: >-
     A test plugin that ships a personal investment assistant on fakes (ADR 0133, S63-19). It is the

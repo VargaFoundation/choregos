@@ -63,9 +63,9 @@ async def test_the_toy_repository_is_committed_once_and_the_ticket_filed_once(ev
     assert first["plan"]["work_item_id"] == again["plan"]["work_item_id"], "a retry files no second ticket"
     branch = first["plan"]["eval_cell"]["base_branch"]
     assert branch.startswith("choregos-evals/python-toy-")
-    assert scm.branches["varga/billing-api"][branch] == "main"
+    assert scm.branches["northwind/billing-api"][branch] == "main"
     toy = evals.REPOS / "python-toy"
-    assert scm.files[("varga/billing-api", branch)] == {
+    assert scm.files[("northwind/billing-api", branch)] == {
         str(p.relative_to(toy)): p.read_text(encoding="utf-8")
         for p in toy.rglob("*")
         if p.is_file() and "__pycache__" not in p.parts and ".pytest_cache" not in p.parts

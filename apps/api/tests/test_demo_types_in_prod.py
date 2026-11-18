@@ -41,7 +41,7 @@ async def test_prod_offers_no_demo_type(client: AsyncClient, admin: str, prod: N
     offered = _types((await client.get("/api/v1/connectors/types")).json())
     assert not DEMOS & offered
     assert ("documents", "confluence") in offered
-    catalogue = (await client.get("/api/v1/orgs/varga/connector-catalogue")).json()
+    catalogue = (await client.get("/api/v1/orgs/northwind/connector-catalogue")).json()
     entries = catalogue["entries"] if isinstance(catalogue, dict) else catalogue
     assert not DEMOS & _types(entries)
 
@@ -50,7 +50,7 @@ async def test_prod_refuses_to_declare_a_demo(
     client: AsyncClient, admin: str, project: dict[str, Any], prod: None
 ) -> None:
     body = {"name": "fleet", "type": "demo", "kind": "mdm", "config": {}}
-    refused = await client.post("/api/v1/orgs/varga/connectors", json=body)
+    refused = await client.post("/api/v1/orgs/northwind/connectors", json=body)
     assert refused.status_code == 422, refused.text
     assert "refused in prod" in refused.json()["detail"]
 

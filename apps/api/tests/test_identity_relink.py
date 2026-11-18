@@ -131,13 +131,13 @@ async def test_a_new_provider_moves_the_same_account_while_the_window_is_open(
     client: AsyncClient, org: str
 ) -> None:
     """The proof the change needs: the same user id before and after, its memberships and its history."""
-    user_id = await _account("jo@varga.dev", "old-sub")
+    user_id = await _account("jo@northwind.dev", "old-sub")
     async with session_scope(orgs="*") as session:
         org_id = (await session.execute(select(Organization.id))).scalar_one()
         session.add(Membership(user_id=user_id, org_id=org_id, role="developer"))
         session.add(AuditLog(actor_id=user_id, actor_kind="user", action="work_item.approve", ts=_in(-3)))
     response = await _sign_in(
-        client, {"sub": "new-sub", "email": "jo@varga.dev", "email_verified": True, "name": "Jo"}
+        client, {"sub": "new-sub", "email": "jo@northwind.dev", "email_verified": True, "name": "Jo"}
     )
     assert response.status_code == 307, response.text
     users = await _users()
@@ -158,16 +158,16 @@ async def test_a_new_provider_moves_the_same_account_while_the_window_is_open(
 
 
 async def test_a_second_sign_in_moves_nothing_more(client: AsyncClient, org: str) -> None:
-    await _account("jo@varga.dev", "old-sub")
-    verified = {"sub": "new-sub", "email": "jo@varga.dev", "email_verified": True}
+    await _account("jo@northwind.dev", "old-sub")
+    verified = {"sub": "new-sub", "email": "jo@northwind.dev", "email_verified": True}
     assert (await _sign_in(client, verified)).status_code == 307
     assert (await _sign_in(client, verified)).status_code == 307
     assert len(await _relinks()) == 1
 
 
 async def test_an_account_bound_before_issuers_were_recorded_is_moved(client: AsyncClient, org: str) -> None:
-    user_id = await _account("jo@varga.dev", "old-sub", issuer=None)
-    response = await _sign_in(client, {"sub": "new-sub", "email": "jo@varga.dev", "email_verified": True})
+    user_id = await _account("jo@northwind.dev", "old-sub", issuer=None)
+    response = await _sign_in(client, {"sub": "new-sub", "email": "jo@northwind.dev", "email_verified": True})
     assert response.status_code == 307, response.text
     assert (await _users())[user_id].oidc_sub == "new-sub"
 
@@ -175,16 +175,16 @@ async def test_an_account_bound_before_issuers_were_recorded_is_moved(client: As
 @pytest.mark.parametrize(
     "userinfo",
     [
-        {"sub": "new-sub", "email": "jo@varga.dev"},
-        {"sub": "new-sub", "email": "jo@varga.dev", "email_verified": False},
-        {"sub": "new-sub", "email": "jo@varga.dev", "email_verified": "true"},
+        {"sub": "new-sub", "email": "jo@northwind.dev"},
+        {"sub": "new-sub", "email": "jo@northwind.dev", "email_verified": False},
+        {"sub": "new-sub", "email": "jo@northwind.dev", "email_verified": "true"},
     ],
     ids=["claim-omitted", "unverified", "not-a-boolean"],
 )
 async def test_the_window_needs_the_provider_to_assert_the_address_verified(
     client: AsyncClient, org: str, userinfo: dict[str, Any]
 ) -> None:
-    user_id = await _account("jo@varga.dev", "old-sub")
+    user_id = await _account("jo@northwind.dev", "old-sub")
     response = await _sign_in(client, userinfo)
     assert response.status_code == 401, response.text
     users = await _users()
@@ -198,8 +198,8 @@ async def test_without_an_open_window_nothing_is_moved(
     client: AsyncClient, org: str, monkeypatch: pytest.MonkeyPatch, until: int | None
 ) -> None:
     _configure(monkeypatch, NEW, None if until is None else _in(until))
-    user_id = await _account("jo@varga.dev", "old-sub")
-    response = await _sign_in(client, {"sub": "new-sub", "email": "jo@varga.dev", "email_verified": True})
+    user_id = await _account("jo@northwind.dev", "old-sub")
+    response = await _sign_in(client, {"sub": "new-sub", "email": "jo@northwind.dev", "email_verified": True})
     assert response.status_code == 401, response.text
     assert "belongs to another identity" in response.text
     assert (await _users())[user_id].oidc_sub == "old-sub"
@@ -207,10 +207,10 @@ async def test_without_an_open_window_nothing_is_moved(
 
 async def test_an_account_is_never_moved_twice(client: AsyncClient, org: str) -> None:
     """Two identities of the new provider with one address: the first one keeps the account."""
-    user_id = await _account("jo@varga.dev", "old-sub")
-    first = {"sub": "new-sub", "email": "jo@varga.dev", "email_verified": True}
+    user_id = await _account("jo@northwind.dev", "old-sub")
+    first = {"sub": "new-sub", "email": "jo@northwind.dev", "email_verified": True}
     assert (await _sign_in(client, first)).status_code == 307
-    second = await _sign_in(client, {"sub": "intruder", "email": "jo@varga.dev", "email_verified": True})
+    second = await _sign_in(client, {"sub": "intruder", "email": "jo@northwind.dev", "email_verified": True})
     assert second.status_code == 401, second.text
     assert "belongs to another identity" in second.text
     users = await _users()
@@ -219,9 +219,9 @@ async def test_an_account_is_never_moved_twice(client: AsyncClient, org: str) ->
 
 
 async def test_two_accounts_with_one_address_are_refused_both(client: AsyncClient, org: str) -> None:
-    first = await _account("jo@varga.dev", "old-1")
-    second = await _account("Jo@varga.dev", "old-2")
-    response = await _sign_in(client, {"sub": "new-sub", "email": "jo@varga.dev", "email_verified": True})
+    first = await _account("jo@northwind.dev", "old-1")
+    second = await _account("Jo@northwind.dev", "old-2")
+    response = await _sign_in(client, {"sub": "new-sub", "email": "jo@northwind.dev", "email_verified": True})
     assert response.status_code == 401, response.text
     assert "several accounts" in response.text
     users = await _users()
@@ -231,14 +231,14 @@ async def test_two_accounts_with_one_address_are_refused_both(client: AsyncClien
 
 
 async def test_the_address_matches_whatever_its_letter_case(client: AsyncClient, org: str) -> None:
-    user_id = await _account("Jo.Martin@Varga.dev", "old-sub")
+    user_id = await _account("Jo.Martin@Northwind.dev", "old-sub")
     response = await _sign_in(
-        client, {"sub": "new-sub", "email": "jo.martin@varga.dev", "email_verified": True}
+        client, {"sub": "new-sub", "email": "jo.martin@northwind.dev", "email_verified": True}
     )
     assert response.status_code == 307, response.text
     users = await _users()
     assert list(users) == [user_id]
-    assert (users[user_id].oidc_sub, users[user_id].email) == ("new-sub", "jo.martin@varga.dev")
+    assert (users[user_id].oidc_sub, users[user_id].email) == ("new-sub", "jo.martin@northwind.dev")
 
 
 @pytest.mark.parametrize(
@@ -249,20 +249,20 @@ async def test_the_address_matches_whatever_its_letter_case(client: AsyncClient,
 async def test_the_window_leaves_what_the_instance_provider_does_not_hold(
     client: AsyncClient, org: str, sub: str, extra: dict[str, Any]
 ) -> None:
-    user_id = await _account("jo@varga.dev", sub, **extra)
-    response = await _sign_in(client, {"sub": "new-sub", "email": "jo@varga.dev", "email_verified": True})
+    user_id = await _account("jo@northwind.dev", sub, **extra)
+    response = await _sign_in(client, {"sub": "new-sub", "email": "jo@northwind.dev", "email_verified": True})
     assert response.status_code == 401, response.text
     assert (await _users())[user_id].oidc_sub == sub
 
 
 async def test_every_sign_in_records_the_issuer(client: AsyncClient, org: str) -> None:
-    returning = await _account("old@varga.dev", "u-1", issuer=None)
-    assert (await _sign_in(client, {"sub": "u-1", "email": "old@varga.dev"})).status_code == 307
-    assert (await _sign_in(client, {"sub": "u-2", "email": "new@varga.dev"})).status_code == 307
+    returning = await _account("old@northwind.dev", "u-1", issuer=None)
+    assert (await _sign_in(client, {"sub": "u-1", "email": "old@northwind.dev"})).status_code == 307
+    assert (await _sign_in(client, {"sub": "u-2", "email": "new@northwind.dev"})).status_code == 307
     users = {u.email: u for u in (await _users()).values()}
-    assert users["old@varga.dev"].id == returning
-    assert users["old@varga.dev"].oidc_issuer == NEW
-    assert users["new@varga.dev"].oidc_issuer == NEW
+    assert users["old@northwind.dev"].id == returning
+    assert users["old@northwind.dev"].oidc_issuer == NEW
+    assert users["new@northwind.dev"].oidc_issuer == NEW
 
 
 # ───────────────────────────── the plan ─────────────────────────────
@@ -271,12 +271,12 @@ async def test_every_sign_in_records_the_issuer(client: AsyncClient, org: str) -
 async def _instance() -> dict[str, str]:
     """One account of each kind the plan sorts, besides the administrator's development one."""
     return {
-        "pending": await _account("pending@varga.dev", "old-1"),
-        "legacy": await _account("legacy@varga.dev", "old-2", issuer=None),
-        "twin-a": await _account("twin@varga.dev", "old-3"),
-        "twin-b": await _account("Twin@varga.dev", "old-4"),
-        "current": await _account("current@varga.dev", "new-1", issuer=NEW),
-        "unbound": await _account("invited@varga.dev", None, issuer=None),
+        "pending": await _account("pending@northwind.dev", "old-1"),
+        "legacy": await _account("legacy@northwind.dev", "old-2", issuer=None),
+        "twin-a": await _account("twin@northwind.dev", "old-3"),
+        "twin-b": await _account("Twin@northwind.dev", "old-4"),
+        "current": await _account("current@northwind.dev", "new-1", issuer=NEW),
+        "unbound": await _account("invited@northwind.dev", None, issuer=None),
         "tenant": await _account("member@tenant.example", "tenant:t:u-1", issuer="https://tenant.example"),
         "machine": await _account("app@machines.local", None, issuer=None, is_service=True),
     }
@@ -294,7 +294,7 @@ async def test_the_plan_sorts_every_account_and_changes_nothing(client: AsyncCli
     assert {a["user_id"] for a in plan["pending"]} == {ids["pending"], ids["legacy"]}
     assert {a["user_id"] for a in plan["ambiguous"]} == {ids["twin-a"], ids["twin-b"]}
     twin = next(a for a in plan["ambiguous"] if a["user_id"] == ids["twin-a"])
-    assert twin["same_address_as"] == ["Twin@varga.dev"]
+    assert twin["same_address_as"] == ["Twin@northwind.dev"]
     # The administrator signed in with the development login: an account without a provider subject.
     assert plan["counts"] == {"pending": 2, "ambiguous": 2, "current": 1, "unbound": 2, "not_concerned": 2}
     after = {u.id: (u.oidc_sub, u.oidc_issuer) for u in (await _users()).values()}
@@ -340,7 +340,7 @@ async def test_what_the_plan_promises_the_sign_in_does(app: Any, client: AsyncCl
 async def test_the_plan_is_the_platform_administrators(client: AsyncClient, org: str) -> None:
     from .conftest import login
 
-    await login(client, "developer@varga.dev")
+    await login(client, "developer@northwind.dev")
     assert (await client.get(PLAN)).status_code == 403
 
 

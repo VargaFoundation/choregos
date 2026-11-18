@@ -12,7 +12,7 @@ from typing import Any
 
 from httpx import AsyncClient
 
-REPO = {"full_name": "varga/billing-api"}
+REPO = {"full_name": "northwind/billing-api"}
 WHO = {"login": "a"}
 
 
@@ -49,7 +49,7 @@ async def _labels() -> list[str]:
 
     async with session_scope() as session:
         item = (
-            await session.execute(select(WorkItem).where(WorkItem.tracker_key == "varga/billing-api#7"))
+            await session.execute(select(WorkItem).where(WorkItem.tracker_key == "northwind/billing-api#7"))
         ).scalar_one()
         return list((item.documents or {}).get("labels") or [])
 
@@ -85,7 +85,7 @@ async def test_the_webhook_boards_the_work_item_with_its_labels(
     pr = {
         "number": 107,
         "merged": True,
-        "html_url": "https://github.com/varga/billing-api/pull/107",
+        "html_url": "https://github.com/northwind/billing-api/pull/107",
         "head": {"ref": "choregos/7-credit-notes", "sha": "sha7"},
         "base": {"ref": "main"},
         "labels": [{"name": "backend"}],

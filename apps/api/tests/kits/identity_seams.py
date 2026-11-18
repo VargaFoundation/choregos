@@ -83,7 +83,7 @@ async def extended_client(
     application = create_app()
     await create_all()
     async with session_scope() as session:
-        session.add(Organization(slug="varga", name="Varga"))
+        session.add(Organization(slug="northwind", name="Northwind"))
     async with AsyncClient(transport=ASGITransport(app=application), base_url="http://test") as http:
         yield http
     await db_session.dispose_engine()

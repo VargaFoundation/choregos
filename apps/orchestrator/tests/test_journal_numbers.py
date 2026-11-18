@@ -90,7 +90,7 @@ async def api(setup: Fixture, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[
     import httpx
 
     monkeypatch.setenv("CHOREGOS_DEV_LOGIN_ENABLED", "true")
-    monkeypatch.setenv("CHOREGOS_DEV_ADMIN_EMAILS", "admin@varga.dev")
+    monkeypatch.setenv("CHOREGOS_DEV_ADMIN_EMAILS", "admin@northwind.dev")
     monkeypatch.setenv("CHOREGOS_SESSION_SECRET", "test-session-secret-" + "x" * 32)
     from choregos_api.config import reset_settings_cache as reset_api_settings
     from choregos_api.main import create_app
@@ -106,7 +106,7 @@ def _token(run_id: str) -> str:
     from choregos_api.security import mint_run_token
 
     return mint_run_token(
-        run_id, project_slug="billing-api", work_item_key="varga/billing-api#123", ttl_minutes=30
+        run_id, project_slug="billing-api", work_item_key="northwind/billing-api#123", ttl_minutes=30
     )
 
 
@@ -115,7 +115,7 @@ async def _journal_as_the_console_reads_it(transport: Any, run_id: str) -> list[
     import httpx
 
     async with httpx.AsyncClient(transport=transport, base_url="http://journal.test") as http:
-        start = await http.get("/api/v1/auth/login", params={"as": "admin@varga.dev"})
+        start = await http.get("/api/v1/auth/login", params={"as": "admin@northwind.dev"})
         assert start.status_code == 307, start.text
         callback = await http.get(start.headers["location"])
         assert callback.status_code == 307, callback.text

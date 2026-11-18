@@ -8,8 +8,8 @@ import { ApiError, api } from "@/lib/api";
 const session = vi.hoisted(() => ({ selectOrg: vi.fn() }));
 vi.mock("@/lib/session", () => ({
   useSession: () => ({
-    org: "varga",
-    orgs: [{ slug: "varga", name: "Varga Foundation", role: "org_admin", currency: "EUR" }],
+    org: "northwind",
+    orgs: [{ slug: "northwind", name: "Northwind", role: "org_admin", currency: "EUR" }],
     selectOrg: session.selectOrg,
   }),
 }));
@@ -29,7 +29,7 @@ const user = {
 function wrap(canEdit = true) {
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <OrganisationCard org="varga" canEdit={canEdit} />
+      <OrganisationCard org="northwind" canEdit={canEdit} />
     </QueryClientProvider>,
   );
 }
@@ -38,16 +38,16 @@ describe("the Organisation card", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(api.platformIdentity).mockRejectedValue(new ApiError(403, { title: "Forbidden" }));
-    vi.mocked(api.updateOrg).mockResolvedValue({ slug: "varga", name: "Globex", role: "org_admin", currency: "USD" } as never);
+    vi.mocked(api.updateOrg).mockResolvedValue({ slug: "northwind", name: "Globex", role: "org_admin", currency: "USD" } as never);
     Object.defineProperty(window, "location", { value: { assign, origin: "http://console.test" }, configurable: true });
   });
 
   it("is prefilled, and says what the slug is for", async () => {
     wrap();
-    expect((await screen.findByLabelText("Display name") as HTMLInputElement).value).toBe("Varga Foundation");
+    expect((await screen.findByLabelText("Display name") as HTMLInputElement).value).toBe("Northwind");
     expect((screen.getByLabelText("Currency") as HTMLSelectElement).value).toBe("EUR");
     expect(screen.getByText(/used in every URL, MCP address and identity-provider group/i)).toBeTruthy();
-    expect(screen.getByText("varga")).toBeTruthy();
+    expect(screen.getByText("northwind")).toBeTruthy();
   });
 
   it("saves exactly the name and the currency", async () => {
@@ -57,7 +57,7 @@ describe("the Organisation card", () => {
     await user.type(name, "Globex");
     await user.selectOptions(screen.getByLabelText("Currency"), "USD");
     await user.click(screen.getByRole("button", { name: "Save the organisation" }));
-    await waitFor(() => expect(api.updateOrg).toHaveBeenCalledWith("varga", { name: "Globex", currency: "USD" }));
+    await waitFor(() => expect(api.updateOrg).toHaveBeenCalledWith("northwind", { name: "Globex", currency: "USD" }));
     expect(await screen.findByText("Organisation saved")).toBeTruthy();
   });
 
@@ -95,7 +95,7 @@ describe("the Organisation card", () => {
       wrap();
       await user.click(await screen.findByRole("button", { name: "Change the slug" }));
       const box = screen.getByTestId("confirmation");
-      for (const broken of [/console URLs already copied/, /\/mcp\/projects\/varga:<project>/, /\/a2a\/orgs\/varga/, /choregos:varga:<group>/, /--org varga/]) {
+      for (const broken of [/console URLs already copied/, /\/mcp\/projects\/northwind:<project>/, /\/a2a\/orgs\/northwind/, /choregos:northwind:<group>/, /--org northwind/]) {
         expect(box.textContent).toMatch(broken);
       }
       expect(box.textContent).toMatch(/global memories follow/);
@@ -107,7 +107,7 @@ describe("the Organisation card", () => {
       await user.clear(input);
       await user.type(input, "globex");
       await user.click(screen.getByRole("button", { name: "Change the slug" }));
-      await waitFor(() => expect(api.updateOrg).toHaveBeenCalledWith("varga", { slug: "globex" }));
+      await waitFor(() => expect(api.updateOrg).toHaveBeenCalledWith("northwind", { slug: "globex" }));
       expect(session.selectOrg).toHaveBeenCalledWith("globex");
       expect(assign).toHaveBeenCalledWith("http://console.test/admin");
     });

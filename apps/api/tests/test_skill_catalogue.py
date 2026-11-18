@@ -18,7 +18,7 @@ from httpx import ASGITransport, AsyncClient
 
 from .conftest import login
 
-BASE = "/api/v1/orgs/varga/skill-catalogue"
+BASE = "/api/v1/orgs/northwind/skill-catalogue"
 RECORDINGS = pathlib.Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "catalogues" / "skills"
 
 
@@ -48,7 +48,7 @@ def _other_client(client: AsyncClient) -> AsyncClient:
 
 
 async def _member(client: AsyncClient, email: str, role: str) -> None:
-    added = await client.post("/api/v1/orgs/varga/members", json={"email": email, "role": role})
+    added = await client.post("/api/v1/orgs/northwind/members", json={"email": email, "role": role})
     assert added.status_code in {200, 201}, added.text
 
 
@@ -60,7 +60,7 @@ async def test_a_member_lists_the_catalogue_and_nothing_is_installed(client: Asy
     assert body["meta"]["catalogue_version"] == shipped.meta.catalogue_version
     assert len(body["entries"]) == len(shipped.entries) >= 70
     assert {e["state"] for e in body["entries"]} == {"available"}
-    assert (await client.get("/api/v1/orgs/varga/skills")).json() == [], "listing installs nothing"
+    assert (await client.get("/api/v1/orgs/northwind/skills")).json() == [], "listing installs nothing"
     entry = _by_id(body)["write-spec"]
     assert (entry["delivery"], entry["risk"], entry["licence"]) == ("bundled", "low", "Apache-2.0")
     assert _by_id(body)["systematic-debugging"]["delivery"] == "git"
@@ -89,7 +89,7 @@ async def test_a_bundled_entry_installs_offline_approved_by_the_platform(
         "low",
         "approved",
     )
-    version = (await client.get("/api/v1/orgs/varga/skills/write-spec/versions/1")).json()
+    version = (await client.get("/api/v1/orgs/northwind/skills/write-spec/versions/1")).json()
     assert version["digest"] == entry.digest
     assert version["reviewed_by"] == "platform"
     assert version["source"]["catalogue"] == f"write-spec@{skill_catalogue.load().meta.catalogue_version}"
@@ -126,12 +126,12 @@ async def test_a_high_risk_git_entry_waits_for_a_second_administrator(
     assert [c[0] for c in fetcher.calls] == ["tarball"] and fetcher.calls[0][2] == entry.sha, (
         "the pinned commit"
     )
-    version = (await client.get("/api/v1/orgs/varga/skills/systematic-debugging/versions/1")).json()
+    version = (await client.get("/api/v1/orgs/northwind/skills/systematic-debugging/versions/1")).json()
     assert (version["source"]["delivery"], version["source"]["sha"]) == ("git", entry.sha)
     assert version["reviewed_by"] is None
 
     pinned = await client.post(
-        "/api/v1/orgs/varga/agents",
+        "/api/v1/orgs/northwind/agents",
         json={
             "slug": "debugger",
             "display_name": "d",
@@ -141,12 +141,12 @@ async def test_a_high_risk_git_entry_waits_for_a_second_administrator(
     assert pinned.status_code == 422 and "second reviewer" in pinned.text
     assert _by_id((await client.get(BASE)).json())["systematic-debugging"]["state"] == "pending_review"
 
-    await _member(client, "second@varga.dev", "org_admin")  # with ONE administrator they may approve
-    own = await client.post("/api/v1/orgs/varga/skills/systematic-debugging/versions/1/approve")
+    await _member(client, "second@northwind.dev", "org_admin")  # with ONE administrator they may approve
+    own = await client.post("/api/v1/orgs/northwind/skills/systematic-debugging/versions/1/approve")
     assert own.status_code == 403, "the installer cannot approve its own install"
     async with _other_client(client) as second:
-        await login(second, "second@varga.dev")
-        approved = await second.post("/api/v1/orgs/varga/skills/systematic-debugging/versions/1/approve")
+        await login(second, "second@northwind.dev")
+        approved = await second.post("/api/v1/orgs/northwind/skills/systematic-debugging/versions/1/approve")
         assert approved.status_code == 200, approved.text
     state = _by_id((await client.get(BASE)).json())["systematic-debugging"]
     assert state["state"] == "installed"
@@ -186,9 +186,9 @@ async def test_the_precomputed_risk_is_the_gates_answer_for_every_entry_of_the_c
 async def test_a_project_owner_installs_new_skills_from_an_allowlisted_repository_only(
     client: AsyncClient, admin: str, fetcher: Any
 ) -> None:
-    await _member(client, "po@varga.dev", "project_owner")
+    await _member(client, "po@northwind.dev", "project_owner")
     async with _other_client(client) as po:
-        await login(po, "po@varga.dev")
+        await login(po, "po@northwind.dev")
         listed = _by_id((await po.get(BASE)).json())
         assert listed["write-spec"]["state"] == "blocked"
         assert "skill sources" in listed["write-spec"]["blocked_reason"]
@@ -196,7 +196,7 @@ async def test_a_project_owner_installs_new_skills_from_an_allowlisted_repositor
         assert refused.status_code == 403 and "skill sources" in refused.text
 
         allowed = await client.put(
-            "/api/v1/orgs/varga/skill-sources",
+            "/api/v1/orgs/northwind/skill-sources",
             json={"sources": ["github.com/anthropics/knowledge-work-plugins"]},
         )
         assert allowed.status_code == 200, allowed.text
@@ -211,12 +211,12 @@ async def test_a_project_owner_installs_new_skills_from_an_allowlisted_repositor
 async def test_a_project_owner_cannot_publish_a_new_version_of_an_installed_skill(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    await client.put("/api/v1/orgs/varga/skill-sources", json={"sources": ["github.com/anthropics"]})
+    await client.put("/api/v1/orgs/northwind/skill-sources", json={"sources": ["github.com/anthropics"]})
     assert (await client.post(f"{BASE}/write-spec/install")).status_code == 201
-    await _member(client, "po@varga.dev", "project_owner")
+    await _member(client, "po@northwind.dev", "project_owner")
     _newer_bundle(monkeypatch, "write-spec")
     async with _other_client(client) as po:
-        await login(po, "po@varga.dev")
+        await login(po, "po@northwind.dev")
         refused = await po.post(f"{BASE}/write-spec/install")
         assert refused.status_code == 403 and "new skills only" in refused.text
 
@@ -251,9 +251,9 @@ async def test_a_newer_pin_shows_as_an_update_and_installs_the_next_version(
     updated = await client.post(f"{BASE}/write-spec/install")
     assert updated.status_code == 201, updated.text
     assert updated.json()["latest_version"] == 2
-    v2 = (await client.get("/api/v1/orgs/varga/skills/write-spec/versions/2")).json()
+    v2 = (await client.get("/api/v1/orgs/northwind/skills/write-spec/versions/2")).json()
     assert "A line added in the next release" in v2["files"]["SKILL.md"]
-    v1 = (await client.get("/api/v1/orgs/varga/skills/write-spec/versions/1")).json()
+    v1 = (await client.get("/api/v1/orgs/northwind/skills/write-spec/versions/1")).json()
     assert "A line added" not in v1["files"]["SKILL.md"], "versions never change"
 
 
@@ -261,12 +261,12 @@ async def test_an_organisation_skill_of_the_same_name_is_left_untouched(
     client: AsyncClient, admin: str
 ) -> None:
     files = {"SKILL.md": "---\nname: runbook\ndescription: Our own runbook skill.\n---\n\nOurs.\n"}
-    assert (await client.post("/api/v1/orgs/varga/skills", json={"files": files})).status_code == 201
+    assert (await client.post("/api/v1/orgs/northwind/skills", json={"files": files})).status_code == 201
     state = _by_id((await client.get(BASE)).json())["runbook"]
     assert state["state"] == "blocked" and "left untouched" in state["blocked_reason"]
     refused = await client.post(f"{BASE}/runbook/install")
     assert refused.status_code == 409 and "left untouched" in refused.text
-    version = (await client.get("/api/v1/orgs/varga/skills/runbook/versions/1")).json()
+    version = (await client.get("/api/v1/orgs/northwind/skills/runbook/versions/1")).json()
     assert version["files"]["SKILL.md"].endswith("Ours.\n")
 
 
@@ -279,7 +279,7 @@ async def test_a_tampered_bundled_file_is_refused_and_nothing_is_published(
     monkeypatch.setattr(skill_catalogue, "BUNDLED_DIR", tmp_path)
     refused = await client.post(f"{BASE}/write-spec/install")
     assert refused.status_code == 502 and "provenance" in refused.text
-    assert (await client.get("/api/v1/orgs/varga/skills")).json() == []
+    assert (await client.get("/api/v1/orgs/northwind/skills")).json() == []
 
 
 async def test_a_pin_the_repository_cannot_serve_is_a_bad_gateway_not_a_half_install(
@@ -288,7 +288,7 @@ async def test_a_pin_the_repository_cannot_serve_is_a_bad_gateway_not_a_half_ins
     fetcher.tarballs.clear()
     refused = await client.post(f"{BASE}/systematic-debugging/install")
     assert refused.status_code == 502, refused.text
-    assert (await client.get("/api/v1/orgs/varga/skills")).json() == []
+    assert (await client.get("/api/v1/orgs/northwind/skills")).json() == []
 
 
 async def test_what_the_repository_serves_must_be_what_the_catalogue_pinned(
@@ -302,7 +302,7 @@ async def test_what_the_repository_serves_must_be_what_the_catalogue_pinned(
     monkeypatch.setattr(skill_catalogue, "load", lambda: changed)
     refused = await client.post(f"{BASE}/systematic-debugging/install")
     assert refused.status_code == 422 and "digest mismatch" in refused.text
-    assert (await client.get("/api/v1/orgs/varga/skills")).json() == []
+    assert (await client.get("/api/v1/orgs/northwind/skills")).json() == []
 
 
 async def test_git_entries_say_whether_the_deployment_declares_their_host(
@@ -347,4 +347,4 @@ async def test_the_platform_never_approves_a_high_risk_bundle_on_its_own_word(
     )
     refused = await client.post(f"{BASE}/write-spec/install")
     assert refused.status_code == 422 and "high risk" in refused.text, refused.text
-    assert (await client.get("/api/v1/orgs/varga/skills")).json() == []
+    assert (await client.get("/api/v1/orgs/northwind/skills")).json() == []

@@ -11,7 +11,9 @@ async def _only(email: str, role: str | None = None, project_slug: str | None = 
     from sqlalchemy import delete, select
 
     async with session_scope() as session:
-        org = (await session.execute(select(Organization).where(Organization.slug == "varga"))).scalar_one()
+        org = (
+            await session.execute(select(Organization).where(Organization.slug == "northwind"))
+        ).scalar_one()
         user = (await session.execute(select(User).where(User.email == email))).scalar_one()
         await session.execute(delete(Membership).where(Membership.user_id == user.id))
         if role is not None:

@@ -96,7 +96,9 @@ async def _consent(
     client: AsyncClient, provider: FakeOAuthProvider, seen: list[str], connector: str = "fournisseur"
 ) -> None:
     """The whole journey of the person: connect, consent at the source, the callback."""
-    started = await client.post(f"/api/v1/me/connected-accounts/{connector}/connect", params={"org": "varga"})
+    started = await client.post(
+        f"/api/v1/me/connected-accounts/{connector}/connect", params={"org": "northwind"}
+    )
     assert started.status_code == 200, started.text
     seen.append(started.text)
     redirect = provider.authorize(started.json()["authorization_url"], PROVIDER_USER)
@@ -185,7 +187,7 @@ async def test_disconnecting_revokes_at_the_source_and_the_next_call_has_no_acco
     await _consent(client, provider, [])
     (refresh,) = provider.refresh_tokens
 
-    gone = await client.delete("/api/v1/me/connected-accounts/fournisseur", params={"org": "varga"})
+    gone = await client.delete("/api/v1/me/connected-accounts/fournisseur", params={"org": "northwind"})
     assert gone.status_code == 204
     assert provider.revoked == [refresh] and provider.refresh_tokens == {}, "revoked at the source"
     async with session_scope(orgs=ALL_ORGS) as session:
@@ -214,7 +216,7 @@ async def test_without_an_account_the_error_carries_the_consent_url_and_nothing_
 
     assert _calls(source) == [], "no fallback to the connector's own identity"
     (text,) = [t for t in _told(upstream) if "account_not_connected" in t]
-    url = f"{get_settings().public_url.rstrip('/')}/me/connected-accounts/fournisseur/connect?org=varga"
+    url = f"{get_settings().public_url.rstrip('/')}/me/connected-accounts/fournisseur/connect?org=northwind"
     assert url in text, text
     (event,) = await _tool_events(answer["session_id"])
     assert event["status_code"] == 422 and event["identity_mode"] == "user_consent"
@@ -264,13 +266,15 @@ async def test_a_callback_with_a_forged_state_or_no_handshake_is_refused(
     client: AsyncClient, project: dict[str, Any], provider: FakeOAuthProvider, source: Any
 ) -> None:
     await _declare(client)
-    started = await client.post("/api/v1/me/connected-accounts/fournisseur/connect", params={"org": "varga"})
+    started = await client.post(
+        "/api/v1/me/connected-accounts/fournisseur/connect", params={"org": "northwind"}
+    )
     url = started.json()["authorization_url"]
     redirect = urlparse(provider.authorize(url))
     forged = await client.get(f"{redirect.path}?code=x&state=forged.state")
     assert forged.status_code == 422
     client.cookies.clear()  # the handshake cookie that holds the PKCE verifier
-    await login(client, "admin@varga.dev")
+    await login(client, "admin@northwind.dev")
     lost = await client.get(f"{redirect.path}?{redirect.query}")
     assert lost.status_code == 422 and provider.requests == [], "the code was never exchanged"
 
@@ -279,9 +283,11 @@ async def test_a_connector_that_does_not_declare_the_mode_cannot_be_connected(
     client: AsyncClient, project: dict[str, Any], provider: FakeOAuthProvider, source: Any
 ) -> None:
     await _declare(client, {"url": "https://fournisseur.test/mcp", "identity_modes": ["service"]})
-    started = await client.post("/api/v1/me/connected-accounts/fournisseur/connect", params={"org": "varga"})
+    started = await client.post(
+        "/api/v1/me/connected-accounts/fournisseur/connect", params={"org": "northwind"}
+    )
     assert started.status_code == 422
-    unknown = await client.post("/api/v1/me/connected-accounts/nothing/connect", params={"org": "varga"})
+    unknown = await client.post("/api/v1/me/connected-accounts/nothing/connect", params={"org": "northwind"})
     assert unknown.status_code == 404
 
 
@@ -339,7 +345,9 @@ async def test_a_plugin_server_receives_the_persons_token_next_to_the_platforms(
 
 
 async def _begin_and_call_back(client: AsyncClient, provider: FakeOAuthProvider) -> httpx.Response:
-    started = await client.post("/api/v1/me/connected-accounts/fournisseur/connect", params={"org": "varga"})
+    started = await client.post(
+        "/api/v1/me/connected-accounts/fournisseur/connect", params={"org": "northwind"}
+    )
     assert started.status_code == 200, started.text
     parsed = urlparse(provider.authorize(started.json()["authorization_url"], PROVIDER_USER))
     return await client.get(f"{parsed.path}?{parsed.query}")
@@ -391,7 +399,9 @@ async def test_an_authorization_endpoint_that_is_not_a_plain_https_address_is_ne
     client: AsyncClient, project: dict[str, Any], provider: FakeOAuthProvider, source: Any, endpoint: str
 ) -> None:
     await _declare(client, _consent_config(authorization_endpoint=endpoint))
-    started = await client.post("/api/v1/me/connected-accounts/fournisseur/connect", params={"org": "varga"})
+    started = await client.post(
+        "/api/v1/me/connected-accounts/fournisseur/connect", params={"org": "northwind"}
+    )
     assert started.status_code == 422, started.text
     assert "authorization_url" not in started.text
 
@@ -534,7 +544,7 @@ async def test_disconnecting_does_not_send_the_refresh_token_to_a_revocation_end
     await _edit_connector(
         lambda config: config["user_consent"].update(revocation_endpoint="http://elsewhere.test/revoke")
     )
-    gone = await client.delete("/api/v1/me/connected-accounts/fournisseur", params={"org": "varga"})
+    gone = await client.delete("/api/v1/me/connected-accounts/fournisseur", params={"org": "northwind"})
     assert gone.status_code == 204
     assert provider.revoked == [] and all(path != "/revoke" for path, _ in provider.requests)
 
@@ -571,7 +581,7 @@ async def test_a_need_bound_for_user_consent_calls_under_the_persons_connected_a
     monkeypatch.setattr(choregos_adapters, "FAKE_MCP", server)
     monkeypatch.setenv("CONNECTOR_TEST_FEED_KEY", "feed-key")
 
-    await _member(client, "reader@varga.dev", [AUDIENCE])
+    await _member(client, "reader@northwind.dev", [AUDIENCE])
     await _plugin(client)
     for name in ("news-feed", "markets"):
         await _served(client, name)
@@ -589,7 +599,7 @@ async def test_a_need_bound_for_user_consent_calls_under_the_persons_connected_a
     bound = await _bind(client, "brokerage", "broker")
     assert bound.status_code == 200, bound.text
 
-    reader = await _as(app, "reader@varga.dev")
+    reader = await _as(app, "reader@northwind.dev")
     conversation = (await reader.post(OPEN, json={})).json()["id"]
     server.received.clear()
     upstream.model.call("brokerage__list_positions", {}).say("No account.")
@@ -604,7 +614,7 @@ async def test_a_need_bound_for_user_consent_calls_under_the_persons_connected_a
 
     async with session_scope(orgs="*") as session:
         citations, missing = await signals_of(session, conversation)
-    url = f"{get_settings().public_url.rstrip('/')}/me/connected-accounts/broker/connect?org=varga"
+    url = f"{get_settings().public_url.rstrip('/')}/me/connected-accounts/broker/connect?org=northwind"
     assert citations == [] and missing == [{"need": "brokerage", "connect_url": url}]
 
     await _consent(reader, provider, [], "broker")
@@ -624,7 +634,7 @@ async def test_a_need_bound_for_user_consent_calls_under_the_persons_connected_a
 async def test_the_catalogue_no_longer_opposes_needs_oauth_to_a_user_consent_server(
     client: AsyncClient, admin: str
 ) -> None:
-    base = "/api/v1/orgs/varga/mcp-catalogue"
+    base = "/api/v1/orgs/northwind/mcp-catalogue"
     refused = await client.post(f"{base}/notion/install", json={})
     assert refused.status_code == 422 and "OAuth" in refused.text, "without consent the refusal stands"
 

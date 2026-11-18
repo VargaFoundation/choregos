@@ -57,7 +57,9 @@ async def _installation(*, approval: str = "inline") -> dict[str, str]:
     from choregos_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
-        org = (await session.execute(select(Organization).where(Organization.slug == "varga"))).scalar_one()
+        org = (
+            await session.execute(select(Organization).where(Organization.slug == "northwind"))
+        ).scalar_one()
         connector = (
             await session.execute(select(OrgConnector).where(OrgConnector.name == "fournisseur"))
         ).scalar_one()
@@ -103,7 +105,7 @@ async def _propose(
 ) -> tuple[str, str]:
     await _agent(client, mcp_servers=NEEDS)
     upstream.model.call(WRITE, ARGUMENTS).say("I proposed the order; please confirm it.")
-    conversation = await _open("varga", admin, installation_id=ids["installation"])
+    conversation = await _open("northwind", admin, installation_id=ids["installation"])
     answer = await _say(client, conversation, "Order two laptops.")
     assert answer.status_code == 200, answer.text
     (action,) = (await client.get(f"{ME}/{conversation}/actions")).json()["items"]
@@ -235,8 +237,8 @@ async def test_another_person_cannot_confirm(
 ) -> None:
     ids = await _ready(client)
     conversation, action_id = await _propose(client, admin, upstream, ids)
-    await add_member(client, "other@varga.dev", "org_admin")
-    await as_user(client, "other@varga.dev")
+    await add_member(client, "other@northwind.dev", "org_admin")
+    await as_user(client, "other@northwind.dev")
     for verb in ("confirm", "refuse"):
         response = await client.post(f"{ME}/{conversation}/actions/{action_id}/{verb}")
         assert response.status_code == 404, response.text
@@ -282,7 +284,7 @@ async def test_a_read_conversation_without_installation_is_offered_no_write(
     await _ready(client)
     await _agent(client, mcp_servers=NEEDS)
     upstream.model.say("hello")
-    conversation = await _open("varga", admin)
+    conversation = await _open("northwind", admin)
     assert (await _say(client, conversation, "hi")).status_code == 200
     (_, first) = upstream.model.requests[0]
     assert WRITE not in {tool["function"]["name"] for tool in first.get("tools") or []}
@@ -381,7 +383,7 @@ async def test_owners_raise_an_approval_but_never_go_below_the_manifests_floor(
     created = await client.post(
         f"{ORG}/assistants",
         json={"plugin": "investment-assistant", "assistant": "investment-assistant",
-              "config": {"house_name": "Varga"}},
+              "config": {"house_name": "Northwind"}},
     )  # fmt: skip
     assert created.status_code == 201, created.text
     await _writing_connector("orders-source", "place_order")
@@ -487,7 +489,7 @@ async def test_a_proposal_carries_the_diff_the_source_previews(
     assert opened.status_code == 200, opened.text
     await _agent(client, mcp_servers=[{"connector": "orders", "tools": ["commander_poste", preview]}])
     upstream.model.call(WRITE, ARGUMENTS).say("I proposed the order; please confirm it.")
-    conversation = await _open("varga", admin, installation_id=ids["installation"])
+    conversation = await _open("northwind", admin, installation_id=ids["installation"])
     assert (await _say(client, conversation, "Order two laptops.")).status_code == 200
     (action,) = (await client.get(f"{ME}/{conversation}/actions")).json()["items"]
     assert action["status"] == "proposed"
@@ -520,7 +522,7 @@ async def test_a_console_approval_of_a_service_write_is_a_governed_action_decide
         for agent in (await session.execute(select(Agent))).scalars():
             agent.owner_id = None  # whoever owns the agent does not decide its proposals
     upstream.model.call(WRITE, ARGUMENTS).say("I proposed it; it needs an approval.")
-    conversation = await _open("varga", admin, installation_id=ids["installation"])
+    conversation = await _open("northwind", admin, installation_id=ids["installation"])
     assert (await _say(client, conversation, "Order two laptops.")).status_code == 200
     (offered, *_) = upstream.model.requests
     assert WRITE in {t["function"]["name"] for t in offered[1]["tools"]}, "a console need of a service write"
@@ -578,7 +580,7 @@ async def test_a_console_write_bound_to_a_persons_identity_is_not_offered(
             agent.owner_id = None
     await _agent(client, mcp_servers=NEEDS)
     upstream.model.say("hello")
-    conversation = await _open("varga", admin, installation_id=ids["installation"])
+    conversation = await _open("northwind", admin, installation_id=ids["installation"])
     assert (await _say(client, conversation, "hi")).status_code == 200
     (_, first) = upstream.model.requests[0]
     assert WRITE not in {t["function"]["name"] for t in first.get("tools") or []}, (
@@ -645,7 +647,7 @@ async def test_an_inline_write_bound_for_user_consent_executes_under_the_persons
         assert "account_not_connected" in refused.text
 
         started = await client.post(
-            "/api/v1/me/connected-accounts/fournisseur/connect", params={"org": "varga"}
+            "/api/v1/me/connected-accounts/fournisseur/connect", params={"org": "northwind"}
         )
         assert started.status_code == 200, started.text
         redirect = urlparse(provider.authorize(started.json()["authorization_url"], "person-at-the-source"))

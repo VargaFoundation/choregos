@@ -17,7 +17,7 @@ from .kits.run_git_token import run_token_for, run_with_repository
 from .test_network_policy_api import _policy, _run
 
 DIAMCTL = {
-    "url": "https://git.acme.example/varga/diamctl.git",
+    "url": "https://git.acme.example/northwind/diamctl.git",
     "base_branch": "trunk",
     "work_branch": "fix/1",
 }
@@ -58,7 +58,7 @@ def minted(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
 async def test_the_git_token_of_a_run_on_a_secondary_repository_is_that_repository_s(
     client: AsyncClient, project: dict[str, Any], minted: list[dict[str, Any]]
 ) -> None:
-    """The project's primary is `varga/billing-api`; the run cloned `acme-tools/diamctl`, whose owner
+    """The project's primary is `northwind/billing-api`; the run cloned `acme-tools/diamctl`, whose owner
     the organisation claimed through another installation: the token is minted there, for it only."""
     from choregos_api.db.models import Organization
     from choregos_api.db.session import session_scope
@@ -66,11 +66,11 @@ async def test_the_git_token_of_a_run_on_a_secondary_repository_is_that_reposito
 
     await add_organisation("globex")
     async with session_scope(orgs="*") as session:
-        varga = (
-            await session.execute(select(Organization.id).where(Organization.slug == "varga"))
+        northwind = (
+            await session.execute(select(Organization.id).where(Organization.slug == "northwind"))
         ).scalar_one()
-    await claim_for(5, "varga", varga)
-    await claim_for(77, "acme-tools", varga)
+    await claim_for(5, "northwind", northwind)
+    await claim_for(77, "acme-tools", northwind)
     run_id = await run_with_repository(project, "https://github.com/acme-tools/diamctl.git")
     reply = await client.post(f"/api/v1/internal/runs/{run_id}/git-token", headers=run_token_for(run_id))
     assert reply.status_code == 200, reply.text

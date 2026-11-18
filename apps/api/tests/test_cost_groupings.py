@@ -27,8 +27,8 @@ async def _seed(project_id: str) -> None:
     async with session_scope() as session:
         one = WorkItem(project_id=project_id, tracker_key="B-1", title="One", state="ready")
         two = WorkItem(project_id=project_id, tracker_key="B-2", title="Two", state="ready")
-        varga = select(Organization.id).where(Organization.slug == "varga")
-        org_id = (await session.execute(varga)).scalar_one()
+        northwind = select(Organization.id).where(Organization.slug == "northwind")
+        org_id = (await session.execute(northwind)).scalar_one()
         concierge, analyst = (
             AssistantInstallation(org_id=org_id, slug=slug, plugin="p", plugin_version="1",
                                   manifest_digest="d", assistant_name=slug)
@@ -110,7 +110,7 @@ async def test_every_grouping_adds_up_at_project_scope(
 async def test_every_grouping_adds_up_at_organisation_scope(
     client: AsyncClient, seeded: dict[str, Any], group: str
 ) -> None:
-    report = (await client.get("/api/v1/orgs/varga/costs", params={"group_by": group})).json()
+    report = (await client.get("/api/v1/orgs/northwind/costs", params={"group_by": group})).json()
     assert report["group_by"] == group
     assert report["total"]["cost_usd"] == 7.0
     if group in EXPECTED:
@@ -132,32 +132,32 @@ async def test_the_period_filters_both_scopes(client: AsyncClient, seeded: dict[
         "since": str(today - timedelta(days=60)),
         "until": str(today - timedelta(days=40)),
     }
-    for url in (f"/api/v1/projects/{seeded['id']}/costs", "/api/v1/orgs/varga/costs"):
+    for url in (f"/api/v1/projects/{seeded['id']}/costs", "/api/v1/orgs/northwind/costs"):
         report = (await client.get(url, params=old)).json()
         assert report["total"]["cost_usd"] == 3.0, url
-    assert (await client.get("/api/v1/orgs/varga/costs", params={"group_by": "bogus"})).status_code == 422
+    assert (await client.get("/api/v1/orgs/northwind/costs", params={"group_by": "bogus"})).status_code == 422
 
 
 @pytest.mark.parametrize("group", GROUPS)
 async def test_the_csv_follows_the_grouping(client: AsyncClient, seeded: dict[str, Any], group: str) -> None:
-    for url in (f"/api/v1/projects/{seeded['id']}/costs.csv", "/api/v1/orgs/varga/costs.csv"):
+    for url in (f"/api/v1/projects/{seeded['id']}/costs.csv", "/api/v1/orgs/northwind/costs.csv"):
         response = await client.get(url, params={"group_by": group})
         assert response.status_code == 200, response.text
         lines = response.text.lstrip("﻿").splitlines()
         assert lines[0].startswith(f"{group};cout_usd;"), lines[0]
         assert any(line.startswith("total;7.000000;") for line in lines), lines
-    detail = (await client.get("/api/v1/orgs/varga/costs.csv", params={"group_by": "agent"})).text
+    detail = (await client.get("/api/v1/orgs/northwind/costs.csv", params={"group_by": "agent"})).text
     assert "coordinator;5.000000;" in detail and "reviewer;2.000000;" in detail
 
 
 async def test_the_kind_filter_separates_models_from_tools(
     client: AsyncClient, seeded: dict[str, Any]
 ) -> None:
-    for url in (f"/api/v1/projects/{seeded['id']}/costs", "/api/v1/orgs/varga/costs"):
+    for url in (f"/api/v1/projects/{seeded['id']}/costs", "/api/v1/orgs/northwind/costs"):
         tools = (await client.get(url, params={"group_by": "model", "kind": "tool"})).json()
         assert _by_key(tools) == {"crm_export": 1.0}, url
         models = (await client.get(url, params={"group_by": "model", "kind": "model"})).json()
         assert _by_key(models) == {"m-big": 4.0, "m-small": 2.0}, url
-    csv = await client.get("/api/v1/orgs/varga/costs.csv", params={"group_by": "model", "kind": "tool"})
+    csv = await client.get("/api/v1/orgs/northwind/costs.csv", params={"group_by": "model", "kind": "tool"})
     assert "crm_export;1.000000;" in csv.text and "m-big" not in csv.text
-    assert (await client.get("/api/v1/orgs/varga/costs", params={"kind": "bogus"})).status_code == 422
+    assert (await client.get("/api/v1/orgs/northwind/costs", params={"kind": "bogus"})).status_code == 422

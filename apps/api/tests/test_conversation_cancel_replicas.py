@@ -47,7 +47,7 @@ async def test_a_cancel_sent_to_another_replica_stops_the_turn(
     await _agent(client)
     upstream.model.call("lookup", {"order": 42}).say("never read")
     transport = _slow(upstream, after=1)
-    conversation = await _open("varga", admin)
+    conversation = await _open("northwind", admin)
     turn = asyncio.ensure_future(_say(client, conversation, "Where is order 42?"))
     await asyncio.wait_for(transport.waiting.wait(), 10)
     # Another replica sees the turn by its committed lease: wait until it is there, as a real second
@@ -88,7 +88,7 @@ async def test_a_cancel_with_no_turn_running_is_a_conflict_on_any_replica(
     upstream: Upstream,  # noqa: F811
 ) -> None:
     await _agent(client)
-    conversation = await _open("varga", admin)
+    conversation = await _open("northwind", admin)
     second = await _second_replica(admin)
     try:
         assert (await second.post(f"{ME}/{conversation}/cancel")).status_code == 409

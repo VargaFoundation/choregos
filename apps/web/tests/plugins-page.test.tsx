@@ -51,9 +51,9 @@ function installed(name: string, extra: Partial<InstalledPlugin> = {}): Installe
   return {
     name,
     version: "1.0.0",
-    source: "varga",
+    source: "northwind",
     digest: DIGEST,
-    publisher: "Varga Foundation",
+    publisher: "GRAAL.SYSTEMS SAS",
     license: "Apache-2.0",
     description: `the ${name} plugin`,
     default: false,
@@ -67,7 +67,7 @@ function installed(name: string, extra: Partial<InstalledPlugin> = {}): Installe
 
 const SOURCES: PluginSource[] = [
   {
-    name: "varga",
+    name: "northwind",
     index: "oci://registry.example/choregos-agents/index:stable",
     trust: { mode: "keyless", identity: "https://github.com/example/choregos-agents/.*", issuer: "https://token.actions.githubusercontent.com" },
     plugins: [
@@ -115,7 +115,7 @@ const TRIAGE = installed("triage", {
 const WAITING: PluginApproval = {
   id: "pa-1",
   action: "install",
-  source: "varga",
+  source: "northwind",
   name: "hello",
   version: "1.0.0",
   digest: DIGEST,
@@ -173,13 +173,13 @@ describe("Catalogue → Plugins", () => {
     await waitFor(() => expect(server).toHaveTextContent("unconfigured"));
     expect(within(server).getByRole("link", { name: "Configure" })).toHaveAttribute("href", "/admin/connectors?connector=servicenow");
 
-    expect(screen.getByTestId("trust-varga")).toHaveTextContent("keyless");
+    expect(screen.getByTestId("trust-northwind")).toHaveTextContent("keyless");
     expect(screen.getByTestId("source-partner")).toHaveTextContent("did not answer");
-    const hello = screen.getByTestId("entry-varga-hello");
+    const hello = screen.getByTestId("entry-northwind-hello");
     expect(hello).toHaveTextContent("needs core >=0.22.0");
     expect(within(hello).getAllByRole("option").map((o) => o.textContent)).toEqual(["1.0.0"]);
     // Installed already: upgraded or uninstalled above, not installed again.
-    const triage = screen.getByTestId("entry-varga-triage");
+    const triage = screen.getByTestId("entry-northwind-triage");
     expect(within(triage).queryByRole("button", { name: "Install" })).toBeNull();
     expect(triage).toHaveTextContent("Installed (1.0.0)");
   });
@@ -187,9 +187,9 @@ describe("Catalogue → Plugins", () => {
   it("an install answered 201 says it is installed", async () => {
     api.installPlugin.mockResolvedValue(installed("notes", { version: "0.3.0" }));
     page();
-    const notes = await screen.findByTestId("entry-varga-notes");
+    const notes = await screen.findByTestId("entry-northwind-notes");
     fireEvent.click(within(notes).getByRole("button", { name: "Install" }));
-    await waitFor(() => expect(api.installPlugin).toHaveBeenCalledWith("acme", { source: "varga", name: "notes", version: "0.3.0" }));
+    await waitFor(() => expect(api.installPlugin).toHaveBeenCalledWith("acme", { source: "northwind", name: "notes", version: "0.3.0" }));
     expect(await screen.findByText("notes 0.3.0 is installed.")).toBeInTheDocument();
     expect(screen.queryByTestId("outcome-pending")).toBeNull();
   });
@@ -201,7 +201,7 @@ describe("Catalogue → Plugins", () => {
       reason: "it brings the server `hello`; its skill `greeting` is high risk (script)",
     });
     page();
-    const hello = await screen.findByTestId("entry-varga-hello");
+    const hello = await screen.findByTestId("entry-northwind-hello");
     fireEvent.click(within(hello).getByRole("button", { name: "Install" }));
     const note = await screen.findByTestId("outcome-pending");
     expect(screen.getByText("Waiting for a second administrator", { selector: "p" })).toBeInTheDocument();

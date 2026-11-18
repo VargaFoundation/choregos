@@ -293,3 +293,22 @@ def test_an_index_says_which_agents_a_release_ships(offline: Path) -> None:
     assert offline_index(offline).releases["hello"]["1.0.0"].agents == ("greeter",), (
         "read from the plugin itself"
     )
+
+
+def test_the_old_default_source_name_reaches_the_source_that_replaced_it() -> None:
+    """ADR 0186: a deployment whose values still say `varga` keeps working against `tranibor`."""
+    tranibor = {
+        "name": "tranibor",
+        "index": "oci://registry.example.org/agents/index:latest",
+        "trust": {"key": "k"},
+    }
+    config = parse_config(
+        {"sources": [tranibor], "defaultPlugins": [{"source": "varga", "name": "netops", "version": "*"}]}
+    )
+    assert config.default_plugins[0].source == "tranibor"
+    assert config.source("varga").name == "tranibor"
+    # A deployment that declares a `varga` source of its own keeps it, untouched.
+    own = parse_config({"sources": [{**tranibor, "name": "varga"}]})
+    assert own.source("varga").name == "varga"
+    with pytest.raises(SourceError):
+        parse_config({"defaultPlugins": [{"source": "varga", "name": "netops", "version": "*"}]})

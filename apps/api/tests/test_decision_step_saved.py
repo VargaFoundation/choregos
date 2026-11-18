@@ -48,7 +48,9 @@ async def _catalogue(usages: list[str]) -> None:
     from sqlalchemy import select
 
     async with session_scope() as session:
-        org = (await session.execute(select(Organization).where(Organization.slug == "varga"))).scalar_one()
+        org = (
+            await session.execute(select(Organization).where(Organization.slug == "northwind"))
+        ).scalar_one()
         session.add(ModelCatalogueRow(org_id=org.id, model_name="platform/decide", usages=usages))
 
 

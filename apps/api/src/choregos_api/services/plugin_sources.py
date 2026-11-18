@@ -527,7 +527,7 @@ async def fetch_plugin(
     checked; `SourceError` names the check that refused. The plugin's files live as long as the context.
 
     ```python
-    async with fetch_plugin("varga", "servicenow", "^0.1") as fetched:
+    async with fetch_plugin("tranibor", "servicenow", "^0.1") as fetched:
         if fetched.gate.needs_second_approval: ...  # 202 (S43-04)
     ```
     """

@@ -26,7 +26,7 @@ from . import outpost_daemon as daemon_kit
 from . import outposts as kit
 from .outpost_daemon import Daemon
 
-ORG = "/api/v1/orgs/varga"
+ORG = "/api/v1/orgs/northwind"
 SLUG = daemon_kit.SLUG
 ALIAS = "tracker"
 CONNECTOR = "tracker"
@@ -153,7 +153,7 @@ async def agent_and_run(
     )
     assert agent.status_code == 201, agent.text
     async with session_scope(orgs="*") as session:
-        item = WorkItem(project_id=project["id"], tracker_key="varga/x#1", title="T", state="ready")
+        item = WorkItem(project_id=project["id"], tracker_key="northwind/x#1", title="T", state="ready")
         session.add(item)
         await session.flush()
         session.add(
@@ -166,10 +166,10 @@ async def agent_and_run(
                 status="running",
                 agent_slug="coordinator",
                 agent_version=1,
-                initiated_by="person:admin@varga.dev",
+                initiated_by="person:admin@northwind.dev",
             )
         )
-    token = mint_run_token(run_id, project_slug="billing-api", work_item_key="varga/x#1", ttl_minutes=30)
+    token = mint_run_token(run_id, project_slug="billing-api", work_item_key="northwind/x#1", ttl_minutes=30)
     return {"Authorization": f"Bearer {token}"}
 
 

@@ -17,7 +17,7 @@ from httpx import AsyncClient
 from .agent_scopes_kit import add_member, as_user, make_project
 from .catalogue_kit import project_only
 
-ORG = "/api/v1/orgs/varga"
+ORG = "/api/v1/orgs/northwind"
 TOOLS: list[dict[str, Any]] = [
     {"name": "lookup", "description": "read", "annotations": {"readOnlyHint": True},
      "inputSchema": {"type": "object"}},
@@ -56,7 +56,7 @@ async def _prepare(
     )
     assert agent.status_code == 201, agent.text
     async with session_scope() as session:
-        item = WorkItem(project_id=project["id"], tracker_key="varga/x#1", title="T", state="ready")
+        item = WorkItem(project_id=project["id"], tracker_key="northwind/x#1", title="T", state="ready")
         session.add(item)
         await session.flush()
         session.add(
@@ -72,7 +72,7 @@ async def _prepare(
             )
         )
     token = mint_run_token(
-        "run-enablement-1", project_slug=project["slug"], work_item_key="varga/x#1", ttl_minutes=30
+        "run-enablement-1", project_slug=project["slug"], work_item_key="northwind/x#1", ttl_minutes=30
     )
     return "/api/v1/internal/runs/run-enablement-1/tools", {"Authorization": f"Bearer {token}"}
 
@@ -178,23 +178,23 @@ async def test_the_projects_operations_leave_out_a_connector_not_enabled(
 async def test_who_may_turn_a_connector_on(client: AsyncClient, project: dict[str, Any], vendor: Any) -> None:
     other = await make_project(client, "checkout")
     await _prepare(client, project, availability="selected_projects")
-    await add_member(client, "owner@varga.dev", "project_owner", "billing-api")
-    await add_member(client, "dev@varga.dev", "developer", "billing-api")
+    await add_member(client, "owner@northwind.dev", "project_owner", "billing-api")
+    await add_member(client, "dev@northwind.dev", "developer", "billing-api")
 
-    await project_only(client, "dev@varga.dev")
+    await project_only(client, "dev@northwind.dev")
     assert (await client.put(_enablement(project))).status_code == 403
     assert (await client.delete(_enablement(project))).status_code == 403
     listed = (await client.get(f"/api/v1/projects/{project['id']}/org-connectors")).json()
     assert listed[0]["can_toggle"] is False and "owner" in listed[0]["cannot_reason"]
 
-    await project_only(client, "owner@varga.dev")
+    await project_only(client, "owner@northwind.dev")
     foreign = f"/api/v1/projects/{other['id']}/org-connectors/vendor/enablement"
     assert (await client.put(foreign)).status_code in {403, 404}, "an owner of another project"
     assert (await client.put(_enablement(project))).status_code == 200
     assert (await client.put(_enablement(project))).status_code == 200, "idempotent"
     assert (await client.delete(foreign)).status_code in {403, 404}
 
-    await as_user(client, "admin@varga.dev")
+    await as_user(client, "admin@northwind.dev")
     assert (await client.put(foreign)).status_code == 200, "an administrator, any project"
     assert (await client.get(f"{ORG}/connectors/vendor")).json()["enabled_projects"] == [
         "billing-api",
@@ -224,11 +224,11 @@ async def test_only_the_administrator_changes_availability(
     client: AsyncClient, project: dict[str, Any], vendor: Any
 ) -> None:
     await _prepare(client, project)
-    await add_member(client, "owner@varga.dev", "project_owner", "billing-api")
-    await project_only(client, "owner@varga.dev")
+    await add_member(client, "owner@northwind.dev", "project_owner", "billing-api")
+    await project_only(client, "owner@northwind.dev")
     refused = await client.patch(f"{ORG}/connectors/vendor", json={"availability": "selected_projects"})
     assert refused.status_code == 403
-    await as_user(client, "admin@varga.dev")
+    await as_user(client, "admin@northwind.dev")
     assert (await client.get(f"{ORG}/connectors/vendor")).json()["availability"] == "all_projects"
 
 
@@ -256,7 +256,7 @@ async def test_installing_from_the_catalogue_stores_the_availability_and_hides_f
 ) -> None:
     await make_project(client, "billing")
     await make_project(client, "checkout")
-    await add_member(client, "owner@varga.dev", "project_owner", "billing")
+    await add_member(client, "owner@northwind.dev", "project_owner", "billing")
     installed = await client.post(
         f"{ORG}/mcp-catalogue/github/install",
         json={"secret_refs": {"token": "env:CONNECTOR_ENABLEMENT_TEST"}, "availability": "selected_projects"},
@@ -277,6 +277,6 @@ async def test_installing_from_the_catalogue_stores_the_availability_and_hides_f
         "availability": "selected_projects",
         "enabled_projects": ["billing", "checkout"],
     }
-    await project_only(client, "owner@varga.dev")
+    await project_only(client, "owner@northwind.dev")
     owner_view = enablement((await client.get(f"{ORG}/mcp-catalogue")).json())
     assert owner_view["enabled_projects"] == ["billing"], "a project the caller does not see is not named"
