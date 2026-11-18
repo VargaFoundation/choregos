@@ -24,6 +24,7 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from tranibor_core.instructions import instruction_errors
+from tranibor_core.prompt_cache import with_prompt_cache
 
 from ..config import Settings, get_settings
 from ..db.models import (
@@ -167,16 +168,18 @@ class GatewayAgentDrafter:
                 response = await client.post(
                     f"{self.base_url}/v1/chat/completions",
                     headers={"Authorization": f"Bearer {self.key}"},
-                    json={
-                        "model": self.model,
-                        "messages": [
-                            {"role": "system", "content": instructions},
-                            {"role": "user", "content": context.prompt(request)},
-                        ],
-                        "max_tokens": MAX_OUTPUT_TOKENS,
-                        "response_format": {"type": "json_object"},
-                        "metadata": {"choregos_agent": AGENT},
-                    },
+                    json=with_prompt_cache(
+                        {
+                            "model": self.model,
+                            "messages": [
+                                {"role": "system", "content": instructions},
+                                {"role": "user", "content": context.prompt(request)},
+                            ],
+                            "max_tokens": MAX_OUTPUT_TOKENS,
+                            "response_format": {"type": "json_object"},
+                            "metadata": {"choregos_agent": AGENT},
+                        }
+                    ),
                 )
         except httpx.HTTPError as exc:
             raise DraftingError(f"the gateway did not answer: {type(exc).__name__}") from exc
