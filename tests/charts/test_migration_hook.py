@@ -148,3 +148,21 @@ def test_the_service_account_annotations_follow_on_the_account_of_the_hook() -> 
     assert annotations["eks.amazonaws.com/role-arn"] == "arn:aws:iam::1:role/choregos"
     # And the caller's annotations did not overwrite the hook's.
     assert annotations["helm.sh/hook-weight"] == "-10"
+
+
+@pytest.mark.parametrize("env", ENVIRONMENTS)
+def test_the_migrations_have_a_writable_temporary_directory(env: str) -> None:
+    """S80-07d: the root filesystem is read-only, and a migration reads the agent catalogue, whose
+    plugin archives open in a temporary directory: without a `/tmp` volume a FIRST install fails
+    there ("No usable temporary directory"), as the single-node proof's first run did."""
+    documents = _rendered(env)
+    jobs = [d for d in documents if d.get("kind") == "Job" and "migrations" in d["metadata"]["name"]]
+    assert jobs, "no migrations Job rendered"
+    for job in jobs:
+        pod = job["spec"]["template"]["spec"]
+        (container,) = [c for c in pod["containers"] if c["name"] == "migrations"]
+        assert container["securityContext"].get("readOnlyRootFilesystem") is True
+        mounts = {m["mountPath"]: m["name"] for m in container.get("volumeMounts", [])}
+        assert "/tmp" in mounts, "the migrations container has no writable /tmp"
+        volumes = {v["name"]: v for v in pod.get("volumes", [])}
+        assert "emptyDir" in volumes[mounts["/tmp"]]

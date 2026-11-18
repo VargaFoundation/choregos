@@ -151,6 +151,21 @@ def test_the_restore_is_a_job_template_that_never_runs_by_itself() -> None:
     assert "COMPLETE" in scripts["fetch.sh"]
 
 
+@pytest.mark.parametrize("script", ["database.sh", "restore-database.sh"])
+def test_the_database_steps_wait_for_postgresql_before_their_first_connection(script: str) -> None:
+    """S80-07d: k3s's NetworkPolicy controller admits a new pod to PostgreSQL a few seconds after it
+    starts; the first real backup connected at once, was refused, and the job failed."""
+    scripts = _one(_documents(), "ConfigMap", "choregos-backup")["data"]
+    lines = scripts[script].splitlines()
+    wait = next((i for i, line in enumerate(lines) if "pg_isready" in line), None)
+    assert wait is not None, f"{script} does not wait for PostgreSQL"
+    assert "until" in lines[wait] or "for _ in" in lines[wait], lines[wait]
+    first = next(
+        i for i, line in enumerate(lines) if any(c in line for c in ("pg_dump", "psql", "pg_restore"))
+    )
+    assert wait < first, f"{script} connects before it waits"
+
+
 def test_the_object_store_is_copied_when_asked() -> None:
     documents = _documents(
         "--set",
