@@ -1,0 +1,375 @@
+{
+  "name": "01-initial-board",
+  "description": "First read: every lane of the graph in order, an out-of-workflow lane, a run read from current_run, a workflow failure, a waiting card (one line label, then the kind), terminal lanes counting what closed today.",
+  "graph": {
+    "nodes": [
+      {
+        "id": "triage",
+        "display": "Triage",
+        "kind": "agent"
+      },
+      {
+        "id": "plan",
+        "display": "Plan",
+        "kind": "agent"
+      },
+      {
+        "id": "implement",
+        "display": "Implement",
+        "kind": "agent"
+      },
+      {
+        "id": "review",
+        "display": "Review",
+        "kind": "wait"
+      },
+      {
+        "id": "done",
+        "display": "Done",
+        "kind": "terminal",
+        "terminal": true,
+        "outcome": "success"
+      },
+      {
+        "id": "declined",
+        "display": "Declined",
+        "kind": "terminal",
+        "terminal": true,
+        "outcome": "declined"
+      }
+    ],
+    "edges": [
+      {
+        "from": "triage",
+        "to": "plan"
+      },
+      {
+        "from": "plan",
+        "to": "implement"
+      },
+      {
+        "from": "implement",
+        "to": "review"
+      },
+      {
+        "from": "review",
+        "to": "done"
+      }
+    ]
+  },
+  "items": [
+    {
+      "id": "w1",
+      "project_slug": "acme-web",
+      "tracker_key": "ACME-1",
+      "title": "Fix the login redirect",
+      "state": "triage",
+      "totals": {}
+    },
+    {
+      "id": "w2",
+      "project_slug": "acme-web",
+      "tracker_key": "ACME-2",
+      "title": "Add CSV export",
+      "state": "plan",
+      "totals": {},
+      "current_run": {
+        "id": "r2",
+        "status": "running",
+        "stage_role": "planner",
+        "started_at": "2026-11-18T14:55:00Z",
+        "cost_usd": 0.12
+      }
+    },
+    {
+      "id": "w3",
+      "project_slug": "acme-web",
+      "tracker_key": "ACME-3",
+      "title": "Upgrade the ORM",
+      "state": "implement",
+      "totals": {},
+      "failure": {
+        "message": "Interpreter died:\n  worker lost"
+      }
+    },
+    {
+      "id": "w4",
+      "project_slug": "acme-web",
+      "tracker_key": "ACME-4",
+      "title": "Rename the settings page",
+      "state": "review",
+      "totals": {},
+      "pending_request": {
+        "id": "h1",
+        "kind": "approval",
+        "requested_at": "2026-11-18T14:00:00Z",
+        "payload": {
+          "title": "Approve the pull request\nsecond line"
+        }
+      }
+    },
+    {
+      "id": "w5",
+      "project_slug": "acme-web",
+      "tracker_key": "ACME-5",
+      "title": "Dark mode",
+      "state": "done",
+      "totals": {},
+      "closed_at": "2026-11-18T09:00:00Z",
+      "state_display": "Done"
+    },
+    {
+      "id": "w6",
+      "project_slug": "acme-web",
+      "tracker_key": "ACME-6",
+      "title": "Old thing",
+      "state": "done",
+      "totals": {},
+      "closed_at": "2026-11-10T09:00:00Z"
+    },
+    {
+      "id": "w7",
+      "project_slug": "acme-web",
+      "tracker_key": "ACME-7",
+      "title": "Spam",
+      "state": "declined",
+      "totals": {},
+      "closed_at": "2026-11-18T10:00:00Z"
+    },
+    {
+      "id": "w8",
+      "project_slug": "acme-web",
+      "tracker_key": "ACME-8",
+      "title": "Migrated ticket",
+      "state": "legacy_blocked",
+      "totals": {},
+      "state_display": "Legacy blocked"
+    },
+    {
+      "id": "w9",
+      "project_slug": "acme-web",
+      "tracker_key": "ACME-9",
+      "title": "Question for a person",
+      "state": "plan",
+      "totals": {},
+      "pending_request": {
+        "id": "h2",
+        "kind": "question",
+        "requested_at": "2026-11-18T14:00:00Z",
+        "payload": {}
+      }
+    }
+  ],
+  "steps": [],
+  "now": "2026-11-18T15:00:00Z",
+  "options": {
+    "ticker_size": 5,
+    "day_start": "2026-11-18T00:00:00Z"
+  },
+  "expected": {
+    "lanes": [
+      {
+        "state": "triage",
+        "display": "Triage",
+        "kind": null,
+        "terminal": false,
+        "hors_workflow": false,
+        "count": 1,
+        "left_today": 0,
+        "closed_today": 0,
+        "cards": [
+          "w1"
+        ]
+      },
+      {
+        "state": "plan",
+        "display": "Plan",
+        "kind": null,
+        "terminal": false,
+        "hors_workflow": false,
+        "count": 2,
+        "left_today": 0,
+        "closed_today": 0,
+        "cards": [
+          "w2",
+          "w9"
+        ]
+      },
+      {
+        "state": "implement",
+        "display": "Implement",
+        "kind": null,
+        "terminal": false,
+        "hors_workflow": false,
+        "count": 1,
+        "left_today": 0,
+        "closed_today": 0,
+        "cards": [
+          "w3"
+        ]
+      },
+      {
+        "state": "review",
+        "display": "Review",
+        "kind": "wait",
+        "terminal": false,
+        "hors_workflow": false,
+        "count": 1,
+        "left_today": 0,
+        "closed_today": 0,
+        "cards": [
+          "w4"
+        ]
+      },
+      {
+        "state": "done",
+        "display": "Done",
+        "kind": "terminal",
+        "terminal": true,
+        "hors_workflow": false,
+        "count": 2,
+        "left_today": 0,
+        "closed_today": 1,
+        "cards": [
+          "w5",
+          "w6"
+        ]
+      },
+      {
+        "state": "declined",
+        "display": "Declined",
+        "kind": "declined",
+        "terminal": true,
+        "hors_workflow": false,
+        "count": 1,
+        "left_today": 0,
+        "closed_today": 1,
+        "cards": [
+          "w7"
+        ]
+      },
+      {
+        "state": "legacy_blocked",
+        "display": "Legacy blocked",
+        "kind": null,
+        "terminal": false,
+        "hors_workflow": true,
+        "count": 1,
+        "left_today": 0,
+        "closed_today": 0,
+        "cards": [
+          "w8"
+        ]
+      }
+    ],
+    "cards": [
+      {
+        "id": "w1",
+        "key": "ACME-1",
+        "title": "Fix the login redirect",
+        "lane": "triage",
+        "status": "idle",
+        "running": null,
+        "failure": null,
+        "waiting": null
+      },
+      {
+        "id": "w2",
+        "key": "ACME-2",
+        "title": "Add CSV export",
+        "lane": "plan",
+        "status": "running",
+        "running": {
+          "run_id": "r2",
+          "stage": "planner",
+          "agent": null,
+          "started_at": "2026-11-18T14:55:00Z",
+          "elapsed_ms": 300000,
+          "cost_usd": 0.12
+        },
+        "failure": null,
+        "waiting": null
+      },
+      {
+        "id": "w3",
+        "key": "ACME-3",
+        "title": "Upgrade the ORM",
+        "lane": "implement",
+        "status": "failed",
+        "running": null,
+        "failure": {
+          "reason": "workflow",
+          "summary": "Interpreter died: worker lost"
+        },
+        "waiting": null
+      },
+      {
+        "id": "w4",
+        "key": "ACME-4",
+        "title": "Rename the settings page",
+        "lane": "review",
+        "status": "waiting",
+        "running": null,
+        "failure": null,
+        "waiting": {
+          "kind": "approval",
+          "label": "Approve the pull request"
+        }
+      },
+      {
+        "id": "w5",
+        "key": "ACME-5",
+        "title": "Dark mode",
+        "lane": "done",
+        "status": "idle",
+        "running": null,
+        "failure": null,
+        "waiting": null
+      },
+      {
+        "id": "w6",
+        "key": "ACME-6",
+        "title": "Old thing",
+        "lane": "done",
+        "status": "idle",
+        "running": null,
+        "failure": null,
+        "waiting": null
+      },
+      {
+        "id": "w7",
+        "key": "ACME-7",
+        "title": "Spam",
+        "lane": "declined",
+        "status": "idle",
+        "running": null,
+        "failure": null,
+        "waiting": null
+      },
+      {
+        "id": "w8",
+        "key": "ACME-8",
+        "title": "Migrated ticket",
+        "lane": "legacy_blocked",
+        "status": "idle",
+        "running": null,
+        "failure": null,
+        "waiting": null
+      },
+      {
+        "id": "w9",
+        "key": "ACME-9",
+        "title": "Question for a person",
+        "lane": "plan",
+        "status": "waiting",
+        "running": null,
+        "failure": null,
+        "waiting": {
+          "kind": "question",
+          "label": "question"
+        }
+      }
+    ],
+    "ticker": []
+  }
+}

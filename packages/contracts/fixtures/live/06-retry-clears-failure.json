@@ -1,0 +1,254 @@
+{
+  "name": "06-retry-clears-failure",
+  "description": "A card failed at the first read (a workflow failure; a last run that failed) is red; a run starting on it makes it running, not red.",
+  "graph": {
+    "nodes": [
+      {
+        "id": "triage",
+        "display": "Triage",
+        "kind": "agent"
+      },
+      {
+        "id": "plan",
+        "display": "Plan",
+        "kind": "agent"
+      },
+      {
+        "id": "implement",
+        "display": "Implement",
+        "kind": "agent"
+      },
+      {
+        "id": "review",
+        "display": "Review",
+        "kind": "wait"
+      },
+      {
+        "id": "done",
+        "display": "Done",
+        "kind": "terminal",
+        "terminal": true,
+        "outcome": "success"
+      },
+      {
+        "id": "declined",
+        "display": "Declined",
+        "kind": "terminal",
+        "terminal": true,
+        "outcome": "declined"
+      }
+    ],
+    "edges": [
+      {
+        "from": "triage",
+        "to": "plan"
+      },
+      {
+        "from": "plan",
+        "to": "implement"
+      },
+      {
+        "from": "implement",
+        "to": "review"
+      },
+      {
+        "from": "review",
+        "to": "done"
+      }
+    ]
+  },
+  "items": [
+    {
+      "id": "w1",
+      "project_slug": "acme-web",
+      "tracker_key": "ACME-1",
+      "title": "Fix",
+      "state": "implement",
+      "totals": {},
+      "failure": {
+        "message": "gateway refused"
+      }
+    },
+    {
+      "id": "w2",
+      "project_slug": "acme-web",
+      "tracker_key": "ACME-2",
+      "title": "Add",
+      "state": "implement",
+      "totals": {},
+      "current_run": {
+        "id": "r0",
+        "status": "failed",
+        "stage_role": "developer",
+        "started_at": "2026-11-18T14:00:00Z",
+        "cost_usd": 0
+      }
+    }
+  ],
+  "steps": [
+    {
+      "event": "activity.upsert",
+      "data": {
+        "kind": "run",
+        "id": "r1",
+        "status": "running",
+        "project_slug": "acme-web",
+        "work_item_id": "w2",
+        "workflow": "delivery",
+        "stage_role": "developer",
+        "agent_slug": "developer",
+        "started_at": "2026-11-18T14:58:00Z",
+        "can_stop": true
+      }
+    },
+    {
+      "event": "activity.upsert",
+      "data": {
+        "kind": "run",
+        "id": "r2",
+        "status": "running",
+        "project_slug": "acme-web",
+        "work_item_id": "w1",
+        "workflow": "delivery",
+        "stage_role": "developer",
+        "agent_slug": "developer",
+        "started_at": "2026-11-18T14:58:30Z",
+        "can_stop": true
+      }
+    }
+  ],
+  "now": "2026-11-18T15:00:00Z",
+  "options": {
+    "ticker_size": 5,
+    "day_start": "2026-11-18T00:00:00Z"
+  },
+  "expected": {
+    "lanes": [
+      {
+        "state": "triage",
+        "display": "Triage",
+        "kind": null,
+        "terminal": false,
+        "hors_workflow": false,
+        "count": 0,
+        "left_today": 0,
+        "closed_today": 0,
+        "cards": []
+      },
+      {
+        "state": "plan",
+        "display": "Plan",
+        "kind": null,
+        "terminal": false,
+        "hors_workflow": false,
+        "count": 0,
+        "left_today": 0,
+        "closed_today": 0,
+        "cards": []
+      },
+      {
+        "state": "implement",
+        "display": "Implement",
+        "kind": null,
+        "terminal": false,
+        "hors_workflow": false,
+        "count": 2,
+        "left_today": 0,
+        "closed_today": 0,
+        "cards": [
+          "w1",
+          "w2"
+        ]
+      },
+      {
+        "state": "review",
+        "display": "Review",
+        "kind": "wait",
+        "terminal": false,
+        "hors_workflow": false,
+        "count": 0,
+        "left_today": 0,
+        "closed_today": 0,
+        "cards": []
+      },
+      {
+        "state": "done",
+        "display": "Done",
+        "kind": "terminal",
+        "terminal": true,
+        "hors_workflow": false,
+        "count": 0,
+        "left_today": 0,
+        "closed_today": 0,
+        "cards": []
+      },
+      {
+        "state": "declined",
+        "display": "Declined",
+        "kind": "declined",
+        "terminal": true,
+        "hors_workflow": false,
+        "count": 0,
+        "left_today": 0,
+        "closed_today": 0,
+        "cards": []
+      }
+    ],
+    "cards": [
+      {
+        "id": "w1",
+        "key": "ACME-1",
+        "title": "Fix",
+        "lane": "implement",
+        "status": "running",
+        "running": {
+          "run_id": "r2",
+          "stage": "developer",
+          "agent": "developer",
+          "started_at": "2026-11-18T14:58:30Z",
+          "elapsed_ms": 90000,
+          "cost_usd": null
+        },
+        "failure": null,
+        "waiting": null
+      },
+      {
+        "id": "w2",
+        "key": "ACME-2",
+        "title": "Add",
+        "lane": "implement",
+        "status": "running",
+        "running": {
+          "run_id": "r1",
+          "stage": "developer",
+          "agent": "developer",
+          "started_at": "2026-11-18T14:58:00Z",
+          "elapsed_ms": 120000,
+          "cost_usd": null
+        },
+        "failure": null,
+        "waiting": null
+      }
+    ],
+    "ticker": [
+      {
+        "at": "2026-11-18T14:58:30Z",
+        "kind": "started",
+        "key": "ACME-1",
+        "stage": "developer",
+        "from": null,
+        "to": null,
+        "reason": null
+      },
+      {
+        "at": "2026-11-18T14:58:00Z",
+        "kind": "started",
+        "key": "ACME-2",
+        "stage": "developer",
+        "from": null,
+        "to": null,
+        "reason": null
+      }
+    ]
+  }
+}
