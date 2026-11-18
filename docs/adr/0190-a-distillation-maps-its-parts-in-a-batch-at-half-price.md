@@ -69,5 +69,14 @@ egress), whose aliases map to OpenAI today (`platform/standard` is `openai/gpt-5
 - The ledger's cache columns (S4-07) and prompt-caching markers (S4-08) are not touched: a batched part
   books its input and output tokens like a synchronous one. Cache reads inside a batch are not priced until
   S4-07 lands.
-- Follow-up: the evals (`activities/evals.py`) through the same adapter: they run through the runner, not a
-  stateless call, so reusing `GatewayBatches` there is a change of the runner, not of this story.
+- S4-10 finding (evals): no eval call in the orchestrator's evals can be batched. `activities/evals.py`
+  plays a ticket or agent case as a runner stage (`seed_eval_ticket`, `prepare_stage`, `start_run`,
+  `await_run`): a stateful, multi-turn agent run, which a batch cannot carry. Its verdicts (`_judge`,
+  `tranibor_playbooks.evals.agents.judge`) are deterministic predicates over files, answers and journals:
+  no model call. The stateless model calls that exist are elsewhere and all want a verdict now:
+  the conversation judge (`tranibor_core.conversation_judge`, run by the API's `default_player` inside
+  a promotion gate request, a verdict the promotion waits for), the playbook `--judge` and `--live-agents`
+  of `python -m tranibor_playbooks.evals.runner` (a CLI that blocks CI). A batch ends within 24 h; none of
+  these has a durable workflow to park on, so batching them would turn a gate into a day-long wait.
+  Not forced: nothing was built. Reopen if a judge moves to a scheduled, non-blocking run (for example a
+  nightly rubric sweep); it would then reuse `GatewayBatches` with the submit-once and timer pattern.

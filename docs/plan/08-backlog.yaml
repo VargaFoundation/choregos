@@ -5687,3 +5687,14 @@ stories:
       - "Results mapped by custom_id; each part booked at the batch price; the synchronous path stays the fallback"
       - "Evals (activities/evals.py) through the same adapter — follow-up; cache columns (S4-07) and caching markers (S4-08) are siblings"
     notes: "ADR 0190"
+  - id: S4-10
+    title: "Evals through the gateway batch API at -50 % — nothing stateless enough to batch"
+    stream: S4
+    sprint: 2
+    priority: 9
+    size: S
+    depends_on: [S4-09]
+    acceptance:
+      - "Which eval calls are stateless model calls is established from the code, and written in ADR 0190"
+      - "No eval call is batched when none is stateless and non-blocking; the finding names where to reopen"
+    notes: "ADR 0190, follow-up"
