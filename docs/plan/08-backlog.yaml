@@ -5142,6 +5142,95 @@ stories:
     depends_on: [S67-10, S67-11, S67-12]
     notes: "docs/site/use/terminal.md; docs/cli.md regenerated; tests/docs green."
 
+  - id: S67-18
+    title: "docs(adr): ADR 0187, the amendments of ADR 0154 and 0180, the plan and the stories"
+    stream: S67
+    sprint: 7
+    priority: 1
+    size: S
+    depends_on: []
+    notes: "ADR 0187 accepted and indexed; ADR 0180's S67 row and ADR 0154 amended; PLAN-2026-11-18-workspace-and-live; S67-18 to S67-28 in the backlog and in status/S67.md."
+  - id: S67-19
+    title: "contract(openapi): a failed activity entry says why (ADR 0187 \u00a73)"
+    stream: S67
+    sprint: 7
+    priority: 1
+    size: S
+    depends_on: [S67-18]
+    notes: "ActivityEntry.failure {reason, summary<=300}, optional, only on status failed; make contracts; the field listed contract-first."
+  - id: S67-20
+    title: "feat(api): the activity list and stream carry a failed run's reason (ADR 0187 \u00a73)"
+    stream: S67
+    sprint: 7
+    priority: 1
+    size: S
+    depends_on: [S67-19]
+    notes: "failure read from the run's StageResult (reason, summary cut to 300, credentials redacted as in the journal); absent on any other status; list and stream equal; a gateway body with a key is redacted (a test)."
+  - id: S67-21
+    title: "feat(cli): the workspace is one screen of tabs with a context pane, no frames (ADR 0187 \u00a71)"
+    stream: S67
+    sprint: 7
+    priority: 1
+    size: L
+    depends_on: [S67-18]
+    notes: "Tabs 1-6, header (org, assistant, running, waiting, amount today), one-line composer with the turn's cost, a context pane following the selection that folds below 120 columns; pilot tests per tab; SVG snapshots colour and NO_COLOR at 80 and 160 columns replace the five-pane ones."
+  - id: S67-22
+    title: "feat(cli): failures and decisions read in one line, their detail in the context pane (ADR 0187 \u00a73)"
+    stream: S67
+    sprint: 7
+    priority: 1
+    size: M
+    depends_on: [S67-20, S67-21]
+    notes: "A failed run prints its reason as a word and its summary in the context pane; a pending item is one line, grouped by project; no raw provider body in a list (a test with the gateway's budget error); activity --run and the plain activity command follow."
+  - id: S67-23
+    title: "feat(cli): the Projects tab, every project then its items then an item's runs (ADR 0187 \u00a72)"
+    stream: S67
+    sprint: 7
+    priority: 1
+    size: M
+    depends_on: [S67-21]
+    notes: "GET /orgs/{org}/projects then /projects/{id}/work-items then the item's runs; a project with no activity is listed; counts in flight and waiting; pilot tests."
+  - id: S67-24
+    title: "feat(cli): the ctrl-k palette (ADR 0187 \u00a71)"
+    stream: S67
+    sprint: 7
+    priority: 1
+    size: M
+    depends_on: [S67-21]
+    notes: "Fuzzy search over tabs, projects, items, assistants, organisations and in-workspace commands; every entry also has a key or a tab; pilot tests."
+  - id: S67-25
+    title: "fix(cli): every amount in the organisation's currency (ADR 0187 \u00a71)"
+    stream: S67
+    sprint: 7
+    priority: 1
+    size: S
+    depends_on: [S67-18]
+    notes: "The org's currency setting read once; amounts given in the other currency converted with the API's rate or printed with their own symbol; no '$' label on a euro amount nor the reverse (tests on projects list, items, activity, the workspace header)."
+  - id: S67-26
+    title: "feat(contracts,web,cli): the live flow's reduction, written twice and tested on shared fixtures (ADR 0187 \u00a74)"
+    stream: S67
+    sprint: 7
+    priority: 1
+    size: M
+    depends_on: [S67-18]
+    notes: "packages/contracts/fixtures/live/*.json (definition, items, stream events, expected lanes, cards and ticker); a TypeScript and a Python reduction both green on every fixture; a fixture added runs in both suites (a test)."
+  - id: S67-27
+    title: "feat(web): the live view of a workflow, /p/{slug}/live, and its wall mode (ADR 0187 \u00a74)"
+    stream: S67
+    sprint: 7
+    priority: 1
+    size: L
+    depends_on: [S67-26]
+    notes: "Lanes from the validated graph, cards from the items, motion from the activity stream, a card moves on its state change, red with the reason on a failure, amber when it waits; lane counts; the ticker; wall mode; prefers-reduced-motion respected; no animation dependency; vitest and a Playwright pass against the mock API; linked from the board."
+  - id: S67-28
+    title: "feat(cli): choregos live and the workspace's Live tab (ADR 0187 \u00a74)"
+    stream: S67
+    sprint: 7
+    priority: 1
+    size: M
+    depends_on: [S67-26, S67-21]
+    notes: "The same lanes as columns of cards, a spinner on running cards, lanes collapsing to counts below 100 columns, the ticker; NO_COLOR and ASCII; pilot tests and SVG snapshots; docs/site/use/terminal.md updated."
+
   # ───────────────────────── S68 — The editor is a surface of the platform (ADR 0155) ─────────────────────────
   - id: S68-00
     title: "docs(adr): ADR 0155, the S68 plan, the backlog stories"
