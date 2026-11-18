@@ -132,7 +132,11 @@ async def test_two_global_and_two_project_memories_are_resolved_in_order_and_mer
         ("project:shared", "write", SHARED),
     ]
     assert stage_input["memory_scope"] == "none", "no legacy value means this list: old runners read nothing"
-    assert "memory" not in stage_input["tools"]["mcp"], "Ecphoria's own server only serves the shared memory"
+    memory_server = stage_input["tools"]["mcp"]["memory"]
+    assert memory_server["scope_arguments"] == {"tenant_id": SHARED}, (
+        "Ecphoria's server serves the shared memory only"
+    )
+    assert "add_memory" in memory_server["allowed_tools"], "the shared binding is `write`"
     from tranibor_api.db.models import Run
     from tranibor_api.db.session import session_scope
 
@@ -245,13 +249,48 @@ async def test_the_legacy_single_memory_is_unchanged(setup: Fixture) -> None:
         assert [i["memory"] for i in run.context_pack["memories"]] == [None]
 
 
-def test_the_memory_server_is_announced_only_for_the_legacy_shared_memory() -> None:
+def _bound(*bindings: tuple[str, str, str, str]) -> list[Any]:
+    from tranibor_contracts import StageMemory
+
+    return [
+        StageMemory(label=f"{scope}:{slug}", scope=scope, slug=slug, mode=mode, namespace=namespace)  # type: ignore[arg-type]
+        for scope, slug, mode, namespace in bindings
+    ]
+
+
+def test_the_memory_server_is_announced_only_for_the_projects_shared_memory() -> None:
+    from tranibor_adapters.memory.ecphoria import EcphoriaMemory
     from tranibor_orchestrator.activities.stage import _mcp_servers
 
     settings = SimpleNamespace(tools_sidecar_url="", memory_url="http://ecphoria:8432")
-    assert "memory" in _mcp_servers(settings, "project")
-    assert "memory" not in _mcp_servers(settings, "none"), "several, global or own: not the project's server"
-    assert "memory" not in _mcp_servers(settings, "agent")
+    adapter = EcphoriaMemory("http://ecphoria:8432", token="k")
+    shared = _bound(("project", "shared", "write", SHARED))
+    assert "memory" in _mcp_servers(settings, shared, adapter)
+    assert "memory" not in _mcp_servers(settings, [], adapter), "none"
+    own = _bound(("project", "own", "write", f"{SHARED}#agent:architect"))
+    assert "memory" not in _mcp_servers(settings, own, adapter), (
+        "the agent's own memory is not the project's tenant"
+    )
+    others = _bound(("global", "security-lessons", "read", SEC), ("project", "decisions", "write", DECISIONS))
+    assert "memory" not in _mcp_servers(settings, others, adapter), "named memories: not the project's server"
+    assert "memory" not in _mcp_servers(settings, shared, None), "a memory that is not Ecphoria serves no MCP"
+
+
+def test_the_memory_server_carries_the_projects_tenant_and_the_tools_of_the_binding_mode() -> None:
+    """Announced bare, it answered 401 (Ecphoria `auth_enabled`); with the key and no tenant it would have
+    served every tenant. The runner forces what is announced here."""
+    from tranibor_adapters.memory.ecphoria import MCP_READ_TOOLS, MCP_WRITE_TOOLS, EcphoriaMemory
+    from tranibor_orchestrator.activities.stage import _mcp_servers
+
+    settings = SimpleNamespace(tools_sidecar_url="", memory_url="http://ecphoria:8432")
+    adapter = EcphoriaMemory("http://ecphoria:8432", token="k")
+    writing = _mcp_servers(settings, _bound(("project", "shared", "write", SHARED)), adapter)["memory"]
+    reading = _mcp_servers(settings, _bound(("project", "shared", "read", SHARED)), adapter)["memory"]
+
+    assert writing.scope_arguments == reading.scope_arguments == {"tenant_id": SHARED}
+    assert writing.env == {"Authorization": "Bearer k"}
+    assert writing.allowed_tools == [*MCP_READ_TOOLS, *MCP_WRITE_TOOLS]
+    assert reading.allowed_tools == list(MCP_READ_TOOLS), "a `read` binding is not offered a write tool"
 
 
 async def _run_of(setup: Fixture, memories: list[dict[str, Any]], run_id: str = "run-1") -> str:
