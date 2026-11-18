@@ -69,6 +69,21 @@ The agent's stage resumes where it stopped, with your answer and one more attemp
 choregos items answer <item-id> "Use the customer's billing currency."
 ```
 
+## Approve an escalation
+
+A step that escalates (its budget ran out, its gates failed too many times, a person stopped its run)
+parks the work item in **Needs a human** and asks for an approval that says why. **Approve** it to
+replay that stage: a new run, billed, with one more attempt. The work item's other request, the step
+that abandons it, is closed when the stage replays.
+
+- When the work item's budget is spent, **Approve** is refused: raise the project's ticket budget
+  (its policy's `budgets.ticket_usd`), or replay the stage with a top-up (see
+  [Work items](work-items.md)).
+- Abandoning is never what **Approve** decides by default: the board and the inbox show the
+  escalation first, and a decision is always sent for the request it was shown with. To abandon, approve
+  the abandon step itself, or **Stop** the work item.
+- Once a work item has ended, its requests left open are closed: nothing waits on it any more.
+
 ## Accept or refuse a change of scope
 
 An agent that needs to touch a path outside its allowed scope asks for it. A small request (a few

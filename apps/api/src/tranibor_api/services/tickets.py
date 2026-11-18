@@ -53,6 +53,7 @@ from .definitions import work_item_workflow, workflow_model
 from .events import persist_event
 from .human_assignee import StepAssignee, actor_of_the_step, assignee_from_actor, assignee_of_row
 from .initiator import of_principal
+from .pending_requests import pending_request
 from .routing import WorkItemBirth, new_work_item, verify_birth
 from .work_item_repository import repository_view
 
@@ -191,14 +192,9 @@ async def work_item_dto(
             .limit(1)
         )
     ).scalar_one_or_none()
-    pending = (
-        await session.execute(
-            select(HumanRequest)
-            .where(HumanRequest.work_item_id == item.id, HumanRequest.decided_at.is_(None))
-            .order_by(HumanRequest.requested_at.desc())
-            .limit(1)
-        )
-    ).scalar_one_or_none()
+    # The request the board shows is the one its bar decides: never the abandon step while another is
+    # open (FON-319).
+    pending = await pending_request(session, item, workflow)
     totals = totals_from(item.totals)
     # What the ticket has cost is the ledger's sum — models AND tools (S27-03): the counter kept on
     # the row adds model spend only. A ticket with no ledger line keeps its counter.

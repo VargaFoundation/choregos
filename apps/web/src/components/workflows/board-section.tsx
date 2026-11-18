@@ -206,7 +206,12 @@ function BoardCard({ slug, item, onDecided }: { slug: string; item: WorkItemDto;
                 Do the task
               </Link>
             ) : (
-              <DecisionBar itemId={item.id} kind={item.pending_request.kind} onDone={onDecided} />
+              <DecisionBar
+                itemId={item.id}
+                kind={item.pending_request.kind}
+                request={item.pending_request}
+                onDone={onDecided}
+              />
             )}
           </div>
         )}
