@@ -11,14 +11,19 @@ import type { LiveCard, LiveView } from "@/lib/live-flow";
 import { workflowHue, type Hue } from "@/lib/workflow-hue";
 import { KIND_COLOURS, KIND_LABEL, type ActorKind, type Graph, type GraphEdge } from "../map/layout";
 import {
-  TOKEN_H,
-  TOKEN_W,
+  HEAD_H,
+  MAX_TOKENS,
+  MIN_STATION_W,
+  PAD,
+  STATION_W,
+  TOKEN_GAP,
   edgeOfMove,
   flowGeometry,
   parkTokens,
   pointAlong,
   travelPath,
   type FlowEdge,
+  type FlowGeometry,
   type Parked,
   type Station,
 } from "./geometry";
@@ -51,28 +56,55 @@ const HUE_VAR: Record<Hue, string> = {
 
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 
-/** The scale that fits the drawing in its box: never above 1 on a page, as large as the screen allows on the wall. */
-function useFit(box: React.RefObject<HTMLDivElement | null>, width: number, height: number, wall: boolean) {
+/** How large the wall's text is meant to be, against the page's: the flow is read from across a room. */
+export const WALL_TEXT = 1.6;
+const WALL_MAX = 2.2;
+
+/** The size of a box, kept up to date. */
+function useBox(box: React.RefObject<HTMLDivElement | null>) {
   const [size, setSize] = useState<{ w: number; h: number } | null>(null);
   useLayoutEffect(() => {
     const el = box.current;
     if (!el || typeof ResizeObserver === "undefined") return;
     const read = () => setSize({ w: el.clientWidth, h: el.clientHeight });
+    read();
     const observer = new ResizeObserver(read);
     observer.observe(el);
     return () => observer.disconnect();
   }, [box]);
-  if (!size || size.w === 0 || width === 0) return 1;
-  const byWidth = size.w / width;
-  if (!wall) return Math.max(0.55, Math.min(1, byWidth));
-  const byHeight = size.h > 0 ? size.h / height : byWidth;
-  return Math.min(2.2, byWidth, byHeight);
+  return size;
+}
+
+/**
+ * The drawing and the scale it is shown at. On a page the scale is 1 (the text never shrinks; a wide
+ * flow scrolls). On the wall the scale is as large as the screen allows, down to the stations getting
+ * narrower rather than the text smaller, and the rows are stretched to fill the height.
+ */
+export function layoutFor(
+  wall: boolean,
+  size: { w: number; h: number } | null,
+  build: (options: { stationW?: number; gapX?: number; stretch?: number }) => FlowGeometry,
+): { geometry: FlowGeometry; scale: number } {
+  const natural = build({});
+  if (!wall || !size || size.w === 0 || size.h === 0) return { geometry: natural, scale: 1 };
+  let geometry = natural;
+  let scale = Math.min(WALL_MAX, size.w / geometry.width);
+  for (let w = STATION_W; scale < WALL_TEXT && w > MIN_STATION_W; ) {
+    w = Math.max(MIN_STATION_W, w - 8);
+    geometry = build({ stationW: w, gapX: Math.max(36, Math.round(w * 0.25)) });
+    scale = Math.min(WALL_MAX, size.w / geometry.width);
+  }
+  scale = Math.min(scale, size.h / geometry.height);
+  const gapOf = (g: FlowGeometry) => (g.stations[1] && g.stations[0] ? g.stations[1].x - g.stations[0].x - g.stations[0].w : undefined);
+  const stretch = Math.max(0, size.h / scale - geometry.height);
+  if (stretch > 0) geometry = build({ stationW: geometry.stations[0]?.w, gapX: gapOf(geometry), stretch });
+  return { geometry, scale };
 }
 
 function Token({
   card,
   at,
-  wall,
+  size,
   hue,
   now,
   slug,
@@ -81,7 +113,7 @@ function Token({
 }: {
   card: LiveCard;
   at: Parked;
-  wall: boolean;
+  size: { w: number; h: number };
   hue: string;
   now: number;
   slug: string;
@@ -114,7 +146,7 @@ function Token({
       data-status={card.status}
       data-arrived={arrived ? "true" : undefined}
       className="flow-token group absolute z-10 transition-[left,top] duration-500 ease-out"
-      style={{ left: at.x, top: at.y, width: TOKEN_W, height: TOKEN_H, ["--live-hue" as string]: hue }}
+      style={{ left: at.x, top: at.y, width: size.w, height: size.h, ["--live-hue" as string]: hue }}
     >
       <div className="flow-token-body relative size-full">
         {card.status === "running" && <span aria-hidden className="flow-ring" />}
@@ -124,7 +156,7 @@ function Token({
           aria-label={`${card.key}, ${card.title}${detail ? `, ${detail}` : ""}`}
           data-testid="flow-token"
           className={cn(
-            "relative flex size-full items-center gap-1.5 rounded-full border px-2 font-mono text-[11px] font-medium no-underline shadow-sm",
+            "relative flex size-full items-center gap-1.5 rounded-full border px-2.5 font-mono text-xs font-medium no-underline shadow-sm",
             tone,
             card.status === "failed" && "flow-flash",
             arrived && "live-arrived",
@@ -133,7 +165,7 @@ function Token({
           <span
             aria-hidden
             className={cn(
-              "size-1.5 shrink-0 rounded-full",
+              "size-2 shrink-0 rounded-full",
               card.status === "failed"
                 ? "bg-failed"
                 : card.status === "waiting"
@@ -159,7 +191,6 @@ function Token({
             <span className="mt-1 block text-ink-muted">{card.failure.summary}</span>
           )}
         </span>
-        {wall && null}
       </div>
     </div>
   );
@@ -173,6 +204,8 @@ function Stage({
   selected,
   hue,
   overflow,
+  token,
+  cols,
   onSelect,
   closedToday,
 }: {
@@ -183,6 +216,8 @@ function Stage({
   selected: boolean;
   hue: string;
   overflow: number;
+  token: { w: number; h: number };
+  cols: number;
   onSelect: () => void;
   closedToday: number;
 }) {
@@ -214,42 +249,40 @@ function Stage({
           borderTop: `3px solid ${colours.border}`,
         }}
       >
-        <span className="flex items-start gap-2 px-3 pt-2.5">
-          <span
-            aria-hidden
-            className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg"
-            style={{ background: colours.fill, color: colours.text }}
-          >
-            <Icon className="size-4" />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-sm font-semibold leading-tight">{station.display}</span>
-            <span className="block truncate text-[11px] leading-tight" style={{ color: colours.text }}>
-              {actor ? `${KIND_LABEL[station.kind]} · ${actor}` : KIND_LABEL[station.kind]}
+        <span className="flex flex-col gap-1 px-3 pt-3">
+          <span className="block truncate text-base font-semibold leading-tight">{station.display}</span>
+          <span className="flex items-center gap-1.5 text-xs leading-tight">
+            <span
+              data-testid="flow-actor"
+              className="flex min-w-0 flex-1 items-center gap-1.5"
+              style={{ color: colours.text }}
+            >
+              <Icon aria-hidden className="size-3.5 shrink-0" />
+              <span className="truncate">{actor ?? KIND_LABEL[station.kind]}</span>
+            </span>
+            {station.terminal && closedToday > 0 && (
+              <span className="shrink-0 text-succeeded-ink">{closedToday} today</span>
+            )}
+            <span
+              data-testid="flow-count"
+              className="shrink-0 rounded-full bg-surface-sunken px-1.5 py-px font-medium tabular-nums text-ink-muted"
+            >
+              {count}
             </span>
           </span>
-          <span
-            data-testid="flow-count"
-            className="rounded-full bg-surface-sunken px-2 py-0.5 text-xs font-semibold tabular-nums text-ink-muted"
-          >
-            {count}
-          </span>
         </span>
-        {station.terminal && closedToday > 0 && (
-          <span className="absolute right-3 bottom-2 text-[11px] text-succeeded-ink">{closedToday} today</span>
-        )}
         {station.reached.length > 0 && count === 0 && (
-          <span className="absolute inset-x-3 bottom-2 truncate text-[11px] text-ink-subtle">{station.reached[0]}</span>
+          <span className="absolute inset-x-3 bottom-2 truncate text-xs text-ink-subtle">{station.reached[0]}</span>
         )}
       </button>
       {overflow > 0 && (
         <span
-          className="absolute z-10 flex items-center justify-center rounded-full border border-line bg-surface-sunken text-[11px] font-medium text-ink-muted"
+          className="absolute z-10 flex items-center justify-center rounded-full border border-line bg-surface-sunken text-xs font-medium text-ink-muted"
           style={{
-            left: station.x + 10 + (TOKEN_W + 6),
-            top: station.y + 64 + 6 + 2 * (TOKEN_H + 6),
-            width: TOKEN_W,
-            height: TOKEN_H,
+            left: station.x + PAD + ((MAX_TOKENS - 1) % cols) * (token.w + TOKEN_GAP),
+            top: station.y + HEAD_H + 6 + Math.floor((MAX_TOKENS - 1) / cols) * (token.h + TOKEN_GAP),
+            width: token.w,
+            height: token.h,
           }}
         >
           +{overflow} more
@@ -297,17 +330,16 @@ export function FlowView({
 
   // Keys keep the geometry from being recomputed every second: only counts and places matter to it.
   const lanesKey = JSON.stringify(flow.lanes.map((l) => [l.state, l.display, l.count, l.hors_workflow, l.cards]));
-  const { geometry, parked, overflow } = useMemo(() => {
+  const size = useBox(box);
+  const { geometry, scale, parked, overflow } = useMemo(() => {
     const lanes = (JSON.parse(lanesKey) as [string, string, number, boolean, string[]][]).map(
       ([state, display, count, outside, cards]) => ({ state, display, count, outside, cards }),
     );
     const counts = new Map(lanes.map((l) => [l.state, l.count]));
     const outside = lanes.filter((l) => l.outside && l.count > 0).map((l) => ({ id: l.state, display: l.display }));
-    const geometry = flowGeometry(graph, initial, counts, outside);
-    return { geometry, ...parkTokens(geometry, lanes) };
-  }, [graph, initial, lanesKey]);
-
-  const scale = useFit(box, geometry.width, geometry.height, wall);
+    const { geometry, scale } = layoutFor(wall, size, (o) => flowGeometry(graph, initial, counts, outside, o));
+    return { geometry, scale, ...parkTokens(geometry, lanes) };
+  }, [graph, initial, lanesKey, wall, size]);
   const cards = useMemo(() => new Map(flow.cards.map((c) => [c.id, c])), [flow.cards]);
   const edges = geometry.edges;
   const actorOf = useMemo(() => {
@@ -353,7 +385,7 @@ export function FlowView({
       el.style.transition = "none";
       void el.offsetWidth;
       el.style.transition = "";
-      const path = travelPath({ x: was.x, y: was.y }, { x: now.x, y: now.y }, edge);
+      const path = travelPath({ x: was.x, y: was.y }, { x: now.x, y: now.y }, edge, geometry.token);
       const frames = Array.from({ length: 41 }, (_, i) => {
         const u = i / 40;
         const p = pointAlong(path, ease(u));
@@ -376,13 +408,25 @@ export function FlowView({
     [],
   );
 
+  // On a page the flow scrolls rather than shrinks: the station the work is at is kept in view.
+  const focus = flow.cards.find((c) => c.status === "running")?.lane ?? flow.lanes.find((l) => l.count > 0)?.state;
+  const focusX = focus ? geometry.byId.get(focus) : undefined;
+  const focusLeft = focusX ? focusX.x + focusX.w / 2 : null;
+  useLayoutEffect(() => {
+    const el = box.current;
+    if (wall || !el || focusLeft === null || typeof el.scrollTo !== "function") return;
+    const target = Math.max(0, focusLeft * scale - el.clientWidth / 2);
+    if (Math.abs(el.scrollLeft - target) < 4) return;
+    el.scrollTo({ left: target, behavior: reduced ? "auto" : "smooth" });
+  }, [focus, focusLeft, wall, scale, reduced]);
+
   const running = new Set(flow.cards.filter((c) => c.status === "running").map((c) => c.lane));
   const lanes = new Map(flow.lanes.map((l) => [l.state, l]));
   return (
     <div
       ref={box}
       data-testid="flow-view"
-      className={cn("w-full", wall ? "flex h-full items-center" : "overflow-x-auto")}
+      className={cn("w-full", wall ? "flex h-full items-center overflow-hidden" : "overflow-x-auto")}
       style={wall ? undefined : { minHeight: geometry.height * scale }}
     >
       <div style={{ width: geometry.width * scale, height: geometry.height * scale }} className="mx-auto">
@@ -437,6 +481,8 @@ export function FlowView({
               selected={selected === station.id}
               hue={hue}
               overflow={overflow.get(station.id) ?? 0}
+              token={geometry.token}
+              cols={geometry.cols}
               onSelect={() => onSelect(selected === station.id ? null : station.id)}
             />
           ))}
@@ -447,7 +493,7 @@ export function FlowView({
                 key={id}
                 card={card}
                 at={at}
-                wall={wall}
+                size={geometry.token}
                 hue={hue}
                 now={now}
                 slug={slug}

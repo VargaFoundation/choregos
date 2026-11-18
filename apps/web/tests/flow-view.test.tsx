@@ -1,7 +1,8 @@
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Wall } from "@/components/live/live-kit";
-import { FlowView, TRAVEL_MS } from "@/components/workflows/flow/flow-view";
+import { FlowView, TRAVEL_MS, WALL_TEXT, layoutFor } from "@/components/workflows/flow/flow-view";
+import { flowGeometry } from "@/components/workflows/flow/geometry";
 import { applyEvent, applyItems, initialState, view, type LiveEntry } from "@/lib/live-flow";
 import type { WorkflowGraph, WorkItemDto } from "@/lib/types";
 
@@ -89,7 +90,8 @@ describe("the flow view", () => {
     expect(token("2").dataset.station).toBe("plan");
     const station = screen.getByRole("button", { name: /^Plan, agent, 1 item$/ });
     expect(within(station).getByTestId("flow-count")).toHaveTextContent("1");
-    expect(within(station).getByText(/agent · planner/)).toBeInTheDocument();
+    // The agent's name alone, with the actor's icon: not "agent · planner".
+    expect(within(station).getByTestId("flow-actor")).toHaveTextContent(/^planner$/);
     expect(screen.getByRole("button", { name: /^Plan approval, human, 0 items$/ })).toBeInTheDocument();
   });
 
@@ -211,5 +213,25 @@ describe("the wall", () => {
     expect(shell.hasAttribute("inert")).toBe(false);
     expect(document.documentElement.dataset.wall).toBeUndefined();
     shell.remove();
+  });
+});
+
+describe("the flow's size", () => {
+  const build = (o: { stationW?: number; gapX?: number; stretch?: number }) =>
+    flowGeometry(graph as never, "triage", new Map(), [], o);
+  it("never shrinks the text on a page: the scale is 1 however wide the flow", () => {
+    expect(layoutFor(false, { w: 300, h: 300 }, build).scale).toBe(1);
+  });
+  it("makes the wall's text 1.6 times the page's and fills the height", () => {
+    const { geometry, scale } = layoutFor(true, { w: 1920, h: 700 }, build);
+    expect(scale).toBeGreaterThanOrEqual(WALL_TEXT);
+    expect(geometry.height * scale).toBeGreaterThan(690);
+    expect(geometry.width * scale).toBeLessThanOrEqual(1921);
+  });
+  it("narrows the stations rather than the text when the wall is too narrow for the row", () => {
+    const wide = layoutFor(true, { w: 1920, h: 700 }, build).geometry.stations[0]!.w;
+    const tight = layoutFor(true, { w: 1500, h: 700 }, build);
+    expect(tight.geometry.stations[0]!.w).toBeLessThan(wide);
+    expect(tight.scale).toBeGreaterThanOrEqual(WALL_TEXT);
   });
 });
