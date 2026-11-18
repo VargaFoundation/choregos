@@ -6093,6 +6093,15 @@ export type ActivityEntry = {
   spend?: SpendSoFar | null;
   /** whether the reader may stop it */
   can_stop: boolean;
+  /** why a run ended `failed`; null for any other status (S67-19) */
+  failure?: ActivityFailure | null;
+};
+
+export type ActivityFailure = {
+  /** the stage result's reason, an open string: `loop`, `budget`, `max_turns`, `timeout`, a gateway refusal... */
+  reason: string;
+  /** the stage result's summary, cut to 300 characters, credentials redacted as the run journal redacts them */
+  summary: string;
 };
 
 export type SpendSoFar = {

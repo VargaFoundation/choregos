@@ -6,6 +6,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
+from pydantic import Field
+
 from .base import Dto
 
 ActivityKind = Literal["run", "session", "turn"]
@@ -21,6 +23,15 @@ class SpendSoFar(Dto):
     #: When the gateway was asked (at most every 30 s per run), or when the spend was booked.
     read_at: datetime
     booked: bool = False
+
+
+class ActivityFailure(Dto):
+    """Why a run ended `failed` (ADR 0187 §3): its stage result's reason and summary."""
+
+    #: An open string: `loop`, `budget`, `max_turns`, `timeout`, a gateway refusal, ...
+    reason: str
+    #: At most 300 characters, credentials redacted.
+    summary: str = Field(max_length=300)
 
 
 class ActivityEntry(Dto):
@@ -45,6 +56,8 @@ class ActivityEntry(Dto):
     #: `None` when the gateway cannot say (ADR 0141 §2): never zeros for unknown.
     spend: SpendSoFar | None = None
     can_stop: bool
+    #: Only a run whose status is `failed`; `None` for any other entry.
+    failure: ActivityFailure | None = None
 
 
 class ActivityList(Dto):
@@ -52,4 +65,4 @@ class ActivityList(Dto):
     finished: list[ActivityEntry]
 
 
-__all__ = ["ActivityEntry", "ActivityKind", "ActivityList", "SpendSoFar"]
+__all__ = ["ActivityEntry", "ActivityFailure", "ActivityKind", "ActivityList", "SpendSoFar"]
