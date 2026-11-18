@@ -493,11 +493,11 @@ export function Summary({
         wall ? "gap-x-10 gap-y-2" : "gap-x-8 gap-y-1",
       )}
     >
-      <Figure testid="sum-running" label="in flight" value={String(count("running"))} tone="text-running-ink" wall={wall} />
-      <Figure testid="sum-waiting" label="waiting for a person" value={String(count("waiting"))} tone="text-waiting-ink" wall={wall} />
-      <Figure testid="sum-failed" label="failed" value={String(count("failed"))} tone="text-failed-ink" wall={wall} />
-      <Figure testid="sum-done" label="done today" value={String(done)} tone="text-succeeded-ink" wall={wall} />
-      {spent !== null && <Figure testid="sum-spend" label="spent today" value={spent} wall={wall} />}
+      <Figure testid="sum-running" label="In flight" value={String(count("running"))} tone="text-running-ink" wall={wall} />
+      <Figure testid="sum-waiting" label="Waiting for a person" value={String(count("waiting"))} tone="text-waiting-ink" wall={wall} />
+      <Figure testid="sum-failed" label="Failed" value={String(count("failed"))} tone="text-failed-ink" wall={wall} />
+      <Figure testid="sum-done" label="Done today" value={String(done)} tone="text-succeeded-ink" wall={wall} />
+      {spent !== null && <Figure testid="sum-spend" label="Spent today" value={spent} wall={wall} />}
     </dl>
   );
 }
