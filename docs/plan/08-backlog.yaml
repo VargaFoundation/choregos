@@ -5431,13 +5431,13 @@ stories:
     depends_on: []
     notes: "Plan workstream S2, first part. Production is CHOREGOS_ENV staging or prod (the notion that already refuses the superuser and the development sign-in), in choregos_core/production.py. The workers now pass CHOREGOS_ENV to every run. The internal API guard keeps warn as its default: the flip of the shipped presets is S80-03b."
   - id: S80-03b
-    title: "chore(charts): the run's API guard enforces in the staging and prod presets, after two to four weeks of observation in warn"
+    title: "chore(charts): the run's API guard enforces in the staging and prod presets"
     stream: S80
     sprint: 3
     priority: 3
     size: XS
     depends_on: [S80-03]
-    notes: "Plan workstream S2, second part. The switch exists (CHOREGOS_INTERNAL_API_GUARD, choregos-api.internalApiGuard, ADR 0144); what is due is the default of values/staging.yaml then values/prod.yaml, once internal_api.would_refuse has been read on a release in warn (docs/deployment.md, 'The run's API and the run door'). Not before mid-December 2026."
+    notes: "Plan workstream S2, second part. The switch exists (CHOREGOS_INTERNAL_API_GUARD, choregos-api.internalApiGuard, ADR 0144); values/staging.yaml and values/prod.yaml now default to enforce. Planned for mid-December after two to four weeks in warn; done on 2026-11-18 by the owner's decision, with only the Diametral dev and prod deployments (enforce since 2026-11-14, little traffic) behind it."
   - id: S80-07a
     title: "feat(orchestrator,charts): the worker's concurrency is a setting (activities, workflow tasks, local activities, sticky cache), chart values per queue"
     stream: S80
