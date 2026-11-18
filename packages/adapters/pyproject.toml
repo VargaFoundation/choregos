@@ -1,6 +1,6 @@
 [project]
 name = "tranibor-adapters"
-version = "0.27.13"
+version = "0.27.14"
 description = "Adaptateurs Tranibor : tracker, scm, ci, cd, executor, memory, gateway, notify"
 requires-python = ">=3.12,<3.13"
 license = { text = "Apache-2.0" }

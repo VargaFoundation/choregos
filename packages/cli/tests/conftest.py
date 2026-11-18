@@ -28,6 +28,14 @@ def _no_real_profile(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
 
 
 @pytest.fixture(autouse=True)
+def _currency_read_afresh() -> None:
+    # The organisation's currency is read once a process (S67-25): each test reads it again.
+    from tranibor_cli import money
+
+    money.forget()
+
+
+@pytest.fixture(autouse=True)
 def _no_version_check(monkeypatch: pytest.MonkeyPatch) -> None:
     # The check reads `GET /edition` once a process and writes under ~/.cache: the suites mock
     # their own routes and must not write there. `test_self_update.py` turns it back on.

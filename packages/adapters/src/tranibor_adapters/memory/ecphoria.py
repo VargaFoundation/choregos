@@ -12,11 +12,20 @@ import asyncio
 from typing import Any
 
 import httpx
-from tranibor_contracts import ContextPack, MemoryItem, RelatedItem
+from tranibor_contracts import ContextPack, McpServerRef, MemoryItem, RelatedItem
 from tranibor_core.domain import Fact, Memory, Provenance, utcnow
 from tranibor_core.memory_scope import parse_namespace
 
 from ..errors import UpstreamError
+
+#: What an agent may do on Ecphoria's MCP server for ITS project's memory. Only the tools whose tenant is
+#: the one the caller NAMES (`tenant_id`, which the runner then forces to the run's): the others take the
+#: tenant from the credential, and the deployment's key carries none (`<key>@:admin`), so `query`, `ingest`,
+#: `set_state`, `embed`, the sessions and the graph tools would reach every tenant, and `update_memory`,
+#: `delete_memory`, `memory_history`, `link_memory`, `memory_feedback` and `memory_provenance` take a bare
+#: id that is not checked against any tenant. Measured on ecphoria 0.2.5 (`mcp/transport.rs`).
+MCP_READ_TOOLS = ("search_memory", "get_memories", "list_contradictions")
+MCP_WRITE_TOOLS = ("add_memory", "remember")
 
 
 class EcphoriaMemory:
@@ -67,6 +76,19 @@ class EcphoriaMemory:
         if self.token:
             headers["Authorization"] = f"Bearer {self.token}"
         return headers
+
+    def mcp_server(self, namespace: str, *, writes: bool) -> McpServerRef:
+        """The memory MCP server as the runner is to serve it to the agent for ONE memory (S81): Ecphoria's
+        `/mcp` with the deployment's credential (held by the runner, never by the agent), the tenant this
+        adapter writes that namespace under forced on every call, and only the memory tools of the
+        binding's mode. The agent reads and writes what the orchestrator reads and writes, nothing else."""
+        tenant = self._headers(namespace)["X-Ecphoria-Tenant"]
+        return McpServerRef(
+            url=f"{self.base_url}/mcp",
+            env={"Authorization": f"Bearer {self.token}"} if self.token else {},
+            scope_arguments={"tenant_id": tenant},
+            allowed_tools=[*MCP_READ_TOOLS, *(MCP_WRITE_TOOLS if writes else ())],
+        )
 
     def _circuit_open(self) -> bool:
         import time

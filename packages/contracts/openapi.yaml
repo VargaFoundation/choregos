@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Choregos API
-  version: 0.27.13
+  version: 0.27.14
   description: |
     The Choregos platform API. The console and the CLI use this API and nothing else.
     Auth: an OIDC session (cookie) or `Authorization: Bearer <api_token>`.
@@ -12842,6 +12842,15 @@ components:
           oneOf: [{ $ref: "#/components/schemas/SpendSoFar" }, { type: "null" }]
           description: "null when the gateway cannot say (ADR 0141 §2), never zero for unknown"
         can_stop: { type: boolean, description: "whether the reader may stop it" }
+        failure:
+          oneOf: [{ $ref: "#/components/schemas/ActivityFailure" }, { type: "null" }]
+          description: "why a run ended `failed`; null for any other status (S67-19)"
+    ActivityFailure:
+      type: object
+      required: [reason, summary]
+      properties:
+        reason: { type: string, description: "the stage result's reason, an open string: `loop`, `budget`, `max_turns`, `timeout`, a gateway refusal..." }
+        summary: { type: string, maxLength: 300, description: "the stage result's summary, cut to 300 characters, credentials redacted as the run journal redacts them" }
     SpendSoFar:
       type: object
       required: [tokens_in, tokens_out, tokens_cached, cost_usd, read_at]

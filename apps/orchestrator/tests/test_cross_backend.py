@@ -160,9 +160,18 @@ async def test_the_memory_url_comes_from_its_setting_not_from_a_port_replacement
     settings_under_test = OrchestratorSettings(
         executor_kind="k8s_job", gateway_url="http://litellm:4000", memory_url="http://ecphoria:8432"
     )
-    servers = _mcp_servers(settings_under_test)
+    from tranibor_adapters.memory.ecphoria import EcphoriaMemory
+    from tranibor_contracts import StageMemory
+
+    shared = [
+        StageMemory(label="project:shared", scope="project", slug="shared", mode="write", namespace="demo")
+    ]
+    adapter = EcphoriaMemory(settings_under_test.memory_url)
+    servers = _mcp_servers(settings_under_test, shared, adapter)
     assert servers["memory"].url == "http://ecphoria:8432/mcp", servers["memory"].url
     assert "litellm" not in servers["memory"].url, "the memory does not live on the gateway host"
 
     # Without a configured memory, no memory server is announced.
-    assert "memory" not in _mcp_servers(OrchestratorSettings(executor_kind="k8s_job", memory_url=""))
+    assert "memory" not in _mcp_servers(
+        OrchestratorSettings(executor_kind="k8s_job", memory_url=""), shared, adapter
+    )

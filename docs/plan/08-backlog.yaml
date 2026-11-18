@@ -5668,6 +5668,14 @@ stories:
     size: L
     depends_on: []
     notes: "Decision of 2026-11-18. NOTICE, licence headers, console footer, publishing identity (security contact, commit address, plugin repository and index) and docs name GRAAL.SYSTEMS SAS; the default plugin source varga becomes tranibor (migration, old name still resolved); guarded by tests/licences/test_no_varga.py."
+  - id: S80-11
+    title: "chore: the Ecphoria image is published under graalsystems and the core pulls it from there (ADR 0186)"
+    stream: S80
+    sprint: 1
+    priority: 2
+    size: S
+    depends_on: [S80-10]
+    notes: "graalsystems/ecphoria 0.2.6 is the first release published to ghcr.io/graalsystems/ecphoria and -operator. The chart and both compose files pin 0.2.6-memory there; the allowlist of tests/licences/test_no_varga.py loses the four files that named the frozen Ecphoria address."
   - id: S4-08
     title: "Prompt caching on the platform's own model calls — stable prefix, `cache_control` on the Anthropic-family prefix, no-op elsewhere"
     stream: S4

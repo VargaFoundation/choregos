@@ -61,7 +61,7 @@ from .launcher import SHARED_UMASK, Launcher
 from .local_tools import start_if_absent
 from .local_tools import stop as stop_tools
 from .loopback import Loopback
-from .loopback.agent import agent_view, proxy_environment
+from .loopback.agent import agent_view, proxy_environment, without_unenforceable_servers
 from .loopback.connect import ConnectProxy, upstream_proxy
 from .loopback.mcp import McpProxy
 from .loopback.model import ModelProxy
@@ -391,7 +391,9 @@ class Runner:
 
         # 4-5. backend et lancement
         backend = get_backend(stage_input.agent.backend)
-        plan, env = self._agent_launch(stage_input, backend, workspace)
+        plan, env = self._agent_launch(
+            await self._withhold_unenforceable(stage_input, journal), backend, workspace
+        )
         await self._record_shell_filter(stage_input, backend, journal)
         written = _materialize(plan, workspace, stage_input)
         # Skills, then knowledge bases: the first refusal stops the run before the agent starts.
@@ -831,6 +833,17 @@ class Runner:
             return RunOutcome(Exit.AGENT_UNREACHABLE, detail=str(exc))
         probe.known = lambda: model.budget_refusal
         return None
+
+    async def _withhold_unenforceable(self, stage_input: StageInput, journal: Any) -> StageInput:
+        """No container: the agent cannot be kept from a scoped server's key, so it is not given."""
+        if self.launcher is not None:
+            return stage_input
+        kept, dropped = without_unenforceable_servers(stage_input)
+        if dropped:
+            await journal.record(
+                "agent.mcp_withheld", {"servers": dropped, "reason": "no_container_isolation"}
+            )
+        return kept
 
     def _agent_launch(
         self, stage_input: StageInput, backend: Backend, workspace: Workspace
