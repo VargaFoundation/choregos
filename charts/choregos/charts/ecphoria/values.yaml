@@ -14,6 +14,11 @@ embedding:
   # embedding calls fail silently on every write.
   provider: openai_compatible
   model: platform/embed
+  # Vector size the model returns (`openai/text-embedding-3-small`, the `platform/embed` alias: 1536).
+  # Ecphoria's default is 768: with no value here every write answered "embedding dimension
+  # mismatch: expected 768, got 1536" and no memory was ever indexed (prod, 2026-11-18). Change it
+  # WITH the model, then re-embed (`POST /admin/memory/reembed`).
+  dimension: 1536
 resources:
   requests: { cpu: 100m, memory: 256Mi }
   limits: { cpu: "1", memory: 2Gi }

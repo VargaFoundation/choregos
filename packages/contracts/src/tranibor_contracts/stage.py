@@ -141,6 +141,18 @@ class McpServerRef(Strict):
     url: str | None = None
     command: list[str] = Field(default_factory=list)
     env: dict[str, str] = Field(default_factory=dict)
+    #: Arguments the runner's loopback sets on EVERY `tools/call` of this server, over whatever the agent
+    #: sent (the memory server's `tenant_id`: the run's project, never the agent's choice). Only the
+    #: loopback can hold them, so a server that carries any is never handed to the agent directly.
+    scope_arguments: dict[str, str] = Field(default_factory=dict)
+    #: The only tools of this server the agent may call (and see listed). `None`: every tool, as before
+    #: (a server that carries no scope); `[]`: none. Judged runner-side, on the loopback.
+    allowed_tools: list[str] | None = None
+
+    @property
+    def scoped(self) -> bool:
+        """The runner enforces something on the calls to this server."""
+        return bool(self.scope_arguments) or self.allowed_tools is not None
 
 
 #: The most calls of one run a script may have in flight at once through the tool bridge (ADR 0122 §7).

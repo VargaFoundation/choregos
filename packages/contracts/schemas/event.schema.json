@@ -16,7 +16,7 @@
         "choregos.workitem.created", "choregos.workitem.state_changed", "choregos.workitem.closed",
         "choregos.workitem.human_requested", "choregos.workitem.human_decided",
         "choregos.workitem.workflow_failed", "choregos.workitem.migrated",
-        "choregos.workitem.migration_refused",
+        "choregos.workitem.migration_refused", "choregos.workitem.status_comment_missed",
         "choregos.run.queued", "choregos.run.started", "choregos.run.progress", "choregos.run.finished",
         "choregos.finding.reported", "choregos.finding.created", "choregos.finding.duplicate",
         "choregos.finding.dismissed",

@@ -1,10 +1,10 @@
 [project]
 name = "choregos-quant"
-version = "0.27.13"
+version = "0.27.14"
 description = "Deprecated name of tranibor-quant: an empty wheel that depends on it and ships the `choregos_quant` import alias (ADR 0176, R2)"
 requires-python = ">=3.12,<3.13"
 license = { text = "Apache-2.0" }
-dependencies = ["tranibor-quant==0.27.13", "tranibor-contracts==0.27.13"]
+dependencies = ["tranibor-quant==0.27.14", "tranibor-contracts==0.27.14"]
 
 [build-system]
 requires = ["hatchling"]

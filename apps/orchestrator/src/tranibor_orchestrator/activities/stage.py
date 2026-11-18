@@ -372,7 +372,9 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
             context_pack_url=f"{settings.object_store_url}/runs/{run_id}/context.json",
             playbook=PlaybookRef(ref=playbook_ref, prompt=playbook_prompt),
             tools=ToolsRef(
-                mcp={} if remote_runtime is not None else _mcp_servers(settings, memory_scope),
+                mcp={}
+                if remote_runtime is not None
+                else _mcp_servers(settings, resolved_memories.memories, bundle.adapters.memory),
                 # The tool bridge (ADR 0122), strictest first: the organisation's switch (the
                 # deployment's brake, then its setting, else the deployment's default; S57-05b), the
                 # ceiling that forbids them, what the policy says for the role, then the agent's own
