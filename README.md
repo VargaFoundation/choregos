@@ -95,8 +95,9 @@ CHOREGOS_PORT=8001 CHOREGOS_FAKES=1 uv run choregos-api
 `CHOREGOS_PORT_{POSTGRES,TEMPORAL,TEMPORAL_UI,LITELLM,KEYCLOAK,MINIO,MINIO_CONSOLE,ECPHORIA}`
 for the stack, `CHOREGOS_PORT` for the API, `PORT` for the front end (`PORT=3001 pnpm -C apps/web dev`).
 
-The Ecphoria image lives on GHCR, `ghcr.io/graalsystems/ecphoria`. If the package is private, you need to
-authenticate once before the first `up`:
+The Ecphoria image lives on GHCR, `ghcr.io/vargafoundation/ecphoria`: the image `compose.yaml` and the
+chart pin, since the memory edition is not published under the project's own registry. If the package is
+private, you need to authenticate once before the first `up`:
 
 ```bash
 echo "$GITHUB_TOKEN" | docker login ghcr.io -u <user> --password-stdin
