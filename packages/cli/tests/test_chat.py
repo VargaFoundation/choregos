@@ -407,6 +407,8 @@ def node_with(app: Any, text: str) -> Any:
 async def put_cursor_on(pilot: Any, text: str) -> None:
     from tranibor_cli.workspace import FlightTree
 
+    pilot.app.action_show_view("activity")
+    await pilot.pause()
     tree = pilot.app.query_one(FlightTree)
     tree.focus()
     tree.move_cursor(node_with(pilot.app, text), animate=False)
@@ -416,22 +418,48 @@ async def put_cursor_on(pilot: Any, text: str) -> None:
 # ───────────────────────────────── the five parts ─────────────────────────────────
 
 
-async def test_the_workspace_shows_its_five_parts(platform: Platform) -> None:
+def pane(app: Any) -> str:
+    """What the context pane (right of the rule) shows."""
+    return "\n".join(line.partition("│")[2].strip() for line in screen_text(app).splitlines())
+
+
+async def show(pilot: Any, view: str) -> None:
+    pilot.app.action_show_view(view)
+    await pilot.pause()
+
+
+async def test_the_workspace_is_one_screen_of_tabs_and_each_tab_shows_its_part(platform: Platform) -> None:
     platform.pending([_pending_action()])
     platform.finished = [_entry("run-done", status="succeeded", ended_at=_iso(NOW), work_item_key="FIN-9")]
-    app = make_app()
+    app = make_app(conversation=CID)
     async with app.run_test(size=(160, 40)) as pilot:
         await ready(pilot)
-        await until(pilot, lambda: bool(app.pending), "decisions")
+        await until(pilot, lambda: bool(app.pending) and app.conversation is not None, "loaded")
+        home = screen_text(app)
+        for number, name in enumerate(
+            ["Conversation", "Activity", "Projects", "Decisions", "Artefacts", "Live"], 1
+        ):
+            assert f"{number} {name}" in home or f"{number}  {name}" in home, name
+        assert "Say something" in home
+        assert "acme · finance" in home and "1 running" in home and "1 waiting for you" in home
+        assert "$1.23 today" in home
+        assert app.query_one("#views").current == "view-conversation"
+        await show(pilot, "activity")
         text = screen_text(app)
-    assert "Conversation" in text and "Say something" in text
-    assert "billing-api" in text and "FIN-12" in text and "● running" in text
-    assert "implement · coder" in text and "4m12s · 12.3k in / 800 out · $0.84" in text
-    assert "Decisions" in text and "⏸ waiting for you  Merge the release train" in text
-    assert "F2 decides one" in text
-    assert "digest.md · weekly-digest v2" in text and "Quarter close · finance" in text
-    assert "acme · 1 running · 1 waiting for you · $1.23 today" in text
-    assert "Ended in the last hour" in text
+        assert "billing-api" in text and "FIN-12" in text and "● running" in text
+        assert "implement · coder" in text and "4m12s · 12.3k in / 800 out · $0.84" in text
+        assert "Ended in the last hour" in text
+        await show(pilot, "decisions")
+        text = screen_text(app)
+        assert "Merge the release train" in text and "billing-api" in text
+        assert re.search(r"4 +Decisions +1", text)
+        await show(pilot, "artefacts")
+        text = screen_text(app)
+        assert re.search(r"digest\.md +weekly-digest v2", text)
+        await show(pilot, "projects")
+        assert "later change" in screen_text(app)
+        await show(pilot, "live")
+        assert "coming" in screen_text(app)
 
 
 def _pending_action() -> dict[str, Any]:
@@ -472,15 +500,18 @@ async def test_unreadable_pending_actions_and_costs_are_dashes_not_zero(platform
         await until(pilot, lambda: app.live and bool(app.assistants), "loaded")
         await until(pilot, lambda: app.pending is None and app.board.in_flight != {}, "decisions")
         await pilot.pause(0.2)
+        head = screen_text(app)
+        await show(pilot, "decisions")
         text = screen_text(app)
-    assert "— waiting for you · — today" in text
-    assert "not readable right now" in text and "$0.00" not in text
+    assert "— waiting for you" in head and "— today" in head and "$0.00" not in head
+    assert "not readable right now" in text
 
 
 async def test_nothing_waiting_says_so(platform: Platform) -> None:
     app = make_app()
     async with app.run_test(size=(160, 40)) as pilot:
         await ready(pilot)
+        await show(pilot, "decisions")
         await pilot.pause(0.2)
         assert "nothing waits for you" in screen_text(app)
 
@@ -490,6 +521,7 @@ async def test_the_tree_follows_the_activity_stream(platform: Platform) -> None:
     app = make_app()
     async with app.run_test(size=(160, 40)) as pilot:
         await ready(pilot)
+        await show(pilot, "activity")
         await until(pilot, lambda: "FIN-20" in screen_text(app), "the streamed entry")
         assert "2 running" in screen_text(app)
 
@@ -502,9 +534,124 @@ async def test_every_status_is_a_word(platform: Platform) -> None:
     app = make_app()
     async with app.run_test(size=(160, 60)) as pilot:
         await ready(pilot)
+        await show(pilot, "activity")
         text = screen_text(app)
     for word in ("○ queued", "● running", "✓ done", "✗ failed", "■ cancelled", "✗ timed out"):
         assert word in text, word
+
+
+# ─────────────────────────────── the tabs (S67-21) ───────────────────────────────
+
+
+async def test_digits_tab_and_shift_tab_move_between_the_tabs(platform: Platform) -> None:
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        assert app.current_view == "conversation"
+        await pilot.press("tab")
+        assert app.current_view == "activity"
+        await pilot.press("shift+tab", "shift+tab")
+        assert app.current_view == "live", "the tabs wrap around"
+        await pilot.press("tab")
+        assert app.current_view == "conversation"
+        app.query_one("#tree").focus()
+        await pilot.press("4")
+        assert app.current_view == "decisions"
+        await pilot.press("2")
+        assert app.current_view == "activity"
+
+
+async def test_a_digit_typed_in_the_composer_is_a_character_not_a_tab(platform: Platform) -> None:
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await pilot.press("3", "4")
+        assert app.current_view == "conversation"
+        assert app.query_one("#prompt").value == "34"
+
+
+async def test_a_tab_is_chosen_with_a_click_on_its_name(platform: Platform) -> None:
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        row = next(
+            line for line in screen_text(app).splitlines() if "3 Projects" in line or "3  Projects" in line
+        )
+        await pilot.click("#tabs", offset=(row.index("Artefacts") + 2, 0))
+        assert app.current_view == "artefacts"
+
+
+async def test_the_tab_keys_do_nothing_over_a_dialog(platform: Platform) -> None:
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await put_cursor_on(pilot, "implement")
+        await pilot.press("x")
+        await pilot.pause()
+        assert "Stop run" in screen_text(app)
+        await pilot.press("tab")
+        assert app.current_view == "activity", "Tab moves the dialog's focus, not the workspace's tab"
+        assert "Stop run" in screen_text(app)
+
+
+async def test_the_header_counts_what_runs_and_what_waits(platform: Platform) -> None:
+    platform.pending([_pending_action(), _pending_proposal()])
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await until(pilot, lambda: bool(app.pending), "the decisions")
+        head = screen_text(app).splitlines()[1]
+    assert "acme" in head and "finance" in head
+    assert "1 running" in head and "2 waiting for you" in head and "$1.23 today" in head
+
+
+async def test_the_composer_is_one_line_with_the_cost_of_the_turn_at_its_right(platform: Platform) -> None:
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await pilot.press(*"How is the close?", "enter")
+        await until(pilot, lambda: "$0.0125" in str(app.query_one("#cost").render()), "the cost")
+        line = next(line for line in screen_text(app).splitlines() if "›" in line)
+    main = line.split("│")[0]
+    assert main.strip().startswith("›") and main.rstrip().endswith("$0.0125")
+
+
+async def test_the_context_pane_follows_the_selection(platform: Platform) -> None:
+    platform.in_flight = [_entry(RUN), _entry("run-queued-0001", status="queued", work_item_key="FIN-13")]
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await put_cursor_on(pilot, "implement")
+        await until(pilot, lambda: "run-a1b2c3d4" in pane(app), "the run in the pane")
+        body = pane(app)
+        assert "FIN-12" in body and "coder" in body
+        await put_cursor_on(pilot, "FIN-13")
+        await pilot.pause()
+        assert pane(app) != body and "run-a1b2c3d4" not in pane(app)
+
+
+async def test_the_decisions_context_shows_what_the_highlighted_one_is(platform: Platform) -> None:
+    platform.pending([_pending_action(), _pending_proposal()])
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await until(pilot, lambda: bool(app.pending), "the decisions")
+        await show(pilot, "decisions")
+        first = pane(app)
+        await pilot.press("down")
+        await pilot.pause()
+        assert pane(app) != first
+
+
+@pytest.mark.parametrize(("columns", "shown"), [(160, True), (120, True), (119, False), (80, False)])
+async def test_the_context_pane_folds_below_120_columns(
+    platform: Platform, columns: int, shown: bool
+) -> None:
+    app = make_app()
+    async with app.run_test(size=(columns, 40)) as pilot:
+        await ready(pilot)
+        await pilot.pause()
+        assert app.query_one("#context").display is shown
 
 
 # ───────────────────────────────────── a turn ─────────────────────────────────────
@@ -518,12 +665,13 @@ async def test_a_turn_is_sent_streamed_and_its_writes_are_listed(platform: Platf
         await pilot.press(*"How is the close?", "enter")
         await until(pilot, lambda: "✓ 1200 in / 80 out" in screen_text(app), "the end of the turn")
         text = screen_text(app)
+        await show(pilot, "decisions")
+        decisions = screen_text(app)
     assert platform.opened.call_count == 1, "the conversation is opened at the first message"
     assert platform.sent_turns == [{"input": "How is the close?", "stream": True}]
     assert "Hello, Quarter close is on track." in text and "you" in text
-    assert "⏸ waiting for you  Create the ticket FIN-12" in text
-    assert "write proposed by an assistant" in text and "F2 decides one" in text
-    assert "$0.0125" in text
+    assert "$0.0125" in text and re.search(r"4 +Decisions +1", text)
+    assert "Create the ticket FIN-12" in decisions and "write proposed by an assistant" in decisions
 
 
 async def test_escape_closes_the_stream_so_the_platform_cancels_the_turn(platform: Platform) -> None:
@@ -789,7 +937,7 @@ async def test_an_unreadable_journal_is_said_on_the_node_and_the_workspace_goes_
         await ready(pilot)
         await expand_run(pilot)
         await until(pilot, lambda: "the journal cannot be read (403)" in screen_text(app), "the notice")
-        assert "Quarter close" in screen_text(app)
+        assert "FIN-12" in screen_text(app)
 
 
 async def test_what_a_backend_writes_in_meta_does_not_move_a_tool_call(platform: Platform) -> None:
@@ -892,7 +1040,7 @@ def test_the_workspace_snapshot_with_an_expanded_run(
     app = make_app(conversation=CID)
 
     async def settled(pilot: Any) -> None:
-        await until(pilot, lambda: app.live and "Quarter close" in screen_text(app), "the workspace")
+        await until(pilot, lambda: app.live and app.conversation is not None, "the workspace")
         await until(pilot, lambda: bool(app.pending), "the decisions")
         await put_cursor_on(pilot, "implement")
         await pilot.press("enter")
@@ -904,12 +1052,14 @@ def test_the_workspace_snapshot_with_an_expanded_run(
 
 @pytest.mark.parametrize("colour", ["colour", "no-color"])
 @pytest.mark.parametrize("columns", ["80", "160"])
+@pytest.mark.parametrize("view", ["conversation", "activity", "decisions", "artefacts"])
 def test_the_workspace_snapshot(
     snap_compare: Any,
     platform: Platform,
     monkeypatch: pytest.MonkeyPatch,
     colour: str,
     columns: str,
+    view: str,
 ) -> None:
     if colour == "no-color":
         monkeypatch.setenv("NO_COLOR", "1")
@@ -917,8 +1067,9 @@ def test_the_workspace_snapshot(
     app = make_app(conversation=CID)
 
     async def settled(pilot: Any) -> None:
-        await until(pilot, lambda: app.live and "Quarter close" in screen_text(app), "the workspace")
+        await until(pilot, lambda: app.live and app.conversation is not None, "the workspace")
         await until(pilot, lambda: bool(app.pending), "the decisions")
+        await show(pilot, view)
         await pilot.pause(0.3)
 
     assert snap_compare(app, terminal_size=SIZES[columns], run_before=settled)

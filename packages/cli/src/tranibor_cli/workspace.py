@@ -1,20 +1,25 @@
 # SPDX-License-Identifier: Apache-2.0
-"""The workspace of `choregos chat` (ADR 0154 §2, §8, §9), drawn with Textual.
+"""The workspace of `choregos chat` (ADR 0154 §2, §8, §9; ADR 0187 §1), drawn with Textual.
 
-Five parts, from routes that exist on `main` (ADR 0154 §4):
+One screen of tabs, from routes that exist on `main` (ADR 0154 §4), under a one-line header
+(`org · assistant`, then `N running · N waiting for you · amount today`):
 
-- **Conversation** (left): a durable conversation of ADR 0134, streamed; ending the turn closes the stream,
-  which cancels it on the platform (S63-04b).
-- **Live tree** (right, blue): the same board and the same lines as `choregos activity`
-  (`activity.Board`, `activity.group`, `activity.line`), kept live by the activity stream. `x` stops the run
-or
-  the work item under the cursor, always with a reason (ADR 0142 §2).
-- **Decisions** (right, amber): what waits for the person (`GET /me/pending`: writes and launches an assistant
-  proposed, governed actions, human steps). `d` (in the pane) or F2 opens one: its operation, arguments
-  and diff, then ONE explicit key per decision (`a` approve, `r` reject with a reason, `n` answer). Never a
-  batch, never a default (ADR 0154 §7; the rules are `decide.py`'s).
-- **Elsewhere** (below): `/me/inbox` and the person's recent conversations.
-- **Status line**: `acme · N running · — waiting for you · $X today` (`activity.status_line`).
+- **1 Conversation**: a durable conversation of ADR 0134, streamed, and a one-line composer `›` with the
+  conversation's cost at its right. Ending the turn closes the stream, which cancels it on the platform
+  (S63-04b).
+- **2 Activity**: the same board and the same lines as `choregos activity` (`activity.Board`,
+  `activity.group`, `activity.line`), kept live by the activity stream. `x` stops the run or the work item
+  under the cursor, always with a reason (ADR 0142 §2).
+- **3 Projects**: every project the person may read (S67-23).
+- **4 Decisions**: what waits for the person (`GET /me/pending`: writes and launches an assistant proposed,
+  governed actions, human steps). Enter, `d` or F2 opens one: its operation, arguments and diff, then ONE
+  explicit key per decision (`a` approve, `r` reject with a reason, `n` answer). Never a batch, never a
+  default (ADR 0154 §7; the rules are `decide.py`'s).
+- **5 Artefacts**: `/me/inbox`, what was delivered to the person.
+- **6 Live**: the live flow of ADR 0187 §4 (S67-28).
+
+A **context pane** on the right follows the selection and folds below `CONTEXT_MIN` columns. There is no
+frame: one thin rule under the tabs and one before the context pane; titles are words.
 
 The terminal's sixteen colours (`ansi_color`), no background painted, glyph and word before colour; `NO_COLOR`
 gives the monochrome rendering. Nothing here runs a tool, a model or an agent on the person's machine.
@@ -31,6 +36,8 @@ from typing import Any, ClassVar
 import httpx
 from rich.console import Console, Group, RenderableType
 from rich.markdown import Markdown
+from rich.style import Style
+from rich.table import Table
 from rich.text import Text
 from textual import on
 from textual.app import App, ComposeResult
@@ -38,7 +45,7 @@ from textual.binding import Binding, BindingType
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.css.query import NoMatches
 from textual.screen import ModalScreen
-from textual.widgets import Footer, Input, OptionList, Static, Tree
+from textual.widgets import ContentSwitcher, Footer, Input, OptionList, Static, Tree
 from textual.widgets.option_list import Option
 from textual.widgets.tree import TreeNode
 
@@ -52,11 +59,43 @@ RECONNECT_S = 3.0
 CONVERSATIONS_SHOWN = 50
 #: How often an expanded run that is still in flight is asked for what is new (its journal, by `after_seq`).
 RUN_POLL_S = 2.0
-#: Under this many columns the panes are stacked.
-NARROW = 100
+#: Under this many columns the context pane folds away.
+CONTEXT_MIN = 120
+#: The tabs, in the order of their keys (ADR 0187 §1): `(name, label)`.
+TABS = (
+    ("conversation", "Conversation"),
+    ("activity", "Activity"),
+    ("projects", "Projects"),
+    ("decisions", "Decisions"),
+    ("artefacts", "Artefacts"),
+    ("live", "Live"),
+)
 DASH = activity.DASH
 Key = tuple[str, ...]
 Row = tuple[Key, Key | None, Text, dict[str, Any]]
+
+
+def money(amount: float | None, *, digits: int = 2) -> str:
+    """The one place the workspace prints an amount of its own (the header, the composer, a conversation's
+    cost): `—` where the platform cannot say, never 0. S67-25 makes it follow the organisation's currency."""
+    return DASH if amount is None else f"${amount:.{digits}f}"
+
+
+def facts(title: Text | str, rows: list[tuple[str, Text | str]], *notes: Text) -> Group:
+    """The context pane's shape: a bold title, then aligned `label  value` rows (labels dim), then notes."""
+    grid = Table.grid(padding=(0, 2))
+    grid.add_column(style="dim", no_wrap=True)
+    grid.add_column(ratio=1)
+    for label, value in rows:
+        grid.add_row(label, value)
+    head = Text(title, style="bold") if isinstance(title, str) else title
+    return Group(head, Text(""), grid, *([Text("")] if notes else []), *notes)
+
+
+def one_line(text: Text) -> Text:
+    """A row that never wraps: cut with an ellipsis where the pane ends."""
+    text.no_wrap, text.overflow = True, "ellipsis"
+    return text
 
 
 def run(
@@ -75,14 +114,14 @@ def run(
 
 
 def smoke(profile: Profile, organisation: str) -> str:
-    """Start the workspace headless (no terminal), check its five parts are there, quit it: what the binary's
+    """Start the workspace headless (no terminal), check its parts are there, quit it: what the binary's
     smoke test (`tools/cli_binary/smoke.py`) runs where no person is, to prove Textual and its data files
     are inside the binary."""
     found: list[str] = []
 
     async def drive(pilot: Any) -> None:
         await pilot.pause()
-        for part in ("#conversation", "#prompt", "#tree", "#decisions", "#elsewhere", "#status"):
+        for part in ("#header", "#tabs", "#conversation", "#prompt", "#tree", "#decisions"):
             if pilot.app.query(part):
                 found.append(part)
         pilot.app.exit()
@@ -159,15 +198,16 @@ class FlightTree(Tree[dict[str, Any]]):
         app.action_stop_selected()
 
 
-class DecisionsPane(VerticalScroll):
-    """The decisions: `d` opens one while the pane has focus (the prompt keeps its letters), F2 anywhere."""
+class DecisionList(OptionList):
+    """What waits for the person, one line each, grouped by project: Enter or `d` opens the one under the
+    cursor (the prompt keeps its letters), F2 anywhere chooses one."""
 
-    BINDINGS: ClassVar[list[BindingType]] = [Binding("d", "decide", "Decide")]
+    BINDINGS: ClassVar[list[BindingType]] = [Binding("d", "decide_highlighted", "Decide")]
 
-    def action_decide(self) -> None:
+    def action_decide_highlighted(self) -> None:
         app = self.app
         assert isinstance(app, Workspace)
-        app.action_decide()
+        app.decide_highlighted()
 
 
 class StopScreen(ModalScreen[str | None]):
@@ -281,27 +321,44 @@ class Workspace(App[None]):
     TITLE = "choregos"
     ENABLE_COMMAND_PALETTE = False
     CSS = """
-    Screen { layout: vertical; }
-    #title { height: 1; padding: 0 1; }
-    #main { height: 1fr; }
-    #left { width: 2fr; height: 100%; }
-    #right { width: 3fr; height: 100%; }
-    .-narrow #main { layout: vertical; }
-    .-narrow #left, .-narrow #right { width: 100%; height: 1fr; }
-    .-narrow #elsewhere { height: 4; }
-    .-narrow #inbox { display: none; }
-    #conversation { height: 1fr; border: round ansi_default; padding: 0 1; }
-    #prompt { border: round ansi_default; height: 3; }
-    #prompt:focus { border: round ansi_blue; }
-    #tree { height: 2fr; border: round ansi_blue; }
-    #tree > .tree--guides, #tree > .tree--guides-selected { color: ansi_blue; }
+    Screen { layout: vertical; background: ansi_default; }
+    #header { height: 1; padding: 0 2; margin: 1 0 0 0; }
+    #org { width: 1fr; }
+    #figures { width: auto; }
+    #tabs {
+        link-style: none; link-color: ansi_default; link-style-hover: none;
+        height: 2; padding: 0 1; margin: 1 0 0 0; border-bottom: solid ansi_bright_black;
+    }
+    #body { height: 1fr; }
+    #views { width: 1fr; height: 100%; }
+    #context { width: 46; height: 100%; padding: 1 2; border-left: solid ansi_bright_black; }
+    .-narrow #context { display: none; }
+    #conversation { height: 1fr; padding: 1 2 0 2; scrollbar-size-vertical: 1; }
+    .message { margin: 0 0 1 0; }
+    #composer { height: 1; margin: 0 2 1 2; }
+    #chevron { width: 2; }
+    #prompt, #prompt:focus {
+        width: 1fr; height: 1; border: none; padding: 0; background: ansi_default; color: ansi_default;
+    }
+    #prompt > .input--placeholder { color: ansi_bright_black; text-style: none; }
+    #cost { width: 10; text-align: right; color: ansi_bright_black; }
+    #tree { height: 100%; padding: 1 1 0 1; background: ansi_default; }
+    #tree > .tree--guides, #tree > .tree--guides-selected, #tree > .tree--guides-hover {
+        color: ansi_bright_black;
+    }
     #tree > .tree--cursor { text-style: reverse bold; background: ansi_default; }
     #tree:focus > .tree--cursor { text-style: reverse bold; background: ansi_default; }
-    #decisions { height: 1fr; border: round ansi_yellow; padding: 0 1; }
-    #elsewhere { height: 7; }
-    #inbox, #recent { width: 1fr; height: 100%; border: round ansi_default; padding: 0 1; }
-    #status { height: 1; padding: 0 1; }
-    .message { margin: 0 0 1 0; }
+    #decisions, #artefacts {
+        height: 100%; padding: 1 1 0 1; border: none; background: ansi_default;
+    }
+    #decisions > .option-list--option-highlighted, #artefacts > .option-list--option-highlighted {
+        text-style: reverse bold; background: ansi_default; color: ansi_default;
+    }
+    #decisions:focus > .option-list--option-highlighted, #artefacts:focus > .option-list--option-highlighted {
+        text-style: reverse bold; background: ansi_default; color: ansi_default;
+    }
+    #decisions > .option-list--option-disabled { color: ansi_default; text-style: bold; }
+    .placeholder { padding: 2 3; color: ansi_bright_black; }
     StopScreen, PickScreen, TextScreen, DecisionScreen { align: center middle; }
     #decision { width: 90%; height: 80%; border: round ansi_yellow; padding: 1 2; }
     #decision-body { height: 1fr; }
@@ -310,11 +367,19 @@ class Workspace(App[None]):
     """
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("escape", "cancel_turn", "Cancel the turn"),
+        # The screen binds Tab to its own focus ring, nearer than the app: the tabs' keys take it first.
+        Binding("tab", "next_view", "Next view", priority=True),
+        Binding("shift+tab", "previous_view", "Previous view", show=False, priority=True),
+        # The digits are the tabs' keys wherever the person is not typing: the composer keeps its characters.
+        *(
+            Binding(str(n), f"show_view('{name}')", "View", show=False)
+            for n, (name, _label) in enumerate(TABS, start=1)
+        ),
         Binding("ctrl+o", "conversations", "Conversations"),
         Binding("ctrl+n", "new_conversation", "New"),
-        Binding("ctrl+a", "assistants", "Assistant"),
+        # The composer binds Ctrl+A to "start of line" (`home` does that): choosing the assistant is first.
+        Binding("ctrl+a", "assistants", "Assistant", priority=True),
         Binding("f2", "decide", "Decide"),
-        Binding("tab", "focus_next", "Next pane"),
         Binding("ctrl+q", "quit", "Quit"),
     ]
 
@@ -343,6 +408,9 @@ class Workspace(App[None]):
         self._deciding = False
         self.inbox: list[dict[str, Any]] = []
         self.live = False
+        #: The tab on show (a name of `TABS`).
+        self.current_view = "conversation"
+        self._tab_gap = 4
         self._user_open: dict[Key, bool] = {}
         self._tree_keys: list[Key] = []
         self._by_key: dict[Key, TreeNode[dict[str, Any]]] = {}
@@ -350,41 +418,113 @@ class Workspace(App[None]):
         #: The runs whose node the person has expanded, by run id: they are read while they are open.
         self._open_runs: set[str] = set()
         self._details: dict[str, RunDetail] = {}
+        #: What the decisions and artefacts lists show now, to redraw only what changed.
+        self._decision_shape: list[Any] = []
+        self._artefact_shape: list[Any] = []
 
     # ───────────────────────────── layout ─────────────────────────────
 
     def compose(self) -> ComposeResult:
-        yield Static(id="title")
-        with Horizontal(id="main"):
-            with Vertical(id="left"):
-                yield VerticalScroll(id="conversation")
-                yield Input(placeholder="Say something · Enter sends", id="prompt")
-            with Vertical(id="right"):
+        with Horizontal(id="header"):
+            yield Static(id="org")
+            yield Static(id="figures")
+        yield Static(id="tabs")
+        with Horizontal(id="body"):
+            with ContentSwitcher(initial="view-conversation", id="views"):
+                with Vertical(id="view-conversation"):
+                    yield VerticalScroll(id="conversation")
+                    with Horizontal(id="composer"):
+                        yield Static("›", id="chevron")
+                        yield Input(placeholder="Say something", id="prompt")
+                        yield Static(id="cost")
                 yield FlightTree("", id="tree")
-                yield DecisionsPane(Static(id="decisions-body"), id="decisions")
-        with Horizontal(id="elsewhere"):
-            yield Static(id="inbox")
-            yield Static(id="recent")
-        yield Static(id="status")
+                yield Static("", id="projects", classes="placeholder")
+                yield DecisionList(id="decisions")
+                yield OptionList(id="artefacts")
+                yield Static("", id="live-view", classes="placeholder")
+            with VerticalScroll(id="context"):
+                yield Static(id="context-body")
         yield Footer()
 
+    #: The id of the widget each tab shows (the content switcher's children are named after them).
+    VIEW_WIDGET: ClassVar[dict[str, str]] = {
+        "conversation": "view-conversation",
+        "activity": "tree",
+        "projects": "projects",
+        "decisions": "decisions",
+        "artefacts": "artefacts",
+        "live": "live-view",
+    }
+    #: What takes the focus when a tab opens.
+    VIEW_FOCUS: ClassVar[dict[str, str]] = {
+        "conversation": "#prompt",
+        "activity": "#tree",
+        "projects": "#projects",
+        "decisions": "#decisions",
+        "artefacts": "#artefacts",
+        "live": "#live-view",
+    }
+
     def on_resize(self, event: Any) -> None:
-        """Below a hundred columns the conversation and the right-hand panes are stacked, not side by side."""
-        self.screen.set_class(event.size.width < NARROW, "-narrow")
+        """Below `CONTEXT_MIN` columns the context pane folds away: the main view takes the width."""
+        self.screen.set_class(event.size.width < CONTEXT_MIN, "-narrow")
+        self._tab_gap = 2 if event.size.width < 90 else 4
+        self.draw_tabs()
 
     def on_mount(self) -> None:
         self.theme = "ansi-dark"
         tree = self.query_one(FlightTree)
         tree.show_root = False
-        tree.border_title = "Live tree"
-        self.query_one("#conversation").border_title = "Conversation"
-        self.query_one("#decisions").border_title = "Decisions"
-        self.query_one("#inbox").border_title = "Elsewhere · inbox"
-        self.query_one("#recent").border_title = "Elsewhere · recent conversations"
+        tree.show_guides = True
+        self.query_one("#projects", Static).update("Every project of the organisation, in a later change.")
+        self.query_one("#live-view", Static).update("The live flow of a workflow is coming.")
         self.query_one("#prompt", Input).focus()
         self.set_interval(activity.REDRAW_EVERY_S, self.tick)
+        self.draw_header()
+        self.draw_tabs()
         self.run_worker(self.load(), group="load", exit_on_error=False)
         self.run_worker(self.follow_activity(), group="activity", exit_on_error=False)
+
+    # ───────────────────────────── the tabs ─────────────────────────────
+
+    def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
+        """The tab keys belong to the workspace, not to a dialog over it."""
+        ours = action in ("show_view", "next_view", "previous_view", "assistants", "conversations")
+        return not (ours and isinstance(self.screen, ModalScreen))
+
+    def action_show_view(self, name: str) -> None:
+        """Show a tab (`1`..`6`, a click on its name, Tab) and move the focus into it."""
+        if name not in self.VIEW_WIDGET:
+            return
+        self.current_view = name
+        self.query_one("#views", ContentSwitcher).current = self.VIEW_WIDGET[name]
+        self.draw_tabs()
+        self.draw_context()
+        self.query_one(self.VIEW_FOCUS[name]).focus()
+
+    def _step_view(self, step: int) -> None:
+        names = [name for name, _label in TABS]
+        self.action_show_view(names[(names.index(self.current_view) + step) % len(names)])
+
+    def action_next_view(self) -> None:
+        self._step_view(1)
+
+    def action_previous_view(self) -> None:
+        self._step_view(-1)
+
+    def draw_tabs(self) -> None:
+        """`1 Conversation   2 Activity …`: the open one bold and underlined, the others dim; what waits for
+        the person is a count in amber beside Decisions. Each name is a click."""
+        bar = Text()
+        for number, (name, label) in enumerate(TABS, start=1):
+            click = Style(meta={"@click": f"app.show_view('{name}')"})
+            current = name == self.current_view
+            bar.append(f"{number} ", Style(dim=True) + click)
+            bar.append(label, (Style(bold=True, underline=True) if current else Style(dim=True)) + click)
+            if name == "decisions" and self.pending:
+                bar.append(f" {len(self.pending)}", Style(color="yellow", bold=True) + click)
+            bar.append(" " * self._tab_gap)
+        self.query_one("#tabs", Static).update(bar)
 
     # ───────────────────────────── loading ─────────────────────────────
 
@@ -437,7 +577,8 @@ class Workspace(App[None]):
         except (ApiError, httpx.TransportError):
             self.pending = None
         self.draw_decisions()
-        self.draw_status()
+        self.draw_header()
+        self.draw_tabs()
 
     async def follow_activity(self) -> None:
         """The board from the list, then from the stream; opened again when it ends."""
@@ -461,36 +602,43 @@ class Workspace(App[None]):
     def tick(self) -> None:
         """Elapsed times move without an event."""
         self.draw_tree()
+        self.draw_context()
 
     def redraw(self) -> None:
-        self.draw_title()
+        self.draw_header()
+        self.draw_tabs()
         self.draw_tree()
         self.draw_decisions()
-        self.draw_elsewhere()
-        self.draw_status()
+        self.draw_artefacts()
+        self.draw_context()
 
-    def draw_title(self) -> None:
-        text = Text("choregos", style="bold")
-        text.append(f" · {self.organisation}")
+    def draw_header(self) -> None:
+        """`acme · finance` at the left, `1 running · 2 waiting for you · $1.24 today` at the right: what runs
+        in blue, what waits for the person in amber, the amount quiet."""
+        try:
+            org, figures = self.query_one("#org", Static), self.query_one("#figures", Static)
+        except NoMatches:  # a read that lands while the workspace closes: nothing left to draw on
+            return
+        left = Text(self.organisation, style="bold")
         if self.assistant:
-            text.append(" · ")
-            text.append(self.assistant, style=theme.hue_style(self.assistant))
-        if self.conversation and self.conversation.get("title"):
-            text.append(f" · {self.conversation['title']}")
-        self.query_one("#title", Static).update(text)
-
-    def draw_status(self) -> None:
-        status = activity.status_line(
-            self.board,
-            self.organisation,
-            self.today,
-            None if self.pending is None else len(self.pending),
-        )
+            left.append(" · ")
+            left.append(self.assistant, style=theme.hue_style(self.assistant))
+        org.update(left)
+        waiting = DASH if self.pending is None else str(len(self.pending))
+        right = Text()
         if not self.live:
-            status.append(" · ")
-            status.append_text(theme.badge(theme.QUEUED, self.out))
-            status.append(" activity stream reconnecting")
-        self.query_one("#status", Static).update(status)
+            right.append_text(theme.badge(theme.QUEUED, self.out))
+            right.append(" reconnecting · ", style="dim")
+        right.append(f"{self.board.running()} running", style=theme.RUNNING.style)
+        right.append(" · ", style="dim")
+        right.append(f"{waiting} waiting for you", style="yellow" if self.pending else "")
+        right.append(f" · {money(self.today)} today", style="dim")
+        figures.update(right)
+
+    def draw_cost(self) -> None:
+        cost = (self.conversation or {}).get("cost_usd")
+        shown = money(float(cost), digits=4) if isinstance(cost, int | float) else ""
+        self.query_one("#cost", Static).update(shown)
 
     def _tree_shape(self) -> tuple[list[Key], list[Row]]:
         """The nodes the tree shows, parents first: `(key, parent, label, data)`."""
@@ -506,7 +654,12 @@ class Workspace(App[None]):
             for project, items in grouped.projects.items():
                 pkey: Key = (prefix, "project", project)
                 rows.append(
-                    (pkey, top, Text(project, style=f"bold {theme.hue_style(project)}"), {"kind": "project"})
+                    (
+                        pkey,
+                        top,
+                        Text(project, style=f"bold {theme.hue_style(project)}"),
+                        {"kind": "project", "name": project, "items": items},
+                    )
                 )
                 for item, runs in items.items():
                     ikey: Key = (prefix, "item", project, item)
@@ -576,12 +729,13 @@ class Workspace(App[None]):
             self._by_key[key] = node
         self._tree_keys = shape
         if not rows:
-            tree.root.add_leaf(Text("nothing is running"), data={"kind": "empty"})
+            tree.root.add_leaf(Text("nothing is running", style="dim"), data={"kind": "empty"})
         elif selected in self._by_key:
             # A node knows its line only once the tree has laid its nodes out again.
             node = self._by_key[selected]
             tree.call_after_refresh(tree.move_cursor, node, False)
-        tree.border_subtitle = f"{self.board.running()} running" if self.live else "reconnecting"
+        else:  # nothing was selected: the first line, so the context pane has something to follow
+            tree.call_after_refresh(tree.move_cursor_to_line, 0)
 
     @staticmethod
     def _has_children(key: Key, rows: list[Row]) -> bool:
@@ -661,43 +815,288 @@ class Workspace(App[None]):
         if not isinstance(agents, BaseException):
             detail.agents = list((agents or {}).get("items") or [])
 
+    # ───────────────────────────── the lists ─────────────────────────────
+
+    @staticmethod
+    def _highlighted(listing: OptionList) -> str | None:
+        option = listing.highlighted_option
+        return None if option is None else option.id
+
+    @staticmethod
+    def _place_of(item: dict[str, Any]) -> str:
+        where = item.get("where") or {}
+        if where.get("project_slug"):
+            return str(where["project_slug"])
+        return "your conversations" if where.get("conversation_id") else str(where.get("org") or DASH)
+
+    def _fill(self, listing: OptionList, options: list[Option]) -> None:
+        """Replace a list's options and keep the cursor on the same one when it is still there."""
+        before = self._highlighted(listing)
+        listing.clear_options()
+        listing.add_options(options)
+        ids = [option.id for option in options]
+        if before is not None and before in ids:
+            listing.highlighted = ids.index(before)
+        else:
+            listing.highlighted = next((n for n, option in enumerate(options) if not option.disabled), None)
+
     def draw_decisions(self) -> None:
-        body = self.query_one("#decisions-body", Static)
-        lines: list[RenderableType] = []
-        for item in self.pending or []:
-            head = theme.badge(theme.WAITING, self.out)
-            head.append(f"  {decide.clean(item['what'])}")
-            lines.append(head)
-            where = item.get("where") or {}
-            place = where.get("project_slug") or where.get("org") or ""
-            lines.append(
-                Text(f"  {decide.KIND_LABEL.get(item['kind'], item['kind'])} · {decide.clean(place)}")
+        """Every thing that waits for the person, one line each, grouped by project."""
+        try:
+            listing = self.query_one(DecisionList)
+        except NoMatches:
+            return
+        shape = (
+            [None]
+            if self.pending is None
+            else [(i["id"], i["what"], self._place_of(i)) for i in self.pending]
+        )
+        if shape == self._decision_shape:
+            return
+        self._decision_shape = shape
+        options: list[Option] = []
+        if self.pending is None:
+            options.append(
+                Option(
+                    Text(f"{DASH} what waits for you is not readable right now", style="dim"), disabled=True
+                )
             )
-        if not lines:
-            lines.append(
-                Text(
-                    "nothing waits for you"
-                    if self.pending is not None
-                    else f"{DASH} what waits for you is not readable right now"
+        elif not self.pending:
+            options.append(Option(Text("nothing waits for you", style="dim"), disabled=True))
+        else:
+            glyph = theme.glyph(theme.WAITING, self.out)
+            placed: dict[str, list[dict[str, Any]]] = {}
+            for item in self.pending:
+                placed.setdefault(self._place_of(item), []).append(item)
+            for place, items in placed.items():
+                options.append(
+                    Option(Text(decide.clean(place), style=f"bold {theme.hue_style(place)}"), disabled=True)
+                )
+                for item in items:
+                    line = Text()
+                    line.append(f" {glyph} ", style=theme.WAITING.style)
+                    line.append(decide.clean(item["what"]).splitlines()[0] if item["what"] else DASH)
+                    options.append(Option(one_line(line), id=str(item["id"])))
+        self._fill(listing, options)
+        self.draw_context()
+
+    def draw_artefacts(self) -> None:
+        """What was delivered to the person (`GET /me/inbox`), newest first."""
+        try:
+            listing = self.query_one("#artefacts", OptionList)
+        except NoMatches:
+            return
+        shape = [(a.get("id"), a.get("name"), a.get("version")) for a in self.inbox]
+        if shape == self._artefact_shape:
+            return
+        self._artefact_shape = shape
+        options: list[Option] = []
+        for found in self.inbox:
+            line = Text(f" {found.get('name')}", style="bold")
+            line.append(f"  {found.get('task')} v{found.get('version')}", style="dim")
+            options.append(Option(one_line(line), id=str(found.get("id"))))
+        if not options:
+            options.append(Option(Text("nothing delivered yet", style="dim"), disabled=True))
+        self._fill(listing, options)
+        self.draw_context()
+
+    @on(OptionList.OptionHighlighted)
+    @on(Tree.NodeHighlighted)
+    def selection_moved(self, event: Any) -> None:
+        self.draw_context()
+
+    @on(OptionList.OptionSelected, "#decisions")
+    def decision_chosen(self, event: OptionList.OptionSelected) -> None:
+        self.decide_highlighted()
+
+    # ───────────────────────────── the context pane ─────────────────────────────
+
+    def draw_context(self) -> None:
+        """What the selection of the tab on show is, in full: the pane to the right of the main view."""
+        try:
+            body = self.query_one("#context-body", Static)
+            body.update(self._context_of(self.current_view))
+        except NoMatches:  # a read that lands while the workspace closes: nothing left to draw on
+            return
+
+    def _context_of(self, view: str) -> RenderableType:
+        if view == "conversation":
+            return self._context_conversation()
+        if view == "activity":
+            return self._context_activity()
+        if view == "decisions":
+            item = next(
+                (
+                    i
+                    for i in self.pending or []
+                    if str(i["id"]) == self._highlighted(self.query_one(DecisionList))
+                ),
+                None,
+            )
+            return self._context_decision(item)
+        if view == "artefacts":
+            found = next(
+                (
+                    a
+                    for a in self.inbox
+                    if str(a.get("id")) == self._highlighted(self.query_one("#artefacts", OptionList))
+                ),
+                None,
+            )
+            return self._context_artefact(found)
+        return Text("")
+
+    @staticmethod
+    def _when(value: Any) -> str:
+        return str(value).replace("T", " ").rstrip("Z")[:16] if value else DASH
+
+    def _context_conversation(self) -> RenderableType:
+        found = self.conversation
+        parts: list[RenderableType] = []
+        if found is None:
+            parts.append(
+                facts(
+                    "New conversation",
+                    [("assistant", self.assistant or DASH)],
+                    Text("It is opened with your first message.", style="dim"),
                 )
             )
         else:
-            lines.append(Text("d (here) or F2 decides one, after showing it", style="bold"))
-        body.update(Group(*lines))
-
-    def draw_elsewhere(self) -> None:
-        inbox: list[Text] = []
-        for item in self.inbox[:5]:
-            inbox.append(Text(f"{item.get('name')} · {item.get('task')} v{item.get('version')}"))
-        self.query_one("#inbox", Static).update(Group(*inbox) if inbox else Text("nothing delivered yet"))
-        recent: list[Text] = []
-        for summary in self.conversations[:5]:
-            label = Text(str(summary.get("title") or "(untitled)"))
-            label.append(
-                f" · {summary.get('assistant') or summary.get('agent')} · ${summary.get('cost_usd', 0):.2f}"
+            parts.append(
+                facts(
+                    str(found.get("title") or "(untitled)"),
+                    [
+                        ("assistant", str(found.get("assistant") or found.get("agent") or DASH)),
+                        ("status", str(found.get("status") or DASH)),
+                        ("turns", str(found.get("turns") or 0)),
+                        ("cost", money(float(found.get("cost_usd") or 0), digits=4)),
+                        ("opened", self._when(found.get("created_at"))),
+                    ],
+                )
             )
-            recent.append(label)
-        self.query_one("#recent", Static).update(Group(*recent) if recent else Text("no conversation yet"))
+            waiting = [
+                i
+                for i in self.pending or []
+                if (i.get("where") or {}).get("conversation_id") == self.conversation_id
+            ]
+            if waiting:
+                lines = [Text("Waiting for you", style="bold yellow")]
+                lines += [one_line(Text(f"  {decide.clean(i['what'])}")) for i in waiting]
+                lines.append(Text("  4 shows it, d decides it", style="dim"))
+                parts += [Text(""), *lines]
+        others = [c for c in self.conversations if c.get("id") != self.conversation_id][:5]
+        if others:
+            parts += [Text(""), Text("Recent", style="bold")]
+            for summary in others:
+                row = Text(str(summary.get("title") or "(untitled)"))
+                row.append(
+                    f"  {summary.get('assistant') or summary.get('agent')} · "
+                    f"{money(float(summary.get('cost_usd') or 0))}",
+                    style="dim",
+                )
+                parts.append(one_line(row))
+            parts.append(Text("ctrl+o opens one", style="dim"))
+        return Group(*parts)
+
+    def _context_activity(self) -> RenderableType:
+        now = activity.clock()
+        tree = self.query_one(FlightTree)
+        node = tree.cursor_node
+        while (
+            node is not None
+            and "entry" not in (node.data or {})
+            and (node.data or {}).get("kind")
+            not in (
+                "item",
+                "project",
+            )
+        ):
+            node = node.parent
+        data = (node.data if node else None) or {}
+        if "entry" in data:
+            return self.entry_facts(data["entry"], now)
+        if data.get("kind") == "item":
+            runs = data["runs"]
+            first = runs[0]
+            states = ", ".join(sorted({theme.status_of(str(r.get("status"))).word for r in runs}))
+            return facts(
+                activity.work_item_label(first),
+                [
+                    ("project", str(first.get("project_slug") or DASH)),
+                    ("workflow", str(first.get("workflow") or DASH)),
+                    ("runs", f"{len(runs)} · {states}"),
+                ],
+            )
+        if data.get("kind") == "project":
+            return facts(
+                str(node.label) if node else "",
+                [],
+                Text("The project's items are under it.", style="dim"),
+            )
+        return Text("Move to a run to see it in full.", style="dim")
+
+    def entry_facts(self, entry: dict[str, Any], now: datetime) -> RenderableType:
+        status = theme.badge(theme.status_of(str(entry.get("status") or "")), self.out)
+        title = Text(
+            activity.work_item_of(entry)
+            if entry.get("work_item_id") or entry.get("work_item_key")
+            else str(entry.get("kind")),
+            style="bold",
+        )
+        if entry.get("project_slug"):
+            title.append(f"  {entry['project_slug']}", style=theme.hue_style(str(entry["project_slug"])))
+        rows: list[tuple[str, Text | str]] = [
+            ("status", Text.assemble(status, f"  {activity.elapsed(entry, now)}")),
+            ("stage", str(entry.get("stage_role") or DASH)),
+            ("agent", str(entry.get("agent_slug") or DASH)),
+            ("workflow", str(entry.get("workflow") or DASH)),
+            ("model", activity.model_name(entry.get("model")) or DASH),
+            ("by", str(entry.get("initiated_by") or DASH)),
+            ("started", self._when(entry.get("started_at"))),
+            ("spend", activity.spend(entry.get("spend"))),
+            ("steps", str(entry.get("steps") if entry.get("steps") is not None else DASH)),
+            ("id", str(entry.get("id"))),
+        ]
+        stop = (
+            Text("x stops it, with a reason", style="dim")
+            if entry.get("can_stop") and entry.get("status") in activity.IN_FLIGHT
+            else Text("")
+        )
+        return facts(title, rows, stop)
+
+    def _context_decision(self, item: dict[str, Any] | None) -> RenderableType:
+        if item is None:
+            return Text(
+                "Nothing waits for you."
+                if self.pending is not None
+                else "What waits for you is not readable.",
+                style="dim",
+            )
+        where = item.get("where") or {}
+        place = " · ".join(
+            decide.clean(where[k]) for k in ("org", "project_slug", "work_item_key") if where.get(k)
+        )
+        return facts(
+            Text(decide.clean(decide.KIND_LABEL.get(item["kind"], item["kind"])), style="bold yellow"),
+            [("where", place or DASH), ("since", self._when(item.get("since")))],
+            Text(decide.clean(item["what"])),
+            Text(""),
+            Text("Enter or d shows it whole, then one key decides.", style="dim"),
+        )
+
+    def _context_artefact(self, found: dict[str, Any] | None) -> RenderableType:
+        if found is None:
+            return Text("Nothing was delivered to you yet.", style="dim")
+        return facts(
+            str(found.get("name")),
+            [
+                ("task", str(found.get("task") or DASH)),
+                ("version", f"v{found.get('version')}"),
+                ("type", str(found.get("type") or DASH)),
+                ("media", str(found.get("media_type") or DASH)),
+                ("delivered", self._when(found.get("created_at"))),
+            ],
+        )
 
     # ─────────────────────────── the conversation ───────────────────────────
 
@@ -719,8 +1118,11 @@ class Workspace(App[None]):
             text = Text(f"Several assistants are ready for you ({', '.join(ready)}): Ctrl+A chooses one.")
         else:
             text = Text(f"{DASH} no assistant is ready for you in {self.organisation}.")
+        text.stylize("dim")
         pane.mount(Static(text, classes="message"))
-        self.draw_title()
+        self.draw_header()
+        self.draw_cost()
+        self.draw_context()
 
     def say(self, role: str, text: str) -> Static:
         pane = self.query_one("#conversation", VerticalScroll)
@@ -730,14 +1132,19 @@ class Workspace(App[None]):
         return widget
 
     def _message(self, role: str, text: str, *, note: str = "") -> RenderableType:
+        """`you   …` and `finance   …`: the speaker in a quiet column, what was said beside it."""
+        grid = Table.grid(padding=(0, 2), expand=True)
+        grid.add_column(width=12, no_wrap=True, overflow="ellipsis")
+        grid.add_column(ratio=1)
         if role == "user":
-            return Group(Text("you", style="bold"), Text(text))
-        name = Text(
-            self.assistant or "assistant", style=f"bold {theme.hue_style(self.assistant or 'assistant')}"
-        )
+            grid.add_row(Text("you", style="dim"), Text(text))
+            return grid
+        who = self.assistant or "assistant"
+        body: list[RenderableType] = [Markdown(text)] if text else []
         if note:
-            name.append(f"  {note}")
-        return Group(name, Markdown(text) if text else Text(""))
+            body.append(Text(note, style="red" if note.startswith("✗") else "dim"))
+        grid.add_row(Text(who, style=f"bold {theme.hue_style(who)}"), Group(*body))
+        return grid
 
     @on(Input.Submitted, "#prompt")
     async def submit(self, event: Input.Submitted) -> None:
@@ -793,7 +1200,7 @@ class Workspace(App[None]):
             self._turn_running = False
             if view is not None:
                 view.update(self._message("assistant", answer, note=note))
-            self.draw_title()
+            self.draw_header()
         await self.after_turn()
 
     def _ending(self, data: dict[str, Any]) -> str:
@@ -811,10 +1218,9 @@ class Workspace(App[None]):
             summary = await self._read(f"/me/conversations/{self.conversation_id}")
             if summary:
                 self.conversation = summary
-                self.query_one(
-                    "#conversation"
-                ).border_subtitle = f"${float(summary.get('cost_usd') or 0):.4f}"
-        self.draw_title()
+        self.draw_header()
+        self.draw_cost()
+        self.draw_context()
 
     def action_cancel_turn(self) -> None:
         """Escape: end the stream (the platform cancels the turn) and keep what was already said."""
@@ -831,31 +1237,33 @@ class Workspace(App[None]):
         await pane.remove_children()
         for message in summary.get("messages") or []:
             pane.mount(Static(self._message(message["role"], str(message["content"])), classes="message"))
-        pane.border_subtitle = f"${float(summary.get('cost_usd') or 0):.4f}"
         pane.scroll_end(animate=False)
         await self.refresh_decisions()
-        self.draw_title()
+        self.draw_header()
+        self.draw_cost()
+        self.draw_context()
 
     def action_new_conversation(self) -> None:
         if self._turn_running:
             self.notify("a turn is running: Esc cancels it", severity="warning")
             return
         self.conversation_id, self.conversation = None, None
-        self.query_one("#conversation").border_subtitle = ""
         self.show_welcome()
         self.draw_decisions()
+        self.action_show_view("conversation")
 
     def action_conversations(self) -> None:
         options: list[tuple[str, RenderableType]] = []
         for summary in self.conversations:
             label = Text(str(summary.get("title") or "(untitled)"), style="bold")
             who = summary.get("assistant") or summary.get("agent")
-            tail = f"  {who} · {summary.get('status')} · ${summary.get('cost_usd', 0):.2f}"
+            tail = f"  {who} · {summary.get('status')} · {money(float(summary.get('cost_usd') or 0))}"
             label.append(tail)
             options.append((str(summary["id"]), label))
 
         def chosen(conversation_id: str | None) -> None:
             if conversation_id:
+                self.action_show_view("conversation")
                 self.run_worker(self.open_conversation(conversation_id), group="load", exit_on_error=False)
 
         self.push_screen(PickScreen("Your conversations", options, "no conversation yet"), chosen)
@@ -873,24 +1281,31 @@ class Workspace(App[None]):
                 self.assistant = slug
                 if self.conversation and self.conversation.get("assistant") != slug:
                     self.action_new_conversation()
-                self.show_welcome() if not self.conversation_id else self.draw_title()
+                self.show_welcome() if not self.conversation_id else self.draw_header()
 
         self.push_screen(
             PickScreen("Assistants ready for you", options, "no assistant is ready for you"), chosen
         )
 
-    # ─────────────────────────────── stopping ───────────────────────────────
-
     # ───────────────────────────── deciding (ADR 0154 §7) ─────────────────────────────
 
+    def decide_highlighted(self) -> None:
+        """Enter or `d` in the decisions tab: the one under the cursor, shown whole before any key decides."""
+        item_id = self._highlighted(self.query_one(DecisionList))
+        item = next((i for i in self.pending or [] if str(i["id"]) == item_id), None)
+        if item is None:
+            self.notify("nothing waits for you", severity="information")
+            return
+        self.run_worker(self.show_decision(item), exit_on_error=False)
+
     def action_decide(self) -> None:
-        """`d`: choose ONE of what waits. Nothing is chosen for the person, however short the list."""
+        """F2: choose ONE of what waits. Nothing is chosen for the person, however short the list."""
         if not self.pending:
             self.notify("nothing waits for you", severity="information")
             return
         options: list[tuple[str, RenderableType]] = []
         for item in self.pending:
-            label = Text(decide.clean(item["what"]), style="bold")
+            label = Text(decide.clean(item["what"]).splitlines()[0], style="bold")
             label.append(f"  {decide.KIND_LABEL.get(item['kind'], item['kind'])}", style="dim")
             options.append((item["id"], label))
 
