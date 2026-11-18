@@ -4,8 +4,8 @@ so its chunks get heading paths and `knowledge_get` reads it by section."""
 
 from __future__ import annotations
 
-import time
-
+import pytest
+from choregos_api.knowledge import pdf_outline
 from choregos_api.knowledge.chunking import chunk
 from choregos_api.knowledge.convert import convert
 from choregos_api.knowledge.pdf_outline import bookmarks, with_headings
@@ -75,11 +75,31 @@ def test_headings_follow_the_outline_order_and_a_line_is_taken_once() -> None:
     assert placed == 1 and [s.title for s in outline(markdown)] == ["A"]
 
 
-def test_placing_a_large_outline_that_the_text_never_says_stays_linear() -> None:
-    """A long PDF whose bookmarks are not in its text must not exhaust the conversion's timeout."""
-    text = "\n".join(f"line {n} of the body" for n in range(100_000))
-    missing = [(1, f"Chapter that is not there {n}") for n in range(2000)]
-    started = time.monotonic()
-    _, placed = with_headings(text, missing)
-    assert placed == 0
-    assert time.monotonic() - started < 5
+def test_placing_a_large_outline_that_the_text_never_says_stays_linear(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A long PDF whose bookmarks are not in its text must not exhaust the conversion's timeout: the text
+    is read once whatever the outline, and each bookmark costs one lookup, not a pass over the text.
+
+    Counted, not timed: a wall-clock bound was red on a loaded CI runner (5.5 s for a 5 s limit)."""
+    normalised = 0
+    normal = pdf_outline._normal
+
+    def counting(text: str) -> str:
+        nonlocal normalised
+        normalised += 1
+        return normal(text)
+
+    monkeypatch.setattr(pdf_outline, "_normal", counting)
+    text = "\n".join(f"line {n} of the body" for n in range(20_000))
+
+    def cost(bookmarks: int) -> int:
+        nonlocal normalised
+        normalised = 0
+        _, placed = with_headings(text, [(1, f"Chapter that is not there {n}") for n in range(bookmarks)])
+        assert placed == 0
+        return normalised
+
+    one, many = cost(1), cost(2000)
+    assert many - one == 1999, "one lookup per bookmark, never a pass over the text"
+    assert one <= 6 * 20_000, "the text is read a bounded number of times per line"
