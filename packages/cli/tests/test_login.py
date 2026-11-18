@@ -334,6 +334,6 @@ def test_a_bare_choregos_takes_the_organisation_of_its_workspace(monkeypatch: py
     opened: list[str | None] = []
     monkeypatch.setattr("choregos_cli.chat.interactive", lambda: True)
     monkeypatch.setattr("choregos_cli.chat.open_workspace", lambda *, org=None: opened.append(org))
-    result = _run("--org", "diametral")
+    result = _run("--org", "globex")
     assert result.exit_code == 0, result.output
-    assert opened == ["diametral"]
+    assert opened == ["globex"]
