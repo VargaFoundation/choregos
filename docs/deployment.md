@@ -31,7 +31,9 @@ helm upgrade --install choregos oci://ghcr.io/graalsystems/charts/choregos \
 ```
 
 Images are published under `ghcr.io/graalsystems/choregos-{api,orchestrator,web,tools,runner}`,
-multi-arch and signed. The chart's `global.imageTag` follows the chart version.
+multi-arch and signed. The chart's `global.imageTag` follows the chart version. From the release after
+0.27.13, every image and chart is also published under its new name, `tranibor-*` (see "Upgrading past
+0.27.13"): the same digest, signed the same way.
 
 ## Dependencies: embedded or external
 
@@ -2055,6 +2057,33 @@ value>` on the first model call. Nothing said the key had never resolved.
 
 If the API refuses to start with `réglages non résolus`, fix the source of the secret — the key
 is missing where it is stored, not where it is read.
+
+## Upgrading past 0.27.13
+
+**The images and charts have two names** (S75-03, [ADR 0176](adr/0176-the-core-is-named-tranibor.md)
+R3). From the first release after 0.27.13, each release publishes every image twice and every chart
+twice, under the core's name and under the former one:
+
+| Published | The name from now on | The former name, kept for the window |
+| :-- | :-- | :-- |
+| Images | `ghcr.io/graalsystems/tranibor-{api,orchestrator,web,tools,runner,laya,outpost}` | `ghcr.io/graalsystems/choregos-{…}` |
+| Charts | `oci://ghcr.io/graalsystems/charts/tranibor`, `…/tranibor-outpost` | `…/charts/choregos`, `…/choregos-outpost` |
+
+An image is one manifest list under both names (one digest), and each name carries its own keyless
+signature from the release workflow of `graalsystems/tranibor`: a policy that verifies the signature of
+`choregos-*` verifies `tranibor-*` with the same subject. A chart is packaged from one directory under each
+name and renders the same objects under both (the objects' names do not follow the chart's), so moving a
+release from `choregos` to `tranibor` changes its address and nothing else. Nothing changes by itself: the
+chart's defaults still name the images `choregos-*`.
+
+**The future name is `tranibor-*`.** Move when you can, in this order: first admit `tranibor-*` in your
+admission policies beside `choregos-*` (`infra/policies/images.yaml` does; a policy that matches
+`<registry>/tranibor-*` as a glob would also catch the plugin servers under
+`<registry>/tranibor-agents/`, so name the components), then point each component's `image.repository`
+(`choregos-api.image.repository: tranibor-api`, and `web`, `orchestrator`, `tools`,
+`choregos-orchestrator.runner.image: tranibor-runner`) and the chart's address at the new names. The
+former names stop being published two minor versions after the enterprise edition has moved, and the
+chart's defaults switch before that; each step is announced here.
 
 ## Upgrading past 0.27.3
 

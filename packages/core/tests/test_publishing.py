@@ -12,6 +12,8 @@ from choregos_core.publishing import PUBLISHING, SIGNING_ISSUER, load, parse
 EXAMPLE = {
     "owner": "ExampleOrg",
     "registry": "registry.example.org/exampleorg",
+    "image_prefix": "exampleware",
+    "image_alias_prefix": "examplelegacy",
     "source_repository": "https://forge.example.org/exampleorg/choregos",
     "documentation": "https://docs.example.org/choregos",
     "security_contact": "security@example.org",
@@ -43,6 +45,23 @@ def test_what_follows_from_the_repositories() -> None:
         "https://forge.example.org/exampleorg/choregos-agents/.github/workflows/publish.yml@refs/heads/main"
     )
     assert SIGNING_ISSUER.startswith("https://")
+
+
+def test_one_image_and_one_chart_under_both_names() -> None:
+    """ADR 0176 R3: the current name first, then the alias of the deprecation window."""
+    identity = parse(json.dumps(EXAMPLE))
+    assert identity.image_names("api") == (
+        "registry.example.org/exampleorg/exampleware-api",
+        "registry.example.org/exampleorg/examplelegacy-api",
+    )
+    assert identity.chart_names() == ("exampleware", "examplelegacy")
+    assert identity.chart_names("-outpost") == ("exampleware-outpost", "examplelegacy-outpost")
+    # quant is a command of the runner image, not an image (#1847).
+    with pytest.raises(ValueError, match="not an image the release builds"):
+        identity.image_names("quant")
+    with pytest.raises(ValueError, match="names no chart"):
+        identity.chart_names("-web")
+    assert PUBLISHING.image_prefixes == ("tranibor", "choregos")
 
 
 @pytest.mark.parametrize(

@@ -1,6 +1,10 @@
-{{/* Short name and labels common to all the platform's objects. */}}
+{{/*
+Short name and labels common to all the platform's objects. The name is not the chart's: the chart
+is published as `tranibor` and as `choregos` (ADR 0176 R3), and a deployment that moves from one
+to the other must render the same objects (`tests/charts/test_chart_names.py`).
+*/}}
 {{- define "choregos.name" -}}
-{{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" -}}
+{{- default "choregos" .Values.nameOverride | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
 
 {{/*

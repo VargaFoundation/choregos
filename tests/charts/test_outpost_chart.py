@@ -26,7 +26,7 @@ from typing import Any
 
 import pytest
 import yaml
-from choregos_core.publishing import PUBLISHING
+from choregos_core.publishing import CHARTS, PUBLISHING
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 CHART = ROOT / "charts" / "choregos-outpost"
@@ -848,9 +848,10 @@ def test_the_chart_is_linted_and_published_beside_the_platforms() -> None:
     assert "helm template outpost charts/choregos-outpost" in steps and "/tmp/outpost.yaml" in steps
     release = yaml.safe_load((ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8"))
     published = "\n".join(str(step.get("run", "")) for step in release["jobs"]["chart"]["steps"])
-    for chart in ("choregos", "choregos-outpost"):
-        assert f'helm package charts/{chart} --version "$version" --app-version "$version"' in published
-        assert f'helm push "{chart}-$version.tgz" oci://{PUBLISHING.registry}/charts' in published
+    # Both charts, each under both names (ADR 0176 R3): `tests/charts/test_chart_names.py`.
+    assert 'tools/package_charts.py --version "$version" --out dist/charts' in published
+    assert f'helm push "$chart" oci://{PUBLISHING.registry}/charts' in published
+    assert CHARTS["-outpost"] == "charts/choregos-outpost"
     # After the images: a published chart never points at an image that was not pushed.
     assert release["jobs"]["chart"]["needs"] == "manifest"
     assert "outpost" in release["jobs"]["manifest"]["strategy"]["matrix"]["image"]

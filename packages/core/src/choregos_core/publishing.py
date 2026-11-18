@@ -25,14 +25,27 @@ SIGNING_ISSUER = "https://token.actions.githubusercontent.com"
 RELEASE_WORKFLOW = "release.yml"
 PLUGIN_WORKFLOW = "publish.yml"
 PLUGIN_BRANCH = "refs/heads/main"
+#: The images a release builds, signs and pushes, each as `<registry>/<prefix>-<component>`
+#: (the `images` matrix of the release workflow).
+IMAGE_COMPONENTS = ("api", "orchestrator", "tools", "web", "runner", "laya", "outpost")
+#: The charts a release pushes to `oci://<registry>/charts`, by the suffix of their name: the
+#: platform's, named by the prefix alone, and the outpost's, `<prefix>-outpost` (ADR 0147), each
+#: packaged from its directory.
+CHARTS = {"": "charts/choregos", "-outpost": "charts/choregos-outpost"}
 
 
 @dataclass(frozen=True)
 class Publishing:
     #: The GitHub organisation that publishes the source, the images and the plugins.
     owner: str
-    #: The image and chart namespace: `<registry>/choregos-api`, `oci://<registry>/charts/choregos`.
+    #: The image and chart namespace: `<registry>/tranibor-api`, `oci://<registry>/charts/tranibor`.
     registry: str
+    #: The name every image and chart starts with: `<registry>/<image_prefix>-api`, the charts
+    #: `<image_prefix>` and `<image_prefix>-outpost` (ADR 0176 R3).
+    image_prefix: str
+    #: The former prefix, published beside `image_prefix` (one digest, two names, both signed) for the
+    #: deprecation window of ADR 0176 R3; it goes with the old names, in that round's step (e).
+    image_alias_prefix: str
     #: The core's repository: its releases, its issues, its files.
     source_repository: str
     #: The public user documentation, without a trailing slash (`CHOREGOS_DOCS_URL` by default).
@@ -62,6 +75,25 @@ class Publishing:
     def image(self, name: str, tag: str | None = None) -> str:
         """An image of the registry: `<registry>/<name>[:<tag>]`."""
         return f"{self.registry}/{name}" + (f":{tag}" if tag else "")
+
+    @property
+    def image_prefixes(self) -> tuple[str, str]:
+        """The prefixes a release publishes under: the current one first, then the alias."""
+        return self.image_prefix, self.image_alias_prefix
+
+    def image_names(self, component: str) -> tuple[str, ...]:
+        """Every name a release pushes one image under, `<registry>/<prefix>-<component>`, per prefix."""
+        if component not in IMAGE_COMPONENTS:
+            raise ValueError(
+                f"{component!r} is not an image the release builds: {', '.join(IMAGE_COMPONENTS)}"
+            )
+        return tuple(self.image(f"{prefix}-{component}") for prefix in self.image_prefixes)
+
+    def chart_names(self, suffix: str = "") -> tuple[str, ...]:
+        """Every name a release pushes one chart under (`""` the platform's, `"-outpost"`), per prefix."""
+        if suffix not in CHARTS:
+            raise ValueError(f"{suffix!r} names no chart of the release: {sorted(CHARTS)}")
+        return tuple(f"{prefix}{suffix}" for prefix in self.image_prefixes)
 
     def signing_identity(self, ref: str, workflow: str = RELEASE_WORKFLOW) -> str:
         """The keyless identity of what a workflow of the source repository signed at `ref`."""

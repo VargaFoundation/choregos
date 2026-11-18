@@ -108,3 +108,10 @@ The definition keeps its eight values. ADR 0176 R3 adds the image and chart name
 aliases for a deprecation window, and keeps the cosign identities as they are (the repository, hence the
 signing workflow, did not change). `commit_email`, `documentation` and the plugin keys are values the
 publisher chooses and move by editing the definition, not by R1 to R4.
+
+## Amendment (2026-11-18, S75-03): ten values, two of them prefixes
+
+The definition holds ten values: `image_prefix` and `image_alias_prefix` join the eight above (ADR 0176
+R3 and its amendment of the same day). A prefix is a word, not an address: like the owner (§6), it
+counts only in its place, inside an image or chart name under `registry`, and `make publishing-rewrite`
+moves those names with the registry.

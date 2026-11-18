@@ -7,6 +7,11 @@
 # "1.0.0"` hard-coded, whatever version was published. The scheme below is Ecphoria v0.2.5's,
 # proven: one architecture per native runner, pushed by digest, then
 # a manifest list per image.
+#
+# Two names per image and per chart (ADR 0176 R3): `tranibor-*`, the name from now on, and
+# `choregos-*`, published beside it for the deprecation window. One digest under both names, each
+# signed by this workflow; the charts are packaged twice from one directory. The names come from the
+# publishing identity (`image_prefix`, `image_alias_prefix`, ADR 0156).
 name: release
 
 on:
@@ -198,7 +203,8 @@ jobs:
           # The daemon an outpost's operator runs (ADR 0147): built, signed and attested as its neighbours.
           - { image: outpost, file: docker/outpost.Dockerfile, target: "" }
     env:
-      IMAGE: ghcr.io/graalsystems/choregos-${{ matrix.image }}
+      # Pushed by digest under the current name only; the manifest job gives it both names.
+      IMAGE: ghcr.io/graalsystems/tranibor-${{ matrix.image }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # The signed CLI binaries, for the API image only: the `cli` build context replaces the empty
@@ -265,7 +271,9 @@ jobs:
       matrix:
         image: [api, orchestrator, tools, web, runner, laya, outpost]
     env:
-      IMAGE: ghcr.io/graalsystems/choregos-${{ matrix.image }}
+      IMAGE: ghcr.io/graalsystems/tranibor-${{ matrix.image }}
+      # The former name, the same manifest list (ADR 0176 R3): until the deployments have moved.
+      ALIAS: ghcr.io/graalsystems/choregos-${{ matrix.image }}
     steps:
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1
@@ -282,7 +290,10 @@ jobs:
       - uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         id: meta
         with:
-          images: ${{ env.IMAGE }}
+          # Every tag under both names: `imagetools create` writes the one manifest list to each.
+          images: |
+            ${{ env.IMAGE }}
+            ${{ env.ALIAS }}
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
@@ -313,12 +324,16 @@ jobs:
           exit-code: "1"
           severity: CRITICAL
           ignore-unfixed: true
-      - name: sign the manifest
+      - name: sign the manifest, under both names
         env:
           VERSION: ${{ steps.meta.outputs.version }}
         run: |
           digest=$(docker buildx imagetools inspect "${IMAGE}:${VERSION}" --format '{{json .Manifest}}' | jq -r .digest)
+          alias=$(docker buildx imagetools inspect "${ALIAS}:${VERSION}" --format '{{json .Manifest}}' | jq -r .digest)
+          # One digest, two names: a signature lives beside the repository it signs, so each gets one.
+          test "$digest" = "$alias" || { echo "::error::${ALIAS} is ${alias}, not ${digest}"; exit 1; }
           cosign sign --yes "${IMAGE}@${digest}"
+          cosign sign --yes "${ALIAS}@${digest}"
 
   chart:
     # After the images: a published chart must never point at a missing image.
@@ -342,13 +357,14 @@ jobs:
           ACTOR: ${{ github.repository_owner }}
         run: |
           version="${GITHUB_REF_NAME#v}"
-          helm package charts/choregos --version "$version" --app-version "$version"
-          # The chart an outpost's operator installs in their own cluster (ADR 0147): a chart of its
-          # own, published beside the platform's at the same version.
-          helm package charts/choregos-outpost --version "$version" --app-version "$version"
+          # The platform's chart and the one an outpost's operator installs in their own cluster
+          # (ADR 0147), each under both names of ADR 0176 R3 (`tranibor`, `choregos`; `-outpost`):
+          # one directory each, packaged once per name, the same templates and the same defaults.
+          uv run python tools/package_charts.py --version "$version" --out dist/charts
           echo "$HELM_TOKEN" | helm registry login ghcr.io -u "$ACTOR" --password-stdin
-          helm push "choregos-$version.tgz" oci://ghcr.io/graalsystems/charts
-          helm push "choregos-outpost-$version.tgz" oci://ghcr.io/graalsystems/charts
+          for chart in dist/charts/*.tgz; do
+            helm push "$chart" oci://ghcr.io/graalsystems/charts
+          done
 
   pypi:
     # `choregos-agent-sdk` and the `choregos-contracts` it depends on (ADR 0063). OFF until the two
