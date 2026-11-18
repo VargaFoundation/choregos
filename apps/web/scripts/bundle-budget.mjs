@@ -70,7 +70,13 @@ const CHUNKS = join(process.cwd(), ".next", "static", "chunks");
 // and started work items measure 2533 kB on the rebased branch, no new dependency.
 // 2026-11-14 (S65-26): 2550 -> 2575 kB. The action page's card *What a person found* (the two outcomes, the note,
 // the stated result, the record once settled), about 20 kB on top of S66-23's 2533 kB; no new dependency.
-const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 2575);
+// 2026-11-18 (S67-27): 2575 -> 2600 kB. The live board (its stream subscription, the cards' running, waiting and failed
+// states with the reason of a failure, the lane counts and the ticker) measures 2593 kB on main after S67-26; no new
+// dependency.
+// 2026-11-18 (S67-29): 2600 -> 2625 kB. The workflow's flow view (the stations drawn from the validated graph, the tickets
+// travelling between them with CSS transitions and View Transitions, and the wall mode) measures 2621 kB; no new
+// dependency.
+const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 2625);
 const CHUNK_MAX_KB = Number(process.env.BUNDLE_CHUNK_MAX_KB ?? 600);
 
 function* files(dir) {
