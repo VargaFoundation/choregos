@@ -5490,6 +5490,14 @@ stories:
     size: S
     depends_on: [S80-07c]
     notes: "Runs tools/single-node/proof.sh end to end on a workstation (k3d, images built from main and imported). proof.sh gains PROOF_EVICTION (kubelet hard-eviction thresholds for a large, mostly full Docker disk) and PROOF_IMPORT_IMAGES. Not done: the proof as a nightly CI job."
+  - id: S80-07e
+    title: "ci: the single-node proof runs every night on a GitHub-hosted runner (ADR 0184)"
+    stream: S80
+    sprint: 1
+    priority: 7
+    size: S
+    depends_on: [S80-07d]
+    notes: ".github/workflows/single-node-proof.yml: nightly at 02:30 UTC, on dispatch, and on a pull request that changes the proof; builds the api, worker and web images of the commit, installs k3d by version and checksum (k3s node pinned by digest, new PROOF_K3S_IMAGE), runs tools/single-node/proof.sh, uploads the cluster's diagnostics on failure, opens the nightly issue when a night fails. The product profile fits the 4-vCPU runner as it is: no CI overlay."
   - id: S80-07c
     title: "fix(charts): on the single-node profile an agent pod reaches nothing it should not: the NetworkPolicies for the embedded layout and the egress proxy (ADR 0184)"
     stream: S80

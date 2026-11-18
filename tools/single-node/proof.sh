@@ -15,6 +15,9 @@
 #   PROOF_IMPORT_IMAGES="img:tag ..."  images built here (`make images`, retagged), imported into each
 #                                      new node before the install: the chart of an unreleased commit
 #                                      with its own images. Pair with PROOF_IMAGE_TAG.
+#   PROOF_K3S_IMAGE="rancher/k3s:<tag>@sha256:<digest>"
+#                                      the node's image (k3d's own default otherwise): the nightly CI job
+#                                      pins it by digest, as it pins everything it pulls (S80-04).
 #   PROOF_EVICTION="2%"                the kubelet's hard eviction thresholds (imagefs and nodefs), for a
 #                                      workstation whose Docker disk is large but more than 85 % used:
 #                                      the defaults (15 % and 10 %) put the node under disk pressure
@@ -77,9 +80,10 @@ s3_up() {
 node_up() {
   if [ "$MODE" = k3d ]; then
     local extra=()
+    [ -z "${PROOF_K3S_IMAGE:-}" ] || extra+=(--image "$PROOF_K3S_IMAGE")
     if [ -n "${PROOF_EVICTION:-}" ]; then
       local t="memory.available<100Mi,imagefs.available<$PROOF_EVICTION,nodefs.available<$PROOF_EVICTION"
-      extra=(--k3s-arg "--kubelet-arg=eviction-hard=$t@server:*")
+      extra+=(--k3s-arg "--kubelet-arg=eviction-hard=$t@server:*")
     fi
     k3d cluster create "$NAME" --network "$NAME" --wait --timeout 300s \
       --kubeconfig-update-default=false --kubeconfig-switch-context=false "${extra[@]}" >/dev/null
