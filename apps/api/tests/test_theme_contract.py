@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
-import choregos_contracts as contracts
 import pytest
-from choregos_api.theme import DEFAULT_THEME, validate_theme
+import tranibor_contracts as contracts
+from tranibor_api.theme import DEFAULT_THEME, validate_theme
 
 from .theme_fixtures import sample
 
@@ -65,7 +65,7 @@ def test_unknown_fields_and_a_missing_mode_are_refused() -> None:
 
 
 def test_the_python_model_and_the_openapi_agree_on_the_role_names() -> None:
-    from choregos_api.theme import themable_roles
+    from tranibor_api.theme import themable_roles
 
     schema = contracts.load_openapi()["components"]["schemas"]["ThemeTokens"]
     assert tuple(sorted(schema["properties"])) == tuple(sorted(themable_roles()))

@@ -10,12 +10,12 @@ from collections.abc import Iterator
 from typing import Any
 
 import pytest
-from choregos_core.production import FakesInProductionError
+from tranibor_core.production import FakesInProductionError
 
 
 @pytest.fixture
 def production(monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest) -> Iterator[str]:
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     environment = str(request.param)
     monkeypatch.setenv("CHOREGOS_ENV", environment)
@@ -28,14 +28,14 @@ def production(monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest) 
 
 
 def _api() -> Any:
-    from choregos_api.main import create_app
+    from tranibor_api.main import create_app
 
     return create_app()
 
 
 @pytest.mark.parametrize("production", ["staging", "prod"], indirect=True)
 async def test_the_api_refuses_to_start_on_the_fakes(production: str) -> None:
-    from choregos_api import main
+    from tranibor_api import main
 
     with pytest.raises(FakesInProductionError) as refused:
         async with main.lifespan(_api()):
@@ -46,8 +46,8 @@ async def test_the_api_refuses_to_start_on_the_fakes(production: str) -> None:
 
 @pytest.mark.parametrize("production", ["staging", "prod"], indirect=True)
 async def test_the_outposts_door_served_alone_refuses_them_too(production: str) -> None:
-    from choregos_api.outposts import alone
     from fastapi import FastAPI
+    from tranibor_api.outposts import alone
 
     # Its lifespan, on any application: `create_app` itself wants outposts switched on.
     with pytest.raises(FakesInProductionError, match="outposts' door"):

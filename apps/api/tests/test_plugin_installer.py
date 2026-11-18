@@ -15,13 +15,13 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
-import choregos_contracts as contracts
 import pytest
+import tranibor_contracts as contracts
 import yaml
-from choregos_core import template_yaml
 from httpx import AsyncClient
 from jsonschema import Draft202012Validator
 from sqlalchemy import delete, func, select
+from tranibor_core import template_yaml
 
 from .agent_scopes_kit import add_member, as_user, make_project
 from .catalogue_kit import project_only
@@ -58,7 +58,7 @@ def _version(root: Path, version: str, instructions: str | None = None, *, serve
 
 @pytest.fixture
 def offline(tmp_path: Path) -> Iterator[Path]:
-    from choregos_api.services.plugin_supply import OfflineDirectory, use_plugin_supply
+    from tranibor_api.services.plugin_supply import OfflineDirectory, use_plugin_supply
 
     root = tmp_path / "plugins"
     first = _version(root, "1.0.0")
@@ -100,7 +100,7 @@ def _contract(name: str) -> Draft202012Validator:
 
 
 async def _counts() -> dict[str, int]:
-    from choregos_api.db.models import (
+    from tranibor_api.db.models import (
         Agent,
         AgentVersion,
         AuditLog,
@@ -109,7 +109,7 @@ async def _counts() -> dict[str, int]:
         Skill,
         SkillVersion,
     )
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         return {
@@ -119,8 +119,8 @@ async def _counts() -> dict[str, int]:
 
 
 async def _versions(slug: str) -> list[tuple[int, str]]:
-    from choregos_api.db.models import Agent, AgentVersion
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Agent, AgentVersion
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = await session.execute(
@@ -134,8 +134,8 @@ async def _versions(slug: str) -> list[tuple[int, str]]:
 
 async def _hand_version(slug: str) -> None:
     """The organisation publishes its own text: the agent has diverged from the plugin."""
-    from choregos_api.db.models import Agent, AgentVersion
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Agent, AgentVersion
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         agent = (await session.execute(select(Agent).where(Agent.slug == slug))).scalar_one()
@@ -169,8 +169,8 @@ async def _hand_version(slug: str) -> None:
 async def test_install_brings_agents_skills_templates_evals_procedures_and_records_servers(
     client: AsyncClient, admin: str, offline: Path
 ) -> None:
-    from choregos_api.db.models import Agent, OrgPlugin
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Agent, OrgPlugin
+    from tranibor_api.db.session import session_scope
 
     body = await _install(client)
     assert not list(_contract("InstalledPlugin").iter_errors(body))
@@ -198,11 +198,11 @@ async def test_install_brings_agents_skills_templates_evals_procedures_and_recor
 
 
 async def test_install_twice_changes_nothing(client: AsyncClient, admin: str, offline: Path) -> None:
-    from choregos_api.config import get_settings
-    from choregos_api.db.session import session_scope
-    from choregos_api.rbac import SYSTEM
-    from choregos_api.services import plugin_installer
-    from choregos_api.services.plugin_supply import OfflineDirectory
+    from tranibor_api.config import get_settings
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.rbac import SYSTEM
+    from tranibor_api.services import plugin_installer
+    from tranibor_api.services.plugin_supply import OfflineDirectory
 
     await _install(client)
     before = await _counts()
@@ -274,8 +274,8 @@ async def test_an_eval_case_s_fields_are_the_rendered_ticket_fields(
     """S51-10: a plugin's case carries `input.fields`, and the installer renders it as `ticket.fields`
     — as the API's publish gate does (S51-04): a case naming another reporter fails, the right one
     installs, and a case without fields renders `{}`."""
-    from choregos_api.schemas.agents import MAX_SAMPLE_FIELDS_BYTES
-    from choregos_core.plugins import MAX_CASE_FIELDS_BYTES
+    from tranibor_api.schemas.agents import MAX_SAMPLE_FIELDS_BYTES
+    from tranibor_core.plugins import MAX_CASE_FIELDS_BYTES
 
     assert MAX_CASE_FIELDS_BYTES == MAX_SAMPLE_FIELDS_BYTES, "`plugin validate` refuses what the API refuses"
     version = offline / "hello" / "1.1.0"
@@ -367,8 +367,8 @@ async def test_an_upgrade_offers_and_never_overwrites_an_agent_the_organisation_
 
 
 async def test_an_upgrade_does_not_move_a_project_pin(client: AsyncClient, admin: str, offline: Path) -> None:
-    from choregos_api.db.models import Agent, ProjectAgent
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Agent, ProjectAgent
+    from tranibor_api.db.session import session_scope
 
     project = await make_project(client, "billing")
     await _install(client)
@@ -397,8 +397,8 @@ async def test_uninstall_removes_what_nobody_changed(client: AsyncClient, admin:
 async def test_uninstall_keeps_a_diverged_agent_and_says_so(
     client: AsyncClient, admin: str, offline: Path
 ) -> None:
-    from choregos_api.db.models import Agent, AuditLog, Skill
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Agent, AuditLog, Skill
+    from tranibor_api.db.session import session_scope
 
     await _install(client)
     await _hand_version("greeter")
@@ -417,8 +417,8 @@ async def test_uninstall_keeps_a_diverged_agent_and_says_so(
 async def test_uninstall_keeps_an_agent_a_project_pins(
     client: AsyncClient, admin: str, offline: Path
 ) -> None:
-    from choregos_api.db.models import Agent, ProjectAgent
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Agent, ProjectAgent
+    from tranibor_api.db.session import session_scope
 
     project = await make_project(client, "billing")
     await _install(client)
@@ -435,8 +435,8 @@ async def test_uninstall_keeps_an_agent_a_project_pins(
 async def test_a_project_is_born_from_a_plugin_template_with_its_files(
     client: AsyncClient, admin: str, offline: Path
 ) -> None:
-    from choregos_api.db.models import WorkflowDef
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import WorkflowDef
+    from tranibor_api.db.session import session_scope
 
     await _install(client)
     created = await client.post(
@@ -473,8 +473,8 @@ async def test_an_upgrade_gives_the_projects_born_of_its_template_the_knowledge_
 ) -> None:
     """A project is born once: the bases a template ships from a later version reach the projects
     already born of it at the upgrade, or the agents that read them refuse every run (S51-06)."""
-    from choregos_api.db.models import KnowledgeBase, KnowledgeSource
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import KnowledgeBase, KnowledgeSource
+    from tranibor_api.db.session import session_scope
 
     target = _version(offline, "1.2.0", server=False)
     docs = {
@@ -554,7 +554,7 @@ async def test_procedures_of_a_plugin_are_served_to_the_organisation_only(
 async def test_a_procedure_id_already_on_the_platform_is_a_conflict(
     client: AsyncClient, admin: str, offline: Path
 ) -> None:
-    from choregos_core import procedures
+    from tranibor_core import procedures
 
     shipped = sorted(procedures.load().procedures)[0]
     path = offline / "hello" / "1.0.0" / "procedures" / "connector.mcp.hello.md"
@@ -584,10 +584,10 @@ async def test_a_plugin_s_template_workflows_join_the_workflow_catalogue(
     client: AsyncClient, admin: str, offline: Path
 ) -> None:
     """ADR 0111 §1: an installed plugin is an external catalogue; its agents resolve as `plugin`."""
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.workflow_catalogue import resolutions
     from sqlalchemy import select
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.workflow_catalogue import resolutions
 
     await _install(client)
     entries = (await client.get(f"{ORG}/workflow-catalogue")).json()
@@ -606,10 +606,10 @@ async def test_an_unresolved_agent_names_the_plugin_that_ships_it(
     client: AsyncClient, admin: str, offline: Path
 ) -> None:
     """ADR 0111 §2-3 (S49-05b): not installed, `greeter` is unresolved, and the plugin is named."""
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.workflow_catalogue import resolutions
     from sqlalchemy import select
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.workflow_catalogue import resolutions
 
     async with session_scope() as session:
         query = select(Organization.id).where(Organization.slug == "northwind")
@@ -625,8 +625,8 @@ async def test_upgrading_to_the_installed_version_installs_the_agents_the_organi
     """S59-06: a plugin row that names fewer agents than its version ships (the S43-09 migration wrote only
     the agents an organisation had then) is repaired by upgrading to the installed version: the missing
     agent is installed, an existing one is left as it is, and the audit says what was added."""
-    from choregos_api.db.models import Agent, OrgPlugin
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Agent, OrgPlugin
+    from tranibor_api.db.session import session_scope
 
     await _install(client)
     async with session_scope() as session:
@@ -647,10 +647,10 @@ async def test_upgrading_to_the_installed_version_installs_the_agents_the_organi
 
 async def _hand_knowledge(slug: str, **changes: Any) -> None:
     """The organisation publishes its next version: the latest spec plus its own knowledge base."""
-    from choregos_api.db.models import Agent, AgentVersion
-    from choregos_api.db.session import session_scope
-    from choregos_api.schemas import AgentSpec
-    from choregos_api.services.agents import digest
+    from tranibor_api.db.models import Agent, AgentVersion
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.schemas import AgentSpec
+    from tranibor_api.services.agents import digest
 
     async with session_scope() as session:
         agent = (await session.execute(select(Agent).where(Agent.slug == slug))).scalar_one()

@@ -12,13 +12,13 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from choregos_contracts import ModelRef
+from tranibor_contracts import ModelRef
 
 from .conftest import Fixture
 
 
 async def _prepare(setup: Fixture) -> dict[str, Any]:
-    from choregos_orchestrator.activities import stage as activities
+    from tranibor_orchestrator.activities import stage as activities
 
     return await activities.prepare_stage(
         {
@@ -35,7 +35,7 @@ async def _prepare(setup: Fixture) -> dict[str, Any]:
 
 
 async def test_the_model_behind_the_alias_reaches_the_runner(setup: Fixture) -> None:
-    from choregos_runner.backends import get_backend
+    from tranibor_runner.backends import get_backend
 
     prepared = await _prepare(setup)
     model = ModelRef.model_validate(prepared["stage_input"]["model"])
@@ -60,8 +60,8 @@ async def test_a_gateway_that_cannot_list_its_models_does_not_stop_the_stage(
 async def test_the_agent_calls_the_organisations_own_gateway(setup: Fixture) -> None:
     """S44-04: the key of a project without a gateway is minted on its organisation's own gateway, so
     the agent must call that gateway, not the deployment's `gateway_url`."""
-    from choregos_api.db.models import OrgConnector, Project
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import OrgConnector, Project
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         project = await session.get(Project, setup.project_id)

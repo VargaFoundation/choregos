@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from choregos_core import KNOWN_BACKEND_NAMES, backend_enabled
+from tranibor_core import KNOWN_BACKEND_NAMES, backend_enabled
 
 
 def test_no_stored_setting_enables_claude_code_only() -> None:

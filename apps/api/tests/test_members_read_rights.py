@@ -9,8 +9,8 @@ from collections.abc import Iterator
 from typing import Any
 
 import pytest
-from choregos_contracts import Role
 from httpx import ASGITransport, AsyncClient
+from tranibor_contracts import Role
 
 from .conftest import login
 
@@ -20,7 +20,7 @@ def land_in_acme(project: dict[str, Any], monkeypatch: pytest.MonkeyPatch) -> It
     """Once the northwind project exists: the dev login makes a new user a developer of EVERY organisation
     unless a default one is set; here it lands in `acme`, so a northwind role is only the one a test grants.
     """
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     monkeypatch.setenv("CHOREGOS_OIDC_DEFAULT_ORG", "acme")
     reset_settings_cache()
@@ -29,9 +29,9 @@ def land_in_acme(project: dict[str, Any], monkeypatch: pytest.MonkeyPatch) -> It
 
 
 async def _member(email: str, org_slug: str, role: Role, project_slug: str | None = None) -> None:
-    from choregos_api.db.models import Membership, Organization, Project, User
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Membership, Organization, Project, User
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         org = (

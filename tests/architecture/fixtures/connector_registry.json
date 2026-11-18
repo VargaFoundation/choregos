@@ -1432,7 +1432,7 @@
     "config_schema": {
       "properties": {
         "url": {
-          "description": "the MCP endpoint of the single process serving the fakes (`choregos_adapters.fakes.server`); empty: in this process",
+          "description": "the MCP endpoint of the single process serving the fakes (`tranibor_adapters.fakes.server`); empty: in this process",
           "type": "string"
         }
       },
@@ -1521,7 +1521,7 @@
     "config_schema": {
       "properties": {
         "url": {
-          "description": "the MCP endpoint of the single process serving the fakes (`choregos_adapters.fakes.server`); empty: in this process",
+          "description": "the MCP endpoint of the single process serving the fakes (`tranibor_adapters.fakes.server`); empty: in this process",
           "type": "string"
         }
       },
@@ -1620,7 +1620,7 @@
     "config_schema": {
       "properties": {
         "url": {
-          "description": "the MCP endpoint of the single process serving the fakes (`choregos_adapters.fakes.server`); empty: in this process",
+          "description": "the MCP endpoint of the single process serving the fakes (`tranibor_adapters.fakes.server`); empty: in this process",
           "type": "string"
         }
       },
@@ -1709,7 +1709,7 @@
     "config_schema": {
       "properties": {
         "url": {
-          "description": "the MCP endpoint of the single process serving the fakes (`choregos_adapters.fakes.server`); empty: in this process",
+          "description": "the MCP endpoint of the single process serving the fakes (`tranibor_adapters.fakes.server`); empty: in this process",
           "type": "string"
         }
       },

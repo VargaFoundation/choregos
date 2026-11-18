@@ -12,8 +12,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from choregos_core.instructions import render_task_instructions
 from httpx import AsyncClient
+from tranibor_core.instructions import render_task_instructions
 
 from .kits.assistant_memory import _profile
 from .kits.assistant_tasks import (  # noqa: F401
@@ -28,9 +28,9 @@ from .kits.assistant_tasks import (  # noqa: F401
 
 
 async def _values(work_item_id: str) -> dict[str, Any] | None:
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.services import task_instruction_values
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services import task_instruction_values
 
     async with session_scope(orgs="*") as session:
         item = await session.get(WorkItem, work_item_id)
@@ -39,8 +39,8 @@ async def _values(work_item_id: str) -> dict[str, Any] | None:
 
 
 async def _installation_config() -> dict[str, Any]:
-    from choregos_api.db.models import AssistantInstallation
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import AssistantInstallation
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         installation = await session.get(AssistantInstallation, await _installation_id())
@@ -88,8 +88,8 @@ async def test_a_work_item_that_is_not_a_tasks_has_no_assistant_values(
     mine = await _subscriber(client, app, "mine@northwind.dev")
     ran = await mine.post(f"{TASKS}/morning_brief/run")
     assert ran.status_code == 201, ran.text
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         item = await session.get(WorkItem, ran.json()["work_item_id"])

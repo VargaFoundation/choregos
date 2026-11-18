@@ -37,9 +37,9 @@ MARKET = ("get_quote", "get_history", "lookup_instrument")
 
 async def _person(client: AsyncClient, email: str, groups: list[str]) -> str:
     """A member with these groups, and a read-only MCP token of theirs."""
-    from choregos_api.db.models import User
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import User
+    from tranibor_api.db.session import session_scope
 
     await add_member(client, email, "developer")
     async with session_scope() as session:
@@ -76,7 +76,7 @@ async def installed(client: AsyncClient, org: str, offline: Path) -> str:  # noq
 
 
 def _wait(monkeypatch: pytest.MonkeyPatch, seconds: float) -> None:
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     monkeypatch.setenv("CHOREGOS_MCP_ASSISTANT_WAIT_S", str(seconds))
     reset_settings_cache()
@@ -84,7 +84,7 @@ def _wait(monkeypatch: pytest.MonkeyPatch, seconds: float) -> None:
 
 def _slow(upstream: Upstream, delay: float) -> None:  # noqa: F811
     """The model answers after `delay` seconds."""
-    from choregos_api.services.agent_sessions import set_model_transport
+    from tranibor_api.services.agent_sessions import set_model_transport
 
     async def handler(request: httpx.Request) -> httpx.Response:
         await asyncio.sleep(delay)
@@ -95,10 +95,10 @@ def _slow(upstream: Upstream, delay: float) -> None:  # noqa: F811
 
 async def _installation_knowledge() -> str:
     """A base of the investment assistant's installation with one document; returns the document's id."""
-    from choregos_api.db.models import AssistantInstallation, KnowledgeBase, KnowledgeDocument
-    from choregos_api.db.session import session_scope
-    from choregos_api.knowledge.index import index_document
     from sqlalchemy import select
+    from tranibor_api.db.models import AssistantInstallation, KnowledgeBase, KnowledgeDocument
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.knowledge.index import index_document
 
     async with session_scope(orgs="*") as session:
         installation = (await session.execute(select(AssistantInstallation))).scalar_one()
@@ -266,8 +266,8 @@ async def test_someone_outside_the_audience_does_not_see_the_assistant(
 
 
 async def test_an_assistant_that_is_not_ready_is_not_announced(client: AsyncClient, installed: str) -> None:
-    from choregos_api.db.models import AssistantInstallation
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import AssistantInstallation
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         from sqlalchemy import select
@@ -395,9 +395,9 @@ async def test_an_oauth_client_makes_a_turn(
     installed: str,
     upstream: Upstream,  # noqa: F811
 ) -> None:
-    from choregos_api.db.models import User
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import User
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         user = (await session.execute(select(User).where(User.email == "ines@northwind.dev"))).scalar_one()
@@ -413,7 +413,7 @@ async def test_an_oauth_client_makes_a_turn(
 
 @pytest.fixture(autouse=True)
 def _reset_turns() -> Iterator[None]:
-    from choregos_api.mcp import assistants
+    from tranibor_api.mcp import assistants
 
     yield
     assistants._TURNS.clear()
@@ -425,9 +425,9 @@ async def test_a_token_principal_has_its_groups_re_read_at_every_request(
 ) -> None:
     """A token carries no group of its own: the audience is judged on the user's row at each call, through
     the MCP door and through the REST API, so leaving the IdP group cuts a token as it cuts a session."""
-    from choregos_api.db.models import User
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import User
+    from tranibor_api.db.session import session_scope
 
     async def groups(*names: str) -> None:
         async with session_scope() as session:

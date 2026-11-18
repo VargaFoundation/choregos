@@ -119,7 +119,7 @@ tests:
       - documentIndex: 1
         equal:
           path: spec.template.spec.containers[0].command
-          value: ["python", "-m", "choregos_api.outposts"]
+          value: ["python", "-m", "tranibor_api.outposts"]
       - documentIndex: 1
         equal:
           path: spec.template.spec.automountServiceAccountToken

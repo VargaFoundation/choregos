@@ -25,8 +25,8 @@ NOW = datetime.now(UTC)
 
 @pytest.fixture(autouse=True)
 def profile(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from choregos_cli import activity, theme
-    from choregos_cli import client as client_module
+    from tranibor_cli import activity, theme
+    from tranibor_cli import client as client_module
 
     monkeypatch.setattr(client_module, "CONFIG_PATH", tmp_path / "config.json")
     monkeypatch.setattr(theme, "MONOCHROME", False)
@@ -151,7 +151,7 @@ def platform(contract: Any) -> Any:
 
 
 def _run(*words: str, env: dict[str, str] | None = None) -> Any:
-    from choregos_cli.main import app
+    from tranibor_cli.main import app
 
     return CliRunner().invoke(app, ["activity", *words], env=env)
 
@@ -247,7 +247,7 @@ def test_watch_moves_an_ended_entry_from_in_flight_to_ended(platform: Platform) 
 
 
 def test_board_keeps_the_newest_first_and_an_upsert_that_ended_moves_it() -> None:
-    from choregos_cli.activity import Board
+    from tranibor_cli.activity import Board
 
     board = Board.of({"in_flight": [_run_entry("a")], "finished": []})
     board.apply("activity.upsert", _run_entry("b"))
@@ -262,7 +262,7 @@ def test_board_keeps_the_newest_first_and_an_upsert_that_ended_moves_it() -> Non
 
 
 def test_elapsed_and_counts_read_as_a_person_reads_them() -> None:
-    from choregos_cli.activity import elapsed, spend
+    from tranibor_cli.activity import elapsed, spend
 
     start = NOW - timedelta(hours=1, minutes=3, seconds=5)
     assert elapsed({"started_at": _iso(start)}, NOW) == "1h03m"
@@ -283,7 +283,7 @@ def test_no_color_gives_no_escape_sequence_and_keeps_the_words(platform: Platfor
 
 
 def test_an_ascii_terminal_gets_ascii_glyphs(platform: Platform, monkeypatch: pytest.MonkeyPatch) -> None:
-    from choregos_cli import theme
+    from tranibor_cli import theme
 
     monkeypatch.setattr(theme, "unicode_ok", lambda target: False)
     assert "* running implement" in _said(_run())
@@ -335,7 +335,7 @@ def test_the_live_view_reads_the_sub_agents_of_a_run_that_appears(platform: Plat
 
 def test_a_surface_never_reads_a_backends_private_meta() -> None:
     """The platform names the sub-agents (ADR 0154 §5): no CLI module reads `_meta` or a backend's key."""
-    source = Path(__file__).parents[1] / "src" / "choregos_cli"
+    source = Path(__file__).parents[1] / "src" / "tranibor_cli"
     quoted = re.compile(r"""["'](_meta|claudeCode|parentToolUseId|toolName)["']""")
     offenders = [p.name for p in source.glob("*.py") if quoted.search(p.read_text(encoding="utf-8"))]
     assert offenders == []

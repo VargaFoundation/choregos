@@ -11,10 +11,10 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from choregos_contracts import DecisionActor
-from choregos_core.domain import GatewayModel
 from sqlalchemy import select
 from temporalio.exceptions import ApplicationError
+from tranibor_contracts import DecisionActor
+from tranibor_core.domain import GatewayModel
 
 from .conftest import Fixture
 
@@ -49,7 +49,7 @@ class _Transition:
 
 
 def _payload(setup: Fixture, *, attempt: int = 1, outputs: dict[str, Any] | None = None) -> dict[str, Any]:
-    from choregos_orchestrator.activities.decision import decision_request
+    from tranibor_orchestrator.activities.decision import decision_request
 
     return decision_request(
         project_id=setup.project_id,
@@ -64,8 +64,8 @@ def _payload(setup: Fixture, *, attempt: int = 1, outputs: dict[str, Any] | None
 
 
 async def _catalogue(setup: Fixture, usages: list[str] | None = ("decide",)) -> None:  # type: ignore[assignment]
-    from choregos_api.db.models import ModelCatalogueRow, Project
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import ModelCatalogueRow, Project
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         project = await session.get(Project, setup.project_id)
@@ -77,8 +77,8 @@ async def _catalogue(setup: Fixture, usages: list[str] | None = ("decide",)) -> 
 
 
 async def _fields(setup: Fixture, **fields: Any) -> None:
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         item = await session.get(WorkItem, setup.work_item_id)
@@ -87,16 +87,16 @@ async def _fields(setup: Fixture, **fields: Any) -> None:
 
 
 async def _run(run_id: str) -> Any:
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         return await session.get(Run, run_id)
 
 
 async def _events(kind: str) -> list[Any]:
-    from choregos_api.db.models import Event
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Event
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         return list((await session.execute(select(Event).where(Event.type == kind))).scalars().all())
@@ -119,7 +119,7 @@ async def ready(setup: Fixture) -> Fixture:
 
 
 async def test_the_state_holds_exactly_what_the_step_names(ready: Fixture) -> None:
-    from choregos_orchestrator.activities.decision import decide
+    from tranibor_orchestrator.activities.decision import decide
 
     await decide(_payload(ready))
     (sent,) = ready.adapters.decisions.requests
@@ -134,7 +134,7 @@ async def test_the_state_holds_exactly_what_the_step_names(ready: Fixture) -> No
 
 
 async def test_a_secret_in_a_field_leaves_masked(ready: Fixture) -> None:
-    from choregos_orchestrator.activities.decision import decide
+    from tranibor_orchestrator.activities.decision import decide
 
     await decide(_payload(ready))
     (call,) = ready.adapters.decisions.calls
@@ -146,8 +146,8 @@ async def test_a_secret_in_a_field_leaves_masked(ready: Fixture) -> None:
 
 
 async def test_the_key_is_the_project_s_for_the_step_s_model_and_is_revoked(ready: Fixture) -> None:
-    from choregos_orchestrator.activities.decision import decide
-    from choregos_orchestrator.config import get_settings
+    from tranibor_orchestrator.activities.decision import decide
+    from tranibor_orchestrator.config import get_settings
 
     decided = await decide(_payload(ready))
     gateway = ready.adapters.gateway
@@ -159,8 +159,8 @@ async def test_the_key_is_the_project_s_for_the_step_s_model_and_is_revoked(read
     run = await _run(decided["run_id"])
     assert run.gateway_key_id == key_id
     # Minted for the decision model only, under a small cap, with the run's identity.
-    from choregos_api.db.models import GatewayKeyRow
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import GatewayKeyRow
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         row = (
@@ -170,7 +170,7 @@ async def test_the_key_is_the_project_s_for_the_step_s_model_and_is_revoked(read
 
 
 async def test_the_key_is_revoked_when_the_model_does_not_answer(ready: Fixture) -> None:
-    from choregos_orchestrator.activities.decision import decide
+    from tranibor_orchestrator.activities.decision import decide
 
     ready.adapters.decisions.fail_next("connection refused", status_code=503)
     decided = await decide(_payload(ready))
@@ -181,7 +181,7 @@ async def test_the_key_is_revoked_when_the_model_does_not_answer(ready: Fixture)
 
 
 async def test_the_key_is_revoked_even_when_the_activity_fails(ready: Fixture, monkeypatch: Any) -> None:
-    from choregos_orchestrator.activities import decision as decision_module
+    from tranibor_orchestrator.activities import decision as decision_module
 
     def explode(_decision: Any, _reply: Any) -> Any:
         raise RuntimeError("a bug after the answer")
@@ -196,7 +196,7 @@ async def test_a_spend_that_cannot_be_read_keeps_the_answer_and_revokes_the_key(
     ready: Fixture, monkeypatch: Any
 ) -> None:
     """Failing the activity would retry it, and ask the model a second time: the answer is kept."""
-    from choregos_orchestrator.activities import decision as decision_module
+    from tranibor_orchestrator.activities import decision as decision_module
 
     async def ledger_down(*_: Any, **__: Any) -> Any:
         raise RuntimeError("the gateway's spend logs are down")
@@ -209,7 +209,7 @@ async def test_a_spend_that_cannot_be_read_keeps_the_answer_and_revokes_the_key(
 
 
 async def test_an_answer_that_was_not_offered_fails_the_run(ready: Fixture) -> None:
-    from choregos_orchestrator.activities.decision import decide
+    from tranibor_orchestrator.activities.decision import decide
 
     ready.adapters.decisions.answer(route=("sales", 0.95))
     decided = await decide(_payload(ready))
@@ -220,9 +220,9 @@ async def test_an_answer_that_was_not_offered_fails_the_run(ready: Fixture) -> N
 
 
 async def test_the_answers_are_the_step_s_outputs_and_its_summary(ready: Fixture) -> None:
-    from choregos_api.db.models import CostLedger
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities.decision import decide
+    from tranibor_api.db.models import CostLedger
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities.decision import decide
 
     ready.adapters.decisions.answer(route=("billing", 0.93), urgent=(True, 0.7))
     decided = await decide(_payload(ready))
@@ -252,9 +252,9 @@ async def test_the_answers_are_the_step_s_outputs_and_its_summary(ready: Fixture
 
 
 async def test_a_retried_activity_neither_asks_again_nor_writes_again(ready: Fixture) -> None:
-    from choregos_api.db.models import CostLedger
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities.decision import decide
+    from tranibor_api.db.models import CostLedger
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities.decision import decide
 
     ready.adapters.decisions.answer(route=("tech", 0.81))
     first = await decide(_payload(ready))
@@ -270,8 +270,8 @@ async def test_a_retried_activity_neither_asks_again_nor_writes_again(ready: Fix
 
 
 async def test_a_gateway_without_the_decision_route_refuses_the_step(ready: Fixture) -> None:
-    from choregos_adapters.base import GATEWAY_CAPABILITIES
-    from choregos_orchestrator.activities.decision import decide
+    from tranibor_adapters.base import GATEWAY_CAPABILITIES
+    from tranibor_orchestrator.activities.decision import decide
 
     ready.adapters.gateway.capabilities = GATEWAY_CAPABILITIES - {"systemone"}
     with pytest.raises(ApplicationError) as refused:
@@ -285,7 +285,7 @@ async def test_a_gateway_without_the_decision_route_refuses_the_step(ready: Fixt
 async def test_a_model_the_catalogue_does_not_enable_for_decide_refuses_the_step(
     setup: Fixture, usages: list[str] | None
 ) -> None:
-    from choregos_orchestrator.activities.decision import decide
+    from tranibor_orchestrator.activities.decision import decide
 
     await _catalogue(setup, usages)
     with pytest.raises(ApplicationError) as refused:
@@ -296,9 +296,9 @@ async def test_a_model_the_catalogue_does_not_enable_for_decide_refuses_the_step
 
 
 async def test_the_injection_guard_reads_the_state_before_it_leaves(ready: Fixture) -> None:
-    from choregos_api.db.session import session_scope
-    from choregos_api.services import active_policy, policy_model
-    from choregos_orchestrator.activities.decision import decide
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services import active_policy, policy_model
+    from tranibor_orchestrator.activities.decision import decide
 
     async with session_scope() as session:
         row = await active_policy(session, ready.project_id)

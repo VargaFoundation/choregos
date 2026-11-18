@@ -30,7 +30,7 @@ ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
 
 @pytest.fixture(autouse=True)
 def profile(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from choregos_cli import client as client_module
+    from tranibor_cli import client as client_module
 
     # No profile file: the profile is the environment's, never the one of whoever runs the suite.
     monkeypatch.setattr(client_module, "CONFIG_PATH", tmp_path / "config.json")
@@ -41,7 +41,7 @@ def profile(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _run(*words: str) -> Any:
-    from choregos_cli.main import app
+    from tranibor_cli.main import app
 
     return CliRunner().invoke(app, ["outposts", *words])
 

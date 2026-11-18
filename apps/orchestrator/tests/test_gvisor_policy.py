@@ -18,12 +18,12 @@ from typing import Any
 
 import pytest
 import yaml
-from choregos_adapters.executor.k8s_job import KubernetesJobExecutor
-from choregos_adapters.executor.tekton import KubernetesClient
-from choregos_contracts import ProjectConfig, RepoConfig
-from choregos_core import load_preset
-from choregos_core.domain import AgentContainer, StageJobSpec
-from choregos_orchestrator.gitops import render_project_manifests
+from tranibor_adapters.executor.k8s_job import KubernetesJobExecutor
+from tranibor_adapters.executor.tekton import KubernetesClient
+from tranibor_contracts import ProjectConfig, RepoConfig
+from tranibor_core import load_preset
+from tranibor_core.domain import AgentContainer, StageJobSpec
+from tranibor_orchestrator.gitops import render_project_manifests
 
 SLUG = "billing"
 

@@ -24,14 +24,14 @@ Status words: **exists** (in the code), **missing**, **partial** (exists, and do
 | What an outpost needs | Where | Today |
 |:--|:--|:--|
 | One place where a connector's route is decided | `services/mcp_gateway.py`: `Route` (454), `route_of` (461), `connector_client` (493); called by `services/broker.py` (270, 401, 569, 590), `effects.py` (124, 189), `routers/org_connectors.py` (618, 626) | **exists**: a host and "is it the gateway's"; no third route |
-| A connector with no URL and no secret | `packages/adapters/src/choregos_adapters/specs.py` (763: `mcp-gateway`, `server` and `timeout_s`, no secret field, `egress` empty), `builtins.py` (181, 725) | **exists** as the precedent; `mcp-outpost` **missing** |
+| A connector with no URL and no secret | `packages/adapters/src/tranibor_adapters/specs.py` (763: `mcp-gateway`, `server` and `timeout_s`, no secret field, `egress` empty), `builtins.py` (181, 725) | **exists** as the precedent; `mcp-outpost` **missing** |
 | A client the callers can swap | they call `call_tool` / `list_tools` when the client has them (`broker.py` 598, `effects.py` 194, `org_connectors.py` 629) | **exists**; a new subclass of the MCP client is refused (`tests/licences/test_mcp_gateway_boundary.py`, `RUNTIME_MCP_CLIENTS`, 246) |
 | Governance around the call, not at the server | `broker.py`: `tools_of_selection` (192), `propose_call` (258), `write_through_action` (386), `check_arguments` (511), `bounded_result` (664); `routers/internal.py`: `callRunTool` (969), `_injection_guard` (1384), the ledger line and the `tool.called` digests | **exists**, all of it in the API |
-| A deterministic id for a write | `broker.py` `call_id` (380); `apps/orchestrator/src/choregos_orchestrator/activities/actions.py` `execute_effect` (93): the key `<action id>:<position>`, recorded `started` before each attempt | **exists** |
-| A write that is not retried, and a state that says "unknown" | `apps/orchestrator/src/choregos_orchestrator/workflows/action.py`: `EFFECT` retries six attempts (41), any final failure compensates and closes `failed` (97-120); `ActionStatus` (`packages/contracts/src/choregos_contracts/enums.py`, 234) has no such state | **missing** |
+| A deterministic id for a write | `broker.py` `call_id` (380); `apps/orchestrator/src/tranibor_orchestrator/activities/actions.py` `execute_effect` (93): the key `<action id>:<position>`, recorded `started` before each attempt | **exists** |
+| A write that is not retried, and a state that says "unknown" | `apps/orchestrator/src/tranibor_orchestrator/workflows/action.py`: `EFFECT` retries six attempts (41), any final failure compensates and closes `failed` (97-120); `ActionStatus` (`packages/contracts/src/tranibor_contracts/enums.py`, 234) has no such state | **missing** |
 | An idempotency key the platform fills | `effects.py` `_platform_arguments` (220): `action_key`; declared by `OperationSpec.platform_arguments` (`registry.py`, 59) or a plugin server's descriptor (`services/connectors.py`, `declared_operation`, 25) | **exists** for declared operations; **missing** for a discovered tool (`declared_operation` answers `None`) |
 | A connector type that says which identities it supports | `ConnectorTypeSpec` (`registry.py`, 91) | **missing**: no such field; ADR 0107's story S50-01 is not started |
-| Sealing to one recipient | `packages/adapters/src/choregos_adapters/sealing.py`: `seal`, `open_sealed` (X25519, HKDF-SHA256, ChaCha20-Poly1305, the run's id as associated data) | **exists**, one direction, platform to pod |
+| Sealing to one recipient | `packages/adapters/src/tranibor_adapters/sealing.py`: `seal`, `open_sealed` (X25519, HKDF-SHA256, ChaCha20-Poly1305, the run's id as associated data) | **exists**, one direction, platform to pod |
 | A request signed by an Ed25519 key | run tokens are ES256 (`security.py`, 22); the installed PyJWT lists `EdDSA` | **missing**; no new dependency needed |
 | A wake-up that reaches every replica | `events.py` `PostgresRelay` (162): one `LISTEN` connection per replica, channel `choregos_events` | **partial**: `_receive` (179) drops what is not a platform event; none on SQLite (`main.py`, 105) |
 | A long poll that holds no transaction | `routers/agent_session_pods.py` `get_next_turn` (106): a look every 0.2 s (`POLL_S`), 30 s at most | **partial**: polled, not woken; under the all-organisations scope (64) |
@@ -42,7 +42,7 @@ Status words: **exists** (in the code), **missing**, **partial** (exists, and do
 | A contract for a door | `packages/contracts/openapi.yaml` and `schemas/`; `/mcp` and `/a2a` are outside the contract (`tests/web/test_api_routes_have_a_client.py`, 36) | **missing** |
 | A replay cache | `rate_limit.py` (5-6): "There is no shared store, by decision" | **missing**, on purpose: ADR 0148 uses a sequence on a row |
 | Encryption at rest behind a seam | `secret_store.py` `KeyWrapper` (124) | **exists** |
-| An entrypoint of the API image as its own Deployment | `charts/choregos/templates/egress.yaml` (19-53); the relay `apps/api/src/choregos_api/relay/`, which no chart template renders (`docs/usage.md`, 110) | **partial**: neither holds a database credential |
+| An entrypoint of the API image as its own Deployment | `charts/choregos/templates/egress.yaml` (19-53); the relay `apps/api/src/tranibor_api/relay/`, which no chart template renders (`docs/usage.md`, 110) | **partial**: neither holds a database credential |
 | A bounded connection pool per process | `config.py` (61-68): `db_pool_size`, `db_max_overflow` | **exists** |
 | A network journal | `db/models/audit.py` `NetworkDecision` (43): a row per run, layer, host and decision; `services/platform_network.py` `enforce_connector_call` (190) checks nothing without a host (205) | **exists** |
 | "What a version reaches", read before a run | `services/agent_reach.py`: a connector tool is `{name, source, origin, access}` | **partial**: no route, no offline state |
@@ -128,7 +128,7 @@ clause**; the migration goes down and up again.
 
 ### S65-12 · feat(api): the outposts' door: enrol, poll, answer, refuse
 
-`apps/api/src/choregos_api/outposts/`, mounted only when the setting is on. Depends on S65-11. **Accepted
+`apps/api/src/tranibor_api/outposts/`, mounted only when the setting is on. Depends on S65-11. **Accepted
 when** `test_outpost_door.py` refuses, each with its own case: a replayed sequence, a valid signature over
 another method or URL, a stale `iat`, a stale nonce, a revoked instance, a pending instance, an answer to
 another outpost's call (404, never 403), a body above the cap (before parsing), a second concurrent poll
@@ -145,7 +145,7 @@ the door imports the broker.
 
 ### S65-13 · feat(api,adapters): a connector reached through an outpost, and its fakes
 
-The port and the tool client in `packages/adapters/src/choregos_adapters/outpost/`, implemented over the
+The port and the tool client in `packages/adapters/src/tranibor_adapters/outpost/`, implemented over the
 database by the API as `adapter_wiring.py` does for the lexical memory; a scriptable `FakeOutpost`
 (`go_offline`, `refuse_next`, `lose_lease`); the type `mcp-outpost`; the outpost route in `route_of` and
 `connector_client`; the typed refusals; the procedure `connector.mcp.mcp-outpost.md`. Depends on S65-12.

@@ -2,7 +2,7 @@
 """Are the plugin's tables REALLY isolated by organisation on PostgreSQL?
 
 On SQLite there is no RLS: this test runs only against a real PostgreSQL (`CHOREGOS_TEST_DATABASE_URL`,
-set by CI). The schema is the one of `python -m choregos_api.migrate` with the plugin installed — the
+set by CI). The schema is the one of `python -m tranibor_api.migrate` with the plugin installed — the
 `ontology` branch included — and the session is the NON-superuser application role's, without which RLS
 would not apply.
 """
@@ -48,9 +48,9 @@ async def _admin(*statements: str) -> Any:
 @pytest.fixture
 async def migrated_database(plugin: None, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[None]:
     from alembic import command
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.db import session as db_session
-    from choregos_api.migrate import configuration
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.db import session as db_session
+    from tranibor_api.migrate import configuration
 
     await _admin(
         "DROP SCHEMA public CASCADE",
@@ -86,10 +86,10 @@ async def test_the_plugin_tables_are_under_forced_rls(migrated_database: None) -
 async def test_an_organisation_sees_neither_the_objects_nor_the_ontology_of_another(
     migrated_database: None,
 ) -> None:
-    from choregos_api.db.models import Organization, Project
-    from choregos_api.db.session import session_scope
-    from choregos_ontology.service.store import ManagedObject, OntologyVersion
     from sqlalchemy import select
+    from tranibor_api.db.models import Organization, Project
+    from tranibor_api.db.session import session_scope
+    from tranibor_ontology.service.store import ManagedObject, OntologyVersion
 
     projects: dict[str, str] = {}
     async with session_scope(orgs="*") as session:
@@ -144,9 +144,9 @@ async def test_onto0003_copies_the_proposals_under_forced_rls(
     import json
 
     from alembic import command
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.db import session as db_session
-    from choregos_api.migrate import configuration
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.db import session as db_session
+    from tranibor_api.migrate import configuration
 
     await _admin(
         "DROP SCHEMA public CASCADE",
@@ -163,9 +163,9 @@ async def test_onto0003_copies_the_proposals_under_forced_rls(
     try:
         await asyncio.to_thread(command.upgrade, configuration(), "f8a0b2c4d6e9")
         await asyncio.to_thread(command.upgrade, configuration(), "onto0002")
-        from choregos_api.db.session import session_scope
-        from choregos_ontology.service.store import OntologyVersion
         from sqlalchemy import text
+        from tranibor_api.db.session import session_scope
+        from tranibor_ontology.service.store import OntologyVersion
 
         async with session_scope(orgs="*") as session:
             # Raw SQL, not the ORM: the database stands at `onto0002`, and the models describe the

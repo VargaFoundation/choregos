@@ -10,9 +10,9 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 import pytest
-from choregos_contracts import ProjectConfig, RepoConfig
-from choregos_core import load_preset
-from choregos_orchestrator.gitops import EGRESS_NAME, EGRESS_PORT, render_project_manifests
+from tranibor_contracts import ProjectConfig, RepoConfig
+from tranibor_core import load_preset
+from tranibor_orchestrator.gitops import EGRESS_NAME, EGRESS_PORT, render_project_manifests
 
 from .conftest import apply, kubectl, run_probe
 

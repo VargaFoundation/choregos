@@ -32,9 +32,9 @@ HISTORIES = pathlib.Path(__file__).resolve().parents[3] / "tests" / "replay" / "
 
 
 async def _releases() -> list[Any]:
-    from choregos_api.db.models import Release
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Release
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         return list((await session.execute(select(Release))).scalars())
@@ -163,8 +163,8 @@ async def test_the_ticket_advances_when_its_train_has_delivered_without_a_hand_c
     assert issue["state"] == "deployed_prod"
 
     # The two histories replay against the current code, and are archived for those to come.
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.worker import Replayer
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     for name, history in histories.items():
         await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
@@ -227,9 +227,9 @@ EXPRESS_ARCHIVES = {"lane-requires": "train-express-S22-17"}
 
 async def _express_lane(setup: Fixture, *, approval_required: bool, lane: dict[str, Any] | None) -> None:
     """The ordinary approval of prod, and that of its express lane (`None`: the lane says nothing)."""
-    from choregos_api.db.models import PolicyDef
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import PolicyDef
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         row = (
@@ -263,9 +263,9 @@ def _express_departures(history: Any) -> list[bool]:
 
 async def _requested_groups() -> list[str | None]:
     """The group of each departure approval request, in order."""
-    from choregos_api.db.models import Event
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Event
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = await session.execute(
@@ -278,9 +278,9 @@ async def test_a_hotfix_ticket_boarded_by_the_interpreter_takes_the_express_lane
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
     """`signal_train` boarded with `labels: []`: a hotfix coming from the interpreter waited for the cron."""
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.services import record_labels
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services import record_labels
 
     async with session_scope() as session:
         item = await session.get(WorkItem, setup.work_item_id)
@@ -349,8 +349,8 @@ async def test_an_express_departure_takes_the_approval_of_the_express_lane(
             await train.result()
             history = await train.fetch_history()
     # The history replays against the current code; the one of the lane that requires is archived.
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.worker import Replayer
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
     name = EXPRESS_ARCHIVES.get(request.node.callspec.id)
@@ -380,9 +380,9 @@ async def _prod_policy(setup: Fixture, **changes: Any) -> None:
     `0 10,14,17 * * 1-4` is due for a whole minute three times a day, Monday to Thursday, in UTC: a
     suite that ran at 10:00:43 on 2026-10-19 saw three trains that must wait for the cron leave on it.
     """
-    from choregos_api.db.models import PolicyDef
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import PolicyDef
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         row = (
@@ -411,8 +411,8 @@ async def _express_label(setup: Fixture, label: str) -> None:
 
 
 async def _replay_and_archive(name: str | None, history: Any) -> None:
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.worker import Replayer
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
     if name and recording_history():

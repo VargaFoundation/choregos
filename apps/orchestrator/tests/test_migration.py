@@ -51,9 +51,9 @@ ARRIVAL: dict[str, Any] = {
 
 async def _define(setup: Fixture, document: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     """A definition in the database, and what the API would send of it in the signal."""
-    from choregos_api.db.models import WorkflowDef
-    from choregos_api.db.session import session_scope
-    from choregos_contracts import Workflow
+    from tranibor_api.db.models import WorkflowDef
+    from tranibor_api.db.session import session_scope
+    from tranibor_contracts import Workflow
 
     model = Workflow.model_validate(document)
     signal = model.model_dump(mode="json", by_alias=True, exclude_none=True)
@@ -75,8 +75,8 @@ async def _define(setup: Fixture, document: dict[str, Any]) -> tuple[str, dict[s
 
 async def _park(setup: Fixture) -> str:
     """The ticket is born in `parking`, in state `parked`."""
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     parking, _ = await _define(setup, PARKING)
     async with session_scope() as session:
@@ -110,9 +110,9 @@ async def _wait_for(handle: Any, predicate: Any, what: str) -> dict[str, Any]:
 
 
 async def _events(setup: Fixture) -> list[Any]:
-    from choregos_api.db.models import Event
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Event
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = await session.execute(
@@ -124,10 +124,10 @@ async def _events(setup: Fixture) -> list[Any]:
 async def test_a_parked_ticket_migrates_and_ends_on_its_new_definition(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.worker import Replayer
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     await _park(setup)
     arrival, signal = await _define(setup, ARRIVAL)
@@ -172,8 +172,8 @@ async def test_a_parked_ticket_migrates_and_ends_on_its_new_definition(
 async def test_an_impossible_migration_leaves_the_ticket_alive(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     parking = await _park(setup)
     arrival, signal = await _define(setup, ARRIVAL)
@@ -205,7 +205,7 @@ async def test_an_impossible_migration_leaves_the_ticket_alive(
 
 async def test_recording_the_same_migration_twice_does_not_double_it(setup: Fixture) -> None:
     """A replayed activity (ADR 0008): the migration's key is in the event."""
-    from choregos_orchestrator.activities.interpretation import record_migration
+    from tranibor_orchestrator.activities.interpretation import record_migration
 
     arrival, _ = await _define(setup, ARRIVAL)
     recorded_migration = {
@@ -241,10 +241,10 @@ async def test_a_reroute_does_not_wait_for_the_person_who_was_asked(
 ) -> None:
     """ADR 0123 §1: a misrouted ticket is seen when a person is asked. The re-route — a `migrate` to the
     target's initial state — closes the request as superseded and plays the new workflow at once."""
-    from choregos_api.db.models import HumanRequest, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.worker import Replayer
+    from tranibor_api.db.models import HumanRequest, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     review, _ = await _define(setup, REVIEW)
     async with session_scope() as session:

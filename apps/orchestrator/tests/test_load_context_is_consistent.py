@@ -20,8 +20,8 @@ AFTER = "awaiting_spec_approval"
 
 
 async def _a_succeeded_run_not_decided_yet(setup: Fixture) -> None:
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Run, WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         item = await session.get(WorkItem, setup.work_item_id)
@@ -41,10 +41,10 @@ async def _a_succeeded_run_not_decided_yet(setup: Fixture) -> None:
 
 async def _commit_the_mirror(setup: Fixture) -> None:
     """What `mirror_state` commits, in one transaction: the new state, and the decision applied."""
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
     from sqlalchemy import update
+    from tranibor_api.db.models import Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
 
     async with session_scope(orgs="*") as session:
         item = await session.get(WorkItem, setup.work_item_id)
@@ -58,7 +58,7 @@ async def _commit_the_mirror(setup: Fixture) -> None:
 async def test_a_commit_between_the_two_reads_does_not_replay_the_stage(
     setup: Fixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_orchestrator.activities import interpretation
+    from tranibor_orchestrator.activities import interpretation
 
     await _a_succeeded_run_not_decided_yet(setup)
     real = interpretation.attempts_spent

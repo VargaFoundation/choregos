@@ -23,8 +23,8 @@ async def _until(handle: Any, predicate: Any, timeout: float = 60.0) -> dict[str
 
 
 def _demo_cd(setup: Fixture) -> Any:
-    from choregos_adapters.fakes.demo_cd import DemoCd, FakeDemoCd
-    from choregos_adapters.fakes.hr import Desk
+    from tranibor_adapters.fakes.demo_cd import DemoCd, FakeDemoCd
+    from tranibor_adapters.fakes.hr import Desk
 
     fake = FakeDemoCd()
     setup.adapters.cd = DemoCd(Desk(fake))
@@ -44,9 +44,9 @@ async def _departure(temporal_env: Any, setup: Fixture) -> Any:
 
 
 async def _releases() -> list[Any]:
-    from choregos_api.db.models import Release
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Release
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         return list((await session.execute(select(Release))).scalars())

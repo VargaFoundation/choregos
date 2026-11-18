@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from choregos_adapters import account_of
+from tranibor_adapters import account_of
 
 
 @pytest.mark.parametrize(

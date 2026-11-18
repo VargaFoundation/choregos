@@ -126,7 +126,7 @@ default, like `knowledge` and `memory`: versions published before this ADR keep 
 
 ## As built (S40-01c)
 
-- The proxy is `apps/api/src/choregos_api/egress/` (`python -m choregos_api.egress`, an asyncio server on
+- The proxy is `apps/api/src/tranibor_api/egress/` (`python -m choregos_api.egress`, an asyncio server on
   the API image, no new dependency). Sources and sinks are protocols with fakes
   (`FakeRunNetworkSource`, `FakeDecisionSink`); the resolver and the "is this address public" predicate
   are injectable and the default predicate refuses loopback, private, link-local, reserved, multicast and

@@ -5,10 +5,10 @@ from __future__ import annotations
 import asyncio
 
 import pytest
-from choregos_api.egress.config import EgressSettings
-from choregos_api.egress.proxy import EgressProxy, is_public
-from choregos_api.egress.report import FakeDecisionSink, Reporter
-from choregos_api.egress.sources import FakeRunNetworkSource
+from tranibor_api.egress.config import EgressSettings
+from tranibor_api.egress.proxy import EgressProxy, is_public
+from tranibor_api.egress.report import FakeDecisionSink, Reporter
+from tranibor_api.egress.sources import FakeRunNetworkSource
 
 from .helpers import LOOPBACK, basic, connect_request, headers_of, rig
 

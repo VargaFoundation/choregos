@@ -7,7 +7,7 @@ import json
 from typing import Any
 
 import pytest
-from choregos_ontology.observations import PartialReportError, parse_report, plan_sync
+from tranibor_ontology.observations import PartialReportError, parse_report, plan_sync
 
 NOW = "2026-10-03T12:00:00+00:00"
 

@@ -13,14 +13,14 @@ import json
 from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any
 
-import choregos_contracts
 import httpx
 import pytest
-from choregos_contracts import StageInput, ToolScripts
-from choregos_tools_mcp import McpServer
-from choregos_tools_mcp import app as app_module
-from choregos_tools_mcp.app import create_app
-from choregos_tools_mcp.bridge import (
+import tranibor_contracts
+from tranibor_contracts import StageInput, ToolScripts
+from tranibor_tools_mcp import McpServer
+from tranibor_tools_mcp import app as app_module
+from tranibor_tools_mcp.app import create_app
+from tranibor_tools_mcp.bridge import (
     CALL_EVENT,
     MAX_BODY_BYTES,
     MAX_SCRIPT_BYTES,
@@ -30,7 +30,7 @@ from choregos_tools_mcp.bridge import (
     Bridge,
     StageInputBridge,
 )
-from choregos_tools_mcp.client import InternalClient
+from tranibor_tools_mcp.client import InternalClient
 
 RUN = "run-42"
 API = "http://api.test/api/v1/internal"
@@ -107,7 +107,7 @@ class FakeApi:
 
 
 def _stage_input(scripts: ToolScripts | None) -> dict[str, Any]:
-    example = choregos_contracts.schemas_dir() / "examples" / "stage-input.example.json"
+    example = tranibor_contracts.schemas_dir() / "examples" / "stage-input.example.json"
     stage_input = StageInput.model_validate(json.loads(example.read_text(encoding="utf-8")))
     stage_input.tools.scripts = scripts
     return stage_input.model_dump(mode="json", by_alias=True, exclude_none=True)

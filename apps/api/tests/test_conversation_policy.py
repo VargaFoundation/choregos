@@ -15,10 +15,10 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from choregos_core import utcnow
-from choregos_core.domain import aware
 from httpx import AsyncClient
 from sqlalchemy import delete, select
+from tranibor_core import utcnow
+from tranibor_core.domain import aware
 
 from .agent_scopes_kit import as_user
 from .conftest import without_postgres
@@ -159,8 +159,8 @@ async def test_max_turns_and_retention_come_from_the_installations_policy(
 
 
 async def _break(how: str) -> None:
-    from choregos_api.db.models import AssistantInstallation, OrgPlugin
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import AssistantInstallation, OrgPlugin
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         if how == "incomplete":
@@ -210,7 +210,7 @@ async def test_two_turns_racing_the_installations_month_cap_are_not_both_admitte
     without the installation's lock and the open reservations counted, both are admitted at the whole cap
     and the month is reserved twice."""
     import httpx
-    from choregos_api.services.agent_sessions import set_model_transport
+    from tranibor_api.services.agent_sessions import set_model_transport
 
     person = await _person(client, app)
     other = await _person(client, app, "other@northwind.dev")
@@ -242,8 +242,8 @@ async def test_two_turns_racing_the_installations_month_cap_are_not_both_admitte
 
 
 async def _turn_keys() -> list[Any]:
-    from choregos_api.db.models import GatewayKeyRow
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import GatewayKeyRow
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         rows = list((await session.execute(select(GatewayKeyRow))).scalars())

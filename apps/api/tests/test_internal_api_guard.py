@@ -17,8 +17,14 @@ from typing import Any
 
 import pytest
 import structlog
-from choregos_api.config import Settings, reset_settings_cache
-from choregos_api.internal_api_guard import (
+from httpx import AsyncClient
+from starlette.applications import Starlette
+from starlette.datastructures import Headers
+from starlette.routing import WebSocketRoute
+from starlette.testclient import TestClient
+from starlette.websockets import WebSocket, WebSocketDisconnect
+from tranibor_api.config import Settings, reset_settings_cache
+from tranibor_api.internal_api_guard import (
     PREFIX,
     Guard,
     InternalApiGuard,
@@ -27,12 +33,6 @@ from choregos_api.internal_api_guard import (
     hostname,
     presented_hosts,
 )
-from httpx import AsyncClient
-from starlette.applications import Starlette
-from starlette.datastructures import Headers
-from starlette.routing import WebSocketRoute
-from starlette.testclient import TestClient
-from starlette.websockets import WebSocket, WebSocketDisconnect
 
 from .test_network_policy_api import _run
 
@@ -69,10 +69,10 @@ async def _on(client: AsyncClient, host: str, path: str, token: dict[str, str], 
 
 async def _session_pod(project: dict[str, Any]) -> tuple[str, dict[str, str]]:
     """A hosted session whose pod may read its input, and the token its workflow mints for it."""
-    from choregos_api.db.models import AgentSessionRecord, Organization
-    from choregos_api.db.session import session_scope
-    from choregos_api.security import mint_run_token
     from sqlalchemy import select
+    from tranibor_api.db.models import AgentSessionRecord, Organization
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.security import mint_run_token
 
     async with session_scope() as db:
         org_id = (

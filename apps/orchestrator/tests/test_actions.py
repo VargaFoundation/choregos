@@ -27,8 +27,8 @@ class Journal:
 
 @pytest.fixture
 def journal() -> Iterator[Journal]:
-    from choregos_api import effects
-    from choregos_api.effects import EffectRefused
+    from tranibor_api import effects
+    from tranibor_api.effects import EffectRefused
 
     seen = Journal()
 
@@ -78,8 +78,8 @@ REFUSE = {"effect": "test.refuse", "with": {}}  # fmt: skip
 
 
 async def _action(setup: Fixture, effect_list: list[dict[str, Any]], status: str = "approved") -> str:
-    from choregos_api.db.models import Action, Project
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Action, Project
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         project = await session.get(Project, setup.project_id)
@@ -111,9 +111,9 @@ async def _run(temporal_env: Any, worker_factory: Any, action_id: str) -> tuple[
 
 
 async def _state(action_id: str) -> tuple[str, list[tuple[str, str, int]]]:
-    from choregos_api.db.models import Action, ActionEffect
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Action, ActionEffect
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         action = await session.get(Action, action_id)
@@ -131,8 +131,8 @@ async def _state(action_id: str) -> tuple[str, list[tuple[str, str, int]]]:
 async def test_a_transient_failure_does_not_redo_the_effect_already_done(
     setup: Fixture, temporal_env: Any, worker_factory: Any, journal: Journal
 ) -> None:
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.worker import Replayer
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     journal.outages["add"] = 1
     action_id = await _action(setup, [CREATE, ADD])
@@ -200,13 +200,13 @@ async def test_a_refusal_compensates_what_was_done_in_reverse(
 async def test_a_done_key_is_not_redone_a_started_key_is_resumed(setup: Fixture, journal: Journal) -> None:
     """The worker is killed: before the confirmation, the effect is resumed (it is idempotent);
     after, the recorded answer comes back and nothing is sent again to the third-party system."""
-    from choregos_api.db.models import ActionEffect
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities.actions import execute_effect
+    from tranibor_api.db.models import ActionEffect
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities.actions import execute_effect
 
     action_id = await _action(setup, [CREATE])
     async with session_scope() as session:
-        from choregos_api.db.models import Action
+        from tranibor_api.db.models import Action
 
         action = await session.get(Action, action_id)
         assert action is not None
@@ -237,15 +237,15 @@ async def test_an_approved_action_reaches_the_server_with_the_connector_key(
     """End to end on the orchestrator side (S20-02): the tool under approval became an action, it
     was approved; the `ActionWorkflow` runs it, and it is IT that reaches the server — with the
     connector key, resolved by the platform."""
-    import choregos_adapters
-    from choregos_adapters.fakes.mcp import FakeMcpServer
-    from choregos_api.db.models import ConnectorOperation, OrgConnector, Project
-    from choregos_api.db.session import session_scope
+    import tranibor_adapters
+    from tranibor_adapters.fakes.mcp import FakeMcpServer
+    from tranibor_api.db.models import ConnectorOperation, OrgConnector, Project
+    from tranibor_api.db.session import session_scope
 
     server = FakeMcpServer(
         tools=[{"name": "order_workstation", "inputSchema": {"type": "object"}}], token="provider-key"
     )
-    monkeypatch.setattr(choregos_adapters, "FAKE_MCP", server)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_MCP", server)
     monkeypatch.setenv("CONNECTOR_TEST_PROVIDER_KEY", "provider-key")
     async with session_scope() as session:
         project = await session.get(Project, setup.project_id)
@@ -292,8 +292,8 @@ async def test_an_action_started_before_its_row_is_visible_waits_until_it_is(
     row may not be visible yet when the workflow reads it. It retries, instead of dying."""
     import asyncio
 
-    from choregos_api.db.models import Action, Project
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Action, Project
+    from tranibor_api.db.session import session_scope
 
     action_id = "00000000-0000-7000-8000-00000000a7a1"
     async with worker_factory():

@@ -1,7 +1,7 @@
 """Temporal over TLS and its payload codec reach the API and every worker (S80-06, ADR 0183).
 
 The chart mounts the TLS Secret and the codec Secret into the pods that hold a Temporal client, and
-sets the variables `choregos_core.temporal_connection` reads. Off by default: nothing is mounted and
+sets the variables `tranibor_core.temporal_connection` reads. Off by default: nothing is mounted and
 no variable is set, so dev, kind and compose keep talking in clear.
 """
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from choregos_core import parse_workflow
+from tranibor_core import parse_workflow
 
 WORKFLOW = """
 apiVersion: choregos/v1
@@ -108,7 +108,7 @@ def test_the_scale_of_a_result_field_cannot_be_replaced(name: str) -> None:
 
 
 def test_every_shipped_workflow_that_writes_code_shows_its_changes() -> None:
-    from choregos_core.dsl import TEMPLATE_NAMES, template_yaml
+    from tranibor_core.dsl import TEMPLATE_NAMES, template_yaml
 
     writing = 0
     for name in TEMPLATE_NAMES:

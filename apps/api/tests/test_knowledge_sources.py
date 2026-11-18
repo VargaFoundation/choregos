@@ -42,7 +42,7 @@ async def _sharepoint(
 
 
 async def _sync(source_id: str) -> dict[str, Any]:
-    from choregos_api.knowledge.sync import sync_source
+    from tranibor_api.knowledge.sync import sync_source
 
     return await sync_source("northwind", source_id)
 
@@ -54,9 +54,9 @@ async def _search(client: AsyncClient, query: str) -> set[str]:
 
 
 async def _chunks_of(document_id: str) -> int:
-    from choregos_api.db.models import KnowledgeChunk
-    from choregos_api.db.session import session_scope
     from sqlalchemy import func, select
+    from tranibor_api.db.models import KnowledgeChunk
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         return int(
@@ -89,7 +89,7 @@ async def test_a_document_deleted_at_the_source_leaves_the_index(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The acceptance of S33-04."""
-    from choregos_adapters.fakes.documents import fake_source
+    from tranibor_adapters.fakes.documents import fake_source
 
     source = await _sharepoint(client, monkeypatch)
     site = fake_source(source["id"])
@@ -122,7 +122,7 @@ async def test_a_sync_names_the_spreadsheets_it_cut(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """S42-09e: `last_summary` says how many documents were cut and which sheets, like `skipped_reasons`."""
-    from choregos_adapters.fakes.documents import fake_source
+    from tranibor_adapters.fakes.documents import fake_source
 
     source = await _sharepoint(client, monkeypatch, mode="files")
     site = fake_source(source["id"])
@@ -145,9 +145,9 @@ async def test_a_sync_replayed_changes_nothing_twice(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """ADR 0008: the cursor moves only once the changes are applied; replaying them is a no-op."""
-    from choregos_adapters.fakes.documents import fake_source
-    from choregos_api.db.models import KnowledgeSource
-    from choregos_api.db.session import session_scope
+    from tranibor_adapters.fakes.documents import fake_source
+    from tranibor_api.db.models import KnowledgeSource
+    from tranibor_api.db.session import session_scope
 
     source = await _sharepoint(client, monkeypatch, mode="files")
     site = fake_source(source["id"])
@@ -174,10 +174,10 @@ async def test_a_sync_replayed_changes_nothing_twice(
 async def test_a_failed_sync_says_why_and_keeps_its_cursor(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_adapters.documents.base import Changes
-    from choregos_api.db.models import KnowledgeSource
-    from choregos_api.db.session import session_scope
-    from choregos_api.knowledge.sync import sync_source
+    from tranibor_adapters.documents.base import Changes
+    from tranibor_api.db.models import KnowledgeSource
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.knowledge.sync import sync_source
 
     source = await _sharepoint(client, monkeypatch, mode="files")
 
@@ -200,8 +200,8 @@ async def test_a_failed_sync_says_why_and_keeps_its_cursor(
 async def test_a_full_listing_deletes_what_it_does_not_list_unless_a_page_was_unreadable() -> None:
     from types import SimpleNamespace
 
-    from choregos_adapters.documents.base import Changes, SourceItem
-    from choregos_api.knowledge.sync import _deleted
+    from tranibor_adapters.documents.base import Changes, SourceItem
+    from tranibor_api.knowledge.sync import _deleted
 
     known: dict[str, Any] = {"a": SimpleNamespace(), "b": SimpleNamespace()}
     listed = [SourceItem(ref="a", name="a.md", version="1")]
@@ -213,13 +213,13 @@ async def test_a_full_listing_deletes_what_it_does_not_list_unless_a_page_was_un
 async def test_an_unknown_source_kind_is_unavailable_not_faked(monkeypatch: pytest.MonkeyPatch) -> None:
     from types import SimpleNamespace
 
-    from choregos_api.knowledge.sync import SourceUnavailableError, open_source
+    from tranibor_api.knowledge.sync import SourceUnavailableError, open_source
 
     monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
-    from choregos_adapters import registry
+    from tranibor_adapters import registry
 
     monkeypatch.setattr(registry, "fakes_enabled", lambda: False)
-    monkeypatch.setattr("choregos_api.knowledge.sync.fakes_enabled", lambda: False)
+    monkeypatch.setattr("tranibor_api.knowledge.sync.fakes_enabled", lambda: False)
     source = SimpleNamespace(kind="carrier-pigeon", config={}, connector=None, org_id="o", id="s")
     with pytest.raises(SourceUnavailableError, match="carrier-pigeon"):
         await open_source(None, source)  # type: ignore[arg-type]
@@ -228,7 +228,7 @@ async def test_an_unknown_source_kind_is_unavailable_not_faked(monkeypatch: pyte
 async def test_the_loop_starts_with_the_source_and_syncs_on_demand(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch, app: Any
 ) -> None:
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.temporal import get_temporal
 
     source = await _sharepoint(client, monkeypatch, mode="files")
     temporal: Any = get_temporal()
@@ -317,10 +317,10 @@ async def test_a_sync_refuses_a_connector_of_another_type(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Same check at sync time: a connector whose type changed after the source was declared."""
-    from choregos_api.db.models import KnowledgeSource, OrgConnector
-    from choregos_api.db.session import session_scope
-    from choregos_api.knowledge.sync import SourceUnavailableError, open_source
     from sqlalchemy import select
+    from tranibor_api.db.models import KnowledgeSource, OrgConnector
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.knowledge.sync import SourceUnavailableError, open_source
 
     source = await _sharepoint(client, monkeypatch)
     async with session_scope() as session:
@@ -336,7 +336,7 @@ async def test_a_sync_refuses_a_connector_of_another_type(
 
 
 async def test_web_and_git_sources_sync_through_their_fakes(client: AsyncClient, admin: str) -> None:
-    from choregos_adapters.fakes.documents import fake_source
+    from tranibor_adapters.fakes.documents import fake_source
 
     await client.post(BASE, json={"slug": "framework", "name": "Framework"})
     for body, name, content in (
@@ -358,7 +358,7 @@ async def test_web_and_git_sources_sync_through_their_fakes(client: AsyncClient,
 
 async def test_a_git_source_syncs_yaml_and_json_under_their_path(client: AsyncClient, admin: str) -> None:
     """S51-05: a `.yaml` from git is no longer skipped as an unsupported format; its path heads it."""
-    from choregos_adapters.fakes.documents import fake_source
+    from tranibor_adapters.fakes.documents import fake_source
 
     await client.post(BASE, json={"slug": "framework", "name": "Framework"})
     created = await client.post(
@@ -387,9 +387,9 @@ async def test_the_activity_skips_a_pass_that_is_not_due(
     """S39-19: a restarted worker or a `continue_as_new` pass must not sync off-schedule."""
     from datetime import UTC, datetime, timedelta
 
-    from choregos_adapters.fakes.documents import fake_source
-    from choregos_api.knowledge import refresh
-    from choregos_orchestrator.activities.knowledge import sync_knowledge_source
+    from tranibor_adapters.fakes.documents import fake_source
+    from tranibor_api.knowledge import refresh
+    from tranibor_orchestrator.activities.knowledge import sync_knowledge_source
 
     now = [datetime(2026, 10, 16, 8, 0, tzinfo=UTC)]
     monkeypatch.setattr(refresh, "utcnow", lambda: now[0])
@@ -424,7 +424,7 @@ async def _confluence(
 ) -> dict[str, Any]:
     """An `index` base, a `documents/confluence` connector, and a source on the fake site, with the
     real adapter (fakes off) talking to `FakeConfluence` through the module's transport seam."""
-    from choregos_adapters.documents import confluence
+    from tranibor_adapters.documents import confluence
 
     monkeypatch.setenv("CONNECTOR_KB_CONFLUENCE_TOKEN", site.token)
     created = await client.post(
@@ -455,7 +455,7 @@ async def _confluence(
 async def test_a_confluence_page_tree_syncs_and_follows_the_source(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_adapters.fakes.confluence import FakeConfluence
+    from tranibor_adapters.fakes.confluence import FakeConfluence
 
     site = FakeConfluence()
     site.add_space("ENG")
@@ -498,8 +498,8 @@ async def test_chosen_pages_without_their_sub_pages_sync_and_one_leaving_is_dele
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """S42-09d: `page_ids` + `descendants: false` mirror exactly those pages."""
-    from choregos_adapters.fakes.confluence import FakeConfluence
-    from choregos_adapters.http import rest
+    from tranibor_adapters.fakes.confluence import FakeConfluence
+    from tranibor_adapters.http import rest
 
     monkeypatch.setattr(rest, "_backoff", lambda response, attempt: 0.0)
     site = FakeConfluence()
@@ -529,8 +529,8 @@ async def test_chosen_pages_without_their_sub_pages_sync_and_one_leaving_is_dele
 async def test_a_listing_that_fails_deletes_nothing(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_adapters.fakes.confluence import FakeConfluence
-    from choregos_adapters.http import rest
+    from tranibor_adapters.fakes.confluence import FakeConfluence
+    from tranibor_adapters.http import rest
 
     monkeypatch.setattr(rest, "_backoff", lambda response, attempt: 0.0)
     site = FakeConfluence()
@@ -611,7 +611,7 @@ async def test_the_confluence_connector_type_is_listed_with_its_secret_field(
 async def test_a_crawl_that_suddenly_lists_nothing_deletes_nothing(client: AsyncClient, admin: str) -> None:
     """The start redirects off the site: no page, and no mass deletion of what was indexed."""
     import httpx
-    from choregos_adapters.documents.web import WebCrawlSource
+    from tranibor_adapters.documents.web import WebCrawlSource
 
     await client.post(BASE, json={"slug": "framework", "name": "Framework"})
     created = await client.post(
@@ -639,7 +639,7 @@ async def test_a_crawl_that_suddenly_lists_nothing_deletes_nothing(client: Async
             url="https://docs.example.com/", transport=httpx.MockTransport(handler), resolver=public
         )
 
-    from choregos_api.knowledge.sync import sync_source
+    from tranibor_api.knowledge.sync import sync_source
 
     assert (await sync_source("northwind", source_id, adapter=crawl()))["added"] == 3
     state["up"] = False
@@ -652,7 +652,7 @@ async def test_a_web_source_starting_on_a_redirect_is_refused(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     import respx
-    from choregos_adapters.documents import web
+    from tranibor_adapters.documents import web
 
     monkeypatch.setenv("CHOREGOS_FAKES", "0")
 
@@ -699,7 +699,7 @@ async def _git_connector(client: AsyncClient, name: str = "globex-github") -> No
 async def test_a_git_source_names_a_git_connector_for_a_private_repository(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_adapters.fakes.documents import fake_source
+    from tranibor_adapters.fakes.documents import fake_source
 
     monkeypatch.setenv("CONNECTOR_KB_GIT_TOKEN", "t" + "ok-" + "x")
 
@@ -747,9 +747,9 @@ async def test_a_web_source_with_linked_documents_stores_the_pdf_converted(
     client: AsyncClient, admin: str
 ) -> None:
     """S42-09b: a PDF the crawl lists goes through the same pipeline as an upload (fakes: no network)."""
-    from choregos_adapters.fakes.documents import fake_source
-    from choregos_api.db.models import KnowledgeDocument
-    from choregos_api.db.session import session_scope
+    from tranibor_adapters.fakes.documents import fake_source
+    from tranibor_api.db.models import KnowledgeDocument
+    from tranibor_api.db.session import session_scope
 
     await client.post(BASE, json={"slug": "framework", "name": "Framework"})
     created = await client.post(
@@ -851,10 +851,10 @@ async def test_a_web_source_behind_a_login_is_checked_and_crawled_with_the_conne
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     import respx
-    from choregos_adapters.documents import web
-    from choregos_api.db.models import KnowledgeSource
-    from choregos_api.db.session import session_scope
-    from choregos_api.knowledge.sync import open_source
+    from tranibor_adapters.documents import web
+    from tranibor_api.db.models import KnowledgeSource
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.knowledge.sync import open_source
 
     monkeypatch.setenv("CHOREGOS_FAKES", "0")
 

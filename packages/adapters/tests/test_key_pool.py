@@ -14,12 +14,12 @@ from typing import Any
 
 import httpx
 import pytest
-from choregos_adapters.http import pool as pool_module
-from choregos_adapters.http.pool import Pool
-from choregos_adapters.marketdata import AlphaVantageProvider, RateLimited
-from choregos_adapters.registry import resolved_configuration, validate_config
-from choregos_adapters.web_search import BraveSearch, SearchError, SearchRateLimited
-from choregos_core.egress import hosts_of_config
+from tranibor_adapters.http import pool as pool_module
+from tranibor_adapters.http.pool import Pool
+from tranibor_adapters.marketdata import AlphaVantageProvider, RateLimited
+from tranibor_adapters.registry import resolved_configuration, validate_config
+from tranibor_adapters.web_search import BraveSearch, SearchError, SearchRateLimited
+from tranibor_core.egress import hosts_of_config
 
 from .test_marketdata import ALPHA_DAILY
 
@@ -246,7 +246,7 @@ async def test_a_single_refused_search_key_is_the_old_error() -> None:
 async def test_tiingo_sends_the_key_of_each_call_and_moves_past_a_refused_one() -> None:
     """Tiingo's key is a header: set once at construction, every call of a pool would carry the first
     key whatever the turn (S39-30d). Set per request, a refused key moves the call to the next."""
-    from choregos_adapters.marketdata import TiingoProvider
+    from tranibor_adapters.marketdata import TiingoProvider
 
     from .test_marketdata import TIINGO_ROWS
 
@@ -265,7 +265,7 @@ async def test_tiingo_sends_the_key_of_each_call_and_moves_past_a_refused_one() 
 
 
 def test_a_composite_pools_its_tiingo_keys() -> None:
-    from choregos_adapters.registry import spec_of
+    from tranibor_adapters.registry import spec_of
 
     tiingo, composite = spec_of("marketdata", "tiingo"), spec_of("marketdata", "composite")
     assert tiingo is not None and tiingo.pooled_fields == ("api_key",)

@@ -12,7 +12,7 @@ import os
 import shutil
 
 import pytest
-from choregos_adapters.oci import CosignVerifier
+from tranibor_adapters.oci import CosignVerifier
 
 pytestmark = [
     pytest.mark.cosign_real,

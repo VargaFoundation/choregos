@@ -34,11 +34,11 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from choregos_contracts import StageInput
-from choregos_runner.acp import AcpClient, AgentUnreachableError
-from choregos_runner.acp.guard import TurnGuard
-from choregos_runner.backends import get_backend
-from choregos_runner.result import load_result
+from tranibor_contracts import StageInput
+from tranibor_runner.acp import AcpClient, AgentUnreachableError
+from tranibor_runner.acp.guard import TurnGuard
+from tranibor_runner.backends import get_backend
+from tranibor_runner.result import load_result
 
 from .test_acp_conformance import CHECKS, ConformanceResult
 
@@ -116,7 +116,7 @@ def gateway() -> Iterator[FakeGateway]:
 
 
 def code_stage_input(command: list[str], gateway_url: str, workspace: Path) -> StageInput:
-    from choregos_contracts import (
+    from tranibor_contracts import (
         AgentRef,
         Budget,
         Callbacks,

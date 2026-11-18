@@ -10,10 +10,10 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from choregos_api.rbac import Principal
-from choregos_api.services.catalogue_rights import CatalogueAction, decide, projects_where
-from choregos_contracts import Role
 from httpx import AsyncClient
+from tranibor_api.rbac import Principal
+from tranibor_api.services.catalogue_rights import CatalogueAction, decide, projects_where
+from tranibor_contracts import Role
 
 from .agent_scopes_kit import add_member, as_user, make_project
 from .catalogue_kit import project_only
@@ -212,9 +212,9 @@ async def test_configured_in_lists_only_projects_the_caller_sees(client: AsyncCl
     project = (await client.get(f"{BASE}/projects")).json()["items"]
     configured = {p["slug"]: p for p in project}
     assert configured, "the helper created projects"
-    from choregos_api.db.models import Connector, Project
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Connector, Project
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         for slug in ("billing", "checkout"):

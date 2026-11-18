@@ -57,8 +57,8 @@ class HeldModel:
 
 @pytest.fixture
 def held() -> Iterator[HeldModel]:
-    from choregos_adapters.fakes import FakeGateway
-    from choregos_api.services.agent_sessions import set_model_transport, set_session_gateway
+    from tranibor_adapters.fakes import FakeGateway
+    from tranibor_api.services.agent_sessions import set_model_transport, set_session_gateway
 
     model = HeldModel()
     set_session_gateway(FakeGateway())
@@ -70,8 +70,8 @@ def held() -> Iterator[HeldModel]:
 
 async def _small_pool(monkeypatch: pytest.MonkeyPatch) -> None:
     """The engine built again with a pool of `POOL_SIZE`, no overflow, a short wait."""
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.db import session as db_session
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.db import session as db_session
 
     monkeypatch.setenv("CHOREGOS_DB_POOL_SIZE", str(POOL_SIZE))
     monkeypatch.setenv("CHOREGOS_DB_MAX_OVERFLOW", "0")
@@ -82,8 +82,8 @@ async def _small_pool(monkeypatch: pytest.MonkeyPatch) -> None:
 
 async def _an_agent_to_talk_to(client: AsyncClient) -> None:
     """The organisation `a`, its administrator signed in, a project and a prompt agent."""
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         session.add(Organization(slug="a", name="A"))
@@ -116,8 +116,8 @@ async def _idle_in_transaction() -> int:
 async def test_responses_held_at_their_model_leave_the_pool_to_the_other_requests(
     pg_app: Any, held: HeldModel, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.db.models import AgentSessionEvent, AgentSessionRecord
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import AgentSessionEvent, AgentSessionRecord
+    from tranibor_api.db.session import session_scope
 
     await _small_pool(monkeypatch)
     loop = asyncio.get_running_loop()

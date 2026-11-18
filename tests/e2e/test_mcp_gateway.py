@@ -32,7 +32,7 @@ UPSTREAM_KEY = "upstream-key"
 
 
 def _server(tools: list[dict[str, Any]], token: str, gestures: dict[str, Any]) -> Any:
-    from choregos_adapters.fakes.mcp import FakeMcpServer
+    from tranibor_adapters.fakes.mcp import FakeMcpServer
 
     return FakeMcpServer(tools=tools, token=token, gestures=gestures)
 
@@ -74,7 +74,7 @@ class Bench:
 
 @pytest.fixture
 def secret_store() -> Iterator[Any]:
-    from choregos_api.secret_store import FakeSecretStore, set_secret_store
+    from tranibor_api.secret_store import FakeSecretStore, set_secret_store
 
     store = FakeSecretStore()
     set_secret_store(store)
@@ -83,11 +83,11 @@ def secret_store() -> Iterator[Any]:
 
 
 async def _prepare(platform: Platform, monkeypatch: pytest.MonkeyPatch, store: Any) -> Bench:
-    import choregos_adapters
-    from choregos_adapters.fakes.mcp_gateway import FakeMcpGateway, GatewayUpstream
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.security import mint_run_token
+    import tranibor_adapters
+    from tranibor_adapters.fakes.mcp_gateway import FakeMcpGateway, GatewayUpstream
+    from tranibor_api.db.models import Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.security import mint_run_token
 
     client = platform.client
     await login(client)
@@ -119,7 +119,7 @@ async def _prepare(platform: Platform, monkeypatch: pytest.MonkeyPatch, store: A
         issuer=issuer,
         upstreams={"supplier": GatewayUpstream(server=server, token=UPSTREAM_KEY)},
     )
-    monkeypatch.setattr(choregos_adapters, "FAKE_MCP_GATEWAY", gateway)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_MCP_GATEWAY", gateway)
     declared = await client.post(
         f"{ORG}/connectors",
         json={"name": "supplier", "type": "mcp-gateway", "config": {"server": "supplier"}},
@@ -257,9 +257,9 @@ async def test_an_approval_gated_write_waits_for_a_person_and_carries_their_name
 async def test_nothing_of_choregos_s_reaches_the_upstream_and_no_upstream_key_is_in_choregos(
     platform: Platform, worker: Any, monkeypatch: pytest.MonkeyPatch, secret_store: Any
 ) -> None:
-    from choregos_api.db.models import OrgConnector
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import OrgConnector
+    from tranibor_api.db.session import session_scope
 
     bench = await _prepare(platform, monkeypatch, secret_store)
     client = platform.client

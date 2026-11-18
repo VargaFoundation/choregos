@@ -18,9 +18,9 @@ pytestmark = pytest.mark.asyncio
 
 
 async def _daily(setup: Fixture, usd: float | None) -> None:
-    from choregos_api.db.models import PolicyDef
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import PolicyDef
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         row = (
@@ -34,8 +34,8 @@ async def _daily(setup: Fixture, usd: float | None) -> None:
 
 
 async def test_provisioning_creates_the_team_with_the_day_budget(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.base import db, project_bundle
-    from choregos_orchestrator.activities.provisioning import (
+    from tranibor_orchestrator.activities.base import db, project_bundle
+    from tranibor_orchestrator.activities.provisioning import (
         _gateway_create_team_and_budget,
         project_team_id,
     )
@@ -51,9 +51,9 @@ async def test_provisioning_creates_the_team_with_the_day_budget(setup: Fixture)
 
 
 async def test_a_run_key_joins_the_project_team_and_the_gateway_cuts_the_day(setup: Fixture) -> None:
-    from choregos_adapters.fakes import BudgetExceededError
-    from choregos_orchestrator.activities.provisioning import project_team_id
-    from choregos_orchestrator.activities.stage import prepare_stage, start_run
+    from tranibor_adapters.fakes import BudgetExceededError
+    from tranibor_orchestrator.activities.provisioning import project_team_id
+    from tranibor_orchestrator.activities.stage import prepare_stage, start_run
 
     await _daily(setup, 1.0)
     prepared = await prepare_stage(_plan(setup))
@@ -77,7 +77,7 @@ async def test_a_run_key_joins_the_project_team_and_the_gateway_cuts_the_day(set
 
 
 async def test_a_project_over_its_day_gets_its_next_key_refused(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.stage import prepare_stage
+    from tranibor_orchestrator.activities.stage import prepare_stage
 
     await _daily(setup, 1.0)
     await spend(setup, 0.6, work_item=False)
@@ -88,7 +88,7 @@ async def test_a_project_over_its_day_gets_its_next_key_refused(setup: Fixture) 
 
 
 async def test_no_daily_budget_no_team(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.stage import prepare_stage
+    from tranibor_orchestrator.activities.stage import prepare_stage
 
     await _daily(setup, None)  # the preset's day budget is lifted
     await prepare_stage(_plan(setup))

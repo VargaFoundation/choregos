@@ -9,7 +9,7 @@ from typing import Any
 
 import httpx
 import pytest
-from choregos_core import mcp_catalogue
+from tranibor_core import mcp_catalogue
 
 from tools.catalogues import _github, _recording
 from tools.catalogues import build_mcp_catalogue as gen

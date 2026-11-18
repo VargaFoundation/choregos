@@ -12,8 +12,8 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from choregos_api.temporal import WorkflowState
 from httpx import AsyncClient
+from tranibor_api.temporal import WorkflowState
 
 ALERT = {
     "alerts": [
@@ -27,9 +27,9 @@ ALERT = {
 
 
 async def _disable_memory(project_id: str) -> None:
-    from choregos_api.db.models import PolicyDef
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import PolicyDef
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         row = (
@@ -44,9 +44,9 @@ async def _disable_memory(project_id: str) -> None:
 
 
 async def _signalled_alerts(project_id: str) -> int:
-    from choregos_api.db.models import ReceivedEvent
-    from choregos_api.db.session import session_scope
     from sqlalchemy import func, select
+    from tranibor_api.db.models import ReceivedEvent
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         return int(
@@ -64,7 +64,7 @@ async def _signalled_alerts(project_id: str) -> int:
 async def test_reimport_starts_a_loop_that_does_not_run_then_signals_it(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.temporal import get_temporal
 
     get_temporal().gone.add("mem-billing-api")  # never started: Temporal answers NOT_FOUND
     response = await client.post(
@@ -78,7 +78,7 @@ async def test_reimport_starts_a_loop_that_does_not_run_then_signals_it(
 async def test_reimport_of_a_completed_loop_is_a_clear_conflict(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.temporal import get_temporal
 
     get_temporal().gone.add("mem-billing-api")
     get_temporal().described["mem-billing-api"] = WorkflowState(status="COMPLETED")  # its id is not reused
@@ -90,7 +90,7 @@ async def test_reimport_of_a_completed_loop_is_a_clear_conflict(
 async def test_reimport_under_a_policy_without_memory_is_a_clear_conflict(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.temporal import get_temporal
 
     await _disable_memory(project["id"])
     response = await client.post(f"/api/v1/projects/{project['id']}/memory/reimport", json={})
@@ -103,8 +103,8 @@ async def test_reimport_under_a_policy_without_memory_is_a_clear_conflict(
 async def test_an_alert_for_a_loop_that_cannot_take_it_is_acknowledged_not_500(
     client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch, case: str
 ) -> None:
-    from choregos_api.config import get_settings
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.config import get_settings
+    from tranibor_api.temporal import get_temporal
 
     monkeypatch.setattr(get_settings(), "generic_webhook_secret", "s3cret")
     get_temporal().gone.add("mem-billing-api")

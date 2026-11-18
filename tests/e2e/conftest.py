@@ -40,7 +40,7 @@ def environnement_pose(variables: dict[str, str]) -> Iterator[None]:
     The API settings are cached: the cache is cleared on entry and on exit, so that neither this
     package nor the next reads settings computed under the other environment.
     """
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     avant = {name: os.environ.get(name) for name in variables}
     for name, value in variables.items():
@@ -164,9 +164,9 @@ class Platform:
     app: Any = None
 
     async def work_item(self, key: str) -> Any:
-        from choregos_api.db.models import WorkItem
-        from choregos_api.db.session import session_scope
         from sqlalchemy import select
+        from tranibor_api.db.models import WorkItem
+        from tranibor_api.db.session import session_scope
 
         async with session_scope() as session:
             return (
@@ -178,18 +178,18 @@ class Platform:
 async def platform(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[Platform]:
     # Through `monkeypatch`: a scenario's database does not outlive its test (#259).
     monkeypatch.setenv("CHOREGOS_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/e2e.db")
-    from choregos_adapters import AdapterSet
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.db import session as db_session
-    from choregos_api.db.models import Organization, Project
-    from choregos_api.db.session import create_all, session_scope
-    from choregos_api.main import create_app
-    from choregos_api.services import ensure_defaults
-    from choregos_api.temporal import FakeTemporal, set_temporal
-    from choregos_orchestrator.activities.base import set_adapters_override
-    from choregos_orchestrator.train_client import clear_fake_signals
     from httpx import ASGITransport, AsyncClient
     from temporalio.testing import WorkflowEnvironment
+    from tranibor_adapters import AdapterSet
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.db import session as db_session
+    from tranibor_api.db.models import Organization, Project
+    from tranibor_api.db.session import create_all, session_scope
+    from tranibor_api.main import create_app
+    from tranibor_api.services import ensure_defaults
+    from tranibor_api.temporal import FakeTemporal, set_temporal
+    from tranibor_orchestrator.activities.base import set_adapters_override
+    from tranibor_orchestrator.train_client import clear_fake_signals
 
     reset_settings_cache()
     await db_session.dispose_engine()
@@ -252,9 +252,9 @@ async def platform(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncItera
 
 @pytest.fixture
 def worker(platform: Platform) -> Any:
-    from choregos_orchestrator.activities import ALL_ACTIVITIES
-    from choregos_orchestrator.testing import workers_by_queue
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS, WORKFLOW_ACTIVITIES
+    from tranibor_orchestrator.activities import ALL_ACTIVITIES
+    from tranibor_orchestrator.testing import workers_by_queue
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS, WORKFLOW_ACTIVITIES
 
     def factory(task_queue: str = "e2e") -> Any:
         return workers_by_queue(

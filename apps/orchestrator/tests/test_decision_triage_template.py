@@ -8,7 +8,7 @@ Played on the in-memory engine with the scripted decision model: a sure `deliver
 from __future__ import annotations
 
 import pytest
-from choregos_core.dsl import template_yaml
+from tranibor_core.dsl import template_yaml
 
 from .conftest import Fixture
 
@@ -16,10 +16,10 @@ pytestmark = pytest.mark.asyncio
 
 
 async def _publish(setup: Fixture) -> None:
-    from choregos_api.db.models import ModelCatalogueRow, Project, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.rbac import SYSTEM
-    from choregos_api.services.definitions import publish_workflow
+    from tranibor_api.db.models import ModelCatalogueRow, Project, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.rbac import SYSTEM
+    from tranibor_api.services.definitions import publish_workflow
 
     async with session_scope() as session:
         project = await session.get(Project, setup.project_id)
@@ -46,7 +46,7 @@ async def _publish(setup: Fixture) -> None:
 async def test_the_template_routes_what_it_is_sure_of_and_escalates_the_rest(
     setup: Fixture, answer: str, probability: float, route: list[str]
 ) -> None:
-    from choregos_orchestrator.local import run_local
+    from tranibor_orchestrator.local import run_local
 
     await _publish(setup)
     setup.adapters.decisions.answer(route=(answer, probability))

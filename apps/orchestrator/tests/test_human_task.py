@@ -73,11 +73,11 @@ BADGE: dict[str, Any] = {
 
 @pytest.fixture
 def readers(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
-    import choregos_adapters
-    from choregos_adapters.fakes.hr import FakeBadges
+    import tranibor_adapters
+    from tranibor_adapters.fakes.hr import FakeBadges
 
     fake = FakeBadges(expected_key="cle-des-readers")
-    monkeypatch.setitem(choregos_adapters.FAUX_METIER, "access_control", fake)
+    monkeypatch.setitem(tranibor_adapters.FAUX_METIER, "access_control", fake)
     monkeypatch.setenv("CONNECTOR_TEST_READERS_KEY", "cle-des-readers")
     yield fake
 
@@ -85,10 +85,10 @@ def readers(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
 async def _set_up(setup: Fixture) -> None:
     """The organisation's badge readers (type `demo`, key by reference), `activate_badge`
     open (`allowed`); the workflow; Lea's ticket, at the task."""
-    from choregos_adapters import spec_of
-    from choregos_api.db.models import ConnectorOperation, OrgConnector, Project, WorkflowDef, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_contracts import Workflow
+    from tranibor_adapters import spec_of
+    from tranibor_api.db.models import ConnectorOperation, OrgConnector, Project, WorkflowDef, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_contracts import Workflow
 
     spec = spec_of("access_control", "demo")
     assert spec is not None
@@ -147,12 +147,12 @@ async def _wait_for(handle: Any, predicate: Any, what: str) -> dict[str, Any]:
 async def test_the_uid_entered_in_the_task_reaches_the_activate_badge_parameters(
     setup: Fixture, temporal_env: Any, worker_factory: Any, readers: Any
 ) -> None:
-    from choregos_api.db.models import Action, HumanRequest, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from sqlalchemy import select
     from temporalio.api.enums.v1 import EventType
     from temporalio.worker import Replayer
+    from tranibor_api.db.models import Action, HumanRequest, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     await _set_up(setup)
     async with worker_factory():
@@ -218,9 +218,9 @@ async def test_a_date_entered_in_the_task_arms_the_action_that_depends_on_it(
 ) -> None:
     """The task fills in the date the next action waits for (`not_before`): its values enter the
     fields the interpreter holds, not only the database."""
-    from choregos_api.db.models import WorkflowDef, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_contracts import Workflow
+    from tranibor_api.db.models import WorkflowDef, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_contracts import Workflow
 
     await _set_up(setup)
     document = json.loads(json.dumps(BADGE))

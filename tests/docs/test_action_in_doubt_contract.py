@@ -36,7 +36,7 @@ def _described(operation_id: str) -> str:
 
 
 def test_an_action_s_statuses_are_the_enum_s_and_in_doubt_is_one() -> None:
-    from choregos_contracts import ActionStatus
+    from tranibor_contracts import ActionStatus
 
     declared = SCHEMAS["Action"]["properties"]["status"]
     assert set(declared["enum"]) == {status.value for status in ActionStatus}
@@ -60,7 +60,7 @@ def test_an_effect_may_be_in_doubt_and_says_what_was_sent() -> None:
 def test_an_action_that_ended_in_doubt_is_said_by_the_existing_terminal_event() -> None:
     """No event type was added for the doubt: `choregos.action.failed` carries the status the action
     ended with. The one type added since says a person settled it (S65-26)."""
-    from choregos_contracts.enums import EventType
+    from tranibor_contracts.enums import EventType
 
     actions = sorted(kind.value for kind in EventType if kind.value.startswith("choregos.action."))
     assert actions == [

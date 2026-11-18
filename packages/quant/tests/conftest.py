@@ -7,7 +7,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 import pytest
-from choregos_quant.bars import Bar, write_bars
+from tranibor_quant.bars import Bar, write_bars
 
 Rows = list[Bar]
 

@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import pytest
-from choregos_contracts import ProjectConfig
-from choregos_core import ModelResolutionError, ModelResolver
-from choregos_core.domain import Fact, GatewayModel, Provenance
+from tranibor_contracts import ProjectConfig
+from tranibor_core import ModelResolutionError, ModelResolver
+from tranibor_core.domain import Fact, GatewayModel, Provenance
 
 from .conftest import Platform, login
 
@@ -15,7 +15,7 @@ pytestmark = [pytest.mark.e2e, pytest.mark.asyncio]
 async def test_review_croisee_impose_un_backend_different(platform: Platform) -> None:
     """The `review.cross_backend` policy requires that the reviewer not be the implementer."""
     await login(platform.client)
-    from choregos_core import PolicyEngine, load_preset
+    from tranibor_core import PolicyEngine, load_preset
 
     engine = PolicyEngine(load_preset("team"))
     assert engine.cross_backend_review() is True
@@ -51,9 +51,9 @@ async def test_context_pack_injecte_et_trace(platform: Platform) -> None:
         ),
     )
 
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities import stage as stage_activities
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities import stage as stage_activities
 
     async with session_scope() as session:
         item = WorkItem(
@@ -86,7 +86,7 @@ async def test_context_pack_injecte_et_trace(platform: Platform) -> None:
     stage_input = prepared["stage_input"]
     assert stage_input["context_pack_url"], "the pack is archived with the run"
 
-    from choregos_api.db.models import Run
+    from tranibor_api.db.models import Run
 
     async with session_scope() as session:
         run = await session.get(Run, prepared["run_id"])
@@ -101,9 +101,9 @@ async def test_a_memory_outage_does_not_block_a_stage(platform: Platform) -> Non
     await login(platform.client)
     platform.adapters.memory.fail = True
 
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities import stage as stage_activities
+    from tranibor_api.db.models import Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities import stage as stage_activities
 
     async with session_scope() as session:
         item = WorkItem(
@@ -139,7 +139,7 @@ async def test_a_memory_outage_does_not_block_a_stage(platform: Platform) -> Non
 async def test_evals_matrix_published_and_enforceable(platform: Platform) -> None:
     """An unvalidated combination is refused at registration, with a clear message."""
     await login(platform.client)
-    from choregos_orchestrator.activities import evals as eval_activities
+    from tranibor_orchestrator.activities import evals as eval_activities
 
     await eval_activities.publish_matrix(
         {
@@ -173,7 +173,7 @@ async def test_evals_matrix_published_and_enforceable(platform: Platform) -> Non
 async def test_the_matrix_shows_the_four_context_cells_with_their_tokens(platform: Platform) -> None:
     """S37-09: cells as `run_eval_cell` publishes them, `details` and all, come back with their tokens."""
     await login(platform.client)
-    from choregos_orchestrator.activities import evals as eval_activities
+    from tranibor_orchestrator.activities import evals as eval_activities
 
     cells = [
         {

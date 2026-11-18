@@ -13,11 +13,11 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from choregos_adapters.fakes.a2a import FakeA2aAgent
-from choregos_contracts import ContextPack, StageResult, StageStatus
-from choregos_orchestrator.activities import stage as stage_activities
-from choregos_runner.config import RunnerSettings
-from choregos_runner.runner import Runner
+from tranibor_adapters.fakes.a2a import FakeA2aAgent
+from tranibor_contracts import ContextPack, StageResult, StageStatus
+from tranibor_orchestrator.activities import stage as stage_activities
+from tranibor_runner.config import RunnerSettings
+from tranibor_runner.runner import Runner
 
 from .conftest import Fixture
 from .test_remote_agent_step import HOST, TOKEN, _decor, _plan

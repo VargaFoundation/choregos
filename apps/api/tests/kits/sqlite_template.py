@@ -18,9 +18,9 @@ _state: dict[str, Any] = {}
 
 
 async def _build(tables: frozenset[str]) -> pathlib.Path:
-    from choregos_api.config import get_settings
-    from choregos_api.db.models import Base
-    from choregos_api.db.session import _create_engine
+    from tranibor_api.config import get_settings
+    from tranibor_api.db.models import Base
+    from tranibor_api.db.session import _create_engine
 
     scratch = _state.get("scratch")
     if scratch is None:
@@ -40,7 +40,7 @@ async def _build(tables: frozenset[str]) -> pathlib.Path:
 
 async def copy_schema_to(target: pathlib.Path) -> None:
     """Make `target` a database with the full schema, as `create_all()` leaves it."""
-    from choregos_api.db.models import Base
+    from tranibor_api.db.models import Base
 
     tables = frozenset(Base.metadata.tables)
     if _state.get("tables") != tables:

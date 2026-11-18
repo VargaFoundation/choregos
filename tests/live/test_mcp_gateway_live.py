@@ -36,7 +36,7 @@ async def test_a_real_gateway_lists_a_servers_tools():
     assert server, "CHOREGOS_LIVE_MCP_GATEWAY_URL is set but CHOREGOS_LIVE_MCP_GATEWAY_SERVER is not"
     assert token, "CHOREGOS_LIVE_MCP_GATEWAY_URL is set but CHOREGOS_LIVE_MCP_GATEWAY_TOKEN is not"
 
-    from choregos_adapters.mcp import CLIENT_VERSIONS
+    from tranibor_adapters.mcp import CLIENT_VERSIONS
 
     from tools.mcp_gateway_probe import probe
 

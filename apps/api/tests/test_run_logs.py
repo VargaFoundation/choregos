@@ -17,8 +17,8 @@ _KEYS = itertools.count(1)
 
 
 async def _run(project_id: str, **fields: Any) -> str:
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Run, WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         item = WorkItem(project_id=project_id, tracker_key=f"LOGS-{next(_KEYS)}", title="T", state="ready")
@@ -86,9 +86,9 @@ async def test_a_run_without_capture_says_so(client: AsyncClient, project: dict[
 
 @without_postgres
 async def test_another_organisations_run_logs_answer_404(pg_app: Any) -> None:
-    from choregos_api.db.models import Organization, Project
-    from choregos_api.db.session import session_scope
-    from choregos_api.services import ensure_defaults
+    from tranibor_api.db.models import Organization, Project
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services import ensure_defaults
 
     projects: dict[str, str] = {}
     async with session_scope(orgs="*") as session:

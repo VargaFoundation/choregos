@@ -31,7 +31,7 @@ from typing import Any
 
 import pytest
 import yaml
-from choregos_core.publishing import PUBLISHING
+from tranibor_core.publishing import PUBLISHING
 
 ROOT = Path(__file__).resolve().parents[2]
 SITE = ROOT / "docs" / "site"
@@ -228,7 +228,7 @@ def _cli() -> Any:
 
     os.environ["TYPER_USE_RICH"] = "0"
     import typer.main
-    from choregos_cli.main import app
+    from tranibor_cli.main import app
 
     return typer.main.get_command(app)
 
@@ -355,8 +355,8 @@ def _yaml_blocks() -> list[tuple[str, str, str]]:
 
 @pytest.mark.parametrize(("page", "info", "block"), _yaml_blocks())
 def test_every_yaml_block_is_checked(page: str, info: str, block: str) -> None:
-    from choregos_contracts import Policy
-    from choregos_core import parse_workflow
+    from tranibor_contracts import Policy
+    from tranibor_core import parse_workflow
 
     document = yaml.safe_load(block)
     assert isinstance(document, dict), f"{page}: a YAML block is not a mapping"
@@ -395,7 +395,7 @@ def test_every_json_block_is_json(page: Path) -> None:
 
 def test_the_plugin_validates(tmp_path: Path) -> None:
     """The plugins page's files, written where their titles say, are a valid plugin."""
-    from choregos_core.plugins import load_directory
+    from tranibor_core.plugins import load_directory
 
     page = SITE / "build" / "plugins.md"
     written = 0
@@ -426,7 +426,7 @@ def _write_titled_files(page: Path, root: Path) -> int:
 
 def test_the_assistant_plugin_validates(tmp_path: Path) -> None:
     """The assistants page's files (plugin, agent, assistant, conversation suite) are a valid plugin."""
-    from choregos_core.plugins import load_directory
+    from tranibor_core.plugins import load_directory
 
     assert _write_titled_files(SITE / "build" / "assistants.md", tmp_path) == 4
     plugin = load_directory(tmp_path / "billing-assistant")
@@ -436,7 +436,7 @@ def test_the_assistant_plugin_validates(tmp_path: Path) -> None:
 
 def test_the_assistant_plugin_check_refuses_a_wrong_example(tmp_path: Path) -> None:
     """The guard bites: an assistant whose agent is not in the plugin is refused."""
-    from choregos_core.plugins import load_directory
+    from tranibor_core.plugins import load_directory
 
     _write_titled_files(SITE / "build" / "assistants.md", tmp_path)
     manifest = tmp_path / "billing-assistant" / "assistants" / "billing-assistant.yaml"
@@ -477,7 +477,7 @@ def test_the_workflow_reference_names_every_key_of_the_schema() -> None:
 
 
 def test_the_workflow_reference_lists_exactly_the_known_gates() -> None:
-    from choregos_core.gates import is_async_gate, known_gates
+    from tranibor_core.gates import is_async_gate, known_gates
 
     page = _text(SITE / "reference" / "workflow-yaml.md")
     table = page.split("## Gates", 1)[1].split("\n## ", 1)[0]

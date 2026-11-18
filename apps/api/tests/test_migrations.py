@@ -15,9 +15,9 @@ from alembic import command
 from alembic.autogenerate import compare_metadata
 from alembic.config import Config
 from alembic.migration import MigrationContext
-from choregos_api.config import get_settings
-from choregos_api.db.models import Base, is_core_object
 from sqlalchemy import create_engine
+from tranibor_api.config import get_settings
+from tranibor_api.db.models import Base, is_core_object
 
 API = pathlib.Path(__file__).resolve().parents[1]
 
@@ -27,7 +27,7 @@ def _config(url: str) -> Config:
     avoids repeating the connection string in two places). The test therefore follows the same
     path: it sets the environment variable and empties the settings cache."""
     config = Config(str(API / "alembic.ini"))
-    config.set_main_option("script_location", str(API / "src" / "choregos_api" / "migrations"))
+    config.set_main_option("script_location", str(API / "src" / "tranibor_api" / "migrations"))
     config.set_main_option("sqlalchemy.url", url)
     return config
 

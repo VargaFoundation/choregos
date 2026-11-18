@@ -188,7 +188,7 @@ def test_makefile_reads_comments_only() -> None:
         ("docs/fr/guide.md", True),
         ("docs/cli.md", False),
         ("apps/web/pnpm-lock.yaml", False),
-        ("packages/core/src/choregos_core/injection.py", False),
+        ("packages/core/src/tranibor_core/injection.py", False),
         ("apps/web/public/logo.png", False),
         ("demo/seed.py", True),
         ("charts/choregos/values.yaml", True),

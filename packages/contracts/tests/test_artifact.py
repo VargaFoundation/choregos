@@ -5,9 +5,11 @@ from __future__ import annotations
 import hashlib
 import json
 
-import choregos_contracts as contracts
 import pytest
-from choregos_contracts import (
+import tranibor_contracts as contracts
+from jsonschema import Draft202012Validator
+from pydantic import ValidationError
+from tranibor_contracts import (
     ARTIFACT_TYPES,
     Artifact,
     ArtifactKind,
@@ -17,8 +19,6 @@ from choregos_contracts import (
     type_of_filename,
     type_of_value,
 )
-from jsonschema import Draft202012Validator
-from pydantic import ValidationError
 
 EXAMPLE = contracts.schemas_dir() / "examples" / "artifact.example.json"
 

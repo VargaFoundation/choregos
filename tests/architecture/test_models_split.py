@@ -13,8 +13,8 @@ import re
 from pathlib import Path
 from typing import Any
 
-from choregos_api.db import models
-from choregos_api.db.base import Base
+from tranibor_api.db import models
+from tranibor_api.db.base import Base
 
 PACKAGE = Path(models.__file__).parent
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -102,7 +102,7 @@ def test_the_metadata_is_unchanged() -> None:
 def test_every_public_name_still_imports() -> None:
     names = json.loads((FIXTURES / "model_public_names.json").read_text(encoding="utf-8"))
     missing = [name for name in names if not hasattr(models, name)]
-    assert not missing, f"names no longer importable from choregos_api.db.models: {missing}"
+    assert not missing, f"names no longer importable from tranibor_api.db.models: {missing}"
     assert set(names) <= set(models.__all__)
 
 

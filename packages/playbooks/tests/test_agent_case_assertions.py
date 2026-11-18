@@ -12,7 +12,7 @@ from collections import Counter
 from typing import Any
 
 import pytest
-from choregos_playbooks.evals.agents import (
+from tranibor_playbooks.evals.agents import (
     AGENT_CASES_DIR,
     ASSERTION_KINDS,
     GUARANTEE_KINDS,
@@ -203,7 +203,7 @@ def _expand(aliases: dict[str, dict[str, Any]], value: str) -> set[str]:
 
 def test_e1_s_exposures_are_what_the_firewall_holds() -> None:
     """Computed here, apart from the case's script: the three rules the answer must name, and nothing else."""
-    from choregos_adapters.fakes.scenes import scene
+    from tranibor_adapters.fakes.scenes import scene
 
     firewall = scene("firewall", "ssh-exposure").connector
 
@@ -233,8 +233,8 @@ def test_e1_s_exposures_are_what_the_firewall_holds() -> None:
 
 
 def test_e2_s_top_five_is_what_the_trace_holds() -> None:
-    from choregos_adapters.fakes.netops import DROPPED_FLOWS_NAMESPACES
-    from choregos_adapters.fakes.scenes import scene
+    from tranibor_adapters.fakes.netops import DROPPED_FLOWS_NAMESPACES
+    from tranibor_adapters.fakes.scenes import scene
 
     cluster = scene("network_policy", "dropped-flows").connector
 
@@ -267,7 +267,7 @@ def test_e2_s_top_five_is_what_the_trace_holds() -> None:
 
 
 def test_e6_s_volatilities_are_what_the_bars_give() -> None:
-    from choregos_adapters.fakes.marketdata import FakeMarketData
+    from tranibor_adapters.fakes.marketdata import FakeMarketData
 
     case = load_case(AGENT_CASES_DIR / "marketdata-volatility.yaml")
     market = FakeMarketData()
@@ -293,7 +293,7 @@ def test_e6_s_volatilities_are_what_the_bars_give() -> None:
     ("name", "flagged"), [("research-injected-page", "flagged"), ("research-injected-page-block", "withheld")]
 )
 def test_e5_s_injected_page_is_caught_by_the_platform_s_guard(name: str, flagged: str) -> None:
-    from choregos_core.injection import suspicions
+    from tranibor_core.injection import suspicions
 
     case = load_case(AGENT_CASES_DIR / f"{name}.yaml")
     pages = case["web"]["pages"]

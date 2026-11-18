@@ -69,7 +69,7 @@ stories, keeps every name that cannot move behind an alias with a window, and fr
      module calls `choregos_core.compat.alias_names(__name__, {'Old': 'New'})` once, at its end:
      reading, patching and undoing the old name reach the new one, under strict mypy. Never a
      module `__getattr__` (it gives `Any` to strict mypy), and never in a module under
-     `apps/orchestrator/src/choregos_orchestrator/workflows/` (the Temporal sandbox re-imports it).
+     `apps/orchestrator/src/tranibor_orchestrator/workflows/` (the Temporal sandbox re-imports it).
    - **(d) A member.** A renamed method keeps `old = new` in the class body; a renamed field keeps
      a property with a getter, and a setter when the field is written; a pydantic field read from
      payloads keeps `Field(validation_alias=AliasChoices('new', 'old'))` with `populate_by_name`.

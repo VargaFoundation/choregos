@@ -13,9 +13,9 @@ from .kits.work_item_migration import make_work_item
 
 
 async def test_totals_add_the_tool_lines_of_the_ledger(client: AsyncClient, project: dict[str, Any]) -> None:
-    from choregos_api.db.models import CostLedger
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
+    from tranibor_api.db.models import CostLedger
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
 
     ticket = await make_work_item(client, project)
     before = await client.get(f"/api/v1/work-items/{ticket['id']}")

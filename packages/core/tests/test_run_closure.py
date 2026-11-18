@@ -12,8 +12,8 @@ from datetime import UTC, datetime
 from typing import Any
 
 import pytest
-from choregos_contracts import RunStatus, StageResult, StageStatus
-from choregos_core.run_closure import (
+from tranibor_contracts import RunStatus, StageResult, StageStatus
+from tranibor_core.run_closure import (
     CLOSED_RUN_STATUSES,
     OPEN_RUN_STATUSES,
     close_run,

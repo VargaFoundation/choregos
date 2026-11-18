@@ -97,14 +97,14 @@ class Shipped:
     @property
     def opening(self) -> Any:
         """The transition that opens the pull request."""
-        from choregos_contracts.workflow import transition_effect
+        from tranibor_contracts.workflow import transition_effect
 
         return next(t for t in self.workflow.transitions if transition_effect(t) == "open_pr")
 
     @property
     def scoped_steps(self) -> list[Any]:
         """The steps whose scope is judged on their own run's writes, in the order they are written."""
-        from choregos_core.gates import judged_on_a_run
+        from tranibor_core.gates import judged_on_a_run
 
         return [
             transition
@@ -116,7 +116,7 @@ class Shipped:
     def scope_guard(self) -> Any:
         """The first transition, from the opening of the pull request on, that reads the scope over the
         work item's whole diff: the merge, or the opening itself where the workflow asks it there."""
-        from choregos_core.gates import OVER_WORK_ITEM
+        from tranibor_core.gates import OVER_WORK_ITEM
 
         def whole(transition: Any) -> bool:
             return any(
@@ -128,8 +128,8 @@ class Shipped:
 
 
 def _merge_of(workflow: Any) -> Any | None:
-    from choregos_contracts import SystemActor
-    from choregos_contracts.workflow import transition_effect
+    from tranibor_contracts import SystemActor
+    from tranibor_contracts.workflow import transition_effect
 
     for transition in workflow.transitions:
         if (
@@ -142,8 +142,8 @@ def _merge_of(workflow: Any) -> Any | None:
 
 def shipped_workflows_that_merge() -> list[Shipped]:
     """The core's workflows and those of the templates in `templates/`, read from the files shipped."""
-    from choregos_core import parse_workflow
-    from choregos_core.dsl import TEMPLATE_NAMES, template_yaml
+    from tranibor_core import parse_workflow
+    from tranibor_core.dsl import TEMPLATE_NAMES, template_yaml
 
     texts = [("core", template_yaml(name)) for name in TEMPLATE_NAMES]
     for path in sorted((ROOT / "templates").glob("*/workflows/*.yaml")):
@@ -159,10 +159,10 @@ def shipped_workflows_that_merge() -> list[Shipped]:
 
 async def pin(setup: Fixture, shipped: Shipped) -> None:
     """Publish the workflow in the fixture's project and pin its work item to it."""
-    from choregos_api.db.models import Project, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.rbac import SYSTEM
-    from choregos_api.services.definitions import publish_workflow
+    from tranibor_api.db.models import Project, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.rbac import SYSTEM
+    from tranibor_api.services.definitions import publish_workflow
 
     async with session_scope() as session:
         project = await session.get(Project, setup.project_id)
@@ -188,8 +188,8 @@ def answer(stage_input: Any, began_at: str) -> Any:
 
 
 async def work_item(setup: Fixture) -> Any:
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         item = await session.get(WorkItem, setup.work_item_id)
@@ -200,10 +200,10 @@ async def work_item(setup: Fixture) -> Any:
 
 async def journey(setup: Fixture) -> list[tuple[str, str, str]]:
     """`(from, to, reason)` of each state the work item changed to, in order."""
-    from choregos_api.db.models import Event
-    from choregos_api.db.session import session_scope
-    from choregos_contracts import EventType
     from sqlalchemy import select
+    from tranibor_api.db.models import Event
+    from tranibor_api.db.session import session_scope
+    from tranibor_contracts import EventType
 
     async with session_scope() as session:
         rows = await session.execute(
@@ -222,9 +222,9 @@ async def journey(setup: Fixture) -> list[tuple[str, str, str]]:
 
 async def verdicts(setup: Fixture, gate: str) -> list[dict[str, Any]]:
     """Every verdict of `gate` journaled on the work item's runs, in order."""
-    from choregos_api.db.models import Run, RunEvent
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Run, RunEvent
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = await session.execute(
@@ -290,9 +290,9 @@ async def walked(
     the merge transition is entered — and the branch holds `lands` from there on. With `after_step`
     it lands earlier: once that step's gates have ruled, before the next agent step begins, so that
     every later run starts from a branch that already holds it."""
-    from choregos_api.temporal import interpreter_id
-    from choregos_orchestrator.activities.scm import open_pull_request
     from temporalio import activity
+    from tranibor_api.temporal import interpreter_id
+    from tranibor_orchestrator.activities.scm import open_pull_request
 
     scm = setup.adapters.scm
     walk = Walk(handle=None)

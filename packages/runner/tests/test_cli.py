@@ -7,8 +7,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-from choregos_runner.cli import app
-from choregos_runner.exits import Exit
+from tranibor_runner.cli import app
+from tranibor_runner.exits import Exit
 from typer.testing import CliRunner
 
 cli = CliRunner()
@@ -55,14 +55,14 @@ def test_the_cli_starts_without_the_api_dependencies() -> None:
     """The runner image installs `choregos-runner` alone: no SQLAlchemy, no FastAPI.
 
     `docker/runner.Dockerfile` runs `choregos-runner --help` and the build failed on main
-    after #409, because importing `choregos_adapters` imported SQLAlchemy. Blocking those
+    after #409, because importing `tranibor_adapters` imported SQLAlchemy. Blocking those
     modules here reproduces that image in the test suite.
     """
     code = (
         "import sys\n"
         "for name in ('sqlalchemy', 'fastapi', 'asyncpg', 'alembic'):\n"
         "    sys.modules[name] = None\n"
-        "from choregos_runner.cli import app\n"
+        "from tranibor_runner.cli import app\n"
     )
     done = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=False)
     assert done.returncode == 0, done.stderr

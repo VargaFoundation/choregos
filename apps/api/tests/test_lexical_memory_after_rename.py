@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from choregos_core.domain import Fact
 from httpx import AsyncClient
+from tranibor_core.domain import Fact
 
 from .agent_scopes_kit import ORG
 from .kits.organisation import declare_administrator
@@ -20,7 +20,7 @@ def real_adapters(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _memory() -> Any:
-    from choregos_adapters import build
+    from tranibor_adapters import build
 
     return build("memory", "lexical", {"org": "*"})
 
@@ -28,7 +28,7 @@ def _memory() -> Any:
 async def test_the_old_slug_still_names_the_organisation_after_a_rename(
     client: AsyncClient, admin: str
 ) -> None:
-    from choregos_api.edition import reset
+    from tranibor_api.edition import reset
 
     await client.post(f"{ORG}/memories", json={"slug": "lessons", "display_name": "L"})
     declared = await client.post(

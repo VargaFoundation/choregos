@@ -6,7 +6,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from choregos_contracts import artifact_digest
+from tranibor_contracts import artifact_digest
 
 from .conftest import Fixture, stage_result
 
@@ -14,9 +14,9 @@ HUNK = "@@ -1 +1 @@\n-old\n+new"
 
 
 async def _diff_rows(item_id: str) -> list[Any]:
-    from choregos_api.db.models import ArtifactRecord
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import ArtifactRecord
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = await session.execute(
@@ -28,9 +28,9 @@ async def _diff_rows(item_id: str) -> list[Any]:
 
 
 async def _collect(setup: Fixture, run_id: str, files: list[tuple[Any, ...]]) -> dict[str, Any]:
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities.scm import collect_run_artifacts
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities.scm import collect_run_artifacts
 
     setup.adapters.scm.set_diff("northwind/billing-api", "main", "choregos/123", files)
     async with session_scope() as session:
@@ -66,8 +66,8 @@ async def test_the_patch_becomes_an_artifact_of_the_run_that_left_it(setup: Fixt
 
 
 async def test_the_patch_stays_out_of_the_run_result(setup: Fixture) -> None:
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
 
     await _collect(setup, "run-1", [("a.py", 1, 1, HUNK)])
     async with session_scope() as session:
@@ -101,7 +101,7 @@ async def test_a_secret_in_the_patch_never_reaches_the_row(setup: Fixture) -> No
 async def test_a_failure_to_record_does_not_cost_the_activity(
     setup: Fixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_orchestrator.activities import outcome
+    from tranibor_orchestrator.activities import outcome
 
     async def boom(*_args: Any, **_kwargs: Any) -> None:
         raise RuntimeError("store down")
@@ -111,9 +111,9 @@ async def test_a_failure_to_record_does_not_cost_the_activity(
 
 
 async def test_an_agent_cannot_write_the_diff(setup: Fixture) -> None:
-    from choregos_api.db.models import Project, Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.artifacts import record_inline_outputs
+    from tranibor_api.db.models import Project, Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.artifacts import record_inline_outputs
 
     async with session_scope() as session:
         run = Run(

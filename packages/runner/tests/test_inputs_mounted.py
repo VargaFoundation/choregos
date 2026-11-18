@@ -6,9 +6,9 @@ import hashlib
 import subprocess
 from typing import Any
 
-from choregos_contracts import StageInput
-from choregos_runner.exits import Exit
-from choregos_runner.runner import Runner
+from tranibor_contracts import StageInput
+from tranibor_runner.exits import Exit
+from tranibor_runner.runner import Runner
 
 from .conftest import FakeInternalClient, agent_script, valid_result
 

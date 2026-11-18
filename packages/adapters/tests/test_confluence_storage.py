@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from choregos_adapters.documents.confluence import confluence_storage_to_html
+from tranibor_adapters.documents.confluence import confluence_storage_to_html
 
 
 def test_a_macro_keeps_its_body_and_loses_its_parameters() -> None:

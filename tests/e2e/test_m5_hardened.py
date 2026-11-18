@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from choregos_contracts import Evidence, StageResult, StageStatus
+from tranibor_contracts import Evidence, StageResult, StageStatus
 
 from .conftest import Platform, login
 
@@ -13,10 +13,10 @@ pytestmark = [pytest.mark.e2e, pytest.mark.asyncio]
 async def test_recovery_after_an_outage_without_double_cost(platform: Platform) -> None:
     """The heart of the promise: replaying a stage never bills twice."""
     await login(platform.client)
-    from choregos_api.db.models import CostLedger, Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities import stage as stage_activities
     from sqlalchemy import func, select
+    from tranibor_api.db.models import CostLedger, Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities import stage as stage_activities
 
     async with session_scope() as session:
         item = WorkItem(
@@ -84,8 +84,8 @@ async def test_recovery_after_an_outage_without_double_cost(platform: Platform) 
 
 async def test_the_runner_cannot_leave_the_perimeter(platform: Platform) -> None:
     """Sandbox: what the agent tries outside its scope is refused and traced."""
-    from choregos_contracts import Permissions
-    from choregos_runner.guardrails import GuardRails
+    from tranibor_contracts import Permissions
+    from tranibor_runner.guardrails import GuardRails
 
     guards = GuardRails(
         Permissions(
@@ -110,9 +110,9 @@ async def test_the_runner_cannot_leave_the_perimeter(platform: Platform) -> None
 async def test_project_manifests_lock_the_network(platform: Platform) -> None:
     """Provisioning writes a deny-by-default egress and quotas: it is GitOps."""
     import yaml
-    from choregos_contracts import ProjectConfig
-    from choregos_core import load_preset
-    from choregos_orchestrator.gitops import render_project_manifests
+    from tranibor_contracts import ProjectConfig
+    from tranibor_core import load_preset
+    from tranibor_orchestrator.gitops import render_project_manifests
 
     config = ProjectConfig.model_validate(
         {
@@ -140,9 +140,9 @@ async def test_project_manifests_lock_the_network(platform: Platform) -> None:
 
 async def test_cancelling_a_run_is_clean(platform: Platform) -> None:
     await login(platform.client)
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities import stage as stage_activities
+    from tranibor_api.db.models import Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities import stage as stage_activities
 
     async with session_scope() as session:
         item = WorkItem(
@@ -187,7 +187,7 @@ async def test_cancelling_a_run_is_clean(platform: Platform) -> None:
 
 async def test_second_ecosystem_is_cleanly_refused_until_it_is_enabled(platform: Platform) -> None:
     """Jira and GitLab accept webhooks but clearly announce that they are inactive."""
-    from choregos_api.config import get_settings
+    from tranibor_api.config import get_settings
 
     secret = get_settings().generic_webhook_secret
     for source, header in (("jira", "X-Choregos-Secret"), ("gitlab", "X-Gitlab-Token")):

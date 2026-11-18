@@ -155,10 +155,10 @@ PROJECTS = {
 
 
 async def main() -> int:
-    from choregos_api.db.models import Connector, Organization, Project, WorkflowDef, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.services import ensure_defaults
-    from choregos_core.dsl.parser import checksum, parse_workflow
+    from tranibor_api.db.models import Connector, Organization, Project, WorkflowDef, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services import ensure_defaults
+    from tranibor_core.dsl.parser import checksum, parse_workflow
     from sqlalchemy import select
 
     async with session_scope(orgs="*") as session:
@@ -283,9 +283,9 @@ async def start_tickets() -> None:
     ticket, that reads the state, picks the transition and launches the agent. Starting it
     here avoids inventing an entry point the platform does not have.
     """
-    from choregos_api.db.models import Project, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.temporal import get_temporal, interpreter_id
+    from tranibor_api.db.models import Project, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.temporal import get_temporal, interpreter_id
     from sqlalchemy import select
 
     async with session_scope(orgs="*") as session:

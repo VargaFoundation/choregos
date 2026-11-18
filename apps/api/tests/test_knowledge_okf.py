@@ -33,7 +33,7 @@ WITHDRAWN = "---\ntype: Table\nstatus: deprecated\n---\n\n# Old orders\n\nThe or
 
 
 def _header(markdown: str) -> dict[str, Any]:
-    from choregos_api.knowledge import okf
+    from tranibor_api.knowledge import okf
 
     header, _ = okf.split(markdown)
     assert header is not None, markdown
@@ -44,7 +44,7 @@ def _header(markdown: str) -> dict[str, Any]:
 
 
 def test_a_header_is_read_and_its_body_kept() -> None:
-    from choregos_api.knowledge import okf
+    from tranibor_api.knowledge import okf
 
     header, body = okf.split(IMPORTED)
     assert header is not None
@@ -64,13 +64,13 @@ def test_a_header_is_read_and_its_body_kept() -> None:
     ],
 )
 def test_what_is_not_a_header_stays_text(markdown: str) -> None:
-    from choregos_api.knowledge import okf
+    from tranibor_api.knowledge import okf
 
     assert okf.split(markdown) == (None, markdown)
 
 
 def test_a_served_document_is_an_okf_concept_and_keeps_what_it_said_of_itself() -> None:
-    from choregos_api.knowledge import okf
+    from tranibor_api.knowledge import okf
 
     served = okf.served(
         IMPORTED,
@@ -99,7 +99,7 @@ def test_a_served_document_is_an_okf_concept_and_keeps_what_it_said_of_itself() 
 def test_an_imported_verified_claim_is_never_served_as_a_verification() -> None:
     """OKF derives a trust tier from `verified` (human-reviewed for `human:`); a header written by
     whoever wrote the file is a claim, not a review the organisation made."""
-    from choregos_api.knowledge import okf
+    from tranibor_api.knowledge import okf
 
     header = _header(okf.served(IMPORTED, title="Orders", filename="orders.md"))
     assert "verified" not in header
@@ -107,7 +107,7 @@ def test_an_imported_verified_claim_is_never_served_as_a_verification() -> None:
 
 
 def test_a_converted_document_without_a_header_gets_one() -> None:
-    from choregos_api.knowledge import okf
+    from tranibor_api.knowledge import okf
 
     served = okf.served(
         "# Encryption standard\n\nTLS 1.3.\n", title="Encryption standard", filename="enc.docx"
@@ -122,7 +122,7 @@ def test_a_converted_document_without_a_header_gets_one() -> None:
 
 
 def test_a_naive_timestamp_from_the_database_is_written_with_its_offset() -> None:
-    from choregos_api.knowledge import okf
+    from tranibor_api.knowledge import okf
 
     header = _header(
         okf.served("x\n", title="t", filename="f.md", converted_at=datetime(2026, 1, 2, 3, 4, 5))
@@ -131,8 +131,8 @@ def test_a_naive_timestamp_from_the_database_is_written_with_its_offset() -> Non
 
 
 def test_deprecated_and_the_declared_title() -> None:
-    from choregos_api.knowledge import okf
-    from choregos_api.knowledge.conversion import title_of
+    from tranibor_api.knowledge import okf
+    from tranibor_api.knowledge.conversion import title_of
 
     assert okf.deprecated(WITHDRAWN) and not okf.deprecated(IMPORTED) and not okf.deprecated("# x\n")
     assert title_of(IMPORTED, None, "orders.md") == "Orders"
@@ -146,8 +146,8 @@ def test_deprecated_and_the_declared_title() -> None:
 async def test_a_run_is_served_an_okf_bundle_without_the_withdrawn_document(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.knowledge.conversion import conversions
-    from choregos_contracts import knowledge_digest
+    from tranibor_api.knowledge.conversion import conversions
+    from tranibor_contracts import knowledge_digest
 
     await client.post(BASE, json={"slug": "architecture", "name": "Architecture framework"})
     for name, data in (("orders.md", IMPORTED), ("old-orders.md", WITHDRAWN), ("log.md", "# A log\n")):
@@ -181,7 +181,7 @@ async def test_a_run_is_served_an_okf_bundle_without_the_withdrawn_document(
 async def test_a_withdrawn_document_is_not_searched_and_a_header_is_not_a_passage(
     client: AsyncClient, admin: str
 ) -> None:
-    from choregos_api.knowledge.conversion import conversions
+    from tranibor_api.knowledge.conversion import conversions
 
     created = await client.post(BASE, json={"slug": "catalog", "name": "Catalog", "serving_mode": "index"})
     assert created.status_code == 201, created.text
@@ -201,7 +201,7 @@ async def test_a_withdrawn_document_is_not_searched_and_a_header_is_not_a_passag
 
 
 def test_a_lifecycle_says_status_and_staleness() -> None:
-    from choregos_api.knowledge import okf
+    from tranibor_api.knowledge import okf
 
     now = datetime(2026, 11, 16, tzinfo=UTC)
     assert okf.lifecycle("# no header\n", now) is None
@@ -223,7 +223,7 @@ def test_a_lifecycle_says_status_and_staleness() -> None:
 
 
 async def test_a_listing_shows_each_document_s_okf_lifecycle(client: AsyncClient, admin: str) -> None:
-    from choregos_api.knowledge.conversion import conversions
+    from tranibor_api.knowledge.conversion import conversions
 
     await client.post(BASE, json={"slug": "catalog", "name": "Catalog"})
     for name, data in (("orders.md", IMPORTED), ("old-orders.md", WITHDRAWN), ("plain.md", "# Plain\n")):
@@ -249,8 +249,8 @@ async def test_a_base_exports_as_an_okf_bundle_its_reader_may_take_and_it_is_aud
     import io
     import zipfile
 
-    from choregos_api.knowledge import okf
-    from choregos_api.knowledge.conversion import conversions
+    from tranibor_api.knowledge import okf
+    from tranibor_api.knowledge.conversion import conversions
 
     await client.post(BASE, json={"slug": "catalog", "name": "Catalog"})
     for name, data in (("orders.md", IMPORTED), ("old-orders.md", WITHDRAWN)):

@@ -21,7 +21,7 @@ TOOLS = [{"name": "order_status", "inputSchema": {"type": "object"}}]
 
 @pytest.fixture
 def enforce(app: Any, monkeypatch: pytest.MonkeyPatch) -> None:
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     monkeypatch.setenv("CHOREGOS_EGRESS_MODE", "enforce")
     reset_settings_cache()
@@ -29,11 +29,11 @@ def enforce(app: Any, monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture
 def vendor(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
-    import choregos_adapters
-    from choregos_adapters.fakes.mcp import FakeMcpServer
+    import tranibor_adapters
+    from tranibor_adapters.fakes.mcp import FakeMcpServer
 
     server = FakeMcpServer(tools=[dict(t) for t in TOOLS])
-    monkeypatch.setattr(choregos_adapters, "FAKE_MCP", server)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_MCP", server)
     yield server
 
 
@@ -66,11 +66,11 @@ async def test_a_broker_call_during_a_run_on_a_revoked_host_is_a_tool_error_not_
     enforce: None,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import choregos_adapters
-    from choregos_adapters.fakes.mcp import FakeMcpServer
+    import tranibor_adapters
+    from tranibor_adapters.fakes.mcp import FakeMcpServer
 
     server = FakeMcpServer(tools=[dict(o) for o in BROKER_TOOLS])
-    monkeypatch.setattr(choregos_adapters, "FAKE_MCP", server)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_MCP", server)
     monkeypatch.setenv("CONNECTOR_TEST_CLE_FOURNISSEUR", "x")
     # open the host first (the setup declares and discovers under enforce)
     assert (
@@ -89,7 +89,7 @@ async def test_a_broker_call_during_a_run_on_a_revoked_host_is_a_tool_error_not_
 @pytest.fixture
 def github(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[httpx.Request]]:
     """GitHub, recorded: the HTTPS fetcher through a `MockTransport`."""
-    from choregos_api.services.skill_sources import HttpsSourceFetcher, set_fetcher
+    from tranibor_api.services.skill_sources import HttpsSourceFetcher, set_fetcher
 
     seen: list[httpx.Request] = []
 
@@ -115,7 +115,7 @@ async def test_a_git_import_outside_the_deployment_ceiling_is_a_422_that_names_e
     github: list[httpx.Request],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     monkeypatch.setenv("CHOREGOS_EGRESS_CEILING", '{"api": ["api.github.com"]}')
     reset_settings_cache()
@@ -146,8 +146,8 @@ async def test_a_git_preview_with_a_revoked_api_host_is_refused_with_no_request(
 async def test_a_web_sync_with_the_host_absent_fails_the_source_and_sends_nothing(
     client: AsyncClient, admin: str, enforce: None
 ) -> None:
-    from choregos_adapters.documents import WebCrawlSource
-    from choregos_api.knowledge.sync import sync_source
+    from tranibor_adapters.documents import WebCrawlSource
+    from tranibor_api.knowledge.sync import sync_source
 
     base = "/api/v1/orgs/northwind/knowledge"
     assert (
@@ -195,7 +195,7 @@ async def _public(host: str) -> list[str]:
 async def test_a_remote_agents_card_fetch_outside_the_ceiling_is_refused_and_never_sent(
     client: AsyncClient, admin: str, enforce: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_adapters.fakes.a2a import FakeA2aAgent
+    from tranibor_adapters.fakes.a2a import FakeA2aAgent
 
     from .conftest_remote import remote_agent, set_sealing_key
 
@@ -211,7 +211,7 @@ async def test_a_remote_agents_card_fetch_outside_the_ceiling_is_refused_and_nev
         fetched = remote.card_fetches
         # the organisation still allows it, the deployment's ceiling no longer does: the gate passes,
         # the guard refuses before the card is requested
-        from choregos_api.config import reset_settings_cache
+        from tranibor_api.config import reset_settings_cache
 
         monkeypatch.setenv("CHOREGOS_EGRESS_CEILING", '{"api": ["elsewhere.example.test"]}')
         reset_settings_cache()
@@ -226,8 +226,8 @@ async def test_creating_a_web_source_checks_its_start_url_inside_the_organisatio
     """On the dev tenant (0.18.3, `enforce`) a web source was refused at creation with "no egress
     policy in context" although its host was allowed: the start URL check ran outside the
     organisation's policy (S39-28). Fakes skip that check, so it is switched on here."""
-    from choregos_adapters.documents import web
-    from choregos_api.routers.knowledge import source_config as router
+    from tranibor_adapters.documents import web
+    from tranibor_api.routers.knowledge import source_config as router
 
     monkeypatch.setattr(router, "fakes_enabled", lambda: False)
     sent: list[httpx.Request] = []

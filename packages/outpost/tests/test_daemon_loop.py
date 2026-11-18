@@ -10,11 +10,11 @@ import random
 from pathlib import Path
 
 import httpx
-from choregos_contracts.enums import OutpostDoorCode
-from choregos_contracts.outpost import MAX_WAIT_S
-from choregos_outpost.daemon import Exit
-from choregos_outpost.toolhost import ToolHost
-from choregos_outpost.uplink import Backoff
+from tranibor_contracts.enums import OutpostDoorCode
+from tranibor_contracts.outpost import MAX_WAIT_S
+from tranibor_outpost.daemon import Exit
+from tranibor_outpost.toolhost import ToolHost
+from tranibor_outpost.uplink import Backoff
 
 from ._bench import CREDENTIAL, Bench, bench
 

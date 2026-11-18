@@ -10,17 +10,17 @@ from __future__ import annotations
 import copy
 from typing import Any
 
-import choregos_contracts as contracts
 import pytest
-from choregos_contracts import (
+import tranibor_contracts as contracts
+from jsonschema import Draft202012Validator, RefResolver
+from pydantic import ValidationError
+from tranibor_contracts import (
     ActorType,
     DecisionActor,
     DecisionOutcome,
     DecisionRecord,
     Workflow,
 )
-from jsonschema import Draft202012Validator, RefResolver
-from pydantic import ValidationError
 
 from .test_contracts import _compare, _load
 

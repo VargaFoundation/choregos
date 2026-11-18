@@ -11,9 +11,9 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from choregos_adapters import build, validate_config
-from choregos_adapters.errors import ConfigurationError
-from choregos_adapters.registry import DEPLOYMENT_FIELDS, AdapterSet, refuse_deployment_fields, spec_of
+from tranibor_adapters import build, validate_config
+from tranibor_adapters.errors import ConfigurationError
+from tranibor_adapters.registry import DEPLOYMENT_FIELDS, AdapterSet, refuse_deployment_fields, spec_of
 
 ELSEWHERE: dict[str, Any] = {"kubernetes": {"base_url": "https://k8s.elsewhere.example", "verify": False}}
 KUBE: dict[str, Any] = {"kubernetes": {"base_url": "https://k8s.test", "token": "t", "verify": False}}

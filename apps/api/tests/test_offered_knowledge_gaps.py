@@ -8,9 +8,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from choregos_adapters.fakes.notify import FakeNotifier
 from httpx import AsyncClient
 from sqlalchemy import select
+from tranibor_adapters.fakes.notify import FakeNotifier
 
 from .agent_scopes_kit import as_user
 from .kits.assistant_install import OWNERS, _member
@@ -73,10 +73,10 @@ async def test_a_document_the_owners_wrote_is_not_remembered_when_deleted(
 async def test_a_source_sync_that_rewrites_a_seed_document_makes_it_local(
     client: AsyncClient, org: str, offline: Path
 ) -> None:
-    from choregos_adapters.fakes.documents import fake_source
-    from choregos_api.db.models import KnowledgeSource
-    from choregos_api.db.session import session_scope
-    from choregos_api.knowledge.sync import sync_source
+    from tranibor_adapters.fakes.documents import fake_source
+    from tranibor_api.db.models import KnowledgeSource
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.knowledge.sync import sync_source
 
     source = {"kind": "git", "name": "house-docs", "config": {"url": "https://git.test/house.git"}}
     publish(offline, "0.1.0", "follow", V1, sources=[source])
@@ -102,8 +102,8 @@ async def test_a_source_sync_that_rewrites_a_seed_document_makes_it_local(
 async def test_the_sources_of_the_seed_are_attached_at_install_and_never_synced_there(
     client: AsyncClient, org: str, offline: Path
 ) -> None:
-    from choregos_api.db.models import KnowledgeBase, KnowledgeSource
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import KnowledgeBase, KnowledgeSource
+    from tranibor_api.db.session import session_scope
 
     source = {
         "kind": "web",
@@ -131,7 +131,7 @@ async def test_the_sources_of_the_seed_are_attached_at_install_and_never_synced_
 async def test_the_owners_are_told_at_upgrade_time_that_proposals_wait(
     client: AsyncClient, org: str, offline: Path
 ) -> None:
-    from choregos_api.services.task_delivery import set_notifier_factory
+    from tranibor_api.services.task_delivery import set_notifier_factory
 
     publish(offline, "0.1.0", "propose_updates", V1)
     await installed(client)

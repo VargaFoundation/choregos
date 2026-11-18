@@ -7,8 +7,8 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from choregos_adapters.errors import AdapterError, ConfigurationError
-from choregos_adapters.fakes.hr import (
+from tranibor_adapters.errors import AdapterError, ConfigurationError
+from tranibor_adapters.fakes.hr import (
     FakeBadges,
     FakeCarrier,
     FakeMdm,
@@ -67,7 +67,7 @@ def test_an_unknown_argument_or_operation_is_refused_by_name() -> None:
 
 
 async def test_the_suppliers_agent_orders_tracks_and_refuses_over_mcp() -> None:
-    from choregos_adapters.mcp import McpClient
+    from tranibor_adapters.mcp import McpClient
 
     supplier = FakeSupplier()
     client = McpClient(
@@ -106,7 +106,7 @@ async def test_the_suppliers_agent_orders_tracks_and_refuses_over_mcp() -> None:
 def test_the_families_are_connector_types_and_demo_is_refused_in_production(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from choregos_adapters import build, connector_types
+    from tranibor_adapters import build, connector_types
 
     demos = {
         k: {o.name: o.default_policy for o in s.operations} for k, t, s in connector_types() if t == "demo"

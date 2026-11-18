@@ -9,14 +9,14 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import Any
 
-from choregos_core import utcnow
 from httpx import AsyncClient
+from tranibor_core import utcnow
 
 
 async def _runs(project_id: str, key: str, runs: list[tuple[str, str | None, int]]) -> None:
     """A work item with `runs`: (stage role, backend, minutes after the first run), in the last day."""
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Run, WorkItem
+    from tranibor_api.db.session import session_scope
 
     first = utcnow() - timedelta(hours=2)
     async with session_scope() as session:

@@ -6,12 +6,12 @@ import copy
 import json
 from typing import Any
 
-import choregos_contracts as contracts
 import pytest
+import tranibor_contracts as contracts
 import yaml
-from choregos_contracts import HostedCall, StageInput
 from jsonschema import Draft202012Validator, RefResolver
 from pydantic import ValidationError
+from tranibor_contracts import HostedCall, StageInput
 
 EXAMPLES = contracts.schemas_dir() / "examples"
 OPENAPI = contracts.schemas_dir().parent / "openapi.yaml"

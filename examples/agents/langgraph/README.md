@@ -1,7 +1,7 @@
 # LangGraph example: the ticket triager as a graph
 
 The same agent as `../plain`, written as a LangGraph graph of three nodes (`lookup`, `read`,
-`deliver`) on the `choregos-agent-sdk`.
+`deliver`) on the `tranibor-agent-sdk`.
 
 Two things stay governed, each in a few lines:
 

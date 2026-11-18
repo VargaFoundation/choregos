@@ -2,8 +2,8 @@
 
 - **Status**: accepted, 2026-11-15 (the product owner's decision D14 of the graal and Choregos offer of
   2026-11: MCP is one of the two doors between the products)
-- **Concerns**: the MCP door (`apps/api/src/choregos_api/mcp/`), the MCP connector and its client
-  (`packages/adapters/src/choregos_adapters/mcp/`, `specs.py`), the connector discovery
+- **Concerns**: the MCP door (`apps/api/src/tranibor_api/mcp/`), the MCP connector and its client
+  (`packages/adapters/src/tranibor_adapters/mcp/`, `specs.py`), the connector discovery
   (`routers/org_connectors.py`), the broker; follows [ADR 0030](0030-an-mcp-door-for-external-clients.md),
   [ADR 0079](0079-choregos-and-graal-are-autonomous-products.md),
   [ADR 0105](0105-choregos-consumes-an-mcp-gateway-it-never-is-one.md); companion of

@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import pytest
-from choregos_contracts import Evidence, StageResult, StageStatus
-from choregos_core import GateOutcome, WorkflowEngine, load_template
+from tranibor_contracts import Evidence, StageResult, StageStatus
+from tranibor_core import GateOutcome, WorkflowEngine, load_template
 
 
 @pytest.fixture

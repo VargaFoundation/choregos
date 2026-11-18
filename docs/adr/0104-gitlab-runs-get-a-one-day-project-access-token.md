@@ -1,7 +1,7 @@
 # 0104 — GitLab runs get a one-day project access token
 
 - **Status**: accepted, 2026-11-04
-- **Concerns**: `packages/adapters/src/choregos_adapters/scm/gitlab.py` (`GitLabScm`), the `scm/gitlab`
+- **Concerns**: `packages/adapters/src/tranibor_adapters/scm/gitlab.py` (`GitLabScm`), the `scm/gitlab`
   connector type and its setup procedure; builds on [ADR 0005](0005-adapters-and-fakes.md) and
   [ADR 0115](0115-the-agent-never-holds-the-run-token.md)
 

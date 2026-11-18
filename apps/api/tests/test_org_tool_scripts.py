@@ -3,7 +3,7 @@
 `PATCH /orgs/{org}` with `tool_scripts`: `enabled`, `disabled`, or `null` to follow the deployment's
 default. Its administrator only — a project owner and a platform administrator who is not one are refused
 — audited in `org.update`, and stored under the key the orchestrator reads
-(`choregos_core.tool_scripts_switch`). `GET /orgs` shows it to every member, so a project's settings can
+(`tranibor_core.tool_scripts_switch`). `GET /orgs` shows it to every member, so a project's settings can
 say when the organisation has them disabled.
 """
 
@@ -11,8 +11,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from choregos_core.tool_scripts_switch import ORG_SETTING, org_tool_scripts
 from httpx import AsyncClient
+from tranibor_core.tool_scripts_switch import ORG_SETTING, org_tool_scripts
 
 from .conftest import login
 from .kits.organisation import declare_administrator
@@ -21,9 +21,9 @@ ORG = "/api/v1/orgs"
 
 
 async def _stored() -> dict[str, Any]:
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         organisation = (
@@ -115,9 +115,9 @@ async def test_a_member_reads_the_organisation_s_choice(
 
 
 async def _remove_the_memberships(email: str) -> None:
-    from choregos_api.db.models import Membership, User
-    from choregos_api.db.session import session_scope
     from sqlalchemy import delete, select
+    from tranibor_api.db.models import Membership, User
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         me = (await session.execute(select(User).where(User.email == email))).scalar_one()
@@ -129,7 +129,7 @@ async def test_a_platform_administrator_who_is_not_its_administrator_is_refused(
 ) -> None:
     """The platform administrator renames an organisation he is not a member of; its tool scripts are its
     administrator's choice, so the whole request is refused and nothing of it is applied."""
-    from choregos_api.edition import reset
+    from tranibor_api.edition import reset
 
     await declare_administrator({"platform@example.dev"})
     try:

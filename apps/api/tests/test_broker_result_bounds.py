@@ -29,15 +29,15 @@ STOCK_SCHEMA = {
 
 @pytest.fixture
 def server(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
-    import choregos_adapters
-    from choregos_adapters.fakes.mcp import FakeMcpServer
+    import tranibor_adapters
+    from tranibor_adapters.fakes.mcp import FakeMcpServer
 
     tools = [dict(o) for o in TOOLS]
     for tool in tools:
         if tool["name"] == "stock":
             tool["outputSchema"] = STOCK_SCHEMA
     fake = FakeMcpServer(tools=tools, token="cle-fournisseur")
-    monkeypatch.setattr(choregos_adapters, "FAKE_MCP", fake)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_MCP", fake)
     monkeypatch.setenv("CONNECTOR_TEST_CLE_FOURNISSEUR", "cle-fournisseur")
     yield fake
 
@@ -45,7 +45,7 @@ def server(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
 async def test_an_oversized_result_is_cut_to_the_cap_with_a_marker(
     client: AsyncClient, project: dict[str, Any], server: Any
 ) -> None:
-    from choregos_api.config import get_settings
+    from tranibor_api.config import get_settings
 
     server.answers["suivi_commande"] = "line of a very long log\n" * 20_000
     base, headers = await _prepare(client, project, ["*"])
@@ -93,9 +93,9 @@ async def test_a_declared_output_schema_with_no_structured_content_is_refused(
 async def test_the_output_schema_follows_the_server_on_rediscovery_without_closing_the_operation(
     client: AsyncClient, project: dict[str, Any], server: Any
 ) -> None:
-    from choregos_api.db.models import ConnectorOperation
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import ConnectorOperation
+    from tranibor_api.db.session import session_scope
 
     await _prepare(client, project, ["*"])
     for tool in server.tools:
@@ -131,9 +131,9 @@ async def test_a_governed_write_result_is_masked_too(
 ) -> None:
     """A write runs as an action (#241): the broker returns what the action's effect recorded. It is
     masked like a read's result — and never refused, since the effect already happened."""
-    from choregos_api.db.models import Action, ActionEffect
-    from choregos_api.db.session import ALL_ORGS, session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Action, ActionEffect
+    from tranibor_api.db.session import ALL_ORGS, session_scope
 
     base, headers = await _prepare(client, project, ["*"])
     opened = await client.patch(
@@ -182,10 +182,10 @@ async def test_a_job_reads_an_oversized_answer_whole_and_masked(
     """The cap protects a model's context (#755); a job (ADR 0056) has none. A snapshot job reads
     seven years of daily bars through the broker: cut, they were no bars at all, and every
     investment campaign stopped at its snapshot (S40-13b). Masking still holds."""
-    from choregos_api.config import get_settings
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
-    from choregos_api.security import mint_run_token
+    from tranibor_api.config import get_settings
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.security import mint_run_token
 
     bars = [{"date": f"day-{i}", "close": 100.0 + i} for i in range(5_000)]
     server.gestures["stock"] = lambda _arguments: {

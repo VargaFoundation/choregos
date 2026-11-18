@@ -66,7 +66,7 @@ def _arrival(policy: str = "allowed", params: dict[str, Any] | None = None) -> d
 @pytest.fixture
 def done_effects() -> Iterator[list[dict[str, Any]]]:
     """What the effects REALLY did: the truth of the outside world."""
-    from choregos_api import effects
+    from tranibor_api import effects
 
     seen: list[dict[str, Any]] = []
 
@@ -81,9 +81,9 @@ def done_effects() -> Iterator[list[dict[str, Any]]]:
 
 
 async def _work_item(setup: Fixture, document: dict[str, Any], fields: dict[str, Any]) -> None:
-    from choregos_api.db.models import WorkflowDef, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_contracts import Workflow
+    from tranibor_api.db.models import WorkflowDef, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_contracts import Workflow
 
     model = Workflow.model_validate(document)
     async with session_scope() as session:
@@ -128,9 +128,9 @@ async def _wait_for(handle: Any, predicate: Any, what: str) -> dict[str, Any]:
 
 
 async def _actions(setup: Fixture) -> list[Any]:
-    from choregos_api.db.models import Action
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Action
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = await session.execute(select(Action).where(Action.work_item_id == setup.work_item_id))
@@ -144,9 +144,9 @@ def _iso(instant: datetime) -> str:
 async def test_the_action_waits_for_d_minus_10_then_goes_and_the_work_item_learns_it_by_a_signal(
     setup: Fixture, temporal_env: Any, worker_factory: Any, done_effects: list[dict[str, Any]]
 ) -> None:
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.api.enums.v1 import EventType
     from temporalio.worker import Replayer
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     start = await temporal_env.get_current_time()
     arrival = start + timedelta(days=20)
@@ -242,7 +242,7 @@ async def test_a_lost_signal_the_re_read_takes_over(
 ) -> None:
     """`action_settled` never arrives (a work item unreachable for a moment): the re-read from the
     database, every six hours, settles the wait anyway."""
-    from choregos_orchestrator.activities import actions
+    from tranibor_orchestrator.activities import actions
 
     async def lost(*_: Any) -> None:
         return None
@@ -262,8 +262,8 @@ async def test_a_rejected_action_is_not_played_and_the_work_item_follows_on_fail
     """An operation under approval: the action waits for a person. Rejected — what `decider` does
     in the API: the row, then `action_settled` —, nothing is played, and the work item goes where
     `on_fail` sends it."""
-    from choregos_api.db.models import Action
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Action
+    from tranibor_api.db.session import session_scope
 
     start = await temporal_env.get_current_time()
     fields = {"upn": "lea@acme.test", "arrival_date": _iso(start + timedelta(days=5))}

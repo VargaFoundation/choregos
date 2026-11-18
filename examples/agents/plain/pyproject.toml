@@ -4,7 +4,7 @@ version = "0.27.13"
 description = "Example: a ticket triage agent in plain Python (choregos-agent-sdk)"
 requires-python = ">=3.12,<3.13"
 license = { text = "Apache-2.0" }
-dependencies = ["choregos-agent-sdk"]
+dependencies = ["tranibor-agent-sdk"]
 
 [build-system]
 requires = ["hatchling"]

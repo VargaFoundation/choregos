@@ -7,8 +7,8 @@ and `await_run` would poll an `unknown` run until the stage timed out.
 
 from __future__ import annotations
 
-from choregos_adapters import build
-from choregos_contracts import (
+from tranibor_adapters import build
+from tranibor_contracts import (
     AgentRef,
     Budget,
     Callbacks,
@@ -20,7 +20,7 @@ from choregos_contracts import (
     TransitionRef,
     WorkItemRef,
 )
-from choregos_core.domain import ExecRef, StageJobSpec
+from tranibor_core.domain import ExecRef, StageJobSpec
 
 
 def _spec(run_id: str, outputs: list[str]) -> StageJobSpec:

@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from choregos_contracts import EventType
+from tranibor_contracts import EventType
 
 from .conftest import Fixture
 
@@ -20,17 +20,17 @@ JIRA = {"base_url": "https://acme.atlassian.net", "email": "bot@acme.example", "
 
 
 async def _tracker(setup: Fixture, type_name: str, config: dict[str, Any]) -> None:
-    from choregos_api.db.models import Connector
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Connector
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         session.add(Connector(project_id=setup.project_id, kind="tracker", type=type_name, config=config))
 
 
 async def _payloads(setup: Fixture, type_: EventType) -> list[dict[str, Any]]:
-    from choregos_api.db.models import Event
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Event
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = (
@@ -42,7 +42,7 @@ async def _payloads(setup: Fixture, type_: EventType) -> list[dict[str, Any]]:
 
 
 async def _mirror(setup: Fixture) -> dict[str, Any]:
-    from choregos_orchestrator.activities.tracker import mirror_state
+    from tranibor_orchestrator.activities.tracker import mirror_state
 
     await mirror_state(
         {"project_id": setup.project_id, "work_item_id": setup.work_item_id, "state": "triage", "reason": "t"}
@@ -58,7 +58,7 @@ async def test_a_state_mirrored_to_jira_names_the_connectors_account(setup: Fixt
 
 
 async def test_a_question_posted_on_the_ticket_names_the_connectors_account(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.tracker import create_human_request
+    from tranibor_orchestrator.activities.tracker import create_human_request
 
     await _tracker(setup, "jira", JIRA)
     await create_human_request(

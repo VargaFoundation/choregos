@@ -172,7 +172,7 @@ def _matching(op_id: str, body: dict[str, Any]) -> list[str]:
 def test_a_refusal_of_an_outpost_matches_the_outpost_conflict_alone() -> None:
     """What the connector routes answer when the outpost a connector is reached through refuses
     (ADR 0149 §7, S65-13): the problem the API sends is one branch of each route's 409, and one only."""
-    from choregos_api.errors import conflict
+    from tranibor_api.errors import conflict
 
     paused = conflict("x", extra={"code": "outpost_paused", "outpost": "factory-floor"})
     body = paused.to_problem("/api/v1/orgs/acme/connectors")
@@ -244,7 +244,7 @@ def test_catalogue_entries_say_their_routes_and_installs_take_one() -> None:
 
 def test_a_problem_body_the_api_sends_matches_the_gateway_conflict_alone() -> None:
     """The API always adds `instance` to a problem; the closed schema must accept it (S46-06)."""
-    from choregos_api.errors import conflict
+    from tranibor_api.errors import conflict
 
     body = conflict("x", extra={"code": "gateway_required"}).to_problem("/api/v1/orgs/acme/connectors")
     assert body["instance"] == "/api/v1/orgs/acme/connectors"

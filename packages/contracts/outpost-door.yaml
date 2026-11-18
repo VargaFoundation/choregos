@@ -174,7 +174,7 @@ x-call-signature:
 
 x-sealing:
   construction: >-
-    `seal` and `open_sealed` of `choregos_adapters.sealing`, as they are, with the call's id where a run's id
+    `seal` and `open_sealed` of `tranibor_adapters.sealing`, as they are, with the call's id where a run's id
     is today (ADR 0148 §5).
   key_agreement: X25519, between a key pair the sender makes for this one envelope and the recipient's public key.
   key_derivation: >-

@@ -12,8 +12,8 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from choregos_runner.job import FIELDS, JOB_RESULT
-from choregos_runner.workspace import RUNNER_FILES, Workspace
+from tranibor_runner.job import FIELDS, JOB_RESULT
+from tranibor_runner.workspace import RUNNER_FILES, Workspace
 
 pytestmark = pytest.mark.asyncio
 

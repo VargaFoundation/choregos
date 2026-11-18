@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from choregos_core import ValidationError, parse_workflow
+from tranibor_core import ValidationError, parse_workflow
 
 DOC = """
 apiVersion: choregos/v1

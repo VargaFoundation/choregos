@@ -96,7 +96,7 @@ def at(hour: int, minute: int = 0) -> datetime:
 
 @pytest.fixture
 def offline(tmp_path: Path) -> Iterator[Path]:
-    from choregos_api.services.plugin_supply import OfflineDirectory, use_plugin_supply
+    from tranibor_api.services.plugin_supply import OfflineDirectory, use_plugin_supply
 
     root = tmp_path / "plugins"
     target = root / "investment-assistant" / "0.1.0"
@@ -113,8 +113,8 @@ def offline(tmp_path: Path) -> Iterator[Path]:
 
 @pytest.fixture
 def markets(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
-    import choregos_adapters
-    from choregos_adapters.fakes.mcp import FakeMcpServer
+    import tranibor_adapters
+    from tranibor_adapters.fakes.mcp import FakeMcpServer
 
     tools = [
         {
@@ -126,7 +126,7 @@ def markets(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
         for n in MARKET
     ]
     server = FakeMcpServer(tools=tools, token="markets-key")
-    monkeypatch.setattr(choregos_adapters, "FAKE_MCP", server)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_MCP", server)
     monkeypatch.setenv("CONNECTOR_TEST_MARKETS_KEY", "markets-key")
     yield server
 
@@ -167,8 +167,8 @@ async def _subscriber(client: AsyncClient, app: Any, email: str) -> AsyncClient:
 
 async def _runs(email: str | None = None) -> list[Any]:
     """The task work items, with the owner of the personal space they are in."""
-    from choregos_api.db.models import Project, User, WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Project, User, WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         query = (
@@ -186,8 +186,8 @@ async def _runs(email: str | None = None) -> list[Any]:
 
 
 async def _pass(now: datetime) -> dict[str, str]:
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.assistant_tasks import run_due
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.assistant_tasks import run_due
 
     async with session_scope(orgs="*") as session:
         return await run_due(session, now)
@@ -195,9 +195,9 @@ async def _pass(now: datetime) -> dict[str, str]:
 
 async def _produce(work_item_id: str, **outputs: Any) -> None:
     """What the workflow's step leaves: a run and its artifacts."""
-    from choregos_api.db.models import Project, Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.artifacts import record_inline_outputs
+    from tranibor_api.db.models import Project, Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.artifacts import record_inline_outputs
 
     async with session_scope(orgs="*") as session:
         item = await session.get(WorkItem, work_item_id)
@@ -221,8 +221,8 @@ async def as_admin(client: AsyncClient) -> None:
 
 
 async def _installation_id() -> str:
-    from choregos_api.db.models import AssistantInstallation
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import AssistantInstallation
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         return (await session.execute(select(AssistantInstallation.id))).scalar_one()

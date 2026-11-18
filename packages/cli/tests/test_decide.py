@@ -31,8 +31,8 @@ REFUSED = (
 
 @pytest.fixture(autouse=True)
 def profile(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from choregos_cli import client as client_module
-    from choregos_cli import theme
+    from tranibor_cli import client as client_module
+    from tranibor_cli import theme
 
     monkeypatch.setattr(client_module, "CONFIG_PATH", tmp_path / "config.json")
     monkeypatch.setattr(theme, "MONOCHROME", False)
@@ -45,7 +45,7 @@ def profile(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _run(*words: str, stdin: str | None = None) -> Any:
-    from choregos_cli.main import app
+    from tranibor_cli.main import app
 
     return CliRunner().invoke(app, ["decide", *words], input=stdin)
 
@@ -419,7 +419,7 @@ def test_show_decides_nothing_and_list_names_what_waits(platform: Platform) -> N
 
 def test_no_batch_confirmation_exists(platform: Platform) -> None:
     import typer
-    from choregos_cli.decide import decide_app
+    from tranibor_cli.decide import decide_app
     from typer.main import get_command
 
     group = get_command(decide_app)
@@ -442,8 +442,8 @@ def test_no_batch_confirmation_exists(platform: Platform) -> None:
 
 def _pilot_env(platform: Platform, token: str = "chs_session") -> Any:
     """A workspace on the same fake: the routes the pane reads beside `decide`'s."""
-    from choregos_cli.client import AsyncClient, Profile
-    from choregos_cli.workspace import Workspace
+    from tranibor_cli.client import AsyncClient, Profile
+    from tranibor_cli.workspace import Workspace
 
     router = platform.router
     contract = platform.contract
@@ -538,7 +538,7 @@ async def test_a_rejection_in_the_pane_asks_a_reason_and_an_empty_one_is_not_sen
 
 
 async def test_the_pane_has_no_batch_key(platform: Platform) -> None:
-    from choregos_cli.workspace import DecisionScreen, Workspace
+    from tranibor_cli.workspace import DecisionScreen, Workspace
 
     keys = [b.key for b in [*Workspace.BINDINGS, *DecisionScreen.BINDINGS]]
     actions = " ".join(str(b.action) for b in [*Workspace.BINDINGS, *DecisionScreen.BINDINGS])

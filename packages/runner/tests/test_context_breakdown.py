@@ -14,9 +14,9 @@ from typing import Any
 
 import httpx
 import pytest
-from choregos_adapters.fakes import FakeModelServer
-from choregos_adapters.fakes.mcp import FakeMcpServer
-from choregos_contracts import (
+from tranibor_adapters.fakes import FakeModelServer
+from tranibor_adapters.fakes.mcp import FakeMcpServer
+from tranibor_contracts import (
     AgentRef,
     HostedCall,
     McpServerRef,
@@ -25,10 +25,10 @@ from choregos_contracts import (
     StageInput,
     ToolsRef,
 )
-from choregos_core.context_breakdown import EVENT, Hints
-from choregos_core.hosted import LOOPBACK_KEY
-from choregos_runner.loopback.model import ModelProxy
-from choregos_runner.runner import Runner
+from tranibor_core.context_breakdown import EVENT, Hints
+from tranibor_core.hosted import LOOPBACK_KEY
+from tranibor_runner.loopback.model import ModelProxy
+from tranibor_runner.runner import Runner
 
 from .conftest import FakeInternalClient
 

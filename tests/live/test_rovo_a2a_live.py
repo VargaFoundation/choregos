@@ -18,7 +18,7 @@ import asyncio
 import os
 
 import pytest
-from choregos_adapters.a2a import A2aClient, fetch_card, text_part
+from tranibor_adapters.a2a import A2aClient, fetch_card, text_part
 
 from .conftest import require
 

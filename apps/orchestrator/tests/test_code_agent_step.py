@@ -6,8 +6,8 @@ import json
 from typing import Any
 
 import pytest
-from choregos_orchestrator.activities import stage as stage_activities
 from temporalio.exceptions import ApplicationError
+from tranibor_orchestrator.activities import stage as stage_activities
 
 from .conftest import Fixture
 from .test_backend_toggle_enforced import _switch
@@ -20,15 +20,15 @@ COMMAND = ["python", "-m", "ticket_triager"]
 
 @pytest.fixture
 def images(monkeypatch: pytest.MonkeyPatch) -> None:
-    from choregos_orchestrator.config import reset_settings_cache
+    from tranibor_orchestrator.config import reset_settings_cache
 
     monkeypatch.setenv("CHOREGOS_AGENT_IMAGES", json.dumps({"ticket-triager": TRIAGER}))
     reset_settings_cache()
 
 
 async def _agent(setup: Fixture, runtime: dict[str, Any] | None, backend: str | None = None) -> None:
-    from choregos_api.db.models import Agent, AgentVersion, Project
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Agent, AgentVersion, Project
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         project = await session.get(Project, setup.project_id)
@@ -112,7 +112,7 @@ async def test_an_anthropic_runtime_sets_the_models_api_format(setup: Fixture, i
 
 
 async def test_an_agent_without_a_runtime_keeps_the_runner_image(setup: Fixture, images: None) -> None:
-    from choregos_orchestrator.config import get_settings
+    from tranibor_orchestrator.config import get_settings
 
     await _agent(setup, None)
     prepared = await stage_activities.prepare_stage(_plan(setup))

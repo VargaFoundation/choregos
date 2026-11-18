@@ -99,7 +99,7 @@ async def test_separation_of_duties_can_be_switched_off(client: AsyncClient) -> 
 async def test_an_approval_needs_a_fresh_sign_in_and_a_person(
     client: AsyncClient, app: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api import freshness
+    from tranibor_api import freshness
 
     await org_admins(client, DAVE)
     await as_user(client, ADMIN)
@@ -270,7 +270,7 @@ async def test_retiring_an_agent_cancels_its_waiting_request(client: AsyncClient
 async def test_the_approvals_gate_is_not_loosened_without_a_fresh_sign_in(
     client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api import freshness
+    from tranibor_api import freshness
 
     await as_user(client, ADMIN)
     await new_agent(client, policy={"on_publish": "candidate", "stable": {"approvals": 2}})
@@ -292,7 +292,7 @@ async def test_the_approvals_gate_is_not_loosened_without_a_fresh_sign_in(
 
 
 async def test_the_gesture_check_sees_each_approval(client: AsyncClient) -> None:
-    from choregos_api import extensions
+    from tranibor_api import extensions
 
     seen: list[dict[str, Any]] = []
 

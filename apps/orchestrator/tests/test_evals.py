@@ -10,7 +10,7 @@ from typing import Any
 
 import pytest
 import yaml
-from choregos_orchestrator.activities import evals
+from tranibor_orchestrator.activities import evals
 
 from .conftest import Fixture
 
@@ -221,7 +221,7 @@ async def test_a_fake_matrix_has_four_context_cells_with_tokens_from_the_ledger(
 
 async def test_the_cell_reports_what_the_ledger_says_not_what_the_fixture_scripts(setup: Fixture) -> None:
     """A gateway that cannot be billed by hand is the real one: its ledger is the only measure."""
-    from choregos_core.domain import Spend
+    from tranibor_core.domain import Spend
 
     class Ledger:
         """A gateway without `record_usage`: it only says what it saw."""
@@ -322,9 +322,9 @@ async def test_a_cell_without_context_is_the_none_cell(setup: Fixture) -> None:
 
 
 async def test_a_backend_is_validated_by_its_cells_without_context_reduction(setup: Fixture) -> None:
-    from choregos_api.db.models import ModelProfileRow
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import ModelProfileRow
+    from tranibor_api.db.session import session_scope
 
     cell = {"model": "platform/standard", "with_memory": True, "success_rate": 0.9}
     await evals.publish_matrix(

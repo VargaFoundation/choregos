@@ -56,4 +56,4 @@ image keeps as a link to it.)
 Two conditions, in this order: that OpenHands exposes an ACP agent (or that an ACP client
 to its `agent-server` is written), then that the backend passes the conformance suite
 **against the real binary** in the image, not against a fake. The removed adapter is in the
-history (`packages/runner/src/choregos_runner/backends/openhands.py`, before that commit).
+history (`packages/runner/src/tranibor_runner/backends/openhands.py`, before that commit).

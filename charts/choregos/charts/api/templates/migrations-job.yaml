@@ -92,7 +92,7 @@ spec:
           # branches declared by plugins (`choregos.migrations`): `upgrade heads`, not
           # `head`. The former `alembic -c alembic.ini upgrade head` required `/app/apps/api` as the
           # working directory, and only saw the core.
-          command: ["python", "-m", "choregos_api.migrate"]
+          command: ["python", "-m", "tranibor_api.migrate"]
           env: {{- include "choregos.commonEnv" . | nindent 12 }}
           securityContext: {{- toYaml .Values.global.securityContext | nindent 12 }}
           # The root filesystem is read-only: a migration that reads the agent catalogue (the

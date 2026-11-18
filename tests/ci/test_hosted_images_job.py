@@ -60,8 +60,8 @@ def test_the_gate_waits_for_both_jobs_and_the_filter_covers_what_they_prove() ->
         "examples/hosted/**",
         "tests/conformance/hosted_real/**",
         "tests/conformance/hosted/**",
-        "packages/adapters/src/choregos_adapters/executor/local_docker.py",
-        "packages/runner/src/choregos_runner/serve_session.py",
-        "apps/api/src/choregos_api/services/hosted_sources.py",
+        "packages/adapters/src/tranibor_adapters/executor/local_docker.py",
+        "packages/runner/src/tranibor_runner/serve_session.py",
+        "apps/api/src/tranibor_api/services/hosted_sources.py",
     ):
         assert path in filters, path

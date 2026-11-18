@@ -47,9 +47,9 @@ async def _shape(
     org_slug: str = "northwind",
 ) -> str:
     """Gives the user exactly these memberships (the development sign-in adds a developer role)."""
-    from choregos_api.db.models import Membership, Organization, Project, User
-    from choregos_api.db.session import session_scope
     from sqlalchemy import delete, select
+    from tranibor_api.db.models import Membership, Organization, Project, User
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         user = (await session.execute(select(User).where(User.email == email))).scalar_one()
@@ -87,9 +87,9 @@ async def _uid(client: AsyncClient, email: str, **shape: Any) -> str:
     """Creates the person (a first sign-in), shapes their memberships, and gives their id."""
     async with _as(client, email, **shape):
         pass
-    from choregos_api.db.models import User
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import User
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         return str((await session.execute(select(User.id).where(User.email == email))).scalar_one())
@@ -245,8 +245,8 @@ async def test_a_grant_by_e_mail_does_not_cross_organisations(
     client: AsyncClient, two_projects: dict[str, Any]
 ) -> None:
     """A grant on another organisation's base, even naming this person's e-mail, gives them nothing."""
-    from choregos_api.db.models import KnowledgeBase, Organization
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import KnowledgeBase, Organization
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         other = Organization(slug="other", name="Other")
@@ -263,7 +263,7 @@ async def test_a_grant_by_e_mail_does_not_cross_organisations(
             await person.put("/api/v1/orgs/other/knowledge/secret/grants", json={"grants": []})
         ).status_code in {403, 404}
     # even when an administrator of `other` names this person's e-mail, it is not enough
-    from choregos_api.db.models import KnowledgeGrant
+    from tranibor_api.db.models import KnowledgeGrant
 
     async with session_scope() as session:
         base = (await session.execute(__import__("sqlalchemy").select(KnowledgeBase))).scalars().all()
@@ -318,7 +318,7 @@ async def test_a_project_grant_gives_its_members_the_role_and_other_projects_not
 async def test_restricted_base_hides_from_project_viewers_and_serves_runs_only_for_its_readers(
     client: AsyncClient, two_projects: dict[str, Any]
 ) -> None:
-    from choregos_api.knowledge.serving import KnowledgeRefusedError
+    from tranibor_api.knowledge.serving import KnowledgeRefusedError
 
     from .test_knowledge_files import _pinned, _run
 
@@ -353,7 +353,7 @@ async def test_restricted_base_hides_from_project_viewers_and_serves_runs_only_f
 
 
 async def test_a_grant_never_serves_a_run(client: AsyncClient, two_projects: dict[str, Any]) -> None:
-    from choregos_api.knowledge.serving import KnowledgeRefusedError
+    from tranibor_api.knowledge.serving import KnowledgeRefusedError
 
     from .test_knowledge_files import _pinned
 
@@ -421,9 +421,9 @@ async def test_an_editor_cannot_archive_but_can_rename(
 async def test_grants_put_is_idempotent_and_audited(
     client: AsyncClient, two_projects: dict[str, Any]
 ) -> None:
-    from choregos_api.db.models import AuditLog
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import AuditLog
+    from tranibor_api.db.session import session_scope
 
     await _admin_base(client, two_projects)
     wanted = [
@@ -509,8 +509,8 @@ async def test_a_grant_by_e_mail_waits_for_a_person_invited_later(
 
 
 async def test_list_does_not_query_grants_per_base(client: AsyncClient, two_projects: dict[str, Any]) -> None:
-    from choregos_api.db.session import get_engine
     from sqlalchemy import event
+    from tranibor_api.db.session import get_engine
 
     for index in range(5):
         created = await client.post(ORG, json={"slug": f"base-{index}", "name": f"B{index}"})
@@ -532,9 +532,9 @@ async def test_list_does_not_query_grants_per_base(client: AsyncClient, two_proj
 
 
 async def test_a_deleted_base_takes_its_grants(client: AsyncClient, two_projects: dict[str, Any]) -> None:
-    from choregos_api.db.models import KnowledgeGrant
-    from choregos_api.db.session import session_scope
     from sqlalchemy import func, select
+    from tranibor_api.db.models import KnowledgeGrant
+    from tranibor_api.db.session import session_scope
 
     await _admin_base(client, two_projects)
     await _grant(client, {"subject_type": "group", "subject": "writers", "role": "viewer"})
@@ -545,11 +545,11 @@ async def test_a_deleted_base_takes_its_grants(client: AsyncClient, two_projects
 async def test_the_agent_drafter_suggests_only_what_the_caller_reads(
     client: AsyncClient, two_projects: dict[str, Any]
 ) -> None:
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
-    from choregos_api.rbac import Principal, Role
-    from choregos_api.services.agent_drafts import context_of
     from sqlalchemy import select
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.rbac import Principal, Role
+    from tranibor_api.services.agent_drafts import context_of
 
     await client.post(ORG, json={"slug": "everyone", "name": "Everyone"})
     await client.post(ORG, json={"slug": "private-figures", "name": "Private", "restricted": True})
@@ -572,8 +572,8 @@ async def test_the_agent_drafter_suggests_only_what_the_caller_reads(
 
 
 def test_decide_is_one_function() -> None:
-    from choregos_api.knowledge.access import KnowledgeAction, decide, role_of, visible_to
-    from choregos_api.rbac import Principal, Role
+    from tranibor_api.knowledge.access import KnowledgeAction, decide, role_of, visible_to
+    from tranibor_api.rbac import Principal, Role
 
     base = SimpleNamespace(
         scope="org", projects=[], groups=[], owner_project=None, restricted=False, status="active"

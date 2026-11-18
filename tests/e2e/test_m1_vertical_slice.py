@@ -14,7 +14,7 @@ import json
 from typing import Any
 
 import pytest
-from choregos_contracts import Evidence, StageResult, StageStatus
+from tranibor_contracts import Evidence, StageResult, StageStatus
 
 from .conftest import Platform, login
 
@@ -184,7 +184,7 @@ async def test_issue_agent_ready_becomes_a_green_pr(platform: Platform, worker: 
 
 
 async def test_webhook_with_an_invalid_signature_is_refused(platform: Platform) -> None:
-    from choregos_api.config import get_settings
+    from tranibor_api.config import get_settings
 
     settings = get_settings()
     settings.github_webhook_secret = "s3cr3t"
@@ -206,7 +206,7 @@ async def test_webhook_with_an_invalid_signature_is_refused(platform: Platform) 
 
 
 def _fake_tracker_item(key: str, title: str) -> Any:
-    from choregos_core.domain import WorkItemData
+    from tranibor_core.domain import WorkItemData
 
     return WorkItemData(key=key, title=title, state="Todo")
 

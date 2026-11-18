@@ -28,7 +28,7 @@ class _Forward:
         self._http, self._loop = http, loop
 
     def request(self, method: str, path: str, **kwargs: Any) -> Any:
-        from choregos_cli.client import ApiError
+        from tranibor_cli.client import ApiError
 
         call = self._http.request(method, "/api/v1" + path, **kwargs)
         response = asyncio.run_coroutine_threadsafe(call, self._loop).result(30)
@@ -55,7 +55,7 @@ def to_test_org(words: list[str]) -> list[str]:
 
 async def run_cli(http: AsyncClient, words: list[str], cwd: Path | None = None) -> Result:
     """Run `choregos <words[1:]>` against the test application, with the session `http` holds."""
-    from choregos_cli import main
+    from tranibor_cli import main
 
     assert words[0] == "choregos", words
     loop = asyncio.get_running_loop()

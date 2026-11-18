@@ -12,10 +12,10 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from choregos_contracts import Evidence, StageResult, StageStatus
-from choregos_core import GateContext, WorkflowEngine, evaluate
-from choregos_core.dsl.parser import parse_workflow
-from choregos_core.gates import ALREADY_FIXED_GATE, ALREADY_FIXED_UNPROVEN, GateOutcome, unchanged_run
+from tranibor_contracts import Evidence, StageResult, StageStatus
+from tranibor_core import GateContext, WorkflowEngine, evaluate
+from tranibor_core.dsl.parser import parse_workflow
+from tranibor_core.gates import ALREADY_FIXED_GATE, ALREADY_FIXED_UNPROVEN, GateOutcome, unchanged_run
 
 DEV_SIMPLE = (
     Path(__file__).resolve().parents[3] / "templates/github-software-delivery/workflows/dev-simple.yaml"

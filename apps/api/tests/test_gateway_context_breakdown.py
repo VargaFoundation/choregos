@@ -14,8 +14,8 @@ import json
 from typing import Any
 
 import pytest
-from choregos_core.context_breakdown import register
 from httpx import AsyncClient
+from tranibor_core.context_breakdown import register
 
 from .kits.context_breakdown import MASTER_KEY, gateway_breakdown, set_master_key, signed
 from .kits.context_breakdown import journal as _events
@@ -76,7 +76,7 @@ async def test_the_gateways_events_never_take_a_runners_seq(
 ) -> None:
     """The gateway writes while the runner does: a breakdown posted first must not make the runner's
     next events look like replays, nor the other way round."""
-    from choregos_api.security import mint_run_token
+    from tranibor_api.security import mint_run_token
 
     await _run(project, "run-gw-4", "claude-code", [("session/new", {})])
     await client.post(
@@ -142,7 +142,7 @@ async def test_only_numbers_are_written_and_the_source_is_the_gateways(
 async def test_only_the_gateways_signature_for_this_run_is_accepted(
     client: AsyncClient, project: dict[str, Any], headers: Any
 ) -> None:
-    from choregos_api.security import mint_run_token
+    from tranibor_api.security import mint_run_token
 
     if headers == "run-token":
         token = mint_run_token("run-gw-6", project_slug="x", work_item_key="x", ttl_minutes=5)
@@ -162,7 +162,7 @@ async def test_only_the_gateways_signature_for_this_run_is_accepted(
 async def test_without_a_master_key_the_routes_open_to_nobody(
     client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     monkeypatch.setenv("CHOREGOS_GATEWAY_MASTER_KEY", "")
     reset_settings_cache()

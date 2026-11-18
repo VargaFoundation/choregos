@@ -45,13 +45,13 @@ def _free_port() -> int:
 
 
 class ApiProcess:
-    """One API replica: `uvicorn choregos_api.main:app`, its JSON log in a file."""
+    """One API replica: `uvicorn tranibor_api.main:app`, its JSON log in a file."""
 
     def __init__(self, name: str, log: pathlib.Path, env: dict[str, str]) -> None:
         self.name, self.log = name, log
         self.port = _free_port()
         self.url = f"http://127.0.0.1:{self.port}"
-        command = [sys.executable, "-m", "uvicorn", "choregos_api.main:app", "--host", "127.0.0.1"]
+        command = [sys.executable, "-m", "uvicorn", "tranibor_api.main:app", "--host", "127.0.0.1"]
         self._out = log.open("w")
         self.proc = subprocess.Popen(
             [*command, "--port", str(self.port)], env=env, stdout=self._out, stderr=subprocess.STDOUT
@@ -181,7 +181,7 @@ async def test_a_stream_wakes_up_on_an_event_another_process_persists(
 async def _listeners() -> list[int]:
     """The backends of the replicas' `LISTEN` connections."""
     import asyncpg
-    from choregos_api.events import APPLICATION_NAME
+    from tranibor_api.events import APPLICATION_NAME
 
     conn = await asyncpg.connect(PG_URL.replace("postgresql+asyncpg://", "postgresql://"))
     try:

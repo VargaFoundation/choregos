@@ -79,9 +79,9 @@ async def test_an_invalid_fields_schema_is_refused_at_publication(
 
 async def test_the_fields_arrive_in_the_runs_context(client: AsyncClient, project: dict[str, Any]) -> None:
     """The agent reads the work item through `get_ticket`: the fields are there, no guessing."""
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
-    from choregos_api.security import mint_run_token
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.security import mint_run_token
 
     pid = await _hr_project(client, project)
     fields = {"start_date": "2026-11-03", "position": "data consultant"}

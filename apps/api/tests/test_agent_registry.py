@@ -120,8 +120,8 @@ async def test_a_project_tightens_and_cannot_widen(client: AsyncClient, project:
 async def test_an_agent_of_another_organisation_cannot_be_pinned(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.db.models import Agent, AgentVersion, Organization
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Agent, AgentVersion, Organization
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         other = Organization(slug="other", name="Autre")
@@ -152,9 +152,9 @@ async def test_instructions_that_do_not_render_are_refused_at_publication(
 async def test_the_metrics_of_an_agent_count_its_failures_and_its_tools(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.db.models import CostLedger, Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
+    from tranibor_api.db.models import CostLedger, Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
 
     await _create(client)
     async with session_scope() as session:

@@ -9,9 +9,9 @@ from httpx import AsyncClient
 
 
 async def test_an_agent_s_runs_are_listed_newest_first(client: AsyncClient, project: dict[str, Any]) -> None:
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
+    from tranibor_api.db.models import Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
 
     created = await client.post(
         "/api/v1/orgs/northwind/agents", json={"slug": "writer", "display_name": "Writer", "spec": {}}

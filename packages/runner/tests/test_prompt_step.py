@@ -12,9 +12,9 @@ import json
 from typing import Any
 
 import pytest
-from choregos_adapters.fakes import FakeModelServer
-from choregos_adapters.fakes.mcp import FakeMcpServer
-from choregos_contracts import (
+from tranibor_adapters.fakes import FakeModelServer
+from tranibor_adapters.fakes.mcp import FakeMcpServer
+from tranibor_contracts import (
     AgentRef,
     McpServerRef,
     ModelRef,
@@ -24,8 +24,8 @@ from choregos_contracts import (
     StageStatus,
     ToolsRef,
 )
-from choregos_runner.exits import Exit
-from choregos_runner.runner import Runner
+from tranibor_runner.exits import Exit
+from tranibor_runner.runner import Runner
 
 from .conftest import FakeInternalClient
 
@@ -243,9 +243,9 @@ async def test_the_last_notice_of_an_error_answer_reaches_the_model(
     """The platform's tool server ends a relayed answer with the calls left under the cap, within the
     loop's own bound (S57-04); the loop's error prefix must not push that line out of the cut, and the
     loop reads as much as that server lets through: past the platform's bound on a result (#1374)."""
-    from choregos_adapters.errors import AdapterError
-    from choregos_core.mcp import RESULT_MAX_BYTES
-    from choregos_tools_mcp.answer import MAX_TEXT, render_answer
+    from tranibor_adapters.errors import AdapterError
+    from tranibor_core.mcp import RESULT_MAX_BYTES
+    from tranibor_tools_mcp.answer import MAX_TEXT, render_answer
 
     answer = render_answer({"status_code": 404, "result": {"error": "x" * 100_000}, "remaining": 2})
     rendered = answer["content"][0]["text"]
@@ -272,8 +272,8 @@ async def test_an_answer_read_up_to_a_raised_bound_reaches_the_model_whole(
 ) -> None:
     """#1383: the tool server reads a result up to the bound the API names (an operation's cap, up to
     the deployment's ceiling); the loop lets through as much, the last notice included."""
-    from choregos_core.mcp import RESULT_CEILING_BYTES
-    from choregos_tools_mcp.answer import MAX_NOTICES, render_answer
+    from tranibor_core.mcp import RESULT_CEILING_BYTES
+    from tranibor_tools_mcp.answer import MAX_NOTICES, render_answer
 
     page = {"objects": ["o" * 200] * 1_000, "next_cursor": "after"}  # 200 KB: a 256 KiB page
     rendered = render_answer(
@@ -288,6 +288,6 @@ async def test_an_answer_read_up_to_a_raised_bound_reaches_the_model_whole(
     await _run(stage, model, runner_settings, crm)
 
     assert model.requests[1][1]["messages"][-1]["content"] == rendered, "whole, the calls left included"
-    from choregos_runner import prompt
+    from tranibor_runner import prompt
 
     assert prompt._MAX_TOOL_TEXT == RESULT_CEILING_BYTES + MAX_NOTICES, "the most the tool server writes"

@@ -25,8 +25,8 @@ EMAIL = "jo@northwind.dev"
 @pytest.fixture
 async def idp(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[dict[str, Any]]:
     """An instance provider whose userinfo answers `state["groups"]`."""
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.routers.auth import forget_discovery
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.routers.auth import forget_discovery
 
     monkeypatch.setenv("CHOREGOS_DEV_LOGIN_ENABLED", "false")
     monkeypatch.setenv("CHOREGOS_OIDC_ISSUER", ISSUER)
@@ -72,8 +72,8 @@ async def _memberships(client: AsyncClient) -> set[tuple[str, str]]:
 
 
 async def _revocations() -> list[Any]:
-    from choregos_api.db.models import AuditLog
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import AuditLog
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         stmt = select(AuditLog).where(AuditLog.action == "member.revoke")
@@ -81,8 +81,8 @@ async def _revocations() -> list[Any]:
 
 
 async def _seed(slug: str, role: str, source: str, email: str = EMAIL) -> None:
-    from choregos_api.db.models import Membership, Organization, User
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Membership, Organization, User
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         org = (await session.execute(select(Organization).where(Organization.slug == slug))).scalar_one()
@@ -94,8 +94,8 @@ async def _seed(slug: str, role: str, source: str, email: str = EMAIL) -> None:
 
 
 async def _source(slug: str, email: str = EMAIL) -> str | None:
-    from choregos_api.db.models import Membership, Organization, User
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Membership, Organization, User
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         stmt = (
@@ -123,8 +123,8 @@ async def test_a_group_withdrawn_at_the_idp_withdraws_the_role(
 async def test_a_role_moved_to_another_org_at_the_idp_moves(
     client: AsyncClient, org: str, idp: dict[str, Any]
 ) -> None:
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         session.add(Organization(slug="autre", name="Autre"))
@@ -193,8 +193,8 @@ async def test_an_instance_sign_in_leaves_an_organisation_with_its_own_provider_
     client: AsyncClient, org: str, idp: dict[str, Any]
 ) -> None:
     """An instance sign-in does not speak for an organisation that has a provider of its own."""
-    from choregos_api import tenant_sign_in
-    from choregos_api.tenant_sign_in import OidcProvider, TenantSignIn
+    from tranibor_api import tenant_sign_in
+    from tranibor_api.tenant_sign_in import OidcProvider, TenantSignIn
 
     await _sign_in(client, idp, ["choregos:northwind:developers"])
 

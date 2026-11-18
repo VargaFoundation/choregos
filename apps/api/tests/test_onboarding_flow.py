@@ -10,8 +10,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from choregos_core.dsl import template_yaml
 from httpx import AsyncClient
+from tranibor_core.dsl import template_yaml
 
 STUDY = """apiVersion: choregos/v1
 kind: Workflow
@@ -63,7 +63,7 @@ async def _merged_work_item(client: AsyncClient, number: int, labels: list[str])
 
 
 def _boardings() -> dict[str, list[dict[str, Any]]]:
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.temporal import get_temporal
 
     trains: dict[str, list[dict[str, Any]]] = {}
     for workflow_id, name, payload in get_temporal().signals:  # type: ignore[attr-defined]

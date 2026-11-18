@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""The tool host: the outpost's own server, called with the MCP client of `choregos_adapters`.
+"""The tool host: the outpost's own server, called with the MCP client of `tranibor_adapters`.
 
 The credential is the outpost's and stays there; the client reaches the endpoint's own host and no
 other; an answer is read up to a bound; and what a failure means depends on whether the tool call
@@ -17,14 +17,14 @@ from typing import Any
 
 import httpx
 import pytest
-from choregos_adapters.fakes.mcp import FakeMcpServer
-from choregos_adapters.mcp import McpClient
-from choregos_contracts.enums import OutpostAnswerOutcome
-from choregos_contracts.outpost import OutpostPolicy
-from choregos_core.egress import EgressRefusedError
-from choregos_core.redaction import remember_secret
-from choregos_outpost import logs, toolhost
-from choregos_outpost.toolhost import EndpointUnavailableError, ResultTooLargeError, ToolHost
+from tranibor_adapters.fakes.mcp import FakeMcpServer
+from tranibor_adapters.mcp import McpClient
+from tranibor_contracts.enums import OutpostAnswerOutcome
+from tranibor_contracts.outpost import OutpostPolicy
+from tranibor_core.egress import EgressRefusedError
+from tranibor_core.redaction import remember_secret
+from tranibor_outpost import logs, toolhost
+from tranibor_outpost.toolhost import EndpointUnavailableError, ResultTooLargeError, ToolHost
 
 from ._bench import CREDENTIAL, TOOLS, bench
 
@@ -57,7 +57,7 @@ async def test_the_tool_host_uses_the_adapters_mcp_client_as_it_is() -> None:
     """ADR 0149 §3: nothing outside the client's own package and the platform-run plugin servers
     extends the MCP client. The tool host builds one, and defines no class of its own on it."""
     assert toolhost.McpClient is McpClient
-    assert not [cls for cls in McpClient.__subclasses__() if cls.__module__.startswith("choregos_outpost")]
+    assert not [cls for cls in McpClient.__subclasses__() if cls.__module__.startswith("tranibor_outpost")]
 
 
 @pytest.mark.parametrize(

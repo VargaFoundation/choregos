@@ -28,15 +28,15 @@ DIGEST = "0f" * 32
 @pytest.fixture
 def supplier(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
     """The broker's supplier server, whose `stock` declares the shape of its answer."""
-    import choregos_adapters
-    from choregos_adapters.fakes.mcp import FakeMcpServer
+    import tranibor_adapters
+    from tranibor_adapters.fakes.mcp import FakeMcpServer
 
     tools = [dict(o) for o in TOOLS]
     for tool in tools:
         if tool["name"] == "stock":
             tool["outputSchema"] = STOCK_SCHEMA
     server = FakeMcpServer(tools=tools, token="cle-fournisseur")
-    monkeypatch.setattr(choregos_adapters, "FAKE_MCP", server)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_MCP", server)
     monkeypatch.setenv("CONNECTOR_TEST_CLE_FOURNISSEUR", "cle-fournisseur")
     yield server
 
@@ -103,7 +103,7 @@ async def test_a_catalogue_tool_and_web_fetch_are_reads(
 
 
 def _extension(monkeypatch: pytest.MonkeyPatch, listed: list[dict[str, Any]]) -> None:
-    from choregos_api import extensions
+    from tranibor_api import extensions
 
     async def list_tools(session: Any, run: Any, project: Any) -> list[dict[str, Any]]:
         return [dict(tool) for tool in listed]
@@ -171,9 +171,9 @@ async def _call(
     monkeypatch: pytest.MonkeyPatch,
     extra: dict[str, str],
 ) -> tuple[httpx.Response, list[dict[str, Any]]]:
-    from choregos_api.db.models import Event
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Event
+    from tranibor_api.db.session import session_scope
 
     run_id, headers = await run_with_catalogue(project, tmp_path, monkeypatch)
     intercept(
@@ -213,9 +213,9 @@ async def test_an_origin_header_outside_the_contract_is_a_400_and_nothing_is_boo
     monkeypatch: pytest.MonkeyPatch,
     extra: dict[str, str],
 ) -> None:
-    from choregos_api.db.models import CostLedger
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import CostLedger
+    from tranibor_api.db.session import session_scope
 
     response, events = await _call(client, project, tmp_path, monkeypatch, extra)
     assert response.status_code == 400, response.text
@@ -256,8 +256,8 @@ async def test_a_good_origin_lands_in_the_event(
 
 
 def test_the_contract_names_the_origins_the_api_reads() -> None:
-    import choregos_contracts as contracts
-    from choregos_api.routers import internal
+    import tranibor_contracts as contracts
+    from tranibor_api.routers import internal
 
     operation = contracts.load_openapi()["paths"]["/internal/runs/{id}/tools/{name}"]["post"]
     headers = {p["name"]: p["schema"] for p in operation["parameters"]}

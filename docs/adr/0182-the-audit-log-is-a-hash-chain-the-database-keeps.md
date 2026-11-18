@@ -3,7 +3,7 @@
 - **Status**: accepted, 2026-11-18 (decided by the product owner after review of the pull request;
   proposed 2026-11-17, S80-05, an irreversible migration of the audit log)
 - **Concerns**: `audit_log`, `audit_chain_heads` and `audit_checkpoints` (migration `e2a4c6b8d0f3`,
-  `apps/api/src/choregos_api/migrations/versions/20261117_2300_audit_chain.py`), `choregos_api.audit_chain`,
+  `apps/api/src/tranibor_api/migrations/versions/20261117_2300_audit_chain.py`), `choregos_api.audit_chain`,
   `choregos-admin audit verify|checkpoint` (`admin_cli.py`); leaves `choregos_api.audit.record` unchanged;
   touches the enterprise edition's end of life (`DELETE /orgs/{org}`, ADR 0024) through the foreign key only;
   builds on [ADR 0148](0148-the-outpost-door-is-a-third-door-with-its-own-contract.md) §13 for the key

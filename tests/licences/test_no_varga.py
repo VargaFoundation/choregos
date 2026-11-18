@@ -18,7 +18,7 @@ VARGA = re.compile("varga", re.IGNORECASE)
 HISTORY = (
     "docs/adr/",  # the decisions, past tense, and the amendments that retire them
     "docs/plan/",  # the plan's rows say what was done when
-    "apps/api/src/choregos_api/migrations/versions/",  # a migration means what it meant when it ran
+    "apps/api/src/tranibor_api/migrations/versions/",  # a migration means what it meant when it ran
     "trials/",  # dated reports
     "plugins/offline/",  # the archives and the lock record the index and identity that signed them
 )
@@ -26,7 +26,7 @@ HISTORY = (
 #: Files: the frozen namespace `ghcr.io/vargafoundation` and the old source name, until republished.
 ALLOWED = {
     "tests/licences/test_no_varga.py": "this guard",
-    "packages/core/src/choregos_core/plugins/sources.py": "resolves the old default source name",
+    "packages/core/src/tranibor_core/plugins/sources.py": "resolves the old default source name",
     "packages/core/tests/test_plugin_sources.py": "tests that the old default source name resolves",
     "apps/api/tests/test_default_plugin_source_migration.py": "tests the rename of the old source name",
     "infra/policies/images.yaml": "admits the images published before the move",

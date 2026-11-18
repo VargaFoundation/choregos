@@ -12,9 +12,9 @@ import pathlib
 import pytest
 from alembic import command
 from alembic.config import Config
-from choregos_api.config import get_settings
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import IntegrityError
+from tranibor_api.config import get_settings
 
 API = pathlib.Path(__file__).resolve().parents[1]
 BEFORE = "e7a9c1b3d5f7"
@@ -23,7 +23,7 @@ AFTER = "5b7d9f1a3c4e"
 
 def _config(url: str) -> Config:
     config = Config(str(API / "alembic.ini"))
-    config.set_main_option("script_location", str(API / "src" / "choregos_api" / "migrations"))
+    config.set_main_option("script_location", str(API / "src" / "tranibor_api" / "migrations"))
     config.set_main_option("sqlalchemy.url", url)
     return config
 
@@ -107,9 +107,9 @@ def test_the_backfill_gives_template_installed_catalogue_agents_their_provenance
 ) -> None:
     import json
 
-    from choregos_api.schemas import AgentSpec
-    from choregos_api.services.agents import digest
-    from choregos_core.agent_catalogue import entry
+    from tranibor_api.schemas import AgentSpec
+    from tranibor_api.services.agents import digest
+    from tranibor_core.agent_catalogue import entry
 
     reviewer, triager = entry("reviewer"), entry("triager")
     assert reviewer is not None and triager is not None

@@ -15,10 +15,10 @@ from collections.abc import Iterator
 from typing import Any
 
 import pytest
-from choregos_api.services import plugin_sources
-from choregos_api.services import plugin_supply as supply_module
-from choregos_api.services.plugin_supply import SourcesSupply
-from choregos_core.plugins.sources import PluginsConfig, SourceConfig, Trust
+from tranibor_api.services import plugin_sources
+from tranibor_api.services import plugin_supply as supply_module
+from tranibor_api.services.plugin_supply import SourcesSupply
+from tranibor_core.plugins.sources import PluginsConfig, SourceConfig, Trust
 
 REMOTE = SourceConfig("northwind", "oci://registry.invalid/agents/index:latest", Trust("none"))
 

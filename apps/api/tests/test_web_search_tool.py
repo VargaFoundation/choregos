@@ -25,11 +25,11 @@ QUERY = "python asyncio taskgroup cancellation"
 
 @pytest.fixture
 def backend(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
-    import choregos_adapters
-    from choregos_adapters.fakes.web_search import FakeSearchBackend
+    import tranibor_adapters
+    from tranibor_adapters.fakes.web_search import FakeSearchBackend
 
     fake = FakeSearchBackend()
-    monkeypatch.setattr(choregos_adapters, "FAKE_WEB_SEARCH", fake)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_WEB_SEARCH", fake)
     monkeypatch.setenv("CONNECTOR_TEST_SEARCH_KEY", KEY)
     yield fake
 
@@ -87,18 +87,18 @@ async def _search(client: AsyncClient, base: str, headers: dict[str, str], **arg
 
 
 async def _ledger() -> list[Any]:
-    from choregos_api.db.models import CostLedger
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import CostLedger
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         return list((await session.execute(select(CostLedger).where(CostLedger.kind == "tool"))).scalars())
 
 
 async def _events() -> list[Any]:
-    from choregos_api.db.models import Event
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Event
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         return list(
@@ -211,7 +211,7 @@ async def test_a_project_switches_it_off_and_cannot_widen_the_ceiling(
 async def test_its_name_is_reserved(
     client: AsyncClient, project: dict[str, Any], backend: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.routers import internal
+    from tranibor_api.routers import internal
 
     base, headers = await _ready(client, project, ceiling={"mode": "allow"})
 
@@ -255,7 +255,7 @@ async def test_a_search_returns_links_metered_and_the_event_keeps_a_fingerprint(
 async def test_a_query_that_holds_a_secret_is_refused_and_nothing_is_sent(
     client: AsyncClient, project: dict[str, Any], backend: Any
 ) -> None:
-    from choregos_core.redaction import forget_secrets, remember_secret
+    from tranibor_core.redaction import forget_secrets, remember_secret
 
     base, headers = await _ready(client, project, ceiling={"mode": "allow"})
     remember_secret("tenant-db-passphrase-77")
@@ -419,9 +419,9 @@ async def test_a_stored_firecrawl_without_base_url_fails_closed_and_sends_nothin
 ) -> None:
     """A row saved when the cloud was the default has no `base_url`: the search is refused with the
     decision named, the cloud is never reached, and the fake backend is never asked."""
-    from choregos_api.db.models import OrgConnector
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import OrgConnector
+    from tranibor_api.db.session import session_scope
 
     saved = await client.put(
         f"/api/v1/projects/{project['id']}/policy", json={"yaml": _policy(["docs.example.org"])}
@@ -436,7 +436,7 @@ async def test_a_stored_firecrawl_without_base_url_fails_closed_and_sends_nothin
     ceiling = await client.put(CEILING_URL, json={"ceiling": {"web_search": {"mode": "allow"}}})
     assert ceiling.status_code == 200, ceiling.text
     headers = await _run(project, "run-search-fc2")
-    monkeypatch.setattr("choregos_adapters.registry.fakes_enabled", lambda: False)
+    monkeypatch.setattr("tranibor_adapters.registry.fakes_enabled", lambda: False)
     failed = await _search(client, "/api/v1/internal/runs/run-search-fc2/tools", headers)
     assert failed["status_code"] == 502, failed
     message = failed["result"]["error"]

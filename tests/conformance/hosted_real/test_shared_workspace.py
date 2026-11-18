@@ -29,9 +29,9 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from choregos_adapters.executor.local_docker import LocalDockerExecutor, _workspace_volume
-from choregos_adapters.oci import BuildRequest, LocalDockerBuilder, OciRegistryClient
-from choregos_core.domain import AgentContainer, StageJobSpec
+from tranibor_adapters.executor.local_docker import LocalDockerExecutor, _workspace_volume
+from tranibor_adapters.oci import BuildRequest, LocalDockerBuilder, OciRegistryClient
+from tranibor_core.domain import AgentContainer, StageJobSpec
 
 pytestmark = [pytest.mark.hosted_docker, pytest.mark.asyncio]
 
@@ -44,7 +44,7 @@ AGENT_UID = 12345
 #: The runner's side: a working tree with a credential in `.git/config`, exported as the runner does.
 RUNNER = r"""
 import json, os, pathlib, time
-from choregos_runner.hosted_workspace import export_tree
+from tranibor_runner.hosted_workspace import export_tree
 
 ws = pathlib.Path("/tmp/ws")
 (ws / "src" / "pkg").mkdir(parents=True)

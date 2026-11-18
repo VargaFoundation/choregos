@@ -22,8 +22,8 @@ async def install_agent(
     scope: str = "org",
     project: str | None = None,
 ) -> None:
-    from choregos_api.db.models import Agent, AgentVersion, Project, ProjectAgent
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Agent, AgentVersion, Project, ProjectAgent
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         project_row = await session.get(Project, setup.project_id)

@@ -10,8 +10,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from choregos_contracts import StageInput
-from choregos_runner.workspace import Workspace
+from tranibor_contracts import StageInput
+from tranibor_runner.workspace import Workspace
 
 pytestmark = pytest.mark.asyncio
 
@@ -40,7 +40,7 @@ async def test_the_workspace_is_an_empty_versioned_directory(
 async def test_what_the_agent_writes_is_seen_as_added(no_repository: StageInput, tmp_path: Path) -> None:
     """The reference is git's empty tree: everything is "added", which is the truth
     for a directory that had nothing."""
-    from choregos_runner.runner import EMPTY_TREE
+    from tranibor_runner.runner import EMPTY_TREE
 
     workspace = Workspace(tmp_path / "work")
     await workspace.prepare(no_repository)

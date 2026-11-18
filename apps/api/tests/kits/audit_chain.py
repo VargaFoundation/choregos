@@ -6,9 +6,9 @@ from __future__ import annotations
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
-from choregos_api.audit_chain import Link
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from tranibor_api.audit_chain import Link
 
 ORG = "0193a8f2-0000-7000-8000-000000000001"
 T0 = datetime(2026, 11, 17, 23, 0, 0, 123456, tzinfo=UTC)

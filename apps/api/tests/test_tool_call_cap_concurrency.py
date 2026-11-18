@@ -58,9 +58,9 @@ class HeldProvider:
 
 
 async def _cap_the_project(project_id: str, cap: int) -> None:
-    from choregos_api.db.models import PolicyDef
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import PolicyDef
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         policy = (
@@ -81,9 +81,9 @@ async def _cap_the_project(project_id: str, cap: int) -> None:
 
 
 async def _tool_lines(run_id: str) -> list[Any]:
-    from choregos_api.db.models import CostLedger
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import CostLedger
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         query = select(CostLedger).where(CostLedger.run_id == run_id, CostLedger.kind == "tool")
@@ -93,8 +93,8 @@ async def _tool_lines(run_id: str) -> list[Any]:
 async def test_eight_calls_at_once_at_cap_minus_one_let_exactly_one_through(
     client: AsyncClient, project: dict[str, Any], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.services import tool_call_cap
-    from choregos_api.services.tool_call_cap import IN_FLIGHT
+    from tranibor_api.services import tool_call_cap
+    from tranibor_api.services.tool_call_cap import IN_FLIGHT
 
     # A run of its own: the in-process lock that stands in on SQLite is kept per run for the process.
     run_id, headers = await run_with_catalogue(project, tmp_path, monkeypatch, run_id="run-cap-at-once")
@@ -228,7 +228,7 @@ async def test_on_postgresql_the_lock_is_asked_for_before_the_count(
 ) -> None:
     """The SQLite suite cannot take a PostgreSQL lock; it checks the route asks for one, on the run,
     before it sweeps and counts, and commits the place it takes before the call leaves."""
-    from choregos_api.services import budgets, tool_call_cap
+    from tranibor_api.services import budgets, tool_call_cap
 
     postgres = SimpleNamespace(is_sqlite=False)
     monkeypatch.setattr(budgets, "get_settings", lambda: postgres)
@@ -261,7 +261,7 @@ async def test_on_postgresql_the_lock_is_asked_for_before_the_count(
 
 
 async def test_without_a_cap_nothing_is_locked_or_counted(monkeypatch: pytest.MonkeyPatch) -> None:
-    from choregos_api.services import tool_call_cap
+    from tranibor_api.services import tool_call_cap
 
     session = _Recorder(0)
     run = SimpleNamespace(id="run-free", project_id="p", work_item_id="w", stage_role="plan")
@@ -274,10 +274,10 @@ async def test_without_a_cap_nothing_is_locked_or_counted(monkeypatch: pytest.Mo
 
 async def _hold_a_place(run_id: str, project_id: str, *, age: timedelta, tool: str = TOOL) -> str:
     """A provisional line, as `take_tool_call_slot` leaves it when the API dies during the call."""
-    from choregos_api.db.models import CostLedger
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
-    from choregos_core.tool_ledger import IN_FLIGHT
+    from tranibor_api.db.models import CostLedger
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
+    from tranibor_core.tool_ledger import IN_FLIGHT
 
     async with session_scope() as session:
         line = CostLedger(
@@ -298,7 +298,7 @@ async def test_a_place_whose_request_died_is_given_back_by_the_runs_next_call(
 ) -> None:
     """A pod restarted during a call leaves its place: past the bound it is deleted, under the lock,
     by the run's next call; a recent one is a call still running and keeps its place."""
-    from choregos_core.tool_ledger import IN_FLIGHT, IN_FLIGHT_STALE_AFTER
+    from tranibor_core.tool_ledger import IN_FLIGHT, IN_FLIGHT_STALE_AFTER
 
     run_id, headers = await run_with_catalogue(project, tmp_path, monkeypatch, run_id="run-cap-stale")
     await _cap_the_project(project["id"], 2)

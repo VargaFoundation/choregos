@@ -8,12 +8,12 @@ empty workspace. Nothing stored an output that was not called `spec_markdown`, `
 
 from __future__ import annotations
 
-from choregos_contracts import StageOutputs
+from tranibor_contracts import StageOutputs
 
 
 def test_an_output_declared_by_the_transition_is_stored_under_its_name() -> None:
-    from choregos_api.db.models import WorkItem
-    from choregos_api.services import store_outputs
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.services import store_outputs
 
     item = WorkItem(tracker_key="RH-1", title="T", state="sourcing", documents={"spec_markdown": "old"})
     outputs = StageOutputs.model_validate(
@@ -26,8 +26,8 @@ def test_an_output_declared_by_the_transition_is_stored_under_its_name() -> None
 
 
 def test_the_software_documents_are_always_stored_even_without_a_declaration() -> None:
-    from choregos_api.db.models import WorkItem
-    from choregos_api.services import store_outputs
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.services import store_outputs
 
     item = WorkItem(tracker_key="X-1", title="T", state="refining")
     store_outputs(item, StageOutputs(spec_markdown="## Spec", size="M"), None)
@@ -35,7 +35,7 @@ def test_the_software_documents_are_always_stored_even_without_a_declaration() -
 
 
 def test_the_next_playbook_receives_the_inputs_under_their_name() -> None:
-    from choregos_playbooks import render_playbook
+    from tranibor_playbooks import render_playbook
 
     prompt = render_playbook(
         "implement",

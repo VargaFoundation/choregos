@@ -1,4 +1,4 @@
-"""The outposts' door served alone: `python -m choregos_api.outposts` (S65-16, ADR 0148 §8).
+"""The outposts' door served alone: `python -m tranibor_api.outposts` (S65-16, ADR 0148 §8).
 
 Where a deployment splits the door out, its Deployment runs the API image with this entrypoint: the
 four verbs, two probes, the wake-up channel of the relay's connection, and nothing else. These tests
@@ -23,10 +23,10 @@ import time
 from collections.abc import AsyncIterator
 from typing import Any
 
-import choregos_contracts as contracts
 import pytest
-from choregos_contracts import outpost
+import tranibor_contracts as contracts
 from httpx import ASGITransport, AsyncClient
+from tranibor_contracts import outpost
 
 from .conftest import PG_URL, login, without_postgres
 from .kits import outpost_daemon as daemon_kit
@@ -51,7 +51,7 @@ def door(monkeypatch: pytest.MonkeyPatch) -> kit.Door:
 
 
 def _alone() -> Any:
-    from choregos_api.outposts.alone import create_app
+    from tranibor_api.outposts.alone import create_app
 
     return create_app()
 
@@ -140,8 +140,8 @@ async def test_an_error_is_answered_there_as_the_api_answers_it(
 ) -> None:
     """The same door in both layouts, down to what goes wrong: an error of the API keeps its status,
     and an unexpected one is a problem that carries the id of its log line, never a stack trace."""
-    from choregos_api.errors import conflict
-    from choregos_api.outposts import auth
+    from tranibor_api.errors import conflict
+    from tranibor_api.outposts import auth
 
     async def refuses(*_: Any) -> bytes:
         raise conflict("a row another replica holds")
@@ -181,7 +181,7 @@ def test_it_is_not_built_without_the_doors_origin_or_its_key(
 def test_an_extension_that_does_not_load_stops_it(monkeypatch: pytest.MonkeyPatch) -> None:
     """An edition's key wrapper is an extension (ADR 0103): the door served alone loads them as the
     API does, and a declared one that fails stops the start-up rather than hand nothing over."""
-    from choregos_api.outposts import alone as module
+    from tranibor_api.outposts import alone as module
 
     def fails() -> list[str]:
         raise RuntimeError('extension "house": cannot load')
@@ -195,23 +195,23 @@ def test_an_extension_that_does_not_load_stops_it(monkeypatch: pytest.MonkeyPatc
 
 _CLOSURE = """
 import json, sys
-from choregos_api.outposts.alone import create_app
+from tranibor_api.outposts.alone import create_app
 
 create_app()
-print(json.dumps(sorted(name for name in sys.modules if name.startswith("choregos_"))))
+print(json.dumps(sorted(name for name in sys.modules if name.startswith("tranibor_"))))
 """
 #: What the process that serves the door alone never loads: the application of the API, its routers,
 #: the two other doors, and what reaches an organisation's connectors.
 NEVER_IMPORTED = (
-    "choregos_api.main",
-    "choregos_api.routers",
-    "choregos_api.mcp",
-    "choregos_api.a2a",
-    "choregos_api.metrics",
-    "choregos_api.services.broker",
-    "choregos_api.services.mcp_gateway",
-    "choregos_adapters.mcp",
-    "choregos_orchestrator",
+    "tranibor_api.main",
+    "tranibor_api.routers",
+    "tranibor_api.mcp",
+    "tranibor_api.a2a",
+    "tranibor_api.metrics",
+    "tranibor_api.services.broker",
+    "tranibor_api.services.mcp_gateway",
+    "tranibor_adapters.mcp",
+    "tranibor_orchestrator",
 )
 
 
@@ -228,7 +228,7 @@ def test_serving_the_door_alone_loads_no_other_part_of_the_api(door: kit.Door) -
     )
     assert done.returncode == 0, done.stderr[-2000:]
     loaded = json.loads(done.stdout.strip().splitlines()[-1])
-    assert "choregos_api.outposts.door" in loaded, "the probe no longer builds the door"
+    assert "tranibor_api.outposts.door" in loaded, "the probe no longer builds the door"
     reached = [
         name
         for name in loaded
@@ -249,7 +249,7 @@ async def test_it_is_alive_and_ready_when_the_database_answers(alone: AsyncClien
 async def test_it_is_not_ready_while_the_database_does_not_answer(
     alone: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.outposts import alone as module
+    from tranibor_api.outposts import alone as module
 
     def unreachable() -> Any:
         raise OSError("connection refused")
@@ -267,7 +267,7 @@ async def test_it_is_not_ready_while_the_database_does_not_answer(
 @pytest.fixture
 def sweeps(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     """Every start of the platform's sweep, in whichever process's start-up it happens."""
-    from choregos_api.outposts import rendezvous
+    from tranibor_api.outposts import rendezvous
 
     started: list[str] = []
 
@@ -285,8 +285,8 @@ async def test_the_api_runs_the_sweep_and_the_door_served_alone_never_does(
     """Exactly one place closes what ran out of time at outposts nobody polls: the API, whether or
     not the door is split out. The sweep lists every outpost under the platform's scope, which the
     door never takes (ADR 0148 §6)."""
-    from choregos_api import main
-    from choregos_api.outposts import alone as module
+    from tranibor_api import main
+    from tranibor_api.outposts import alone as module
 
     async with module.lifespan(_alone()):
         await asyncio.sleep(0.05)
@@ -301,15 +301,15 @@ async def test_the_api_runs_the_sweep_and_the_door_served_alone_never_does(
 
 def test_the_entrypoint_gives_the_polls_in_hand_the_time_to_end(monkeypatch: pytest.MonkeyPatch) -> None:
     import uvicorn
-    from choregos_api.outposts import alone as module
-    from choregos_api.outposts.door import SLOT_MARGIN_S
+    from tranibor_api.outposts import alone as module
+    from tranibor_api.outposts.door import SLOT_MARGIN_S
 
     seen: dict[str, Any] = {}
     monkeypatch.setattr(
         uvicorn, "run", lambda application, **options: seen.update(app=application, **options)
     )
     module.main()
-    assert seen["app"] == "choregos_api.outposts.alone:create_app" and seen["factory"] is True
+    assert seen["app"] == "tranibor_api.outposts.alone:create_app" and seen["factory"] is True
     # Longer than the longest poll: past it what is left is cancelled, and gives its slot back.
     assert seen["timeout_graceful_shutdown"] == outpost.MAX_WAIT_S + SLOT_MARGIN_S == module.GRACE_S
     assert seen["port"] == 8000 and seen["log_config"] is None
@@ -342,7 +342,7 @@ async def test_a_process_told_to_stop_lets_the_poll_it_holds_end(
     log = tmp_path / "door.log"
     with log.open("w", encoding="utf-8") as output:
         process = subprocess.Popen(
-            [sys.executable, "-m", "choregos_api.outposts"],
+            [sys.executable, "-m", "tranibor_api.outposts"],
             env={**os.environ, "CHOREGOS_PORT": str(port), "CHOREGOS_LOG_LEVEL": "INFO"},
             stdout=output,
             stderr=subprocess.STDOUT,
@@ -384,9 +384,9 @@ async def test_a_process_told_to_stop_lets_the_poll_it_holds_end(
 
 @pytest.fixture
 async def pg_client(pg_app: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[AsyncClient]:
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
 
     monkeypatch.setenv("CHOREGOS_OIDC_DEFAULT_ORG", kit.ORG)
     monkeypatch.setenv("CHOREGOS_DEV_ADMIN_EMAILS", "admin@northwind.dev")
@@ -408,8 +408,8 @@ async def test_a_poll_is_woken_through_the_processs_own_listen_connection(
     The mechanism is read, not the clock (#1725): a 2-second bound was crossed on a loaded runner with
     the notification path working. The periodic look is pushed a minute away, so a call handed over
     within the poll's wait came through the wake-up, and the pause it ended was ended by it."""
-    from choregos_api.outposts import alone as module
-    from choregos_api.outposts import rendezvous
+    from tranibor_api.outposts import alone as module
+    from tranibor_api.outposts import rendezvous
 
     monkeypatch.setattr(rendezvous, "LOOK_S", (60.0, 60.0))  # only a notification can wake it in time
     pauses = daemon_kit.record_pauses(monkeypatch)
@@ -457,7 +457,7 @@ async def _until_heard_or_attached(heard_before: int) -> None:
     """Wait until this process's relay listens: a probe notification on the outposts' channel comes
     back to it."""
     import asyncpg
-    from choregos_api.outposts import rendezvous
+    from tranibor_api.outposts import rendezvous
 
     connection = await asyncpg.connect(PG_URL.replace("postgresql+asyncpg://", "postgresql://"))
     try:
@@ -478,9 +478,9 @@ async def test_the_relay_of_the_door_served_alone_hears_no_platform_event(pg_app
     which nobody in that process would be woken by. The same event reaches a relay that listens to
     them: it was sent, and it would have been counted."""
     import asyncpg
-    from choregos_api.config import get_settings
-    from choregos_api.events import CHANNEL, PostgresRelay
-    from choregos_contracts import ChoregosEvent, EventType
+    from tranibor_api.config import get_settings
+    from tranibor_api.events import CHANNEL, PostgresRelay
+    from tranibor_contracts import ChoregosEvent, EventType
 
     heard: list[str] = []
     wake_ups = "choregos_test_wake_ups"
@@ -516,9 +516,9 @@ async def test_it_does_not_serve_as_a_superuser_outside_development(
     """The door keeps one outpost from another's rows by row-level security alone (ADR 0148 §6), and a
     PostgreSQL superuser ignores it: the same refusal as the API's start-up, in the process that
     serves the door alone."""
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.db import session as db_session
-    from choregos_api.outposts import alone as module
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.db import session as db_session
+    from tranibor_api.outposts import alone as module
 
     application = _alone()
     # The test container's own role is a superuser: the one a deployment must never hand the door.

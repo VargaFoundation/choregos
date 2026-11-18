@@ -75,8 +75,8 @@ def _told(upstream: Upstream) -> list[str]:
 
 
 async def _reads() -> list[tuple[str, str, str | None]]:
-    from choregos_api.db.models import AssistantRead
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import AssistantRead
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         rows = await session.execute(select(AssistantRead).order_by(AssistantRead.at))
@@ -150,8 +150,8 @@ async def test_a_person_without_rights_in_the_project_cannot_start_it(
 ) -> None:
     """The decisive check is the confirming person's own request: rights lost after the proposal leave
     nothing created."""
-    from choregos_api.db.models import Membership, Project
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Membership, Project
+    from tranibor_api.db.session import session_scope
 
     await _bound(client, project, offline)
     await add_member(client, "dev@northwind.dev", "viewer")
@@ -214,8 +214,8 @@ async def test_a_refused_launch_starts_nothing(
 async def test_launch_status_reports_the_work_item_and_its_artefacts(
     client: AsyncClient, project: dict[str, Any], offline: Path, upstream: Upstream
 ) -> None:
-    from choregos_api.db.models import ArtifactRecord
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import ArtifactRecord
+    from tranibor_api.db.session import session_scope
 
     await _bound(client, project, offline)
     conversation = await _conversation()
@@ -247,7 +247,7 @@ async def test_launch_status_reports_the_work_item_and_its_artefacts(
 
 
 async def _org_id(session: Any) -> str:
-    from choregos_api.db.models import Organization
+    from tranibor_api.db.models import Organization
 
     return str((await session.execute(select(Organization.id))).scalar_one())
 

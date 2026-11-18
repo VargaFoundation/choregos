@@ -6,7 +6,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from choregos_runner.runner import _commit_message
+from tranibor_runner.runner import _commit_message
 
 
 @pytest.mark.parametrize(

@@ -16,12 +16,12 @@ class _Stop(Exception):  # noqa: N818 - the test's stop signal
 async def test_the_worker_loads_the_extensions_before_joining_temporal(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import choregos_adapters
-    from choregos_orchestrator import worker
+    import tranibor_adapters
     from temporalio.client import Client
+    from tranibor_orchestrator import worker
 
     order: list[str] = []
-    monkeypatch.setattr(choregos_adapters, "load_extensions", lambda: order.append("extensions") or [])
+    monkeypatch.setattr(tranibor_adapters, "load_extensions", lambda: order.append("extensions") or [])
 
     async def join(*_: object, **__: object) -> None:
         order.append("temporal")

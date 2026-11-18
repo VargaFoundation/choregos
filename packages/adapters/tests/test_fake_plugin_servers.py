@@ -14,8 +14,8 @@ from typing import Any
 
 import pytest
 import yaml
-from choregos_adapters.errors import AdapterError
-from choregos_adapters.fakes.plugin_servers import (
+from tranibor_adapters.errors import AdapterError
+from tranibor_adapters.fakes.plugin_servers import (
     EVAL_TOKEN,
     FakePluginServer,
     bound_plugin_fake,
@@ -23,9 +23,9 @@ from choregos_adapters.fakes.plugin_servers import (
     plugin_scene,
     use_fake_plugin_server,
 )
-from choregos_adapters.fakes.scenes import EVAL_FAKE_SCENES_ENV
-from choregos_adapters.mcp import McpError
-from choregos_adapters.plugin_servers import PluginServerClient
+from tranibor_adapters.fakes.scenes import EVAL_FAKE_SCENES_ENV
+from tranibor_adapters.mcp import McpError
+from tranibor_adapters.plugin_servers import PluginServerClient
 
 ROOT = Path(__file__).resolve().parents[3]
 RECORDING = ROOT / "tests" / "fixtures" / "plugin_fakes" / "servicenow.json"

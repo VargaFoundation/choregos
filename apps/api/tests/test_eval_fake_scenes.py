@@ -12,8 +12,8 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from choregos_adapters.fakes.scenes import EVAL_FAKE_SCENES_ENV, FAKE_SCENE_FIELD
 from httpx import AsyncClient
+from tranibor_adapters.fakes.scenes import EVAL_FAKE_SCENES_ENV, FAKE_SCENE_FIELD
 
 ORG = "/api/v1/orgs/northwind/connectors"
 BOUND = {FAKE_SCENE_FIELD: "ssh-exposure"}
@@ -60,10 +60,10 @@ async def test_a_project_cannot_set_the_field_on_its_own_connector(
 
 async def _client_of_a_bound_row() -> Any:
     """What the broker calls for a connector the matrix wrote itself, on the scene `ssh-exposure`."""
-    from choregos_api.db.models import Organization, OrgConnector
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.plugin_servers import connector_client
     from sqlalchemy import select
+    from tranibor_api.db.models import Organization, OrgConnector
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.plugin_servers import connector_client
 
     async with session_scope() as session:
         org = (await session.execute(select(Organization))).scalar_one()

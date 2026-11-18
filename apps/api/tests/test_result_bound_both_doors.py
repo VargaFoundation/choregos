@@ -35,7 +35,7 @@ pytestmark = pytest.mark.asyncio
 
 #: A plugin's tool that declares 256 KiB, as the ontology's page of objects does (S40-17c).
 PLUGIN = """
-from choregos_api.extensions import declare_tool_provider
+from tranibor_api.extensions import declare_tool_provider
 
 PAGE_OF_HOSTS = {
     "name": "host_search",
@@ -64,7 +64,7 @@ def plug_in():
 
 @pytest.fixture
 def plugin(tmp_path: pathlib.Path) -> Iterator[None]:
-    from choregos_api.extensions import reset
+    from tranibor_api.extensions import reset
 
     root = tmp_path / "site"
     root.mkdir()
@@ -93,7 +93,7 @@ def _size(value: Any) -> int:
 def _door(answer: dict[str, Any]) -> tuple[str, Any]:
     """What the run's tool server shows the model of the API's answer: its whole text, and the
     result's JSON past the notices, parsed."""
-    from choregos_tools_mcp.answer import render_answer
+    from tranibor_tools_mcp.answer import render_answer
 
     text = render_answer(answer)["content"][0]["text"]
     [body] = [part for part in text.split("\n\n") if part.startswith(("{", "["))]
@@ -105,9 +105,9 @@ def _door(answer: dict[str, Any]) -> tuple[str, Any]:
 
 async def test_the_prompt_loop_lets_through_what_the_ceiling_allows() -> None:
     """One number: the API's default ceiling on a declared cap is what the prompt loop reads of one
-    tool answer (`choregos_runner.prompt`), its notices beside it."""
-    from choregos_api.config import Settings
-    from choregos_core.mcp import RESULT_CEILING_BYTES
+    tool answer (`tranibor_runner.prompt`), its notices beside it."""
+    from tranibor_api.config import Settings
+    from tranibor_core.mcp import RESULT_CEILING_BYTES
 
     assert Settings.model_fields["broker_result_ceiling_bytes"].default == RESULT_CEILING_BYTES == 1_048_576
 
@@ -116,7 +116,7 @@ async def test_a_plugin_s_raised_cap_reaches_the_model_and_the_script_alike(
     plugin: None, client: AsyncClient, project: dict[str, Any]
 ) -> None:
     """A 200 KiB page of a tool capped at 256 KiB: whole through both doors, the same data."""
-    from choregos_runner.tool_client import unwrapped
+    from tranibor_runner.tool_client import unwrapped
 
     run_id, headers = await run_extension_tool(project["id"])
     called = await client.post(
@@ -137,8 +137,8 @@ async def test_a_plugin_s_raised_cap_reaches_the_model_and_the_script_alike(
 @pytest.fixture
 def e1(monkeypatch: pytest.MonkeyPatch) -> Iterator[dict[str, Any]]:
     """The netops estate with E1's firewall (S57-09)."""
-    import choregos_adapters
-    from choregos_adapters.fakes.netops import (
+    import tranibor_adapters
+    from tranibor_adapters.fakes.netops import (
         FakeCiliumKubernetes,
         FakeRepo,
         recorded_flows,
@@ -153,7 +153,7 @@ def e1(monkeypatch: pytest.MonkeyPatch) -> Iterator[dict[str, Any]]:
         "flows": recorded_flows(),
         "repo": FakeRepo(),
     }
-    monkeypatch.setattr(choregos_adapters, "FAKE_NETOPS", fakes)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_NETOPS", fakes)
     monkeypatch.setenv("CONNECTOR_NETOPS_TEST_PFSENSE_KEY", PFSENSE_KEY)
     monkeypatch.setenv("CONNECTOR_NETOPS_TEST_READER_TOKEN", READER_TOKEN)
     yield fakes
@@ -163,7 +163,7 @@ async def test_an_operation_whose_cap_an_administrator_raised_reaches_both_doors
     client: AsyncClient, project: dict[str, Any], e1: dict[str, Any]
 ) -> None:
     """E1's firewall grown to about 200 KB of rules, its operation's cap raised to 256 KiB."""
-    from choregos_runner.tool_client import unwrapped
+    from tranibor_runner.tool_client import unwrapped
 
     await _declare(client)
     firewall = e1["pfsense"]
@@ -201,7 +201,7 @@ async def test_a_page_over_the_bound_reaches_both_doors_cut_at_the_same_place(
 ) -> None:
     """A 1 MiB page: the API bounds it at the platform's default, the page's text kept up to it with the
     marker and what was fetched beside it; the model and a script read the same cut."""
-    from choregos_runner.tool_client import unwrapped
+    from tranibor_runner.tool_client import unwrapped
 
     line = "a line of a long page about feature flags\n"
     page = line * (1_048_576 // len(line))

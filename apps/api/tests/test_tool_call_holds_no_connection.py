@@ -42,7 +42,7 @@ WRITE = "fournisseur__commander_poste"
 
 def checked_out() -> int:
     """The connections the API's engine has lent out right now."""
-    from choregos_api.db.session import get_engine
+    from tranibor_api.db.session import get_engine
 
     return int(get_engine().pool.checkedout())
 
@@ -119,8 +119,8 @@ async def test_a_governed_write_waits_for_its_outcome_with_no_connection_held(
 ) -> None:
     """The broker commits the approved action, starts its workflow and polls its status (#241): the
     request holds nothing while Temporal is asked, nor between two polls, each a short read of its own."""
-    from choregos_api.services import broker
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.services import broker
+    from tranibor_api.temporal import get_temporal
 
     base, headers = await _prepare(client, project, ["*"])
     opened = await client.patch(
@@ -160,7 +160,7 @@ async def test_a_web_fetch_resolves_and_reads_with_no_connection_held(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Three external calls in one fetch: the host's address, its robots.txt, the page."""
-    from choregos_api.services import web_fetch
+    from tranibor_api.services import web_fetch
 
     web.add(PAGE, HTML)
     base, headers = await web_ready(client, project)
@@ -215,9 +215,9 @@ async def test_an_extension_is_called_with_no_connection_held_and_may_still_read
 ) -> None:
     """The extension gets the session with no transaction open; what it reads begins one, under the run
     token's scope, and is booked with the call's line."""
-    from choregos_api import extensions
-    from choregos_api.db.models import Run
     from sqlalchemy import select
+    from tranibor_api import extensions
+    from tranibor_api.db.models import Run
 
     tool = {"name": "lookup", "description": "Looks up.", "inputSchema": {"type": "object"}}
     seen: list[tuple[bool, int]] = []
@@ -253,8 +253,8 @@ async def test_a_booking_that_fails_after_the_call_is_said_and_keeps_the_place(
     """The call left and answered; its line, its event and its place given back are one transaction
     after it. When that transaction fails the caller gets a 500, the log names what was not booked, and
     the place taken before the call stays: the cap still counts the call (S57-03)."""
-    from choregos_api.routers import internal
-    from choregos_core.tool_ledger import IN_FLIGHT
+    from tranibor_api.routers import internal
+    from tranibor_core.tool_ledger import IN_FLIGHT
 
     run_id, headers = await run_with_catalogue(project, tmp_path, monkeypatch, run_id="run-no-conn-fail")
     await cap_the_project(project["id"], 5)
@@ -286,8 +286,8 @@ async def test_a_booking_that_fails_after_the_call_is_said_and_keeps_the_place(
 async def test_a_session_nobody_allowed_keeps_its_transaction_across_the_block(app: Any) -> None:
     """A caller of the broker that did not opt in (every route but the tool route and the agent
     sessions', #1376) keeps its transaction: unchanged."""
-    from choregos_api.db.session import outside_the_transaction, session_scope
     from sqlalchemy import text
+    from tranibor_api.db.session import outside_the_transaction, session_scope
 
     async with session_scope() as session:
         await session.execute(text("SELECT 1"))
@@ -298,14 +298,14 @@ async def test_a_session_nobody_allowed_keeps_its_transaction_across_the_block(a
 async def test_an_allowed_session_commits_on_entry_runs_what_the_commit_released_and_reads_after(
     app: Any,
 ) -> None:
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import (
+    from sqlalchemy import select
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import (
         after_commit,
         allow_release_during_calls,
         outside_the_transaction,
         session_scope,
     )
-    from sqlalchemy import select
 
     started: list[bool] = []
 

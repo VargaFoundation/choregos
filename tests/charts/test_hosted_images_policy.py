@@ -22,7 +22,7 @@ from typing import Any
 
 import pytest
 import yaml
-from choregos_core.publishing import PUBLISHING
+from tranibor_core.publishing import PUBLISHING
 
 CHART = pathlib.Path(__file__).resolve().parents[2] / "charts" / "choregos"
 DIGEST = "sha256:" + "a" * 64

@@ -50,7 +50,7 @@ class HeldSteps:
 
 @pytest.fixture
 def holds(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
-    from choregos_orchestrator.activities import train as train_activities
+    from tranibor_orchestrator.activities import train as train_activities
 
     created: list[HeldSteps] = []
 
@@ -98,9 +98,9 @@ async def _state(handle: Any) -> dict[str, Any]:
 
 
 async def _releases() -> list[Any]:
-    from choregos_api.db.models import Release
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Release
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         return list((await session.execute(select(Release))).scalars())
@@ -139,8 +139,8 @@ async def test_a_degradation_announced_during_the_soak_rolls_back_without_waitin
     assert not any(t.startswith("Approval requested") for t in titles), "the departure stopped at the soak"
 
     # The history replays against the current code, and is archived for those to come.
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.worker import Replayer
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
     if recording_history():

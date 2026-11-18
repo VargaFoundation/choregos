@@ -10,11 +10,11 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from choregos_api.config import Settings, get_settings
-from choregos_api.decision_session import CODE, holds_a_person_session, require_person_session
-from choregos_api.errors import ApiError
-from choregos_api.rbac import Principal
 from httpx import AsyncClient
+from tranibor_api.config import Settings, get_settings
+from tranibor_api.decision_session import CODE, holds_a_person_session, require_person_session
+from tranibor_api.errors import ApiError
+from tranibor_api.rbac import Principal
 
 from .agent_scopes_kit import ADMIN, as_user
 from .test_agent_release_channels import token_client
@@ -118,9 +118,9 @@ async def test_a_fresh_signed_in_principal_is_refused_when_its_credential_is_not
     credential: str,
 ) -> None:
     """`authenticated_at` is set (a token minted from a fresh sign-in), the credential is what refuses."""
-    from choregos_api.schemas.actions import ActionSettlementBody
-    from choregos_api.services import actions
-    from choregos_core import utcnow
+    from tranibor_api.schemas.actions import ActionSettlementBody
+    from tranibor_api.services import actions
+    from tranibor_core import utcnow
 
     principal = Principal(
         user_id="u1", email="a@b.test", kind="user", credential=credential, authenticated_at=utcnow()

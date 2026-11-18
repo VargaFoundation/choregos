@@ -2,7 +2,7 @@
 """`choregos a2a`'s client against the real A2A door (S62-03), through ASGI.
 
 The commands themselves are `packages/cli/tests/test_a2a.py`'s, against a mocked door; this drives the
-CLI's own client code (`choregos_cli.a2a`): the card's fields, a message with fields and a file, its
+CLI's own client code (`tranibor_cli.a2a`): the card's fields, a message with fields and a file, its
 idempotency, the follow across the door's hour cut, and the refusal of a `*` token.
 """
 
@@ -12,8 +12,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from choregos_cli.a2a import A2aDoor, DoorError, build_message, file_part, follow, skills_of
 from httpx import ASGITransport, AsyncClient
+from tranibor_cli.a2a import A2aDoor, DoorError, build_message, file_part, follow, skills_of
 
 from .test_a2a_guide import _publish, _token
 
@@ -27,10 +27,10 @@ def _door(app: Any, token: str) -> A2aDoor:
 async def test_the_cli_starts_a_workflow_with_a_file_and_follows_it_across_the_hour_cut(
     app: Any, client: AsyncClient, project: dict[str, Any], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.a2a import door as door_module
-    from choregos_api.db.models import ArtifactRecord, WorkItem
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.a2a import door as door_module
+    from tranibor_api.db.models import ArtifactRecord, WorkItem
+    from tranibor_api.db.session import session_scope
 
     await _publish(client, project)
     token = await _token(client)

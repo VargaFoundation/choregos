@@ -41,7 +41,7 @@ UNPROVEN = "the implementation changed nothing and the evidence does not prove t
 def _unchanged(*, tests_measured: bool = True) -> Any:
     """What the runner reports for an implementation that changed nothing: git's zero diff, no
     commit — and, when it ran them, the tests on that unchanged checkout, which is `main`."""
-    from choregos_contracts import Evidence
+    from tranibor_contracts import Evidence
 
     # Without `tests_measured`, the agent SAYS the tests pass: its word, not evidence.
     evidence = Evidence(tests_passed=True, tests_run=412, tests_failed=0, diff_files=0, diff_lines=0)
@@ -73,10 +73,10 @@ def _pr_calls(setup: Fixture, monkeypatch: pytest.MonkeyPatch) -> list[str]:
 
 
 async def _arrivals(item_id: str, state: str) -> list[dict[str, Any]]:
-    from choregos_api.db.models import Event
-    from choregos_api.db.session import session_scope
-    from choregos_contracts import EventType
     from sqlalchemy import select
+    from tranibor_api.db.models import Event
+    from tranibor_api.db.session import session_scope
+    from tranibor_contracts import EventType
 
     async with session_scope() as session:
         rows = await session.execute(
@@ -88,9 +88,9 @@ async def _arrivals(item_id: str, state: str) -> list[dict[str, Any]]:
 
 
 async def _request_payloads(item_id: str) -> list[dict[str, Any]]:
-    from choregos_api.db.models import HumanRequest
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import HumanRequest
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = await session.execute(select(HumanRequest).where(HumanRequest.work_item_id == item_id))
@@ -100,8 +100,8 @@ async def _request_payloads(item_id: str) -> list[dict[str, Any]]:
 async def test_a_no_change_ticket_green_on_main_closes_as_already_fixed_without_a_pull_request(
     setup: Fixture, temporal_env: Any, worker_factory: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.worker import Replayer
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     project_id = await create_dev_project(setup)
     item_id, key = await create_ticket(setup, project_id, 18, "dev-simple")
@@ -166,7 +166,7 @@ async def test_a_no_change_ticket_without_measured_tests_escalates_at_once(
 async def test_a_ticket_with_changes_is_unaffected(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
-    from choregos_contracts import Evidence
+    from tranibor_contracts import Evidence
 
     project_id = await create_dev_project(setup)
     item_id, key = await create_ticket(setup, project_id, 7, "dev-simple")
@@ -197,7 +197,7 @@ async def test_a_history_before_the_marker_goes_on_to_the_tests(
 ) -> None:
     """A run recorded before the marker answers no to `patched`: the empty change is tested and
     reviewed, then escalates at the pull request (S22-46), as then."""
-    from choregos_orchestrator.workflows import interpreter
+    from tranibor_orchestrator.workflows import interpreter
 
     real = interpreter.workflow.patched
     monkeypatch.setattr(
@@ -237,10 +237,10 @@ async def test_the_guarantee_reads_the_branch_from_the_scm(
 ) -> None:
     """No branch on the SCM is part of the proof: a pushed one refuses, and so does an SCM that
     cannot answer — an outage proves nothing."""
-    from choregos_adapters.errors import UpstreamError
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities.gates import evaluate_gates
+    from tranibor_adapters.errors import UpstreamError
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities.gates import evaluate_gates
 
     if branch != "pushed":  # the fixture's work item has a scripted branch: here it was never pushed
         setup.adapters.scm.delete_branch("northwind/billing-api", "choregos/123")

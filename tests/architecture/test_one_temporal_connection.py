@@ -2,7 +2,7 @@
 
 Every client and worker must share TLS and the payload codec: a process that calls
 `Client.connect` itself talks in clear and writes payloads the others cannot read (or cannot read
-theirs). Only `choregos_core.temporal_connection` calls it; everything else calls `connect_temporal`.
+theirs). Only `tranibor_core.temporal_connection` calls it; everything else calls `connect_temporal`.
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ import ast
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-THE_ONE = ROOT / "packages" / "core" / "src" / "choregos_core" / "temporal_connection.py"
+THE_ONE = ROOT / "packages" / "core" / "src" / "tranibor_core" / "temporal_connection.py"
 
 
 def _sources() -> list[Path]:

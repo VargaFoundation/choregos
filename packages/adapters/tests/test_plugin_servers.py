@@ -6,8 +6,8 @@ import json
 
 import httpx
 import pytest
-from choregos_adapters.fakes.kubernetes import FakeKubernetesApi
-from choregos_adapters.plugin_servers import (
+from tranibor_adapters.fakes.kubernetes import FakeKubernetesApi
+from tranibor_adapters.plugin_servers import (
     CONFIG_DIGEST,
     PRIVATE_RANGES,
     PluginServerClient,

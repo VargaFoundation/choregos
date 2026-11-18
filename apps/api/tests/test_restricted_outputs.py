@@ -22,9 +22,9 @@ async def _marked(
     client: AsyncClient, project: dict[str, Any], marks: list[str] | None = None
 ) -> dict[str, str]:
     """`hr` restricted and granted to READER; a work item marked with it, a run and a pending question."""
-    from choregos_api.db.models import HumanRequest, Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
+    from tranibor_api.db.models import HumanRequest, Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
 
     created = await client.post(ORG, json={"slug": "hr", "name": "HR", "restricted": True})
     assert created.status_code == 201, created.text
@@ -127,8 +127,8 @@ async def test_the_bases_are_read_as_they_are_now(
         "an administrator reads it"
     )
 
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         row = await session.get(WorkItem, item["id"])
@@ -187,8 +187,8 @@ async def test_the_a2a_door_does_not_find_the_task_for_a_member_who_does_not_rea
 
 @pytest.mark.parametrize("slugs", [[], ["hr"], ["hr", "legal"]])
 def test_a_mark_is_only_ever_added_to(slugs: list[str]) -> None:
-    from choregos_api.db.models import WorkItem
-    from choregos_api.knowledge.marked import mark
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.knowledge.marked import mark
 
     item = WorkItem(restricted_knowledge=["legal"])
     assert mark(item, slugs) is (not set(slugs) <= {"legal"})
@@ -198,8 +198,8 @@ def test_a_mark_is_only_ever_added_to(slugs: list[str]) -> None:
 async def test_a_finding_of_a_marked_work_item_is_listed_only_to_its_readers(
     client: AsyncClient, admin: str, project: dict[str, Any]
 ) -> None:
-    from choregos_api.db.models import Finding
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Finding
+    from tranibor_api.db.session import session_scope
 
     item = await _marked(client, project)
     async with session_scope() as session:
@@ -227,8 +227,8 @@ async def test_a_finding_of_a_marked_work_item_is_listed_only_to_its_readers(
 async def test_a_title_an_agent_wrote_is_not_listed(
     client: AsyncClient, admin: str, project: dict[str, Any]
 ) -> None:
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     item = await _marked(client, project)
     async with session_scope() as session:
@@ -243,13 +243,13 @@ async def test_a_title_an_agent_wrote_is_not_listed(
 async def test_an_external_tracker_receives_a_neutral_issue_for_a_marked_child(
     client: AsyncClient, admin: str, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_adapters.fakes.tracker import FakeTracker
-    from choregos_api.db.models import Project
-    from choregos_api.db.session import session_scope
-    from choregos_api.knowledge.marked import WITHHELD
-    from choregos_api.rbac import SYSTEM
-    from choregos_api.schemas import WorkItemCreate
-    from choregos_api.services import tickets
+    from tranibor_adapters.fakes.tracker import FakeTracker
+    from tranibor_api.db.models import Project
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.knowledge.marked import WITHHELD
+    from tranibor_api.rbac import SYSTEM
+    from tranibor_api.schemas import WorkItemCreate
+    from tranibor_api.services import tickets
 
     fake = FakeTracker("billing-api")
     real = tickets.project_tracker

@@ -26,7 +26,7 @@ async def _upload(client: AsyncClient, name: str, data: bytes, slug: str = "arch
 async def _converted(
     client: AsyncClient, name: str, data: bytes, slug: str = "architecture"
 ) -> dict[str, Any]:
-    from choregos_api.knowledge.conversion import conversions
+    from tranibor_api.knowledge.conversion import conversions
 
     sent = await _upload(client, name, data, slug)
     assert sent.status_code == 202, sent.text
@@ -135,7 +135,7 @@ async def test_the_upload_answers_pending_and_converts_outside_the_request(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The request stores and schedules; it never converts. Without the queue, nothing converts."""
-    from choregos_api.knowledge import conversion
+    from tranibor_api.knowledge import conversion
 
     scheduled: list[tuple[str, str]] = []
     monkeypatch.setattr(conversion.conversions, "schedule", lambda org, doc: scheduled.append((org, doc)))
@@ -153,7 +153,7 @@ async def test_the_upload_answers_pending_and_converts_outside_the_request(
 
 
 async def test_the_same_bytes_twice_are_one_document(client: AsyncClient, admin: str) -> None:
-    from choregos_api.knowledge.conversion import conversions
+    from tranibor_api.knowledge.conversion import conversions
 
     await _base(client)
     first = await _upload(client, "notes.md", b"# Notes\n")
@@ -192,7 +192,7 @@ async def test_a_file_that_is_not_what_it_claims_is_refused(
 async def test_an_office_archive_that_would_inflate_too_much_is_refused(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.knowledge import formats
+    from tranibor_api.knowledge import formats
 
     monkeypatch.setattr(formats, "MAX_INFLATED", 1024)
     await _base(client)
@@ -204,7 +204,7 @@ async def test_an_office_archive_that_would_inflate_too_much_is_refused(
 async def test_a_file_over_the_cap_is_refused(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     monkeypatch.setenv("CHOREGOS_KNOWLEDGE_MAX_UPLOAD_MIB", "1")
     reset_settings_cache()
@@ -215,7 +215,7 @@ async def test_a_file_over_the_cap_is_refused(
 
 
 async def test_a_conversion_that_fails_says_why_and_can_be_retried(client: AsyncClient, admin: str) -> None:
-    from choregos_api.knowledge.conversion import conversions
+    from tranibor_api.knowledge.conversion import conversions
 
     await _base(client)
     document = await _converted(client, "broken.docx", fx.broken_office())
@@ -232,7 +232,7 @@ async def test_a_conversion_past_its_timeout_is_stopped(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The child process is killed: a hostile or huge document cannot hold a worker forever."""
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     monkeypatch.setenv("CHOREGOS_KNOWLEDGE_CONVERSION_TIMEOUT_S", "0.05")
     reset_settings_cache()
@@ -243,7 +243,7 @@ async def test_a_conversion_past_its_timeout_is_stopped(
 
 
 def test_the_converter_inherits_none_of_the_api_secrets(monkeypatch: pytest.MonkeyPatch) -> None:
-    from choregos_api.knowledge.conversion import child_environment
+    from tranibor_api.knowledge.conversion import child_environment
 
     monkeypatch.setenv("CHOREGOS_DATABASE_URL", "postgresql://secret")
     monkeypatch.setenv("CHOREGOS_GATEWAY_MASTER_KEY", "sk-secret")
@@ -257,11 +257,11 @@ async def test_a_stopped_replica_leaves_nothing_behind(client: AsyncClient, admi
     """Pending documents, and `converting` ones gone stale, are converted at the next start-up."""
     from datetime import timedelta
 
-    from choregos_api.db.models import KnowledgeDocument
-    from choregos_api.db.session import session_scope
-    from choregos_api.knowledge.conversion import conversions
-    from choregos_core import utcnow
     from sqlalchemy import update
+    from tranibor_api.db.models import KnowledgeDocument
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.knowledge.conversion import conversions
+    from tranibor_core import utcnow
 
     base = await _base(client)
     ids = []
@@ -316,9 +316,9 @@ def test_scope_decides_who_reads_and_which_runs_are_served() -> None:
     """A project-only member reads the bases of ITS projects; a run is never served a group base."""
     from types import SimpleNamespace
 
-    from choregos_api.knowledge.access import served_to_project, visible_to
-    from choregos_api.rbac import Principal
-    from choregos_contracts import Role
+    from tranibor_api.knowledge.access import served_to_project, visible_to
+    from tranibor_api.rbac import Principal
+    from tranibor_contracts import Role
 
     projects = SimpleNamespace(scope="projects", projects=["billing-api"], groups=[], status="active")
     groups = SimpleNamespace(scope="groups", projects=[], groups=["auditors"], status="active")

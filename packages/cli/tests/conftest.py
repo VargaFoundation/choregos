@@ -22,7 +22,7 @@ def _no_real_profile(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     # `client.CONFIG_PATH` is read from the environment when the module is first imported: a suite that
     # imports it at collection (the workspace's) would freeze the developer's real profile for the ones
     # that import it later. A suite that wants a profile file points `CONFIG_PATH` at its own.
-    from choregos_cli import client
+    from tranibor_cli import client
 
     monkeypatch.setattr(client, "CONFIG_PATH", tmp_path / "no-profile.json")
 

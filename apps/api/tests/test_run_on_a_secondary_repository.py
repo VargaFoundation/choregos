@@ -35,14 +35,14 @@ async def test_the_proxy_opens_the_target_s_host_and_not_the_primary_s(
 
 @pytest.fixture
 def minted(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
-    from choregos_adapters.github import GitHubAppAuth, InstallationToken
+    from tranibor_adapters.github import GitHubAppAuth, InstallationToken
 
     monkeypatch.setenv("CHOREGOS_GITHUB_APP_ID", "5242171")
     monkeypatch.setenv(
         "CHOREGOS_GITHUB_APP_PRIVATE_KEY", "-----BEGIN RSA PRIVATE KEY-----\nx\n-----END RSA PRIVATE KEY-----"
     )
     # The App is read from the settings (ADR 0167), cached per process: read again.
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     reset_settings_cache()
     asked: list[dict[str, Any]] = []
@@ -60,9 +60,9 @@ async def test_the_git_token_of_a_run_on_a_secondary_repository_is_that_reposito
 ) -> None:
     """The project's primary is `northwind/billing-api`; the run cloned `acme-tools/diamctl`, whose owner
     the organisation claimed through another installation: the token is minted there, for it only."""
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
 
     await add_organisation("globex")
     async with session_scope(orgs="*") as session:

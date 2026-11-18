@@ -12,11 +12,11 @@ import asyncio
 from typing import Any
 
 import pytest
-from choregos_api import temporal as module
-from choregos_api.temporal import FakeTemporal, RealTemporal, get_temporal, train_id
 from httpx import AsyncClient
 from temporalio.client import WorkflowQueryFailedError
 from temporalio.service import RPCError, RPCStatusCode
+from tranibor_api import temporal as module
+from tranibor_api.temporal import FakeTemporal, RealTemporal, get_temporal, train_id
 
 
 async def test_a_project_with_no_merge_has_a_collecting_train(

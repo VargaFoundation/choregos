@@ -11,8 +11,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from choregos_tools_mcp import McpServer
-from choregos_tools_mcp.server import listed_to_the_model
+from tranibor_tools_mcp import McpServer
+from tranibor_tools_mcp.server import listed_to_the_model
 
 OUTPUT = {"type": "object", "required": ["quantity"], "properties": {"quantity": {"type": "integer"}}}
 API_TOOLS: list[dict[str, Any]] = [

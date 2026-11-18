@@ -3,8 +3,8 @@ the API derives the nodes (the API image does not import the runner)."""
 
 from __future__ import annotations
 
-from choregos_core.agent_tree import RULES
-from choregos_runner.backends import BACKENDS, backend_version
+from tranibor_core.agent_tree import RULES
+from tranibor_runner.backends import BACKENDS, backend_version
 
 
 def test_every_backend_has_an_entry_in_the_rules() -> None:

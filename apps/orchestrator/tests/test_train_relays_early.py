@@ -133,7 +133,7 @@ async def test_a_train_at_rest_relays_before_being_too_long_to_replay(
     temporal_env: Any, worker_factory: Any
 ) -> None:
     """The DEFAULT threshold: no `relay_threshold` in the input, like the tenant's trains."""
-    from choregos_orchestrator.workflows.train import (
+    from tranibor_orchestrator.workflows.train import (
         IDLE_TRAIN_CONTINUES_AS_NEW,
         TRAIN_CONTINUES_AS_NEW_EARLY,
     )
@@ -165,9 +165,9 @@ async def test_a_train_at_rest_relays_before_being_too_long_to_replay(
 async def test_a_train_relays_right_after_its_departure(temporal_env: Any, worker_factory: Any) -> None:
     """A departure adds dozens of events: past the threshold, the train relays at once, without
     waiting to go back through the collection (where the relay at rest would have done it before S22-27)."""
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
-    from choregos_orchestrator.workflows.train import TRAIN_CONTINUES_AS_NEW_EARLY
     from temporalio.worker import Replayer
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
+    from tranibor_orchestrator.workflows.train import TRAIN_CONTINUES_AS_NEW_EARLY
 
     async with worker_factory(replacements=_departing()):
         train = await temporal_env.client.start_workflow(
@@ -200,7 +200,7 @@ async def test_a_train_relays_right_after_its_departure(temporal_env: Any, worke
 
 
 async def test_an_auto_sync_train_relays(temporal_env: Any, worker_factory: Any) -> None:
-    from choregos_orchestrator.workflows.train import TRAIN_CONTINUES_AS_NEW_EARLY
+    from tranibor_orchestrator.workflows.train import TRAIN_CONTINUES_AS_NEW_EARLY
 
     async with worker_factory(replacements=_in_auto_sync()):
         train = await temporal_env.client.start_workflow(
@@ -239,9 +239,9 @@ async def test_a_run_from_before_replays_against_the_lowered_threshold(
     new threshold out of reach: it therefore relays at 300 under the old marker, like 0.17.11 at
     15,000. Then we show that this same history would NOT replay if the threshold had merely been lowered,
     without a new marker: this is what made `TRAIN_CONTINUES_AS_NEW_EARLY` necessary."""
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
-    from choregos_orchestrator.workflows import train as module
     from temporalio.worker import Replayer
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
+    from tranibor_orchestrator.workflows import train as module
 
     monkeypatch.setattr(module, "RELAY_THRESHOLD", 10**9)
     monkeypatch.setattr(module, "FORMER_RELAY_THRESHOLD", 300)

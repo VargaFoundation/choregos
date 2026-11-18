@@ -81,8 +81,8 @@ async def test_a_freeze_delivered_with_the_start_blocks_the_departure(
         await train.result()
         history = await train.fetch_history()
 
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.worker import Replayer
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
     if recording_history():
@@ -92,9 +92,9 @@ async def test_a_freeze_delivered_with_the_start_blocks_the_departure(
 
 async def test_a_history_recorded_before_the_fix_still_replays() -> None:
     """Recorded on the code of #763 (no marker): the old reading, `frozen` overwritten, replays."""
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.client import WorkflowHistory
     from temporalio.worker import Replayer
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     path = HISTORIES / "train-freeze-before-run-old-code-S22-36b.json"
     payload = json.loads(path.read_text(encoding="utf-8"))

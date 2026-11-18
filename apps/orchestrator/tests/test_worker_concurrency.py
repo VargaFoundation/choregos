@@ -18,7 +18,7 @@ class _Stop(Exception):  # noqa: N818 - the test's stop signal
 
 @pytest.fixture
 def _fresh_settings() -> Any:
-    from choregos_orchestrator.config import reset_settings_cache
+    from tranibor_orchestrator.config import reset_settings_cache
 
     reset_settings_cache()
     yield
@@ -27,10 +27,10 @@ def _fresh_settings() -> Any:
 
 async def _worker_keywords(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
     """Run `run_worker` up to the `Worker` constructors and return what each received."""
-    import choregos_adapters
     import temporalio.worker
-    from choregos_orchestrator import worker
+    import tranibor_adapters
     from temporalio.client import Client
+    from tranibor_orchestrator import worker
 
     received: list[dict[str, Any]] = []
 
@@ -47,7 +47,7 @@ async def _worker_keywords(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, An
         async def __aexit__(self, *_: object) -> None:
             return None
 
-    monkeypatch.setattr(choregos_adapters, "load_extensions", list)
+    monkeypatch.setattr(tranibor_adapters, "load_extensions", list)
     monkeypatch.setattr(Client, "connect", connect)
     monkeypatch.setattr(temporalio.worker, "Worker", _Worker)
     with pytest.raises(_Stop):
@@ -90,8 +90,8 @@ async def test_the_environment_reaches_every_worker(monkeypatch: pytest.MonkeyPa
 
 @pytest.mark.usefixtures("_fresh_settings")
 def test_a_worker_with_no_slot_is_refused_at_start(monkeypatch: pytest.MonkeyPatch) -> None:
-    from choregos_orchestrator.config import get_settings
     from pydantic import ValidationError
+    from tranibor_orchestrator.config import get_settings
 
     monkeypatch.setenv("CHOREGOS_WORKER_MAX_CONCURRENT_ACTIVITIES", "0")
     with pytest.raises(ValidationError, match="worker_max_concurrent_activities"):

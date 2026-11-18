@@ -29,11 +29,11 @@ LINE = "line of a very long log\n"
 
 @pytest.fixture
 def server(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
-    import choregos_adapters
-    from choregos_adapters.fakes.mcp import FakeMcpServer
+    import tranibor_adapters
+    from tranibor_adapters.fakes.mcp import FakeMcpServer
 
     fake = FakeMcpServer(tools=[dict(o) for o in TOOLS], token="cle-fournisseur")
-    monkeypatch.setattr(choregos_adapters, "FAKE_MCP", fake)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_MCP", fake)
     monkeypatch.setenv("CONNECTOR_TEST_CLE_FOURNISSEUR", "cle-fournisseur")
     yield fake
 
@@ -84,7 +84,7 @@ async def test_a_higher_operation_cap_lets_through_what_the_default_cuts(
 async def test_a_cap_above_the_ceiling_is_refused_and_null_restores_the_default(
     client: AsyncClient, project: dict[str, Any], server: Any
 ) -> None:
-    from choregos_api.config import get_settings
+    from tranibor_api.config import get_settings
 
     server.answers["suivi_commande"] = LINE * 1_000
     base, headers = await _prepare(client, project, ["*"])
@@ -110,7 +110,7 @@ async def test_a_cap_above_the_ceiling_is_refused_and_null_restores_the_default(
 async def test_a_ceiling_lowered_later_clips_a_cap_set_before_it(
     client: AsyncClient, project: dict[str, Any], server: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.config import get_settings
+    from tranibor_api.config import get_settings
 
     server.answers["suivi_commande"] = LINE * 5_000
     base, headers = await _prepare(client, project, ["*"])
@@ -147,9 +147,9 @@ async def test_a_governed_write_result_is_held_to_its_operation_cap(
     client: AsyncClient, project: dict[str, Any], server: Any
 ) -> None:
     """A write's result is what its action's effect recorded (#241): the same cap applies to it."""
-    from choregos_api.db.models import Action, ActionEffect
-    from choregos_api.db.session import ALL_ORGS, session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Action, ActionEffect
+    from tranibor_api.db.session import ALL_ORGS, session_scope
 
     base, headers = await _prepare(client, project, ["*"])
     opened = await client.patch(

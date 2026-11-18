@@ -15,10 +15,10 @@ API_SRC = pathlib.Path(__file__).resolve().parents[1] / "src"
 
 
 def test_python_m_of_the_former_migration_module_fails(tmp_path: pathlib.Path) -> None:
-    """The chart's Job runs `python -m choregos_api.migrate`; the former module no longer runs."""
+    """The chart's Job runs `python -m tranibor_api.migrate`; the former module no longer runs."""
     database = tmp_path / "former.db"
     done = subprocess.run(
-        [sys.executable, "-m", "choregos_api.migrer", "heads"],  # lang: fr-ok - removed, asserted gone
+        [sys.executable, "-m", "tranibor_api.migrer", "heads"],  # lang: fr-ok - removed, asserted gone
         cwd=tmp_path,
         env={
             **os.environ,
@@ -37,8 +37,8 @@ def test_python_m_of_the_former_migration_module_fails(tmp_path: pathlib.Path) -
 @pytest.mark.parametrize(
     "former",
     [
-        "choregos_api.migrer",  # lang: fr-ok - removed, asserted gone
-        "choregos_api.outils",  # lang: fr-ok - removed, asserted gone
+        "tranibor_api.migrer",  # lang: fr-ok - removed, asserted gone
+        "tranibor_api.outils",  # lang: fr-ok - removed, asserted gone
     ],
 )
 def test_the_former_api_modules_are_gone(former: str) -> None:
@@ -47,7 +47,7 @@ def test_the_former_api_modules_are_gone(former: str) -> None:
 
 
 def test_migrate_configuration_refuses_the_former_keyword() -> None:
-    from choregos_api.migrate import configuration
+    from tranibor_api.migrate import configuration
 
     with pytest.raises(TypeError):
         configuration(**{"avec_les_greffons": False})  # lang: fr-ok - removed, asserted gone

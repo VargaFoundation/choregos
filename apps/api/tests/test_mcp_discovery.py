@@ -27,11 +27,11 @@ TOOLS: list[dict[str, Any]] = [
 @pytest.fixture
 def supplier(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
     """The supplier's agent, as a fake: it demands the connector's key."""
-    import choregos_adapters
-    from choregos_adapters.fakes.mcp import FakeMcpServer
+    import tranibor_adapters
+    from tranibor_adapters.fakes.mcp import FakeMcpServer
 
     server = FakeMcpServer(tools=[dict(o) for o in TOOLS], token="supplier-key")
-    monkeypatch.setattr(choregos_adapters, "FAKE_MCP", server)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_MCP", server)
     monkeypatch.setenv("CONNECTOR_TEST_KEY_SUPPLIER", "supplier-key")
     yield server
 

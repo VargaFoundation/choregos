@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from choregos_core.egress_gate import (
+from tranibor_core.egress_gate import (
     DEFAULT_TARGET,
     EgressGate,
     gate_from_env,
@@ -19,7 +19,7 @@ from choregos_core.egress_gate import (
     parse_target,
     wait_until_closed,
 )
-from choregos_core.exit_codes import Exit, explanation
+from tranibor_core.exit_codes import Exit, explanation
 
 
 class _Path:

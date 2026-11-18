@@ -4,7 +4,7 @@ every property is a declared field) and the sentence the process view makes of i
 from __future__ import annotations
 
 import pytest
-from choregos_core.dsl import parse_workflow, to_process
+from tranibor_core.dsl import parse_workflow, to_process
 
 BADGE = """
 apiVersion: choregos/v1

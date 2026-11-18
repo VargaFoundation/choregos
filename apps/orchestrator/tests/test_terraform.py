@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from choregos_orchestrator.activities import train as train_activities
+from tranibor_orchestrator.activities import train as train_activities
 
 from .conftest import Fixture
 
@@ -15,9 +15,9 @@ INFRA_PR = "https://github.com/northwind/billing-api-infra/pull/7"
 
 
 async def _release(setup: Fixture, *, with_infra: bool) -> str:
-    from choregos_api.db.models import Release
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
+    from tranibor_api.db.models import Release
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
 
     item: dict[str, Any] = {"work_item_key": setup.tracker_key, "title": "a ticket"}
     if with_infra:
@@ -37,8 +37,8 @@ async def _release(setup: Fixture, *, with_infra: bool) -> str:
 
 
 async def _enable_atlantis(project_id: str) -> None:
-    from choregos_api.db.session import session_scope
-    from choregos_api.services import active_policy, policy_model
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services import active_policy, policy_model
 
     async with session_scope() as session:
         row = await active_policy(session, project_id)
@@ -51,7 +51,7 @@ async def _enable_atlantis(project_id: str) -> None:
 
 
 def _seed_pr(setup: Fixture) -> None:
-    from choregos_core.domain import PrRef, PrState
+    from tranibor_core.domain import PrRef, PrState
 
     ref = PrRef(repo="northwind/billing-api-infra", number=7, url=INFRA_PR)
     setup.adapters.scm.prs[("northwind/billing-api-infra", 7)] = PrState(ref=ref, title="infra")
@@ -103,8 +103,8 @@ async def test_without_an_infra_pr_the_train_comments_nothing(setup: Fixture) ->
 
 async def test_without_atlantis_configured_nothing_happens(setup: Fixture) -> None:
     """`terraform.via: none`: commenting on a PR would be a surprise."""
-    from choregos_api.db.session import session_scope
-    from choregos_api.services import active_policy, policy_model
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services import active_policy, policy_model
 
     async with session_scope() as session:
         row = await active_policy(session, setup.project_id)
@@ -125,8 +125,8 @@ async def test_without_atlantis_configured_nothing_happens(setup: Fixture) -> No
 
 
 async def test_an_unreadable_pr_url_is_refused(setup: Fixture) -> None:
-    from choregos_api.db.models import Release
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Release
+    from tranibor_api.db.session import session_scope
 
     await _enable_atlantis(setup.project_id)
     release_id = await _release(setup, with_infra=True)
@@ -145,9 +145,9 @@ async def test_an_unreadable_pr_url_is_refused(setup: Fixture) -> None:
 
 async def test_the_infra_pr_declared_by_the_agent_follows_the_ticket(setup: Fixture) -> None:
     """`artifacts.reports["infra_pr"]` is the channel: no new contract for this."""
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities import stage as stage_activities
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities import stage as stage_activities
 
     from .conftest import stage_result
 
@@ -167,7 +167,7 @@ async def test_the_infra_pr_declared_by_the_agent_follows_the_ticket(setup: Fixt
         {"run_id": "run-infra", "result": result.model_dump(mode="json", by_alias=True)}
     )
 
-    from choregos_api.db.models import WorkItem
+    from tranibor_api.db.models import WorkItem
 
     async with session_scope() as session:
         item = await session.get(WorkItem, setup.work_item_id)

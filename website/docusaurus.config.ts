@@ -6,13 +6,13 @@ import {resolve} from 'node:path';
 
 // Where the site is published and where its source lives: the publishing identity (ADR 0156), read, not copied.
 const identity = JSON.parse(
-  readFileSync(resolve(__dirname, '../packages/core/src/choregos_core/publishing.json'), 'utf8'),
+  readFileSync(resolve(__dirname, '../packages/core/src/tranibor_core/publishing.json'), 'utf8'),
 );
 const documentation = new URL(identity.documentation);
 const [organizationName, projectName] = new URL(identity.source_repository).pathname.slice(1).split('/');
 
 // Its pages are `docs/site/` of this repository, copied to `website/docs/` by `scripts/import-docs.mjs`.
-// The address is the publishing identity's `documentation` (packages/core/src/choregos_core/publishing.json).
+// The address is the publishing identity's `documentation` (packages/core/src/tranibor_core/publishing.json).
 const config: Config = {
   title: 'Tranibor',
   tagline: 'Governed agents: workflows carried by agents and people, under budgets and checks you can read.',

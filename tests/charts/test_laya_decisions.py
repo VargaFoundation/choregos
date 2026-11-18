@@ -15,7 +15,7 @@ from typing import Any
 
 import pytest
 import yaml
-from choregos_core.publishing import PUBLISHING
+from tranibor_core.publishing import PUBLISHING
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 CHART = ROOT / "charts" / "choregos"
@@ -282,7 +282,7 @@ def test_the_image_is_offline_and_its_laya_is_the_locked_one() -> None:
 def test_the_live_stack_runs_the_chart_s_configuration_and_the_local_install_s() -> None:
     """`tests/live/decisions/litellm.yaml` is what the live test proves; it must stay what the chart
     renders (the Service name aside) and what `compose.yaml`'s `decisions` profile writes."""
-    from choregos_api.local_demo import litellm_config
+    from tranibor_api.local_demo import litellm_config
 
     live = yaml.safe_load((ROOT / "tests/live/decisions/litellm.yaml").read_text(encoding="utf-8"))
     rendered = yaml.safe_load(_config_text(_render(*DECISIONS)))

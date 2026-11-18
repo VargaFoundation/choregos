@@ -3,7 +3,7 @@
 
 - The `agent_sandbox` template's FIRST init container is the gate, before the ADR 0146 agent container,
   and it is the very container the executor builds for `k8s_job`
-  (`choregos_adapters.executor.egress_gate.init_container`): one gate, not two that drift.
+  (`tranibor_adapters.executor.egress_gate.init_container`): one gate, not two that drift.
 - The executor workers receive `CHOREGOS_RUNNER_EGRESS_GATE`: on by default, on in the single-node
   profile (whose guard refuses it off), off on a laptop's `values/local.yaml` only.
 """
@@ -17,8 +17,8 @@ from typing import Any
 
 import pytest
 import yaml
-from choregos_adapters.executor import egress_gate
-from choregos_core.egress_gate import GATE_CONTAINER, REPORT_ENV, EgressGate, gate_from_env
+from tranibor_adapters.executor import egress_gate
+from tranibor_core.egress_gate import GATE_CONTAINER, REPORT_ENV, EgressGate, gate_from_env
 
 CHART = pathlib.Path(__file__).resolve().parents[2] / "charts" / "choregos"
 VALUES = CHART / "values"

@@ -68,9 +68,9 @@ async def test_the_name_alone_changes_without_touching_the_slug(client: AsyncCli
 
 
 async def _another_organisation(also_admin: bool) -> None:
-    from choregos_api.db.models import Membership, Organization, User
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Membership, Organization, User
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         other = Organization(slug="other", name="Other")
@@ -119,9 +119,9 @@ async def test_a_malformed_slug_is_refused(client: AsyncClient, admin: str) -> N
 
 async def _remove_the_memberships(email: str) -> None:
     """The dev login enrols a newcomer in the default organisation: undo it, he is a real outsider."""
-    from choregos_api.db.models import Membership, User
-    from choregos_api.db.session import session_scope
     from sqlalchemy import delete, select
+    from tranibor_api.db.models import Membership, User
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         me = (await session.execute(select(User).where(User.email == email))).scalar_one()
@@ -131,7 +131,7 @@ async def _remove_the_memberships(email: str) -> None:
 async def test_a_platform_administrator_who_is_not_a_member_renames_name_and_slug(
     client: AsyncClient, admin: str
 ) -> None:
-    from choregos_api.edition import reset
+    from tranibor_api.edition import reset
 
     await declare_administrator({"platform@example.dev"})
     try:
@@ -167,7 +167,7 @@ async def test_a_platform_administrator_who_is_not_a_member_renames_name_and_slu
 
 
 async def test_a_non_member_without_platform_right_is_refused(client: AsyncClient, admin: str) -> None:
-    from choregos_api.edition import reset
+    from tranibor_api.edition import reset
 
     await declare_administrator({"platform@example.dev"})
     try:

@@ -6,8 +6,8 @@ from __future__ import annotations
 import io
 
 import pytest
-from choregos_cli import theme
 from rich.console import Console
+from tranibor_cli import theme
 
 #: `workflowHue(name)` as the console computes it (`apps/web/src/lib/workflow-hue.ts`), run by Node on
 #: 2026-11-12: the same workflow has the same hue on the board and in the terminal.
@@ -75,7 +75,7 @@ def test_a_monochrome_console_renders_no_style_at_all(monkeypatch: pytest.Monkey
 
 def test_queued_is_grey_and_never_reads_as_running() -> None:
     """The mock-up of 2026-11-12: a queued entry is grey and an outline, distinct from running."""
-    from choregos_cli import theme
+    from tranibor_cli import theme
 
     assert theme.QUEUED.style == "bright_black"
     assert theme.QUEUED.glyph == "○"

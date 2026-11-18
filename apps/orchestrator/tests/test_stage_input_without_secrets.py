@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from choregos_core.redaction import REDACTED
+from tranibor_core.redaction import REDACTED
 
 from .conftest import Fixture
 
@@ -19,7 +19,7 @@ pytestmark = pytest.mark.asyncio
 
 
 async def _prepare(setup: Fixture) -> dict[str, Any]:
-    from choregos_orchestrator.activities import stage as activities
+    from tranibor_orchestrator.activities import stage as activities
 
     return await activities.prepare_stage(
         {
@@ -36,8 +36,8 @@ async def _prepare(setup: Fixture) -> dict[str, Any]:
 
 
 async def _stored(run_id: str) -> dict[str, Any]:
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         run = await session.get(Run, run_id)
@@ -52,7 +52,7 @@ def _minted_key(setup: Fixture) -> str:
 
 
 async def _start(setup: Fixture, prepared: dict[str, Any]) -> dict[str, Any]:
-    from choregos_orchestrator.activities import stage as activities
+    from tranibor_orchestrator.activities import stage as activities
 
     return await activities.start_run(
         {
@@ -84,7 +84,7 @@ async def test_no_run_token_is_stored_and_no_secret_is_in_the_temporal_payload(s
 
 
 async def test_start_run_gives_the_executor_a_valid_run_token(setup: Fixture) -> None:
-    from choregos_api.security import verify_run_token
+    from tranibor_api.security import verify_run_token
 
     prepared = await _prepare(setup)
     await _start(setup, prepared)
@@ -103,10 +103,10 @@ async def test_a_reused_preparation_carries_no_secret_either(setup: Fixture) -> 
 
 
 async def test_the_key_is_revoked_and_dropped_from_the_row_when_the_run_ends(setup: Fixture) -> None:
-    from choregos_api.db.models import GatewayKeyRow
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities import stage as activities
     from sqlalchemy import select
+    from tranibor_api.db.models import GatewayKeyRow
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities import stage as activities
 
     prepared = await _prepare(setup)
     await _start(setup, prepared)
@@ -128,10 +128,10 @@ async def test_the_key_is_revoked_and_dropped_from_the_row_when_the_run_ends(set
 async def test_a_gateway_that_cannot_revoke_does_not_fail_the_stage(
     setup: Fixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.db.models import GatewayKeyRow
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities import stage as activities
     from sqlalchemy import select
+    from tranibor_api.db.models import GatewayKeyRow
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities import stage as activities
 
     async def unreachable(key_id: str) -> None:
         raise ConnectionError("gateway unreachable")

@@ -66,7 +66,7 @@ TREES = (
 #: Optional data: a catalogue entry or an exclusion reason may name a product without Choregos needing it.
 ALLOWED_FILES = frozenset(
     {
-        "packages/core/src/choregos_core/mcp_catalogue/catalogue.yaml",
+        "packages/core/src/tranibor_core/mcp_catalogue/catalogue.yaml",
         "tools/catalogues/mcp/exclusions.yaml",
     }
 )
@@ -82,28 +82,28 @@ VENDOR = re.compile(
 )
 
 #: The inbound MCP door (ADR 0030), the A2A door (ADR 0078) and the outposts' door (ADR 0148).
-OUTPOSTS_DOOR = "apps/api/src/choregos_api/outposts"
-DOOR_DIRS = ("apps/api/src/choregos_api/mcp", "apps/api/src/choregos_api/a2a", OUTPOSTS_DOOR)
+OUTPOSTS_DOOR = "apps/api/src/tranibor_api/outposts"
+DOOR_DIRS = ("apps/api/src/tranibor_api/mcp", "apps/api/src/tranibor_api/a2a", OUTPOSTS_DOOR)
 
 #: What reaches an organisation's connectors: the broker, the MCP client, the gateway services. A door
 #: serves Choregos's own tools and workflows; if it imported one of these it would forward a call.
 FORBIDDEN_MODULES = frozenset(
     {
-        "choregos_api.services.broker",
-        "choregos_api.services.mcp_gateway",
-        "choregos_api.services.mcp_gateway_identity",
-        "choregos_adapters.mcp",
-        "choregos_adapters.mcp.client",
+        "tranibor_api.services.broker",
+        "tranibor_api.services.mcp_gateway",
+        "tranibor_api.services.mcp_gateway_identity",
+        "tranibor_adapters.mcp",
+        "tranibor_adapters.mcp.client",
         # `build(kind, type, config)` is how an organisation connector's client is made.
-        "choregos_adapters.build",
+        "tranibor_adapters.build",
         # A platform-run plugin server is an organisation connector, and the doors must not reach it
         # either (ADR 0096).
-        "choregos_api.services.plugin_servers",
-        "choregos_api.services.plugin_tracker",
-        "choregos_adapters.plugin_servers",
+        "tranibor_api.services.plugin_servers",
+        "tranibor_api.services.plugin_tracker",
+        "tranibor_adapters.plugin_servers",
         # The routers that hold the broker's routes: a door that imported one would hold the broker too.
-        "choregos_api.routers.internal",
-        "choregos_api.routers.agent_session_pods",
+        "tranibor_api.routers.internal",
+        "tranibor_api.routers.agent_session_pods",
     }
 )
 
@@ -113,21 +113,21 @@ FORBIDDEN_MODULES = frozenset(
 #: must not reach any of them.
 PLUGIN_SERVER_SURFACE = frozenset(
     {
-        "choregos_adapters.plugin_servers",  # `PluginServerClient` subclasses the MCP client
-        "choregos_adapters.tracker.plugin",
-        "choregos_adapters.fakes.plugin_tracker",
-        "choregos_api.services.plugin_servers",
-        "choregos_api.services.plugin_tracker",
-        "choregos_api.services.plugin_installer",
-        "choregos_api.routers.plugins",
-        "choregos_api.routers.plugin_sources",
+        "tranibor_adapters.plugin_servers",  # `PluginServerClient` subclasses the MCP client
+        "tranibor_adapters.tracker.plugin",
+        "tranibor_adapters.fakes.plugin_tracker",
+        "tranibor_api.services.plugin_servers",
+        "tranibor_api.services.plugin_tracker",
+        "tranibor_api.services.plugin_installer",
+        "tranibor_api.routers.plugins",
+        "tranibor_api.routers.plugin_sources",
     }
 )
 
 #: Raw TCP listeners the API ships. Both are HTTP forward proxies for traffic that is not MCP: the relay
 #: puts the search engines behind an organisation's outbound proxy (ADR 0091), the egress proxy enforces a
 #: run's network access (ADR 0070).
-FORWARD_PROXIES = frozenset({"choregos_api.relay", "choregos_api.egress"})
+FORWARD_PROXIES = frozenset({"tranibor_api.relay", "tranibor_api.egress"})
 
 #: ADR 0096 (the tracker half): a third party's delivery, handed to the plugin's own server's
 #: `tracker_parse_event`. The URL names the organisation, the plugin and the server the plugin brings.
@@ -143,7 +143,7 @@ ALLOWED_PLATFORM_MCP = PLUGIN_SERVER_SURFACE | FORWARD_PROXIES | {PLUGIN_WEBHOOK
 #: serves Choregos's own tools or workflows is added here; one that forwards to, merges or names another MCP
 #: server is a gateway.
 DOOR_ROUTES = {
-    "apps/api/src/choregos_api/mcp": frozenset(
+    "apps/api/src/tranibor_api/mcp": frozenset(
         {
             "GET /.well-known/oauth-protected-resource",
             "GET /.well-known/oauth-protected-resource/{path:path}",
@@ -160,7 +160,7 @@ DOOR_ROUTES = {
             "POST /mcp/assistants/{assistant}",
         }
     ),
-    "apps/api/src/choregos_api/a2a": frozenset(
+    "apps/api/src/tranibor_api/a2a": frozenset(
         {
             "POST /a2a/orgs/{org}",
             "GET /a2a/orgs/{org}/.well-known/agent-card.json",
@@ -189,7 +189,7 @@ SERVED_ALONE = {OUTPOSTS_DOOR: frozenset({"GET /healthz", "GET /readyz"})}
 
 #: What MCP is made of on the wire. The outposts' door carries none of it: no JSON-RPC, no tool listing and
 #: no tool call a third party could use to reach a server through the platform (ADR 0148 §12).
-MCP_ON_THE_WIRE = re.compile(r"jsonrpc|tools/list|tools/call|choregos_core\.mcp|choregos_adapters\.mcp")
+MCP_ON_THE_WIRE = re.compile(r"jsonrpc|tools/list|tools/call|tranibor_core\.mcp|tranibor_adapters\.mcp")
 
 #: The door's parameters still have French names until the English rename of the MCP door (plan story
 #: S45-14); the freeze reads them under their English names. A rename to any other name changes the freeze,
@@ -255,7 +255,7 @@ GATEWAY_SEGMENTS = re.compile(
 GATEWAY_NAME = re.compile(r"mcp[ _-]?gateway", re.IGNORECASE)
 NO_GATEWAY_TREES = ("apps/orchestrator/src", "packages/runner/src")
 
-API_SOURCE = "apps/api/src/choregos_api"
+API_SOURCE = "apps/api/src/tranibor_api"
 #: The prefix the application mounts its routers under; the live routes are compared without it.
 API_PREFIX = "/api/v1"
 SOURCE_ROOTS = (*sorted(ROOT.glob("packages/*/src")), *sorted(ROOT.glob("apps/*/src")))
@@ -275,10 +275,10 @@ LISTENERS = frozenset({"start_server", "start_unix_server", "create_server", "cr
 #: An import the AST does not see as one: a door must not make any.
 DYNAMIC_IMPORTS = frozenset({"import_module", "__import__"})
 #: ADR 0096: the one class outside the client's own module that extends the MCP client at runtime.
-RUNTIME_MCP_CLIENTS = frozenset({"choregos_adapters.plugin_servers.PluginServerClient"})
+RUNTIME_MCP_CLIENTS = frozenset({"tranibor_adapters.plugin_servers.PluginServerClient"})
 #: The packages the runtime check imports module by module, and the modules that already fail to import on
 #: main (none): a module that cannot be imported cannot be checked, so a new failure is a failure here.
-RUNTIME_PACKAGES = ("choregos_api", "choregos_adapters")
+RUNTIME_PACKAGES = ("tranibor_api", "tranibor_adapters")
 KNOWN_IMPORT_FAILURES: frozenset[str] = frozenset()
 PATH_PARAMETER = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)(?::([a-z]+))?\}")
 
@@ -376,8 +376,8 @@ def forbidden_imports(
     """The forbidden modules `source` (the code of `module`) imports, relative imports resolved.
 
     An `ImportFrom` names a module AND names: `from ..services import broker` is the module
-    `choregos_api.services`, and also `choregos_api.services.broker`. Both are tested, and a prefix counts
-    (`choregos_adapters.mcp.x` is beneath `choregos_adapters.mcp`).
+    `tranibor_api.services`, and also `tranibor_api.services.broker`. Both are tested, and a prefix counts
+    (`tranibor_adapters.mcp.x` is beneath `tranibor_adapters.mcp`).
     """
     forbidden = frozenset(forbidden)
     found: list[str] = []
@@ -451,36 +451,36 @@ def _module_of(path: pathlib.Path) -> tuple[str, bool]:
 
 
 def test_the_import_check_sees_through_relative_and_from_imports() -> None:
-    door = "choregos_api.mcp.tools"
-    assert forbidden_imports("from ..services import broker", door) == ["choregos_api.services.broker"]
+    door = "tranibor_api.mcp.tools"
+    assert forbidden_imports("from ..services import broker", door) == ["tranibor_api.services.broker"]
     assert forbidden_imports("from ..services.broker import broker_tools", door) == [
-        "choregos_api.services.broker"
+        "tranibor_api.services.broker"
     ]
-    assert forbidden_imports("from choregos_adapters import build", door) == ["choregos_adapters.build"]
-    assert forbidden_imports("import choregos_adapters.mcp.client", door) == ["choregos_adapters.mcp.client"]
-    assert forbidden_imports("from choregos_adapters.mcp.x import y", door) == ["choregos_adapters.mcp.x"]
-    assert forbidden_imports("from choregos_adapters.mcp import McpClient", door) == ["choregos_adapters.mcp"]
+    assert forbidden_imports("from tranibor_adapters import build", door) == ["tranibor_adapters.build"]
+    assert forbidden_imports("import tranibor_adapters.mcp.client", door) == ["tranibor_adapters.mcp.client"]
+    assert forbidden_imports("from tranibor_adapters.mcp.x import y", door) == ["tranibor_adapters.mcp.x"]
+    assert forbidden_imports("from tranibor_adapters.mcp import McpClient", door) == ["tranibor_adapters.mcp"]
     # A sibling import, and the same line in an `__init__.py` (one level less to climb).
-    assert forbidden_imports("from . import broker", "choregos_api.services.x") == [
-        "choregos_api.services.broker"
+    assert forbidden_imports("from . import broker", "tranibor_api.services.x") == [
+        "tranibor_api.services.broker"
     ]
-    assert forbidden_imports("from ..services import broker", "choregos_api.mcp", is_package=True) == [
-        "choregos_api.services.broker"
+    assert forbidden_imports("from ..services import broker", "tranibor_api.mcp", is_package=True) == [
+        "tranibor_api.services.broker"
     ]
-    assert forbidden_imports("from ..services import broker", "choregos_api.mcp") == []  # climbs too far
-    assert forbidden_imports("from .broker import broker_tools", "choregos_api.services", True) == [
-        "choregos_api.services.broker"
+    assert forbidden_imports("from ..services import broker", "tranibor_api.mcp") == []  # climbs too far
+    assert forbidden_imports("from .broker import broker_tools", "tranibor_api.services", True) == [
+        "tranibor_api.services.broker"
     ]
     # What a door does import.
     assert forbidden_imports("from ..services import create_work_item", door) == []
-    assert forbidden_imports("from choregos_adapters.storage import ObjectStoreError", door) == []
-    assert forbidden_imports("import choregos_adapters", door) == []
-    assert forbidden_imports("from choregos_adapters.mcpx import y", door) == []  # a prefix ends at a dot
+    assert forbidden_imports("from tranibor_adapters.storage import ObjectStoreError", door) == []
+    assert forbidden_imports("import tranibor_adapters", door) == []
+    assert forbidden_imports("from tranibor_adapters.mcpx import y", door) == []  # a prefix ends at a dot
     # The plugin surface is checked with its own list.
     plugin = "from ..routers import plugins"
     assert forbidden_imports(plugin, door) == []
     assert forbidden_imports(plugin, door, forbidden=PLUGIN_SERVER_SURFACE) == [
-        "choregos_api.routers.plugins"
+        "tranibor_api.routers.plugins"
     ]
 
 
@@ -519,7 +519,7 @@ def test_the_outposts_door_serves_assignments_and_never_mcp() -> None:
         "the instance that claims them, and never a tool listing, a tool call or JSON-RPC (ADR 0148 §12)."
     )
     assert MCP_ON_THE_WIRE.search('{"jsonrpc": "2.0", "method": "tools/call"}'), "the pattern sees MCP"
-    assert MCP_ON_THE_WIRE.search("from choregos_core.mcp import ok")
+    assert MCP_ON_THE_WIRE.search("from tranibor_core.mcp import ok")
     # Second condition: one path parameter, a call's `{id}`; no route names a connector or a server.
     parameters = {name for route in DOOR_ROUTES[OUTPOSTS_DOOR] for name, _ in PATH_PARAMETER.findall(route)}
     assert parameters == {"id"}, f"the outposts' door takes other path parameters: {sorted(parameters)}"
@@ -527,12 +527,12 @@ def test_the_outposts_door_serves_assignments_and_never_mcp() -> None:
     # segment with no parameter, outside the door's own path.
     assert all(re.fullmatch(r"GET /[a-z]+", probe) for probe in SERVED_ALONE[OUTPOSTS_DOOR])
     # Third condition, in its own lines: what a door that imported the broker would look like.
-    door = "choregos_api.outposts.door"
-    assert forbidden_imports("from ..services import broker", door) == ["choregos_api.services.broker"]
+    door = "tranibor_api.outposts.door"
+    assert forbidden_imports("from ..services import broker", door) == ["tranibor_api.services.broker"]
     assert forbidden_imports("from ..services.mcp_gateway import connector_client", door) == [
-        "choregos_api.services.mcp_gateway"
+        "tranibor_api.services.mcp_gateway"
     ]
-    assert forbidden_imports("from choregos_adapters import sealing", door) == []
+    assert forbidden_imports("from tranibor_adapters import sealing", door) == []
     assert forbidden_imports("from ..services import outposts", door) == []
 
 
@@ -540,12 +540,12 @@ def test_the_services_package_re_exports_nothing_that_reaches_an_organisation_co
     """The doors import names from `..services`: a re-export there would carry the broker to them."""
     path = ROOT / API_SOURCE / "services" / "__init__.py"
     module, is_package = _module_of(path)
-    assert (module, is_package) == ("choregos_api.services", True)
+    assert (module, is_package) == ("tranibor_api.services", True)
     found = forbidden_imports(
         path.read_text("utf-8"), module, is_package, forbidden=FORBIDDEN_MODULES | PLUGIN_SERVER_SURFACE
     )
     assert not found, (
-        f"`choregos_api.services` re-exports {found}: the doors import from it by name, so they would "
+        f"`tranibor_api.services` re-exports {found}: the doors import from it by name, so they would "
         "reach an organisation's connectors without importing the broker (ADR 0105)."
     )
 
@@ -858,32 +858,32 @@ def test_the_client_and_listener_checks_see_what_they_guard() -> None:
     assert listeners("await asyncio.get_running_loop().create_unix_server(protocol, path)") == [1]
     assert listeners("from asyncio import start_server as listen\nawait listen(handler, host, port)") == [2]
     assert listeners("listen = asyncio.start_server\nopen_ = listen\nawait open_(handler)") == [3]
-    assert mcp_client_subclasses("from choregos_adapters.mcp import McpClient as Up\nclass R(Up): ...") == [
+    assert mcp_client_subclasses("from tranibor_adapters.mcp import McpClient as Up\nclass R(Up): ...") == [
         "R"
     ]
     assert mcp_client_subclasses("Base = mcp.McpClient\nclass R(Base): ...") == ["R"]
     # A door's imports by a computed name.
     assert dynamic_imports("import importlib\nm = importlib.import_module('x')") == [2]
     assert dynamic_imports("from importlib import import_module as load\nload('x')") == [2]
-    assert dynamic_imports("m = __import__('choregos_api.services.broker', fromlist=['call'])") == [1]
+    assert dynamic_imports("m = __import__('tranibor_api.services.broker', fromlist=['call'])") == [1]
     assert dynamic_imports("import importlib.metadata\nimportlib.metadata.version('x')") == []
 
 
 def test_the_attribute_check_follows_an_imported_package() -> None:
-    door = "choregos_api.mcp.tools"
+    door = "tranibor_api.mcp.tools"
     reach = "from .. import services as s\ns.broker.call()"
-    assert forbidden_attributes(reach, door) == ["choregos_api.services.broker"]
-    assert forbidden_attributes("import choregos_api\nchoregos_api.services.broker.x", door) == [
-        "choregos_api.services.broker"
+    assert forbidden_attributes(reach, door) == ["tranibor_api.services.broker"]
+    assert forbidden_attributes("import tranibor_api\ntranibor_api.services.broker.x", door) == [
+        "tranibor_api.services.broker"
     ]
-    assert forbidden_attributes("import choregos_adapters as a\na.mcp.McpClient('u')", door) == [
-        "choregos_adapters.mcp"
+    assert forbidden_attributes("import tranibor_adapters as a\na.mcp.McpClient('u')", door) == [
+        "tranibor_adapters.mcp"
     ]
     assert forbidden_attributes("from .. import routers\nrouters.internal.router", door) == [
-        "choregos_api.routers.internal"
+        "tranibor_api.routers.internal"
     ]
     assert forbidden_attributes("from .. import services as s\ns.journey(x)", door) == []
-    assert forbidden_attributes("import choregos_adapters\nchoregos_adapters.mcpx", door) == []
+    assert forbidden_attributes("import tranibor_adapters\ntranibor_adapters.mcpx", door) == []
 
 
 def test_no_route_selects_a_third_party_mcp_server() -> None:
@@ -935,9 +935,9 @@ def test_only_the_platform_run_servers_extend_the_mcp_client() -> None:
             subclasses = mcp_client_subclasses(path.read_text("utf-8"))
             if subclasses:
                 extending.add(module)
-            if subclasses and not (_allowed(module) or _is_forbidden(module, ["choregos_adapters.mcp"])):
+            if subclasses and not (_allowed(module) or _is_forbidden(module, ["tranibor_adapters.mcp"])):
                 offenders.append(f"{module}: {', '.join(subclasses)}")
-    assert "choregos_adapters.plugin_servers" in extending, "the check no longer sees PluginServerClient"
+    assert "tranibor_adapters.plugin_servers" in extending, "the check no longer sees PluginServerClient"
     assert not offenders, (
         "a class extends the MCP client outside the client's own package and the platform-run plugin "
         f"servers (ADR 0096): {offenders}. A new way to reach MCP servers is one more thing the gateway "
@@ -954,7 +954,7 @@ def test_only_the_forward_proxies_open_a_raw_listener() -> None:
             listening.add(module)
             if not _allowed(module):
                 offenders.append(module)
-    assert any(module.startswith("choregos_api.relay") for module in listening), "the check lost the relay"
+    assert any(module.startswith("tranibor_api.relay") for module in listening), "the check lost the relay"
     assert not offenders, (
         f"the API opens a raw listener outside its forward proxies: {offenders}. Something that accepts "
         "connections and forwards them is a passthrough (ADR 0105); the relay (ADR 0091) and the egress "
@@ -998,7 +998,7 @@ closure = sorted(sys.modules)
 
 from fastapi.routing import iter_route_contexts
 from starlette.routing import Mount, WebSocketRoute
-from choregos_api.main import create_app
+from tranibor_api.main import create_app
 
 routes = []
 for context in iter_route_contexts(create_app().router.routes):
@@ -1021,7 +1021,7 @@ for name in packages:
         except BaseException as error:
             failures[found.name] = repr(error)[:300]
 
-from choregos_adapters import mcp
+from tranibor_adapters import mcp
 
 def below(cls):
     for sub in cls.__subclasses__():
@@ -1085,8 +1085,8 @@ def _live_routes() -> list[tuple[str, str]]:
 def test_the_doors_import_nothing_that_reaches_an_organisation_connector() -> None:
     """The doors' whole import closure, not their own lines: a re-export anywhere on the way is seen."""
     closure = _probe()["closure"]
-    assert "choregos_api.mcp.transport" in closure, "the probe no longer imports the doors"
-    assert "choregos_api.outposts.rendezvous" in closure, "the probe no longer imports the outposts' door"
+    assert "tranibor_api.mcp.transport" in closure, "the probe no longer imports the doors"
+    assert "tranibor_api.outposts.rendezvous" in closure, "the probe no longer imports the outposts' door"
     forbidden = FORBIDDEN_MODULES | PLUGIN_SERVER_SURFACE
     reached = [module for module in closure if _is_forbidden(module, forbidden)]
     assert not reached, (

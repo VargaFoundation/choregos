@@ -7,8 +7,8 @@ import shutil
 from pathlib import Path
 
 import pytest
-from choregos_quant.cli import main
-from choregos_quant.snapshot import Fetched
+from tranibor_quant.cli import main
+from tranibor_quant.snapshot import Fetched
 
 from .test_snapshot import fake
 

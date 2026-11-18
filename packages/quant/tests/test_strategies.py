@@ -7,8 +7,8 @@ import json
 from typing import Any
 
 import pytest
-from choregos_quant.errors import InputError
-from choregos_quant.strategies import SCHEMA_PATH, build_schema, strategies_schema, validate_strategies
+from tranibor_quant.errors import InputError
+from tranibor_quant.strategies import SCHEMA_PATH, build_schema, strategies_schema, validate_strategies
 
 
 def one(**over: Any) -> dict[str, Any]:

@@ -37,7 +37,7 @@ def templates(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> pathli
 @pytest.fixture
 def installers(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     """The registry of installers, private to the test."""
-    from choregos_api import extensions
+    from tranibor_api import extensions
 
     registry: dict[str, Any] = {}
     monkeypatch.setattr(extensions, "_INSTALLERS", registry)
@@ -63,7 +63,7 @@ async def _audit(client: AsyncClient, action: str) -> list[dict[str, Any]]:
 async def test_the_declared_installer_receives_the_folder_and_the_audit_says_so(
     client: AsyncClient, admin: str, templates: pathlib.Path, installers: dict[str, Any]
 ) -> None:
-    from choregos_api.extensions import declare_template_installer
+    from tranibor_api.extensions import declare_template_installer
 
     received: list[tuple[str, dict[str, str], str]] = []
 
@@ -98,8 +98,8 @@ async def test_without_an_installer_the_project_is_born_without_and_the_audit_sa
 async def test_a_refusal_by_the_installer_makes_the_birth_fail(
     client: AsyncClient, admin: str, templates: pathlib.Path, installers: dict[str, Any]
 ) -> None:
-    from choregos_api.errors import unprocessable
-    from choregos_api.extensions import declare_template_installer
+    from tranibor_api.errors import unprocessable
+    from tranibor_api.extensions import declare_template_installer
 
     async def installer(session: Any, project: Any, files: dict[str, str], author: str) -> dict[str, Any]:
         raise unprocessable("wrong package")
@@ -115,7 +115,7 @@ async def test_a_refusal_by_the_installer_makes_the_birth_fail(
 async def test_a_folder_that_leaves_the_template_is_refused(
     client: AsyncClient, admin: str, templates: pathlib.Path, installers: dict[str, Any], case: str
 ) -> None:
-    from choregos_api.extensions import declare_template_installer
+    from tranibor_api.extensions import declare_template_installer
 
     received: list[str] = []
 
@@ -137,7 +137,7 @@ async def test_a_folder_that_leaves_the_template_is_refused(
 
 
 def test_two_extensions_do_not_declare_the_same_installer(installers: dict[str, Any]) -> None:
-    from choregos_api.extensions import (
+    from tranibor_api.extensions import (
         declare_template_installer,
         reset,
         template_installers,

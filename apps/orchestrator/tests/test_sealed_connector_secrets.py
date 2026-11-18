@@ -12,8 +12,8 @@ from collections.abc import Iterator
 from typing import Any
 
 import pytest
-from choregos_adapters import ConnectorTypeSpec, register
-from choregos_adapters.registry import _REGISTRY, _SPECS
+from tranibor_adapters import ConnectorTypeSpec, register
+from tranibor_adapters.registry import _REGISTRY, _SPECS
 
 from .conftest import Fixture
 
@@ -38,9 +38,9 @@ def probes(monkeypatch: pytest.MonkeyPatch) -> Iterator[dict[str, dict[str, Any]
 
 
 async def _declare(setup: Fixture, refs: dict[str, str], value: str | None) -> None:
-    from choregos_api.db.models import Connector, Project
-    from choregos_api.db.session import session_scope
-    from choregos_api.secret_store import SealedDbSecretStore
+    from tranibor_api.db.models import Connector, Project
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.secret_store import SealedDbSecretStore
 
     async with session_scope(orgs="*") as session:
         project = await session.get(Project, setup.project_id)
@@ -64,8 +64,8 @@ async def _declare(setup: Fixture, refs: dict[str, str], value: str | None) -> N
 async def test_a_project_connector_with_a_sealed_secret_builds_its_adapter_with_the_value(
     setup: Fixture, probes: dict[str, dict[str, Any]]
 ) -> None:
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities.base import load_project
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities.base import load_project
 
     await _declare(setup, {"api_token": "store:project/billing-api/tracker/api_token"}, VALUE)
     async with session_scope(orgs="*") as session:
@@ -77,9 +77,9 @@ async def test_a_project_connector_with_a_sealed_secret_builds_its_adapter_with_
 async def test_a_lost_sealed_value_fails_that_connector_only_and_loudly(
     setup: Fixture, probes: dict[str, dict[str, Any]]
 ) -> None:
-    from choregos_api.db.session import session_scope
-    from choregos_core.secrets import SecretNotFound
-    from choregos_orchestrator.activities.base import load_project
+    from tranibor_api.db.session import session_scope
+    from tranibor_core.secrets import SecretNotFound
+    from tranibor_orchestrator.activities.base import load_project
 
     await _declare(setup, {"api_token": "store:project/billing-api/tracker/api_token"}, None)
     with pytest.raises(SecretNotFound, match="resolved by the platform"):

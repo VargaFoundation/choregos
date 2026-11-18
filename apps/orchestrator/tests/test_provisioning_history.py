@@ -25,9 +25,9 @@ STEPS = [
 
 async def play() -> tuple[dict[str, Any], dict[str, list[Any]], Any]:
     """The workflow against stub activities: its result, what each activity was asked, its history."""
-    from choregos_orchestrator.testing import workers_by_queue
-    from choregos_orchestrator.workflows.provisioning import ProjectProvisioning
     from temporalio.testing import WorkflowEnvironment
+    from tranibor_orchestrator.testing import workers_by_queue
+    from tranibor_orchestrator.workflows.provisioning import ProjectProvisioning
 
     asked: dict[str, list[Any]] = {"load": [], "step": [], "finish": []}
 
@@ -77,9 +77,9 @@ async def test_every_step_runs_in_order_and_the_project_is_finished() -> None:
 
 
 async def test_the_archived_history_replays() -> None:
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.client import WorkflowHistory
     from temporalio.worker import Replayer
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     _, _, history = await play()
     replayer = Replayer(workflows=ALL_WORKFLOWS)

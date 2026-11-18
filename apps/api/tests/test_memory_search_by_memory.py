@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from choregos_core.domain import Fact, Provenance
 from httpx import AsyncClient
+from tranibor_core.domain import Fact, Provenance
 
 from .agent_scopes_kit import ORG, add_member, as_user, make_project
 
@@ -19,7 +19,7 @@ def real_adapters(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _memory() -> Any:
-    from choregos_adapters import build
+    from tranibor_adapters import build
 
     return build("memory", "lexical", {"org": "northwind"})
 

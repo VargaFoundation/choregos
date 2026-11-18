@@ -81,7 +81,7 @@ jobs:
               # The lockfiles the Dockerfiles copy: a dependency bump changes the image (#857).
               - 'uv.lock'
               - 'apps/web/pnpm-lock.yaml'
-              - 'packages/runner/src/choregos_runner/backends/versions.lock'
+              - 'packages/runner/src/tranibor_runner/backends/versions.lock'
             # What `docker compose up` at the root is made of (S28-04). The platform's code is
             # proven by the other jobs; this job proves the install, and runs on `main` and in
             # the merge queue whatever changed, so that nothing merges past a broken compose.
@@ -93,8 +93,8 @@ jobs:
               - 'docker/**'
               - 'tools/local_install_check.py'
               - '.github/workflows/ci.yml'
-              - 'apps/api/src/choregos_api/local_demo.py'
-              - 'apps/api/src/choregos_api/migrations/**'
+              - 'apps/api/src/tranibor_api/local_demo.py'
+              - 'apps/api/src/tranibor_api/migrations/**'
               - 'apps/web/src/app/login/**'
               - 'apps/web/package.json'
               - 'apps/web/next.config.mjs'
@@ -103,8 +103,8 @@ jobs:
             # What a hosted zip becomes an image through (S41-13): the builder, the template, the
             # reference agent it builds, and the suite the built image goes through.
             hosted-build:
-              - 'packages/adapters/src/choregos_adapters/oci/**'
-              - 'apps/api/src/choregos_api/services/hosted_sources.py'
+              - 'packages/adapters/src/tranibor_adapters/oci/**'
+              - 'apps/api/src/tranibor_api/services/hosted_sources.py'
               - 'examples/hosted/reference/**'
               - 'tests/build/**'
               - 'tests/conformance/hosted/**'
@@ -115,7 +115,7 @@ jobs:
             # The real `cosign` against a real registry (S41-14): what verifies a hosted image's
             # signature, the release the API image carries, and this job.
             hosted-cosign:
-              - 'packages/adapters/src/choregos_adapters/oci/**'
+              - 'packages/adapters/src/tranibor_adapters/oci/**'
               - 'packages/adapters/tests/test_cosign*.py'
               - 'charts/choregos/templates/hosted-images-policy*.yaml'
               - 'tests/charts/test_hosted_images_policy.py'
@@ -132,10 +132,10 @@ jobs:
               - 'tests/conformance/hosted/**'
               - 'examples/hosted/reference/**'
               - 'examples/hosted/reference-node/**'
-              - 'packages/runner/src/choregos_runner/hosted.py'
-              - 'packages/runner/src/choregos_runner/loopback/**'
-              - 'packages/adapters/src/choregos_adapters/executor/k8s_job.py'
-              - 'apps/orchestrator/src/choregos_orchestrator/gitops.py'
+              - 'packages/runner/src/tranibor_runner/hosted.py'
+              - 'packages/runner/src/tranibor_runner/loopback/**'
+              - 'packages/adapters/src/tranibor_adapters/executor/k8s_job.py'
+              - 'apps/orchestrator/src/tranibor_orchestrator/gitops.py'
               - 'apps/orchestrator/tests/test_gvisor_policy.py'
               - 'dev/scripts/gvisor.sh'
               - '.github/workflows/ci.yml'
@@ -149,11 +149,11 @@ jobs:
               - 'dev/kind*.yaml'
               - 'dev/scripts/gvisor.sh'
               - 'infra/bootstrap/gvisor.yaml'
-              - 'packages/adapters/src/choregos_adapters/executor/k8s_job.py'
-              - 'packages/core/src/choregos_core/hosted.py'
-              - 'packages/runner/src/choregos_runner/serve_session.py'
-              - 'packages/runner/src/choregos_runner/hosted.py'
-              - 'packages/runner/src/choregos_runner/hosted_workspace.py'
+              - 'packages/adapters/src/tranibor_adapters/executor/k8s_job.py'
+              - 'packages/core/src/tranibor_core/hosted.py'
+              - 'packages/runner/src/tranibor_runner/serve_session.py'
+              - 'packages/runner/src/tranibor_runner/hosted.py'
+              - 'packages/runner/src/tranibor_runner/hosted_workspace.py'
               - 'examples/hosted/reference/**'
               - 'Makefile'
               - '.github/workflows/ci.yml'
@@ -165,9 +165,9 @@ jobs:
             hosted-foundry:
               - 'examples/hosted/agent-framework-foundry/**'
               - 'tests/conformance/hosted/**'
-              - 'packages/runner/src/choregos_runner/hosted.py'
-              - 'packages/runner/src/choregos_runner/loopback/**'
-              - 'packages/core/src/choregos_core/hosted.py'
+              - 'packages/runner/src/tranibor_runner/hosted.py'
+              - 'packages/runner/src/tranibor_runner/loopback/**'
+              - 'packages/core/src/tranibor_core/hosted.py'
               - 'Makefile'
               - '.github/workflows/ci.yml'
             # Every hosted example built and run for real with Docker, the shared workspace of a
@@ -176,12 +176,12 @@ jobs:
               - 'examples/hosted/**'
               - 'tests/conformance/hosted_real/**'
               - 'tests/conformance/hosted/**'
-              - 'packages/adapters/src/choregos_adapters/oci/**'
-              - 'packages/adapters/src/choregos_adapters/executor/local_docker.py'
-              - 'apps/api/src/choregos_api/services/hosted_sources.py'
-              - 'packages/runner/src/choregos_runner/serve_session.py'
-              - 'packages/runner/src/choregos_runner/hosted.py'
-              - 'packages/runner/src/choregos_runner/hosted_workspace.py'
+              - 'packages/adapters/src/tranibor_adapters/oci/**'
+              - 'packages/adapters/src/tranibor_adapters/executor/local_docker.py'
+              - 'apps/api/src/tranibor_api/services/hosted_sources.py'
+              - 'packages/runner/src/tranibor_runner/serve_session.py'
+              - 'packages/runner/src/tranibor_runner/hosted.py'
+              - 'packages/runner/src/tranibor_runner/hosted_workspace.py'
               - 'packages/runner/tests/test_serve_session_socket_docker.py'
               - 'packages/runner/tests/fixtures/ws_agent.py'
               - 'docker/runner.Dockerfile'
@@ -192,13 +192,13 @@ jobs:
             # ships it with the gateway's image and config, the live test and its fake provider.
             # The skill gate's second scanner and what pins it (S44-02b).
             skill-scanner:
-              - 'apps/api/src/choregos_api/scanners/**'
-              - 'apps/api/src/choregos_api/services/skill_scanner.py'
+              - 'apps/api/src/tranibor_api/scanners/**'
+              - 'apps/api/src/tranibor_api/services/skill_scanner.py'
               - 'apps/api/tests/test_skill_scanner.py'
               - 'docker/api.Dockerfile'
               - '.github/workflows/ci.yml'
             llm-guard:
-              - 'packages/core/src/choregos_core/llm_guardrail.py'
+              - 'packages/core/src/tranibor_core/llm_guardrail.py'
               - 'charts/choregos/charts/litellm/**'
               - 'tests/live/test_llm_guard_live.py'
               - 'tests/live/llm_guard_upstream.py'
@@ -224,7 +224,7 @@ jobs:
               - 'apps/web/**'
               - 'apps/api/**'
               - 'packages/contracts/**'
-              - 'packages/adapters/src/choregos_adapters/fakes/**'
+              - 'packages/adapters/src/tranibor_adapters/fakes/**'
               - 'tools/e2e_live_api.py'
               - '.github/workflows/ci.yml'
 

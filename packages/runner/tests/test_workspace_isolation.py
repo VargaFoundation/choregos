@@ -10,8 +10,8 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from choregos_contracts import StageInput
-from choregos_runner.workspace import Workspace, run_command
+from tranibor_contracts import StageInput
+from tranibor_runner.workspace import Workspace, run_command
 
 pytestmark = pytest.mark.asyncio
 

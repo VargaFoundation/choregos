@@ -52,8 +52,8 @@ class World:
 
 @pytest.fixture
 def world() -> Iterator[World]:
-    from choregos_api import effects
-    from choregos_api.effects import EffectInDoubt
+    from tranibor_api import effects
+    from tranibor_api.effects import EffectInDoubt
 
     seen = World()
 
@@ -87,8 +87,8 @@ def world() -> Iterator[World]:
     async def overtaken(ctx: Any, _params: dict[str, Any]) -> dict[str, Any]:
         """Wakes after another attempt of the same effect recorded it done and emptied the answer
         with that record: what is left at the rendezvous is an answer that is gone."""
-        from choregos_api.db.models import ActionEffect
         from sqlalchemy import update
+        from tranibor_api.db.models import ActionEffect
 
         seen.done.append("overtaken")
         await ctx.session.execute(
@@ -120,8 +120,8 @@ AGAIN = {"effect": "test.again", "with": {}}
 
 
 async def _action(setup: Fixture, effects: list[dict[str, Any]]) -> str:
-    from choregos_api.db.models import Action, Project
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Action, Project
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         project = await session.get(Project, setup.project_id)
@@ -153,9 +153,9 @@ async def _run(temporal_env: Any, worker_factory: Any, action_id: str) -> tuple[
 
 
 async def _state(action_id: str) -> tuple[Any, list[Any]]:
-    from choregos_api.db.models import Action, ActionEffect
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Action, ActionEffect
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         action = await session.get(Action, action_id)
@@ -167,9 +167,9 @@ async def _state(action_id: str) -> tuple[Any, list[Any]]:
 
 
 async def _events(action_id: str) -> list[tuple[str, dict[str, Any]]]:
-    from choregos_api.db.models import Event
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Event
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = await session.execute(select(Event).where(Event.subject == action_id).order_by(Event.ts))
@@ -179,8 +179,8 @@ async def _events(action_id: str) -> list[tuple[str, dict[str, Any]]]:
 async def test_an_effect_in_doubt_closes_the_action_in_doubt_and_compensates_nothing(
     setup: Fixture, temporal_env: Any, worker_factory: Any, world: World
 ) -> None:
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.worker import Replayer
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     action_id = await _action(setup, [CREATE, DOUBT, CREATE])
     result, history = await _run(temporal_env, worker_factory, action_id)
@@ -222,7 +222,7 @@ async def test_an_effect_in_doubt_closes_the_action_in_doubt_and_compensates_not
 async def test_a_final_doubt_is_not_attempted_again(setup: Fixture, world: World) -> None:
     """Temporal may deliver a task twice (a worker that recorded the doubt and died before it said
     so): the effect is not played a second time, and the answer is the same."""
-    from choregos_orchestrator.activities.actions import execute_effect
+    from tranibor_orchestrator.activities.actions import execute_effect
 
     action_id = await _action(setup, [DOUBT])
     for _ in range(2):
@@ -275,7 +275,7 @@ async def test_what_follows_a_doubt_does_not_make_it_a_failure(
     """One delivery is in doubt; the attempt that follows is refused, or fails until the retries
     are spent. The effect did not fail: a delivery of it may have been executed, so the action is in
     doubt and what it had done is not compensated."""
-    from choregos_api.effects import EffectRefused
+    from tranibor_api.effects import EffectRefused
 
     world.then = EffectRefused("the outpost is paused") if final else RuntimeError("503, transient")
     action_id = await _action(setup, [CREATE, AGAIN])
@@ -297,7 +297,7 @@ async def test_the_activities_alone_compensate_nothing_and_close_in_doubt(
     upgrade, a history replayed from before the patch) takes its failure branch: it asks each done
     effect to be compensated and the action to be closed `failed`. The activities answer for the
     action as it is: nothing is undone, and it is closed in doubt."""
-    from choregos_orchestrator.activities.actions import close_action, compensate_effect, execute_effect
+    from tranibor_orchestrator.activities.actions import close_action, compensate_effect, execute_effect
 
     action_id = await _action(setup, [CREATE, DOUBT])
     assert (await execute_effect({"action_id": action_id, "position": 0}))["result"] == {"id": "account-1"}
@@ -324,7 +324,7 @@ async def test_an_attempt_overtaken_by_the_one_that_recorded_the_effect_keeps_it
     waiting when the next begins). The one that records the effect done empties the answer in the
     same transaction; the other wakes to an answer that is gone. That is not a doubt: the recorded
     outcome stands and is what this attempt returns, instead of being overwritten `in_doubt`."""
-    from choregos_orchestrator.activities.actions import execute_effect
+    from tranibor_orchestrator.activities.actions import execute_effect
 
     action_id = await _action(setup, [OVERTAKEN])
     played = await execute_effect({"action_id": action_id, "position": 0})
@@ -337,7 +337,7 @@ async def test_an_attempt_overtaken_by_the_one_that_recorded_the_effect_keeps_it
 async def test_an_action_that_failed_or_succeeded_closes_as_it_always_did(
     setup: Fixture, world: World
 ) -> None:
-    from choregos_orchestrator.activities.actions import close_action, execute_effect
+    from tranibor_orchestrator.activities.actions import close_action, execute_effect
 
     action_id = await _action(setup, [CREATE])
     await execute_effect({"action_id": action_id, "position": 0})
@@ -350,8 +350,8 @@ async def test_an_action_that_failed_or_succeeded_closes_as_it_always_did(
 
 
 def test_the_workflow_reads_the_type_the_activity_raises() -> None:
-    from choregos_orchestrator.activities import actions as activities
-    from choregos_orchestrator.workflows import action as workflow
+    from tranibor_orchestrator.activities import actions as activities
+    from tranibor_orchestrator.workflows import action as workflow
 
     assert workflow.EFFECT_IN_DOUBT == activities.EFFECT_IN_DOUBT == "EffectInDoubt"
     # A doubt is retried only when its activity says so: the policy must not name the type.
@@ -367,7 +367,7 @@ async def test_a_work_item_whose_action_is_in_doubt_waits_and_proposes_it_no_sec
     stays where it is, and re-reading the action every six hours changes nothing."""
     from datetime import timedelta
 
-    from choregos_api import effects
+    from tranibor_api import effects
 
     from .test_dated_action import _actions, _arrival, _iso, _start, _wait_for, _work_item
 
@@ -409,9 +409,9 @@ async def test_a_workflow_that_predates_the_status_undoes_nothing_and_its_histor
     of what was done and for the action to be closed `failed`. The activities undo nothing and close
     the action in doubt. Replayed by today's code, that history holds no marker of the branch, so
     the failure branch is taken again: the same commands, no divergence."""
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
-    from choregos_orchestrator.workflows import action as workflow
     from temporalio.worker import Replayer
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
+    from tranibor_orchestrator.workflows import action as workflow
 
     action_id = await _action(setup, [CREATE, DOUBT])
     with monkeypatch.context() as before:

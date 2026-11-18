@@ -5,11 +5,11 @@ of the ceiling and the policy applies; a project cannot widen the ceiling."""
 from __future__ import annotations
 
 import pytest
-from choregos_contracts import Policy
-from choregos_contracts.policy import WebSearchPolicy
-from choregos_core import load_preset
-from choregos_core.policy_ceiling import CeilingWebSearch, PolicyCeiling, clamp, widenings
-from choregos_core.web_search import DataHandling, shortfalls, stricter
+from tranibor_contracts import Policy
+from tranibor_contracts.policy import WebSearchPolicy
+from tranibor_core import load_preset
+from tranibor_core.policy_ceiling import CeilingWebSearch, PolicyCeiling, clamp, widenings
+from tranibor_core.web_search import DataHandling, shortfalls, stricter
 
 KNOWN = DataHandling(
     query_retention_days=30, query_reuse=False, region="us", terms_ref="https://x/terms@2026"

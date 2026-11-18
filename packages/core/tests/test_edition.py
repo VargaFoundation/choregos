@@ -15,9 +15,9 @@ from typing import Any
 
 import pytest
 import yaml
-from choregos_core import parse_workflow
-from choregos_core.dsl import TEMPLATE_NAMES, template_yaml
-from choregos_core.dsl.edition import EditRefused, edit
+from tranibor_core import parse_workflow
+from tranibor_core.dsl import TEMPLATE_NAMES, template_yaml
+from tranibor_core.dsl.edition import EditRefused, edit
 
 MIXED = """apiVersion: choregos/v1
 kind: Workflow
@@ -326,7 +326,7 @@ transitions:
 def test_renaming_a_state_with_an_effect_writes_its_effect_first() -> None:
     """#175: `pr_open` opened the PR by its NAME. Renamed from the console, it would have lost it without
     saying so. The rename first writes `does: open_pr`: the workflow does the same thing after."""
-    from choregos_contracts.workflow import transition_effect
+    from tranibor_contracts.workflow import transition_effect
 
     edition = edit(FORMER, [{"op": "rename_state", "from": "pr_open", "to": "review"}])
     after, _ = parse_workflow(edition.yaml, strict=False)

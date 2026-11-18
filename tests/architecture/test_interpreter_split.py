@@ -9,8 +9,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from choregos_orchestrator.workflows import interpreter
-from choregos_orchestrator.workflows.interpreter import WorkflowInterpreter
+from tranibor_orchestrator.workflows import interpreter
+from tranibor_orchestrator.workflows.interpreter import WorkflowInterpreter
 
 INTERPRETER = Path(interpreter.__file__)
 MAX_LINES = 700

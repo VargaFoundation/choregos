@@ -4,9 +4,9 @@ say the same thing. The behaviour behind them is S42-10c (`test_knowledge_distil
 
 from __future__ import annotations
 
-import choregos_contracts as contracts
-from choregos_api.schemas.knowledge import KnowledgeDistillEstimate, KnowledgeDistillRequest
+import tranibor_contracts as contracts
 from httpx import AsyncClient
+from tranibor_api.schemas.knowledge import KnowledgeDistillEstimate, KnowledgeDistillRequest
 
 BASE = "/api/v1/orgs/northwind/knowledge"
 

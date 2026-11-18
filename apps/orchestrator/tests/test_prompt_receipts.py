@@ -16,7 +16,7 @@ SPEC = "# Spec\n\nDeduct credit notes from the total, rounded half to even.\n"
 
 
 async def _prepare(setup: Any) -> dict[str, Any]:
-    from choregos_orchestrator.activities import stage as activities
+    from tranibor_orchestrator.activities import stage as activities
 
     return await activities.prepare_stage(
         {
@@ -33,9 +33,9 @@ async def _prepare(setup: Any) -> dict[str, Any]:
 
 
 async def _receipts(run_id: str) -> list[tuple[str, str, str]]:
-    from choregos_api.db.models import HandOffReceipt
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import HandOffReceipt
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         rows = (
@@ -45,9 +45,9 @@ async def _receipts(run_id: str) -> list[tuple[str, str, str]]:
 
 
 async def test_the_implementation_prompt_reads_the_spec_revision(setup: Any) -> None:
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.receipts import digest
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.receipts import digest
 
     async with session_scope(orgs="*") as session:
         item = await session.get(WorkItem, setup.work_item_id)

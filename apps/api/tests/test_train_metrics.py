@@ -13,8 +13,8 @@ from httpx import AsyncClient
 
 
 async def test_a_frozen_train_is_exported(client: AsyncClient, project: dict[str, Any]) -> None:
-    from choregos_api.metrics import refresh
-    from choregos_api.temporal import FakeTemporal, get_temporal, train_id
+    from tranibor_api.metrics import refresh
+    from tranibor_api.temporal import FakeTemporal, get_temporal, train_id
 
     fake = get_temporal()
     assert isinstance(fake, FakeTemporal)
@@ -36,9 +36,9 @@ async def test_a_frozen_train_is_exported(client: AsyncClient, project: dict[str
 
 
 def test_the_metrics_ask_a_query_the_train_defines() -> None:
-    from choregos_api.metrics import TRAIN_STATES, TRAIN_STATUS_QUERY
-    from choregos_contracts import ReleaseStatus
-    from choregos_orchestrator.workflows.train import ReleaseTrain
+    from tranibor_api.metrics import TRAIN_STATES, TRAIN_STATUS_QUERY
+    from tranibor_contracts import ReleaseStatus
+    from tranibor_orchestrator.workflows.train import ReleaseTrain
 
     assert callable(getattr(ReleaseTrain, TRAIN_STATUS_QUERY, None))
     assert set(TRAIN_STATES) <= {str(s) for s in ReleaseStatus}, "every mapped state is a real status"

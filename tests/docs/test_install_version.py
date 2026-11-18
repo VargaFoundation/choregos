@@ -15,13 +15,13 @@ import re
 import tomllib
 from types import ModuleType
 
-from choregos_core.publishing import PUBLISHING
+from tranibor_core.publishing import PUBLISHING
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 #: Every version an install or upgrade command names: `helm … --version X`, a release wheel's file name.
 NAMED = (
     re.compile(r"--version (\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?) "),
-    re.compile(r"choregos_[a-z_]+-(\d+\.\d+\.\d+[0-9A-Za-z.]*)-py3-none-any\.whl"),
+    re.compile(r"tranibor_[a-z_]+-(\d+\.\d+\.\d+[0-9A-Za-z.]*)-py3-none-any\.whl"),
 )
 #: The pages a reader installs from, and how many versions each must at least name.
 PAGES = {

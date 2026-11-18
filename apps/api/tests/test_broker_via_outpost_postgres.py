@@ -42,9 +42,9 @@ def door(monkeypatch: pytest.MonkeyPatch) -> kit.Door:
 @pytest.fixture
 async def client(pg_app: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[AsyncClient]:
     """The application on the migrated schema, an organisation and its administrator signed in."""
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
 
     monkeypatch.setenv("CHOREGOS_OIDC_DEFAULT_ORG", kit.ORG)
     monkeypatch.setenv("CHOREGOS_DEV_ADMIN_EMAILS", "admin@northwind.dev")
@@ -102,9 +102,9 @@ async def test_a_run_whose_scope_is_every_organisation_places_a_row_only_its_out
 ) -> None:
     """The run's token gives its session the platform's scope, which names no outpost: under it no
     row of an outpost exists. The route names the connector's outpost for the write, and for it alone."""
-    from choregos_api.db.models import OutpostCall
-    from choregos_api.db.session import name_the_outpost, session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import OutpostCall
+    from tranibor_api.db.session import name_the_outpost, session_scope
 
     fake = route.outpost()
     daemon, headers = await route.prepared(client, project, fake)
@@ -131,8 +131,8 @@ async def test_a_call_that_waits_for_an_outpost_holds_no_connection_and_no_trans
     """A read may wait as long as its connector's timeout. A request that kept its transaction open
     for that long would keep a pooled connection `idle in transaction`, and a few calls at once
     would take a replica's pool (#1354)."""
-    from choregos_api.db.session import get_engine
-    from choregos_api.outposts import rendezvous
+    from tranibor_api.db.session import get_engine
+    from tranibor_api.outposts import rendezvous
 
     fake = route.outpost()
     _daemon, headers = await route.prepared(client, project, fake, timeout_s=TIMEOUT_S)
@@ -162,8 +162,8 @@ async def test_two_placements_at_once_do_not_both_take_the_last_call_of_the_minu
     """The count of the last minute and the row that takes its last place are one step per
     organisation: a placement that arrives while another has counted and not committed waits for it,
     then counts its row. Two replicas are two sessions here; the lock is the database's."""
-    from choregos_api.db.session import session_scope
-    from choregos_api.outposts import rendezvous
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.outposts import rendezvous
 
     await daemon_kit.approved(client)
     quota = rendezvous.Quota(per_outpost=100, per_organisation=100, per_minute_per_outpost=3)
@@ -214,9 +214,9 @@ async def test_the_call_that_loses_the_race_for_the_journal_line_counts_itself_o
     """The race itself, held open: one call has written the line and not committed. The other finds
     none, writes it too, waits on the index, is refused when the first commits, and counts itself on
     the line that is there now. Without that, its booking would fail on a line of the journal."""
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.mcp_gateway_identity import CallIdentity
-    from choregos_api.services.outpost_route import DatabaseRendezvous, Placing
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.mcp_gateway_identity import CallIdentity
+    from tranibor_api.services.outpost_route import DatabaseRendezvous, Placing
 
     fake = route.outpost()
     await route.prepared(client, project, fake)
@@ -250,10 +250,10 @@ async def test_a_session_that_names_another_outpost_still_finds_the_one_a_connec
     """The registry shows one row to a session that names an outpost. A path that worked for one
     outpost and goes on to a connector at another reads the registry with none named, at a call and
     at a declaration alike; what it named is restored."""
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import name_the_outpost, session_scope
-    from choregos_api.services import outpost_route
     from sqlalchemy import select
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import name_the_outpost, session_scope
+    from tranibor_api.services import outpost_route
 
     await kit.create(client, SLUG)
     await kit.create(client, "lab")
@@ -274,7 +274,7 @@ async def test_a_session_that_names_another_outpost_still_finds_the_one_a_connec
 
 
 async def test_the_migrated_schema_has_the_index_the_cap_per_minute_reads(client: AsyncClient) -> None:
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         found = (

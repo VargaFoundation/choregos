@@ -21,8 +21,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from choregos_core.publishing import PUBLISHING
 from httpx import AsyncClient
+from tranibor_core.publishing import PUBLISHING
 
 NAMES = {
     ("linux", "x86_64"): "choregos-linux-x86_64",
@@ -62,7 +62,7 @@ def make_bundle(directory: Path, *, version: str = "9.9.9", tamper: str | None =
 
 @pytest.fixture
 def bundle(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[dict[str, Any]]:
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     directory = tmp_path / "cli"
     manifest = make_bundle(directory)
@@ -147,8 +147,8 @@ async def test_only_a_name_the_manifest_lists_is_served(
 async def test_without_a_bundle_the_answer_is_a_clear_404_naming_the_release(
     client: AsyncClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api import __version__
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api import __version__
+    from tranibor_api.config import reset_settings_cache
 
     monkeypatch.setenv("CHOREGOS_CLI_DIR", str(tmp_path / "absent"))
     reset_settings_cache()
@@ -210,7 +210,7 @@ async def test_the_install_scripts_carry_the_instances_url(
 async def test_a_public_url_that_is_not_plain_writes_no_script(
     client: AsyncClient, bundle: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     monkeypatch.setenv("CHOREGOS_PUBLIC_URL", "https://x.example/'; rm -rf ~; '")
     reset_settings_cache()
@@ -229,7 +229,7 @@ async def test_a_public_url_that_is_not_plain_writes_no_script(
     ],
 )
 def test_the_rendering_accepts_plain_urls_only(url: str) -> None:
-    from choregos_api.routers.cli_downloads import render_script
+    from tranibor_api.routers.cli_downloads import render_script
 
     if "[" in url:
         with pytest.raises(ValueError):
@@ -245,12 +245,12 @@ def test_the_rendering_accepts_plain_urls_only(url: str) -> None:
 async def test_the_downloads_have_a_rate_limit_of_their_own(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.errors import install_error_handlers
-    from choregos_api.rate_limit import install
-    from choregos_api.routers.cli_downloads import router
     from fastapi import FastAPI
     from httpx import ASGITransport
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.errors import install_error_handlers
+    from tranibor_api.rate_limit import install
+    from tranibor_api.routers.cli_downloads import router
 
     make_bundle(tmp_path / "cli")
     monkeypatch.setenv("CHOREGOS_CLI_DIR", str(tmp_path / "cli"))
@@ -277,7 +277,7 @@ async def test_the_downloads_have_a_rate_limit_of_their_own(
 
 
 async def test_the_routes_are_served_at_the_root_outside_the_contract(app: Any, client: AsyncClient) -> None:
-    import choregos_contracts as contracts
+    import tranibor_contracts as contracts
 
     # The other tests reach them through the whole application, at the root: none under `/api/v1`.
     assert (await client.get("/api/v1/downloads/cli/manifest.json")).status_code == 404
@@ -299,10 +299,10 @@ def _free_port() -> int:
 def live_instance(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[dict[str, Any]]:
     """A real HTTP server on a local port, with only the download routes, over a fake bundle."""
     import uvicorn
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.errors import install_error_handlers
-    from choregos_api.routers.cli_downloads import router
     from fastapi import FastAPI
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.errors import install_error_handlers
+    from tranibor_api.routers.cli_downloads import router
 
     port = _free_port()
     url = f"http://127.0.0.1:{port}"
@@ -423,7 +423,7 @@ def test_install_sh_says_when_the_instance_bundles_no_cli(
 
 
 def _script(name: str) -> str:
-    from choregos_api.routers.cli_downloads import render_script
+    from tranibor_api.routers.cli_downloads import render_script
 
     return render_script(name, "https://choregos.example.org")  # type: ignore[arg-type]
 

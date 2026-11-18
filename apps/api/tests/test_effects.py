@@ -9,7 +9,7 @@ import pytest
 
 @pytest.mark.parametrize("name", ["check", "verifier"])
 async def test_check_effect_and_verifier_alias(name: str) -> None:
-    from choregos_api.effects import EffectContext, EffectRefused, declared_effects, effect, effect_policy
+    from tranibor_api.effects import EffectContext, EffectRefused, declared_effects, effect, effect_policy
 
     assert name in declared_effects()
     assert effect_policy(name) == "allowed"

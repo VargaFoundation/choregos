@@ -351,7 +351,7 @@ global:
         nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
         nginx.ingress.kubernetes.io/proxy-buffering: "off"
       # false: the API serves the door, as one more router. true: the door has its own Deployment,
-      # `choregos-outposts-door` (the API image, `python -m choregos_api.outposts`): the four verbs
+      # `choregos-outposts-door` (the API image, `python -m tranibor_api.outposts`): the four verbs
       # and nothing else of the API, with its own bounded connection pool, so that polls waiting by
       # the hundred take no worker and no connection from the console and the runs (ADR 0148 §8).
       # The route then leads to it. The sweep that ends leases stays in the API, in both layouts.

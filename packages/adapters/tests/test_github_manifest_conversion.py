@@ -7,16 +7,16 @@ from collections.abc import Iterator
 import httpx
 import pytest
 import respx
-from choregos_adapters.errors import UpstreamError
-from choregos_adapters.fakes.github_app import FakeManifestConversion
-from choregos_adapters.github import GitHubManifestConversion, app_credentials, set_app_credentials_provider
+from tranibor_adapters.errors import UpstreamError
+from tranibor_adapters.fakes.github_app import FakeManifestConversion
+from tranibor_adapters.github import GitHubManifestConversion, app_credentials, set_app_credentials_provider
 
 CONVERSION = "https://api.github.com/app-manifests/abc123/conversions"
 
 
 @pytest.fixture(autouse=True)
 def no_provider(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    from choregos_adapters.github import manifest
+    from tranibor_adapters.github import manifest
 
     kept = list(manifest._PROVIDER)
     set_app_credentials_provider(None)
@@ -73,7 +73,7 @@ def test_the_deployments_variables_win_over_a_stored_app(monkeypatch: pytest.Mon
 
 
 def test_the_github_client_reads_the_stored_app_when_the_deployment_names_none() -> None:
-    from choregos_adapters.builtins import _github_client
+    from tranibor_adapters.builtins import _github_client
 
     assert _github_client({"repo": "acme/app"}).auth is None
     set_app_credentials_provider(lambda: ("42", "stored-key"))

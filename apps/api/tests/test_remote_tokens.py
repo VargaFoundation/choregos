@@ -6,8 +6,8 @@ from collections.abc import Iterator
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
-from choregos_adapters.fakes.a2a import FakeA2aAgent
 from httpx import AsyncClient
+from tranibor_adapters.fakes.a2a import FakeA2aAgent
 
 from .conftest_remote import remote_agent, set_sealing_key
 
@@ -26,9 +26,9 @@ BASE = "/api/v1/orgs/northwind/remote-credentials"
 
 
 async def _connected(client: AsyncClient, remote: FakeA2aAgent) -> str:
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
 
     await client.post(
         BASE, json={"name": "rovo", "type": "oauth2_authorization_code", "card_url": remote.card_url}
@@ -43,9 +43,9 @@ async def _connected(client: AsyncClient, remote: FakeA2aAgent) -> str:
 async def test_each_refresh_rewrites_the_rotated_refresh_token(
     client: AsyncClient, admin: str, remote: FakeA2aAgent
 ) -> None:
-    from choregos_api.db.session import session_scope
-    from choregos_api.secret_store import get_secret_store
-    from choregos_api.services.remote_tokens import access_token_for
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.secret_store import get_secret_store
+    from tranibor_api.services.remote_tokens import access_token_for
 
     org_id = await _connected(client, remote)
     first_refresh = remote.live_refresh_token
@@ -65,8 +65,8 @@ async def test_each_refresh_rewrites_the_rotated_refresh_token(
 async def test_a_provider_that_refuses_the_refresh_says_reconnect(
     client: AsyncClient, admin: str, remote: FakeA2aAgent
 ) -> None:
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.remote_tokens import RemoteCredentialError, access_token_for
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.remote_tokens import RemoteCredentialError, access_token_for
 
     org_id = await _connected(client, remote)
     remote.live_refresh_token = "revoked-by-the-user"
@@ -78,10 +78,10 @@ async def test_a_provider_that_refuses_the_refresh_says_reconnect(
 async def test_a_credential_nobody_authorised_gives_no_token(
     client: AsyncClient, admin: str, remote: FakeA2aAgent
 ) -> None:
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.remote_tokens import RemoteCredentialError, access_token_for
     from sqlalchemy import select
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.remote_tokens import RemoteCredentialError, access_token_for
 
     await client.post(
         BASE, json={"name": "rovo", "type": "oauth2_authorization_code", "card_url": remote.card_url}
@@ -93,10 +93,10 @@ async def test_a_credential_nobody_authorised_gives_no_token(
 
 
 async def test_a_bearer_and_a_none_credential(client: AsyncClient, admin: str, remote: FakeA2aAgent) -> None:
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.remote_tokens import access_token_for
     from sqlalchemy import select
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.remote_tokens import access_token_for
 
     await client.post(BASE, json={"name": "static", "type": "bearer", "token": "the-static-token"})
     await client.post(BASE, json={"name": "open", "type": "none"})

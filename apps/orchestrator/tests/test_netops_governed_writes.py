@@ -20,17 +20,17 @@ CHECK_PASSES = {"effect": "verifier", "with": {"condition": "true", "motif": "th
 
 @pytest.fixture
 def firewall(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
-    import choregos_adapters
-    from choregos_adapters.fakes.netops import FakePfSense
+    import tranibor_adapters
+    from tranibor_adapters.fakes.netops import FakePfSense
 
     fake = FakePfSense()
-    monkeypatch.setattr(choregos_adapters, "FAKE_NETOPS", {"pfsense": fake})
+    monkeypatch.setattr(tranibor_adapters, "FAKE_NETOPS", {"pfsense": fake})
     yield fake
 
 
 def _with_compensation(operation: str, arguments: dict[str, Any]) -> dict[str, Any]:
     """The effect as the broker builds it: the operation, and the compensation its type declares."""
-    from choregos_adapters import operation_spec
+    from tranibor_adapters import operation_spec
 
     declared = operation_spec("firewall", "pfsense", operation)
     assert declared is not None and declared.compensation is not None
@@ -42,10 +42,10 @@ def _with_compensation(operation: str, arguments: dict[str, Any]) -> dict[str, A
 
 
 async def _action(setup: Fixture, effects: list[dict[str, Any]], status: str = "approved") -> str:
-    from choregos_adapters import spec_of
-    from choregos_api.db.models import Action, ConnectorOperation, OrgConnector, Project
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_adapters import spec_of
+    from tranibor_api.db.models import Action, ConnectorOperation, OrgConnector, Project
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         project = await session.get(Project, setup.project_id)
@@ -173,8 +173,8 @@ async def test_an_action_nobody_approved_writes_nothing_even_when_its_workflow_s
         await _run(temporal_env, worker_factory, action_id)
     assert "not approved" in str(failure.value.cause.cause)
     assert firewall.writes == 0 and firewall.state() == before
-    from choregos_api.db.models import Action
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Action
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         row = await session.get(Action, action_id)

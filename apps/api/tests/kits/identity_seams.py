@@ -15,7 +15,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 EXTENSION = """
-from choregos_api.edition import (
+from tranibor_api.edition import (
     SessionRefused,
     declare_platform_administrator,
     declare_session_validation,
@@ -45,7 +45,7 @@ def plug_in():
 
 @pytest.fixture
 def identity_extension(tmp_path: pathlib.Path) -> Iterator[Any]:
-    from choregos_api.edition import reset
+    from tranibor_api.edition import reset
 
     root = tmp_path / "site"
     root.mkdir()
@@ -72,11 +72,11 @@ async def extended_client(
     identity_extension: pathlib.Path, tmp_path: pathlib.Path
 ) -> AsyncIterator[AsyncClient]:
     os.environ["CHOREGOS_DATABASE_URL"] = f"sqlite+aiosqlite:///{tmp_path}/identite.db"
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.db import session as db_session
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import create_all, session_scope
-    from choregos_api.main import create_app
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.db import session as db_session
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import create_all, session_scope
+    from tranibor_api.main import create_app
 
     reset_settings_cache()
     await db_session.dispose_engine()

@@ -36,18 +36,18 @@ transitions:
 
 
 async def _user_id(email: str) -> str:
-    from choregos_api.db.models import User
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import User
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         return str((await session.execute(select(User.id).where(User.email == email))).scalar_one())
 
 
 async def _org_id() -> str:
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         return str(
@@ -56,9 +56,9 @@ async def _org_id() -> str:
 
 
 async def _audited(action: str) -> list[dict[str, Any]]:
-    from choregos_api.db.models import AuditLog
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import AuditLog
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = (await session.execute(select(AuditLog).where(AuditLog.action == action))).scalars().all()
@@ -70,8 +70,8 @@ async def _create(client: AsyncClient, slug: str = GROUP, **extra: Any) -> Any:
 
 
 async def _scim_group(members: list[str], *, slug: str = "platform-team", external_id: str = "ext-1") -> None:
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.org_groups import upsert_external_group
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.org_groups import upsert_external_group
 
     org_id = await _org_id()
     async with session_scope() as session:
@@ -143,9 +143,9 @@ async def test_someone_outside_the_organisation_reads_nothing(
     client: AsyncClient, project: dict[str, Any], app: Any
 ) -> None:
     assert (await _create(client)).status_code == 201
-    from choregos_api.db.models import Membership
-    from choregos_api.db.session import session_scope
     from sqlalchemy import delete
+    from tranibor_api.db.models import Membership
+    from tranibor_api.db.session import session_scope
 
     stranger = await _session(app, "stranger@elsewhere.dev")
     async with session_scope() as session:
@@ -218,11 +218,11 @@ async def test_a_group_the_identity_provider_pushes_is_read_only_here(
 async def test_upsert_external_group_creates_then_replaces_the_group_and_its_members(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.db.models import OrgGroup, OrgGroupMember
-    from choregos_api.db.session import session_scope
-    from choregos_api.errors import ApiError
-    from choregos_api.services.org_groups import upsert_external_group
     from sqlalchemy import select
+    from tranibor_api.db.models import OrgGroup, OrgGroupMember
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.errors import ApiError
+    from tranibor_api.services.org_groups import upsert_external_group
 
     for email in ("a@northwind.dev", "b@northwind.dev", "c@northwind.dev"):
         await _member(client, email, "developer", [])
@@ -268,8 +268,8 @@ async def test_upsert_external_group_creates_then_replaces_the_group_and_its_mem
 
 
 async def _session_user(email: str) -> str:
-    from choregos_api.db.models import User
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import User
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         user = User(email=email, display_name=email)
@@ -282,9 +282,9 @@ async def _session_user(email: str) -> str:
 
 
 async def _waiting_ticket(client: AsyncClient, pid: str) -> str:
-    from choregos_api.db.models import HumanRequest
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
+    from tranibor_api.db.models import HumanRequest
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
 
     assert (
         await client.put(f"/api/v1/projects/{pid}/workflows/release", json={"yaml": WORKFLOW})
@@ -336,10 +336,10 @@ async def test_the_principal_carries_the_table_groups_namespaced_and_only_while_
         await client.post(f"{BASE}/{GROUP}/members", json={"email": "cap@northwind.dev"})
     ).status_code == 201
 
-    from choregos_api.db.models import User
-    from choregos_api.db.session import session_scope
-    from choregos_api.deps import principal_for_user
     from sqlalchemy import select
+    from tranibor_api.db.models import User
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.deps import principal_for_user
 
     async with session_scope() as session:
         user = (await session.execute(select(User).where(User.email == "cap@northwind.dev"))).scalar_one()
@@ -358,8 +358,8 @@ async def test_the_principal_carries_the_table_groups_namespaced_and_only_while_
 async def test_an_internal_group_with_a_member_is_known_and_its_members_are_listed(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.human_groups import groups_known_in, members_of_group
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.human_groups import groups_known_in, members_of_group
 
     path = f"/api/v1/projects/{project['id']}/workflows/validate"
     assert [w["code"] for w in (await client.post(path, json={"yaml": WORKFLOW})).json()["warnings"]] == [

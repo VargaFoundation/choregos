@@ -16,9 +16,9 @@ from typing import Any
 
 import httpx
 import pytest
-from choregos_contracts import AgentRef, HostedCall, ModelRef, StageInput
-from choregos_core.hosted import IDENTITY_HEADER, LOOPBACK_KEY, sidecar_env
-from choregos_runner.loopback.model import ModelProxy
+from tranibor_contracts import AgentRef, HostedCall, ModelRef, StageInput
+from tranibor_core.hosted import IDENTITY_HEADER, LOOPBACK_KEY, sidecar_env
+from tranibor_runner.loopback.model import ModelProxy
 
 pytestmark = pytest.mark.asyncio
 

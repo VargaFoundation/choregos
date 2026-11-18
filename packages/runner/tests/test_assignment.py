@@ -8,11 +8,11 @@ from typing import Any
 
 import httpx
 import pytest
-from choregos_adapters.sealing import key_from_log, new_key, seal
-from choregos_runner import cli
-from choregos_runner.assignment import AssignmentServer
-from choregos_runner.exits import Exit
-from choregos_runner.runner import RunOutcome
+from tranibor_adapters.sealing import key_from_log, new_key, seal
+from tranibor_runner import cli
+from tranibor_runner.assignment import AssignmentServer
+from tranibor_runner.exits import Exit
+from tranibor_runner.runner import RunOutcome
 
 SECRET = {"api_url": "http://api/internal", "run_token": "tok-1", "env": {"HTTP_PROXY": "http://p"}}
 

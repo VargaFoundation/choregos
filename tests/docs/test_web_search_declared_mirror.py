@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import pathlib
 
-from choregos_adapters.web_search import BACKENDS, declared
+from tranibor_adapters.web_search import BACKENDS, declared
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 MIRROR = ROOT / "apps" / "web" / "src" / "lib" / "web-search-declared.json"

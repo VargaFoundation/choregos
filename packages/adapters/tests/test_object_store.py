@@ -6,8 +6,8 @@ from datetime import UTC, datetime
 
 import httpx
 import pytest
-from choregos_adapters.fakes import FakeObjectStore
-from choregos_adapters.storage import (
+from tranibor_adapters.fakes import FakeObjectStore
+from tranibor_adapters.storage import (
     ObjectNotFoundError,
     ObjectStore,
     ObjectStoreError,

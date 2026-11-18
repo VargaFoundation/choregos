@@ -5,10 +5,10 @@ plugins, ADR 0093), so adopting it never asks for an agent the deployment cannot
 from __future__ import annotations
 
 import pytest
-from choregos_contracts import AgentActor
-from choregos_core import parse_workflow
-from choregos_core.agent_catalogue import entries
-from choregos_core.dsl import NOT_DEPLOYED, TEMPLATE_NAMES, template_yaml
+from tranibor_contracts import AgentActor
+from tranibor_core import parse_workflow
+from tranibor_core.agent_catalogue import entries
+from tranibor_core.dsl import NOT_DEPLOYED, TEMPLATE_NAMES, template_yaml
 
 #: The catalogue of S59-02; the six earlier workflows are presented by their description only.
 CATALOGUE = TEMPLATE_NAMES[TEMPLATE_NAMES.index("dev-feature") :]

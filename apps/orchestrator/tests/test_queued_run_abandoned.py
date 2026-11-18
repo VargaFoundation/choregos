@@ -12,8 +12,8 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from choregos_adapters.executor.k8s_job import KubernetesJobExecutor
-from choregos_adapters.fakes.kubernetes import FakeKubernetesApi
+from tranibor_adapters.executor.k8s_job import KubernetesJobExecutor
+from tranibor_adapters.fakes.kubernetes import FakeKubernetesApi
 
 from .conftest import Fixture
 from .test_gateway_key_through_the_secret import _prepare_and_start, _run
@@ -22,7 +22,7 @@ pytestmark = pytest.mark.asyncio
 
 
 async def _die(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.interpretation import record_workflow_failure
+    from tranibor_orchestrator.activities.interpretation import record_workflow_failure
 
     await record_workflow_failure(
         {
@@ -70,7 +70,7 @@ async def test_a_queued_run_abandoned_twice_is_not_an_error(setup: Fixture) -> N
 
 async def test_a_queued_run_is_removed_before_its_key_is_revoked(setup: Fixture, monkeypatch: Any) -> None:
     """As in `cancel_run`: the executor is told to stop first, then the key is revoked."""
-    from choregos_orchestrator.activities import interpretation
+    from tranibor_orchestrator.activities import interpretation
 
     order: list[str] = []
     api = _cluster(setup)

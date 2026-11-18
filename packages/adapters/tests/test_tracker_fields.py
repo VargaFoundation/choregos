@@ -12,12 +12,12 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-from choregos_adapters.fakes.plugin_tracker import FakePluginTrackerServer
-from choregos_adapters.http import RestClient
-from choregos_adapters.plugin_servers import PluginServerClient
-from choregos_adapters.tracker.jira import JiraTracker
-from choregos_adapters.tracker.plugin import PluginTracker
-from choregos_adapters.tracker.ticket_fields import (
+from tranibor_adapters.fakes.plugin_tracker import FakePluginTrackerServer
+from tranibor_adapters.http import RestClient
+from tranibor_adapters.plugin_servers import PluginServerClient
+from tranibor_adapters.tracker.jira import JiraTracker
+from tranibor_adapters.tracker.plugin import PluginTracker
+from tranibor_adapters.tracker.ticket_fields import (
     MAX_ANSWER_CHARS,
     MAX_ANSWERS_CHARS,
     answers,

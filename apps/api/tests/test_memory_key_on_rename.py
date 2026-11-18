@@ -12,10 +12,10 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from choregos_adapters.fakes.memory import FakeMemory
-from choregos_core.domain import Fact
-from choregos_core.memory_scope import memory_key
 from httpx import AsyncClient
+from tranibor_adapters.fakes.memory import FakeMemory
+from tranibor_core.domain import Fact
+from tranibor_core.memory_scope import memory_key
 
 from .agent_scopes_kit import ORG
 from .kits.organisation import declare_administrator
@@ -27,13 +27,13 @@ ORGS = "/api/v1/orgs"
 def memory(monkeypatch: pytest.MonkeyPatch) -> FakeMemory:
     """One in-memory backend shared by every request, keyed by namespace like Ecphoria."""
     shared = FakeMemory()
-    monkeypatch.setattr("choregos_adapters.build", lambda kind, type_name, config=None: shared)
+    monkeypatch.setattr("tranibor_adapters.build", lambda kind, type_name, config=None: shared)
     return shared
 
 
 @pytest.fixture
 async def platform_admin(admin: str) -> Any:
-    from choregos_api.edition import reset
+    from tranibor_api.edition import reset
 
     await declare_administrator({"admin@northwind.dev"})
     yield
@@ -73,9 +73,9 @@ async def test_a_global_memory_survives_a_rename_and_a_second_one(
     assert await _seed_and_search(client, memory, "dia") == ["Pin TLS 1.2."]
     assert set(memory.facts) == {"org:northwind#memory:lessons"}, "nothing was ever written under another key"
 
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         row = (await session.execute(select(Organization).where(Organization.slug == "dia"))).scalar_one()
@@ -93,9 +93,9 @@ async def test_an_organisation_never_renamed_uses_its_slug(
     assert (
         await client.patch(f"{ORGS}/northwind", json={"name": "Northwind", "currency": "USD"})
     ).status_code == 200
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         row = (

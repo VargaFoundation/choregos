@@ -63,7 +63,7 @@ contents:
 
 - **Paths stay inside the plugin.** A path cannot be absolute or hold a `.` or `..` segment, and no
   declared path, nor anything under a declared directory, may be or pass through a symbolic link, even
-  one pointing inside the plugin. These are the template rules, shared in `choregos_core.paths`. A link
+  one pointing inside the plugin. These are the template rules, shared in `tranibor_core.paths`. A link
   elsewhere in the directory is ignored with the rest of what is not declared.
 - **The manifest** matches `plugin.schema.json`. A kind other than `Plugin`, a version that is not
   semver, or an unknown key is refused.
@@ -185,7 +185,7 @@ install.
 
 A matrix case is an agent case of the core's eval matrix (S57-09; [the eval matrix
 runbook](runbooks/live-eval-matrix.md#a-plugins-cases-1372)), in the same format as the core's own
-(`choregos_playbooks/evals/agent_cases/*.yaml`): its agent, its task, its doors (`tools_cells`), its
+(`tranibor_playbooks/evals/agent_cases/*.yaml`): its agent, its task, its doors (`tools_cells`), its
 connectors, its evidence, its scripted script and answers, its assertions. The matrix names it
 `plugin:<plugin>/<file stem>` (`plugin:servicenow/itsm-triage-similar-incidents`). A connector may be
 one of the plugin's servers:
@@ -523,7 +523,7 @@ cases:
 
 `choregos plugin validate` holds the file to the schema and refuses a suite for another agent than the
 assistant's, a duplicate case name, and a tool (in an assertion, a condition or `tool_results`) that is not
-a `<need>__<operation>` of the assistant's tools. `choregos_core.conversation_evals` evaluates a journal
+a `<need>__<operation>` of the assistant's tools. `tranibor_core.conversation_evals` evaluates a journal
 (`evaluate_case`, `evaluate_suite`) and plays a case through the prompt loop on a scripted model
 (`play_case`, `play_suite`). A release to production of an agent version an assistant wraps carries the
 required check `conversation_suite`. A thumb down on an answer (`POST /orgs/{org}/agent-sessions/{id}/feedback`)
@@ -982,7 +982,7 @@ approval).
 - **Polling.** `list_candidates` is the profile's `tracker_list_candidates`, read by the tracker
   reconciliation like any external tracker's, for systems that send no events.
 - **Fakes.** Under `CHOREGOS_FAKES=1` a plugin tracker is built as itself and talks to
-  `FakePluginTrackerServer` (`choregos_adapters.fakes.plugin_tracker`), an in-memory server of the
+  `FakePluginTrackerServer` (`tranibor_adapters.fakes.plugin_tracker`), an in-memory server of the
   profile with the same replay rules.
 
 ## Default plugins
@@ -1062,7 +1062,7 @@ with the reason.
 
 ### What a fetch checks
 
-A fetch (`choregos_api.services.plugin_sources.fetch_plugin`, which install and upgrade call) refuses
+A fetch (`tranibor_api.services.plugin_sources.fetch_plugin`, which install and upgrade call) refuses
 at the first failed check, naming it:
 
 | check | refuses |

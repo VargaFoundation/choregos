@@ -23,14 +23,14 @@ def profile(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     path = tmp_path / "config.json"
     path.write_text(json.dumps({"api_url": API, "token": "chg_x", "org": "acme"}))
     monkeypatch.setenv("CHOREGOS_CONFIG", str(path))
-    import choregos_cli.client as client_module
+    import tranibor_cli.client as client_module
 
     monkeypatch.setattr(client_module, "CONFIG_PATH", path)
     return path
 
 
 def _run(*args: str) -> Any:
-    from choregos_cli.main import app
+    from tranibor_cli.main import app
 
     return CliRunner().invoke(app, list(args))
 
@@ -125,7 +125,7 @@ def test_no_default_organisation_is_invented(tmp_path: Path, monkeypatch: pytest
     """A profile without an organisation and no CHOREGOS_ORG: a clear error, not `northwind`."""
     path = tmp_path / "config.json"
     path.write_text(json.dumps({"api_url": API, "token": "chg_x"}))
-    monkeypatch.setattr("choregos_cli.client.CONFIG_PATH", path)
+    monkeypatch.setattr("tranibor_cli.client.CONFIG_PATH", path)
     monkeypatch.delenv("CHOREGOS_ORG", raising=False)
     with respx.mock:
         result = _run("projects", "list")
@@ -137,7 +137,7 @@ def test_no_default_organisation_is_invented(tmp_path: Path, monkeypatch: pytest
 
 @respx.mock
 def test_the_environment_names_the_organisation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("choregos_cli.client.CONFIG_PATH", tmp_path / "absent.json")
+    monkeypatch.setattr("tranibor_cli.client.CONFIG_PATH", tmp_path / "absent.json")
     monkeypatch.setenv("CHOREGOS_API_URL", API)
     monkeypatch.setenv("CHOREGOS_ORG", "globex")
     route = respx.get(f"{API}/api/v1/orgs/globex/projects").mock(

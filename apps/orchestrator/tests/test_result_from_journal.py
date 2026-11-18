@@ -10,8 +10,8 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from choregos_contracts import ExecutorKind, StageResult, StageStatus
-from choregos_core.domain import ExecRef, ExecStatus, StageJobSpec
+from tranibor_contracts import ExecutorKind, StageResult, StageStatus
+from tranibor_core.domain import ExecRef, ExecStatus, StageJobSpec
 
 from .conftest import Fixture
 
@@ -46,7 +46,7 @@ class _TektonWithoutUpload:
 
 
 async def _started_run(setup: Fixture) -> str:
-    from choregos_orchestrator.activities import stage as activities
+    from tranibor_orchestrator.activities import stage as activities
 
     plan = await activities.prepare_stage(
         {
@@ -71,9 +71,9 @@ async def _started_run(setup: Fixture) -> str:
 
 
 async def _journal(run_id: str, *payloads: dict[str, Any]) -> None:
-    from choregos_api.db.models import RunEvent
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
+    from tranibor_api.db.models import RunEvent
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
 
     async with session_scope() as session:
         for seq, payload in enumerate(payloads, start=1):
@@ -81,7 +81,7 @@ async def _journal(run_id: str, *payloads: dict[str, Any]) -> None:
 
 
 async def _await(setup: Fixture, run_id: str) -> dict[str, Any]:
-    from choregos_orchestrator.activities import stage as activities
+    from tranibor_orchestrator.activities import stage as activities
 
     return await activities.await_run(
         {"project_id": setup.project_id, "run_id": run_id, "timeout_minutes": 1, "poll_seconds": 0.01}
@@ -89,8 +89,8 @@ async def _await(setup: Fixture, run_id: str) -> dict[str, Any]:
 
 
 async def test_a_tekton_run_whose_post_failed_still_yields_its_result(setup: Fixture) -> None:
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
 
     setup.adapters.executor = _TektonWithoutUpload()
     run_id = await _started_run(setup)

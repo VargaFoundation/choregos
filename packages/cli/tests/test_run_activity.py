@@ -27,8 +27,8 @@ RUN = "0192a3b4c5d6e7f8"
 
 @pytest.fixture(autouse=True)
 def profile(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from choregos_cli import activity, run_activity, theme
-    from choregos_cli import client as client_module
+    from tranibor_cli import activity, run_activity, theme
+    from tranibor_cli import client as client_module
 
     monkeypatch.setattr(client_module, "CONFIG_PATH", tmp_path / "config.json")
     monkeypatch.setattr(theme, "MONOCHROME", False)
@@ -88,7 +88,7 @@ def platform(contract: Any) -> Any:
 
 
 def _run(*words: str, env: dict[str, str] | None = None) -> Any:
-    from choregos_cli.main import app
+    from tranibor_cli.main import app
 
     return CliRunner().invoke(app, ["activity", "--run", RUN, *words], env=env)
 
@@ -148,7 +148,7 @@ def test_an_opencode_run_shows_its_steps_and_the_plan_its_todowrite_carried(plat
 def test_only_the_latest_steps_are_listed_and_the_earlier_ones_counted(
     platform: Platform, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_cli import run_activity
+    from tranibor_cli import run_activity
 
     monkeypatch.setattr(run_activity, "STEPS_SHOWN", 5)
     platform.events(_journal("opencode-run-journal.json"))
@@ -244,7 +244,7 @@ def test_no_color_gives_no_escape_sequence_and_keeps_the_words(platform: Platfor
 def test_an_ascii_terminal_gets_ascii_glyphs_and_bars(
     platform: Platform, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_cli import theme
+    from tranibor_cli import theme
 
     platform.context(
         {

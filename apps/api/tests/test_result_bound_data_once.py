@@ -8,8 +8,8 @@ data: E1's whole rule list (44 KB) never reached an agent. It now counts the dat
 says something else (`web_fetch`'s page beside what was fetched) is still counted with it.
 
 The two doors read one answer: the run's tool server shows the model compact JSON of the result, its
-data once, up to the same bound (`choregos_tools_mcp.answer`); a script's client gets the same data
-(`choregos_runner.tool_client.unwrapped`), the page's text included.
+data once, up to the same bound (`tranibor_tools_mcp.answer`); a script's client gets the same data
+(`tranibor_runner.tool_client.unwrapped`), the page's text included.
 """
 
 from __future__ import annotations
@@ -50,7 +50,7 @@ def _size(value: Any) -> int:
 
 def _door_body(answer: dict[str, Any]) -> Any:
     """What the run's tool server shows the model of the API's answer, past its notices, parsed."""
-    from choregos_tools_mcp.answer import render_answer
+    from tranibor_tools_mcp.answer import render_answer
 
     text = render_answer(answer)["content"][0]["text"]
     [body] = [part for part in text.split("\n\n") if part.startswith("{")]
@@ -62,16 +62,16 @@ def _door_body(answer: dict[str, Any]) -> Any:
 
 async def test_the_tool_server_shows_the_model_what_the_api_lets_through() -> None:
     """One number, the platform's: the API's default bound is the tool server's (#1374)."""
-    from choregos_api.config import Settings
-    from choregos_core.mcp import RESULT_MAX_BYTES
-    from choregos_tools_mcp.answer import MAX_NOTICES, MAX_TEXT
+    from tranibor_api.config import Settings
+    from tranibor_core.mcp import RESULT_MAX_BYTES
+    from tranibor_tools_mcp.answer import MAX_NOTICES, MAX_TEXT
 
     assert Settings.model_fields["broker_result_max_bytes"].default == RESULT_MAX_BYTES == 65_536
     assert MAX_TEXT == RESULT_MAX_BYTES + MAX_NOTICES
 
 
 async def test_a_directory_s_data_is_counted_once() -> None:
-    from choregos_api.services.broker import bounded_result, result_limit
+    from tranibor_api.services.broker import bounded_result, result_limit
 
     limit = result_limit()
     under = _rules(44_000)
@@ -90,7 +90,7 @@ async def test_a_directory_s_data_is_counted_once() -> None:
 
 async def test_a_text_that_says_something_else_is_counted_with_the_structure() -> None:
     """A text block that is not the structure serialized is other data: both count."""
-    from choregos_api.services.broker import bounded_result, result_limit
+    from tranibor_api.services.broker import bounded_result, result_limit
 
     page = "line of a page\n" * 2_500  # 37 KB
     fetched = {"url": "https://docs.example.com/guide", "notes": "y" * 37_000}
@@ -122,8 +122,8 @@ async def test_a_text_that_says_something_else_is_counted_with_the_structure() -
 @pytest.fixture
 def e1(monkeypatch: pytest.MonkeyPatch) -> Iterator[dict[str, Any]]:
     """The netops estate with E1's firewall (S57-09): 184 rules, 44 KB of data."""
-    import choregos_adapters
-    from choregos_adapters.fakes.netops import (
+    import tranibor_adapters
+    from tranibor_adapters.fakes.netops import (
         FakeCiliumKubernetes,
         FakeRepo,
         recorded_flows,
@@ -138,7 +138,7 @@ def e1(monkeypatch: pytest.MonkeyPatch) -> Iterator[dict[str, Any]]:
         "flows": recorded_flows(),
         "repo": FakeRepo(),
     }
-    monkeypatch.setattr(choregos_adapters, "FAKE_NETOPS", fakes)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_NETOPS", fakes)
     monkeypatch.setenv("CONNECTOR_NETOPS_TEST_PFSENSE_KEY", PFSENSE_KEY)
     monkeypatch.setenv("CONNECTOR_NETOPS_TEST_READER_TOKEN", READER_TOKEN)
     yield fakes
@@ -147,7 +147,7 @@ def e1(monkeypatch: pytest.MonkeyPatch) -> Iterator[dict[str, Any]]:
 async def test_e1_s_whole_rule_list_reaches_both_doors_whole(
     client: AsyncClient, project: dict[str, Any], e1: dict[str, Any]
 ) -> None:
-    from choregos_runner.tool_client import unwrapped
+    from tranibor_runner.tool_client import unwrapped
 
     await _declare(client)
     base, headers = await _run(client, project)
@@ -178,7 +178,7 @@ async def test_a_fetched_page_reaches_a_script_as_it_reaches_the_model(
     web: Any,  # noqa: F811 - the fixture imported above
 ) -> None:
     """#1373: the API's own `web_fetch` answer, read by both doors."""
-    from choregos_runner.tool_client import unwrapped
+    from tranibor_runner.tool_client import unwrapped
 
     web.add(PAGE, HTML)
     base, headers = await _ready(client, project)

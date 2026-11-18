@@ -18,10 +18,10 @@ PAYLOAD = {"project_slug": "replay", "sources": ["closed_issues", "adr"]}
 
 async def play() -> tuple[dict[str, Any], dict[str, list[Any]], Any]:
     """The workflow against stub activities: its result, what each activity was asked, its history."""
-    from choregos_orchestrator.testing import wait_for_event, workers_by_queue
-    from choregos_orchestrator.workflows.memory import MemoryIngestion
     from temporalio.api.enums.v1 import EventType
     from temporalio.testing import WorkflowEnvironment
+    from tranibor_orchestrator.testing import wait_for_event, workers_by_queue
+    from tranibor_orchestrator.workflows.memory import MemoryIngestion
 
     asked: dict[str, list[Any]] = {"ingest": []}
 
@@ -58,10 +58,10 @@ async def test_one_cycle_ingests_the_sources_and_stop_ends_the_loop() -> None:
 
 
 async def test_the_archived_history_replays() -> None:
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.api.enums.v1 import EventType
     from temporalio.client import WorkflowHistory
     from temporalio.worker import Replayer
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     _, _, history = await play()
     replayer = Replayer(workflows=ALL_WORKFLOWS)

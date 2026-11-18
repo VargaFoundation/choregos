@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from choregos_adapters import deployment_default_type
+from tranibor_adapters import deployment_default_type
 
 
 def test_the_runtime_is_the_deployment_s_executor(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -10,13 +10,13 @@
 
 from __future__ import annotations
 
-from choregos_agent_sdk import Context, Result, agent
-from choregos_agent_sdk.errors import sdk_error_in
-from choregos_agent_sdk.integrations import pydantic_ai as bridge
 from pydantic import BaseModel
 from pydantic_ai import Agent
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
+from tranibor_agent_sdk import Context, Result, agent
+from tranibor_agent_sdk.errors import sdk_error_in
+from tranibor_agent_sdk.integrations import pydantic_ai as bridge
 
 
 class Triage(BaseModel):

@@ -36,7 +36,7 @@ TEXTS = {
 async def _setup() -> dict[str, Any]:
     """An installation with its seeded copy, a bound base everyone reads, a bound restricted base, and a
     person of the audience who is not an administrator."""
-    from choregos_api.db.models import (
+    from tranibor_api.db.models import (
         AssistantInstallation,
         AssistantKnowledgeBinding,
         KnowledgeBase,
@@ -44,8 +44,8 @@ async def _setup() -> dict[str, Any]:
         Organization,
         User,
     )
-    from choregos_api.db.session import session_scope
-    from choregos_api.knowledge.index import index_document
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.knowledge.index import index_document
 
     ids: dict[str, Any] = {}
     async with session_scope(orgs="*") as session:
@@ -135,8 +135,8 @@ async def test_a_person_who_may_not_read_a_bound_base_gets_nothing_of_it_until_a
     project: dict[str, Any],
     upstream: Upstream,
 ) -> None:
-    from choregos_api.db.models import KnowledgeGrant
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import KnowledgeGrant
+    from tranibor_api.db.session import session_scope
 
     ids = await _reader(client)
     upstream.model.call("knowledge_search", {"base": "board-notes", "query": "merger"}).call(
@@ -168,8 +168,8 @@ async def test_a_disabled_binding_is_never_served(
     project: dict[str, Any],
     upstream: Upstream,
 ) -> None:
-    from choregos_api.db.models import AssistantKnowledgeBinding
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import AssistantKnowledgeBinding
+    from tranibor_api.db.session import session_scope
 
     ids = await _reader(client)
     async with session_scope(orgs="*") as session:

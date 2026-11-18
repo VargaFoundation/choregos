@@ -24,7 +24,7 @@ from collections.abc import Iterator
 from typing import Any
 
 import pytest
-from choregos_adapters.sealing import key_from_log, new_key, seal
+from tranibor_adapters.sealing import key_from_log, new_key, seal
 
 from .conftest import kubectl_shared
 from .test_agent_sandbox import _condition, _get, _wait, operator_installed

@@ -8,10 +8,10 @@ from typing import Any
 
 import httpx
 import pytest
-from choregos_core import telemetry
 from httpx import AsyncClient
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from opentelemetry.trace import StatusCode
+from tranibor_core import telemetry
 
 from .kits.tool_catalogue import intercept, run_with_catalogue
 

@@ -35,9 +35,9 @@ async def _ceiling(client: AsyncClient, network: dict[str, Any]) -> Any:
 
 
 async def _run(project: dict[str, Any], run_id: str, **columns: Any) -> dict[str, str]:
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.security import mint_run_token
+    from tranibor_api.db.models import Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.security import mint_run_token
 
     async with session_scope() as session:
         item = WorkItem(project_id=project["id"], tracker_key=f"BILLING-{run_id}", title="T", state="ready")
@@ -174,8 +174,8 @@ async def test_without_a_ceiling_any_pattern_is_publishable_and_empty_means_no_i
 
 def test_the_digest_of_a_version_without_a_network_has_not_moved() -> None:
     """Versions published before `network` existed keep the digest they were published with."""
-    from choregos_api.schemas.agents import AgentNetwork, AgentSpec
-    from choregos_api.services.agents import digest
+    from tranibor_api.schemas.agents import AgentNetwork, AgentSpec
+    from tranibor_api.services.agents import digest
 
     assert digest(AgentSpec.model_validate(LEGACY_SPEC)) == LEGACY_DIGEST
     assert digest(AgentSpec()) == EMPTY_DIGEST
@@ -271,9 +271,9 @@ ALLOWED = {
 async def test_decisions_are_cumulative_and_a_replayed_batch_does_not_double_them(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.db.models import NetworkDecision
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import NetworkDecision
+    from tranibor_api.db.session import session_scope
 
     headers = await _run(project, "run-dec-1", agent_slug="pip", agent_version=1)
     url = "/api/v1/internal/runs/run-dec-1/network/decisions"
@@ -299,9 +299,9 @@ async def test_decisions_are_cumulative_and_a_replayed_batch_does_not_double_the
 async def test_the_first_denial_of_a_host_is_journaled_once_per_run(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.db.models import Event
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Event
+    from tranibor_api.db.session import session_scope
 
     headers = await _run(project, "run-dec-2")
     url = "/api/v1/internal/runs/run-dec-2/network/decisions"

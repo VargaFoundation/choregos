@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import pytest
-from choregos_adapters.gateway.direct import DirectGateway
-from choregos_adapters.tracker.internal import InternalTracker
-from choregos_contracts import ProjectConfig
-from choregos_core.domain import NewItem, TrackerStateMapping
+from tranibor_adapters.gateway.direct import DirectGateway
+from tranibor_adapters.tracker.internal import InternalTracker
+from tranibor_contracts import ProjectConfig
+from tranibor_core.domain import NewItem, TrackerStateMapping
 
 
 async def test_the_direct_gateway_returns_a_unique_key_per_run() -> None:
@@ -58,8 +58,8 @@ def test_the_direct_gateway_refuses_to_be_built_in_production(
     that had never measured any spend (BLOCKERS, S12). On a serious environment,
     it is a refusal, as `guard.yaml` refuses an embedded dependency.
     """
-    from choregos_adapters import build
-    from choregos_adapters.errors import ConfigurationError
+    from tranibor_adapters import build
+    from tranibor_adapters.errors import ConfigurationError
 
     # `CHOREGOS_FAKES=1` (set by the API suite when everything runs together) short-circuits
     # the factory and returns a fake: without this zero, the test passed alone and turned red in a group.
@@ -71,7 +71,7 @@ def test_the_direct_gateway_refuses_to_be_built_in_production(
 
 def test_elle_se_construit_ailleurs(monkeypatch: pytest.MonkeyPatch) -> None:
     """A development workstation or a bench keeps the right to bring its own key."""
-    from choregos_adapters import build
+    from tranibor_adapters import build
 
     monkeypatch.setenv("CHOREGOS_FAKES", "0")
     monkeypatch.setenv("CHOREGOS_ENV", "dev")

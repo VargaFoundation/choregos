@@ -12,8 +12,8 @@ from typing import Any
 import pytest
 import sqlalchemy as sa
 from alembic import command
-from choregos_api.config import get_settings
 from httpx import AsyncClient
+from tranibor_api.config import get_settings
 
 from .test_migrations import _config
 
@@ -94,10 +94,10 @@ def test_the_migration_backfills_a_seeded_ledger(tmp_path: pathlib.Path) -> None
 async def test_a_run_s_ledger_lines_carry_its_agent_and_workflow(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.db.models import CostLedger, Run, WorkflowDef, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.costs import record_cost
     from sqlalchemy import select
+    from tranibor_api.db.models import CostLedger, Run, WorkflowDef, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.costs import record_cost
 
     async with session_scope() as session:
         definition = (await session.execute(select(WorkflowDef))).scalars().first()

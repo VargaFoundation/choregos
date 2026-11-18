@@ -18,8 +18,8 @@ from httpx import ASGITransport, AsyncClient
 EXTENSION = '''
 from fastapi import APIRouter
 
-from choregos_api.deps import Me
-from choregos_api.extensions import declare_router
+from tranibor_api.deps import Me
+from tranibor_api.extensions import declare_router
 
 router = APIRouter(tags=["extension"])
 
@@ -43,7 +43,7 @@ def attach():
 OVERLAPPING_EXTENSION = """
 from fastapi import APIRouter
 
-from choregos_api.extensions import declare_router
+from tranibor_api.extensions import declare_router
 
 router = APIRouter()
 
@@ -68,7 +68,7 @@ def _install(root: pathlib.Path, name: str, source: str) -> None:
 
 
 def _extension(tmp_path: pathlib.Path, name: str, source: str) -> Iterator[None]:
-    from choregos_api.extensions import reset
+    from tranibor_api.extensions import reset
 
     root = tmp_path / name
     root.mkdir()
@@ -100,10 +100,10 @@ async def client_with_extension(
     import os
 
     os.environ["CHOREGOS_DATABASE_URL"] = f"sqlite+aiosqlite:///{tmp_path}/extension.db"
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.db import session as db_session
-    from choregos_api.db.session import create_all
-    from choregos_api.main import create_app
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.db import session as db_session
+    from tranibor_api.db.session import create_all
+    from tranibor_api.main import create_app
 
     reset_settings_cache()
     await db_session.dispose_engine()
@@ -141,7 +141,7 @@ async def test_the_extension_route_appears_in_the_openapi(client_with_extension:
 
 
 def test_an_extension_that_overlaps_a_core_route_stops_the_start(overlapping_extension: None) -> None:
-    from choregos_api.main import create_app
+    from tranibor_api.main import create_app
 
     with pytest.raises(RuntimeError, match=r"déjà servies : GET /api/v1/orgs"):  # lang: fr-ok
         create_app()
@@ -153,7 +153,7 @@ def test_without_an_extension_no_route_is_added() -> None:
     Read in the OpenAPI and not in `app.routes`, which no longer shows the included routes since
     FastAPI 0.141: that control would have been green whatever happened.
     """
-    from choregos_api.main import create_app
+    from tranibor_api.main import create_app
 
     paths: Any = create_app().openapi()["paths"]
     assert "/api/v1/orgs" in paths, "the control would see nothing: the OpenAPI is empty"

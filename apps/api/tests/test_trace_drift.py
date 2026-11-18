@@ -46,8 +46,8 @@ class FakeTempo:
         self.by_run[run_id] = body
 
     async def trace(self, trace_id: str) -> dict[str, Any] | None:
-        from choregos_api.trace_drift import TempoError
-        from choregos_core.telemetry import run_trace_ids
+        from tranibor_api.trace_drift import TempoError
+        from tranibor_core.telemetry import run_trace_ids
 
         self.asked.append(trace_id)
         for run_id in self.failing:
@@ -67,9 +67,9 @@ async def _run(
     kind: str = "model",
     **fields: Any,
 ) -> str:
-    from choregos_api.db.models import CostLedger, Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
+    from tranibor_api.db.models import CostLedger, Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
 
     ended = utcnow() - timedelta(hours=ended_hours_ago)
     async with session_scope(orgs="*") as session:
@@ -108,17 +108,17 @@ async def _run(
 
 
 async def _compare(tempo: FakeTempo, tolerance: float = 0.01) -> Any:
-    from choregos_api.trace_drift import compare
-    from choregos_core import utcnow
+    from tranibor_api.trace_drift import compare
+    from tranibor_core import utcnow
 
     now = utcnow()
     return await compare(tempo, since=now - timedelta(hours=24), until=now, tolerance=tolerance)
 
 
 async def _drift_lines() -> list[Any]:
-    from choregos_api.db.models import AuditLog
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import AuditLog
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         return list(
@@ -154,9 +154,9 @@ async def test_a_drift_is_recorded_once_as_a_platform_finding(project: dict[str,
 
 
 async def test_the_ledger_is_never_corrected(project: dict[str, Any]) -> None:
-    from choregos_api.db.models import CostLedger
-    from choregos_api.db.session import session_scope
     from sqlalchemy import func, select
+    from tranibor_api.db.models import CostLedger
+    from tranibor_api.db.session import session_scope
 
     tempo = FakeTempo()
     run = await _run(project["id"], tokens=(500, 50))
@@ -182,7 +182,7 @@ async def test_a_missing_trace_is_counted_not_recorded(project: dict[str, Any]) 
 
 
 async def test_only_the_gateway_s_spans_count(project: dict[str, Any]) -> None:
-    from choregos_api.trace_drift import gateway_usage
+    from tranibor_api.trace_drift import gateway_usage
 
     run = await _run(project["id"], tokens=(100, 10))
     body = _trace(_span("chat", 100, 10))
@@ -234,7 +234,7 @@ async def test_a_tempo_error_is_reported_and_the_others_are_still_read(project: 
 
 
 async def test_the_reader_tells_a_missing_trace_from_an_error() -> None:
-    from choregos_api.trace_drift import TempoError, TempoReader
+    from tranibor_api.trace_drift import TempoError, TempoReader
 
     def answer(request: httpx.Request) -> httpx.Response:
         if request.url.path.endswith("/" + "a" * 32):
@@ -254,7 +254,7 @@ async def test_the_reader_tells_a_missing_trace_from_an_error() -> None:
 
 
 def test_the_otlp_resource_spans_shape_is_read_too() -> None:
-    from choregos_api.trace_drift import gateway_usage
+    from tranibor_api.trace_drift import gateway_usage
 
     body = {"trace": {"resourceSpans": _trace(_span("chat", 7, 3))["batches"]}}
     assert (gateway_usage(body).tokens_in, gateway_usage(body).tokens_out) == (7, 3)
@@ -263,8 +263,8 @@ def test_the_otlp_resource_spans_shape_is_read_too() -> None:
 async def test_without_a_tempo_address_the_job_refuses(
     app: Any, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    from choregos_api import trace_drift
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api import trace_drift
+    from tranibor_api.config import reset_settings_cache
 
     monkeypatch.delenv("CHOREGOS_TEMPO_URL", raising=False)
     reset_settings_cache()
@@ -277,8 +277,8 @@ async def test_the_job_fails_when_tempo_errs_and_prints_its_report(
 ) -> None:
     import json
 
-    from choregos_api import trace_drift
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api import trace_drift
+    from tranibor_api.config import reset_settings_cache
 
     await _run(project["id"], tokens=(10, 5))
     monkeypatch.setenv("CHOREGOS_TEMPO_URL", "http://tempo.invalid:3200")

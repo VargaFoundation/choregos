@@ -44,10 +44,10 @@ async def test_the_extension_tool_is_announced_to_the_run(
 async def test_the_call_goes_through_the_extension_and_is_counted(
     extension_tools: None, client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.db.models import CostLedger, Event
-    from choregos_api.db.session import session_scope
-    from choregos_contracts import EventType
     from sqlalchemy import select
+    from tranibor_api.db.models import CostLedger, Event
+    from tranibor_api.db.session import session_scope
+    from tranibor_contracts import EventType
 
     run_id, headers = await run_extension_tool(project["id"])
     response = await client.post(
@@ -85,9 +85,9 @@ async def test_a_name_already_taken_by_the_catalogue_is_refused_and_not_masked(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from choregos_api import catalogue as catalogue_service
-    from choregos_api.db.models import Project
-    from choregos_api.db.session import session_scope
+    from tranibor_api import catalogue as catalogue_service
+    from tranibor_api.db.models import Project
+    from tranibor_api.db.session import session_scope
 
     file = tmp_path / "catalogue.yaml"
     file.write_text(OVERLAPPING_CATALOGUE, encoding="utf-8")

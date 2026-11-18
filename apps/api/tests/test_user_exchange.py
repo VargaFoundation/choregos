@@ -13,9 +13,9 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from choregos_adapters.fakes.identity_provider import FakeIdentityProvider
-from choregos_adapters.token_exchange import claims_of
 from httpx import AsyncClient
+from tranibor_adapters.fakes.identity_provider import FakeIdentityProvider
+from tranibor_adapters.token_exchange import claims_of
 
 from .kits.user_exchange import (  # noqa: F401
     AUDIENCE,
@@ -173,8 +173,8 @@ async def test_an_agent_version_that_says_nothing_keeps_the_connectors_identity(
 async def test_the_bearer_the_door_validated_serves_its_own_person_only(
     client: AsyncClient, project: dict[str, Any], idp: FakeIdentityProvider
 ) -> None:
-    from choregos_api.db.session import ALL_ORGS, session_scope
-    from choregos_api.services import identity_exchange as exchange
+    from tranibor_api.db.session import ALL_ORGS, session_scope
+    from tranibor_api.services import identity_exchange as exchange
 
     user_id, org_id = await _person()
     token = exchange._DOOR.set(None)
@@ -192,9 +192,9 @@ async def test_the_bearer_the_door_validated_serves_its_own_person_only(
 async def test_a_rotated_refresh_token_is_sealed_again_and_the_old_one_is_gone(
     client: AsyncClient, project: dict[str, Any], idp: FakeIdentityProvider
 ) -> None:
-    from choregos_api.db.session import ALL_ORGS, session_scope
-    from choregos_api.secret_store import get_secret_store
-    from choregos_api.services import identity_exchange as exchange
+    from tranibor_api.db.session import ALL_ORGS, session_scope
+    from tranibor_api.secret_store import get_secret_store
+    from tranibor_api.services import identity_exchange as exchange
 
     idp.rotate = True
     await _sign_in_sealed()
@@ -210,10 +210,10 @@ async def test_a_rotated_refresh_token_is_sealed_again_and_the_old_one_is_gone(
 async def test_signing_out_forgets_the_sealed_refresh_token(
     client: AsyncClient, project: dict[str, Any], idp: FakeIdentityProvider
 ) -> None:
-    from choregos_api.db.session import ALL_ORGS, session_scope
-    from choregos_api.secret_store import get_secret_store
-    from choregos_api.services.identity_exchange import refresh_secret_name
-    from choregos_core.secrets import SecretNotFound
+    from tranibor_api.db.session import ALL_ORGS, session_scope
+    from tranibor_api.secret_store import get_secret_store
+    from tranibor_api.services.identity_exchange import refresh_secret_name
+    from tranibor_core.secrets import SecretNotFound
 
     await _sign_in_sealed()
     user_id, org_id = await _person()
@@ -228,7 +228,7 @@ async def test_signing_out_forgets_the_sealed_refresh_token(
 
 
 def test_a_connector_declares_its_modes_in_its_configuration() -> None:
-    from choregos_api.services.identity_exchange import exchange_audience, supports_identity
+    from tranibor_api.services.identity_exchange import exchange_audience, supports_identity
 
     class Connector:
         def __init__(self, config: dict[str, Any]) -> None:
@@ -246,7 +246,7 @@ def test_a_connector_declares_its_modes_in_its_configuration() -> None:
 
 
 def test_an_absent_identity_leaves_the_agent_versions_digest_unchanged() -> None:
-    from choregos_api.schemas.agents import AgentMcpServer
+    from tranibor_api.schemas.agents import AgentMcpServer
 
     assert AgentMcpServer(connector="iris").model_dump(mode="json") == {"connector": "iris", "tools": []}
     named = AgentMcpServer(connector="iris", identity="user_exchange").model_dump(mode="json")
@@ -261,7 +261,7 @@ def _issuing(idp: FakeIdentityProvider, issue: Any) -> None:
     import json
 
     import httpx
-    from choregos_api.services.identity_exchange import set_exchange_transport
+    from tranibor_api.services.identity_exchange import set_exchange_transport
 
     def respond(request: httpx.Request) -> httpx.Response:
         answer = idp.respond(request)
@@ -314,7 +314,7 @@ async def test_the_deployments_audience_list_bounds_what_a_connectors_editor_can
 ) -> None:
     """The audience is written in the connector's configuration, by whoever edits the connector: with
     `CHOREGOS_TOKEN_EXCHANGE_AUDIENCES` set, an audience outside it is never even asked of the provider."""
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     await _declare(client)
     await _sign_in_sealed()
@@ -341,7 +341,7 @@ async def test_the_deployments_scope_for_an_audience_is_sent_with_its_exchange(
     """Keycloak grants an audience only through a scope the request names or a default scope of the
     client: `CHOREGOS_TOKEN_EXCHANGE_SCOPES` names it, so the scope can stay optional on the client and
     the source's audience is not in every token the client is issued (S63-27)."""
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     await _declare(client)
     await _sign_in_sealed()
@@ -372,11 +372,11 @@ async def test_an_exchanged_opaque_token_is_masked_wherever_an_error_would_echo_
 ) -> None:
     """A source's error text can quote the bearer it received; an opaque token has no shape for `redact` to
     recognise, so the platform remembers it."""
-    from choregos_api.db.models import OrgConnector
-    from choregos_api.db.session import ALL_ORGS, session_scope
-    from choregos_api.services.identity_exchange import Acting, exchanged_token
-    from choregos_core.redaction import forget_secrets, redact
     from sqlalchemy import select
+    from tranibor_api.db.models import OrgConnector
+    from tranibor_api.db.session import ALL_ORGS, session_scope
+    from tranibor_api.services.identity_exchange import Acting, exchanged_token
+    from tranibor_core.redaction import forget_secrets, redact
 
     await _declare(client)
     await _sign_in_sealed()
@@ -399,9 +399,9 @@ async def test_a_token_rotated_while_the_person_signs_out_is_killed_not_sealed_a
     """The same race as a delegation's revocation: a renewal in flight when the sealed token is withdrawn
     must not seal what the provider just issued, and kills it at the provider."""
     import httpx
-    from choregos_api.db.session import ALL_ORGS, session_scope
-    from choregos_api.secret_store import get_secret_store
-    from choregos_api.services.identity_exchange import (
+    from tranibor_api.db.session import ALL_ORGS, session_scope
+    from tranibor_api.secret_store import get_secret_store
+    from tranibor_api.services.identity_exchange import (
         IdentityUnavailable,
         forget_refresh_token,
         refresh_secret_name,
@@ -423,7 +423,7 @@ async def test_a_token_rotated_while_the_person_signs_out_is_killed_not_sealed_a
     with pytest.raises(IdentityUnavailable):
         async with session_scope(orgs=ALL_ORGS) as session:
             await subject_token(session, org_id, user_id)
-    from choregos_core.secrets import SecretNotFound
+    from tranibor_core.secrets import SecretNotFound
 
     async with session_scope(orgs=ALL_ORGS) as session:
         with pytest.raises(SecretNotFound):

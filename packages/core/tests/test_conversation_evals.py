@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 import yaml
-from choregos_core.conversation_evals import (
+from tranibor_core.conversation_evals import (
     Journal,
     ToolCall,
     evaluate_case,
@@ -22,8 +22,8 @@ from choregos_core.conversation_evals import (
     play_case,
     play_suite,
 )
-from choregos_core.conversation_judge import judge_with
-from choregos_core.plugins import PluginError, load_directory
+from tranibor_core.conversation_judge import judge_with
+from tranibor_core.plugins import PluginError, load_directory
 
 FIXTURE = Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "plugins" / "investment-assistant"
 SUITE = "evals/investment-assistant.yaml"

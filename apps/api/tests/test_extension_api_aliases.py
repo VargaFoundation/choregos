@@ -13,11 +13,11 @@ from typing import Any
 
 import pytest
 
-M = "choregos_api.extensions"
-E = "choregos_api.effects"
-Q = "choregos_core.quotas"
-A = "choregos_core.admission"
-S = "choregos_core.secrets"
+M = "tranibor_api.extensions"
+E = "tranibor_api.effects"
+Q = "tranibor_core.quotas"
+A = "tranibor_core.admission"
+S = "tranibor_core.secrets"
 
 #: (module, former name), every one removed in 0.24.0.
 FORMER_NAMES: list[tuple[str, str]] = [
@@ -81,8 +81,8 @@ def test_every_former_extension_name_is_gone(module: str, former: str) -> None:
 @pytest.mark.parametrize(
     "former_module",
     [
-        "choregos_api.greffons",  # lang: fr-ok - removed, asserted gone
-        "choregos_api.effets",  # lang: fr-ok - removed, asserted gone
+        "tranibor_api.greffons",  # lang: fr-ok - removed, asserted gone
+        "tranibor_api.effets",  # lang: fr-ok - removed, asserted gone
     ],
 )
 def test_the_former_modules_are_gone(former_module: str) -> None:
@@ -95,7 +95,7 @@ async def _noop(*_args: Any) -> dict[str, Any]:
 
 
 def test_declare_effect_refuses_the_former_policy_keyword() -> None:
-    from choregos_api import effects
+    from tranibor_api import effects
 
     effects.reset()
     try:
@@ -110,7 +110,7 @@ def test_declare_effect_refuses_the_former_policy_keyword() -> None:
 
 def test_the_dsl_value_aliases_are_kept() -> None:
     """`verifier` is a value written in stored workflows, not an extension API name: it stays."""
-    from choregos_api import effects
+    from tranibor_api import effects
 
     assert {"check", "verifier", "connector.call"} <= effects.declared_effects()  # lang: fr-ok - DSL value
     assert effects.effect_policy("verifier") == "allowed"  # lang: fr-ok - DSL value
@@ -118,7 +118,7 @@ def test_the_dsl_value_aliases_are_kept() -> None:
 
 @pytest.mark.parametrize("former", ["interdit", "conflit"])  # lang: fr-ok - removed, asserted gone
 def test_gesture_refused_refuses_the_former_natures(former: str) -> None:
-    from choregos_api import extensions
+    from tranibor_api import extensions
 
     with pytest.raises(ValueError, match="unknown nature"):
         extensions.GestureRefused("no", former)
@@ -129,7 +129,7 @@ def test_gesture_refused_refuses_the_former_natures(former: str) -> None:
 
 
 def test_the_gesture_request_lost_its_former_properties() -> None:
-    from choregos_api import extensions
+    from tranibor_api import extensions
 
     request = extensions.GestureRequest("project.create", "northwind", None, {"slug": "a"})
     assert (request.gesture, request.target) == ("project.create", {"slug": "a"})
@@ -138,7 +138,7 @@ def test_the_gesture_request_lost_its_former_properties() -> None:
 
 
 def test_tool_providers_refuse_the_former_keywords() -> None:
-    from choregos_api import extensions
+    from tranibor_api import extensions
 
     def list_tools(*_a: Any) -> list[Any]:
         return []
@@ -183,7 +183,7 @@ def test_tool_providers_refuse_the_former_keywords() -> None:
 
 
 def test_quota_refuses_the_former_memory_keyword() -> None:
-    from choregos_core.quotas import Quota
+    from tranibor_core.quotas import Quota
 
     with pytest.raises(TypeError):
         Quota(**{"memoire": "16Gi"})  # lang: fr-ok - removed, asserted gone

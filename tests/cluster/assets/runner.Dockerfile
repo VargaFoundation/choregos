@@ -8,10 +8,11 @@ COPY --from=ghcr.io/astral-sh/uv:0.5.11@sha256:0ac957607303916420297a4c9c213bb33
 WORKDIR /app
 COPY pyproject.toml uv.lock README.md ./
 COPY packages packages
+COPY compat compat
 COPY apps/api/pyproject.toml apps/api/
 COPY apps/orchestrator/pyproject.toml apps/orchestrator/
 RUN mkdir -p apps/api/src apps/orchestrator/src \
- && uv sync --frozen --no-dev --package choregos-runner
+ && uv sync --frozen --no-dev --package tranibor-runner
 
 FROM python:3.12-slim-bookworm@sha256:935c3c5b12357a7e10caa9c1e6ca5692344d97cf229832ef584be2cec9fc03df
 RUN apt-get update && apt-get install -y --no-install-recommends git tini \

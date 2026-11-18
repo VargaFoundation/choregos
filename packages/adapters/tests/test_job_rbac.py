@@ -19,7 +19,7 @@ import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[3]
-EXECUTOR = ROOT / "packages/adapters/src/choregos_adapters/executor/k8s_job.py"
+EXECUTOR = ROOT / "packages/adapters/src/tranibor_adapters/executor/k8s_job.py"
 ROLE = ROOT / "charts/choregos/charts/orchestrator/templates/rbac-jobs.yaml"
 
 #: What the HTTP verb requires as an RBAC verb. `GET` covers `get` and `list`; the

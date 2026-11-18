@@ -3,7 +3,7 @@
 
 The run's virtual key is the hard cap (ADR 0047): once it is spent, LiteLLM answers every model
 call with a 400 `budget_exceeded`, and the runner reads that refusal in what the agent relays
-(`choregos_runner.budget`). With headroom between the agent and the gateway (ADR 0055), the agent
+(`tranibor_runner.budget`). With headroom between the agent and the gateway (ADR 0055), the agent
 no longer sees the gateway's answer, it sees headroom's. A proxy that wrapped the error, turned it
 into a 502 or retried it would make a spent budget look like a silent agent, which the workflow
 retries with a fresh key at the full stage budget.
@@ -25,7 +25,7 @@ import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-from choregos_runner.budget import gateway_budget_refusal
+from tranibor_runner.budget import gateway_budget_refusal
 
 GATEWAY_PORT = 9400
 PROXY_PORT = 8787

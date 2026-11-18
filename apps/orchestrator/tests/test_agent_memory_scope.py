@@ -13,8 +13,8 @@ from .conftest import Fixture
 
 
 async def _run_with_finding(setup: Fixture, run_id: str, scope: str | None, agent: str | None) -> None:
-    from choregos_api.db.models import Finding, Run
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Finding, Run
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         stage_input: dict[str, Any] = {} if scope is None else {"memory_scope": scope}
@@ -44,8 +44,8 @@ async def _run_with_finding(setup: Fixture, run_id: str, scope: str | None, agen
 
 
 async def test_findings_go_to_the_memory_of_their_runs_agent(setup: Fixture) -> None:
-    from choregos_core import memory_namespace
-    from choregos_orchestrator.activities.memory import ingest_sources
+    from tranibor_core import memory_namespace
+    from tranibor_orchestrator.activities.memory import ingest_sources
 
     await _run_with_finding(setup, "run-project", None, None)
     await _run_with_finding(setup, "run-agent", "agent", "coordinateur")
@@ -67,8 +67,8 @@ async def test_findings_go_to_the_memory_of_their_runs_agent(setup: Fixture) -> 
 
 
 async def test_a_run_lesson_follows_the_same_scope(setup: Fixture) -> None:
-    from choregos_core import memory_namespace
-    from choregos_orchestrator.activities.memory import write_run_lesson
+    from tranibor_core import memory_namespace
+    from tranibor_orchestrator.activities.memory import write_run_lesson
 
     await _run_with_finding(setup, "run-agent", "agent", "coordinateur")
     await _run_with_finding(setup, "run-none", "none", "muet")

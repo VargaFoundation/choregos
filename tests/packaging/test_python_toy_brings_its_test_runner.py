@@ -18,7 +18,7 @@ import subprocess
 
 import pytest
 import yaml
-from choregos_runner.dod import LANGUAGE_DEFAULTS
+from tranibor_runner.dod import LANGUAGE_DEFAULTS
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 TOY = ROOT / "tests/fixtures/repos/python-toy"

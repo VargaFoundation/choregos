@@ -33,7 +33,7 @@ async def _tools(client: AsyncClient, token: str) -> dict[str, Any]:
 async def test_extension_tool_marked_write_is_a_write_tool_and_the_former_key_is_ignored(
     client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api import extensions
+    from tranibor_api import extensions
 
     async def list_tools(_session: Any, _principal: Any, _project: Any, _org: Any) -> list[dict[str, Any]]:
         return [
@@ -68,11 +68,11 @@ async def test_extension_tool_marked_write_is_a_write_tool_and_the_former_key_is
 async def test_writes_today_counts_write_and_ecriture(  # lang: fr-ok - names the persisted audit key
     client: AsyncClient, admin: str
 ) -> None:
-    from choregos_api.db.models import AuditLog, Organization, User
-    from choregos_api.db.session import session_scope
-    from choregos_api.mcp.limits import writes_today
-    from choregos_core import utcnow
     from sqlalchemy import select
+    from tranibor_api.db.models import AuditLog, Organization, User
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.mcp.limits import writes_today
+    from tranibor_core import utcnow
 
     payloads: list[dict[str, Any] | None] = [
         {"write": True},

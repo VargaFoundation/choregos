@@ -1,5 +1,5 @@
 """The fakes, families, memory, market data, identity, documents and storage adapters are English
-(S45-09, ADR 0098); `python -m choregos_adapters.fakes.server` serves, and the former module path is
+(S45-09, ADR 0098); `python -m tranibor_adapters.fakes.server` serves, and the former module path is
 gone since 0.24.0 (S45-49)."""
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ import httpx
 import pytest
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
-SRC = "packages/adapters/src/choregos_adapters/"
+SRC = "packages/adapters/src/tranibor_adapters/"
 
 #: What S45-09 owns. `fakes/` is scanned whole and its files owned by other stories are removed.
 OWNED = (
@@ -94,11 +94,11 @@ def _free_port() -> int:
 
 
 def test_python_m_fakes_server_serves() -> None:
-    """The chart's container command is `python -m choregos_adapters.fakes.server`."""
+    """The chart's container command is `python -m tranibor_adapters.fakes.server`."""
     port = _free_port()
     env = {**os.environ, "CHOREGOS_DEMO_PORT": str(port), "CONNECTOR_DEMO_TOKEN": "t"}
     process = subprocess.Popen(
-        [sys.executable, "-m", "choregos_adapters.fakes.server"],
+        [sys.executable, "-m", "tranibor_adapters.fakes.server"],
         env=env,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
@@ -120,4 +120,4 @@ def test_python_m_fakes_server_serves() -> None:
 
 def test_the_former_fakes_module_is_gone() -> None:
     with pytest.raises(ImportError):
-        importlib.import_module("choregos_adapters.fakes.serveur")  # lang: fr-ok - removed, asserted gone
+        importlib.import_module("tranibor_adapters.fakes.serveur")  # lang: fr-ok - removed, asserted gone

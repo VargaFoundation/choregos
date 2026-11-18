@@ -14,8 +14,8 @@ from .conftest import Fixture
 
 
 async def _publish_a_v2(setup: Fixture, v1: str) -> str:
-    from choregos_api.db.models import WorkflowDef
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import WorkflowDef
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         previous = await session.get(WorkflowDef, v1)
@@ -43,7 +43,7 @@ async def _publish_a_v2(setup: Fixture, v1: str) -> str:
 
 
 async def test_a_work_item_keeps_the_version_it_was_born_in(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.interpretation import load_context
+    from tranibor_orchestrator.activities.interpretation import load_context
 
     context = {"project_id": setup.project_id, "work_item_id": setup.work_item_id}
     first = await load_context(context)
@@ -59,11 +59,11 @@ async def test_a_work_item_keeps_the_version_it_was_born_in(setup: Fixture) -> N
 
 async def test_a_work_item_never_reads_another_projects_workflow(setup: Fixture) -> None:
     """A pin that designated another project's definition is ignored: the default serves."""
-    from choregos_api.db.models import Organization, Project, WorkflowDef, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.services import ensure_defaults
-    from choregos_orchestrator.activities.base import work_item_workflow
     from sqlalchemy import select
+    from tranibor_api.db.models import Organization, Project, WorkflowDef, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services import ensure_defaults
+    from tranibor_orchestrator.activities.base import work_item_workflow
 
     async with session_scope() as session:
         org = (await session.execute(select(Organization))).scalars().first()

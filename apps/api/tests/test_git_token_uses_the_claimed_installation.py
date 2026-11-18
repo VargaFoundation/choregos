@@ -18,14 +18,14 @@ from .kits.run_git_token import run_token_for, run_with_repository
 
 @pytest.fixture
 def minted(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
-    from choregos_adapters.github import GitHubAppAuth, InstallationToken
+    from tranibor_adapters.github import GitHubAppAuth, InstallationToken
 
     monkeypatch.setenv("CHOREGOS_GITHUB_APP_ID", "5242171")
     monkeypatch.setenv(
         "CHOREGOS_GITHUB_APP_PRIVATE_KEY", "-----BEGIN RSA PRIVATE KEY-----\nx\n-----END RSA PRIVATE KEY-----"
     )
     # The App is read from the settings (ADR 0167), cached per process: read again.
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     reset_settings_cache()
     asked: list[dict[str, Any]] = []
@@ -58,9 +58,9 @@ async def test_in_a_two_org_instance_a_run_gets_no_token_for_another_orgs_reposi
 async def test_a_run_is_pinned_to_the_installation_its_organisation_claimed(
     client: AsyncClient, project: dict[str, Any], minted: list[dict[str, Any]]
 ) -> None:
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
 
     await add_organisation("globex")
     async with session_scope(orgs="*") as session:

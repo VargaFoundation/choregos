@@ -22,8 +22,8 @@ async def _project(client: AsyncClient, slug: str, *, memory: bool) -> str:
     assert response.status_code == 201, response.text
     project_id = str(response.json()["id"])
 
-    from choregos_api.db.session import session_scope
-    from choregos_api.services import active_policy, policy_model
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services import active_policy, policy_model
 
     async with session_scope() as session:
         row = await active_policy(session, project_id)
@@ -36,9 +36,9 @@ async def _project(client: AsyncClient, slug: str, *, memory: bool) -> str:
 
 async def _tickets(project_id: str, *, count: int, attempts: int, cost: float) -> None:
     """`count` closed work items, each with its implementation in `attempts` attempt(s)."""
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
+    from tranibor_api.db.models import Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
 
     async with session_scope() as session:
         for index in range(count):

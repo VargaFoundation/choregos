@@ -10,12 +10,12 @@ from typing import Any
 
 import httpx
 import pytest
-from choregos_adapters.errors import ConfigurationError
-from choregos_adapters.http import RestClient
-from choregos_adapters.tracker.gitlab import GitLabTracker
-from choregos_adapters.tracker.gitlab_events import parse_gitlab_event
-from choregos_contracts import InboundEventType, ProjectConfig, RepoConfig, Risk, Size
-from choregos_core.domain import NewItem, TrackerStateMapping
+from tranibor_adapters.errors import ConfigurationError
+from tranibor_adapters.http import RestClient
+from tranibor_adapters.tracker.gitlab import GitLabTracker
+from tranibor_adapters.tracker.gitlab_events import parse_gitlab_event
+from tranibor_contracts import InboundEventType, ProjectConfig, RepoConfig, Risk, Size
+from tranibor_core.domain import NewItem, TrackerStateMapping
 
 PROJECT = "northwind/billing-api"
 ENCODED = "northwind%2Fbilling-api"
@@ -111,7 +111,7 @@ async def test_the_state_goes_through_a_scoped_label() -> None:
 
 
 async def test_the_status_note_is_rewritten() -> None:
-    from choregos_adapters.tracker.gitlab import STATUS_COMMENT_MARKER
+    from tranibor_adapters.tracker.gitlab import STATUS_COMMENT_MARKER
 
     calls: list[tuple[str, str]] = []
 

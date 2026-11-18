@@ -16,7 +16,7 @@ from typing import Any
 
 import pytest
 import yaml
-from choregos_contracts.project import DodConfig
+from tranibor_contracts.project import DodConfig
 
 #: The stand-in collector the example calls, relative to the workspace.
 COLLECTOR = "ops/collectors/20-k3s.sh"

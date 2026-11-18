@@ -12,8 +12,8 @@ from datetime import timedelta
 from typing import Any
 
 import pytest
-from choregos_core.domain import utcnow
 from httpx import AsyncClient
+from tranibor_core.domain import utcnow
 
 from .conftest import login
 
@@ -33,8 +33,8 @@ async def _internal(client: AsyncClient, project: dict[str, Any]) -> dict[str, A
 
 
 async def _run(project: dict[str, Any], item: dict[str, Any], **fields: Any) -> str:
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         run = Run(
@@ -71,7 +71,7 @@ async def test_a_work_item_is_listed_read_and_tells_its_timeline(
 
 
 async def test_a_dead_workflow_shows_on_the_work_item(client: AsyncClient, project: dict[str, Any]) -> None:
-    from choregos_api.temporal import WorkflowState, get_temporal
+    from tranibor_api.temporal import WorkflowState, get_temporal
 
     item = await _internal(client, project)
     get_temporal().described[item["temporal_wf_id"]] = WorkflowState(status="FAILED")
@@ -82,7 +82,7 @@ async def test_a_dead_workflow_shows_on_the_work_item(client: AsyncClient, proje
 async def test_the_control_actions_go_to_the_workflow_and_are_audited(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.temporal import get_temporal
 
     item = await _internal(client, project)
     for action, paused in (("pause", True), ("resume", False), ("stop", False)):
@@ -102,8 +102,8 @@ async def test_the_control_actions_go_to_the_workflow_and_are_audited(
 async def test_a_decision_settles_the_pending_human_request(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.db.models import HumanRequest
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import HumanRequest
+    from tranibor_api.db.session import session_scope
 
     item = await _internal(client, project)
     nothing_pending = await client.post(
@@ -135,8 +135,8 @@ async def test_a_decision_settles_the_pending_human_request(
 async def test_a_run_is_read_with_its_events_its_diff_and_its_accesses(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.db.models import CostLedger, RunEvent
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import CostLedger, RunEvent
+    from tranibor_api.db.session import session_scope
 
     item = await _internal(client, project)
     run_id = await _run(
@@ -229,8 +229,8 @@ async def test_a_run_without_a_transcript_answers_404(client: AsyncClient, proje
 
 
 async def _spends(client: AsyncClient, project: dict[str, Any]) -> dict[str, Any]:
-    from choregos_api.db.models import CostLedger
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import CostLedger
+    from tranibor_api.db.session import session_scope
 
     item = await _internal(client, project)
     run_id = await _run(project, item)
@@ -354,7 +354,7 @@ async def test_the_costs_of_an_organisation_read_per_project(
 async def test_the_train_state_comes_from_the_workflow_when_it_answers(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.temporal import get_temporal, train_id
+    from tranibor_api.temporal import get_temporal, train_id
 
     get_temporal().queries[f"{train_id('billing-api', 'prod')}:status_query"] = {
         "status": "collecting",
@@ -378,7 +378,7 @@ async def test_the_train_state_comes_from_the_workflow_when_it_answers(
 async def test_departures_freezes_and_unfreezes_are_traced_signals(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.temporal import get_temporal
 
     base = f"/api/v1/projects/{project['id']}/trains/prod"
     assert (await client.post(f"{base}/depart")).status_code == 202
@@ -394,9 +394,9 @@ async def test_departures_freezes_and_unfreezes_are_traced_signals(
 
 
 async def test_a_release_is_approved_and_aborted(client: AsyncClient, project: dict[str, Any]) -> None:
-    from choregos_api.db.models import Release
-    from choregos_api.db.session import session_scope
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.db.models import Release
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.temporal import get_temporal
 
     async with session_scope(orgs="*") as session:
         release = Release(
@@ -431,7 +431,7 @@ async def test_a_release_is_approved_and_aborted(client: AsyncClient, project: d
 async def test_a_tekton_cloudevent_is_routed_only_once(
     client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.config import get_settings
+    from tranibor_api.config import get_settings
 
     # This test assumes an empty webhook secret (test environment): it says so, instead of
     # depending on what another part of the session may have set (#259).
@@ -458,8 +458,8 @@ async def test_a_tekton_cloudevent_is_routed_only_once(
 async def test_argocd_and_alertmanager_require_the_shared_secret_then_signal(
     client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.config import get_settings
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.config import get_settings
+    from tranibor_api.temporal import get_temporal
 
     monkeypatch.setattr(get_settings(), "generic_webhook_secret", "s3cret")
     refusal = await client.post("/api/v1/webhooks/argocd", json={"app": "billing-prod"})
@@ -615,8 +615,8 @@ async def test_the_platform_settings_are_reserved_to_administrators(client: Asyn
 async def test_the_timeline_tells_runs_decisions_states_and_findings(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.db.models import Event, Finding, HumanRequest
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Event, Finding, HumanRequest
+    from tranibor_api.db.session import session_scope
 
     item = await _internal(client, project)
     run_id = await _run(project, item, result={"summary": "three profiles"}, cost_usd=0.4)
@@ -673,7 +673,7 @@ async def test_a_project_with_a_repository_still_receives_default_simple(
 async def test_provisioning_starts_a_workflow_and_exposes_its_state(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.temporal import get_temporal
 
     dry_run = await client.post(
         f"/api/v1/projects/{project['id']}/provision", json={"dry_run": True, "inputs": {"env": "dev"}}
@@ -695,7 +695,7 @@ async def test_provisioning_starts_a_workflow_and_exposes_its_state(
 async def test_a_project_without_template_or_repository_is_activated_without_a_workflow(
     client: AsyncClient, admin: str
 ) -> None:
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.temporal import get_temporal
 
     created = await client.post(
         "/api/v1/orgs/northwind/projects",
@@ -723,9 +723,9 @@ async def test_a_project_without_template_or_repository_is_activated_without_a_w
 async def test_the_internal_api_serves_the_agent_with_its_run_token(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.config import get_settings
-    from choregos_api.security import mint_run_token
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.config import get_settings
+    from tranibor_api.security import mint_run_token
+    from tranibor_api.temporal import get_temporal
 
     item = await _internal(client, project)
     run_id = await _run(
@@ -804,9 +804,9 @@ async def test_choregos_admin_mints_a_token_and_replays_the_bootstrap(
 ) -> None:
     import asyncio
 
-    from choregos_api.admin_cli import app as cli
-    from choregos_api.config import get_settings
-    from choregos_api.db import session as db_session
+    from tranibor_api.admin_cli import app as cli
+    from tranibor_api.config import get_settings
+    from tranibor_api.db import session as db_session
     from typer.testing import CliRunner
 
     runner = CliRunner()
@@ -842,7 +842,7 @@ async def test_tekton_webhook_accepts_token_and_no_longer_the_former_parameter(
 ) -> None:
     """It had no check at all. Tekton's CloudEvents sink adds no header: the secret also travels in the
     URL (`?token=`). The former parameter, removed in 0.24.0 (S45-49), authenticates nothing."""
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     monkeypatch.setenv("CHOREGOS_GENERIC_WEBHOOK_SECRET", "s3cret-tekton")
     reset_settings_cache()
@@ -891,7 +891,7 @@ async def test_tekton_webhook_accepts_token_and_no_longer_the_former_parameter(
 async def test_without_a_secret_the_tekton_webhook_is_refused_outside_development(
     client: AsyncClient, org: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api import config
+    from tranibor_api import config
 
     settings = config.get_settings()
     monkeypatch.setattr(settings, "env", "prod")
@@ -909,8 +909,8 @@ async def test_a_transient_argocd_health_does_not_signal_a_degradation(
 ) -> None:
     """Since S22-18, the train rolls a departure back on `cd.app.degraded`: a `Progressing`
     notification, sent during a HEALTHY deployment, must not be one (#349)."""
-    from choregos_api.config import get_settings
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.config import get_settings
+    from tranibor_api.temporal import get_temporal
 
     monkeypatch.setattr(get_settings(), "generic_webhook_secret", "s3cret")
     headers = {"X-Choregos-Secret": "s3cret"}

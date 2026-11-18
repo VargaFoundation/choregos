@@ -25,9 +25,9 @@ DRAFT = {
 async def test_a_draft_runs_once_under_the_trial_s_cap(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
-    from choregos_api.db.models import GatewayKeyRow, Run
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import GatewayKeyRow, Run
+    from tranibor_api.db.session import session_scope
 
     setup.adapters.executor.queue_result(stage_result("sorted: urgent"))
     async with worker_factory():
@@ -65,9 +65,9 @@ async def test_a_draft_s_day_budget_does_not_bound_its_trial(
 ) -> None:
     """A trial's runs carry no agent, so no day spend counts against the draft's day budget: the
     trial's own cap bounds the key, not a day budget that would cap a run and never be spent."""
-    from choregos_api.db.models import GatewayKeyRow
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import GatewayKeyRow
+    from tranibor_api.db.session import session_scope
 
     setup.adapters.executor.queue_result(stage_result("sorted"))
     draft = {**DRAFT, "budget": {"run_usd": 2.0, "daily_usd": 0.1}}

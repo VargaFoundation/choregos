@@ -19,9 +19,9 @@ from typing import Any
 import httpx
 import pytest
 import structlog
-from choregos_adapters import build, spec_of
-from choregos_adapters.marketdata import MarketDataError, MarketDataProvider
 from jsonschema import Draft202012Validator
+from tranibor_adapters import build, spec_of
+from tranibor_adapters.marketdata import MarketDataError, MarketDataProvider
 
 pytestmark = pytest.mark.conformance
 
@@ -127,7 +127,7 @@ def example(name: str, schema: dict[str, Any]) -> Any:
 
 @pytest.mark.parametrize("name", [*TYPES, "fake"])
 async def test_each_operation_declares_a_closed_schema_the_implementation_follows(name: str) -> None:
-    import choregos_adapters.fakes.marketdata  # noqa: F401 - the `fake` type registers itself at import
+    import tranibor_adapters.fakes.marketdata  # noqa: F401 - the `fake` type registers itself at import
 
     spec = spec_of("marketdata", name if name != "fake" else "stooq")
     assert spec is not None

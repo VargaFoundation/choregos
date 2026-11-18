@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from choregos_core.hosted import kubernetes_version, native_sidecars_refusal
+from tranibor_core.hosted import kubernetes_version, native_sidecars_refusal
 
 
 @pytest.mark.parametrize(

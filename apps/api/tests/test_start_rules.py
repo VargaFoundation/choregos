@@ -18,7 +18,7 @@ RULES = [{"item_type": "Incident", "states": ["New", "1"]}, {"labels_all": ["pay
 
 @pytest.fixture(autouse=True)
 def _secret(client: AsyncClient, monkeypatch: pytest.MonkeyPatch) -> None:
-    from choregos_api.config import get_settings
+    from tranibor_api.config import get_settings
 
     monkeypatch.setattr(get_settings(), "generic_webhook_secret", SECRET)
 
@@ -63,7 +63,7 @@ async def _outcomes(client: AsyncClient, project: dict[str, Any]) -> list[tuple[
 
 
 async def test_an_item_matching_a_rule_starts_without_the_label(client: AsyncClient, admin: str) -> None:
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.temporal import get_temporal
 
     project = await _project(client, RULES)
 

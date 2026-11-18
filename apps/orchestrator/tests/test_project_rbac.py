@@ -15,12 +15,12 @@ from pathlib import Path
 
 import pytest
 import yaml
-from choregos_contracts import ProjectConfig, RepoConfig
-from choregos_core import load_preset
-from choregos_orchestrator.gitops import render_project_manifests
+from tranibor_contracts import ProjectConfig, RepoConfig
+from tranibor_core import load_preset
+from tranibor_orchestrator.gitops import render_project_manifests
 
 ROOT = Path(__file__).resolve().parents[3]
-EXECUTOR = ROOT / "packages/adapters/src/choregos_adapters/executor/k8s_job.py"
+EXECUTOR = ROOT / "packages/adapters/src/tranibor_adapters/executor/k8s_job.py"
 VERB = {"GET": "get", "POST": "create", "PUT": "update", "PATCH": "patch", "DELETE": "delete"}
 CALL = re.compile(r'"(GET|POST|PUT|PATCH|DELETE)",\s*\n?\s*f?"[^"]*/(jobs|secrets)')
 

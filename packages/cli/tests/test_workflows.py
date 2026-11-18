@@ -31,14 +31,14 @@ def profile(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     path = tmp_path / "config.json"
     path.write_text(json.dumps({"api_url": API, "token": "chg_x", "org": "acme"}))
     monkeypatch.setenv("CHOREGOS_CONFIG", str(path))
-    import choregos_cli.client as client_module
+    import tranibor_cli.client as client_module
 
     monkeypatch.setattr(client_module, "CONFIG_PATH", path)
     return path
 
 
 def _run(*args: str) -> Any:
-    from choregos_cli.main import app
+    from tranibor_cli.main import app
 
     return CliRunner().invoke(app, list(args))
 

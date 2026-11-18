@@ -9,10 +9,10 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import Any
 
-from choregos_api.egress.config import EgressSettings
-from choregos_api.egress.proxy import EgressProxy
-from choregos_api.egress.report import FakeDecisionSink, Reporter
-from choregos_api.egress.sources import FakeRunNetworkSource
+from tranibor_api.egress.config import EgressSettings
+from tranibor_api.egress.proxy import EgressProxy
+from tranibor_api.egress.report import FakeDecisionSink, Reporter
+from tranibor_api.egress.sources import FakeRunNetworkSource
 
 LOOPBACK = "127.0.0.1"
 
@@ -149,9 +149,9 @@ sandbox:
 
 
 async def _run(project: dict[str, Any], run_id: str, **columns: Any) -> dict[str, str]:
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.security import mint_run_token
+    from tranibor_api.db.models import Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.security import mint_run_token
 
     async with session_scope() as session:
         item = WorkItem(project_id=project["id"], tracker_key=f"BILLING-{run_id}", title="T", state="ready")

@@ -8,8 +8,8 @@ bare `AsyncOpenAI`
 
 import os
 
-from choregos_agent_sdk import Context, Result, agent
 from openai import AsyncOpenAI
+from tranibor_agent_sdk import Context, Result, agent
 
 
 @agent(name="framework-like")

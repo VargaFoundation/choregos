@@ -5,7 +5,7 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-API_PACKAGE = Path(__file__).resolve().parents[1] / "src" / "choregos_api"
+API_PACKAGE = Path(__file__).resolve().parents[1] / "src" / "tranibor_api"
 
 
 def module_of(path: Path, package_dir: Path, package: str) -> str:

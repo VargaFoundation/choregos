@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 import pytest
-from choregos_adapters.a2a import (
+from tranibor_adapters.a2a import (
     A2aAuthRequired,
     A2aClient,
     A2aError,
     A2aMethodNotSupported,
     text_part,
 )
-from choregos_adapters.fakes.a2a import FakeA2aAgent
+from tranibor_adapters.fakes.a2a import FakeA2aAgent
 
 
 def _client(fake: FakeA2aAgent, token: str | None = "tok", version: str | None = None) -> A2aClient:
@@ -115,7 +115,7 @@ async def test_the_token_is_sent_as_bearer_and_only_there() -> None:
 
 
 async def test_states_are_normalised_across_versions() -> None:
-    from choregos_adapters.a2a.client import normalise_state
+    from tranibor_adapters.a2a.client import normalise_state
 
     assert normalise_state("TASK_STATE_COMPLETED") == "completed"
     assert normalise_state("input_required") == "input-required"
@@ -124,7 +124,7 @@ async def test_states_are_normalised_across_versions() -> None:
 
 def test_a_1_0_send_message_response_is_unwrapped() -> None:
     """A 1.0 `SendMessageResponse` holds the task (or a message) under its own key (S62-02)."""
-    from choregos_adapters.a2a.client import parse_task
+    from tranibor_adapters.a2a.client import parse_task
 
     task = {"id": "t-1", "contextId": "c-1", "status": {"state": "TASK_STATE_WORKING"}}
     assert parse_task({"task": task}).id == "t-1"

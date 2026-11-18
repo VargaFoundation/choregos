@@ -1,7 +1,7 @@
 # 0082 — Distillation in passes: map over parts, reduce, a budget and an estimate
 
 - **Status**: accepted, 2026-10-21
-- **Concerns**: `apps/api/src/choregos_api/knowledge/distill.py`, `routers/knowledge.py`, the
+- **Concerns**: `apps/api/src/tranibor_api/knowledge/distill.py`, `routers/knowledge.py`, the
   `knowledge_distillation_parts` table, the `KnowledgeDistill` workflow of the orchestrator; amends
   [ADR 0051](0051-knowledge-bases.md) (distillation was one call with the whole corpus, refused over
   400 000 characters); keeps [ADR 0008](0008-idempotence-and-run-id.md) (idempotent activities) and

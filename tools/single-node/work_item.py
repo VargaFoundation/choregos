@@ -4,7 +4,7 @@
     run <org> <token>      seed the demo project, take its work item to `approved`, print its id
     check <org> <token> <id>   print the work item's state; exit 1 unless it is `approved`
 
-The demo project (`choregos_api.local_demo`) has a simulated agent: every declared output filled, no
+The demo project (`tranibor_api.local_demo`) has a simulated agent: every declared output filled, no
 model called. Everything else is the platform's own path: the API, the database, Temporal, the
 workers, the gates and a person's decision.
 
@@ -59,12 +59,12 @@ def person_session(user_id: str) -> str:
     import asyncio
     from datetime import timedelta
 
-    from choregos_api.browser_sessions import open_session
-    from choregos_api.config import get_settings
-    from choregos_api.db.models import User
-    from choregos_api.db.session import session_scope
-    from choregos_api.security import sign_session
-    from choregos_core import utcnow
+    from tranibor_api.browser_sessions import open_session
+    from tranibor_api.config import get_settings
+    from tranibor_api.db.models import User
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.security import sign_session
+    from tranibor_core import utcnow
 
     async def opened() -> str:
         settings = get_settings()
@@ -102,7 +102,7 @@ def wait_for(token: str, item_id: str, states: set[str], timeout_s: float) -> di
 
 def run(org: str, token: str) -> None:
     # Its log goes to stderr: stdout carries the work item id only, which the proof reads.
-    subprocess.run([sys.executable, "-m", "choregos_api.local_demo"], check=True, stdout=sys.stderr)
+    subprocess.run([sys.executable, "-m", "tranibor_api.local_demo"], check=True, stdout=sys.stderr)
     status, page = call("GET", f"/projects/{org}:demo/work-items", token)
     if status != 200 or not isinstance(page, dict) or not page.get("items"):
         raise SystemExit(f"the demo project's work items answered {status}: {page}")

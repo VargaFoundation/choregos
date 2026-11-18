@@ -75,7 +75,7 @@ Then, in this order, with these headings where they apply:
 - every relative link resolves, to a file and to a heading; a link to a section that has no page yet
   is tolerated only for the sections of the second half;
 - every `yaml` block parses, and a `Workflow`, a `Policy` or a `KnowledgeBase` is validated by the
-  platform's own models (`choregos_core.parse_workflow`, the policy model, the CLI's manifest model),
+  platform's own models (`tranibor_core.parse_workflow`, the policy model, the CLI's manifest model),
   with no warning;
 - every `json` block parses;
 - every `choregos` command in a `bash` block exists, with the options it is given;

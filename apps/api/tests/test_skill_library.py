@@ -119,9 +119,9 @@ async def test_the_runner_reads_the_skills_of_its_run_and_of_no_other(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
     """`GET /internal/runs/{id}/skills`: the files the `StageInput` names, with the run's token."""
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.security import mint_run_token
+    from tranibor_api.db.models import Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.security import mint_run_token
 
     created = (await client.post("/api/v1/orgs/northwind/skills", json={"files": SKILL_FILES})).json()
     digest = created["versions"][0]["digest"]

@@ -10,10 +10,10 @@ from urllib.parse import parse_qsl
 
 import httpx
 import pytest
-from choregos_adapters.documents import GitSource, GraphDriveSource, WebCrawlSource
-from choregos_adapters.documents.base import SourceRefusedError
-from choregos_adapters.errors import ConfigurationError, UpstreamError
-from choregos_adapters.fakes.documents import FakeDocumentSource
+from tranibor_adapters.documents import GitSource, GraphDriveSource, WebCrawlSource
+from tranibor_adapters.documents.base import SourceRefusedError
+from tranibor_adapters.errors import ConfigurationError, UpstreamError
+from tranibor_adapters.fakes.documents import FakeDocumentSource
 
 GRAPH = "https://graph.microsoft.com/v1.0"
 PASSWORD = "account-password-AAAA-1111"
@@ -239,7 +239,7 @@ async def test_an_application_refused_sign_in_stays_its_status_alone() -> None:
     "half", [{"username": "reader@example.com"}, {"password": PASSWORD}], ids=["no-password", "no-username"]
 )
 def test_half_a_service_account_is_refused_when_the_source_opens(half: dict[str, str]) -> None:
-    from choregos_adapters.documents.graph import GraphDocumentsConnector
+    from tranibor_adapters.documents.graph import GraphDocumentsConnector
 
     connector = GraphDocumentsConnector({"tenant_id": "t", "client_id": "c", "client_secret": "s", **half})
     with pytest.raises(ConfigurationError, match="both `username` and its `password`") as refused:
@@ -248,7 +248,7 @@ def test_half_a_service_account_is_refused_when_the_source_opens(half: dict[str,
 
 
 def test_the_connector_opens_a_source_that_signs_in_as_its_account() -> None:
-    from choregos_adapters.documents.graph import GraphDocumentsConnector
+    from tranibor_adapters.documents.graph import GraphDocumentsConnector
 
     opened = GraphDocumentsConnector(
         {
@@ -263,7 +263,7 @@ def test_the_connector_opens_a_source_that_signs_in_as_its_account() -> None:
 
 
 def test_the_sharepoint_type_declares_its_account_with_a_sealed_password() -> None:
-    from choregos_adapters.registry import secret_references, spec_of
+    from tranibor_adapters.registry import secret_references, spec_of
 
     spec = spec_of("documents", "sharepoint")
     assert spec is not None
@@ -499,9 +499,9 @@ async def test_the_fake_source_answers_like_a_delta() -> None:
 
 
 def test_a_documents_connector_opens_a_source_from_its_configuration() -> None:
-    from choregos_adapters.documents.base import DocumentsConnector
-    from choregos_adapters.documents.graph import GraphDocumentsConnector
-    from choregos_adapters.fakes.documents import FakeDocumentsConnector, fake_source
+    from tranibor_adapters.documents.base import DocumentsConnector
+    from tranibor_adapters.documents.graph import GraphDocumentsConnector
+    from tranibor_adapters.fakes.documents import FakeDocumentsConnector, fake_source
 
     graph: DocumentsConnector = GraphDocumentsConnector({"tenant_id": "t", "client_id": "c"})
     opened = graph.source({"site_id": "s1", "drive_id": "d1", "folder": "/Policies/"}, key="src1")
@@ -604,7 +604,7 @@ async def test_two_files_of_the_same_name_in_two_folders_are_two_documents(tmp_p
 
 
 def test_the_git_connector_takes_a_token_or_a_github_app() -> None:
-    from choregos_adapters.documents.git import GitDocumentsConnector
+    from tranibor_adapters.documents.git import GitDocumentsConnector
 
     token = _secret()
     opened = GitDocumentsConnector({"token": token}).source({"url": "https://github.com/a/b.git"}, key="k")
@@ -627,9 +627,9 @@ async def test_a_github_app_mints_a_read_only_token_for_the_repository(
     import base64
 
     import respx
-    from choregos_adapters.documents.git import GitDocumentsConnector
     from cryptography.hazmat.primitives import serialization
     from cryptography.hazmat.primitives.asymmetric import rsa
+    from tranibor_adapters.documents.git import GitDocumentsConnector
 
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048).private_bytes(
         serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()

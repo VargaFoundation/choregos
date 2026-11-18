@@ -114,13 +114,13 @@ proxy (even when disabled) and returns the exit IP and country; a failing proxy 
 *The relay, for SearXNG and Firecrawl* ([ADR 0091](adr/0091-the-search-engines-reach-the-proxy-through-a-relay.md)).
 A self-hosted SearXNG and Firecrawl cannot read the organisation's setting, and the API does not proxy its
 calls to an in-cluster Firecrawl. A deployment that wants their traffic through the proxy runs the relay,
-`python -m choregos_api.relay` (the API image, its own Deployment, one per organisation), and points them at it:
+`python -m tranibor_api.relay` (the API image, its own Deployment, one per organisation), and points them at it:
 
 - environment: `CHOREGOS_RELAY_ORG` (the organisation's slug), `CHOREGOS_RELAY_API_URL` (e.g.
   `http://choregos-api:8000/api/v1`: the Service, not a public hostname of the API, where the route the
   relay reads may be refused, see [the run's API and the run door](deployment.md#the-runs-api-and-the-run-door)),
   `CHOREGOS_RELAY_API_TOKEN` (printed by
-  `python -m choregos_api.relay mint --org <slug> --days N`, run where `CHOREGOS_RUN_TOKEN_PRIVATE_KEY` is set;
+  `python -m tranibor_api.relay mint --org <slug> --days N`, run where `CHOREGOS_RUN_TOKEN_PRIVATE_KEY` is set;
   it expires, at most 400 days), `CHOREGOS_RELAY_CLIENT_TOKEN` (16 characters or more, shared with the clients),
   `CHOREGOS_RELAY_LISTEN` (`0.0.0.0:3128` by default); it refuses to start without them;
 - SearXNG: `outgoing.proxies: {all://: ["http://search_engines:<client token>@<relay>:3128"]}`;
@@ -205,7 +205,7 @@ curl -X PUT $API/projects/acme:hr/connectors/tracker -d '{"type": "jira",
 ```
 
 The core reads `env:NAME`; an extension declares other schemes (a vault) with
-`choregos_core.secrets.declare_resolver`. A reference the process cannot resolve fails the
+`tranibor_core.secrets.declare_resolver`. A reference the process cannot resolve fails the
 connector test with its name — never a silent fallback to a default value.
 
 `env:NAME` reads only the variables matching `CHOREGOS_SECRET_ENV_PATTERN` (default
@@ -312,7 +312,7 @@ In the console, **Library → MCP servers** (`/library/mcp-servers`; `/catalogue
 
 **The MCP catalogue** ([ADR 0065](adr/0065-catalogues-of-mcp-servers-and-skills.md)) is a list
 of well-known MCP servers shipped in the image, so an administrator does not need to know a
-vendor's URL by heart: `choregos_core/mcp_catalogue/catalogue.yaml`, about a hundred entries,
+vendor's URL by heart: `tranibor_core/mcp_catalogue/catalogue.yaml`, about a hundred entries,
 validated by a JSON Schema. **An entry is an offer, not a connector**: nothing is installed, no
 tool is open, no network call is made by listing it. Each entry says who publishes it, whether it is
 *official* (the registry namespace, the repository owner or the host belongs to the vendor, decided
@@ -367,7 +367,7 @@ families have **no real type yet**: type `demo` keeps them in memory, each proce
 demonstration, refused in staging and prod: there the console does not offer it, and declaring one
 is a 422. Where the API and the orchestrator are several
 processes, give the `demo` connector a `url`: it then reaches the fakes served by **one** pod
-(`demoFakes.enabled` in the chart, `python -m choregos_adapters.fakes.server`), which also serves a
+(`demoFakes.enabled` in the chart, `python -m tranibor_adapters.fakes.server`), which also serves a
 fake Microsoft Graph for an `entra` connector whose `graph_url` and `login_url` point to it, and a
 demonstration environment for a `cd: demo` connector (`/cd/mcp`): the release train of a demo
 project promotes, checks and rolls back there, with no Argo CD — refused in staging and prod too. A supplier's agent needs no family: it is an MCP
@@ -1256,7 +1256,7 @@ The step runs in the orchestrator, in one activity (`decide`), with no pod and n
 - **Where it goes**: `POST {gateway}/v1/systemone` on the project's gateway (its own connector, else
   the organisation's, else the deployment's: the URL a run of the project is given), never to a model
   directly. A `yes_no` question is sent as `noul`, a `choice` with its options as `criteria`, a
-  `score` with its levels, lowest first (`choregos_adapters.decisions` holds the mapping and its
+  `score` with its levels, lowest first (`tranibor_adapters.decisions` holds the mapping and its
   sources: LiteLLM 1.105.5, Laya 0.4.21).
 - **The key**: a virtual key minted for the step, for its model only, capped at 0.05 $ (or the role's
   stage budget when lower), living five minutes, and revoked as soon as the answer is in, whatever
@@ -1435,21 +1435,21 @@ never the excerpts — and says the content is data, never instructions; a run w
 `Tool calls left in this run: <n>.`. The result is shown as a script reads it (#1374): compact JSON,
 its data once — a text block that serializes its `structuredContent` is left out, a text that says
 something else (`web_fetch`'s page) stays — and cut only past the platform's own bound, 65,536
-characters (`CHOREGOS_BROKER_RESULT_MAX_BYTES`' default, `choregos_core.mcp.RESULT_MAX_BYTES`), the
+characters (`CHOREGOS_BROKER_RESULT_MAX_BYTES`' default, `tranibor_core.mcp.RESULT_MAX_BYTES`), the
 notices outside the cut; a status of 400 or more is still `isError`. A result the API passes under the
 default bound therefore reaches the model whole. The API says the bound it held the result to,
 `result_max_bytes` in its answer (#1383): an operation's, a catalogue entry's or a plugin tool's own
 cap (the ontology's 256 KiB pages), the default for `web_fetch` and `web_search`. The tool server
 reads the result up to that bound instead of its 65,536, and does not show it to the model; the
 prompt backend's loop lets through up to `CHOREGOS_BROKER_RESULT_CEILING_BYTES`' default (1 MiB,
-`choregos_core.mcp.RESULT_CEILING_BYTES`) and the notices.
+`tranibor_core.mcp.RESULT_CEILING_BYTES`) and the notices.
 `structuredContent` carries the API's answer as it came, `status_code` included, with the same lines
 under `notices`, when its JSON fits the same bound. A hosted session's tools say the same around the
 text its model reads (#1349, [hosted agents](hosted-agents.md)), and so do a prompt session's tool
 messages and a realtime session's `function_call_output`s (#1399), which have no error flag: there a
 status of 400 or more is a first line, `FAILED (status <code>): the call did not succeed; what follows
 is its error, not a result.`, and the calls left are `Tool calls left in this session: <n>.`. Every door
-composes these lines in one place, `choregos_core.tool_answer`. An ontology proposal says it was not
+composes these lines in one place, `tranibor_core.tool_answer`. An ontology proposal says it was not
 executed (#1350): its
 `action_<name>` tools are `approval` tools and answer as every one does, `202` naming the core action the
 proposal is (`action`, `status`, `decision_path`, `message`, beside the proposal's own file); one the policy
@@ -1737,7 +1737,7 @@ already published under one of them keeps its next versions; the skills list lin
 
 **The skills catalogue** ([ADR 0065](adr/0065-catalogues-of-mcp-servers-and-skills.md)) offers the
 most used skills of public repositories, so `/skills` is not empty on day one:
-`choregos_core/skill_catalogue/catalogue.yaml`, generated from a reviewed seed at **pinned commits**.
+`tranibor_core/skill_catalogue/catalogue.yaml`, generated from a reviewed seed at **pinned commits**.
 An entry is an offer: nothing is installed by default and nothing follows upstream. Each says its
 publisher, repository, pinned SHA and folder, **licence** (`permissive` or `copyleft`), size, the
 supply-chain gate's **risk** at generation time, and its **delivery**:
@@ -3854,7 +3854,7 @@ with the run's read right.
 **Sub-agents.** `GET /runs/{id}/agents` serves the run's agent and the sub-agents it delegated to (Claude Code's
 `Agent`/`Task` tool), each with its parent, status, start and end and its own tool-call count, and
 `choregos activity` shows them under their run. ACP has no notion of a sub-agent: the platform derives them
-from the run's journal with one rule per backend (`choregos_core.agent_tree`), and only for a backend that
+from the run's journal with one rule per backend (`tranibor_core.agent_tree`), and only for a backend that
 sends the parent of the calls made inside a sub-agent (Claude Code does). opencode and the others give a flat
 list: no sub-agent is guessed. Tokens and cost stay per run.
 

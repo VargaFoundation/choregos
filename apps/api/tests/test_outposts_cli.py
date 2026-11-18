@@ -25,8 +25,8 @@ from unittest import mock
 import pytest
 import typer
 import yaml
-from choregos_contracts import OutpostPolicy
 from httpx import ASGITransport, AsyncClient, Response
+from tranibor_contracts import OutpostPolicy
 from typer.testing import CliRunner, Result
 
 from .kits import outposts as kit
@@ -51,7 +51,7 @@ class _Wire:
 
 async def cli(http: AsyncClient, *words: str) -> Result:
     """Run `choregos outposts <words>` for the organisation of the fixtures."""
-    from choregos_cli import main
+    from tranibor_cli import main
 
     loop = asyncio.get_running_loop()
     the_cli_s_own = main.client
@@ -84,7 +84,7 @@ def _expiry(issued: Result) -> datetime:
 
 @pytest.fixture(autouse=True)
 def profile(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from choregos_cli import client as client_module
+    from tranibor_cli import client as client_module
 
     # No profile file and no version check: the CLI of whoever runs the suite is left alone.
     monkeypatch.setattr(client_module, "CONFIG_PATH", tmp_path / "config.json")
@@ -157,7 +157,7 @@ async def test_the_token_command_prints_what_the_operator_pastes(
     client: AsyncClient, token_holder: AsyncClient, door: kit.Door
 ) -> None:
     """The lines are a policy file's, the command is the daemon's, and the token enrols an instance."""
-    from choregos_outpost.cli import app as daemon
+    from tranibor_outpost.cli import app as daemon
 
     await kit.create(client, SLUG)
     before = datetime.now(UTC)
@@ -249,7 +249,7 @@ async def test_approve_carries_the_fingerprint_it_was_given_and_nothing_else(
 ) -> None:
     """With a person's session in place of the token, the same command is the route's own request:
     another fingerprint is refused in the API's words, the daemon's own is taken."""
-    from choregos_contracts import fingerprint_of
+    from tranibor_contracts import fingerprint_of
 
     await kit.create(client, SLUG)
     instance = await kit.enrolled_instance(client, SLUG)
@@ -336,8 +336,8 @@ async def test_a_revoked_outpost_is_deleted(
 
 async def _call(slug: str, call_id: str, **columns: Any) -> None:
     """A call routed to the outpost, as the broker will write one (S65-13): written by hand."""
-    from choregos_api.db.models import OutpostCall
-    from choregos_api.db.session import name_the_outpost, session_scope
+    from tranibor_api.db.models import OutpostCall
+    from tranibor_api.db.session import name_the_outpost, session_scope
 
     outpost = await kit.outpost_row(slug)
     async with session_scope(orgs="*") as session:

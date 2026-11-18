@@ -103,11 +103,11 @@ EXCLUDED = (
     "docs/cli.md",  # generated from the CLI's help strings, which are read at their source
     "packages/contracts/ts/",  # generated from the schemas, which are read at their source
     # Third-party skills, redistributed verbatim under their own licence (ADR 0065): their text is theirs.
-    "packages/core/src/choregos_core/skill_catalogue/bundled/",
+    "packages/core/src/tranibor_core/skill_catalogue/bundled/",
     # The 1.x joiners-leavers template, French on purpose: what S39-11c's script migrates (S39-11).
     "apps/api/tests/fixtures/joiners-leavers-v1/",
     # The injection guard's patterns also recognise an injection written in French.
-    "packages/core/src/choregos_core/injection.py",
+    "packages/core/src/tranibor_core/injection.py",
 )
 EXCLUDED_NAMES = {"pnpm-lock.yaml"}
 #: Paths whose French name is a record, not a choice: the path pass skips them, each with its reason.
@@ -296,7 +296,7 @@ def shipped_prose(text: str) -> str:
 
 #: Code that says French on purpose, and why: the injection guard's patterns also recognise an
 #: injection written in French. A line here is a decision, not an oversight.
-SPOKEN_FRENCH_ON_PURPOSE = frozenset({"packages/core/src/choregos_core/injection.py"})
+SPOKEN_FRENCH_ON_PURPOSE = frozenset({"packages/core/src/tranibor_core/injection.py"})
 
 
 def spoken_strings(source: str) -> Iterator[tuple[int, str]]:
@@ -851,7 +851,7 @@ def scan_tree(prefixes: Iterable[str] = ("",)) -> list[Finding]:
 
 # ──────────────────────────────── areas and baselines (ADR 0098) ────────────────────────────────
 
-_API = "apps/api/src/choregos_api/"
+_API = "apps/api/src/tranibor_api/"
 #: One baseline file per area, so that no two stories write the same file. The longest prefix wins:
 #: `apps/api/tests/` is `api-tests`, not `api-root`; `""` catches everything else.
 AREAS: dict[str, tuple[str, ...]] = {

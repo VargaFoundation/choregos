@@ -17,15 +17,15 @@ the real system, the console was tested against its mock API, a cluster run is m
 A read of the code on 2026-11-16 found that the guarantees the platform states are not yet all
 mechanisms. Verified again on the morning of 2026-11-17, before the first S80 stories merged:
 
-- `CHOREGOS_FAKES` (`Settings.fakes`, `apps/api/src/choregos_api/config.py`) was refused nowhere in
+- `CHOREGOS_FAKES` (`Settings.fakes`, `apps/api/src/tranibor_api/config.py`) was refused nowhere in
   production (S80-03 refuses it the same day).
 - The agent runs in the runner's container by default: `runner.sandbox.agentIsolation: process` in
   `charts/choregos/values.yaml` (ADR 0146; `container` exists for `agent_sandbox` only).
-- The audit log is a plain insert (`apps/api/src/choregos_api/audit.py`, 44 lines): no chaining, no
+- The audit log is a plain insert (`apps/api/src/tranibor_api/audit.py`, 44 lines): no chaining, no
   append-only table, no export.
 - Temporal is reached without TLS and without a payload codec: `Client.connect(address, namespace=…)`
-  in `apps/orchestrator/src/choregos_orchestrator/worker.py`, `train_client.py` and
-  `apps/api/src/choregos_api/temporal.py` (S80-06 added TLS and a payload codec the same day, off by
+  in `apps/orchestrator/src/tranibor_orchestrator/worker.py`, `train_client.py` and
+  `apps/api/src/tranibor_api/temporal.py` (S80-06 added TLS and a payload codec the same day, off by
   default, ADR 0183).
 - None of the 134 `uses:` lines of `.github/workflows/` was pinned by commit SHA, most base images
   were referenced by tag, and `docker/runner.Dockerfile` installed `npm@latest pnpm@latest` (S80-04
@@ -92,8 +92,8 @@ deliverable). `tests/docs/test_partial_triage.py` fails when a 🟡 story is mis
 ### 3. A human reviews contracts, security and migrations
 
 Three areas change only after a human other than the author has read the change: the contracts
-(`packages/contracts/`, ADR 0001), the migrations (`apps/api/src/choregos_api/migrations/`,
-`packages/ontology/src/choregos_ontology/service/migrations/`) and the security guards (the paths
+(`packages/contracts/`, ADR 0001), the migrations (`apps/api/src/tranibor_api/migrations/`,
+`packages/ontology/src/tranibor_ontology/service/migrations/`) and the security guards (the paths
 listed under "Human review" at the end of `CODEOWNERS`).
 
 The mechanism is the smallest that does not stop the project's single maintainer today:

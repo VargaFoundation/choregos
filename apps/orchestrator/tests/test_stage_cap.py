@@ -11,7 +11,7 @@ import pathlib
 from typing import Any
 
 import pytest
-from choregos_contracts import StageResult, StageStatus
+from tranibor_contracts import StageResult, StageStatus
 
 from .conftest import Fixture, recording_history
 from .test_budget_reservation import _plan
@@ -25,9 +25,9 @@ FAILURE = StageResult(status=StageStatus.FAILED, summary="tests still red", reas
 
 async def _attempts(setup: Fixture, **attempts: Any) -> None:
     """Sets fields of the active policy's `attempts`."""
-    from choregos_api.db.models import PolicyDef
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import PolicyDef
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         row = (
@@ -41,8 +41,8 @@ async def _attempts(setup: Fixture, **attempts: Any) -> None:
 
 
 async def _past_runs(setup: Fixture, count: int) -> None:
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         for n in range(count):
@@ -58,7 +58,7 @@ async def _past_runs(setup: Fixture, count: int) -> None:
 
 
 async def test_the_51st_stage_is_refused_at_the_default_50(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.stage import prepare_stage
+    from tranibor_orchestrator.activities.stage import prepare_stage
 
     await _past_runs(setup, 49)
     fiftieth = await prepare_stage(_plan(setup, attempt=1))
@@ -67,9 +67,9 @@ async def test_the_51st_stage_is_refused_at_the_default_50(setup: Fixture) -> No
     assert refused["refused"]["reason"] == "max_stages"
     assert "50" in refused["refused"]["detail"]
     # The key is minted when a run starts (#523): what prepare_stage holds is its reservation.
-    from choregos_api.db.models import GatewayKeyRow
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import GatewayKeyRow
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         held = (await session.execute(select(GatewayKeyRow.key_id))).scalars().all()
@@ -79,8 +79,8 @@ async def test_the_51st_stage_is_refused_at_the_default_50(setup: Fixture) -> No
 async def test_a_capped_ticket_goes_to_a_person_instead_of_retrying(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.worker import Replayer
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     await _attempts(setup, max_stages_per_ticket=1)
     scripted(setup.adapters, FAILURE, FAILURE)

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Does `python -m choregos_api.migrate` play the core from anywhere, and an extension's branch?
+"""Does `python -m tranibor_api.migrate` play the core from anywhere, and an extension's branch?
 
 The extension is installed for real (a `.dist-info` on disk that declares the group
 `choregos.migrations`); it is `migrate` that finds it, as in the chart's Job.
@@ -21,7 +21,7 @@ API_SRC = pathlib.Path(__file__).resolve().parents[1] / "src"
 
 def _core_head() -> str:
     from alembic.script import ScriptDirectory
-    from choregos_api.migrate import configuration
+    from tranibor_api.migrate import configuration
 
     (head,) = ScriptDirectory.from_config(configuration(with_extensions=False)).get_heads()
     return head
@@ -31,7 +31,7 @@ def _core_head() -> str:
 def database(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[str]:
     file = tmp_path / "migrated.db"
     monkeypatch.setenv("CHOREGOS_DATABASE_URL", f"sqlite+aiosqlite:///{file}")
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     reset_settings_cache()
     yield f"sqlite:///{file}"
@@ -60,7 +60,7 @@ def test_the_core_migrates_from_any_directory(database: str, tmp_path: pathlib.P
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()
     done = subprocess.run(
-        [sys.executable, "-m", "choregos_api.migrate"],
+        [sys.executable, "-m", "tranibor_api.migrate"],
         cwd=elsewhere,
         env={**os.environ, "PYTHONPATH": str(API_SRC)},
         capture_output=True,
@@ -128,7 +128,7 @@ def extension_with_schema(tmp_path: pathlib.Path) -> Iterator[pathlib.Path]:
 def test_an_extensions_branch_is_played_after_the_core(
     database: str, extension_with_schema: pathlib.Path
 ) -> None:
-    from choregos_api.migrate import main
+    from tranibor_api.migrate import main
 
     main([])
 
@@ -144,7 +144,7 @@ def test_the_extensions_branch_goes_back_down_alone(
     database: str, extension_with_schema: pathlib.Path
 ) -> None:
     """Uninstalling an extension must be able to remove ITS schema without touching the core's."""
-    from choregos_api.migrate import main
+    from tranibor_api.migrate import main
 
     main([])
     main(["downgrade", "extension_schema@base"])
@@ -160,7 +160,7 @@ def test_a_declared_but_missing_location_stops_the_command(tmp_path: pathlib.Pat
     _install(root, "extension_empty", module, "choregos.migrations", "extension_empty:LOCATION")
     sys.path.insert(0, str(root))
     try:
-        from choregos_api.migrate import extension_locations
+        from tranibor_api.migrate import extension_locations
 
         with pytest.raises(RuntimeError, match=r"extension_empty.*does not exist"):
             extension_locations()

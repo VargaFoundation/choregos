@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from choregos_contracts import ContextPack, MemoryItem
-from choregos_runner.workspace import _context_markdown
+from tranibor_contracts import ContextPack, MemoryItem
+from tranibor_runner.workspace import _context_markdown
 
 
 def test_an_item_says_which_memory_it_came_from() -> None:

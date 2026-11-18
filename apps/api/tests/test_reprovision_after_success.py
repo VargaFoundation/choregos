@@ -67,7 +67,7 @@ def _worker(env: Any, queue: str) -> Any:
 
 
 def _temporal(env: Any, queue: str) -> Any:
-    from choregos_api.temporal import RealTemporal
+    from tranibor_api.temporal import RealTemporal
 
     temporal = RealTemporal("unused:7233", env.client.namespace, queue)
 

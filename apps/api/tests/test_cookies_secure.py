@@ -20,7 +20,7 @@ def _flags(response_headers: list[str], name: str) -> str:
 
 
 def _settings(monkeypatch: pytest.MonkeyPatch, **env: str) -> None:
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     for key, value in env.items():
         monkeypatch.setenv(f"CHOREGOS_{key.upper()}", value)
@@ -41,7 +41,7 @@ def _settings(monkeypatch: pytest.MonkeyPatch, **env: str) -> None:
 def test_cookies_secure_follows_the_url_and_the_environment(
     monkeypatch: pytest.MonkeyPatch, env: str, public_url: str, api_url: str, secure: bool
 ) -> None:
-    from choregos_api.config import Settings
+    from tranibor_api.config import Settings
 
     settings_obj = Settings(env=env, public_url=public_url, api_url=api_url, dev_login_enabled=False)  # type: ignore[arg-type]
     assert settings_obj.cookies_secure is secure

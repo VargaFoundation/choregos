@@ -28,10 +28,10 @@ pytestmark = pytest.mark.live
 
 async def _ledger(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, runs: dict[str, tuple[int, int]]) -> None:
     """A throwaway ledger: one collected run per entry, with its model line."""
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.db import session as db_session
-    from choregos_api.db.models import CostLedger, Organization, Project, Run, WorkItem
-    from choregos_core import utcnow
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.db import session as db_session
+    from tranibor_api.db.models import CostLedger, Organization, Project, Run, WorkItem
+    from tranibor_core import utcnow
 
     monkeypatch.setenv("CHOREGOS_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/ledger.db")
     reset_settings_cache()
@@ -93,12 +93,12 @@ async def test_the_job_reads_the_gateway_s_usage_from_a_real_tempo(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     require("CHOREGOS_LIVE_OTEL")
-    from choregos_api.db.models import AuditLog
-    from choregos_api.db.session import session_scope
-    from choregos_api.trace_drift import TempoReader, compare
-    from choregos_core import utcnow
-    from choregos_core.telemetry import run_trace_ids
     from sqlalchemy import select
+    from tranibor_api.db.models import AuditLog
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.trace_drift import TempoReader, compare
+    from tranibor_core import utcnow
+    from tranibor_core.telemetry import run_trace_ids
 
     agreeing, drifting = (f"PROJ-1-dev-{uuid4().hex[:8]}" for _ in range(2))
     with httpx.Client(timeout=60) as client:

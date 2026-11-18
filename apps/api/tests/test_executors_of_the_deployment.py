@@ -68,8 +68,8 @@ async def test_there_is_no_route_to_store_an_executor(
 
 def test_the_executors_table_is_gone() -> None:
     """S42-07d: the deployment is the only source of executors; no model or table stores them."""
-    from choregos_api.db import models
-    from choregos_api.db.base import Base
+    from tranibor_api.db import models
+    from tranibor_api.db.base import Base
 
     assert "executors" not in Base.metadata.tables
     assert not hasattr(models, "ExecutorRow")

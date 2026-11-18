@@ -14,8 +14,8 @@ from typing import Any
 
 import pytest
 import yaml
-from choregos_core.domain import Fact, Memory, Provenance
 from httpx import AsyncClient
+from tranibor_core.domain import Fact, Memory, Provenance
 
 from .agent_scopes_kit import ORG, add_member, as_user, make_project
 
@@ -28,7 +28,7 @@ def real_adapters(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _memory() -> Any:
-    from choregos_adapters import build
+    from tranibor_adapters import build
 
     return build("memory", "lexical", {"org": "northwind"})
 
@@ -154,8 +154,8 @@ async def test_a_global_memory_exports_for_whoever_may_search_it(client: AsyncCl
 
 def test_a_backend_that_cannot_list_one_memory_is_refused() -> None:
     """Ecphoria ignores the namespace header: a listing would mix every memory of its tenant."""
-    from choregos_adapters.memory.ecphoria import EcphoriaMemory
-    from choregos_api.routers.memory import refuse_unlisted
+    from tranibor_adapters.memory.ecphoria import EcphoriaMemory
+    from tranibor_api.routers.memory import refuse_unlisted
 
     with pytest.raises(Exception) as refused:
         refuse_unlisted(EcphoriaMemory("http://ecphoria.invalid"))
@@ -163,7 +163,7 @@ def test_a_backend_that_cannot_list_one_memory_is_refused() -> None:
 
 
 def test_a_fact_whose_validity_ended_is_deprecated() -> None:
-    from choregos_api.services.memory_export import fact_markdown
+    from tranibor_api.services.memory_export import fact_markdown
 
     now = datetime(2026, 11, 17, tzinfo=UTC)
     ended = Memory(

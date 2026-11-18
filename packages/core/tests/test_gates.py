@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import pytest
-from choregos_contracts import Evidence, StageResult, StageStatus
-from choregos_core import (
+from tranibor_contracts import Evidence, StageResult, StageStatus
+from tranibor_core import (
     GateContext,
     GateError,
     evaluate,
@@ -183,7 +183,7 @@ def test_matches_any_globs() -> None:
 def test_outputs_present_is_the_gate_of_trades_without_tests() -> None:
     """A non-software workflow has neither tests nor a diff: its mechanical guarantee is that
     the stage did produce what the transition declares."""
-    from choregos_contracts import StageResult, StageStatus
+    from tranibor_contracts import StageResult, StageStatus
 
     done = StageResult(
         schema="choregos/StageResult/v1",
@@ -218,7 +218,7 @@ def test_a_guarantee_with_nothing_to_check_refuses() -> None:
 def test_evidence_facts_reads_the_trades_evidence() -> None:
     """`evidence_present` requires tests, `outputs_present` believes what the agent tells.
     Between the two: facts named by the trade, and comparable."""
-    from choregos_contracts import Evidence, StageResult, StageStatus
+    from tranibor_contracts import Evidence, StageResult, StageStatus
 
     def make_result(**facts: object) -> StageResult:
         return StageResult(
@@ -248,7 +248,7 @@ def test_evidence_facts_reads_the_trades_evidence() -> None:
 
 
 def test_evidence_facts_max_is_a_ceiling_on_numbers_only() -> None:
-    from choregos_contracts import Evidence, StageResult, StageStatus
+    from tranibor_contracts import Evidence, StageResult, StageStatus
 
     def make_result(**facts: object) -> StageResult:
         return StageResult(
@@ -288,7 +288,7 @@ def test_a_guarantee_without_a_diff_does_not_rule() -> None:
 def test_tool_called_reads_the_ledger_not_the_narrative() -> None:
     """Bench of 2026-09-24: ten catalogue listings, zero calls, and `place_verified: true`
     recorded anyway. The guarantee looks at what the platform counted."""
-    from choregos_contracts import StageResult, StageStatus
+    from tranibor_contracts import StageResult, StageStatus
 
     told = StageResult(
         schema="choregos/StageResult/v1",

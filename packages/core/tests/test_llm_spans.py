@@ -7,10 +7,10 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
-from choregos_core import llm_spans, telemetry
 from opentelemetry.sdk.trace import ReadableSpan
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from opentelemetry.trace import SpanKind, StatusCode
+from tranibor_core import llm_spans, telemetry
 
 RUN_ID = "PROJ-1-dev-1"
 START = datetime(2026, 10, 22, 9, 0, tzinfo=UTC)

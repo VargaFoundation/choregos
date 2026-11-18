@@ -20,9 +20,9 @@ from typing import Any
 
 import pytest
 import yaml
-from choregos_core.publishing import PUBLISHING
 from httpx import AsyncClient
 from sqlalchemy import select
+from tranibor_core.publishing import PUBLISHING
 
 ROOT = Path(__file__).resolve().parents[3]
 OFFLINE = ROOT / "plugins" / "offline"
@@ -41,7 +41,7 @@ TRANIBOR = {
 
 
 def test_the_api_reads_the_offline_directory_against_its_lock() -> None:
-    from choregos_core.plugins.sources import offline_index
+    from tranibor_core.plugins.sources import offline_index
 
     index = offline_index(OFFLINE)
     assert {name: sorted(v) for name, v in index.releases.items()} == {
@@ -60,9 +60,9 @@ def test_the_api_reads_the_offline_directory_against_its_lock() -> None:
 def deployment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
     """The chart's configuration: the `tranibor` source, the offline directory, these defaults; the core
     reports a release every offline plugin admits (the S60-04 versions require `>=0.25.1`)."""
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.services import plugin_sources
-    from choregos_core.plugins import versions
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.services import plugin_sources
+    from tranibor_core.plugins import versions
 
     fake = plugin_sources.FakePluginSource()
     plugin_sources.set_backend(fake)
@@ -85,16 +85,16 @@ def deployment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]
 
 
 async def _rows() -> dict[str, Any]:
-    from choregos_api.db.models import OrgPlugin
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import OrgPlugin
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         return {r.name: r for r in (await session.execute(select(OrgPlugin))).scalars()}
 
 
 async def _audit(action: str) -> list[Any]:
-    from choregos_api.db.models import AuditLog
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import AuditLog
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         return list((await session.execute(select(AuditLog).where(AuditLog.action == action))).scalars())
@@ -103,7 +103,7 @@ async def _audit(action: str) -> list[Any]:
 async def test_software_delivery_waits_for_a_second_administrator_without_preapproval(
     client: AsyncClient, admin: str, deployment: Any
 ) -> None:
-    from choregos_api.services import plugin_defaults
+    from tranibor_api.services import plugin_defaults
 
     deployment([{"source": "tranibor", "name": "software-delivery", "version": "^1.0"}])
     outcomes = await plugin_defaults.reconcile_all()
@@ -116,7 +116,7 @@ async def test_software_delivery_waits_for_a_second_administrator_without_preapp
 async def test_a_preapproved_default_is_installed_and_the_configuration_is_the_approver(
     client: AsyncClient, admin: str, deployment: Any
 ) -> None:
-    from choregos_api.services import plugin_defaults
+    from tranibor_api.services import plugin_defaults
 
     fake = deployment(
         [{"source": "tranibor", "name": "software-delivery", "version": "^1.0", "preapproved": True}]
@@ -139,7 +139,7 @@ async def test_requests_is_installed_without_a_second_administrator(
 ) -> None:
     """The agents of `default-request` (ADR 0110, #1091): the chart lists `requests` without
     `preapproved`, so the gate must find nothing in it for a second administrator."""
-    from choregos_api.services import plugin_defaults
+    from tranibor_api.services import plugin_defaults
 
     fake = deployment([{"source": "tranibor", "name": "requests", "version": "^1.0"}])
     outcomes = await plugin_defaults.reconcile_all()
@@ -168,7 +168,7 @@ async def test_the_api_never_takes_a_preapproval(client: AsyncClient, admin: str
 async def test_a_default_outside_the_offline_versions_goes_to_its_source(
     client: AsyncClient, admin: str, deployment: Any
 ) -> None:
-    from choregos_api.services import plugin_defaults
+    from tranibor_api.services import plugin_defaults
 
     fake = deployment([{"source": "tranibor", "name": "netops", "version": "^2.0", "preapproved": True}])
     outcomes = await plugin_defaults.reconcile_all()
@@ -216,9 +216,9 @@ async def test_an_installed_version_replaces_the_offline_one_in_the_catalogue(
     )
     assert installed.status_code == 201, installed.text
 
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.agent_catalogue import catalogue_of
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.agent_catalogue import catalogue_of
 
     # The deployment's directory no longer holds it: the organisation's catalogue still does.
     deployment([], tmp_path / "empty")
@@ -236,9 +236,9 @@ async def test_an_installed_version_replaces_the_offline_one_in_the_catalogue(
 async def test_without_the_authoring_plugin_the_drafter_says_what_to_install(
     client: AsyncClient, admin: str, tmp_path: Path, deployment: Any
 ) -> None:
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.agent_drafts import DraftingError, instructions_for_drafter
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.agent_drafts import DraftingError, instructions_for_drafter
 
     (tmp_path / "empty").mkdir()
     deployment([], tmp_path / "empty")

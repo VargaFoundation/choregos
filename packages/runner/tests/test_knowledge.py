@@ -7,11 +7,11 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from choregos_contracts import KnowledgeRef, StageInput, knowledge_digest
-from choregos_runner.exits import Exit
-from choregos_runner.knowledge import INDEX, OKF_VERSION, ROOT, KnowledgeInvalidError, lay_out
-from choregos_runner.runner import Runner
-from choregos_runner.workspace import git_dir_for
+from tranibor_contracts import KnowledgeRef, StageInput, knowledge_digest
+from tranibor_runner.exits import Exit
+from tranibor_runner.knowledge import INDEX, OKF_VERSION, ROOT, KnowledgeInvalidError, lay_out
+from tranibor_runner.runner import Runner
+from tranibor_runner.workspace import git_dir_for
 
 from .conftest import FakeInternalClient, agent_script, valid_result
 

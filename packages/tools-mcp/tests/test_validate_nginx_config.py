@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from choregos_tools_mcp import McpServer, ToolContext
+from tranibor_tools_mcp import McpServer, ToolContext
 
 
 def _server(tmp_path: Path, binary: str) -> McpServer:
@@ -96,7 +96,7 @@ async def test_the_real_nginx_accepts_a_minimal_configuration(tmp_path: Path, wo
 
 def test_the_pid_goes_to_the_throwaway_prefix_unless_the_configuration_names_one() -> None:
     """`nginx -t` opens its pid file; the distribution's is root's — the CI caught it (PR #389)."""
-    from choregos_tools_mcp.nginx import command
+    from tranibor_tools_mcp.nginx import command
 
     plain = command("nginx", "/tmp/x", Path("/w/nginx.conf"), "events {}\n")
     assert plain[-2:] == ["-g", "pid /tmp/x/nginx.pid;"]

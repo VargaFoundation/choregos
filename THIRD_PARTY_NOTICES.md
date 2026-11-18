@@ -5,7 +5,7 @@
 Tranibor itself is Apache-2.0 (see `LICENSE`). Its image also carries the starter set of the skills
 catalogue ([ADR 0065](docs/adr/0065-catalogues-of-mcp-servers-and-skills.md)): skills written by
 others, redistributed verbatim under their own permissive licence. Each skill's licence text and
-provenance sit next to it under `packages/core/src/choregos_core/skill_catalogue/bundled/<skill>/`.
+provenance sit next to it under `packages/core/src/tranibor_core/skill_catalogue/bundled/<skill>/`.
 
 ## addyosmani/agent-skills
 

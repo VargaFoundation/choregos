@@ -76,9 +76,9 @@ with a real harness.
 
 ## Context
 
-Paths below without a directory are under `packages/runner/src/choregos_runner/`; the executors
+Paths below without a directory are under `packages/runner/src/tranibor_runner/`; the executors
 (`k8s_job.py`, `agent_sandbox.py`, `local_docker.py`, `tekton.py`, `aca.py`) are under
-`packages/adapters/src/choregos_adapters/executor/`, and `sandbox.yaml` is the orchestrator chart's
+`packages/adapters/src/tranibor_adapters/executor/`, and `sandbox.yaml` is the orchestrator chart's
 template. Every line was read at `9f646fda4`.
 
 A step an ACP agent carries runs two things in one container, under one user id (1000:

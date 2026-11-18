@@ -99,13 +99,13 @@ async def _base(client: AsyncClient, slug: str) -> dict[str, Any]:
 
 
 def _loops() -> dict[str, Any]:
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.temporal import get_temporal
 
     return {k: v for k, v in get_temporal().started.items() if k.startswith("knowledge-sync-")}  # type: ignore[attr-defined]
 
 
 def test_the_template_schema_accepts_defaults_knowledge_and_refuses_what_it_cannot_install() -> None:
-    import choregos_contracts as contracts
+    import tranibor_contracts as contracts
     from jsonschema import Draft202012Validator
 
     schema = Draft202012Validator(contracts.load_schema("template.schema.json"))
@@ -172,8 +172,8 @@ async def test_a_project_born_of_the_template_gets_its_bases_served_owned_and_sy
     }
 
     # The first pass brings the repository's documents into the base.
-    from choregos_adapters.fakes.documents import fake_source
-    from choregos_api.knowledge.sync import sync_source
+    from tranibor_adapters.fakes.documents import fake_source
+    from tranibor_api.knowledge.sync import sync_source
 
     fake_source(source["id"]).put("docs/setup.md", "docs-setup.md", b"# Setup\n\nRun make.\n")
     await sync_source("northwind", source["id"])
@@ -183,11 +183,11 @@ async def test_a_project_born_of_the_template_gets_its_bases_served_owned_and_sy
 async def test_applying_the_template_again_duplicates_nothing(
     client: AsyncClient, admin: str, templates: pathlib.Path
 ) -> None:
-    from choregos_api.db.models import KnowledgeBase, KnowledgeSource, Project
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.installation import install_what_template_delivers
-    from choregos_api.services.templates import delivery, template_manifest
     from sqlalchemy import func, select
+    from tranibor_api.db.models import KnowledgeBase, KnowledgeSource, Project
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.installation import install_what_template_delivers
+    from tranibor_api.services.templates import delivery, template_manifest
 
     born = await _born(client)
     assert born.status_code == 201, born.text
@@ -209,10 +209,10 @@ async def test_applying_the_template_again_duplicates_nothing(
 async def test_a_source_the_project_lost_is_added_back_and_only_it(
     client: AsyncClient, admin: str, templates: pathlib.Path
 ) -> None:
-    from choregos_api.db.models import Project
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.installation import install_what_template_delivers
-    from choregos_api.services.templates import delivery, template_manifest
+    from tranibor_api.db.models import Project
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.installation import install_what_template_delivers
+    from tranibor_api.services.templates import delivery, template_manifest
 
     born = await _born(client)
     (gone,) = (await _base(client, "house-style"))["sources"]
@@ -325,8 +325,8 @@ async def test_a_template_whose_knowledge_is_wrong_creates_no_project(
 
 @pytest.fixture
 def minted(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
-    from choregos_adapters.github import GitHubAppAuth, InstallationToken
-    from choregos_api.config import reset_settings_cache
+    from tranibor_adapters.github import GitHubAppAuth, InstallationToken
+    from tranibor_api.config import reset_settings_cache
 
     monkeypatch.setenv("CHOREGOS_GITHUB_APP_ID", "5242171")
     monkeypatch.setenv(
@@ -344,8 +344,8 @@ def minted(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
 
 
 async def _source_row(client: AsyncClient) -> Any:
-    from choregos_api.db.models import KnowledgeSource
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import KnowledgeSource
+    from tranibor_api.db.session import session_scope
 
     (source,) = (await _base(client, "product-docs"))["sources"]
     async with session_scope(orgs="*") as session:
@@ -358,9 +358,9 @@ async def test_the_projects_repository_is_read_with_a_read_only_token_of_the_app
     client: AsyncClient, admin: str, templates: pathlib.Path, minted: list[dict[str, Any]],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:  # fmt: skip
-    from choregos_adapters.documents.git import GitSource
-    from choregos_api.db.session import session_scope
-    from choregos_api.knowledge import sync
+    from tranibor_adapters.documents.git import GitSource
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.knowledge import sync
 
     assert (await _born(client)).status_code == 201
     row = await _source_row(client)
@@ -376,9 +376,9 @@ async def test_the_projects_repository_is_read_with_a_read_only_token_of_the_app
 async def test_without_an_app_the_projects_repository_cannot_be_opened(
     client: AsyncClient, admin: str, templates: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.db.session import session_scope
-    from choregos_api.knowledge import sync
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.knowledge import sync
 
     monkeypatch.delenv("CHOREGOS_GITHUB_APP_ID", raising=False)
     reset_settings_cache()

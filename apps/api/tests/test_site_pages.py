@@ -177,7 +177,7 @@ async def test_from_nothing_to_an_agent_used_in_a_workflow(
 
 
 def test_the_code_agent_s_registration_is_a_valid_agent() -> None:
-    from choregos_api.schemas.agents import AgentCreate
+    from tranibor_api.schemas.agents import AgentCreate
 
     body = next(json.loads(b) for b in _blocks("build/agents.md", "json") if '"kind": "code"' in b)
     agent = AgentCreate.model_validate(body)
@@ -190,12 +190,12 @@ def test_the_code_agent_s_registration_is_a_valid_agent() -> None:
 async def test_the_server_the_grant_and_the_policy_of_the_page_are_taken(
     client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import choregos_adapters
-    from choregos_adapters.fakes.mcp import FakeMcpServer
+    import tranibor_adapters
+    from tranibor_adapters.fakes.mcp import FakeMcpServer
 
     (_, path, server), (_, discover, _none), (patch_method, patch_path, opened) = _curls("build/tools.md")
     fake = FakeMcpServer(tools=[dict(t) for t in FAKE_TOOLS], token=server["secret_values"]["token"])
-    monkeypatch.setattr(choregos_adapters, "FAKE_MCP", fake)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_MCP", fake)
     declared = await client.post(path, json=server)
     assert declared.status_code == 201, declared.text
     assert server["secret_values"]["token"] not in declared.text, "a written secret is never returned"
@@ -228,7 +228,7 @@ async def test_the_server_the_grant_and_the_policy_of_the_page_are_taken(
 
 
 async def test_the_trigger_of_the_page_answers_as_its_table_says(client: AsyncClient, admin: str) -> None:
-    from choregos_core.dsl import template_yaml
+    from tranibor_core.dsl import template_yaml
 
     triggers = json.loads(_blocks("integrate/triggers.md", "json")[0])
     created = await client.post(
@@ -298,7 +298,7 @@ async def _login_back(client: AsyncClient) -> None:
 async def test_the_rest_page_s_requests_work_with_a_full_access_token(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_core.dsl import template_yaml
+    from tranibor_core.dsl import template_yaml
 
     await _internal_tracker(client, project)
     opt_in = yaml.safe_load(
@@ -354,7 +354,7 @@ async def test_the_mcp_page_s_token_opens_the_door_and_the_tools_are_its_table(
     table = _page("integrate/mcp.md").split("## The door and its tools", 1)[1].split("\n## ", 1)[0]
     documented = set(re.findall(r"^\| `([a-z_]+)` \|", table, re.M))
     assert served == documented, (served, documented)
-    from choregos_core.mcp import VERSIONS
+    from tranibor_core.mcp import VERSIONS
 
     for version in VERSIONS:
         assert f"`{version}`" in _page("integrate/mcp.md")
@@ -364,7 +364,7 @@ async def test_the_mcp_page_s_token_opens_the_door_and_the_tools_are_its_table(
 
 
 def test_the_a2a_codes_of_the_errors_page_are_the_door_s() -> None:
-    from choregos_api.a2a import door, push, v1
+    from tranibor_api.a2a import door, push, v1
 
     codes = {
         value
@@ -378,7 +378,7 @@ def test_the_a2a_codes_of_the_errors_page_are_the_door_s() -> None:
 
 
 def test_the_mcp_door_s_limits_are_the_pages() -> None:
-    from choregos_api.mcp import limits
+    from tranibor_api.mcp import limits
 
     for page in ("integrate/mcp.md", "reference/errors.md"):
         text = _page(page)

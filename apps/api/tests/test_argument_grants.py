@@ -33,11 +33,11 @@ SYNC = "argo__sync_application"
 
 @pytest.fixture
 def argo(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
-    import choregos_adapters
-    from choregos_adapters.fakes.mcp import FakeMcpServer
+    import tranibor_adapters
+    from tranibor_adapters.fakes.mcp import FakeMcpServer
 
     server = FakeMcpServer(tools=[dict(tool) for tool in TOOLS], token="argo-key")
-    monkeypatch.setattr(choregos_adapters, "FAKE_MCP", server)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_MCP", server)
     monkeypatch.setenv("CONNECTOR_TEST_ARGO_KEY", "argo-key")
     yield server
 
@@ -56,9 +56,9 @@ async def _agent(
     client: AsyncClient, project: dict[str, Any], tools: list[Any]
 ) -> tuple[str, dict[str, str]]:
     """An agent whose version grants `tools` on argo, and a run of it: the run's tools route and headers."""
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.security import mint_run_token
+    from tranibor_api.db.models import Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.security import mint_run_token
 
     spec = {"mcp_servers": [{"connector": "argo", "tools": tools}]}
     agent = await client.post(
@@ -178,9 +178,9 @@ async def test_the_organisation_rule_binds_every_agent(
 async def test_a_call_outside_a_grant_proposes_no_action(
     client: AsyncClient, project: dict[str, Any], argo: Any
 ) -> None:
-    from choregos_api.db.models import Action
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Action
+    from tranibor_api.db.session import session_scope
 
     await _connector(client)
     base, headers = await _agent(client, project, [{"name": "delete_application", "arguments": ONLY_SHOP}])
@@ -261,8 +261,8 @@ async def test_a_version_that_keeps_plain_strings_keeps_its_digest() -> None:
     import hashlib
     import json
 
-    from choregos_api.schemas import AgentSpec
-    from choregos_api.services.agents import digest
+    from tranibor_api.schemas import AgentSpec
+    from tranibor_api.services.agents import digest
 
     spec = AgentSpec.model_validate(
         {"mcp_servers": [{"connector": "argo", "tools": ["sync_*", "get_application"]}]}

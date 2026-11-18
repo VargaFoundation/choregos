@@ -176,7 +176,7 @@ async def test_two_simultaneous_creations_one_gets_409(
     client: AsyncClient, project: dict[str, Any], monkeypatch: Any
 ) -> None:
     """The race the read does not see: the other creation is written between the read and the write."""
-    from choregos_api.services import definitions
+    from tranibor_api.services import definitions
 
     pid = project["id"]
     assert (await _publish(client, pid, "onboarding", create_only=True)).status_code == 200

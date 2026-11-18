@@ -9,10 +9,10 @@ import json
 from typing import Any
 
 import pytest
-from choregos_adapters.fakes.tracker import FakeTracker
-from choregos_adapters.tracker.github_events import parse_command
 from httpx import AsyncClient
 from sqlalchemy import select
+from tranibor_adapters.fakes.tracker import FakeTracker
+from tranibor_adapters.tracker.github_events import parse_command
 
 KEY = "northwind/billing-api#7"
 REPO = {"full_name": "northwind/billing-api"}
@@ -20,7 +20,7 @@ REPO = {"full_name": "northwind/billing-api"}
 
 @pytest.fixture
 def tracker(monkeypatch: pytest.MonkeyPatch) -> FakeTracker:
-    from choregos_api.services import tickets
+    from tranibor_api.services import tickets
 
     fake = FakeTracker("billing-api")
     seeded = fake.seed("Credit notes fail")
@@ -74,14 +74,14 @@ async def _comment(client: AsyncClient, delivery: str, text: str) -> Any:
 
 
 def _signals() -> list[tuple[str, str, Any]]:
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.temporal import get_temporal
 
     return get_temporal().signals  # type: ignore[attr-defined,no-any-return]
 
 
 async def _audit(verb: str) -> list[Any]:
-    from choregos_api.db.models import AuditLog
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import AuditLog
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = (
@@ -134,8 +134,8 @@ async def test_the_reply_is_not_read_as_a_command(
 async def test_a_broken_tracker_connector_does_not_fail_the_webhook(
     client: AsyncClient, project: dict[str, Any], tracker: FakeTracker, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.errors import upstream
-    from choregos_api.services import tickets
+    from tranibor_api.errors import upstream
+    from tranibor_api.services import tickets
 
     await _routed_item(client, project)
 

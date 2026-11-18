@@ -24,7 +24,7 @@ def profile(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _app():  # type: ignore[no-untyped-def]
-    from choregos_cli.main import app
+    from tranibor_cli.main import app
 
     return app
 

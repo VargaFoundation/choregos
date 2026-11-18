@@ -9,7 +9,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any, cast
 
-from choregos_api.services import broker
+from tranibor_api.services import broker
 
 #: Computed from `identifiant_de_l_appel` as it was before the move (uuid5 of `run:tool:canonical JSON`).
 CALL_ID = "c6a66a5a-d541-5b95-a6ab-1cc8ed2a3492"

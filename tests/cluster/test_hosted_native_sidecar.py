@@ -26,10 +26,10 @@ import time
 from typing import Any
 
 import pytest
-from choregos_adapters.errors import UnsupportedClusterError
-from choregos_adapters.executor.k8s_job import AGENT_CONTAINER, KubernetesJobExecutor
-from choregos_core.domain import AgentContainer, StageJobSpec
-from choregos_core.hosted import NATIVE_SIDECARS_MIN, kubernetes_version
+from tranibor_adapters.errors import UnsupportedClusterError
+from tranibor_adapters.executor.k8s_job import AGENT_CONTAINER, KubernetesJobExecutor
+from tranibor_core.domain import AgentContainer, StageJobSpec
+from tranibor_core.hosted import NATIVE_SIDECARS_MIN, kubernetes_version
 
 from .conftest import kubectl_shared
 

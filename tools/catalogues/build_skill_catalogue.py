@@ -12,7 +12,7 @@ function of the seed, the publisher and exclusion files and the recordings under
 
 Each skill goes through the code the platform runs at install: `read_tarball` reads it, `detect_licence`
 names its licence, `skill_gate.assess` gives its risk and `skills.digest` its digest. The generator
-imports them from `choregos_api` rather than copying them, so what the catalogue says of a skill is what
+imports them from `tranibor_api` rather than copying them, so what the catalogue says of a skill is what
 the gate will say again when it is installed.
 """
 
@@ -35,23 +35,23 @@ from typing import Any
 
 import httpx
 import yaml
-from choregos_api.services.skill_gate import OPEN_LICENCES, assess
-from choregos_api.services.skill_sources import (
+from tranibor_api.services.skill_gate import OPEN_LICENCES, assess
+from tranibor_api.services.skill_sources import (
     LICENCE_FILES,
     FoundSkill,
     Snapshot,
     detect_licence,
     read_tarball,
 )
-from choregos_api.services.skills import digest
-from choregos_contracts.skill_files import skill_file_bytes
+from tranibor_api.services.skills import digest
+from tranibor_contracts.skill_files import skill_file_bytes
 
 from tools.catalogues import _github, _recording
 
 ROOT = Path(__file__).resolve().parents[2]
 SEED_DIR = ROOT / "tools" / "catalogues" / "skills"
 FIXTURES = ROOT / "tests" / "fixtures" / "catalogues" / "skills"
-CORE = ROOT / "packages" / "core" / "src" / "choregos_core" / "skill_catalogue"
+CORE = ROOT / "packages" / "core" / "src" / "tranibor_core" / "skill_catalogue"
 OUTPUT = CORE / "catalogue.yaml"
 BUNDLED = CORE / "bundled"
 NOTICES = ROOT / "THIRD_PARTY_NOTICES.md"
@@ -430,7 +430,7 @@ def notices(document: dict[str, Any]) -> str:
         "Tranibor itself is Apache-2.0 (see `LICENSE`). Its image also carries the starter set of the skills",
         "catalogue ([ADR 0065](docs/adr/0065-catalogues-of-mcp-servers-and-skills.md)): skills written by",
         "others, redistributed verbatim under their own permissive licence. Each skill's licence text and",
-        "provenance sit next to it under `packages/core/src/choregos_core/skill_catalogue/bundled/<skill>/`.",
+        "provenance sit next to it under `packages/core/src/tranibor_core/skill_catalogue/bundled/<skill>/`.",
         "",
     ]
     for repo, entries in sorted(by_repo.items()):

@@ -19,9 +19,9 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
-import choregos_contracts as contracts
 import httpx
 import pytest
+import tranibor_contracts as contracts
 from httpx import AsyncClient
 from jsonschema import Draft202012Validator
 from sqlalchemy import select
@@ -84,8 +84,8 @@ async def _turn(person: AsyncClient, conversation: str, text: str = "Hello") -> 
 
 
 async def _audited(action: str) -> list[dict[str, Any]]:
-    from choregos_api.db.models import AuditLog
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import AuditLog
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         rows = (
@@ -95,8 +95,8 @@ async def _audited(action: str) -> list[dict[str, Any]]:
 
 
 async def _ledger_of(conversation: str) -> list[Any]:
-    from choregos_api.db.models import CostLedger
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import CostLedger
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         return list(
@@ -127,7 +127,7 @@ class Held:
 
 
 def _hold(model: Upstream) -> Held:
-    from choregos_api.services.agent_sessions import set_model_transport
+    from tranibor_api.services.agent_sessions import set_model_transport
 
     held = Held(model)
     set_model_transport(httpx.MockTransport(held))
@@ -147,7 +147,7 @@ async def _in_flight(conversation: str, held: Held) -> None:
 def _on_another_replica(monkeypatch: pytest.MonkeyPatch) -> None:
     """The turn runs in another process: this one's registry never holds it. The PostgreSQL poller
     (`watch_cancel`, S63-23) is switched off too, so only the turn's own read of the request can stop it."""
-    from choregos_api.services import conversation_turns, conversations
+    from tranibor_api.services import conversation_turns, conversations
 
     def nowhere(_conversation_id: str, _task: Any) -> None:
         return None
@@ -162,7 +162,7 @@ def _on_another_replica(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def _record_tool_calls(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     """The tools the turn really called (an MCP connector's call), recorded instead of made."""
-    from choregos_api.services import agent_sessions
+    from tranibor_api.services import agent_sessions
 
     called: list[str] = []
 
@@ -372,10 +372,10 @@ async def _conversation(
 ) -> str:
     from datetime import timedelta
 
-    from choregos_api.db.models import AgentSessionEvent, AgentSessionRecord, Organization, User
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.personal_spaces import personal_space
-    from choregos_core import utcnow
+    from tranibor_api.db.models import AgentSessionEvent, AgentSessionRecord, Organization, User
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.personal_spaces import personal_space
+    from tranibor_core import utcnow
 
     now = utcnow()
     async with session_scope(orgs="*") as session:
@@ -411,8 +411,8 @@ async def _conversation(
 
 
 async def _installation_ids() -> dict[str, str]:
-    from choregos_api.db.models import AssistantInstallation, Organization
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import AssistantInstallation, Organization
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         org_id = (
@@ -443,9 +443,9 @@ async def _plain_session(project_id: str, user_email: str) -> str:
     """A session of the `/responses` kind: no assistant's."""
     from datetime import timedelta
 
-    from choregos_api.db.models import AgentSessionRecord, Project, User
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
+    from tranibor_api.db.models import AgentSessionRecord, Project, User
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
 
     async with session_scope(orgs="*") as session:
         project_row = await session.get(Project, project_id)
@@ -535,11 +535,11 @@ async def test_the_stream_sends_a_turn_to_whoever_may_see_it(
     app: Any,
     project: dict[str, Any],
 ) -> None:
-    from choregos_api.db.models import Organization, User
-    from choregos_api.db.session import session_scope
-    from choregos_api.rbac import Principal, Role
-    from choregos_api.services.activity import ActivityFilters, ActivityReader, entry_of_event
-    from choregos_contracts import ChoregosEvent, EventType
+    from tranibor_api.db.models import Organization, User
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.rbac import Principal, Role
+    from tranibor_api.services.activity import ActivityFilters, ActivityReader, entry_of_event
+    from tranibor_contracts import ChoregosEvent, EventType
 
     installations = await _installation_ids()
     await _member(client, PERSON, [])

@@ -160,7 +160,7 @@ beside a daemon without taking its place.
 
 ## Tests and the fake door
 
-`choregos_outpost.fakes.FakeDoor` is a scriptable door built from the contract: the four verbs, the
+`tranibor_outpost.fakes.FakeDoor` is a scriptable door built from the contract: the four verbs, the
 order of the checks, the problems, calls sealed and signed as the contract says, under a key
 derived from a label. It is reached without a socket (`transport()`) or served by any ASGI server.
 

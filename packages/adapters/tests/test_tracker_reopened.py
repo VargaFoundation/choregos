@@ -5,9 +5,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from choregos_adapters.tracker.github_events import parse_github_event
-from choregos_adapters.tracker.gitlab_events import parse_gitlab_event
-from choregos_contracts import InboundEventType
+from tranibor_adapters.tracker.github_events import parse_github_event
+from tranibor_adapters.tracker.gitlab_events import parse_gitlab_event
+from tranibor_contracts import InboundEventType
 
 REPO = "northwind/billing"
 PROJECT = "northwind/billing-api"
@@ -64,8 +64,8 @@ def test_a_gitlab_update_does_not_say_it_reopened() -> None:
 async def test_github_dates_a_reopened_issue_by_its_last_reopened_event_only() -> None:
     from datetime import UTC, datetime
 
-    from choregos_adapters.github.client import GitHubClient
-    from choregos_adapters.tracker.github import GitHubTracker
+    from tranibor_adapters.github.client import GitHubClient
+    from tranibor_adapters.tracker.github import GitHubTracker
 
     from ._transport import Wire
 
@@ -102,8 +102,8 @@ async def test_jira_dates_an_open_issue_by_its_status_category_change() -> None:
     from datetime import UTC, datetime
 
     import httpx
-    from choregos_adapters.http import RestClient
-    from choregos_adapters.tracker.jira import JiraTracker
+    from tranibor_adapters.http import RestClient
+    from tranibor_adapters.tracker.jira import JiraTracker
 
     category = {"key": "new"}
 
@@ -123,7 +123,7 @@ async def test_jira_dates_an_open_issue_by_its_status_category_change() -> None:
 
 
 def test_a_jira_move_says_the_category_of_the_status_it_enters() -> None:
-    from choregos_adapters.tracker.jira_events import parse_jira_event
+    from tranibor_adapters.tracker.jira_events import parse_jira_event
 
     payload = {
         "webhookEvent": "jira:issue_updated",

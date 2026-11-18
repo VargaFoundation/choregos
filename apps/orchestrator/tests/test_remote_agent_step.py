@@ -13,12 +13,12 @@ from datetime import timedelta
 from typing import Any
 
 import pytest
-from choregos_adapters.a2a import parse_card
-from choregos_adapters.fakes.a2a import FakeA2aAgent
-from choregos_core import utcnow
-from choregos_orchestrator.activities import outcome
-from choregos_orchestrator.activities import stage as stage_activities
 from temporalio.exceptions import ApplicationError
+from tranibor_adapters.a2a import parse_card
+from tranibor_adapters.fakes.a2a import FakeA2aAgent
+from tranibor_core import utcnow
+from tranibor_orchestrator.activities import outcome
+from tranibor_orchestrator.activities import stage as stage_activities
 
 from .conftest import Fixture
 
@@ -58,10 +58,10 @@ async def _decor(
     credential: str | None = "connected",
 ) -> None:
     """The remote agent, the credential holding its token, and the project's egress policy."""
-    from choregos_api.db.models import Agent, AgentVersion, PolicyDef, Project, RemoteCredential
-    from choregos_api.db.session import session_scope
-    from choregos_api.secret_store import get_secret_store
     from sqlalchemy import select
+    from tranibor_api.db.models import Agent, AgentVersion, PolicyDef, Project, RemoteCredential
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.secret_store import get_secret_store
 
     async with session_scope() as session:
         project = await session.get(Project, setup.project_id)
@@ -121,9 +121,9 @@ def _plan(setup: Fixture, **extra: Any) -> dict[str, Any]:
 
 
 async def _reservations() -> list[Any]:
-    from choregos_api.db.models import GatewayKeyRow
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import GatewayKeyRow
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         return list((await session.execute(select(GatewayKeyRow))).scalars())
@@ -151,8 +151,8 @@ async def test_a_remote_agents_step_carries_the_call_and_no_model(setup: Fixture
 async def test_the_access_token_reaches_the_executor_spec_and_nothing_that_outlives_the_run(
     setup: Fixture,
 ) -> None:
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
 
     await _decor(setup)
     prepared = await stage_activities.prepare_stage(_plan(setup))
@@ -222,9 +222,9 @@ async def test_a_free_remote_agent_starts_with_nothing_declared(setup: Fixture) 
 
 
 async def test_the_declared_cost_is_booked_as_external_apart_from_models(setup: Fixture) -> None:
-    from choregos_api.db.models import CostLedger, Run
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import CostLedger, Run
+    from tranibor_api.db.session import session_scope
 
     await _decor(setup)
     prepared = await stage_activities.prepare_stage(_plan(setup))
@@ -253,9 +253,9 @@ async def test_the_declared_cost_is_booked_as_external_apart_from_models(setup: 
 
 
 async def test_nothing_declared_is_booked_as_unmeasured(setup: Fixture) -> None:
-    from choregos_api.db.models import CostLedger
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import CostLedger
+    from tranibor_api.db.session import session_scope
 
     await _decor(setup, runtime=_runtime(declared_cost={}))
     prepared = await stage_activities.prepare_stage(_plan(setup))
@@ -274,8 +274,8 @@ async def test_nothing_declared_is_booked_as_unmeasured(setup: Fixture) -> None:
 
 async def test_an_agent_that_is_not_remote_is_unchanged(setup: Fixture) -> None:
     """The remote branch must not touch an ordinary stage: a gateway key is still minted."""
-    from choregos_api.db.models import Agent, AgentVersion, Project
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Agent, AgentVersion, Project
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         project = await session.get(Project, setup.project_id)

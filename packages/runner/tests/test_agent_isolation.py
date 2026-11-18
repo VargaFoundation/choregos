@@ -9,11 +9,11 @@ from collections.abc import AsyncIterator, Iterator
 from typing import Any
 
 import pytest
-from choregos_contracts import StageInput
-from choregos_core.exit_codes import explanation
-from choregos_runner import launcher as lc
-from choregos_runner.exits import Exit
-from choregos_runner.runner import Runner
+from tranibor_contracts import StageInput
+from tranibor_core.exit_codes import explanation
+from tranibor_runner import launcher as lc
+from tranibor_runner.exits import Exit
+from tranibor_runner.runner import Runner
 
 from .conftest import FakeInternalClient, agent_script, free_port, valid_result
 
@@ -37,7 +37,7 @@ async def serving() -> AsyncIterator[tuple[int, list[Any]]]:
         return await real(*argv, **kwargs)
 
     server = await asyncio.start_server(lc.handle, "127.0.0.1", port)
-    import choregos_runner.launcher as module
+    import tranibor_runner.launcher as module
 
     module.asyncio.create_subprocess_exec = recording  # type: ignore[assignment]
     try:

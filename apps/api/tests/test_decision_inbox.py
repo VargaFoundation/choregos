@@ -19,11 +19,11 @@ from .test_broker import TOOLS, _prepare
 
 @pytest.fixture
 def supplier(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
-    import choregos_adapters
-    from choregos_adapters.fakes.mcp import FakeMcpServer
+    import tranibor_adapters
+    from tranibor_adapters.fakes.mcp import FakeMcpServer
 
     server = FakeMcpServer(tools=[dict(o) for o in TOOLS], token="cle-fournisseur")
-    monkeypatch.setattr(choregos_adapters, "FAKE_MCP", server)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_MCP", server)
     monkeypatch.setenv("CONNECTOR_TEST_CLE_FOURNISSEUR", "cle-fournisseur")
     yield server
 
@@ -31,7 +31,7 @@ def supplier(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
 async def test_a_tool_under_validation_proposes_an_action_and_nothing_reaches_the_server(
     client: AsyncClient, project: dict[str, Any], supplier: Any, app: Any
 ) -> None:
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.temporal import get_temporal
 
     base, headers = await _prepare(client, project, ["*"])
     call = await client.post(
@@ -76,9 +76,9 @@ async def test_a_proposal_counts_towards_the_runs_ceiling(
     client: AsyncClient, project: dict[str, Any], supplier: Any
 ) -> None:
     """An agent loop does not fill the inbox: the run's call ceiling holds too."""
-    from choregos_api.db.models import PolicyDef
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import PolicyDef
+    from tranibor_api.db.session import session_scope
 
     base, headers = await _prepare(client, project, ["*"])
     async with session_scope() as session:
@@ -112,8 +112,8 @@ async def test_a_job_steps_proposal_names_its_job_and_no_agent_owner_is_kept_out
     runs it (`job:<actor>`), not `agent:None`; and since no person owns a job — its command and its
     `tools:` are the workflow's —, the separation of roles keeps nobody out: the person who owns the
     agent of the run's former life approves it."""
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
 
     base, headers = await _prepare(client, project, ["*"])
     async with session_scope() as session:

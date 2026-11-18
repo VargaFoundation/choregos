@@ -5,11 +5,11 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from choregos_adapters.documents.base import ItemUnreadableError, SourceRefusedError
-from choregos_adapters.documents.confluence import ConfluenceDocumentsConnector, ConfluenceSource, slug
-from choregos_adapters.errors import UpstreamError
-from choregos_adapters.fakes.confluence import CLOUD_ID, SITE_HOST, FakeConfluence
-from choregos_adapters.http import rest
+from tranibor_adapters.documents.base import ItemUnreadableError, SourceRefusedError
+from tranibor_adapters.documents.confluence import ConfluenceDocumentsConnector, ConfluenceSource, slug
+from tranibor_adapters.errors import UpstreamError
+from tranibor_adapters.fakes.confluence import CLOUD_ID, SITE_HOST, FakeConfluence
+from tranibor_adapters.http import rest
 
 SITE = f"https://{SITE_HOST}"
 
@@ -288,7 +288,7 @@ async def test_a_wrong_token_is_refused_and_the_connector_test_says_so() -> None
     with pytest.raises(UpstreamError) as refused:
         await source.changes(None)
     assert refused.value.status_code == 401
-    from choregos_adapters.documents import confluence
+    from tranibor_adapters.documents import confluence
 
     confluence.TRANSPORT = site.transport()
     try:
@@ -308,7 +308,7 @@ async def test_a_scoped_token_goes_through_the_gateway_and_test_finds_the_cloud_
     assert {r.url.host for r in site.requests} == {"api.atlassian.com"}
     assert all(r.url.path.startswith(f"/ex/confluence/{CLOUD_ID}/wiki/api/v2/") for r in site.requests)
 
-    from choregos_adapters.documents import confluence
+    from tranibor_adapters.documents import confluence
 
     confluence.TRANSPORT = site.transport()
     try:

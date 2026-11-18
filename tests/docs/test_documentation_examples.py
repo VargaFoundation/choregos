@@ -16,8 +16,8 @@ from typing import Any
 
 import pytest
 import yaml
-from choregos_contracts import Policy
-from choregos_core import parse_workflow
+from tranibor_contracts import Policy
+from tranibor_core import parse_workflow
 
 DOCS = sorted((Path(__file__).resolve().parents[2] / "docs").glob("*.md"))
 BLOCK = re.compile(r"```yaml\n(.*?)```", re.S)

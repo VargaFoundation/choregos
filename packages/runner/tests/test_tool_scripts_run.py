@@ -17,15 +17,15 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from choregos_contracts import StageInput, ToolScripts
-from choregos_runner import tool_scripts
-from choregos_runner.backends import known_backends
-from choregos_runner.backends.code import CodeBackend
-from choregos_runner.config import RunnerSettings
-from choregos_runner.exits import Exit
-from choregos_runner.runner import Runner
-from choregos_runner.workspace import agent_home
-from choregos_tools_mcp.client import Relayed
+from tranibor_contracts import StageInput, ToolScripts
+from tranibor_runner import tool_scripts
+from tranibor_runner.backends import known_backends
+from tranibor_runner.backends.code import CodeBackend
+from tranibor_runner.config import RunnerSettings
+from tranibor_runner.exits import Exit
+from tranibor_runner.runner import Runner
+from tranibor_runner.workspace import agent_home
+from tranibor_tools_mcp.client import Relayed
 
 from .conftest import FakeInternalClient, agent_script, valid_result
 

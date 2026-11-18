@@ -8,12 +8,12 @@ transport, so the organisation's egress allowlist decides; the shipped fake reco
 from __future__ import annotations
 
 import pytest
-from choregos_adapters import build, spec_of
-from choregos_adapters.errors import AdapterError, UpstreamError
-from choregos_adapters.fakes.teams import FakeTeamsWebhook
-from choregos_adapters.notify.teams import TeamsNotifier, card
-from choregos_core.domain import Message
-from choregos_core.egress import AllowedRule, EgressPolicy, EgressRefusedError, use_policy
+from tranibor_adapters import build, spec_of
+from tranibor_adapters.errors import AdapterError, UpstreamError
+from tranibor_adapters.fakes.teams import FakeTeamsWebhook
+from tranibor_adapters.notify.teams import TeamsNotifier, card
+from tranibor_core.domain import Message
+from tranibor_core.egress import AllowedRule, EgressPolicy, EgressRefusedError, use_policy
 
 URL = "https://prod-12.westeurope.logic.azure.com/workflows/SECRETPATH123/triggers/manual/paths/invoke?sig=SECRETSIG"
 
@@ -98,27 +98,27 @@ def test_only_an_https_url_without_credentials_is_taken(url: str) -> None:
 def test_the_type_is_registered_with_its_url_as_a_secret_and_the_fake_serves_it(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import choregos_adapters
+    import tranibor_adapters
 
     spec = spec_of("notify", "teams")
     assert spec is not None and spec.secret_fields == ("webhook_url",)
     monkeypatch.setenv("CHOREGOS_FAKES", "1")
-    monkeypatch.setattr(choregos_adapters, "FAKE_TEAMS", None)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_TEAMS", None)
     built = build("notify", "teams", {"webhook_url": URL})
     assert isinstance(built, TeamsNotifier), (
         "under CHOREGOS_FAKES the real card is built over the fake webhook"
     )
-    assert isinstance(choregos_adapters.FAKE_TEAMS, FakeTeamsWebhook)
+    assert isinstance(tranibor_adapters.FAKE_TEAMS, FakeTeamsWebhook)
     with pytest.raises(AdapterError):
         build("notify", "teams", {})
 
 
 async def test_a_post_reaches_the_fake_of_the_process_under_fakes(monkeypatch: pytest.MonkeyPatch) -> None:
-    import choregos_adapters
+    import tranibor_adapters
 
     monkeypatch.setenv("CHOREGOS_FAKES", "1")
-    monkeypatch.setattr(choregos_adapters, "FAKE_TEAMS", None)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_TEAMS", None)
     notifier = build("notify", "teams", {"webhook_url": URL})
     with use_policy(_policy("prod-12.westeurope.logic.azure.com")):
         await notifier.send("", Message(title="hello"))
-    assert choregos_adapters.FAKE_TEAMS.texts() == ["hello"]
+    assert tranibor_adapters.FAKE_TEAMS.texts() == ["hello"]

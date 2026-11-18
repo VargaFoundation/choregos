@@ -8,8 +8,8 @@ from collections.abc import Iterator
 
 import pytest
 import structlog
-from choregos_core.redaction import forget_secrets
-from choregos_outpost import logs
+from tranibor_core.redaction import forget_secrets
+from tranibor_outpost import logs
 
 
 @pytest.fixture(autouse=True)

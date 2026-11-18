@@ -8,7 +8,7 @@ from typing import Any
 
 import httpx
 import pytest
-from choregos_contracts import (
+from tranibor_contracts import (
     Artifacts,
     Diagnostics,
     Evidence,
@@ -17,19 +17,19 @@ from choregos_contracts import (
     StageResult,
     StageStatus,
 )
-from choregos_runner.backends import (
+from tranibor_runner.backends import (
     BACKENDS,
     RUNTIME_BACKENDS,
     backend_version,
     get_backend,
     known_backends,
 )
-from choregos_runner.client import InternalApiError, InternalClient
-from choregos_runner.dod import CheckOutcome, DodReport, commands_for, run_checks
-from choregos_runner.guardrails import GuardRails
-from choregos_runner.result import complete_result, fallback_result, load_result, repair_prompt, write_result
-from choregos_runner.scope import check_scope
-from choregos_runner.workspace import Workspace, run_command
+from tranibor_runner.client import InternalApiError, InternalClient
+from tranibor_runner.dod import CheckOutcome, DodReport, commands_for, run_checks
+from tranibor_runner.guardrails import GuardRails
+from tranibor_runner.result import complete_result, fallback_result, load_result, repair_prompt, write_result
+from tranibor_runner.scope import check_scope
+from tranibor_runner.workspace import Workspace, run_command
 
 # ───────────────────────────── guardrails ─────────────────────────────
 
@@ -124,7 +124,7 @@ def test_a_missing_declared_output_goes_back_to_repair(tmp_path: Path) -> None:
 
 
 def test_the_task_names_the_expected_outputs(stage_input) -> None:  # type: ignore[no-untyped-def]
-    from choregos_runner.workspace import _task_markdown
+    from tranibor_runner.workspace import _task_markdown
 
     stage_with_outputs = stage_input.model_copy(
         update={"transition": stage_input.transition.model_copy(update={"outputs": ["size", "risk"]})}
@@ -177,7 +177,7 @@ def test_writing_and_rereading_the_result(tmp_path: Path) -> None:
 
 
 def test_commands_deduced_from_the_repository(tmp_path: Path) -> None:
-    from choregos_contracts import ProjectRef
+    from tranibor_contracts import ProjectRef
 
     (tmp_path / "package.json").write_text("{}", encoding="utf-8")
     stage_input = _minimal_stage_input(tmp_path)
@@ -194,7 +194,7 @@ def test_the_project_commands_take_precedence(tmp_path: Path) -> None:
 
 def test_a_dash_skips_a_check_the_project_does_not_have(tmp_path: Path) -> None:
     """S59-04: `typecheck_command: "-"` skips the check instead of falling back to `make typecheck`."""
-    from choregos_contracts import ProjectRef
+    from tranibor_contracts import ProjectRef
 
     (tmp_path / "pyproject.toml").write_text("[project]\nname = 'x'\n", encoding="utf-8")
     stage_input = _minimal_stage_input(tmp_path)
@@ -208,7 +208,7 @@ def test_a_dash_skips_a_check_the_project_does_not_have(tmp_path: Path) -> None:
 
 
 async def test_an_absent_command_is_skipped_not_ok(tmp_path: Path) -> None:
-    from choregos_contracts import ProjectRef
+    from tranibor_contracts import ProjectRef
 
     stage_input = _minimal_stage_input(tmp_path)
     stage_input.project = ProjectRef(slug="demo", org="northwind", test_command="true")
@@ -372,7 +372,7 @@ async def test_the_timeout_is_reported(tmp_path: Path) -> None:
 
 
 async def test_the_token_never_appears_in_clear(tmp_path: Path) -> None:
-    from choregos_runner.workspace import _redact, _with_token
+    from tranibor_runner.workspace import _redact, _with_token
 
     url = _with_token("https://github.com/acme/billing.git", "ghs_secret")
     assert "x-access-token:ghs_secret@" in url
@@ -383,13 +383,13 @@ async def test_the_token_never_appears_in_clear(tmp_path: Path) -> None:
 
 
 def _finding(title: str, type_: str, severity: str, evidence: str) -> Any:
-    from choregos_contracts import Finding
+    from tranibor_contracts import Finding
 
     return Finding(title=title, type=type_, severity=severity, evidence=evidence)
 
 
 def _minimal_stage_input(path: Path) -> Any:
-    from choregos_contracts import (
+    from tranibor_contracts import (
         AgentRef,
         Budget,
         Callbacks,
@@ -438,7 +438,7 @@ async def _git_workspace(path: Path) -> Workspace:
 
 def test_a_retired_backend_is_refused_with_its_reason() -> None:
     """The "openhands" backend is not a typo: we say why it is no longer there."""
-    from choregos_runner.backends import get_backend
+    from tranibor_runner.backends import get_backend
 
     with pytest.raises(KeyError) as error:
         get_backend("openhands")
@@ -451,7 +451,7 @@ async def test_git_accepts_the_workspace_even_if_the_volume_belongs_to_root(tmp_
     """A pod's volume belongs to root, the agent runs as 1000: without `safe.directory`,
     git refuses the repository ("detected dubious ownership") and advises writing a
     global configuration, which an ephemeral container cannot do."""
-    from choregos_runner.workspace import _git_env, run_command
+    from tranibor_runner.workspace import _git_env, run_command
 
     env = _git_env(tmp_path)
     assert env["GIT_CONFIG_KEY_0"] == "safe.directory"
@@ -467,8 +467,8 @@ def test_an_http_mcp_server_carries_its_headers(stage_input) -> None:  # type: i
     """The ACP schema requires `headers` for an HTTP server. Without it, `session/new` is
     refused with "Invalid params" and a tree of errors where the missing field is hard to
     read: the agent never starts."""
-    from choregos_contracts import McpServerRef, ToolsRef
-    from choregos_runner.backends.base import Backend
+    from tranibor_contracts import McpServerRef, ToolsRef
+    from tranibor_runner.backends.base import Backend
 
     stage_input.tools = ToolsRef(
         mcp={
@@ -487,7 +487,7 @@ def test_the_repository_is_not_the_agents_home_directory(stage_input) -> None:  
     became unreadable."""
     from pathlib import Path
 
-    from choregos_runner.workspace import workspace_env
+    from tranibor_runner.workspace import workspace_env
 
     env = workspace_env(stage_input)
     home = Path(env["HOME"])
@@ -500,8 +500,8 @@ async def test_the_runner_really_serves_the_files_it_announces(tmp_path) -> None
     """The two lies are costly, and we paid for them: announcing `fs` then refusing
     the call sends the agent off to redo everything in `bash`; announcing `false` disables its
     editing tools and it writes nothing any more."""
-    from choregos_runner.acp.client import AcpClient
-    from choregos_runner.acp.protocol import FS_READ_TEXT_FILE, FS_WRITE_TEXT_FILE, Request, Response
+    from tranibor_runner.acp.client import AcpClient
+    from tranibor_runner.acp.protocol import FS_READ_TEXT_FILE, FS_WRITE_TEXT_FILE, Request, Response
 
     (tmp_path / "src").mkdir()
     (tmp_path / "src" / "a.py").write_text("un\ndeux\ntrois\n", encoding="utf-8")
@@ -535,7 +535,7 @@ def test_the_scope_hook_lets_the_result_be_written(tmp_path, stage_input) -> Non
     import json
     import subprocess
 
-    from choregos_runner.backends.claude_code import ClaudeCodeBackend
+    from tranibor_runner.backends.claude_code import ClaudeCodeBackend
 
     workspace = tmp_path / "ws"
     (workspace / ".choregos").mkdir(parents=True)
@@ -561,8 +561,8 @@ async def test_the_permission_answer_reuses_a_proposed_id(tmp_path) -> None:  # 
     """ACP lets the agent NAME its options. Answering `allow_once` when it offers
     `allow` amounts to choosing nothing: the agent reads a refusal, and its transcript says
     "refused by the user" while our journal says "allowed"."""
-    from choregos_runner.acp.client import AcpClient
-    from choregos_runner.acp.protocol import SESSION_REQUEST_PERMISSION, Request, Response
+    from tranibor_runner.acp.client import AcpClient
+    from tranibor_runner.acp.protocol import SESSION_REQUEST_PERMISSION, Request, Response
 
     options = [
         {"kind": "allow_always", "optionId": "allow_always", "name": "Always Allow"},
@@ -598,7 +598,7 @@ def test_runtime_noise_does_not_enter_the_runs_commit(tmp_path) -> None:  # type
     nobody wrote."""
     import subprocess
 
-    from choregos_runner.workspace import Workspace
+    from tranibor_runner.workspace import Workspace
 
     repo_dir = tmp_path / "ws"
     repo_dir.mkdir()
@@ -628,8 +628,8 @@ def test_a_silent_agent_is_named_as_such() -> None:
     """When the model does not answer (key refused, quota reached, provider down),
     the agent says nothing and does nothing. Demanding `result.json` would then accuse the agent
     of an oversight, and the investigation would start from the wrong side."""
-    from choregos_runner.acp.client import PromptOutcome
-    from choregos_runner.runner import _agent_silent
+    from tranibor_runner.acp.client import PromptOutcome
+    from tranibor_runner.runner import _agent_silent
 
     assert _agent_silent(PromptOutcome(turns=1, messages=0, tool_calls=0))
     assert not _agent_silent(PromptOutcome(turns=1, messages=7, tool_calls=0)), "it spoke"
@@ -644,7 +644,7 @@ async def test_the_diff_is_measured_on_a_shallow_history(tmp_path) -> None:  # t
     changed. The scope then sees nothing any more, and the evidence announces zero files."""
     import subprocess
 
-    from choregos_runner.workspace import Workspace
+    from tranibor_runner.workspace import Workspace
 
     amont = tmp_path / "amont"
     amont.mkdir()
@@ -792,7 +792,7 @@ def test_the_policy_can_close_requests_of_unknown_nature() -> None:
 
 
 def test_the_regulated_preset_closes_unknown_requests() -> None:
-    from choregos_core import load_preset
+    from tranibor_core import load_preset
 
     assert load_preset("regulated").sandbox.unknown_requests == "reject"
     assert load_preset("team").sandbox.unknown_requests == "allow"
@@ -819,7 +819,7 @@ def test_opencode_writes_its_mcp_servers_in_its_own_schema(tmp_path: Path) -> No
     """
     import json as _json
 
-    from choregos_contracts import McpServerRef
+    from tranibor_contracts import McpServerRef
 
     stage_input = _minimal_stage_input(tmp_path)
     stage_input.tools.mcp = {
@@ -844,7 +844,7 @@ def test_the_other_backends_keep_the_common_format(tmp_path: Path) -> None:
     """The `mcpServers` format stays that of Claude Code, Codex and Gemini: do not align it."""
     import json as _json
 
-    from choregos_contracts import McpServerRef
+    from tranibor_contracts import McpServerRef
 
     stage_input = _minimal_stage_input(tmp_path)
     stage_input.tools.mcp = {"choregos": McpServerRef(url="http://localhost:7777/mcp")}

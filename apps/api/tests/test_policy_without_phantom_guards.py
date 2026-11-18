@@ -29,8 +29,8 @@ def _not_enforced(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 async def _policy_rows(project_id: str) -> int:
-    from choregos_api.db.models import PolicyDef
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import PolicyDef
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         return int(

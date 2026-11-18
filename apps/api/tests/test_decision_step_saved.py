@@ -43,9 +43,9 @@ transitions:
 
 
 async def _catalogue(usages: list[str]) -> None:
-    from choregos_api.db.models import ModelCatalogueRow, Organization
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import ModelCatalogueRow, Organization
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         org = (
@@ -84,10 +84,10 @@ async def test_a_gateway_without_the_decision_route_is_refused_at_save(
     client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The project's own `openai-compatible` gateway, built for real (the fakes declare every route)."""
-    from choregos_adapters.registry import _REGISTRY
-    from choregos_api.db.models import Connector
-    from choregos_api.db.session import session_scope
-    from choregos_api.services import gateway as gateway_service
+    from tranibor_adapters.registry import _REGISTRY
+    from tranibor_api.db.models import Connector
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services import gateway as gateway_service
 
     monkeypatch.setattr(
         gateway_service, "build", lambda kind, type_name, config: _REGISTRY[(kind, type_name)](config)
@@ -116,7 +116,7 @@ async def test_a_workflow_without_a_decision_step_is_not_checked(
 ) -> None:
     """No catalogue entry, a gateway that cannot be built: neither matters to a workflow that asks
     no decision."""
-    from choregos_api.services import gateway as gateway_service
+    from tranibor_api.services import gateway as gateway_service
 
     async def unbuildable(*_: Any) -> Any:
         raise AssertionError("the gateway is not built for a workflow without a decision step")

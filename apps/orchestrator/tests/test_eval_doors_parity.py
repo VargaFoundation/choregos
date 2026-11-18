@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from choregos_orchestrator.activities import eval_doors, evals
+from tranibor_orchestrator.activities import eval_doors, evals
 
 #: What the tool server showed the model of an answer before #1374.
 OLD_MAX_TEXT = 20_000

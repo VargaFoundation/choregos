@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import pytest
-from choregos_core.egress import (
+from tranibor_core.egress import (
     AllowedRule,
     EgressPolicy,
     EgressRefusedError,

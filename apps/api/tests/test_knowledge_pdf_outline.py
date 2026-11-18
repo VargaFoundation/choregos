@@ -5,11 +5,11 @@ so its chunks get heading paths and `knowledge_get` reads it by section."""
 from __future__ import annotations
 
 import pytest
-from choregos_api.knowledge import pdf_outline
-from choregos_api.knowledge.chunking import chunk
-from choregos_api.knowledge.convert import convert
-from choregos_api.knowledge.pdf_outline import bookmarks, with_headings
-from choregos_core.outline import outline
+from tranibor_api.knowledge import pdf_outline
+from tranibor_api.knowledge.chunking import chunk
+from tranibor_api.knowledge.convert import convert
+from tranibor_api.knowledge.pdf_outline import bookmarks, with_headings
+from tranibor_core.outline import outline
 
 from . import knowledge_fixtures as fx
 

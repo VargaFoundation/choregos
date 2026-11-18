@@ -72,10 +72,10 @@ async def test_a_connector_on_another_host_is_left_alone(
 async def test_the_claimed_installation_is_injected_when_the_connector_is_built(
     client: AsyncClient, project: dict[str, Any], github: Any
 ) -> None:
-    from choregos_api.db.models import Connector, Project
-    from choregos_api.db.session import session_scope
-    from choregos_api.secret_store import resolved_configuration
     from sqlalchemy import select
+    from tranibor_api.db.models import Connector, Project
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.secret_store import resolved_configuration
 
     github.add_installation(41, "northwind")
     assert (await _put(client, project, "scm", "github", {"repo": "northwind/billing"})).status_code == 200

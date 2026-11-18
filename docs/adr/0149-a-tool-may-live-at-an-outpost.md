@@ -1,11 +1,11 @@
 # 0149 — A tool may live at an outpost
 
 - **Status**: proposed, 2026-11-11
-- **Concerns**: a connector type `mcp-outpost` (`packages/adapters/src/choregos_adapters/specs.py`,
+- **Concerns**: a connector type `mcp-outpost` (`packages/adapters/src/tranibor_adapters/specs.py`,
   `builtins.py`, `registry.py`); `Route`, `route_of` and `connector_client`
-  (`apps/api/src/choregos_api/services/mcp_gateway.py`); the broker (`services/broker.py`); the
+  (`apps/api/src/tranibor_api/services/mcp_gateway.py`); the broker (`services/broker.py`); the
   `connector.call` effect (`effects.py`), its activity and its workflow
-  (`apps/orchestrator/src/choregos_orchestrator/activities/actions.py`, `workflows/action.py`); discovery
+  (`apps/orchestrator/src/tranibor_orchestrator/activities/actions.py`, `workflows/action.py`); discovery
   and the operation rule (`routers/org_connectors.py`); `ActionStatus` (a new `in_doubt`, a contract
   change); `GET /orgs/{org}/agents/{slug}/access`; the `network_decisions` journal; the outpost's chart.
   When accepted, amends [ADR 0034](0034-connectors-by-capability.md) (a connector may be reached through an
@@ -310,7 +310,7 @@ promises about it. Read on `main` at `9f646fda4`:
       (ADR 0101);
     - **`executed_at` is a recorded fact**, `platform` or `outpost:<id>`, not an assurance level. A gate
       that wants measured evidence already has `measured_only`
-      (`packages/core/src/choregos_core/gates/__init__.py`), and what the platform can compute from the
+      (`packages/core/src/tranibor_core/gates/__init__.py`), and what the platform can compute from the
       pushed branch (the diff, the scope, `no_secrets`) it keeps computing itself.
 
     Until a record decides it, `runs` is a capability no outpost announces.

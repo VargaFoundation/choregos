@@ -14,8 +14,8 @@ import pathlib
 from typing import Any
 
 import pytest
-from choregos_adapters.errors import ConfigurationError
-from choregos_adapters.fakes.executor import FakeExecutor
+from tranibor_adapters.errors import ConfigurationError
+from tranibor_adapters.fakes.executor import FakeExecutor
 
 from .conftest import Fixture, recording_history, refine_result
 from .kits.escalation import requests_of
@@ -41,11 +41,11 @@ def _refusing(setup: Fixture) -> FakeExecutor:
 async def test_a_refused_start_escalates_and_the_stage_replays_once_fixed(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from sqlalchemy import select
     from temporalio.worker import Replayer
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     executor = _refusing(setup)
     scripted(setup.adapters, refine_result("spec"))
@@ -85,8 +85,8 @@ async def test_a_history_before_the_marker_still_fails(
     setup: Fixture, temporal_env: Any, worker_factory: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A run recorded before the marker answers no to `patched`: the refusal fails it, as then."""
-    from choregos_orchestrator.workflows import interpreter
     from temporalio.client import WorkflowFailureError
+    from tranibor_orchestrator.workflows import interpreter
 
     real = interpreter.workflow.patched
     monkeypatch.setattr(

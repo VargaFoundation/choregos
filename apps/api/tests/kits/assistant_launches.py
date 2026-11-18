@@ -100,9 +100,9 @@ async def items(client: AsyncClient, kind_prefix: str = "launch_") -> list[tuple
 
 
 async def installation_id() -> str:
-    from choregos_api.db.models import AssistantInstallation
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import AssistantInstallation
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         return str(
@@ -117,18 +117,18 @@ async def installation_id() -> str:
 
 
 async def set_groups(email: str, groups: list[str]) -> None:
-    from choregos_api.db.models import User
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import User
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         (await session.execute(select(User).where(User.email == email))).scalar_one().groups = groups
 
 
 async def work_items(project_slug: str = "billing-api") -> list[Any]:
-    from choregos_api.db.models import Project, WorkItem
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Project, WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         rows = await session.execute(

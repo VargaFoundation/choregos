@@ -367,7 +367,7 @@ jobs:
           done
 
   pypi:
-    # `choregos-agent-sdk` and the `choregos-contracts` it depends on (ADR 0063). OFF until the two
+    # `tranibor-agent-sdk` and the `tranibor-contracts` it depends on (ADR 0063). OFF until the two
     # projects exist on pypi.org with this repository, this workflow and the `pypi` environment as
     # their trusted publisher: set the repository variable PUBLISH_TO_PYPI=true to turn it on.
     if: vars.PUBLISH_TO_PYPI == 'true'
@@ -380,7 +380,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
-      - run: uv build --package choregos-contracts --package choregos-agent-sdk --out-dir dist
+      - run: uv build --package tranibor-contracts --package tranibor-agent-sdk --out-dir dist
       - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
         with: { packages-dir: dist }
 

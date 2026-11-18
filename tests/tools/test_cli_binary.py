@@ -18,7 +18,7 @@ import urllib.request
 
 import pygments.lexers
 import pytest
-from choregos_cli import a2a
+from tranibor_cli import a2a
 
 from tools.cli_binary import build, release, smoke
 
@@ -48,7 +48,7 @@ def test_windows_file_version_is_four_numbers(version: str, numeric: str) -> Non
 
 
 def test_the_build_s_version_is_the_cli_s() -> None:
-    from choregos_cli import __version__
+    from tranibor_cli import __version__
 
     assert build.cli_version() == __version__
 
@@ -58,10 +58,10 @@ def test_the_nuitka_command_carries_the_data_and_leaves_out_what_is_not_the_cli(
 ) -> None:
     command = build.nuitka_command(pathlib.Path("python"), tmp_path, "choregos-linux-x86_64", "0.25.3")
     assert "--mode=onefile" in command
-    for package in ("choregos_core", "choregos_contracts", "jsonschema_specifications", "textual"):
+    for package in ("tranibor_core", "tranibor_contracts", "jsonschema_specifications", "textual"):
         assert f"--include-package-data={package}" in command
-    assert "--include-distribution-metadata=choregos-cli" in command
-    for module in ("opentelemetry", "choregos_orchestrator", "zstandard"):
+    assert "--include-distribution-metadata=tranibor-cli" in command
+    for module in ("opentelemetry", "tranibor_orchestrator", "zstandard"):
         assert f"--nofollow-import-to={module}" in command
     spec = next(arg for arg in command if arg.startswith("--onefile-tempdir-spec="))
     assert spec.startswith("--onefile-tempdir-spec={CACHE_DIR}/choregos/cli-0.25.3-")
@@ -79,7 +79,7 @@ def test_the_pygments_patterns_keep_the_python_lexer_and_the_name_table_only() -
 def test_forbidden_modules_are_found_in_a_report(tmp_path: pathlib.Path) -> None:
     report = tmp_path / "report.xml"
     report.write_text(
-        '<nuitka-compilation-report><module name="choregos_cli.main"/><module name="opentelemetry.trace"/>'
+        '<nuitka-compilation-report><module name="tranibor_cli.main"/><module name="opentelemetry.trace"/>'
         '<module name="opentelemetry_like"/></nuitka-compilation-report>',
         encoding="utf-8",
     )
@@ -90,11 +90,11 @@ def test_forbidden_modules_are_found_in_a_report(tmp_path: pathlib.Path) -> None
 def test_the_report_names_the_metadata_the_binary_carries(tmp_path: pathlib.Path) -> None:
     report = tmp_path / "report.xml"
     report.write_text(
-        '<nuitka-compilation-report><included_metadata name="choregos-cli" reason="user requested"/>'
+        '<nuitka-compilation-report><included_metadata name="tranibor-cli" reason="user requested"/>'
         '<included_metadata name="attrs" reason="static analysis"/></nuitka-compilation-report>',
         encoding="utf-8",
     )
-    assert build.bundled_metadata(report) == ["attrs", "choregos-cli"]
+    assert build.bundled_metadata(report) == ["attrs", "tranibor-cli"]
     assert set(build.REQUIRED_METADATA) <= set(build.bundled_metadata(report))
     for name in build.REQUIRED_METADATA:
         command = build.nuitka_command(pathlib.Path("python"), tmp_path, "choregos-linux-x86_64", "0.25.3")
@@ -174,7 +174,7 @@ def test_a_cli_that_needs_a_python_fails_the_smoke_test(tmp_path: pathlib.Path) 
     """The installed CLI's console script is a Python program: in the smoke test's environment it
     cannot start, so a 'binary' that is a Python in disguise never passes."""
     fake = tmp_path / "choregos-linux-x86_64"
-    fake.write_text(f"#!{sys.executable}\nfrom choregos_cli.main import main\nmain()\n", encoding="utf-8")
+    fake.write_text(f"#!{sys.executable}\nfrom tranibor_cli.main import main\nmain()\n", encoding="utf-8")
     fake.chmod(fake.stat().st_mode | stat.S_IEXEC)
     with pytest.raises(smoke.SmokeError, match="--version"):
         smoke.smoke(fake, "0.25.3")
@@ -215,7 +215,7 @@ def _info(**overrides: object) -> str:
         "compiled": True,
         "argv0": "choregos",
         "running_binary": None,
-        "detector": "choregos_cli.binary_info",
+        "detector": "tranibor_cli.binary_info",
     }
     info.update(overrides)
     return json.dumps(info)
@@ -250,7 +250,7 @@ def test_the_binary_must_know_its_version_and_its_path(
 
 def test_binary_info_from_python_packages_says_so() -> None:
     """Outside a binary the hidden command reports no running binary: `self update` refuses there."""
-    from choregos_cli.binary_info import info
+    from tranibor_cli.binary_info import info
 
     found = info()
     assert found["compiled"] is False and found["running_binary"] is None

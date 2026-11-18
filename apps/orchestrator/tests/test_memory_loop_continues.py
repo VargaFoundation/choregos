@@ -23,12 +23,12 @@ PAYLOAD = {"project_slug": "replay", "sources": ["closed_issues"], "max_cycles":
 async def play() -> tuple[str, dict[str, Any] | None, dict[str, list[Any]], Any]:
     """One cycle of a loop whose `max_cycles` is 1: how its first run ended, the input of the next run,
     what the activity was asked, and the first run's history."""
-    from choregos_orchestrator.testing import wait_for_event, workers_by_queue
-    from choregos_orchestrator.workflows.memory import MemoryIngestion
     from temporalio.api.enums.v1 import EventType
     from temporalio.client import WorkflowContinuedAsNewError
     from temporalio.converter import default
     from temporalio.testing import WorkflowEnvironment
+    from tranibor_orchestrator.testing import wait_for_event, workers_by_queue
+    from tranibor_orchestrator.workflows.memory import MemoryIngestion
 
     asked: dict[str, list[Any]] = {"ingest": []}
 
@@ -76,10 +76,10 @@ async def test_a_loop_past_its_cycles_continues_as_new_with_the_same_input() -> 
 
 
 async def test_the_archived_history_replays() -> None:
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.api.enums.v1 import EventType
     from temporalio.client import WorkflowHistory
     from temporalio.worker import Replayer
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     _, _, _, history = await play()
     replayer = Replayer(workflows=ALL_WORKFLOWS)

@@ -89,14 +89,14 @@ spec:
         # below included, until a direct connection out is refused three times in a row. k3s's
         # kube-router applies a new pod's egress policy seconds after it starts (#1854). Still open
         # after `deadlineSeconds`: exit 115, the pod fails, the warm pool replaces it. The same
-        # container `k8s_job` builds (`choregos_adapters.executor.egress_gate`).
+        # container `k8s_job` builds (`tranibor_adapters.executor.egress_gate`).
         - name: egress-gate
           image: {{ $image }}
           imagePullPolicy: {{ .Values.global.imagePullPolicy }}
           command:
             - /app/.venv/bin/python
             - -m
-            - choregos_core.egress_gate
+            - tranibor_core.egress_gate
             - --target
             - {{ $gate.target | default "1.1.1.1:443" | quote }}
             - --deadline

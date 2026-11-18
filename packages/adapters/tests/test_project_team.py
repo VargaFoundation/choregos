@@ -5,9 +5,9 @@ from __future__ import annotations
 import json
 
 import respx
-from choregos_adapters.fakes import BudgetExceededError, FakeGateway
-from choregos_adapters.gateway.litellm import LiteLlmGateway
 from httpx import Response
+from tranibor_adapters.fakes import BudgetExceededError, FakeGateway
+from tranibor_adapters.gateway.litellm import LiteLlmGateway
 
 LITELLM = "http://litellm.test"
 

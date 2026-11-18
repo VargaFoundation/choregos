@@ -30,16 +30,16 @@ LATE_RESULT: dict[str, Any] = {
 
 
 def _stage_input(run_id: str) -> dict[str, Any]:
-    import choregos_contracts
+    import tranibor_contracts
 
-    example = choregos_contracts.schemas_dir() / "examples" / "stage-input.example.json"
+    example = tranibor_contracts.schemas_dir() / "examples" / "stage-input.example.json"
     return {**json.loads(example.read_text(encoding="utf-8")), "run_id": run_id}
 
 
 async def a_run(project: dict[str, Any], *, status: str = "running", **columns: Any) -> str:
     """A run of a work item that already has a pull request, a size, a risk, a scope and a spec."""
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Run, WorkItem
+    from tranibor_api.db.session import session_scope
 
     number = next(_KEYS)
     run_id = f"northwind-billing-api-{number}-t-implement-1"
@@ -75,7 +75,7 @@ async def a_run(project: dict[str, Any], *, status: str = "running", **columns: 
 
 
 def token_of(run_id: str) -> dict[str, str]:
-    from choregos_api.security import mint_run_token
+    from tranibor_api.security import mint_run_token
 
     token = mint_run_token(
         run_id, project_slug="billing-api", work_item_key="northwind/billing-api#1", ttl_minutes=30
@@ -85,10 +85,10 @@ def token_of(run_id: str) -> dict[str, str]:
 
 async def close(run_id: str, *, status: str = "failed", reason: str = "timeout") -> None:
     """Close the row as the orchestrator does when it stops waiting (`close_run`, ADR 0143)."""
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
-    from choregos_contracts import StageResult
-    from choregos_core.run_closure import close_run
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
+    from tranibor_contracts import StageResult
+    from tranibor_core.run_closure import close_run
 
     async with session_scope(orgs="*") as session:
         run = await session.get(Run, run_id)
@@ -118,7 +118,8 @@ class Kept:
 
 
 async def kept(run_id: str) -> Kept:
-    from choregos_api.db.models import (
+    from sqlalchemy import func, select
+    from tranibor_api.db.models import (
         ArtifactRecord,
         CostLedger,
         Event,
@@ -128,9 +129,8 @@ async def kept(run_id: str) -> Kept:
         Run,
         WorkItem,
     )
-    from choregos_api.db.session import session_scope
-    from choregos_contracts import EventType
-    from sqlalchemy import func, select
+    from tranibor_api.db.session import session_scope
+    from tranibor_contracts import EventType
 
     async with session_scope(orgs="*") as session:
         run = await session.get(Run, run_id)

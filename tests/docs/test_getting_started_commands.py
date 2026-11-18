@@ -79,7 +79,7 @@ def test_every_command_exists(command: str) -> None:
         # The install of the CLI from the instance (S62-08): a route the API serves at the root.
         url = next(word for word in words if word.startswith("http"))
         path = "/" + url.split("://", 1)[1].split("/", 1)[1]
-        routes = (ROOT / "apps" / "api" / "src" / "choregos_api" / "routers" / "cli_downloads.py").read_text()
+        routes = (ROOT / "apps" / "api" / "src" / "tranibor_api" / "routers" / "cli_downloads.py").read_text()
         assert f'@router.get("{path}"' in routes, f"the API serves no `{path}`"
     elif tool in {"git", "cd"} or "=" in tool:
         return  # cloning, moving, or a line of `.env`

@@ -15,9 +15,9 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from choregos_contracts import StageInput
-from choregos_runner import outputs
-from choregos_runner.outputs import (
+from tranibor_contracts import StageInput
+from tranibor_runner import outputs
+from tranibor_runner.outputs import (
     OUTPUTS_DIR,
     collect,
     store_outputs,

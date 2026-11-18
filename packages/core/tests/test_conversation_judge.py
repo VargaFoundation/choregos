@@ -8,9 +8,9 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from choregos_core.conversation_evals import play_suite
-from choregos_core.conversation_judge import INSTRUCTIONS, PURPOSE, judge_with
-from choregos_core.prompt_loop import LoopTool
+from tranibor_core.conversation_evals import play_suite
+from tranibor_core.conversation_judge import INSTRUCTIONS, PURPOSE, judge_with
+from tranibor_core.prompt_loop import LoopTool
 
 QUOTE = "market_data__get_quote"
 TOOLS = [LoopTool(QUOTE, "quote", {"type": "object", "additionalProperties": True})]

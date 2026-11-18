@@ -105,8 +105,8 @@ ISSUER = "https://idp.example.test/realms/x"
 
 @pytest.fixture
 def idp(org: str, monkeypatch: pytest.MonkeyPatch) -> Any:
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.routers.auth import forget_discovery
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.routers.auth import forget_discovery
 
     monkeypatch.setenv("CHOREGOS_DEV_LOGIN_ENABLED", "false")
     monkeypatch.setenv("CHOREGOS_OIDC_ISSUER", ISSUER)

@@ -20,14 +20,14 @@ GUIDE = "# Guide\n\n## Tone\n\nAlways answer in plain words.\n"
 
 async def _files_base() -> dict[str, str]:
     """An installation with a restricted `groups` base of mode `files` that nobody has a grant on."""
-    from choregos_api.db.models import (
+    from tranibor_api.db.models import (
         AssistantInstallation,
         KnowledgeBase,
         KnowledgeDocument,
         Organization,
         User,
     )
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.session import session_scope
 
     ids: dict[str, str] = {}
     async with session_scope(orgs="*") as session:
@@ -94,8 +94,8 @@ async def test_a_withdrawn_document_is_neither_listed_nor_read_in_a_conversation
     upstream: Upstream,  # noqa: F811
 ) -> None:
     """ADR 0174 point 3: a document whose OKF header says `status: deprecated` reaches no agent."""
-    from choregos_api.db.models import KnowledgeDocument
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import KnowledgeDocument
+    from tranibor_api.db.session import session_scope
 
     ids = await _files_base()
     async with session_scope(orgs="*") as session:

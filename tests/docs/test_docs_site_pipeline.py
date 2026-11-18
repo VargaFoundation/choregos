@@ -14,7 +14,7 @@ from urllib.parse import urlparse
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 WEBSITE = ROOT / "website"
 WORKFLOW = ROOT / ".github" / "workflows" / "docs-site.yml"
-IDENTITY = json.loads((ROOT / "packages/core/src/choregos_core/publishing.json").read_text("utf-8"))
+IDENTITY = json.loads((ROOT / "packages/core/src/tranibor_core/publishing.json").read_text("utf-8"))
 
 
 def test_the_site_is_served_where_the_publishing_identity_says() -> None:

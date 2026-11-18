@@ -1,0 +1,403 @@
+# SPDX-License-Identifier: Apache-2.0
+"""The outcome of a step: the spend read at the gateway, the recorded result, the findings kept.
+
+All idempotent by `run_id`: `collect_spend` counts once (`spend_collected`), `record_run_outcome`
+does not overwrite a result already set.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+from urllib.parse import urlsplit
+
+import structlog
+from sqlalchemy import select, update
+from sqlalchemy.ext.asyncio import AsyncSession
+from temporalio import activity
+from tranibor_api.db.models import Finding as FindingRow
+from tranibor_api.db.models import Project, Run, WorkItem
+from tranibor_api.services import DecidedBy, persist_event, record_cost, record_decisions, store_outputs
+from tranibor_api.services.artifacts import record_diff, record_inline_outputs
+from tranibor_api.services.budget_alerts import unsent_month_alerts
+from tranibor_api.services.budgets import ticket_budget, ticket_spent
+from tranibor_api.services.model_catalogue import priced_spend
+from tranibor_api.services.tickets import outputs_to_store
+from tranibor_contracts import EventType, StageInput, StageResult, StageStatus
+from tranibor_core import Message, Spend, elapsed_seconds, utcnow
+from tranibor_core.decision_ledger import declared_confidences
+from tranibor_core.domain import DiffSummary
+from tranibor_core.run_stop import stopped_by_a_person
+from tranibor_core.unified_diff import unified_diff
+
+from ..config import get_settings
+from ..train_client import signal_findings
+from .base import db, load_work_item, notification_target, project_bundle, work_item_workflow
+from .job import JOB_BACKEND
+from .remote import declared_cost_usd
+from .repositories import adopt
+from .run_key import release_run_key
+
+logger = structlog.get_logger("choregos.outcome")
+#: An agent's declared confidence in the decision ledger (ADR 0121 §6).
+AGENT_SOURCE = "agent"
+
+
+async def _tell_slack_of_agent_alerts(session: Any, bundle: Any) -> None:
+    """The monthly alerts of the organisation's agents (50, 80, 100 %) that Slack has not heard yet.
+    One message each; `notified_at` is what makes it once. A notifier that is absent or down leaves
+    the alert unsent: the next stage end tries again, and the inbox has it meanwhile."""
+    for alert in await unsent_month_alerts(session, bundle.project.org_id):
+        full = alert.threshold >= 100
+        try:
+            await bundle.adapters.notify.send(
+                notification_target(bundle),
+                Message(
+                    title=(
+                        f"Agent {alert.subject}: monthly budget {alert.threshold} % "
+                        f"({alert.spent_usd:.2f} / {alert.budget_usd:.2f} $)"
+                    ),
+                    body=(
+                        "The agent is suspended: its new runs are refused until it is resumed."
+                        if full
+                        else "Nothing is stopped yet."
+                    ),
+                    severity="error" if full else "warning",
+                    context={"agent": alert.subject, "month": alert.period_key},
+                ),
+            )
+        except Exception as error:
+            activity.logger.warning("agent budget alert not sent: %s", error)
+            return
+        alert.notified_at = utcnow()
+
+
+@activity.defn(name="collect_spend")
+async def collect_spend(payload: dict[str, Any]) -> dict[str, Any]:
+    """Read the spend at the gateway (the cost's source of truth), book it in the ledger, revoke the key."""
+    settings = get_settings()
+    async with db() as session:
+        bundle = await project_bundle(session, payload["project_id"])
+        run = await session.get(Run, payload["run_id"])
+        if run is None:
+            return Spend().model_dump(mode="json")
+        return await book_spend(session, bundle, run, settings)
+
+
+async def book_spend(session: Any, bundle: Any, run: Run, settings: Any) -> dict[str, Any]:
+    """`collect_spend` in an open session: a decision step (ADR 0121) books its spend before its
+    key is revoked, in the activity that minted it. Counted once (`spend_collected`)."""
+    if run.spend_collected or not await _claim_the_spend(session, run):
+        return {**(run.tokens or {}), **await ticket_view(session, bundle, run.work_item_id)}
+    spend = Spend()
+    if run.gateway_key_id:
+        spend = await bundle.adapters.gateway.spend(run.gateway_key_id)
+    measured = "spend_readback" in getattr(bundle.adapters.gateway, "capabilities", {"spend_readback"})
+    # The organisation's price override (ADR 0060) replaces the gateway's figure when tokens are
+    # known; a gateway that cannot read a spend back leaves the line `unmeasured`.
+    spend, pricing = await priced_spend(
+        session, bundle.project.org_id, [run.model or "", *spend.models_used], spend, measured=measured
+    )
+    # A remote agent reports no cost (ADR 0062): what its registry entry DECLARES is booked,
+    # as `external`, apart from the model spend.
+    remote = StageInput.model_validate(run.stage_input).remote if run.stage_input else None
+    if remote is not None:
+        wall = elapsed_seconds(run.started_at, run.ended_at or utcnow())
+        spend = Spend(cost_usd=declared_cost_usd(StageInput.model_validate(run.stage_input), wall))
+    # The round trips (S57-01, ADR 0122): the model calls the gateway's spend logs counted for
+    # this segment's key. Unknown, not zero, when the gateway cannot read a spend back, and for a
+    # remote agent, whose model calls the platform never sees.
+    requests = spend.requests if measured and remote is None else None
+    item = await load_work_item(session, run.work_item_id)
+    segment = {
+        "tokens_in": spend.tokens_in,
+        "tokens_out": spend.tokens_out,
+        "tokens_cached": spend.tokens_cached,
+        "cost_usd": spend.cost_usd,
+        "cost_eur": round(spend.cost_usd * settings.fx_usd_eur, 6),
+    }
+    # A run resumed after a person's answer (S35-03) is ONE run in two segments: what it
+    # spent before the question stays on it, the continuation is added, and the work item
+    # does not count a second run.
+    resumed = dict(run.tokens or {}) if (run.tokens or {}).get("resumed") else {}
+    of_the_run: dict[str, Any] = dict(resumed)
+    for name in ("tokens_in", "tokens_out", "tokens_cached"):
+        of_the_run[name] = int(resumed.get(name, 0)) + int(segment[name])
+    for name in ("cost_usd", "cost_eur"):
+        of_the_run[name] = round(float(resumed.get(name, 0.0)) + float(segment[name]), 6)
+    # A segment whose calls are unknown, this one or the one before the question (booked before
+    # S57-01), leaves the run's count unknown: a partial count would read as fewer round trips.
+    earlier = resumed.get("requests") if resumed else 0
+    if requests is None or earlier is None:
+        of_the_run.pop("requests", None)
+    else:
+        of_the_run["requests"] = int(earlier) + requests
+    of_the_run["runs"] = 1
+    of_the_run.update(pricing)
+    run.tokens = of_the_run
+    run.cost_usd = float(of_the_run["cost_usd"])
+    run.spend_collected = True
+    run.ended_at = run.ended_at or utcnow()
+    await record_cost(
+        session,
+        project_id=bundle.project.id,
+        work_item_id=item.id,
+        run_id=run.id,
+        provider=(
+            (urlsplit(remote.endpoint).hostname or "")
+            if remote is not None
+            else (spend.models_used[0].split("/")[0] if spend.models_used else "")
+        ),
+        model=(run.model or "") + (" (unmeasured)" if remote is not None and spend.cost_usd == 0 else ""),
+        kind="external" if remote is not None else "model",
+        backend=run.backend,
+        stage_role=run.stage_role,
+        size=item.size,
+        tokens_in=spend.tokens_in,
+        tokens_out=spend.tokens_out,
+        tokens_cached=spend.tokens_cached,
+        cost_usd=spend.cost_usd,
+        fx_rate=settings.fx_usd_eur,
+    )
+    totals = dict(item.totals or {})
+    # The work item counts its model calls only while every run of it told them: one booked
+    # before S57-01, or whose calls are unknown, leaves the work item's count unknown for good.
+    if requests is not None and ("requests" in totals or not int(totals.get("runs", 0))):
+        totals["requests"] = int(totals.get("requests", 0)) + requests
+    else:
+        totals.pop("requests", None)
+    for field in ("tokens_in", "tokens_out", "tokens_cached"):
+        totals[field] = int(totals.get(field, 0)) + int(segment[field])
+    totals["cost_usd"] = round(float(totals.get("cost_usd", 0.0)) + spend.cost_usd, 6)
+    totals["cost_eur"] = round(float(totals.get("cost_eur", 0.0)) + segment["cost_eur"], 6)
+    totals["runs"] = int(totals.get("runs", 0)) + (0 if resumed else 1)
+    totals["duration_s"] = float(totals.get("duration_s", 0.0)) + elapsed_seconds(
+        run.started_at, run.ended_at
+    )
+    item.totals = totals
+
+    # The run is over: its key is revoked and no copy of it stays on the row (#519, #523).
+    await release_run_key(session, bundle, run, spend_usd=spend.cost_usd)
+    await session.flush()
+    await _tell_slack_of_agent_alerts(session, bundle)
+    # What the ticket has cost, read from the ledger — this run's line included, tool calls
+    # too (S27-03): the interpreter's counter is this, not a sum it keeps in memory.
+    return {**run.tokens, **await ticket_view(session, bundle, item.id)}
+
+
+async def _claim_the_spend(session: Any, run: Run) -> bool:
+    """Whether this transaction books the run's spend: the flag is set by a conditional update, so
+    two activities that end the same run at once — the interpreter's `collect_spend` and a stop's
+    `cancel_run` (ADR 0142 §2) — book it once. The loser reads what the winner wrote."""
+    claimed = await session.execute(
+        update(Run)
+        .where(Run.id == run.id, Run.spend_collected.is_(False))
+        .values(spend_collected=True)
+        .execution_options(synchronize_session=False)
+    )
+    if claimed.rowcount == 1:
+        return True
+    await session.refresh(run)
+    return False
+
+
+async def close_run_spend(project_id: str, run_id: str) -> None:
+    """A run that ends without the interpreter's `collect_spend` (cancelled, its workflow dead):
+    its spend is booked and its key revoked all the same (#523). Never raises.
+
+    `collect_spend` first, because a revoked key may no longer tell its spend; if the gateway
+    cannot answer, the key is still revoked and scrubbed, and its spend is not booked.
+    """
+    try:
+        await collect_spend({"project_id": project_id, "run_id": run_id})
+        return
+    except Exception as error:
+        logger.warning("spend of an abandoned run not collected", run_id=run_id, error=str(error)[:300])
+    try:
+        async with db() as session:
+            bundle = await project_bundle(session, project_id)
+            run = await session.get(Run, run_id)
+            if run is not None:
+                await release_run_key(session, bundle, run)
+    except Exception as error:  # a cleanup: the key still dies at its TTL
+        logger.warning("key of an abandoned run not released", run_id=run_id, error=str(error)[:300])
+
+
+async def ticket_view(session: Any, bundle: Any, work_item_id: str) -> dict[str, float]:
+    """What the ticket has cost, read from the ledger (models and tools), and its budget as it
+    stands now — its size may have changed since the interpreter started (S27-03)."""
+    item = await load_work_item(session, work_item_id)
+    return {
+        "ticket_cost_usd": await ticket_spent(session, work_item_id, item.recurred_at),
+        "ticket_budget_usd": ticket_budget(bundle.engine, item),
+    }
+
+
+@activity.defn(name="record_run_outcome")
+async def record_run_outcome(payload: dict[str, Any]) -> dict[str, Any]:
+    """Record the result of a step (status, findings counted) without replaying it twice."""
+    async with db() as session:
+        run = await session.get(Run, payload["run_id"])
+        if run is None:
+            return {"recorded": False}
+        result = StageResult.model_validate(payload["result"])
+        if run.result is None:
+            run.result = result.model_dump(mode="json", by_alias=True)
+        if stopped_by_a_person(result):
+            run.status = "cancelled"  # a person stopped it (ADR 0142 §2): not a failure to learn from
+        else:
+            run.status = "succeeded" if result.status == StageStatus.DONE else "failed"
+        run.ended_at = run.ended_at or utcnow()
+        item = await load_work_item(session, run.work_item_id)
+        outputs = result.outputs
+        if outputs.size:
+            item.size = str(outputs.size)
+        if outputs.risk:
+            item.risk = str(outputs.risk)
+        if outputs.allowed_paths:
+            item.allowed_paths = list(outputs.allowed_paths)
+        declared_outputs = list(((run.stage_input or {}).get("transition") or {}).get("outputs") or [])
+        if result.status == StageStatus.DONE:
+            # The repository a step names, when its transition declares it (ADR 0124 §2): the work
+            # item's target from now on, checked at the next stage that touches git.
+            adopt(item, outputs.model_dump(mode="json", exclude_none=True), declared_outputs)
+        documents = store_outputs(item, outputs, declared_outputs)
+        # An infrastructure PR declared by the agent (`artifacts.reports["infra_pr"]`) follows the
+        # work item to the train, which triggers its Atlantis `apply` after approval.
+        infra_pr = result.artifacts.reports.get("infra_pr")
+        if infra_pr:
+            documents["infra_pr_url"] = infra_pr
+        if result.status == StageStatus.DONE:
+            documents.pop("human_answer", None)  # the answer served the step that asked for it
+        item.documents = documents
+        # The same outputs as typed artifacts (ADR 0049). Usually already recorded when the runner
+        # posted its result; the same content makes no new version, so this is a no-op then.
+        # After `documents` is final: recording flushes, and a later in-place change of the same
+        # dict would no longer be seen.
+        project = await session.get(Project, run.project_id)
+        if project is not None:
+            await record_inline_outputs(
+                session,
+                org_id=project.org_id,
+                item=item,
+                run=run,
+                outputs=outputs_to_store(outputs, declared_outputs),
+                types=dict(((run.stage_input or {}).get("transition") or {}).get("output_types") or {}),
+            )
+        if result.artifacts.pr_url:
+            item.pr_url = result.artifacts.pr_url
+        if result.status == StageStatus.DONE and project is not None and run.backend != JOB_BACKEND:
+            await _record_declared_confidences(session, project, item, run, result, declared_outputs)
+        recorded = await _persist_findings(session, run, item, result)
+        outcome = {"recorded": True, "status": run.status, "findings": recorded}
+    if outcome["status"] == "failed":
+        await _keep_the_lesson(payload["run_id"])
+    return outcome
+
+
+async def record_the_diff(session: AsyncSession, item: WorkItem, run: Run, diff: DiffSummary) -> None:
+    """The branch's patch, as an artifact (ADR 0129 §7). It serves the display: it never fails the
+    activity, whose counters the gates and the run page still need."""
+    rendered = unified_diff(diff, get_settings().artifact_diff_max_bytes)
+    if rendered is None:
+        return
+    try:
+        project = await session.get(Project, run.project_id)
+        if project is not None:
+            await record_diff(session, org_id=project.org_id, item=item, run=run, diff=rendered)
+    except Exception:
+        logger.exception("diff artifact not recorded", work_item=item.tracker_key, run_id=run.id)
+
+
+async def _keep_the_lesson(run_id: str) -> None:
+    """A failed run's lesson goes to memory now (S51-02), once (`run:<id>`). Best effort: memory never
+    blocks a stage (ADR 0007); the memory loop's `run_lessons` source catches a missed one up."""
+    from .memory import keep_the_lesson_of_a_failed_run
+
+    try:
+        await keep_the_lesson_of_a_failed_run(run_id)
+    except Exception as error:
+        logger.warning("lesson of a failed run not kept", run_id=run_id, error=str(error)[:300])
+
+
+async def _record_declared_confidences(
+    session: Any, project: Project, item: Any, run: Run, result: StageResult, declared: list[str]
+) -> None:
+    """The confidence an agent declared (ADR 0106) goes to the decision ledger beside a decision
+    model's answers (ADR 0121 §6), to be measured on the same footing. What it is the probability of
+    is `tranibor_core.decision_ledger`'s rule; a job's figures are measured, not declared, and are
+    left out. Recorded once per run and question: a retried activity adds nothing."""
+    answers = declared_confidences(result.outputs.model_dump(mode="json", exclude_none=True), declared)
+    if not answers:
+        return
+    transition = (run.stage_input or {}).get("transition") or {}
+    workflow = await work_item_workflow(session, item)
+    decided = DecidedBy(
+        org_id=project.org_id,
+        project_id=project.id,
+        project_slug=project.slug,
+        work_item_id=item.id,
+        work_item_key=item.tracker_key,
+        run_id=run.id,
+        workflow=workflow.metadata.name,
+        workflow_version=workflow.metadata.version,
+        step=str(transition.get("from") or transition.get("from_") or run.transition_id or ""),
+        transition_id=run.transition_id,
+        source=AGENT_SOURCE,
+        model=run.model or run.backend or AGENT_SOURCE,
+        # The registry agent and its version: its instructions are what its confidence is measured on.
+        model_version=f"{run.agent_slug}@{run.agent_version}" if run.agent_slug else None,
+        decided_at=run.ended_at or utcnow(),
+    )
+    await record_decisions(session, decided, answers)
+
+
+async def _persist_findings(session: Any, run: Run, item: Any, result: StageResult) -> list[str]:
+    """The findings declared in the result are not lost.
+
+    The runner normally posts them one by one during the run (the `report_finding` MCP tool); if the
+    API was unavailable at that moment, the result still carries them. They are recorded here,
+    without duplicates (same run, same title), and the triage is then woken.
+    """
+    if not result.findings:
+        return []
+    bundle = await project_bundle(session, run.project_id)
+    cap = bundle.engine.max_findings_per_run()
+    existing = (
+        (await session.execute(select(FindingRow).where(FindingRow.origin_run_id == run.id))).scalars().all()
+    )
+    known = {row.title for row in existing}
+    created: list[str] = []
+    for finding in result.findings:
+        if finding.title in known or len(existing) + len(created) >= cap:
+            continue
+        row = FindingRow(
+            project_id=run.project_id,
+            origin_work_item_id=item.id,
+            origin_run_id=run.id,
+            title=finding.title,
+            type=str(finding.type),
+            severity=str(finding.severity),
+            evidence=finding.evidence,
+            suggested_fix=finding.suggested_fix,
+            estimate=str(finding.estimate) if finding.estimate else None,
+            status="pending",
+        )
+        session.add(row)
+        await session.flush()
+        created.append(row.id)
+        await persist_event(
+            session,
+            EventType.FINDING_REPORTED,
+            project_id=run.project_id,
+            work_item_id=item.id,
+            project_slug=bundle.slug,
+            subject=row.id,
+            finding_id=row.id,
+            severity=row.severity,
+            title=row.title,
+        )
+    for finding_id in created:
+        await signal_findings(
+            bundle.slug, "finding", {"finding_id": finding_id, "project_id": run.project_id}
+        )
+    return created

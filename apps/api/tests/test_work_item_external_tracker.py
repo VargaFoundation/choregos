@@ -5,12 +5,12 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from choregos_adapters.errors import AdapterError
-from choregos_adapters.fakes.tracker import FakeTracker
-from choregos_contracts import InboundEvent, InboundEventType
-from choregos_core.domain import NewItem
 from httpx import AsyncClient
 from sqlalchemy import select
+from tranibor_adapters.errors import AdapterError
+from tranibor_adapters.fakes.tracker import FakeTracker
+from tranibor_contracts import InboundEvent, InboundEventType
+from tranibor_core.domain import NewItem
 
 ONBOARDING = """apiVersion: choregos/v1
 kind: Workflow
@@ -46,7 +46,7 @@ def tracker(monkeypatch: pytest.MonkeyPatch) -> FakeTracker:
 
 
 def _install(monkeypatch: pytest.MonkeyPatch, fake: FakeTracker) -> FakeTracker:
-    from choregos_api.services import tickets
+    from tranibor_api.services import tickets
 
     real = tickets.project_tracker
 
@@ -75,7 +75,7 @@ async def _github(client: AsyncClient, project: dict[str, Any]) -> str:
 async def test_a_github_project_files_the_issue_then_the_work_item(
     client: AsyncClient, project: dict[str, Any], tracker: FakeTracker
 ) -> None:
-    from choregos_api.temporal import get_temporal, interpreter_id
+    from tranibor_api.temporal import get_temporal, interpreter_id
 
     pid = await _github(client, project)
     created = await client.post(
@@ -123,8 +123,8 @@ async def test_refused_fields_leave_no_issue(
 async def test_a_tracker_refusal_is_a_readable_502(
     client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     _install(monkeypatch, RefusingTracker("billing-api"))
     pid = await _github(client, project)
@@ -151,10 +151,10 @@ async def test_internal_or_absent_tracker_unchanged(
 async def test_the_webhook_ignores_the_issue_until_labelled(
     client: AsyncClient, project: dict[str, Any], tracker: FakeTracker
 ) -> None:
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.routers.webhooks import _dispatch
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.routers.webhooks import _dispatch
+    from tranibor_api.temporal import get_temporal
 
     pid = await _github(client, project)
     created = await client.post(

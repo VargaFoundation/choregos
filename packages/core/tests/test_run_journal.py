@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from choregos_core.run_journal import (
+from tranibor_core.run_journal import (
     GATE_OUTCOME,
     MEMORY_SKIPPED,
     PLATFORM_EVENTS,

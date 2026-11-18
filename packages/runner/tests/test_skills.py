@@ -6,12 +6,12 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from choregos_contracts import SkillRef, StageInput, skill_digest
-from choregos_runner.backends import get_backend
-from choregos_runner.exits import Exit
-from choregos_runner.runner import Runner
-from choregos_runner.skills import FALLBACK_DIR, InvalidSkill, place_skills
-from choregos_runner.workspace import git_dir_for
+from tranibor_contracts import SkillRef, StageInput, skill_digest
+from tranibor_runner.backends import get_backend
+from tranibor_runner.exits import Exit
+from tranibor_runner.runner import Runner
+from tranibor_runner.skills import FALLBACK_DIR, InvalidSkill, place_skills
+from tranibor_runner.workspace import git_dir_for
 
 from .conftest import FakeInternalClient, agent_script, valid_result
 
@@ -122,7 +122,7 @@ PNG = b"\x89PNG\r\n\x1a\n\x00\xff\xfe"
 
 
 def test_an_inert_binary_is_written_as_bytes_without_an_exec_bit(tmp_path: Path) -> None:
-    from choregos_contracts import encode_binary
+    from tranibor_contracts import encode_binary
 
     files = {**FILES, "assets/logo.png": encode_binary(PNG)}
     ref = SkillRef(slug="onboarding-procedure", version=2, digest=skill_digest(files))
@@ -135,7 +135,7 @@ def test_an_inert_binary_is_written_as_bytes_without_an_exec_bit(tmp_path: Path)
 
 
 def test_a_binary_swapped_after_preparation_stops_the_run(tmp_path: Path) -> None:
-    from choregos_contracts import encode_binary
+    from tranibor_contracts import encode_binary
 
     expected = {**FILES, "a.png": encode_binary(PNG)}
     ref = SkillRef(slug="onboarding-procedure", version=2, digest=skill_digest(expected))

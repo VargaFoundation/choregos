@@ -54,9 +54,9 @@ async def test_two_merges_make_one_batch(setup: Fixture, temporal_env: Any, work
             await handle.signal("abort", {"by": "test"})
             await handle.result()
 
-    from choregos_api.db.models import Release
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Release
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         releases = (await session.execute(select(Release))).scalars().all()
@@ -102,9 +102,9 @@ async def test_broken_canary_rolls_back_and_freezes(
             await handle.signal("abort", {"by": "test"})
             await handle.result()
 
-    from choregos_api.db.models import Finding, Release
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Finding, Release
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         releases = (await session.execute(select(Release))).scalars().all()

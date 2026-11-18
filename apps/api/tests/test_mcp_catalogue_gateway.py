@@ -10,9 +10,9 @@ from collections.abc import Iterator
 from typing import Any
 
 import pytest
-from choregos_api.secret_store import FakeSecretStore, set_secret_store
-from choregos_core import mcp_catalogue
 from httpx import AsyncClient
+from tranibor_api.secret_store import FakeSecretStore, set_secret_store
+from tranibor_core import mcp_catalogue
 
 BASE = "/api/v1/orgs/northwind/mcp-catalogue"
 GATEWAY = "/api/v1/orgs/northwind/mcp-gateway"
@@ -20,7 +20,7 @@ GATEWAY = "/api/v1/orgs/northwind/mcp-gateway"
 
 @pytest.fixture(autouse=True)
 def _isolated() -> Iterator[None]:
-    from choregos_api.services import mcp_gateway as service
+    from tranibor_api.services import mcp_gateway as service
 
     mcp_catalogue.load_with_site.cache_clear()
     set_secret_store(FakeSecretStore())

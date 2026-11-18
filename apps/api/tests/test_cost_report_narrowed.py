@@ -19,8 +19,8 @@ SCOPES = ("project", "org")
 
 
 async def _seed(project_id: str) -> dict[str, str]:
-    from choregos_api.db.models import CostLedger, Run, WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import CostLedger, Run, WorkItem
+    from tranibor_api.db.session import session_scope
 
     now = datetime.now(UTC)
     async with session_scope() as session:
@@ -91,9 +91,9 @@ async def items(client: AsyncClient, project: dict[str, Any]) -> dict[str, str]:
 async def _seed_assistants(project_id: str) -> dict[str, str]:
     """Two installations of the organisation and their lines: `investor`'s conversation turn and task,
     `support`'s turn. Each cost is a power of two above the base seed's 31."""
-    from choregos_api.db.models import AssistantInstallation, CostLedger, Organization
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import AssistantInstallation, CostLedger, Organization
+    from tranibor_api.db.session import session_scope
 
     now = datetime.now(UTC)
     async with session_scope() as session:

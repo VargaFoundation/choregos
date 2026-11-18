@@ -1,7 +1,7 @@
 # 0026 — What the core's row-level security covers, and what it leaves to the enterprise edition
 
 - **Status**: accepted, 2026-09-28 — refines a consequence of [ADR 0024](0024-two-editions.md); decision 3 **superseded on 2026-09-29** (see the update at the end)
-- **Concerns**: `apps/api/src/choregos_api/migrations`, `apps/api/tests/test_rls_postgres.py`
+- **Concerns**: `apps/api/src/tranibor_api/migrations`, `apps/api/tests/test_rls_postgres.py`
 
 ## Context
 

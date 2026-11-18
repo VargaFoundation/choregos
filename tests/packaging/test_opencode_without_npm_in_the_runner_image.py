@@ -12,11 +12,11 @@ from __future__ import annotations
 import pathlib
 import re
 
-from choregos_runner.backends.others import OPENCODE_CONFIG_HOME
+from tranibor_runner.backends.others import OPENCODE_CONFIG_HOME
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 DOCKERFILE = (ROOT / "docker/runner.Dockerfile").read_text(encoding="utf-8")
-LOCK = (ROOT / "packages/runner/src/choregos_runner/backends/versions.lock").read_text(encoding="utf-8")
+LOCK = (ROOT / "packages/runner/src/tranibor_runner/backends/versions.lock").read_text(encoding="utf-8")
 
 
 def _pins() -> dict[str, str]:
@@ -43,5 +43,5 @@ def test_what_is_baked_belongs_to_the_runner_user_and_is_checked() -> None:
 
 
 def test_the_bake_comes_after_the_versions_lock_is_in_the_image() -> None:
-    lock_copy = "COPY packages/runner/src/choregos_runner/backends/versions.lock /etc/choregos"
+    lock_copy = "COPY packages/runner/src/tranibor_runner/backends/versions.lock /etc/choregos"
     assert DOCKERFILE.index(lock_copy) < DOCKERFILE.index('"@opencode-ai/plugin@')

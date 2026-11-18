@@ -1,5 +1,5 @@
 /**
- * Writes `apps/api/src/choregos_api/theme_defaults.json`: the console's colour roles, resolved to
+ * Writes `apps/api/src/tranibor_api/theme_defaults.json`: the console's colour roles, resolved to
  * `#rrggbb`, for each mode, from `src/styles/theme.css` (S39-03, ADR 0064).
  *
  * The API validates a served theme against the console's contrast budget on the EFFECTIVE tokens
@@ -11,7 +11,7 @@ import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { themeDefaults } from "../tests/theme-tokens.ts";
 
-const DESTINATION = resolve(import.meta.dirname, "../../api/src/choregos_api/theme_defaults.json");
+const DESTINATION = resolve(import.meta.dirname, "../../api/src/tranibor_api/theme_defaults.json");
 
 writeFileSync(DESTINATION, `${JSON.stringify(themeDefaults(), null, 2)}\n`);
 console.log(`wrote ${DESTINATION}`);

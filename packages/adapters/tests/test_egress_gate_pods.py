@@ -7,12 +7,12 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from choregos_adapters.executor import egress_gate
-from choregos_adapters.executor.agent_sandbox import AgentSandboxExecutor
-from choregos_adapters.executor.k8s_job import AGENT_CONTAINER, KubernetesJobExecutor
-from choregos_core.domain import AgentContainer, ExecRef, StageJobSpec
-from choregos_core.egress_gate import GATE_CONTAINER, REPORT_ENV, EgressGate
-from choregos_core.exit_codes import Exit
+from tranibor_adapters.executor import egress_gate
+from tranibor_adapters.executor.agent_sandbox import AgentSandboxExecutor
+from tranibor_adapters.executor.k8s_job import AGENT_CONTAINER, KubernetesJobExecutor
+from tranibor_core.domain import AgentContainer, ExecRef, StageJobSpec
+from tranibor_core.egress_gate import GATE_CONTAINER, REPORT_ENV, EgressGate
+from tranibor_core.exit_codes import Exit
 
 RUNNER = "harbor.example/choregos-runner:0.28.0"
 HOSTED = "ghcr.io/acme/triager:1@sha256:" + "a" * 64
@@ -58,7 +58,7 @@ async def test_the_gate_is_the_first_init_container_of_the_agent_pod() -> None:
     first = pod["initContainers"][0]
     assert first["name"] == GATE_CONTAINER
     assert first["image"] == RUNNER, "no image of its own: the runner's, already pulled for the run"
-    assert first["command"][:3] == [egress_gate.PYTHON, "-m", "choregos_core.egress_gate"]
+    assert first["command"][:3] == [egress_gate.PYTHON, "-m", "tranibor_core.egress_gate"]
     assert first["command"][3:] == EgressGate().args()
     assert "restartPolicy" not in first, "a plain init container: the pod waits for it to exit 0"
     assert "env" not in first and "envFrom" not in first, "the gate holds nothing of the run"
@@ -103,7 +103,7 @@ async def test_without_a_gate_the_pod_is_as_before(hosted: bool) -> None:
 
 
 def test_the_deployment_turns_the_gate_on_for_k8s_job(monkeypatch: pytest.MonkeyPatch) -> None:
-    from choregos_adapters.registry import _REGISTRY
+    from tranibor_adapters.registry import _REGISTRY
 
     config = {"kubernetes": {"base_url": "https://k8s.example", "token": "t", "verify": False}}
     monkeypatch.delenv("CHOREGOS_RUNNER_EGRESS_GATE", raising=False)

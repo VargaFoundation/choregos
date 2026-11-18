@@ -20,11 +20,11 @@ from typing import Any
 
 import httpx
 import pytest
-from choregos_adapters.fakes.kubernetes import FakeKubernetesApi
-from choregos_adapters.plugin_servers import CONFIG_DIGEST, TOKEN_ENV, PluginServerRuntime
-from choregos_core.publishing import PUBLISHING
 from httpx import AsyncClient
 from sqlalchemy import func, select
+from tranibor_adapters.fakes.kubernetes import FakeKubernetesApi
+from tranibor_adapters.plugin_servers import CONFIG_DIGEST, TOKEN_ENV, PluginServerRuntime
+from tranibor_core.publishing import PUBLISHING
 
 from .agent_scopes_kit import add_member, as_user, make_project
 
@@ -37,8 +37,8 @@ SECOND = "second-admin@northwind.dev"
 @pytest.fixture
 def kube(tmp_path: Path) -> Iterator[FakeKubernetesApi]:
     """The offline source serves `hello` 1.0.0 (one server); servers run in an in-memory cluster."""
-    from choregos_api.services.plugin_servers import use_plugin_runtime, use_plugin_transport
-    from choregos_api.services.plugin_supply import OfflineDirectory, use_plugin_supply
+    from tranibor_api.services.plugin_servers import use_plugin_runtime, use_plugin_transport
+    from tranibor_api.services.plugin_supply import OfflineDirectory, use_plugin_supply
 
     root = tmp_path / "plugins"
     shutil.copytree(HELLO, root / "hello" / "1.0.0")
@@ -53,14 +53,14 @@ def kube(tmp_path: Path) -> Iterator[FakeKubernetesApi]:
 
 @pytest.fixture
 def settings_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[pytest.MonkeyPatch]:
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     yield monkeypatch
     reset_settings_cache()
 
 
 def _set(monkeypatch: pytest.MonkeyPatch, **env: str) -> None:
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     for name, value in env.items():
         monkeypatch.setenv(name, value)
@@ -82,8 +82,8 @@ async def _install(client: AsyncClient) -> None:
 
 
 async def _connector() -> Any:
-    from choregos_api.db.models import OrgConnector
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import OrgConnector
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         return (await session.execute(select(OrgConnector).where(OrgConnector.name == "hello"))).scalar_one()
@@ -161,9 +161,9 @@ async def test_the_connector_is_named_after_the_server_with_its_operations_at_th
 async def test_human_approval_is_never_lowered(
     client: AsyncClient, admin: str, kube: FakeKubernetesApi
 ) -> None:
-    from choregos_api.db.models import ConnectorOperation
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.connectors import human_floor
+    from tranibor_api.db.models import ConnectorOperation
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.connectors import human_floor
 
     await _install(client)
     refused = await client.patch(
@@ -188,7 +188,7 @@ async def test_human_approval_is_never_lowered(
 async def test_the_declaration_carries_compensation_and_platform_arguments(
     client: AsyncClient, admin: str, kube: FakeKubernetesApi
 ) -> None:
-    from choregos_api.services.connectors import declared_operation
+    from tranibor_api.services.connectors import declared_operation
 
     await _install(client)
     declared = declared_operation(await _connector(), "post_greeting")
@@ -221,11 +221,11 @@ def _mcp_server(tools: list[str], seen: list[httpx.Request]) -> httpx.MockTransp
 async def test_an_undeclared_tool_is_refused_and_the_token_rides_every_call(
     client: AsyncClient, admin: str, kube: FakeKubernetesApi
 ) -> None:
-    from choregos_api.db.models import ConnectorOperation, OrgConnector, Project
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.broker import tools_of_selection
-    from choregos_api.services.connectors import policy_for_project
-    from choregos_api.services.plugin_servers import use_plugin_transport
+    from tranibor_api.db.models import ConnectorOperation, OrgConnector, Project
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.broker import tools_of_selection
+    from tranibor_api.services.connectors import policy_for_project
+    from tranibor_api.services.plugin_servers import use_plugin_transport
 
     await _install(client)
     seen: list[httpx.Request] = []
@@ -331,8 +331,8 @@ async def test_a_host_the_bounds_deny_is_refused_at_configuration(
 async def test_a_name_collision_is_409_before_anything_is_written(
     client: AsyncClient, admin: str, kube: FakeKubernetesApi
 ) -> None:
-    from choregos_api.db.models import OrgPluginApproval
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import OrgPluginApproval
+    from tranibor_api.db.session import session_scope
 
     made = await client.post(
         f"{ORG}/connectors",
@@ -361,8 +361,8 @@ async def test_the_image_rules_refuse(
     env: dict[str, str],
     needle: str,
 ) -> None:
-    from choregos_adapters.fakes import FakeImageVerifier, FakeRegistryClient
-    from choregos_api.services.hosted_images import set_image_services
+    from tranibor_adapters.fakes import FakeImageVerifier, FakeRegistryClient
+    from tranibor_api.services.hosted_images import set_image_services
 
     set_image_services(FakeRegistryClient(), FakeImageVerifier())
     try:
@@ -378,8 +378,8 @@ async def test_a_signed_image_passes_enforce(
     client: AsyncClient, admin: str, kube: FakeKubernetesApi, settings_env: pytest.MonkeyPatch
 ) -> None:
     import yaml
-    from choregos_adapters.fakes import FakeImageVerifier, FakeRegistryClient
-    from choregos_api.services.hosted_images import set_image_services
+    from tranibor_adapters.fakes import FakeImageVerifier, FakeRegistryClient
+    from tranibor_api.services.hosted_images import set_image_services
 
     verifier = FakeImageVerifier()
     verifier.sign(yaml.safe_load((HELLO / "servers" / "hello.yaml").read_text())["image"])
@@ -394,7 +394,7 @@ async def test_a_signed_image_passes_enforce(
 async def test_a_deployment_without_plugin_servers_refuses_one(
     client: AsyncClient, admin: str, kube: FakeKubernetesApi, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.services import plugin_servers
+    from tranibor_api.services import plugin_servers
 
     plugin_servers.use_plugin_runtime(None)
     monkeypatch.setattr(plugin_servers, "fakes_enabled", lambda: False)
@@ -407,13 +407,13 @@ async def test_a_reconcile_replayed_changes_nothing(
 ) -> None:
     import copy
 
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.plugin_servers import reconcile
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.plugin_servers import reconcile
 
     await _install(client)
     before, calls = copy.deepcopy(kube.objects), len(kube.calls)
     async with session_scope() as session:
-        from choregos_api.db.models import OrgConnector
+        from tranibor_api.db.models import OrgConnector
 
         instance = (
             await session.execute(select(OrgConnector).where(OrgConnector.name == "hello"))
@@ -427,9 +427,9 @@ async def test_a_reconcile_replayed_changes_nothing(
 async def test_uninstall_deletes_the_server_and_its_connector(
     client: AsyncClient, admin: str, kube: FakeKubernetesApi
 ) -> None:
-    from choregos_api.db.models import ConnectorOperation, OrgConnector
-    from choregos_api.db.session import session_scope
-    from choregos_api.secret_store import get_secret_store
+    from tranibor_api.db.models import ConnectorOperation, OrgConnector
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.secret_store import get_secret_store
 
     await _install(client)
     instance = await _connector()
@@ -455,7 +455,7 @@ async def test_the_platform_fills_its_arguments_and_drops_the_agent_s(
     `action_key` of its own does not choose the idempotency key the server trusts."""
     from types import SimpleNamespace
 
-    from choregos_api.effects import _platform_arguments
+    from tranibor_api.effects import _platform_arguments
 
     await _install(client)
     ctx: Any = SimpleNamespace(
@@ -472,8 +472,8 @@ async def test_the_platform_fills_its_arguments_and_drops_the_agent_s(
 
 
 async def _approvals(action: str) -> list[dict[str, Any]]:
-    from choregos_api.db.models import AuditLog
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import AuditLog
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = (await session.execute(select(AuditLog).where(AuditLog.action == action))).scalars()

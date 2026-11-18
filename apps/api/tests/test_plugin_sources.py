@@ -16,7 +16,8 @@ import httpx
 import jsonschema
 import pytest
 import yaml
-from choregos_api.services.plugin_sources import (
+from httpx import AsyncClient
+from tranibor_api.services.plugin_sources import (
     FakePluginSource,
     HttpPluginBackend,
     _fetch_git,
@@ -27,9 +28,9 @@ from choregos_api.services.plugin_sources import (
     read_index,
     set_backend,
 )
-from choregos_contracts import load_openapi
-from choregos_core.plugins import digest, load_directory, pack
-from choregos_core.plugins.sources import (
+from tranibor_contracts import load_openapi
+from tranibor_core.plugins import digest, load_directory, pack
+from tranibor_core.plugins.sources import (
     INDEX_MEDIA_TYPE,
     LOCK,
     GitRelease,
@@ -39,7 +40,6 @@ from choregos_core.plugins.sources import (
     SourceError,
     parse_config,
 )
-from httpx import AsyncClient
 
 from .conftest import login
 
@@ -315,7 +315,7 @@ def test_a_plugin_that_brings_a_server_needs_a_second_approval(tmp_path: Path) -
 async def test_fetches_go_through_the_egress_guard(
     monkeypatch: pytest.MonkeyPatch, app: Any, tmp_path: Path
 ) -> None:
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     monkeypatch.setenv("CHOREGOS_EGRESS_MODE", "enforce")
     reset_settings_cache()
@@ -354,7 +354,7 @@ async def test_a_member_lists_the_sources(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     fake.publish_index(
         "https://acme.example/index.yaml",
@@ -398,8 +398,8 @@ async def test_a_member_lists_the_sources(
 
 
 async def test_a_stranger_cannot_list_the_sources(client: AsyncClient, org: str) -> None:
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
 
     await login(client, "dev@northwind.dev")  # a member of northwind only
     async with session_scope() as session:
@@ -412,7 +412,7 @@ async def test_a_stranger_cannot_list_the_sources(client: AsyncClient, org: str)
 async def test_an_invalid_configuration_is_reported(
     client: AsyncClient, admin: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     path = tmp_path / "plugins.yaml"
     path.write_text(yaml.safe_dump({"sources": [{"name": "acme", "index": "oci://x/i:1"}]}))

@@ -29,7 +29,7 @@ TASK_QUEUE = "choregos-relay-test"
 @pytest.fixture(autouse=True)
 def noop_effect() -> Iterator[list[str]]:
     """The calls of the action's one effect: what the world outside saw, once or more."""
-    from choregos_api import effects
+    from tranibor_api import effects
 
     calls: list[str] = []
 
@@ -67,10 +67,10 @@ async def temporal_server() -> AsyncIterator[Any]:
 async def _stranded(client: AsyncClient, app: Any, pid: str, monkeypatch: pytest.MonkeyPatch) -> list[str]:
     """Two actions proposed by a developer; the first approved while Temporal refused its start and
     left `approved` long enough for the relay, the second still pending."""
-    from choregos_api.db.models import Action
-    from choregos_api.db.session import session_scope
-    from choregos_api.temporal import get_temporal
-    from choregos_core import utcnow
+    from tranibor_api.db.models import Action
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.temporal import get_temporal
+    from tranibor_core import utcnow
 
     member = await client.post(
         "/api/v1/orgs/northwind/members", json={"email": "dev@northwind.dev", "role": "developer"}
@@ -107,7 +107,7 @@ async def _stranded(client: AsyncClient, app: Any, pid: str, monkeypatch: pytest
 async def test_the_lifespan_runs_the_relay(
     client: AsyncClient, project: dict[str, Any], app: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.temporal import FakeTemporal, get_temporal
+    from tranibor_api.temporal import FakeTemporal, get_temporal
 
     stranded, pending = await _stranded(client, app, project["id"], monkeypatch)
     fake = get_temporal()
@@ -138,9 +138,9 @@ async def test_the_relay_starts_one_run_on_a_real_temporal(
     app: Any,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from choregos_api.services.action_relay import start_approved_actions
-    from choregos_api.temporal import RealTemporal, set_temporal
     from temporalio.service import RPCError, RPCStatusCode
+    from tranibor_api.services.action_relay import start_approved_actions
+    from tranibor_api.temporal import RealTemporal, set_temporal
 
     stranded, pending = await _stranded(client, app, project["id"], monkeypatch)
     namespace = temporal_server.client.namespace
@@ -165,9 +165,9 @@ async def test_the_relay_starts_one_run_on_a_real_temporal(
 @pytest.fixture
 def workers(temporal_server: Any) -> Any:
     """The orchestrator's workers on the test queue, one per queue as the chart deploys them."""
-    from choregos_orchestrator.activities import ALL_ACTIVITIES
-    from choregos_orchestrator.testing import workers_by_queue
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS, WORKFLOW_ACTIVITIES
+    from tranibor_orchestrator.activities import ALL_ACTIVITIES
+    from tranibor_orchestrator.testing import workers_by_queue
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS, WORKFLOW_ACTIVITIES
 
     return workers_by_queue(
         temporal_server.client,
@@ -178,9 +178,9 @@ def workers(temporal_server: Any) -> Any:
 
 
 async def _state(action_id: str) -> tuple[str, list[tuple[str, int]]]:
-    from choregos_api.db.models import Action, ActionEffect
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Action, ActionEffect
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         action = await session.get(Action, action_id)
@@ -201,8 +201,8 @@ async def test_a_worker_runs_the_relayed_action_once(
     workers: Any,
     noop_effect: list[str],
 ) -> None:
-    from choregos_api.services.action_relay import start_approved_actions
-    from choregos_api.temporal import RealTemporal, set_temporal
+    from tranibor_api.services.action_relay import start_approved_actions
+    from tranibor_api.temporal import RealTemporal, set_temporal
 
     stranded, pending = await _stranded(client, app, project["id"], monkeypatch)
     address = temporal_server.client.service_client.config.target_host
@@ -234,9 +234,9 @@ async def test_two_replicas_relaying_one_action_run_it_once(
     started again (`ALLOW_DUPLICATE_FAILED_ONLY`), and a replica's late start counts as a start."""
     import contextvars
 
-    from choregos_api import temporal as gateway
-    from choregos_api.services.action_relay import start_approved_actions
-    from choregos_api.temporal import RealTemporal
+    from tranibor_api import temporal as gateway
+    from tranibor_api.services.action_relay import start_approved_actions
+    from tranibor_api.temporal import RealTemporal
 
     stranded, _pending = await _stranded(client, app, project["id"], monkeypatch)
     address = temporal_server.client.service_client.config.target_host

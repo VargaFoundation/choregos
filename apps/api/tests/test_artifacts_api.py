@@ -7,8 +7,8 @@ from collections.abc import Iterator
 from typing import Any
 
 import pytest
-from choregos_adapters.fakes import FakeObjectStore
 from httpx import AsyncClient
+from tranibor_adapters.fakes import FakeObjectStore
 
 SPEC = "# Spec\n\nDeduct credit notes from the total.\n"
 DECK = b"PK\x03\x04" + b"slides" * 50
@@ -21,7 +21,7 @@ def _digest(data: bytes) -> str:
 
 @pytest.fixture
 def store() -> Iterator[FakeObjectStore]:
-    from choregos_api.object_store import use_object_store
+    from tranibor_api.object_store import use_object_store
 
     fake = FakeObjectStore()
     use_object_store(fake)
@@ -40,9 +40,9 @@ async def _work_item(client: AsyncClient, project: dict[str, Any]) -> dict[str, 
 async def _run(
     item: dict[str, Any], project: dict[str, Any], run_id: str, role: str, *, inputs: list[str] | None = None
 ) -> dict[str, str]:
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
-    from choregos_api.security import mint_run_token
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.security import mint_run_token
 
     async with session_scope() as session:
         session.add(
@@ -66,9 +66,9 @@ async def _run(
 async def _store_deck(
     item: dict[str, Any], project: dict[str, Any], store: FakeObjectStore, run_id: str
 ) -> Any:
-    from choregos_api.db.models import Project, Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.artifacts import store_file
+    from tranibor_api.db.models import Project, Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.artifacts import store_file
 
     async with session_scope() as session:
         work_item = await session.get(WorkItem, item["id"])

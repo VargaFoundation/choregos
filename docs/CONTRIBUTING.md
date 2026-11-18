@@ -102,7 +102,7 @@ archived Temporal histories, a blocking dependency scan.
 ## A new type ships with its procedure
 
 A new connector type, knowledge source kind or MCP-door client comes with its setup procedure, a
-Markdown file in `packages/core/src/choregos_core/procedures/` (see
+Markdown file in `packages/core/src/tranibor_core/procedures/` (see
 [the procedures](procedures/README.md) and [ADR 0067](adr/0067-a-procedure-per-connector-and-agent-type.md)):
 `tests/procedures/test_coverage.py` is red without it. Write what a person does at the vendor, then in
 Tranibor, and where you could not check a vendor fact, say so in the text. Then `make procedures` and

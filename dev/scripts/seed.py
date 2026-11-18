@@ -41,7 +41,8 @@ STATES = [
 
 async def main() -> int:
     os.environ.setdefault("CHOREGOS_FAKES", "1")
-    from choregos_api.db.models import (
+    from sqlalchemy import select
+    from tranibor_api.db.models import (
         CostLedger,
         Finding,
         HumanRequest,
@@ -51,10 +52,9 @@ async def main() -> int:
         Run,
         WorkItem,
     )
-    from choregos_api.db.session import create_all, session_scope
-    from choregos_api.services import ensure_defaults
-    from choregos_core import utcnow
-    from sqlalchemy import select
+    from tranibor_api.db.session import create_all, session_scope
+    from tranibor_api.services import ensure_defaults
+    from tranibor_core import utcnow
 
     await create_all()
     random.seed(7)

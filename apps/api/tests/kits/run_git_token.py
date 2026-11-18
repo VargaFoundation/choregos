@@ -9,8 +9,8 @@ _KEYS = itertools.count(1)
 
 
 async def run_with_repository(project: dict[str, Any], url: str, **fields: Any) -> str:
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Run, WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         item = WorkItem(
@@ -33,8 +33,8 @@ async def run_with_repository(project: dict[str, Any], url: str, **fields: Any) 
 
 
 def run_token_for(run_id: str) -> dict[str, str]:
-    from choregos_api.config import get_settings
-    from choregos_api.security import mint_run_token
+    from tranibor_api.config import get_settings
+    from tranibor_api.security import mint_run_token
 
     token = mint_run_token(
         run_id, project_slug="billing-api", work_item_key="ACME-1", ttl_minutes=5, settings=get_settings()

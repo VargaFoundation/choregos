@@ -9,8 +9,8 @@ from httpx import AsyncClient
 
 
 def test_the_default_scope_leaves_the_digest_of_older_versions_unchanged() -> None:
-    from choregos_api.schemas import AgentSpec
-    from choregos_api.services.agents import digest
+    from tranibor_api.schemas import AgentSpec
+    from tranibor_api.services.agents import digest
 
     before = AgentSpec().model_dump(mode="json")
     del before["memory"]

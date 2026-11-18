@@ -14,9 +14,9 @@ The gateway is OpenAI-compatible, not necessarily OpenAI, so the example:
 from __future__ import annotations
 
 from agents import Agent, OpenAIChatCompletionsModel, Runner, set_tracing_disabled
-from choregos_agent_sdk import Context, Result, agent
-from choregos_agent_sdk.errors import sdk_error_in
-from choregos_agent_sdk.integrations import openai_agents as bridge
+from tranibor_agent_sdk import Context, Result, agent
+from tranibor_agent_sdk.errors import sdk_error_in
+from tranibor_agent_sdk.integrations import openai_agents as bridge
 
 
 @agent(name="openai-agents-triager")

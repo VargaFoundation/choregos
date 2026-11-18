@@ -23,9 +23,9 @@ pytestmark = pytest.mark.asyncio
 
 
 async def _runs(item_id: str) -> list[tuple[str, str, bool]]:
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = (
@@ -35,8 +35,8 @@ async def _runs(item_id: str) -> list[tuple[str, str, bool]]:
 
 
 async def _state(item_id: str) -> str:
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         item = await session.get(WorkItem, item_id)
@@ -46,10 +46,10 @@ async def _state(item_id: str) -> str:
 
 async def _moves_to(item_id: str, state: str) -> int:
     """How many times the work item was moved to `state`, read from its events."""
-    from choregos_api.db.models import Event
-    from choregos_api.db.session import session_scope
-    from choregos_contracts import EventType
     from sqlalchemy import select
+    from tranibor_api.db.models import Event
+    from tranibor_api.db.session import session_scope
+    from tranibor_contracts import EventType
 
     async with session_scope() as session:
         rows = (
@@ -77,8 +77,8 @@ async def test_a_restart_after_a_review_sent_the_work_item_back_plays_a_new_atte
     work item back in `implemented`: `t-test-1` and `t-review-1` succeeded and their decisions were
     applied. The restarted interpreter plays `t-test-2`, then `t-review-2` — the old code read both
     runs back, applied "changes requested" again and sent the work item round the loop once more."""
-    from choregos_core.domain import ExecRef, ExecStatus, StageJobSpec
-    from choregos_orchestrator.config import reset_settings_cache
+    from tranibor_core.domain import ExecRef, ExecStatus, StageJobSpec
+    from tranibor_orchestrator.config import reset_settings_cache
 
     monkeypatch.setenv("CHOREGOS_HEARTBEAT_SECONDS", "1")  # `await_run` polls every second
     reset_settings_cache()

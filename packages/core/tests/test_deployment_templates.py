@@ -18,7 +18,7 @@ from __future__ import annotations
 import pathlib
 
 import pytest
-from choregos_core.dsl import (
+from tranibor_core.dsl import (
     TEMPLATE_NAMES,
     forget_templates,
     load_template,

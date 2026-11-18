@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from choregos_core import GateContext, evaluate, known_gates
-from choregos_core.gates import gate_needs
+from tranibor_core import GateContext, evaluate, known_gates
+from tranibor_core.gates import gate_needs
 
 
 def _ctx(changed: list[str], added: dict[str, str] | None = None, **kw: Any) -> GateContext:

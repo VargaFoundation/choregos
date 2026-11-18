@@ -2,14 +2,14 @@
 
 Each half was tested against a stand-in for the other: the door against a scripted daemon
 (`apps/api/tests/kits/outpost_daemon.py`), the daemon against a scripted door
-(`choregos_outpost.fakes.door.FakeDoor`). Here they meet, and nothing of either is scripted:
+(`tranibor_outpost.fakes.door.FakeDoor`). Here they meet, and nothing of either is scripted:
 
 - **the platform** is the API application of the end-to-end bench with outposts switched on: its door
   is mounted, it signs every call it hands over with a key derived from a label, and a call's
   arguments wait sealed under a key wrapper derived from another. A run's calls take the product's own
   path: the broker, the governed action played by the platform's workers on the Temporal test
   server, the rendezvous;
-- **the outpost** is the `choregos_outpost` daemon, built from its classes exactly as
+- **the outpost** is the `tranibor_outpost` daemon, built from its classes exactly as
   `choregos-outpost enrol` and `choregos-outpost run` build it (its command line is not run here: it
   configures the process's logging), with its keys, its journal and its audit log on disk. Its HTTP
   client reaches the API application through an ASGI transport, under the door's public origin; its
@@ -163,9 +163,9 @@ def outposts_on(monkeypatch: pytest.MonkeyPatch) -> DaemonLog:
     """Outposts on, before the application is made: the door is mounted, it has an origin, a key that
     signs and one announced beside it; the deployment has a key wrapper; a wait looks often, since
     SQLite has no relay to wake it; and the daemon's log is read here."""
-    from choregos_api.outposts import rendezvous
-    from choregos_api.secret_store import ENV_KEKS
-    from choregos_outpost import daemon
+    from tranibor_api.outposts import rendezvous
+    from tranibor_api.secret_store import ENV_KEKS
+    from tranibor_outpost import daemon
 
     monkeypatch.setenv("CHOREGOS_OUTPOSTS", "on")
     monkeypatch.setenv("CHOREGOS_OUTPOSTS_DOOR_URL", ORIGIN)
@@ -188,7 +188,7 @@ class Server:
     arrive, and holds each one while `gate` is closed."""
 
     def __init__(self) -> None:
-        from choregos_adapters.fakes.mcp import FakeMcpServer
+        from tranibor_adapters.fakes.mcp import FakeMcpServer
 
         self.mcp = FakeMcpServer(
             tools=[dict(tool) for tool in SERVED_TOOLS],
@@ -280,7 +280,7 @@ class Outpost:
     def policy(self, given: dict[str, Any], *, endpoints: dict[str, Any] | None = None, **more: Any) -> Any:
         """The policy file, written from what the console gave with the token (the door's origin and
         its keys to pin), and read as the daemon reads it."""
-        from choregos_outpost import policy as policies
+        from tranibor_outpost import policy as policies
 
         document = {
             "control_plane": given["control_plane"],
@@ -294,7 +294,7 @@ class Outpost:
         return policies.load(path)
 
     def http(self) -> httpx.AsyncClient:
-        from choregos_outpost import uplink
+        from tranibor_outpost import uplink
 
         self.wire = Wire(self.app, self.exchanges)
         return uplink.client(transport=self.wire)
@@ -302,8 +302,8 @@ class Outpost:
     async def enrol(self, policy: Any, token: str) -> str:
         """`choregos-outpost enrol`: makes the keys, presents the token, keeps what the door answered,
         and returns the fingerprint it prints, computed from its own key."""
-        from choregos_outpost import identity as identities
-        from choregos_outpost import uplink
+        from tranibor_outpost import identity as identities
+        from tranibor_outpost import uplink
 
         directory = self.state / "identity"
         own, new = identities.load_or_create(directory)
@@ -328,12 +328,12 @@ class Outpost:
     async def run(self, policy: Any, *, grace_s: float = 20.0) -> None:
         """`choregos-outpost run`: what `cli._serve` builds, on this instance's state directory. A
         second `run` after a `stop` is a restart."""
-        from choregos_outpost import identity as identities
-        from choregos_outpost import uplink
-        from choregos_outpost.audit import AuditLog
-        from choregos_outpost.daemon import Daemon
-        from choregos_outpost.journal import Journal
-        from choregos_outpost.toolhost import ToolHost
+        from tranibor_outpost import identity as identities
+        from tranibor_outpost import uplink
+        from tranibor_outpost.audit import AuditLog
+        from tranibor_outpost.daemon import Daemon
+        from tranibor_outpost.journal import Journal
+        from tranibor_outpost.toolhost import ToolHost
 
         directory = self.state / "identity"
         own = identities.load(directory)
@@ -391,8 +391,8 @@ class Outpost:
 
     def lines(self, call_id: str | None = None) -> list[dict[str, Any]]:
         """The local audit log, each line checked against the contract's schema as it is read."""
-        from choregos_contracts import load_schema
         from jsonschema import Draft202012Validator
+        from tranibor_contracts import load_schema
 
         if not self.audit_path.exists():
             return []
@@ -500,9 +500,9 @@ async def _true(value: bool) -> bool:
 async def _declared_discovered_and_opened(bench: Bench, *, writes: dict[str, Any] | None = None) -> None:
     """A connector at the outpost, its tools discovered through it (each born `forbidden`), the read
     opened, and a run of an agent that names the connector."""
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.security import mint_run_token
+    from tranibor_api.db.models import Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.security import mint_run_token
 
     client = bench.client
     declared = await client.post(
@@ -584,9 +584,9 @@ async def _records(bench: Bench) -> list[dict[str, Any]]:
 
 
 async def _ledger() -> list[Any]:
-    from choregos_api.db.models import CostLedger
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import CostLedger
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = await session.execute(select(CostLedger).where(CostLedger.provider == f"mcp:{CONNECTOR}"))
@@ -594,9 +594,9 @@ async def _ledger() -> list[Any]:
 
 
 async def _called_events() -> list[Any]:
-    from choregos_api.db.models import Event
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Event
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = await session.execute(select(Event).where(Event.type == "choregos.tool.called"))
@@ -626,8 +626,8 @@ async def _search(bench: Bench) -> dict[str, Any]:
 async def test_an_outpost_is_enrolled_approved_and_run_and_a_read_through_it_is_governed_end_to_end(
     platform: Platform, outpost: Outpost
 ) -> None:
-    from choregos_api.services.broker import result_limit
-    from choregos_contracts import arguments_sha256
+    from tranibor_api.services.broker import result_limit
+    from tranibor_contracts import arguments_sha256
 
     bench = await _prepared(platform, outpost)
     # The daemon's first signed request carries no nonce yet: refused once, and signed again.
@@ -703,8 +703,8 @@ async def test_an_outpost_is_enrolled_approved_and_run_and_a_read_through_it_is_
 async def test_with_the_daemon_stopped_a_call_fails_fast_and_names_the_outpost(
     platform: Platform, outpost: Outpost
 ) -> None:
-    from choregos_api.db.models import OutpostInstance
-    from choregos_api.services.outposts import POLL_WINDOW_S
+    from tranibor_api.db.models import OutpostInstance
+    from tranibor_api.services.outposts import POLL_WINDOW_S
 
     bench = await _prepared(platform, outpost)
     assert (await outpost.stop()).name == "STOPPED"
@@ -738,8 +738,8 @@ async def test_with_the_daemon_stopped_a_call_fails_fast_and_names_the_outpost(
 
 async def _age(row_id: str, model: Any, **values: Any) -> None:
     """Writes a row of the outpost by hand: what time would have done."""
-    from choregos_api.db.session import session_scope
     from sqlalchemy import update
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         done = await session.execute(update(model).where(model.id == row_id).values(**values))
@@ -774,7 +774,7 @@ async def test_a_tool_outside_the_aliass_patterns_is_refused_by_the_outpost_and_
 ) -> None:
     """The daemon restarted with a file whose alias no longer lets `search_*` through: the call is
     handed over, refused by the outpost alone with its code, and the two logs say the same."""
-    from choregos_contracts import arguments_sha256
+    from tranibor_contracts import arguments_sha256
 
     bench = await _prepared(platform, outpost)
     await outpost.restart(outpost.policy(bench.given, endpoints={ALIAS: outpost.endpoint(tools=["get_*"])}))
@@ -824,8 +824,8 @@ async def test_a_daemon_below_the_doors_minimum_protocol_stops_and_says_so(
 ) -> None:
     """The platform is upgraded and its door's minimum rises above what the daemon speaks: the daemon
     is handed nothing, says so with the window, and ends with the code that asks for an upgrade."""
-    from choregos_api.outposts import auth
-    from choregos_outpost import PROTOCOL
+    from tranibor_api.outposts import auth
+    from tranibor_outpost import PROTOCOL
 
     bench = await _prepared(platform, outpost)
     await outpost.stop()

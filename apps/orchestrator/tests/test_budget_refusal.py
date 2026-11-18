@@ -11,7 +11,7 @@ import pathlib
 from typing import Any
 
 import pytest
-from choregos_contracts import StageInput, StageResult
+from tranibor_contracts import StageInput, StageResult
 
 from .conftest import Fixture, recording_history, stage_result
 from .test_interpreter import _runs, _wait_state, _wait_until, start
@@ -23,10 +23,10 @@ HISTORIES = pathlib.Path(__file__).resolve().parents[3] / "tests" / "replay" / "
 
 def refusing_runner(gateway: Any) -> Any:
     """What a run does against a key the fake gateway caps: it spends, the gateway refuses, and the
-    runner reports the refusal the way `choregos_runner` does."""
-    from choregos_adapters.fakes import BudgetExceededError
-    from choregos_runner.budget import BUDGET_REASON, gateway_budget_refusal
-    from choregos_runner.result import fallback_result
+    runner reports the refusal the way `tranibor_runner` does."""
+    from tranibor_adapters.fakes import BudgetExceededError
+    from tranibor_runner.budget import BUDGET_REASON, gateway_budget_refusal
+    from tranibor_runner.result import fallback_result
 
     def run(stage_input: StageInput) -> StageResult:
         key_id = stage_input.gateway_key.removeprefix("sk-fake-")
@@ -45,9 +45,9 @@ def refusing_runner(gateway: Any) -> Any:
 
 async def install_workflow(setup: Fixture, *, drop: tuple[str, ...]) -> None:
     """`default-simple`, minus some of its `from_any_agent_state` defaults, pinned on the ticket."""
-    from choregos_api.db.models import WorkflowDef, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_core import load_template
+    from tranibor_api.db.models import WorkflowDef, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import load_template
 
     wf = load_template("default-simple").model_copy(deep=True)
     assert wf.defaults is not None and wf.defaults.from_any_agent_state is not None
@@ -73,10 +73,10 @@ async def install_workflow(setup: Fixture, *, drop: tuple[str, ...]) -> None:
 
 
 async def _state_reasons(setup: Fixture) -> list[str]:
-    from choregos_api.db.models import Event
-    from choregos_api.db.session import session_scope
-    from choregos_contracts import EventType
     from sqlalchemy import select
+    from tranibor_api.db.models import Event
+    from tranibor_api.db.session import session_scope
+    from tranibor_contracts import EventType
 
     async with session_scope() as session:
         rows = (
@@ -112,7 +112,7 @@ async def test_a_refusing_gateway_parks_the_ticket_after_one_run(
     assert any(r.startswith("budget") for r in reasons), reasons
     assert len(setup.adapters.gateway.keys) + len(setup.adapters.gateway.revoked) == 1, "one key minted"
 
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
     if recording_history():
@@ -124,7 +124,7 @@ async def test_before_the_marker_a_budget_stop_was_retried(
     setup: Fixture, temporal_env: Any, worker_factory: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A history recorded before `budget-never-retries` keeps its old decision on replay."""
-    from choregos_orchestrator.workflows import interpreter
+    from tranibor_orchestrator.workflows import interpreter
 
     real = interpreter.workflow.patched
     monkeypatch.setattr(

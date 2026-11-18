@@ -11,10 +11,11 @@ COPY --from=ghcr.io/astral-sh/uv:0.5.11@sha256:0ac957607303916420297a4c9c213bb33
 WORKDIR /app
 COPY pyproject.toml uv.lock README.md ./
 COPY packages packages
+COPY compat compat
 COPY apps/api/pyproject.toml apps/api/
 COPY apps/orchestrator/pyproject.toml apps/orchestrator/
 RUN mkdir -p apps/api/src apps/orchestrator/src \
- && uv sync --frozen --no-dev --package choregos-runner
+ && uv sync --frozen --no-dev --package tranibor-runner
 
 # rtk (ADR 0055): the version and its digests come from `versions.lock`. `sha256sum -c` fails the
 # build on a wrong digest. amd64 takes the static release binary. arm64 builds the same release from
@@ -25,7 +26,7 @@ RUN mkdir -p apps/api/src apps/orchestrator/src \
 # falls back to an amd64 build host.
 FROM --platform=${BUILDPLATFORM:-linux/amd64} rust:1.99-slim-bookworm@sha256:f2c004e3d2d8b547e8cf7ffbc29205385f4e71d23e53e4e383065db5e9f822cd AS rtk
 ARG TARGETARCH
-COPY packages/runner/src/choregos_runner/backends/versions.lock /tmp/versions.lock
+COPY packages/runner/src/tranibor_runner/backends/versions.lock /tmp/versions.lock
 WORKDIR /src
 RUN set -eux; \
     version() { grep "^$1=" /tmp/versions.lock | cut -d= -f2; }; \
@@ -136,7 +137,7 @@ COPY --from=headroom /opt/headroom /opt/headroom
 RUN ln -s /opt/headroom/bin/headroom /usr/local/bin/headroom
 
 # ACP agents, at pinned versions (packages/runner/backends/versions.lock).
-COPY packages/runner/src/choregos_runner/backends/versions.lock /etc/choregos/versions.lock
+COPY packages/runner/src/tranibor_runner/backends/versions.lock /etc/choregos/versions.lock
 RUN set -eux; \
     version() { grep "^$1=" /etc/choregos/versions.lock | cut -d= -f2; }; \
     npm install -g --allow-scripts=opencode-ai,@github/keytar,node-pty \
@@ -220,7 +221,7 @@ ENV UV_PYTHON_DOWNLOADS=never
 
 # Shims: defence in depth. No credential exists anyway, but an agent that tries must be
 # **refused and traced**, not silently ignored: the runner reads the shim's line in the call's output
-# and journals `shim.refused` (`choregos_runner.refusal_shims.SHIMMED` lists the same tools).
+# and journals `shim.refused` (`tranibor_runner.refusal_shims.SHIMMED` lists the same tools).
 COPY docker/shims/refuse.sh /usr/local/bin/choregos-refuse
 RUN chmod +x /usr/local/bin/choregos-refuse \
  && for binary in kubectl helm terraform az gcloud aws docker podman; do \
@@ -244,7 +245,7 @@ RUN mkdir -p /var/log/nginx /var/lib/nginx \
 
 WORKDIR /app
 COPY --from=builder --chown=1000:1000 /app /app
-# The runner must START in this image. `uv sync --package choregos-runner` installs only what
+# The runner must START in this image. `uv sync --package tranibor-runner` installs only what
 # that package declares, where the development environment has far more: a forgotten
 # dependency only showed at the first agent launched in a cluster, as a `ModuleNotFoundError`
 # (it happened with `pydantic-settings`). Here, the build fails.
@@ -260,7 +261,7 @@ RUN set -eux; \
     done; \
     test "$(command -v python3)" = /usr/local/bin/python3; \
     python3 -c 'import sys; assert sys.prefix == sys.base_prefix, sys.prefix'; \
-    if python3 -c 'import choregos_runner' 2>/dev/null; then exit 1; fi; \
+    if python3 -c 'import tranibor_runner' 2>/dev/null; then exit 1; fi; \
     choregos-runner --help >/dev/null
 # headroom must hand the gateway's budget refusal to the agent as the gateway wrote it, or a spent
 # key looks like a silent agent and is retried with a fresh one (S37-12): the image's headroom, a

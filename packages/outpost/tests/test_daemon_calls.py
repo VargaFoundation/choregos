@@ -6,8 +6,8 @@ from __future__ import annotations
 import io
 from pathlib import Path
 
-from choregos_contracts.outpost import arguments_sha256
-from choregos_outpost.daemon import Exit
+from tranibor_contracts.outpost import arguments_sha256
+from tranibor_outpost.daemon import Exit
 
 from ._bench import CREDENTIAL, bench
 

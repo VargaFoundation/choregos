@@ -13,8 +13,8 @@ import sys
 from dataclasses import replace
 
 import pytest
-from choregos_core.agent_catalogue import FOLDER, entries, entry
-from choregos_core.agent_catalogue.evals import cases, evaluate
+from tranibor_core.agent_catalogue import FOLDER, entries, entry
+from tranibor_core.agent_catalogue.evals import cases, evaluate
 
 INTERNAL = [e for e in entries() if e.kind == "internal"]
 CASES = {c.name: c.case for c in cases()}
@@ -75,9 +75,9 @@ def test_netops_is_not_duplicated_here() -> None:
 
 
 def test_the_former_evals_module_no_longer_runs() -> None:
-    """The nightly job runs `python -m choregos_core.agent_catalogue.evals`; the former module was
+    """The nightly job runs `python -m tranibor_core.agent_catalogue.evals`; the former module was
     removed in 0.24.0 (S45-49)."""
-    former = "choregos_core.catalogue_d_agents.evals"  # lang: fr-ok - removed, asserted gone
+    former = "tranibor_core.catalogue_d_agents.evals"  # lang: fr-ok - removed, asserted gone
     done = subprocess.run(
         [sys.executable, "-m", former, "--all"],
         capture_output=True,

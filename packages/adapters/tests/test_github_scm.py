@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import pytest
-from choregos_adapters.errors import HeadMovedError, UpstreamError
-from choregos_adapters.github.client import GitHubClient
-from choregos_adapters.scm.github import GitHubScm
+from tranibor_adapters.errors import HeadMovedError, UpstreamError
+from tranibor_adapters.github.client import GitHubClient
+from tranibor_adapters.scm.github import GitHubScm
 
 from ._transport import Wire
 
@@ -92,7 +92,7 @@ async def test_leaving_draft_goes_through_graphql() -> None:
             ("POST", "/graphql"): (200, {"data": {}}),
         }
     )
-    from choregos_core.domain import PrRef
+    from tranibor_core.domain import PrRef
 
     await scm(wire).update_pr(PrRef(repo=REPO, number=8), body="nouveau request_body", draft=False)
     assert wire.sent() == [
@@ -107,7 +107,7 @@ async def test_leaving_draft_goes_through_graphql() -> None:
 async def test_a_draft_left_as_it_is_is_not_marked_ready() -> None:
     """S51-11: `open_pull_request` asked for a draft updates the body with `draft=None`: no GraphQL
     `markPullRequestReadyForReview`, so the draft stays one."""
-    from choregos_core.domain import PrRef
+    from tranibor_core.domain import PrRef
 
     wire = Wire({("PATCH", f"/repos/{REPO}/pulls/8"): (200, {})})
     await scm(wire).update_pr(PrRef(repo=REPO, number=8), body="new body", draft=None)
@@ -115,7 +115,7 @@ async def test_a_draft_left_as_it_is_is_not_marked_ready() -> None:
 
 
 async def test_a_prs_state_gathers_checks_reviews_and_files() -> None:
-    from choregos_core.domain import PrRef
+    from tranibor_core.domain import PrRef
 
     wire = Wire(
         {
@@ -164,7 +164,7 @@ async def test_a_prs_state_gathers_checks_reviews_and_files() -> None:
 
 
 async def test_the_merge_queue_or_the_direct_merge_depending_on_the_configuration() -> None:
-    from choregos_core.domain import PrRef
+    from tranibor_core.domain import PrRef
 
     wire = Wire(
         {
@@ -258,7 +258,7 @@ async def test_an_absent_folder_is_empty_but_a_failure_comes_up() -> None:
 
 
 async def test_reviewers_are_split_between_people_and_teams() -> None:
-    from choregos_core.domain import PrRef
+    from tranibor_core.domain import PrRef
 
     wire = Wire({("POST", f"/repos/{REPO}/pulls/8/requested_reviewers"): (201, {})})
     await scm(wire).request_review(PrRef(repo=REPO, number=8), ["marie", "northwind/maintainers"])
@@ -331,7 +331,7 @@ async def test_a_failure_on_read_writes_nothing() -> None:
 async def test_commit_statuses_count_as_checks() -> None:
     """S59-09: a CI that posts commit statuses (Tekton's `github-app-status`) is read like a check run:
     pending while it runs, failed on `error` or `failure`, green on `success`."""
-    from choregos_core.domain import PrRef
+    from tranibor_core.domain import PrRef
 
     def wire_with(states: list[str]) -> Wire:
         return Wire(
@@ -360,7 +360,7 @@ async def test_commit_statuses_count_as_checks() -> None:
 async def test_a_repository_that_refuses_auto_merge_is_merged_directly() -> None:
     """S59-12: iris (private, no branch protection) refused `enablePullRequestAutoMerge` and the merge
     step failed five times after a green CI; the pull request is now merged directly."""
-    from choregos_core.domain import PrRef
+    from tranibor_core.domain import PrRef
 
     wire = Wire(
         {
@@ -382,7 +382,7 @@ async def test_a_repository_that_refuses_auto_merge_is_merged_directly() -> None
 
 
 async def test_another_graphql_refusal_is_not_merged_around() -> None:
-    from choregos_core.domain import PrRef
+    from tranibor_core.domain import PrRef
 
     wire = Wire(
         {
@@ -416,7 +416,7 @@ async def test_the_head_of_a_branch_is_the_commit_of_its_ref() -> None:
 
 
 async def test_a_head_that_moved_is_refused_before_anything_is_asked() -> None:
-    from choregos_core.domain import PrRef
+    from tranibor_core.domain import PrRef
 
     wire = Wire({("GET", f"/repos/{REPO}/pulls/8"): (200, _pull_request(LATER))})
     with pytest.raises(HeadMovedError) as moved:
@@ -427,7 +427,7 @@ async def test_a_head_that_moved_is_refused_before_anything_is_asked() -> None:
 
 async def test_a_direct_merge_the_forge_refuses_on_its_sha_is_a_moved_head() -> None:
     """The head moves between the read and the merge: GitHub answers 409 to the `sha` it was sent."""
-    from choregos_core.domain import PrRef
+    from tranibor_core.domain import PrRef
 
     wire = Wire(
         {
@@ -445,7 +445,7 @@ async def test_a_direct_merge_the_forge_refuses_on_its_sha_is_a_moved_head() -> 
 async def test_a_merge_queue_that_refuses_a_stale_head_is_a_moved_head_not_a_direct_merge() -> None:
     """Whatever words GitHub puts on a stale `expectedHeadOid`, the head is read again: elsewhere, it
     is a moved head, and the pull request is not merged directly instead."""
-    from choregos_core.domain import PrRef
+    from tranibor_core.domain import PrRef
 
     wire = Wire(
         {
@@ -460,7 +460,7 @@ async def test_a_merge_queue_that_refuses_a_stale_head_is_a_moved_head_not_a_dir
 
 
 async def test_a_pull_request_already_merged_at_the_commit_is_not_merged_again() -> None:
-    from choregos_core.domain import PrRef
+    from tranibor_core.domain import PrRef
 
     wire = Wire({("GET", f"/repos/{REPO}/pulls/8"): (200, {**_pull_request(JUDGED), "merged": True})})
     await scm(wire).enqueue_merge(PrRef(repo=REPO, number=8), JUDGED)
@@ -472,7 +472,7 @@ async def test_a_pull_request_already_merged_at_the_commit_is_not_merged_again()
 
 
 def test_the_adapter_says_it_merges_at_a_commit() -> None:
-    from choregos_adapters.base import SCM_CAPABILITIES, merge_at_commit_refusal
+    from tranibor_adapters.base import SCM_CAPABILITIES, merge_at_commit_refusal
 
     assert GitHubScm.capabilities <= SCM_CAPABILITIES
     assert merge_at_commit_refusal(scm(Wire({}))) is None

@@ -1,4 +1,4 @@
-"""The demo organisation of the local install (`python -m choregos_api.local_demo`, S28-01)."""
+"""The demo organisation of the local install (`python -m tranibor_api.local_demo`, S28-01)."""
 
 from __future__ import annotations
 
@@ -7,8 +7,9 @@ from typing import Any
 
 import pytest
 import yaml
-from choregos_api.config import Settings
-from choregos_api.local_demo import (
+from httpx import AsyncClient
+from tranibor_api.config import Settings
+from tranibor_api.local_demo import (
     DEMO_WORKFLOW,
     decisions_enabled,
     demo_connectors,
@@ -18,8 +19,7 @@ from choregos_api.local_demo import (
     seed_local_demo,
     write_litellm_config,
 )
-from choregos_core.dsl.parser import parse_workflow
-from httpx import AsyncClient
+from tranibor_core.dsl.parser import parse_workflow
 
 from .conftest import login
 
@@ -53,7 +53,7 @@ async def test_the_seed_creates_the_project_once(app: Any) -> None:
 async def test_a_request_created_in_the_demo_project_starts_its_workflow(
     app: Any, client: AsyncClient
 ) -> None:
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.temporal import get_temporal
 
     await seed_local_demo(_settings())
     await login(client, "admin@northwind.dev")  # a dev admin of every organisation of the bench
@@ -127,9 +127,9 @@ def test_fakes_mode_mocks_every_alias() -> None:
 
 
 async def test_adding_a_key_switches_the_demo_project_to_a_real_agent(app: Any) -> None:
-    from choregos_api.db.models import Connector, Project
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Connector, Project
+    from tranibor_api.db.session import session_scope
 
     await seed_local_demo(_settings())
     switched = await seed_local_demo(_settings(), "openai")
@@ -150,9 +150,9 @@ async def test_adding_a_key_switches_the_demo_project_to_a_real_agent(app: Any) 
 
 
 async def test_a_connector_changed_by_a_person_is_not_switched_back(app: Any) -> None:
-    from choregos_api.db.models import Connector
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Connector
+    from tranibor_api.db.session import session_scope
 
     await seed_local_demo(_settings())
     async with session_scope(orgs="*") as session:
@@ -170,9 +170,9 @@ def test_with_a_key_the_agent_backend_accepts_the_model_litellm_serves(provider:
     """Seen on 2026-10-12 with the published runner: `claude-code` refused `platform/standard` (it
     cannot see the Claude behind the alias), then asked LiteLLM for a model the run's key did not
     allow. The demo project runs `opencode` and names the provider's model, which LiteLLM serves."""
-    from choregos_api.local_demo import demo_backend, demo_models
-    from choregos_contracts import ModelRef
-    from choregos_runner.backends import get_backend
+    from tranibor_api.local_demo import demo_backend, demo_models
+    from tranibor_contracts import ModelRef
+    from tranibor_runner.backends import get_backend
 
     model = demo_models(provider)["standard"]
     assert demo_backend(provider) == "opencode"
@@ -189,7 +189,7 @@ def test_with_a_key_the_agent_backend_accepts_the_model_litellm_serves(provider:
 async def test_the_first_sign_in_finds_the_demo_project_with_one_running_work_item(
     app: Any, client: AsyncClient
 ) -> None:
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.temporal import get_temporal
 
     report = await seed_local_demo(_settings())
     assert report["work_items"] == ["DEMO-1"]
@@ -204,10 +204,10 @@ async def test_the_first_sign_in_finds_the_demo_project_with_one_running_work_it
 
 async def test_with_a_model_key_the_demo_work_item_waits_to_be_started(app: Any) -> None:
     """A real model costs money: the install does not spend it before anyone has opened the console."""
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.temporal import get_temporal
     from sqlalchemy import select
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.temporal import get_temporal
 
     assert (await seed_local_demo(_settings(), "anthropic"))["work_items"] == ["DEMO-1"]
     async with session_scope(orgs="*") as session:
@@ -228,13 +228,13 @@ async def test_development_sign_in_is_refused_outside_a_development_environment(
 
 def test_the_local_gateway_loads_the_llm_guard_next_to_its_config(tmp_path: pathlib.Path) -> None:
     """S40-21 (ADR 0084): LiteLLM's image has no Tranibor package; the guard travels as a file."""
-    import choregos_core.llm_guardrail
+    import tranibor_core.llm_guardrail
 
     write_litellm_config(tmp_path, {})
     (guard,) = yaml.safe_load((tmp_path / "config.yaml").read_text(encoding="utf-8"))["guardrails"]
     module, _, cls = guard["litellm_params"]["guardrail"].rpartition(".")
     assert cls == "ChoregosGuardrail" and guard["litellm_params"]["mode"] == ["pre_call", "post_call"]
-    source = pathlib.Path(choregos_core.llm_guardrail.__file__).read_text(encoding="utf-8")
+    source = pathlib.Path(tranibor_core.llm_guardrail.__file__).read_text(encoding="utf-8")
     assert (tmp_path / f"{module}.py").read_text(encoding="utf-8") == source
 
 

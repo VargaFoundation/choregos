@@ -25,8 +25,8 @@ A2A = {"kind": "a2a", "card_url": "https://rovo.example/.well-known/agent.json"}
 
 
 def test_a_version_without_a_default_keeps_its_digest_and_one_with_it_declares_it() -> None:
-    from choregos_api.schemas.agents import AgentSpec
-    from choregos_api.services.agents import digest
+    from tranibor_api.schemas.agents import AgentSpec
+    from tranibor_api.services.agents import digest
 
     legacy = AgentSpec.model_validate(LEGACY_SPEC)
     assert "tools" not in legacy.model_dump(mode="json"), "left out while unset"
@@ -39,7 +39,7 @@ def test_a_version_without_a_default_keeps_its_digest_and_one_with_it_declares_i
 
 
 def test_an_unquoted_off_reads_as_off() -> None:
-    from choregos_api.schemas.agents import AgentSpec
+    from tranibor_api.schemas.agents import AgentSpec
 
     raw = yaml.safe_load("tools:\n  scripts: off\n")
     assert raw["tools"]["scripts"] is False, "the YAML reading this test is about"
@@ -50,14 +50,14 @@ def test_an_unquoted_off_reads_as_off() -> None:
     "tools", [{"scripts": "on"}, {"scripts": True}, {}, {"scripts": "offer", "mode": "x"}]
 )
 def test_a_default_outside_the_contract_is_refused(tools: dict[str, Any]) -> None:
-    from choregos_api.schemas.agents import AgentSpec
+    from tranibor_api.schemas.agents import AgentSpec
 
     with pytest.raises(ValidationError, match="tools"):
         AgentSpec.model_validate({"tools": tools})
 
 
 def test_a_remote_agent_declares_no_default() -> None:
-    from choregos_api.schemas.agents import AgentSpec
+    from tranibor_api.schemas.agents import AgentSpec
 
     assert AgentSpec.model_validate({"runtime": A2A}).tool_scripts_default() is None
     with pytest.raises(ValidationError, match="no tool scripts"):

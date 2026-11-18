@@ -13,17 +13,17 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from choregos_adapters.fakes.model_server import FakeModelServer
-from choregos_api.config import get_settings
-from choregos_api.services.agent_sessions import set_model_transport
-from choregos_api.services.conversation_gate import set_conversation_source
-from choregos_api.services.conversation_player import default_player, judge_model_of
-from choregos_api.services.installed_suites import (
+from httpx import AsyncClient
+from tranibor_adapters.fakes.model_server import FakeModelServer
+from tranibor_api.config import get_settings
+from tranibor_api.services.agent_sessions import set_model_transport
+from tranibor_api.services.conversation_gate import set_conversation_source
+from tranibor_api.services.conversation_player import default_player, judge_model_of
+from tranibor_api.services.installed_suites import (
     current_player,
     installed_suite_source,
     set_suite_player,
 )
-from httpx import AsyncClient
 
 from .kits.assistant_install import ORG as ORG_URL
 from .kits.assistant_install import _install, _plugin, offline  # noqa: F401

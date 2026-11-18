@@ -15,20 +15,20 @@ import uuid
 from collections.abc import Callable
 from typing import Any
 
-import choregos_adapters.fakes.mcp_gateway as gateway_module
 import httpx
 import jwt
 import pytest
-from choregos_adapters.fakes.mcp import FakeMcpServer
-from choregos_adapters.fakes.mcp_gateway import (
+import tranibor_adapters.fakes.mcp_gateway as gateway_module
+from cryptography.hazmat.primitives.asymmetric import ec
+from jwt.algorithms import ECAlgorithm
+from tranibor_adapters.fakes.mcp import FakeMcpServer
+from tranibor_adapters.fakes.mcp_gateway import (
     FakeMcpGateway,
     FakeMcpGatewayApp,
     GatewayUpstream,
     application,
 )
-from choregos_adapters.mcp import McpClient, McpError
-from cryptography.hazmat.primitives.asymmetric import ec
-from jwt.algorithms import ECAlgorithm
+from tranibor_adapters.mcp import McpClient, McpError
 
 SUPPLIER_TOOLS = [
     {"name": "order_laptop", "inputSchema": {"type": "object"}},

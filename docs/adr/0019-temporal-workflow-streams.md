@@ -1,7 +1,7 @@
 # 0019 — Temporal Workflow Streams for the live journal
 
 - **Status**: proposed, 2026-09-25 — not implemented; depends on the self-hosted server version
-- **Concerns**: `apps/api/src/choregos_api/events.py`, the SSE routes, the runner's journal client
+- **Concerns**: `apps/api/src/tranibor_api/events.py`, the SSE routes, the runner's journal client
 
 ## Context
 

@@ -25,15 +25,15 @@ SECRET = "# Salary grid\n\n## Bands\n\nThe confidential salary bands are listed 
 
 async def _bases() -> dict[str, Any]:
     """An installation with a base of its own, and a base of the organisation outside it."""
-    from choregos_api.db.models import (
+    from tranibor_api.db.models import (
         AssistantInstallation,
         KnowledgeBase,
         KnowledgeDocument,
         Organization,
         User,
     )
-    from choregos_api.db.session import session_scope
-    from choregos_api.knowledge.index import index_document
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.knowledge.index import index_document
 
     ids: dict[str, Any] = {}
     async with session_scope(orgs="*") as session:
@@ -166,9 +166,9 @@ async def test_a_long_document_ends_with_its_outline_and_one_section_is_read_by_
     """A document longer than `knowledge_get` returns is not cut blind: its outline follows, and a section
     is read whole by the number the outline gives or the heading path a search printed (STAIR's point:
     the corpus's own table of contents is a retrieval key)."""
-    from choregos_api.db.models import KnowledgeDocument
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.conversation_knowledge import DOCUMENT_CHARS
+    from tranibor_api.db.models import KnowledgeDocument
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.conversation_knowledge import DOCUMENT_CHARS
 
     ids = await _bases()
     filler = "Background paragraph. " * (DOCUMENT_CHARS // 20)

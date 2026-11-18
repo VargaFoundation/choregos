@@ -22,7 +22,7 @@ from .conftest import login
 @pytest.fixture(autouse=True)
 def default_edition() -> Any:
     """Each test starts from the most restrictive edition."""
-    from choregos_api import edition
+    from tranibor_api import edition
 
     edition.reset()
     yield
@@ -62,7 +62,7 @@ async def test_the_community_edition_refuses_a_second_organisation(
 async def test_the_enterprise_edition_lets_it_through(client: AsyncClient, org: str, admin: str) -> None:
     """The refusal is about the EDITION, not a hard-coded cap: otherwise the enterprise edition
     would have to fork the core to lift it, which ADR 0024 explicitly refuses."""
-    from choregos_api import edition
+    from tranibor_api import edition
 
     edition.declare(edition.ENTERPRISE, features=frozenset({"multi-org"}))
     response = await client.post("/api/v1/orgs", json={"slug": "second", "name": "Second"})
@@ -82,9 +82,9 @@ async def test_without_an_organisation_the_edition_is_not_what_refuses(client: A
     Otherwise the community edition would not be single-organisation, it would be
     zero-organisation.
     """
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
     from sqlalchemy import delete
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
 
     await login(client, "admin@northwind.dev")
     async with session_scope(orgs="*") as session:
@@ -112,8 +112,8 @@ async def test_administering_the_platform_is_a_right_on_the_instance(
     the enterprise edition has defined a real platform role: a refusal, and that is the right
     default: better a route nobody can reach than a route open to the wrong tenant.
     """
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
 
     # `GET /platform/gateway/keys`: budgets, spend, expiry, revocation. The most sensitive route
     # of `/platform/*`, and one of the three that were guarded.
@@ -132,7 +132,7 @@ async def test_administering_the_platform_is_a_right_on_the_instance(
 
 
 def test_the_edition_names_its_publisher_and_version() -> None:
-    from choregos_api import edition
+    from tranibor_api import edition
 
     edition.declare(edition.ENTERPRISE, publisher="  Acme Corp ", version="1.2.3")
     assert edition.publisher() == "Acme Corp"
@@ -155,7 +155,7 @@ def test_the_edition_names_its_publisher_and_version() -> None:
     ],
 )
 def test_a_malformed_publisher_or_version_is_refused(publisher: str | None, version: str | None) -> None:
-    from choregos_api import edition
+    from tranibor_api import edition
 
     with pytest.raises(ValueError):
         edition.declare(edition.ENTERPRISE, publisher=publisher, version=version)
@@ -163,7 +163,7 @@ def test_a_malformed_publisher_or_version_is_refused(publisher: str | None, vers
 
 
 def test_the_community_edition_has_no_publisher() -> None:
-    from choregos_api import edition
+    from tranibor_api import edition
 
     with pytest.raises(ValueError, match="community"):
         edition.declare(edition.COMMUNITY, publisher="Acme")
@@ -172,7 +172,7 @@ def test_the_community_edition_has_no_publisher() -> None:
 
 
 async def test_the_edition_route_serves_the_publisher(client: AsyncClient) -> None:
-    from choregos_api import edition
+    from tranibor_api import edition
 
     community = (await client.get("/edition")).json()
     assert community["publisher"] is None and community["edition_version"] is None
@@ -184,7 +184,7 @@ async def test_the_edition_route_serves_the_publisher(client: AsyncClient) -> No
         assert body["publisher"] == "Acme"
         assert body["edition_version"] == "0.2.0"
         assert body["version"] and body["version"] != "0.2.0", "the core's version stays the core's"
-        import choregos_contracts as contracts
+        import tranibor_contracts as contracts
         from jsonschema import Draft202012Validator
 
         schema = contracts.load_openapi()["paths"]["/edition"]["get"]["responses"]["200"]["content"][
@@ -194,7 +194,7 @@ async def test_the_edition_route_serves_the_publisher(client: AsyncClient) -> No
 
 
 def test_the_edition_names_its_licence() -> None:
-    from choregos_api import edition
+    from tranibor_api import edition
 
     assert edition.edition_licence() is None
     edition.declare(edition.ENTERPRISE, licence="  Acme Corp EULA ")
@@ -205,7 +205,7 @@ def test_the_edition_names_its_licence() -> None:
 
 @pytest.mark.parametrize("licence", ["", "   ", "x" * 81, "bad\nlicence", "tab\there", "del\x7f"])
 def test_a_malformed_licence_is_refused(licence: str) -> None:
-    from choregos_api import edition
+    from tranibor_api import edition
 
     with pytest.raises(ValueError, match="licence"):
         edition.declare(edition.ENTERPRISE, licence=licence)
@@ -213,14 +213,14 @@ def test_a_malformed_licence_is_refused(licence: str) -> None:
 
 
 def test_the_community_edition_has_no_licence() -> None:
-    from choregos_api import edition
+    from tranibor_api import edition
 
     with pytest.raises(ValueError, match="community"):
         edition.declare(edition.COMMUNITY, licence="Acme Corp EULA")
 
 
 def _validate_edition_body(body: dict[str, object]) -> None:
-    import choregos_contracts as contracts
+    import tranibor_contracts as contracts
     from jsonschema import Draft202012Validator
 
     schema = contracts.load_openapi()["paths"]["/edition"]["get"]["responses"]["200"]["content"][
@@ -232,7 +232,7 @@ def _validate_edition_body(body: dict[str, object]) -> None:
 async def test_the_edition_route_serves_the_licences_and_no_revision_by_default(
     client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api import edition
+    from tranibor_api import edition
 
     monkeypatch.delenv("CHOREGOS_BUILD_REVISION", raising=False)
     community = (await client.get("/api/v1/edition")).json()

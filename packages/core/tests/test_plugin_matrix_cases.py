@@ -12,8 +12,8 @@ from pathlib import Path
 
 import pytest
 import yaml
-from choregos_core.agent_catalogue import catalogue, plugin_ref
-from choregos_core.plugins import PluginError, fake_scenes, load_directory, opened, pack
+from tranibor_core.agent_catalogue import catalogue, plugin_ref
+from tranibor_core.plugins import PluginError, fake_scenes, load_directory, opened, pack
 
 FIXTURES = Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "plugins"
 SERVICENOW = FIXTURES / "servicenow"
@@ -129,7 +129,7 @@ def test_the_catalogue_offers_a_plugin_s_matrix_cases_and_its_servers_by_referen
 
 
 def test_an_installed_version_replaces_the_image_s_cases_and_servers(plugin: Path) -> None:
-    from choregos_core.agent_catalogue import of_plugin
+    from tranibor_core.agent_catalogue import of_plugin
 
     image = of_plugin(load_directory(SERVICENOW))
     (plugin / f"evals/matrix/{C1}.yaml").unlink()

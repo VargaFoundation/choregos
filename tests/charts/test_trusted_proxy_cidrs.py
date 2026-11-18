@@ -52,7 +52,7 @@ def test_the_api_trusts_the_private_ranges_by_default(monkeypatch: pytest.Monkey
     assert json.loads(_api_env("choregos-api.trustedProxyCidrs=[]")[CIDRS]["value"]) == []
 
     # what the chart writes is what the API settings accept, not merely JSON
-    from choregos_api.config import Settings
+    from tranibor_api.config import Settings
 
     monkeypatch.setenv(CIDRS, env[CIDRS]["value"])
     monkeypatch.setenv("CHOREGOS_TRUSTED_PROXY_HOPS", env["CHOREGOS_TRUSTED_PROXY_HOPS"]["value"])

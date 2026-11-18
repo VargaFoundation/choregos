@@ -19,12 +19,12 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest
 import respx
-from choregos_api.config import Settings, reset_settings_cache
-from choregos_api.db.models import AuditLog, Membership, Organization, User
-from choregos_api.db.session import session_scope
-from choregos_api.routers.auth import forget_discovery
 from httpx import AsyncClient, Response
 from sqlalchemy import select
+from tranibor_api.config import Settings, reset_settings_cache
+from tranibor_api.db.models import AuditLog, Membership, Organization, User
+from tranibor_api.db.session import session_scope
+from tranibor_api.routers.auth import forget_discovery
 
 OLD = "https://old-idp.example.test/realms/x"
 NEW = "https://new-idp.example.test/realms/y"

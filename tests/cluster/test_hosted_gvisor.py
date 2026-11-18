@@ -17,8 +17,8 @@ import subprocess
 import time
 
 import pytest
-from choregos_adapters.executor.k8s_job import AGENT_CONTAINER, KubernetesJobExecutor
-from choregos_core.hosted import NATIVE_SIDECARS_MIN
+from tranibor_adapters.executor.k8s_job import AGENT_CONTAINER, KubernetesJobExecutor
+from tranibor_core.hosted import NATIVE_SIDECARS_MIN
 
 from .conftest import context, kubectl_shared
 from .test_hosted_native_sidecar import (

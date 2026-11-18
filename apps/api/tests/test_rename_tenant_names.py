@@ -39,10 +39,10 @@ MAPPING = yaml.safe_load((ROOT / "tools" / "rename_tenant_names.yaml").read_text
 @pytest.fixture
 async def tenant(client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch) -> Any:
     """A tenant as it was before S39-11: the French template's project, agents, skills, connectors."""
-    import choregos_adapters
-    from choregos_adapters.fakes.hr import FakeSupplier, mcp_server
+    import tranibor_adapters
+    from tranibor_adapters.fakes.hr import FakeSupplier, mcp_server
 
-    monkeypatch.setattr(choregos_adapters, "FAKE_MCP", mcp_server(FakeSupplier()))
+    monkeypatch.setattr(tranibor_adapters, "FAKE_MCP", mcp_server(FakeSupplier()))
     monkeypatch.setenv("CHOREGOS_TEMPLATES_DIR", str(FIXTURES))
     monkeypatch.setenv("CONNECTOR_RENAME_TEST_SECRET", "s3cret")
     for body in (

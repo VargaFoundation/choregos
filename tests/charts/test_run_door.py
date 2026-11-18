@@ -100,8 +100,8 @@ def test_the_api_warns_by_default_and_knows_the_names_it_is_routed_under(
 
     # What the chart writes is what the API's settings accept, and it leaves the guard free to refuse:
     # runs are sent to the Service, which is no public name.
-    from choregos_api.config import Settings
-    from choregos_api.internal_api_guard import guard_of
+    from tranibor_api.config import Settings
+    from tranibor_api.internal_api_guard import guard_of
 
     for name in (
         GUARD,
@@ -185,8 +185,8 @@ def _preset_documents(preset: str, *json_sets: str) -> list[dict[str, Any]]:
 
 
 def _guard_of_env(env: dict[str, str], monkeypatch: pytest.MonkeyPatch) -> Any:
-    from choregos_api.config import Settings
-    from choregos_api.internal_api_guard import guard_of
+    from tranibor_api.config import Settings
+    from tranibor_api.internal_api_guard import guard_of
 
     for name in (GUARD, DOORS, PUBLIC, CALLBACK, "CHOREGOS_PUBLIC_URL", "CHOREGOS_API_URL"):
         monkeypatch.setenv(name, env.get(name, ""))

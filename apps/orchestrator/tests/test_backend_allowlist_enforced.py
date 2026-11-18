@@ -22,8 +22,8 @@ pytestmark = pytest.mark.asyncio
 
 
 async def _allow(setup: Fixture, backends: list[str]) -> None:
-    from choregos_api.db.models import Project
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Project
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         project = await session.get(Project, setup.project_id)
@@ -38,7 +38,7 @@ def _bundle(allowed: list[str]) -> Any:
 
 
 async def test_a_backend_outside_the_project_list_is_refused_before_any_key(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.stage import prepare_stage
+    from tranibor_orchestrator.activities.stage import prepare_stage
 
     await _switch("codex", enabled=True)
     await _allow(setup, ["claude-code"])
@@ -54,7 +54,7 @@ async def test_a_backend_outside_the_project_list_is_refused_before_any_key(setu
 
 
 async def test_the_allowlist_is_checked_before_the_platform_switch(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.stage import prepare_stage
+    from tranibor_orchestrator.activities.stage import prepare_stage
 
     await _switch("codex", enabled=False, reason="under security review")
     await _allow(setup, ["claude-code"])
@@ -65,7 +65,7 @@ async def test_the_allowlist_is_checked_before_the_platform_switch(setup: Fixtur
 
 
 async def test_an_empty_list_allows_every_enabled_backend(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.stage import prepare_stage
+    from tranibor_orchestrator.activities.stage import prepare_stage
 
     await _switch("codex", enabled=True)
     await _allow(setup, [])
@@ -73,7 +73,7 @@ async def test_an_empty_list_allows_every_enabled_backend(setup: Fixture) -> Non
 
 
 async def test_a_runtime_that_fixes_its_backend_is_not_concerned(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.stage import _require_backend_allowed
+    from tranibor_orchestrator.activities.stage import _require_backend_allowed
 
     code_agent = SimpleNamespace(spec=SimpleNamespace(runtime=SimpleNamespace(kind="code")))
     _require_backend_allowed(code_agent, _bundle(["claude-code"]), "codex")

@@ -20,8 +20,8 @@ async def wait_until_state(handle: Any, query: str, predicate: Any, timeout: flo
 
 async def run_work_item_to_train(setup: Fixture, temporal_env: Any) -> tuple[Any, dict[str, Any]]:
     """A `default-simple` work item driven up to the merge; returns its interpreter and its boarding."""
-    from choregos_api.temporal import interpreter_id
-    from choregos_orchestrator.train_client import fake_signals
+    from tranibor_api.temporal import interpreter_id
+    from tranibor_orchestrator.train_client import fake_signals
 
     for result in (
         stage_result("spec", outputs={"size": "M", "risk": "low", "spec_markdown": "## Spec"}),
@@ -70,9 +70,9 @@ async def run_work_item_to_train(setup: Fixture, temporal_env: Any) -> tuple[Any
 async def set_prod_approval_policy(setup: Fixture, *, approval: bool) -> None:
     """The project policy (preset `solo`) requires approval in prod; these tests remove it to prove
     that the WORKFLOW's own requirement is enough to hold the batch."""
-    from choregos_api.db.models import PolicyDef
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import PolicyDef
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         row = (

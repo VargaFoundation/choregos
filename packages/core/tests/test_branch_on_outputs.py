@@ -11,8 +11,8 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from choregos_core import ValidationError, WorkflowEngine, parse_workflow
-from choregos_core.dsl.conditions import when_holds
+from tranibor_core import ValidationError, WorkflowEngine, parse_workflow
+from tranibor_core.dsl.conditions import when_holds
 
 # "Develop XXX, then answer: is it finished? are there findings?" — the agent loops until it says it
 # is done; findings send it to a fixer; a low confidence asks a person.
@@ -107,7 +107,7 @@ def test_a_workflow_without_when_chooses_as_before(engine: WorkflowEngine) -> No
     ],
 )
 def test_conditions(when: dict[str, Any], outputs: dict[str, Any], holds: bool) -> None:
-    from choregos_contracts.workflow import Transition
+    from tranibor_contracts.workflow import Transition
 
     parsed = Transition.model_validate({"from": "a", "to": "b", "by": "x", "when": when}).when
     assert when_holds(parsed, outputs) is holds

@@ -50,9 +50,9 @@ async def _waiting_work_item(
     client: AsyncClient, pid: str, kind: str = "task", yaml: str = BADGE
 ) -> dict[str, Any]:
     """The work item, and the request the interpreter would have created on reaching the task."""
-    from choregos_api.db.models import HumanRequest
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
+    from tranibor_api.db.models import HumanRequest
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
 
     published = await client.put(f"/api/v1/projects/{pid}/workflows/onboarding", json={"yaml": yaml})
     assert published.status_code == 200, published.text
@@ -85,7 +85,7 @@ async def _waiting_work_item(
 async def test_a_task_is_filled_attested_and_its_values_become_fields(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.temporal import FakeTemporal, get_temporal
+    from tranibor_api.temporal import FakeTemporal, get_temporal
 
     ticket = await _waiting_work_item(client, project["id"])
     base = f"/api/v1/work-items/{ticket['id']}"
@@ -143,9 +143,9 @@ async def test_an_impossible_task_is_sent_back_and_complete_only_holds_for_a_tas
 
 
 async def _another_waiting_work_item(client: AsyncClient, pid: str) -> str:
-    from choregos_api.db.models import HumanRequest
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
+    from tranibor_api.db.models import HumanRequest
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
 
     created = await client.post(
         f"/api/v1/projects/{pid}/work-items",

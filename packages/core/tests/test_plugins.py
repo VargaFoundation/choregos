@@ -12,8 +12,9 @@ from typing import Any
 
 import pytest
 import yaml
-from choregos_contracts import load_schema
-from choregos_core.plugins import (
+from jsonschema import Draft202012Validator
+from tranibor_contracts import load_schema
+from tranibor_core.plugins import (
     TRACKER_PROFILE,
     PluginError,
     build_index,
@@ -22,7 +23,6 @@ from choregos_core.plugins import (
     opened,
     pack,
 )
-from jsonschema import Draft202012Validator
 
 HELLO = Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "plugins" / "hello"
 DESK = HELLO.parent / "desk"
@@ -248,7 +248,7 @@ def test_an_eval_names_an_agent_of_the_plugin(plugin: Path) -> None:
 
 
 def _catalogue_cases() -> list[Any]:
-    from choregos_core.agent_catalogue.evals import cases
+    from tranibor_core.agent_catalogue.evals import cases
 
     return cases()
 

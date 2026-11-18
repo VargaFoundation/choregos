@@ -18,7 +18,7 @@ RULE = {"name": "adr_number_free"}
 
 
 async def test_a_number_taken_on_the_default_branch_is_refused(setup: Any) -> None:
-    from choregos_orchestrator.activities.gates import evaluate_gates
+    from tranibor_orchestrator.activities.gates import evaluate_gates
 
     payload = {"project_id": setup.project_id, "work_item_id": setup.work_item_id, "gates": [RULE]}
     scm = setup.adapters.scm
@@ -35,7 +35,7 @@ async def test_a_number_taken_on_the_default_branch_is_refused(setup: Any) -> No
 
 
 async def test_without_the_repository_listing_the_guard_refuses(setup: Any, monkeypatch: Any) -> None:
-    from choregos_orchestrator.activities.gates import evaluate_gates
+    from tranibor_orchestrator.activities.gates import evaluate_gates
 
     async def down(*_: Any) -> list[str]:
         raise RuntimeError("GitHub unreachable")

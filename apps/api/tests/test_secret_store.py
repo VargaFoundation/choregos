@@ -7,7 +7,7 @@ import os
 from typing import Any
 
 import pytest
-from choregos_api.secret_store import (
+from tranibor_api.secret_store import (
     ENV_KEKS,
     FakeSecretStore,
     SealedDbSecretStore,
@@ -19,8 +19,8 @@ from choregos_api.secret_store import (
     set_secret_store,
     unseal,
 )
-from choregos_core.redaction import forget_secrets, redact
-from choregos_core.secrets import SecretNotFound
+from tranibor_core.redaction import forget_secrets, redact
+from tranibor_core.secrets import SecretNotFound
 
 
 def _key() -> str:
@@ -34,7 +34,7 @@ def _ring(*ids: str) -> Any:
 
 
 def _row(sealed: Any, org: str, name: str, version: int) -> Any:
-    from choregos_api.db.models import OrgSecret
+    from tranibor_api.db.models import OrgSecret
 
     return OrgSecret(
         org_id=org,
@@ -101,9 +101,9 @@ def test_the_keyring_names_what_is_wrong() -> None:
 
 
 async def test_a_value_is_stored_sealed_replaced_and_read(app: Any, org: str) -> None:
-    from choregos_api.db.models import Organization, OrgSecret
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Organization, OrgSecret
+    from tranibor_api.db.session import session_scope
 
     store = SealedDbSecretStore(_ring("k1"))
     async with session_scope() as session:
@@ -127,9 +127,9 @@ async def test_a_value_is_stored_sealed_replaced_and_read(app: Any, org: str) ->
 async def test_a_rewrap_moves_the_data_keys_to_the_active_key_and_keeps_the_values(
     app: Any, org: str
 ) -> None:
-    from choregos_api.db.models import Organization, OrgSecret
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Organization, OrgSecret
+    from tranibor_api.db.session import session_scope
 
     old = _ring("k1")
     new = parse_keyring(f"k2:{_key()},k1:{base64.b64encode(old.keys['k1']).decode()}")
@@ -157,7 +157,7 @@ async def test_a_rewrap_moves_the_data_keys_to_the_active_key_and_keeps_the_valu
 async def test_without_a_key_a_write_is_refused_and_a_read_says_why(
     app: Any, org: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.session import session_scope
 
     monkeypatch.delenv(ENV_KEKS, raising=False)
     store = SealedDbSecretStore()

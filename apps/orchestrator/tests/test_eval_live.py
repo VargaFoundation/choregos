@@ -10,10 +10,10 @@ from typing import Any
 
 import pytest
 import yaml
-from choregos_contracts import Diagnostics, Evidence, StageInput, StageResult, StageStatus
-from choregos_orchestrator.activities import evals
-from choregos_orchestrator.activities import stage as stage_activities
-from choregos_orchestrator.config import reset_settings_cache
+from tranibor_contracts import Diagnostics, Evidence, StageInput, StageResult, StageStatus
+from tranibor_orchestrator.activities import evals
+from tranibor_orchestrator.activities import stage as stage_activities
+from tranibor_orchestrator.config import reset_settings_cache
 
 from .conftest import Fixture
 
@@ -34,8 +34,8 @@ def _cell(fixture: str, context: str = "rtk+headroom", **extra: Any) -> dict[str
 
 
 async def _memory_off(project_id: str) -> None:
-    from choregos_api.db.session import session_scope
-    from choregos_api.services import active_policy, policy_model
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services import active_policy, policy_model
 
     async with session_scope() as session:
         row = await active_policy(session, project_id)
@@ -346,9 +346,9 @@ def test_expect_status_is_one_status_or_a_list(expect: object, status: str, ok: 
 async def test_a_run_without_the_cell_s_reduction_is_skipped(
     eval_project: Fixture, event: str, payload: dict[str, Any], why: str
 ) -> None:
-    from choregos_api.db.models import RunEvent
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
+    from tranibor_api.db.models import RunEvent
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
 
     _, seen = await _live_case(eval_project, "py-rounding-bug", "rtk+headroom")
     run_id = seen["stage_input"].run_id

@@ -22,9 +22,9 @@ pytestmark = pytest.mark.asyncio
 
 
 async def _org_month_cap(setup: Fixture, usd: float) -> None:
-    from choregos_api.db.models import Organization, Project
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.definitions import CEILING_KEY
+    from tranibor_api.db.models import Organization, Project
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.definitions import CEILING_KEY
 
     async with session_scope() as session:
         project = await session.get(Project, setup.project_id)
@@ -36,9 +36,9 @@ async def _org_month_cap(setup: Fixture, usd: float) -> None:
 
 
 async def _project_day_cap(setup: Fixture, usd: float) -> None:
-    from choregos_api.db.models import PolicyDef
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import PolicyDef
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         row = (
@@ -53,9 +53,9 @@ async def _project_day_cap(setup: Fixture, usd: float) -> None:
 
 async def _open_key(setup: Fixture, key_id: str, usd: float, *, project_id: str, agent: str | None) -> None:
     """A key still open (not revoked, not expired) for a run of `agent`, as a run in flight holds."""
-    from choregos_api.db.models import GatewayKeyRow, Run
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
+    from tranibor_api.db.models import GatewayKeyRow, Run
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
 
     async with session_scope() as session:
         run_id = f"run-{key_id}"
@@ -83,8 +83,8 @@ async def _open_key(setup: Fixture, key_id: str, usd: float, *, project_id: str,
 
 
 async def _other_project(setup: Fixture) -> str:
-    from choregos_api.db.models import Project
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Project
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         mine = await session.get(Project, setup.project_id)
@@ -96,9 +96,9 @@ async def _other_project(setup: Fixture) -> str:
 
 
 async def _reserved_keys(setup: Fixture) -> list[float]:
-    from choregos_api.db.models import GatewayKeyRow
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import GatewayKeyRow
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = (
@@ -111,7 +111,7 @@ async def _reserved_keys(setup: Fixture) -> list[float]:
 async def test_two_stages_at_once_cannot_reserve_the_same_remainder(setup: Fixture, scope: str) -> None:
     """A remainder that fits one stage: one key is reserved, the other stage is refused as below
     the floor — whichever scope the remainder is under."""
-    from choregos_orchestrator.activities.stage import prepare_stage
+    from tranibor_orchestrator.activities.stage import prepare_stage
 
     if scope == "agent_month":
         await _with_cap(setup, 10.0, run_usd=None)
@@ -144,10 +144,10 @@ async def test_two_stages_at_once_cannot_reserve_the_same_remainder(setup: Fixtu
 async def test_the_organisation_month_caps_a_key(setup: Fixture) -> None:
     """The organisation's month is the spend of ALL its projects, not the project's, and of that
     organisation only."""
-    from choregos_api.db.models import CostLedger, Organization, Project
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
-    from choregos_orchestrator.activities.stage import prepare_stage
+    from tranibor_api.db.models import CostLedger, Organization, Project
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
+    from tranibor_orchestrator.activities.stage import prepare_stage
 
     await _org_month_cap(setup, 1.0)
     other = await _other_project(setup)
@@ -167,7 +167,7 @@ async def test_the_organisation_month_caps_a_key(setup: Fixture) -> None:
 
 
 async def test_the_organisation_s_open_keys_reduce_its_month(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.stage import prepare_stage
+    from tranibor_orchestrator.activities.stage import prepare_stage
 
     await _org_month_cap(setup, 1.0)
     await _open_key(setup, "k-other", 0.6, project_id=await _other_project(setup), agent=None)
@@ -179,7 +179,7 @@ async def test_the_organisation_s_open_keys_reduce_its_month(setup: Fixture) -> 
 
 async def test_the_agent_s_open_keys_reduce_its_monthly_remainder(setup: Fixture) -> None:
     """S27-09's gap: a run of the same agent still holding a key of USD 0.60 may spend it."""
-    from choregos_orchestrator.activities.stage import prepare_stage
+    from tranibor_orchestrator.activities.stage import prepare_stage
 
     await _with_cap(setup, 10.0, run_usd=None)
     await _spend_as_agent(setup, 9.0, 0)
@@ -191,7 +191,7 @@ async def test_the_agent_s_open_keys_reduce_its_monthly_remainder(setup: Fixture
 
 
 async def test_another_agent_s_open_keys_do_not_reduce_it(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.stage import prepare_stage
+    from tranibor_orchestrator.activities.stage import prepare_stage
 
     await _with_cap(setup, 10.0, run_usd=None)
     await _spend_as_agent(setup, 9.0, 0)

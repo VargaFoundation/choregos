@@ -8,7 +8,7 @@
  * (its comments dropped), the part of the parsed document the console reads (`WorkflowDef.json`:
  * inputs and actors), the `task` of `t-hand-over-badge`, and `POST /workflows/validate` (its graph; the
  * process view emptied). It was written by running the API's `validate` route and
- * `choregos_core.parse_workflow` over `templates/joiners-leavers/workflows/onboarding.yaml`. The
+ * `tranibor_core.parse_workflow` over `templates/joiners-leavers/workflows/onboarding.yaml`. The
  * offboarding workflow and the process view are left out: every fixture counts in the bundle budget.
  */
 import type {

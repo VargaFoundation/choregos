@@ -12,9 +12,9 @@ from collections.abc import Iterator
 from typing import Any
 
 import pytest
-from choregos_api.services.skills import digest
-from choregos_core import skill_catalogue
 from httpx import ASGITransport, AsyncClient
+from tranibor_api.services.skills import digest
+from tranibor_core import skill_catalogue
 
 from .conftest import login
 
@@ -24,7 +24,7 @@ RECORDINGS = pathlib.Path(__file__).resolve().parents[3] / "tests" / "fixtures" 
 
 @pytest.fixture
 def fetcher() -> Iterator[Any]:
-    from choregos_api.services.skill_sources import FakeSourceFetcher, set_fetcher
+    from tranibor_api.services.skill_sources import FakeSourceFetcher, set_fetcher
 
     fake = FakeSourceFetcher()
     fake.load_recordings(RECORDINGS)
@@ -101,9 +101,9 @@ async def test_a_bundled_entry_installs_offline_approved_by_the_platform(
 
 
 async def test_install_leaves_an_audit_row_naming_the_entry(client: AsyncClient, admin: str) -> None:
-    from choregos_api.db.models import AuditLog
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import AuditLog
+    from tranibor_api.db.session import session_scope
 
     await client.post(f"{BASE}/runbook/install")
     async with session_scope() as session:
@@ -156,9 +156,9 @@ async def test_the_precomputed_risk_is_the_gates_answer_for_every_entry_of_the_c
     client: AsyncClient, admin: str, fetcher: Any
 ) -> None:
     """The guard against drift: the generator's risk, digest and licence equal what the install gets."""
-    from choregos_api.db.models import Skill, SkillVersion
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Skill, SkillVersion
+    from tranibor_api.db.session import session_scope
 
     entries = skill_catalogue.load().entries
     for e in entries:
@@ -308,7 +308,7 @@ async def test_what_the_repository_serves_must_be_what_the_catalogue_pinned(
 async def test_git_entries_say_whether_the_deployment_declares_their_host(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     unknown = _by_id((await client.get(BASE)).json())
     assert unknown["systematic-debugging"]["egress"] == "unknown"

@@ -9,9 +9,9 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from choregos_adapters.errors import ConfigurationError
-from choregos_adapters.fakes.executor import FakeExecutor
 from temporalio.exceptions import ApplicationError
+from tranibor_adapters.errors import ConfigurationError
+from tranibor_adapters.fakes.executor import FakeExecutor
 
 from .conftest import Fixture
 
@@ -24,7 +24,7 @@ REASON = (
 
 
 async def _prepare(setup: Fixture) -> dict[str, Any]:
-    from choregos_orchestrator.activities import stage as activities
+    from tranibor_orchestrator.activities import stage as activities
 
     return await activities.prepare_stage(
         {
@@ -41,7 +41,7 @@ async def _prepare(setup: Fixture) -> dict[str, Any]:
 
 
 async def _start(setup: Fixture, plan: dict[str, Any]) -> dict[str, Any]:
-    from choregos_orchestrator.activities import stage as activities
+    from tranibor_orchestrator.activities import stage as activities
 
     return await activities.start_run(
         {
@@ -54,10 +54,10 @@ async def _start(setup: Fixture, plan: dict[str, Any]) -> dict[str, Any]:
 
 
 async def test_a_configuration_refusal_fails_the_run_and_is_not_retried(setup: Fixture) -> None:
-    from choregos_api.db.models import Event, Run
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities.execution import START_REFUSED
     from sqlalchemy import select
+    from tranibor_api.db.models import Event, Run
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities.execution import START_REFUSED
 
     executor = FakeExecutor()
     executor.start_error = ConfigurationError(REASON)
@@ -95,8 +95,8 @@ async def test_a_configuration_refusal_fails_the_run_and_is_not_retried(setup: F
 
 async def test_another_error_is_still_retried(setup: Fixture) -> None:
     """Only a configuration refusal is final: an upstream hiccup keeps its retries and its run."""
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
 
     executor = FakeExecutor()
     executor.start_error = RuntimeError("the cluster API answered 503")

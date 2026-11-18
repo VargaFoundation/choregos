@@ -15,8 +15,8 @@ from typing import Any
 import pytest
 from alembic import command
 from alembic.config import Config
-from choregos_api.config import get_settings
 from sqlalchemy import create_engine, text
+from tranibor_api.config import get_settings
 
 from .conftest import PG_URL, _app_url, _prepare_postgres, without_postgres
 
@@ -27,7 +27,7 @@ LINKED = "c7e2a9d4f1b6"
 
 def _config(url: str) -> Config:
     config = Config(str(API / "alembic.ini"))
-    config.set_main_option("script_location", str(API / "src" / "choregos_api" / "migrations"))
+    config.set_main_option("script_location", str(API / "src" / "tranibor_api" / "migrations"))
     config.set_main_option("sqlalchemy.url", url)
     return config
 

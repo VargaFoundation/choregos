@@ -23,10 +23,10 @@ import base64
 from collections.abc import AsyncIterator
 
 import pytest
-from choregos_adapters.http import RestClient
-from choregos_adapters.tracker.jira import JiraTracker
-from choregos_contracts import ProjectConfig, RepoConfig
-from choregos_core.domain import NewItem, TrackerStateMapping
+from tranibor_adapters.http import RestClient
+from tranibor_adapters.tracker.jira import JiraTracker
+from tranibor_contracts import ProjectConfig, RepoConfig
+from tranibor_core.domain import NewItem, TrackerStateMapping
 
 from .conftest import require
 
@@ -123,7 +123,7 @@ async def test_full_cycle_on_a_real_ticket(tracker: JiraTracker) -> None:
 
 
 async def test_a_missing_project_gives_a_readable_error(tracker: JiraTracker) -> None:
-    from choregos_adapters.errors import UpstreamError
+    from tranibor_adapters.errors import UpstreamError
 
     absent = JiraTracker(tracker.client, "ZZZINEXISTANT")
     with pytest.raises(UpstreamError) as error:

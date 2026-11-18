@@ -22,7 +22,7 @@ from types import ModuleType
 from typing import Any
 
 import pytest
-from choregos_contracts import (
+from tranibor_contracts import (
     AgentRef,
     Budget,
     Callbacks,
@@ -38,7 +38,7 @@ from choregos_contracts import (
     TransitionRef,
     WorkItemRef,
 )
-from choregos_playbooks import INVARIANTS, KNOWN_ROLES, OUTPUT_CONTRACT, frame, render_playbook
+from tranibor_playbooks import INVARIANTS, KNOWN_ROLES, OUTPUT_CONTRACT, frame, render_playbook
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 
@@ -116,7 +116,7 @@ def test_every_rendered_playbook_is_in_english(role: str) -> None:
 def test_the_demonstration_playbooks_are_in_english(role: str, monkeypatch: pytest.MonkeyPatch) -> None:
     """Brought by the deployment (`demo/playbooks`, mounted through `CHOREGOS_PLAYBOOKS_DIR`):
     rendered by the same path as in production. The Jinja loader caches its directories."""
-    from choregos_playbooks import _env
+    from tranibor_playbooks import _env
 
     monkeypatch.setenv("CHOREGOS_PLAYBOOKS_DIR", str(ROOT / "demo/playbooks"))
     _env.cache_clear()
@@ -160,7 +160,7 @@ def test_a_registry_agent_gets_the_language_instruction_in_its_frame() -> None:
 
 
 def test_the_runners_task_md_and_context_md_are_in_english() -> None:
-    from choregos_runner.workspace import _context_markdown, _task_markdown
+    from tranibor_runner.workspace import _context_markdown, _task_markdown
 
     stage_input = _stage_input()
     for name, text in (
@@ -186,7 +186,7 @@ def _descriptions(value: Any, path: str) -> Iterator[tuple[str, str]]:
 
 
 def test_the_mcp_tool_descriptions_are_in_english() -> None:
-    from choregos_tools_mcp.tools import TOOL_SCHEMAS
+    from tranibor_tools_mcp.tools import TOOL_SCHEMAS
 
     descriptions = [d for tool in TOOL_SCHEMAS for d in _descriptions(tool, str(tool["name"]))]
     assert len(descriptions) >= len(TOOL_SCHEMAS), "every tool describes itself"
@@ -196,7 +196,7 @@ def test_the_mcp_tool_descriptions_are_in_english() -> None:
 
 @pytest.mark.parametrize(
     "root",
-    ["packages/runner/src/choregos_runner", "packages/tools-mcp/src/choregos_tools_mcp"],
+    ["packages/runner/src/tranibor_runner", "packages/tools-mcp/src/tranibor_tools_mcp"],
     ids=["runner", "mcp-tools"],
 )
 def test_what_the_runner_and_the_tools_say_is_in_english(root: str) -> None:

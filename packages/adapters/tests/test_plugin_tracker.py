@@ -5,12 +5,12 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from choregos_adapters.errors import ConfigurationError, UpstreamError
-from choregos_adapters.fakes.plugin_tracker import FakePluginTrackerServer
-from choregos_adapters.plugin_servers import PluginServerClient
-from choregos_adapters.tracker.plugin import PluginTracker
-from choregos_contracts import ProjectConfig
-from choregos_core.domain import NewItem, TrackerStateMapping
+from tranibor_adapters.errors import ConfigurationError, UpstreamError
+from tranibor_adapters.fakes.plugin_tracker import FakePluginTrackerServer
+from tranibor_adapters.plugin_servers import PluginServerClient
+from tranibor_adapters.tracker.plugin import PluginTracker
+from tranibor_contracts import ProjectConfig
+from tranibor_core.domain import NewItem, TrackerStateMapping
 
 
 def _tracker(fake: FakePluginTrackerServer, audit: Any = None) -> PluginTracker:
@@ -90,8 +90,8 @@ async def test_a_server_missing_a_profile_tool_fails_its_test() -> None:
 
 
 def test_the_registered_type_takes_only_plugin_and_server() -> None:
-    from choregos_adapters import validate_config
-    from choregos_adapters.registry import _REGISTRY
+    from tranibor_adapters import validate_config
+    from tranibor_adapters.registry import _REGISTRY
 
     validate_config("tracker", "plugin", {"plugin": "desk", "server": "desk"})
     with pytest.raises(ConfigurationError):

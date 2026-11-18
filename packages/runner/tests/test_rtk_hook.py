@@ -15,11 +15,11 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from choregos_contracts import ModelRef, StageContext, StageInput
-from choregos_runner.backends.claude_code import RTK_CONFIG, RTK_HOOK, ClaudeCodeBackend
-from choregos_runner.exits import Exit
-from choregos_runner.guardrails import GuardRails
-from choregos_runner.workspace import agent_home, git_dir_for
+from tranibor_contracts import ModelRef, StageContext, StageInput
+from tranibor_runner.backends.claude_code import RTK_CONFIG, RTK_HOOK, ClaudeCodeBackend
+from tranibor_runner.exits import Exit
+from tranibor_runner.guardrails import GuardRails
+from tranibor_runner.workspace import agent_home, git_dir_for
 
 from .conftest import valid_result
 from .test_runner_flow import execute

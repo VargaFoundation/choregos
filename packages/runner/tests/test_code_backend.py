@@ -6,15 +6,15 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import choregos_contracts
 import pytest
-from choregos_contracts import ApiFormat, StageInput
-from choregos_runner.backends import get_backend, known_backends
-from choregos_runner.backends.code import CodeBackend
+import tranibor_contracts
+from tranibor_contracts import ApiFormat, StageInput
+from tranibor_runner.backends import get_backend, known_backends
+from tranibor_runner.backends.code import CodeBackend
 
 
 def _stage_input() -> StageInput:
-    example = choregos_contracts.schemas_dir() / "examples" / "stage-input.code-agent.example.json"
+    example = tranibor_contracts.schemas_dir() / "examples" / "stage-input.code-agent.example.json"
     return StageInput.model_validate(json.loads(example.read_text(encoding="utf-8")))
 
 

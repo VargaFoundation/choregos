@@ -27,8 +27,8 @@ BINARY = b"\x89PNG\r\n\x1a\n\xff\xfe\x00data\r\n\x00"
 
 @pytest.fixture(autouse=True)
 def profile(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from choregos_cli import client as client_module
-    from choregos_cli import theme
+    from tranibor_cli import client as client_module
+    from tranibor_cli import theme
 
     monkeypatch.setattr(client_module, "CONFIG_PATH", tmp_path / "config.json")
     monkeypatch.setattr(theme, "MONOCHROME", False)
@@ -103,7 +103,7 @@ def platform(contract: Any) -> Any:
 
 
 def _run(*words: str, env: dict[str, str] | None = None) -> Any:
-    from choregos_cli.main import app
+    from tranibor_cli.main import app
 
     return CliRunner().invoke(app, ["artifacts", *words], env=env)
 
@@ -190,7 +190,7 @@ def test_a_missing_revision_exits_1_and_writes_nothing(platform: Platform, tmp_p
 def test_open_hands_a_private_temporary_copy_to_the_injected_opener(
     platform: Platform, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_cli import artifacts
+    from tranibor_cli import artifacts
 
     platform.content("logo.png", BINARY, "image/png")
     seen: list[tuple[Path, bytes, int]] = []
@@ -208,7 +208,7 @@ def test_open_hands_a_private_temporary_copy_to_the_injected_opener(
 def test_an_opener_that_cannot_start_is_a_red_line(
     platform: Platform, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_cli import artifacts
+    from tranibor_cli import artifacts
 
     platform.content("spec.md", b"x")
 
@@ -221,7 +221,7 @@ def test_an_opener_that_cannot_start_is_a_red_line(
 
 
 def test_each_platform_uses_its_own_opener() -> None:
-    from choregos_cli.artifacts import viewer_command
+    from tranibor_cli.artifacts import viewer_command
 
     p = Path("/tmp/x/spec.md")
     assert viewer_command(p, "Darwin")[0] == "open"
@@ -237,7 +237,7 @@ def test_each_platform_uses_its_own_opener() -> None:
 
 
 def test_wsl_is_recognised_from_the_environment_or_the_kernel() -> None:
-    from choregos_cli.artifacts import is_wsl
+    from tranibor_cli.artifacts import is_wsl
 
     assert is_wsl({"WSL_DISTRO_NAME": "Ubuntu"}, "6.1.0")
     assert is_wsl({}, "6.18.33.2-microsoft-standard-WSL2")

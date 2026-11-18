@@ -18,8 +18,8 @@ from typing import Any
 
 import pytest
 import yaml
-from choregos_core.agent_catalogue import entries
-from choregos_core.agent_completeness import missing_components
+from tranibor_core.agent_catalogue import entries
+from tranibor_core.agent_completeness import missing_components
 
 pytestmark = pytest.mark.conformance
 

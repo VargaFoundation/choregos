@@ -99,9 +99,9 @@ def test_the_table_only_names_activities_that_exist() -> None:
     runs on the workflow queue, everything works, until the day a network policy counts on the
     declared queue.
     """
-    from choregos_orchestrator.activities import ALL_ACTIVITIES
-    from choregos_orchestrator.queues import QUEUE_BY_ACTIVITY, activity_name
-    from choregos_orchestrator.workflows import WORKFLOW_ACTIVITIES
+    from tranibor_orchestrator.activities import ALL_ACTIVITIES
+    from tranibor_orchestrator.queues import QUEUE_BY_ACTIVITY, activity_name
+    from tranibor_orchestrator.workflows import WORKFLOW_ACTIVITIES
 
     known = {
         name
@@ -114,9 +114,9 @@ def test_the_table_only_names_activities_that_exist() -> None:
 
 def test_a_call_that_specifies_its_queue_keeps_the_last_word() -> None:
     """The envelope sets a default; it does not confiscate the caller's decision."""
-    from choregos_orchestrator.activities import stage as stage_activities
-    from choregos_orchestrator.activities.interpretation import load_context
-    from choregos_orchestrator.workflows import scheduling
+    from tranibor_orchestrator.activities import stage as stage_activities
+    from tranibor_orchestrator.activities.interpretation import load_context
+    from tranibor_orchestrator.workflows import scheduling
 
     seen: list[dict[str, Any]] = []
 

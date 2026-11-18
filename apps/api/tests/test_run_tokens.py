@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import pytest
-from choregos_api.config import Settings
-from choregos_api.security import mint_run_token, public_from_private, run_token_keys, verify_run_token
+from tranibor_api.config import Settings
+from tranibor_api.security import mint_run_token, public_from_private, run_token_keys, verify_run_token
 
 
 def _settings(**kwargs: object) -> Settings:

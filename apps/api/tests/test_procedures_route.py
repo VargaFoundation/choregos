@@ -8,9 +8,9 @@ from collections.abc import Iterator
 from typing import Any
 
 import pytest
-from choregos_api.config import reset_settings_cache
-from choregos_core import procedures as core
 from httpx import AsyncClient
+from tranibor_api.config import reset_settings_cache
+from tranibor_core import procedures as core
 
 # http, not https: an https URL makes the session cookie `Secure` and the test client drops it
 API = "http://agentic.example.test"

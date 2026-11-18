@@ -13,16 +13,16 @@ from __future__ import annotations
 from collections.abc import Iterator
 from typing import Any
 
-import choregos_adapters
 import httpx
 import pytest
-from choregos_adapters import build, egress_hosts, validate_config
-from choregos_adapters.errors import AdapterError
-from choregos_adapters.fakes.mcp import FakeMcpServer
-from choregos_adapters.fakes.oauth_provider import FakeOAuthProvider
-from choregos_adapters.mcp import CONNECTOR_TOKENS, McpError, TokenRefused
-from choregos_adapters.mcp import client_credentials as module
-from choregos_core.egress import AllowedRule, EgressPolicy, EgressRefusedError, use_policy
+import tranibor_adapters
+from tranibor_adapters import build, egress_hosts, validate_config
+from tranibor_adapters.errors import AdapterError
+from tranibor_adapters.fakes.mcp import FakeMcpServer
+from tranibor_adapters.fakes.oauth_provider import FakeOAuthProvider
+from tranibor_adapters.mcp import CONNECTOR_TOKENS, McpError, TokenRefused
+from tranibor_adapters.mcp import client_credentials as module
+from tranibor_core.egress import AllowedRule, EgressPolicy, EgressRefusedError, use_policy
 
 TOOLS = [{"name": "read_orders", "inputSchema": {"type": "object"}, "annotations": {"readOnlyHint": True}}]
 SECRET = "client-secret-of-the-reader"
@@ -40,7 +40,7 @@ CONFIG: dict[str, Any] = {
 def provider(monkeypatch: pytest.MonkeyPatch) -> Iterator[FakeOAuthProvider]:
     monkeypatch.setenv("CHOREGOS_FAKES", "1")
     fake = FakeOAuthProvider(client_id="choregos-reader", client_secret=SECRET)
-    monkeypatch.setattr(choregos_adapters, "FAKE_OAUTH", fake)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_OAUTH", fake)
     CONNECTOR_TOKENS.clear()
     yield fake
     CONNECTOR_TOKENS.clear()
@@ -49,7 +49,7 @@ def provider(monkeypatch: pytest.MonkeyPatch) -> Iterator[FakeOAuthProvider]:
 @pytest.fixture
 def server(provider: FakeOAuthProvider, monkeypatch: pytest.MonkeyPatch) -> FakeMcpServer:
     fake = FakeMcpServer(tools=[dict(t) for t in TOOLS], accepts=provider.accepts)
-    monkeypatch.setattr(choregos_adapters, "FAKE_MCP", fake)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_MCP", fake)
     return fake
 
 
@@ -159,7 +159,7 @@ async def test_without_its_secret_the_connector_is_not_built(provider: FakeOAuth
 async def test_bearer_and_basic_connectors_are_unchanged(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CHOREGOS_FAKES", "1")
     fake = FakeMcpServer(tools=[dict(t) for t in TOOLS], token="static-key")
-    monkeypatch.setattr(choregos_adapters, "FAKE_MCP", fake)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_MCP", fake)
     client = build("mcp", "mcp", {"url": "https://data.example.test/mcp", "token": "static-key"})
     assert [t.name for t in await client.list_tools()] == ["read_orders"]
 

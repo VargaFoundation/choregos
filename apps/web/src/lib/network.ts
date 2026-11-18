@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
  * Network access (ADR 0070), as the console reads it: the host-pattern grammar (a mirror of
- * `choregos_core.network.validate_pattern`, so a typo is flagged before the request; the server stays
+ * `tranibor_core.network.validate_pattern`, so a typo is flagged before the request; the server stays
  * the judge), the organisation's ceiling section, and the sentences that say what an agent may reach.
  */
 import type { AgentNetwork } from "./types";

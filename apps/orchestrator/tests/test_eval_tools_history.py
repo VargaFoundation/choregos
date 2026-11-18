@@ -36,9 +36,9 @@ LIVE = {
 async def _play(
     payload: dict[str, Any], workflow_id: str
 ) -> tuple[dict[str, list[Any]], dict[str, Any], Any]:
-    from choregos_orchestrator.testing import workers_by_queue
-    from choregos_orchestrator.workflows.evals import EvalMatrix
     from temporalio.testing import WorkflowEnvironment
+    from tranibor_orchestrator.testing import workers_by_queue
+    from tranibor_orchestrator.workflows.evals import EvalMatrix
 
     asked: dict[str, list[Any]] = {}
 
@@ -85,8 +85,8 @@ async def _play(
 async def _replays(history: Any, name: str | None) -> None:
     """The fresh history replays; recorded under `name` when histories are recorded (`None`: never, the
     archived one is the shape of an older code)."""
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.worker import Replayer
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
     if recording_history() and name is not None:

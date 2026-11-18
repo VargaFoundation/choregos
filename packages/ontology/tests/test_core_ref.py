@@ -10,8 +10,8 @@ import json
 import os
 from pathlib import Path
 
-from choregos_ontology import compile_directory
-from choregos_ontology.validator import Registry
+from tranibor_ontology import compile_directory
+from tranibor_ontology.validator import Registry
 
 from .conftest import CORE_REF, SNAPSHOTS
 

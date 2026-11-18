@@ -23,8 +23,8 @@ def _url(user_id: str, tracker: str = "github") -> str:
 async def test_an_admin_links_a_github_identity_and_a_developer_cannot(
     client: AsyncClient, admin: str
 ) -> None:
-    from choregos_api.db.models import AuditLog
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import AuditLog
+    from tranibor_api.db.session import session_scope
 
     dev = await _member(client, "dev@northwind.dev", "developer")
     other = await _member(client, "other@northwind.dev", "developer")

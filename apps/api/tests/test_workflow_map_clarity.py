@@ -14,9 +14,9 @@ from httpx import AsyncClient
 
 
 async def _member(org: str, email: str, groups: list[str], role: str, project_id: str | None = None) -> None:
-    from choregos_api.db.models import Membership, Organization, User
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Membership, Organization, User
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         org_id = (await session.execute(select(Organization.id).where(Organization.slug == org))).scalar_one()
@@ -50,9 +50,9 @@ async def test_a_group_lists_who_carries_it_and_who_may_answer_here(
 async def test_the_activity_counts_open_items_by_state_and_runs_by_step(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.db.models import Run, WorkflowDef, WorkItem
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Run, WorkflowDef, WorkItem
+    from tranibor_api.db.session import session_scope
 
     workflows = (await client.get(f"/api/v1/projects/{project['id']}/workflows")).json()
     name = workflows[0]["name"]
@@ -116,9 +116,9 @@ async def test_a_state_s_wait_starts_when_the_item_entered_it_not_when_it_was_fi
 ) -> None:
     """The map said how many items wait in a state but not since when: the filing date of the oldest
     is not its wait. The last `state_changed` event into the state is."""
-    from choregos_api.db.models import Event, WorkflowDef, WorkItem
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Event, WorkflowDef, WorkItem
+    from tranibor_api.db.session import session_scope
 
     name = (await client.get(f"/api/v1/projects/{project['id']}/workflows")).json()[0]["name"]
     now = datetime.now(UTC)

@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from choregos_contracts import StageResult, StageStatus
+from tranibor_contracts import StageResult, StageStatus
 
 from .conftest import Fixture, refine_result, stage_result
 from .kits.workers import worker_with
@@ -98,9 +98,9 @@ async def test_default_simple_full_traversal(setup: Fixture, temporal_env: Any, 
 
 async def _runs(setup: Fixture) -> int:
     """How many agent steps ran for this ticket."""
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
     from sqlalchemy import func, select
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         return int(
@@ -191,9 +191,9 @@ async def test_agent_question_creates_human_request(
         await handle.signal("control", {"action": "stop"})
         await handle.result()
 
-    from choregos_api.db.models import HumanRequest
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import HumanRequest
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = (await session.execute(select(HumanRequest))).scalars().all()
@@ -237,9 +237,9 @@ async def test_cost_is_counted_once_per_run(setup: Fixture, temporal_env: Any, w
         await handle.signal("control", {"action": "stop"})
         await handle.result()
 
-    from choregos_api.db.models import CostLedger, Run
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import CostLedger, Run
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         runs = (await session.execute(select(Run))).scalars().all()
@@ -249,13 +249,13 @@ async def test_cost_is_counted_once_per_run(setup: Fixture, temporal_env: Any, w
 
 
 def _spend() -> Any:
-    from choregos_core import Spend
+    from tranibor_core import Spend
 
     return Spend(tokens_in=41000, tokens_out=3000, tokens_cached=28000, cost_usd=0.34, requests=12)
 
 
 def _pr_ref(setup: Fixture) -> Any:
-    from choregos_core.domain import PrRef
+    from tranibor_core.domain import PrRef
 
     prs = list(setup.adapters.scm.prs.values())
     if prs:
@@ -353,8 +353,8 @@ async def test_any_other_query_error_still_fails() -> None:
 
 
 async def _ticket(setup: Fixture) -> Any:
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         item = await session.get(WorkItem, setup.work_item_id)
@@ -388,9 +388,9 @@ async def test_an_interpreter_that_dies_says_so(setup: Fixture, temporal_env: An
     assert item.failure["activity"] == "await_run"
     assert item.failure["state"] == "inbox"  # the state the step was leaving from
 
-    from choregos_api.db.models import Event
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Event
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         types = (
@@ -433,10 +433,10 @@ async def test_an_error_without_a_message_still_leaves_its_type(setup: Fixture, 
 
 async def test_an_interpreter_that_restarts_clears_the_mark(setup: Fixture, temporal_env: Any) -> None:
     """The mark falls on restart: a restarted ticket is no longer "dead"."""
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
     from temporalio import activity
     from temporalio.exceptions import ApplicationError
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         item = await session.get(WorkItem, setup.work_item_id)
@@ -480,9 +480,9 @@ async def test_an_uncollected_diff_does_not_kill_the_step(setup: Fixture, tempor
 
 async def test_await_run_is_replayed_after_a_transient_failure(setup: Fixture, temporal_env: Any) -> None:
     """A worker that restarts during a run (missed heartbeat) no longer kills the ticket."""
-    from choregos_orchestrator.activities import stage as stage_activities
     from temporalio import activity
     from temporalio.exceptions import ApplicationError
+    from tranibor_orchestrator.activities import stage as stage_activities
 
     scripted(
         setup.adapters,
@@ -509,9 +509,9 @@ async def test_the_gate_verdicts_are_in_the_run_journal(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
     """Which gates ran, and what they answered: it is in the run journal."""
-    from choregos_api.db.models import Run, RunEvent
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Run, RunEvent
+    from tranibor_api.db.session import session_scope
 
     scripted(
         setup.adapters,
@@ -565,9 +565,9 @@ async def test_a_failing_notifier_does_not_kill_the_human_gate(
     human gate was therefore unreachable on any installation without a notifier, and the message
     blamed Slack instead of saying "the request is there, nobody was notified".
     """
-    from choregos_api.db.models import HumanRequest
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import HumanRequest
+    from tranibor_api.db.session import session_scope
 
     setup.adapters.notify.failure = "[slack] neither `bot_token` nor `webhook_url` configured"
     scripted(setup.adapters, refine_result("spec written"))
@@ -607,7 +607,7 @@ async def test_a_failing_notifier_does_not_kill_the_human_gate(
     assert item.failure is None, f"the ticket died of a notification: {item.failure}"
 
     # And the silence shows: the event says that nobody was notified.
-    from choregos_api.db.models import Event
+    from tranibor_api.db.models import Event
 
     async with session_scope() as session:
         events = (
@@ -668,9 +668,9 @@ async def test_the_reminder_without_a_notifier_keeps_the_interpreter_alive(
 
 async def _refine_attempts(setup: Fixture, attempts: int) -> None:
     """The project's workflow, with `t-refine` retried up to `attempts` times."""
-    from choregos_api.db.models import WorkflowDef
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import WorkflowDef
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         row = (
@@ -708,8 +708,8 @@ async def test_the_same_failure_twice_escalates_instead_of_retrying(
     import os
     from pathlib import Path
 
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.worker import Replayer
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
     if os.environ.get("CHOREGOS_RECORD_REPLAY") == "1":

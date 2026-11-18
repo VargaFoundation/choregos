@@ -13,7 +13,7 @@ from types import ModuleType
 import pytest
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
-SRC = "apps/api/src/choregos_api/services/"
+SRC = "apps/api/src/tranibor_api/services/"
 
 OWNED = (
     "actions",
@@ -62,11 +62,11 @@ def test_owned_services_have_no_french() -> None:
 
 def test_the_former_french_service_modules_are_gone() -> None:
     for former in RENAMED_MODULES:
-        assert importlib.util.find_spec(f"choregos_api.services.{former}") is None, former
+        assert importlib.util.find_spec(f"tranibor_api.services.{former}") is None, former
 
 
 def test_the_english_keywords_are_the_only_ones() -> None:
-    from choregos_api.services import actions, definitions, installation
+    from tranibor_api.services import actions, definitions, installation
 
     assert {"origin", "proposed_by"} <= set(inspect.signature(actions.propose).parameters)
     assert "attempt" in inspect.signature(actions.propose_for_transition).parameters
@@ -79,7 +79,7 @@ def test_the_english_keywords_are_the_only_ones() -> None:
 
 
 def test_the_catalogue_keeps_its_diverged_marker() -> None:
-    from choregos_api.services import agent_catalogue
+    from tranibor_api.services import agent_catalogue
 
     assert agent_catalogue.DIVERGE == "!diverged"
 
@@ -87,8 +87,8 @@ def test_the_catalogue_keeps_its_diverged_marker() -> None:
 def test_agent_checksum_unchanged() -> None:
     """`digest` is what `agent_versions.checksum` stores (and migration 20261016_1500 recomputes):
     a fixed spec keeps the digest it had before the rename."""
-    from choregos_api.schemas import AgentSpec
-    from choregos_api.services.agents import digest
+    from tranibor_api.schemas import AgentSpec
+    from tranibor_api.services.agents import digest
 
     spec = AgentSpec.model_validate({"instructions": "Write the code.", "model": "claude-sonnet-4-5"})
     assert digest(spec) == "sha256:80e9e24de9263e83d24e19fc8c89e633cd5683596db041c7c215f26967d2a774"

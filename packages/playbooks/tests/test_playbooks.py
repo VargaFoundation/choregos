@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import pytest
-from choregos_contracts import ContextPack, MemoryItem
-from choregos_playbooks import KNOWN_ROLES, render_playbook
-from choregos_playbooks.evals import CASES_DIR
-from choregos_playbooks.evals.runner import evaluate_case
+from tranibor_contracts import ContextPack, MemoryItem
+from tranibor_playbooks import KNOWN_ROLES, render_playbook
+from tranibor_playbooks.evals import CASES_DIR
+from tranibor_playbooks.evals.runner import evaluate_case
 
 
 @pytest.mark.parametrize("role", KNOWN_ROLES)
@@ -53,7 +53,7 @@ def test_the_invariants_do_not_contradict_each_other_on_result_json() -> None:
     one file) — it was the PROMPT that contradicted itself, and a correct guardrail behind a
     contradictory instruction is useless.
     """
-    from choregos_playbooks import INVARIANTS
+    from tranibor_playbooks import INVARIANTS
 
     lines = [line for line in INVARIANTS.splitlines() if ".choregos/**" in line]
     assert lines, "the invariant on `.choregos/**` is gone"
@@ -85,7 +85,7 @@ def test_verify_prod_with_an_indicator_source_keeps_the_strict_rule() -> None:
 def test_a_preview_names_what_only_a_run_knows(role: str) -> None:
     """The console shows a built-in agent's prompt: the role's own words, the frame, and
     placeholders where a run puts the work item."""
-    from choregos_playbooks import playbook_origin, preview_playbook
+    from tranibor_playbooks import playbook_origin, preview_playbook
 
     preview = preview_playbook(role)
     assert "<work item title>" in preview
@@ -99,8 +99,8 @@ def test_a_registered_built_in_agent_says_what_the_playbook_said(role: str) -> N
     """ "Register" on a built-in agent used to create an agent with empty instructions: the console
     showed nothing to edit. Its instructions are now the role's prompt, which the sandbox renders and
     the frame completes — and the result says what the playbook said, the frame's parts once."""
-    from choregos_core.instructions import render_instructions
-    from choregos_playbooks import INVARIANTS, frame, playbook_instructions
+    from tranibor_core.instructions import render_instructions
+    from tranibor_playbooks import INVARIANTS, frame, playbook_instructions
 
     variables = {"ticket": {"key": "acme#1", "title": "Title", "body": "Body"}, "allowed_paths": ["src/**"]}
     registered = frame(render_instructions(playbook_instructions(role), **variables))

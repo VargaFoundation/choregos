@@ -6,9 +6,9 @@ from collections.abc import Iterator
 from typing import Any
 
 import pytest
-from choregos_adapters import ConnectorTypeSpec, register
-from choregos_adapters.errors import ConfigurationError
-from choregos_adapters.registry import _REGISTRY, _SPECS
+from tranibor_adapters import ConnectorTypeSpec, register
+from tranibor_adapters.errors import ConfigurationError
+from tranibor_adapters.registry import _REGISTRY, _SPECS
 
 from .conftest import Fixture
 
@@ -36,8 +36,8 @@ def probes(monkeypatch: pytest.MonkeyPatch) -> Iterator[dict[str, dict[str, Any]
 
 
 async def _declare(setup: Fixture, *, second_org: bool, claimed: bool) -> None:
-    from choregos_api.db.models import Connector, GitHubInstallation, Organization, Project
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Connector, GitHubInstallation, Organization, Project
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         project = await session.get(Project, setup.project_id)
@@ -71,8 +71,8 @@ async def _declare(setup: Fixture, *, second_org: bool, claimed: bool) -> None:
 async def test_load_project_passes_installation_id_for_github_kinds(
     setup: Fixture, probes: dict[str, dict[str, Any]]
 ) -> None:
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities.base import load_project
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities.base import load_project
 
     await _declare(setup, second_org=False, claimed=True)
     async with session_scope(orgs="*") as session:
@@ -85,8 +85,8 @@ async def test_load_project_passes_installation_id_for_github_kinds(
 async def test_a_single_org_instance_without_a_claim_still_discovers(
     setup: Fixture, probes: dict[str, dict[str, Any]]
 ) -> None:
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities.base import load_project
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities.base import load_project
 
     await _declare(setup, second_org=False, claimed=False)
     async with session_scope(orgs="*") as session:
@@ -97,9 +97,9 @@ async def test_a_single_org_instance_without_a_claim_still_discovers(
 async def test_a_multi_org_instance_without_a_claim_refuses_to_build(
     setup: Fixture, probes: dict[str, dict[str, Any]], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities.base import load_project
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities.base import load_project
 
     monkeypatch.setenv("CHOREGOS_GITHUB_APP_ID", "1")
     monkeypatch.setenv("CHOREGOS_GITHUB_APP_PRIVATE_KEY", "pem")

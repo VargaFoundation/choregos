@@ -18,14 +18,14 @@ from typing import Any
 import httpx
 import jwt
 import pytest
-from choregos_contracts import schemas_dir
-from choregos_contracts.enums import OutpostDoorCode, OutpostRefusalCode
-from choregos_contracts.outpost import NONCE_HEADER, SIGNATURE_HEADER
-from choregos_outpost import identity as identities
-from choregos_outpost import uplink
-from choregos_outpost.fakes import FakeDoor
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
+from tranibor_contracts import schemas_dir
+from tranibor_contracts.enums import OutpostDoorCode, OutpostRefusalCode
+from tranibor_contracts.outpost import NONCE_HEADER, SIGNATURE_HEADER
+from tranibor_outpost import identity as identities
+from tranibor_outpost import uplink
+from tranibor_outpost.fakes import FakeDoor
 
 from ._bench import bench
 

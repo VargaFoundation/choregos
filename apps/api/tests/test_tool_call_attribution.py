@@ -22,10 +22,10 @@ from typing import Any
 
 import httpx
 import pytest
-from choregos_core import telemetry
 from httpx import AsyncClient
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from opentelemetry.trace import StatusCode
+from tranibor_core import telemetry
 
 from .kits.tool_catalogue import intercept, run_with_catalogue
 from .test_broker import ORG, TOOLS, _prepare
@@ -46,20 +46,20 @@ def spans() -> Iterator[InMemorySpanExporter]:
 
 @pytest.fixture
 def supplier(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
-    import choregos_adapters
-    from choregos_adapters.fakes.mcp import FakeMcpServer
+    import tranibor_adapters
+    from tranibor_adapters.fakes.mcp import FakeMcpServer
 
     server = FakeMcpServer(tools=[dict(o) for o in TOOLS], token="cle-fournisseur")
-    monkeypatch.setattr(choregos_adapters, "FAKE_MCP", server)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_MCP", server)
     monkeypatch.setenv("CONNECTOR_TEST_CLE_FOURNISSEUR", "cle-fournisseur")
     yield server
 
 
 async def _another_run(template_id: str, run_id: str, *, job: dict[str, Any] | None) -> dict[str, str]:
     """A run on the template's work item: of the template's agent, or a job step when `job` is given."""
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.security import mint_run_token
+    from tranibor_api.db.models import Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.security import mint_run_token
 
     async with session_scope() as session:
         template = await session.get(Run, template_id)
@@ -88,10 +88,10 @@ async def _another_run(template_id: str, run_id: str, *, job: dict[str, Any] | N
 
 async def _booked(run_id: str) -> list[Any]:
     """The run's tool lines, the provisional ones of S57-03 left out."""
-    from choregos_api.db.models import CostLedger
-    from choregos_api.db.session import session_scope
-    from choregos_core.tool_ledger import IN_FLIGHT
     from sqlalchemy import select
+    from tranibor_api.db.models import CostLedger
+    from tranibor_api.db.session import session_scope
+    from tranibor_core.tool_ledger import IN_FLIGHT
 
     async with session_scope() as session:
         query = select(CostLedger).where(
@@ -101,9 +101,9 @@ async def _booked(run_id: str) -> list[Any]:
 
 
 async def _events(run_id: str) -> list[dict[str, Any]]:
-    from choregos_api.db.models import Event
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Event
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = (await session.execute(select(Event).where(Event.type == "choregos.tool.called"))).scalars()
@@ -231,8 +231,8 @@ async def test_a_run_named_job_without_the_job_spec_is_not_a_job_step(
     client: AsyncClient, project: dict[str, Any], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A job step is what `prepare_job` writes: `backend: job` AND the job's spec in the StageInput."""
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
 
     run_id, headers = await run_with_catalogue(project, tmp_path, monkeypatch, run_id="run-door-3")
     async with session_scope() as session:
@@ -258,9 +258,9 @@ async def test_the_three_doors_are_three_groups_of_the_cost_reports(
 ) -> None:
     """Real calls, one per door, then the reports: what the route booked is what `group_by=origin`
     reads, at project and organisation scope, in JSON and CSV; a place still in flight is no call."""
-    from choregos_api.db.models import CostLedger
-    from choregos_api.db.session import session_scope
-    from choregos_core.tool_ledger import IN_FLIGHT
+    from tranibor_api.db.models import CostLedger
+    from tranibor_api.db.session import session_scope
+    from tranibor_core.tool_ledger import IN_FLIGHT
 
     run_id, headers = await run_with_catalogue(project, tmp_path, monkeypatch, run_id="run-door-4")
     job_headers = await _another_run(run_id, "run-door-job-4", job={"command": JOB_COMMAND, "tools": {}})
@@ -316,8 +316,8 @@ GROUPINGS_AHEAD_OF_THE_API: dict[str, str] = {}
 def test_the_contract_lists_the_groupings_the_api_accepts() -> None:
     import re
 
-    import choregos_contracts as contracts
-    from choregos_api.routers import costs
+    import tranibor_contracts as contracts
+    from tranibor_api.routers import costs
 
     accepted = re.fullmatch(r"\^\((.*)\)\$", costs.GROUP_PATTERN)
     assert accepted is not None
@@ -375,9 +375,9 @@ _EXPECTED: list[tuple[Any, ...]] = [
 
 async def _cap(project_id: str, cap: int) -> None:
     """The project's policy caps a run at `cap` tool calls (`budgets.tool_calls_per_run`)."""
-    from choregos_api.db.models import PolicyDef
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import PolicyDef
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         latest = (
@@ -417,9 +417,9 @@ async def test_every_refusal_is_the_same_for_every_door(
     """ADR 0122 §2 and invariant 7 of the plan: no authorisation decision reads the origin. Six runs,
     three doors (`model` by default and said, `script` with its digest; `job` from job steps that
     say nothing, `job`, or `script`): each meets the same calls and learns the same thing."""
-    from choregos_api import catalogue as catalogue_service
-    from choregos_api.db.models import Project
-    from choregos_api.db.session import session_scope
+    from tranibor_api import catalogue as catalogue_service
+    from tranibor_api.db.models import Project
+    from tranibor_api.db.session import session_scope
 
     base, _headers = await _prepare(client, project, ["*"])
     template = base.split("/")[-2]
@@ -480,7 +480,7 @@ def test_the_route_reads_the_door_for_attribution_only() -> None:
     """Structural: in `call_tool`, the origin and the digest are read by the header check, the job
     rule, the span, the ledger line and the event — never in a condition, never by the policy, the
     cap, the broker or a provider. A rule keyed on the door (ADR 0122 §2) would have to read one."""
-    from choregos_api.routers import internal
+    from tranibor_api.routers import internal
 
     function = ast.parse(textwrap.dedent(inspect.getsource(internal.call_tool))).body[0]
     assert isinstance(function, ast.AsyncFunctionDef)
@@ -512,9 +512,9 @@ def test_the_route_reads_the_door_for_attribution_only() -> None:
 
 def test_nothing_else_in_the_api_reads_the_door() -> None:
     """The headers are read by the tool route alone, and the ledger's door by the cost reports alone."""
-    import choregos_api
+    import tranibor_api
 
-    package = Path(choregos_api.__file__).parent
+    package = Path(tranibor_api.__file__).parent
     header_readers: set[str] = set()
     column_readers: set[str] = set()
     for path in sorted(package.rglob("*.py")):

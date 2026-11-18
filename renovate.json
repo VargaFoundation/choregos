@@ -85,7 +85,7 @@
         "custom.regex"
       ],
       "matchFileNames": [
-        "packages/runner/src/choregos_runner/backends/versions.lock"
+        "packages/runner/src/tranibor_runner/backends/versions.lock"
       ],
       "groupName": "backends ACP",
       "automerge": false,
@@ -125,7 +125,7 @@
       "customType": "regex",
       "description": "ACP agent versions pinned in the runner image (annotated lines).",
       "managerFilePatterns": [
-        "/^packages/runner/src/choregos_runner/backends/versions\\.lock$/"
+        "/^packages/runner/src/tranibor_runner/backends/versions\\.lock$/"
       ],
       "matchStrings": [
         "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+\\S+=(?<currentValue>\\S+)"

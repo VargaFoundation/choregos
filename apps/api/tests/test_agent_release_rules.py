@@ -8,18 +8,18 @@ item, so that every stage and every retry of one work item gets one revision.
 from __future__ import annotations
 
 import pytest
-from choregos_api.db.models import Agent, ProjectAgent
-from choregos_api.schemas import AgentOverrides, AgentReleaseCreate, AgentReleasePolicy, AgentSpec
-from choregos_api.schemas.agents import AgentBudget, AgentLimits
-from choregos_api.services.agent_releases import (
+from pydantic import ValidationError
+from tranibor_api.db.models import Agent, ProjectAgent
+from tranibor_api.schemas import AgentOverrides, AgentReleaseCreate, AgentReleasePolicy, AgentSpec
+from tranibor_api.schemas.agents import AgentBudget, AgentLimits
+from tranibor_api.services.agent_releases import (
     canary_bucket,
     in_canary,
     kind_for,
     loosens,
     served,
 )
-from choregos_api.services.agents import effective, widenings
-from pydantic import ValidationError
+from tranibor_api.services.agents import effective, widenings
 
 
 def test_the_canary_bucket_is_stable_for_one_work_item_and_spreads_the_others() -> None:

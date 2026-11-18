@@ -5,9 +5,9 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any
 
-from choregos_api.rbac import Principal, Role
-from choregos_api.services.memory_access import reaches_project, visible_to
 from httpx import AsyncClient
+from tranibor_api.rbac import Principal, Role
+from tranibor_api.services.memory_access import reaches_project, visible_to
 
 from .agent_scopes_kit import ORG, add_member, as_user, create_agent, make_project
 

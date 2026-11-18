@@ -17,7 +17,7 @@ PLACES = [
     "apps/web/src",
     "packages/contracts/openapi.yaml",
     "packages/contracts/ts",
-    "packages/core/src/choregos_core/agent_catalogue",
+    "packages/core/src/tranibor_core/agent_catalogue",
     "templates",
 ]
 SUFFIXES = {".py", ".ts", ".tsx", ".yaml", ".yml", ".md", ".json"}

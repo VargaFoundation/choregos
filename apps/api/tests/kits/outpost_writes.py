@@ -12,9 +12,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from choregos_adapters.fakes.outpost import FakeOutpost
 from httpx import AsyncClient
 from sqlalchemy import select
+from tranibor_adapters.fakes.outpost import FakeOutpost
 
 from . import outpost_daemon as daemon_kit
 from . import outpost_route as route
@@ -122,8 +122,8 @@ def call(
 
 async def action(project_id: str, effects: list[dict[str, Any]], status: str = "approved") -> str:
     """An action of the run, approved: what the `ActionWorkflow` is started for."""
-    from choregos_api.db.models import Action, Project, Run
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Action, Project, Run
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         project = await session.get(Project, project_id)
@@ -151,7 +151,7 @@ async def action(project_id: str, effects: list[dict[str, Any]], status: str = "
 
 async def play(action_id: str, position: int = 0) -> dict[str, Any]:
     """One attempt of an effect, as the workflow's activity makes it."""
-    from choregos_orchestrator.activities.actions import execute_effect
+    from tranibor_orchestrator.activities.actions import execute_effect
 
     return dict(await execute_effect({"action_id": action_id, "position": position}))
 
@@ -159,9 +159,9 @@ async def play(action_id: str, position: int = 0) -> dict[str, Any]:
 async def attempt_that_dies(action_id: str, position: int = 0) -> dict[str, Any]:
     """An attempt whose worker is killed once the outpost answered and before the answer is
     recorded: the effect is played under its key, as the activity plays it, and nothing is kept."""
-    from choregos_api.db.models import Action, Project
-    from choregos_api.db.session import session_scope
-    from choregos_api.effects import EffectContext, effect
+    from tranibor_api.db.models import Action, Project
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.effects import EffectContext, effect
 
     async with session_scope(orgs="*") as session:
         row = await session.get(Action, action_id)
@@ -175,8 +175,8 @@ async def attempt_that_dies(action_id: str, position: int = 0) -> dict[str, Any]
 
 async def journal(action_id: str) -> list[Any]:
     """The effects of an action, by position."""
-    from choregos_api.db.models import ActionEffect
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import ActionEffect
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         rows = await session.execute(
@@ -186,8 +186,8 @@ async def journal(action_id: str) -> list[Any]:
 
 
 async def action_row(action_id: str) -> Any:
-    from choregos_api.db.models import Action
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Action
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         row = await session.get(Action, action_id)

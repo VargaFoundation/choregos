@@ -16,8 +16,8 @@ pytestmark = without_postgres
 @pytest.fixture
 async def world(pg_app: Any) -> dict[str, str]:
     """Organisations `a` and `b`; in `a` an agent and two people; in `b` an agent."""
-    from choregos_api.db.models import Agent, Organization, User
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Agent, Organization, User
+    from tranibor_api.db.session import session_scope
 
     ids: dict[str, str] = {}
     async with session_scope(orgs="*") as session:
@@ -40,8 +40,8 @@ async def world(pg_app: Any) -> dict[str, str]:
 async def test_the_three_tables_are_isolated_by_organisation_and_notifications_by_person(
     world: dict[str, str],
 ) -> None:
-    from choregos_api.db.models import AgentNotification, AgentStar, AgentWatch
-    from choregos_api.db.session import limit_to_organisations, name_the_user, session_scope
+    from tranibor_api.db.models import AgentNotification, AgentStar, AgentWatch
+    from tranibor_api.db.session import limit_to_organisations, name_the_user, session_scope
 
     async with session_scope(orgs="*") as session:
         for who in ("alice", "bob"):
@@ -82,9 +82,9 @@ async def test_the_three_tables_are_isolated_by_organisation_and_notifications_b
 async def test_another_organisation_cannot_write_a_row_and_another_person_cannot_change_an_item(
     world: dict[str, str],
 ) -> None:
-    from choregos_api.db.models import AgentNotification, AgentStar
-    from choregos_api.db.session import name_the_user, session_scope
     from sqlalchemy import update
+    from tranibor_api.db.models import AgentNotification, AgentStar
+    from tranibor_api.db.session import name_the_user, session_scope
 
     with pytest.raises(DBAPIError):
         async with session_scope(orgs=["b"]) as session:

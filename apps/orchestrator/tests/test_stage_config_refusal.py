@@ -47,8 +47,8 @@ async def _refused_then_parked(temporal_env: Any, setup: Fixture) -> Any:
 async def test_a_refused_model_escalates_and_the_stage_replays_once_fixed(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.worker import Replayer
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     catalogue = _without_tool_calling(setup.adapters.gateway)
     scripted(setup.adapters, refine_result("spec"))
@@ -103,9 +103,9 @@ async def test_another_non_retryable_error_still_fails_the_interpreter(
 ) -> None:
     """Only configuration refusals escalate: any other error in `prepare_stage` — here a bug that
     says it should not be retried — fails the interpreter, and says so, as before."""
-    from choregos_orchestrator.activities import stage
     from temporalio.client import WorkflowFailureError
     from temporalio.exceptions import ApplicationError
+    from tranibor_orchestrator.activities import stage
 
     def bug(*_: Any) -> Any:
         raise ApplicationError("a genuine bug", type="KeyError", non_retryable=True)
@@ -122,8 +122,8 @@ async def test_a_history_before_the_marker_still_fails(
     setup: Fixture, temporal_env: Any, worker_factory: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A run recorded before the marker answers no to `patched`: the refusal fails it, as then."""
-    from choregos_orchestrator.workflows import interpreter
     from temporalio.client import WorkflowFailureError
+    from tranibor_orchestrator.workflows import interpreter
 
     real = interpreter.workflow.patched
     monkeypatch.setattr(

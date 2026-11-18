@@ -17,7 +17,7 @@ function checkout(files) {
 }
 
 const BASE = {
-  "packages/core/src/choregos_core/publishing.json": '{"source_repository": "https://github.com/acme/product"}',
+  "packages/core/src/tranibor_core/publishing.json": '{"source_repository": "https://github.com/acme/product"}',
   "docs/site/index.md": "# Choregos\n\n[Concepts](concepts.md) · [Usage](../usage.md#3-write-the-workflow)\n",
   "docs/site/concepts.md": "# Concepts\n\n![diagram](img/map.svg) ![logo](../../apps/web/public/logo.svg)\n",
   "docs/site/img/map.svg": "<svg/>",

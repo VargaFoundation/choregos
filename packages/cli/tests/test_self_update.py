@@ -15,8 +15,8 @@ from typing import Any
 import httpx
 import pytest
 import respx
-from choregos_cli import self_update
-from choregos_cli.self_update import UpdateError, check_version, replace_binary, update
+from tranibor_cli import self_update
+from tranibor_cli.self_update import UpdateError, check_version, replace_binary, update
 from typer.testing import CliRunner
 
 URL = "https://choregos.example.org"
@@ -170,7 +170,7 @@ def test_on_windows_a_failed_replace_puts_the_old_exe_back(tmp_path: Path) -> No
 
 
 def test_the_command_updates_the_given_binary(binary: Path) -> None:
-    from choregos_cli.main import app
+    from tranibor_cli.main import app
 
     with respx.mock() as mock:
         _serve(mock, _manifest())
@@ -182,7 +182,7 @@ def test_the_command_updates_the_given_binary(binary: Path) -> None:
 
 
 def test_the_command_from_python_packages_says_how_to_update() -> None:
-    from choregos_cli.main import app
+    from tranibor_cli.main import app
 
     result = CliRunner().invoke(app, ["self", "update", "--api-url", URL])
     assert result.exit_code == 1
@@ -279,11 +279,11 @@ def test_a_development_version_is_not_compared(check: list[str]) -> None:
 def test_a_command_writes_the_warning_on_stderr_once(
     check: list[str], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_cli.main import app
+    from tranibor_cli.main import app
 
     config = tmp_path / "config.json"
     config.write_text(json.dumps({"api_url": URL, "token": "chg_x", "org": "acme"}))
-    import choregos_cli.client as client_module
+    import tranibor_cli.client as client_module
 
     monkeypatch.setattr(client_module, "CONFIG_PATH", config)
     monkeypatch.setattr(self_update, "cli_version", lambda: "9.9.8")

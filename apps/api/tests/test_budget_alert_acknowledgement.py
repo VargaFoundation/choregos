@@ -38,9 +38,9 @@ async def _agent_alert(client: AsyncClient, project: dict[str, Any]) -> str:
 async def _drop_organisation_role(email: str) -> None:
     """The development sign-in grants a role on the organisation; a production member of one project
     only has none, so it is taken back after the sign-in."""
-    from choregos_api.db.models import Membership, User
-    from choregos_api.db.session import session_scope
     from sqlalchemy import delete, select
+    from tranibor_api.db.models import Membership, User
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         user_id = (await session.execute(select(User.id).where(User.email == email))).scalar_one()

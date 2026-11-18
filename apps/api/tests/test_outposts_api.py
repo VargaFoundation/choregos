@@ -15,12 +15,12 @@ import time
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-import choregos_contracts as contracts
 import pytest
-from choregos_contracts import OutpostDoorCode, OutpostEnrolmentAnswer, fingerprint_of
+import tranibor_contracts as contracts
 from httpx import ASGITransport, AsyncClient
 from jsonschema import Draft202012Validator
 from sqlalchemy import select
+from tranibor_contracts import OutpostDoorCode, OutpostEnrolmentAnswer, fingerprint_of
 
 from .kits import outpost_daemon as daemon_kit
 from .kits import outposts as kit
@@ -57,7 +57,7 @@ def door(monkeypatch: pytest.MonkeyPatch) -> kit.Door:
 
 async def test_with_outposts_off_a_creation_is_refused(client: AsyncClient, admin: str) -> None:
     """`CHOREGOS_OUTPOSTS` is off unless turned on (ADR 0147 §12)."""
-    from choregos_api.config import Settings
+    from tranibor_api.config import Settings
 
     assert Settings.model_fields["outposts"].default is False
     refused = _refused(await client.post(BASE, json={"slug": SLUG}), "outposts_disabled")
@@ -161,7 +161,7 @@ async def test_an_enrolment_token_is_shown_once_with_what_the_operator_pins(
 ) -> None:
     """Single use, 15 minutes at most, stored as a digest (ADR 0147 §4); it comes with the door's
     origin and the door's keys, which the outpost's policy file pins (ADR 0148 §13)."""
-    from choregos_api.db.models import OutpostEnrolment
+    from tranibor_api.db.models import OutpostEnrolment
 
     await kit.create(client)
     before = datetime.now(UTC)
@@ -203,7 +203,7 @@ async def test_without_a_door_signing_key_no_enrolment_token_is_issued(
 ) -> None:
     """An outpost makes only calls signed by a key its policy file pins (ADR 0148 §13): with no key to
     pin, an instance enrolled now could never be handed anything."""
-    from choregos_api.db.models import OutpostEnrolment
+    from tranibor_api.db.models import OutpostEnrolment
 
     kit.configure(monkeypatch, outposts="on", outposts_door_url=ORIGIN)
     outpost = await kit.create(client)
@@ -236,8 +236,8 @@ async def test_switched_off_no_token_is_issued_and_what_exists_is_still_managed(
 
 
 async def test_an_instance_is_born_pending(client: AsyncClient, admin: str, door: kit.Door) -> None:
-    from choregos_api.db.models import OutpostEnrolment
-    from choregos_api.services.outposts import outpost_id_of_instance
+    from tranibor_api.db.models import OutpostEnrolment
+    from tranibor_api.services.outposts import outpost_id_of_instance
 
     await kit.create(client)
     token = await kit.token_for(client)
@@ -303,7 +303,7 @@ async def test_an_instance_is_born_pending(client: AsyncClient, admin: str, door
 async def test_an_enrolment_token_used_twice_is_refused(
     client: AsyncClient, admin: str, door: kit.Door
 ) -> None:
-    from choregos_api.services.outposts import EnrolmentRefused
+    from tranibor_api.services.outposts import EnrolmentRefused
 
     await kit.create(client)
     token = await kit.token_for(client)
@@ -317,8 +317,8 @@ async def test_an_enrolment_token_used_twice_is_refused(
 async def test_an_enrolment_token_is_refused_after_fifteen_minutes(
     client: AsyncClient, admin: str, door: kit.Door, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.services import outposts as service
-    from choregos_api.services.outposts import EnrolmentRefused
+    from tranibor_api.services import outposts as service
+    from tranibor_api.services.outposts import EnrolmentRefused
 
     await kit.create(client)
     late, in_time = await kit.token_for(client), await kit.token_for(client)
@@ -337,7 +337,7 @@ async def test_a_token_enrols_at_its_own_outpost_and_nowhere_else(
     client: AsyncClient, admin: str, door: kit.Door
 ) -> None:
     """The token is bound to one outpost: the digest is looked for among that outpost's tokens."""
-    from choregos_api.services.outposts import ENROLMENT_TOKEN_PREFIX, EnrolmentRefused
+    from tranibor_api.services.outposts import ENROLMENT_TOKEN_PREFIX, EnrolmentRefused
 
     await kit.create(client)
     await kit.create(client, "cold-store")
@@ -366,7 +366,7 @@ async def test_a_pending_key_enrols_again_as_the_same_instance_under_a_new_token
     assert second.again is True and second.instance.id == first.instance.id
     (shown,) = (await client.get(f"{ONE}/instances")).json()["items"]
     assert (shown["id"], shown["status"], shown["daemon_version"]) == (first.instance.id, "pending", "0.27.1")
-    from choregos_api.db.models import OutpostInstance
+    from tranibor_api.db.models import OutpostInstance
 
     (row,) = await kit.rows_of(SLUG, OutpostInstance)
     assert row.sealing_key == resealed, "the sealing key the last signed enrolment carried"
@@ -376,7 +376,7 @@ async def test_a_key_ever_approved_or_revoked_does_not_enrol_again(
     client: AsyncClient, admin: str, door: kit.Door
 ) -> None:
     """A revoked key does not come back; and a refused enrolment does not use the token up."""
-    from choregos_api.services.outposts import EnrolmentRefused
+    from tranibor_api.services.outposts import EnrolmentRefused
 
     await kit.create(client)
     key = kit.signing_key()
@@ -399,7 +399,7 @@ async def test_a_key_ever_approved_or_revoked_does_not_enrol_again(
 async def test_a_key_pending_at_another_outpost_is_refused(
     client: AsyncClient, admin: str, door: kit.Door
 ) -> None:
-    from choregos_api.services.outposts import EnrolmentRefused
+    from tranibor_api.services.outposts import EnrolmentRefused
 
     await kit.create(client)
     await kit.create(client, "cold-store")
@@ -485,7 +485,7 @@ async def test_an_approval_needs_a_recent_authentication(
     client: AsyncClient, admin: str, door: kit.Door, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The condition `decide` puts on a decision: a session left open does not approve for its owner."""
-    from choregos_api import freshness
+    from tranibor_api import freshness
 
     await kit.create(client)
     instance = await kit.enrolled_instance(client)
@@ -544,7 +544,7 @@ async def test_revoking_an_instance_moves_the_epoch(client: AsyncClient, admin: 
 async def test_revoking_the_outpost_revokes_every_instance_and_is_final(
     client: AsyncClient, admin: str, door: kit.Door
 ) -> None:
-    from choregos_api.services.outposts import EnrolmentRefused
+    from tranibor_api.services.outposts import EnrolmentRefused
 
     await kit.create(client)
     pending = await kit.enrolled_instance(client)
@@ -608,8 +608,8 @@ async def test_a_paused_outpost_is_resumed(client: AsyncClient, admin: str, door
 async def test_a_revoked_outpost_is_deleted_and_one_that_still_has_connectors_is_not(
     client: AsyncClient, admin: str, door: kit.Door
 ) -> None:
-    from choregos_api.db.models import OrgConnector, OutpostCall, OutpostEnrolment, OutpostInstance
-    from choregos_api.db.session import name_the_outpost, session_scope
+    from tranibor_api.db.models import OrgConnector, OutpostCall, OutpostEnrolment, OutpostInstance
+    from tranibor_api.db.session import name_the_outpost, session_scope
 
     await kit.create(client)
     instance = await kit.enrolled_instance(client)
@@ -648,9 +648,9 @@ async def test_a_revoked_outpost_is_deleted_and_one_that_still_has_connectors_is
 
 async def _seen(instance_id: str, ago_s: float, endpoints: list[str]) -> None:
     """What the door writes at a poll: when, and the aliases the instance's policy file serves."""
-    from choregos_api.db.models import OutpostInstance
-    from choregos_api.db.session import name_the_outpost, session_scope
-    from choregos_api.services.outposts import outpost_id_of_instance
+    from tranibor_api.db.models import OutpostInstance
+    from tranibor_api.db.session import name_the_outpost, session_scope
+    from tranibor_api.services.outposts import outpost_id_of_instance
 
     async with session_scope() as session:
         await name_the_outpost(session, outpost_id_of_instance(instance_id))
@@ -664,7 +664,7 @@ async def _seen(instance_id: str, ago_s: float, endpoints: list[str]) -> None:
 async def test_an_outpost_is_online_while_an_active_instance_polled_within_the_window(
     client: AsyncClient, admin: str, door: kit.Door
 ) -> None:
-    from choregos_api.services.outposts import POLL_WINDOW_S
+    from tranibor_api.services.outposts import POLL_WINDOW_S
 
     await kit.create(client)
     pending = await kit.enrolled_instance(client)
@@ -688,8 +688,8 @@ async def test_an_outpost_is_online_while_an_active_instance_polled_within_the_w
 
 async def _call(slug: str, call_id: str, **columns: Any) -> None:
     """A row of the rendezvous, as S65-13 will write one and S65-12 claim it."""
-    from choregos_api.db.models import OutpostCall
-    from choregos_api.db.session import name_the_outpost, session_scope
+    from tranibor_api.db.models import OutpostCall
+    from tranibor_api.db.session import name_the_outpost, session_scope
 
     outpost = await kit.outpost_row(slug)
     values: dict[str, Any] = {
@@ -710,8 +710,8 @@ async def test_the_recent_calls_are_listed_newest_first_as_digests(
     client: AsyncClient, project: dict[str, Any], door: kit.Door
 ) -> None:
     """References and digests, never arguments or a result (ADR 0148 §11)."""
-    from choregos_api.db.models import OrgConnector
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import OrgConnector
+    from tranibor_api.db.session import session_scope
 
     await kit.create(client)
     assert (await client.get(f"{ONE}/calls")).json() == {
@@ -792,9 +792,9 @@ async def test_what_the_door_recorded_for_a_call_stays_on_its_row(
     """A daemon sends its answer or its refusal again until the call's deadline, and again after a
     restart: what was recorded, from which instance and under which epoch, is kept on the call's own
     row, apart from its state, so that a later copy reads it back whatever the caller did since."""
-    from choregos_api.db.models import OutpostCall
-    from choregos_api.db.session import name_the_outpost, session_scope
-    from choregos_api.services import outposts as service
+    from tranibor_api.db.models import OutpostCall
+    from tranibor_api.db.session import name_the_outpost, session_scope
+    from tranibor_api.services import outposts as service
 
     await kit.create(client)
     instance = await kit.enrolled_instance(client)
@@ -847,9 +847,9 @@ async def test_an_instances_sequence_holds_a_clock_in_milliseconds(
 ) -> None:
     """A daemon raises its sequence to its clock in milliseconds, and the contract lets it go up to
     2^53 - 1: the row keeps 64 bits, where 32 would refuse the first request of any daemon."""
-    from choregos_api.db.models import OutpostInstance
-    from choregos_api.db.session import name_the_outpost, session_scope
     from sqlalchemy import BigInteger
+    from tranibor_api.db.models import OutpostInstance
+    from tranibor_api.db.session import name_the_outpost, session_scope
 
     assert isinstance(OutpostInstance.__table__.c.sequence.type, BigInteger)
     await kit.create(client)
@@ -869,7 +869,7 @@ async def test_an_instances_sequence_holds_a_clock_in_milliseconds(
 def _keyring() -> Any:
     import os
 
-    from choregos_api.secret_store import Keyring
+    from tranibor_api.secret_store import Keyring
 
     return Keyring(keys={"k1": os.urandom(32)}, active_id="k1")
 
@@ -881,9 +881,9 @@ async def test_a_calls_arguments_wait_sealed_and_open_on_their_own_row_only(
     stays (ADR 0103, ADR 0148 §11)."""
     import os
 
-    from choregos_api.db.models import OutpostCall
-    from choregos_api.secret_store import Keyring, SecretStoreUnavailable
-    from choregos_api.services import outposts as service
+    from tranibor_api.db.models import OutpostCall
+    from tranibor_api.secret_store import Keyring, SecretStoreUnavailable
+    from tranibor_api.services import outposts as service
 
     await kit.create(client)
     row = await kit.outpost_row(SLUG)
@@ -936,9 +936,9 @@ async def test_without_a_key_wrapper_no_argument_is_written(
     client: AsyncClient, admin: str, door: kit.Door, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """In clear is not a fallback: with no key configured the arguments are not put on the row."""
-    from choregos_api.db.models import OutpostCall
-    from choregos_api.secret_store import ENV_KEKS, SecretStoreUnavailable, active_key_wrapper
-    from choregos_api.services import outposts as service
+    from tranibor_api.db.models import OutpostCall
+    from tranibor_api.secret_store import ENV_KEKS, SecretStoreUnavailable, active_key_wrapper
+    from tranibor_api.services import outposts as service
 
     monkeypatch.delenv(ENV_KEKS, raising=False)
     assert active_key_wrapper() is None
@@ -956,7 +956,7 @@ async def test_without_a_key_wrapper_no_argument_is_written(
     assert service.open_call_arguments(waiting) == {"query": "open"}
 
     # The wrapper an extension supplies with its store (ADR 0103) is the one a call is sealed under.
-    from choregos_api.secret_store import FakeSecretStore, Keyring, SealedDbSecretStore, set_secret_store
+    from tranibor_api.secret_store import FakeSecretStore, Keyring, SealedDbSecretStore, set_secret_store
 
     try:
         set_secret_store(SealedDbSecretStore(keyring=Keyring(keys={"kms": os.urandom(32)}, active_id="kms")))
@@ -971,8 +971,8 @@ async def test_without_a_key_wrapper_no_argument_is_written(
 
 def test_an_enrolment_token_is_one_the_doors_contract_accepts() -> None:
     """The token carries its outpost, and stays inside what `enrol` takes (`outpost-door.yaml`)."""
-    from choregos_api.db.models import Outpost
-    from choregos_api.services import outposts as service
+    from tranibor_api.db.models import Outpost
+    from tranibor_api.services import outposts as service
 
     outpost = Outpost(id="0192f0c0-1111-7222-8333-444455556666", org_id="o", slug=SLUG, display_name=SLUG)
     token, digest = service._new_token(outpost)
@@ -1015,7 +1015,7 @@ async def test_the_tokens_that_can_still_enrol_are_listed_without_the_token(
     client: AsyncClient, admin: str, door: kit.Door
 ) -> None:
     """Row 5: listed newest first, unused and in time only, never their plaintext."""
-    from choregos_api.db.models import OutpostEnrolment
+    from tranibor_api.db.models import OutpostEnrolment
 
     await kit.create(client)
     first = (await client.post(f"{ONE}/enrolments")).json()
@@ -1042,7 +1042,7 @@ async def test_a_token_that_enrolled_nothing_is_cancelled_and_enrols_nothing_aft
     client: AsyncClient, admin: str, door: kit.Door
 ) -> None:
     """Row 5: a token pasted in the wrong place need not live its fifteen minutes."""
-    from choregos_api.services.outposts import EnrolmentRefused
+    from tranibor_api.services.outposts import EnrolmentRefused
 
     await kit.create(client)
     issued = (await client.post(f"{ONE}/enrolments")).json()
@@ -1106,7 +1106,7 @@ async def test_an_instance_names_the_token_it_enrolled_with_and_who_issued_it(
 
 async def test_the_calls_window_is_the_one_the_contract_states(client: AsyncClient, admin: str) -> None:
     """Row 7: the list reads the newest 1000 calls; the contract says so."""
-    from choregos_api.services import outposts as service
+    from tranibor_api.services import outposts as service
 
     described = " ".join(
         contracts.load_openapi()["paths"]["/orgs/{org}/outposts/{slug}/calls"]["get"]["description"].split()

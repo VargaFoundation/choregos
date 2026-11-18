@@ -11,7 +11,7 @@ import json
 from pathlib import Path
 
 import pytest
-from choregos_runner.backends import get_backend
+from tranibor_runner.backends import get_backend
 
 from .test_units import _minimal_stage_input
 

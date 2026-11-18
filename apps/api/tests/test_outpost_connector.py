@@ -14,8 +14,8 @@ from __future__ import annotations
 
 from typing import Any
 
-import choregos_adapters
 import pytest
+import tranibor_adapters
 from httpx import AsyncClient
 
 from .conftest import login
@@ -45,7 +45,7 @@ def _config(**changes: Any) -> dict[str, Any]:
 async def test_the_type_is_offered_with_the_contracts_schema_and_no_secret_field(
     client: AsyncClient, admin: str
 ) -> None:
-    from choregos_contracts import load_openapi
+    from tranibor_contracts import load_openapi
 
     types = (await client.get("/api/v1/connectors/types")).json()
     (offered,) = [t for t in types if (t["kind"], t["type"]) == ("mcp", "mcp-outpost")]
@@ -123,8 +123,8 @@ async def test_a_declaration_with_a_secret_is_a_422(
 
 
 async def test_an_outpost_the_organisation_does_not_have_is_a_422(client: AsyncClient, admin: str) -> None:
-    from choregos_api.db.models import Organization, Outpost
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Organization, Outpost
+    from tranibor_api.db.session import session_scope
 
     unknown = await _declare(client, _config())
     assert unknown.status_code == 422, unknown.text
@@ -147,9 +147,9 @@ async def test_an_outpost_the_organisation_does_not_have_is_a_422(client: AsyncC
 async def test_an_outpost_that_is_not_enabled_for_tools_serves_no_connector(
     client: AsyncClient, admin: str
 ) -> None:
-    from choregos_api.db.models import Outpost
-    from choregos_api.db.session import session_scope
     from sqlalchemy import update
+    from tranibor_api.db.models import Outpost
+    from tranibor_api.db.session import session_scope
 
     await kit.create(client, SLUG)
     async with session_scope(orgs="*") as session:
@@ -212,8 +212,8 @@ async def test_declaring_one_is_the_administrators(client: AsyncClient, admin: s
 def test_a_connector_at_an_outpost_carries_the_service_identity_and_no_other() -> None:
     """ADR 0149 §2: a need that must be called as the person is refused when it is bound, since the
     type's closed schema has no `identity_modes`; and a row that had one would change nothing."""
-    from choregos_api.db.models import OrgConnector
-    from choregos_api.services.connector_identity import supports_identity
+    from tranibor_api.db.models import OrgConnector
+    from tranibor_api.services.connector_identity import supports_identity
 
     forged = {"outpost": SLUG, "endpoint": ALIAS, "identity_modes": ["user_exchange", "user_consent"]}
     at_an_outpost = OrgConnector(kind="mcp", type="mcp-outpost", config=forged)
@@ -228,9 +228,9 @@ async def test_no_path_builds_its_client_without_the_seam(client: AsyncClient, a
     """The type cannot be built from its configuration alone, by the adapters' factory or by the
     platform's: only the one seam of connector calls supplies the rendezvous. A person's token handed
     to a direct build goes nowhere."""
-    from choregos_adapters.errors import AdapterError
-    from choregos_api.db.session import session_scope
-    from choregos_api.services import plugin_servers
+    from tranibor_adapters.errors import AdapterError
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services import plugin_servers
 
     await kit.create(client, SLUG)
     assert (await _declare(client, _config())).status_code == 201
@@ -248,9 +248,9 @@ async def test_the_route_names_the_outpost_and_the_alias_and_has_no_host(
     client: AsyncClient, admin: str
 ) -> None:
     """ADR 0149 §3: `route_of` answers "through an outpost" for the type, and for it alone."""
-    from choregos_api.db.models import OrgConnector
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.mcp_gateway import Route, route_of
+    from tranibor_api.db.models import OrgConnector
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.mcp_gateway import Route, route_of
 
     await kit.create(client, SLUG)
     assert (await _declare(client, _config())).status_code == 201
@@ -273,7 +273,7 @@ async def test_the_route_names_the_outpost_and_the_alias_and_has_no_host(
 async def test_the_alias_is_never_read_as_a_host(client: AsyncClient, admin: str) -> None:
     """`endpoint` is a URL-shaped key for other types. For this one it is an alias (ADR 0149 §11):
     neither the organisation's deny list nor its allowed set judges it, at declaration or at a call."""
-    from choregos_api.services.platform_network import connector_host
+    from tranibor_api.services.platform_network import connector_host
 
     assert connector_host({"outpost": SLUG, "endpoint": "tracker"}) is None
     assert connector_host({"endpoint": "tracker"}) == "tracker", "another type's `endpoint` is an address"
@@ -295,15 +295,15 @@ async def test_without_a_secrets_key_the_fake_outpost_serves_the_connector_in_me
     """`CHOREGOS_FAKES=1` on a deployment that has no key to seal a call's arguments under: the
     in-memory fake secret store is in force, and so is the in-memory `FakeOutpost`. The route is still
     judged on the outpost's own row; no call is written; the refusals are the same."""
-    from choregos_adapters.fakes.outpost import FakeOutpost
-    from choregos_api.secret_store import ENV_KEKS
-    from choregos_api.services import outpost_route
+    from tranibor_adapters.fakes.outpost import FakeOutpost
+    from tranibor_api.secret_store import ENV_KEKS
+    from tranibor_api.services import outpost_route
 
     monkeypatch.delenv(ENV_KEKS)
     assert outpost_route.faked()
     served = route.server(answers={"search_issues": "two issues match"})
     fake = FakeOutpost(fallback=lambda: served)
-    monkeypatch.setattr(choregos_adapters, "FAKE_OUTPOST", fake)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_OUTPOST", fake)
     await kit.create(client, SLUG)  # no instance was ever enrolled: the fake stands for the daemon
     await route.declare(client)
     found = await client.post(f"{CONNECTORS}/{CONNECTOR}/discover")
@@ -337,11 +337,11 @@ async def test_without_a_secrets_key_the_fake_outpost_serves_the_connector_in_me
     assert len(await route.ledger()) == 1, "only the call that reached the server is booked"
     assert (await client.post(f"{ORG}/outposts/{SLUG}/resume")).status_code == 200
     # The platform still decides alone that a write carries its key: a row opened behind the API.
-    from choregos_api.db.models import ConnectorOperation
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.mcp_gateway import connector_client
-    from choregos_api.services.mcp_gateway_identity import CallIdentity
     from sqlalchemy import update
+    from tranibor_api.db.models import ConnectorOperation
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.mcp_gateway import connector_client
+    from tranibor_api.services.mcp_gateway_identity import CallIdentity
 
     async with session_scope(orgs="*") as session:
         opened = update(ConnectorOperation).where(ConnectorOperation.name == "create_issue")
@@ -351,7 +351,7 @@ async def test_without_a_secrets_key_the_fake_outpost_serves_the_connector_in_me
     async def identity() -> CallIdentity:
         return CallIdentity(org="northwind", org_id=instance.org_id, subject="action:a-1", purpose="action")
 
-    from choregos_adapters.outpost import OutpostNotAdmitted
+    from tranibor_adapters.outpost import OutpostNotAdmitted
 
     async with session_scope(orgs="*") as session:
         tools = await connector_client(session, instance, identity)
@@ -363,9 +363,9 @@ async def test_without_a_secrets_key_the_fake_outpost_serves_the_connector_in_me
 async def test_with_a_secrets_key_the_rendezvous_is_the_real_one_even_under_fakes(
     client: AsyncClient, admin: str
 ) -> None:
-    from choregos_api.services import outpost_route
+    from tranibor_api.services import outpost_route
 
-    assert choregos_adapters.fakes_enabled() and not outpost_route.faked()
+    assert tranibor_adapters.fakes_enabled() and not outpost_route.faked()
     daemon = await daemon_kit.approved(client)
     fake = route.outpost()
     await route.seen(client, daemon, fake)
@@ -382,11 +382,11 @@ def test_the_platform_registers_the_factory_that_supplies_the_rendezvous() -> No
     import sys
 
     probe = (
-        "from choregos_adapters import registry, builtins\n"
+        "from tranibor_adapters import registry, builtins\n"
         "assert registry._REGISTRY[('mcp', 'mcp-outpost')] is builtins._mcp_outpost_client\n"
-        "from choregos_api.main import create_app\n"
+        "from tranibor_api.main import create_app\n"
         "create_app()\n"
-        "from choregos_api import adapter_wiring\n"
+        "from tranibor_api import adapter_wiring\n"
         "assert registry._REGISTRY[('mcp', 'mcp-outpost')] is adapter_wiring._outpost_tools\n"
         "assert ('mcp', 'mcp-outpost') in registry.BUILT_UNDER_FAKES\n"
         "assert registry.spec_of('mcp', 'mcp-outpost').secret_fields == ()\n"

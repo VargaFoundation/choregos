@@ -1,6 +1,6 @@
 """Test agent: calls one MCP tool, one model, writes one deliverable."""
 
-from choregos_agent_sdk import Context, Result, agent
+from tranibor_agent_sdk import Context, Result, agent
 
 
 @agent(name="calls-tool")

@@ -13,10 +13,10 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from choregos_contracts import StageInput
-from choregos_runner.exits import Exit
-from choregos_runner.runner import Runner
-from choregos_runner.workspace import agent_git_env
+from tranibor_contracts import StageInput
+from tranibor_runner.exits import Exit
+from tranibor_runner.runner import Runner
+from tranibor_runner.workspace import agent_git_env
 
 from .conftest import FakeInternalClient, agent_script, valid_result
 

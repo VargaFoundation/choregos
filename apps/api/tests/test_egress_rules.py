@@ -12,7 +12,7 @@ from .egress_support import ORG, add_member, as_person, audit_actions, rules_in_
 
 @pytest.fixture
 def enforce(app: Any, monkeypatch: pytest.MonkeyPatch) -> None:
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     monkeypatch.setenv("CHOREGOS_EGRESS_MODE", "enforce")
     reset_settings_cache()
@@ -81,7 +81,7 @@ async def test_a_request_is_approved_or_refused_and_the_decision_is_remembered(
 async def test_a_host_already_allowed_cannot_be_requested_and_requests_are_capped(
     client: AsyncClient, admin: str
 ) -> None:
-    from choregos_api.services.egress import MAX_OPEN_REQUESTS
+    from tranibor_api.services.egress import MAX_OPEN_REQUESTS
 
     assert (await _create(client)).status_code == 201
     async with as_person(client, "dev@northwind.dev", "developer") as dev:
@@ -99,10 +99,10 @@ async def test_a_host_already_allowed_cannot_be_requested_and_requests_are_cappe
 async def test_a_revoked_host_is_no_longer_allowed_by_the_policy(
     client: AsyncClient, admin: str, enforce: None
 ) -> None:
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.egress import load_policy
     from sqlalchemy import select
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.egress import load_policy
 
     rule = (await _create(client)).json()
 
@@ -124,7 +124,7 @@ async def test_a_revoked_host_is_no_longer_allowed_by_the_policy(
 async def test_check_derives_the_hosts_and_reports_both_layers(
     client: AsyncClient, admin: str, enforce: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     monkeypatch.setenv("CHOREGOS_EGRESS_CEILING", '{"api": ["api.github.com"]}')
     reset_settings_cache()

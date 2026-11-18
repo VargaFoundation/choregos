@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from choregos_adapters.executor.routing import RoutingExecutor
-from choregos_adapters.fakes.executor import FakeExecutor
-from choregos_contracts import ExecutorKind
-from choregos_core import ExecRef
-from choregos_orchestrator.activities.execution import _capabilities_for
+from tranibor_adapters.executor.routing import RoutingExecutor
+from tranibor_adapters.fakes.executor import FakeExecutor
+from tranibor_contracts import ExecutorKind
+from tranibor_core import ExecRef
+from tranibor_orchestrator.activities.execution import _capabilities_for
 
 
 class _Sandbox(FakeExecutor):

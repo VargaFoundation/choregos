@@ -16,9 +16,9 @@ from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 import pytest
-from choregos_adapters.fakes.forge_accounts import FakeForge
 from httpx import AsyncClient
 from sqlalchemy import select
+from tranibor_adapters.fakes.forge_accounts import FakeForge
 
 from .conftest import login
 
@@ -27,7 +27,7 @@ ORG = "/api/v1/orgs/northwind"
 
 @pytest.fixture
 def forge() -> Iterator[FakeForge]:
-    from choregos_api.services.linked_accounts import set_forge_transport
+    from tranibor_api.services.linked_accounts import set_forge_transport
 
     fake = FakeForge()
     set_forge_transport(fake.transport())
@@ -81,8 +81,8 @@ async def _mine(client: AsyncClient) -> dict[str, Any]:
 
 
 async def _audit(action: str) -> list[Any]:
-    from choregos_api.db.models import AuditLog
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import AuditLog
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         return list((await session.execute(select(AuditLog).where(AuditLog.action == action))).scalars())

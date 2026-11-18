@@ -38,9 +38,9 @@ HISTORIES = pathlib.Path(__file__).resolve().parents[3] / "tests" / "replay" / "
 
 async def _gate_journal(item_id: str) -> list[dict[str, Any]]:
     """Every guarantee verdict journaled for the work item's runs, in order."""
-    from choregos_api.db.models import Run, RunEvent
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Run, RunEvent
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         runs = (await session.execute(select(Run.id).where(Run.work_item_id == item_id))).scalars().all()
@@ -73,8 +73,8 @@ async def _ci_awaited(item_id: str) -> None:
 async def test_an_adr_number_taken_during_the_ci_is_refused_when_the_ci_turns_green(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.worker import Replayer
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     project_id = await create_dev_project(setup)
     item_id, tracker_key = await create_ticket(setup, project_id, 14, "study")

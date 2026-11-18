@@ -1,7 +1,7 @@
 # 0103 — The secret KEKs sit behind a key wrapper
 
 - **Status**: accepted, 2026-11-03
-- **Concerns**: `apps/api/src/choregos_api/secret_store.py` (`KeyWrapper`, `EnvKeyWrapper`,
+- **Concerns**: `apps/api/src/tranibor_api/secret_store.py` (`KeyWrapper`, `EnvKeyWrapper`,
   `SealedDbSecretStore`); builds on [ADR 0058](0058-connector-secrets-are-write-only-values.md)
 
 ## Context

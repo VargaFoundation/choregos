@@ -11,9 +11,9 @@ from collections.abc import AsyncIterator, Iterator
 from typing import Any
 
 import pytest
-from choregos_adapters.fakes import FakeGateway, FakeRealtimeUpstream
-from choregos_adapters.fakes.realtime import AUDIO_B64
 from httpx import AsyncClient
+from tranibor_adapters.fakes import FakeGateway, FakeRealtimeUpstream
+from tranibor_adapters.fakes.realtime import AUDIO_B64
 
 from .egress_support import as_person
 from .test_agent_sessions import _key_rows, _ledger
@@ -65,9 +65,9 @@ class Voice:
 
 @pytest.fixture
 def voice() -> Iterator[Voice]:
-    from choregos_adapters.base import GatewayModel
-    from choregos_api.services.agent_realtime import set_realtime_connector
-    from choregos_api.services.agent_sessions import set_session_gateway
+    from tranibor_adapters.base import GatewayModel
+    from tranibor_api.services.agent_realtime import set_realtime_connector
+    from tranibor_api.services.agent_sessions import set_session_gateway
 
     realtime = GatewayModel(
         model_name=MODEL,
@@ -106,9 +106,9 @@ def _socket(client: AsyncClient, url: str = REALTIME, **headers: str) -> AsgiWeb
 
 
 async def _events(session_id: str) -> list[dict[str, Any]]:
-    from choregos_api.db.models import AgentSessionEvent
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import AgentSessionEvent
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as db:
         query = select(AgentSessionEvent).where(AgentSessionEvent.session_id == session_id)
@@ -117,9 +117,9 @@ async def _events(session_id: str) -> list[dict[str, Any]]:
 
 
 async def _session(client: AsyncClient) -> dict[str, Any]:
-    from choregos_api.db.models import AgentSessionRecord
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import AgentSessionRecord
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as db:
         (record,) = (await db.execute(select(AgentSessionRecord))).scalars()
@@ -270,11 +270,11 @@ async def test_a_callers_text_and_a_bare_response_create_go_through(
 
 @pytest.fixture
 def supplier(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
-    import choregos_adapters
-    from choregos_adapters.fakes.mcp import FakeMcpServer
+    import tranibor_adapters
+    from tranibor_adapters.fakes.mcp import FakeMcpServer
 
     server = FakeMcpServer(tools=[dict(o) for o in TOOLS], token="supplier-key")
-    monkeypatch.setattr(choregos_adapters, "FAKE_MCP", server)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_MCP", server)
     monkeypatch.setenv("CONNECTOR_TEST_SUPPLIER_KEY", "supplier-key")
     yield server
 
@@ -355,7 +355,7 @@ async def test_a_voice_models_function_output_says_the_flag_the_failure_and_the_
 async def test_a_frame_over_a_megabyte_closes_the_socket_with_1009_and_the_session(
     greeted: AsgiWebSocket, voice: Voice, client: AsyncClient
 ) -> None:
-    from choregos_api.services.agent_realtime import MAX_FRAME_BYTES
+    from tranibor_api.services.agent_realtime import MAX_FRAME_BYTES
 
     before = len(voice.model.received)
     await greeted.send_json({"type": "input_audio_buffer.append", "audio": "A" * MAX_FRAME_BYTES})
@@ -369,7 +369,7 @@ async def test_a_frame_over_a_megabyte_closes_the_socket_with_1009_and_the_sessi
 async def test_the_minutes_cap_closes_the_session(
     client: AsyncClient, project: dict[str, Any], voice: Voice, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.routers import agent_realtime
+    from tranibor_api.routers import agent_realtime
 
     monkeypatch.setattr(agent_realtime, "SECONDS_PER_MINUTE", 0.2)
     await _agent(client, runtime={"kind": "voice", "voice": "verse", "max_session_minutes": 1})
@@ -432,8 +432,8 @@ async def test_a_prompt_agent_is_refused_on_the_voice_door(
 async def test_a_voice_agent_is_refused_at_publication_on_a_gateway_without_realtime(
     client: AsyncClient, project: dict[str, Any], voice: Voice
 ) -> None:
-    from choregos_adapters.base import GATEWAY_CAPABILITIES
-    from choregos_api.services.agent_sessions import set_session_gateway
+    from tranibor_adapters.base import GATEWAY_CAPABILITIES
+    from tranibor_api.services.agent_sessions import set_session_gateway
 
     set_session_gateway(FakeGateway(capabilities=GATEWAY_CAPABILITIES - {"realtime"}))
     body = {"instructions": "x", "runtime": {"kind": "voice"}, "model": MODEL}
@@ -448,9 +448,9 @@ async def test_a_voice_agent_is_refused_at_publication_on_a_gateway_without_real
 
 
 async def _rate(usd_per_minute: float) -> None:
-    from choregos_api.db.models import ModelCatalogueRow, Organization
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import ModelCatalogueRow, Organization
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as db:
         org = (await db.execute(select(Organization).where(Organization.slug == "northwind"))).scalar_one()

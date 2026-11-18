@@ -18,11 +18,11 @@ from typing import Any
 
 import httpx
 import pytest
-from choregos_adapters.errors import ConfigurationError, UpstreamError
-from choregos_adapters.executor.agent_sandbox import AgentSandboxExecutor
-from choregos_adapters.fakes.agent_sandbox import FakeSandboxCluster
-from choregos_contracts import ExecutorKind
-from choregos_core.domain import ExecRef, StageJobSpec
+from tranibor_adapters.errors import ConfigurationError, UpstreamError
+from tranibor_adapters.executor.agent_sandbox import AgentSandboxExecutor
+from tranibor_adapters.fakes.agent_sandbox import FakeSandboxCluster
+from tranibor_contracts import ExecutorKind
+from tranibor_core.domain import ExecRef, StageJobSpec
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 
@@ -445,7 +445,7 @@ async def test_what_the_executor_writes_fits_the_pinned_crds() -> None:
 
 
 def test_the_executor_speaks_the_pinned_release() -> None:
-    from choregos_adapters.executor import agent_sandbox
+    from tranibor_adapters.executor import agent_sandbox
 
     pinned = _crds().pinned()
     assert pinned["release"] == agent_sandbox.AGENT_SANDBOX_RELEASE
@@ -521,7 +521,7 @@ async def test_a_run_with_an_image_the_pool_was_not_made_from_is_refused() -> No
 
 
 def test_the_factory_reads_the_pool_image_from_the_runner_image_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    from choregos_adapters import build
+    from tranibor_adapters import build
 
     monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
     monkeypatch.setenv("CHOREGOS_RUNNER_IMAGE", "harbor.example/choregos-runner:0.17.12")
@@ -536,7 +536,7 @@ def test_the_factory_reads_the_pool_image_from_the_runner_image_env(monkeypatch:
 async def test_a_finished_sandbox_gives_its_volume_back_in_minutes(monkeypatch: pytest.MonkeyPatch) -> None:
     """An hour per finished stage filled the dev tenant's PVC quota after one ticket (2026-10-15):
     the claim's clock is short by default, and the deployment sets it."""
-    from choregos_adapters.registry import build
+    from tranibor_adapters.registry import build
 
     kubernetes = {"kubernetes": {"token": "t", "verify": False}}
     monkeypatch.delenv("CHOREGOS_FAKES", raising=False)  # the real executor, not its fake

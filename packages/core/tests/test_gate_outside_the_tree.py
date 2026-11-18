@@ -18,9 +18,9 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from choregos_contracts import Evidence, StageResult
-from choregos_core import parse_workflow
-from choregos_core.gates import GateContext, GateOutcome, evaluate, gate, known_gates
+from tranibor_contracts import Evidence, StageResult
+from tranibor_core import parse_workflow
+from tranibor_core.gates import GateContext, GateOutcome, evaluate, gate, known_gates
 
 NAME = "clean_collector"
 
@@ -53,7 +53,7 @@ transitions:
 @pytest.fixture
 def house_guarantee() -> Any:
     """Register a guarantee as an extension would, then remove it."""
-    from choregos_core.gates import _REGISTRY
+    from tranibor_core.gates import _REGISTRY
 
     before = dict(_REGISTRY)
 

@@ -22,6 +22,19 @@ members = [
     "choregos-runner",
     "choregos-tools-mcp",
     "choregos-workspace",
+    "tranibor-adapters",
+    "tranibor-agent-sdk",
+    "tranibor-api",
+    "tranibor-cli",
+    "tranibor-contracts",
+    "tranibor-core",
+    "tranibor-ontology",
+    "tranibor-orchestrator",
+    "tranibor-outpost",
+    "tranibor-playbooks",
+    "tranibor-quant",
+    "tranibor-runner",
+    "tranibor-tools-mcp",
 ]
 
 [[package]]
@@ -309,348 +322,192 @@ wheels = [
 [[package]]
 name = "choregos-adapters"
 version = "0.27.13"
-source = { editable = "packages/adapters" }
+source = { editable = "compat/choregos-adapters" }
 dependencies = [
-    { name = "choregos-core" },
-    { name = "cryptography" },
-    { name = "httpx" },
-    { name = "pydantic" },
-    { name = "pyjwt" },
-    { name = "pyyaml" },
-    { name = "structlog" },
+    { name = "tranibor-adapters" },
+    { name = "tranibor-contracts" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "choregos-core", editable = "packages/core" },
-    { name = "cryptography", specifier = ">=43.0" },
-    { name = "httpx", specifier = ">=0.27" },
-    { name = "pydantic", specifier = ">=2.9" },
-    { name = "pyjwt", specifier = ">=2.9" },
-    { name = "pyyaml", specifier = ">=6.0" },
-    { name = "structlog", specifier = ">=24.4" },
+    { name = "tranibor-adapters", editable = "packages/adapters" },
+    { name = "tranibor-contracts", editable = "packages/contracts" },
 ]
 
 [[package]]
 name = "choregos-agent-sdk"
 version = "0.27.13"
-source = { editable = "packages/agent-sdk" }
+source = { editable = "compat/choregos-agent-sdk" }
 dependencies = [
-    { name = "agent-client-protocol" },
-    { name = "choregos-contracts" },
-    { name = "mcp" },
-    { name = "openai" },
+    { name = "tranibor-agent-sdk" },
+    { name = "tranibor-contracts" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "agent-client-protocol", specifier = "==0.12.1" },
-    { name = "choregos-contracts", editable = "packages/contracts" },
-    { name = "mcp", specifier = ">=1.20" },
-    { name = "openai", specifier = "==3.46.0" },
+    { name = "tranibor-agent-sdk", editable = "packages/agent-sdk" },
+    { name = "tranibor-contracts", editable = "packages/contracts" },
 ]
 
 [[package]]
 name = "choregos-api"
 version = "0.27.13"
-source = { editable = "apps/api" }
+source = { editable = "compat/choregos-api" }
 dependencies = [
-    { name = "aiosqlite" },
-    { name = "alembic" },
-    { name = "asyncpg" },
-    { name = "authlib" },
-    { name = "choregos-adapters" },
-    { name = "choregos-core", extra = ["telemetry", "temporal"] },
-    { name = "fastapi" },
-    { name = "itsdangerous" },
-    { name = "markitdown", extra = ["docx", "pdf", "pptx", "xlsx"] },
-    { name = "openpyxl" },
-    { name = "pillow" },
-    { name = "prometheus-client" },
-    { name = "pydantic-settings" },
-    { name = "pyjwt", extra = ["crypto"] },
-    { name = "python-multipart" },
-    { name = "signxml" },
-    { name = "sqlalchemy", extra = ["asyncio"] },
-    { name = "sse-starlette" },
-    { name = "structlog" },
-    { name = "temporalio" },
-    { name = "uvicorn", extra = ["standard"] },
-    { name = "websockets" },
+    { name = "tranibor-api" },
+    { name = "tranibor-contracts" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "aiosqlite", specifier = ">=0.20" },
-    { name = "alembic", specifier = ">=1.14" },
-    { name = "asyncpg", specifier = ">=0.30" },
-    { name = "authlib", specifier = ">=1.3" },
-    { name = "choregos-adapters", editable = "packages/adapters" },
-    { name = "choregos-core", extras = ["telemetry"], editable = "packages/core" },
-    { name = "choregos-core", extras = ["temporal"], editable = "packages/core" },
-    { name = "fastapi", specifier = ">=0.115" },
-    { name = "itsdangerous", specifier = ">=2.2" },
-    { name = "markitdown", extras = ["docx", "pdf", "pptx", "xlsx"], specifier = "==0.1.9" },
-    { name = "openpyxl", specifier = "==3.1.5" },
-    { name = "pillow", specifier = ">=13.0" },
-    { name = "prometheus-client", specifier = ">=0.21" },
-    { name = "pydantic-settings", specifier = ">=2.6" },
-    { name = "pyjwt", extras = ["crypto"], specifier = ">=2.9" },
-    { name = "python-multipart", specifier = ">=0.0.12" },
-    { name = "signxml", specifier = "==5.1.0" },
-    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
-    { name = "sse-starlette", specifier = ">=2.1" },
-    { name = "structlog", specifier = ">=24.4" },
-    { name = "temporalio", specifier = ">=1.8" },
-    { name = "uvicorn", extras = ["standard"], specifier = ">=0.32" },
-    { name = "websockets", specifier = ">=13" },
+    { name = "tranibor-api", editable = "apps/api" },
+    { name = "tranibor-contracts", editable = "packages/contracts" },
 ]
 
 [[package]]
 name = "choregos-cli"
 version = "0.27.13"
-source = { editable = "packages/cli" }
+source = { editable = "compat/choregos-cli" }
 dependencies = [
-    { name = "choregos-core" },
-    { name = "httpx" },
-    { name = "pyyaml" },
-    { name = "rich" },
-    { name = "textual" },
-    { name = "typer" },
+    { name = "tranibor-cli" },
+    { name = "tranibor-contracts" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "choregos-core", editable = "packages/core" },
-    { name = "httpx", specifier = ">=0.27" },
-    { name = "pyyaml", specifier = ">=6.0" },
-    { name = "rich", specifier = ">=13.9" },
-    { name = "textual", specifier = ">=0.89" },
-    { name = "typer", specifier = ">=0.15" },
+    { name = "tranibor-cli", editable = "packages/cli" },
+    { name = "tranibor-contracts", editable = "packages/contracts" },
 ]
 
 [[package]]
 name = "choregos-contracts"
 version = "0.27.13"
-source = { editable = "packages/contracts" }
+source = { editable = "compat/choregos-contracts" }
 dependencies = [
-    { name = "pydantic" },
-    { name = "pyyaml" },
+    { name = "tranibor-contracts" },
 ]
 
 [package.metadata]
-requires-dist = [
-    { name = "pydantic", specifier = ">=2.9" },
-    { name = "pyyaml", specifier = ">=6.0" },
-]
+requires-dist = [{ name = "tranibor-contracts", editable = "packages/contracts" }]
 
 [[package]]
 name = "choregos-core"
 version = "0.27.13"
-source = { editable = "packages/core" }
+source = { editable = "compat/choregos-core" }
 dependencies = [
-    { name = "choregos-contracts" },
-    { name = "jinja2" },
-    { name = "jsonschema" },
-    { name = "pydantic" },
-    { name = "pyyaml" },
-    { name = "structlog" },
-]
-
-[package.optional-dependencies]
-telemetry = [
-    { name = "opentelemetry-exporter-otlp-proto-http" },
-    { name = "opentelemetry-sdk" },
-]
-temporal = [
-    { name = "cryptography" },
-    { name = "temporalio" },
+    { name = "tranibor-contracts" },
+    { name = "tranibor-core" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "choregos-contracts", editable = "packages/contracts" },
-    { name = "cryptography", marker = "extra == 'temporal'", specifier = ">=43.0" },
-    { name = "jinja2", specifier = ">=3.1" },
-    { name = "jsonschema", specifier = ">=4.23" },
-    { name = "opentelemetry-exporter-otlp-proto-http", marker = "extra == 'telemetry'", specifier = "==1.45.2" },
-    { name = "opentelemetry-sdk", marker = "extra == 'telemetry'", specifier = "==1.45.2" },
-    { name = "pydantic", specifier = ">=2.9" },
-    { name = "pyyaml", specifier = ">=6.0" },
-    { name = "structlog", specifier = ">=24.4" },
-    { name = "temporalio", marker = "extra == 'temporal'", specifier = ">=1.8" },
+    { name = "tranibor-contracts", editable = "packages/contracts" },
+    { name = "tranibor-core", editable = "packages/core" },
 ]
-provides-extras = ["telemetry", "temporal"]
 
 [[package]]
 name = "choregos-ontology"
 version = "0.27.13"
-source = { editable = "packages/ontology" }
+source = { editable = "compat/choregos-ontology" }
 dependencies = [
-    { name = "cel-python" },
-    { name = "pydantic" },
-    { name = "pyyaml" },
-]
-
-[package.optional-dependencies]
-service = [
-    { name = "choregos-api" },
-    { name = "jsonschema" },
-    { name = "sqlalchemy" },
+    { name = "tranibor-contracts" },
+    { name = "tranibor-ontology" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "cel-python", specifier = ">=0.5" },
-    { name = "choregos-api", marker = "extra == 'service'", editable = "apps/api" },
-    { name = "jsonschema", marker = "extra == 'service'", specifier = ">=4.23" },
-    { name = "pydantic", specifier = ">=2.9" },
-    { name = "pyyaml", specifier = ">=6.0" },
-    { name = "sqlalchemy", marker = "extra == 'service'", specifier = ">=2.0" },
+    { name = "tranibor-contracts", editable = "packages/contracts" },
+    { name = "tranibor-ontology", editable = "packages/ontology" },
 ]
-provides-extras = ["service"]
 
 [[package]]
 name = "choregos-orchestrator"
 version = "0.27.13"
-source = { editable = "apps/orchestrator" }
+source = { editable = "compat/choregos-orchestrator" }
 dependencies = [
-    { name = "choregos-adapters" },
-    { name = "choregos-api" },
-    { name = "choregos-core", extra = ["telemetry", "temporal"] },
-    { name = "prometheus-client" },
-    { name = "pydantic-settings" },
-    { name = "structlog" },
-    { name = "temporalio" },
+    { name = "tranibor-contracts" },
+    { name = "tranibor-orchestrator" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "choregos-adapters", editable = "packages/adapters" },
-    { name = "choregos-api", editable = "apps/api" },
-    { name = "choregos-core", extras = ["telemetry"], editable = "packages/core" },
-    { name = "choregos-core", extras = ["temporal"], editable = "packages/core" },
-    { name = "prometheus-client", specifier = ">=0.21" },
-    { name = "pydantic-settings", specifier = ">=2.6" },
-    { name = "structlog", specifier = ">=24.4" },
-    { name = "temporalio", specifier = ">=1.8" },
+    { name = "tranibor-contracts", editable = "packages/contracts" },
+    { name = "tranibor-orchestrator", editable = "apps/orchestrator" },
 ]
 
 [[package]]
 name = "choregos-outpost"
 version = "0.27.13"
-source = { editable = "packages/outpost" }
+source = { editable = "compat/choregos-outpost" }
 dependencies = [
-    { name = "choregos-adapters" },
-    { name = "choregos-contracts" },
-    { name = "choregos-core" },
-    { name = "cryptography" },
-    { name = "httpx" },
-    { name = "jsonschema" },
-    { name = "pydantic" },
-    { name = "pyjwt" },
-    { name = "pyyaml" },
-    { name = "structlog" },
-    { name = "typer" },
+    { name = "tranibor-contracts" },
+    { name = "tranibor-outpost" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "choregos-adapters", editable = "packages/adapters" },
-    { name = "choregos-contracts", editable = "packages/contracts" },
-    { name = "choregos-core", editable = "packages/core" },
-    { name = "cryptography", specifier = ">=43.0" },
-    { name = "httpx", specifier = ">=0.27" },
-    { name = "jsonschema", specifier = ">=4.23" },
-    { name = "pydantic", specifier = ">=2.9" },
-    { name = "pyjwt", specifier = ">=2.9" },
-    { name = "pyyaml", specifier = ">=6.0" },
-    { name = "structlog", specifier = ">=24.4" },
-    { name = "typer", specifier = ">=0.15" },
+    { name = "tranibor-contracts", editable = "packages/contracts" },
+    { name = "tranibor-outpost", editable = "packages/outpost" },
 ]
 
 [[package]]
 name = "choregos-playbooks"
 version = "0.27.13"
-source = { editable = "packages/playbooks" }
+source = { editable = "compat/choregos-playbooks" }
 dependencies = [
-    { name = "jinja2" },
-    { name = "pydantic" },
-    { name = "pyyaml" },
+    { name = "tranibor-contracts" },
+    { name = "tranibor-playbooks" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "jinja2", specifier = ">=3.1" },
-    { name = "pydantic", specifier = ">=2.9" },
-    { name = "pyyaml", specifier = ">=6.0" },
+    { name = "tranibor-contracts", editable = "packages/contracts" },
+    { name = "tranibor-playbooks", editable = "packages/playbooks" },
 ]
 
 [[package]]
 name = "choregos-quant"
 version = "0.27.13"
-source = { editable = "packages/quant" }
-
-[[package]]
-name = "choregos-runner"
-version = "0.27.13"
-source = { editable = "packages/runner" }
+source = { editable = "compat/choregos-quant" }
 dependencies = [
-    { name = "choregos-adapters" },
-    { name = "choregos-core", extra = ["telemetry"] },
-    { name = "choregos-quant" },
-    { name = "choregos-tools-mcp" },
-    { name = "httpx" },
-    { name = "pydantic-settings" },
-    { name = "pyyaml" },
-    { name = "starlette" },
-    { name = "structlog" },
-    { name = "typer" },
-    { name = "uvicorn" },
-    { name = "websockets" },
+    { name = "tranibor-contracts" },
+    { name = "tranibor-quant" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "choregos-adapters", editable = "packages/adapters" },
-    { name = "choregos-core", extras = ["telemetry"], editable = "packages/core" },
-    { name = "choregos-quant", editable = "packages/quant" },
-    { name = "choregos-tools-mcp", editable = "packages/tools-mcp" },
-    { name = "httpx", specifier = ">=0.27" },
-    { name = "pydantic-settings", specifier = ">=2.6" },
-    { name = "pyyaml", specifier = ">=6.0" },
-    { name = "starlette", specifier = ">=0.40" },
-    { name = "structlog", specifier = ">=24.4" },
-    { name = "typer", specifier = ">=0.15" },
-    { name = "uvicorn", specifier = ">=0.32" },
-    { name = "websockets", specifier = ">=13" },
+    { name = "tranibor-contracts", editable = "packages/contracts" },
+    { name = "tranibor-quant", editable = "packages/quant" },
+]
+
+[[package]]
+name = "choregos-runner"
+version = "0.27.13"
+source = { editable = "compat/choregos-runner" }
+dependencies = [
+    { name = "tranibor-contracts" },
+    { name = "tranibor-runner" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "tranibor-contracts", editable = "packages/contracts" },
+    { name = "tranibor-runner", editable = "packages/runner" },
 ]
 
 [[package]]
 name = "choregos-tools-mcp"
 version = "0.27.13"
-source = { editable = "packages/tools-mcp" }
+source = { editable = "compat/choregos-tools-mcp" }
 dependencies = [
-    { name = "choregos-contracts" },
-    { name = "choregos-core" },
-    { name = "fastapi" },
-    { name = "httpx" },
-    { name = "pydantic" },
-    { name = "structlog" },
-    { name = "typer" },
-    { name = "uvicorn" },
+    { name = "tranibor-contracts" },
+    { name = "tranibor-tools-mcp" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "choregos-contracts", editable = "packages/contracts" },
-    { name = "choregos-core", editable = "packages/core" },
-    { name = "fastapi", specifier = ">=0.115" },
-    { name = "httpx", specifier = ">=0.27" },
-    { name = "pydantic", specifier = ">=2.9" },
-    { name = "structlog", specifier = ">=24.4" },
-    { name = "typer", specifier = ">=0.15" },
-    { name = "uvicorn", specifier = ">=0.32" },
+    { name = "tranibor-contracts", editable = "packages/contracts" },
+    { name = "tranibor-tools-mcp", editable = "packages/tools-mcp" },
 ]
 
 [[package]]
@@ -671,6 +528,19 @@ dependencies = [
     { name = "choregos-quant" },
     { name = "choregos-runner" },
     { name = "choregos-tools-mcp" },
+    { name = "tranibor-adapters" },
+    { name = "tranibor-agent-sdk" },
+    { name = "tranibor-api" },
+    { name = "tranibor-cli" },
+    { name = "tranibor-contracts" },
+    { name = "tranibor-core" },
+    { name = "tranibor-ontology" },
+    { name = "tranibor-orchestrator" },
+    { name = "tranibor-outpost" },
+    { name = "tranibor-playbooks" },
+    { name = "tranibor-quant" },
+    { name = "tranibor-runner" },
+    { name = "tranibor-tools-mcp" },
 ]
 
 [package.dev-dependencies]
@@ -695,19 +565,32 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "choregos-adapters", editable = "packages/adapters" },
-    { name = "choregos-agent-sdk", editable = "packages/agent-sdk" },
-    { name = "choregos-api", editable = "apps/api" },
-    { name = "choregos-cli", editable = "packages/cli" },
-    { name = "choregos-contracts", editable = "packages/contracts" },
-    { name = "choregos-core", editable = "packages/core" },
-    { name = "choregos-ontology", editable = "packages/ontology" },
-    { name = "choregos-orchestrator", editable = "apps/orchestrator" },
-    { name = "choregos-outpost", editable = "packages/outpost" },
-    { name = "choregos-playbooks", editable = "packages/playbooks" },
-    { name = "choregos-quant", editable = "packages/quant" },
-    { name = "choregos-runner", editable = "packages/runner" },
-    { name = "choregos-tools-mcp", editable = "packages/tools-mcp" },
+    { name = "choregos-adapters", editable = "compat/choregos-adapters" },
+    { name = "choregos-agent-sdk", editable = "compat/choregos-agent-sdk" },
+    { name = "choregos-api", editable = "compat/choregos-api" },
+    { name = "choregos-cli", editable = "compat/choregos-cli" },
+    { name = "choregos-contracts", editable = "compat/choregos-contracts" },
+    { name = "choregos-core", editable = "compat/choregos-core" },
+    { name = "choregos-ontology", editable = "compat/choregos-ontology" },
+    { name = "choregos-orchestrator", editable = "compat/choregos-orchestrator" },
+    { name = "choregos-outpost", editable = "compat/choregos-outpost" },
+    { name = "choregos-playbooks", editable = "compat/choregos-playbooks" },
+    { name = "choregos-quant", editable = "compat/choregos-quant" },
+    { name = "choregos-runner", editable = "compat/choregos-runner" },
+    { name = "choregos-tools-mcp", editable = "compat/choregos-tools-mcp" },
+    { name = "tranibor-adapters", editable = "packages/adapters" },
+    { name = "tranibor-agent-sdk", editable = "packages/agent-sdk" },
+    { name = "tranibor-api", editable = "apps/api" },
+    { name = "tranibor-cli", editable = "packages/cli" },
+    { name = "tranibor-contracts", editable = "packages/contracts" },
+    { name = "tranibor-core", editable = "packages/core" },
+    { name = "tranibor-ontology", editable = "packages/ontology" },
+    { name = "tranibor-orchestrator", editable = "apps/orchestrator" },
+    { name = "tranibor-outpost", editable = "packages/outpost" },
+    { name = "tranibor-playbooks", editable = "packages/playbooks" },
+    { name = "tranibor-quant", editable = "packages/quant" },
+    { name = "tranibor-runner", editable = "packages/runner" },
+    { name = "tranibor-tools-mcp", editable = "packages/tools-mcp" },
 ]
 
 [package.metadata.requires-dev]
@@ -2447,6 +2330,353 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/00/21/39a76b01bd5eea82a04baaca7580e105d8c59450df03998345bb2cfb307b/textual-8.2.8.tar.gz", hash = "sha256:3f106a9fbc73e39dd266c9712432087de78a6d644084c7c241d6a25c3169115b", size = 1860502, upload-time = "2026-06-30T06:51:24.495Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/fb/be/35261223d9416a0751cdff1c7b4a6f881387218a12d439fe22fefebc8c04/textual-8.2.8-py3-none-any.whl", hash = "sha256:267375fd402dc8d981457212efa71f0e3365fd17bba144ba9bb3ed7563cb374a", size = 731418, upload-time = "2026-06-30T06:51:26.364Z" },
+]
+
+[[package]]
+name = "tranibor-adapters"
+version = "0.27.13"
+source = { editable = "packages/adapters" }
+dependencies = [
+    { name = "cryptography" },
+    { name = "httpx" },
+    { name = "pydantic" },
+    { name = "pyjwt" },
+    { name = "pyyaml" },
+    { name = "structlog" },
+    { name = "tranibor-core" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "cryptography", specifier = ">=43.0" },
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "pydantic", specifier = ">=2.9" },
+    { name = "pyjwt", specifier = ">=2.9" },
+    { name = "pyyaml", specifier = ">=6.0" },
+    { name = "structlog", specifier = ">=24.4" },
+    { name = "tranibor-core", editable = "packages/core" },
+]
+
+[[package]]
+name = "tranibor-agent-sdk"
+version = "0.27.13"
+source = { editable = "packages/agent-sdk" }
+dependencies = [
+    { name = "agent-client-protocol" },
+    { name = "mcp" },
+    { name = "openai" },
+    { name = "tranibor-contracts" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "agent-client-protocol", specifier = "==0.12.1" },
+    { name = "mcp", specifier = ">=1.20" },
+    { name = "openai", specifier = "==3.46.0" },
+    { name = "tranibor-contracts", editable = "packages/contracts" },
+]
+
+[[package]]
+name = "tranibor-api"
+version = "0.27.13"
+source = { editable = "apps/api" }
+dependencies = [
+    { name = "aiosqlite" },
+    { name = "alembic" },
+    { name = "asyncpg" },
+    { name = "authlib" },
+    { name = "fastapi" },
+    { name = "itsdangerous" },
+    { name = "markitdown", extra = ["docx", "pdf", "pptx", "xlsx"] },
+    { name = "openpyxl" },
+    { name = "pillow" },
+    { name = "prometheus-client" },
+    { name = "pydantic-settings" },
+    { name = "pyjwt", extra = ["crypto"] },
+    { name = "python-multipart" },
+    { name = "signxml" },
+    { name = "sqlalchemy", extra = ["asyncio"] },
+    { name = "sse-starlette" },
+    { name = "structlog" },
+    { name = "temporalio" },
+    { name = "tranibor-adapters" },
+    { name = "tranibor-core", extra = ["telemetry", "temporal"] },
+    { name = "uvicorn", extra = ["standard"] },
+    { name = "websockets" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "aiosqlite", specifier = ">=0.20" },
+    { name = "alembic", specifier = ">=1.14" },
+    { name = "asyncpg", specifier = ">=0.30" },
+    { name = "authlib", specifier = ">=1.3" },
+    { name = "fastapi", specifier = ">=0.115" },
+    { name = "itsdangerous", specifier = ">=2.2" },
+    { name = "markitdown", extras = ["docx", "pdf", "pptx", "xlsx"], specifier = "==0.1.9" },
+    { name = "openpyxl", specifier = "==3.1.5" },
+    { name = "pillow", specifier = ">=13.0" },
+    { name = "prometheus-client", specifier = ">=0.21" },
+    { name = "pydantic-settings", specifier = ">=2.6" },
+    { name = "pyjwt", extras = ["crypto"], specifier = ">=2.9" },
+    { name = "python-multipart", specifier = ">=0.0.12" },
+    { name = "signxml", specifier = "==5.1.0" },
+    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
+    { name = "sse-starlette", specifier = ">=2.1" },
+    { name = "structlog", specifier = ">=24.4" },
+    { name = "temporalio", specifier = ">=1.8" },
+    { name = "tranibor-adapters", editable = "packages/adapters" },
+    { name = "tranibor-core", extras = ["telemetry"], editable = "packages/core" },
+    { name = "tranibor-core", extras = ["temporal"], editable = "packages/core" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.32" },
+    { name = "websockets", specifier = ">=13" },
+]
+
+[[package]]
+name = "tranibor-cli"
+version = "0.27.13"
+source = { editable = "packages/cli" }
+dependencies = [
+    { name = "httpx" },
+    { name = "pyyaml" },
+    { name = "rich" },
+    { name = "textual" },
+    { name = "tranibor-core" },
+    { name = "typer" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "pyyaml", specifier = ">=6.0" },
+    { name = "rich", specifier = ">=13.9" },
+    { name = "textual", specifier = ">=0.89" },
+    { name = "tranibor-core", editable = "packages/core" },
+    { name = "typer", specifier = ">=0.15" },
+]
+
+[[package]]
+name = "tranibor-contracts"
+version = "0.27.13"
+source = { editable = "packages/contracts" }
+dependencies = [
+    { name = "pydantic" },
+    { name = "pyyaml" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "pydantic", specifier = ">=2.9" },
+    { name = "pyyaml", specifier = ">=6.0" },
+]
+
+[[package]]
+name = "tranibor-core"
+version = "0.27.13"
+source = { editable = "packages/core" }
+dependencies = [
+    { name = "jinja2" },
+    { name = "jsonschema" },
+    { name = "pydantic" },
+    { name = "pyyaml" },
+    { name = "structlog" },
+    { name = "tranibor-contracts" },
+]
+
+[package.optional-dependencies]
+telemetry = [
+    { name = "opentelemetry-exporter-otlp-proto-http" },
+    { name = "opentelemetry-sdk" },
+]
+temporal = [
+    { name = "cryptography" },
+    { name = "temporalio" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "cryptography", marker = "extra == 'temporal'", specifier = ">=43.0" },
+    { name = "jinja2", specifier = ">=3.1" },
+    { name = "jsonschema", specifier = ">=4.23" },
+    { name = "opentelemetry-exporter-otlp-proto-http", marker = "extra == 'telemetry'", specifier = "==1.45.2" },
+    { name = "opentelemetry-sdk", marker = "extra == 'telemetry'", specifier = "==1.45.2" },
+    { name = "pydantic", specifier = ">=2.9" },
+    { name = "pyyaml", specifier = ">=6.0" },
+    { name = "structlog", specifier = ">=24.4" },
+    { name = "temporalio", marker = "extra == 'temporal'", specifier = ">=1.8" },
+    { name = "tranibor-contracts", editable = "packages/contracts" },
+]
+provides-extras = ["telemetry", "temporal"]
+
+[[package]]
+name = "tranibor-ontology"
+version = "0.27.13"
+source = { editable = "packages/ontology" }
+dependencies = [
+    { name = "cel-python" },
+    { name = "pydantic" },
+    { name = "pyyaml" },
+]
+
+[package.optional-dependencies]
+service = [
+    { name = "jsonschema" },
+    { name = "sqlalchemy" },
+    { name = "tranibor-api" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "cel-python", specifier = ">=0.5" },
+    { name = "jsonschema", marker = "extra == 'service'", specifier = ">=4.23" },
+    { name = "pydantic", specifier = ">=2.9" },
+    { name = "pyyaml", specifier = ">=6.0" },
+    { name = "sqlalchemy", marker = "extra == 'service'", specifier = ">=2.0" },
+    { name = "tranibor-api", marker = "extra == 'service'", editable = "apps/api" },
+]
+provides-extras = ["service"]
+
+[[package]]
+name = "tranibor-orchestrator"
+version = "0.27.13"
+source = { editable = "apps/orchestrator" }
+dependencies = [
+    { name = "prometheus-client" },
+    { name = "pydantic-settings" },
+    { name = "structlog" },
+    { name = "temporalio" },
+    { name = "tranibor-adapters" },
+    { name = "tranibor-api" },
+    { name = "tranibor-core", extra = ["telemetry", "temporal"] },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "prometheus-client", specifier = ">=0.21" },
+    { name = "pydantic-settings", specifier = ">=2.6" },
+    { name = "structlog", specifier = ">=24.4" },
+    { name = "temporalio", specifier = ">=1.8" },
+    { name = "tranibor-adapters", editable = "packages/adapters" },
+    { name = "tranibor-api", editable = "apps/api" },
+    { name = "tranibor-core", extras = ["telemetry"], editable = "packages/core" },
+    { name = "tranibor-core", extras = ["temporal"], editable = "packages/core" },
+]
+
+[[package]]
+name = "tranibor-outpost"
+version = "0.27.13"
+source = { editable = "packages/outpost" }
+dependencies = [
+    { name = "cryptography" },
+    { name = "httpx" },
+    { name = "jsonschema" },
+    { name = "pydantic" },
+    { name = "pyjwt" },
+    { name = "pyyaml" },
+    { name = "structlog" },
+    { name = "tranibor-adapters" },
+    { name = "tranibor-contracts" },
+    { name = "tranibor-core" },
+    { name = "typer" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "cryptography", specifier = ">=43.0" },
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "jsonschema", specifier = ">=4.23" },
+    { name = "pydantic", specifier = ">=2.9" },
+    { name = "pyjwt", specifier = ">=2.9" },
+    { name = "pyyaml", specifier = ">=6.0" },
+    { name = "structlog", specifier = ">=24.4" },
+    { name = "tranibor-adapters", editable = "packages/adapters" },
+    { name = "tranibor-contracts", editable = "packages/contracts" },
+    { name = "tranibor-core", editable = "packages/core" },
+    { name = "typer", specifier = ">=0.15" },
+]
+
+[[package]]
+name = "tranibor-playbooks"
+version = "0.27.13"
+source = { editable = "packages/playbooks" }
+dependencies = [
+    { name = "jinja2" },
+    { name = "pydantic" },
+    { name = "pyyaml" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "jinja2", specifier = ">=3.1" },
+    { name = "pydantic", specifier = ">=2.9" },
+    { name = "pyyaml", specifier = ">=6.0" },
+]
+
+[[package]]
+name = "tranibor-quant"
+version = "0.27.13"
+source = { editable = "packages/quant" }
+
+[[package]]
+name = "tranibor-runner"
+version = "0.27.13"
+source = { editable = "packages/runner" }
+dependencies = [
+    { name = "httpx" },
+    { name = "pydantic-settings" },
+    { name = "pyyaml" },
+    { name = "starlette" },
+    { name = "structlog" },
+    { name = "tranibor-adapters" },
+    { name = "tranibor-core", extra = ["telemetry"] },
+    { name = "tranibor-quant" },
+    { name = "tranibor-tools-mcp" },
+    { name = "typer" },
+    { name = "uvicorn" },
+    { name = "websockets" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "pydantic-settings", specifier = ">=2.6" },
+    { name = "pyyaml", specifier = ">=6.0" },
+    { name = "starlette", specifier = ">=0.40" },
+    { name = "structlog", specifier = ">=24.4" },
+    { name = "tranibor-adapters", editable = "packages/adapters" },
+    { name = "tranibor-core", extras = ["telemetry"], editable = "packages/core" },
+    { name = "tranibor-quant", editable = "packages/quant" },
+    { name = "tranibor-tools-mcp", editable = "packages/tools-mcp" },
+    { name = "typer", specifier = ">=0.15" },
+    { name = "uvicorn", specifier = ">=0.32" },
+    { name = "websockets", specifier = ">=13" },
+]
+
+[[package]]
+name = "tranibor-tools-mcp"
+version = "0.27.13"
+source = { editable = "packages/tools-mcp" }
+dependencies = [
+    { name = "fastapi" },
+    { name = "httpx" },
+    { name = "pydantic" },
+    { name = "structlog" },
+    { name = "tranibor-contracts" },
+    { name = "tranibor-core" },
+    { name = "typer" },
+    { name = "uvicorn" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "fastapi", specifier = ">=0.115" },
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "pydantic", specifier = ">=2.9" },
+    { name = "structlog", specifier = ">=24.4" },
+    { name = "tranibor-contracts", editable = "packages/contracts" },
+    { name = "tranibor-core", editable = "packages/core" },
+    { name = "typer", specifier = ">=0.15" },
+    { name = "uvicorn", specifier = ">=0.32" },
 ]
 
 [[package]]

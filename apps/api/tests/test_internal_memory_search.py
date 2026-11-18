@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from choregos_core.domain import Fact
 from httpx import AsyncClient
+from tranibor_core.domain import Fact
 
 from .agent_scopes_kit import ORG, make_project
 
@@ -21,7 +21,7 @@ def real_adapters(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _memory() -> Any:
-    from choregos_adapters import build
+    from tranibor_adapters import build
 
     return build("memory", "lexical", {"org": "northwind"})
 
@@ -43,10 +43,10 @@ async def _setup(client: AsyncClient) -> None:
 async def _run(
     client: AsyncClient, run_id: str, memories: list[dict[str, str]] | None, **extra: Any
 ) -> dict[str, str]:
-    from choregos_api.db.models import Project, Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.security import mint_run_token
     from sqlalchemy import select
+    from tranibor_api.db.models import Project, Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.security import mint_run_token
 
     async with session_scope() as session:
         project = (await session.execute(select(Project).where(Project.slug == "billing-api"))).scalar_one()

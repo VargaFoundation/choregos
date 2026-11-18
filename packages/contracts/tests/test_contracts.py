@@ -1,6 +1,6 @@
 """The examples must validate against both the JSON Schemas and the Python models.
 
-This test is what prevents drift between `schemas/*.json`, `openapi.yaml` and `choregos_contracts.*`.
+This test is what prevents drift between `schemas/*.json`, `openapi.yaml` and `tranibor_contracts.*`.
 """
 
 from __future__ import annotations
@@ -9,9 +9,10 @@ import json
 from pathlib import Path
 from typing import Any
 
-import choregos_contracts as contracts
 import pytest
-from choregos_contracts import (
+import tranibor_contracts as contracts
+from jsonschema import Draft202012Validator, RefResolver
+from tranibor_contracts import (
     ContextPack,
     ContextPolicy,
     DecisionRecord,
@@ -27,8 +28,7 @@ from choregos_contracts import (
     ToolsRef,
     Workflow,
 )
-from choregos_contracts.stage import MAX_CONCURRENT_TOOL_CALLS
-from jsonschema import Draft202012Validator, RefResolver
+from tranibor_contracts.stage import MAX_CONCURRENT_TOOL_CALLS
 
 SCHEMAS = contracts.schemas_dir()
 EXAMPLES = SCHEMAS / "examples"
@@ -193,7 +193,7 @@ def test_event_schema_knows_every_emitted_type() -> None:
     They had diverged without anything turning red: `workflow_failed` and `tool.called` were
     emitted, and a consumer validating against the schema rejected them.
     """
-    from choregos_contracts.enums import EventType
+    from tranibor_contracts.enums import EventType
 
     declares = set(contracts.load_schema("event.schema.json")["properties"]["type"]["enum"])
     assert {t.value for t in EventType} == declares
@@ -531,8 +531,8 @@ def test_the_network_fields_exist_in_the_models_and_the_schemas_with_the_same_de
     """ADR 0070: `NetworkPolicy` grew a deny list, rates and a built-in web tools switch; `Permissions`
     carries them to the runner. A default that differs between model and schema would make the two
     disagree on what an old file means."""
-    from choregos_contracts import Permissions
-    from choregos_contracts.policy import NetworkPolicy
+    from tranibor_contracts import Permissions
+    from tranibor_contracts.policy import NetworkPolicy
 
     policy_props = contracts.load_schema("policy.schema.json")["properties"]["sandbox"]["properties"][
         "network"
@@ -570,7 +570,7 @@ def test_the_policy_and_a_stage_input_with_the_new_network_keys_validate_against
 
 
 def test_the_network_denied_event_is_declared_and_the_openapi_names_the_four_operations() -> None:
-    from choregos_contracts.enums import EventType
+    from tranibor_contracts.enums import EventType
 
     assert EventType.NETWORK_DENIED.value == "choregos.network.denied"
     assert (
@@ -634,7 +634,7 @@ def test_an_asset_property_names_where_its_file_goes() -> None:
 
 def test_the_web_search_schema_and_model_declare_the_same_fields() -> None:
     """ADR 0083: the project's narrowing of web_search, in the schema as in the model."""
-    from choregos_contracts.policy import WebSearchPolicy
+    from tranibor_contracts.policy import WebSearchPolicy
 
     gaps: list[str] = []
     node = contracts.load_schema("policy.schema.json")["properties"]["web_search"]
@@ -682,7 +682,7 @@ def test_the_run_access_record_carries_an_optional_chain() -> None:
 
 def test_a_workflow_a2a_block_is_read_the_same_by_the_schema_and_the_model() -> None:
     """ADR 0078: a workflow opts in as an A2A skill; the schema and the model accept and refuse alike."""
-    from choregos_contracts import WorkflowA2a
+    from tranibor_contracts import WorkflowA2a
 
     gaps: list[str] = []
     node = contracts.load_schema("workflow.schema.json")["$defs"]["a2a"]
@@ -719,7 +719,7 @@ def test_the_platform_executors_are_read_only_in_the_contract() -> None:
 
 def test_a_project_a2a_block_bounds_file_parts_the_same_in_the_schema_and_the_model() -> None:
     """ADR 0078 §6 (S40-23g): a project bounds the A2A file parts it takes, 10 MiB unless it says so."""
-    from choregos_contracts import A2A_MAX_FILE_BYTES_CEILING, A2A_MAX_FILE_BYTES_DEFAULT, A2aConfig
+    from tranibor_contracts import A2A_MAX_FILE_BYTES_CEILING, A2A_MAX_FILE_BYTES_DEFAULT, A2aConfig
 
     gaps: list[str] = []
     node = contracts.load_schema("project.schema.json")["properties"]["a2a"]
@@ -797,7 +797,7 @@ def test_an_organisation_lists_the_slugs_it_had_and_an_alias_can_be_released() -
 
 def test_a_trigger_maps_a_payload_by_json_pointers() -> None:
     """S56-01 (ADR 0113): the schema and the model refuse the same triggers."""
-    from choregos_contracts import TriggerConfig
+    from tranibor_contracts import TriggerConfig
 
     gaps: list[str] = []
     node = contracts.load_schema("project.schema.json")["properties"]["triggers"]["items"]
@@ -827,7 +827,7 @@ def test_a_trigger_maps_a_payload_by_json_pointers() -> None:
 
 def test_a_trigger_filters_and_signs_and_a_start_rule_needs_a_condition() -> None:
     """S56-03 to S56-05 (ADR 0113): the schema and the model refuse the same configurations."""
-    from choregos_contracts import StartRule
+    from tranibor_contracts import StartRule
 
     gaps: list[str] = []
     _compare(
@@ -861,7 +861,7 @@ def test_a_trigger_filters_and_signs_and_a_start_rule_needs_a_condition() -> Non
 
 def test_a_project_s_repositories_are_declared_the_same_in_the_schema_and_the_model() -> None:
     """S58-01 (ADR 0124): the repositories beside the primary, in the schema as in the model."""
-    from choregos_contracts import NamedRepository, RepoConfig
+    from tranibor_contracts import NamedRepository, RepoConfig
 
     gaps: list[str] = []
     properties = contracts.load_schema("project.schema.json")["properties"]
@@ -911,7 +911,7 @@ def test_a_repository_name_designates_one_repository_and_a_url_has_one_name() ->
 
 def test_the_primary_is_named_after_its_url_and_a_branch_takes_its_repository_s_prefix() -> None:
     """ADR 0124 §1 and §4: names, lookups and branch names."""
-    from choregos_contracts.project import name_of_url
+    from tranibor_contracts.project import name_of_url
 
     assert name_of_url("https://github.com/acme/Infra.git") == "infra"
     assert name_of_url("git@github.com:acme/choregos_deploy.git") == "choregos-deploy"

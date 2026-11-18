@@ -12,8 +12,8 @@ from httpx import ASGITransport, AsyncClient
 
 
 async def _post(monkeypatch: pytest.MonkeyPatch, path: str, public_url: str, headers: dict[str, str]) -> int:
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.main import create_app
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.main import create_app
 
     monkeypatch.setenv("CHOREGOS_ENV", "dev")
     monkeypatch.setenv("CHOREGOS_PUBLIC_URL", public_url)

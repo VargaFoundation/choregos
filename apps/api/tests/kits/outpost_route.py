@@ -17,10 +17,10 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 import pytest
-from choregos_adapters.fakes.mcp import FakeMcpServer
-from choregos_adapters.fakes.outpost import FakeOutpost
 from httpx import AsyncClient
 from sqlalchemy import func, select
+from tranibor_adapters.fakes.mcp import FakeMcpServer
+from tranibor_adapters.fakes.outpost import FakeOutpost
 
 from . import outpost_daemon as daemon_kit
 from . import outposts as kit
@@ -59,7 +59,7 @@ TOOLS: list[dict[str, Any]] = [
 def switch_on(monkeypatch: pytest.MonkeyPatch) -> kit.Door:
     """Outposts on, a door that signs, a key to seal a call's arguments under, a daemon that may poll
     as often as a test needs, and a wait that looks often: SQLite has no relay to wake it."""
-    from choregos_api.outposts import rendezvous
+    from tranibor_api.outposts import rendezvous
 
     daemon_kit.key_wrapper(monkeypatch)
     door = kit.switch_on(monkeypatch)
@@ -143,9 +143,9 @@ async def agent_and_run(
     client: AsyncClient, project: dict[str, Any], connectors: list[str], run_id: str = RUN
 ) -> dict[str, str]:
     """An agent whose version names the connectors, and a run of it: the run's token."""
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.security import mint_run_token
+    from tranibor_api.db.models import Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.security import mint_run_token
 
     spec = {"mcp_servers": [{"connector": name, "tools": ["*"]} for name in connectors]}
     agent = await client.post(
@@ -213,14 +213,14 @@ async def set_timeout(client: AsyncClient, seconds: int, name: str = CONNECTOR) 
 
 async def calls(slug: str = SLUG) -> list[Any]:
     """The rows of the rendezvous, read under the outpost's name."""
-    from choregos_api.db.models import OutpostCall
+    from tranibor_api.db.models import OutpostCall
 
     return sorted(await kit.rows_of(slug, OutpostCall), key=lambda row: (row.created_at, row.id))
 
 
 async def ledger(provider: str = f"mcp:{CONNECTOR}") -> list[Any]:
-    from choregos_api.db.models import CostLedger
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import CostLedger
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         rows = await session.execute(select(CostLedger).where(CostLedger.provider == provider))
@@ -228,8 +228,8 @@ async def ledger(provider: str = f"mcp:{CONNECTOR}") -> list[Any]:
 
 
 async def events(tool: str | None = None) -> list[Any]:
-    from choregos_api.db.models import Event
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Event
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         rows = await session.execute(
@@ -239,8 +239,8 @@ async def events(tool: str | None = None) -> list[Any]:
 
 
 async def actions() -> int:
-    from choregos_api.db.models import Action
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Action
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         return int((await session.execute(select(func.count()).select_from(Action))).scalar_one())
@@ -248,8 +248,8 @@ async def actions() -> int:
 
 async def journal() -> list[tuple[str, str, str, str, int]]:
     """The network journal: `(host, layer, decision, reason, count)` of each line."""
-    from choregos_api.db.models import NetworkDecision
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import NetworkDecision
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         rows = (await session.execute(select(NetworkDecision))).scalars()
@@ -257,8 +257,8 @@ async def journal() -> list[tuple[str, str, str, str, int]]:
 
 
 async def connector_row(name: str = CONNECTOR) -> Any:
-    from choregos_api.db.models import OrgConnector
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import OrgConnector
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         return (await session.execute(select(OrgConnector).where(OrgConnector.name == name))).scalar_one()

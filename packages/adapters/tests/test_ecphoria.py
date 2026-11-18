@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import httpx
 import pytest
-from choregos_adapters.memory.ecphoria import EcphoriaMemory, _memory
-from choregos_core.domain import Fact, Provenance
+from tranibor_adapters.memory.ecphoria import EcphoriaMemory, _memory
+from tranibor_core.domain import Fact, Provenance
 
 from ._transport import Wire
 

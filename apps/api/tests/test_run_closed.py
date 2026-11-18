@@ -127,7 +127,7 @@ class _StillRunning:
         self.cancels = 0
 
     async def status(self, ref: Any) -> Any:
-        from choregos_core import ExecStatus
+        from tranibor_core import ExecStatus
 
         return ExecStatus(state="running")
 
@@ -143,9 +143,9 @@ class _StillRunning:
 @pytest.fixture
 def executor() -> Iterator[_StillRunning]:
     """The orchestrator's activities on fakes, with an executor that keeps the pod alive."""
-    from choregos_adapters import AdapterSet
-    from choregos_orchestrator.activities.base import set_adapters_override
-    from choregos_orchestrator.config import reset_settings_cache
+    from tranibor_adapters import AdapterSet
+    from tranibor_orchestrator.activities.base import set_adapters_override
+    from tranibor_orchestrator.config import reset_settings_cache
 
     adapters = AdapterSet.fakes()
     adapters.executor = _StillRunning()  # type: ignore[assignment]
@@ -160,7 +160,7 @@ async def test_a_result_posted_after_the_orchestrator_stopped_waiting_changes_no
     client: AsyncClient, project: dict[str, Any], executor: _StillRunning
 ) -> None:
     """The whole defect, end to end: the budget is spent, the cancel fails, the pod posts its result."""
-    from choregos_orchestrator.activities.execution import await_run
+    from tranibor_orchestrator.activities.execution import await_run
 
     run_id = await a_run(project)
     outcome = await await_run(
@@ -269,14 +269,14 @@ async def test_the_refusal_is_the_same_however_the_run_was_closed(
 @pytest.fixture
 def github_app(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     """A GitHub App set up, its token minting intercepted: what it was asked for is kept."""
-    from choregos_adapters.github import GitHubAppAuth, InstallationToken
+    from tranibor_adapters.github import GitHubAppAuth, InstallationToken
 
     monkeypatch.setenv("CHOREGOS_GITHUB_APP_ID", "5242171")
     monkeypatch.setenv(
         "CHOREGOS_GITHUB_APP_PRIVATE_KEY", "-----BEGIN RSA PRIVATE KEY-----\nx\n-----END RSA PRIVATE KEY-----"
     )
     # The App is read from the settings (ADR 0167), cached per process: read again.
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     reset_settings_cache()
     asked: list[str] = []
@@ -308,9 +308,9 @@ async def test_the_journals_of_a_closed_run_still_accept(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
     """What a process did after its run ended is what an operator wants to read."""
-    from choregos_api.db.models import NetworkDecision, RunEvent
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import NetworkDecision, RunEvent
+    from tranibor_api.db.session import session_scope
 
     run_id = await a_run(project)
     await close(run_id)
@@ -368,8 +368,8 @@ async def test_a_run_resumed_after_a_persons_answer_is_open_again(
     """A run has no `suspended` status: it waits for a person holding the result that asked, closed
     while its sandbox sleeps, and `resume_run` is what opens it again. The row is then the one
     `resume_run` leaves (`test_run_closed_when_the_wait_ends.py`, orchestrator suite, plays it)."""
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
 
     asked = {"status": "needs_human", "summary": "which currency?", "reason": "question"}
     run_id = await a_run(project, status="failed", result=asked)
@@ -402,8 +402,8 @@ def _dependencies(route: Any) -> set[Any]:
 def test_every_route_of_the_run_api_is_closed_with_its_run_or_is_a_journal() -> None:
     """A route added to the run's API takes the open-run token, or is named here as a journal: the
     guard is one dependency, and no route is left to remember it."""
-    from choregos_api.deps import open_network_claims, open_run_claims
-    from choregos_api.routers.internal import router
+    from tranibor_api.deps import open_network_claims, open_run_claims
+    from tranibor_api.routers.internal import router
 
     guards = {open_run_claims, open_network_claims}
     guarded, unguarded = set(), set()

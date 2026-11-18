@@ -20,8 +20,8 @@ COVERAGE = {"type": "metric", "show": "facts", "unit": "percent", "min": 0, "max
 async def _declared(
     item: dict[str, Any], project: dict[str, Any], run_id: str, displays: dict[str, Any]
 ) -> dict[str, str]:
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
 
     headers = await _run(item, project, run_id, "triage", outputs=list(displays))
     async with session_scope() as session:
@@ -65,9 +65,9 @@ async def test_the_list_carries_a_value_and_how_it_is_shown(
 async def test_a_value_changed_behind_the_platform_leaves_the_list(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.db.models import ArtifactRecord
-    from choregos_api.db.session import session_scope
     from sqlalchemy import update
+    from tranibor_api.db.models import ArtifactRecord
+    from tranibor_api.db.session import session_scope
 
     item = await _work_item(client, project)
     headers = await _declared(item, project, "r1", {"severity": SEVERITY})
@@ -108,9 +108,9 @@ async def test_a_platform_output_is_typed_without_any_declaration(
 async def test_a_revision_older_than_the_display_is_read_by_its_name(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.db.models import ArtifactRecord
-    from choregos_api.db.session import session_scope
     from sqlalchemy import update
+    from tranibor_api.db.models import ArtifactRecord
+    from tranibor_api.db.session import session_scope
 
     item = await _work_item(client, project)
     headers = await _run(item, project, "r1", "triage", outputs=["size"])
@@ -141,8 +141,8 @@ async def test_a_place_without_a_type_keeps_the_type_of_the_value(
 async def test_a_value_converted_to_its_type_still_credits_its_producer(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.artifacts import producing_runs
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.artifacts import producing_runs
 
     item = await _work_item(client, project)
     headers = await _declared(item, project, "r1", {"severity": SEVERITY})
@@ -155,10 +155,10 @@ async def test_a_value_converted_to_its_type_still_credits_its_producer(
 async def test_a_file_keeps_the_place_its_workflow_gave_it(
     client: AsyncClient, project: dict[str, Any], monkeypatch: Any
 ) -> None:
-    from choregos_adapters.fakes import FakeObjectStore
-    from choregos_api.db.models import Project, Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.artifacts import store_file
+    from tranibor_adapters.fakes import FakeObjectStore
+    from tranibor_api.db.models import Project, Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.artifacts import store_file
 
     item = await _work_item(client, project)
     await _declared(item, project, "r1", {"audit": {"show": "hidden", "title": "Audit"}})
@@ -183,8 +183,8 @@ async def test_a_file_keeps_the_place_its_workflow_gave_it(
 async def test_a_reader_of_a_converted_value_keeps_its_receipt(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.artifacts import value_for_receipt
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.artifacts import value_for_receipt
 
     item = await _work_item(client, project)
     headers = await _declared(item, project, "r1", {"severity": SEVERITY})
@@ -199,7 +199,7 @@ async def test_a_reader_of_a_converted_value_keeps_its_receipt(
 def test_a_level_travels_over_a2a_as_text_not_a_file() -> None:
     from types import SimpleNamespace
 
-    from choregos_api.a2a.door import _content_part
+    from tranibor_api.a2a.door import _content_part
 
     row: Any = SimpleNamespace(storage_key=None, type="level", content="approve")
     assert _content_part(row, b"approve") == {"kind": "text", "text": "approve"}

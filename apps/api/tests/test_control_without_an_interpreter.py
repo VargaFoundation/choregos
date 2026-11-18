@@ -13,9 +13,9 @@ from httpx import AsyncClient
 
 async def _item(client: AsyncClient, project: dict[str, Any], *, created_by: str | None) -> tuple[str, str]:
     """A work item whose interpreter Temporal no longer knows, and that interpreter's id."""
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.temporal import FakeTemporal, get_temporal, interpreter_id
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.temporal import FakeTemporal, get_temporal, interpreter_id
 
     created = await client.post(
         f"/api/v1/projects/{project['id']}/work-items", json={"title": "Fix the login"}
@@ -34,8 +34,8 @@ async def _item(client: AsyncClient, project: dict[str, Any], *, created_by: str
 
 
 async def _paused(item_id: str) -> bool:
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         row = await session.get(WorkItem, item_id)

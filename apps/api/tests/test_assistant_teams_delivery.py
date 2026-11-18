@@ -14,11 +14,11 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
-import choregos_adapters
 import pytest
-from choregos_adapters.fakes.teams import FakeTeamsWebhook
+import tranibor_adapters
 from httpx import AsyncClient
 from sqlalchemy import select
+from tranibor_adapters.fakes.teams import FakeTeamsWebhook
 
 from .kits.assistant_install import ORG
 from .kits.assistant_tasks import (  # noqa: F401
@@ -41,21 +41,21 @@ TEAMS = f"{ORG}/assistants/investment-assistant/delivery/teams"
 @pytest.fixture
 def teams(monkeypatch: pytest.MonkeyPatch) -> Iterator[FakeTeamsWebhook]:
     fake = FakeTeamsWebhook()
-    monkeypatch.setattr(choregos_adapters, "FAKE_TEAMS", fake)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_TEAMS", fake)
     yield fake
 
 
 def _enforce(monkeypatch: pytest.MonkeyPatch) -> None:
     """Egress enforced from now on (after the installation's own connectors were opened)."""
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     monkeypatch.setenv("CHOREGOS_EGRESS_MODE", "enforce")
     reset_settings_cache()
 
 
 async def _deliver() -> int:
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.task_delivery import deliver_pending
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.task_delivery import deliver_pending
 
     async with session_scope(orgs="*") as session:
         return await deliver_pending(session)
@@ -74,9 +74,9 @@ async def _produced_run(person: AsyncClient) -> None:
 async def test_the_manager_seals_the_url_and_nobody_reads_it_back(
     client: AsyncClient, org: str, app: Any, offline: Path, markets: Any, teams: FakeTeamsWebhook
 ) -> None:
-    from choregos_api.db.models import AuditLog
-    from choregos_api.db.session import session_scope
-    from choregos_api.secret_store import get_secret_store
+    from tranibor_api.db.models import AuditLog
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.secret_store import get_secret_store
 
     await _ready(client)
     member = await _subscriber(client, app, "member@northwind.dev")
@@ -100,7 +100,7 @@ async def test_the_manager_seals_the_url_and_nobody_reads_it_back(
     assert "SECRET" not in str(installation), "the installation shows a reference, not the URL"
     store = get_secret_store()
     async with session_scope(orgs="*") as session:
-        from choregos_api.db.models import Organization
+        from tranibor_api.db.models import Organization
 
         organisation = (await session.execute(select(Organization))).scalar_one()
         name = "assistant/investment-assistant/delivery/teams"
@@ -191,9 +191,9 @@ async def test_a_failing_teams_is_retried_and_then_sent_once(
 async def test_the_owners_of_an_upgrade_are_told_in_teams_as_one_card_and_a_failure_never_fails_it(
     client: AsyncClient, org: str, app: Any, offline: Path, markets: Any, teams: FakeTeamsWebhook
 ) -> None:
-    from choregos_api.db.models import AssistantInstallation
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.offered_knowledge import notify_owners
+    from tranibor_api.db.models import AssistantInstallation
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.offered_knowledge import notify_owners
 
     await _ready(client)
 

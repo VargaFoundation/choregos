@@ -8,14 +8,14 @@ from datetime import timedelta
 from typing import Any
 
 import pytest
-from choregos_api.config import get_settings, reset_settings_cache
-from choregos_api.db.models import DeviceAuthorization, Membership, Organization, User, UserSession
-from choregos_api.db.session import session_scope
-from choregos_api.security import sign_session
-from choregos_core import utcnow
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select, update
 from starlette.requests import HTTPConnection
+from tranibor_api.config import get_settings, reset_settings_cache
+from tranibor_api.db.models import DeviceAuthorization, Membership, Organization, User, UserSession
+from tranibor_api.db.session import session_scope
+from tranibor_api.security import sign_session
+from tranibor_core import utcnow
 
 ALICE = "alice@northwind.dev"
 BOB = "bob@northwind.dev"
@@ -48,7 +48,7 @@ async def browsers(app: Any) -> AsyncIterator[Any]:
         assert done.status_code == 307, done.text
         if auth_time is not None:  # the same session, as if the identity provider had said `auth_time`
             settings = get_settings()
-            from choregos_api.security import read_session
+            from tranibor_api.security import read_session
 
             payload = read_session(http.cookies.get(settings.session_cookie) or "", settings)
             assert payload is not None
@@ -212,7 +212,7 @@ async def test_a_surface_principal_is_as_old_as_its_approving_sign_in(
     org: str, anyone: AsyncClient, browsers: Any
 ) -> None:
     """The principal's `authenticated_at` is the approving sign-in's, so a step-up gate sees its real age."""
-    from choregos_api.deps import _surface_principal
+    from tranibor_api.deps import _surface_principal
 
     then = int(time.time()) - 7200
     person = await browsers(ALICE, auth_time=then)

@@ -15,7 +15,7 @@ from httpx import AsyncClient
 from .test_network_policy_api import _run
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
-SRC = "apps/api/src/choregos_api/routers/"
+SRC = "apps/api/src/tranibor_api/routers/"
 
 OWNED = (
     "internal",
@@ -51,7 +51,7 @@ def test_owned_routers_have_no_french() -> None:
 async def test_patching_the_extension_tools_provider_reaches_the_listing(
     client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.routers import internal
+    from tranibor_api.routers import internal
 
     headers = await _run(project, "run-former-name-1")
 

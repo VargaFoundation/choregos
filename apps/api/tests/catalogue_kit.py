@@ -10,9 +10,9 @@ from .agent_scopes_kit import as_user
 async def project_only(client: AsyncClient, email: str) -> None:
     """Sign in as `email` and drop the organisation role the development login gives: what remains is
     a person who belongs to a project only."""
-    from choregos_api.db.models import Membership, User
-    from choregos_api.db.session import session_scope
     from sqlalchemy import delete, select
+    from tranibor_api.db.models import Membership, User
+    from tranibor_api.db.session import session_scope
 
     await as_user(client, email)
     async with session_scope() as session:

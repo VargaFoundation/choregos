@@ -1,6 +1,6 @@
 """The two authors of a run's journal stay apart (S65-08, ADR 0173).
 
-- The platform writes a line of a run's journal with a type taken from `choregos_core.run_journal`,
+- The platform writes a line of a run's journal with a type taken from `tranibor_core.run_journal`,
   so that a new one cannot appear outside the namespaces the run's door refuses.
 - The run's door is the one place that writes a type it was sent.
 - Nothing the runner or its tool bridge records is in a reserved namespace: reserving it would
@@ -12,16 +12,16 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-from choregos_core import run_journal
-from choregos_core.run_journal import PLATFORM_EVENTS, platform_written
+from tranibor_core import run_journal
+from tranibor_core.run_journal import PLATFORM_EVENTS, platform_written
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCES = [*sorted(ROOT.glob("apps/*/src")), *sorted(ROOT.glob("packages/*/src"))]
 
 #: The run's own door: it writes the type it was sent, after refusing the platform's.
-RUN_DOOR = "apps/api/src/choregos_api/routers/internal.py"
+RUN_DOOR = "apps/api/src/tranibor_api/routers/internal.py"
 
-#: The names of `choregos_core.run_journal` that are a platform type.
+#: The names of `tranibor_core.run_journal` that are a platform type.
 PLATFORM_NAMES = {name for name in run_journal.__all__ if getattr(run_journal, name) in PLATFORM_EVENTS}
 
 #: Lines the platform adds under a type the run writes too, by file and by the name the type is
@@ -29,7 +29,7 @@ PLATFORM_NAMES = {name for name in run_journal.__all__ if getattr(run_journal, n
 #: `context.breakdown`: the runner records the context it measured; the API adds the gateway's count
 #: (`source: gateway`, above `GATEWAY_SEQ_BASE`). A number, not a verdict; the run's door refuses the
 #: gateway's shape of it (S65-08b, `gateway_written`).
-SHARED_TYPES = {"apps/api/src/choregos_api/services/context_breakdown.py": "EVENT"}
+SHARED_TYPES = {"apps/api/src/tranibor_api/services/context_breakdown.py": "EVENT"}
 
 #: Who records a run's own lines: the runner and its tool bridge.
 RUN_SIDE = ["packages/runner/src", "packages/tools-mcp/src"]
@@ -82,7 +82,7 @@ def test_the_platform_takes_its_journal_types_from_one_module() -> None:
             if name not in PLATFORM_NAMES and SHARED_TYPES.get(path) != name:
                 wrong.append(f"{path}:{call.lineno}")
     assert not wrong, (
-        "a line the platform writes in a run's journal takes its type from choregos_core.run_journal "
+        "a line the platform writes in a run's journal takes its type from tranibor_core.run_journal "
         f"(one of {sorted(PLATFORM_NAMES)}), so that the run's door refuses it from a run: {wrong}"
     )
     assert len(lines) > 1, "no platform writer was found: the guard would pass on nothing"

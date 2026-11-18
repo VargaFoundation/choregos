@@ -59,7 +59,7 @@ def test_the_declared_connectors_exist(path: Path) -> None:
     """A template only promises registered adapters."""
     import os
 
-    from choregos_adapters import available
+    from tranibor_adapters import available
 
     was_fake = os.environ.pop("CHOREGOS_FAKES", None)
     try:
@@ -81,7 +81,7 @@ def test_the_steps_are_implemented(path: Path) -> None:
 
 def _workflows(path: Path) -> list[Any]:
     """The workflows the template ships, read and validated as at a project's birth."""
-    from choregos_core.dsl import load_template, parse_workflow
+    from tranibor_core.dsl import load_template, parse_workflow
 
     defaults = manifest(path)["defaults"]
     refs = list(defaults.get("workflows") or [defaults["workflow"]])
@@ -101,7 +101,7 @@ def _workflows(path: Path) -> list[Any]:
 
 @pytest.mark.parametrize("path", MANIFESTS, ids=lambda p: p.parent.name)
 def test_the_workflows_the_default_the_routing_and_the_policy_exist(path: Path) -> None:
-    from choregos_core import load_preset
+    from tranibor_core import load_preset
 
     defaults = manifest(path)["defaults"]
     names = [w.metadata.name for w in _workflows(path)]
@@ -117,7 +117,7 @@ def test_the_workflows_the_default_the_routing_and_the_policy_exist(path: Path) 
         assert load_preset(policy_ref.removeprefix("preset:")) is not None
         return
     # A policy of the template's own (S21-22): in its folder, and readable.
-    from choregos_core.policy import parse_policy
+    from tranibor_core.policy import parse_policy
 
     resolved = (path.parent / policy_ref).resolve()
     assert resolved.is_relative_to(path.parent.resolve()), f"{policy_ref} leaves the template folder"
@@ -146,7 +146,7 @@ def test_actions_call_only_what_the_template_announces(path: Path) -> None:
     operation its capability declares, with the arguments its schema requires — and nothing else. An
     `mcp` server discovers its tools: only the connector name is judged. A template only calls
     core effects: a plugin's are not everywhere."""
-    from choregos_adapters import connector_types
+    from tranibor_adapters import connector_types
 
     annonces = dict(manifest(path)["requires"].get("org_connectors") or {})
     operations = {
@@ -190,12 +190,12 @@ def test_actions_call_only_what_the_template_announces(path: Path) -> None:
 
 @pytest.mark.parametrize("path", MANIFESTS, ids=lambda p: p.parent.name)
 def test_the_template_agents_and_skills_are_installable(path: Path) -> None:
-    from choregos_api.schemas.agents import AgentCreate
-    from choregos_api.services.agents import version_errors
-    from choregos_api.services.templates import delivery
+    from tranibor_api.schemas.agents import AgentCreate
+    from tranibor_api.services.agents import version_errors
+    from tranibor_api.services.templates import delivery
 
     livree = delivery(manifest(path), path.parent)
-    from choregos_api.services.skills import validate
+    from tranibor_api.services.skills import validate
 
     skills = {validate(files).name for files in livree.skills}
     agents = set()
@@ -226,17 +226,17 @@ SERVED_EVIDENCE = {"object.reread", "collector.rerun"}
 def test_template_extensions_are_valid_for_their_extension_package(path: Path, tmp_path: Path) -> None:
     """A shipped ontology compiles with no error NOR warning against what the plugin can play; its
     effects and proofs are served; an agent it authorises to propose is shipped by the template."""
-    from choregos_api.schemas.agents import AgentCreate
-    from choregos_api.services.templates import delivery
+    from tranibor_api.schemas.agents import AgentCreate
+    from tranibor_api.services.templates import delivery
 
     livree = delivery(manifest(path), path.parent)
     inconnues = set(livree.extensions) - EXTENSIONS_CONNUES
     assert not inconnues, f"extensions nobody validates: {sorted(inconnues)}"
     if "ontology" not in livree.extensions:
         return
-    from choregos_ontology.compiler import compile_directory
-    from choregos_ontology.service.actions import SERVED_EFFECTS
-    from choregos_ontology.service.api import REGISTRY, _check_package, _write_package
+    from tranibor_ontology.compiler import compile_directory
+    from tranibor_ontology.service.actions import SERVED_EFFECTS
+    from tranibor_ontology.service.api import REGISTRY, _check_package, _write_package
 
     files = livree.extensions["ontology"]
     _check_package(files)

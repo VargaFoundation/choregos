@@ -12,8 +12,8 @@ import json
 from typing import Any
 
 import pytest
-from choregos_adapters.fakes import FakeObjectStore
 from httpx import AsyncClient
+from tranibor_adapters.fakes import FakeObjectStore
 
 from .kits.artifacts import _post, _rows, _run, _work_item
 
@@ -96,8 +96,8 @@ async def test_a_new_content_is_a_new_version_and_the_same_content_is_not(
 async def test_an_inline_artifact_edited_behind_the_platform_is_refused_on_read(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.artifacts import ArtifactCorruptedError, read_content
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.artifacts import ArtifactCorruptedError, read_content
 
     item = await _work_item(client, project)
     headers = await _run(item, project, "run-refine", "refine")
@@ -107,7 +107,7 @@ async def test_an_inline_artifact_edited_behind_the_platform_is_refused_on_read(
     assert await read_content(store, row) == SPEC.encode()
 
     async with session_scope() as session:
-        from choregos_api.db.models import ArtifactRecord
+        from tranibor_api.db.models import ArtifactRecord
 
         stored = await session.get(ArtifactRecord, row.id)
         assert stored is not None
@@ -120,9 +120,9 @@ async def test_an_inline_artifact_edited_behind_the_platform_is_refused_on_read(
 async def test_a_file_goes_to_the_object_store_once_and_is_checked_on_read(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.db.models import Project, Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.artifacts import ArtifactCorruptedError, read_content, store_file
+    from tranibor_api.db.models import Project, Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.artifacts import ArtifactCorruptedError, read_content, store_file
 
     item = await _work_item(client, project)
     await _run(item, project, "run-present", "present", agent=("presenter", 1))
@@ -160,9 +160,9 @@ async def test_a_file_goes_to_the_object_store_once_and_is_checked_on_read(
 async def test_a_name_that_cannot_be_a_file_name_is_refused(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.db.models import Project, Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.artifacts import store_file
+    from tranibor_api.db.models import Project, Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.artifacts import store_file
 
     item = await _work_item(client, project)
     await _run(item, project, "run-x", "present")

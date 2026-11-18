@@ -30,7 +30,7 @@ VARIABLES = (
 
 async def test_keycloak_exchanges_a_persons_token_for_a_sources_audience() -> None:
     env = require(*VARIABLES)
-    from choregos_adapters.token_exchange import TokenExchangeClient, claims_of
+    from tranibor_adapters.token_exchange import TokenExchangeClient, claims_of
 
     client = TokenExchangeClient(
         env["CHOREGOS_LIVE_KEYCLOAK_TOKEN_URL"],

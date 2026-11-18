@@ -13,17 +13,17 @@ ORCHESTRATOR_SRC = ROOT / "apps" / "orchestrator" / "src"
 CEILING = 156  # S47-33: +3, the stage helpers moved to stage_*.py repeat three imports of the stage module
 
 HTTP_LAYER = (
-    "choregos_api.routers",
-    "choregos_api.deps",
-    "choregos_api.main",
-    "choregos_api.mcp",
-    "choregos_api.a2a",
+    "tranibor_api.routers",
+    "tranibor_api.deps",
+    "tranibor_api.main",
+    "tranibor_api.mcp",
+    "tranibor_api.a2a",
     "fastapi",
 )
 
 
 def _is_api(name: str) -> bool:
-    return name == "choregos_api" or name.startswith("choregos_api.")
+    return name == "tranibor_api" or name.startswith("tranibor_api.")
 
 
 def imported_modules(root: Path) -> list[str]:
@@ -41,7 +41,7 @@ def imported_modules(root: Path) -> list[str]:
 
 
 def count_api_imports(root: Path) -> int:
-    """Count the `choregos_api` import statements under `root` (one per `from`, one per alias)."""
+    """Count the `tranibor_api` import statements under `root` (one per `from`, one per alias)."""
     count = 0
     for path in root.rglob("*.py"):
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
@@ -56,13 +56,13 @@ def count_api_imports(root: Path) -> int:
 def test_the_orchestrator_imports_no_more_of_the_api() -> None:
     count = count_api_imports(ORCHESTRATOR_SRC)
     assert count <= CEILING, (
-        f"apps/orchestrator imports choregos_api {count} times, the ceiling is {CEILING}: "
+        f"apps/orchestrator imports tranibor_api {count} times, the ceiling is {CEILING}: "
         "a new import is refused (ADR 0099: move shared code to packages/core)"
     )
 
 
 def http_layer_imports(root: Path) -> list[str]:
-    """The HTTP-layer modules imported under `root`, `from choregos_api import deps` included."""
+    """The HTTP-layer modules imported under `root`, `from tranibor_api import deps` included."""
     return sorted(
         {
             module
@@ -79,27 +79,27 @@ def test_the_orchestrator_never_imports_the_http_layer() -> None:
 
 def test_the_counter_sees_both_import_forms(tmp_path: Path) -> None:
     (tmp_path / "sample.py").write_text(
-        "from choregos_api.db import x\nimport choregos_api.config\nimport os\n", encoding="utf-8"
+        "from tranibor_api.db import x\nimport tranibor_api.config\nimport os\n", encoding="utf-8"
     )
     assert count_api_imports(tmp_path) == 2
 
 
 def test_the_http_layer_ban_sees_every_form(tmp_path: Path) -> None:
     (tmp_path / "bad.py").write_text(
-        "from choregos_api.routers import a\nfrom choregos_api import deps, main\nimport fastapi\n",
+        "from tranibor_api.routers import a\nfrom tranibor_api import deps, main\nimport fastapi\n",
         encoding="utf-8",
     )
     assert http_layer_imports(tmp_path) == [
-        "choregos_api.deps",
-        "choregos_api.main",
-        "choregos_api.routers",
-        "choregos_api.routers.a",
         "fastapi",
+        "tranibor_api.deps",
+        "tranibor_api.main",
+        "tranibor_api.routers",
+        "tranibor_api.routers.a",
     ]
     clean = tmp_path / "clean"
     clean.mkdir()
     (clean / "ok.py").write_text(
-        "from choregos_api.db import x\nfrom choregos_api import config\nimport os\n",
+        "from tranibor_api.db import x\nfrom tranibor_api import config\nimport os\n",
         encoding="utf-8",
     )
     assert http_layer_imports(clean) == []

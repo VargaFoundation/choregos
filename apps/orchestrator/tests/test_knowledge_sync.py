@@ -38,9 +38,9 @@ def scripted(answers: list[Any]) -> Any:
 
 
 async def run_loop(answers: list[Any], *, wake: bool = True) -> tuple[dict[str, Any], Any, Any]:
-    from choregos_orchestrator.workflows.knowledge import KnowledgeSync
     from temporalio.testing import WorkflowEnvironment
     from temporalio.worker import Worker
+    from tranibor_orchestrator.workflows.knowledge import KnowledgeSync
 
     stub = scripted(answers)
     environment = await WorkflowEnvironment.start_time_skipping()
@@ -99,9 +99,9 @@ async def test_a_failing_pass_does_not_end_the_loop() -> None:
 
 async def test_the_archived_history_replays() -> None:
     """The history in `tests/replay/histories` is this loop's; recorded again here, it replays too."""
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.client import WorkflowHistory
     from temporalio.worker import Replayer
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     _, _, history = await run_loop([{"status": "synced", "interval_seconds": 300}, {"status": "gone"}])
     replayer = Replayer(workflows=ALL_WORKFLOWS)

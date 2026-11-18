@@ -5,9 +5,9 @@ refused (S39-22b, ADR 0066)."""
 from __future__ import annotations
 
 import pytest
-from choregos_adapters.documents import GitSource
-from choregos_adapters.documents import git as git_module
-from choregos_core.egress import AllowedRule, EgressPolicy, EgressRefusedError, use_policy
+from tranibor_adapters.documents import GitSource
+from tranibor_adapters.documents import git as git_module
+from tranibor_core.egress import AllowedRule, EgressPolicy, EgressRefusedError, use_policy
 
 
 class Spy:

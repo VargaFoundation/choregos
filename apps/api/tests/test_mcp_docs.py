@@ -75,7 +75,7 @@ def _tree(root: Path) -> Path:
 
 @pytest.fixture
 def docs_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, app: Any) -> Path:
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     site = _tree(tmp_path / "documentation")
     monkeypatch.setenv("CHOREGOS_DOCS_DIR", str(site))
@@ -221,7 +221,7 @@ async def test_read_one_section_by_its_anchor(client: AsyncClient, admin: str, d
 
 
 async def test_a_long_page_comes_in_bounded_parts(client: AsyncClient, admin: str, docs_dir: Path) -> None:
-    from choregos_api.mcp.docs import READ_CHUNK
+    from tranibor_api.mcp.docs import READ_CHUNK
 
     token = await _token(client, "mcp:read")
     whole = (docs_dir / "01-use" / "big.md").read_text(encoding="utf-8")
@@ -289,7 +289,7 @@ async def test_a_symbolic_link_and_a_partial_are_not_indexed(
 async def test_a_build_without_documentation_says_so(
     client: AsyncClient, admin: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, kind: str
 ) -> None:
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     directory = tmp_path / "no-docs"
     if kind == "empty":
@@ -324,9 +324,9 @@ async def test_a_token_without_an_mcp_scope_is_refused(
 
 
 async def test_every_call_is_audited(client: AsyncClient, admin: str, docs_dir: Path) -> None:
-    from choregos_api.db.models import AuditLog, Organization, User
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import AuditLog, Organization, User
+    from tranibor_api.db.session import session_scope
 
     token = await _token(client, "mcp:read")
     await _tool(client, token, "docs_search", query="kumquat")
@@ -364,8 +364,8 @@ async def test_every_call_is_audited(client: AsyncClient, admin: str, docs_dir: 
 async def test_the_doors_rate_applies(
     client: AsyncClient, admin: str, docs_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.mcp import transport
-    from choregos_api.rate_limit import RateLimiter
+    from tranibor_api.mcp import transport
+    from tranibor_api.rate_limit import RateLimiter
 
     monkeypatch.setattr(transport, "RATE_LIMITER", RateLimiter(1))
     token = await _token(client, "mcp:read")
@@ -379,9 +379,9 @@ async def test_an_external_agent_reads_the_documentation_only_if_its_version_nam
     client: AsyncClient, admin: str, docs_dir: Path
 ) -> None:
     """The door's agent filter (ADR 0033) applies to the documentation tools like to any other."""
-    from choregos_api.mcp.caller import Caller
-    from choregos_api.mcp.tools import Context, announced_tools
-    from choregos_api.rbac import Principal
+    from tranibor_api.mcp.caller import Caller
+    from tranibor_api.mcp.tools import Context, announced_tools
+    from tranibor_api.rbac import Principal
 
     principal = Principal(user_id="u", email="u@example.test")
     caller = Caller(principal=principal, token=None, scopes=frozenset({"mcp:read"}), reasons=("list_*",))
@@ -396,7 +396,7 @@ async def test_an_external_agent_reads_the_documentation_only_if_its_version_nam
 
 
 def test_slugs_follow_the_public_site() -> None:
-    from choregos_api.mcp.docs import slug_of
+    from tranibor_api.mcp.docs import slug_of
 
     assert slug_of(Path("index.md")) == ("", True)
     assert slug_of(Path("01-use/02-workflows.md")) == ("use/workflows", False)
@@ -406,7 +406,7 @@ def test_slugs_follow_the_public_site() -> None:
 
 
 def test_anchors_follow_docusaurus() -> None:
-    from choregos_api.mcp.docs import Page, _sections, anchor_of
+    from tranibor_api.mcp.docs import Page, _sections, anchor_of
 
     assert anchor_of("Budgets & policies") == "budgets--policies"
     assert anchor_of("The `mcp:read` scope") == "the-mcpread-scope"
@@ -420,10 +420,10 @@ def test_anchors_follow_docusaurus() -> None:
 
 
 def test_an_ontology_cannot_take_the_names_of_the_doors_tools() -> None:
-    from choregos_api.mcp.caller import Caller
-    from choregos_api.mcp.tools import Context, core_tools
-    from choregos_api.rbac import Principal
-    from choregos_ontology.mcpgen import RESERVED_TOOLS
+    from tranibor_api.mcp.caller import Caller
+    from tranibor_api.mcp.tools import Context, core_tools
+    from tranibor_api.rbac import Principal
+    from tranibor_ontology.mcpgen import RESERVED_TOOLS
 
     caller = Caller(principal=Principal(user_id="u", email="u@x.test"), token=None, scopes=frozenset())
     ctx = Context(session=None, caller=caller, project=None, org=None, console="")  # type: ignore[arg-type]

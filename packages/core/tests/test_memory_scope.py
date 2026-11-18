@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import pytest
-from choregos_core.memory_scope import (
+from tranibor_core.memory_scope import (
     MEMORY_KEY_SETTING,
     global_store_namespace,
     memory_key,

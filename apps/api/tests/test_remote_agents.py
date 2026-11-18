@@ -6,9 +6,9 @@ from collections.abc import Iterator
 from typing import Any
 
 import pytest
-from choregos_adapters.a2a import parse_card
-from choregos_adapters.fakes.a2a import FakeA2aAgent
 from httpx import AsyncClient
+from tranibor_adapters.a2a import parse_card
+from tranibor_adapters.fakes.a2a import FakeA2aAgent
 
 from .conftest import login
 from .conftest_remote import remote_agent, set_sealing_key

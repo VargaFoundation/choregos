@@ -155,7 +155,7 @@ async def test_the_shipped_templates_keep_their_shape(client: AsyncClient, admin
 
 def test_the_template_schema_knows_these_fields() -> None:
     """An administrator publishes a template in the database (`POST /templates`): the schema accepts it."""
-    import choregos_contracts as contracts
+    import tranibor_contracts as contracts
     from jsonschema import Draft202012Validator
 
     schema = Draft202012Validator(contracts.load_schema("template.schema.json"))
@@ -179,7 +179,7 @@ async def test_a_template_delivers_its_own_policy(
     client: AsyncClient, admin: str, templates: Any, tmp_path: pathlib.Path
 ) -> None:
     """Its budgets and its trains, which no preset carries (S21-22): `./policy.yaml`, in its folder."""
-    from choregos_core.policy import preset_yaml
+    from tranibor_core.policy import preset_yaml
 
     templates({"workflows": ["workflows/arrival.yaml"], "policy": "./policy.yaml"})
     own = preset_yaml("team").replace("name: team", "name: hr-delivery", 1)

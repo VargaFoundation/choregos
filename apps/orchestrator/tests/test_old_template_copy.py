@@ -18,10 +18,10 @@ pytestmark = pytest.mark.asyncio
 
 
 async def _store_old_copy(setup: Fixture) -> None:
-    from choregos_api.db.models import WorkflowDef
-    from choregos_api.db.session import session_scope
-    from choregos_core.dsl.legacy import legacy_declarations, old_template
     from sqlalchemy import select
+    from tranibor_api.db.models import WorkflowDef
+    from tranibor_api.db.session import session_scope
+    from tranibor_core.dsl.legacy import legacy_declarations, old_template
 
     document = old_template("default-simple")
     # Modified by a person: the migration leaves it alone.

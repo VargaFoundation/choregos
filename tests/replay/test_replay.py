@@ -33,7 +33,7 @@ def recorded_workflow_types() -> set[str]:
 
 def registered_workflow_types() -> set[str]:
     """The name Temporal knows each registered workflow class by (`@workflow.defn(name=...)`)."""
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     names: set[str] = set()
     for workflow_class in ALL_WORKFLOWS:
@@ -67,9 +67,9 @@ def test_a_workflow_without_a_history_is_reported() -> None:
 @pytest.mark.skipif(not history_files(), reason="no archived history (see `make replay-record`)")
 @pytest.mark.parametrize("path", history_files(), ids=lambda path: path.stem)
 async def test_replay_history(path: Path) -> None:
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.client import WorkflowHistory
     from temporalio.worker import Replayer
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     payload = json.loads(path.read_text(encoding="utf-8"))
     history = WorkflowHistory.from_json(payload.get("workflowId", path.stem), payload)
@@ -79,12 +79,12 @@ async def test_replay_history(path: Path) -> None:
 
 async def test_record_and_replay_roundtrip(tmp_path: Path) -> None:
     """Record a fresh history then replay it: the loop is verifiable in CI."""
-    from choregos_orchestrator.testing import workers_by_queue
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
-    from choregos_orchestrator.workflows.train import ReleaseTrain
     from temporalio.client import WorkflowHistory
     from temporalio.testing import WorkflowEnvironment
     from temporalio.worker import Replayer
+    from tranibor_orchestrator.testing import workers_by_queue
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
+    from tranibor_orchestrator.workflows.train import ReleaseTrain
 
     environment = await WorkflowEnvironment.start_time_skipping()
     try:

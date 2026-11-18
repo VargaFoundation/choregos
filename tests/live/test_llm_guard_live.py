@@ -33,7 +33,7 @@ from uuid import uuid4
 import httpx
 import pytest
 import yaml
-from choregos_core.llm_guardrail import GUARD_METADATA_KEY, GUARD_REDACT, REDACTED
+from tranibor_core.llm_guardrail import GUARD_METADATA_KEY, GUARD_REDACT, REDACTED
 
 from .conftest import require
 from .llm_guard_upstream import ARGUMENTS, PASSWORD, SECRET, SIGNATURE

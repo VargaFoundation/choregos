@@ -51,10 +51,10 @@ from typing import Any
 GUARD_METADATA_KEY = "choregos_llm_guard"
 GUARD_REDACT = "redact"
 
-#: What a masked value becomes (the same marker as `choregos_core.redaction`).
+#: What a masked value becomes (the same marker as `tranibor_core.redaction`).
 REDACTED = "[REDACTED]"
 
-#: The `no_secrets` gate's shapes (`choregos_core.gates.SECRET_PATTERNS`); a test keeps them equal.
+#: The `no_secrets` gate's shapes (`tranibor_core.gates.SECRET_PATTERNS`); a test keeps them equal.
 KNOWN_SHAPES: tuple[str, ...] = (
     r"AKIA[0-9A-Z]{16}",
     r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----",

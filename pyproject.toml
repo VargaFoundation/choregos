@@ -6,19 +6,33 @@ readme = "README.md"
 requires-python = ">=3.12,<3.13"
 license = { text = "Apache-2.0" }
 dependencies = [
-  "choregos-contracts",
-  "choregos-core",
-  "choregos-ontology",
-  "choregos-adapters",
-  "choregos-runner",
-  "choregos-quant",
-  "choregos-tools-mcp",
-  "choregos-playbooks",
-  "choregos-cli",
-  "choregos-api",
-  "choregos-orchestrator",
-  "choregos-agent-sdk",
-  "choregos-outpost",
+  "tranibor-contracts",
+  "tranibor-core",
+  "tranibor-ontology",
+  "tranibor-adapters",
+  "tranibor-runner",
+  "tranibor-quant",
+  "tranibor-tools-mcp",
+  "tranibor-playbooks",
+  "tranibor-cli",
+  "tranibor-api",
+  "tranibor-orchestrator",
+  "tranibor-agent-sdk",
+  "tranibor-outpost",
+  # The former names (ADR 0176 R2): empty wheels that ship the `choregos_*` import aliases.
+  "choregos-contracts", # compat-ok
+  "choregos-core", # compat-ok
+  "choregos-ontology", # compat-ok
+  "choregos-adapters", # compat-ok
+  "choregos-runner", # compat-ok
+  "choregos-quant", # compat-ok
+  "choregos-tools-mcp", # compat-ok
+  "choregos-playbooks", # compat-ok
+  "choregos-cli", # compat-ok
+  "choregos-api", # compat-ok
+  "choregos-orchestrator", # compat-ok
+  "choregos-agent-sdk", # compat-ok
+  "choregos-outpost", # compat-ok
 ]
 
 [dependency-groups]
@@ -45,23 +59,36 @@ dev = [
 default-groups = ["dev"]
 
 [tool.uv.workspace]
-members = ["packages/*", "apps/api", "apps/orchestrator"]
+members = ["packages/*", "apps/api", "apps/orchestrator", "compat/*"]
 exclude = ["packages/contracts/ts", "apps/web"]
 
 [tool.uv.sources]
-choregos-contracts = { workspace = true }
-choregos-core = { workspace = true }
-choregos-ontology = { workspace = true }
-choregos-adapters = { workspace = true }
-choregos-runner = { workspace = true }
-choregos-quant = { workspace = true }
-choregos-tools-mcp = { workspace = true }
-choregos-playbooks = { workspace = true }
-choregos-cli = { workspace = true }
-choregos-api = { workspace = true }
-choregos-orchestrator = { workspace = true }
-choregos-agent-sdk = { workspace = true }
-choregos-outpost = { workspace = true }
+tranibor-contracts = { workspace = true }
+tranibor-core = { workspace = true }
+tranibor-ontology = { workspace = true }
+tranibor-adapters = { workspace = true }
+tranibor-runner = { workspace = true }
+tranibor-quant = { workspace = true }
+tranibor-tools-mcp = { workspace = true }
+tranibor-playbooks = { workspace = true }
+tranibor-cli = { workspace = true }
+tranibor-api = { workspace = true }
+tranibor-orchestrator = { workspace = true }
+tranibor-agent-sdk = { workspace = true }
+tranibor-outpost = { workspace = true }
+choregos-contracts = { workspace = true } # compat-ok
+choregos-core = { workspace = true } # compat-ok
+choregos-ontology = { workspace = true } # compat-ok
+choregos-adapters = { workspace = true } # compat-ok
+choregos-runner = { workspace = true } # compat-ok
+choregos-quant = { workspace = true } # compat-ok
+choregos-tools-mcp = { workspace = true } # compat-ok
+choregos-playbooks = { workspace = true } # compat-ok
+choregos-cli = { workspace = true } # compat-ok
+choregos-api = { workspace = true } # compat-ok
+choregos-orchestrator = { workspace = true } # compat-ok
+choregos-agent-sdk = { workspace = true } # compat-ok
+choregos-outpost = { workspace = true } # compat-ok
 
 [tool.ruff]
 line-length = 110
@@ -71,7 +98,7 @@ extend-exclude = [
   "packages/contracts/ts",
   "apps/web",
   "**/generated/**",
-  "apps/api/src/choregos_api/migrations/versions",
+  "apps/api/src/tranibor_api/migrations/versions",
   # The evals' toy repositories: they imitate customer code, not our house style.
   "tests/fixtures/repos",
 ]
@@ -98,22 +125,22 @@ max-statements = 80
 "tests/**" = ["S", "PLR", "ASYNC"]
 "**/fakes/**" = ["S"]
 # Development defaults, never real secrets.
-"apps/api/src/choregos_api/config.py" = ["S105"]
-"apps/api/src/choregos_api/security.py" = ["S105"]
-"apps/api/src/choregos_api/migrations/**" = ["E501", "W291", "I001"]
+"apps/api/src/tranibor_api/config.py" = ["S105"]
+"apps/api/src/tranibor_api/security.py" = ["S105"]
+"apps/api/src/tranibor_api/migrations/**" = ["E501", "W291", "I001"]
 # Engine/session and bus singletons: one per process, deliberately.
-"apps/api/src/choregos_api/db/session.py" = ["PLW0603"]
-"apps/api/src/choregos_api/temporal.py" = ["PLW0603"]
-"apps/orchestrator/src/choregos_orchestrator/activities/base.py" = ["PLW0603"]
-"apps/orchestrator/src/choregos_orchestrator/train_client.py" = ["PLW0603"]
+"apps/api/src/tranibor_api/db/session.py" = ["PLW0603"]
+"apps/api/src/tranibor_api/temporal.py" = ["PLW0603"]
+"apps/orchestrator/src/tranibor_orchestrator/activities/base.py" = ["PLW0603"]
+"apps/orchestrator/src/tranibor_orchestrator/train_client.py" = ["PLW0603"]
 # Reading local fixtures in an activity: short disk I/O, deliberately.
-"apps/orchestrator/src/choregos_orchestrator/activities/evals.py" = ["ASYNC240"]
-"apps/orchestrator/src/choregos_orchestrator/activities/provisioning.py" = ["ASYNC240"]
+"apps/orchestrator/src/tranibor_orchestrator/activities/evals.py" = ["ASYNC240"]
+"apps/orchestrator/src/tranibor_orchestrator/activities/provisioning.py" = ["ASYNC240"]
 # Build-time probe: loopback URLs and a fixed headroom command line, no untrusted input.
 "docker/headroom/relays_budget_refusal.py" = ["S310", "S603", "S607"]
 # The explicit `timeout` is part of these functions' contract (RPC, subprocesses).
-"packages/runner/src/choregos_runner/**" = ["ASYNC109"]
-"packages/adapters/src/choregos_adapters/**" = ["ASYNC109"]
+"packages/runner/src/tranibor_runner/**" = ["ASYNC109"]
+"packages/adapters/src/tranibor_adapters/**" = ["ASYNC109"]
 # Demonstration data: the randomness is not cryptographic, on purpose.
 "dev/scripts/seed.py" = ["S311", "E501"]
 

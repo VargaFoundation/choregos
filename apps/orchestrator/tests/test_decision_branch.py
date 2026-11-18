@@ -61,10 +61,10 @@ transitions:
 
 async def _publish(setup: Fixture) -> None:
     """The workflow, saved through the API's only write path, and pinned on the work item."""
-    from choregos_api.db.models import ModelCatalogueRow, Project, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.rbac import SYSTEM
-    from choregos_api.services.definitions import publish_workflow
+    from tranibor_api.db.models import ModelCatalogueRow, Project, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.rbac import SYSTEM
+    from tranibor_api.services.definitions import publish_workflow
 
     async with session_scope() as session:
         project = await session.get(Project, setup.project_id)
@@ -79,7 +79,7 @@ async def _publish(setup: Fixture) -> None:
 
 
 async def _start(setup: Fixture, temporal_env: Any, *, publish: bool = True) -> Any:
-    from choregos_api.temporal import interpreter_id
+    from tranibor_api.temporal import interpreter_id
 
     if publish:
         await _publish(setup)
@@ -97,8 +97,8 @@ async def _start(setup: Fixture, temporal_env: Any, *, publish: bool = True) -> 
 
 
 async def _replay_and_archive(handle: Any, name: str) -> None:
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.worker import Replayer
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     history = await handle.fetch_history()
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
@@ -108,8 +108,8 @@ async def _replay_and_archive(handle: Any, name: str) -> None:
 
 
 async def _state(setup: Fixture) -> str:
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         item = await session.get(WorkItem, setup.work_item_id)
@@ -176,9 +176,9 @@ async def test_a_refused_decision_escalates_the_work_item_instead_of_killing_it(
 ) -> None:
     """The catalogue entry removed after the workflow was saved: the step refuses (`DecisionRefused`)
     and the work item escalates with the reason, as for a model `prepare_stage` refuses (#543)."""
-    from choregos_api.db.models import Event, ModelCatalogueRow
-    from choregos_api.db.session import session_scope
     from sqlalchemy import delete, select
+    from tranibor_api.db.models import Event, ModelCatalogueRow
+    from tranibor_api.db.session import session_scope
 
     with temporal_env.auto_time_skipping_disabled():
         async with worker_factory():
@@ -204,7 +204,7 @@ async def test_a_refused_decision_escalates_the_work_item_instead_of_killing_it(
 
 
 async def test_the_local_engine_routes_on_the_answer(setup: Fixture) -> None:
-    from choregos_orchestrator.local import run_local
+    from tranibor_orchestrator.local import run_local
 
     await _publish(setup)
     setup.adapters.decisions.answer(route=("billing", 0.91))
@@ -214,7 +214,7 @@ async def test_the_local_engine_routes_on_the_answer(setup: Fixture) -> None:
 
 
 async def test_the_local_engine_escalates_an_unsure_answer_to_a_person(setup: Fixture) -> None:
-    from choregos_orchestrator.local import run_local
+    from tranibor_orchestrator.local import run_local
 
     await _publish(setup)
     setup.adapters.decisions.answer(route=("billing", 0.6))
@@ -225,7 +225,7 @@ async def test_the_local_engine_escalates_an_unsure_answer_to_a_person(setup: Fi
 
 
 async def test_the_local_engine_retries_an_unusable_answer(setup: Fixture) -> None:
-    from choregos_orchestrator.local import run_local
+    from tranibor_orchestrator.local import run_local
 
     await _publish(setup)
     setup.adapters.decisions.answer(route=("sales", 0.9)).answer(route=("billing", 0.9))

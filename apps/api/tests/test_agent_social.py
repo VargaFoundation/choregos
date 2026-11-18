@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from choregos_api.errors import ApiError
 from httpx import AsyncClient
+from tranibor_api.errors import ApiError
 
 from .agent_scopes_kit import ADMIN, ORG, SPEC, add_member, as_user, create_agent, install_common
 
@@ -175,8 +175,8 @@ async def test_the_list_sorts_by_stars_and_keeps_the_starred_ones(client: AsyncC
 
 
 async def test_only_a_person_watches_and_stars() -> None:
-    from choregos_api.rbac import SYSTEM
-    from choregos_api.services.agent_social import require_person
+    from tranibor_api.rbac import SYSTEM
+    from tranibor_api.services.agent_social import require_person
 
     with pytest.raises(ApiError) as refused:
         require_person(SYSTEM)
@@ -286,9 +286,9 @@ async def test_a_watcher_who_loses_sight_of_the_agent_gets_nothing_and_it_is_not
     await as_user(client, ADMIN)
     assert len((await _inbox(client))["items"]) >= 1
 
-    from choregos_api.db.models import Agent
-    from choregos_api.db.session import session_scope
     from sqlalchemy import update
+    from tranibor_api.db.models import Agent
+    from tranibor_api.db.session import session_scope
 
     # the agent turns personal to somebody else: the administrator's view of it goes with the role
     await as_user(client, OTHER)

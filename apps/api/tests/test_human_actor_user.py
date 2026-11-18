@@ -47,9 +47,9 @@ PERSON_THEN_GROUP = _workflow(f"{{type: human, user: {PERSON}, group: {GROUP}, s
 async def _waiting_ticket(
     client: AsyncClient, pid: str, yaml: str, *, overdue: bool = False
 ) -> tuple[str, str]:
-    from choregos_api.db.models import HumanRequest
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
+    from tranibor_api.db.models import HumanRequest
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
 
     assert (
         await client.put(f"/api/v1/projects/{pid}/workflows/release", json={"yaml": yaml})
@@ -77,9 +77,9 @@ async def _waiting_ticket(
 
 
 async def _audit(action: str) -> list[Any]:
-    from choregos_api.db.models import AuditLog
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import AuditLog
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         return list((await session.execute(select(AuditLog).where(AuditLog.action == action))).scalars())

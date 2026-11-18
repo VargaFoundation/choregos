@@ -18,7 +18,7 @@ TEMPLATE = Path(__file__).resolve().parents[3] / "templates" / "investment-resea
 
 
 def _workflow(name: str) -> Any:
-    from choregos_core.dsl import parse_workflow
+    from tranibor_core.dsl import parse_workflow
 
     workflow, report = parse_workflow((TEMPLATE / "workflows" / f"{name}.yaml").read_text(encoding="utf-8"))
     assert workflow is not None, report

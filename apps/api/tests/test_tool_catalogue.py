@@ -57,9 +57,9 @@ async def test_the_call_is_entered_in_the_cost_ledger(
 ) -> None:
     """A catalogue tool costs on every call. Uncounted, it would be the platform's only spend that
     nobody sees."""
-    from choregos_api.db.models import CostLedger
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import CostLedger
+    from tranibor_api.db.session import session_scope
 
     run_id, headers = await run_with_catalogue(project, tmp_path, monkeypatch)
 
@@ -90,9 +90,9 @@ async def test_the_event_carries_the_digest_of_the_request_and_the_response(
     import hashlib
     import json
 
-    from choregos_api.db.models import Event
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Event
+    from tranibor_api.db.session import session_scope
 
     run_id, headers = await run_with_catalogue(project, tmp_path, monkeypatch)
     intercept(
@@ -131,9 +131,9 @@ async def test_the_event_carries_the_size_of_the_answer(
     of, in UTF-8 bytes, not characters: what a round trip puts back into the model's context."""
     import json
 
-    from choregos_api.db.models import Event
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Event
+    from tranibor_api.db.session import session_scope
 
     run_id, headers = await run_with_catalogue(project, tmp_path, monkeypatch)
     intercept(
@@ -181,9 +181,9 @@ async def test_the_call_ceiling_bounds_the_bill(
 ) -> None:
     """A paid tool without a ceiling is a bill without a ceiling: a runaway loop costs as much as it
     runs."""
-    from choregos_api.db.models import PolicyDef
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import PolicyDef
+    from tranibor_api.db.session import session_scope
 
     run_id, headers = await run_with_catalogue(project, tmp_path, monkeypatch)
     intercept(
@@ -300,9 +300,9 @@ async def test_an_argument_outside_the_schema_is_refused_and_costs_nothing(
     second being the costlier: a paid provider received a malformed call, and the ledger counted it
     anyway.
     """
-    from choregos_api.db.models import CostLedger
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import CostLedger
+    from tranibor_api.db.session import session_scope
 
     run_id, headers = await run_with_catalogue(project, tmp_path, monkeypatch)
     seen: list[Any] = []

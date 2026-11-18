@@ -15,13 +15,13 @@ from collections.abc import Iterator
 from typing import Any
 
 import pytest
-from choregos_adapters.fakes.scenes import (
+from httpx import AsyncClient
+from tranibor_adapters.fakes.scenes import (
     EVAL_FAKE_SCENES_ENV,
     FAKE_SCENE_FIELD,
     WEB_FIELD,
     WEB_SCENE,
 )
-from httpx import AsyncClient
 
 from .test_network_policy_api import CEILING_URL, _policy, _run
 
@@ -57,7 +57,7 @@ def eval_fakes(monkeypatch: pytest.MonkeyPatch) -> None:
 def web() -> Iterator[Any]:
     """The process's own web client and resolver, which a bound project never reaches: every host
     resolves to a public address and every page is a 404, recorded."""
-    from choregos_api.services import web_fetch
+    from tranibor_api.services import web_fetch
 
     fake = web_fetch.FakeWebClient()
 
@@ -75,9 +75,9 @@ def web() -> Iterator[Any]:
 
 async def _bound_connector(project_id: str, *, turned_on: bool = True) -> None:
     """What the matrix's seeding writes itself: the case's fake web, turned on for its eval project."""
-    from choregos_api.db.models import Organization, OrgConnector, OrgConnectorProject
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Organization, OrgConnector, OrgConnectorProject
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         org = (await session.execute(select(Organization))).scalar_one()

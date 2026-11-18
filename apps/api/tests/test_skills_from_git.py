@@ -79,7 +79,7 @@ REPO_V2 = {
 
 @pytest.fixture
 def fake() -> Iterator[Any]:
-    from choregos_api.services.skill_sources import FakeSourceFetcher, set_fetcher
+    from tranibor_api.services.skill_sources import FakeSourceFetcher, set_fetcher
 
     fetcher = FakeSourceFetcher()
     fetcher.add(
@@ -100,9 +100,9 @@ def fake() -> Iterator[Any]:
 
 
 async def _member(email: str, role: str) -> None:
-    from choregos_api.db.models import Membership, Organization, User
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Membership, Organization, User
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         org = (
@@ -325,21 +325,21 @@ async def test_a_skill_not_from_git_has_no_update(client: AsyncClient, admin: st
 
 
 def test_an_entry_leaving_the_repository_refuses_the_tarball() -> None:
-    from choregos_api.services.skill_sources import SourceRefused, read_tarball
+    from tranibor_api.services.skill_sources import SourceRefused, read_tarball
 
     with pytest.raises(SourceRefused, match="outside"):
         read_tarball(tarball({"SKILL.md": ONBOARDING, "../../etc/cron.d/x": "* * * * * root sh"}), "")
 
 
 def test_a_path_leaving_the_repository_is_refused() -> None:
-    from choregos_api.services.skill_sources import SourceRefused, read_tarball
+    from tranibor_api.services.skill_sources import SourceRefused, read_tarball
 
     with pytest.raises(SourceRefused):
         read_tarball(tarball(REPO_V1), "../")
 
 
 def test_the_licence_is_read_from_the_skill_then_the_repository() -> None:
-    from choregos_api.services.skill_sources import detect_licence
+    from tranibor_api.services.skill_sources import detect_licence
 
     assert detect_licence({"LICENSE.txt": "Proprietary. All rights reserved."}, {"LICENSE": APACHE}) == (
         "LicenseRef-proprietary"
@@ -349,7 +349,7 @@ def test_the_licence_is_read_from_the_skill_then_the_repository() -> None:
 
 
 async def test_https_resolves_through_the_api_and_follows_no_redirect() -> None:
-    from choregos_api.services.skill_sources import (
+    from tranibor_api.services.skill_sources import (
         HttpsSourceFetcher,
         SourceRefused,
         SourceUnavailable,

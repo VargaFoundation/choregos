@@ -9,9 +9,9 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 
 def test_the_runner_package_depends_on_quant() -> None:
-    """`uv sync --package choregos-runner` installs only what the runner declares."""
+    """`uv sync --package tranibor-runner` installs only what the runner declares."""
     data = tomllib.loads((ROOT / "packages/runner/pyproject.toml").read_text(encoding="utf-8"))
-    assert "choregos-quant" in data["project"]["dependencies"]
+    assert "tranibor-quant" in data["project"]["dependencies"]
 
 
 def test_the_runner_dockerfile_checks_that_quant_starts() -> None:

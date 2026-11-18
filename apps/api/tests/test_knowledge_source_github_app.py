@@ -22,8 +22,8 @@ ASKED = {"url": URL, "paths": ["docs/**/*.md"], "github_app": True}
 
 @pytest.fixture
 def minted(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
-    from choregos_adapters.github import GitHubAppAuth, InstallationToken
-    from choregos_api.config import reset_settings_cache
+    from tranibor_adapters.github import GitHubAppAuth, InstallationToken
+    from tranibor_api.config import reset_settings_cache
 
     monkeypatch.setenv("CHOREGOS_GITHUB_APP_ID", "5242171")
     monkeypatch.setenv(
@@ -41,9 +41,9 @@ def minted(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
 
 
 async def _northwind_claims(login: str, installation_id: int = 7) -> None:
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         org_id = (
@@ -64,10 +64,10 @@ async def test_an_administrator_reads_a_repository_through_the_installation_the_
     client: AsyncClient, two_projects: dict[str, Any], minted: list[dict[str, Any]],  # noqa: F811
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:  # fmt: skip
-    from choregos_adapters.documents.git import GitSource
-    from choregos_api.db.models import KnowledgeSource
-    from choregos_api.db.session import session_scope
-    from choregos_api.knowledge import sync
+    from tranibor_adapters.documents.git import GitSource
+    from tranibor_api.db.models import KnowledgeSource
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.knowledge import sync
 
     await _admin_base(client, two_projects)
     await add_organisation("globex")  # two organisations: nothing is implicit

@@ -6,7 +6,7 @@ import copy
 from typing import Any
 
 import pytest
-from choregos_api.theme import (
+from tranibor_api.theme import (
     DEFAULT_THEME,
     MODES,
     budget_violations,

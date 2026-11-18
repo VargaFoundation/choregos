@@ -4,8 +4,8 @@
 from __future__ import annotations
 
 import pytest
-from choregos_contracts import ContextPack, MemoryItem
-from choregos_core.memory_bindings import (
+from tranibor_contracts import ContextPack, MemoryItem
+from tranibor_core.memory_bindings import (
     Binding,
     binding_problems,
     effective_bindings,

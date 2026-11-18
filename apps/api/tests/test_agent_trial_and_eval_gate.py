@@ -54,7 +54,7 @@ async def test_an_agent_is_not_created_failing_its_own_suite(client: AsyncClient
 async def test_a_trial_runs_the_draft_capped_and_off_the_board(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.temporal import get_temporal
 
     trial = await client.post(
         "/api/v1/orgs/northwind/agent-trials",

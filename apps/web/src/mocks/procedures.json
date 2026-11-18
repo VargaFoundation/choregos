@@ -18,7 +18,7 @@
       {
         "key": "at",
         "title": "At the registry",
-        "markdown": "1. Write the agent with `choregos-agent-sdk`: `@agent(name=...)`, an `async def run(ctx)` that uses\n   `ctx.llm` for the model and `ctx.tools()` for tools, and returns a `Result`.\n2. Build the image **FROM the runner image**: the runner is the entrypoint and your agent is the\n   subprocess it starts. Give the agent its own virtualenv. See `examples/agents/plain/Dockerfile`.\n3. Check it with `make conformance-agent IMAGE=<reference> COMMAND='[...]'`, then push the image and\n   note its **digest**."
+        "markdown": "1. Write the agent with `tranibor-agent-sdk`: `@agent(name=...)`, an `async def run(ctx)` that uses\n   `ctx.llm` for the model and `ctx.tools()` for tools, and returns a `Result`.\n2. Build the image **FROM the runner image**: the runner is the entrypoint and your agent is the\n   subprocess it starts. Give the agent its own virtualenv. See `examples/agents/plain/Dockerfile`.\n3. Check it with `make conformance-agent IMAGE=<reference> COMMAND='[...]'`, then push the image and\n   note its **digest**."
       },
       {
         "key": "permissions",

@@ -9,8 +9,8 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from choregos_core import utcnow
 from httpx import AsyncClient
+from tranibor_core import utcnow
 
 from .agent_scopes_kit import ADMIN, ORG, as_user
 from .test_agent_release_channels import agent_of, release, save
@@ -57,9 +57,9 @@ async def write_runs(
 ) -> None:
     """The trial runs: `(run status, result status, summary)` for each trial work item, in order.
     `collected` is whether `collect_spend` has booked the run's cost (it runs after the result is posted)."""
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Run, WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         for item_id, (status, result_status, summary) in zip(work_items, outcomes, strict=True):
@@ -86,7 +86,7 @@ def items_of(evaluation: dict[str, Any]) -> list[str]:
 async def test_starting_an_evaluation_starts_one_capped_trial_per_live_case(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.temporal import get_temporal
 
     cases = [live(f"case {n}", ["ok"], cost=0.4) for n in range(3)]
     await agent_with(client, [*cases, {"name": "level one", "must_contain": ["Review"]}])
@@ -111,7 +111,7 @@ async def test_an_evaluation_that_could_spend_more_than_the_policy_allows_is_ref
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
     """Red without the budget check: five cases at 0.50 $ is 2.50 $, above the 2.00 $ default."""
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.temporal import get_temporal
 
     await agent_with(client, [live(f"case {n}", ["ok"], cost=0.5) for n in range(5)])
     refused = await evaluate(client, project["slug"])
@@ -186,9 +186,9 @@ async def test_what_a_case_judges(
 async def test_without_a_model_to_call_the_evaluation_is_not_run_never_passed(
     client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api import config
-    from choregos_api.services import agent_live_evals
-    from choregos_api.temporal import get_temporal
+    from tranibor_api import config
+    from tranibor_api.services import agent_live_evals
+    from tranibor_api.temporal import get_temporal
 
     real = config.get_settings()
     quiet = real.model_copy(update={"fakes": False, "gateway_master_key": ""})
@@ -243,8 +243,8 @@ async def save_v2(client: AsyncClient) -> None:
 
 async def test_the_level_one_gate_ignores_live_cases(client: AsyncClient) -> None:
     """Red if `evaluate()` judged a live case on the rendered instructions: it asserts on a run's output."""
-    from choregos_api.schemas import AgentSpec
-    from choregos_api.services.agent_evals import evaluate as level_one
+    from tranibor_api.schemas import AgentSpec
+    from tranibor_api.services.agent_evals import evaluate as level_one
 
     spec = AgentSpec(instructions="Review.", evals=[live("needs a run", ["never in the instructions"])])
     assert level_one(spec, spec.evals) == []
@@ -279,8 +279,8 @@ async def test_a_case_is_not_judged_before_the_trial_spend_is_booked(
     (mid,) = (await client.get(f"{ORG}/agents/reviewer/versions/1/evaluations")).json()
     assert mid["status"] == "running" and mid["score"] is None
     assert mid["cases"][0]["status"] == "running" and mid["cases"][0].get("cost_usd") in (None, 0.0)
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:  # collect_spend books the cost
         run = await session.get(Run, mid["cases"][0]["run_id"])
@@ -296,8 +296,8 @@ async def test_a_run_whose_spend_never_came_is_judged_after_the_grace(
     """A trial workflow that died after the result must not leave the evaluation running forever."""
     from datetime import timedelta
 
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
 
     await agent_with(client, [live("only", ["ok"], cost=0.1)])
     started = (await evaluate(client, project["slug"])).json()

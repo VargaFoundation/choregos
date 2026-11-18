@@ -20,7 +20,7 @@ from typing import Any
 
 import pytest
 import yaml
-from choregos_adapters.executor.k8s_job import RUNNER_POD_LABELS
+from tranibor_adapters.executor.k8s_job import RUNNER_POD_LABELS
 
 CHART = pathlib.Path(__file__).resolve().parents[2] / "charts" / "choregos"
 PROFILE = CHART / "values" / "single-node.yaml"

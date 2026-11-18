@@ -18,9 +18,9 @@ from collections import Counter
 from typing import Any
 
 import pytest
-from choregos_contracts import load_openapi
 from httpx import AsyncClient
 from jsonschema import Draft202012Validator
+from tranibor_contracts import load_openapi
 
 from .kits import outpost_daemon as daemon_kit
 from .kits import outpost_route as route
@@ -44,9 +44,9 @@ def door(monkeypatch: pytest.MonkeyPatch) -> kit.Door:
 
 async def _operations(connector: str, *names: str) -> None:
     """Reads of a connector, opened: what discovery and an administrator would have left."""
-    from choregos_api.db.models import ConnectorOperation, OrgConnector
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import ConnectorOperation, OrgConnector
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         row = (await session.execute(select(OrgConnector).where(OrgConnector.name == connector))).scalar_one()
@@ -66,9 +66,9 @@ async def _operations(connector: str, *names: str) -> None:
 
 async def _connector(name: str, type_: str, config: dict[str, Any], outpost_id: str | None = None) -> None:
     """A connector row written as an administrator, or a row edited behind the API, would leave it."""
-    from choregos_api.db.models import Organization, OrgConnector
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Organization, OrgConnector
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         org_id = (
@@ -116,7 +116,7 @@ def _connector_tools(access: dict[str, Any]) -> dict[str, dict[str, Any]]:
 
 def _counted(monkeypatch: pytest.MonkeyPatch) -> Counter[str]:
     """How many times the route's presence is read, by outpost."""
-    from choregos_api.services import outposts
+    from tranibor_api.services import outposts
 
     reads: Counter[str] = Counter()
     real = outposts.presence
@@ -178,8 +178,8 @@ async def test_the_presence_is_read_once_per_outpost_not_once_per_tool(
 async def test_an_outpost_the_organisation_does_not_have_is_never_named(
     client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.db.models import Organization, Outpost
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Organization, Outpost
+    from tranibor_api.db.session import session_scope
 
     theirs = "their-floor"
     async with session_scope(orgs="*") as session:

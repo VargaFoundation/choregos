@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from choregos_core.agent_catalogue import entry
+from tranibor_core.agent_catalogue import entry
 
 DOCKERFILE = Path(__file__).resolve().parents[2] / "docker" / "runner.Dockerfile"
 

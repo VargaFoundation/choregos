@@ -16,11 +16,13 @@ import re
 import tomllib
 
 import yaml
-from choregos_core.publishing import PUBLISHING
+from tranibor_core.publishing import PUBLISHING
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 DOCKERFILE = ROOT / "docker" / "outpost.Dockerfile"
-PACKAGE = "choregos-outpost"
+PACKAGE = "tranibor-outpost"
+#: The console script keeps its name: an operator types it (ADR 0176 R2).
+COMMAND = "choregos-outpost"
 
 
 def _stages() -> dict[str, str]:
@@ -37,7 +39,7 @@ def _instructions(stage: str) -> list[str]:
 
 def test_the_package_is_a_workspace_member_with_its_command() -> None:
     project = tomllib.loads((ROOT / "packages/outpost/pyproject.toml").read_text(encoding="utf-8"))["project"]
-    assert project["name"] == PACKAGE and project["scripts"] == {PACKAGE: "choregos_outpost.cli:main"}
+    assert project["name"] == PACKAGE and project["scripts"] == {COMMAND: "tranibor_outpost.cli:main"}
     workspace = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     assert PACKAGE in workspace["project"]["dependencies"]
     assert workspace["tool"]["uv"]["sources"][PACKAGE] == {"workspace": True}
@@ -81,7 +83,7 @@ def test_the_api_image_does_not_install_the_daemon() -> None:
     syncs = [line for line in re.sub(r"\\\n\s*", " ", text).splitlines() if line.startswith("RUN uv sync")]
     assert len(syncs) == 1 and "--all-packages" in syncs[0]
     assert f"--no-install-package {PACKAGE}" in syncs[0], "the API image would ship the outpost daemon"
-    assert "--no-install-package choregos-agent-sdk" in syncs[0]
+    assert "--no-install-package tranibor-agent-sdk" in syncs[0]
     # And no other image of the platform installs it: each syncs its own package.
     for name in ("tools.Dockerfile", "runner.Dockerfile"):
         other = (ROOT / "docker" / name).read_text(encoding="utf-8")

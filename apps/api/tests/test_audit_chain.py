@@ -11,7 +11,7 @@ import json
 from dataclasses import replace
 
 import pytest
-from choregos_api.audit_chain import (
+from tranibor_api.audit_chain import (
     GENESIS,
     ChainWalker,
     Checkpoint,
@@ -154,7 +154,7 @@ def test_a_checkpoint_whose_signature_fails_anchors_nothing_and_fails_the_verdic
 
 
 def test_a_checkpoint_signed_by_an_untrusted_key_fails_the_verdict() -> None:
-    from choregos_api.config import ed25519_public_key
+    from tranibor_api.config import ed25519_public_key
 
     pem, other = new_key(), new_key()
     links = _chain(3)
@@ -193,8 +193,8 @@ def test_the_genesis_checkpoint_is_reported_not_signed() -> None:
 
 
 def test_the_commands_say_sqlite_keeps_no_chain(monkeypatch: pytest.MonkeyPatch, tmp_path: object) -> None:
-    from choregos_api.admin_cli import NO_CHAIN, app
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.admin_cli import NO_CHAIN, app
+    from tranibor_api.config import reset_settings_cache
     from typer.testing import CliRunner
 
     monkeypatch.setenv("CHOREGOS_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/chain.db")

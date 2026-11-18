@@ -5,8 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from choregos_core import ValidationError, parse_workflow
-from choregos_core.dsl import TEMPLATE_NAMES, template_yaml
+from tranibor_core import ValidationError, parse_workflow
+from tranibor_core.dsl import TEMPLATE_NAMES, template_yaml
 
 BASE = """
 apiVersion: choregos/v1
@@ -308,7 +308,7 @@ def test_17_a_role_that_is_not_an_identifier_is_refused() -> None:
 
 def test_tool_called_without_a_tool_is_refused_when_written() -> None:
     """A `tool_called` guarantee without `tools:` would have nothing to check: the DSL refuses it."""
-    from choregos_core.dsl.parser import parse_workflow
+    from tranibor_core.dsl.parser import parse_workflow
 
     source = """
 apiVersion: choregos/v1
@@ -359,7 +359,7 @@ transitions:
 
 def _with_guarantee(name: str, params: str = "") -> str:
     """default-simple, with one more guarantee on t-verify."""
-    from choregos_core.dsl import template_yaml
+    from tranibor_core.dsl import template_yaml
 
     guarantee = f"{{ name: {name}{', params: ' + params if params else ''} }}"
     return template_yaml("default-simple").replace(
@@ -369,7 +369,7 @@ def _with_guarantee(name: str, params: str = "") -> str:
 
 
 def test_outputs_in_without_values_is_refused() -> None:
-    from choregos_core.dsl import parse_workflow
+    from tranibor_core.dsl import parse_workflow
 
     _, report = parse_workflow(_with_guarantee("outputs_in"), strict=False)
     assert "gate.nothing_to_check" in {e.code for e in report.errors}
@@ -380,7 +380,7 @@ def test_outputs_in_without_values_is_refused() -> None:
 
 
 def test_markdown_sections_without_paths_is_refused() -> None:
-    from choregos_core.dsl import parse_workflow
+    from tranibor_core.dsl import parse_workflow
 
     _, report = parse_workflow(_with_guarantee("markdown_sections"), strict=False)
     assert "gate.nothing_to_check" in {e.code for e in report.errors}

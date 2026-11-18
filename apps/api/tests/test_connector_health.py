@@ -13,8 +13,8 @@ from collections.abc import Iterator
 from typing import Any
 
 import pytest
-from choregos_api.config import get_settings
 from httpx import AsyncClient
+from tranibor_api.config import get_settings
 
 FAKE_TOKEN = "".join(["tok", "en-", "for-the-test"])  # built at runtime: no literal that looks like a key
 
@@ -34,8 +34,8 @@ class _Probe:
 @pytest.fixture
 def scripted(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """Three `tracker` types whose `test()` succeeds, raises, or never answers (real adapters, no fakes)."""
-    from choregos_adapters import ConnectorTypeSpec, register
-    from choregos_adapters.registry import _REGISTRY, _SPECS
+    from tranibor_adapters import ConnectorTypeSpec, register
+    from tranibor_adapters.registry import _REGISTRY, _SPECS
 
     names = {"scripted-ok": "ok", "scripted-raise": "raise", "scripted-slow": "slow"}
     for name, behaviour in names.items():

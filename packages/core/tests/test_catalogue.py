@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from choregos_core.catalogue import ArgumentRefusedError, build_request, load_catalogue
+from tranibor_core.catalogue import ArgumentRefusedError, build_request, load_catalogue
 
 CATALOGUE = """
 tools:
@@ -175,7 +175,7 @@ def test_an_argument_outside_the_schema_is_refused_before_the_call() -> None:
     had every reason to believe it binding. A schema that is announced and not enforced describes
     a guarantee that does not exist.
     """
-    from choregos_core.catalogue import validate_arguments
+    from tranibor_core.catalogue import validate_arguments
 
     tool = load_catalogue(PATH_TEMPLATE).by_name("read_a_repository")
     assert tool is not None
@@ -195,7 +195,7 @@ def test_an_argument_outside_the_schema_is_refused_before_the_call() -> None:
 
 def test_a_tool_without_a_schema_imposes_nothing() -> None:
     """The catalogue must stay writable by hand for a trivial tool."""
-    from choregos_core.catalogue import validate_arguments
+    from tranibor_core.catalogue import validate_arguments
 
     tool = load_catalogue(CATALOGUE).by_name("search_profiles")
     assert tool is not None

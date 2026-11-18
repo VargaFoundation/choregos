@@ -18,13 +18,13 @@ from typing import Any
 
 import httpx
 import yaml
-from choregos_adapters.fakes.mcp import FakeMcpServer
-from choregos_outpost import doctor
-from choregos_outpost import identity as identities
-from choregos_outpost import policy as policies
-from choregos_outpost.fakes import FakeDoor
-from choregos_outpost.settings import Settings
-from choregos_outpost.toolhost import ToolHost
+from tranibor_adapters.fakes.mcp import FakeMcpServer
+from tranibor_outpost import doctor
+from tranibor_outpost import identity as identities
+from tranibor_outpost import policy as policies
+from tranibor_outpost.fakes import FakeDoor
+from tranibor_outpost.settings import Settings
+from tranibor_outpost.toolhost import ToolHost
 
 from ._bench import CREDENTIAL, TOOLS, policy_document, write_policy
 from ._wire import AUTHORITY, closed_port, private_authority, proxy, served

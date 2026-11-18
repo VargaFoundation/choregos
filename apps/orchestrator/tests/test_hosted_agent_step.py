@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from choregos_orchestrator.activities import stage as stage_activities
 from temporalio.exceptions import ApplicationError
+from tranibor_orchestrator.activities import stage as stage_activities
 
 from .conftest import Fixture
 from .test_code_agent_step import _agent, _plan
@@ -51,7 +51,7 @@ async def test_a_hosted_agent_is_sent_the_step_in_its_pinned_image(setup: Fixtur
 
 
 async def test_the_pod_runs_the_runner_and_the_agent_beside_it_without_any_secret(setup: Fixture) -> None:
-    from choregos_orchestrator.config import get_settings
+    from tranibor_orchestrator.config import get_settings
 
     await _agent(setup, _hosted(termination_grace_s=40))
     spec = await _start(setup, await stage_activities.prepare_stage(_plan(setup)))
@@ -155,8 +155,8 @@ async def test_a_zip_whose_build_is_ready_runs_the_built_image(setup: Fixture) -
 async def test_a_zip_version_published_pending_runs_the_image_its_build_row_records(setup: Fixture) -> None:
     """Versions are immutable: a zip version keeps `build.status: pending` as published, and the step
     reads the `hosted_builds` row, which the build workflow wrote since (S41-08)."""
-    from choregos_api.db.models import HostedBuildRecord, Project
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import HostedBuildRecord, Project
+    from tranibor_api.db.session import session_scope
 
     built = f"registry.internal/choregos-builds/triager@{DIGEST}"
     zipped = {"type": "zip", "sha256": DIGEST, "runtime": "python_3_12", "entry_point": ["app"]}
@@ -182,8 +182,8 @@ async def test_a_zip_version_published_pending_runs_the_image_its_build_row_reco
 
 async def test_a_cluster_older_than_1_29_fails_the_hosted_run_without_a_retry(setup: Fixture) -> None:
     """S41-16: below 1.29 the sidecar would be a plain init container the pod never gets past."""
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
 
     setup.adapters.executor.server_version = "v1.28.9-gke.1200"
     await _agent(setup, _hosted())

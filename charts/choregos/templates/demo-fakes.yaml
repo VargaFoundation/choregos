@@ -40,7 +40,7 @@ spec:
           image: {{ include "choregos.image" (dict "global" .Values.global "image" (index .Values "choregos-api" "image")) }}
           imagePullPolicy: {{ .Values.global.imagePullPolicy }}
           securityContext: {{- toYaml .Values.global.securityContext | nindent 12 }}
-          command: ["python", "-m", "choregos_adapters.fakes.server"]
+          command: ["python", "-m", "tranibor_adapters.fakes.server"]
           ports:
             - name: http
               containerPort: {{ .Values.demoFakes.port }}

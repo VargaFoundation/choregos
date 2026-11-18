@@ -5,8 +5,8 @@ on a threshold with no person below it (ADR 0121 §6, §7, S52-05)."""
 from __future__ import annotations
 
 import pytest
-from choregos_core import parse_workflow
-from choregos_core.decision_ledger import (
+from tranibor_core import parse_workflow
+from tranibor_core.decision_ledger import (
     MAX_ANSWER,
     Answered,
     declared_confidences,

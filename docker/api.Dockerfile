@@ -30,6 +30,9 @@ RUN for p in contracts core adapters runner tools-mcp playbooks cli; do mkdir -p
  && for a in api orchestrator; do mkdir -p "apps/$a/src"; done
 
 COPY packages packages
+# The former names' shims (ADR 0176 R2): workspace members, and what keeps `import tranibor_api` working for
+# the enterprise edition built FROM this image.
+COPY compat compat
 COPY apps/api apps/api
 COPY apps/orchestrator apps/orchestrator
 # The project templates (manifest, scaffold): provisioning reads them at run time.
@@ -50,12 +53,14 @@ COPY tests/fixtures/repos tests/fixtures/repos
 # workers run: it stays out of the image. Nor is the outpost daemon (ADR 0147): it is the program an
 # outpost's operator runs in their own network, with an image of its own (`outpost.Dockerfile`), and
 # the platform serves its door without ever importing it.
+# The shims of those two stay out as well (ADR 0176 R2).
+ARG SHIMS_OUT="--no-install-package choregos-agent-sdk --no-install-package choregos-outpost" # compat-ok
 RUN uv sync --frozen --no-dev --all-packages \
-    --no-install-package choregos-agent-sdk --no-install-package choregos-outpost
+    --no-install-package tranibor-agent-sdk --no-install-package tranibor-outpost $SHIMS_OUT
 
 # SkillSpector, the skill gate's second scanner (ADR 0095), in an environment of its own: its
 # dependencies (LangGraph, YARA…) are not the platform's, and the API runs it as a child process,
-# offline, through `choregos_api/scanners/skillspector_offline.py`. Pinned to the commit of v2.13.1;
+# offline, through `tranibor_api/scanners/skillspector_offline.py`. Pinned to the commit of v2.13.1;
 # a bump re-runs `apps/api/tests/test_skill_scanner.py` against the new release.
 FROM python:3.12-slim-bookworm@sha256:935c3c5b12357a7e10caa9c1e6ca5692344d97cf229832ef584be2cec9fc03df AS skillspector
 ENV UV_LINK_MODE=copy UV_COMPILE_BYTECODE=1 UV_PYTHON_DOWNLOADS=never
@@ -182,7 +187,7 @@ COPY --from=docs /out /opt/choregos/docs
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s \
   CMD python -c "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/healthz')"
-CMD ["uvicorn", "choregos_api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "tranibor_api.main:app", "--host", "0.0.0.0", "--port", "8000"]
 
 # --- Target `worker-local`: the workers of the local install (`compose.yaml`), with the Docker CLI.
 #
@@ -191,7 +196,7 @@ CMD ["uvicorn", "choregos_api.main:app", "--host", "0.0.0.0", "--port", "8000"]
 # Defined BEFORE `worker`, so that a build without `--target` still produces `worker`.
 FROM commun AS worker-local
 COPY --from=docker:28.5.1-cli@sha256:9190b0613792e658a7783cf14b2d5ace5941bb68ede7276922ea36ee457d76ad /usr/local/bin/docker /usr/local/bin/docker
-CMD ["python", "-m", "choregos_orchestrator.worker", "--queues", "orchestrator,executor,tracker,memory"]
+CMD ["python", "-m", "tranibor_orchestrator.worker", "--queues", "orchestrator,executor,tracker,memory"]
 
 # --- Target `worker`: the Temporal workers.
 #
@@ -210,5 +215,5 @@ RUN apt-get update && apt-get install -y --no-install-recommends git \
 # `tests/packaging/test_buildctl_in_the_worker_image.py` refuses one without the other.
 COPY --from=moby/buildkit:v0.34.1-rootless@sha256:f68752a5a94acfcdad2d07867b7075601a421638e17fc5f28efc1c814d0c4f89 /usr/bin/buildctl /usr/local/bin/buildctl
 USER 1000
-CMD ["python", "-m", "choregos_orchestrator.worker", "--queues", "orchestrator,executor,tracker,memory"]
+CMD ["python", "-m", "tranibor_orchestrator.worker", "--queues", "orchestrator,executor,tracker,memory"]
 

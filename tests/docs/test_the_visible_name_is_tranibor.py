@@ -17,7 +17,7 @@ from typer.testing import CliRunner
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 
-#: The old name as a word of prose. A part of an identifier (`choregos_core`, `X-Choregos-Secret`,
+#: The old name as a word of prose. A part of an identifier (`tranibor_core`, `X-Choregos-Secret`,
 #: `ChoregosError`) is not it: those are the next rounds' and the wire's, not prose.
 OLD_NAME = re.compile(r"(?<![A-Za-z0-9_\-/.])Choregos(?![A-Za-z0-9_\-/])")
 
@@ -33,7 +33,7 @@ ALLOWED_LINES = (
 )
 
 #: Prose that ships or is read: not the ADRs, the plan or the French archive, which say what was true.
-PROSE_ROOTS = ("README.md", "NOTICE", "SECURITY.md", "docs/", "packages/core/src/choregos_core/procedures/")
+PROSE_ROOTS = ("README.md", "NOTICE", "SECURITY.md", "docs/", "packages/core/src/tranibor_core/procedures/")
 HISTORY = ("docs/adr/", "docs/plan/", "docs/fr/")
 
 
@@ -63,7 +63,7 @@ def test_the_prose_that_is_checked_is_not_empty() -> None:
     names = _tracked_prose()
     assert "README.md" in names and "NOTICE" in names
     assert any(n.startswith("docs/site/") for n in names)
-    assert any(n.startswith("packages/core/src/choregos_core/procedures/") for n in names)
+    assert any(n.startswith("packages/core/src/tranibor_core/procedures/") for n in names)
     assert len(names) > 100
 
 
@@ -76,13 +76,13 @@ def test_the_readme_and_the_notice_name_the_former_name_once_and_say_the_new_one
 
 def test_the_cli_installs_tranibor_and_keeps_choregos_as_the_same_entry_point() -> None:
     scripts = tomllib.loads((ROOT / "packages/cli/pyproject.toml").read_text())["project"]["scripts"]
-    assert scripts["tranibor"] == "choregos_cli.main:main"
+    assert scripts["tranibor"] == "tranibor_cli.main:main"
     assert scripts["choregos"] == scripts["tranibor"], "the alias is the same main, with nothing extra"
 
 
 def test_the_cli_says_tranibor() -> None:
-    from choregos_cli import __version__
-    from choregos_cli.main import app
+    from tranibor_cli import __version__
+    from tranibor_cli.main import app
 
     runner = CliRunner()
     assert runner.invoke(app, ["--version"]).stdout.strip() == f"tranibor {__version__}"
@@ -91,7 +91,7 @@ def test_the_cli_says_tranibor() -> None:
 
 
 def test_the_default_product_name_is_tranibor() -> None:
-    from choregos_api.theme import DEFAULT_THEME
+    from tranibor_api.theme import DEFAULT_THEME
 
     assert DEFAULT_THEME["product_name"] == "Tranibor"
 

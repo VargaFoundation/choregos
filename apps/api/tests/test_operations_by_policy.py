@@ -21,8 +21,8 @@ CREATE_ACCOUNT = "/api/v1/orgs/northwind/connectors/directory-acme/operations/cr
 @pytest.fixture
 def directory() -> Iterator[None]:
     """A directory type, declared as an extension would: its operations make its policy."""
-    from choregos_adapters import ConnectorTypeSpec, OperationSpec, register
-    from choregos_adapters.registry import _REGISTRY, _SPECS
+    from tranibor_adapters import ConnectorTypeSpec, OperationSpec, register
+    from tranibor_adapters.registry import _REGISTRY, _SPECS
 
     spec = ConnectorTypeSpec(
         "test directory",
@@ -146,8 +146,8 @@ async def test_a_project_owner_decides_neither_connectors_nor_groups(
 
 
 async def test_another_organisation_does_not_exist(client: AsyncClient, admin: str, directory: None) -> None:
-    from choregos_api.db.models import Organization, OrgConnector
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Organization, OrgConnector
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         other = Organization(slug="other", name="Other")

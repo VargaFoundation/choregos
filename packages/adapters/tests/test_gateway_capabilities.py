@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import httpx
 import pytest
-from choregos_adapters import available, build
-from choregos_adapters.base import GATEWAY_CAPABILITIES, GatewayAdapter, LlmGateway, llm_guard_refusal
-from choregos_adapters.fakes.gateway import FakeGateway
-from choregos_adapters.gateway.direct import DirectGateway
-from choregos_adapters.gateway.litellm import LiteLlmGateway
-from choregos_adapters.gateway.openai_compatible import OpenAiCompatibleGateway
+from tranibor_adapters import available, build
+from tranibor_adapters.base import GATEWAY_CAPABILITIES, GatewayAdapter, LlmGateway, llm_guard_refusal
+from tranibor_adapters.fakes.gateway import FakeGateway
+from tranibor_adapters.gateway.direct import DirectGateway
+from tranibor_adapters.gateway.litellm import LiteLlmGateway
+from tranibor_adapters.gateway.openai_compatible import OpenAiCompatibleGateway
 
 
 def test_the_protocol_is_documented_under_a_vendor_neutral_name() -> None:
@@ -63,7 +63,7 @@ def test_only_a_gateway_that_holds_the_llm_guard_can_carry_a_marked_key() -> Non
 
 def test_only_a_gateway_with_the_decision_route_can_serve_a_decision_step() -> None:
     """ADR 0121 §4: LiteLLM serves `/v1/systemone` (>= 1.104.2); the other gateways have no such route."""
-    from choregos_adapters.base import decision_route_refusal
+    from tranibor_adapters.base import decision_route_refusal
 
     client = httpx.AsyncClient()
     assert "systemone" in GATEWAY_CAPABILITIES

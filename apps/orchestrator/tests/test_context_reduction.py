@@ -6,8 +6,8 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from choregos_orchestrator.activities import stage as stage_activities
-from choregos_orchestrator.config import reset_settings_cache
+from tranibor_orchestrator.activities import stage as stage_activities
+from tranibor_orchestrator.config import reset_settings_cache
 
 from .conftest import Fixture
 
@@ -22,8 +22,8 @@ BOTH_ON = {
 
 
 async def _set_context(project_id: str, context: dict[str, Any] | None) -> None:
-    from choregos_api.db.session import session_scope
-    from choregos_api.services import active_policy, policy_model
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services import active_policy, policy_model
 
     async with session_scope() as session:
         row = await active_policy(session, project_id)

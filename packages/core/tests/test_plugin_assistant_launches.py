@@ -11,7 +11,7 @@ from typing import Any
 
 import pytest
 import yaml
-from choregos_core.plugins import PluginError, load_directory
+from tranibor_core.plugins import PluginError, load_directory
 
 FIXTURE = Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "plugins" / "investment-assistant"
 ASSISTANT = "assistants/investment-assistant.yaml"

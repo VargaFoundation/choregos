@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from choregos_contracts import (
+from tranibor_contracts import (
     AgentRef,
     LaunchSpec,
     McpServerRef,
@@ -25,10 +25,10 @@ from choregos_contracts import (
     ToolsRef,
     skill_digest,
 )
-from choregos_core.context_breakdown import PARTS_EVENT, paragraph_digest, paragraphs
-from choregos_core.llm_spans import ContextMeasure, Registry
-from choregos_runner.exits import Exit
-from choregos_runner.runner import Runner
+from tranibor_core.context_breakdown import PARTS_EVENT, paragraph_digest, paragraphs
+from tranibor_core.llm_spans import ContextMeasure, Registry
+from tranibor_runner.exits import Exit
+from tranibor_runner.runner import Runner
 
 from .conftest import FakeInternalClient, agent_script, valid_result
 

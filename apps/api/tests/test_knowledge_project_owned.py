@@ -19,9 +19,9 @@ ORG = "/api/v1/orgs/northwind/knowledge"
 
 
 async def _member(email: str, role: str, project_slug: str | None = None) -> None:
-    from choregos_api.db.models import Membership, Organization, Project, User
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Membership, Organization, Project, User
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         org = (
@@ -212,7 +212,7 @@ async def test_an_org_admin_keeps_every_right_over_an_owned_base(
 async def test_an_owned_base_is_still_served_to_its_project_only(
     client: AsyncClient, project: dict[str, Any], owners: dict[str, Any]
 ) -> None:
-    from choregos_api.knowledge.access import served_to_project
+    from tranibor_api.knowledge.access import served_to_project
 
     async with _as(client, "owner@northwind.dev") as owner:
         base = await _owned_base(owner, project)
@@ -233,8 +233,8 @@ async def test_the_owning_project_and_its_curators(client: AsyncClient, admin: s
     """`can_curate` is `can_manage`, or `project:write` on the owning project."""
     from types import SimpleNamespace
 
-    from choregos_api.knowledge.access import can_curate
-    from choregos_api.rbac import Principal, Role
+    from tranibor_api.knowledge.access import can_curate
+    from tranibor_api.rbac import Principal, Role
 
     owner = Principal(user_id="u", email="o@x", project_roles={"northwind/billing-api": Role.PROJECT_OWNER})
     developer = Principal(user_id="d", email="d@x", project_roles={"northwind/billing-api": Role.DEVELOPER})

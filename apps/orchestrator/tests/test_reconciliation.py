@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from choregos_orchestrator.activities import tracker as tracker_activities
-from choregos_orchestrator.train_client import clear_fake_signals, fake_starts
+from tranibor_orchestrator.activities import tracker as tracker_activities
+from tranibor_orchestrator.train_client import clear_fake_signals, fake_starts
 
 from .conftest import Fixture
 
@@ -28,9 +28,9 @@ async def test_a_ticket_never_announced_is_created_and_started(setup: Fixture) -
     assert key in result["started"], result
     assert any(key.replace("/", "_").replace("#", "-") in wf for wf in fake_starts()), fake_starts()
 
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         row = (await session.execute(select(WorkItem).where(WorkItem.tracker_key == key))).scalar_one()
@@ -70,9 +70,9 @@ async def test_a_finished_or_paused_ticket_is_left_alone(setup: Fixture) -> None
     setup.adapters.tracker.items[setup.tracker_key].labels = ["agent-ready"]
     finished = _seed_candidate(setup, "Already delivered")
 
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         row = (
@@ -132,11 +132,11 @@ async def test_a_ticket_held_by_the_platform_is_discovered(setup: Fixture) -> No
     in its initial state forever. On the 2026-09-23 bench, the two tickets coming from findings
     stayed in `inbox` from start to finish.
     """
-    from choregos_adapters.tracker.internal import InternalTracker
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities.base import internal_ticket_key, project_bundle
     from sqlalchemy import select
+    from tranibor_adapters.tracker.internal import InternalTracker
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities.base import internal_ticket_key, project_bundle
 
     clear_fake_signals()
     setup.adapters.tracker = InternalTracker()
@@ -165,9 +165,9 @@ async def test_a_ticket_held_by_the_platform_is_discovered(setup: Fixture) -> No
 async def test_the_internal_key_follows_the_project_and_does_not_repeat(setup: Fixture) -> None:
     """The returned key was the ticket TITLE: unreadable on a board, and colliding
     with `(project_id, tracker_key)` as soon as two findings looked alike."""
-    from choregos_api.db.models import Connector, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities.base import internal_ticket_key, project_bundle
+    from tranibor_api.db.models import Connector, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities.base import internal_ticket_key, project_bundle
 
     async with session_scope() as session:
         bundle = await project_bundle(session, setup.project_slug)
@@ -192,9 +192,9 @@ async def test_a_failing_pass_does_not_kill_the_loop(temporal_env: Any) -> None:
     is stated in the status, and the next one goes again."""
     import uuid
 
-    from choregos_orchestrator.workflows.reconciliation import TrackerReconciliation
     from temporalio import activity
     from temporalio.worker import Worker
+    from tranibor_orchestrator.workflows.reconciliation import TrackerReconciliation
 
     calls: list[str] = []
 
@@ -231,7 +231,7 @@ async def test_a_failing_pass_does_not_kill_the_loop(temporal_env: Any) -> None:
 async def test_the_start_restarts_a_dead_loop_but_never_a_ticket(setup: Fixture, monkeypatch: Any) -> None:
     """At the worker's start, a catch-up loop dead by failure restarts; a ticket never starts twice
     (S22-06)."""
-    from choregos_orchestrator import worker
+    from tranibor_orchestrator import worker
 
     requests: list[tuple[str, bool]] = []
 
@@ -245,13 +245,13 @@ async def test_the_start_restarts_a_dead_loop_but_never_a_ticket(setup: Fixture,
         requests.append((workflow_id, relancer_si_echoue))
         return True
 
-    monkeypatch.setattr("choregos_orchestrator.train_client.start_workflow_once", capture)
+    monkeypatch.setattr("tranibor_orchestrator.train_client.start_workflow_once", capture)
     await worker.start_reconciliation_loops()
     assert requests and all(restarted for _, restarted in requests), requests
 
     import inspect
 
-    from choregos_orchestrator.train_client import start_workflow_once
+    from tranibor_orchestrator.train_client import start_workflow_once
 
     assert (
         inspect.signature(start_workflow_once).parameters["relancer_si_echoue"].default is False
@@ -260,8 +260,8 @@ async def test_the_start_restarts_a_dead_loop_but_never_a_ticket(setup: Fixture,
 
 async def test_an_item_a_start_rule_matches_is_caught_up_without_agent_ready(setup: Fixture) -> None:
     """S56-03: a lost webhook of an item a start rule would have started is caught up by the poll."""
-    from choregos_api.db.models import Project
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Project
+    from tranibor_api.db.session import session_scope
 
     clear_fake_signals()
     async with session_scope() as session:
@@ -281,8 +281,8 @@ async def test_an_item_a_start_rule_matches_is_caught_up_without_agent_ready(set
 
 
 async def _set_project(setup: Fixture, **fields: Any) -> None:
-    from choregos_api.db.models import Project
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Project
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         project = await session.get(Project, setup.project_id)
@@ -307,8 +307,8 @@ async def test_an_archived_or_suspended_project_takes_nothing_on(setup: Fixture,
 async def test_the_catch_up_loop_of_a_project_starts_with_the_configured_interval(
     setup: Fixture, monkeypatch: Any
 ) -> None:
-    from choregos_orchestrator.config import get_settings
-    from choregos_orchestrator.train_client import start_reconciliation_loop
+    from tranibor_orchestrator.config import get_settings
+    from tranibor_orchestrator.train_client import start_reconciliation_loop
 
     clear_fake_signals()
     monkeypatch.setattr(get_settings(), "reconcile_interval_seconds", 45)
@@ -328,7 +328,7 @@ async def test_a_project_activated_by_its_provisioning_is_polled_at_once(
 ) -> None:
     """Before, only the worker's start polled the active projects: one activated later waited for a
     restart, and `candidates_jql` took nothing on (2026-11-02)."""
-    from choregos_orchestrator.activities.provisioning import finish_provisioning
+    from tranibor_orchestrator.activities.provisioning import finish_provisioning
 
     clear_fake_signals()
     step = {"name": "github.ensure_labels", "status": "failed" if failed else "succeeded"}
@@ -352,9 +352,9 @@ async def test_a_caught_up_issue_keeps_who_filed_it(setup: Fixture) -> None:
 
     await tracker_activities.reconcile_tracker({"project_slug": setup.project_slug})
 
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         row = (await session.execute(select(WorkItem).where(WorkItem.tracker_key == key))).scalar_one()
@@ -364,12 +364,12 @@ async def test_a_caught_up_issue_keeps_who_filed_it(setup: Fixture) -> None:
 async def test_a_plugin_tracker_s_poll_starts_only_agent_ready_or_a_start_rule(setup: Fixture) -> None:
     """#1112: a plugin server returns its whole open queue; the poll starts only what the webhook
     would: `agent-ready`, or an item a start rule matches. The others get no work item at all."""
-    from choregos_adapters.fakes.plugin_tracker import FakePluginTrackerServer
-    from choregos_adapters.plugin_servers import PluginServerClient
-    from choregos_adapters.tracker.plugin import PluginTracker
-    from choregos_api.db.models import Project, WorkItem
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_adapters.fakes.plugin_tracker import FakePluginTrackerServer
+    from tranibor_adapters.plugin_servers import PluginServerClient
+    from tranibor_adapters.tracker.plugin import PluginTracker
+    from tranibor_api.db.models import Project, WorkItem
+    from tranibor_api.db.session import session_scope
 
     clear_fake_signals()
     server = FakePluginTrackerServer(token="t0k")

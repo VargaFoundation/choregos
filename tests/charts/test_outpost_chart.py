@@ -26,7 +26,7 @@ from typing import Any
 
 import pytest
 import yaml
-from choregos_core.publishing import CHARTS, PUBLISHING
+from tranibor_core.publishing import CHARTS, PUBLISHING
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 CHART = ROOT / "charts" / "choregos-outpost"
@@ -151,7 +151,7 @@ def test_the_image_is_the_release_one_pinned_by_digest_when_given() -> None:
 
 def _model() -> dict[str, Any]:
     """A plugin server's pod as the platform writes it (ADR 0096 §2): the model."""
-    from choregos_adapters.plugin_servers import ServerDeployment, server_manifests
+    from tranibor_adapters.plugin_servers import ServerDeployment, server_manifests
 
     model = ServerDeployment(
         name="s", namespace="n", image="registry.example.com/i@sha256:" + "0" * 64, port=8080,
@@ -262,8 +262,8 @@ def test_each_instance_has_a_volume_of_its_own() -> None:
 
 def test_the_policy_the_chart_renders_is_one_the_daemon_starts_on(tmp_path: pathlib.Path) -> None:
     """Read back by the daemon's own loader: the contract's schema, its model, and the keys."""
-    import choregos_contracts as contracts
-    from choregos_outpost import policy as loader
+    import tranibor_contracts as contracts
+    from tranibor_outpost import policy as loader
 
     documents = _documents(values=EXAMPLE)
     path = tmp_path / "policy.yaml"
@@ -507,7 +507,7 @@ def test_without_an_identity_and_without_a_token_the_instance_waits_and_says_how
 def test_the_keys_are_put_back_to_the_mode_the_daemon_accepts(enrolment: Any) -> None:
     """The kubelet's `fsGroup` pass makes every file of a volume group-writable, and the daemon
     refuses a private key its group can write: the daemon's own check reads the result."""
-    from choregos_outpost import identity
+    from tranibor_outpost import identity
 
     made = identity.create(enrolment.identity.parent / "fresh")
     for name in (identity.SIGNING_FILE, identity.SEALING_FILE):
@@ -541,7 +541,7 @@ def test_the_notes_say_how_to_read_the_fingerprint_and_what_restarts_on_purpose(
 def _daemon_options() -> dict[str, str]:
     """Every environment variable the daemon's command line reads, by the option that reads it."""
     import typer
-    from choregos_outpost.cli import app
+    from tranibor_outpost.cli import app
 
     command = typer.main.get_command(app)
     found: dict[str, str] = {}
@@ -574,7 +574,7 @@ def test_every_variable_the_chart_sets_is_one_the_daemon_reads() -> None:
     # running the daemon's command line sets the process's logging to a stream that is closed once the
     # run ends, and whatever logs next in this process would write to it.
     import typer
-    from choregos_outpost.cli import app
+    from tranibor_outpost.cli import app
 
     enrol = typer.main.get_command(app).commands["enrol"]  # type: ignore[attr-defined]
     assert "--token-file" in {option for parameter in enrol.params for option in parameter.opts}

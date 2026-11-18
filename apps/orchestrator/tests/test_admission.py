@@ -18,7 +18,7 @@ from sqlalchemy import func, select
 from .conftest import Fixture
 
 EXTENSION = """
-from choregos_core.admission import AdmissionRefused, declare_admission
+from tranibor_core.admission import AdmissionRefused, declare_admission
 
 #: What the test sets: the "suspended" organisation, and what the check saw.
 STATE = {"suspended": set(), "seen": [], "outage": False}
@@ -39,8 +39,8 @@ def plug_in():
 
 @pytest.fixture
 def extension(tmp_path: pathlib.Path) -> Iterator[Any]:
-    from choregos_adapters import load_extensions
-    from choregos_core.admission import reset
+    from tranibor_adapters import load_extensions
+    from tranibor_core.admission import reset
 
     root = tmp_path / "site"
     root.mkdir()
@@ -64,7 +64,7 @@ def extension(tmp_path: pathlib.Path) -> Iterator[Any]:
 
 
 async def _prepare(setup: Fixture, attempt: int = 1) -> dict[str, Any]:
-    from choregos_orchestrator.activities import stage as activities
+    from tranibor_orchestrator.activities import stage as activities
 
     return await activities.prepare_stage(
         {
@@ -81,7 +81,7 @@ async def _prepare(setup: Fixture, attempt: int = 1) -> dict[str, Any]:
 
 
 async def _count(model: Any) -> int:
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         return int((await session.execute(select(func.count()).select_from(model))).scalar_one())
@@ -103,8 +103,8 @@ async def test_the_check_receives_what_it_needs_to_decide(setup: Fixture, extens
 async def test_a_refusal_stops_the_stage_without_retry_and_without_a_key(
     setup: Fixture, extension: Any
 ) -> None:
-    from choregos_api.db.models import GatewayKeyRow, Run
     from temporalio.exceptions import ApplicationError
+    from tranibor_api.db.models import GatewayKeyRow, Run
 
     extension["suspended"].add("northwind")
     with pytest.raises(ApplicationError) as refusal:
@@ -140,7 +140,7 @@ async def test_a_check_outage_is_not_a_refusal(setup: Fixture, extension: Any) -
 
 
 async def test_without_an_extension_every_run_is_admitted(setup: Fixture) -> None:
-    from choregos_core.admission import declared_admissions
+    from tranibor_core.admission import declared_admissions
 
     assert declared_admissions() == ()
     assert (await _prepare(setup))["run_id"]

@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from choregos_api.services.workflow_catalogue import renamed
-from choregos_core.dsl import template_yaml
 from httpx import AsyncClient
+from tranibor_api.services.workflow_catalogue import renamed
+from tranibor_core.dsl import template_yaml
 
 from .conftest import login
 
@@ -66,8 +66,8 @@ async def test_a_member_reads_the_catalogue_an_outsider_does_not(client: AsyncCl
     )
     await login(client, "po@northwind.dev")
     assert (await client.get(BASE)).status_code == 200
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         session.add(Organization(slug="acme", name="Acme"))

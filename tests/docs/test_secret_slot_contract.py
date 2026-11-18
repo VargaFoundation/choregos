@@ -13,7 +13,7 @@ import re
 
 import pytest
 import yaml
-from choregos_api.services.connector_secrets import SECRET_FIELD
+from tranibor_api.services.connector_secrets import SECRET_FIELD
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 OPENAPI = yaml.safe_load((ROOT / "packages/contracts/openapi.yaml").read_text(encoding="utf-8"))
@@ -69,5 +69,5 @@ def test_a_type_says_which_fields_it_pools(schema: str, model: str) -> None:
 
     assert "pooled_fields" in OPENAPI["components"]["schemas"][schema]["properties"]
     module, name = model.split(".")
-    dto = getattr(importlib.import_module(f"choregos_api.schemas.{module}"), name)
+    dto = getattr(importlib.import_module(f"tranibor_api.schemas.{module}"), name)
     assert "pooled_fields" in dto.model_fields

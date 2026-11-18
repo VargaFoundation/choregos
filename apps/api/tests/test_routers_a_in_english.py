@@ -13,7 +13,7 @@ from typing import Any
 import pytest
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
-SRC = "apps/api/src/choregos_api/routers/"
+SRC = "apps/api/src/tranibor_api/routers/"
 RECORDED = pathlib.Path(__file__).parent / "fixtures" / "routes_before_s45_15.json"
 
 #: The routers S45-15 owns. Not listed: the nine of S45-16 (internal, org_connectors, connectors,

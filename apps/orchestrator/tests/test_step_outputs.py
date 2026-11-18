@@ -10,11 +10,11 @@ pytestmark = pytest.mark.asyncio
 
 
 async def test_the_qualification_prompt_contains_the_sourcing_profiles(setup: Any, tmp_path: Any) -> None:
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_contracts import ContextPack
-    from choregos_orchestrator.activities.base import project_bundle
-    from choregos_orchestrator.activities.stage import StagePlan, _render_playbook
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_contracts import ContextPack
+    from tranibor_orchestrator.activities.base import project_bundle
+    from tranibor_orchestrator.activities.stage import StagePlan, _render_playbook
 
     # the qualification playbook comes from the deployment (as in demo/), with `{{ inputs.profiles }}`
     (tmp_path / "qualification.md").write_text(
@@ -22,7 +22,7 @@ async def test_the_qualification_prompt_contains_the_sourcing_profiles(setup: An
     )
     import os
 
-    from choregos_playbooks import _env
+    from tranibor_playbooks import _env
 
     # the Jinja loader is cached with its directories: clear it on both sides
     _env.cache_clear()

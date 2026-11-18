@@ -8,8 +8,8 @@ created without connecting: nothing here needs a PostgreSQL.
 
 from __future__ import annotations
 
-from choregos_api.config import Settings
-from choregos_api.db.session import _create_engine
+from tranibor_api.config import Settings
+from tranibor_api.db.session import _create_engine
 
 
 def test_the_postgres_pool_is_bounded_by_the_configuration() -> None:

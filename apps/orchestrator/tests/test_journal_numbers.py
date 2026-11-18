@@ -22,8 +22,8 @@ API = "http://journal.test/api/v1/internal"
 
 async def _agent(setup: Fixture, memories: list[dict[str, Any]]) -> None:
     """The agent `architect`, version 1, bound to `memories`."""
-    from choregos_api.db.models import Agent, AgentVersion, Project
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Agent, AgentVersion, Project
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         project = await session.get(Project, setup.project_id)
@@ -65,8 +65,8 @@ def _plan(setup: Fixture) -> dict[str, Any]:
 
 async def _run_of(setup: Fixture, run_id: str) -> str:
     """A run row of the work item, with no line in its journal."""
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         session.add(
@@ -92,9 +92,9 @@ async def api(setup: Fixture, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[
     monkeypatch.setenv("CHOREGOS_DEV_LOGIN_ENABLED", "true")
     monkeypatch.setenv("CHOREGOS_DEV_ADMIN_EMAILS", "admin@northwind.dev")
     monkeypatch.setenv("CHOREGOS_SESSION_SECRET", "test-session-secret-" + "x" * 32)
-    from choregos_api.config import reset_settings_cache as reset_api_settings
-    from choregos_api.main import create_app
-    from choregos_api.temporal import FakeTemporal, set_temporal
+    from tranibor_api.config import reset_settings_cache as reset_api_settings
+    from tranibor_api.main import create_app
+    from tranibor_api.temporal import FakeTemporal, set_temporal
 
     reset_api_settings()
     set_temporal(FakeTemporal())
@@ -103,7 +103,7 @@ async def api(setup: Fixture, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[
 
 
 def _token(run_id: str) -> str:
-    from choregos_api.security import mint_run_token
+    from tranibor_api.security import mint_run_token
 
     return mint_run_token(
         run_id, project_slug="billing-api", work_item_key="northwind/billing-api#123", ttl_minutes=30
@@ -125,9 +125,9 @@ async def _journal_as_the_console_reads_it(transport: Any, run_id: str) -> list[
 
 
 async def _stored(run_id: str) -> list[tuple[int, str]]:
-    from choregos_api.db.models import RunEvent
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import RunEvent
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = (
@@ -145,9 +145,9 @@ async def test_a_run_prepared_with_a_skipped_memory_keeps_its_runners_first_line
 
     Red before the change: `memory.skipped` took 1, the door kept it and dropped the runner's line 1
     (`accepted` 2, three lines)."""
-    from choregos_orchestrator.activities.stage import prepare_stage
-    from choregos_runner.runner import EventJournal
-    from choregos_tools_mcp.client import InternalClient
+    from tranibor_orchestrator.activities.stage import prepare_stage
+    from tranibor_runner.runner import EventJournal
+    from tranibor_tools_mcp.client import InternalClient
 
     await _agent(
         setup,
@@ -177,8 +177,8 @@ async def test_a_run_prepared_with_a_skipped_memory_keeps_its_runners_first_line
 
 
 async def test_skipped_memories_keep_their_order_below_zero_and_a_replay_adds_nothing(setup: Fixture) -> None:
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities.stage import _journal_skipped_memories
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities.stage import _journal_skipped_memories
 
     run_id = await _run_of(setup, "run-numbers")
     first = [
@@ -191,8 +191,8 @@ async def test_skipped_memories_keep_their_order_below_zero_and_a_replay_adds_no
         async with session_scope() as session:
             await _journal_skipped_memories(session, run_id, batch)
 
-    from choregos_api.db.models import RunEvent
     from sqlalchemy import select
+    from tranibor_api.db.models import RunEvent
 
     async with session_scope() as session:
         rows = (
@@ -209,11 +209,11 @@ async def test_skipped_memories_keep_their_order_below_zero_and_a_replay_adds_no
 
 async def test_a_verdict_follows_the_runners_last_line_and_never_takes_zero(setup: Fixture) -> None:
     """`gate.outcome` is written once the run's process has finished: after the highest line, from 1."""
-    from choregos_api.db.models import Run, RunEvent
-    from choregos_api.db.session import session_scope
-    from choregos_core import GateOutcome, utcnow
-    from choregos_orchestrator.activities.gates import _journal
-    from choregos_orchestrator.activities.stage import _journal_skipped_memories
+    from tranibor_api.db.models import Run, RunEvent
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import GateOutcome, utcnow
+    from tranibor_orchestrator.activities.gates import _journal
+    from tranibor_orchestrator.activities.stage import _journal_skipped_memories
 
     verdicts = [GateOutcome(name="tests_green", passed=True), GateOutcome(name="scope", passed=False)]
     skipped = [{"memory": "global:gone", "reason": "the memory does not exist"}]

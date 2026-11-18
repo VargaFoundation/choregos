@@ -41,8 +41,8 @@ async def _scene(
     repositories: list[dict[str, Any]] | None = None,
 ) -> None:
     """The project holds `repositories` beside its primary; the work item says `fields`."""
-    from choregos_api.db.models import Project, WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Project, WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         project = await session.get(Project, setup.project_id)
@@ -58,8 +58,8 @@ async def _scene(
 
 async def _allow_only_pypi(setup: Fixture) -> None:
     """The project's policy opens `pypi.org` alone: a repository host on the run comes from its clone."""
-    from choregos_api.db.session import session_scope
-    from choregos_api.services import active_policy, policy_model
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services import active_policy, policy_model
 
     async with session_scope() as session:
         row = await active_policy(session, setup.project_id)
@@ -70,8 +70,8 @@ async def _allow_only_pypi(setup: Fixture) -> None:
 
 
 async def _item(setup: Fixture) -> Any:
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         return await session.get(WorkItem, setup.work_item_id)
@@ -91,7 +91,7 @@ def _plan(setup: Fixture) -> dict[str, Any]:
 
 
 async def _prepared(setup: Fixture) -> dict[str, Any]:
-    from choregos_orchestrator.activities.stage import prepare_stage
+    from tranibor_orchestrator.activities.stage import prepare_stage
 
     return dict((await prepare_stage(_plan(setup)))["stage_input"])
 
@@ -140,7 +140,7 @@ async def test_a_project_with_one_repository_is_unchanged(setup: Fixture) -> Non
 
 
 async def test_an_unknown_repository_refuses_the_stage_before_anything_runs(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.stage import prepare_stage
+    from tranibor_orchestrator.activities.stage import prepare_stage
 
     await _scene(setup, fields={"repository": "diamclt"})
     with pytest.raises(ApplicationError) as refused:
@@ -154,7 +154,7 @@ async def test_an_unknown_repository_refuses_the_stage_before_anything_runs(setu
 
 
 async def test_a_work_item_fixed_to_diamctl_refuses_another_repository(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.stage import prepare_stage
+    from tranibor_orchestrator.activities.stage import prepare_stage
 
     await _scene(setup, fields={"repository": "billing-api"}, documents={"repository_fixed": "diamctl"})
     with pytest.raises(ApplicationError) as refused:
@@ -164,7 +164,7 @@ async def test_a_work_item_fixed_to_diamctl_refuses_another_repository(setup: Fi
 
 
 async def test_a_job_step_clones_the_target_too(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.stage import prepare_stage
+    from tranibor_orchestrator.activities.stage import prepare_stage
 
     await _scene(setup, fields={"repository": "diamctl"})
     await _allow_only_pypi(setup)
@@ -181,8 +181,8 @@ async def test_a_job_step_clones_the_target_too(setup: Fixture) -> None:
 
 
 async def test_the_branch_the_pull_request_and_the_guarantees_are_diamctl_s(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.gates import check_scope_violations, evaluate_gates
-    from choregos_orchestrator.activities.scm import ensure_branch, open_pull_request
+    from tranibor_orchestrator.activities.gates import check_scope_violations, evaluate_gates
+    from tranibor_orchestrator.activities.scm import ensure_branch, open_pull_request
 
     await _scene(setup, fields={"repository": "diamctl"})
     ids = {"project_id": setup.project_id, "work_item_id": setup.work_item_id}
@@ -212,9 +212,9 @@ async def test_the_branch_the_pull_request_and_the_guarantees_are_diamctl_s(setu
 
 
 async def test_the_diff_shown_for_a_run_is_the_target_s(setup: Fixture) -> None:
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities.scm import collect_run_artifacts
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities.scm import collect_run_artifacts
 
     from .conftest import stage_result
 
@@ -243,8 +243,8 @@ async def test_the_diff_shown_for_a_run_is_the_target_s(setup: Fixture) -> None:
 
 
 async def _run_with_outputs(setup: Fixture, run_id: str, outputs: dict[str, Any], declared: list[str]) -> Any:
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
 
     from .conftest import stage_result
 
@@ -264,7 +264,7 @@ async def _run_with_outputs(setup: Fixture, run_id: str, outputs: dict[str, Any]
 
 
 async def test_a_declared_repository_output_becomes_the_target(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.outcome import record_run_outcome
+    from tranibor_orchestrator.activities.outcome import record_run_outcome
 
     await _scene(setup)
     result = await _run_with_outputs(setup, "run-triage", {"repository": "diamctl"}, ["repository"])
@@ -279,8 +279,8 @@ async def test_a_step_that_names_the_repository_does_not_fix_the_one_it_reads(
 ) -> None:
     """A context job reads the primary, then names the repository the finding lives in: fixing the
     primary while it runs would refuse the one it names at the next step."""
-    from choregos_orchestrator.activities.outcome import record_run_outcome
-    from choregos_orchestrator.activities.stage import prepare_stage
+    from tranibor_orchestrator.activities.outcome import record_run_outcome
+    from tranibor_orchestrator.activities.stage import prepare_stage
 
     await _scene(setup)
     await _allow_only_pypi(setup)
@@ -300,7 +300,7 @@ async def test_a_step_that_names_the_repository_does_not_fix_the_one_it_reads(
 
 
 async def test_an_undeclared_repository_output_changes_nothing(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.outcome import record_run_outcome
+    from tranibor_orchestrator.activities.outcome import record_run_outcome
 
     await _scene(setup)
     result = await _run_with_outputs(setup, "run-free", {"repository": "diamctl"}, ["summary_markdown"])
@@ -309,8 +309,8 @@ async def test_an_undeclared_repository_output_changes_nothing(setup: Fixture) -
 
 
 async def test_a_decision_question_named_repository_answers_the_target(setup: Fixture) -> None:
-    from choregos_contracts import DecisionActor
-    from choregos_orchestrator.activities.decision import decide, decision_request
+    from tranibor_contracts import DecisionActor
+    from tranibor_orchestrator.activities.decision import decide, decision_request
 
     from .test_decision_step import _catalogue, _Transition
 
@@ -345,7 +345,7 @@ async def test_a_decision_question_named_repository_answers_the_target(setup: Fi
 
 
 def test_only_a_declared_repository_output_is_adopted() -> None:
-    from choregos_orchestrator.activities.repositories import adopted
+    from tranibor_orchestrator.activities.repositories import adopted
 
     assert adopted({"repository": "diamctl", "repository_confidence": 0.9}, ["repository"]) == "diamctl"
     assert adopted({"repository": " "}, ["repository"]) is None
@@ -363,8 +363,8 @@ KINDS = ("tracker", "ci", "cd", "runtime", "memory", "gateway", "notify")
 @pytest.fixture
 def built(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[dict[str, Any]]]:
     """What the GitHub SCM is built with, once fakes are off (as in production)."""
-    from choregos_adapters import ConnectorTypeSpec, register
-    from choregos_adapters.registry import _REGISTRY, _SPECS
+    from tranibor_adapters import ConnectorTypeSpec, register
+    from tranibor_adapters.registry import _REGISTRY, _SPECS
 
     received: list[dict[str, Any]] = []
     spec = ConnectorTypeSpec("probe", KINDS, {"type": "object", "properties": {}})
@@ -383,9 +383,9 @@ def built(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[dict[str, Any]]]:
 async def test_a_target_of_another_owner_gets_that_owner_s_installation(
     setup: Fixture, built: list[dict[str, Any]]
 ) -> None:
-    from choregos_api.db.models import Connector, GitHubInstallation, Project
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities.base import (
+    from tranibor_api.db.models import Connector, GitHubInstallation, Project
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities.base import (
         adapters_override,
         load_project,
         scm_for,
@@ -436,11 +436,11 @@ async def test_a_target_of_another_owner_gets_that_owner_s_installation(
 async def test_an_unknown_repository_escalates_then_the_stage_runs_on_the_repository_set(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from sqlalchemy import select
     from temporalio.worker import Replayer
+    from tranibor_api.db.models import Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     await _scene(setup, fields={"repository": "diamclt"})  # a label typed in the tracker
     scripted(setup.adapters, refine_result("spec"))

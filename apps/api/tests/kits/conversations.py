@@ -11,10 +11,10 @@ ME = "/api/v1/me/conversations"
 
 
 async def _open(org_slug: str, email: str, agent: str = "helper", **terms: Any) -> str:
-    from choregos_api.db.models import Organization, User
-    from choregos_api.db.session import session_scope
-    from choregos_api.rbac import Principal
-    from choregos_api.services.conversations import open_conversation
+    from tranibor_api.db.models import Organization, User
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.rbac import Principal
+    from tranibor_api.services.conversations import open_conversation
 
     async with session_scope(orgs="*") as session:
         organisation = (
@@ -28,8 +28,8 @@ async def _open(org_slug: str, email: str, agent: str = "helper", **terms: Any) 
 
 
 async def _record(conversation_id: str) -> Any:
-    from choregos_api.db.models import AgentSessionRecord
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import AgentSessionRecord
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         record = await session.get(AgentSessionRecord, conversation_id)
@@ -39,8 +39,8 @@ async def _record(conversation_id: str) -> Any:
 
 
 async def _events(conversation_id: str) -> list[str]:
-    from choregos_api.db.models import AgentSessionEvent
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import AgentSessionEvent
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         rows = await session.execute(

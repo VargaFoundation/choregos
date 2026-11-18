@@ -45,7 +45,7 @@ def count_router_imports(package_dir: Path, package: str) -> int:
 
 
 def test_services_do_not_import_routers() -> None:
-    count = count_router_imports(API_PACKAGE, "choregos_api")
+    count = count_router_imports(API_PACKAGE, "tranibor_api")
     assert count <= CEILING, (
         f"{count} router import statements outside routers/: services never import routers "
         "(ADR 0099: share helpers through services or core)"

@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 import pytest
-from choregos_api import errors
-from choregos_api.config import reset_settings_cache
-from choregos_api.db.models import ApiToken
-from choregos_api.db.session import session_scope
-from choregos_api.main import create_app
 from httpx import AsyncClient
 from sqlalchemy import func, select
 from starlette.requests import Request
+from tranibor_api import errors
+from tranibor_api.config import reset_settings_cache
+from tranibor_api.db.models import ApiToken
+from tranibor_api.db.session import session_scope
+from tranibor_api.main import create_app
 
 pytestmark = pytest.mark.asyncio
 

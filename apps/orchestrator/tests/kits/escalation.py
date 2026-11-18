@@ -8,9 +8,9 @@ from ..conftest import Fixture
 
 
 async def requests_of(setup: Fixture) -> list[Any]:
-    from choregos_api.db.models import HumanRequest
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import HumanRequest
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = (

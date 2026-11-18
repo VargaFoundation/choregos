@@ -16,7 +16,7 @@ order. Each input has a default that keeps a matrix started before it as it was:
 | `contexts` | `none`, `rtk`, `headroom`, `rtk+headroom` | `["none"]` | the context reduction (ADR 0055) |
 | `tools` | `mcp`, `scripts` | `["mcp"]` | the door of the run's tools (ADR 0122): `mcp`, the model's MCP tools only; `scripts`, those and the tool bridge with the generated client `choregos_tools` |
 | `fixtures` | reference tickets (`tests/fixtures/tickets`) | all of them | |
-| `agent_cases` | agent cases (`packages/playbooks/src/choregos_playbooks/evals/agent_cases`), and a plugin's as `plugin:<plugin>/<case>` ([A plugin's cases](#a-plugins-cases-1372)) | `[]` | scripted cells (below), and live cells on fake scenes since S57-11a ([Agent cases in a live cell](#agent-cases-in-a-live-cell-s57-11a)) |
+| `agent_cases` | agent cases (`packages/playbooks/src/tranibor_playbooks/evals/agent_cases`), and a plugin's as `plugin:<plugin>/<case>` ([A plugin's cases](#a-plugins-cases-1372)) | `[]` | scripted cells (below), and live cells on fake scenes since S57-11a ([Agent cases in a live cell](#agent-cases-in-a-live-cell-s57-11a)) |
 | `repetitions` | 1 to 100 | `1` | each case played that many times: the bootstrap's pairs |
 | `live` | | `false` | real stages on the eval project's executor |
 
@@ -77,7 +77,7 @@ doors and compares them. An answer bounded otherwise is read to the same place b
 the API names its bound (`result_max_bytes`: an operation's raised cap, the default for `web_fetch`,
 whose pages it now bounds too) and the MCP door cuts there.
 
-A case's file: `connectors` (each one's fake and its scene, `choregos_adapters.fakes.scenes`, or a
+A case's file: `connectors` (each one's fake and its scene, `tranibor_adapters.fakes.scenes`, or a
 plugin's server, `plugin:<plugin>/<server>`), `policy`
 (`writes: approval | allowed`, `prompt_injection: ignore | warn | block`), `web` (the scripted search
 results and pages of `web_search` and `web_fetch`), `agent_spec` (a case-local agent's instructions),
@@ -108,7 +108,7 @@ pair as "below the top five", and a fix that "does not use `fromEntities`". A fo
 says where the claim is made: on the line the task asks for (E1's `Exposed:`), at a rank (E2's sixth pair
 numbered 1 to 5), or in the form the mistake takes (a `fromEntities:` key, a `kubectl apply` command line).
 
-**Its guarantees** (`assertions`, `choregos_playbooks.evals.agents.check_assertions`): what must hold
+**Its guarantees** (`assertions`, `tranibor_playbooks.evals.agents.check_assertions`): what must hold
 whichever door the run used. An assertion with a `cell` is checked in that cell only; `count` is exact,
 `min` and `max` bound.
 
@@ -156,7 +156,7 @@ connectors:
 
 **In a scripted cell**, the fake API reaches the server as the broker does, over MCP with a bearer
 token (`PluginServerClient`), on a fake **registered** for it in the process
-(`choregos_adapters.fakes.plugin_servers.use_fake_plugin_server`): a plugin's own CI registers its
+(`tranibor_adapters.fakes.plugin_servers.use_fake_plugin_server`): a plugin's own CI registers its
 server in-process on its fake instance (an `httpx.ASGITransport` over the server's app), the core's CI
 registers `FakePluginServer`, which answers from a recording of that server's fake
 (`tests/fixtures/plugin_fakes/servicenow.json`). The server's declaration governs its tools: the
@@ -255,10 +255,10 @@ C2, the coding control.
 ## Agent cases in a live cell (S57-11a)
 
 A live cell plays an agent case as a real stage of its agent, on the real gateway, against connectors
-that are **fake scenes** (`choregos_adapters.fakes.scenes`): no real firewall, cluster or directory is
+that are **fake scenes** (`tranibor_adapters.fakes.scenes`): no real firewall, cluster or directory is
 ever reached. `seed_eval_ticket` provisions it, idempotently (a retry and the next repetition find what
 the first one wrote), in an **eval project of its own** beside the matrix's eval project, in its
-organisation (`apps/orchestrator/src/choregos_orchestrator/eval_live_cases.py`):
+organisation (`apps/orchestrator/src/tranibor_orchestrator/eval_live_cases.py`):
 
 - the project `<eval project>-<case>` (`evals-netops-ssh-exposure`): the eval project's configuration
   without its repository, GitOps, schedules, triggers and start rules; its `runtime` and `gateway`
@@ -309,7 +309,7 @@ organisation** of its own, where the connector names and agent slugs are free.
 `/p/<case project>/actions/…` read as the scripted matrix's `/p/evals/actions/…`; what the run did is read
 from the API: its `choregos.tool.called` events (calls by origin), its actions (proposed, executed), its
 security events, its journal's scripts, its model calls (`tokens.requests`). The case's judge
-(`choregos_playbooks.evals.agents.judge`) checks `answer_must_contain`, `answer_must_not_contain`,
+(`tranibor_playbooks.evals.agents.judge`) checks `answer_must_contain`, `answer_must_not_contain`,
 `answer_sections`, `min_score` and every guarantee of the case (`proposed_actions`, `executed_actions`,
 `no_tool_called`, `security_event`), and says beside its verdict the measures the run did not meet
 (`max_model_requests`, `calls_by_origin`). A run that did not get its cell's door or context is skipped,

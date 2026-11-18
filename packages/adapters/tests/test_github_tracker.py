@@ -8,12 +8,12 @@ import json
 from typing import Any
 
 import pytest
-from choregos_adapters.errors import ConfigurationError
-from choregos_adapters.github.client import GitHubClient
-from choregos_adapters.tracker.github import STATUS_COMMENT_MARKER, GitHubTracker
-from choregos_adapters.tracker.github_events import parse_command, parse_github_event
-from choregos_contracts import InboundEventType, ProjectConfig, Risk, Size
-from choregos_core.domain import NewItem, TrackerStateMapping
+from tranibor_adapters.errors import ConfigurationError
+from tranibor_adapters.github.client import GitHubClient
+from tranibor_adapters.tracker.github import STATUS_COMMENT_MARKER, GitHubTracker
+from tranibor_adapters.tracker.github_events import parse_command, parse_github_event
+from tranibor_contracts import InboundEventType, ProjectConfig, Risk, Size
+from tranibor_core.domain import NewItem, TrackerStateMapping
 
 from ._transport import Wire
 

@@ -12,12 +12,12 @@ from pathlib import Path
 
 import jwt
 import pytest
-from choregos_contracts import schemas_dir
-from choregos_contracts.outpost import FINGERPRINT_PATTERN, PUBLIC_KEY_PATTERN, fingerprint_of
-from choregos_outpost import identity as identities
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
+from tranibor_contracts import schemas_dir
+from tranibor_contracts.outpost import FINGERPRINT_PATTERN, PUBLIC_KEY_PATTERN, fingerprint_of
+from tranibor_outpost import identity as identities
 
 SIGNED = json.loads(
     (schemas_dir() / "examples" / "outpost-signature.vector.json").read_text(encoding="utf-8")

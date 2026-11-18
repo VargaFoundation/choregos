@@ -16,9 +16,9 @@ from typing import Any
 
 import pytest
 import structlog
-from choregos_contracts import ExecutorKind, StageResult, StageStatus
-from choregos_core.domain import ExecRef, ExecStatus, StageJobSpec
-from choregos_core.run_closure import run_is_closed
+from tranibor_contracts import ExecutorKind, StageResult, StageStatus
+from tranibor_core.domain import ExecRef, ExecStatus, StageJobSpec
+from tranibor_core.run_closure import run_is_closed
 
 from .conftest import ON_POSTGRES, Fixture
 from .test_gateway_key_through_the_secret import _run
@@ -71,7 +71,7 @@ async def _started(setup: Fixture, executor: _Executor) -> str:
 
 
 async def _await(setup: Fixture, run_id: str, **bounds: float) -> dict[str, Any]:
-    from choregos_orchestrator.activities import stage as activities
+    from tranibor_orchestrator.activities import stage as activities
 
     payload = {"project_id": setup.project_id, "run_id": run_id, "poll_seconds": 0.01}
     return await activities.await_run({**payload, "timeout_minutes": 0.0005, **bounds})
@@ -171,7 +171,7 @@ async def test_a_result_read_from_the_journal_closes_the_run_with_its_own_status
 
 @pytest.mark.parametrize("cancel_fails", [False, True], ids=["cancelled", "cancel fails"])
 async def test_a_cancelled_run_is_closed_whatever_the_cancel_does(setup: Fixture, cancel_fails: bool) -> None:
-    from choregos_orchestrator.activities.execution import cancel_run
+    from tranibor_orchestrator.activities.execution import cancel_run
 
     executor = _Executor("running", cancel_fails=cancel_fails)
     run_id = await _started(setup, executor)
@@ -194,9 +194,9 @@ async def test_a_queued_run_whose_interpreter_dies_is_closed_and_its_running_run
 ) -> None:
     """A dying interpreter removes its queued run (#501) and closes it. Its running run is not
     abandoned: a restarted interpreter awaits it again (ADR 0008), so it stays open."""
-    from choregos_adapters.executor.k8s_job import KubernetesJobExecutor
-    from choregos_adapters.fakes.kubernetes import FakeKubernetesApi
-    from choregos_orchestrator.activities.interpretation import record_workflow_failure
+    from tranibor_adapters.executor.k8s_job import KubernetesJobExecutor
+    from tranibor_adapters.fakes.kubernetes import FakeKubernetesApi
+    from tranibor_orchestrator.activities.interpretation import record_workflow_failure
 
     from .test_gateway_key_through_the_secret import _prepare_and_start
 
@@ -245,7 +245,7 @@ async def test_awaiting_a_closed_run_again_reads_its_result_back(setup: Fixture)
 
 
 async def test_cancelling_twice_changes_nothing(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.execution import cancel_run
+    from tranibor_orchestrator.activities.execution import cancel_run
 
     executor = _Executor("running", cancel_fails=True)
     run_id = await _started(setup, executor)
@@ -260,7 +260,7 @@ async def test_cancelling_twice_changes_nothing(setup: Fixture) -> None:
 
 
 async def test_a_run_abandoned_then_cancelled_keeps_how_it_ended(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.execution import cancel_run
+    from tranibor_orchestrator.activities.execution import cancel_run
 
     run_id = await _started(setup, _Executor("running"))
     outcome = await _await(setup, run_id)
@@ -274,9 +274,9 @@ async def test_a_run_abandoned_then_cancelled_keeps_how_it_ended(setup: Fixture)
 
 async def _post_as_the_runner(run_id: str, result: StageResult) -> dict[str, Any]:
     """What the run's API writes when the runner posts its result."""
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
 
     payload = result.model_dump(mode="json", by_alias=True)
     async with session_scope() as session:
@@ -291,7 +291,7 @@ async def _post_as_the_runner(run_id: str, result: StageResult) -> dict[str, Any
 async def test_a_result_the_runner_posted_first_is_never_overwritten(setup: Fixture) -> None:
     """The budget ends and the result lands at the same moment: the result wins, and the workflow
     is told the result — never a timeout the row does not hold."""
-    from choregos_orchestrator.activities import execution
+    from tranibor_orchestrator.activities import execution
 
     executor = _Executor("running", cancel_fails=True)
     run_id = await _started(setup, executor)
@@ -314,7 +314,7 @@ async def test_a_result_the_runner_posted_first_is_never_overwritten(setup: Fixt
 
 async def _asleep_on_a_question(setup: Fixture) -> tuple[dict[str, Any], dict[str, Any]]:
     """A run whose agent asked a person, its sandbox suspended (ADR 0016): its ids, what it asked."""
-    from choregos_orchestrator.activities.suspension import suspend_run
+    from tranibor_orchestrator.activities.suspension import suspend_run
 
     executor = setup.adapters.executor
     executor.capabilities = frozenset({"suspend", "resume"})
@@ -329,9 +329,9 @@ async def _asleep_on_a_question(setup: Fixture) -> tuple[dict[str, Any], dict[st
 async def test_a_suspended_run_is_closed_while_it_sleeps_and_open_once_resumed(setup: Fixture) -> None:
     """A run has no `suspended` status: it waits for a person holding the result that asked the
     question. `suspend_run` leaves the row alone, and `resume_run` is what opens it again."""
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities.suspension import resume_run
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities.suspension import resume_run
 
     ids, asked = await _asleep_on_a_question(setup)
     asleep = await _run(ids["run_id"])
@@ -349,7 +349,7 @@ async def test_a_suspended_run_is_closed_while_it_sleeps_and_open_once_resumed(s
 
 
 async def test_cancelling_a_suspended_run_keeps_the_question_it_asked(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.execution import cancel_run
+    from tranibor_orchestrator.activities.execution import cancel_run
 
     ids, asked = await _asleep_on_a_question(setup)
     before = await _run(ids["run_id"])
@@ -390,10 +390,10 @@ async def test_a_result_being_posted_is_waited_for_not_overwritten(setup: Fixtur
     SQLite has one writer and no row lock: only a real PostgreSQL shows this."""
     import asyncio
 
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
-    from choregos_orchestrator.activities.execution import cancel_run
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
+    from tranibor_orchestrator.activities.execution import cancel_run
 
     run_id = await _started(setup, _Executor("running"))
     posted = DONE.model_dump(mode="json", by_alias=True)

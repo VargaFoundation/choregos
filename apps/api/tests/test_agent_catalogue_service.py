@@ -13,17 +13,17 @@ import pathlib
 from typing import Any
 
 import pytest
-from choregos_api.schemas import AgentCreate
-from choregos_api.services.agents import version_errors
-from choregos_core.agent_catalogue import entries, entry
 from httpx import AsyncClient
+from tranibor_api.schemas import AgentCreate
+from tranibor_api.services.agents import version_errors
+from tranibor_core.agent_catalogue import entries, entry
 
 ORG = "/api/v1/orgs/northwind"
 
 
 def _replace_entry(monkeypatch: pytest.MonkeyPatch, new: Any) -> None:
     """The offline catalogue with `new` in place of the entry of the same slug."""
-    from choregos_api.services import agent_catalogue as service
+    from tranibor_api.services import agent_catalogue as service
 
     base = service.offline_catalogue()
     kept = (*(e for e in base.entries if e.slug != new.slug), new)
@@ -133,7 +133,7 @@ async def test_an_agent_unknown_to_the_catalogue_returns_404(client: AsyncClient
 async def test_publishing_a_workflow_that_names_a_catalogue_agent_installs_it(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_core.dsl import template_yaml
+    from tranibor_core.dsl import template_yaml
 
     yaml = template_yaml("default-simple").replace(
         'dev: { type: agent, role: implement, model: "profile:by_size" }',
@@ -234,7 +234,7 @@ async def test_a_client_that_calls_from_the_cloud_is_not_offered_without_oauth_o
 ) -> None:
     import json
 
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     chatgpt = next(e for e in (await client.get(f"{ORG}/agent-catalogue")).json() if e["slug"] == "chatgpt")
     assert chatgpt["offered"] is False and "OAuth" in chatgpt["unavailable_reason"]
@@ -316,9 +316,9 @@ async def test_a_catalogue_agent_installed_by_a_template_upgrades_from_the_catal
 async def test_a_diverged_agent_is_not_overwritten_by_the_upgrade(
     client: AsyncClient, admin: str, templates: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.db.models import Agent, AgentVersion
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Agent, AgentVersion
+    from tranibor_api.db.session import session_scope
 
     await _project_of_the_template(client, templates)
     async with session_scope() as session:
@@ -339,7 +339,7 @@ async def test_a_diverged_agent_is_not_overwritten_by_the_upgrade(
 
 
 def test_a_manifest_names_the_catalogue_provenance_of_the_agents_it_takes_from_it() -> None:
-    from choregos_api.services.templates import delivery
+    from tranibor_api.services.templates import delivery
 
     reviewer = entry("reviewer")
     assert reviewer is not None
@@ -354,11 +354,11 @@ def test_a_manifest_names_the_catalogue_provenance_of_the_agents_it_takes_from_i
 
 async def _hand_version(slug: str, **changes: Any) -> None:
     """The organisation publishes the next version of `slug`: its latest spec with `changes`."""
-    from choregos_api.db.models import Agent, AgentVersion
-    from choregos_api.db.session import session_scope
-    from choregos_api.schemas import AgentSpec
-    from choregos_api.services.agents import digest
     from sqlalchemy import select
+    from tranibor_api.db.models import Agent, AgentVersion
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.schemas import AgentSpec
+    from tranibor_api.services.agents import digest
 
     async with session_scope() as session:
         agent = (await session.execute(select(Agent).where(Agent.slug == slug))).scalar_one()

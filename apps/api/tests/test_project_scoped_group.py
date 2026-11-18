@@ -32,9 +32,9 @@ transitions:
 
 
 async def _waiting(client: AsyncClient, pid: str) -> str:
-    from choregos_api.db.models import HumanRequest
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
+    from tranibor_api.db.models import HumanRequest
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
 
     published = await client.put(f"/api/v1/projects/{pid}/workflows/release", json={"yaml": WORKFLOW})
     assert published.status_code == 200, published.text

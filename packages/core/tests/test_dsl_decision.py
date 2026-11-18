@@ -3,8 +3,8 @@
 
 from __future__ import annotations
 
-from choregos_core import parse_workflow
-from choregos_core.dsl.engine import WorkflowEngine
+from tranibor_core import parse_workflow
+from tranibor_core.dsl.engine import WorkflowEngine
 
 WORKFLOW = """
 apiVersion: choregos/v1

@@ -19,8 +19,8 @@ SECRET = "chs_the-session-credential"
 def profile(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     path = tmp_path / "config.json"
     monkeypatch.setenv("CHOREGOS_CONFIG", str(path))
-    import choregos_cli.client as client_module
-    import choregos_cli.device_login as device_login
+    import tranibor_cli.client as client_module
+    import tranibor_cli.device_login as device_login
 
     monkeypatch.setattr(client_module, "CONFIG_PATH", path)
     monkeypatch.setattr(device_login, "sleep", lambda _seconds: None)
@@ -29,7 +29,7 @@ def profile(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 def _run(*args: str) -> Any:
-    from choregos_cli.main import app
+    from tranibor_cli.main import app
 
     return CliRunner().invoke(app, list(args))
 
@@ -108,7 +108,7 @@ def test_login_fresh_asks_the_console_for_a_recent_sign_in(profile: Path, contra
 def test_login_slow_down_lengthens_the_wait(
     profile: Path, contract: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import choregos_cli.device_login as device_login
+    import tranibor_cli.device_login as device_login
 
     waits: list[float] = []
     monkeypatch.setattr(device_login, "sleep", waits.append)
@@ -141,7 +141,7 @@ def test_login_says_why_it_did_not_sign_in_and_saves_nothing(
 def test_login_gives_up_when_the_code_expires_unanswered(
     profile: Path, contract: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import choregos_cli.device_login as device_login
+    import tranibor_cli.device_login as device_login
 
     ticks = iter(range(0, 10_000, 400))
     monkeypatch.setattr(device_login, "clock", lambda: float(next(ticks)))

@@ -23,7 +23,7 @@ memory: { enabled: false }
 
 
 def _workflow(agent: str) -> str:
-    from choregos_core.dsl import template_yaml
+    from tranibor_core.dsl import template_yaml
 
     yaml = template_yaml("default-simple").replace(
         'dev: { type: agent, role: implement, model: "profile:by_size" }',

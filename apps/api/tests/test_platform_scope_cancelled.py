@@ -46,7 +46,7 @@ class _Session:
 
 @pytest.fixture
 def on_postgresql(monkeypatch: pytest.MonkeyPatch) -> None:
-    from choregos_api.db import session as db_session
+    from tranibor_api.db import session as db_session
 
     # Under SQLite the settings are not statements at all.
     monkeypatch.setattr(db_session, "get_settings", lambda: SimpleNamespace(is_sqlite=False))
@@ -54,7 +54,7 @@ def on_postgresql(monkeypatch: pytest.MonkeyPatch) -> None:
 
 async def test_a_block_cancelled_in_the_driver_raises_the_cancellation(on_postgresql: None) -> None:
     """Red before S65-36: the restore's `PendingRollbackError` replaced the `CancelledError`."""
-    from choregos_api.db.session import in_platform_scope
+    from tranibor_api.db.session import in_platform_scope
 
     session = _Session(before="acme")
     with pytest.raises(asyncio.CancelledError):
@@ -68,7 +68,7 @@ async def test_a_block_that_raises_on_a_usable_transaction_gets_the_narrow_scope
 ) -> None:
     """An error that is not the database's leaves the transaction usable: the scope of one
     organisation comes back, never the whole instance's."""
-    from choregos_api.db.session import in_platform_scope
+    from tranibor_api.db.session import in_platform_scope
 
     session = _Session(before="acme")
     with pytest.raises(LookupError):
@@ -78,7 +78,7 @@ async def test_a_block_that_raises_on_a_usable_transaction_gets_the_narrow_scope
 
 
 async def test_a_block_that_ends_normally_gets_the_narrow_scope_back(on_postgresql: None) -> None:
-    from choregos_api.db.session import in_platform_scope
+    from tranibor_api.db.session import in_platform_scope
 
     session = _Session(before="acme")
     async with in_platform_scope(session):  # type: ignore[arg-type]
@@ -108,7 +108,7 @@ async def test_a_block_cancelled_while_postgresql_runs_it_raises_the_cancellatio
     its read waits on a lock another connection holds. It sees its cancellation, the spoiled
     connection is thrown away, and the next block on the same pool works."""
     import asyncpg
-    from choregos_api.db.session import get_engine, in_platform_scope, session_scope
+    from tranibor_api.db.session import get_engine, in_platform_scope, session_scope
 
     async def count() -> int:
         async with session_scope(orgs="a") as session, in_platform_scope(session):
@@ -143,7 +143,7 @@ async def test_a_block_cancelled_while_postgresql_runs_it_raises_the_cancellatio
 
 @without_postgres
 async def test_on_postgresql_a_block_that_raises_restores_the_scope_it_found(pg_app: Any) -> None:
-    from choregos_api.db.session import in_platform_scope, session_scope
+    from tranibor_api.db.session import in_platform_scope, session_scope
 
     async with session_scope(orgs="a") as session:
         with pytest.raises(LookupError):

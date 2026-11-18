@@ -13,8 +13,8 @@ from types import ModuleType
 import pytest
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
-SERVICES = ROOT / "apps/api/src/choregos_api/services"
-SRC = "apps/api/src/choregos_api/services/"
+SERVICES = ROOT / "apps/api/src/tranibor_api/services"
+SRC = "apps/api/src/tranibor_api/services/"
 
 #: What this story owns: the nine services it rewrote and the English-named one it touched.
 OWNED = (
@@ -51,8 +51,8 @@ def test_owned_services_have_no_french() -> None:
 
 
 def test_the_services_package_exports_the_english_names() -> None:
-    from choregos_api import services
-    from choregos_api.services import routing, tickets
+    from tranibor_api import services
+    from tranibor_api.services import routing, tickets
 
     assert services.WorkItemBirth is routing.WorkItemBirth
     assert services.new_work_item is routing.new_work_item
@@ -68,11 +68,11 @@ def test_the_services_package_exports_the_english_names() -> None:
 
 def test_the_former_french_module_paths_are_gone() -> None:
     for former in ("routage", "recus", "parcours"):
-        assert importlib.util.find_spec(f"choregos_api.services.{former}") is None
+        assert importlib.util.find_spec(f"tranibor_api.services.{former}") is None
 
 
 def test_the_former_keywords_are_gone() -> None:
-    from choregos_api.services import receipts, tickets
+    from tranibor_api.services import receipts, tickets
 
     receipt_keywords = set(inspect.signature(receipts.record).parameters)
     assert {"outputs", "genre"} <= receipt_keywords and "sorties" not in receipt_keywords
@@ -81,7 +81,7 @@ def test_the_former_keywords_are_gone() -> None:
 
 
 def test_patching_project_tracker_reaches_the_tracker_lookup(monkeypatch: pytest.MonkeyPatch) -> None:
-    from choregos_api.services import tickets
+    from tranibor_api.services import tickets
 
     marker = object()
     monkeypatch.setattr(tickets, "project_tracker", marker)

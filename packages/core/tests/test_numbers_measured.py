@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from choregos_contracts import StageOutputs, StageResult, StageStatus
-from choregos_core import GateContext, evaluate
-from choregos_core.dsl.process import RESUMES
+from tranibor_contracts import StageOutputs, StageResult, StageStatus
+from tranibor_core import GateContext, evaluate
+from tranibor_core.dsl.process import RESUMES
 
 METRICS = {
     "products": [

@@ -9,16 +9,16 @@ from __future__ import annotations
 import itertools
 from typing import Any
 
-import choregos_contracts as contracts
 import pytest
+import tranibor_contracts as contracts
 from httpx import AsyncClient
 
 _KEYS = itertools.count(1)
 
 
 async def _run(project_id: str, tokens: dict[str, Any]) -> str:
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Run, WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         item = WorkItem(project_id=project_id, tracker_key=f"TRIPS-{next(_KEYS)}", title="T", state="ready")
@@ -59,7 +59,7 @@ async def test_a_run_booked_before_the_count_serves_null_not_zero(
 def test_the_contract_s_totals_and_the_dto_are_in_step() -> None:
     """The DTO and `components.schemas.Totals` name the same fields, and `requests` is a nullable
     integer in both (ADR 0001: the contract changes with the code, in the same PR)."""
-    from choregos_api.schemas import Totals
+    from tranibor_api.schemas import Totals
 
     schema = contracts.load_openapi()["components"]["schemas"]["Totals"]
     assert set(schema["properties"]) == set(Totals.model_fields)
@@ -90,10 +90,10 @@ async def _seed_window(project_id: str) -> None:
     """Three runs in the window (one booked before S57-01), one older, one still going; tool rows."""
     from datetime import timedelta
 
-    from choregos_api.db.models import CostLedger, Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_contracts import Diagnostics, StageResult, StageStatus
-    from choregos_core import utcnow
+    from tranibor_api.db.models import CostLedger, Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_contracts import Diagnostics, StageResult, StageStatus
+    from tranibor_core import utcnow
 
     now = utcnow()
 
@@ -159,7 +159,7 @@ async def test_the_report_reads_the_routes_and_agrees_with_its_sql(
     PostgreSQL its `--sql` gives the same numbers from the tables."""
     from datetime import timedelta
 
-    from choregos_core import utcnow
+    from tranibor_core import utcnow
 
     from .conftest import SUITE_ON_POSTGRES
 
@@ -177,8 +177,8 @@ async def test_the_report_reads_the_routes_and_agrees_with_its_sql(
 
     if not SUITE_ON_POSTGRES:
         return  # `percentile_cont` and `->>` are PostgreSQL's: CI replays this on its PostgreSQL
-    from choregos_api.db.session import session_scope
     from sqlalchemy import text
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         (record,) = (await session.execute(text(tool.sql(30)))).mappings().all()

@@ -4,7 +4,7 @@
 
 - **Status**: accepted, 2026-11-17 (decided by the product owner on 2026-11-15, D6, and confirmed on
   2026-11-17: "do the renames now", the trademark gate being skipped); R1 is implemented by S75-01,
-  R3 steps (a) and (b) by S75-03 (2026-11-18), R2, R4 and the rest of R3 are not started
+  R3 steps (a) and (b) by S75-03 (2026-11-18), R2 by S75-02 (2026-11-18), R4 and the rest of R3 are not started
 - **Concerns**: the whole repository (25,000 occurrences of the old name in 4,600 files, counted on
   2026-11-17), and above all `packages/*` (the distributions and import packages), `publishing.json` and
   `tools/publishing_identity.py`, `charts/`, `docker/`, `infra/policies/`, the `CHOREGOS_*` variables;
@@ -47,7 +47,7 @@ One commit cannot rename all four, and the fourth layer must not be renamed by a
    stays beside it as a second entry point of the same `main`, and prints nothing extra. `--version`
    prints `tranibor <version>`. **R1 renames no Python identifier, package, file path, environment
    variable, image, chart, header, URI or stored value.**
-3. **R2, the Python distributions and import packages (not started).** `choregos-core` becomes
+3. **R2, the Python distributions and import packages (S75-02, built: see the amendment at the end).** `choregos-core` becomes
    `tranibor-core` and `choregos_core` becomes `tranibor_core`, and so on for `api`, `orchestrator`,
    `adapters`, `runner`, `cli`, `contracts`, `agent-sdk`, `outpost`, `playbooks`, `quant`, `tools-mcp`,
    `ontology` (directory names `packages/*` follow). For one minor cycle each old package stays as a
@@ -192,3 +192,33 @@ One commit cannot rename all four, and the fourth layer must not be renamed by a
   name only; the chart's per-component `repository` defaults (`choregos-api`, …) carry no registry, so
   the rewrite does not see them, and they switch by hand with the deployments (step (c)), not by the
   identity.
+
+## Amendment (2026-11-18, S75-02): R2, as built
+
+- **Done by a script, kept**: `tools/rename_python_packages.py` (`--check` lists what is left, and a test
+  runs it). The thirteen packages and distributions are renamed (`git mv` of `src/choregos_<x>`), the
+  module name `choregos_<x>` is rewritten as a whole word everywhere but in history (`docs/adr`,
+  `docs/plan`, recorded Temporal histories, trials), and the distribution name only where it names one
+  (a `pyproject.toml`, `--package`, `metadata.version(`, and in prose for the names nothing else carries).
+  A branch that falls behind is rebuilt (reset, rerun, replay the hand-written commits), not rebased.
+- **The shims are `compat/choregos-<x>/`**, thirteen workspace members: a pyproject named
+  `choregos-<x>` that depends on `tranibor-<x>==<same version>` and `tranibor-contracts`, and a
+  `choregos_<x>/__init__.py` of one call. `uv build --all-packages` therefore builds them with the
+  release, and the API image (`uv sync --all-packages`) carries them, which is what the enterprise
+  edition, built FROM it, imports through. The logic is one module, `tranibor_contracts._compat`
+  (`install_alias`), in the lowest package, so that no shim carries any: `sys.modules["choregos_x"]` is
+  the module `tranibor_x`, and a meta-path finder placed first answers `choregos_x.<sub>` with the module
+  object `tranibor_x.<sub>`. A module added later is covered without touching a shim; a new package
+  needs its `compat/` directory, and `tests/compat/` fails without it.
+- **One `DeprecationWarning` per old package and process** (not one per process: a process that
+  imports two old names is told about both), attributed to the importing line.
+- **Not renamed in R2, deliberately**: the console scripts other than `tranibor` and `choregos`
+  (`choregos-api`, `choregos-orchestrator`, `choregos-outpost`, `choregos-quant`, `choregos-runner`,
+  `choregos-admin`, `choregos-ontology`: operators' commands, and a job's stored `command`); the
+  entry-point groups `choregos.plugins` and `choregos.migrations` and the plugin names registered under
+  them (`choregos-ontology`); the generated client `choregos_tools` that run scripts import; the
+  workspace's own name `choregos-workspace`; the image and chart names (R3).
+- **Visible side effect**: the loggers named after their module (`choregos_api.*`) are now named
+  `tranibor_api.*`; a log filter or dashboard keyed on the old logger name moves with them.
+- **The PyPI job** (off) builds `tranibor-contracts` and `tranibor-agent-sdk`; the old names ship
+  only as release wheels, until the shims go.

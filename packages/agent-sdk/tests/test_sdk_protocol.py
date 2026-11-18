@@ -1,7 +1,7 @@
 """The SDK agent against the runner's real ACP client (S39-17c).
 
 Each test starts a test agent as a subprocess, exactly as the runner starts a code agent, and drives it
-with `choregos_runner.acp.AcpClient`: initialize, session/new with an MCP server, session/prompt.
+with `tranibor_runner.acp.AcpClient`: initialize, session/new with an MCP server, session/prompt.
 What is proved is what the runner would see: the guard is asked BEFORE a tool is called, a refusal
 stops the action, turns are counted, the result file is valid, standard output stays the protocol's.
 """
@@ -13,8 +13,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-from choregos_runner.acp import AcpClient
-from choregos_runner.result import load_result
+from tranibor_runner.acp import AcpClient
+from tranibor_runner.result import load_result
 
 from .conftest import RUN_KEY, Gateway, McpFake, agent_command
 

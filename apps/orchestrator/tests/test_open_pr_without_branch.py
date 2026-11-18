@@ -63,8 +63,8 @@ def _no_change(setup: Fixture) -> None:
 async def test_a_no_change_work_item_escalates_without_asking_for_a_pull_request(
     setup: Fixture, temporal_env: Any, worker_factory: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.worker import Replayer
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     calls = _pr_calls(setup, monkeypatch)
     _no_change(setup)
@@ -120,8 +120,8 @@ async def test_an_scm_outage_on_the_branch_is_retried_then_fails_as_before(
     setup: Fixture, temporal_env: Any, worker_factory: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Only "no branch" escalates: a 5xx reading the branch is retried, then fails the interpreter."""
-    from choregos_adapters.errors import UpstreamError
     from temporalio.client import WorkflowFailureError
+    from tranibor_adapters.errors import UpstreamError
 
     calls = _pr_calls(setup, monkeypatch)
     reads: list[str] = []
@@ -146,8 +146,8 @@ async def test_a_history_before_the_marker_still_fails(
     setup: Fixture, temporal_env: Any, worker_factory: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A run recorded before the marker answers no to `patched`: the refusal fails it, as then."""
-    from choregos_orchestrator.workflows import interpreter
     from temporalio.client import WorkflowFailureError
+    from tranibor_orchestrator.workflows import interpreter
 
     real = interpreter.workflow.patched
     monkeypatch.setattr(

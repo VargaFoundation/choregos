@@ -14,12 +14,12 @@ from __future__ import annotations
 
 from typing import Any, TypedDict
 
-from choregos_agent_sdk import Context, Result, ToolError, agent
-from choregos_agent_sdk.errors import sdk_error_in
-from choregos_agent_sdk.integrations import langchain as bridge
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, StateGraph
+from tranibor_agent_sdk import Context, Result, ToolError, agent
+from tranibor_agent_sdk.errors import sdk_error_in
+from tranibor_agent_sdk.integrations import langchain as bridge
 
 
 class State(TypedDict, total=False):

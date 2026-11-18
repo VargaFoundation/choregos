@@ -12,13 +12,13 @@ import pytest
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 
 SOURCES = (
-    "packages/core/src/choregos_core/dsl/",
-    "packages/core/src/choregos_core/gates/",
-    "packages/core/src/choregos_core/instructions.py",
-    "packages/core/src/choregos_core/policy.py",
-    "packages/core/src/choregos_core/policy_ceiling.py",
-    "packages/core/src/choregos_core/domain.py",
-    "packages/core/src/choregos_core/presets/",
+    "packages/core/src/tranibor_core/dsl/",
+    "packages/core/src/tranibor_core/gates/",
+    "packages/core/src/tranibor_core/instructions.py",
+    "packages/core/src/tranibor_core/policy.py",
+    "packages/core/src/tranibor_core/policy_ceiling.py",
+    "packages/core/src/tranibor_core/domain.py",
+    "packages/core/src/tranibor_core/presets/",
 )
 TESTS = (
     "test_transition_action",

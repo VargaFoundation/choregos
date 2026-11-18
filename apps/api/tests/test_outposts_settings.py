@@ -13,9 +13,9 @@ import re
 from pathlib import Path
 
 import pytest
-from choregos_contracts.outpost import MAX_DOOR_KEYS, PUBLIC_KEY_PATTERN, OutpostPolicy
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
+from tranibor_contracts.outpost import MAX_DOOR_KEYS, PUBLIC_KEY_PATTERN, OutpostPolicy
 
 from .kits import outposts as kit
 
@@ -34,7 +34,7 @@ def _unset(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _settings(**values: object) -> object:
-    from choregos_api.config import Settings
+    from tranibor_api.config import Settings
 
     return Settings(_env_file=None, **values)  # type: ignore[arg-type, call-arg]
 
@@ -148,7 +148,7 @@ def test_announced_keys_are_public_keys_three_at_most_and_each_once() -> None:
 
 def test_the_settings_repeat_the_contracts_shapes() -> None:
     """`config.py` does not import the contract for three constants: they are held to it here."""
-    from choregos_api import config
+    from tranibor_api import config
 
     assert MAX_DOOR_KEYS == config.MAX_DOOR_KEYS
     assert f"^{config.PUBLIC_KEY.pattern}$" == PUBLIC_KEY_PATTERN

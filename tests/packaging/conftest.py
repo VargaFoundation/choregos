@@ -36,7 +36,7 @@ from __future__ import annotations
 
 def brancher() -> None:
     # The import is INSIDE the function: an EE wheel imported too early would break on a missing core.
-    from choregos_api.edition import ENTERPRISE, declare
+    from tranibor_api.edition import ENTERPRISE, declare
 
     declare(ENTERPRISE, features=frozenset({"multi_org"}))
 '''

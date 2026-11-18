@@ -198,13 +198,13 @@ isolation() {
 # directly from its first instruction for 10 s. Gated, its first attempt must be refused and none may
 # connect. The same pod without the gate is the control: it shows the window the gate closes, and is
 # reported, not judged (a faster node may close it before the first attempt). The images are the
-# API's, already on the node: the gate runs from any image that carries `choregos_core`.
+# API's, already on the node: the gate runs from any image that carries `tranibor_core`.
 AGENT_JOB='
 import json, sys
 from types import SimpleNamespace
-from choregos_adapters.executor.k8s_job import KubernetesJobExecutor
-from choregos_core.domain import StageJobSpec
-from choregos_core.egress_gate import gate_from_env
+from tranibor_adapters.executor.k8s_job import KubernetesJobExecutor
+from tranibor_core.domain import StageJobSpec
+from tranibor_core.egress_gate import gate_from_env
 name, image, gated, loop = sys.argv[1], sys.argv[2], sys.argv[3] == "1", sys.argv[4]
 gate = gate_from_env()
 if gated and gate is None:

@@ -17,7 +17,7 @@ task: >
 tools_cells: [mcp, scripts]
 #: The plugin's server on its fake instance (`SERVICENOW_FAKE=1`, server/src/choregos_servicenow/fake.py):
 #: `plugin:<plugin>/<server>`, as a template names a plugin's server. The core's door player and live
-#: seeding resolve scene kinds only (`choregos_adapters.fakes.scenes`), not this one, yet (#1372).
+#: seeding resolve scene kinds only (`tranibor_adapters.fakes.scenes`), not this one, yet (#1372).
 connectors:
   servicenow: { kind: "plugin:servicenow/servicenow", scene: default }
 #: Writes allowed by the project: `add_work_note` runs as a governed action; `add_comment` and

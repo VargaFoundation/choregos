@@ -65,7 +65,7 @@ async def test_put_invalid_workflow_is_422(client: AsyncClient, project: dict[st
 
 
 async def test_put_valid_workflow_bumps_version(client: AsyncClient, project: dict[str, Any]) -> None:
-    from choregos_core.dsl import template_yaml
+    from tranibor_core.dsl import template_yaml
 
     response = await client.put(
         f"/api/v1/projects/{project['id']}/workflow", json={"yaml": template_yaml("advanced")}
@@ -77,9 +77,9 @@ async def test_put_valid_workflow_bumps_version(client: AsyncClient, project: di
 
 
 async def test_rbac_developer_cannot_write_workflow(client: AsyncClient, project: dict[str, Any]) -> None:
-    from choregos_api.db.models import Membership, Organization, User
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Membership, Organization, User
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         org_row = (await session.execute(select(Organization))).scalars().first()
@@ -109,7 +109,7 @@ async def test_connector_crud_and_test(client: AsyncClient, project: dict[str, A
 
 
 async def test_github_webhook_signature_and_dedup(client: AsyncClient, project: dict[str, Any]) -> None:
-    from choregos_api.config import get_settings
+    from tranibor_api.config import get_settings
 
     settings = get_settings()
     settings.github_webhook_secret = "s3cr3t"
@@ -148,7 +148,7 @@ async def test_github_webhook_signature_and_dedup(client: AsyncClient, project: 
 
 
 async def test_webhook_starts_one_workflow_only(client: AsyncClient, project: dict[str, Any]) -> None:
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.temporal import get_temporal
 
     payload = {
         "action": "labeled",
@@ -174,16 +174,16 @@ async def test_webhook_starts_one_workflow_only(client: AsyncClient, project: di
 
 async def test_internal_run_api(client: AsyncClient, project: dict[str, Any]) -> None:
     """The runner reads its input, logs, posts findings and a result, and nothing else."""
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.security import mint_run_token
-    from choregos_contracts import StageInput
+    from tranibor_api.db.models import Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.security import mint_run_token
+    from tranibor_contracts import StageInput
 
     stage_input = StageInput.model_validate(
         json.loads(
             (
                 __import__("pathlib").Path(
-                    __import__("choregos_contracts").schemas_dir() / "examples" / "stage-input.example.json"
+                    __import__("tranibor_contracts").schemas_dir() / "examples" / "stage-input.example.json"
                 )
             ).read_text()
         )
@@ -278,8 +278,8 @@ async def test_internal_requires_valid_token(client: AsyncClient) -> None:
 
 
 async def test_findings_listing_and_triage(client: AsyncClient, project: dict[str, Any]) -> None:
-    from choregos_api.db.models import Finding
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Finding
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         row = Finding(
@@ -302,9 +302,9 @@ async def test_findings_listing_and_triage(client: AsyncClient, project: dict[st
 
 
 async def test_costs_report(client: AsyncClient, project: dict[str, Any]) -> None:
-    from choregos_api.db.models import CostLedger
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
+    from tranibor_api.db.models import CostLedger
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
 
     async with session_scope() as session:
         for index in range(3):
@@ -360,7 +360,7 @@ async def test_a_jira_webhook_creates_the_work_item_and_starts_the_workflow(
     client: AsyncClient, project: dict[str, Any], monkeypatch: Any
 ) -> None:
     """A Jira webhook follows exactly the same path as a GitHub webhook (S13-04)."""
-    from choregos_api.config import get_settings
+    from tranibor_api.config import get_settings
 
     monkeypatch.setattr(get_settings(), "generic_webhook_secret", "s3cret")
     payload = {
@@ -417,7 +417,7 @@ async def test_a_tracker_birth_records_who_filed_the_issue(
 async def test_a_gitlab_webhook_refuses_an_invalid_token(
     client: AsyncClient, project: dict[str, Any], monkeypatch: Any
 ) -> None:
-    from choregos_api.config import get_settings
+    from tranibor_api.config import get_settings
 
     monkeypatch.setattr(get_settings(), "generic_webhook_secret", "s3cret")
     response = await client.post(
@@ -442,7 +442,7 @@ async def test_a_project_without_a_repository_is_created(client: AsyncClient, ad
     assert response.status_code == 201, response.text
     assert response.json()["config"].get("repo") is None
 
-    from choregos_contracts import ProjectConfig
+    from tranibor_contracts import ProjectConfig
 
     config = ProjectConfig.model_validate(response.json()["config"])
     assert not config.has_repo
@@ -455,8 +455,8 @@ async def test_the_access_sheet_folds_the_log(
 ) -> None:
     """Two agents produce two hundred events in a few minutes: nobody reads them. The sheet answers
     "what did it touch", and puts the refusals first."""
-    from choregos_api.db.models import Run, RunEvent, WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Run, RunEvent, WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         item = WorkItem(project_id=project["id"], tracker_key="northwind/x#7", title="T", state="ready")
@@ -490,7 +490,7 @@ async def test_the_access_sheet_folds_the_log(
                 },
             ),
         ]
-        from choregos_core import utcnow
+        from tranibor_core import utcnow
 
         for seq, (type_, payload) in enumerate(events_list, start=1):
             session.add(RunEvent(run_id=run.id, seq=seq, type=type_, payload=payload, ts=utcnow()))
@@ -513,9 +513,9 @@ async def test_a_work_item_whose_workflow_is_dead_says_so(
 
     Bench of 2026-09-24: two FAILED workflows, two "waiting" work items on the screen.
     """
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.temporal import FakeTemporal, WorkflowState, get_temporal
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.temporal import FakeTemporal, WorkflowState, get_temporal
 
     async with session_scope() as session:
         item = WorkItem(
@@ -551,8 +551,8 @@ async def test_a_declined_ticket_says_so_and_is_not_a_success(
 ) -> None:
     """A terminal state's declared outcome reaches the ticket and the board: a declined access
     request in green read as granted (the Fondation access workflow, 2026-11-02)."""
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     yaml_text = """
 apiVersion: choregos/v1

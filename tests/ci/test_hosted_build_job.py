@@ -73,8 +73,8 @@ def test_the_gate_waits_for_the_job_and_the_filter_covers_what_it_proves() -> No
     assert "hosted-build" in workflow["jobs"]["changes"]["outputs"]
     filters = yaml.safe_load(workflow["jobs"]["changes"]["steps"][1]["with"]["filters"])["hosted-build"]
     for path in (
-        "packages/adapters/src/choregos_adapters/oci/**",
-        "apps/api/src/choregos_api/services/hosted_sources.py",
+        "packages/adapters/src/tranibor_adapters/oci/**",
+        "apps/api/src/tranibor_api/services/hosted_sources.py",
         "examples/hosted/reference/**",
         "tests/build/**",
     ):

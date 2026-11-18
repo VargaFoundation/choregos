@@ -25,9 +25,9 @@ async def play(
     script: Any = None,
 ) -> tuple[dict[str, Any], dict[str, list[Any]], Any]:
     """The workflow against stub activities. `script(handle, env)` acts on it while it runs."""
-    from choregos_orchestrator.testing import workers_by_queue
-    from choregos_orchestrator.workflows.agent_session import AgentSessionPod
     from temporalio.testing import WorkflowEnvironment
+    from tranibor_orchestrator.testing import workers_by_queue
+    from tranibor_orchestrator.workflows.agent_session import AgentSessionPod
 
     asked: dict[str, list[Any]] = {"start": [], "stop": []}
 
@@ -144,9 +144,9 @@ async def _closed(handle: Any, _: Any) -> None:
 
 
 async def test_the_archived_history_replays() -> None:
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.client import WorkflowHistory
     from temporalio.worker import Replayer
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     _, _, history = await play(script=_closed)
     replayer = Replayer(workflows=ALL_WORKFLOWS)

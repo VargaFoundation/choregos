@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from choregos_core import parse_workflow, to_graph, to_process
+from tranibor_core import parse_workflow, to_graph, to_process
 
 ROOT = Path(__file__).resolve().parents[3]
 

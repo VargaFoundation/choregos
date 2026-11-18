@@ -1,5 +1,5 @@
 [project]
-name = "choregos-playbooks"
+name = "tranibor-playbooks"
 version = "0.27.13"
 description = "Tranibor playbooks: prompts per role, and evals"
 requires-python = ">=3.12,<3.13"
@@ -17,4 +17,4 @@ build-backend = "hatchling.build"
 # job therefore failed on this one package ever since it started building wheels (v0.4.0).
 # `tests/packaging/` builds EVERY package and checks that its data files are really in the
 # wheel, not only that the build passes.
-packages = ["src/choregos_playbooks"]
+packages = ["src/tranibor_playbooks"]

@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from choregos_core.domain import CheckRun
+from tranibor_core.domain import CheckRun
 
 
 def test_provenance_is_read_in_the_checks_of_the_pr() -> None:
-    from choregos_orchestrator.activities.gates import _provenance
+    from tranibor_orchestrator.activities.gates import _provenance
 
     def check(check_name: str, conclusion: str | None) -> CheckRun:
         status = "completed" if conclusion else "in_progress"

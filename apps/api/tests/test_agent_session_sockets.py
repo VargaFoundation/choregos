@@ -40,7 +40,7 @@ def _resume(session_id: str, after: int) -> str:
 
 @pytest.fixture
 def grace(monkeypatch: pytest.MonkeyPatch) -> Callable[[float], None]:
-    from choregos_api.services import agent_realtime
+    from tranibor_api.services import agent_realtime
 
     def set_grace(seconds: float) -> None:
         monkeypatch.setattr(agent_realtime, "RESUME_GRACE_S", seconds)
@@ -217,9 +217,9 @@ async def test_a_frame_journaled_while_the_pod_reads_is_sent_on_its_next_read(
 ) -> None:
     """On PostgreSQL each statement reads its own snapshot: a frame committed between reading the
     frames and reading the cursor would be passed by the cursor, and never reach the container."""
-    from choregos_api.db.models import AgentSessionRecord
-    from choregos_api.services import agent_session_sockets as sockets
-    from choregos_api.services.agent_sessions import journal
+    from tranibor_api.db.models import AgentSessionRecord
+    from tranibor_api.services import agent_session_sockets as sockets
+    from tranibor_api.services.agent_sessions import journal
 
     socket, pod = await _opened(client, pod_http)
     cursor, kinds = 0, list[str]()
@@ -418,7 +418,7 @@ async def test_a_frame_the_relay_cannot_carry_closes_the_session(
     message: dict[str, Any] | None,
     code: int,
 ) -> None:
-    from choregos_api.schemas.agent_sessions import SOCKET_FRAME_BYTES
+    from tranibor_api.schemas.agent_sessions import SOCKET_FRAME_BYTES
 
     socket, pod = await _opened(client, pod_http)
     if message is None:

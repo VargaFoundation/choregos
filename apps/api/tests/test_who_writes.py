@@ -26,20 +26,20 @@ RUN = "run-who-writes-1"
 
 @pytest.fixture
 def supplier(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
-    import choregos_adapters
-    from choregos_adapters.fakes.mcp import FakeMcpServer
+    import tranibor_adapters
+    from tranibor_adapters.fakes.mcp import FakeMcpServer
 
     server = FakeMcpServer(tools=[dict(o) for o in TOOLS], token="supplier-key")
-    monkeypatch.setattr(choregos_adapters, "FAKE_MCP", server)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_MCP", server)
     monkeypatch.setenv("CONNECTOR_TEST_SUPPLIER_KEY", "supplier-key")
     yield server
 
 
 async def _connector(client: AsyncClient, name: str, *, basic_as: str | None = None) -> None:
     """An MCP connector, discovered, `suivi_commande` open; `basic_as` then switches it to Basic."""
-    from choregos_api.db.models import OrgConnector
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import OrgConnector
+    from tranibor_api.db.session import session_scope
 
     body = {
         "name": name,
@@ -61,8 +61,8 @@ async def _connector(client: AsyncClient, name: str, *, basic_as: str | None = N
 
 async def _run(client: AsyncClient, project: dict[str, Any], servers: list[dict[str, Any]]) -> str:
     """An agent whose version names `servers`, and a run of it on a new work item."""
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Run, WorkItem
+    from tranibor_api.db.session import session_scope
 
     agent = await client.post(
         f"{ORG}/agents", json={"slug": "triage", "display_name": "Triage", "spec": {"mcp_servers": servers}}
@@ -163,10 +163,10 @@ async def test_a_work_item_names_who_started_it(client: AsyncClient, project: di
 async def test_the_timeline_says_which_tracker_write_and_under_which_account(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.db.models import Event, HumanRequest, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_contracts import EventType
-    from choregos_core import utcnow
+    from tranibor_api.db.models import Event, HumanRequest, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_contracts import EventType
+    from tranibor_core import utcnow
 
     via = {"type": "jira", "account": "bot@acme.example"}
     async with session_scope() as session:

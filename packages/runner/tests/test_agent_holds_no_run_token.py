@@ -27,19 +27,19 @@ from typing import Any
 
 import pytest
 import yaml
-from choregos_adapters.executor.aca import AcaExecutor, AzureArmClient
-from choregos_adapters.executor.k8s_job import KubernetesJobExecutor
-from choregos_adapters.executor.local_docker import LocalDockerExecutor
-from choregos_adapters.executor.tekton import run_secret_data
-from choregos_contracts import AgentRef, JobSpec, ModelRef, StageInput
-from choregos_core.domain import StageJobSpec
-from choregos_runner import confine
-from choregos_runner import runner as runner_module
-from choregos_runner.acp import AcpClient
-from choregos_runner.config import RunnerSettings, agent_base_environment
-from choregos_runner.dod import run_checks
-from choregos_runner.exits import Exit
-from choregos_runner.runner import Runner
+from tranibor_adapters.executor.aca import AcaExecutor, AzureArmClient
+from tranibor_adapters.executor.k8s_job import KubernetesJobExecutor
+from tranibor_adapters.executor.local_docker import LocalDockerExecutor
+from tranibor_adapters.executor.tekton import run_secret_data
+from tranibor_contracts import AgentRef, JobSpec, ModelRef, StageInput
+from tranibor_core.domain import StageJobSpec
+from tranibor_runner import confine
+from tranibor_runner import runner as runner_module
+from tranibor_runner.acp import AcpClient
+from tranibor_runner.config import RunnerSettings, agent_base_environment
+from tranibor_runner.dod import run_checks
+from tranibor_runner.exits import Exit
+from tranibor_runner.runner import Runner
 
 from .conftest import FakeInternalClient, agent_script, free_port, valid_result
 

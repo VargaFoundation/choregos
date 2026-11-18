@@ -20,14 +20,14 @@ from typing import Any
 import pytest
 from alembic import command
 from alembic.config import Config
-from choregos_api.config import get_settings
-from choregos_core.agent_catalogue import entries
 from sqlalchemy import create_engine, text
+from tranibor_api.config import get_settings
+from tranibor_core.agent_catalogue import entries
 
 from .conftest import PG_URL, _app_url, _prepare_postgres, without_postgres
 
 API = pathlib.Path(__file__).resolve().parents[1]
-VERSIONS = API / "src/choregos_api/migrations/versions"
+VERSIONS = API / "src/tranibor_api/migrations/versions"
 LEFT = "f3a5c7e9b1d2"
 REPLAY = "a7c9e1b3d5f8"
 #: Data migrations written before S39-27 that touch no table under RLS, or set the bypass already.
@@ -36,7 +36,7 @@ FIRST_GUARDED = "20261015"
 
 def _config(url: str) -> Config:
     config = Config(str(API / "alembic.ini"))
-    config.set_main_option("script_location", str(API / "src" / "choregos_api" / "migrations"))
+    config.set_main_option("script_location", str(API / "src" / "tranibor_api" / "migrations"))
     config.set_main_option("sqlalchemy.url", url)
     return config
 

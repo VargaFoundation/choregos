@@ -15,7 +15,7 @@ import pathlib
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-ORCHESTRATOR = ROOT / "apps/orchestrator/src/choregos_orchestrator"
+ORCHESTRATOR = ROOT / "apps/orchestrator/src/tranibor_orchestrator"
 LOG_METHODS = {"debug", "info", "warning", "error", "exception", "critical", "warn"}
 
 #: (relative file, start of the literal), each with its reason.
@@ -24,7 +24,7 @@ STILL_FRENCH_LITERALS = {
     ("activities/findings.py", "[a-zà-ÿ0-9_]+"),
     # The former names of the board fields (`Coût (€)`, `Taille`, `Risque`) have not been written by
     # the orchestrator since S22-21: they live outside it, in
-    # `choregos_adapters/tracker/fields.py` (FORMER_NAMES), for the time of a rename. lang: fr-ok
+    # `tranibor_adapters/tracker/fields.py` (FORMER_NAMES), for the time of a rename. lang: fr-ok
 }
 
 
@@ -86,7 +86,7 @@ def test_the_exception_list_only_shrinks() -> None:
 
 
 def test_the_tracking_comment_and_a_human_request_read_in_english() -> None:
-    from choregos_orchestrator.markdown import StageLine, StatusComment, render_human_request
+    from tranibor_orchestrator.markdown import StageLine, StatusComment, render_human_request
 
     line = StageLine(
         1, "Refining", "agent refine", "opencode", "standard", 12_400, 1_800, 0, 0.42, 7_380, "spec written"
@@ -106,7 +106,7 @@ def test_the_tracking_comment_and_a_human_request_read_in_english() -> None:
 
 #: The board fields from before S22-21: names a tracker still carries, that nothing writes any more.
 FORMER_BOARD_NAMES = {"Coût (€)", "Taille", "Risque"}  # lang: fr-ok
-COMPATIBILITY_TABLE = "packages/adapters/src/choregos_adapters/tracker/fields.py"
+COMPATIBILITY_TABLE = "packages/adapters/src/tranibor_adapters/tracker/fields.py"
 
 
 def test_the_former_board_names_live_only_in_the_compatibility_table() -> None:
@@ -114,7 +114,7 @@ def test_the_former_board_names_live_only_in_the_compatibility_table() -> None:
     `Risk`. The French names stay only in `FORMER_NAMES`, to rename a former board and write to it
     until it is renamed: one version, then the table goes away."""
     where: dict[str, set[str]] = {}
-    for root in (ORCHESTRATOR, ROOT / "packages/adapters/src/choregos_adapters"):
+    for root in (ORCHESTRATOR, ROOT / "packages/adapters/src/tranibor_adapters"):
         for path in sorted(root.rglob("*.py")):
             for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
                 if isinstance(node, ast.Constant) and node.value in FORMER_BOARD_NAMES:

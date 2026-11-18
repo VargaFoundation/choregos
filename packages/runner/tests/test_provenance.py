@@ -7,8 +7,8 @@ executed them or the agent wrote it. `Evidence.measured` says it, field by field
 
 from __future__ import annotations
 
-from choregos_contracts import Evidence
-from choregos_runner.dod import merge_evidence
+from tranibor_contracts import Evidence
+from tranibor_runner.dod import merge_evidence
 
 
 def test_the_merge_says_what_is_measured_field_by_field() -> None:

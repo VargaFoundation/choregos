@@ -30,7 +30,7 @@ from typing import Any
 
 import pytest
 import yaml
-from choregos_core.publishing import CHARTS, IMAGE_COMPONENTS, PUBLISHING
+from tranibor_core.publishing import CHARTS, IMAGE_COMPONENTS, PUBLISHING
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 # The tool the release runs (`tests/tools/conftest.py` puts the repository on the path for its own

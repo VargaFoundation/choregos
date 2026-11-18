@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
-from choregos_orchestrator.activities import memory as memory_activities
+from tranibor_orchestrator.activities import memory as memory_activities
 
 from .conftest import Fixture
 
@@ -14,9 +14,9 @@ pytestmark = pytest.mark.asyncio
 
 
 async def _closed_tickets(project_id: str, count: int, attempts: int, cost: float) -> None:
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
+    from tranibor_api.db.models import Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
 
     async with session_scope() as session:
         for index in range(count):

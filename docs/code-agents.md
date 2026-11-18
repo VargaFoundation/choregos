@@ -11,7 +11,7 @@ is a [prompt, voice or hosted agent](hosted-agents.md) instead.
 
 ## Why no Tranibor framework
 
-Tranibor has no agent framework and does not need one. `choregos-agent-sdk` is a **run-contract
+Tranibor has no agent framework and does not need one. `tranibor-agent-sdk` is a **run-contract
 adapter**: it gives an agent written on any framework the four things a step needs from the platform
 and nothing else —
 
@@ -28,7 +28,7 @@ checkpointing is not needed inside one pod. A framework of our own would compete
 maintained ones and duplicate the workflow engine, so the SDK's public surface is frozen by a test
 (`test_public_surface.py`); adding a planner, a memory or a graph primitive needs an amendment of
 [ADR 0063](adr/0063-agents-written-in-code.md). It lives in this repository, moves in lockstep with
-`choregos-contracts`, the runner image and the conformance suite, and is published to PyPI from this
+`tranibor-contracts`, the runner image and the conformance suite, and is published to PyPI from this
 repository's GitHub Actions (trusted publishing, `release.yml`).
 
 ## Bring your framework
@@ -67,11 +67,11 @@ calls you route through the SDK. A stricter option, loopback proxies the runner 
 ## Write it
 
 ```bash
-pip install choregos-agent-sdk      # until it is on PyPI: pip install ./packages/agent-sdk
+pip install tranibor-agent-sdk      # until it is on PyPI: pip install ./packages/agent-sdk
 ```
 
 ```python
-from choregos_agent_sdk import Context, Result, agent
+from tranibor_agent_sdk import Context, Result, agent
 
 
 @agent(name="ticket-triager")

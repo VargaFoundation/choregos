@@ -45,12 +45,12 @@ defaults:
 async def _work_item_to_dev(setup: Fixture, temporal_env: Any) -> tuple[Any, Any]:
     """The work item, pinned to `to-dev` (an agent prepares it), pushed up to the train; and the `dev`
     train, launched for real."""
-    from choregos_api.db.models import Project, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.rbac import SYSTEM
-    from choregos_api.services.definitions import publish_workflow
-    from choregos_api.temporal import interpreter_id
-    from choregos_orchestrator.train_client import fake_signals
+    from tranibor_api.db.models import Project, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.rbac import SYSTEM
+    from tranibor_api.services.definitions import publish_workflow
+    from tranibor_api.temporal import interpreter_id
+    from tranibor_orchestrator.train_client import fake_signals
 
     async with session_scope() as session:
         project = await session.get(Project, setup.project_id)
@@ -98,8 +98,8 @@ async def test_a_healthy_auto_sync_environment_delivers_the_work_item(
     assert issue["state"] == "live"
 
     # The train's history replays against the current code — and is archived for the next ones.
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.worker import Replayer
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
     if recording_history():

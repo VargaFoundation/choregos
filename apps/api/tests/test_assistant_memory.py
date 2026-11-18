@@ -48,7 +48,7 @@ pytestmark = pytest.mark.usefixtures("synthetic_installation")
 
 @pytest.fixture
 def offline(tmp_path: Path) -> Iterator[Path]:
-    from choregos_api.services.plugin_supply import OfflineDirectory, use_plugin_supply
+    from tranibor_api.services.plugin_supply import OfflineDirectory, use_plugin_supply
 
     root = tmp_path / "plugins"
     target = root / "investment-assistant" / "0.1.0"
@@ -101,8 +101,8 @@ async def test_a_subject_no_resolver_returned_is_refused_then_opens_once_a_tool_
     offered = {t["function"]["name"] for t in upstream.model.requests[0][1].get("tools", [])}
     assert {"memory_search", "memory_get_profile", "memory_propose", "markets__lookup_instrument"} <= offered
 
-    from choregos_api.db.models import AgentSessionRecord
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import AgentSessionRecord
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         record = await session.get(AgentSessionRecord, conversation)
@@ -157,7 +157,7 @@ async def test_a_subject_in_a_top_level_list_of_a_resolver_result_is_recorded_to
 
 
 def test_the_subjects_of_a_structured_result() -> None:
-    from choregos_api.services.assistant_memory import subjects_in
+    from tranibor_api.services.assistant_memory import subjects_in
 
     a, b = {"type": "t", "key": "a"}, {"type": "t", "key": "b"}
     assert subjects_in({"subject": a}) == [a]
@@ -175,9 +175,9 @@ async def test_a_tool_of_another_need_does_not_resolve_a_subject(
     markets: Any,
 ) -> None:
     """The same answer from a connector bound to no resolver need records nothing."""
-    from choregos_api.db.models import AgentSessionRecord
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.assistant_memory import note_resolved_subjects
+    from tranibor_api.db.models import AgentSessionRecord
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.assistant_memory import note_resolved_subjects
 
     installation = await _assistant(client, with_markets=True)
     conversation = await _open(installation)
@@ -244,7 +244,7 @@ async def test_owner_only_and_user_only_are_never_written_active_by_a_conversati
     unknown = await _tool(conversation, "memory_search", space="nope", query="x")
     assert unknown["error"] == "unknown_space"
 
-    from choregos_api.services.assistant_memory import MemoryRefused, _status_for
+    from tranibor_api.services.assistant_memory import MemoryRefused, _status_for
 
     with pytest.raises(MemoryRefused) as refused:
         _status_for({"name": "mine", "writes": "user_only"})
@@ -346,10 +346,10 @@ async def test_max_facts_expires_the_oldest_unpinned_first(
 async def test_retention_days_expires_old_facts(client: AsyncClient, admin: str, offline: Path) -> None:
     from datetime import timedelta
 
-    from choregos_api.db.models import MemoryFact, MemoryStore
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.assistant_memory import facts_of
-    from choregos_core import utcnow
+    from tranibor_api.db.models import MemoryFact, MemoryStore
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.assistant_memory import facts_of
+    from tranibor_core import utcnow
 
     conversation = await _open(await _assistant(client))
     subject = {"type": "instrument", "key": "FR0000120073"}
@@ -377,9 +377,9 @@ async def test_a_policy_without_memory_cuts_every_tool_and_the_injection(
     upstream: Upstream,
     offline: Path,
 ) -> None:
-    from choregos_api.db.models import AgentSessionRecord
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.assistant_memory import injection_text
+    from tranibor_api.db.models import AgentSessionRecord
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.assistant_memory import injection_text
 
     await _agent(client)
     conversation = await _open(await _assistant(client))
@@ -434,9 +434,9 @@ async def test_the_start_of_a_conversation_carries_the_profile_and_facts_framed_
     upstream: Upstream,
     offline: Path,
 ) -> None:
-    from choregos_api.db.models import AgentSessionRecord
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.assistant_memory import injection_text
+    from tranibor_api.db.models import AgentSessionRecord
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.assistant_memory import injection_text
 
     await _agent(client)
     conversation = await _open(await _assistant(client))
@@ -471,7 +471,7 @@ async def test_the_start_of_a_conversation_carries_the_profile_and_facts_framed_
     assert any("Prefers Reuters." in s for s in system)
 
     # The budget cuts: a space whose `inject_tokens` is 1 injects nothing of its facts.
-    from choregos_api.services import assistant_memory
+    from tranibor_api.services import assistant_memory
 
     original = assistant_memory._tokens
     assistant_memory._tokens = lambda _text: 10_000  # type: ignore[assignment]
@@ -485,7 +485,7 @@ async def test_the_start_of_a_conversation_carries_the_profile_and_facts_framed_
 
 
 def test_an_assistant_namespace_is_refused_by_the_run_namespace_parsers() -> None:
-    from choregos_core.memory_scope import assistant_space_namespace, parse_namespace, split_namespace
+    from tranibor_core.memory_scope import assistant_space_namespace, parse_namespace, split_namespace
 
     namespace = assistant_space_namespace("northwind", "inst1", "user1", ("instrument", "US0378331005"))
     assert namespace == "org:northwind#assistant:inst1#user:user1#subject:instrument:US0378331005"
@@ -560,9 +560,9 @@ async def test_the_memory_page_lists_confirms_corrects_and_deletes_for_its_owner
 async def test_another_person_never_reads_someones_user_space_on_postgresql(pg_app: Any) -> None:
     """Straight through RLS, whatever the router does: an administrator of the organisation sees neither the
     stores nor their facts and profiles; their owner and the platform scope do."""
-    from choregos_api.db.models import MemoryFact, MemoryProfile, MemoryStore, Organization, User
-    from choregos_api.db.session import limit_to_organisations, name_the_user, session_scope
     from httpx import ASGITransport
+    from tranibor_api.db.models import MemoryFact, MemoryProfile, MemoryStore, Organization, User
+    from tranibor_api.db.session import limit_to_organisations, name_the_user, session_scope
 
     async with AsyncClient(transport=ASGITransport(app=pg_app), base_url="http://test") as client:
         async with session_scope(orgs="*") as session:
@@ -572,7 +572,7 @@ async def test_another_person_never_reads_someones_user_space_on_postgresql(pg_a
         async with session_scope(orgs="*") as session:
             organisation = (await session.execute(select(Organization))).scalar_one()
             users = {u.email: u.id for u in (await session.execute(select(User))).scalars()}
-            from choregos_api.db.models import AssistantInstallation
+            from tranibor_api.db.models import AssistantInstallation
 
             installation = AssistantInstallation(
                 org_id=organisation.id,

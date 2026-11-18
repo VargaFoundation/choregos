@@ -29,7 +29,7 @@ last rotated" to show.
      `store:project/<slug>/<kind>/<field>` for a project connector.
    - A **reference** (`env:NAME`, or a plugin scheme such as `vault:`): for operators, behind
      "use a reference instead".
-2. **A `SecretStore` seam** (`apps/api/src/choregos_api/secret_store.py`): `put`, `get_many`, `meta`,
+2. **A `SecretStore` seam** (`apps/api/src/tranibor_api/secret_store.py`): `put`, `get_many`, `meta`,
    `delete`, async, with the session and the organisation. `SealedDbSecretStore` is the default;
    `FakeSecretStore` serves `CHOREGOS_FAKES` when no key is configured and the tests. An external
    manager (Infisical, Vault) stays a **reference scheme** (`declarer_un_resolveur`). Rejected:

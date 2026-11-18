@@ -18,7 +18,7 @@ from httpx import AsyncClient
 from .test_a2a_inbound import _ready, _send
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
-SRC = "apps/api/src/choregos_api/"
+SRC = "apps/api/src/tranibor_api/"
 OWNED = tuple(f"{SRC}{name}/" for name in ("db", "a2a", "egress", "knowledge"))
 
 
@@ -41,9 +41,9 @@ def test_subsystems_have_no_french() -> None:
 
 
 async def test_door_audit_keys_unchanged(client: AsyncClient, project: dict[str, Any]) -> None:
-    from choregos_api.db.models import AuditLog
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import AuditLog
+    from tranibor_api.db.session import session_scope
 
     token = await _ready(client, project)
     await _send(client, token)

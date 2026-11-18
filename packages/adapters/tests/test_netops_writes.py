@@ -8,12 +8,12 @@ from __future__ import annotations
 import json
 
 import pytest
-from choregos_adapters.errors import AdapterError
-from choregos_adapters.fakes import FakeScm
-from choregos_adapters.fakes.netops import FakePfSense, FakeRepo
-from choregos_adapters.netops import NginxConfig, PfSenseFirewall
-from choregos_adapters.netops.cilium import checked_policy
-from choregos_adapters.netops.gitops import GitOpsTarget, branch_for
+from tranibor_adapters.errors import AdapterError
+from tranibor_adapters.fakes import FakeScm
+from tranibor_adapters.fakes.netops import FakePfSense, FakeRepo
+from tranibor_adapters.netops import NginxConfig, PfSenseFirewall
+from tranibor_adapters.netops.cilium import checked_policy
+from tranibor_adapters.netops.gitops import GitOpsTarget, branch_for
 
 RULE = {"type": "pass", "interface": ["lan"], "protocol": "tcp", "source": "lan", "destination": "any",
         "destination_port": "8443", "descr": "LAN to the admin port"}  # fmt: skip

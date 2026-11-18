@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from choregos_core.agent_completeness import COMPONENTS, is_complete, missing_components
+from tranibor_core.agent_completeness import COMPONENTS, is_complete, missing_components
 
 COMPLETE: dict[str, Any] = {
     "instructions": "x",

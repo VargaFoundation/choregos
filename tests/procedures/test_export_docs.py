@@ -10,7 +10,7 @@ import subprocess
 import sys
 
 import pytest
-from choregos_core import procedures as core
+from tranibor_core import procedures as core
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 _SPEC = importlib.util.spec_from_file_location(

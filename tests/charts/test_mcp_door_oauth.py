@@ -60,7 +60,7 @@ def test_switched_on_with_its_clients() -> None:
 
 def test_the_api_reads_what_the_chart_writes(monkeypatch: pytest.MonkeyPatch) -> None:
     """The rendered JSON is what the API settings accept -- not merely JSON."""
-    from choregos_api.config import Settings
+    from tranibor_api.config import Settings
 
     env = _api_env(
         "global.mcp.oauth.enabled=true",

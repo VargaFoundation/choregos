@@ -17,9 +17,9 @@ CAPPED = {"input_tokens": 1000, "output_tokens": 500}
 
 
 async def _ledger() -> list[Any]:
-    from choregos_api.db.models import CostLedger
-    from choregos_api.db.session import ALL_ORGS, session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import CostLedger
+    from tranibor_api.db.session import ALL_ORGS, session_scope
 
     async with session_scope(orgs=ALL_ORGS) as session:
         rows = (await session.execute(select(CostLedger).order_by(CostLedger.ts))).scalars().all()
@@ -28,9 +28,9 @@ async def _ledger() -> list[Any]:
 
 
 async def _set_record(record: dict[str, Any] | None, **columns: Any) -> None:
-    from choregos_api.db.models import KnowledgeBase
-    from choregos_api.db.session import ALL_ORGS, session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import KnowledgeBase
+    from tranibor_api.db.session import ALL_ORGS, session_scope
 
     async with session_scope(orgs=ALL_ORGS) as session:
         base = (await session.execute(select(KnowledgeBase))).scalars().one()
@@ -45,10 +45,10 @@ async def _set_record(record: dict[str, Any] | None, **columns: Any) -> None:
 async def test_every_call_made_is_booked_as_distill_on_the_organisation_without_an_owning_project(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
-    from choregos_api.knowledge.distill import distill
     from sqlalchemy import select
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.knowledge.distill import distill
 
     base_id = await _base(client, FOUR, monkeypatch)
     await _price(0.01, 0.03)
@@ -70,7 +70,7 @@ async def test_every_call_made_is_booked_as_distill_on_the_organisation_without_
 async def test_a_base_with_an_owning_project_books_on_that_project(
     client: AsyncClient, admin: str, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.knowledge.distill import distill
+    from tranibor_api.knowledge.distill import distill
 
     base_id = await _base(client, FOUR, monkeypatch)
     await _set_record(None, owner_project=project["slug"])
@@ -84,7 +84,7 @@ async def test_a_base_with_an_owning_project_books_on_that_project(
 async def test_an_owning_project_that_no_longer_exists_falls_back_to_the_organisation(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.knowledge.distill import distill
+    from tranibor_api.knowledge.distill import distill
 
     base_id = await _base(client, FOUR, monkeypatch)
     await _set_record(None, owner_project="deleted-project")
@@ -96,7 +96,7 @@ async def test_an_owning_project_that_no_longer_exists_falls_back_to_the_organis
 async def test_a_replay_and_a_relaunch_book_only_what_they_call(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.knowledge.distill import distill
+    from tranibor_api.knowledge.distill import distill
 
     base_id = await _base(client, FOUR, monkeypatch)
     await distill("northwind", base_id, "admin@northwind.dev", distiller=Counting(CAPPED))
@@ -108,7 +108,7 @@ async def test_a_replay_and_a_relaunch_book_only_what_they_call(
 async def test_the_organisation_report_shows_the_spend_and_the_project_report_does_not(
     client: AsyncClient, admin: str, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.knowledge.distill import distill
+    from tranibor_api.knowledge.distill import distill
 
     base_id = await _base(client, FOUR, monkeypatch)
     await _price(0.01, 0.03)
@@ -124,8 +124,8 @@ async def test_the_organisation_report_shows_the_spend_and_the_project_report_do
 
 
 async def test_a_ledger_line_needs_a_project_or_an_organisation(client: AsyncClient, admin: str) -> None:
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.costs import record_cost
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.costs import record_cost
 
     async with session_scope() as session:
         with pytest.raises(ValueError, match="project or, failing one, to an organisation"):
@@ -153,7 +153,7 @@ async def test_a_ledger_line_needs_a_project_or_an_organisation(client: AsyncCli
 async def test_stopping_a_running_distillation_cancels_the_workflow_and_says_who(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.temporal import get_temporal, knowledge_distill_id
+    from tranibor_api.temporal import get_temporal, knowledge_distill_id
 
     await _base(client, FOUR, monkeypatch)
     started = await client.post(KB + "/distill", json={})
@@ -164,9 +164,9 @@ async def test_stopping_a_running_distillation_cancels_the_workflow_and_says_who
     after = stopped.json()["distillation"]
     assert (after["status"], after["code"]) == ("stopped", "cancelled")
     assert after["stopped_by"] == record["requested_by"] and after["at"]
-    from choregos_api.db.models import KnowledgeBase
-    from choregos_api.db.session import ALL_ORGS, session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import KnowledgeBase
+    from tranibor_api.db.session import ALL_ORGS, session_scope
 
     async with session_scope(orgs=ALL_ORGS) as session:
         base_id = (await session.execute(select(KnowledgeBase.id))).scalar_one()
@@ -187,7 +187,7 @@ async def test_stopping_nothing_is_refused_and_so_is_a_stranger(
 async def test_a_stopped_run_makes_no_further_call_and_publishes_nothing(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.knowledge.distill import distill
+    from tranibor_api.knowledge.distill import distill
 
     base_id = await _base(client, FOUR, monkeypatch)
     await _set_record(
@@ -228,8 +228,8 @@ async def test_a_progress_write_never_resurrects_a_run_stopped_meanwhile(
 ) -> None:
     """The flake of 2026-10-28: the run read `running`, the stop committed, the run wrote its progress
     back over `stopped`, and a second stop found the run still going."""
-    from choregos_api.knowledge import distill as module
     from sqlalchemy.ext.asyncio import AsyncSession
+    from tranibor_api.knowledge import distill as module
 
     base_id = await _base(client, FOUR, monkeypatch)
     await _set_record({**STOPPED, "status": "running"})
@@ -250,7 +250,7 @@ async def test_a_progress_write_never_resurrects_a_run_stopped_meanwhile(
 async def test_a_stop_just_before_publishing_publishes_nothing(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.knowledge import distill as module
+    from tranibor_api.knowledge import distill as module
 
     base_id = await _base(client, FOUR, monkeypatch)
     await _set_record({**STOPPED, "status": "running", "requested_by": "admin@northwind.dev"})
@@ -270,8 +270,8 @@ async def test_a_stop_just_before_publishing_publishes_nothing(
 async def test_a_write_lands_only_on_the_run_that_is_still_running(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.db.session import ALL_ORGS, session_scope
-    from choregos_api.knowledge.distill import write_if_running
+    from tranibor_api.db.session import ALL_ORGS, session_scope
+    from tranibor_api.knowledge.distill import write_if_running
 
     base_id = await _base(client, FOUR, monkeypatch)
     started = STOPPED["started_at"]
@@ -290,7 +290,7 @@ async def test_a_write_lands_only_on_the_run_that_is_still_running(
 async def test_a_cancelled_answer_does_not_overwrite_a_new_running_record(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.knowledge.distill import step_fail
+    from tranibor_api.knowledge.distill import step_fail
 
     base_id = await _base(client, FOUR, monkeypatch)
     now = {"status": "running", "started_at": "2026-10-26T11:00:00+00:00", "requested_by": "me"}
@@ -305,7 +305,7 @@ async def test_a_cancelled_answer_does_not_overwrite_a_new_running_record(
 async def test_a_relaunch_keeps_the_last_run_s_settings_and_its_outcome_joins_the_history(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.temporal import get_temporal
 
     await _base(client, FOUR, monkeypatch)
     failed = {
@@ -353,8 +353,8 @@ async def test_there_is_nothing_to_relaunch_before_a_first_run(
 async def test_a_relaunch_after_a_finished_run_reuses_every_stored_part_and_books_nothing(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.knowledge.conversion import conversions
-    from choregos_api.knowledge.distill import distill
+    from tranibor_api.knowledge.conversion import conversions
+    from tranibor_api.knowledge.distill import distill
 
     base_id = await _base(client, FOUR, monkeypatch)
     await distill("northwind", base_id, "admin@northwind.dev", distiller=Counting(CAPPED))
@@ -368,7 +368,7 @@ async def test_a_relaunch_after_a_finished_run_reuses_every_stored_part_and_book
 
 
 async def test_the_history_keeps_five_runs_newest_first_and_the_outcome_keeps_it() -> None:
-    from choregos_api.knowledge.distill import HISTORY_SIZE, new_run
+    from tranibor_api.knowledge.distill import HISTORY_SIZE, new_run
 
     record: dict[str, Any] | None = None
     for n in range(8):
@@ -383,7 +383,7 @@ async def test_the_history_keeps_five_runs_newest_first_and_the_outcome_keeps_it
 async def test_a_failed_run_and_a_published_one_keep_the_history_and_the_settings(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.knowledge.conversion import conversions
+    from tranibor_api.knowledge.conversion import conversions
 
     await _base(client, FOUR, monkeypatch)
     await _set_record({"status": "failed", "code": "gateway", "exclude": [], "max_usd": None})
@@ -423,7 +423,7 @@ def _gateway(answer: dict[str, Any]) -> httpx.MockTransport:
 
 
 async def test_a_merge_is_streamed_so_a_long_generation_is_not_a_read_timeout() -> None:
-    from choregos_api.knowledge.distill import GatewayDistiller
+    from tranibor_api.knowledge.distill import GatewayDistiller
 
     answer = {"description": "d", "principles": [{"title": "T", "statement": "S", "sources": []}] * 30}
     distiller = GatewayDistiller("http://gw", "k", "m", transport=_gateway(answer))
@@ -433,7 +433,7 @@ async def test_a_merge_is_streamed_so_a_long_generation_is_not_a_read_timeout() 
 
 
 async def test_a_gateway_that_ignores_stream_still_answers() -> None:
-    from choregos_api.knowledge.distill import DistillationError, GatewayDistiller
+    from tranibor_api.knowledge.distill import DistillationError, GatewayDistiller
 
     def plain(request: httpx.Request) -> httpx.Response:
         return httpx.Response(

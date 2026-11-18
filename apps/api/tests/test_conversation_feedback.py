@@ -8,9 +8,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from choregos_contracts import load_schema
 from httpx import AsyncClient
 from jsonschema import Draft202012Validator
+from tranibor_contracts import load_schema
 
 from .egress_support import as_person
 from .test_agent_sessions import ORG, Upstream, _agent, _ask, upstream  # noqa: F401
@@ -19,9 +19,9 @@ CANDIDATES = f"{ORG}/agents/helper/feedback-candidates"
 
 
 async def _name_the_admin(name: str) -> None:
-    from choregos_api.db.models import User
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import User
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         user = (await session.execute(select(User).where(User.email == "admin@northwind.dev"))).scalar_one()
@@ -84,9 +84,9 @@ async def test_a_candidate_is_never_added_to_a_suite_automatically(
     await client.post(_feedback(session_id), json={"rating": "down"})
     assert len((await client.get(CANDIDATES)).json()) == 1
     after = (await client.get(f"{ORG}/agents/helper")).json()
-    from choregos_api.db.models import AgentVersion
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import AgentVersion
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as db:
         specs = [row.get("evals", []) for row in (await db.execute(select(AgentVersion.spec))).scalars()]

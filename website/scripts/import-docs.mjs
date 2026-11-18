@@ -25,7 +25,7 @@ import { fileURLToPath } from "node:url";
 
 /** `owner/name` of the repository, from the publishing identity (ADR 0156) of the checkout being copied. */
 export function repositoryOf(sourceRoot) {
-  const file = path.join(sourceRoot, "packages", "core", "src", "choregos_core", "publishing.json");
+  const file = path.join(sourceRoot, "packages", "core", "src", "tranibor_core", "publishing.json");
   const url = new URL(JSON.parse(fs.readFileSync(file, "utf8")).source_repository);
   return url.pathname.replace(/^\/|\/$/g, "");
 }

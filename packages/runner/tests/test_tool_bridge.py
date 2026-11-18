@@ -16,11 +16,11 @@ from typing import Any
 from urllib.parse import urlsplit
 
 import pytest
-from choregos_contracts import StageInput, ToolScripts
-from choregos_runner.config import RunnerSettings
-from choregos_runner.exits import Exit
-from choregos_runner.runner import EventJournal, Runner
-from choregos_runner.workspace import agent_home
+from tranibor_contracts import StageInput, ToolScripts
+from tranibor_runner.config import RunnerSettings
+from tranibor_runner.exits import Exit
+from tranibor_runner.runner import EventJournal, Runner
+from tranibor_runner.workspace import agent_home
 
 from .conftest import FakeInternalClient, agent_script, port_of, valid_result
 

@@ -6,8 +6,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from choregos_tools_mcp import McpServer
-from choregos_tools_mcp.tools import TOOL_SCHEMAS
+from tranibor_tools_mcp import McpServer
+from tranibor_tools_mcp.tools import TOOL_SCHEMAS
 
 HIT = {
     "knowledge_base": "framework",

@@ -55,8 +55,8 @@ async def test_a_policy_wider_than_the_organisation_is_refused(
 async def test_a_policy_above_a_newer_ceiling_runs_clamped_and_says_so(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.db.session import session_scope
-    from choregos_api.services import policy_engine
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services import policy_engine
 
     saved = await client.put(f"/api/v1/projects/{project['id']}/policy", json={"yaml": _policy(ticket_m=30)})
     assert saved.status_code == 200
@@ -72,8 +72,8 @@ async def test_a_policy_above_a_newer_ceiling_runs_clamped_and_says_so(
 
 
 async def test_the_orchestrator_runs_the_clamped_policy(client: AsyncClient, project: dict[str, Any]) -> None:
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities.base import project_bundle
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities.base import project_bundle
 
     await client.put(f"/api/v1/projects/{project['id']}/policy", json={"yaml": _policy(stage_m=9)})
     await _ceiling(client)

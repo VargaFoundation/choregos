@@ -20,7 +20,7 @@ import httpx
 from ._bench import bench
 
 PACKAGE = Path(__file__).resolve().parents[1]
-SOURCE = PACKAGE / "src" / "choregos_outpost"
+SOURCE = PACKAGE / "src" / "tranibor_outpost"
 #: The scriptable door stands in for the platform in tests: it is not the daemon.
 DAEMON = sorted(path for path in SOURCE.rglob("*.py") if "fakes" not in path.parts)
 
@@ -52,7 +52,7 @@ RUNNERS = {
 }
 RUNNER_MODULES = {"subprocess", "runpy", "pickle", "marshal", "ctypes", "pip", "ensurepip"}
 #: Telemetry, another way out, or the platform's own code.
-FOREIGN_MODULES = {"opentelemetry", "sentry_sdk", "prometheus_client", "requests", "aiohttp", "choregos_api"}
+FOREIGN_MODULES = {"opentelemetry", "sentry_sdk", "prometheus_client", "requests", "aiohttp", "tranibor_api"}
 
 
 def _calls(tree: ast.AST) -> set[str]:
@@ -100,7 +100,7 @@ def test_the_detector_sees_what_it_guards() -> None:
     assert _calls(listening) & LISTENERS
     running = ast.parse("import subprocess\nsubprocess.run(['sh', '-c', order])\neval(order)\n")
     assert _calls(running) & RUNNERS and _imports(running) & RUNNER_MODULES
-    assert _imports(ast.parse("from choregos_api.services import broker\n")) & FOREIGN_MODULES
+    assert _imports(ast.parse("from tranibor_api.services import broker\n")) & FOREIGN_MODULES
     assert _imports(ast.parse("from opentelemetry import trace\n")) & FOREIGN_MODULES
 
 
@@ -111,9 +111,9 @@ def test_the_package_depends_on_nothing_that_serves_or_reports() -> None:
         for dependency in declared["dependencies"]
     }
     assert names == {
-        "choregos-contracts",
-        "choregos-core",
-        "choregos-adapters",
+        "tranibor-contracts",
+        "tranibor-core",
+        "tranibor-adapters",
         "httpx",
         "pydantic",
         "structlog",
@@ -123,7 +123,7 @@ def test_the_package_depends_on_nothing_that_serves_or_reports() -> None:
         "jsonschema",
         "typer",
     }, "a new dependency of the daemon is a decision: say why in the pull request"
-    assert declared["scripts"] == {"choregos-outpost": "choregos_outpost.cli:main"}
+    assert declared["scripts"] == {"choregos-outpost": "tranibor_outpost.cli:main"}
 
 
 async def test_a_running_daemon_dials_the_door_and_its_endpoints_and_nothing_else(

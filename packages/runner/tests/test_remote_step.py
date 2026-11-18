@@ -13,11 +13,11 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from choregos_adapters.a2a import parse_card
-from choregos_adapters.fakes.a2a import FakeA2aAgent
-from choregos_contracts import AgentRef, DeclaredCost, ModelRef, RemoteCall, StageInput, StageStatus
-from choregos_runner.exits import Exit
-from choregos_runner.runner import Runner
+from tranibor_adapters.a2a import parse_card
+from tranibor_adapters.fakes.a2a import FakeA2aAgent
+from tranibor_contracts import AgentRef, DeclaredCost, ModelRef, RemoteCall, StageInput, StageStatus
+from tranibor_runner.exits import Exit
+from tranibor_runner.runner import Runner
 
 from .conftest import FakeInternalClient
 

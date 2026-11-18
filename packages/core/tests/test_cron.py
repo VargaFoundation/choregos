@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import pytest
-from choregos_core.cron import matches, min_gap, next_fire, parse
+from tranibor_core.cron import matches, min_gap, next_fire, parse
 
 
 def utc(*args: int) -> datetime:

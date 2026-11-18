@@ -59,8 +59,8 @@ async def served_version(client: AsyncClient, project_id: str, ref: str = "revie
 async def finished_runs(
     project_id: str, slug: str, version: int, statuses: list[str], key: str = "R"
 ) -> None:
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Run, WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         for index, status in enumerate(statuses):
@@ -92,9 +92,9 @@ async def token_client(app: Any, client: AsyncClient) -> AsyncClient:
 
 async def only_project_roles() -> None:
     """A person who belongs to projects only: dropping the organisation role a first sign-in gives."""
-    from choregos_api.db.models import Membership
-    from choregos_api.db.session import session_scope
     from sqlalchemy import delete, select
+    from tranibor_api.db.models import Membership
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         await session.execute(
@@ -173,9 +173,9 @@ async def test_on_publish_candidate_serves_testing_only_to_those_who_follow_it(
 
 
 async def resolve_for(project_id: str, work_item: str) -> Any:
-    from choregos_api.db.models import Project
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.agents import resolve_agent
+    from tranibor_api.db.models import Project
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.agents import resolve_agent
 
     async with session_scope() as session:
         project_row = await session.get(Project, project_id)
@@ -258,9 +258,9 @@ async def test_production_checks_the_eval_suite_again_at_release(
 ) -> None:
     """A revision that gets into the database without passing the level-1 gate does not reach
     production: red without the re-check at release."""
-    from choregos_api.db.models import Agent, AgentVersion
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Agent, AgentVersion
+    from tranibor_api.db.session import session_scope
 
     await as_user(client, ADMIN)
     suite = [{"name": "mentions review", "must_contain": ["Review"]}]
@@ -341,9 +341,9 @@ async def test_an_older_revision_that_was_never_in_production_is_not_a_rollback(
 
 
 async def test_a_migrated_agent_rolls_back_to_any_version_up_to_its_baseline(client: AsyncClient) -> None:
-    from choregos_api.db.models import Agent, AgentRelease, AgentVersion
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Agent, AgentRelease, AgentVersion
+    from tranibor_api.db.session import session_scope
 
     await as_user(client, ADMIN)
     await new_agent(client, "legacy")
@@ -382,7 +382,7 @@ async def test_a_migrated_agent_rolls_back_to_any_version_up_to_its_baseline(cli
 async def test_production_needs_a_person_with_a_fresh_sign_in(
     client: AsyncClient, app: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api import freshness
+    from tranibor_api import freshness
 
     await as_user(client, ADMIN)
     await new_agent(client, policy={"on_publish": "candidate"})
@@ -415,7 +415,7 @@ async def test_production_needs_a_person_with_a_fresh_sign_in(
 async def test_a_personal_agent_is_released_without_a_step_up(
     client: AsyncClient, app: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api import freshness
+    from tranibor_api import freshness
 
     await add_member(client, "dev@northwind.dev", "developer")
     await as_user(client, "dev@northwind.dev")
@@ -457,7 +457,7 @@ async def test_who_may_release(client: AsyncClient) -> None:
 
 
 async def test_the_plugin_gesture_check_can_refuse_a_release(client: AsyncClient) -> None:
-    from choregos_api import extensions
+    from tranibor_api import extensions
 
     def refuse(_session: Any, demand: Any) -> None:
         assert demand.target["channel"] == "stable" and demand.target["kind"] == "promote"
@@ -482,9 +482,9 @@ async def test_the_plugin_gesture_check_can_refuse_a_release(client: AsyncClient
 
 
 async def test_every_move_is_in_the_history_and_in_the_audit_log(client: AsyncClient) -> None:
-    from choregos_api.db.models import AuditLog
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import AuditLog
+    from tranibor_api.db.session import session_scope
 
     await as_user(client, ADMIN)
     await new_agent(client, policy={"on_publish": "none"})
@@ -552,7 +552,7 @@ async def test_the_exposure_lists_who_chose_their_own_revision(client: AsyncClie
 async def test_the_release_policy_is_the_owners_and_loosening_it_needs_a_fresh_sign_in(
     client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api import freshness
+    from tranibor_api import freshness
 
     await make_project(client, "dev")
     await add_member(client, "owner@northwind.dev", "project_owner", project="dev")
@@ -586,9 +586,9 @@ async def test_the_release_policy_is_the_owners_and_loosening_it_needs_a_fresh_s
 
 
 async def test_installed_forked_and_upgraded_agents_have_a_production_pointer(client: AsyncClient) -> None:
-    from choregos_api.db.models import AgentVersion
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import AgentVersion
+    from tranibor_api.db.session import session_scope
 
     await as_user(client, ADMIN)
     common = await install_common(client)
@@ -627,9 +627,9 @@ async def test_retiring_an_agent_empties_testing(client: AsyncClient) -> None:
 async def test_a_release_made_meanwhile_is_a_conflict_not_a_lost_update(client: AsyncClient) -> None:
     """The pointer moves with a compare-and-set from the revision the checks saw: a gesture check
     that lets another release slip in (a stand-in for a concurrent request) makes this one a 409."""
-    from choregos_api import extensions
-    from choregos_api.db.models import Agent
     from sqlalchemy import update
+    from tranibor_api import extensions
+    from tranibor_api.db.models import Agent
 
     await as_user(client, ADMIN)
     await new_agent(client, policy={"on_publish": "none"})

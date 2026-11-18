@@ -70,7 +70,7 @@ def _commands(prefix: str) -> list[list[str]]:
 
 
 async def _publish(client: AsyncClient, project: dict[str, Any]) -> None:
-    from choregos_core.dsl import template_yaml
+    from tranibor_core.dsl import template_yaml
 
     tracker = await client.put(
         f"/api/v1/projects/{project['id']}/connectors/tracker", json={"type": "internal", "config": {}}
@@ -135,8 +135,8 @@ def _same_shape(sample: Any, real: Any, path: str = "result") -> None:
 
 async def _fail(task: str) -> None:
     """The work item reaches a final state, so that a stream on it comes to its end."""
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         item = await session.get(WorkItem, task)
@@ -145,7 +145,7 @@ async def _fail(task: str) -> None:
 
 
 async def test_the_page_s_requests_work_in_its_order(client: AsyncClient, project: dict[str, Any]) -> None:
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.temporal import get_temporal
 
     await _publish(client, project)
     token = await _application_token(client)
@@ -213,9 +213,9 @@ async def test_the_page_s_requests_work_in_its_order(client: AsyncClient, projec
 async def test_a_file_part_is_stored_as_an_input_of_the_work_item(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.db.models import ArtifactRecord
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import ArtifactRecord
+    from tranibor_api.db.session import session_scope
 
     await _publish(client, project)
     token = await _application_token(client)

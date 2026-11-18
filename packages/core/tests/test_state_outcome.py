@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import pytest
-from choregos_contracts import State, StateOutcome, load_schema
-from choregos_core import ValidationError, parse_workflow
-from choregos_core.dsl import to_graph
+from tranibor_contracts import State, StateOutcome, load_schema
+from tranibor_core import ValidationError, parse_workflow
+from tranibor_core.dsl import to_graph
 
 ACCESS_YAML = """
 apiVersion: choregos/v1

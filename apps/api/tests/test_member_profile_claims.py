@@ -15,12 +15,12 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest
 import respx
-from choregos_api.config import reset_settings_cache
-from choregos_api.db.models import User
-from choregos_api.db.session import session_scope
-from choregos_api.routers.auth import forget_discovery
 from httpx import AsyncClient, Response
 from sqlalchemy import select
+from tranibor_api.config import reset_settings_cache
+from tranibor_api.db.models import User
+from tranibor_api.db.session import session_scope
+from tranibor_api.routers.auth import forget_discovery
 
 ISSUER = "https://idp.example.test/realms/x"
 DISCOVERY = {
@@ -110,7 +110,7 @@ async def test_a_later_sign_in_replaces_what_it_carries_and_keeps_the_rest(
 
 async def test_an_extension_sign_in_stores_the_profile_it_maps(client: AsyncClient, org: str) -> None:
     """SAML, brought by an extension, maps its attributes onto the same columns through the public finish."""
-    from choregos_api.routers.auth import terminer_la_connexion
+    from tranibor_api.routers.auth import terminer_la_connexion
 
     async with session_scope(orgs="*") as session:
         await terminer_la_connexion(
@@ -128,8 +128,8 @@ async def test_an_extension_sign_in_stores_the_profile_it_maps(client: AsyncClie
 
 
 def test_a_tenant_provider_names_its_own_job_title_and_department_claims() -> None:
-    from choregos_api.routers.auth import provider_profile
-    from choregos_api.tenant_sign_in import OidcProvider
+    from tranibor_api.routers.auth import provider_profile
+    from tranibor_api.tenant_sign_in import OidcProvider
 
     provider = OidcProvider(
         issuer="https://idp.acme.example", client_id="c", job_title_claim="title", department_claim="ou"

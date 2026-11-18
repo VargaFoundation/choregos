@@ -5,10 +5,10 @@ how it is opened, and only with the keys the contract knows."""
 from __future__ import annotations
 
 import pytest
-from choregos_core import parse_workflow
-from choregos_core.dsl import template_yaml
-from choregos_core.dsl.edition import edit
-from choregos_core.errors import ValidationError
+from tranibor_core import parse_workflow
+from tranibor_core.dsl import template_yaml
+from tranibor_core.dsl.edition import edit
+from tranibor_core.errors import ValidationError
 
 OPEN_PR = "    does: open_pr\n"
 

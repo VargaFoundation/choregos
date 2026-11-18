@@ -15,8 +15,8 @@ from typing import Any
 
 import httpx
 import pytest
-from choregos_core import utcnow
 from httpx import ASGITransport, AsyncClient
+from tranibor_core import utcnow
 
 from .conftest import login, without_postgres
 from .kits.conversations import ME, _events, _open, _record, _say
@@ -161,7 +161,7 @@ async def test_a_long_history_is_summarised_and_the_model_gets_the_summary(
     upstream: Upstream,  # noqa: F811
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from choregos_api.services import conversation_turns
+    from tranibor_api.services import conversation_turns
 
     monkeypatch.setattr(conversation_turns, "COMPRESS_AFTER_TOKENS", 300)
     await _agent(client)
@@ -184,8 +184,8 @@ async def test_a_long_history_is_summarised_and_the_model_gets_the_summary(
 
 
 def test_compression_is_a_noop_under_the_threshold_and_keeps_the_latest_turns() -> None:
-    from choregos_api.db.models import AgentSessionRecord
-    from choregos_api.services.conversation_turns import KEEP_TURNS, compress_history
+    from tranibor_api.db.models import AgentSessionRecord
+    from tranibor_api.services.conversation_turns import KEEP_TURNS, compress_history
 
     record = AgentSessionRecord()
     record.messages = [{"role": "system", "content": "Be brief."}]
@@ -231,7 +231,7 @@ async def test_cancel_stops_a_slow_turn_and_books_its_spend(
     )
     # Nothing runs any more: cancelling again is a conflict, and the conversation takes its next turn.
     assert (await client.post(f"{ME}/{conversation}/cancel")).status_code == 409
-    from choregos_api.services.agent_sessions import set_model_transport
+    from tranibor_api.services.agent_sessions import set_model_transport
 
     set_model_transport(httpx.MockTransport(upstream.handle))
     upstream.model.say("Back.")
@@ -255,8 +255,8 @@ async def test_two_concurrent_turns_never_take_the_same_number(
     pg_app: Any,
     upstream: Upstream,  # noqa: F811
 ) -> None:
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         session.add(Organization(slug="a", name="A"))
@@ -281,8 +281,8 @@ async def test_two_concurrent_turns_never_take_the_same_number(
         assert transport.calls == 1, "the refused turn never reached the model"
         record = await _record(conversation)
         assert record.turns == 1 and record.turn_lease_until is None
-        from choregos_api.db.models import GatewayKeyRow
         from sqlalchemy import select
+        from tranibor_api.db.models import GatewayKeyRow
 
         async with session_scope(orgs="*") as session:
             runs = list((await session.execute(select(GatewayKeyRow.run_id))).scalars())

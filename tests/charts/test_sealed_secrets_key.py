@@ -56,7 +56,7 @@ def test_the_secret_and_the_entry_are_configurable() -> None:
 
 
 def test_a_bench_draws_a_valid_key_that_the_platform_parses() -> None:
-    from choregos_api.secret_store import parse_keyring
+    from tranibor_api.secret_store import parse_keyring
 
     (secret,) = [
         d

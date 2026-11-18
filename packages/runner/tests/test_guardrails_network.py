@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from choregos_contracts import Permissions
-from choregos_runner.guardrails import GuardRails
+from tranibor_contracts import Permissions
+from tranibor_runner.guardrails import GuardRails
 
 
 def rails(**kwargs: Any) -> GuardRails:

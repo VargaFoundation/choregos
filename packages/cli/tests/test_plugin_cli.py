@@ -7,7 +7,7 @@ import shutil
 from pathlib import Path
 
 import yaml
-from choregos_cli.main import app
+from tranibor_cli.main import app
 from typer.testing import CliRunner
 
 HELLO = Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "plugins" / "hello"

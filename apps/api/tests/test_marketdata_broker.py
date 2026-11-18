@@ -19,19 +19,19 @@ KEY = "cle-marketdata-du-coffre"
 
 @pytest.fixture
 def market(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
-    import choregos_adapters
-    from choregos_adapters.fakes.marketdata import FakeMarketData
+    import tranibor_adapters
+    from tranibor_adapters.fakes.marketdata import FakeMarketData
 
     fake = FakeMarketData()
-    monkeypatch.setattr(choregos_adapters, "FAKE_MARKETDATA", fake)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_MARKETDATA", fake)
     monkeypatch.setenv("CONNECTOR_TEST_MARKETDATA_KEY", KEY)
     yield fake
 
 
 async def _prepare(client: AsyncClient, project: dict[str, Any]) -> tuple[str, dict[str, str]]:
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.security import mint_run_token
+    from tranibor_api.db.models import Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.security import mint_run_token
 
     body = {
         "name": "cours",
@@ -76,9 +76,9 @@ async def _prepare(client: AsyncClient, project: dict[str, Any]) -> tuple[str, d
 async def test_a_run_reads_prices_through_the_platform_metered_with_a_digest(
     client: AsyncClient, project: dict[str, Any], market: Any
 ) -> None:
-    from choregos_api.db.models import CostLedger, Event
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import CostLedger, Event
+    from tranibor_api.db.session import session_scope
 
     base, headers = await _prepare(client, project)
     announcements = (await client.get(base, headers=headers)).json()["tools"]

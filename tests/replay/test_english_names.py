@@ -18,7 +18,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 ORCHESTRATOR = ROOT / "apps" / "orchestrator" / "src"
-WORKFLOWS = ORCHESTRATOR / "choregos_orchestrator" / "workflows"
+WORKFLOWS = ORCHESTRATOR / "tranibor_orchestrator" / "workflows"
 HISTORIES = Path(__file__).parent / "histories"
 
 #: English → French, the eight activities renamed by S34-02.
@@ -56,8 +56,8 @@ def test_a_french_patch_id_is_never_renamed(patch_id: str) -> None:
 
 
 def test_the_worker_answers_to_both_names() -> None:
-    from choregos_orchestrator.activities import ALL_ACTIVITIES
-    from choregos_orchestrator.queues import activity_name
+    from tranibor_orchestrator.activities import ALL_ACTIVITIES
+    from tranibor_orchestrator.queues import activity_name
 
     names = {activity_name(activity) for activity in ALL_ACTIVITIES}
     missing = sorted(n for pair in RENAMED.items() for n in pair if n not in names)
@@ -94,8 +94,8 @@ def test_every_activity_names_itself() -> None:
 
 
 def test_the_workflow_takes_both_signals() -> None:
-    from choregos_orchestrator.workflows.action import ActionWorkflow
     from temporalio.workflow import _Definition
+    from tranibor_orchestrator.workflows.action import ActionWorkflow
 
     signals = set(_Definition.must_from_class(ActionWorkflow).signals)
     assert {"preuve", "evidence"} <= signals

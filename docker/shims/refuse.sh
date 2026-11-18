@@ -4,7 +4,7 @@
 # (the guarantee is the NetworkPolicy, the absence of a credential and the diff check).
 # The shim holds no credential and posts nothing (ADR 0115): its first line below is
 # what the runner reads in the call's output and journals as `shim.refused`
-# (`choregos_runner.refusal_shims`, #1346). Keep its wording, or change both.
+# (`tranibor_runner.refusal_shims`, #1346). Keep its wording, or change both.
 tool=$(basename "$0")
 message="choregos: \`$tool\` is refused in an agent workspace."
 printf '%s\n' "$message" >&2

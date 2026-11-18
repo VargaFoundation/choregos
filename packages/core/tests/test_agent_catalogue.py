@@ -6,9 +6,9 @@ import importlib
 
 import pytest
 import yaml
-from choregos_core.agent_catalogue import catalogue_skills, entries, entry, skill_files
-from choregos_core.dsl import TEMPLATES_DIR
-from choregos_core.instructions import render_instructions
+from tranibor_core.agent_catalogue import catalogue_skills, entries, entry, skill_files
+from tranibor_core.dsl import TEMPLATES_DIR
+from tranibor_core.instructions import render_instructions
 
 INTERNAL = [e for e in entries() if e.kind == "internal"]
 
@@ -96,7 +96,7 @@ def test_no_catalogue_agent_fixes_a_runtime() -> None:
 
 
 def test_every_role_of_the_package_has_its_agent_in_the_catalogue() -> None:
-    playbooks = pytest.importorskip("choregos_playbooks")
+    playbooks = pytest.importorskip("tranibor_playbooks")
     roles = {e.role for e in INTERNAL}
     expected = set(playbooks.KNOWN_ROLES)
     assert expected <= roles, expected - roles
@@ -167,18 +167,18 @@ def test_digests_did_not_move() -> None:
 
 
 def test_the_context_file_has_its_new_name() -> None:
-    from choregos_core.agent_catalogue import FOLDER
+    from tranibor_core.agent_catalogue import FOLDER
 
     assert (FOLDER / "_context.md").is_file()
     assert not (FOLDER / "_contexte.md").exists()  # lang: fr-ok
 
 
 def test_former_package_is_gone() -> None:
-    """`choregos_core.catalogue_d_agents` was removed in 0.24.0 (S45-49)."""
+    """`tranibor_core.catalogue_d_agents` was removed in 0.24.0 (S45-49)."""
     with pytest.raises(ImportError):
-        importlib.import_module("choregos_core.catalogue_d_agents")  # lang: fr-ok - removed, asserted gone
+        importlib.import_module("tranibor_core.catalogue_d_agents")  # lang: fr-ok - removed, asserted gone
     with pytest.raises(ImportError):
-        importlib.import_module("choregos_core.catalogue_d_agents.evals")  # lang: fr-ok - asserted gone
+        importlib.import_module("tranibor_core.catalogue_d_agents.evals")  # lang: fr-ok - asserted gone
 
 
 @pytest.mark.parametrize(
@@ -193,6 +193,6 @@ def test_former_package_is_gone() -> None:
     ],
 )
 def test_former_names_are_gone(former: str) -> None:
-    from choregos_core import agent_catalogue
+    from tranibor_core import agent_catalogue
 
     assert not hasattr(agent_catalogue, former)

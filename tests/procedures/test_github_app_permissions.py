@@ -6,8 +6,8 @@ from __future__ import annotations
 import re
 
 import pytest
-from choregos_adapters.github import APP_EVENTS, APP_PERMISSIONS, DEFAULT_PERMISSIONS, RUNNER_PERMISSIONS
-from choregos_core import procedures as core
+from tranibor_adapters.github import APP_EVENTS, APP_PERMISSIONS, DEFAULT_PERMISSIONS, RUNNER_PERMISSIONS
+from tranibor_core import procedures as core
 
 GITHUB_PROCEDURES = ("connector.tracker.github-issues", "connector.scm.github")
 LINE = re.compile(r"^- `([a-z_]+)`: (read|write)$", re.MULTILINE)

@@ -1,7 +1,7 @@
 """A decision step's call to the gateway's `/v1/systemone` (ADR 0121 §2): the wire, the answers it
 accepts and refuses, the HTTP client and its scriptable fake.
 
-The shapes below are the primary sources' (`choregos_adapters.decisions` names them): LiteLLM
+The shapes below are the primary sources' (`tranibor_adapters.decisions` names them): LiteLLM
 1.105.5's `/v1/systemone` request example and pydantic models, and the answers Laya 0.4.21's
 `laya-serve` returns, in its default (extended) and its strict (`LAYA_JEV_STRICT`) form.
 """
@@ -13,8 +13,8 @@ from typing import Any
 
 import httpx
 import pytest
-from choregos_adapters import AdapterSet, DecisionClient
-from choregos_adapters.decisions import (
+from tranibor_adapters import AdapterSet, DecisionClient
+from tranibor_adapters.decisions import (
     DecisionCall,
     DecisionUnreachableError,
     InvalidDecisionError,
@@ -22,9 +22,9 @@ from choregos_adapters.decisions import (
     systemone_request,
     systemone_url,
 )
-from choregos_adapters.fakes import FakeDecisionClient, FakeGateway
-from choregos_adapters.gateway.systemone import SystemOneClient
-from choregos_contracts.workflow import ChoiceQuestion, ScoreQuestion, YesNoQuestion
+from tranibor_adapters.fakes import FakeDecisionClient, FakeGateway
+from tranibor_adapters.gateway.systemone import SystemOneClient
+from tranibor_contracts.workflow import ChoiceQuestion, ScoreQuestion, YesNoQuestion
 
 QUESTIONS: dict[str, Any] = {
     "refund": YesNoQuestion(instructions="Is the customer asking for a refund?"),
@@ -341,7 +341,7 @@ async def test_the_fakes_ask_through_the_fake_gateway() -> None:
 
 
 async def test_the_platform_asks_over_http_unless_fakes_are_on(monkeypatch: pytest.MonkeyPatch) -> None:
-    from choregos_adapters.registry import default_decision_client
+    from tranibor_adapters.registry import default_decision_client
 
     monkeypatch.setenv("CHOREGOS_FAKES", "0")
     assert isinstance(default_decision_client(), SystemOneClient)

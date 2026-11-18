@@ -144,15 +144,15 @@ def test_migrations_ship_in_the_api_wheel(wheels: dict[str, pathlib.Path]) -> No
     PostgreSQL.
 
     Every revision is counted: a forgotten migration would break the chain on upgrade."""
-    source = ROOT / "apps/api/src/choregos_api/migrations"
+    source = ROOT / "apps/api/src/tranibor_api/migrations"
     revisions = sorted(p.relative_to(ROOT / "apps/api/src") for p in (source / "versions").glob("*.py"))
     assert revisions, f"no revision under {source}: the test would prove nothing"
     attendus = {str(p) for p in revisions} | {
-        "choregos_api/migrations/env.py",
-        "choregos_api/migrations/script.py.mako",
-        "choregos_api/migrate.py",
+        "tranibor_api/migrations/env.py",
+        "tranibor_api/migrations/script.py.mako",
+        "tranibor_api/migrate.py",
     }
-    names = set(zipfile.ZipFile(wheels["choregos-api"]).namelist())
+    names = set(zipfile.ZipFile(wheels["tranibor-api"]).namelist())
     manquants = sorted(attendus - names)
-    assert not manquants, f"choregos-api: migrations missing from the wheel: {manquants}"
-    assert "choregos_api/migrer.py" not in names, "the former module was removed in 0.24.0"  # lang: fr-ok
+    assert not manquants, f"tranibor-api: migrations missing from the wheel: {manquants}"
+    assert "tranibor_api/migrer.py" not in names, "the former module was removed in 0.24.0"  # lang: fr-ok

@@ -61,9 +61,9 @@ async def catalogue(
     project: dict[str, Any], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> dict[str, Any]:
     """The deployment's catalogue, opened to the project as `OPENED` and the group `rh`."""
-    from choregos_api import catalogue as catalogue_service
-    from choregos_api.db.models import Project
-    from choregos_api.db.session import session_scope
+    from tranibor_api import catalogue as catalogue_service
+    from tranibor_api.db.models import Project
+    from tranibor_api.db.session import session_scope
 
     file = tmp_path / "catalogue.yaml"
     file.write_text(CATALOGUE, encoding="utf-8")
@@ -80,7 +80,7 @@ async def catalogue(
 @pytest.fixture
 def web_everywhere(monkeypatch: pytest.MonkeyPatch) -> None:
     """The run's network allows a host and a search backend serves the project."""
-    from choregos_api.services import web_fetch, web_search
+    from tranibor_api.services import web_fetch, web_search
 
     async def yes(*args: Any, **kwargs: Any) -> bool:
         return True
@@ -98,9 +98,9 @@ _n = [0]
 
 
 async def _run(project: dict[str, Any], slug: str) -> tuple[str, dict[str, str]]:
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.security import mint_run_token
+    from tranibor_api.db.models import Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.security import mint_run_token
 
     _n[0] += 1
     run_id = f"run-{slug}-{_n[0]}"
@@ -207,7 +207,7 @@ async def test_a_closed_web_list_offers_only_the_web_tools_it_names(
 async def test_a_web_tool_the_network_cannot_serve_is_not_offered_even_when_named(
     client: AsyncClient, catalogue: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.services import web_fetch
+    from tranibor_api.services import web_fetch
 
     async def no(*args: Any, **kwargs: Any) -> bool:
         return False
@@ -279,7 +279,7 @@ async def test_the_access_of_a_legacy_version_says_what_it_inherits(
 async def test_the_access_of_a_complete_version_names_origins_and_refusals(
     extension_tools: None, client: AsyncClient, catalogue: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.services import web_fetch, web_search
+    from tranibor_api.services import web_fetch, web_search
 
     async def no(*args: Any, **kwargs: Any) -> bool:
         return False

@@ -1,6 +1,6 @@
 # Pydantic AI example: the ticket triager
 
-The same agent as `../plain`, on Pydantic AI and the `choregos-agent-sdk`: a typed output (`Triage`) that maps onto the result's facts.
+The same agent as `../plain`, on Pydantic AI and the `tranibor-agent-sdk`: a typed output (`Triage`) that maps onto the result's facts.
 
 Two things stay governed, each in a few lines: the model goes through `ctx.llm.openai_client()` (the
 run's gateway and key; every request counts as a turn against `max_turns`), and the tools come from

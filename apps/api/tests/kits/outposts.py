@@ -12,12 +12,12 @@ from dataclasses import dataclass
 from typing import Any
 
 import pytest
-from choregos_contracts import OutpostEnrolmentRequest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
 from httpx import AsyncClient
 from sqlalchemy import select
+from tranibor_contracts import OutpostEnrolmentRequest
 
 ORG = "northwind"
 BASE = f"/api/v1/orgs/{ORG}/outposts"
@@ -66,7 +66,7 @@ def door_keys() -> Door:
 
 def configure(monkeypatch: pytest.MonkeyPatch, **settings: str | None) -> None:
     """Set (or, with `None`, unset) `CHOREGOS_<NAME>` and have the next request read it."""
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     for name, value in settings.items():
         variable = f"CHOREGOS_{name.upper()}"
@@ -118,8 +118,8 @@ def enrolment_request(token: str, **changes: Any) -> OutpostEnrolmentRequest:
 async def enrol(token: str, **changes: Any) -> Any:
     """Enrol as the door will: a session of its own that has no scope yet, committed when it worked
     and rolled back when it was refused."""
-    from choregos_api.db.session import get_sessionmaker
-    from choregos_api.services import outposts as service
+    from tranibor_api.db.session import get_sessionmaker
+    from tranibor_api.services import outposts as service
 
     async with get_sessionmaker()() as session:
         try:
@@ -152,8 +152,8 @@ async def approve(client: AsyncClient, slug: str, instance_id: str) -> dict[str,
 
 
 async def outpost_row(slug: str, org: str = ORG) -> Any:
-    from choregos_api.db.models import Organization, Outpost
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Organization, Outpost
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         return (
@@ -167,7 +167,7 @@ async def outpost_row(slug: str, org: str = ORG) -> Any:
 
 async def rows_of(slug: str, model: Any) -> list[Any]:
     """The rows of one of an outpost's own tables, read under its name."""
-    from choregos_api.db.session import name_the_outpost, session_scope
+    from tranibor_api.db.session import name_the_outpost, session_scope
 
     outpost = await outpost_row(slug)
     async with session_scope(orgs="*") as session:
@@ -177,8 +177,8 @@ async def rows_of(slug: str, model: Any) -> list[Any]:
 
 async def connector_at(slug: str, name: str = "tracker-at-the-outpost") -> str:
     """An `mcp-outpost` connector that routes to the outpost, as S65-13 will declare one: its id."""
-    from choregos_api.db.models import OrgConnector
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import OrgConnector
+    from tranibor_api.db.session import session_scope
 
     outpost = await outpost_row(slug)
     async with session_scope(orgs="*") as session:
@@ -196,8 +196,8 @@ async def connector_at(slug: str, name: str = "tracker-at-the-outpost") -> str:
 
 
 async def audit_rows(action: str) -> list[Any]:
-    from choregos_api.db.models import AuditLog
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import AuditLog
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         return list(

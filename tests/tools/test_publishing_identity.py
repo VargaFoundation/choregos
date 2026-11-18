@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """The publishing identity is defined once, and moving it is one edit and one command (ADR 0156).
 
-`packages/core/src/choregos_core/publishing.json` says who publishes Choregos and where. The code reads
+`packages/core/src/tranibor_core/publishing.json` says who publishes Choregos and where. The code reads
 it, the console reads its copy, and the files that cannot read a JSON file are listed in
 `tools/publishing_identity.py`, which checks them and rewrites them. Three properties:
 
@@ -23,7 +23,7 @@ import subprocess
 from dataclasses import asdict
 
 import pytest
-from choregos_core.publishing import IMAGE_COMPONENTS, PUBLISHING
+from tranibor_core.publishing import IMAGE_COMPONENTS, PUBLISHING
 
 from tools import publishing_identity as pi
 
@@ -110,16 +110,16 @@ def test_a_small_tree_passes_first(small: pathlib.Path) -> None:
 
 
 def test_a_literal_in_code_is_refused(small: pathlib.Path) -> None:
-    _write(small, "apps/api/src/choregos_api/x.py", f'IMAGE = "{PUBLISHING.registry}/choregos-api:1.0.0"\n')
+    _write(small, "apps/api/src/tranibor_api/x.py", f'IMAGE = "{PUBLISHING.registry}/choregos-api:1.0.0"\n')
     (issue,) = pi.problems(small, derived=["charts/choregos/values.yaml"])
-    assert issue.startswith("apps/api/src/choregos_api/x.py: spells the publishing identity (1: ")
-    assert "choregos_core.publishing" in issue
+    assert issue.startswith("apps/api/src/tranibor_api/x.py: spells the publishing identity (1: ")
+    assert "tranibor_core.publishing" in issue
 
 
 def test_code_cannot_be_listed_as_derived(small: pathlib.Path) -> None:
     _write(small, "apps/web/src/x.ts", f'export const R = "{PUBLISHING.source_repository}";\n')
     issues = pi.problems(small, derived=["charts/choregos/values.yaml", "apps/web/src/x.ts"])
-    assert issues == ["apps/web/src/x.ts: code is not a derived file, it reads choregos_core.publishing"]
+    assert issues == ["apps/web/src/x.ts: code is not a derived file, it reads tranibor_core.publishing"]
 
 
 def test_a_value_spelled_in_another_case_is_refused(small: pathlib.Path) -> None:

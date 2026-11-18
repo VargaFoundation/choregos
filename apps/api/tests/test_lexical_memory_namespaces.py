@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from choregos_core.domain import Fact, Provenance
 from httpx import AsyncClient
+from tranibor_core.domain import Fact, Provenance
 
 from .agent_scopes_kit import ORG, make_project
 
@@ -22,7 +22,7 @@ def real_adapters(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _memory() -> Any:
-    from choregos_adapters import build
+    from tranibor_adapters import build
 
     return build("memory", "lexical", {"org": "northwind"})
 
@@ -65,9 +65,9 @@ async def test_the_four_namespaces_do_not_mix(client: AsyncClient, admin: str) -
 
 
 async def test_facts_carry_their_organisation_and_store(client: AsyncClient, admin: str) -> None:
-    from choregos_api.db.models import MemoryFact, MemoryStore, Organization
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import MemoryFact, MemoryStore, Organization
+    from tranibor_api.db.session import session_scope
 
     project = await _setup(client)
     memory = _memory()

@@ -18,12 +18,12 @@ from typing import Any
 
 import httpx
 import pytest
-from choregos_adapters.fakes.kubernetes import FakeKubernetesApi
-from choregos_adapters.fakes.plugin_tracker import FakePluginTrackerServer
-from choregos_adapters.plugin_servers import TOKEN_ENV, PluginServerRuntime
-from choregos_contracts import InboundEvent
 from httpx import AsyncClient
 from sqlalchemy import select
+from tranibor_adapters.fakes.kubernetes import FakeKubernetesApi
+from tranibor_adapters.fakes.plugin_tracker import FakePluginTrackerServer
+from tranibor_adapters.plugin_servers import TOKEN_ENV, PluginServerRuntime
+from tranibor_contracts import InboundEvent
 
 from .agent_scopes_kit import add_member, as_user
 
@@ -36,8 +36,8 @@ HOOK = "/api/v1/webhooks/plugins/northwind/desk/desk"
 
 @pytest.fixture
 def kube(tmp_path: Path) -> Iterator[FakeKubernetesApi]:
-    from choregos_api.services.plugin_servers import use_plugin_runtime, use_plugin_transport
-    from choregos_api.services.plugin_supply import OfflineDirectory, use_plugin_supply
+    from tranibor_api.services.plugin_servers import use_plugin_runtime, use_plugin_transport
+    from tranibor_api.services.plugin_supply import OfflineDirectory, use_plugin_supply
 
     root = tmp_path / "plugins"
     shutil.copytree(DESK, root / "desk" / "1.0.0")
@@ -81,7 +81,7 @@ async def _configure(client: AsyncClient) -> None:
 
 def _server(kube: FakeKubernetesApi) -> FakePluginTrackerServer:
     """The scripted server, refusing any call without the token the platform gave the pod."""
-    from choregos_api.services.plugin_servers import use_plugin_transport
+    from tranibor_api.services.plugin_servers import use_plugin_transport
 
     fake = FakePluginTrackerServer(SECRET, token=_token(kube))
     use_plugin_transport(fake.transport())
@@ -157,10 +157,10 @@ async def test_a_plugin_tracker_of_a_plugin_not_installed_is_refused(
 async def test_tracker_calls_carry_the_token_and_writes_are_audited(
     client: AsyncClient, admin: str, kube: FakeKubernetesApi
 ) -> None:
-    from choregos_api.db.models import AuditLog, Project
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.tickets import project_tracker
-    from choregos_core.domain import TrackerStateMapping
+    from tranibor_api.db.models import AuditLog, Project
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.tickets import project_tracker
+    from tranibor_core.domain import TrackerStateMapping
 
     fake = await _ready(client, kube)
     fake.add("INC0000001", "VPN drops")
@@ -193,7 +193,7 @@ def trackers() -> list[Any]:
 
 @pytest.fixture
 def dispatched(monkeypatch: pytest.MonkeyPatch, trackers: list[Any]) -> list[InboundEvent]:
-    from choregos_api.routers import webhooks
+    from tranibor_api.routers import webhooks
 
     seen: list[InboundEvent] = []
 

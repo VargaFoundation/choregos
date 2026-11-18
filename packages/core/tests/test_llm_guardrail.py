@@ -13,9 +13,9 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from choregos_core import llm_guardrail, redaction
-from choregos_core.gates import SECRET_PATTERNS
-from choregos_core.llm_guardrail import (
+from tranibor_core import llm_guardrail, redaction
+from tranibor_core.gates import SECRET_PATTERNS
+from tranibor_core.llm_guardrail import (
     GUARD_METADATA_KEY,
     GUARD_REDACT,
     REDACTED,

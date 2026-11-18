@@ -11,8 +11,8 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from choregos_core.domain import Fact, Provenance
 from httpx import ASGITransport, AsyncClient
+from tranibor_core.domain import Fact, Provenance
 
 from .conftest import login, without_postgres
 
@@ -34,7 +34,7 @@ async def _project(client: AsyncClient, org: str, slug: str) -> str:
 
 
 def _memory(org: str) -> Any:
-    from choregos_adapters import build
+    from tranibor_adapters import build
 
     return build("memory", "pgvector", {"org": org})
 
@@ -84,8 +84,8 @@ async def test_write_search_propose_and_validate_on_the_database(client: AsyncCl
 
 
 async def test_without_an_organisation_the_factory_refuses(app: Any) -> None:
-    from choregos_adapters import build
-    from choregos_adapters.errors import ConfigurationError
+    from tranibor_adapters import build
+    from tranibor_adapters.errors import ConfigurationError
 
     with pytest.raises(ConfigurationError, match="org"):
         build("memory", "pgvector", {})
@@ -95,10 +95,10 @@ async def test_without_an_organisation_the_factory_refuses(app: Any) -> None:
 async def test_on_postgres_each_organisation_only_sees_its_own_memory(pg_app: Any) -> None:
     """Two organisations, one `billing-api` project each. `a`'s adapter reads and writes at `a`;
     `b`'s does not see `a`'s facts; a bare session, the former wiring, does not even see the project."""
-    from choregos_adapters.memory.lexical import LexicalMemory, MemoryModels
-    from choregos_api.db.models import MemoryFact, Organization, Project
-    from choregos_api.db.session import get_sessionmaker, session_scope
-    from choregos_api.services import ensure_defaults
+    from tranibor_adapters.memory.lexical import LexicalMemory, MemoryModels
+    from tranibor_api.db.models import MemoryFact, Organization, Project
+    from tranibor_api.db.session import get_sessionmaker, session_scope
+    from tranibor_api.services import ensure_defaults
 
     async with session_scope(orgs="*") as session:
         for slug in ("a", "b"):
@@ -151,8 +151,8 @@ def test_both_names_build_the_same_fallback() -> None:
     """
     import os
 
-    from choregos_adapters import build
-    from choregos_adapters.memory.lexical import LexicalMemory
+    from tranibor_adapters import build
+    from tranibor_adapters.memory.lexical import LexicalMemory
 
     os.environ["CHOREGOS_FAKES"] = "0"
     try:
@@ -173,7 +173,7 @@ async def test_the_interface_catalogue_no_longer_offers_the_old_name(client: Asy
 async def test_an_agents_own_memory_is_kept_apart_from_the_projects(client: AsyncClient, org: str) -> None:
     """S32-02: `<project>#agent:<slug>` is the agent's own memory in that project. The project does
     not read it, the agent reads only it, and a fact of the same subject supersedes nothing across."""
-    from choregos_core import memory_namespace
+    from tranibor_core import memory_namespace
 
     await login(client, "admin@northwind.dev")
     await _project(client, org, "billing")

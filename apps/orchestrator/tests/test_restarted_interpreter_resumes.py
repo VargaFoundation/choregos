@@ -14,7 +14,7 @@ import pathlib
 from typing import Any
 
 import pytest
-from choregos_contracts import StageResult, StageStatus
+from tranibor_contracts import StageResult, StageStatus
 
 from .conftest import Fixture, recording_history, refine_result
 from .test_interpreter import _runs, _wait_state, _wait_until, scripted, start
@@ -26,10 +26,10 @@ FAILURE = StageResult(status=StageStatus.FAILED, summary="the clone failed", rea
 
 
 async def _state_changes(setup: Fixture) -> list[Any]:
-    from choregos_api.db.models import Event
-    from choregos_api.db.session import session_scope
-    from choregos_contracts import EventType
     from sqlalchemy import select
+    from tranibor_api.db.models import Event
+    from tranibor_api.db.session import session_scope
+    from tranibor_contracts import EventType
 
     async with session_scope() as session:
         rows = await session.execute(
@@ -45,8 +45,8 @@ async def _state_changes(setup: Fixture) -> list[Any]:
 
 async def _forget_the_parking(setup: Fixture) -> None:
     """What an escalation recorded before S22-41 left: the state change, without `parked`."""
-    from choregos_api.db.models import Event
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Event
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         for event in await _state_changes(setup):
@@ -65,9 +65,9 @@ async def _wait_mirrored(setup: Fixture, state: str, *, timeout: int = 60) -> No
     """
     import time
 
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
     from sqlalchemy import func, select
+    from tranibor_api.db.models import Run, WorkItem
+    from tranibor_api.db.session import session_scope
 
     deadline = time.monotonic() + timeout
     seen: tuple[str | None, int] = (None, -1)
@@ -109,8 +109,8 @@ async def _escalate_then_restart(temporal_env: Any, setup: Fixture, *, legacy: b
 async def test_the_escalation_records_where_the_work_item_resumes(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.worker import Replayer
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     scripted(setup.adapters, FAILURE, FAILURE)
     async with worker_factory():
@@ -134,8 +134,8 @@ async def test_a_restarted_interpreter_replays_the_escalated_stage(
     """`rerun_stage` on a restarted interpreter replays `t-refine` with a NEW run number — attempt
     1 again would name the failed run, and `prepare_stage` would hand it back — and reaches its
     target."""
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.worker import Replayer
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     scripted(setup.adapters, FAILURE, FAILURE, refine_result("spec"))
     async with worker_factory():
@@ -175,7 +175,7 @@ async def test_a_replay_the_old_code_dropped_does_not_block_the_next(
 ) -> None:
     """Dev #4 received `rerun_stage` before the change, and dropped it: replayed, that request
     answers no to `patched`. The next request must still play — hence one patch id per request."""
-    from choregos_orchestrator.workflows import interpreter
+    from tranibor_orchestrator.workflows import interpreter
 
     dropped = f"{interpreter.ESCALATION_CONTEXT_AFTER_RESTART}-1"
     real = interpreter.workflow.patched

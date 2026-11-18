@@ -11,9 +11,9 @@ async def _request(
     client: AsyncClient, pid: str, title: str, *, user: str, kind: str = "approval", **payload: Any
 ) -> tuple[str, str, str]:
     """A work item waiting for `user` (an administrator's reassignment names them, ADR 0153)."""
-    from choregos_api.db.models import HumanRequest, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
+    from tranibor_api.db.models import HumanRequest, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
 
     created = await client.post(f"/api/v1/projects/{pid}/work-items", json={"title": title, "start": False})
     assert created.status_code == 201, created.text

@@ -14,10 +14,10 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from choregos_contracts import AgentRef, JobSpec, ModelRef, StageInput, StageStatus
-from choregos_core.redaction import REDACTED
-from choregos_runner.exits import Exit
-from choregos_runner.runner import Runner
+from tranibor_contracts import AgentRef, JobSpec, ModelRef, StageInput, StageStatus
+from tranibor_core.redaction import REDACTED
+from tranibor_runner.exits import Exit
+from tranibor_runner.runner import Runner
 
 from .conftest import FakeInternalClient
 
@@ -168,11 +168,11 @@ async def test_an_output_the_contract_refuses_fails_the_step_instead_of_crashing
 
 
 async def test_a_job_past_its_minutes_is_stopped(stage_input: StageInput, tmp_path: Path) -> None:
-    from choregos_runner.job import run_job
+    from tranibor_runner.job import run_job
 
     job = _job(stage_input, tmp_path, code="import time; time.sleep(5)\n")
     job = job.model_copy(update={"budget": job.budget.model_copy(update={"max_minutes": 1})})
-    import choregos_runner.job as module
+    import tranibor_runner.job as module
 
     async def fast(command: Any, **kwargs: Any) -> Any:
         return await original(command, **{**kwargs, "timeout": 0.5})
@@ -204,7 +204,7 @@ async def test_without_fields_a_job_does_not_run(
 
 
 async def test_fields_are_written_sorted(tmp_path: Path) -> None:
-    from choregos_runner.job import FIELDS, write_fields
+    from tranibor_runner.job import FIELDS, write_fields
 
     write_fields(tmp_path, {"b": 1, "a": "x"})
     assert json.loads((tmp_path / FIELDS).read_text()) == {"a": "x", "b": 1}

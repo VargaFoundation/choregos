@@ -13,11 +13,11 @@ import yaml
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 CHART = ROOT / "charts" / "choregos"
 CHART_COPY = CHART / "charts" / "litellm" / "files" / "choregos_guardrail.py"
-SOURCE = ROOT / "packages" / "core" / "src" / "choregos_core" / "llm_guardrail.py"
+SOURCE = ROOT / "packages" / "core" / "src" / "tranibor_core" / "llm_guardrail.py"
 
 
 def test_the_chart_ships_the_guard_the_tests_prove_byte_for_byte() -> None:
-    """`choregos_core.llm_guardrail` is tested; the chart's copy is what LiteLLM runs."""
+    """`tranibor_core.llm_guardrail` is tested; the chart's copy is what LiteLLM runs."""
     assert CHART_COPY.read_bytes() == SOURCE.read_bytes(), (
         f"copy {SOURCE.relative_to(ROOT)} to {CHART_COPY.relative_to(ROOT)}"
     )

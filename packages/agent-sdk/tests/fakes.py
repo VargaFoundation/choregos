@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from acp.schema import AllowedOutcome, DeniedOutcome, RequestPermissionResponse
-from choregos_agent_sdk.session import RunSession
+from tranibor_agent_sdk.session import RunSession
 
 
 class FakeConn:

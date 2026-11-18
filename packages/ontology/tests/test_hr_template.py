@@ -125,8 +125,8 @@ async def test_the_register_is_kept_through_actions_and_a_departure_waits_for_a_
 
 
 async def test_nothing_is_recorded_for_a_person_who_left(client: AsyncClient, temporal: Any) -> None:
-    from choregos_api.db.session import session_scope
-    from choregos_ontology.service.store import ManagedObject
+    from tranibor_api.db.session import session_scope
+    from tranibor_ontology.service.store import ManagedObject
 
     project = await _hr_project(client)
     arrival = await _propose(client, project, "record_joiner", params=ARRIVAL)

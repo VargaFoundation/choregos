@@ -4,8 +4,8 @@ for every call the platform makes, whatever the egress mode (ADR 0070, amended a
 from __future__ import annotations
 
 import pytest
-from choregos_core.egress import AllowedRule, EgressPolicy, EgressRefusedError, Mode, NetworkBounds
-from choregos_core.network import platform_allowed
+from tranibor_core.egress import AllowedRule, EgressPolicy, EgressRefusedError, Mode, NetworkBounds
+from tranibor_core.network import platform_allowed
 
 OPENED = (AllowedRule("mcp.example.test"), AllowedRule("*.wide.example.test"))
 

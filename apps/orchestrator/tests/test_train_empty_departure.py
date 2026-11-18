@@ -98,8 +98,8 @@ async def test_a_departure_on_an_empty_train_does_not_make_it_spin(
         history = await train.fetch_history()
 
     # The history replays against the current code, and is archived for the next ones.
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.worker import Replayer
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
     if recording_history():
@@ -142,8 +142,8 @@ async def test_a_departure_on_a_frozen_train_does_not_make_it_spin(
         await train.result()
         history = await train.fetch_history()
 
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.worker import Replayer
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
     if recording_history():

@@ -15,10 +15,10 @@ import subprocess
 import sys
 from typing import Any
 
-import choregos_contracts as contracts
 import pytest
-from choregos_contracts import SIGNATURE_HEADER, Role
+import tranibor_contracts as contracts
 from httpx import ASGITransport, AsyncClient
+from tranibor_contracts import SIGNATURE_HEADER, Role
 
 from .conftest import login
 from .kits import outposts as kit
@@ -51,9 +51,9 @@ def _routes(instance: str) -> list[tuple[str, str, str, Any]]:
 
 
 async def _member(email: str, role: Role) -> None:
-    from choregos_api.db.models import Membership, Organization, User
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Membership, Organization, User
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         org = (await session.execute(select(Organization).where(Organization.slug == kit.ORG))).scalar_one()
@@ -64,7 +64,7 @@ async def _member(email: str, role: Role) -> None:
 
 
 def test_outpost_manage_is_the_organisation_administrators_and_no_other_roles() -> None:
-    from choregos_api.rbac import ROLE_PERMISSIONS, Permission
+    from tranibor_api.rbac import ROLE_PERMISSIONS, Permission
 
     assert Permission.OUTPOST_MANAGE.value == "outpost:manage"
     holders = {
@@ -130,7 +130,7 @@ async def test_without_a_session_the_routes_answer_401(client: AsyncClient, org:
 
 
 def test_an_outposts_instance_is_a_principal_without_membership_or_role() -> None:
-    from choregos_api.rbac import OUTPOST, Permission, outpost_principal
+    from tranibor_api.rbac import OUTPOST, Permission, outpost_principal
 
     principal = outpost_principal(outpost_id="outpost-1", instance_id="instance-1")
     assert principal.kind == OUTPOST == "outpost"
@@ -144,7 +144,7 @@ def test_an_outposts_instance_is_a_principal_without_membership_or_role() -> Non
 def test_an_outpost_holds_no_permission_whatever_roles_it_is_handed() -> None:
     """The kind is the guard, not the absence of a role: a later change that gave such a principal a
     role would still give it nothing."""
-    from choregos_api.rbac import Permission, outpost_principal
+    from tranibor_api.rbac import Permission, outpost_principal
 
     principal = outpost_principal(outpost_id="outpost-1", instance_id="instance-1")
     principal.org_roles = {"northwind": Role.ORG_ADMIN}
@@ -234,12 +234,12 @@ def test_the_service_a_door_will_import_reaches_no_organisation_connector() -> N
     boundary = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(boundary)
     forbidden = boundary.FORBIDDEN_MODULES | boundary.PLUGIN_SERVER_SURFACE
-    probe = "import json, sys; import choregos_api.services.outposts; print(json.dumps(sorted(sys.modules)))"
+    probe = "import json, sys; import tranibor_api.services.outposts; print(json.dumps(sorted(sys.modules)))"
     done = subprocess.run(
         [sys.executable, "-c", probe], capture_output=True, text=True, timeout=120, check=False, cwd=root
     )
     assert done.returncode == 0, done.stderr[-2000:]
     closure = json.loads(done.stdout.strip().splitlines()[-1])
-    assert "choregos_api.services.outposts" in closure
+    assert "tranibor_api.services.outposts" in closure
     reached = [module for module in closure if boundary._is_forbidden(module, forbidden)]
     assert not reached, f"importing the outposts service imports {reached}: a door could not import it"

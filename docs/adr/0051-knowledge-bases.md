@@ -1,7 +1,7 @@
 # 0051 — Knowledge bases: a curated corpus, converted to markdown, served as files or as a hybrid index
 
 - **Status**: accepted, 2026-10-12
-- **Concerns**: `apps/api/src/choregos_api/knowledge/`, `routers/knowledge.py`, the `knowledge_*`
+- **Concerns**: `apps/api/src/tranibor_api/knowledge/`, `routers/knowledge.py`, the `knowledge_*`
   tables, the runner's workspace, the `choregos-tools` sidecar; keeps
   [ADR 0007](0007-optional-memory.md) (memory is optional) and
   [ADR 0026](0026-what-the-core-rls-covers.md) (every organisation table under forced RLS)

@@ -19,14 +19,14 @@ from typing import Any
 
 import pytest
 import yaml
-from choregos_adapters import sealing
-from choregos_contracts import outpost_door_path, schemas_dir
-from choregos_contracts.outpost import REQUEST_SIGNATURE_TYPE, OutpostCall, OutpostSealedCall
-from choregos_outpost import identity as identities
-from choregos_outpost.calls import signed_by
-from choregos_outpost.daemon import Exit
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
+from tranibor_adapters import sealing
+from tranibor_contracts import outpost_door_path, schemas_dir
+from tranibor_contracts.outpost import REQUEST_SIGNATURE_TYPE, OutpostCall, OutpostSealedCall
+from tranibor_outpost import identity as identities
+from tranibor_outpost.calls import signed_by
+from tranibor_outpost.daemon import Exit
 
 from ._bench import Bench, bench
 
@@ -174,7 +174,7 @@ async def test_a_call_signed_by_the_second_pinned_key_is_made(
     """A rotation: the operator added the next key before the door signs with it."""
     b = await bench(tmp_path, daemon_log)
     next_key = Ed25519PrivateKey.generate()
-    from choregos_outpost.fakes.door import _RAW, _b64
+    from tranibor_outpost.fakes.door import _RAW, _b64
 
     pinned = [b.door.public_key, _b64(next_key.public_key().public_bytes(*_RAW))]
     b.policy = b.policy.model_copy(update={"door_keys": pinned})

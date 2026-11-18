@@ -21,7 +21,7 @@ from types import ModuleType
 import pytest
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
-API = "apps/api/src/choregos_api/"
+API = "apps/api/src/tranibor_api/"
 VERSIONS = ROOT / API / "migrations" / "versions"
 
 #: (revision, down_revision) of every migration on main when S45-13 renamed the files (87 pairs).
@@ -181,5 +181,5 @@ def test_migration_graph_unchanged() -> None:
     ],
 )
 def test_former_schema_module_paths_are_gone(former: str, current: str) -> None:
-    assert importlib.util.find_spec(f"choregos_api.schemas.{former}") is None
-    assert importlib.import_module(f"choregos_api.schemas.{current}") is not None
+    assert importlib.util.find_spec(f"tranibor_api.schemas.{former}") is None
+    assert importlib.import_module(f"tranibor_api.schemas.{current}") is not None

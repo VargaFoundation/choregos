@@ -38,8 +38,8 @@ def _ids(setup: Fixture, **more: Any) -> dict[str, Any]:
 
 async def _run(setup: Fixture, *, commits: list[str], start_commit: str = "") -> str:
     """A finished implement run, as the runner declares it: its branch, its commits, where it began."""
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
 
     result = stage_result("implemented", artifacts={"branch": BRANCH, "commits": commits})
     if start_commit:
@@ -61,8 +61,8 @@ async def _run(setup: Fixture, *, commits: list[str], start_commit: str = "") ->
 
 async def _open_pull_request(setup: Fixture, *, state: str = "pr_open") -> Any:
     """The work item's pull request, open and green, the work item waiting in its merge state."""
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     scm = setup.adapters.scm
     ref = await scm.open_pr(REPOSITORY, BRANCH, "main", "fix: credits", "body", False)
@@ -81,9 +81,9 @@ async def _judged(setup: Fixture) -> dict[str, Any] | None:
 
 
 async def _gate_journal(run_id: str) -> list[dict[str, Any]]:
-    from choregos_api.db.models import RunEvent
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import RunEvent
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = await session.execute(
@@ -100,7 +100,7 @@ async def test_the_gates_read_the_head_once_and_judge_that_commit(
 ) -> None:
     """Every comparison of an evaluation carries the commit read once, never the branch's name; the
     verdicts are journaled with it and it is left on the work item for the merge."""
-    from choregos_orchestrator.activities.gates import evaluate_gates
+    from tranibor_orchestrator.activities.gates import evaluate_gates
 
     scm = setup.adapters.scm
     scm.set_diff(REPOSITORY, "base0", BRANCH, IN_SCOPE)  # what the run wrote since it began
@@ -135,7 +135,7 @@ async def test_a_commit_that_lands_during_the_evaluation_is_not_the_one_judged(
 ) -> None:
     """A push between two reads of the same evaluation: the verdict is about the commit that was read,
     which is the one recorded — the later one is not judged, and is not what a merge would name."""
-    from choregos_orchestrator.activities.gates import evaluate_gates
+    from tranibor_orchestrator.activities.gates import evaluate_gates
 
     scm = setup.adapters.scm
     read_head = scm.head_of
@@ -157,7 +157,7 @@ async def test_a_commit_that_lands_during_the_evaluation_is_not_the_one_judged(
 
 
 async def test_judging_twice_records_the_same_thing(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.gates import evaluate_gates
+    from tranibor_orchestrator.activities.gates import evaluate_gates
 
     payload = _ids(setup, gates=[{"name": "no_secrets"}])
     first = await evaluate_gates(payload)
@@ -171,8 +171,8 @@ async def test_a_branch_whose_head_cannot_be_read_is_not_judged(
 ) -> None:
     """Without a commit there is nothing to judge: the diff guarantees refuse, and nothing is recorded
     that a merge could name."""
-    from choregos_adapters.errors import UpstreamError
-    from choregos_orchestrator.activities.gates import evaluate_gates
+    from tranibor_adapters.errors import UpstreamError
+    from tranibor_orchestrator.activities.gates import evaluate_gates
 
     async def unreadable(repo: str, branch: str) -> Any:
         raise UpstreamError("github", "GET ref → 502", status_code=502)
@@ -186,7 +186,7 @@ async def test_a_branch_whose_head_cannot_be_read_is_not_judged(
 async def test_the_check_runs_carry_the_judged_commit(setup: Fixture) -> None:
     """`choregos/scope` and `choregos/evidence` mark the commit the verdict is about, not the one the
     run declared."""
-    from choregos_orchestrator.activities.gates import evaluate_gates
+    from tranibor_orchestrator.activities.gates import evaluate_gates
 
     scm = setup.adapters.scm
     run_id = await _run(setup, commits=["declared-by-the-run"])
@@ -208,7 +208,7 @@ async def test_the_checks_of_another_head_say_nothing_of_the_judged_commit(
 ) -> None:
     """The pull request moved after the head was read: its green checks are another commit's, and
     `ci_green` stays pending instead of passing on them."""
-    from choregos_orchestrator.activities.gates import evaluate_gates
+    from tranibor_orchestrator.activities.gates import evaluate_gates
 
     scm = setup.adapters.scm
     await _open_pull_request(setup)
@@ -231,8 +231,8 @@ async def test_the_checks_of_another_head_say_nothing_of_the_judged_commit(
 
 
 async def test_the_merge_names_the_judged_commit(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.gates import evaluate_gates
-    from choregos_orchestrator.activities.scm import enqueue_merge
+    from tranibor_orchestrator.activities.gates import evaluate_gates
+    from tranibor_orchestrator.activities.scm import enqueue_merge
 
     scm = setup.adapters.scm
     ref = await _open_pull_request(setup)
@@ -250,8 +250,8 @@ async def test_the_merge_names_the_judged_commit(setup: Fixture) -> None:
 async def test_a_commit_that_lands_after_the_gates_is_not_merged(setup: Fixture) -> None:
     """The gap this story closes: an extra commit after the verdict. The merge names the judged
     commit, the forge refuses it, and the refusal is typed and final — until the gates judge again."""
-    from choregos_orchestrator.activities.gates import evaluate_gates
-    from choregos_orchestrator.activities.scm import HEAD_MOVED, enqueue_merge
+    from tranibor_orchestrator.activities.gates import evaluate_gates
+    from tranibor_orchestrator.activities.scm import HEAD_MOVED, enqueue_merge
 
     scm = setup.adapters.scm
     await _open_pull_request(setup)
@@ -275,8 +275,8 @@ async def test_a_commit_that_lands_after_the_gates_is_not_merged(setup: Fixture)
 
 
 async def test_a_moved_head_that_is_judged_again_is_merged_at_the_new_commit(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.gates import evaluate_gates
-    from choregos_orchestrator.activities.scm import enqueue_merge
+    from tranibor_orchestrator.activities.gates import evaluate_gates
+    from tranibor_orchestrator.activities.scm import enqueue_merge
 
     scm = setup.adapters.scm
     ref = await _open_pull_request(setup)
@@ -293,8 +293,8 @@ async def test_a_moved_head_that_is_judged_again_is_merged_at_the_new_commit(set
 
 async def test_merging_twice_is_not_a_second_merge(setup: Fixture) -> None:
     """ADR 0008: the activity replayed after its merge went through asks for nothing more."""
-    from choregos_orchestrator.activities.gates import evaluate_gates
-    from choregos_orchestrator.activities.scm import enqueue_merge
+    from tranibor_orchestrator.activities.gates import evaluate_gates
+    from tranibor_orchestrator.activities.scm import enqueue_merge
 
     scm = setup.adapters.scm
     await _open_pull_request(setup)
@@ -308,8 +308,8 @@ async def test_a_connector_that_cannot_name_a_commit_is_not_asked_to_merge(
     setup: Fixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """ADR 0101: a merge the platform cannot hold to the judged commit is refused, not made blind."""
-    from choregos_orchestrator.activities.gates import evaluate_gates
-    from choregos_orchestrator.activities.scm import MERGE_UNPINNED, enqueue_merge
+    from tranibor_orchestrator.activities.gates import evaluate_gates
+    from tranibor_orchestrator.activities.scm import MERGE_UNPINNED, enqueue_merge
 
     scm = setup.adapters.scm
     await _open_pull_request(setup)
@@ -331,8 +331,8 @@ async def test_a_connector_that_cannot_name_a_commit_is_not_asked_to_merge(
 async def test_a_merge_transition_without_gates_names_the_head_it_reads(setup: Fixture) -> None:
     """No gate ruled in the state the work item merges from: a verdict given in an earlier state is
     not this merge's. The head is read once, by the merge, and named all the same."""
-    from choregos_orchestrator.activities.gates import evaluate_gates
-    from choregos_orchestrator.activities.scm import HEAD_MOVED, enqueue_merge
+    from tranibor_orchestrator.activities.gates import evaluate_gates
+    from tranibor_orchestrator.activities.scm import HEAD_MOVED, enqueue_merge
 
     scm = setup.adapters.scm
     await evaluate_gates(_ids(setup, gates=DIFF_GATES))  # judged in `inbox`, an earlier state
@@ -363,9 +363,9 @@ async def test_an_extra_commit_after_the_gates_stops_the_work_item_and_nothing_i
     """`default-simple` up to its merge: the gates pass, then a commit lands before the merge is asked.
     The work item's workflow stops with the reason, nothing is merged, the work item is not `merged`;
     started again, its gates judge the new head and the merge names that one."""
-    from choregos_orchestrator.activities.scm import enqueue_merge
     from temporalio import activity
     from temporalio.client import WorkflowFailureError
+    from tranibor_orchestrator.activities.scm import enqueue_merge
 
     scm = setup.adapters.scm
     landed: list[str] = []

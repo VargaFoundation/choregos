@@ -9,8 +9,8 @@ from typing import Any
 
 import pytest
 import yaml
-from choregos_core.agent_catalogue import entry
-from choregos_core.dsl.parser import parse_workflow
+from tranibor_core.agent_catalogue import entry
+from tranibor_core.dsl.parser import parse_workflow
 
 TEMPLATES = Path(__file__).resolve().parents[3] / "templates"
 GOVERNED = TEMPLATES / "software-delivery-governed"

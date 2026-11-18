@@ -31,7 +31,7 @@ def _shipped_files() -> list[pathlib.Path]:
     racines = [
         *sorted((ROOT / "packages").glob("*/src")),
         *sorted((ROOT / "apps").glob("*/src")),
-        ROOT / "apps/api/src/choregos_api/migrations",
+        ROOT / "apps/api/src/tranibor_api/migrations",
     ]
     for root in racines:
         if not root.exists():

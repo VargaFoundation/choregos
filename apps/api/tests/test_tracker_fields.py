@@ -78,10 +78,10 @@ async def test_a_workflow_input_may_not_be_named_tracker(
 async def test_the_block_passes_strict_inputs_survives_a_field_change_and_reaches_the_run(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.db.models import Project, Run
-    from choregos_api.db.session import session_scope
-    from choregos_api.security import mint_run_token
-    from choregos_api.services import WorkItemBirth, new_work_item
+    from tranibor_api.db.models import Project, Run
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.security import mint_run_token
+    from tranibor_api.services import WorkItemBirth, new_work_item
 
     pid = await _strict(client, project)
     async with session_scope() as session:
@@ -119,7 +119,7 @@ def test_a_job_reads_the_block_in_its_fields_json(tmp_path: Any) -> None:
     """What the runner writes from the ticket it read: `.choregos/fields.json` holds `tracker`."""
     import json
 
-    from choregos_runner.job import FIELDS, write_fields
+    from tranibor_runner.job import FIELDS, write_fields
 
     write_fields(tmp_path, {"project_name": "peredur", "tracker": block()})
     assert (
@@ -136,9 +136,9 @@ async def jira_issue(
 ) -> dict[str, Any]:
     """The project's Jira (key `FON`), as `project_tracker` builds it: a fake whose issue says
     `tracker`."""
-    from choregos_adapters.fakes import FakeTracker
-    from choregos_api.config import get_settings
-    from choregos_api.services import tickets
+    from tranibor_adapters.fakes import FakeTracker
+    from tranibor_api.config import get_settings
+    from tranibor_api.services import tickets
 
     monkeypatch.setattr(get_settings(), "generic_webhook_secret", SECRET)
     monkeypatch.setenv("CONNECTOR_JIRA_TEST_TOKEN", "t")
@@ -161,7 +161,7 @@ async def jira_issue(
     async def fetch(key: str) -> Any:
         if state["fail"]:
             raise RuntimeError("jira: 503")
-        from choregos_core.domain import WorkItemData
+        from tranibor_core.domain import WorkItemData
 
         return WorkItemData(key=key, title="New project", fields={"tracker": state["block"]})
 

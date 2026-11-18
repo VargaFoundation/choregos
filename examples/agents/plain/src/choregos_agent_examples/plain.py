@@ -11,7 +11,7 @@ Run it by hand against a runner, or see `README.md` for the image.
 
 from __future__ import annotations
 
-from choregos_agent_sdk import Context, LlmError, Result, ToolError, agent
+from tranibor_agent_sdk import Context, LlmError, Result, ToolError, agent
 
 URGENT = ("outage", "down", "data loss", "breach", "security", "cannot log in", "payment")
 SOON = ("error", "bug", "fails", "slow", "wrong", "broken")

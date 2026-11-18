@@ -27,11 +27,11 @@ from collections.abc import AsyncIterator
 from datetime import timedelta
 from typing import Any
 
-import choregos_adapters
 import pytest
-from choregos_contracts import arguments_sha256
+import tranibor_adapters
 from httpx import AsyncClient
 from temporalio.exceptions import ApplicationError
+from tranibor_contracts import arguments_sha256
 
 from .kits import outpost_route as route
 from .kits import outpost_writes as kit
@@ -196,7 +196,7 @@ async def test_a_statement_the_platform_would_not_act_on_is_refused(
     key_on_a_read = await kit.state(client, "search_issues", platform_arguments=["action_key"])
     assert "a read takes none" in _detail(key_on_a_read)
     # A direct connector's write is retried, never in doubt: there is nothing to accept there either.
-    monkeypatch.setattr(choregos_adapters, "FAKE_MCP", route.server(kit.TOOLS))
+    monkeypatch.setattr(tranibor_adapters, "FAKE_MCP", route.server(kit.TOOLS))
     declared = await client.post(
         f"{ORG}/connectors",
         json={"name": "direct", "type": "mcp", "config": {"url": "https://direct.test/mcp"}},
@@ -385,8 +385,8 @@ async def test_a_retry_after_the_answer_was_swept_is_in_doubt_and_never_a_second
     """The retry comes after the sweep emptied the answer nobody recorded (fifteen minutes). The
     write was delivered; what it returned is gone. It is not delivered again to find out: the effect
     ends in doubt, and a person looks."""
-    from choregos_api.outposts import rendezvous
-    from choregos_core import utcnow
+    from tranibor_api.outposts import rendezvous
+    from tranibor_core import utcnow
 
     served, fake = kit.outpost()
     daemon, _headers = await kit.prepared(client, project, fake, opened={"create_issue": ACCEPTED})
@@ -414,7 +414,7 @@ async def test_a_write_nobody_claimed_is_retried_and_succeeds_once_the_outpost_i
 ) -> None:
     """It reached no server (ADR 0149 §5): the failure is one Temporal retries, not a refusal and not
     a doubt, and the retry delivers the write for the first time, under the same id."""
-    from choregos_adapters.outpost import OutpostOffline
+    from tranibor_adapters.outpost import OutpostOffline
 
     served, fake = kit.outpost()
     daemon, _headers = await kit.prepared(client, project, fake, opened={"create_issue": ACCEPTED})
@@ -440,7 +440,7 @@ async def test_a_write_nobody_claimed_is_retried_and_succeeds_once_the_outpost_i
 async def test_a_quota_is_retried_for_a_write_and_the_outposts_own_refusal_is_final(
     client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_adapters.outpost import OutpostNotAdmitted
+    from tranibor_adapters.outpost import OutpostNotAdmitted
 
     served, fake = kit.outpost()
     daemon, _headers = await kit.prepared(client, project, fake, opened={"create_issue": ACCEPTED})
@@ -628,7 +628,7 @@ async def test_a_retry_refused_after_a_write_nobody_claimed_is_a_refusal(
 ) -> None:
     """The same pause, after a write that no instance took: it reached no server, and the refusal
     is what it says."""
-    from choregos_adapters.outpost import OutpostOffline
+    from tranibor_adapters.outpost import OutpostOffline
 
     served, fake = kit.outpost()
     daemon, _headers = await kit.prepared(client, project, fake, opened={"create_issue": ACCEPTED})
@@ -656,8 +656,8 @@ async def test_a_compensation_through_the_same_outpost_is_a_call_of_its_own(
 ) -> None:
     """A compensation reuses its effect's key. Through the connector its effect went through it must
     not meet its effect's call: it is another write, placed once under an id of its own."""
-    from choregos_api.services.outpost_route import write_call_id
-    from choregos_orchestrator.activities.actions import compensate_effect
+    from tranibor_api.services.outpost_route import write_call_id
+    from tranibor_orchestrator.activities.actions import compensate_effect
 
     served, fake = kit.outpost()
     opened = {"create_issue": ACCEPTED, "delete_issue": ACCEPTED}
@@ -683,7 +683,7 @@ async def test_a_compensation_through_the_same_outpost_is_a_call_of_its_own(
 async def test_a_compensation_whose_lease_is_lost_says_so_and_is_not_played_again(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_orchestrator.activities.actions import compensate_effect
+    from tranibor_orchestrator.activities.actions import compensate_effect
 
     served, fake = kit.outpost()
     opened = {"create_issue": ACCEPTED, "delete_issue": ACCEPTED}
@@ -703,9 +703,9 @@ async def test_a_compensation_whose_lease_is_lost_says_so_and_is_not_played_agai
 
 
 async def _behind_the_api(operation: str, **values: Any) -> None:
-    from choregos_api.db.models import ConnectorOperation
-    from choregos_api.db.session import session_scope
     from sqlalchemy import update
+    from tranibor_api.db.models import ConnectorOperation
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         await session.execute(
@@ -746,9 +746,9 @@ async def temporal() -> AsyncIterator[Any]:
 
 
 def _workers(temporal: Any) -> Any:
-    from choregos_orchestrator.activities import ALL_ACTIVITIES
-    from choregos_orchestrator.testing import workers_by_queue
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS, WORKFLOW_ACTIVITIES
+    from tranibor_orchestrator.activities import ALL_ACTIVITIES
+    from tranibor_orchestrator.testing import workers_by_queue
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS, WORKFLOW_ACTIVITIES
 
     return workers_by_queue(
         temporal.client,
@@ -770,8 +770,8 @@ async def test_the_action_of_a_write_whose_lease_is_lost_ends_in_doubt_and_nothi
     """The whole chain: the first write is answered, the lease of the second is lost. The action ends
     `in_doubt`: the server received each call once, the first write is not undone, the third effect
     never runs, and no route plays the action again."""
-    from choregos_api.services.action_relay import start_approved_actions
     from temporalio.client import WorkflowFailureError
+    from tranibor_api.services.action_relay import start_approved_actions
 
     served, fake = kit.outpost()
     opened = dict.fromkeys(("create_issue", "update_issue", "delete_issue"), ACCEPTED)
@@ -873,7 +873,7 @@ async def test_an_agent_that_repeats_the_call_gets_the_same_action_in_doubt(
 ) -> None:
     """An allowed write called by a run is a governed action under a deterministic id. Its lease is
     lost: the agent is told the action is in doubt, and telling it again changes nothing."""
-    from choregos_api.temporal import RealTemporal, set_temporal
+    from tranibor_api.temporal import RealTemporal, set_temporal
 
     served, fake = kit.outpost()
     daemon, headers = await kit.prepared(client, project, fake, opened={"create_issue": ACCEPTED})
@@ -910,7 +910,7 @@ async def test_a_call_under_approval_that_finds_its_action_in_doubt_is_told_so(
 ) -> None:
     """Under `approval` the call proposes the action. Approved since, played and ended in doubt, it
     is still the action the same call finds: not a proposal any more, and never a second one."""
-    from choregos_orchestrator.activities.actions import close_action
+    from tranibor_orchestrator.activities.actions import close_action
 
     _served, fake = kit.outpost()
     daemon, headers = await kit.prepared(
@@ -934,8 +934,8 @@ async def test_a_call_under_approval_that_finds_its_action_in_doubt_is_told_so(
 
 
 async def _approved(action_id: str) -> None:
-    from choregos_api.db.models import Action
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Action
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         row = await session.get(Action, action_id)
@@ -951,8 +951,8 @@ async def test_a_conversation_follows_an_action_in_doubt_without_calling_it_done
     the conversation keeps saying `governed`, with the status it follows."""
     from types import SimpleNamespace
 
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.conversation_actions import _follow_governed
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.conversation_actions import _follow_governed
 
     _served, fake = kit.outpost()
     await kit.prepared(client, project, fake, opened={"create_issue": ACCEPTED})

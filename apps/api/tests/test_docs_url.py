@@ -9,13 +9,13 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 import pytest
-from choregos_core.publishing import PUBLISHING
 from httpx import AsyncClient
+from tranibor_core.publishing import PUBLISHING
 
 
 @pytest.fixture
 def docs_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[pytest.MonkeyPatch]:
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     yield monkeypatch
     monkeypatch.delenv("CHOREGOS_DOCS_URL", raising=False)
@@ -23,7 +23,7 @@ def docs_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[pytest.MonkeyPatch]:
 
 
 def _set(monkeypatch: pytest.MonkeyPatch, value: str) -> None:
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     monkeypatch.setenv("CHOREGOS_DOCS_URL", value)
     reset_settings_cache()
@@ -31,7 +31,7 @@ def _set(monkeypatch: pytest.MonkeyPatch, value: str) -> None:
 
 async def test_the_public_site_by_default(client: AsyncClient, docs_env: pytest.MonkeyPatch) -> None:
     docs_env.delenv("CHOREGOS_DOCS_URL", raising=False)
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     reset_settings_cache()
     body = (await client.get("/api/v1/edition")).json()

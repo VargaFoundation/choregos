@@ -18,8 +18,8 @@ from .conftest import login
 async def test_the_bootstrap_creates_the_organisation_and_its_admins_only_once(
     app: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.bootstrap import bootstrap_installation
-    from choregos_api.config import Settings
+    from tranibor_api.bootstrap import bootstrap_installation
+    from tranibor_api.config import Settings
 
     settings = Settings(
         bootstrap_org="acme", bootstrap_org_name="ACME", bootstrap_admins="Alice@acme.test, bob@acme.test"
@@ -55,7 +55,7 @@ async def test_an_admin_creates_an_organisation_a_developer_does_not(client: Asy
     (ADR 0024), so it now creates it in the enterprise edition, which proves in passing that the
     guard is about the edition and not a hard-coded cap.
     """
-    from choregos_api import edition
+    from tranibor_api import edition
 
     refusal = await client.post("/api/v1/orgs", json={"slug": "subsidiary", "name": "The subsidiary"})
     assert refusal.status_code == 409, refusal.text
@@ -80,7 +80,7 @@ async def test_an_admin_creates_an_organisation_a_developer_does_not(client: Asy
 async def test_a_request_is_filed_in_choregos_when_the_tracker_is_internal(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.temporal import FakeTemporal, get_temporal
+    from tranibor_api.temporal import FakeTemporal, get_temporal
 
     put = await client.put(
         f"/api/v1/projects/{project['id']}/connectors/tracker", json={"type": "internal", "config": {}}

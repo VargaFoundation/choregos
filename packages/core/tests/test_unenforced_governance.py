@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from choregos_core import parse_policy, parse_workflow
-from choregos_core.dsl import TEMPLATE_NAMES, load_template
-from choregos_core.dsl.validator import validate_workflow
-from choregos_core.policy import UNENFORCED_GOVERNANCE_CODES, unenforced_governance
+from tranibor_core import parse_policy, parse_workflow
+from tranibor_core.dsl import TEMPLATE_NAMES, load_template
+from tranibor_core.dsl.validator import validate_workflow
+from tranibor_core.policy import UNENFORCED_GOVERNANCE_CODES, unenforced_governance
 
 ROOT = Path(__file__).resolve().parents[3]
 

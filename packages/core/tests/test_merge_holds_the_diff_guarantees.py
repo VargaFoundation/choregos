@@ -21,12 +21,12 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from choregos_contracts import SystemActor
-from choregos_contracts.workflow import Transition, Workflow, transition_effect
-from choregos_core import parse_workflow
-from choregos_core.dsl import TEMPLATE_NAMES, template_yaml
-from choregos_core.dsl.process import gate_detail, gate_summary, to_process
-from choregos_core.gates import DIFF_GATES, OVER_WORK_ITEM, GateContext, evaluate, judged_on_a_run
+from tranibor_contracts import SystemActor
+from tranibor_contracts.workflow import Transition, Workflow, transition_effect
+from tranibor_core import parse_workflow
+from tranibor_core.dsl import TEMPLATE_NAMES, template_yaml
+from tranibor_core.dsl.process import gate_detail, gate_summary, to_process
+from tranibor_core.gates import DIFF_GATES, OVER_WORK_ITEM, GateContext, evaluate, judged_on_a_run
 
 ROOT = Path(__file__).resolve().parents[3]
 MERGE_WARNING = "workflow.no_diff_gate_at_merge"

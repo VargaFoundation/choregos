@@ -11,10 +11,10 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from choregos_quant.bars import read_bars
-from choregos_quant.cli import main
-from choregos_quant.errors import InputError
-from choregos_quant.snapshot import Fetched, FetchError, HttpFetcher, parse_response
+from tranibor_quant.bars import read_bars
+from tranibor_quant.cli import main
+from tranibor_quant.errors import InputError
+from tranibor_quant.snapshot import Fetched, FetchError, HttpFetcher, parse_response
 
 from .conftest import CAMPAIGN
 
@@ -171,8 +171,8 @@ def test_http_fetcher_needs_its_environment() -> None:
 
 
 def test_snapshot_is_deterministic_with_a_fixed_clock(workdir: Path) -> None:
-    from choregos_quant.campaign import read_campaign
-    from choregos_quant.snapshot import take_snapshot
+    from tranibor_quant.campaign import read_campaign
+    from tranibor_quant.snapshot import take_snapshot
 
     clock = lambda: dt.datetime(2026, 1, 1, tzinfo=dt.UTC)  # noqa: E731
     camp = read_campaign(workdir / "campaign.json")

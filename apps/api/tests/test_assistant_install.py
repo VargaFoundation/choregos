@@ -69,9 +69,9 @@ async def test_an_assistant_says_the_installation_id_its_spend_and_activity_are_
 ) -> None:
     """The cost and activity routes' `assistant` filter takes the installation's id (ADR 0141 §1): the
     assistant says it, the same in the list and alone (issue #1657)."""
-    from choregos_api.db.models import AssistantInstallation
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import AssistantInstallation
+    from tranibor_api.db.session import session_scope
 
     await _plugin(client)
     installed = await _install(client)
@@ -116,7 +116,7 @@ async def test_an_identity_the_connector_cannot_carry_is_refused(
     org: str,
     offline: Path,  # noqa: F811
 ) -> None:
-    from choregos_api.services.connector_identity import supports_identity
+    from tranibor_api.services.connector_identity import supports_identity
 
     await _plugin(client)
     await _install(client)
@@ -128,7 +128,7 @@ async def test_an_identity_the_connector_cannot_carry_is_refused(
     accepted = await _bind(client, "bank_accounts", "consent-bank")
     assert accepted.status_code == 200, accepted.text
     # The one function: `service` always, the others only when declared.
-    from choregos_api.db.models import OrgConnector
+    from tranibor_api.db.models import OrgConnector
 
     assert supports_identity(OrgConnector(config={}), "service")
     assert not supports_identity(OrgConnector(config={}), "user_exchange")
@@ -141,9 +141,9 @@ async def test_a_connector_that_loses_an_operation_makes_it_incomplete_again(
     org: str,
     offline: Path,  # noqa: F811
 ) -> None:
-    from choregos_api.db.models import ConnectorOperation
-    from choregos_api.db.session import session_scope
     from sqlalchemy import delete
+    from tranibor_api.db.models import ConnectorOperation
+    from tranibor_api.db.session import session_scope
 
     await _plugin(client)
     await _install(client)

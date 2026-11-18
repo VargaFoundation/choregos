@@ -11,9 +11,9 @@ others — a sandbox that holds nothing back must be visible.
 from __future__ import annotations
 
 import pytest
-from choregos_contracts import ProjectConfig, RepoConfig
-from choregos_core import load_preset
-from choregos_orchestrator.gitops import render_project_manifests
+from tranibor_contracts import ProjectConfig, RepoConfig
+from tranibor_core import load_preset
+from tranibor_orchestrator.gitops import render_project_manifests
 
 from .conftest import apply, kubectl, run_probe
 

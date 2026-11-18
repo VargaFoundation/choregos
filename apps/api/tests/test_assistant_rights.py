@@ -53,8 +53,8 @@ async def _ready(client: AsyncClient, **extra: Any) -> None:
 
 
 async def _groups(email: str, groups: list[str]) -> None:
-    from choregos_api.db.models import User
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import User
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         user = (await session.execute(select(User).where(User.email == email))).scalar_one()
@@ -79,8 +79,8 @@ async def _turn(person: AsyncClient, conversation: str, text: str = "Hello") -> 
 
 
 async def _record(conversation: str) -> Any:
-    from choregos_api.db.models import AgentSessionRecord
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import AgentSessionRecord
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         record = await session.get(AgentSessionRecord, conversation)
@@ -309,12 +309,12 @@ async def test_deleting_a_conversation_does_not_give_its_spend_back(
 
 
 async def test_the_three_permissions(client: AsyncClient, org: str, offline: Path) -> None:  # noqa: F811
-    from choregos_api.config import get_settings
-    from choregos_api.db.models import AssistantInstallation
-    from choregos_api.db.session import session_scope
-    from choregos_api.rbac import Permission, Principal
-    from choregos_api.services.assistant_access import holds
-    from choregos_contracts import Role
+    from tranibor_api.config import get_settings
+    from tranibor_api.db.models import AssistantInstallation
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.rbac import Permission, Principal
+    from tranibor_api.services.assistant_access import holds
+    from tranibor_contracts import Role
 
     await _ready(client)
     async with session_scope() as session:

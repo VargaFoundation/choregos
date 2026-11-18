@@ -38,7 +38,7 @@ async def test_the_work_item_keeps_its_workflow_when_the_default_changes(
     assert (ticket["workflow_name"], ticket["state"]) == ("staffing", "request")
 
     # The default becomes default-simple again: the work item stays in staffing.
-    from choregos_core import template_yaml
+    from tranibor_core import template_yaml
 
     other = await client.put(
         f"/api/v1/projects/{pid}/workflow", json={"yaml": template_yaml("default-simple")}

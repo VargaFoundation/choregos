@@ -14,10 +14,10 @@ pytestmark = pytest.mark.asyncio
 async def test_demo_runs_end_to_end(tmp_path: Path, monkeypatch: Any, capsys: Any) -> None:
     monkeypatch.setenv("CHOREGOS_FAKES", "1")
     monkeypatch.setenv("CHOREGOS_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/demo.db")
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.db import session as db_session
-    from choregos_orchestrator.activities.base import set_adapters_override
-    from choregos_orchestrator.demo import main_async
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.db import session as db_session
+    from tranibor_orchestrator.activities.base import set_adapters_override
+    from tranibor_orchestrator.demo import main_async
 
     reset_settings_cache()
     await db_session.dispose_engine()

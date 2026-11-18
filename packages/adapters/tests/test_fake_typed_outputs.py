@@ -5,8 +5,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from choregos_adapters.fakes.executor import _typed_placeholder
-from choregos_contracts import ArtifactDisplay, ArtifactLevel, TransitionRef
+from tranibor_adapters.fakes.executor import _typed_placeholder
+from tranibor_contracts import ArtifactDisplay, ArtifactLevel, TransitionRef
 
 
 def _transition(**displays: ArtifactDisplay) -> TransitionRef:
@@ -29,7 +29,7 @@ def test_each_type_gets_a_value_it_accepts() -> None:
 
 
 def test_a_critical_risk_label_is_read_from_github() -> None:
-    from choregos_adapters.tracker.github import _parse_risk
+    from tranibor_adapters.tracker.github import _parse_risk
 
     assert _parse_risk([{"name": "risk:critical"}]) == "critical"
     assert _parse_risk([{"name": "risk:unheard"}]) is None

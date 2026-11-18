@@ -9,8 +9,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from choregos_core.dsl import template_yaml
 from httpx import AsyncClient
+from tranibor_core.dsl import template_yaml
 
 ORIGIN = template_yaml("default-simple")
 

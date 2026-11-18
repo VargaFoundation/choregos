@@ -3,9 +3,9 @@
 - **Status**: proposed, 2026-11-17. The project lead decides in December 2026 between the options below
   (plan of 2026-11-16, workstreams A1 "decision" and O4 "decision"). The work is tracked by the
   `contract-change` issue [#1832](https://github.com/graalsystems/tranibor/issues/1832).
-- **Concerns**: `packages/contracts` (the schemas, `openapi.yaml`, `src/choregos_contracts/`, `ts/`), the
-  five surfaces of [ADR 0168](0168-the-surfaces-frozen-for-1-0.md), `packages/core/src/choregos_core/gates/`,
-  `packages/core/src/choregos_core/dsl/`, `apps/orchestrator/src/choregos_orchestrator/activities/gates.py`,
+- **Concerns**: `packages/contracts` (the schemas, `openapi.yaml`, `src/tranibor_contracts/`, `ts/`), the
+  five surfaces of [ADR 0168](0168-the-surfaces-frozen-for-1-0.md), `packages/core/src/tranibor_core/gates/`,
+  `packages/core/src/tranibor_core/dsl/`, `apps/orchestrator/src/tranibor_orchestrator/activities/gates.py`,
   `packages/playbooks`, `packages/ontology`, `packages/quant`. Follows
   [ADR 0001](0001-frozen-contracts.md) (a contract moves by a `contract-change` PR),
   [ADR 0029](0029-a-platform-for-governed-agents.md) (a platform for any trade),
@@ -31,7 +31,7 @@ The plan's critique (#7) says this: "the contracts keep the software vocabulary 
   Twelve of them declare `needs=("scm",)`.
 - **The three names exist.** `fix_ci` and `release_captain` are in `choregos_contracts/enums.py`.
   `pr_url` is in `stage.py:460` and in the `WorkItem` schema of `openapi.yaml`.
-- **The citation points at something else.** `packages/adapters/src/choregos_adapters/specs.py:695-720` is
+- **The citation points at something else.** `packages/adapters/src/tranibor_adapters/specs.py:695-720` is
   the three demonstration business families (`mdm`, `shipping` and `access_control`, all `demo` and
   `dev_only`). Those lines support the critique's other claim, that the HR model rests on connectors that
   exist only as demonstrations. They have nothing to do with the vocabulary.
@@ -71,7 +71,7 @@ Each name gets one of three classes:
   the core;
 - **(c)** a concept the core owns under a software name, so it needs a neutral name.
 
-### Python types (`packages/contracts/src/choregos_contracts/`)
+### Python types (`packages/contracts/src/tranibor_contracts/`)
 
 | Name | Where | Class | Proposal |
 | :-- | :-- | :-- | :-- |
@@ -142,7 +142,7 @@ Component fields:
 
 ### The other four surfaces
 
-- **MCP door.** The eleven tools (`apps/api/src/choregos_api/mcp/tools.py:720-980`; `docs_search`, `docs_read`,
+- **MCP door.** The eleven tools (`apps/api/src/tranibor_api/mcp/tools.py:720-980`; `docs_search`, `docs_read`,
   `list_projects`, `describe_workflow`, `create_work_item`, `search_work_items`, `get_work_item`,
   `summarize_run`, `list_pending_decisions`, `get_pending_decision`, `draft_decision`) and their input
   schemas are (a). Their structured outputs carry no software field either: `get_work_item` returns the
@@ -182,7 +182,7 @@ ownership:
    `RUN_SCOPED_GATES` and `OVER_WORK_ITEM` move with it.
 2. **The twelve move (round C2).** They move into a first-party package of this repository, the
    software-delivery pack, registered through that seam. The activity names in
-   `apps/orchestrator/src/choregos_orchestrator/activities/gates.py` do not change, so no history needs a
+   `apps/orchestrator/src/tranibor_orchestrator/activities/gates.py` do not change, so no history needs a
    patch.
 3. **A workflow that names a gate whose provider is not installed is refused at publication.** The refusal
    names the pack. Today an unknown gate is a configuration error at evaluation time
@@ -275,7 +275,7 @@ Options for December:
   The six `wi-campaign-*-S38-*` replay histories never name quant and stay as tests of the generic job step.
 - **O4-4: move the `marketdata` connector family as well.** The plan's indicator for O4 is "the core names
   no trade, without exemption". Today `test_core_names_no_business_vocabulary.py` exempts the `marketdata`
-  connectors (`packages/adapters/src/choregos_adapters/marketdata/`, 1,107 lines with the fake, plus
+  connectors (`packages/adapters/src/tranibor_adapters/marketdata/`, 1,107 lines with the fake, plus
   entries in `specs.py`, `families.py` and `builtins.py`). Without O4-4, the exemption list cannot reach
   zero.
 - **O4-0: keep both as they are.** The exemptions stay, and R2 renames thirteen packages instead of eleven.

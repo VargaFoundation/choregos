@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pathlib
 
-from choregos_core import parse_workflow, to_process
-from choregos_core.dsl import RESUMES
-from choregos_core.gates import known_gates
+from tranibor_core import parse_workflow, to_process
+from tranibor_core.dsl import RESUMES
+from tranibor_core.gates import known_gates
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 
@@ -40,7 +40,7 @@ def test_a_person_their_delay_and_the_rejection() -> None:
 
 def test_what_the_platform_does_is_said_in_plain_words() -> None:
     """`does` (#175): the process view says the platform opens, then merges the PR."""
-    from choregos_core.dsl import template_yaml
+    from tranibor_core.dsl import template_yaml
 
     workflow, _ = parse_workflow(template_yaml("default-simple"))
     steps = {e["to"]: str(e["sentence"]) for e in to_process(workflow)}
@@ -51,7 +51,7 @@ def test_what_the_platform_does_is_said_in_plain_words() -> None:
 def test_a_guarantee_says_its_thresholds_and_how_long_it_waits() -> None:
     """The map listed `diff_size_max` and `ci_green` as bare names: what the limit is, and that the
     step waits for the CI, were not said anywhere."""
-    from choregos_core.dsl.process import gate_detail
+    from tranibor_core.dsl.process import gate_detail
 
     assert (
         gate_detail("diff_size_max", {})

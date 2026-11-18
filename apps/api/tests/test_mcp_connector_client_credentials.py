@@ -16,12 +16,12 @@ import os
 from collections.abc import Iterator
 from typing import Any
 
-import choregos_adapters
 import pytest
-from choregos_adapters.fakes.mcp import FakeMcpServer
-from choregos_adapters.fakes.oauth_provider import FakeOAuthProvider
-from choregos_adapters.mcp import CONNECTOR_TOKENS
+import tranibor_adapters
 from httpx import AsyncClient
+from tranibor_adapters.fakes.mcp import FakeMcpServer
+from tranibor_adapters.fakes.oauth_provider import FakeOAuthProvider
+from tranibor_adapters.mcp import CONNECTOR_TOKENS
 
 from .egress_support import rules_in_db
 from .test_broker import TOOLS
@@ -42,7 +42,7 @@ RUN = "run-client-credentials-1"
 @pytest.fixture(autouse=True)
 def sealed_key(monkeypatch: pytest.MonkeyPatch) -> None:
     """The deployment's key: a typed client secret is sealed with it (ADR 0058)."""
-    from choregos_core.redaction import forget_secrets
+    from tranibor_core.redaction import forget_secrets
 
     monkeypatch.setenv("CHOREGOS_SECRETS_KEKS", f"k1:{base64.b64encode(os.urandom(32)).decode()}")
     forget_secrets()
@@ -51,7 +51,7 @@ def sealed_key(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.fixture
 def provider(monkeypatch: pytest.MonkeyPatch) -> Iterator[FakeOAuthProvider]:
     fake = FakeOAuthProvider(client_id=CLIENT_ID, client_secret=SECRET)
-    monkeypatch.setattr(choregos_adapters, "FAKE_OAUTH", fake)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_OAUTH", fake)
     CONNECTOR_TOKENS.clear()
     yield fake
     CONNECTOR_TOKENS.clear()
@@ -60,13 +60,13 @@ def provider(monkeypatch: pytest.MonkeyPatch) -> Iterator[FakeOAuthProvider]:
 @pytest.fixture
 def server(provider: FakeOAuthProvider, monkeypatch: pytest.MonkeyPatch) -> FakeMcpServer:
     fake = FakeMcpServer(tools=[dict(t) for t in TOOLS], accepts=provider.accepts)
-    monkeypatch.setattr(choregos_adapters, "FAKE_MCP", fake)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_MCP", fake)
     return fake
 
 
 @pytest.fixture
 def enforce(app: Any, monkeypatch: pytest.MonkeyPatch) -> None:
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     monkeypatch.setenv("CHOREGOS_EGRESS_MODE", "enforce")
     reset_settings_cache()
@@ -84,9 +84,9 @@ def _declare(secret: str = SECRET, **over: Any) -> dict[str, Any]:
 
 
 async def _audit_text() -> str:
-    from choregos_api.db.models import AuditLog
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import AuditLog
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = (await session.execute(select(AuditLog))).scalars().all()
@@ -95,9 +95,9 @@ async def _audit_text() -> str:
 
 async def _run(client: AsyncClient, project: dict[str, Any]) -> tuple[str, dict[str, str]]:
     """The connector declared and discovered, its reads open, an agent that names it, a run of it."""
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.security import mint_run_token
+    from tranibor_api.db.models import Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.security import mint_run_token
 
     declared = await client.post(f"{ORG}/connectors", json=_declare())
     assert declared.status_code == 201, declared.text

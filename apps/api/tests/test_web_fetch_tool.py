@@ -23,7 +23,7 @@ HTML = (
 
 @pytest.fixture
 def web() -> Iterator[Any]:
-    from choregos_api.services import web_fetch
+    from tranibor_api.services import web_fetch
 
     fake = web_fetch.FakeWebClient()
     clock = [1000.0]
@@ -74,18 +74,18 @@ async def _fetch(client: AsyncClient, base: str, headers: dict[str, str], **args
 
 
 async def _ledger() -> list[Any]:
-    from choregos_api.db.models import CostLedger
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import CostLedger
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         return list((await session.execute(select(CostLedger).where(CostLedger.kind == "tool"))).scalars())
 
 
 async def _decisions() -> dict[tuple[str, str, str], int]:
-    from choregos_api.db.models import NetworkDecision
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import NetworkDecision
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = (await session.execute(select(NetworkDecision))).scalars()
@@ -132,7 +132,7 @@ async def test_the_repository_host_alone_does_not_offer_it_but_is_readable_once_
 async def test_a_page_is_read_as_text_with_the_platforms_user_agent_and_counted(
     client: AsyncClient, project: dict[str, Any], web: Any
 ) -> None:
-    from choregos_api import __version__
+    from tranibor_api import __version__
 
     web.add(PAGE, HTML)
     base, headers = await _ready(client, project, ceiling={"user_agent_contact": "ops@example.org"})
@@ -157,9 +157,9 @@ async def test_a_page_is_read_as_text_with_the_platforms_user_agent_and_counted(
     (row,) = await _ledger()
     assert (row.provider, row.model, row.run_id) == ("web:docs.example.com", "web_fetch", "run-web-1")
     assert await _decisions() == {("docs.example.com", "allowed", "web_fetch"): 1}
-    from choregos_api.db.models import Event
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Event
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         called = (
@@ -250,7 +250,7 @@ async def test_an_address_that_holds_a_secret_is_refused_before_anything_is_sent
 ) -> None:
     from urllib.parse import quote
 
-    from choregos_core.redaction import forget_secrets, remember_secret
+    from tranibor_core.redaction import forget_secrets, remember_secret
 
     secret = "tenant-db-passphrase/77"
     base, headers = await _ready(client, project)
@@ -450,7 +450,7 @@ async def test_the_runs_own_rate_is_a_429(client: AsyncClient, project: dict[str
     web.add(PAGE, HTML)
     web.add("https://docs.example.com/two", HTML)
     base, headers = await _ready(client, project, extra="")
-    from choregos_api.db.models import Project  # noqa: F401  (the policy below sets the run's rate)
+    from tranibor_api.db.models import Project  # noqa: F401  (the policy below sets the run's rate)
 
     assert (
         await client.put(
@@ -476,7 +476,7 @@ async def test_a_site_that_answers_429_is_passed_on(
 
 
 async def test_the_http_client_connects_to_the_checked_address_and_names_the_host() -> None:
-    from choregos_api.services.web_fetch import HttpWebClient
+    from tranibor_api.services.web_fetch import HttpWebClient
 
     seen: list[httpx.Request] = []
 

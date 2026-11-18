@@ -81,9 +81,9 @@ def stubs(
 async def run(
     planned: dict[str, Any], **options: Any
 ) -> tuple[dict[str, Any], list[tuple[str, dict[str, Any]]], Any]:
-    from choregos_orchestrator.workflows.knowledge_distill import KnowledgeDistill
     from temporalio.testing import WorkflowEnvironment
     from temporalio.worker import Worker
+    from tranibor_orchestrator.workflows.knowledge_distill import KnowledgeDistill
 
     activities, calls = stubs(planned, **options)
     environment = await WorkflowEnvironment.start_time_skipping()
@@ -151,10 +151,10 @@ async def test_a_base_that_left_ends_quietly() -> None:
 async def test_a_cancelled_run_is_completed_as_cancelled_and_publishes_nothing() -> None:
     import asyncio
 
-    from choregos_orchestrator.workflows.knowledge_distill import KnowledgeDistill
     from temporalio.client import WorkflowFailureError
     from temporalio.testing import WorkflowEnvironment
     from temporalio.worker import Worker
+    from tranibor_orchestrator.workflows.knowledge_distill import KnowledgeDistill
 
     activities, calls = stubs(plan_of([1.0, 1.0, 1.0]))
 
@@ -194,9 +194,9 @@ async def test_a_cancelled_run_is_completed_as_cancelled_and_publishes_nothing()
 
 
 async def test_the_archived_history_replays() -> None:
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.client import WorkflowHistory
     from temporalio.worker import Replayer
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     _, _, history = await run(plan_of([1.0, 1.0]))
     replayer = Replayer(workflows=ALL_WORKFLOWS)

@@ -33,7 +33,7 @@ def count_private_router_imports(package_dir: Path, package: str) -> int:
 
 
 def test_routers_import_no_private_names_from_each_other() -> None:
-    count = count_private_router_imports(API_PACKAGE, "choregos_api")
+    count = count_private_router_imports(API_PACKAGE, "tranibor_api")
     assert count <= CEILING, (
         f"routers import private names from each other {count} times: no router may import a "
         "`_private` name from another router (ADR 0099): move the helper into a service under a public name"

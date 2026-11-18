@@ -5,7 +5,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any
 
-from choregos_core.domain import Fact, Provenance
+from tranibor_core.domain import Fact, Provenance
 
 from .conftest import Fixture
 
@@ -24,8 +24,8 @@ FULL = [
 async def _stores(setup: Fixture) -> None:
     """Global: security-lessons (org), architecture-decisions (billing-api), elsewhere-only (checkout-web),
     old-lessons (archived). Project: decisions."""
-    from choregos_api.db.models import MemoryStore, Project
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import MemoryStore, Project
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         project = await session.get(Project, setup.project_id)
@@ -67,8 +67,8 @@ async def _stores(setup: Fixture) -> None:
 async def _agent(
     setup: Fixture, memories: list[dict[str, Any]] | None, slug: str = "architect", **spec: Any
 ) -> None:
-    from choregos_api.db.models import Agent, AgentVersion, Project
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Agent, AgentVersion, Project
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         project = await session.get(Project, setup.project_id)
@@ -118,7 +118,7 @@ async def _seed(setup: Fixture) -> None:
 
 
 async def test_two_global_and_two_project_memories_are_resolved_in_order_and_merged(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.stage import prepare_stage
+    from tranibor_orchestrator.activities.stage import prepare_stage
 
     await _stores(setup)
     await _seed(setup)
@@ -133,8 +133,8 @@ async def test_two_global_and_two_project_memories_are_resolved_in_order_and_mer
     ]
     assert stage_input["memory_scope"] == "none", "no legacy value means this list: old runners read nothing"
     assert "memory" not in stage_input["tools"]["mcp"], "Ecphoria's own server only serves the shared memory"
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         run = await session.get(Run, prepared["run_id"])
@@ -157,10 +157,10 @@ async def test_two_global_and_two_project_memories_are_resolved_in_order_and_mer
 async def test_a_binding_that_does_not_resolve_is_skipped_journaled_once_and_the_run_starts(
     setup: Fixture,
 ) -> None:
-    from choregos_api.db.models import RunEvent
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities.stage import prepare_stage
     from sqlalchemy import select
+    from tranibor_api.db.models import RunEvent
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities.stage import prepare_stage
 
     await _stores(setup)
     await _seed(setup)
@@ -200,9 +200,9 @@ async def test_a_binding_that_does_not_resolve_is_skipped_journaled_once_and_the
 
 
 async def test_a_memory_that_raises_leaves_the_others_in_the_pack(setup: Fixture) -> None:
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities.stage import prepare_stage
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities.stage import prepare_stage
 
     await _stores(setup)
     await _seed(setup)
@@ -227,9 +227,9 @@ async def test_a_memory_that_raises_leaves_the_others_in_the_pack(setup: Fixture
 async def test_the_legacy_single_memory_is_unchanged(setup: Fixture) -> None:
     """No `memories`, no `memory`: the project's shared memory, its pack unmerged and unlabelled, and the
     memory server announced (what S32-02 shipped)."""
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities.stage import prepare_stage
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities.stage import prepare_stage
 
     await _seed(setup)
     await _agent(setup, None)
@@ -246,7 +246,7 @@ async def test_the_legacy_single_memory_is_unchanged(setup: Fixture) -> None:
 
 
 def test_the_memory_server_is_announced_only_for_the_legacy_shared_memory() -> None:
-    from choregos_orchestrator.activities.stage import _mcp_servers
+    from tranibor_orchestrator.activities.stage import _mcp_servers
 
     settings = SimpleNamespace(tools_sidecar_url="", memory_url="http://ecphoria:8432")
     assert "memory" in _mcp_servers(settings, "project")
@@ -255,8 +255,8 @@ def test_the_memory_server_is_announced_only_for_the_legacy_shared_memory() -> N
 
 
 async def _run_of(setup: Fixture, memories: list[dict[str, Any]], run_id: str = "run-1") -> str:
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
 
     resolved = [
         {
@@ -287,7 +287,7 @@ async def _run_of(setup: Fixture, memories: list[dict[str, Any]], run_id: str = 
 
 
 async def test_a_lesson_goes_to_the_write_target(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.memory import write_run_lesson
+    from tranibor_orchestrator.activities.memory import write_run_lesson
 
     await _stores(setup)
     run_id = await _run_of(
@@ -307,7 +307,7 @@ async def test_a_lesson_goes_to_the_write_target(setup: Fixture) -> None:
 
 
 async def test_a_run_with_no_write_binding_writes_nothing(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.memory import write_run_lesson
+    from tranibor_orchestrator.activities.memory import write_run_lesson
 
     await _stores(setup)
     run_id = await _run_of(setup, [{"scope": "global", "slug": "security-lessons", "mode": "read"}])
@@ -319,9 +319,9 @@ async def test_a_run_with_no_write_binding_writes_nothing(setup: Fixture) -> Non
 
 
 async def test_a_global_write_target_receives_proposals_not_facts(setup: Fixture) -> None:
-    from choregos_api.db.models import Finding
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities.memory import ingest_sources, write_run_lesson
+    from tranibor_api.db.models import Finding
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities.memory import ingest_sources, write_run_lesson
 
     await _stores(setup)
     run_id = await _run_of(
@@ -361,7 +361,7 @@ async def test_a_global_write_target_receives_proposals_not_facts(setup: Fixture
 
 
 async def test_auto_accept_covers_the_projects_memories_and_never_a_global_one(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.memory import accept_pending_facts
+    from tranibor_orchestrator.activities.memory import accept_pending_facts
 
     await _stores(setup)
     await _run_of(setup, [{"scope": "project", "slug": "shared", "mode": "write"}])
@@ -383,10 +383,10 @@ async def test_auto_accept_covers_the_projects_memories_and_never_a_global_one(s
 
 async def test_journaling_the_same_skip_twice_leaves_one_event(setup: Fixture) -> None:
     """The guard itself, apart from the early return of a replayed `prepare_stage`."""
-    from choregos_api.db.models import Run, RunEvent
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities.stage import _journal_skipped_memories
     from sqlalchemy import select
+    from tranibor_api.db.models import Run, RunEvent
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities.stage import _journal_skipped_memories
 
     await _run_of(setup, [{"scope": "project", "slug": "shared", "mode": "write"}], run_id="run-skip")
     skipped = [{"memory": "global:gone", "reason": "the memory does not exist"}]
@@ -410,10 +410,10 @@ async def test_journaling_the_same_skip_twice_leaves_one_event(setup: Fixture) -
 async def test_a_renamed_organisation_keeps_its_global_namespaces_at_run_time(setup: Fixture) -> None:
     """S40-24: the run resolves `org:<memory key>`, not `org:<current slug>`, so a slug change does not
     hide the facts already written."""
-    from choregos_api.db.models import Organization, Project
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities.stage import prepare_stage
     from sqlalchemy import select
+    from tranibor_api.db.models import Organization, Project
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities.stage import prepare_stage
 
     await _stores(setup)
     await _seed(setup)
@@ -432,9 +432,9 @@ async def test_a_renamed_organisation_keeps_its_global_namespaces_at_run_time(se
 
 async def _disable_memory(setup: Fixture) -> None:
     """The project's active policy says `memory: {enabled: false}`."""
-    from choregos_api.db.models import PolicyDef
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import PolicyDef
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         row = (
@@ -453,10 +453,10 @@ async def test_a_policy_that_disables_memory_wins_over_the_agents_bindings(setup
     """S51-01, seen on prod: a project whose policy says `memory: {enabled: false}` ran an agent whose spec
     says `memory: "project"`, and the run received `memory_scope: "project"`, a shared memory to write and
     the memory server. The policy is authoritative: no memory, no server, each binding journaled."""
-    from choregos_api.db.models import RunEvent
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities.stage import MEMORY_DISABLED, prepare_stage
     from sqlalchemy import select
+    from tranibor_api.db.models import RunEvent
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities.stage import MEMORY_DISABLED, prepare_stage
 
     await _seed(setup)
     await _agent(setup, None, slug="fon-access-analyst", memory="project")
@@ -483,7 +483,7 @@ async def test_a_policy_that_disables_memory_wins_over_the_agents_bindings(setup
 
 async def test_the_same_agent_gets_its_memory_when_the_policy_enables_it(setup: Fixture) -> None:
     """The control of the test above: only the policy differs."""
-    from choregos_orchestrator.activities.stage import prepare_stage
+    from tranibor_orchestrator.activities.stage import prepare_stage
 
     await _seed(setup)
     await _agent(setup, None, slug="fon-access-analyst", memory="project")
@@ -493,7 +493,7 @@ async def test_the_same_agent_gets_its_memory_when_the_policy_enables_it(setup: 
 
 
 async def test_a_policy_that_disables_memory_skips_every_binding_of_a_list(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.stage import prepare_stage
+    from tranibor_orchestrator.activities.stage import prepare_stage
 
     await _stores(setup)
     await _seed(setup)

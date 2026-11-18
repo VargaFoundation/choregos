@@ -14,7 +14,7 @@ Everything else is the door's own code: the signature, what it binds, the window
 sequence, the schema, the verb.
 
 The bound on a handed call (`x-bounds.max_sealed_call_bytes`) and the refusal codes, `cannot_record`
-among them (S65-10b), are the contract's own: the door reads both from `choregos_contracts`.
+among them (S65-10b), are the contract's own: the door reads both from `tranibor_contracts`.
 """
 
 from __future__ import annotations
@@ -24,15 +24,15 @@ import json
 from datetime import UTC, datetime
 from typing import Any
 
-import choregos_contracts as contracts
 import pytest
+import tranibor_contracts as contracts
 import yaml
-from choregos_adapters import sealing
-from choregos_contracts import MAX_BODY_BYTES, NONCE_HEADER, SIGNATURE_HEADER, outpost
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
 from httpx import AsyncClient
+from tranibor_adapters import sealing
+from tranibor_contracts import MAX_BODY_BYTES, NONCE_HEADER, SIGNATURE_HEADER, outpost
 
 from .kits import outpost_daemon as daemon_kit
 from .kits import outposts as kit
@@ -104,15 +104,15 @@ def test_the_live_routes_are_the_contracts_four_verbs(app: Any) -> None:
 
 
 def test_with_outposts_off_the_application_serves_none_of_them(monkeypatch: pytest.MonkeyPatch) -> None:
-    from choregos_api.main import create_app
+    from tranibor_api.main import create_app
 
     kit.configure(monkeypatch, outposts="off")
     assert _served(create_app()) == set()
 
 
 def test_the_bounds_the_door_applies_are_the_documents() -> None:
-    from choregos_api.outposts import auth, rendezvous
-    from choregos_api.outposts import door as served
+    from tranibor_api.outposts import auth, rendezvous
+    from tranibor_api.outposts import door as served
 
     bounds = DOOR["x-bounds"]
     assert bounds["max_body_bytes"] == MAX_BODY_BYTES
@@ -143,8 +143,8 @@ def test_the_door_signs_a_call_as_the_vector_is_signed_to_the_byte(door: str) ->
     """`x-call-signature`: a compact JWS, `EdDSA`, `kid` the signing key itself, the three claims and
     no other. Ed25519 leaves nothing to chance: the door's signature of the vector's call is the
     vector's."""
-    from choregos_api.config import ed25519_public_key
-    from choregos_api.outposts import rendezvous
+    from tranibor_api.config import ed25519_public_key
+    from tranibor_api.outposts import rendezvous
 
     call = SEALED["call"]
     assert ed25519_public_key(_door_pem()) == door
@@ -167,7 +167,7 @@ def test_the_door_signs_a_call_as_the_vector_is_signed_to_the_byte(door: str) ->
 def test_a_nonce_is_an_authenticated_timestamp_the_door_checks_alone() -> None:
     """Issued without stored state (RFC 9449 §8): with a key and a clock that are fixed, so is the
     nonce; it is taken for 300 seconds by any door that holds the key, and by no other."""
-    from choregos_api.outposts import auth
+    from tranibor_api.outposts import auth
 
     key = _seed("choregos tests: a nonce key")
     issued = auth.Nonces(key).issue(at=VECTOR_TIME)
@@ -201,10 +201,10 @@ def test_a_nonce_is_an_authenticated_timestamp_the_door_checks_alone() -> None:
 async def vectors_door(client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch) -> str:
     """A door that gave the vectors their instance id and their nonce, at the second they were signed.
     The vectors' instance is an approved instance of the test's outpost; its id is returned."""
-    from choregos_api.db.models import OutpostInstance
-    from choregos_api.db.session import name_the_outpost, session_scope
-    from choregos_api.outposts import auth
-    from choregos_api.services import outposts as service
+    from tranibor_api.db.models import OutpostInstance
+    from tranibor_api.db.session import name_the_outpost, session_scope
+    from tranibor_api.outposts import auth
+    from tranibor_api.services import outposts as service
 
     await kit.create(client, SLUG)
     row = await kit.outpost_row(SLUG)
@@ -260,7 +260,7 @@ async def test_the_vectors_enrolment_is_signed_as_the_door_verifies_it(
 ) -> None:
     """Signed with the key it enrols, no `kid`, nonce or sequence. Its token is an example's: the door
     gets as far as the token, which is after the signature, what it binds and its time."""
-    from choregos_api.outposts import auth
+    from tranibor_api.outposts import auth
 
     enrol = REQUESTS["enrol"]
     refused(await _send(client, enrol), "invalid_enrolment_token", 401)
@@ -277,7 +277,7 @@ async def test_the_vectors_requests_pass_the_door_in_their_order(
 ) -> None:
     """A poll under sequence 41, an answer under 42, a refusal under 43: each is taken for what the
     contract says it is, and the calls the poll is handed are the door's, signed and sealed."""
-    from choregos_api.outposts import rendezvous
+    from tranibor_api.outposts import rendezvous
 
     poll, answer, refuse = REQUESTS["poll"], REQUESTS["answer"], REQUESTS["refuse"]
     written = json.loads(SEALED["call"]["plaintext"])
@@ -357,7 +357,7 @@ async def test_a_vector_bent_one_way_at_a_time_is_refused_for_that_way(
     client: AsyncClient, vectors_door: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The same request, with one thing wrong: the code says which, and it took no sequence."""
-    from choregos_api.outposts import auth
+    from tranibor_api.outposts import auth
 
     poll = REQUESTS["poll"]
     refused(await _send(client, poll, url=REQUESTS["refuse"]["url"]), "request_mismatch", 401)

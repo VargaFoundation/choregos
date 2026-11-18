@@ -11,7 +11,7 @@ import pathlib
 from typing import Any
 
 import pytest
-from choregos_contracts import StageInput, StageResult
+from tranibor_contracts import StageInput, StageResult
 
 from .conftest import Fixture, recording_history, refine_result
 from .test_budget_reservation import spend
@@ -40,8 +40,8 @@ async def test_a_restarted_interpreter_keeps_the_spent_amount(
 ) -> None:
     """An earlier interpreter of this ticket spent 3 $ — 2 in models, 1 in tools. The new one starts
     from 3 $, and adds what its own stage costs."""
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.worker import Replayer
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     await spend(setup, 2.0)
     await spend(setup, 1.0, kind="tool")

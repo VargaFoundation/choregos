@@ -22,7 +22,7 @@ def _by_key(body: dict[str, Any]) -> dict[str, dict[str, str]]:
 
 
 def _oidc(monkeypatch: pytest.MonkeyPatch, **extra: str) -> None:
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     monkeypatch.setenv("CHOREGOS_OIDC_ISSUER", ISSUER)
     monkeypatch.setenv("CHOREGOS_OIDC_CLIENT_ID", "choregos-web")
@@ -75,8 +75,8 @@ async def test_unconfigured_oidc_says_so(client: AsyncClient, admin: str) -> Non
 async def test_the_card_says_whether_organisations_bring_their_own_provider(
     client: AsyncClient, admin: str
 ) -> None:
-    from choregos_api.edition import reset
-    from choregos_api.tenant_sign_in import declare_sign_in_resolver
+    from tranibor_api.edition import reset
+    from tranibor_api.tenant_sign_in import declare_sign_in_resolver
 
     key = "oidc.per_organisation"
     assert _by_key((await client.get(URL)).json())[key]["value"] == "instance provider only"
@@ -115,9 +115,9 @@ async def test_a_member_who_is_not_a_platform_admin_is_refused(client: AsyncClie
 
 
 async def test_a_plugin_authority_grants_access(extended_client: AsyncClient) -> None:
-    from choregos_api.db.models import Membership, Organization, User
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Membership, Organization, User
+    from tranibor_api.db.session import session_scope
 
     await connect(extended_client, "admin@northwind.dev")
     async with session_scope(orgs="*") as session:

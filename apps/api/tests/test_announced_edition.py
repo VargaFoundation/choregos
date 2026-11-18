@@ -17,7 +17,7 @@ import pytest
 @pytest.fixture(autouse=True)
 def _clean_edition() -> Any:
     """Each test starts from the most restrictive edition: the state is a module."""
-    from choregos_api.edition import reset
+    from tranibor_api.edition import reset
 
     reset()
     yield
@@ -26,8 +26,8 @@ def _clean_edition() -> Any:
 
 def test_announcing_enterprise_without_an_extension_refuses_to_start(monkeypatch: Any) -> None:
     """The refusal is at start-up, and it names the three possible causes."""
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.main import create_app
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.main import create_app
 
     monkeypatch.setenv("CHOREGOS_EDITION", "enterprise")
     reset_settings_cache()
@@ -45,8 +45,8 @@ def test_announcing_enterprise_without_an_extension_refuses_to_start(monkeypatch
 
 def test_announcing_community_starts(monkeypatch: Any) -> None:
     """The default must require nothing: it is the edition of this repository."""
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.main import create_app
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.main import create_app
 
     monkeypatch.setenv("CHOREGOS_EDITION", "community")
     reset_settings_cache()
@@ -59,9 +59,9 @@ def test_announcing_community_starts(monkeypatch: Any) -> None:
 
 def test_announcing_enterprise_with_an_extension_that_declares_itself_starts(monkeypatch: Any) -> None:
     """An extension that calls `declare(ENTERPRISE)` lifts the refusal: this is the real case."""
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.edition import ENTERPRISE, declare
-    from choregos_api.main import create_app
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.edition import ENTERPRISE, declare
+    from tranibor_api.main import create_app
 
     monkeypatch.setenv("CHOREGOS_EDITION", "enterprise")
     reset_settings_cache()
@@ -80,7 +80,7 @@ async def test_the_metrics_tell_the_edition(client: Any) -> None:
     An operator looking at a dashboard from three weeks ago must be able to know which edition
     produced those figures. `GET /edition` only answers for today's process.
     """
-    from choregos_api.metrics import refresh
+    from tranibor_api.metrics import refresh
 
     await refresh()
     body = (await client.get("/metrics")).text
@@ -97,9 +97,9 @@ async def test_an_extension_can_replace_the_group_mapping(client: Any, monkeypat
     from SAML or SCIM, a table editable in the interface. It is the only identity decision that
     is SUBSTITUTED; the rest (SAML, SCIM, session revocation) are new routes.
     """
-    from choregos_api.edition import declare_group_mapper, group_mapper
-    from choregos_api.routers.auth import roles_from_groups
-    from choregos_contracts import Role
+    from tranibor_api.edition import declare_group_mapper, group_mapper
+    from tranibor_api.routers.auth import roles_from_groups
+    from tranibor_contracts import Role
 
     # Without an extension, the core's mapper serves.
     assert group_mapper(roles_from_groups) is roles_from_groups
@@ -122,7 +122,7 @@ async def test_an_extension_can_replace_the_group_mapping(client: Any, monkeypat
         assert seen, "the declared mapper was not called by the sign-in"
     finally:
         declare_group_mapper(None)
-        from choregos_api.edition import reset
+        from tranibor_api.edition import reset
 
         reset()
 

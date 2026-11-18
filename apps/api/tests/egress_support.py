@@ -14,9 +14,9 @@ ORG = "/api/v1/orgs/northwind"
 
 
 async def add_member(email: str, role: str) -> None:
-    from choregos_api.db.models import Membership, Organization, User
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Membership, Organization, User
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         org = (
@@ -44,9 +44,9 @@ async def as_person(client: AsyncClient, email: str, role: str | None = None) ->
 
 
 async def rules_in_db(status: str | None = None) -> list[Any]:
-    from choregos_api.db.models import OrgEgressRule
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import OrgEgressRule
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         query = select(OrgEgressRule).order_by(OrgEgressRule.host)
@@ -56,9 +56,9 @@ async def rules_in_db(status: str | None = None) -> list[Any]:
 
 
 async def audit_actions() -> list[str]:
-    from choregos_api.db.models import AuditLog
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import AuditLog
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = (await session.execute(select(AuditLog.action).order_by(AuditLog.ts))).tuples()

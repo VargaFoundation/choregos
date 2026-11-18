@@ -39,8 +39,8 @@ def _breakdown(
 
 
 async def _window(model: str, tokens: int | None) -> None:
-    from choregos_api.db.models import ModelCatalogueRow, Organization
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import ModelCatalogueRow, Organization
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         org = (
@@ -123,8 +123,8 @@ async def test_the_breakdown_is_read_with_the_runs_read_right(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
     """A run of an organisation the caller has no role in: the route answers what `getRun` answers."""
-    from choregos_api.db.models import Organization, Project
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Organization, Project
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         other = Organization(slug="acme", name="Acme")
@@ -151,8 +151,8 @@ async def test_the_breakdown_is_read_with_the_runs_read_right(
 
 
 async def _session_breakdowns(session_id: str) -> list[dict[str, Any]]:
-    from choregos_api.db.models import AgentSessionEvent
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import AgentSessionEvent
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = await session.execute(

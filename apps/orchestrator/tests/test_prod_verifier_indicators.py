@@ -15,11 +15,11 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from choregos_api.catalogue import clear_cache
-from choregos_api.schemas import AgentSpec
-from choregos_contracts import ContextPack, ProjectConfig
-from choregos_core.agent_catalogue import entry
-from choregos_orchestrator.activities.stage import _render_playbook, production_indicator_sources
+from tranibor_api.catalogue import clear_cache
+from tranibor_api.schemas import AgentSpec
+from tranibor_contracts import ContextPack, ProjectConfig
+from tranibor_core.agent_catalogue import entry
+from tranibor_orchestrator.activities.stage import _render_playbook, production_indicator_sources
 
 CATALOGUE = """
 tools:

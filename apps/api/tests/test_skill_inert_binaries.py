@@ -13,8 +13,8 @@ from collections.abc import Iterator
 from typing import Any
 
 import pytest
-from choregos_contracts import MAX_BINARY_BYTES, skill_digest, skill_file_bytes
 from httpx import AsyncClient
+from tranibor_contracts import MAX_BINARY_BYTES, skill_digest, skill_file_bytes
 
 from .test_skills_from_git import ANTHROPICS, SHA1, _import, _skill_md, tarball
 
@@ -113,7 +113,7 @@ async def test_the_total_cap_counts_decoded_bytes(client: AsyncClient, admin: st
 
 @pytest.fixture
 def fake() -> Iterator[Any]:
-    from choregos_api.services.skill_sources import FakeSourceFetcher, set_fetcher
+    from tranibor_api.services.skill_sources import FakeSourceFetcher, set_fetcher
 
     fetcher = FakeSourceFetcher()
     repo = {
@@ -150,7 +150,7 @@ async def test_a_git_import_accepts_a_font_and_refuses_a_fake_or_other_binary(
 
 
 def test_the_gate_does_not_scan_a_binary_and_a_binary_makes_a_skill_medium() -> None:
-    from choregos_api.services.skill_gate import assess
+    from tranibor_api.services.skill_gate import assess
 
     # `assess` does not validate base64 (`validate` does): a URL-shaped value would be a finding
     # in a text file, and must be none in a binary one.

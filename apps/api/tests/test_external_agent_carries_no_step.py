@@ -19,7 +19,7 @@ from .agent_scopes_kit import ADMIN, as_user, create_agent, make_project
 
 async def _publish(client: AsyncClient, project_id: str, agent: str) -> tuple[int, str]:
     """The default workflow, its implementing actor naming `agent`."""
-    from choregos_core.dsl import template_yaml
+    from tranibor_core.dsl import template_yaml
 
     yaml = template_yaml("default-simple").replace(
         'dev: { type: agent, role: implement, model: "profile:by_size" }',
@@ -33,9 +33,9 @@ async def _publish(client: AsyncClient, project_id: str, agent: str) -> tuple[in
 
 
 async def _resolve(project_id: str, slug: str) -> Any:
-    from choregos_api.db.models import Project
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.agents import resolve_agent
+    from tranibor_api.db.models import Project
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.agents import resolve_agent
 
     async with session_scope() as session:
         row = await session.get(Project, project_id)
@@ -64,7 +64,7 @@ async def test_a_workflow_naming_an_external_agent_is_not_published(client: Asyn
 
 async def test_a_run_does_not_resolve_an_external_agent(client: AsyncClient, org: str) -> None:
     """The execution's guard, for a workflow published before the publication refused it."""
-    from choregos_api.services.agents import AgentUnavailable
+    from tranibor_api.services.agents import AgentUnavailable
 
     dev = await make_project(client, "dev")
     await _external(client)
@@ -77,7 +77,7 @@ async def test_a_run_does_not_resolve_an_external_agent(client: AsyncClient, org
 
 
 def test_the_rule_reads_the_kind_before_the_scope() -> None:
-    from choregos_api.services.agent_governance import carries_no_step, usable_in_project
+    from tranibor_api.services.agent_governance import carries_no_step, usable_in_project
 
     assert carries_no_step("internal", "a") is None
     assert carries_no_step("remote", "a") is None

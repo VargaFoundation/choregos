@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from choregos_core.production import (
+from tranibor_core.production import (
     PRODUCTION_ENVIRONMENTS,
     FakesInProductionError,
     fakes_on,

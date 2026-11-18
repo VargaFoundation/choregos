@@ -23,7 +23,7 @@ pytestmark = without_postgres
 
 
 async def _second_replica(email: str) -> AsyncClient:
-    from choregos_api.main import create_app
+    from tranibor_api.main import create_app
 
     http = AsyncClient(transport=ASGITransport(app=create_app()), base_url="http://test")
     await login(http, email)
@@ -42,7 +42,7 @@ async def test_a_cancel_sent_to_another_replica_stops_the_turn(
     upstream: Upstream,  # noqa: F811
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from choregos_api.services import conversation_turns
+    from tranibor_api.services import conversation_turns
 
     await _agent(client)
     upstream.model.call("lookup", {"order": 42}).say("never read")

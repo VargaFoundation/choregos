@@ -10,7 +10,7 @@ from typing import Any
 
 import pytest
 import yaml
-from choregos_core.publishing import PUBLISHING
+from tranibor_core.publishing import PUBLISHING
 
 CHART = pathlib.Path(__file__).resolve().parents[2] / "charts" / "choregos"
 
@@ -63,7 +63,7 @@ def test_enabled_renders_a_restricted_deployment_and_a_service_named_choregos_eg
     assert pod["securityContext"]["runAsNonRoot"] is True
     assert pod["securityContext"]["seccompProfile"] == {"type": "RuntimeDefault"}
     container = pod["containers"][0]
-    assert container["command"] == ["python", "-m", "choregos_api.egress"]
+    assert container["command"] == ["python", "-m", "tranibor_api.egress"]
     assert container["securityContext"]["readOnlyRootFilesystem"] is True
     assert container["securityContext"]["allowPrivilegeEscalation"] is False
     assert container["securityContext"]["capabilities"] == {"drop": ["ALL"]}

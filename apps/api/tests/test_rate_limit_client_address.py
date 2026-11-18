@@ -27,7 +27,7 @@ def _request(peer: str, *forwarded: str) -> Request:
 
 
 def _settings(cidrs: list[str] | None = None, hops: int = 0) -> Any:
-    from choregos_api.config import Settings
+    from tranibor_api.config import Settings
 
     return Settings(trusted_proxy_cidrs=cidrs or [], trusted_proxy_hops=hops)
 
@@ -35,8 +35,8 @@ def _settings(cidrs: list[str] | None = None, hops: int = 0) -> Any:
 async def test_a_forged_forwarded_for_buys_no_new_window(
     client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.main import create_app
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.main import create_app
 
     monkeypatch.setenv("CHOREGOS_RATE_LIMIT_PER_MINUTE", "2")
     monkeypatch.delenv("CHOREGOS_TRUSTED_PROXY_CIDRS", raising=False)
@@ -59,8 +59,8 @@ async def test_the_middleware_keys_on_the_trusted_proxy_address(
     client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The middleware reads the trusted-proxy settings: the key is not the bare TCP peer."""
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.main import create_app
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.main import create_app
 
     monkeypatch.setenv("CHOREGOS_RATE_LIMIT_PER_MINUTE", "1")
     # the test transport's TCP peer, named rather than left to httpx's default, is the trusted proxy
@@ -84,7 +84,7 @@ async def test_the_middleware_keys_on_the_trusted_proxy_address(
 
 def test_a_forwarded_entry_with_a_port_is_keyed_by_its_address() -> None:
     """Azure Application Gateway writes `address:port`: the source port buys no new window."""
-    from choregos_api.rate_limit import client_address
+    from tranibor_api.rate_limit import client_address
 
     trusted = _settings(cidrs=CHART_DEFAULT_RANGES)
     keys = {client_address(_request("10.0.0.5", f"203.0.113.5:{port}"), trusted) for port in (54321, 54322)}
@@ -94,7 +94,7 @@ def test_a_forwarded_entry_with_a_port_is_keyed_by_its_address() -> None:
 
 
 def test_a_bracketed_ipv6_entry_is_keyed_by_its_64() -> None:
-    from choregos_api.rate_limit import client_address
+    from tranibor_api.rate_limit import client_address
 
     trusted = _settings(cidrs=CHART_DEFAULT_RANGES)
     written = ("[2001:db8:1:2::5]", "[2001:db8:1:2::9]:443", "[2001:db8:1:2::9]:444")
@@ -107,7 +107,7 @@ def test_a_bracketed_ipv6_entry_is_keyed_by_its_64() -> None:
 
 
 def test_behind_trusted_proxies_the_nearest_untrusted_entry_is_the_client() -> None:
-    from choregos_api.rate_limit import client_address
+    from tranibor_api.rate_limit import client_address
 
     trusted = _settings(cidrs=["10.0.0.0/8"])
     forwarded = "1.1.1.1, 198.51.100.7, 10.0.0.9"
@@ -122,21 +122,21 @@ def test_behind_trusted_proxies_the_nearest_untrusted_entry_is_the_client() -> N
 
 def test_a_proxy_line_of_its_own_is_read_after_the_client_line() -> None:
     """A proxy may add its own `X-Forwarded-For` line rather than append to the client's."""
-    from choregos_api.rate_limit import client_address
+    from tranibor_api.rate_limit import client_address
 
     request = _request("10.0.0.5", "6.6.6.6", "198.51.100.7")
     assert client_address(request, _settings(cidrs=["10.0.0.0/8"])) == "198.51.100.7"
 
 
 def test_behind_the_console_rewrite_the_browser_address_is_the_key() -> None:
-    from choregos_api.rate_limit import client_address
+    from tranibor_api.rate_limit import client_address
 
     request = _request("10.0.0.7", "203.0.113.5, 10.0.0.3")
     assert client_address(request, _settings(cidrs=CHART_DEFAULT_RANGES)) == "203.0.113.5"
 
 
 def test_ipv6_clients_are_keyed_by_their_64() -> None:
-    from choregos_api.rate_limit import client_address
+    from tranibor_api.rate_limit import client_address
 
     keys = {client_address(_request(peer), _settings()) for peer in ("2001:db8:1:2::5", "2001:db8:1:2::9")}
     assert keys == {"2001:db8:1:2::/64"}
@@ -145,7 +145,7 @@ def test_ipv6_clients_are_keyed_by_their_64() -> None:
 
 
 def test_the_limiter_holds_at_most_ten_thousand_keys() -> None:
-    from choregos_api.rate_limit import RateLimiter
+    from tranibor_api.rate_limit import RateLimiter
 
     limiter = RateLimiter(5)
     for n in range(12_000):
@@ -157,7 +157,7 @@ def test_the_limiter_holds_at_most_ten_thousand_keys() -> None:
 
 def test_a_key_seen_again_is_evicted_last() -> None:
     """A throttled client that keeps knocking keeps its window while silent keys go."""
-    from choregos_api.rate_limit import RateLimiter
+    from tranibor_api.rate_limit import RateLimiter
 
     limiter = RateLimiter(1)
     for n in range(10_000):
@@ -185,7 +185,7 @@ class _Unwalkable(OrderedDict[str, deque[float]]):
 
 
 def test_no_request_walks_the_table() -> None:
-    from choregos_api.rate_limit import RateLimiter
+    from tranibor_api.rate_limit import RateLimiter
 
     limiter = RateLimiter(5)
     limiter._windows = _Unwalkable()
@@ -195,7 +195,7 @@ def test_no_request_walks_the_table() -> None:
 
 
 def test_a_malformed_trusted_proxy_network_is_refused() -> None:
-    from choregos_api.config import Settings
+    from tranibor_api.config import Settings
 
     with pytest.raises(ValueError, match="CHOREGOS_TRUSTED_PROXY_CIDRS"):
         Settings(trusted_proxy_cidrs=["not-a-network"])

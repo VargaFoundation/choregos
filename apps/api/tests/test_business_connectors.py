@@ -17,11 +17,11 @@ KEY = "fleet-demo-key"
 
 @pytest.fixture
 def fleet(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
-    import choregos_adapters
-    from choregos_adapters.fakes.hr import FakeMdm
+    import tranibor_adapters
+    from tranibor_adapters.fakes.hr import FakeMdm
 
     fake_mdm = FakeMdm(expected_key=KEY)
-    monkeypatch.setitem(choregos_adapters.FAUX_METIER, "mdm", fake_mdm)
+    monkeypatch.setitem(tranibor_adapters.FAUX_METIER, "mdm", fake_mdm)
     monkeypatch.setenv("CONNECTOR_TEST_KEY_FLEET", KEY)
     yield fake_mdm
 
@@ -66,9 +66,9 @@ async def test_a_family_declares_its_key_by_reference_and_its_writes_go_through_
 async def test_an_approved_write_reaches_the_fleet_with_the_resolved_key_and_a_refusal_is_final(
     client: AsyncClient, project: dict[str, Any], fleet: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.db.models import Action, Project
-    from choregos_api.db.session import session_scope
-    from choregos_api.effects import EffectContext, EffectRefused, effect
+    from tranibor_api.db.models import Action, Project
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.effects import EffectContext, EffectRefused, effect
 
     await _declare(client, "mdm", "fleet")
     call = effect("connector.call")

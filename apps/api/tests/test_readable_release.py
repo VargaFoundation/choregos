@@ -8,8 +8,8 @@ refuses the fields it does not know.
 
 from __future__ import annotations
 
-from choregos_api.db.models import Release
-from choregos_api.services import release_dto
+from tranibor_api.db.models import Release
+from tranibor_api.services import release_dto
 
 #: The batch item as `train-dev-prod` stored it for #4, on 10/10.
 SIGNAL_OF_4 = {

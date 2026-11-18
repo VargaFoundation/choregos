@@ -9,8 +9,8 @@ from collections.abc import Sequence
 from typing import Any
 
 import pytest
-from choregos_adapters.base import ImageVerifier
-from choregos_adapters.oci import CosignVerifier, cosign_runner
+from tranibor_adapters.base import ImageVerifier
+from tranibor_adapters.oci import CosignVerifier, cosign_runner
 
 DIGEST = "sha256:" + "a" * 64
 OTHER = "sha256:" + "b" * 64

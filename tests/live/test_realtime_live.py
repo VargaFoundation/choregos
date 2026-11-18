@@ -20,10 +20,10 @@ from typing import Any
 from uuid import uuid4
 
 import pytest
-from choregos_adapters.gateway.litellm import LiteLlmGateway
-from choregos_adapters.realtime_ws import WebsocketsConnector
-from choregos_api.services.agent_realtime import realtime_url
-from choregos_api.services.realtime_spend import realtime_prices, response_cost, session_cap
+from tranibor_adapters.gateway.litellm import LiteLlmGateway
+from tranibor_adapters.realtime_ws import WebsocketsConnector
+from tranibor_api.services.agent_realtime import realtime_url
+from tranibor_api.services.realtime_spend import realtime_prices, response_cost, session_cap
 
 from .conftest import require
 

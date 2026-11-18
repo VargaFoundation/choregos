@@ -100,9 +100,9 @@ async def _received(client: AsyncClient, project: dict[str, Any]) -> list[dict[s
 
 
 async def _item(client: AsyncClient, project: dict[str, Any], key: str) -> dict[str, Any]:
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         row = (
@@ -124,7 +124,7 @@ async def _item(client: AsyncClient, project: dict[str, Any], key: str) -> dict[
 async def test_a_call_opens_and_starts_a_work_item_in_the_trigger_s_workflow(
     client: AsyncClient, admin: str
 ) -> None:
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.temporal import get_temporal
 
     project = await _project(client)
     minted = await _token(client, project, "incident")
@@ -273,7 +273,7 @@ async def test_a_refused_call_answers_why_and_is_recorded_without_the_payload(
 async def test_an_external_tracker_refuses_the_trigger(
     client: AsyncClient, admin: str, monkeypatch: Any
 ) -> None:
-    from choregos_api.services import tickets
+    from tranibor_api.services import tickets
 
     project = await _project(client)
     token = (await _token(client, project, "incident"))["token"]

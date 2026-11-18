@@ -8,9 +8,9 @@ import tarfile
 from typing import Any
 
 import pytest
-from choregos_adapters.errors import UpstreamError
-from choregos_adapters.executor.local_docker import LocalDockerExecutor
-from choregos_core.domain import AgentContainer, ExecRef, StageJobSpec
+from tranibor_adapters.errors import UpstreamError
+from tranibor_adapters.executor.local_docker import LocalDockerExecutor
+from tranibor_core.domain import AgentContainer, ExecRef, StageJobSpec
 
 
 class _Docker:

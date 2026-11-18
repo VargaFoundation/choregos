@@ -14,11 +14,11 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from choregos_runner.backends import backend_version, known_backends
+from tranibor_runner.backends import backend_version, known_backends
 
 
 async def build_report(backends: list[str]) -> dict[str, Any]:
-    from choregos_contracts import (
+    from tranibor_contracts import (
         AgentRef,
         Budget,
         Callbacks,

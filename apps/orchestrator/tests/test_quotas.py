@@ -15,11 +15,11 @@ from typing import Any
 
 import pytest
 import yaml
-from choregos_contracts import ProjectConfig
-from choregos_core import load_preset
+from tranibor_contracts import ProjectConfig
+from tranibor_core import load_preset
 
 EXTENSION = """
-from choregos_core.quotas import Quota, declare_quota
+from tranibor_core.quotas import Quota, declare_quota
 
 def quota(org, project):
     return Quota(cpu="4", memory="8Gi", pods=6) if org == "small" else None
@@ -31,8 +31,8 @@ def register():
 
 @pytest.fixture
 def extension(tmp_path: pathlib.Path) -> Iterator[None]:
-    from choregos_adapters import load_extensions
-    from choregos_core.quotas import reset
+    from tranibor_adapters import load_extensions
+    from tranibor_core.quotas import reset
 
     root = tmp_path / "site"
     root.mkdir()
@@ -57,7 +57,7 @@ def extension(tmp_path: pathlib.Path) -> Iterator[None]:
 
 async def _written_quotas(org: str) -> list[dict[str, Any]]:
     """Plays the provisioning step that writes the manifests, and returns the `ResourceQuota` written."""
-    from choregos_orchestrator.activities.provisioning import _write_manifests
+    from tranibor_orchestrator.activities.provisioning import _write_manifests
 
     written: dict[str, str] = {}
 
@@ -103,7 +103,7 @@ async def test_without_an_extension_the_historical_default() -> None:
     ("cpu", "memory", "pods"), [("plenty", "8Gi", 6), ("4", "8 gigas", 6), ("4", "8Gi", 0)]
 )
 def test_a_malformed_quota_is_refused_before_argo(cpu: str, memory: str, pods: int) -> None:
-    from choregos_core.quotas import Quota
+    from tranibor_core.quotas import Quota
 
     with pytest.raises(ValueError, match="quota"):
         Quota(cpu=cpu, memory=memory, pods=pods)

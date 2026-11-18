@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from choregos_core.models import USAGES, CatalogueEntry, ModelPolicy
+from tranibor_core.models import USAGES, CatalogueEntry, ModelPolicy
 
 
 def test_decide_is_a_usage_beside_route() -> None:

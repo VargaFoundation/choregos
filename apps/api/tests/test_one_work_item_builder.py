@@ -11,7 +11,7 @@ import ast
 import pathlib
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
-ALLOWED = {ROOT / "apps/api/src/choregos_api/services/routing.py"}
+ALLOWED = {ROOT / "apps/api/src/tranibor_api/services/routing.py"}
 
 
 def test_no_work_item_is_built_outside_new_work_item() -> None:

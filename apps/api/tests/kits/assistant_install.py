@@ -23,7 +23,7 @@ BANK = ("list_accounts", "list_transactions")
 
 @pytest.fixture
 def offline(tmp_path: Path) -> Iterator[Path]:
-    from choregos_api.services.plugin_supply import OfflineDirectory, use_plugin_supply
+    from tranibor_api.services.plugin_supply import OfflineDirectory, use_plugin_supply
 
     root = tmp_path / "plugins"
     shutil.copytree(FIXTURE, root / "investment-assistant" / "0.1.0")
@@ -41,9 +41,9 @@ async def _plugin(client: AsyncClient) -> None:
 async def _connector(
     name: str, operations: tuple[str, ...], *, access: str = "read", identity_modes: list[str] | None = None
 ) -> None:
-    from choregos_api.db.models import ConnectorOperation, Organization, OrgConnector
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import ConnectorOperation, Organization, OrgConnector
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         org_id = (await session.execute(select(Organization.id))).scalar_one()
@@ -81,9 +81,9 @@ async def _bind(client: AsyncClient, need: str, connector: str, slug: str = "inv
 
 
 async def _member(client: AsyncClient, email: str, groups: list[str]) -> None:
-    from choregos_api.db.models import User
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import User
+    from tranibor_api.db.session import session_scope
 
     await add_member(client, email, "developer")
     async with session_scope() as session:

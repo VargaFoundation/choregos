@@ -1,6 +1,6 @@
 """Test agent: two model calls; the second passes a max_turns of one."""
 
-from choregos_agent_sdk import Context, Result, agent
+from tranibor_agent_sdk import Context, Result, agent
 
 
 @agent(name="two-calls")
