@@ -2,7 +2,7 @@
 
 - **Status**: accepted, 2026-11-17; S74-01 delivers points 1 to 3 and 6 (the seam, the theme, the sign-in
   page's organisation) with the enterprise edition's claims; the sign-in on a tenant host (points 4 and 5) is
-  the next step; S74-02 delivers it (amendment below)
+  the next step; S74-02 delivers it, S74-03 the links built for an organisation (amendments below)
 - **Concerns**: `choregos_api.tenant_host` (`declare_host_resolver`, `resolve_host`, `normalise_host`),
   `GET /api/v1/theme` (`routers/theme.py`), the console's first paint (`served-theme-server.ts`,
   `layout.tsx`, `served-theme.tsx`, `/login`); amends [ADR 0108](0108-each-organisation-signs-in-with-its-own-identity-provider.md)
@@ -82,9 +82,10 @@ what this record keeps out: no wildcard, and a host is served only once its owne
 
 ## Not decided here (next steps, each its own story)
 
-Sign-in on the host was this list's first item and is the amendment below (S74-02). Still open: a
-per-organisation public URL for links, MCP, A2A and notifications (S74-03); the chart, ingress and TLS
-(HTTP-01 issuance is infra#1595, S74-04, delivered: amendment below); SAML assertion consumer service per host.
+Sign-in on the host was this list's first item and is the first amendment below (S74-02); the per-organisation
+public URL for links, MCP, A2A and notifications is the S74-03 amendment; the chart, ingress and TLS (HTTP-01
+issuance is infra#1595) are S74-04, delivered. Still open: SAML assertion consumer service per host; per-host
+consent and forge callbacks (see 'Return URLs' in the S74-03 amendment).
 
 ## Amendment, S74-02: signing in on a verified host
 
@@ -153,6 +154,63 @@ The chart carries a host an organisation owns as `global.customHosts` (`template
 5. **Not decided by the chart**: DNS, the TXT proof, the Keycloak redirect URI, the Issuer and its policy
    exception, and (NGINX Inc.) the solver Ingress's need to be a minion of the host's master: documented,
    not proved without a cluster.
+
+## Amendment, S74-03: links built for an organisation
+
+Point 4 said "a per-organisation public URL is a later, separate decision": this is it, narrowed. The canonical
+`CHOREGOS_PUBLIC_URL` stays valid and stays the address of everything the instance owns; what changes is the
+address in a link the platform builds **for one organisation** (a console link in a notification, an e-mail,
+Slack, a tracker comment or field, a pull request body; the MCP resource metadata; the A2A card; the device
+sign-in page).
+
+1. **A second seam, the reverse.** An extension declares `resolver(session, slug) -> host | None` through
+   `tenant_host.declare_org_host_resolver` (sync or async, one per deployment): the ONE host organisation
+   `slug` is reached on. The core's `tenant_host.org_base_url(slug)` is `<instance scheme>://<host>` for it,
+   else `public_url`. **The core re-verifies the answer**: it keeps the host only if it is a bare DNS name
+   (`normalise_host` gives it back unchanged) and the FORWARD resolver, asked now, gives the same organisation
+   for it. A claimed-but-unproved host, another organisation's host, a malformed answer and a raising resolver
+   all give the instance's address: a link never points to an unverified host, whatever the extension returns.
+   With no forward resolver (the community edition) the reverse one is never asked.
+2. **Several verified hosts: the oldest verified wins.** The extension MUST answer deterministically; the rule
+   of the enterprise edition is "the host verified first (`verifie_le` ascending), ties broken by host name".
+   It needs no new column and no choice for the customer to make, and it does not move when a later host is
+   added or withdrawn, except when the primary itself is withdrawn (the next oldest takes over). A customer-chosen
+   "primary" flag is a later refinement; it would change the extension's query only.
+3. **Own session, memo.** The lookup runs in a session of its own over every organisation (the claims are the
+   platform's, as for `verified_host_cached`) and is remembered 30 s per slug, refusals included, bounded at
+   1024 slugs: a host verified or withdrawn changes the links within 30 s.
+4. **Per organisation, switched** (the organisation is known where the link is built): the orchestrator's
+   courtesies and tracker writes (finding, approval, status comment and `Run` field, human request, withheld
+   pull request body; one reader, `activities.base.console_base`); the A2A door (card `url` and `provider.url`,
+   task links, push) and the MCP tool links (`Context.console`); the pending list, conversation confirmation
+   links and launch results; the answer to a `/choregos` comment on a tracker; the device sign-in page when the
+   request names an organisation.
+5. **The door called, switched** (no organisation yet, and the address must equal what the caller typed): the
+   MCP protected-resource metadata `resource` and the `resource_metadata` of a 401, and the integrations page's
+   `mcp_url`, use the verified host the request came in on (`tenant_host.request_base_url`), else the instance's;
+   so does the device page when no organisation is named. The MCP and A2A doors also accept a browser `Origin`
+   equal to that verified host, as `origin_guard` does. The **authorisation server stays the instance's identity
+   provider**; the token audience is the configured `mcp_oauth_audience`, unchanged by the host.
+6. **Instance-level, kept canonical**: OIDC and SAML callbacks and redirect targets (S74-02), the origin and
+   internal-API guards, the GitHub App manifest, its webhook and setup page, the MCP gateway's `iss` (stored,
+   compared verbatim), the CLI install script, the Slack adapter's `public_url` setting (not used to build a
+   link: the link is the message's), the https check of the agent catalogue.
+7. **Return URLs: ambiguous, kept canonical on purpose.** The consent flow of a connected account (its start
+   page, `redirect_uri` on `CHOREGOS_API_URL`, the page it returns to), the forge link flow, the remote
+   credential flow and the GitHub App creation return to the instance's address. The provider knows ONE callback
+   (the instance's) and the callback needs a session, which on a tenant host is host-only (S74-02): moving the
+   start page or the return to the tenant host would end on a callback without a session, or on a provider that
+   refuses an unregistered `redirect_uri`. Making them per host takes, per host and per provider, a registration
+   only the operator can make (below) and a handshake that survives the host change: a later story.
+8. **What the operator must register.** For a link to a verified host to work for a signed-out person, the S74-02
+   registration must exist (Keycloak client `choregos`: `https://<host>/api/v1/auth/callback` among the valid
+   redirect URIs, the host among the web origins; an organisation's own IdP registers the same URI). The core
+   cannot know it: **verify the host only after registering it**, since from verification on the platform's
+   links use it. Nothing to register for the MCP resource (the client's callback is the client's); for a
+   connected account, a forge or the GitHub App nothing changes (instance callbacks).
+9. **A guard so that the classification does not rot.** `apps/api/tests/test_public_url_call_sites.py` lists
+   every file reading `public_url` in the API and the orchestrator with its class (per organisation, instance,
+   ambiguous) and the number of reads: a new read fails until it is classified.
 
 ## Alternatives discarded
 

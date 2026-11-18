@@ -17,7 +17,7 @@ from choregos_core.restricted import WITHHELD, is_marked
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
-from .base import db, load_work_item, project_bundle, scm_for
+from .base import console_base, db, load_work_item, project_bundle, scm_for
 from .judged import judged_commit
 from .outcome import record_the_diff
 from .repositories import fix, repo_slug, target_of, target_or_none
@@ -70,7 +70,11 @@ async def open_pull_request(payload: dict[str, Any]) -> dict[str, Any]:
         fix(bundle, item, found)
         documents = item.documents or {}
         # A marked work item's documents stay in the console; the code is still delivered (ADR 0114, C).
-        body = _withheld_pr_body(item, bundle.slug) if is_marked(item) else _pr_body(item, documents)
+        body = (
+            _withheld_pr_body(item, bundle.slug, await console_base(bundle))
+            if is_marked(item)
+            else _pr_body(item, documents)
+        )
         # Without a pushed branch GitHub answers 422 `head invalid`, retried then fatal (#539, on
         # sandbox-dev#21). Refused here instead, with a reason a person can read. Any error reading
         # the branch (403, 5xx) is raised as it is, and retried as before.
@@ -94,11 +98,9 @@ async def open_pull_request(payload: dict[str, Any]) -> dict[str, Any]:
         return {"pr_url": item.pr_url, "number": ref.number}
 
 
-def _withheld_pr_body(item: Any, project_slug: str) -> str:
+def _withheld_pr_body(item: Any, project_slug: str, console: str) -> str:
     """The body of a marked work item's pull request: its key and the link, nothing it read."""
-    from ..config import get_settings
-
-    link = f"{get_settings().public_url}/p/{project_slug}/items/{item.id}"
+    link = f"{console}/p/{project_slug}/items/{item.id}"
     return "\n".join([f"Work item: {item.tracker_key}", "", WITHHELD, "", link])
 
 

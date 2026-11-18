@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..tenant_host import org_base_url
 from .costs import (
     estimate_cost,
     record_cost,
@@ -126,6 +127,7 @@ __all__ = [
     "move_edge",
     "new_human_request",
     "new_work_item",
+    "org_base_url",
     "outputs_to_store",
     "persist_event",
     "policy_engine",

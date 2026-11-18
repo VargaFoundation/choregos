@@ -16,8 +16,8 @@ from choregos_core.restricted import RESTRICTED_TITLE, WITHHELD, is_marked, mark
 from sqlalchemy import select
 from temporalio import activity
 
-from ..config import get_settings
 from .base import (
+    console_base,
     db,
     internal_ticket_key,
     notification_target,
@@ -55,7 +55,6 @@ def cosine(a: dict[str, float], b: dict[str, float]) -> float:
 @activity.defn(name="triage_finding")
 async def triage_finding(payload: dict[str, Any]) -> dict[str, Any]:
     """Deduplicate, rank, create the linked work item and write the fact to memory."""
-    settings = get_settings()
     async with db() as session:
         bundle = await project_bundle(session, payload["project_slug"])
         row = await session.get(Finding, payload["finding_id"])
@@ -117,7 +116,8 @@ async def triage_finding(payload: dict[str, Any]) -> dict[str, Any]:
 
         origin = await session.get(WorkItem, row.origin_work_item_id) if row.origin_work_item_id else None
         restricted = list(origin.restricted_knowledge or []) if origin is not None else []
-        body = _ticket_body(row, origin, settings.public_url, bundle.slug)
+        console = await console_base(bundle)
+        body = _ticket_body(row, origin, console, bundle.slug)
         labels = ["finding", "source:agent", f"type:{row.type}", f"severity:{row.severity}", "needs-triage"]
         if origin is not None:
             labels.append(f"origin:{origin.tracker_key.rsplit('#', 1)[-1]}")
@@ -189,7 +189,7 @@ async def triage_finding(payload: dict[str, Any]) -> dict[str, Any]:
                 Message(
                     title=f"Finding {row.severity} — {row.title}",
                     body=row.evidence[:500],
-                    url=f"{settings.public_url}/p/{bundle.slug}/findings",
+                    url=f"{console}/p/{bundle.slug}/findings",
                     severity="error" if row.severity == "critical" else "warning",
                 ),
             )

@@ -34,10 +34,12 @@ def issuer_of(settings: Settings) -> str:
     return (settings.mcp_oauth_issuer or settings.oidc_issuer).rstrip("/")
 
 
-def metadata(settings: Settings, path: str = "/mcp") -> dict[str, Any]:
-    """The RFC 9728 document. `resource` is EXACTLY the URL the user types."""
+def metadata(settings: Settings, path: str = "/mcp", base: str | None = None) -> dict[str, Any]:
+    """The RFC 9728 document. `resource` is EXACTLY the URL the user types: `base` is the door the request
+    came in on (the instance's, or a verified tenant host, ADR 0175), the instance's when absent. The
+    authorisation server stays the instance's identity provider."""
     return {
-        "resource": f"{settings.public_url.rstrip('/')}{path}",
+        "resource": f"{(base or settings.public_url).rstrip('/')}{path}",
         "authorization_servers": [issuer_of(settings)],
         "scopes_supported": ["mcp:read", "mcp:write"],
         "bearer_methods_supported": ["header"],

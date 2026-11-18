@@ -48,6 +48,7 @@ from ..db.models import (
 from ..errors import ApiError, conflict
 from ..rbac import Permission, Principal
 from ..schemas.tickets import WorkItemCreate
+from ..tenant_host import org_base_url, org_base_url_of_id
 from . import assistant_launches, assistants
 from .agent_sessions import journal
 
@@ -59,8 +60,8 @@ START = "start"
 TITLE_MAX = 500
 
 
-def _console(path: str) -> str:
-    return f"{get_settings().public_url.rstrip('/')}{path}"
+def _console(path: str, base: str | None = None) -> str:
+    return f"{(base or get_settings().public_url).rstrip('/')}{path}"
 
 
 async def _offered_launches(
@@ -304,7 +305,9 @@ async def confirm(
         "work_item_key": item.tracker_key,
         "project": project.slug,
         "workflow": binding.workflow,
-        "url": _console(f"/p/{project.slug}/items/{item.id}"),
+        "url": _console(
+            f"/p/{project.slug}/items/{item.id}", await org_base_url_of_id(session, record.org_id)
+        ),
     }
     await journal(
         session,
@@ -352,6 +355,7 @@ async def _status(session: AsyncSession, record: AgentSessionRecord, action_id: 
     person = await person_of(session, record)
     organisation = await session.get(Organization, record.org_id)
     org_slug = organisation.slug if organisation is not None else ""
+    base = await org_base_url(org_slug)
     lines: list[dict[str, Any]] = []
     for action in actions:
         entry: dict[str, Any] = {"action_id": action.id, "launch": action.need, "status": action.status}
@@ -383,7 +387,7 @@ async def _status(session: AsyncSession, record: AgentSessionRecord, action_id: 
             "title": item.title,
             "state": item.state,
             "ended": item.closed_at is not None,
-            "url": _console(f"/p/{project.slug}/items/{item.id}"),
+            "url": _console(f"/p/{project.slug}/items/{item.id}", base),
             "artifacts": [
                 {
                     "name": artifact.name,
@@ -391,7 +395,8 @@ async def _status(session: AsyncSession, record: AgentSessionRecord, action_id: 
                     "type": artifact.type,
                     "shown_as": artifact.display.type if artifact.display is not None else None,
                     "content_url": _console(
-                        f"/api/v1/work-items/{item.id}/artifacts/{artifact.name}@{artifact.version}/content"
+                        f"/api/v1/work-items/{item.id}/artifacts/{artifact.name}@{artifact.version}/content",
+                        base,
                     ),
                 }
                 for artifact in latest.values()
