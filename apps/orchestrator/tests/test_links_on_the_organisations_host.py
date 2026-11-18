@@ -1,7 +1,8 @@
 """The links the orchestrator writes for an organisation use its verified host (ADR 0175, S74-03).
 
 A question to a person goes to the tracker (a comment) and to the notifier (a courtesy): both carry the
-console link of the work item. `northwind` owns `agentic.northwind.example`; without it the link is the instance's.
+console link of the work item. `northwind` owns `agentic.northwind.example`;
+without it the link is the instance's.
 """
 
 from __future__ import annotations
@@ -20,7 +21,9 @@ HOST = "agentic.northwind.example"
 
 def _declare(*, verified: bool) -> None:
     tenant_host.reset()
-    tenant_host.declare_host_resolver(lambda session, host: "northwind" if verified and host == HOST else None)
+    tenant_host.declare_host_resolver(
+        lambda session, host: "northwind" if verified and host == HOST else None
+    )
     tenant_host.declare_org_host_resolver(lambda session, slug: HOST if slug == "northwind" else None)
 
 

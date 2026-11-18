@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """A link built for an organisation uses its verified host (ADR 0175, S74-03 amendment).
 
-`northwind` owns `agentic.northwind.example` (verified) and has claimed `claimed.northwind.example` without proving it.
+`northwind` owns `agentic.northwind.example` (verified) and has
+claimed `claimed.northwind.example` without proving it.
 The extension answers the reverse question (`declare_org_host_resolver`); the core keeps its answer only if
 the forward resolver gives the organisation back. The instance (`http://localhost:3000`) stays valid.
 """
