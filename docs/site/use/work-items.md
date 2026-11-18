@@ -120,7 +120,7 @@ choregos runs diff <run-id>
 | :-- | :-- |
 | Hold a work item while you look | **Pause** on its page; **Resume** later |
 | Give up on it | **Stop**. Its run is cancelled and it leaves the workflow; it does not come back, it has to be filed again |
-| Run the step that escalated again | **Replay the stage**. It is a new run, billed, with one more attempt |
+| Run the step that escalated again | **Replay the stage**, or **Approve** the escalation's request. It is a new run, billed, with one more attempt |
 | Send it to another workflow | **Change workflow**. It restarts at that workflow's first state |
 | Answer the question that stopped it | See [Decisions](decisions.md) |
 

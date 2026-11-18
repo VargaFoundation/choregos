@@ -71,6 +71,7 @@ from ..services.human_assignee import (
     sla_passed,
     users_known_in,
 )
+from ..services.pending_requests import is_parking_request, pending_request
 from ..services.receipts import work_item_handoffs
 from ..services.routing import refuse_reserved_fields, validate_fields
 from ..services.work_item_controls import apply_control
@@ -354,14 +355,18 @@ async def post_decision(
     if not principal.can(Permission.ITEM_DECIDE, org_slug, project.slug):
         raise forbidden("deciding needs at least the developer role")
 
-    query = select(HumanRequest).where(
-        HumanRequest.work_item_id == item.id, HumanRequest.decided_at.is_(None)
-    )
+    workflow = workflow_model(await work_item_workflow(session, item))
     if body.request_id:
-        query = select(HumanRequest).where(HumanRequest.id == body.request_id)
-    request_row = (
-        await session.execute(query.order_by(HumanRequest.requested_at.desc()).limit(1))
-    ).scalar_one_or_none()
+        request_row = (
+            await session.execute(
+                select(HumanRequest).where(
+                    HumanRequest.id == body.request_id, HumanRequest.work_item_id == item.id
+                )
+            )
+        ).scalar_one_or_none()
+    else:
+        # Never the abandon step while another request is open (FON-319): see `pending_requests`.
+        request_row = await pending_request(session, item, workflow)
     if request_row is None:
         raise conflict("no human request is pending on this work item")
     if request_row.decided_at is not None:
@@ -403,6 +408,9 @@ async def post_decision(
             },
         ),
     )
+
+    if body.kind == "approve" and is_parking_request(workflow, item, request_row):
+        return await _approve_by_replaying(session, principal, project, item, request_row, body)
 
     is_task = request_row.kind == HumanRequestKind.TASK.value
     if body.kind == "complete" and not is_task:
@@ -467,6 +475,74 @@ async def post_decision(
         target_id=item.id,
         kind=body.kind,
         **({"draft": drafted} if drafted else {}),
+    )
+    return human_request_dto(request_row)
+
+
+async def _approve_by_replaying(
+    session: Any,
+    principal: Any,
+    project: Project,
+    item: WorkItem,
+    request_row: HumanRequest,
+    body: DecisionRequest,
+) -> HumanRequestDto:
+    """Approving the request an escalation left replays the stage that escalated (FON-319).
+
+    The work item is parked in the question state; the approval goes to its interpreter as "Replay
+    the stage" (`rerun_stage`), which closes the abandon step left open and gives the stage one more
+    attempt. Sent as a decision, the interpreter ignored it as stale (#1795) and the person's only
+    working button abandoned the work item. A spent budget is refused here, as for "Replay the
+    stage": the replay would be refused its key at once and park the work item again."""
+    from ..services import policy_engine
+    from ..services.budgets import DEFAULT_FLOOR_USD, ticket_left
+
+    left = await ticket_left(session, await policy_engine(session, project.id), item)
+    if left < DEFAULT_FLOOR_USD:
+        raise conflict(
+            f"approving replays the stage, and the work item's budget is spent ({left:.2f} $ left): "
+            "raise the project's ticket budget, or replay the stage with a top-up (`top_up_usd`)"
+        )
+    control = Control(
+        action="rerun_stage",
+        reason=body.reason or "the escalation was approved",
+        by=principal.email,
+    )
+    try:
+        await deliver_control(project.slug, item.tracker_key, control)
+    except InterpreterNotRunningError as gone:
+        raise await _interpreter_not_running(gone, "this decision") from gone
+    decision = HumanDecision(
+        request_id=request_row.id,
+        kind=HumanRequestKind.APPROVAL,
+        approved=True,
+        reason=body.reason,
+        decided_by=principal.email,
+        channel="web",
+    )
+    request_row.decided_at = utcnow()
+    request_row.decided_by = principal.email
+    request_row.decision = decision.model_dump(mode="json")
+    await persist_event(
+        session,
+        EventType.WORKITEM_HUMAN_DECIDED,
+        project_id=project.id,
+        work_item_id=item.id,
+        project_slug=project.slug,
+        subject=item.tracker_key,
+        kind=body.kind,
+        by=principal.email,
+        replays_the_stage=True,
+    )
+    await record(
+        session,
+        principal,
+        "workitem.decision",
+        org_id=project.org_id,
+        target_type="work_item",
+        target_id=item.id,
+        kind=body.kind,
+        replays_the_stage=True,
     )
     return human_request_dto(request_row)
 

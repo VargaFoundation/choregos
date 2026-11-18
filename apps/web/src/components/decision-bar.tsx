@@ -17,8 +17,12 @@ export function DecisionBar({
 }: {
   itemId: string;
   kind?: string;
-  /** The pending request: a task carries its form there and what it makes one attest. */
-  request?: Pick<HumanRequest, "payload">;
+  /**
+   * The request shown: the decision names it, so it decides THAT request and not the newest one the
+   * work item holds (FON-319: an approval under a budget escalation abandoned the work item). A task
+   * carries its form there and what it makes one attest.
+   */
+  request?: Pick<HumanRequest, "payload"> & Partial<Pick<HumanRequest, "id">>;
   /**
    * A client's draft the person took (ADR 0163): it fills the form, never decides. Remount the bar (a new
    * `key`) to take it again.
@@ -35,6 +39,7 @@ export function DecisionBar({
     setError(null);
     try {
       await api.decide(itemId, {
+        ...(request?.id ? { request_id: request.id } : {}),
         kind: decision,
         ...(decision === "answer" ? { answer } : {}),
         ...(decision === "reject" ? { reason: answer || "sent back" } : {}),
@@ -48,7 +53,15 @@ export function DecisionBar({
   }
 
   if (kind === "task") {
-    return <TaskForm itemId={itemId} payload={request?.payload ?? {}} taken={taken} onDone={onDone} />;
+    return (
+      <TaskForm
+        itemId={itemId}
+        requestId={request?.id}
+        payload={request?.payload ?? {}}
+        taken={taken}
+        onDone={onDone}
+      />
+    );
   }
 
   return (
@@ -100,11 +113,13 @@ export function DecisionBar({
  */
 function TaskForm({
   itemId,
+  requestId,
   payload,
   taken,
   onDone,
 }: {
   itemId: string;
+  requestId?: string;
   payload: Record<string, unknown>;
   taken?: DecisionDraft | null;
   onDone?: () => void;
@@ -125,7 +140,7 @@ function TaskForm({
     setBusy(true);
     setError(null);
     try {
-      await api.decide(itemId, body);
+      await api.decide(itemId, { ...(requestId ? { request_id: requestId } : {}), ...body });
       onDone?.();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "task refused");

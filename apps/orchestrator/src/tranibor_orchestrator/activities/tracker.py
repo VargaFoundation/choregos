@@ -419,6 +419,7 @@ async def close_out(payload: dict[str, Any]) -> dict[str, Any]:
         if item.closed_at is None:
             item.closed_at = utcnow()
         await record_terminal_outcome(session, item.id, await _terminal_outcome(session, item))
+        await _close_open_requests(session, item)
         # A child work item (S38-12) tells its parent once it is closed, after the commit below.
         settled = parent_of(item)
         await persist_event(
@@ -459,6 +460,23 @@ async def close_out(payload: dict[str, Any]) -> dict[str, Any]:
     if settled is not None:
         await notify_parent(settled)
     return {"closed": True, "state": state, "tracker_closed": tracker_closed}
+
+
+async def _close_open_requests(session: Any, item: WorkItem) -> None:
+    """An ended work item waits for nobody: the requests still open are closed as superseded (FON-319).
+
+    The escalation's request outlived the abandon step decided after it: an abandoned work item kept
+    an "Approve" on the board that could only answer 409 (its interpreter had completed). Idempotent:
+    a replay finds nothing open. A superseded close judges no decision (`_judge_the_decisions`)."""
+    await session.execute(
+        update(HumanRequest)
+        .where(HumanRequest.work_item_id == item.id, HumanRequest.decided_at.is_(None))
+        .values(
+            decided_at=utcnow(),
+            decided_by="the platform",
+            decision={"approved": False, "superseded": f"the work item ended in `{item.state}`"},
+        )
+    )
 
 
 async def _terminal_outcome(session: Any, item: WorkItem) -> str:
