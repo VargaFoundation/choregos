@@ -14,6 +14,7 @@ below turns red without the shim that carries it:
 from __future__ import annotations
 
 import importlib
+import os
 import subprocess
 import sys
 import textwrap
@@ -124,6 +125,85 @@ def test_a_module_added_to_an_aliased_package_is_covered_without_touching_the_sh
         from tranibor_contracts import _compat
 
         _compat._FINDER.aliases.pop("choregos_zz", None)
+
+
+def test_the_real_module_keeps_its_own_spec_after_an_import_through_the_old_name() -> None:
+    """The alias spec must not be stamped on the real module (`__spec__.name` is what `reload`,
+    `pickle` by reference and `python -m` read)."""
+    new = importlib.import_module("tranibor_core.plugins.versions")
+    old = importlib.import_module("choregos_core.plugins.versions")
+    assert old is new
+    assert new.__spec__ is not None and new.__spec__.name == "tranibor_core.plugins.versions"
+
+
+def _write_aliased_package(root: Path) -> None:
+    package = root / "tranibor_zz"
+    package.mkdir()
+    (package / "__init__.py").write_text("")
+    (package / "helper.py").write_text("WORD = 'helped'\n")
+    (package / "tool.py").write_text(
+        textwrap.dedent(
+            """
+            import sys
+            from . import helper
+            print("executed", __name__, helper.WORD, sys.argv[1:])
+            """
+        )
+    )
+    shim = root / "choregos_zz"
+    shim.mkdir()
+    (shim / "__init__.py").write_text(
+        'from tranibor_contracts._compat import install_alias\ninstall_alias("choregos_zz", "tranibor_zz")\n'
+    )
+
+
+def test_python_dash_m_runs_a_module_through_the_old_name_once_as_main(tmp_path: Path) -> None:
+    """#1899: runpy asks the loader for `get_code`; the module runs once, as `__main__`."""
+    _write_aliased_package(tmp_path)
+    environment = {**os.environ, "PYTHONPATH": str(tmp_path), "PYTHONWARNINGS": "ignore"}
+    run = subprocess.run(
+        [sys.executable, "-m", "choregos_zz.tool", "an-argument"],
+        check=False,
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+        env=environment,
+    )
+    assert run.returncode == 0, run.stderr
+    assert run.stdout.splitlines() == ["executed __main__ helped ['an-argument']"], run.stdout
+    probe = (
+        "import importlib.util, inspect\n"
+        "spec = importlib.util.find_spec('choregos_zz.tool')\n"
+        "print(spec.loader.is_package('choregos_zz.tool'), spec.origin.endswith('tool.py'))\n"
+        "print('from . import helper' in spec.loader.get_source('choregos_zz.tool'))\n"
+    )
+    seen = subprocess.run(
+        [sys.executable, "-c", probe],
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+        env=environment,
+        check=True,
+    )
+    assert seen.stdout.splitlines() == ["False True", "True"], seen.stdout
+
+
+def test_python_dash_m_migrate_under_the_old_name_is_the_new_command() -> None:
+    """The command #1899 found broken: `python -m choregos_api.migrate` is `tranibor_api.migrate`."""
+    environment = {**os.environ, "PYTHONWARNINGS": "ignore"}
+    outputs = []
+    for name in ("choregos_api.migrate", "tranibor_api.migrate"):
+        run = subprocess.run(
+            [sys.executable, "-m", name, "heads"],
+            check=False,
+            capture_output=True,
+            text=True,
+            cwd=ROOT,
+            env=environment,
+        )
+        assert run.returncode == 0, f"python -m {name} heads: {run.stderr}"
+        outputs.append(run.stdout)
+    assert outputs[0] == outputs[1] and "Rev:" in outputs[0]
 
 
 def test_one_deprecation_warning_per_old_package_and_process() -> None:
