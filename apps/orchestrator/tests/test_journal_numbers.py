@@ -89,9 +89,9 @@ async def api(setup: Fixture, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[
     development sign-in the API's own suite uses."""
     import httpx
 
-    monkeypatch.setenv("CHOREGOS_DEV_LOGIN_ENABLED", "true")
-    monkeypatch.setenv("CHOREGOS_DEV_ADMIN_EMAILS", "admin@northwind.dev")
-    monkeypatch.setenv("CHOREGOS_SESSION_SECRET", "test-session-secret-" + "x" * 32)
+    monkeypatch.setenv("TRANIBOR_DEV_LOGIN_ENABLED", "true")
+    monkeypatch.setenv("TRANIBOR_DEV_ADMIN_EMAILS", "admin@northwind.dev")
+    monkeypatch.setenv("TRANIBOR_SESSION_SECRET", "test-session-secret-" + "x" * 32)
     from tranibor_api.config import reset_settings_cache as reset_api_settings
     from tranibor_api.main import create_app
     from tranibor_api.temporal import FakeTemporal, set_temporal

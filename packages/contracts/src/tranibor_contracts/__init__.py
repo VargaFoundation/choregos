@@ -5,7 +5,13 @@
 Any change goes through a PR labelled `contract-change` (docs/plan/01).
 """
 
+# ruff: noqa: E402 - the first statement adopts the former variable names, before any import reads them
 from __future__ import annotations
+
+from .env import adopt_legacy_environment
+
+# Before anything reads a variable: the former variable names are adopted under the new ones (ADR 0176 R4).
+adopt_legacy_environment()
 
 import json
 from importlib import resources

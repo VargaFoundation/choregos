@@ -409,7 +409,7 @@ async def test_anthropic_paths_reach_the_gateway_under_v1_when_the_platform_name
     stage_input: StageInput,
 ) -> None:
     """S65-04a, measured with claude-agent-acp against the dev gateway: the platform names LiteLLM by its
-    root (`CHOREGOS_GATEWAY_URL=http://litellm:4000`), which serves `messages` only under `/v1`; every
+    root (`TRANIBOR_GATEWAY_URL=http://litellm:4000`), which serves `messages` only under `/v1`; every
     Claude Code request was forwarded to `/messages` and answered 404. Its token count (21 calls in a
     26-message step) was not served at all. A base that already ends in `/v1` is left as it is."""
     gateway = Gateway()

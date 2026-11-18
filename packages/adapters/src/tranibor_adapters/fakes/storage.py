@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""`FakeObjectStore`: the object store in memory (ADR 0005), for `CHOREGOS_FAKES=1` and tests.
+"""`FakeObjectStore`: the object store in memory (ADR 0005), for `TRANIBOR_FAKES=1` and tests.
 
 Scriptable: `tamper` rewrites an object behind the platform's back, which is how a test proves
 that a read checks the digest; `forget` removes one; `fail_next` makes the next call refuse.

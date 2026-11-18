@@ -45,7 +45,7 @@ async def test_a_host_absent_from_the_policy_raises_before_any_subprocess(spy: S
 
 
 async def test_without_a_policy_enforce_fails_closed(spy: Spy, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("CHOREGOS_EGRESS_MODE", "enforce")
+    monkeypatch.setenv("TRANIBOR_EGRESS_MODE", "enforce")
     with pytest.raises(EgressRefusedError) as refused:
         await GitSource(url="https://github.com/acme/docs.git", ref="main").changes(None)
     assert refused.value.reason == "no_policy_in_context"

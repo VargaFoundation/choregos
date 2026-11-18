@@ -135,9 +135,9 @@ CONFIGS = {
 def test_the_api_reads_what_the_built_executor_declares(
     kind: str, isolation: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("CHOREGOS_RUNNER_AGENT_ISOLATION", isolation)
+    monkeypatch.setenv("TRANIBOR_RUNNER_AGENT_ISOLATION", isolation)
     # The real executors, not the fakes another test may have switched on.
-    monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
+    monkeypatch.delenv("TRANIBOR_FAKES", raising=False)
     built = build("runtime", kind, CONFIGS[kind])
     assert declared_capabilities(kind, agent_isolation=isolation) == built.capabilities
 
@@ -158,9 +158,9 @@ def test_one_sentence_for_the_executor_and_the_readiness() -> None:
 
 def test_the_deployment_setting_refuses_a_word_it_does_not_know() -> None:
     assert deployment_agent_isolation({}) == "process"
-    assert deployment_agent_isolation({"CHOREGOS_RUNNER_AGENT_ISOLATION": "container"}) == "container"
-    with pytest.raises(ValueError, match="CHOREGOS_RUNNER_AGENT_ISOLATION"):
-        deployment_agent_isolation({"CHOREGOS_RUNNER_AGENT_ISOLATION": "containers"})
+    assert deployment_agent_isolation({"TRANIBOR_RUNNER_AGENT_ISOLATION": "container"}) == "container"
+    with pytest.raises(ValueError, match="TRANIBOR_RUNNER_AGENT_ISOLATION"):
+        deployment_agent_isolation({"TRANIBOR_RUNNER_AGENT_ISOLATION": "containers"})
 
 
 # Routing ──────────────────────────────────────────────────────────────────────────────────

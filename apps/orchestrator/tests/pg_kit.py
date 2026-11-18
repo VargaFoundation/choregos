@@ -125,7 +125,7 @@ async def reset(url: str) -> None:
 
     The schema is built once per process (95 migrations, about four seconds) and the following tests
     empty its tables. A test that drops or changes the schema makes it differ from what was built: the
-    next call rebuilds it. The caller has set `CHOREGOS_DATABASE_URL` to `app_url(url)` and has reset
+    next call rebuilds it. The caller has set `TRANIBOR_DATABASE_URL` to `app_url(url)` and has reset
     the settings and the engine.
     """
     fingerprint = _built.get("fingerprint")

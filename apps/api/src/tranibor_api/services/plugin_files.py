@@ -32,9 +32,9 @@ async def installed_row(session: AsyncSession, org_id: str, name: str) -> OrgPlu
 
 
 def _cache_root() -> Path:
-    """Where stored files are materialised: `CHOREGOS_PLUGIN_FILES_DIR` when set, else a directory of the
+    """Where stored files are materialised: `TRANIBOR_PLUGIN_FILES_DIR` when set, else a directory of the
     process's own user under the temp directory (a fixed shared path breaks when another account made it)."""
-    configured = os.environ.get("CHOREGOS_PLUGIN_FILES_DIR")
+    configured = os.environ.get("TRANIBOR_PLUGIN_FILES_DIR")
     if configured:
         return Path(configured)
     return Path(tempfile.gettempdir()) / f"choregos-plugin-files-{os.getuid()}"

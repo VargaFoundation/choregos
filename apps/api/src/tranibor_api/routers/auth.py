@@ -164,8 +164,8 @@ async def _discover(issuer: str) -> dict[str, str]:
         raise ApiError(
             status.HTTP_503_SERVICE_UNAVAILABLE,
             "Identity provider unavailable",
-            f"OIDC discovery at {url} failed: {reason}; set CHOREGOS_OIDC_AUTHORIZATION_ENDPOINT, "
-            "CHOREGOS_OIDC_TOKEN_ENDPOINT and CHOREGOS_OIDC_USERINFO_ENDPOINT if the provider "
+            f"OIDC discovery at {url} failed: {reason}; set TRANIBOR_OIDC_AUTHORIZATION_ENDPOINT, "
+            "TRANIBOR_OIDC_TOKEN_ENDPOINT and TRANIBOR_OIDC_USERINFO_ENDPOINT if the provider "
             "publishes none",
         )
     _endpoints[issuer] = found
@@ -703,7 +703,7 @@ async def _map_groups_to_roles(
     # this file — that is all the C3 seam asked for, and nothing more.
     default_org = only_org.slug if only_org is not None else settings.oidc_default_org
     roles = group_mapper(roles_from_groups)(groups, default_org)
-    # A group that names a FORMER slug (`choregos:<old>:<group>`, or `CHOREGOS_OIDC_DEFAULT_ORG` left at
+    # A group that names a FORMER slug (`choregos:<old>:<group>`, or `TRANIBOR_OIDC_DEFAULT_ORG` left at
     # the old slug) grants its role on the renamed organisation (ADR 0090). When a current slug and an
     # alias of the same organisation both appear, the higher role wins, as for two groups of one slug.
     # A mapper an extension declared may answer either spelling of a renamed role (ADR 0181 C1).

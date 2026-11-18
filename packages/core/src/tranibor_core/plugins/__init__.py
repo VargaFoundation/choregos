@@ -31,7 +31,7 @@ rather than the first:
   operation names, a compensation that names an operation of the same server, egress fields that the
   configuration schema declares, and — for a server that `implements: [tracker]` — every tool of the
   tracker profile declared with its access, `TRACKER_PROFILE`) — and, for a server that declares its
-  `fake` (#1372), variables that are neither the platform's (`CHOREGOS_*`) nor any its configuration
+  `fake` (#1372), variables that are neither the platform's (`TRANIBOR_*`) nor any its configuration
   reaches, so that no administrator ever switches a server to its fake.
 - each assistant file (`contents.assistants`, ADR 0133) against `assistant.schema.json`, then what the
   schema cannot say (`tranibor_core.plugins.assistants`): its agent is one of the plugin's and converses,
@@ -271,8 +271,8 @@ def _check_fake(doc: dict[str, Any], ref: str, problems: list[str]) -> None:
         return
     reached = {env: name for name, env in configuration_variables(doc).items()}
     for env in sorted(fake.get("env") or {}):
-        if env.startswith("CHOREGOS_"):
-            problems.append(f"{ref}: fake variable `{env}` is the platform's (`CHOREGOS_*`)")
+        if env.startswith(("TRANIBOR_", "CHOREGOS_")):  # compat-ok
+            problems.append(f"{ref}: fake variable `{env}` is the platform's (`TRANIBOR_*`)")
         elif env in reached:
             problems.append(
                 f"{ref}: fake variable `{env}` is what the configuration field `{reached[env]}` reaches: "

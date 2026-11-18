@@ -74,7 +74,7 @@ async def test_the_enterprise_edition_lets_it_through(client: AsyncClient, org: 
 
 
 async def test_without_an_organisation_the_edition_is_not_what_refuses(client: AsyncClient) -> None:
-    """The very first organisation comes from the bootstrap (`CHOREGOS_BOOTSTRAP_ORG`), not from
+    """The very first organisation comes from the bootstrap (`TRANIBOR_BOOTSTRAP_ORG`), not from
     this route: creating an organisation requires already being an administrator of one.
 
     What this test holds is that the edition guard does not get in the way of that path: on an
@@ -234,7 +234,7 @@ async def test_the_edition_route_serves_the_licences_and_no_revision_by_default(
 ) -> None:
     from tranibor_api import edition
 
-    monkeypatch.delenv("CHOREGOS_BUILD_REVISION", raising=False)
+    monkeypatch.delenv("TRANIBOR_BUILD_REVISION", raising=False)
     community = (await client.get("/api/v1/edition")).json()
     assert community["licence"] == "Apache-2.0"
     assert community["edition_licence"] is None
@@ -265,7 +265,7 @@ async def test_the_edition_route_serves_the_licences_and_no_revision_by_default(
 async def test_the_edition_route_serves_the_build_revision_only_when_it_is_a_commit_id(
     client: AsyncClient, monkeypatch: pytest.MonkeyPatch, raw: str, served: str | None
 ) -> None:
-    monkeypatch.setenv("CHOREGOS_BUILD_REVISION", raw)
+    monkeypatch.setenv("TRANIBOR_BUILD_REVISION", raw)
     for path in ("/edition", "/api/v1/edition"):
         body = (await client.get(path)).json()
         assert body["build"] == {"revision": served}

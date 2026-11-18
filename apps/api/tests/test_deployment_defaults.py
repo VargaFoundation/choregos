@@ -21,16 +21,16 @@ ORG = "/api/v1/orgs/northwind"
 def deployment(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     from tranibor_api.config import reset_settings_cache
 
-    monkeypatch.setenv("CHOREGOS_DEFAULT_AGENT_BACKEND", "opencode")
-    monkeypatch.setenv("CHOREGOS_ALLOWED_AGENT_BACKENDS", '["opencode", "codex"]')
-    monkeypatch.setenv("CHOREGOS_DEFAULT_MODEL_PROFILES", '{"standard": "platform/standard"}')
+    monkeypatch.setenv("TRANIBOR_DEFAULT_AGENT_BACKEND", "opencode")
+    monkeypatch.setenv("TRANIBOR_ALLOWED_AGENT_BACKENDS", '["opencode", "codex"]')
+    monkeypatch.setenv("TRANIBOR_DEFAULT_MODEL_PROFILES", '{"standard": "platform/standard"}')
     reset_settings_cache()
     try:
         yield
     finally:
-        monkeypatch.delenv("CHOREGOS_DEFAULT_AGENT_BACKEND")
-        monkeypatch.delenv("CHOREGOS_ALLOWED_AGENT_BACKENDS")
-        monkeypatch.delenv("CHOREGOS_DEFAULT_MODEL_PROFILES")
+        monkeypatch.delenv("TRANIBOR_DEFAULT_AGENT_BACKEND")
+        monkeypatch.delenv("TRANIBOR_ALLOWED_AGENT_BACKENDS")
+        monkeypatch.delenv("TRANIBOR_DEFAULT_MODEL_PROFILES")
         reset_settings_cache()
 
 
@@ -73,12 +73,12 @@ async def test_a_lone_backend_is_also_the_only_one_allowed(
 ) -> None:
     from tranibor_api.config import reset_settings_cache
 
-    monkeypatch.setenv("CHOREGOS_DEFAULT_AGENT_BACKEND", "opencode")
+    monkeypatch.setenv("TRANIBOR_DEFAULT_AGENT_BACKEND", "opencode")
     reset_settings_cache()
     try:
         config = await _project(client, "alone")
     finally:
-        monkeypatch.delenv("CHOREGOS_DEFAULT_AGENT_BACKEND")
+        monkeypatch.delenv("TRANIBOR_DEFAULT_AGENT_BACKEND")
         reset_settings_cache()
     assert config["agent"] == {"default_backend": "opencode", "allowed_backends": ["opencode"]}
     assert config["models"]["profiles"] == {}, "no profile said: no profile set"

@@ -23,7 +23,7 @@ def test_python_m_of_the_former_migration_module_fails(tmp_path: pathlib.Path) -
         env={
             **os.environ,
             "PYTHONPATH": str(API_SRC),
-            "CHOREGOS_DATABASE_URL": f"sqlite+aiosqlite:///{database}",
+            "TRANIBOR_DATABASE_URL": f"sqlite+aiosqlite:///{database}",
         },
         capture_output=True,
         text=True,

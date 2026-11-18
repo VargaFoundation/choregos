@@ -20,7 +20,7 @@ one pull request, tested against one commit.
 | Seam | What |
 | :-- | :-- |
 | `tranibor_contracts.CONNECTOR_KINDS.declare` | the connector kind `marketdata`, for this plugin (the contracts' open list, ADR 0181 round C0) |
-| `tranibor_adapters.register` | the `marketdata` connector types `stooq`, `yahoo`, `alphavantage`, `tiingo` and `composite` (`marketdata/`), with their specs (`marketdata/specs.py`), and their fake as the kind's `fake` type: `CHOREGOS_FAKES=1` switches every `marketdata` connector to it (ADR 0005), scripted as `marketdata.fake.FAKE` |
+| `tranibor_adapters.register` | the `marketdata` connector types `stooq`, `yahoo`, `alphavantage`, `tiingo` and `composite` (`marketdata/`), with their specs (`marketdata/specs.py`), and their fake as the kind's `fake` type: `TRANIBOR_FAKES=1` switches every `marketdata` connector to it (ADR 0005), scripted as `marketdata.fake.FAKE` |
 | `tranibor_adapters.fakes.scenes.declare_scene` | the eval scene `marketdata/default` the tool-script matrix plays |
 
 ## The job image

@@ -141,13 +141,13 @@ def list_(org: OrgOption = None) -> None:
     # What would refuse a creation or a token, said before anyone tries (S65-24).
     if listed.get("enabled") is False:
         _verbatim(
-            "Outposts are switched off on this deployment (CHOREGOS_OUTPOSTS): no outpost is created and "
+            "Outposts are switched off on this deployment (TRANIBOR_OUTPOSTS): no outpost is created and "
             "no token issued until its operator turns them on. What exists can still be read, revoked and "
             "deleted."
         )
     elif listed.get("door_signing_key") is False:
         _verbatim(
-            "The outposts' door has no signing key on this deployment (CHOREGOS_OUTPOSTS_DOOR_SIGNING_KEY): "
+            "The outposts' door has no signing key on this deployment (TRANIBOR_OUTPOSTS_DOOR_SIGNING_KEY): "
             "there is no key to pin, so no enrolment token is issued until its operator sets one."
         )
 

@@ -55,7 +55,7 @@ def require_person_session(
     principal: Principal, gesture: str, *, settings: Settings | None = None, legacy: str | None = None
 ) -> None:
     """Refuse a principal that is not the person in a session. `legacy` names the route's entry in
-    `CHOREGOS_LEGACY_DECISION_ROUTES`: when the deployment lists it, a token still passes there."""
+    `TRANIBOR_LEGACY_DECISION_ROUTES`: when the deployment lists it, a token still passes there."""
     if holds_a_person_session(principal):
         return
     if legacy is not None and settings is not None and legacy in settings.legacy_decision_route_set():

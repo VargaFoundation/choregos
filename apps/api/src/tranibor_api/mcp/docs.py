@@ -2,9 +2,9 @@
 """The user documentation the image carries, searched and read through the MCP door (S62-10, ADR 0150).
 
 The API image copies `docs/site/**` (the Markdown of the public site) to `/opt/choregos/docs`
-(`CHOREGOS_DOCS_DIR` overrides). The first `docs_search` or `docs_read` walks that directory once and
+(`TRANIBOR_DOCS_DIR` overrides). The first `docs_search` or `docs_read` walks that directory once and
 keeps an index in memory: one page per Markdown file, under the slug the public site gives it
-(`<CHOREGOS_DOCS_URL>/<slug>`, the publishing identity's documentation by default).
+(`<TRANIBOR_DOCS_URL>/<slug>`, the publishing identity's documentation by default).
 
 A slug is a key of that index, never a path: `docs_read` cannot open anything the walk did not list,
 and the walk lists only regular Markdown files under the directory, never through a symbolic link.

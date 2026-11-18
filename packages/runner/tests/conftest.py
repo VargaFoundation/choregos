@@ -40,7 +40,7 @@ def _runner_git_dirs(tmp_path_factory: pytest.TempPathFactory, monkeypatch: pyte
     """The runner keeps its git directory outside the tree (S65-04c): in a test, outside the
     machine's `/var/tmp` too, so that no run leaves a repository there."""
     root = tmp_path_factory.mktemp("git-dirs")
-    monkeypatch.setenv("CHOREGOS_RUNNER_GIT_DIR_ROOT", str(root))
+    monkeypatch.setenv("TRANIBOR_RUNNER_GIT_DIR_ROOT", str(root))
     return root
 
 
@@ -235,7 +235,7 @@ def agent_script(script: dict[str, Any], stage_input: StageInput, workspace: Pat
     stage_input.agent.launch.env.update(
         {
             "FAKE_AGENT_SCRIPT": json.dumps(script, ensure_ascii=False),
-            "CHOREGOS_WORKSPACE_PATH": str(workspace),
+            "TRANIBOR_WORKSPACE_PATH": str(workspace),
         }
     )
 
@@ -255,7 +255,7 @@ def valid_result(summary: str = "fix applied", **kwargs: Any) -> dict[str, Any]:
 def runner_settings(tmp_path: Path) -> Any:
     from tranibor_runner.config import RunnerSettings
 
-    os.environ.setdefault("CHOREGOS_RUNNER_DRY_RUN", "0")
+    os.environ.setdefault("TRANIBOR_RUNNER_DRY_RUN", "0")
     return RunnerSettings(
         run_id="run-test-1",
         api_url="http://localhost:0/internal",

@@ -2,7 +2,7 @@
 """SkillSpector behind the skill gate, offline, on a local OSV mirror (ADR 0095).
 
 The mirror and the mapping are tested here with no third-party tool. The real SkillSpector runs
-only where `CHOREGOS_TEST_SKILLSPECTOR_PYTHON` names its interpreter (the API image has it at
+only where `TRANIBOR_TEST_SKILLSPECTOR_PYTHON` names its interpreter (the API image has it at
 `/opt/skillspector/bin/python`); there, a trapped skill is held for review, a clean one is not,
 and no call leaves the process."""
 
@@ -317,7 +317,7 @@ async def test_without_a_scanner_the_gate_is_unchanged(client: AsyncClient, admi
 
 # ───────────────────────── the real SkillSpector ─────────────────────────
 
-REAL = os.environ.get("CHOREGOS_TEST_SKILLSPECTOR_PYTHON", "")
+REAL = os.environ.get("TRANIBOR_TEST_SKILLSPECTOR_PYTHON", "")
 needs_skillspector = pytest.mark.skipif(
     not REAL or not Path(REAL).exists(), reason="SkillSpector is not installed here"
 )

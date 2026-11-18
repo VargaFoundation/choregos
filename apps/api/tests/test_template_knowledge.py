@@ -72,7 +72,7 @@ def _write(root: pathlib.Path, manifest: dict[str, Any]) -> None:
 def templates(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> pathlib.Path:
     root = tmp_path / "templates"
     _write(root, MANIFEST)
-    monkeypatch.setenv("CHOREGOS_TEMPLATES_DIR", str(root))
+    monkeypatch.setenv("TRANIBOR_TEMPLATES_DIR", str(root))
     return root
 
 
@@ -328,9 +328,9 @@ def minted(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
     from tranibor_adapters.github import GitHubAppAuth, InstallationToken
     from tranibor_api.config import reset_settings_cache
 
-    monkeypatch.setenv("CHOREGOS_GITHUB_APP_ID", "5242171")
+    monkeypatch.setenv("TRANIBOR_GITHUB_APP_ID", "5242171")
     monkeypatch.setenv(
-        "CHOREGOS_GITHUB_APP_PRIVATE_KEY", "-----BEGIN RSA PRIVATE KEY-----\nx\n-----END RSA PRIVATE KEY-----"
+        "TRANIBOR_GITHUB_APP_PRIVATE_KEY", "-----BEGIN RSA PRIVATE KEY-----\nx\n-----END RSA PRIVATE KEY-----"
     )
     reset_settings_cache()
     asked: list[dict[str, Any]] = []
@@ -380,7 +380,7 @@ async def test_without_an_app_the_projects_repository_cannot_be_opened(
     from tranibor_api.db.session import session_scope
     from tranibor_api.knowledge import sync
 
-    monkeypatch.delenv("CHOREGOS_GITHUB_APP_ID", raising=False)
+    monkeypatch.delenv("TRANIBOR_GITHUB_APP_ID", raising=False)
     reset_settings_cache()
     assert (await _born(client)).status_code == 201
     row = await _source_row(client)

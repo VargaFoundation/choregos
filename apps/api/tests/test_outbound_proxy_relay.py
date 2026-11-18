@@ -213,18 +213,18 @@ async def test_the_cache_lasts_its_ttl_and_never_outlives_a_failure() -> None:
 
 def test_the_relay_refuses_to_start_without_its_settings() -> None:
     full = {
-        "CHOREGOS_RELAY_ORG": "northwind",
-        "CHOREGOS_RELAY_API_URL": "http://api",
-        "CHOREGOS_RELAY_API_TOKEN": "t",
-        "CHOREGOS_RELAY_CLIENT_TOKEN": CLIENT_TOKEN,
+        "TRANIBOR_RELAY_ORG": "northwind",
+        "TRANIBOR_RELAY_API_URL": "http://api",
+        "TRANIBOR_RELAY_API_TOKEN": "t",
+        "TRANIBOR_RELAY_CLIENT_TOKEN": CLIENT_TOKEN,
     }
     assert settings_from(full).port == 3128
-    with pytest.raises(SystemExit, match="CHOREGOS_RELAY_API_TOKEN"):
-        settings_from({k: v for k, v in full.items() if k != "CHOREGOS_RELAY_API_TOKEN"})
+    with pytest.raises(SystemExit, match="TRANIBOR_RELAY_API_TOKEN"):
+        settings_from({k: v for k, v in full.items() if k != "TRANIBOR_RELAY_API_TOKEN"})
     with pytest.raises(SystemExit, match="16 characters"):
-        settings_from(full | {"CHOREGOS_RELAY_CLIENT_TOKEN": "short"})
-    with pytest.raises(SystemExit, match="CHOREGOS_RELAY_API_TOKEN holds an unresolved template"):
-        settings_from(full | {"CHOREGOS_RELAY_API_TOKEN": "<no value>"})
+        settings_from(full | {"TRANIBOR_RELAY_CLIENT_TOKEN": "short"})
+    with pytest.raises(SystemExit, match="TRANIBOR_RELAY_API_TOKEN holds an unresolved template"):
+        settings_from(full | {"TRANIBOR_RELAY_API_TOKEN": "<no value>"})
 
 
 # ───────────────────────────── the relay ─────────────────────────────

@@ -7,7 +7,7 @@ an outpost it holds no pooled connection and no transaction. Two placements that
 not both take the last call of the minute. The index the cap per minute reads exists in the migrated
 schema, and the migration goes down and up again.
 
-Runs only with `CHOREGOS_TEST_DATABASE_URL`: the schema is the migration's, the role is not a
+Runs only with `TRANIBOR_TEST_DATABASE_URL`: the schema is the migration's, the role is not a
 superuser, and no session has a scope it did not ask for (`pg_app`).
 """
 
@@ -46,8 +46,8 @@ async def client(pg_app: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[
     from tranibor_api.db.models import Organization
     from tranibor_api.db.session import session_scope
 
-    monkeypatch.setenv("CHOREGOS_OIDC_DEFAULT_ORG", kit.ORG)
-    monkeypatch.setenv("CHOREGOS_DEV_ADMIN_EMAILS", "admin@northwind.dev")
+    monkeypatch.setenv("TRANIBOR_OIDC_DEFAULT_ORG", kit.ORG)
+    monkeypatch.setenv("TRANIBOR_DEV_ADMIN_EMAILS", "admin@northwind.dev")
     reset_settings_cache()
     async with session_scope(orgs="*") as session:
         session.add(Organization(slug=kit.ORG, name="Northwind"))

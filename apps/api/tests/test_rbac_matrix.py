@@ -149,7 +149,7 @@ async def test_each_role_gets_exactly_its_permissions(
 
     # the dev sign-in must neither demote nor promote: the role is set in the database, then we
     # sign in as that member (no dev admin, so the default `developers` is ignored)
-    monkeypatch.setenv("CHOREGOS_DEV_ADMIN_EMAILS", "admin@northwind.dev")
+    monkeypatch.setenv("TRANIBOR_DEV_ADMIN_EMAILS", "admin@northwind.dev")
     reset_settings_cache()
     workflow_yaml = (await client.get(f"/api/v1/projects/{project['id']}/workflow")).json()["yaml"]
     policy_yaml = (await client.get(f"/api/v1/projects/{project['id']}/policy")).json()["yaml"]

@@ -550,7 +550,8 @@ def _daemon_options() -> dict[str, str]:
         for parameter in group.params:
             variable = getattr(parameter, "envvar", None)
             if variable:
-                found[str(variable)] = parameter.opts[0]
+                # The chart still names the former variable (ADR 0176 R4); the daemon adopts it.
+                found[str(variable).replace("TRANIBOR_", "CHOREGOS_", 1)] = parameter.opts[0]
     return found
 
 

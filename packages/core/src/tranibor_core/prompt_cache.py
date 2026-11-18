@@ -37,7 +37,7 @@ EPHEMERAL: Final = {"type": "ephemeral"}
 MAX_BREAKPOINTS: Final = 4
 #: Gateway aliases (`platform/standard`) that name an Anthropic upstream, comma separated: an alias
 #: says nothing about its provider, so the deployment says it.
-ALIASES_ENV: Final = "CHOREGOS_PROMPT_CACHE_MODELS"
+ALIASES_ENV: Final = "TRANIBOR_PROMPT_CACHE_MODELS"
 _FAMILY_MARKERS: Final = ("anthropic/", "claude", "anthropic.")
 
 

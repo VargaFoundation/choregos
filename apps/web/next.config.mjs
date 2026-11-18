@@ -7,7 +7,7 @@
  * install TypeScript when the container started, and failed on "Failed to load
  * next.config.ts". The JSDoc below keeps the typing in the editor and in `tsc`.
  */
-const apiUrl = process.env.CHOREGOS_API_URL ?? "http://localhost:8000";
+const apiUrl = process.env.TRANIBOR_API_URL ?? process.env.CHOREGOS_API_URL ?? "http://localhost:8000";
 
 /** @type {import("next").NextConfig} */
 const nextConfig = {

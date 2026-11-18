@@ -55,7 +55,7 @@ def _contract(name: str) -> Draft202012Validator:
 
 @pytest.fixture
 def configure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
-    """Writes `CHOREGOS_PLUGINS_CONFIG` with an offline directory; returns that directory."""
+    """Writes `TRANIBOR_PLUGINS_CONFIG` with an offline directory; returns that directory."""
     from tranibor_api.config import reset_settings_cache
 
     def write(defaults: list[dict[str, str]] | None = None, *, server: bool = True) -> Path:
@@ -64,12 +64,12 @@ def configure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
             _hello(offline / "hello", server=server)
         path = tmp_path / "plugins.yaml"
         path.write_text(yaml.safe_dump({"offline": str(offline), "defaultPlugins": defaults or []}))
-        monkeypatch.setenv("CHOREGOS_PLUGINS_CONFIG", str(path))
+        monkeypatch.setenv("TRANIBOR_PLUGINS_CONFIG", str(path))
         reset_settings_cache()
         return offline
 
     yield write
-    monkeypatch.delenv("CHOREGOS_PLUGINS_CONFIG", raising=False)
+    monkeypatch.delenv("TRANIBOR_PLUGINS_CONFIG", raising=False)
     reset_settings_cache()
 
 
@@ -325,10 +325,10 @@ def test_an_unusable_configuration_stops_the_api_at_start_up(
 
     path = tmp_path / "plugins.yaml"
     path.write_text(yaml.safe_dump({"sources": [{"name": "acme", "index": "https://a.example/i.yaml"}]}))
-    monkeypatch.setenv("CHOREGOS_PLUGINS_CONFIG", str(path))
+    monkeypatch.setenv("TRANIBOR_PLUGINS_CONFIG", str(path))
     reset_settings_cache()
     try:
-        with pytest.raises(PluginsConfigurationError, match="CHOREGOS_PLUGINS_CONFIG"):
+        with pytest.raises(PluginsConfigurationError, match="TRANIBOR_PLUGINS_CONFIG"):
             create_app()
 
         path.write_text(yaml.safe_dump({"offline": str(tmp_path / "missing")}))
@@ -339,15 +339,15 @@ def test_an_unusable_configuration_stops_the_api_at_start_up(
         (tmp_path / "a").mkdir()
         (tmp_path / "b").mkdir()
         path.write_text(yaml.safe_dump({"offline": str(tmp_path / "a")}))
-        monkeypatch.setenv("CHOREGOS_PLUGINS_OFFLINE", str(tmp_path / "b"))
+        monkeypatch.setenv("TRANIBOR_PLUGINS_OFFLINE", str(tmp_path / "b"))
         reset_settings_cache()
         with pytest.raises(PluginsConfigurationError, match="two offline plugin directories"):
             check_configuration()
 
-        monkeypatch.setenv("CHOREGOS_PLUGINS_OFFLINE", str(tmp_path / "a"))
+        monkeypatch.setenv("TRANIBOR_PLUGINS_OFFLINE", str(tmp_path / "a"))
         reset_settings_cache()
         assert check_configuration().offline == tmp_path / "a"
     finally:
-        monkeypatch.delenv("CHOREGOS_PLUGINS_CONFIG")
-        monkeypatch.delenv("CHOREGOS_PLUGINS_OFFLINE", raising=False)
+        monkeypatch.delenv("TRANIBOR_PLUGINS_CONFIG")
+        monkeypatch.delenv("TRANIBOR_PLUGINS_OFFLINE", raising=False)
         reset_settings_cache()

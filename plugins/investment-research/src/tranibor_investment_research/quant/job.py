@@ -34,10 +34,10 @@ PUBLISHED: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
 
 
 def workspace() -> Path:
-    """The job's workspace, from `CHOREGOS_WORKSPACE`; an error outside a job."""
-    root = os.environ.get("CHOREGOS_WORKSPACE")
+    """The job's workspace, from `TRANIBOR_WORKSPACE`; an error outside a job."""
+    root = os.environ.get("TRANIBOR_WORKSPACE")
     if not root:
-        raise InputError("no --campaign given and CHOREGOS_WORKSPACE is not set: not running as a job")
+        raise InputError("no --campaign given and TRANIBOR_WORKSPACE is not set: not running as a job")
     return Path(root)
 
 

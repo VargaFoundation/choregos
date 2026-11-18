@@ -36,12 +36,12 @@ az containerapp env create -n choregos-env -g "$RG" -l westeurope \
 ## Run the suite
 
 ```bash
-export CHOREGOS_LIVE_AZURE_SUBSCRIPTION=$(az account show --query id -o tsv)
-export CHOREGOS_LIVE_AZURE_RG="$RG"
-export CHOREGOS_LIVE_AZURE_ENV_ID=$(az containerapp env show -n choregos-env -g "$RG" --query id -o tsv)
+export TRANIBOR_LIVE_AZURE_SUBSCRIPTION=$(az account show --query id -o tsv)
+export TRANIBOR_LIVE_AZURE_RG="$RG"
+export TRANIBOR_LIVE_AZURE_ENV_ID=$(az containerapp env show -n choregos-env -g "$RG" --query id -o tsv)
 # A user token rather than a service principal: nothing to create, so nothing to delete.
 # It expires in one hour — re-export it if the suite drags on.
-export CHOREGOS_LIVE_AZURE_TOKEN=$(az account get-access-token \
+export TRANIBOR_LIVE_AZURE_TOKEN=$(az account get-access-token \
   --resource https://management.azure.com --query accessToken -o tsv)
 
 uv run pytest tests/live/test_aca_live.py -m live -v
@@ -69,7 +69,7 @@ interrupted at the wrong moment can leave one: the group is the guarantee.
 |:--|:--|:--|
 | `The subscription is not registered to use namespace 'Microsoft.App'` | Provider not registered | `az provider register -n Microsoft.App`, then wait for `Registered` |
 | The environment stays `Waiting` | Normal for the first 5 to 10 minutes | Wait; beyond 20 min, `az containerapp env show` and read `properties` |
-| `401` on ARM mid-suite | The token expired (1 h) | Re-export `CHOREGOS_LIVE_AZURE_TOKEN` |
+| `401` on ARM mid-suite | The token expired (1 h) | Re-export `TRANIBOR_LIVE_AZURE_TOKEN` |
 | A test leaves a job behind | `pytest` interrupted | `az containerapp job delete -n <name> -g "$RG" --yes`, or delete the group |
 
 ## What it does not prove

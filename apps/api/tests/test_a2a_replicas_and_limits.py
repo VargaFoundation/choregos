@@ -25,7 +25,7 @@ __all__ = ["enforce", "receiver"]  # fixtures, used by name
 
 on_postgres = pytest.mark.skipif(
     not SUITE_ON_POSTGRES,
-    reason="NOTIFY and SKIP LOCKED: PostgreSQL only (CHOREGOS_TEST_SUITE_ON_POSTGRES)",
+    reason="NOTIFY and SKIP LOCKED: PostgreSQL only (TRANIBOR_TEST_SUITE_ON_POSTGRES)",
 )
 
 

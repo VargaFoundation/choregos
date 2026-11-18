@@ -2,7 +2,7 @@
   "$comment": "Every A2A method and CLI command the Integrations page's A2A snippets show (S62-11). apps/web/tests/a2a-snippets.test.ts holds the snippets to this list; tests/web/test_a2a_snippets_match_the_door.py holds this list to the door (apps/api/src/tranibor_api/a2a/door.py, v1.py) and to the CLI's typer app.",
   "methods_0_3": ["message/send", "tasks/get", "tasks/resubscribe", "tasks/cancel"],
   "methods_1_0": ["SendMessage", "GetTask", "SubscribeToTask", "CancelTask"],
-  "env": ["CHOREGOS_API_URL", "CHOREGOS_ORG", "CHOREGOS_A2A_TOKEN"],
+  "env": ["TRANIBOR_API_URL", "TRANIBOR_ORG", "TRANIBOR_A2A_TOKEN"],
   "commands": [
     { "command": ["a2a", "skills"], "options": [] },
     { "command": ["a2a", "send"], "options": ["--message-id", "--title", "--text", "--field", "--file", "--wait", "--out"] },

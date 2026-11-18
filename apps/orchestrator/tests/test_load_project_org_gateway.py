@@ -28,7 +28,7 @@ def built(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[dict[str, Any]]]:
     register("gateway", "probe", spec)(lambda cfg: received.append(cfg) or object())
     for kind in OTHERS:
         register(kind, "probe", spec)(lambda cfg: object())
-    monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
+    monkeypatch.delenv("TRANIBOR_FAKES", raising=False)
     try:
         yield received
     finally:

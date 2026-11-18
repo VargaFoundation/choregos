@@ -5,10 +5,10 @@
 # Postgres on 5432 or a Keycloak on 8080, and the default made `up` fail on
 # "port is already allocated" without saying which one to change:
 #
-#   CHOREGOS_PORT_POSTGRES=15432 docker compose -f dev/compose.yaml up -d
+#   TRANIBOR_PORT_POSTGRES=15432 docker compose -f dev/compose.yaml up -d
 #
-# Variables: CHOREGOS_PORT_{POSTGRES,TEMPORAL,TEMPORAL_UI,LITELLM,KEYCLOAK,S3,S3_CONSOLE,ECPHORIA}
-# (CHOREGOS_PORT_MINIO and CHOREGOS_PORT_MINIO_CONSOLE are still read, for machines already set up).
+# Variables: TRANIBOR_PORT_{POSTGRES,TEMPORAL,TEMPORAL_UI,LITELLM,KEYCLOAK,S3,S3_CONSOLE,ECPHORIA}
+# (TRANIBOR_PORT_MINIO and TRANIBOR_PORT_MINIO_CONSOLE are still read, for machines already set up).
 
 # Everything the platform needs, without Kubernetes: `docker compose -f dev/compose.yaml up -d`.
 # Not `choregos`: that is the local install at the root (`compose.yaml`); the same project name
@@ -22,7 +22,7 @@ services:
       POSTGRES_USER: choregos
       POSTGRES_PASSWORD: choregos
       POSTGRES_DB: choregos
-    ports: ["${CHOREGOS_PORT_POSTGRES:-5432}:5432"]
+    ports: ["${TRANIBOR_PORT_POSTGRES:-5432}:5432"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U choregos"]
       interval: 5s
@@ -43,7 +43,7 @@ services:
       # configuration directory only holds `docker.yaml`. Temporal started, did not
       # find the file, and exited: "Unable to create dynamic config client".
       DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/docker.yaml
-    ports: ["${CHOREGOS_PORT_TEMPORAL:-7233}:7233"]
+    ports: ["${TRANIBOR_PORT_TEMPORAL:-7233}:7233"]
 
   temporal-ui:
     image: temporalio/ui:2.32.0@sha256:82bf98dbe005a831b6bc5dc12ccd7bffd606af2032dae4821ae133caaa943d3d
@@ -51,7 +51,7 @@ services:
     environment:
       TEMPORAL_ADDRESS: temporal:7233
       TEMPORAL_CORS_ORIGINS: http://localhost:3000
-    ports: ["${CHOREGOS_PORT_TEMPORAL_UI:-8088}:8080"]
+    ports: ["${TRANIBOR_PORT_TEMPORAL_UI:-8088}:8080"]
 
   litellm:
     image: ghcr.io/berriai/litellm:main-stable@sha256:11175975a3093e05e92faee2fe2fe3412a3ae2fcaa849eb0fe25d5f0d8bcb2e9
@@ -62,7 +62,7 @@ services:
     volumes: ["./litellm.yaml:/app/config.yaml:ro"]
     depends_on:
       postgres: { condition: service_healthy }
-    ports: ["${CHOREGOS_PORT_LITELLM:-4000}:4000"]
+    ports: ["${TRANIBOR_PORT_LITELLM:-4000}:4000"]
 
   keycloak:
     image: quay.io/keycloak/keycloak:26.0@sha256:09a381c715ab0b111835b70f2905955274843a219c6f27efb348e4d9f4086858
@@ -71,7 +71,7 @@ services:
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
       KC_BOOTSTRAP_ADMIN_PASSWORD: admin
     volumes: ["./keycloak-realm.json:/opt/keycloak/data/import/realm.json:ro"]
-    ports: ["${CHOREGOS_PORT_KEYCLOAK:-8080}:8080"]
+    ports: ["${TRANIBOR_PORT_KEYCLOAK:-8080}:8080"]
 
   # RustFS (Apache-2.0): the MinIO server image is no longer published, on neither Docker Hub nor
   # quay.io — a fresh machine could no longer start this stack (#152). RustFS also issues
@@ -84,8 +84,8 @@ services:
       RUSTFS_ACCESS_KEY: choregos
       RUSTFS_SECRET_KEY: choregos123
     ports:
-      - "${CHOREGOS_PORT_S3:-${CHOREGOS_PORT_MINIO:-9000}}:9000"
-      - "${CHOREGOS_PORT_S3_CONSOLE:-${CHOREGOS_PORT_MINIO_CONSOLE:-9001}}:9001"
+      - "${TRANIBOR_PORT_S3:-${TRANIBOR_PORT_MINIO:-9000}}:9000"
+      - "${TRANIBOR_PORT_S3_CONSOLE:-${TRANIBOR_PORT_MINIO_CONSOLE:-9001}}:9001"
     volumes: ["s3data:/data"]
 
   ecphoria:
@@ -111,7 +111,7 @@ services:
       ECPHORIA_MEMORY__STATE__DB_PATH: /data/state.db
       ECPHORIA_MEMORY__COGNITION__DB_PATH: /data/cognition.duckdb
     volumes: ["ecphoriadata:/data"]
-    ports: ["${CHOREGOS_PORT_ECPHORIA:-8432}:8432"]
+    ports: ["${TRANIBOR_PORT_ECPHORIA:-8432}:8432"]
     # No profile: the README announces Ecphoria in the stack, and a missing memory
     # makes the platform's first run fail on a connection error.
 

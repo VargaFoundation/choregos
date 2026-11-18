@@ -3,7 +3,7 @@
 
 The SDK drives the Claude Code CLI it bundles. The CLI reads the platform's model from
 `ANTHROPIC_BASE_URL` and `ANTHROPIC_API_KEY` (the loopback key) and is given the step's MCP servers
-(`CHOREGOS_MCP_URL<name>`, HTTP) and none of its built-in tools: a hosted triager reads, it does not
+(`TRANIBOR_MCP_URL<name>`, HTTP) and none of its built-in tools: a hosted triager reads, it does not
 edit files or run commands. The CLI's own traffic (telemetry, error reports, updates) is turned
 off: a step's network does not reach it (the conformance suite's `no_egress` check fails otherwise).
 """
@@ -28,14 +28,14 @@ QUIET = {
 
 
 async def answer(text: str) -> str:
-    names = [name for name in os.environ.get("CHOREGOS_MCP_SERVERS", "").split(",") if name]
+    names = [name for name in os.environ.get("TRANIBOR_MCP_SERVERS", "").split(",") if name]
     with tempfile.TemporaryDirectory() as home:
         options = ClaudeAgentOptions(
             system_prompt=INSTRUCTIONS,
-            model=os.environ.get("CHOREGOS_MODEL"),
+            model=os.environ.get("TRANIBOR_MODEL"),
             tools=[],
             mcp_servers={
-                name: {"type": "http", "url": os.environ["CHOREGOS_MCP_URL"] + name} for name in names
+                name: {"type": "http", "url": os.environ["TRANIBOR_MCP_URL"] + name} for name in names
             },
             strict_mcp_config=True,
             allowed_tools=[f"mcp__{name}" for name in names],

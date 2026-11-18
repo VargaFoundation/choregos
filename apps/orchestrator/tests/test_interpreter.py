@@ -704,7 +704,7 @@ async def test_the_same_failure_twice_escalates_instead_of_retrying(
         history = await handle.fetch_history()
     assert await _runs(setup) == 2
     # The decision is behind `workflow.patched`: the history it writes replays, and so do the
-    # archived ones written before it (`tests/replay`). Set CHOREGOS_RECORD_REPLAY=1 to archive it.
+    # archived ones written before it (`tests/replay`). Set TRANIBOR_RECORD_REPLAY=1 to archive it.
     import os
     from pathlib import Path
 
@@ -712,7 +712,7 @@ async def test_the_same_failure_twice_escalates_instead_of_retrying(
     from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
-    if os.environ.get("CHOREGOS_RECORD_REPLAY") == "1":
+    if os.environ.get("TRANIBOR_RECORD_REPLAY") == "1":
         archive = (
             Path(__file__).resolve().parents[3] / "tests/replay/histories/wi-identical-failure-S27-07.json"
         )

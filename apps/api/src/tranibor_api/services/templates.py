@@ -2,7 +2,7 @@
 """The stack templates: where they live, and what their manifest delivers to a new project.
 
 A template is a `templates/<name>/` folder, shipped with the platform or named by
-`CHOREGOS_TEMPLATES_DIR`, or a `templates` row published by an administrator, which wins. Under
+`TRANIBOR_TEMPLATES_DIR`, or a `templates` row published by an administrator, which wins. Under
 `defaults`, its manifest says the workflows of a project born of it, the default and the routing
 (ADR 0031), and the policy. `ensure_defaults` used to ignore it: every project received
 `default-simple`.
@@ -33,7 +33,7 @@ POLICY_WITHOUT_TEMPLATE = "preset:solo"
 
 def templates_directory() -> Path:
     """The same folder as the orchestrator, read from the same setting."""
-    configured = os.environ.get("CHOREGOS_TEMPLATES_DIR", "").strip()
+    configured = os.environ.get("TRANIBOR_TEMPLATES_DIR", "").strip()
     return Path(configured) if configured else Path(__file__).resolve().parents[5] / "templates"
 
 

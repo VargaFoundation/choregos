@@ -61,7 +61,7 @@ skill**, choose the archive. The same by API:
 
 ```bash
 cd release-notes-style && zip -r ../release-notes-style.zip . && cd ..
-curl -s "$CHOREGOS_API_URL/api/v1/orgs/acme/skills/import" -H "Authorization: Bearer $CHOREGOS_TOKEN" \
+curl -s "$TRANIBOR_API_URL/api/v1/orgs/acme/skills/import" -H "Authorization: Bearer $TRANIBOR_TOKEN" \
   -H 'Content-Type: application/zip' --data-binary @release-notes-style.zip
 ```
 

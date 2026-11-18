@@ -103,11 +103,11 @@ export TOKEN=chg_...
 export A2A=https://choregos.example.com/a2a/orgs/acme
 ```
 
-The CLI finds the door from its profile (`choregos login`, or `CHOREGOS_API_URL` and `CHOREGOS_ORG`)
-and takes the token from `--token` or `CHOREGOS_A2A_TOKEN`:
+The CLI finds the door from its profile (`choregos login`, or `TRANIBOR_API_URL` and `TRANIBOR_ORG`)
+and takes the token from `--token` or `TRANIBOR_A2A_TOKEN`:
 
 ```shell
-export CHOREGOS_API_URL=https://choregos.example.com CHOREGOS_ORG=acme CHOREGOS_A2A_TOKEN=chg_...
+export TRANIBOR_API_URL=https://choregos.example.com TRANIBOR_ORG=acme TRANIBOR_A2A_TOKEN=chg_...
 ```
 
 Without either, it sends the profile's own token, usually a full-access one, which the door refuses

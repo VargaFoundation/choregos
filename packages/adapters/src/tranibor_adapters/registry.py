@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """The adapter factory: from the `connector.type` to the implementation.
 
-`CHOREGOS_FAKES=1` switches the whole platform to the in-memory fakes: it is the mode used by
+`TRANIBOR_FAKES=1` switches the whole platform to the in-memory fakes: it is the mode used by
 the tests, the front end's demo mode and `make demo`.
 """
 
@@ -269,8 +269,8 @@ def pooled(kind: str, type_name: str, resolved: dict[str, Any]) -> dict[str, Any
 
 
 def default_gateway_type() -> str:
-    """The gateway of a project that declares none: the deployment's (`CHOREGOS_GATEWAY_TYPE`)."""
-    return os.environ.get("CHOREGOS_GATEWAY_TYPE", "") or DEFAULT_TYPES["gateway"]
+    """The gateway of a project that declares none: the deployment's (`TRANIBOR_GATEWAY_TYPE`)."""
+    return os.environ.get("TRANIBOR_GATEWAY_TYPE", "") or DEFAULT_TYPES["gateway"]
 
 
 def default_type(kind: str) -> str | None:
@@ -284,8 +284,8 @@ def default_type(kind: str) -> str | None:
 def deployment_default_type(kind: str) -> str | None:
     """The type a DEPLOYMENT really provides for a capability, or None (S40-05).
 
-    Only `runtime` (the deployment's executor), `gateway` (`CHOREGOS_GATEWAY_TYPE`) and `memory`
-    (`ecphoria` when `CHOREGOS_MEMORY_URL` is set, `lexical` otherwise) are provided by a
+    Only `runtime` (the deployment's executor), `gateway` (`TRANIBOR_GATEWAY_TYPE`) and `memory`
+    (`ecphoria` when `TRANIBOR_MEMORY_URL` is set, `lexical` otherwise) are provided by a
     deployment. For every other kind, `default_type` names what the adapter factory would
     build with an empty configuration, which is not something that works: `argocd` without a
     GitOps repository and a token provides no CD. The console claims a platform default only
@@ -295,12 +295,12 @@ def deployment_default_type(kind: str) -> str | None:
     if kind == "gateway":
         return default_gateway_type()
     if kind == "memory":
-        return "ecphoria" if os.environ.get("CHOREGOS_MEMORY_URL", "") else "lexical"
+        return "ecphoria" if os.environ.get("TRANIBOR_MEMORY_URL", "") else "lexical"
     return None
 
 
 def fakes_enabled() -> bool:
-    return os.environ.get("CHOREGOS_FAKES", "") in {"1", "true", "yes"}
+    return os.environ.get("TRANIBOR_FAKES", "") in {"1", "true", "yes"}
 
 
 def default_executor_kind() -> str:
@@ -309,23 +309,23 @@ def default_executor_kind() -> str:
     `agent_sandbox` when the deployment says nothing: Tekton is no longer assumed, since it
     is absent from the clusters this platform runs on. A deployment that wants Tekton says so
     (`global.runner.executor: tekton`)."""
-    return os.environ.get("CHOREGOS_EXECUTOR_KIND", "") or "agent_sandbox"
+    return os.environ.get("TRANIBOR_EXECUTOR_KIND", "") or "agent_sandbox"
 
 
 def executors_declared() -> bool:
     """True when the deployment says which executors it runs (the chart always does)."""
     return bool(
-        os.environ.get("CHOREGOS_EXECUTOR_KIND", "") or os.environ.get("CHOREGOS_EXECUTORS_ALLOWED", "")
+        os.environ.get("TRANIBOR_EXECUTOR_KIND", "") or os.environ.get("TRANIBOR_EXECUTORS_ALLOWED", "")
     )
 
 
 def allowed_executor_kinds() -> list[str]:
     """The executors a project may pick as its `runtime`: the deployment's, plus the allowed ones.
 
-    `CHOREGOS_EXECUTORS_ALLOWED` is a comma-separated list (chart `global.runner.allowedExecutors`);
-    the default executor is always in it. `fake` is added under `CHOREGOS_FAKES`."""
+    `TRANIBOR_EXECUTORS_ALLOWED` is a comma-separated list (chart `global.runner.allowedExecutors`);
+    the default executor is always in it. `fake` is added under `TRANIBOR_FAKES`."""
     kinds = [default_executor_kind()]
-    for raw in os.environ.get("CHOREGOS_EXECUTORS_ALLOWED", "").split(","):
+    for raw in os.environ.get("TRANIBOR_EXECUTORS_ALLOWED", "").split(","):
         name = raw.strip()
         if name and name not in kinds:
             kinds.append(name)
@@ -337,11 +337,11 @@ def allowed_executor_kinds() -> list[str]:
 def with_custom_image_executor(executor: Any) -> Any:
     """On `agent_sandbox`, send a step that names its own image to a second executor (ADR 0072).
 
-    `CHOREGOS_CUSTOM_IMAGE_EXECUTOR` (chart `runner.customImageExecutor`) names it; empty keeps the
+    `TRANIBOR_CUSTOM_IMAGE_EXECUTOR` (chart `runner.customImageExecutor`) names it; empty keeps the
     sandbox executor's refusal. Nothing changes for any other executor, or when the pool's image
-    (`CHOREGOS_RUNNER_IMAGE`) is unknown, because an override cannot then be told from the default."""
-    secondary = os.environ.get("CHOREGOS_CUSTOM_IMAGE_EXECUTOR", "")
-    pool_image = os.environ.get("CHOREGOS_RUNNER_IMAGE", "")
+    (`TRANIBOR_RUNNER_IMAGE`) is unknown, because an override cannot then be told from the default."""
+    secondary = os.environ.get("TRANIBOR_CUSTOM_IMAGE_EXECUTOR", "")
+    pool_image = os.environ.get("TRANIBOR_RUNNER_IMAGE", "")
     if not secondary or not pool_image or str(getattr(executor, "kind", "")) != "agent_sandbox":
         return executor
     from .executor.routing import RoutingExecutor
@@ -353,7 +353,7 @@ def available(kind: ConnectorKind | str) -> list[str]:
     return sorted(type_name for (k, type_name) in _REGISTRY if k == str(kind))
 
 
-#: Types that stay themselves under `CHOREGOS_FAKES`: their fake is what they call, not the adapter. A
+#: Types that stay themselves under `TRANIBOR_FAKES`: their fake is what they call, not the adapter. A
 #: plugin tracker (S43-07) under fakes talks to the in-memory server of the tracker profile
 #: (`FakePluginTrackerServer`, the transport the API injects), so the profile mapping is what runs.
 #: The Teams notifier (S63-25) stays itself too: under fakes it posts its real card to `FakeTeamsWebhook`,
@@ -519,7 +519,7 @@ def validate_config(kind: str, type_name: str, config: dict[str, Any]) -> None:
 
     `fake_scene` is refused for every type (S57-11a): a person, a project or an organisation never binds a
     connector to a fake. Only the live eval matrix writes it, on the connectors of its own eval projects,
-    and the API honours it only when the deployment says so (`CHOREGOS_EVAL_FAKE_SCENES`)."""
+    and the API honours it only when the deployment says so (`TRANIBOR_EVAL_FAKE_SCENES`)."""
     if FAKE_SCENE_FIELD in config:
         raise ConfigurationError(
             f"`{FAKE_SCENE_FIELD}` binds a connector to a fake's scene for the live eval matrix (S57-11a): "

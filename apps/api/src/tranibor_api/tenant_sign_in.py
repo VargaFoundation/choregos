@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Each organisation signs in with its own identity provider (ADR 0108).
 
-The core knows one identity provider, the instance's (`CHOREGOS_OIDC_*`). A tenant that brings its
+The core knows one identity provider, the instance's (`TRANIBOR_OIDC_*`). A tenant that brings its
 own (an OIDC issuer, a SAML IdP) needs three things the core cannot decide alone: where that
 provider's settings are stored, which e-mail domains the tenant owns, and how a SAML assertion is
 verified. An extension (ADR 0024: the enterprise edition) answers them by declaring ONE resolver:
@@ -55,7 +55,7 @@ class SignInHint:
 
 @dataclass(frozen=True)
 class OidcProvider:
-    """A tenant's OpenID Connect provider: every option the instance's `CHOREGOS_OIDC_*` has, and more.
+    """A tenant's OpenID Connect provider: every option the instance's `TRANIBOR_OIDC_*` has, and more.
 
     The three endpoints are for a provider that publishes no discovery document: set all three or
     none. `require_email_verified` refuses an address the provider marks `email_verified: false`

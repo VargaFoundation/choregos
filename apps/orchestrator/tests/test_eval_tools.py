@@ -293,10 +293,10 @@ async def test_a_usage_with_requests_is_billed_as_that_many_model_calls(setup: F
 
 @pytest.fixture
 def scripts_on(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    monkeypatch.setenv("CHOREGOS_TOOL_SCRIPTS", "on")
+    monkeypatch.setenv("TRANIBOR_TOOL_SCRIPTS", "on")
     reset_settings_cache()
     yield
-    monkeypatch.delenv("CHOREGOS_TOOL_SCRIPTS", raising=False)
+    monkeypatch.delenv("TRANIBOR_TOOL_SCRIPTS", raising=False)
     reset_settings_cache()
 
 
@@ -341,17 +341,17 @@ async def test_the_kill_switch_skips_the_scripts_cell_and_still_wins_at_prepare_
     eval_project: Fixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     refused = await evals.seed_eval_ticket(_live("scripts"))
-    assert refused["skipped"] and "CHOREGOS_TOOL_SCRIPTS" in refused["reason"]
+    assert refused["skipped"] and "TRANIBOR_TOOL_SCRIPTS" in refused["reason"]
     assert not (await evals.seed_eval_ticket(_live("mcp")))["skipped"]
-    monkeypatch.setenv("CHOREGOS_TOOL_SCRIPTS", "on")
+    monkeypatch.setenv("TRANIBOR_TOOL_SCRIPTS", "on")
     reset_settings_cache()
     seeded = await evals.seed_eval_ticket(_live("scripts"))
-    monkeypatch.setenv("CHOREGOS_TOOL_SCRIPTS", "off")
+    monkeypatch.setenv("TRANIBOR_TOOL_SCRIPTS", "off")
     reset_settings_cache()
     try:
         prepared = await stage_activities.prepare_stage(seeded["plan"])
     finally:
-        monkeypatch.delenv("CHOREGOS_TOOL_SCRIPTS")
+        monkeypatch.delenv("TRANIBOR_TOOL_SCRIPTS")
         reset_settings_cache()
     assert "scripts" not in prepared["stage_input"]["tools"]
 
@@ -361,7 +361,7 @@ async def test_a_live_cell_skips_an_agent_case_where_the_deployment_serves_no_ev
 ) -> None:
     """Since S57-11a a live cell plays agent cases, on fake scenes only (`test_eval_live_agent_cases.py`)."""
     seeded = await evals.seed_eval_ticket(_live("mcp", agent_case=E1, fixture=E1))
-    assert seeded["skipped"] and "CHOREGOS_EVAL_FAKE_SCENES" in seeded["reason"]
+    assert seeded["skipped"] and "TRANIBOR_EVAL_FAKE_SCENES" in seeded["reason"]
 
 
 async def _run(setup: Fixture, tools: str, events: list[tuple[str, dict[str, Any]]]) -> dict[str, Any]:

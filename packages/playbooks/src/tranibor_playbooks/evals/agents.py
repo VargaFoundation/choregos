@@ -257,7 +257,7 @@ async def evidence(case: dict[str, Any]) -> dict[str, Any]:
         if "kind" not in call:
             continue
         kind = str(call["kind"])
-        # The kind's FAKE, whatever `CHOREGOS_FAKES` says: the evidence is the recording, by design.
+        # The kind's FAKE, whatever `TRANIBOR_FAKES` says: the evidence is the recording, by design.
         connector = (
             scene(kind, scenes[kind]).connector
             if kind in scenes
@@ -400,8 +400,8 @@ def _ask_the_model(case: dict[str, Any], instructions: str, tools: dict[str, Any
     """The live answer through the gateway; `None` when no gateway is configured."""
     import httpx
 
-    base_url = os.environ.get("CHOREGOS_GATEWAY_URL", "")
-    key = os.environ.get("CHOREGOS_GATEWAY_KEY", "")
+    base_url = os.environ.get("TRANIBOR_GATEWAY_URL", "")
+    key = os.environ.get("TRANIBOR_GATEWAY_KEY", "")
     if not base_url or not key:
         return None
     from tranibor_core.instructions import render_instructions
@@ -462,7 +462,7 @@ def evaluate_agent_case(
             result.reason = f"live answer unavailable: {str(error)[:200]}"
             return result
         if answer is None:
-            result.reason = "no gateway configured (CHOREGOS_GATEWAY_URL / CHOREGOS_GATEWAY_KEY)"
+            result.reason = "no gateway configured (TRANIBOR_GATEWAY_URL / TRANIBOR_GATEWAY_KEY)"
     if answer is None:
         return result
     score, absent, forbidden, out_of_order = score_answer(case, answer)

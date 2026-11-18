@@ -7,7 +7,7 @@ start-up: a test plugin `itsm` registers `close_incident`, which runs once the t
 passed. A workflow naming it is published, the real interpreter crosses the transition on Temporal's
 test server, and the history replays without the extension (the interpreter never reads the registry:
 `run_step_effect`'s answers are in the history). It is archived for `tests/replay`
-(`CHOREGOS_RECORD_HISTORY=1`).
+(`TRANIBOR_RECORD_HISTORY=1`).
 """
 
 from __future__ import annotations

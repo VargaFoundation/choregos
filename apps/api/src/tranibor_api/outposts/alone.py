@@ -4,7 +4,7 @@
 The API serves the door as one more router. Polls wait by the hundred, each for 25 seconds: where a
 deployment splits the door out, this is what its Deployment runs, from the API image, so that those
 requests take no worker and no pooled connection from the console and the runs
-(`CHOREGOS_DB_POOL_SIZE`, `CHOREGOS_DB_MAX_OVERFLOW`: this process's own pool).
+(`TRANIBOR_DB_POOL_SIZE`, `TRANIBOR_DB_MAX_OVERFLOW`: this process's own pool).
 
 What it holds, and nothing else:
 
@@ -128,7 +128,7 @@ def create_app() -> FastAPI:
     settings = get_settings()
     if not settings.outposts:
         raise RuntimeError(
-            "CHOREGOS_OUTPOSTS is off: a process that serves the outposts' door alone has nothing to "
+            "TRANIBOR_OUTPOSTS is off: a process that serves the outposts' door alone has nothing to "
             "serve. Switch outposts on, or do not run it."
         )
     # An edition's key wrapper registers itself here, as it does in the API (ADR 0103): without it

@@ -103,7 +103,7 @@ def test_the_migration_names_the_plugin_and_records_it(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     database = tmp_path / "provenance.db"
-    monkeypatch.setenv("CHOREGOS_DATABASE_URL", f"sqlite+aiosqlite:///{database}")
+    monkeypatch.setenv("TRANIBOR_DATABASE_URL", f"sqlite+aiosqlite:///{database}")
     get_settings.cache_clear()
     url = f"sqlite:///{database}"
     engine = create_engine(url)

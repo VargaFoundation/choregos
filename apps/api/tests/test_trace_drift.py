@@ -266,10 +266,10 @@ async def test_without_a_tempo_address_the_job_refuses(
     from tranibor_api import trace_drift
     from tranibor_api.config import reset_settings_cache
 
-    monkeypatch.delenv("CHOREGOS_TEMPO_URL", raising=False)
+    monkeypatch.delenv("TRANIBOR_TEMPO_URL", raising=False)
     reset_settings_cache()
     assert await trace_drift._main(24, 0) == 2
-    assert "CHOREGOS_TEMPO_URL" in capsys.readouterr().err
+    assert "TRANIBOR_TEMPO_URL" in capsys.readouterr().err
 
 
 async def test_the_job_fails_when_tempo_errs_and_prints_its_report(
@@ -281,7 +281,7 @@ async def test_the_job_fails_when_tempo_errs_and_prints_its_report(
     from tranibor_api.config import reset_settings_cache
 
     await _run(project["id"], tokens=(10, 5))
-    monkeypatch.setenv("CHOREGOS_TEMPO_URL", "http://tempo.invalid:3200")
+    monkeypatch.setenv("TRANIBOR_TEMPO_URL", "http://tempo.invalid:3200")
     reset_settings_cache()
 
     class Down(trace_drift.TempoReader):

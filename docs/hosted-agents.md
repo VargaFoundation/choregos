@@ -27,13 +27,13 @@ Azure AI Foundry's Agent Service, so that an agent built for it runs here unchan
 **The contract (S41-01) and the image supply chain (S41-02).** The registry accepts and validates the
 three runtimes; the stage input carries `hosted` and `prompt` steps. Nothing runs them yet:
 
-- a hosted **image** is accepted only under a prefix of `CHOREGOS_HOSTED_REGISTRIES`
+- a hosted **image** is accepted only under a prefix of `TRANIBOR_HOSTED_REGISTRIES`
   (`global.images.hostedRegistries`, matched by path segment); outside it, the version is refused
   before anything is fetched. Publication (create, publish, trial, template install) resolves the tag
   to the digest the registry serves and writes it in the version; a digest the caller wrote is resolved
   again, never trusted; a restore keeps the digest it was published with. The manifest is read through
   the organisation's egress allowlist, anonymously;
-- `CHOREGOS_HOSTED_COSIGN`: `enforce` refuses an image without a trusted signature, `warn` publishes it
+- `TRANIBOR_HOSTED_COSIGN`: `enforce` refuses an image without a trusted signature, `warn` publishes it
   and logs `hosted.signature_unverified`, `off` (the default) does not ask. The verifier is cosign
   (S41-14, below);
 - a hosted **zip** source names a zip uploaded first (S41-07, below); publication builds it (S41-08);
@@ -42,7 +42,7 @@ three runtimes; the stage input carries `hosted` and `prompt` steps. Nothing run
 
 What the validation already refuses: a `backend` on any of the three, `skills` on voice and hosted,
 a voice agent without a model, a hosted port on the runner's loopback listeners (4001-4003), a hosted
-`env` naming a reserved variable (`PORT`, the proxy variables, anything under `CHOREGOS_`,
+`env` naming a reserved variable (`PORT`, the proxy variables, anything under `TRANIBOR_`,
 `FOUNDRY_`, `OPENAI_`, `ANTHROPIC_`, `AZURE_`), a protocol listed twice, a zip runtime the platform
 has no base image for.
 
@@ -76,8 +76,8 @@ waits for the container (`GET /readiness`, up to `readiness_timeout_s`), sends i
   (`choregos-loopback`) is accepted. Every call is a turn: past `max_turns` the call is answered 400
   `max_turns` and never forwarded (`hosted.model_refused`); not 429, which every SDK retries (Claude
   Code until its own timeout, found by S41-06). A gateway budget refusal ends the step on `budget`;
-- **the MCP servers, on `:4002`** (`CHOREGOS_MCP_URL=http://127.0.0.1:4002/mcp/`, then the server's
-  name; `CHOREGOS_MCP_SERVERS` lists them): only the step's granted servers are served (any other is
+- **the MCP servers, on `:4002`** (`TRANIBOR_MCP_URL=http://127.0.0.1:4002/mcp/`, then the server's
+  name; `TRANIBOR_MCP_SERVERS` lists them): only the step's granted servers are served (any other is
   404, `hosted.mcp_refused`), only on a host the step's network allows. Each `tools/call` is judged by
   the run's guard rails and journaled as `session/request_permission`; a refusal answers a tool error
   and never reaches the server. The server's credential is added by the runner;
@@ -87,8 +87,8 @@ waits for the container (`GET /readiness`, up to `readiness_timeout_s`), sends i
   (`hosted.egress`, `hosted.egress_refused`).
 
 The container's environment (`tranibor_core.hosted.sidecar_env`) holds the version's own variables,
-then the platform's, which win: `PORT`, `CHOREGOS_RUN_ID`, `CHOREGOS_AGENT_SLUG`,
-`CHOREGOS_AGENT_VERSION`, `CHOREGOS_MODEL`, the addresses above, `NO_PROXY`. It holds no credential:
+then the platform's, which win: `PORT`, `TRANIBOR_RUN_ID`, `TRANIBOR_AGENT_SLUG`,
+`TRANIBOR_AGENT_VERSION`, `TRANIBOR_MODEL`, the addresses above, `NO_PROXY`. It holds no credential:
 not the run's key, not the run token, not an MCP server's header.
 
 The answer: a JSON object with a `status` is the step's result, validated like `result.json`; any
@@ -102,7 +102,7 @@ and under `workspace: write` none does (see below).
 
 - `none` (the default): no repository; the step is not cloned.
 - `read`: the runner clones, then copies the working tree into a volume the two containers share,
-  mounted read-only at `/workspace` (`CHOREGOS_WORKSPACE`). The copy has no `.git` and none of the
+  mounted read-only at `/workspace` (`TRANIBOR_WORKSPACE`). The copy has no `.git` and none of the
   runner's files (`transcript.jsonl`, `result.json`, `acp-session.json`); the task is there.
 - `write`: the same copy, writable. After the answer the runner brings back what changed, one file
   at a time, each judged as an ACP agent's write is (the allowed paths, the sensitive files). A
@@ -153,7 +153,7 @@ The run's pod then holds two containers:
 1.29): the agent becomes a plain init container that never exits, and the runner never starts. The
 platform refuses it twice, with the error `hosted_unsupported_cluster`:
 
-- **at publication**: the chart renders the cluster's version as `CHOREGOS_CLUSTER_VERSION` on the
+- **at publication**: the chart renders the cluster's version as `TRANIBOR_CLUSTER_VERSION` on the
   API (`global.kubernetesVersion`, or the version Helm or Argo CD renders for), and a hosted version
   is refused with a 422 below 1.29. Unset (`docker compose`, `make dev-up`), nothing is checked;
 - **at start**: `KubernetesJobExecutor` reads the API server's `/version` (its `gitVersion`, such as
@@ -171,7 +171,7 @@ runner and the agent's sidecar share one sandbox and its loopback. The project's
 applied the directory without it) refuses any pod of `proj-<slug>-runners` without it, and the Jobs
 the executor creates through autogen. What it proves:
 
-- `tests/conformance/hosted/test_hosted_under_gvisor.py` (marker `gvisor`, `CHOREGOS_TEST_RUNSC`)
+- `tests/conformance/hosted/test_hosted_under_gvisor.py` (marker `gvisor`, `TRANIBOR_TEST_RUNSC`)
   runs the eight checks with the agent inside `runsc do` (rootless, the host's network): the Python
   and Node references pass them, their log showing the sentry's kernel, and the agents that ignore
   SIGTERM or open a tunnel still fail theirs;
@@ -183,7 +183,7 @@ the executor creates through autogen. What it proves:
 - `tests/cluster/test_hosted_native_sidecar.py`, `test_hosted_session_pod.py` (S41-24) run the native
   sidecar, the refusal below 1.29, a session's pod with the real runner image and the shared
   workspace's `fsGroup` on kind; the `hosted-cluster` CI job runs them with the gVisor one and fails
-  on a skip. They need `CHOREGOS_HOSTED_REFERENCE_IMAGE` and `CHOREGOS_HOSTED_RUNNER_IMAGE`, images
+  on a skip. They need `TRANIBOR_HOSTED_REFERENCE_IMAGE` and `TRANIBOR_HOSTED_RUNNER_IMAGE`, images
   loaded into the cluster (`tests/cluster/assets/runner.Dockerfile` is the slim runner). runsc does
   not start a pod in kind over WSL2 (cgroup v1): run the gVisor test on a cgroup v2 host.
 
@@ -215,9 +215,9 @@ built. The blocking CI runs the reference as a process, and, in the `hosted-imag
 builds every example (the zips through the platform's own Dockerfile and `LocalDockerBuilder`, into a
 registry) and runs each image through the suite; the `hosted-docker` job runs a hosted container in
 the runner's workspace volume and relays a real container's `/invocations_ws`. Locally:
-`CHOREGOS_TEST_HOSTED_DOCKER=1 CHOREGOS_TEST_HOSTED_REGISTRY=localhost:5055 pytest tests/conformance/hosted_real`
+`TRANIBOR_TEST_HOSTED_DOCKER=1 TRANIBOR_TEST_HOSTED_REGISTRY=localhost:5055 pytest tests/conformance/hosted_real`
 (with `docker run -d -p 5055:5000 registry:2`). Under Docker Desktop, `--network=host` is the VM's, so
-the harness joins the agent to a socat relay container; `CHOREGOS_CONFORMANCE_DOCKER_NETWORK=relay|host`
+the harness joins the agent to a socat relay container; `TRANIBOR_CONFORMANCE_DOCKER_NETWORK=relay|host`
 forces the choice. `.github/workflows/hosted-agent-examples.yml` (nightly, non-blocking) is the older,
 hand-written version of the same builds.
 
@@ -289,14 +289,14 @@ before the files are copied; .NET is two stages: `dotnet publish` in the SDK ima
 `RUN`, so a project name is never read by a shell), then the published output alone on the ASP.NET
 runtime, which has no SDK.
 
-| Key of `CHOREGOS_HOSTED_BASE_IMAGES` | Default, pinned by digest |
+| Key of `TRANIBOR_HOSTED_BASE_IMAGES` | Default, pinned by digest |
 | --- | --- |
 | `python_3_12`, `python_3_13`, `python_3_14` | `docker.io/library/python:3.1x-slim-bookworm` |
 | `node_22` | `docker.io/library/node:22-bookworm-slim` |
 | `dotnet_10` | `mcr.microsoft.com/dotnet/aspnet:10.0` (where the agent runs) |
 | `dotnet_10_sdk` | `mcr.microsoft.com/dotnet/sdk:10.0` (where a `remote_build` is published) |
 
-The operator replaces any of them with `CHOREGOS_HOSTED_BASE_IMAGES` (JSON, merged over the
+The operator replaces any of them with `TRANIBOR_HOSTED_BASE_IMAGES` (JSON, merged over the
 defaults); a base without a digest is refused, and an empty value takes the runtime away: its
 versions are then refused, saying which runtimes the platform builds (an empty `dotnet_10_sdk`
 leaves `bundled` .NET zips and refuses `remote_build` ones). The version gets `build: {status:
@@ -316,7 +316,7 @@ shared by every version of the same zip; the API's answers show it in `runtime.b
 `building`, `ready` with its `image`, or `failed` with its `error`, the end of the build's log). The
 first publication of a key starts the `HostedImageBuild` workflow: it claims the build, builds on
 the orchestrator's `executor` queue (the worker that holds the push credential), and records the
-outcome. The image is pushed to `CHOREGOS_HOSTED_BUILD_REPOSITORY` (`global.images.buildRegistry`)
+outcome. The image is pushed to `TRANIBOR_HOSTED_BUILD_REPOSITORY` (`global.images.buildRegistry`)
 as `build-<key>` and run by its digest; without a repository the build fails, saying so.
 
 - A version of a key already built starts nothing and moves its channels at once; a replayed build
@@ -327,7 +327,7 @@ as `build-<key>` and run by its digest; without a repository the build fails, sa
   production where it is.
 - A failed build is not retried (the same inputs fail the same way). Publishing a version of the
   same zip again starts the next attempt; the previous attempt, replayed, builds nothing.
-- `CHOREGOS_HOSTED_BUILDER`: `buildkit` (`buildctl` against `CHOREGOS_BUILDKIT_ADDRESS`, a rootless
+- `TRANIBOR_HOSTED_BUILDER`: `buildkit` (`buildctl` against `TRANIBOR_BUILDKIT_ADDRESS`, a rootless
   `buildkitd`) or `local_docker` (`docker build` and `docker push`, a laptop). The zip never leaves
   the platform: its archive is the build context.
 
@@ -345,7 +345,7 @@ carries `buildctl`, copied from the very image the chart deploys.
   mounted in the builder only; the worker that sends the build holds none.
 - **Mutual TLS**: `global.buildkitd.tls.serverSecret` and `clientSecret`, two `kubernetes.io/tls`
   Secrets carrying `ca.crt` (cert-manager writes them so). The worker then gets
-  `CHOREGOS_BUILDKIT_TLS_DIR` and passes `--tlscacert`, `--tlscert`, `--tlskey`; without them the
+  `TRANIBOR_BUILDKIT_TLS_DIR` and passes `--tlscacert`, `--tlscert`, `--tlskey`; without them the
   gRPC is plain and the NetworkPolicy alone keeps other pods off it.
 - **Network**: the builder admits the orchestrator alone, on its port, and reaches DNS and the
   Internet's `egressPorts` (443, 80), never a private range; a registry inside the network is named
@@ -464,13 +464,13 @@ answered 404, and on PostgreSQL a restrictive policy on `agent_sessions` and
 gateway's realtime socket (`ws(s)://<gateway>/realtime?model=…`), with the session's key.
 
 - **Before the socket is accepted**: a browser's `Origin` must be the console's, the API's or one of
-  `choregos-api.corsOrigins` (`CHOREGOS_CORS_ORIGINS`, rendered by the chart; no `Origin` — a CLI, a server — passes); the caller signs in with the session
+  `choregos-api.corsOrigins` (`TRANIBOR_CORS_ORIGINS`, rendered by the chart; no `Origin` — a CLI, a server — passes); the caller signs in with the session
   cookie or an API token and needs `item.control`, as for `/responses`; the organisation's gateway
   must declare the `realtime` capability; the session is opened (one key, the same reservation) and
   the upstream socket connected. Any refusal closes with 1008 and its reason, and no key outlives it.
 - **The agent owns the session**: the relay sends one `session.update` (the agent's instructions,
   voice, PCM16 24 kHz audio, turn detection, input transcription with
-  `CHOREGOS_REALTIME_TRANSCRIPTION_MODEL`, the grant's read tools), then the greeting. A caller's
+  `TRANIBOR_REALTIME_TRANSCRIPTION_MODEL`, the grant's read tools), then the greeting. A caller's
   `session.update`, a `response.create` carrying its own `response`, a `conversation.item.create`
   that is not its own `input_text`/`input_audio` message (a `function_call_output` would forge a
   tool's answer) and any other event outside the audio buffer, cancel, truncate and delete events
@@ -508,7 +508,7 @@ prices a realtime socket late or not at all, while an audio token costs several 
   kept in `session.closed` as `gateway_cost_usd`, for comparison only. A voice session that never
   answered books what the gateway counted, as before.
 - **Live check**: `tests/live/test_realtime_live.py` (`make test-live`, with
-  `CHOREGOS_LIVE_LITELLM_URL`, `CHOREGOS_LIVE_LITELLM_KEY` and `CHOREGOS_LIVE_REALTIME_MODEL`) opens a
+  `TRANIBOR_LIVE_LITELLM_URL`, `TRANIBOR_LIVE_LITELLM_KEY` and `TRANIBOR_LIVE_REALTIME_MODEL`) opens a
   real realtime socket through the gateway and prices its `response.done`.
 
 **A person talks to a hosted agent directly (S41-11).** The same `POST /orgs/{org}/agents/{slug}/responses`,
@@ -533,7 +533,7 @@ agent's own container, in a pod of its own.
   model calls **per turn**, 20 by default) or `budget_exceeded`, which also closes the session.
 - **The walls are a step's**: the model through the loopback with the session's key, the CONNECT
   proxy with the session's network, and the session's tools served by the runner itself on
-  `/mcp/choregos` (`CHOREGOS_MCP_SERVERS=choregos`): each `tools/call` is judged by the guard rails,
+  `/mcp/choregos` (`TRANIBOR_MCP_SERVERS=choregos`): each `tools/call` is judged by the guard rails,
   then sent through the internal API to the courtier as a prompt session's. No other MCP server is
   served. What the runner saw — refused model calls, tool calls — is journaled with the turn.
 - **A tool's answer keeps its meaning** (#1349), as a run's does through its tool server (S57-04):
@@ -543,7 +543,7 @@ agent's own container, in a pod of its own.
   the calls (`budgets.tool_calls_per_run`, counted on the session). A status of 400 or more — a
   provider's refusal, arguments the schema refuses (`400`), the cap reached (`429`), a result withheld
   under `block` (`451`) — is `isError`. A session is offered reads only, so no answer is a proposal.
-- **The pod stops** at the first of: the session closed (`DELETE`, a spent key), `CHOREGOS_HOSTED_SESSION_IDLE_S`
+- **The pod stops** at the first of: the session closed (`DELETE`, a spent key), `TRANIBOR_HOSTED_SESSION_IDLE_S`
   without a response (600 s by default; each response restarts the wait), the session's expiry.
   Stopping fails the turns still waiting, cancels the pod and closes the session with that reason;
   replayed, it changes nothing.
@@ -594,9 +594,9 @@ Publication asks the `cosign` binary the API image carries (v3.1.4) about the **
 
 - **By key**: `global.images.hostedCosignKeySecret` names a Secret of the release's namespace holding
   the public key under `cosign.pub`. The chart mounts it on the API
-  (`CHOREGOS_HOSTED_COSIGN_KEY=/etc/choregos/cosign/cosign.pub`; the variable also takes a KMS URI
+  (`TRANIBOR_HOSTED_COSIGN_KEY=/etc/choregos/cosign/cosign.pub`; the variable also takes a KMS URI
   cosign reads).
-- **Keyless**: `hostedCosignIdentity` and `hostedCosignIssuer` (`CHOREGOS_HOSTED_COSIGN_IDENTITY`,
+- **Keyless**: `hostedCosignIdentity` and `hostedCosignIssuer` (`TRANIBOR_HOSTED_COSIGN_IDENTITY`,
   `_ISSUER`), the certificate's subject and its OIDC issuer as regular expressions. Cosign searches
   them **anchored** (`^(?:…)$`: cosign searches, so a bare `a@b` would accept `evil-a@b.evil`) and,
   when cosign reports the certificate (a legacy signature), the API matches its subject and issuer
@@ -604,7 +604,7 @@ Publication asks the `cosign` binary the API image carries (v3.1.4) about the **
   own exit code, with the anchored expressions, is the verdict (proved against the real Sigstore,
   S41-25). `https://github\.com/acme/.+` does not accept `https://evil.example/?https://github.com/acme/x`.
   Anchor them anyway (`^…$`): Kyverno searches them too.
-- `hostedCosignTlog: false` (`CHOREGOS_HOSTED_COSIGN_TLOG`) skips the transparency log, for a key
+- `hostedCosignTlog: false` (`TRANIBOR_HOSTED_COSIGN_TLOG`) skips the transparency log, for a key
   whose signatures were never uploaded to Rekor.
 
 A signature counts only when cosign accepts it **and** its payload names the pinned digest: a

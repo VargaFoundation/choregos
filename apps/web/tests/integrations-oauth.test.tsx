@@ -38,7 +38,7 @@ describe("the Integrations page offers single sign-on (S15-09)", () => {
     expect(screen.queryByRole("button", { name: /Create an access token/ })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Use an MCP token instead" }));
-    expect(await screen.findByText(/--header "Authorization: Bearer \$CHOREGOS_TOKEN"/)).toBeInTheDocument();
+    expect(await screen.findByText(/--header "Authorization: Bearer \$TRANIBOR_TOKEN"/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Create an access token/ })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Sign in with single sign-on instead" }));

@@ -594,8 +594,8 @@ def test_registry_builds_the_family_and_the_composite_gets_its_secrets_by_type(
 ) -> None:
     from tranibor_adapters import build, spec_of
 
-    # `CHOREGOS_FAKES=1` (set by the API's suite when everything runs together) would build the fake.
-    monkeypatch.setenv("CHOREGOS_FAKES", "0")
+    # `TRANIBOR_FAKES=1` (set by the API's suite when everything runs together) would build the fake.
+    monkeypatch.setenv("TRANIBOR_FAKES", "0")
 
     for name in ("stooq", "yahoo", "alphavantage", "tiingo", "composite"):
         spec = spec_of("marketdata", name)

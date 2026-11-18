@@ -119,7 +119,7 @@ async def test_under_container_a_run_on_an_executor_that_cannot_isolate_is_refus
     from tranibor_core.agent_isolation import AGENT_ISOLATION_UNAVAILABLE
     from tranibor_orchestrator.config import get_settings
 
-    monkeypatch.setenv("CHOREGOS_RUNNER_AGENT_ISOLATION", "container")
+    monkeypatch.setenv("TRANIBOR_RUNNER_AGENT_ISOLATION", "container")
     get_settings.cache_clear()
     try:
         executor = FakeExecutor(capabilities=frozenset({"queue"}))
@@ -145,7 +145,7 @@ async def test_under_container_an_executor_that_isolates_is_handed_the_word(
 ) -> None:
     from tranibor_orchestrator.config import get_settings
 
-    monkeypatch.setenv("CHOREGOS_RUNNER_AGENT_ISOLATION", "container")
+    monkeypatch.setenv("TRANIBOR_RUNNER_AGENT_ISOLATION", "container")
     get_settings.cache_clear()
     try:
         executor = FakeExecutor()

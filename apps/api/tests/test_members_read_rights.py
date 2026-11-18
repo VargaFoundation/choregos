@@ -22,7 +22,7 @@ def land_in_acme(project: dict[str, Any], monkeypatch: pytest.MonkeyPatch) -> It
     """
     from tranibor_api.config import reset_settings_cache
 
-    monkeypatch.setenv("CHOREGOS_OIDC_DEFAULT_ORG", "acme")
+    monkeypatch.setenv("TRANIBOR_OIDC_DEFAULT_ORG", "acme")
     reset_settings_cache()
     yield
     reset_settings_cache()

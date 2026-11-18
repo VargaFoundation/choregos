@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """A direct MCP server signed in with OAuth client credentials (RFC 6749 §4.4).
 
-The connector is built as the platform builds it (`build("mcp", "mcp", …)` under CHOREGOS_FAKES, so the
+The connector is built as the platform builds it (`build("mcp", "mcp", …)` under TRANIBOR_FAKES, so the
 server is the scriptable `FakeMcpServer` and the token endpoint the scriptable `FakeOAuthProvider`). Each
 test fails without the guard it names: the token kept until shortly before it expires, a token the
 server refuses fetched again once and only once, a wrong secret refused by name, the token endpoint held
@@ -38,7 +38,7 @@ CONFIG: dict[str, Any] = {
 
 @pytest.fixture
 def provider(monkeypatch: pytest.MonkeyPatch) -> Iterator[FakeOAuthProvider]:
-    monkeypatch.setenv("CHOREGOS_FAKES", "1")
+    monkeypatch.setenv("TRANIBOR_FAKES", "1")
     fake = FakeOAuthProvider(client_id="choregos-reader", client_secret=SECRET)
     monkeypatch.setattr(tranibor_adapters, "FAKE_OAUTH", fake)
     CONNECTOR_TOKENS.clear()
@@ -157,7 +157,7 @@ async def test_without_its_secret_the_connector_is_not_built(provider: FakeOAuth
 
 
 async def test_bearer_and_basic_connectors_are_unchanged(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("CHOREGOS_FAKES", "1")
+    monkeypatch.setenv("TRANIBOR_FAKES", "1")
     fake = FakeMcpServer(tools=[dict(t) for t in TOOLS], token="static-key")
     monkeypatch.setattr(tranibor_adapters, "FAKE_MCP", fake)
     client = build("mcp", "mcp", {"url": "https://data.example.test/mcp", "token": "static-key"})
@@ -196,13 +196,13 @@ def test_the_token_endpoint_is_a_host_the_connector_opens() -> None:
 def test_an_incoherent_configuration_is_refused_before_it_is_saved(
     over: dict[str, Any], refusal: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
+    monkeypatch.delenv("TRANIBOR_FAKES", raising=False)
     config = {key: value for key, value in {**CONFIG, **over}.items() if value is not None}
     with pytest.raises(AdapterError, match=refusal):
         validate_config("mcp", "mcp", config)
 
 
 def test_a_coherent_configuration_passes(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
+    monkeypatch.delenv("TRANIBOR_FAKES", raising=False)
     validate_config("mcp", "mcp", CONFIG)
     validate_config("mcp", "mcp", {"url": "https://data.example.test/mcp", "auth_scheme": "basic"})

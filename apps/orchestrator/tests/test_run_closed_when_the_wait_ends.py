@@ -383,7 +383,7 @@ async def _waiting_for_a_lock() -> int:
         await connection.close()
 
 
-@pytest.mark.skipif(not ON_POSTGRES, reason="CHOREGOS_TEST_ORCH_ON_POSTGRES is not set")
+@pytest.mark.skipif(not ON_POSTGRES, reason="TRANIBOR_TEST_ORCH_ON_POSTGRES is not set")
 async def test_a_result_being_posted_is_waited_for_not_overwritten(setup: Fixture) -> None:
     """The runner's result is written and not committed yet when the wait ends. The close reads the
     row under the lock an update takes: it waits for the post, then leaves the result alone.

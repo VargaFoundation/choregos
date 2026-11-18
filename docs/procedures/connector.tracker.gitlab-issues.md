@@ -7,7 +7,7 @@ For a project owner. Procedure `connector.tracker.gitlab-issues`, version 2, rev
 ## Before you start
 
 - A GitLab project where you are a Maintainer (to create a token and a webhook).
-- The platform's shared webhook secret (`CHOREGOS_GENERIC_WEBHOOK_SECRET`), held by whoever operates
+- The platform's shared webhook secret (`TRANIBOR_GENERIC_WEBHOOK_SECRET`), held by whoever operates
   Tranibor: GitLab sends it as the webhook's secret token, and without it the endpoint refuses every
   delivery.
 

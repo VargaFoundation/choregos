@@ -1,6 +1,6 @@
 """The deployment's settings for outposts (S65-11): the switch, the door's origin, the door's keys.
 
-`CHOREGOS_OUTPOSTS` is off unless turned on (ADR 0147 §12). The door's origin is what an outpost's
+`TRANIBOR_OUTPOSTS` is off unless turned on (ADR 0147 §12). The door's origin is what an outpost's
 policy file names as `control_plane`. The door signs every call with one Ed25519 key, a secret of the
 installation, and announces others beside it for a rotation: their public halves are the `door_keys`
 an operator pins (ADR 0148 §13). A value that could not work is refused when the API starts, not
@@ -20,10 +20,10 @@ from tranibor_contracts.outpost import MAX_DOOR_KEYS, PUBLIC_KEY_PATTERN, Outpos
 from .kits import outposts as kit
 
 VARIABLES = (
-    "CHOREGOS_OUTPOSTS",
-    "CHOREGOS_OUTPOSTS_DOOR_URL",
-    "CHOREGOS_OUTPOSTS_DOOR_SIGNING_KEY",
-    "CHOREGOS_OUTPOSTS_DOOR_ANNOUNCED_KEYS",
+    "TRANIBOR_OUTPOSTS",
+    "TRANIBOR_OUTPOSTS_DOOR_URL",
+    "TRANIBOR_OUTPOSTS_DOOR_SIGNING_KEY",
+    "TRANIBOR_OUTPOSTS_DOOR_ANNOUNCED_KEYS",
 )
 
 
@@ -48,7 +48,7 @@ def test_outposts_are_off_and_the_door_has_nothing_until_an_operator_says_so() -
 
 @pytest.mark.parametrize(("written", "read"), [("on", True), ("off", False), ("true", True), ("0", False)])
 def test_the_switch_reads_on_and_off(monkeypatch: pytest.MonkeyPatch, written: str, read: bool) -> None:
-    monkeypatch.setenv("CHOREGOS_OUTPOSTS", written)
+    monkeypatch.setenv("TRANIBOR_OUTPOSTS", written)
     assert _settings().outposts is read  # type: ignore[attr-defined]
 
 
@@ -56,9 +56,9 @@ def test_the_doors_keys_are_the_one_that_signs_then_the_announced_ones(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     door = kit.door_keys()
-    monkeypatch.setenv("CHOREGOS_OUTPOSTS_DOOR_SIGNING_KEY", door.signing_pem)
-    monkeypatch.setenv("CHOREGOS_OUTPOSTS_DOOR_ANNOUNCED_KEYS", f'["{door.announced}"]')
-    monkeypatch.setenv("CHOREGOS_OUTPOSTS_DOOR_URL", "https://Outposts.Example.com:443")
+    monkeypatch.setenv("TRANIBOR_OUTPOSTS_DOOR_SIGNING_KEY", door.signing_pem)
+    monkeypatch.setenv("TRANIBOR_OUTPOSTS_DOOR_ANNOUNCED_KEYS", f'["{door.announced}"]')
+    monkeypatch.setenv("TRANIBOR_OUTPOSTS_DOOR_URL", "https://Outposts.Example.com:443")
     settings = _settings()
     keys = settings.outposts_door_keys  # type: ignore[attr-defined]
     assert keys == [door.signing_public, door.announced], "only the public half of the key that signs"
@@ -102,7 +102,7 @@ def test_announced_keys_alone_are_not_keys_to_pin() -> None:
     ],
 )
 def test_a_door_url_that_is_not_an_origin_is_refused(origin: str) -> None:
-    with pytest.raises(ValueError, match="CHOREGOS_OUTPOSTS_DOOR_URL is not an origin"):
+    with pytest.raises(ValueError, match="TRANIBOR_OUTPOSTS_DOOR_URL is not an origin"):
         _settings(outposts_door_url=origin)
 
 
@@ -120,7 +120,7 @@ def test_a_signing_key_that_is_not_an_ed25519_private_key_is_refused() -> None:
         (kit.signing_key(), "not a PEM private key"),  # a public key, in the contract's spelling
         (other.decode(), "an Ed25519 key is expected"),
     ):
-        with pytest.raises(ValueError, match=f"CHOREGOS_OUTPOSTS_DOOR_SIGNING_KEY: {why}") as refused:
+        with pytest.raises(ValueError, match=f"TRANIBOR_OUTPOSTS_DOOR_SIGNING_KEY: {why}") as refused:
             _settings(outposts_door_signing_key=unusable)
         assert "MC4CAQAw" not in str(refused.value.errors()[0]["msg"]), "the message quotes no key"
 

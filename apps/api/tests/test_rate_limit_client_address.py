@@ -38,9 +38,9 @@ async def test_a_forged_forwarded_for_buys_no_new_window(
     from tranibor_api.config import reset_settings_cache
     from tranibor_api.main import create_app
 
-    monkeypatch.setenv("CHOREGOS_RATE_LIMIT_PER_MINUTE", "2")
-    monkeypatch.delenv("CHOREGOS_TRUSTED_PROXY_CIDRS", raising=False)
-    monkeypatch.delenv("CHOREGOS_TRUSTED_PROXY_HOPS", raising=False)
+    monkeypatch.setenv("TRANIBOR_RATE_LIMIT_PER_MINUTE", "2")
+    monkeypatch.delenv("TRANIBOR_TRUSTED_PROXY_CIDRS", raising=False)
+    monkeypatch.delenv("TRANIBOR_TRUSTED_PROXY_HOPS", raising=False)
     reset_settings_cache()
     try:
         app = create_app()
@@ -62,11 +62,11 @@ async def test_the_middleware_keys_on_the_trusted_proxy_address(
     from tranibor_api.config import reset_settings_cache
     from tranibor_api.main import create_app
 
-    monkeypatch.setenv("CHOREGOS_RATE_LIMIT_PER_MINUTE", "1")
+    monkeypatch.setenv("TRANIBOR_RATE_LIMIT_PER_MINUTE", "1")
     # the test transport's TCP peer, named rather than left to httpx's default, is the trusted proxy
     proxy = ("10.0.0.7", 123)
-    monkeypatch.setenv("CHOREGOS_TRUSTED_PROXY_CIDRS", '["10.0.0.0/8"]')
-    monkeypatch.delenv("CHOREGOS_TRUSTED_PROXY_HOPS", raising=False)
+    monkeypatch.setenv("TRANIBOR_TRUSTED_PROXY_CIDRS", '["10.0.0.0/8"]')
+    monkeypatch.delenv("TRANIBOR_TRUSTED_PROXY_HOPS", raising=False)
     reset_settings_cache()
     try:
         app = create_app()
@@ -197,7 +197,7 @@ def test_no_request_walks_the_table() -> None:
 def test_a_malformed_trusted_proxy_network_is_refused() -> None:
     from tranibor_api.config import Settings
 
-    with pytest.raises(ValueError, match="CHOREGOS_TRUSTED_PROXY_CIDRS"):
+    with pytest.raises(ValueError, match="TRANIBOR_TRUSTED_PROXY_CIDRS"):
         Settings(trusted_proxy_cidrs=["not-a-network"])
     with pytest.raises(ValueError, match="not both"):
         Settings(trusted_proxy_cidrs=["10.0.0.0/8"], trusted_proxy_hops=1)

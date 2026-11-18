@@ -80,7 +80,7 @@ export function firstCommands(os: CliOs, origin: string, org: string): string {
       "choregos whoami",
       "",
       "# or, without a saved profile (a CI job, a container):",
-      `$env:CHOREGOS_API_URL = "${base}"; $env:CHOREGOS_TOKEN = "<full-access token>"; $env:CHOREGOS_ORG = "${org}"`,
+      `$env:TRANIBOR_API_URL = "${base}"; $env:TRANIBOR_TOKEN = "<full-access token>"; $env:TRANIBOR_ORG = "${org}"`,
     ].join("\n");
   }
   return [
@@ -88,6 +88,6 @@ export function firstCommands(os: CliOs, origin: string, org: string): string {
     "choregos whoami",
     "",
     "# or, without a saved profile (a CI job, a container):",
-    `export CHOREGOS_API_URL=${base} CHOREGOS_TOKEN=<full-access token> CHOREGOS_ORG=${org}`,
+    `export TRANIBOR_API_URL=${base} TRANIBOR_TOKEN=<full-access token> TRANIBOR_ORG=${org}`,
   ].join("\n");
 }

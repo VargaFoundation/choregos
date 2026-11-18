@@ -100,9 +100,9 @@ def test_the_adapters_factory_builds_nothing_without_a_rendezvous(
 
     monkeypatch.setitem(registry._REGISTRY, ("mcp", "mcp-outpost"), builtins._mcp_outpost_client)
     if fakes is None:
-        monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
+        monkeypatch.delenv("TRANIBOR_FAKES", raising=False)
     else:
-        monkeypatch.setenv("CHOREGOS_FAKES", fakes)
+        monkeypatch.setenv("TRANIBOR_FAKES", fakes)
     for config in (STORED, {**STORED, "route": "outpost"}, {**STORED, "rendezvous": _outpost()}):
         with pytest.raises(AdapterError, match="only the platform supplies"):
             build("mcp", "mcp-outpost", dict(config))
@@ -116,7 +116,7 @@ async def test_the_adapters_factory_builds_the_client_over_what_the_platform_inj
     from tranibor_adapters import builtins
 
     monkeypatch.setitem(registry._REGISTRY, ("mcp", "mcp-outpost"), builtins._mcp_outpost_client)
-    monkeypatch.setenv("CHOREGOS_FAKES", "1")
+    monkeypatch.setenv("TRANIBOR_FAKES", "1")
     outpost = _outpost()
     injected = {
         **STORED,

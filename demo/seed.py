@@ -317,5 +317,5 @@ async def start_tickets() -> None:
 
 
 if __name__ == "__main__":
-    os.environ.setdefault("CHOREGOS_ENV", "dev")
+    os.environ.setdefault("TRANIBOR_ENV", "dev")
     raise SystemExit(asyncio.run(main()))

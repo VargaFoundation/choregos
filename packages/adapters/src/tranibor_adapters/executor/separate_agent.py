@@ -56,7 +56,7 @@ def runner_env() -> dict[str, str]:
     `$HOME`, the tool client) go to the surface both containers see."""
     return {
         AGENT_ISOLATION_ENV: "container",
-        "CHOREGOS_RUNNER_LAUNCHER_PORT": str(LAUNCHER_PORT),
+        "TRANIBOR_RUNNER_LAUNCHER_PORT": str(LAUNCHER_PORT),
         "TMPDIR": EXCHANGE,
     }
 

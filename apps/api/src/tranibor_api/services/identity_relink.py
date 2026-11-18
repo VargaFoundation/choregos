@@ -4,7 +4,7 @@
 An account is bound to its provider's subject (ADR 0100), and a subject only means something at the
 issuer that gave it. A new provider gives every person a new subject. Each account is moved to its new
 subject at the person's first sign-in through the new provider, while a re-link window is open
-(`CHOREGOS_OIDC_RELINK_UNTIL`): the provider must assert the address with `email_verified: true`, and
+(`TRANIBOR_OIDC_RELINK_UNTIL`): the provider must assert the address with `email_verified: true`, and
 exactly one account bound to another issuer's subject must carry that address, letter case aside.
 
 The plan says, before and during the window, which accounts that rule will move, which it will refuse

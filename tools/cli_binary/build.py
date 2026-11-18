@@ -208,7 +208,7 @@ def nuitka_command(python: pathlib.Path, work: pathlib.Path, name: str, version:
         "--copyright=Apache-2.0",
         "--lto=no",
     ]
-    identity = os.environ.get("CHOREGOS_MACOS_SIGN_IDENTITY")
+    identity = os.environ.get("TRANIBOR_MACOS_SIGN_IDENTITY")
     if sys.platform == "darwin" and identity:
         # Nuitka signs the onefile bootstrap and its payload itself; a `codesign` afterwards would
         # sign a file whose appended payload it does not know about.

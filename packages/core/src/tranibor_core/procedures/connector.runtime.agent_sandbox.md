@@ -43,7 +43,7 @@ own image is refused in a pool: use `k8s_job` for such steps.
 
 ## Test it
 
-`CHOREGOS_CLUSTER_CONTEXT=<context> CHOREGOS_CLUSTER_ALLOW_SHARED=<context> make test-cluster` on a
+`TRANIBOR_CLUSTER_CONTEXT=<context> TRANIBOR_CLUSTER_ALLOW_SHARED=<context> make test-cluster` on a
 cluster that has the operator (it uses a namespace of its own and deletes it).
 
 ## When it fails

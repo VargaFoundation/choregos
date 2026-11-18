@@ -3,7 +3,7 @@
 
 The SDK drives the Copilot CLI runtime. In BYOK mode (`provider`), the runtime speaks chat
 completions to the platform's model at `OPENAI_BASE_URL` with `OPENAI_API_KEY` (the loopback key),
-without a GitHub account. It is given the step's MCP servers (`CHOREGOS_MCP_URL<name>`, HTTP) and
+without a GitHub account. It is given the step's MCP servers (`TRANIBOR_MCP_URL<name>`, HTTP) and
 none of its built-in tools: a hosted triager reads, it does not edit files or run commands.
 """
 
@@ -21,8 +21,8 @@ INSTRUCTIONS = (
 
 
 async def answer(text: str) -> str:
-    names = [name for name in os.environ.get("CHOREGOS_MCP_SERVERS", "").split(",") if name]
-    model = os.environ.get("CHOREGOS_MODEL", "default")
+    names = [name for name in os.environ.get("TRANIBOR_MCP_SERVERS", "").split(",") if name]
+    model = os.environ.get("TRANIBOR_MODEL", "default")
     with tempfile.TemporaryDirectory() as home:
         client = CopilotClient(working_directory=home, base_directory=home, use_logged_in_user=False)
         await client.start()
@@ -38,7 +38,7 @@ async def answer(text: str) -> str:
                 },
                 system_message={"mode": "replace", "content": INSTRUCTIONS},
                 mcp_servers={
-                    name: {"type": "http", "url": os.environ["CHOREGOS_MCP_URL"] + name, "tools": ["*"]}
+                    name: {"type": "http", "url": os.environ["TRANIBOR_MCP_URL"] + name, "tools": ["*"]}
                     for name in names
                 },
                 # The MCP tools only: none of the runtime's shell, file and web tools.

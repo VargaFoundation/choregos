@@ -2,7 +2,7 @@
 
 The orchestrator writes straight through the API's models, and the advisory lock of the budget
 reservation (`services/budgets.py`, S27-11) only exists on PostgreSQL. The suite's PostgreSQL mode
-(`CHOREGOS_TEST_ORCH_ON_POSTGRES=1`, `apps/orchestrator/tests/conftest.py`) existed, but nothing
+(`TRANIBOR_TEST_ORCH_ON_POSTGRES=1`, `apps/orchestrator/tests/conftest.py`) existed, but nothing
 set the flag: it ran on SQLite alone. These checks keep the `python-postgres` job running it.
 """
 
@@ -15,8 +15,8 @@ import yaml
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 CI = ROOT / ".github" / "workflows" / "ci.yml"
-API_ON_POSTGRES = "CHOREGOS_TEST_SUITE_ON_POSTGRES"
-ORCHESTRATOR_ON_POSTGRES = "CHOREGOS_TEST_ORCH_ON_POSTGRES"
+API_ON_POSTGRES = "TRANIBOR_TEST_SUITE_ON_POSTGRES"
+ORCHESTRATOR_ON_POSTGRES = "TRANIBOR_TEST_ORCH_ON_POSTGRES"
 
 
 def _workflow() -> dict[str, Any]:
@@ -46,7 +46,7 @@ def test_the_orchestrator_suite_runs_on_postgresql_in_ci() -> None:
         if "apps/orchestrator/tests" in str(step.get("run", ""))
         and _env(step).get(ORCHESTRATOR_ON_POSTGRES) == "1"
     ]
-    assert orchestrator, "no step runs apps/orchestrator/tests with CHOREGOS_TEST_ORCH_ON_POSTGRES=1"
+    assert orchestrator, "no step runs apps/orchestrator/tests with TRANIBOR_TEST_ORCH_ON_POSTGRES=1"
     assert len(orchestrator) == 1, "the orchestrator suite on PostgreSQL runs once"
     step = steps[orchestrator[0]]
     # Both suites drop and recreate the `public` schema: the API's one goes first, because its
@@ -55,7 +55,7 @@ def test_the_orchestrator_suite_runs_on_postgresql_in_ci() -> None:
     assert "if" not in step, "a condition on the step hides what PostgreSQL shows"
     assert not step.get("continue-on-error"), "a failure of the step must fail the job"
     # The mode reads the database from the job's service, as the API suite does.
-    assert str(_env(job)["CHOREGOS_TEST_DATABASE_URL"]).startswith("postgresql+asyncpg://")
+    assert str(_env(job)["TRANIBOR_TEST_DATABASE_URL"]).startswith("postgresql+asyncpg://")
 
 
 def test_the_postgresql_job_runs_beside_the_sqlite_one_under_the_same_conditions() -> None:

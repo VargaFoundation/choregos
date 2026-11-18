@@ -16,15 +16,15 @@ from tranibor_contracts import StageInput
 from tranibor_core.egress import AllowedRule, EgressPolicy, NetworkBounds, host_port_of, normalize_host
 
 PROXY_VARIABLES = ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy")
-#: `CHOREGOS_EGRESS_AUTH=run` is what the orchestrator sets on the pod when the deployment's proxy
+#: `TRANIBOR_EGRESS_AUTH=run` is what the orchestrator sets on the pod when the deployment's proxy
 #: wants credentials.
-AUTH_VARIABLE = "CHOREGOS_EGRESS_AUTH"
+AUTH_VARIABLE = "TRANIBOR_EGRESS_AUTH"
 
 
 def authenticate_proxy_env(env: Mapping[str, str], run_id: str, token: str) -> dict[str, str]:
     """The proxy variables to set so that the proxy knows this run — and nothing else.
 
-    Empty (nothing to change) unless `CHOREGOS_EGRESS_AUTH=run`, a token exists, and the variable
+    Empty (nothing to change) unless `TRANIBOR_EGRESS_AUTH=run`, a token exists, and the variable
     holds a proxy URL without user-info (an operator's own credentials are never overwritten).
     `NO_PROXY` is not touched.
     """

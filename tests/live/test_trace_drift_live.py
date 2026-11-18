@@ -5,7 +5,7 @@ spans the embedded gateway's callback really writes, is the usage the gateway an
 stack is S40-20b's (`tests/live/otel/compose.yaml`, a mocked model, no provider key):
 
     docker compose -p s4020b -f tests/live/otel/compose.yaml up -d --wait
-    CHOREGOS_LIVE_OTEL=1 uv run pytest tests/live/test_trace_drift_live.py -m live
+    TRANIBOR_LIVE_OTEL=1 uv run pytest tests/live/test_trace_drift_live.py -m live
     docker compose -p s4020b -f tests/live/otel/compose.yaml down -v
 """
 
@@ -33,7 +33,7 @@ async def _ledger(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, runs: dict[st
     from tranibor_api.db.models import CostLedger, Organization, Project, Run, WorkItem
     from tranibor_core import utcnow
 
-    monkeypatch.setenv("CHOREGOS_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/ledger.db")
+    monkeypatch.setenv("TRANIBOR_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/ledger.db")
     reset_settings_cache()
     await db_session.dispose_engine()
     await db_session.create_all()
@@ -92,7 +92,7 @@ def _usage_of_calls(client: httpx.Client, run_id: str, calls: int) -> tuple[int,
 async def test_the_job_reads_the_gateway_s_usage_from_a_real_tempo(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    require("CHOREGOS_LIVE_OTEL")
+    require("TRANIBOR_LIVE_OTEL")
     from sqlalchemy import select
     from tranibor_api.db.models import AuditLog
     from tranibor_api.db.session import session_scope

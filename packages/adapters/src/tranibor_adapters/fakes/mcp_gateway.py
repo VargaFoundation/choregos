@@ -24,8 +24,8 @@ The gateway, never Tranibor, holds the upstream servers' credentials: the caller
 dropped, and the upstream receives the gateway's own (`GatewayUpstream.token`).
 
 Served alone, as the local install's gateway: `python -m tranibor_adapters.fakes.mcp_gateway`,
-on port `CHOREGOS_FAKE_GATEWAY_PORT` (8091 by default), configured by the
-`CHOREGOS_FAKE_GATEWAY_*` variables `application()` reads.
+on port `TRANIBOR_FAKE_GATEWAY_PORT` (8091 by default), configured by the
+`TRANIBOR_FAKE_GATEWAY_*` variables `application()` reads.
 """
 
 from __future__ import annotations
@@ -523,28 +523,28 @@ def _choice(variable: str, default: str, allowed: tuple[str, ...]) -> str:
 
 
 def application() -> FakeMcpGatewayApp:
-    """The factory `uvicorn --factory` calls: the gateway the `CHOREGOS_FAKE_GATEWAY_*` variables describe.
+    """The factory `uvicorn --factory` calls: the gateway the `TRANIBOR_FAKE_GATEWAY_*` variables describe.
 
-    `CHOREGOS_FAKE_GATEWAY_UPSTREAMS` is a JSON object `{server: {"url": ..., "token": ...}}`."""
-    declared = json.loads(os.environ.get("CHOREGOS_FAKE_GATEWAY_UPSTREAMS", "") or "{}")
+    `TRANIBOR_FAKE_GATEWAY_UPSTREAMS` is a JSON object `{server: {"url": ..., "token": ...}}`."""
+    declared = json.loads(os.environ.get("TRANIBOR_FAKE_GATEWAY_UPSTREAMS", "") or "{}")
     if not isinstance(declared, dict):
-        raise ValueError("CHOREGOS_FAKE_GATEWAY_UPSTREAMS is a JSON object {server: {url, token}}")
+        raise ValueError("TRANIBOR_FAKE_GATEWAY_UPSTREAMS is a JSON object {server: {url, token}}")
     upstreams = {
         str(name): GatewayUpstream(url=str(spec["url"]), token=str(spec.get("token", "")))
         for name, spec in declared.items()
     }
     gateway = FakeMcpGateway(
         upstreams=upstreams,
-        routing=cast(Routing, _choice("CHOREGOS_FAKE_GATEWAY_ROUTING", "path", ROUTINGS)),
-        server_header=os.environ.get("CHOREGOS_FAKE_GATEWAY_SERVER_HEADER", "") or "X-MCP-Server",
-        auth=cast(AuthMode, _choice("CHOREGOS_FAKE_GATEWAY_AUTH", "bearer", AUTH_MODES)),
-        token=os.environ.get("CHOREGOS_FAKE_GATEWAY_TOKEN", ""),
-        auth_header=os.environ.get("CHOREGOS_FAKE_GATEWAY_AUTH_HEADER", "") or "X-Api-Key",
-        client_id=os.environ.get("CHOREGOS_FAKE_GATEWAY_CLIENT_ID", ""),
-        client_secret=os.environ.get("CHOREGOS_FAKE_GATEWAY_CLIENT_SECRET", ""),
-        jwks_url=os.environ.get("CHOREGOS_FAKE_GATEWAY_JWKS_URL", ""),
-        audience=os.environ.get("CHOREGOS_FAKE_GATEWAY_AUDIENCE", ""),
-        issuer=os.environ.get("CHOREGOS_FAKE_GATEWAY_ISSUER", ""),
+        routing=cast(Routing, _choice("TRANIBOR_FAKE_GATEWAY_ROUTING", "path", ROUTINGS)),
+        server_header=os.environ.get("TRANIBOR_FAKE_GATEWAY_SERVER_HEADER", "") or "X-MCP-Server",
+        auth=cast(AuthMode, _choice("TRANIBOR_FAKE_GATEWAY_AUTH", "bearer", AUTH_MODES)),
+        token=os.environ.get("TRANIBOR_FAKE_GATEWAY_TOKEN", ""),
+        auth_header=os.environ.get("TRANIBOR_FAKE_GATEWAY_AUTH_HEADER", "") or "X-Api-Key",
+        client_id=os.environ.get("TRANIBOR_FAKE_GATEWAY_CLIENT_ID", ""),
+        client_secret=os.environ.get("TRANIBOR_FAKE_GATEWAY_CLIENT_SECRET", ""),
+        jwks_url=os.environ.get("TRANIBOR_FAKE_GATEWAY_JWKS_URL", ""),
+        audience=os.environ.get("TRANIBOR_FAKE_GATEWAY_AUDIENCE", ""),
+        issuer=os.environ.get("TRANIBOR_FAKE_GATEWAY_ISSUER", ""),
     )
     return FakeMcpGatewayApp(gateway)
 
@@ -552,4 +552,4 @@ def application() -> FakeMcpGatewayApp:
 if __name__ == "__main__":  # pragma: no cover - the container's entry point
     import uvicorn
 
-    uvicorn.run(application(), host="0.0.0.0", port=int(os.environ.get("CHOREGOS_FAKE_GATEWAY_PORT", "8091")))
+    uvicorn.run(application(), host="0.0.0.0", port=int(os.environ.get("TRANIBOR_FAKE_GATEWAY_PORT", "8091")))

@@ -49,9 +49,9 @@ remains the way to work on the CLI itself.
 
 ## Profile
 
-The profile lives in `~/.config/choregos/config.json` (`CHOREGOS_CONFIG` overrides the
-path): `api_url`, `token`, `org`. `choregos login` writes it; `CHOREGOS_API_URL`,
-`CHOREGOS_TOKEN` and `CHOREGOS_ORG` are read when no profile exists.
+The profile lives in `~/.config/choregos/config.json` (`TRANIBOR_CONFIG` overrides the
+path): `api_url`, `token`, `org`. `choregos login` writes it; `TRANIBOR_API_URL`,
+`TRANIBOR_TOKEN` and `TRANIBOR_ORG` are read when no profile exists.
 
 ## Install from your instance
 
@@ -68,7 +68,7 @@ The scripts check the binary's sha256 against the instance's manifest
 (`/downloads/cli/manifest.json`) and never use sudo; `sh -s -- --prefix DIR` installs into `DIR/bin`.
 `choregos self update` later replaces the binary with the instance's current one. When the CLI
 talks to an instance that runs another version, it says so in one line on stderr, at most once a
-day (`CHOREGOS_NO_VERSION_CHECK=1` silences it).
+day (`TRANIBOR_NO_VERSION_CHECK=1` silences it).
 
 
 ## `choregos a2a`
@@ -88,7 +88,7 @@ Arguments:
 Options:
   --org <str>    the organisation; the profile's otherwise
   --token <str>  an `a2a` token; the profile's token otherwise, which the door
-                 refuses when it is `*`  [env var: CHOREGOS_A2A_TOKEN]
+                 refuses when it is `*`  [env var: TRANIBOR_A2A_TOKEN]
   --json         print the task as the door answers it, for a script
   --help         Show this message and exit.
 ```
@@ -111,7 +111,7 @@ Options:
   --out <path>   write the artefacts of a completed task in this directory
   --org <str>    the organisation; the profile's otherwise
   --token <str>  an `a2a` token; the profile's token otherwise, which the door
-                 refuses when it is `*`  [env var: CHOREGOS_A2A_TOKEN]
+                 refuses when it is `*`  [env var: TRANIBOR_A2A_TOKEN]
   --json         print the task as the door answers it, for a script
   --help         Show this message and exit.
 ```
@@ -130,7 +130,7 @@ Options:
   --out <path>   write the artefacts of a completed task in this directory
   --org <str>    the organisation; the profile's otherwise
   --token <str>  an `a2a` token; the profile's token otherwise, which the door
-                 refuses when it is `*`  [env var: CHOREGOS_A2A_TOKEN]
+                 refuses when it is `*`  [env var: TRANIBOR_A2A_TOKEN]
   --json         print the task as the door answers it, for a script
   --help         Show this message and exit.
 ```
@@ -166,7 +166,7 @@ Options:
   --org <str>           the organisation; the profile's otherwise
   --token <str>         an `a2a` token; the profile's token otherwise, which
                         the door refuses when it is `*`  [env var:
-                        CHOREGOS_A2A_TOKEN]
+                        TRANIBOR_A2A_TOKEN]
   --json                print the task as the door answers it, for a script
   --help                Show this message and exit.
 ```
@@ -182,7 +182,7 @@ Usage: choregos a2a skills [OPTIONS]
 Options:
   --org <str>    the organisation; the profile's otherwise
   --token <str>  an `a2a` token; the profile's token otherwise, which the door
-                 refuses when it is `*`  [env var: CHOREGOS_A2A_TOKEN]
+                 refuses when it is `*`  [env var: TRANIBOR_A2A_TOKEN]
   --json         print the task as the door answers it, for a script
   --help         Show this message and exit.
 ```
@@ -228,7 +228,7 @@ Usage: choregos admin identity relink [OPTIONS]
   Plan a change of identity provider (a dry run, ADR 0164): which accounts a
   re-link window moves to the new provider's subject at their first sign-in,
   which it refuses (two accounts, one address), and whether the deployment's
-  window (CHOREGOS_OIDC_RELINK_UNTIL) is open. Changes nothing.
+  window (TRANIBOR_OIDC_RELINK_UNTIL) is open. Changes nothing.
 
 Options:
   --issuer <str>  The new provider's issuer; default: the instance's
@@ -247,7 +247,7 @@ Sealed connector secrets
 Usage: choregos admin secrets rewrap [OPTIONS]
 
   Re-wrap every sealed secret under the active key, after a key rotation (the
-  new key first in CHOREGOS_SECRETS_KEKS, the API restarted). The values are
+  new key first in TRANIBOR_SECRETS_KEKS, the API restarted). The values are
   not read out nor changed.
 
 Options:
@@ -733,7 +733,7 @@ Options:
   -w, --workflow <str>  the workflow's name; the project's default otherwise
   --org <str>           the organisation; the profile's otherwise
   --no-motion           no spinner and no travelling token (also
-                        CHOREGOS_NO_MOTION, and NO_COLOR)
+                        TRANIBOR_NO_MOTION, and NO_COLOR)
   --help                Show this message and exit.
 ```
 
@@ -754,11 +754,11 @@ Usage: choregos login [OPTIONS]
 
 Options:
   --api-url <str>           The instance's address (default: the profile's or
-                            CHOREGOS_API_URL, else asked)
+                            TRANIBOR_API_URL, else asked)
   --token <str>             An API token to save instead of signing in with
                             your browser (scripts, CI)
   --org <str>               Default organisation slug (else --org per command
-                            or CHOREGOS_ORG)
+                            or TRANIBOR_ORG)
   --fresh                   Make the console sign you in again at your
                             identity provider first
   --browser / --no-browser  Open the approval page in your browser  [default:

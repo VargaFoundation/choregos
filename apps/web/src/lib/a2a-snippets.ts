@@ -189,7 +189,7 @@ function cliSnippet(context: SnippetContext): Snippet {
     label: "CLI",
     where: "a terminal, with the choregos CLI installed",
     code: [
-      `export CHOREGOS_API_URL=${origineDe(context.origin)} CHOREGOS_ORG=${context.org} CHOREGOS_A2A_TOKEN=${context.token ?? PLACEHOLDER}`,
+      `export TRANIBOR_API_URL=${origineDe(context.origin)} TRANIBOR_ORG=${context.org} TRANIBOR_A2A_TOKEN=${context.token ?? PLACEHOLDER}`,
       "# The workflows this token may start, and their fields (* = required)",
       "choregos a2a skills",
       "# Start one and follow it to its end; the message id is your idempotency key",

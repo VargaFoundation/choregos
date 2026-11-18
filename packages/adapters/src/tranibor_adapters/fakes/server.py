@@ -114,7 +114,7 @@ def application() -> DemoApplication:
 def main() -> None:  # pragma: no cover - the container's entry point
     import uvicorn
 
-    uvicorn.run(application(), host="0.0.0.0", port=int(os.environ.get("CHOREGOS_DEMO_PORT", "8090")))
+    uvicorn.run(application(), host="0.0.0.0", port=int(os.environ.get("TRANIBOR_DEMO_PORT", "8090")))
 
 
 if __name__ == "__main__":  # pragma: no cover - the container's entry point

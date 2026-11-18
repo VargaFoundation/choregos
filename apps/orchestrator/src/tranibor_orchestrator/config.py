@@ -20,15 +20,15 @@ ALL_QUEUES = (QUEUE_ORCHESTRATOR, QUEUE_EXECUTOR, QUEUE_TRACKER, QUEUE_MEMORY)
 
 
 class OrchestratorSettings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="CHOREGOS_", env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="TRANIBOR_", env_file=".env", extra="ignore")
 
-    #: The deployment's environment, the API's `CHOREGOS_ENV` (the chart's `global.environment`):
+    #: The deployment's environment, the API's `TRANIBOR_ENV` (the chart's `global.environment`):
     #: `staging` and `prod` are production, where the workers refuse the fakes (S80-03) and the
     #: runners they start are told where they run.
     env: Literal["dev", "staging", "prod", "test"] = "dev"
     temporal_address: str = "localhost:7233"
     temporal_namespace: str = "default"
-    fakes: bool = Field(default=False, validation_alias="CHOREGOS_FAKES")
+    fakes: bool = Field(default=False, validation_alias="TRANIBOR_FAKES")
     api_url: str = "http://localhost:8000"
     # The URL the AGENTS call back, from inside the cluster. It is not the public URL: a pod does
     # not resolve an ingress's name, and the runner died on "Name or service not known" with no
@@ -37,7 +37,7 @@ class OrchestratorSettings(BaseSettings):
     internal_api_url: str = "http://localhost:8000"
     gateway_url: str = "http://localhost:4000"
     gateway_type: str = "litellm"
-    #: The memory (Ecphoria). The chart has always passed it (`CHOREGOS_MEMORY_URL` of
+    #: The memory (Ecphoria). The chart has always passed it (`TRANIBOR_MEMORY_URL` of
     #: `commonEnv`) and this setting did not exist: `extra="ignore"` swallowed it in silence, and
     #: the memory's MCP URL was built by `gateway_url.replace("4000", "8432")`. The replacement
     #: only holds if the gateway and the memory share a host. On the dev tenant, the gateway is
@@ -51,18 +51,18 @@ class OrchestratorSettings(BaseSettings):
     #: else (`runner/local_tools.py`, which starts the server if nothing answers).
     tools_mcp_url: str = "http://localhost:7777/mcp"
     runner_image: str = PUBLISHING.image("choregos-runner", "1.0.0")
-    #: The images a job step may name (ADR 0056), as JSON in `CHOREGOS_JOB_IMAGES`: name → reference,
+    #: The images a job step may name (ADR 0056), as JSON in `TRANIBOR_JOB_IMAGES`: name → reference,
     #: pinned by digest. A workflow names an image, never pulls one: the operator decides what runs.
     #: Each is built FROM the runner image — the runner is what runs the job's command.
     job_images: dict[str, str] = {}
-    #: The images an agent written in code may name (ADR 0063), as JSON in `CHOREGOS_AGENT_IMAGES`:
+    #: The images an agent written in code may name (ADR 0063), as JSON in `TRANIBOR_AGENT_IMAGES`:
     #: same rules as `job_images`, and the same variable the API validates a version against.
     agent_images: dict[str, str] = {}
-    #: A reference without `@sha256:` stops the worker at start-up (`CHOREGOS_REQUIRE_IMAGE_DIGEST`).
+    #: A reference without `@sha256:` stops the worker at start-up (`TRANIBOR_REQUIRE_IMAGE_DIGEST`).
     require_image_digest: bool = False
     executor_kind: str = "agent_sandbox"
-    # Variables passed to EVERY agent pod (JSON in `CHOREGOS_RUNNER_ENV`). What is secret has no
-    # business here: `CHOREGOS_RUNNER_ENV_SECRETS` lists secrets, which the executor mounts by
+    # Variables passed to EVERY agent pod (JSON in `TRANIBOR_RUNNER_ENV`). What is secret has no
+    # business here: `TRANIBOR_RUNNER_ENV_SECRETS` lists secrets, which the executor mounts by
     # reference.
     runner_env: dict[str, str] = {}
     runner_namespace_pattern: str = "proj-{slug}-runners"
@@ -74,7 +74,7 @@ class OrchestratorSettings(BaseSettings):
     #: (ADR 0070): the per-run `choregos-egress` proxy of the chart sets it. Empty: no credentials.
     runner_egress_auth: str = ""
     #: Hosts no run of this deployment may reach (comma-separated host patterns, ADR 0070): the same
-    #: value as the API's `CHOREGOS_NETWORK_INSTANCE_DENY`.
+    #: value as the API's `TRANIBOR_NETWORK_INSTANCE_DENY`.
     network_instance_deny: str = ""
     # This proxy's image; empty: the one `gitops.py` knows. To pin by digest where Kyverno
     # requires it.
@@ -85,11 +85,11 @@ class OrchestratorSettings(BaseSettings):
     runner_runtime_class: str = ""
     #: Where every run's agent runs (ADR 0146, `tranibor_core.agent_isolation`), the chart's
     #: `global.runner.agentIsolation`: `process`, the runner's child, or `container`, a container of its
-    #: own that the executor starts; one that cannot refuses the run. `CHOREGOS_RUNNER_AGENT_ISOLATION`,
+    #: own that the executor starts; one that cannot refuses the run. `TRANIBOR_RUNNER_AGENT_ISOLATION`,
     #: the same variable the runner and the API read.
     runner_agent_isolation: Literal["process", "container"] = "process"
     #: Below this reservation (USD), a stage does not start: its key would be refused at its first
-    #: model call (ADR 0047, S27-02). `CHOREGOS_MIN_RUN_RESERVATION_USD`.
+    #: model call (ADR 0047, S27-02). `TRANIBOR_MIN_RUN_RESERVATION_USD`.
     min_run_reservation_usd: float = Field(default=0.01, ge=0)
 
     #: The deployment's kill switch for context reduction (ADR 0055): `off` turns rtk and headroom
@@ -99,27 +99,27 @@ class OrchestratorSettings(BaseSettings):
     #: The deployment's DEFAULT for tool scripts (ADR 0122 §6, amended 2026-11-05): what an organisation
     #: that does not choose gets (its `tool_scripts` setting absent). Off (the default) offers its runs no
     #: tool bridge; `on` lets its ceiling and each policy decide, and a policy without `tools` offers
-    #: nothing. An organisation's `enabled` or `disabled` wins over it. `CHOREGOS_TOOL_SCRIPTS`.
+    #: nothing. An organisation's `enabled` or `disabled` wins over it. `TRANIBOR_TOOL_SCRIPTS`.
     tool_scripts: bool = False
     #: The deployment's hard brake on tool scripts (S57-05b): off, no run of any organisation is offered
     #: the bridge, whatever its setting says — an operator's emergency stop, and the protection of a
-    #: deployment whose runner image predates the bridge. `CHOREGOS_TOOL_SCRIPTS_ALLOWED`, on by default.
+    #: deployment whose runner image predates the bridge. `TRANIBOR_TOOL_SCRIPTS_ALLOWED`, on by default.
     tool_scripts_allowed: bool = True
 
     @model_validator(mode="after")
     def _images_named_by_the_operator(self) -> OrchestratorSettings:
-        check_image_map("CHOREGOS_JOB_IMAGES", self.job_images, require_digest=self.require_image_digest)
-        check_image_map("CHOREGOS_AGENT_IMAGES", self.agent_images, require_digest=self.require_image_digest)
+        check_image_map("TRANIBOR_JOB_IMAGES", self.job_images, require_digest=self.require_image_digest)
+        check_image_map("TRANIBOR_AGENT_IMAGES", self.agent_images, require_digest=self.require_image_digest)
         return self
 
     def refuse_fakes_in_production(self) -> None:
         """The workers do not start on the fakes in staging and prod, nor hand them to every run
-        through `CHOREGOS_RUNNER_ENV` (S80-03)."""
+        through `TRANIBOR_RUNNER_ENV` (S80-03)."""
         refuse_fakes_in_production(environment=self.env, fakes=self.fakes, process="orchestrator's workers")
         refuse_fakes_in_production(
             environment=self.env,
             fakes=self.runner_env.get(FAKES_VARIABLE),
-            process="orchestrator's workers (CHOREGOS_RUNNER_ENV gives every run the fakes)",
+            process="orchestrator's workers (TRANIBOR_RUNNER_ENV gives every run the fakes)",
         )
 
     @property
@@ -159,7 +159,7 @@ class OrchestratorSettings(BaseSettings):
     #: `worker.py`, the others the Temporal SDK's silent defaults; the defaults are those same values,
     #: so a deployment that sets nothing behaves as before. An executor activity holds a run's stage
     #: for its whole length: 20 activities x 2 executor replicas is the ~40 simultaneous runs of a
-    #: default install. `CHOREGOS_WORKER_MAX_CONCURRENT_ACTIVITIES`, and so on.
+    #: default install. `TRANIBOR_WORKER_MAX_CONCURRENT_ACTIVITIES`, and so on.
     worker_max_concurrent_activities: int = Field(default=20, ge=1)
     worker_max_concurrent_workflow_tasks: int = Field(default=100, ge=1)
     worker_max_concurrent_local_activities: int = Field(default=100, ge=1)

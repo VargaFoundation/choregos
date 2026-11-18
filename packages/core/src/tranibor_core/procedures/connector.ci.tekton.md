@@ -20,7 +20,7 @@ fields:
 - The platform reads the cluster with the API's own in-cluster service account: it must be allowed to
   `get` and `list` `pipelineruns.tekton.dev` in that namespace. If you only use GitHub Actions, the
   project needs no `ci` connector: checks are read through the `scm` connector.
-- The platform's shared webhook secret (`CHOREGOS_GENERIC_WEBHOOK_SECRET`).
+- The platform's shared webhook secret (`TRANIBOR_GENERIC_WEBHOOK_SECRET`).
 
 ## At the cluster
 

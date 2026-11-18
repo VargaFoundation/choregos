@@ -5,7 +5,7 @@
   row named `reserved:<run_id>`, counted by `open_reservations` like a key, so that no other run
   takes that money before the key exists.
 - `start_run` mints the key (`mint_run_key`) and hands it to the executor, which puts it in the
-  run's Secret next to the run token; the runner reads it from `CHOREGOS_RUN_GATEWAY_KEY`. The
+  run's Secret next to the run token; the runner reads it from `TRANIBOR_RUN_GATEWAY_KEY`. The
   reservation row becomes the key's row. The key itself is never written to `runs.stage_input`
   and never travels in a Temporal payload.
 - `release_run_key` revokes it, closes the reservation and scrubs any copy left on the row (a

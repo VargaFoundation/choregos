@@ -78,7 +78,7 @@ async def installed(client: AsyncClient, org: str, offline: Path) -> str:  # noq
 def _wait(monkeypatch: pytest.MonkeyPatch, seconds: float) -> None:
     from tranibor_api.config import reset_settings_cache
 
-    monkeypatch.setenv("CHOREGOS_MCP_ASSISTANT_WAIT_S", str(seconds))
+    monkeypatch.setenv("TRANIBOR_MCP_ASSISTANT_WAIT_S", str(seconds))
     reset_settings_cache()
 
 

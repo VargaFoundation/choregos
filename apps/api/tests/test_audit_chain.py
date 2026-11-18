@@ -197,7 +197,7 @@ def test_the_commands_say_sqlite_keeps_no_chain(monkeypatch: pytest.MonkeyPatch,
     from tranibor_api.config import reset_settings_cache
     from typer.testing import CliRunner
 
-    monkeypatch.setenv("CHOREGOS_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/chain.db")
+    monkeypatch.setenv("TRANIBOR_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/chain.db")
     reset_settings_cache()
     try:
         for command in (["audit", "verify"], ["audit", "checkpoint", "--key-file", "-"]):

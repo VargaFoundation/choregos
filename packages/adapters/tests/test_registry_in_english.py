@@ -99,7 +99,7 @@ def test_the_factories_read_the_english_fake_global(monkeypatch: pytest.MonkeyPa
 
     sentinel = object()
     monkeypatch.setattr(tranibor_adapters, "FAKE_WEB_SEARCH", sentinel)
-    monkeypatch.setenv("CHOREGOS_FAKES", "1")
+    monkeypatch.setenv("TRANIBOR_FAKES", "1")
     assert tranibor_adapters.build("web_search", "fake") is sentinel
 
 

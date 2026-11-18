@@ -3,7 +3,7 @@
  * The public user documentation (S62-11), as data: the pages it has, and which one each screen of the
  * console points to.
  *
- * The base URL is the instance's (`docs_url` in `GET /edition`, from `CHOREGOS_DOCS_URL`), so an
+ * The base URL is the instance's (`docs_url` in `GET /edition`, from `TRANIBOR_DOCS_URL`), so an
  * air-gapped install points the links at its own copy. The slugs are fixed by the S62 shared contract:
  * a link names one of `DOC_SLUGS`, never a page the site may not have, and a test holds every entry of
  * `DOCS_BY_ROUTE` to that list.

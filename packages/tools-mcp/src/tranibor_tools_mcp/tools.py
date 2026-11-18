@@ -221,7 +221,7 @@ class ToolContext:
     #: (S40-11). `None`: not read yet.
     memory_labels: list[str] | None = None
     #: The run's workspace: what `validate_nginx_config` may read, and nothing outside it.
-    workspace: Path = field(default_factory=lambda: Path(os.environ.get("CHOREGOS_WORKSPACE", "/workspace")))
+    workspace: Path = field(default_factory=lambda: Path(os.environ.get("TRANIBOR_WORKSPACE", "/workspace")))
     #: The nginx binary; the runner image carries it (`docker/runner.Dockerfile`).
     nginx_binary: str = "nginx"
 

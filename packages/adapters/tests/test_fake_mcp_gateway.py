@@ -502,18 +502,18 @@ async def test_the_asgi_app_serves_health_and_mcp() -> None:
 
 def test_application_reads_its_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     upstreams = {"supplier": {"url": "http://choregos-demo-fakes:8090/supplier/mcp", "token": "demo-token"}}
-    monkeypatch.setenv("CHOREGOS_FAKE_GATEWAY_UPSTREAMS", json.dumps(upstreams))
-    monkeypatch.setenv("CHOREGOS_FAKE_GATEWAY_AUTH", "header")
-    monkeypatch.setenv("CHOREGOS_FAKE_GATEWAY_TOKEN", "gw-key")
-    monkeypatch.setenv("CHOREGOS_FAKE_GATEWAY_AUTH_HEADER", "X-Gateway-Key")
-    monkeypatch.delenv("CHOREGOS_FAKE_GATEWAY_ROUTING", raising=False)
+    monkeypatch.setenv("TRANIBOR_FAKE_GATEWAY_UPSTREAMS", json.dumps(upstreams))
+    monkeypatch.setenv("TRANIBOR_FAKE_GATEWAY_AUTH", "header")
+    monkeypatch.setenv("TRANIBOR_FAKE_GATEWAY_TOKEN", "gw-key")
+    monkeypatch.setenv("TRANIBOR_FAKE_GATEWAY_AUTH_HEADER", "X-Gateway-Key")
+    monkeypatch.delenv("TRANIBOR_FAKE_GATEWAY_ROUTING", raising=False)
     gw = application().gateway
     assert gw.upstreams["supplier"].url == "http://choregos-demo-fakes:8090/supplier/mcp"
     assert gw.upstreams["supplier"].token == "demo-token"
     assert gw.upstreams["supplier"].server is None
     assert (gw.auth, gw.token, gw.auth_header, gw.routing) == ("header", "gw-key", "X-Gateway-Key", "path")
-    monkeypatch.setenv("CHOREGOS_FAKE_GATEWAY_AUTH", "basic")
-    with pytest.raises(ValueError, match="CHOREGOS_FAKE_GATEWAY_AUTH"):
+    monkeypatch.setenv("TRANIBOR_FAKE_GATEWAY_AUTH", "basic")
+    with pytest.raises(ValueError, match="TRANIBOR_FAKE_GATEWAY_AUTH"):
         application()
 
 

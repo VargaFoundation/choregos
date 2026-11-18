@@ -113,7 +113,7 @@ async def test_multi_org_claim_requires_oauth_proof(client: AsyncClient, admin: 
     assert (await client.get(STATUS)).json()["multi_org_claim"] == "unavailable"
     refused = await setup()
     assert refused.status_code == 403
-    assert "CHOREGOS_GITHUB_APP_CLIENT_SECRET" in refused.text, "names what to configure"
+    assert "TRANIBOR_GITHUB_APP_CLIENT_SECRET" in refused.text, "names what to configure"
 
     github.oauth_enabled = True
     assert (await client.get(STATUS)).json()["multi_org_claim"] == "oauth"

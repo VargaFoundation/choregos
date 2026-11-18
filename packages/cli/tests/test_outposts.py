@@ -34,9 +34,9 @@ def profile(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 
     # No profile file: the profile is the environment's, never the one of whoever runs the suite.
     monkeypatch.setattr(client_module, "CONFIG_PATH", tmp_path / "config.json")
-    monkeypatch.setenv("CHOREGOS_API_URL", API)
-    monkeypatch.setenv("CHOREGOS_TOKEN", "chg_test")
-    monkeypatch.setenv("CHOREGOS_ORG", "acme")
+    monkeypatch.setenv("TRANIBOR_API_URL", API)
+    monkeypatch.setenv("TRANIBOR_TOKEN", "chg_test")
+    monkeypatch.setenv("TRANIBOR_ORG", "acme")
     monkeypatch.setenv("COLUMNS", "200")
 
 
@@ -124,7 +124,7 @@ def test_create_sends_the_slug_and_says_how_to_enrol_an_instance() -> None:
 
 @respx.mock
 def test_a_creation_refused_because_outposts_are_off_prints_the_apis_words() -> None:
-    words = "outposts are switched off on this deployment (`CHOREGOS_OUTPOSTS`): its operator turns them on"
+    words = "outposts are switched off on this deployment (`TRANIBOR_OUTPOSTS`): its operator turns them on"
     respx.post(BASE).mock(
         return_value=Response(409, json={"title": "Conflict", "detail": words, "code": "outposts_disabled"})
     )
@@ -304,7 +304,7 @@ def test_token_passes_a_shorter_lifetime_and_marks_a_door_with_no_origin() -> No
 @respx.mock
 def test_a_token_refused_for_want_of_a_door_key_prints_the_apis_words() -> None:
     words = (
-        "the outposts' door has no signing key on this deployment (`CHOREGOS_OUTPOSTS_DOOR_SIGNING_KEY`): "
+        "the outposts' door has no signing key on this deployment (`TRANIBOR_OUTPOSTS_DOOR_SIGNING_KEY`): "
         "there is no key to pin, so no instance is enrolled"
     )
     respx.post(f"{ONE}/enrolments").mock(
@@ -526,7 +526,7 @@ def test_every_command_takes_the_organisation_from_the_option_before_the_profile
 
 
 def test_without_an_organisation_nothing_is_called(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("CHOREGOS_ORG")
+    monkeypatch.delenv("TRANIBOR_ORG")
     with respx.mock:
         refused = _run("list")
         assert not respx.calls

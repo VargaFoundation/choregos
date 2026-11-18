@@ -65,7 +65,7 @@ async def build_hosted_image(payload: dict[str, Any]) -> dict[str, Any]:
     repository = get_settings().hosted_build_repository
     if not repository:
         raise ApplicationError(
-            "no build repository is configured (CHOREGOS_HOSTED_BUILD_REPOSITORY, "
+            "no build repository is configured (TRANIBOR_HOSTED_BUILD_REPOSITORY, "
             "`global.images.buildRegistry` in the chart): the platform has nowhere to push the image",
             type=BUILD_FAILED,
             non_retryable=True,

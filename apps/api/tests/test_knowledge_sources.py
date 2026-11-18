@@ -215,7 +215,7 @@ async def test_an_unknown_source_kind_is_unavailable_not_faked(monkeypatch: pyte
 
     from tranibor_api.knowledge.sync import SourceUnavailableError, open_source
 
-    monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
+    monkeypatch.delenv("TRANIBOR_FAKES", raising=False)
     from tranibor_adapters import registry
 
     monkeypatch.setattr(registry, "fakes_enabled", lambda: False)
@@ -442,7 +442,7 @@ async def _confluence(
         },
     )
     assert declared.status_code == 201, declared.text
-    monkeypatch.delenv("CHOREGOS_FAKES")
+    monkeypatch.delenv("TRANIBOR_FAKES")
     monkeypatch.setattr(confluence, "TRANSPORT", site.transport())
     source = await client.post(
         f"{BASE}/framework/sources",
@@ -654,7 +654,7 @@ async def test_a_web_source_starting_on_a_redirect_is_refused(
     import respx
     from tranibor_adapters.documents import web
 
-    monkeypatch.setenv("CHOREGOS_FAKES", "0")
+    monkeypatch.setenv("TRANIBOR_FAKES", "0")
 
     async def public(host: str) -> list[str]:
         return ["93.184.216.34"]
@@ -856,7 +856,7 @@ async def test_a_web_source_behind_a_login_is_checked_and_crawled_with_the_conne
     from tranibor_api.db.session import session_scope
     from tranibor_api.knowledge.sync import open_source
 
-    monkeypatch.setenv("CHOREGOS_FAKES", "0")
+    monkeypatch.setenv("TRANIBOR_FAKES", "0")
 
     async def public(host: str) -> list[str]:
         return ["93.184.216.34"]

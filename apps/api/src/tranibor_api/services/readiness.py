@@ -56,7 +56,7 @@ STALE_TEST = timedelta(days=7)
 #: Connector types that stand in for the real thing.
 STAND_INS = {"demo", "fake"}
 #: Capabilities the deployment provides when a project does not configure one: the executor
-#: (`CHOREGOS_EXECUTOR_KIND`), the gateway, the memory service, and the internal tracker.
+#: (`TRANIBOR_EXECUTOR_KIND`), the gateway, the memory service, and the internal tracker.
 PROVIDED_BY_THE_DEPLOYMENT = frozenset({"runtime", "gateway", "memory", "tracker"})
 #: Secret fields that never block a connector: a webhook secret only matters once GitHub can reach us.
 OPTIONAL_SECRETS = {"webhook_secret"}
@@ -971,7 +971,7 @@ def runtime_fact(connectors: dict[str, ConnectorFact], policy: Any) -> RuntimeFa
     No judgment (None) when the policy asks for no gVisor (the orchestrator then gives a run the
     pool's own class), when the executor in use is not the warm pool (a Job sets `runtimeClassName`
     per run), under fakes, or when the deployment never told the API its pool's class
-    (`CHOREGOS_RUNNER_RUNTIME_CLASS` unset; an empty value means "the cluster default")."""
+    (`TRANIBOR_RUNNER_RUNTIME_CLASS` unset; an empty value means "the cluster default")."""
     import os
 
     from tranibor_adapters import fakes_enabled
@@ -985,10 +985,10 @@ def runtime_fact(connectors: dict[str, ConnectorFact], policy: Any) -> RuntimeFa
     if (runtime.type if runtime else default_executor_kind()) != "agent_sandbox":
         return None
     config = runtime.config if runtime else {}
-    pool = config.get("runtime_class", os.environ.get("CHOREGOS_RUNNER_RUNTIME_CLASS"))
+    pool = config.get("runtime_class", os.environ.get("TRANIBOR_RUNNER_RUNTIME_CLASS"))
     if pool is None:
         return None
-    warm_pool = config.get("warm_pool") or os.environ.get("CHOREGOS_SANDBOX_WARM_POOL") or "choregos-runner"
+    warm_pool = config.get("warm_pool") or os.environ.get("TRANIBOR_SANDBOX_WARM_POOL") or "choregos-runner"
     return RuntimeFact("gvisor", runtime_class_refusal("gvisor", str(pool), str(warm_pool)))
 
 

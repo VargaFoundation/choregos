@@ -69,13 +69,13 @@ def test_the_demo_type_is_refused_in_staging_and_prod_and_reaches_the_fakes_proc
 ) -> None:
     from tranibor_adapters import available, build
 
-    monkeypatch.setenv("CHOREGOS_FAKES", "0")
+    monkeypatch.setenv("TRANIBOR_FAKES", "0")
     assert "demo" in available("cd")
     for environment in ("staging", "prod"):
-        monkeypatch.setenv("CHOREGOS_ENV", environment)
+        monkeypatch.setenv("TRANIBOR_ENV", environment)
         with pytest.raises(ConfigurationError, match="refused"):
             build("cd", "demo", {})
-    monkeypatch.setenv("CHOREGOS_ENV", "dev")
+    monkeypatch.setenv("TRANIBOR_ENV", "dev")
     remote: Any = build("cd", "demo", {"url": "http://choregos-demo-fakes:8090/cd/mcp", "api_key": TOKEN})
     assert isinstance(remote, DemoCd) and isinstance(remote.desk, RemoteDesk)
     assert remote.desk.client.url == "http://choregos-demo-fakes:8090/cd/mcp"

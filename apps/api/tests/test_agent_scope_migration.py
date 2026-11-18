@@ -55,7 +55,7 @@ def test_the_migration_sorts_catalogue_agents_from_the_organisations_own(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     database = tmp_path / "migrated.db"
-    monkeypatch.setenv("CHOREGOS_DATABASE_URL", f"sqlite+aiosqlite:///{database}")
+    monkeypatch.setenv("TRANIBOR_DATABASE_URL", f"sqlite+aiosqlite:///{database}")
     get_settings.cache_clear()
     url = f"sqlite:///{database}"
     try:
@@ -115,7 +115,7 @@ def test_the_backfill_gives_template_installed_catalogue_agents_their_provenance
     assert reviewer is not None and triager is not None
     spec = AgentSpec.model_validate(reviewer.document["spec"])
     database = tmp_path / "backfill.db"
-    monkeypatch.setenv("CHOREGOS_DATABASE_URL", f"sqlite+aiosqlite:///{database}")
+    monkeypatch.setenv("TRANIBOR_DATABASE_URL", f"sqlite+aiosqlite:///{database}")
     get_settings.cache_clear()
     url = f"sqlite:///{database}"
 

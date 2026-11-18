@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: Apache-2.0
 """The context reduction (ADR 0055) and the tool scripts (ADR 0122) a run starts with.
 
-Context reduction: the deployment (`CHOREGOS_CONTEXT_REDUCTION`, Helm `runner.contextReduction.enabled`)
+Context reduction: the deployment (`TRANIBOR_CONTEXT_REDUCTION`, Helm `runner.contextReduction.enabled`)
 can refuse it whatever the policy says. Tool scripts, strictest first: the organisation's switch
-(`tool_scripts_switched_on`: the deployment's brake `CHOREGOS_TOOL_SCRIPTS_ALLOWED`, then its `tool_scripts`
-setting, else the deployment's default `CHOREGOS_TOOL_SCRIPTS`; S57-05b); the organisation's ceiling,
+(`tool_scripts_switched_on`: the deployment's brake `TRANIBOR_TOOL_SCRIPTS_ALLOWED`, then its `tool_scripts`
+setting, else the deployment's default `TRANIBOR_TOOL_SCRIPTS`; S57-05b); the organisation's ceiling,
 which can forbid them; what the policy says for the role (its `per_role` override, else its
 `tools.scripts`); the run's agent's default (its catalogue entry's `spec.tools.scripts`, ADR 0122 §9,
 S57-15); else off. The stage input carries the result, so a run says what it ran with.

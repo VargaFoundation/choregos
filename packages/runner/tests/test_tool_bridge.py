@@ -41,7 +41,7 @@ def own_tmp(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.fixture
 def settings(runner_settings: RunnerSettings, monkeypatch: pytest.MonkeyPatch) -> RunnerSettings:
     """The runner as an executor starts it: the run token in its settings and in its environment."""
-    monkeypatch.setenv("CHOREGOS_RUN_TOKEN", TOKEN)
+    monkeypatch.setenv("TRANIBOR_RUN_TOKEN", TOKEN)
     runner_settings.run_token = TOKEN
     return runner_settings
 
@@ -112,7 +112,7 @@ async def test_a_script_reaches_its_tools_through_the_runner_s_server(
     assert '"tools.script.call"' in transcript and DIGEST in transcript
 
     # No credential: the agent's process holds no run token, and none came back to it or went to the journal.
-    assert "CHOREGOS_RUN_TOKEN" not in seen["run_variables"], seen["run_variables"]
+    assert "TRANIBOR_RUN_TOKEN" not in seen["run_variables"], seen["run_variables"]
     assert TOKEN not in json.dumps(seen)
     assert TOKEN not in json.dumps(client.events) and TOKEN not in transcript
 

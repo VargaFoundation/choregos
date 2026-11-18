@@ -22,7 +22,7 @@ COMMAND = ["python", "-m", "ticket_triager"]
 def images(monkeypatch: pytest.MonkeyPatch) -> None:
     from tranibor_orchestrator.config import reset_settings_cache
 
-    monkeypatch.setenv("CHOREGOS_AGENT_IMAGES", json.dumps({"ticket-triager": TRIAGER}))
+    monkeypatch.setenv("TRANIBOR_AGENT_IMAGES", json.dumps({"ticket-triager": TRIAGER}))
     reset_settings_cache()
 
 
@@ -115,7 +115,7 @@ async def test_under_container_the_agents_image_is_the_agents_container(
     container, started by its launcher: the author's code never runs beside the run's credentials."""
     from tranibor_orchestrator.config import get_settings, reset_settings_cache
 
-    monkeypatch.setenv("CHOREGOS_RUNNER_AGENT_ISOLATION", "container")
+    monkeypatch.setenv("TRANIBOR_RUNNER_AGENT_ISOLATION", "container")
     reset_settings_cache()
     await _agent(setup, _code())
     prepared = await stage_activities.prepare_stage(_plan(setup))

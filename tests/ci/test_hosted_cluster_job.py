@@ -33,7 +33,7 @@ def test_the_job_runs_the_hosted_tests_on_two_versions_and_fails_on_a_skip() -> 
     for test in ("test_hosted_native_sidecar.py", "test_hosted_session_pod.py", "test_hosted_gvisor.py"):
         assert f"tests/cluster/{test}" in runs, test
     assert "kindest/node:v1.28" in runs
-    assert "CHOREGOS_CLUSTER_CONTEXT=kind-old" in runs
+    assert "TRANIBOR_CLUSTER_CONTEXT=kind-old" in runs
     assert "! grep -qi skipped pytest.out" in runs
     assert "make cluster-gvisor" in runs
     assert not any("if" in step for step in _job()["steps"]), "no step of the proof is skipped"
@@ -45,8 +45,8 @@ def test_the_images_are_built_and_loaded_into_the_cluster() -> None:
     assert "tests/cluster/assets/runner.Dockerfile" in runs
     assert "kind load docker-image" in runs
     env = next(step["env"] for step in _job()["steps"] if "env" in step)
-    assert env["CHOREGOS_HOSTED_REFERENCE_IMAGE"] == "reference-agent:ci"
-    assert env["CHOREGOS_HOSTED_RUNNER_IMAGE"] == "choregos-runner:ci"
+    assert env["TRANIBOR_HOSTED_REFERENCE_IMAGE"] == "reference-agent:ci"
+    assert env["TRANIBOR_HOSTED_RUNNER_IMAGE"] == "choregos-runner:ci"
 
 
 def test_the_gate_waits_for_the_job_and_the_filter_covers_what_it_proves() -> None:

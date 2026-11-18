@@ -164,8 +164,8 @@ async def test_the_agent_card_stays_on_the_instance_without_a_verified_host(
 def oauth(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     from tranibor_api.config import reset_settings_cache
 
-    monkeypatch.setenv("CHOREGOS_MCP_OAUTH_ENABLED", "true")
-    monkeypatch.setenv("CHOREGOS_OIDC_ISSUER", "https://idp.test/realms/platform")
+    monkeypatch.setenv("TRANIBOR_MCP_OAUTH_ENABLED", "true")
+    monkeypatch.setenv("TRANIBOR_OIDC_ISSUER", "https://idp.test/realms/platform")
     reset_settings_cache()
     yield
     reset_settings_cache()

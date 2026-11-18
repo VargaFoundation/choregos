@@ -116,7 +116,7 @@ describe("the Outposts page (ADR 0147)", () => {
   });
 
   it("a deployment where outposts are off says so, in the API's own words", async () => {
-    const words = "outposts are switched off on this deployment (`CHOREGOS_OUTPOSTS`): its operator turns them on";
+    const words = "outposts are switched off on this deployment (`TRANIBOR_OUTPOSTS`): its operator turns them on";
     vi.mocked(api.outposts).mockResolvedValue({ items: [], enabled: true, door_signing_key: true });
     vi.mocked(api.createOutpost).mockRejectedValue(new ApiError(409, { detail: words, code: "outposts_disabled" }));
     view();
@@ -125,8 +125,8 @@ describe("the Outposts page (ADR 0147)", () => {
     const said = await screen.findByTestId("outposts-deployment-refusal");
     expect(said).toHaveTextContent("Outposts are switched off on this deployment");
     // The API's sentence as it is: a name between backticks reads as code, the words are the API's.
-    expect(said).toHaveTextContent("outposts are switched off on this deployment (CHOREGOS_OUTPOSTS): its operator turns them on");
-    expect(within(said).getByText("CHOREGOS_OUTPOSTS").tagName).toBe("CODE");
+    expect(said).toHaveTextContent("outposts are switched off on this deployment (TRANIBOR_OUTPOSTS): its operator turns them on");
+    expect(within(said).getByText("TRANIBOR_OUTPOSTS").tagName).toBe("CODE");
     expect(push).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "Create the outpost" })).toBeEnabled();
   });

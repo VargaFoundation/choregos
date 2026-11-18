@@ -6,10 +6,10 @@ by the API's client is decrypted by the worker that runs the workflow, and the r
 module each process called `Client.connect(address, namespace=...)` on its own, in clear, with the
 default converter (S80-06). Now they all call `connect_temporal`, which reads one configuration:
 
-- TLS (`CHOREGOS_TEMPORAL_TLS`, `..._TLS_CA_FILE`, `..._TLS_CERT_FILE`, `..._TLS_KEY_FILE`,
+- TLS (`TRANIBOR_TEMPORAL_TLS`, `..._TLS_CA_FILE`, `..._TLS_CERT_FILE`, `..._TLS_KEY_FILE`,
   `..._TLS_SERVER_NAME`): the CA that signs the frontend's certificate, and for mutual TLS the
   client's certificate and key. A file named turns TLS on; a certificate without its key is refused.
-- The payload codec (`CHOREGOS_TEMPORAL_CODEC_KEYS`, or `..._CODEC_KEYS_FILE` naming a file that
+- The payload codec (`TRANIBOR_TEMPORAL_CODEC_KEYS`, or `..._CODEC_KEYS_FILE` naming a file that
   holds the same text): `id:base64,id:base64`, 32-byte AES keys, the FIRST encrypts, all decrypt.
   The key id travels in each payload's metadata, so a key can rotate: put the new one first, keep
   the old one listed until no open history carries it.
@@ -38,13 +38,13 @@ from temporalio.client import Client
 from temporalio.converter import DataConverter, DefaultFailureConverterWithEncodedAttributes, PayloadCodec
 from temporalio.service import TLSConfig
 
-ENV_TLS = "CHOREGOS_TEMPORAL_TLS"
-ENV_TLS_CA_FILE = "CHOREGOS_TEMPORAL_TLS_CA_FILE"
-ENV_TLS_CERT_FILE = "CHOREGOS_TEMPORAL_TLS_CERT_FILE"
-ENV_TLS_KEY_FILE = "CHOREGOS_TEMPORAL_TLS_KEY_FILE"
-ENV_TLS_SERVER_NAME = "CHOREGOS_TEMPORAL_TLS_SERVER_NAME"
-ENV_CODEC_KEYS = "CHOREGOS_TEMPORAL_CODEC_KEYS"
-ENV_CODEC_KEYS_FILE = "CHOREGOS_TEMPORAL_CODEC_KEYS_FILE"
+ENV_TLS = "TRANIBOR_TEMPORAL_TLS"
+ENV_TLS_CA_FILE = "TRANIBOR_TEMPORAL_TLS_CA_FILE"
+ENV_TLS_CERT_FILE = "TRANIBOR_TEMPORAL_TLS_CERT_FILE"
+ENV_TLS_KEY_FILE = "TRANIBOR_TEMPORAL_TLS_KEY_FILE"
+ENV_TLS_SERVER_NAME = "TRANIBOR_TEMPORAL_TLS_SERVER_NAME"
+ENV_CODEC_KEYS = "TRANIBOR_TEMPORAL_CODEC_KEYS"
+ENV_CODEC_KEYS_FILE = "TRANIBOR_TEMPORAL_CODEC_KEYS_FILE"
 
 #: The encoding an encrypted payload carries; the codec leaves every other payload as it found it.
 ENCRYPTED_ENCODING = b"binary/encrypted"

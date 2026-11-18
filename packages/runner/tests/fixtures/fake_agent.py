@@ -161,14 +161,18 @@ def _http(calls: list[dict[str, Any]]) -> None:
             answers.append({"status": error.code, "body": error.read().decode()})
         except OSError as exc:
             answers.append({"status": None, "body": type(exc).__name__})
-    held = sorted(name for name in os.environ if name.startswith("CHOREGOS_RUN_"))
+    held = sorted(
+        name
+        for name in os.environ
+        if name.startswith(("TRANIBOR_RUN_", "CHOREGOS_RUN_"))  # compat-ok
+    )  # compat-ok
     (Path(os.environ["HOME"]) / "http.json").write_text(
         json.dumps({"answers": answers, "run_variables": held}), encoding="utf-8"
     )
 
 
 #: What `scripts` records of the agent's environment: what the runner sets for tool scripts (ADR 0122).
-SCRIPT_VARIABLES = ("CHOREGOS_TOOLS_DIR", "CHOREGOS_TOOLS_BRIDGE", "PYTHONPATH", "TMPDIR")
+SCRIPT_VARIABLES = ("TRANIBOR_TOOLS_DIR", "TRANIBOR_TOOLS_BRIDGE", "PYTHONPATH", "TMPDIR")
 
 
 def _scripts(scripts: list[dict[str, Any]], workspace: Path) -> None:
@@ -254,7 +258,7 @@ def _new_session(message_id: Any, script: dict[str, Any]) -> None:
 
 def main() -> int:
     script: dict[str, Any] = json.loads(os.environ.get("FAKE_AGENT_SCRIPT", "{}"))
-    workspace = Path(os.environ.get("CHOREGOS_WORKSPACE_PATH", ".")).resolve()
+    workspace = Path(os.environ.get("TRANIBOR_WORKSPACE_PATH", ".")).resolve()
     outgoing_id = 1000
     prompts_seen = 0
     _exit_at_start(script)

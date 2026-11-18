@@ -4,7 +4,7 @@
 `adr_number_free` (read on the default branch). Another study merges an ADR with the same number
 WHILE the CI runs: the duplicate must be refused when the CI turns green, not merged on the verdict
 read when the transition was entered. Played on the fakes with a real interpreter; the history is
-archived for `tests/replay` (`CHOREGOS_RECORD_HISTORY=1`).
+archived for `tests/replay` (`TRANIBOR_RECORD_HISTORY=1`).
 """
 
 from __future__ import annotations

@@ -579,7 +579,7 @@ async def place(  # noqa: PLR0913 - one call is these facts, keyword-only
     flight or per minute reached, a call too large to cross the door, an id that is another call's."""
     settings = get_settings()
     if not settings.outposts:
-        raise NotAdmitted(SWITCHED_OFF, "outposts are switched off on this deployment (`CHOREGOS_OUTPOSTS`)")
+        raise NotAdmitted(SWITCHED_OFF, "outposts are switched off on this deployment (`TRANIBOR_OUTPOSTS`)")
     if outpost.status != OutpostStatus.ACTIVE.value:
         reason = REVOKED if outpost.status == OutpostStatus.REVOKED.value else PAUSED
         raise NotAdmitted(reason, f"the outpost `{outpost.slug}` is {outpost.status}: it is handed nothing")

@@ -6,7 +6,7 @@ organisation and the alias of an endpoint in that outpost's policy file. No URL 
 address and the credential are the outpost's and exist in its file only (ADR 0147 §7), so a
 declaration that carries either is a 422. Declaring it routes the connector to the outpost
 (`org_connectors.outpost_id`), which is then not deleted while the connector remains. It supports
-the `service` identity and no other. Under `CHOREGOS_FAKES` and without a secrets key, its calls are
+the `service` identity and no other. Under `TRANIBOR_FAKES` and without a secrets key, its calls are
 served by the in-memory `FakeOutpost`.
 """
 
@@ -286,13 +286,13 @@ async def test_the_alias_is_never_read_as_a_host(client: AsyncClient, admin: str
     assert (await _declare(client, _config())).status_code == 201
 
 
-# ───────────────────────── under CHOREGOS_FAKES, without a secrets key ─────────────────────────
+# ───────────────────────── under TRANIBOR_FAKES, without a secrets key ─────────────────────────
 
 
 async def test_without_a_secrets_key_the_fake_outpost_serves_the_connector_in_memory(
     client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """`CHOREGOS_FAKES=1` on a deployment that has no key to seal a call's arguments under: the
+    """`TRANIBOR_FAKES=1` on a deployment that has no key to seal a call's arguments under: the
     in-memory fake secret store is in force, and so is the in-memory `FakeOutpost`. The route is still
     judged on the outpost's own row; no call is written; the refusals are the same."""
     from tranibor_adapters.fakes.outpost import FakeOutpost

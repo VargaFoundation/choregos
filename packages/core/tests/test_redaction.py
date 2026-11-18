@@ -19,7 +19,7 @@ _ANT = "sk-ant-" + "api03-" + "a" * 26
     ("line", "secret"),
     [
         (f"GITHUB_TOKEN={_GH}", _GH),
-        ("export CHOREGOS_RUN_TOKEN=opaque-run-token-value", "opaque-run-token-value"),
+        ("export TRANIBOR_RUN_TOKEN=opaque-run-token-value", "opaque-run-token-value"),
         ('{"client_secret": "s3cr3t-value"}', "s3cr3t-value"),
         ("password: hunter2-but-longer", "hunter2-but-longer"),
         (f"curl -H 'Authorization: {_BEARER}'", "abc.def.ghi-123456"),

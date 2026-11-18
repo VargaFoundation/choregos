@@ -6,7 +6,7 @@ signature that binds it, and is answered for the first check that fails, in the 
 instance holds one poll at a time; a call is handed over sealed to the instance and signed by the
 door; an answer is taken once, from the instance that claimed the call, under the epoch of the claim.
 
-They run on SQLite and, with `CHOREGOS_TEST_SUITE_ON_POSTGRES`, again on PostgreSQL under row-level
+They run on SQLite and, with `TRANIBOR_TEST_SUITE_ON_POSTGRES`, again on PostgreSQL under row-level
 security. What only PostgreSQL can show is in `test_outpost_rendezvous_postgres.py` (two claimers)
 and `test_outpost_long_poll_holds_no_connection.py` (the pool, the relay).
 """
@@ -101,7 +101,7 @@ async def _door_events() -> list[str]:
 
 
 async def test_the_door_is_not_mounted_while_outposts_are_off(monkeypatch: pytest.MonkeyPatch) -> None:
-    """`CHOREGOS_OUTPOSTS` is the switch that stops every outpost at once (ADR 0147 §12): off, a daemon
+    """`TRANIBOR_OUTPOSTS` is the switch that stops every outpost at once (ADR 0147 §12): off, a daemon
     meets a 404 that is none of the contract's problems."""
     from tranibor_api.main import create_app
 
@@ -122,7 +122,7 @@ def test_a_door_switched_on_without_its_origin_or_its_key_stops_the_start_up(
     from tranibor_api.main import create_app
 
     kit.configure(monkeypatch, **{missing: None})
-    with pytest.raises(RuntimeError, match=f"CHOREGOS_{missing.upper()}"):
+    with pytest.raises(RuntimeError, match=f"TRANIBOR_{missing.upper()}"):
         create_app()
 
 

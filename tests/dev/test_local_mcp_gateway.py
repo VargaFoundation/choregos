@@ -29,7 +29,7 @@ def test_the_gateway_and_the_fakes_are_optional() -> None:
 
 
 def test_the_gateway_fronts_the_demo_fakes_by_name() -> None:
-    upstreams = json.loads(_env(_services()["mcp-gateway"])["CHOREGOS_FAKE_GATEWAY_UPSTREAMS"])
+    upstreams = json.loads(_env(_services()["mcp-gateway"])["TRANIBOR_FAKE_GATEWAY_UPSTREAMS"])
     assert upstreams
     for name, upstream in upstreams.items():
         assert name in {"mdm", "shipping", "access_control", "supplier", "cd"}
@@ -39,7 +39,7 @@ def test_the_gateway_fronts_the_demo_fakes_by_name() -> None:
 
 def test_the_api_accepts_the_gateway_host() -> None:
     for name in ("api", "worker"):
-        hosts = json.loads(_env(_services()[name])["CHOREGOS_MCP_GATEWAY_INTERNAL_HOSTS"])
+        hosts = json.loads(_env(_services()[name])["TRANIBOR_MCP_GATEWAY_INTERNAL_HOSTS"])
         assert hosts == ["mcp-gateway"], name
 
 

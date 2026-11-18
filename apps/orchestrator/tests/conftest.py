@@ -11,13 +11,13 @@ import pytest
 
 from . import pg_kit, sqlite_kit
 
-os.environ.setdefault("CHOREGOS_ENV", "test")
-os.environ.setdefault("CHOREGOS_FAKES", "1")
+os.environ.setdefault("TRANIBOR_ENV", "test")
+os.environ.setdefault("TRANIBOR_FAKES", "1")
 
 
 def recording_history() -> str | None:
-    """The value of the history-recording switch (`CHOREGOS_RECORD_HISTORY`), or None when off."""
-    return os.environ.get("CHOREGOS_RECORD_HISTORY") or None
+    """The value of the history-recording switch (`TRANIBOR_RECORD_HISTORY`), or None when off."""
+    return os.environ.get("TRANIBOR_RECORD_HISTORY") or None
 
 
 @dataclass
@@ -31,20 +31,20 @@ class Fixture:
     adapters: Any
 
 
-#: `CHOREGOS_TEST_ORCH_ON_POSTGRES=1` (with `CHOREGOS_TEST_DATABASE_URL`) runs the orchestrator
+#: `TRANIBOR_TEST_ORCH_ON_POSTGRES=1` (with `TRANIBOR_TEST_DATABASE_URL`) runs the orchestrator
 #: suite's `setup` on a real PostgreSQL (S27-11: the reservation lock is an advisory lock there, which
 #: SQLite cannot exercise). The schema is migrated by Alembic and the suite connects as a non-superuser
 #: role, so RLS applies (S47-27).
-ON_POSTGRES = os.environ.get("CHOREGOS_TEST_ORCH_ON_POSTGRES") == "1"
-PG_URL = os.environ.get("CHOREGOS_TEST_DATABASE_URL", "")
+ON_POSTGRES = os.environ.get("TRANIBOR_TEST_ORCH_ON_POSTGRES") == "1"
+PG_URL = os.environ.get("TRANIBOR_TEST_DATABASE_URL", "")
 
 
 @pytest.fixture
 async def setup(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[Fixture]:
     if ON_POSTGRES:
-        os.environ["CHOREGOS_DATABASE_URL"] = pg_kit.app_url(PG_URL)
+        os.environ["TRANIBOR_DATABASE_URL"] = pg_kit.app_url(PG_URL)
     else:
-        os.environ["CHOREGOS_DATABASE_URL"] = f"sqlite+aiosqlite:///{tmp_path}/orch.db"
+        os.environ["TRANIBOR_DATABASE_URL"] = f"sqlite+aiosqlite:///{tmp_path}/orch.db"
     from tranibor_adapters import AdapterSet
     from tranibor_api.config import reset_settings_cache
     from tranibor_api.db import session as db_session

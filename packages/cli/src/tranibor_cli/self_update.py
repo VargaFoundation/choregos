@@ -8,7 +8,7 @@
   new one takes its name, and the leftover is removed at the next update.
 - The version check: when the CLI talks to an instance whose version (`GET /api/v1/edition`, public)
   differs from its own, it writes ONE line on stderr saying how to update, at most once a day per
-  instance. `CHOREGOS_NO_VERSION_CHECK=1` silences it. It never fails a command: any error is
+  instance. `TRANIBOR_NO_VERSION_CHECK=1` silences it. It never fails a command: any error is
   swallowed, and the request it makes has a short timeout.
 """
 
@@ -35,7 +35,7 @@ from tranibor_core.publishing import PUBLISHING
 
 RELEASES = PUBLISHING.releases
 #: The variable that silences the version check.
-NO_CHECK_ENV = "CHOREGOS_NO_VERSION_CHECK"
+NO_CHECK_ENV = "TRANIBOR_NO_VERSION_CHECK"
 #: Seconds between two checks of one instance (and so between two warnings).
 CHECK_EVERY_S = 24 * 3600
 CHECK_TIMEOUT_S = 2.0

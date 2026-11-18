@@ -7,6 +7,8 @@ Everything that talks to the outside world lives in `packages/adapters`.
 
 from __future__ import annotations
 
+import tranibor_contracts  # noqa: F401 - adopts the former environment variable names, first (ADR 0176 R4)
+
 from .access import AccessLine, AccessReport, access_report
 from .catalogue import Catalogue, CatalogueTool, build_request, load_catalogue
 from .domain import (

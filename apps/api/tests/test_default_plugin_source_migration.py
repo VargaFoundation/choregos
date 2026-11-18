@@ -44,7 +44,7 @@ def test_the_source_is_renamed_idempotently_and_back(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     database = tmp_path / "source.db"
-    monkeypatch.setenv("CHOREGOS_DATABASE_URL", f"sqlite+aiosqlite:///{database}")
+    monkeypatch.setenv("TRANIBOR_DATABASE_URL", f"sqlite+aiosqlite:///{database}")
     get_settings.cache_clear()
     url = f"sqlite:///{database}"
     engine = create_engine(url)

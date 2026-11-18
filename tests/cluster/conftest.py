@@ -5,7 +5,7 @@ example, accept it and then let everything through. These tests run against a cl
 enforces policies (kind + Calico) and are **skipped** without one.
 
     make cluster-up          # kind + Calico, local ports
-    CHOREGOS_CLUSTER_CONTEXT=kind-choregos uv run pytest tests/cluster -m cluster
+    TRANIBOR_CLUSTER_CONTEXT=kind-choregos uv run pytest tests/cluster -m cluster
 """
 
 from __future__ import annotations
@@ -28,13 +28,13 @@ def context(*, non_destructive: bool = False) -> str:
 
     `non_destructive`: the caller only creates objects in a namespace of its own and deletes
     it afterwards (the agent-sandbox tests, S35). Such a test may run on a shared cluster
-    named, explicitly and exactly, by `CHOREGOS_CLUSTER_ALLOW_SHARED=<context>`; every other
+    named, explicitly and exactly, by `TRANIBOR_CLUSTER_ALLOW_SHARED=<context>`; every other
     test keeps refusing it.
     """
-    name = os.environ.get("CHOREGOS_CLUSTER_CONTEXT", "")
+    name = os.environ.get("TRANIBOR_CLUSTER_CONTEXT", "")
     if not name:
-        pytest.skip("cluster test skipped — CHOREGOS_CLUSTER_CONTEXT is not set")
-    shared_ok = non_destructive and os.environ.get("CHOREGOS_CLUSTER_ALLOW_SHARED", "") == name
+        pytest.skip("cluster test skipped — TRANIBOR_CLUSTER_CONTEXT is not set")
+    shared_ok = non_destructive and os.environ.get("TRANIBOR_CLUSTER_ALLOW_SHARED", "") == name
     # These tests stop nodes, create and destroy namespaces, install operators and cut the
     # network. On a disposable cluster that is their job; on a shared cluster it is an incident.
     # A developer machine's contexts often include one of each — `dev` and `prod` next to
@@ -43,12 +43,12 @@ def context(*, non_destructive: bool = False) -> str:
     if (
         not shared_ok
         and not name.startswith("kind-")
-        and os.environ.get("CHOREGOS_CLUSTER_ALLOW_NON_KIND") != "je-sais-ce-que-je-fais"  # lang: fr-ok
+        and os.environ.get("TRANIBOR_CLUSTER_ALLOW_NON_KIND") != "je-sais-ce-que-je-fais"  # lang: fr-ok
     ):
         pytest.skip(
             f"cluster test refused on `{name}`: it is not a kind cluster. These tests are "
             "destructive (node stop, network cut, database restore). For a disposable cluster "
-            "that is not kind: CHOREGOS_CLUSTER_ALLOW_NON_KIND=je-sais-ce-que-je-fais"  # lang: fr-ok
+            "that is not kind: TRANIBOR_CLUSTER_ALLOW_NON_KIND=je-sais-ce-que-je-fais"  # lang: fr-ok
         )
     if shutil.which("kubectl") is None:
         pytest.skip("cluster test skipped — kubectl is absent")
@@ -78,7 +78,7 @@ def kubectl_shared(
     *args: str, input_text: str | None = None, check: bool = True, timeout_s: float = 180
 ) -> str:
     """`kubectl` for a NON-destructive test, allowed on the shared cluster that
-    `CHOREGOS_CLUSTER_ALLOW_SHARED` names (see `context`)."""
+    `TRANIBOR_CLUSTER_ALLOW_SHARED` names (see `context`)."""
     return _kubectl(
         context(non_destructive=True), *args, input_text=input_text, check=check, timeout_s=timeout_s
     )

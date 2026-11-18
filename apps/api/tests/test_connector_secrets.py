@@ -30,7 +30,7 @@ def sealed_key(monkeypatch: pytest.MonkeyPatch) -> str:
     from tranibor_core.redaction import forget_secrets
 
     key = base64.b64encode(os.urandom(32)).decode()
-    monkeypatch.setenv("CHOREGOS_SECRETS_KEKS", f"k1:{key}")
+    monkeypatch.setenv("TRANIBOR_SECRETS_KEKS", f"k1:{key}")
     forget_secrets()
     return key
 
@@ -219,10 +219,10 @@ async def test_a_reference_whose_stored_value_is_gone_fails_loudly(
 async def test_without_a_deployment_key_a_value_is_refused_and_a_reference_still_works(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.delenv("CHOREGOS_SECRETS_KEKS")
-    monkeypatch.delenv("CHOREGOS_FAKES")
+    monkeypatch.delenv("TRANIBOR_SECRETS_KEKS")
+    monkeypatch.delenv("TRANIBOR_FAKES")
     refused = await client.post(ORG, json=_declare(secret_values={"token": VALUE_1}))
-    assert refused.status_code == 409 and "CHOREGOS_SECRETS_KEKS" in refused.text
+    assert refused.status_code == 409 and "TRANIBOR_SECRETS_KEKS" in refused.text
     assert VALUE_1 not in refused.text
     assert (await client.get(f"{ORG}/vendor")).status_code == 404, "nothing half-created"
     by_reference = await client.post(ORG, json=_declare(secret_refs={"token": "env:CONNECTOR_VENDOR_KEY"}))
@@ -274,7 +274,7 @@ def probe(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[dict[str, Any]]]:
         pooled_fields=("api_token",),
     )
     register("tracker", "probe", spec)(lambda cfg: received.append(cfg) or object())
-    monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
+    monkeypatch.delenv("TRANIBOR_FAKES", raising=False)
     try:
         yield received
     finally:
@@ -320,7 +320,7 @@ async def test_a_tracker_whose_store_is_unavailable_is_an_upstream_error(
     from tranibor_api.errors import ApiError
 
     await _sealed_tracker(client, project, probe)
-    monkeypatch.delenv("CHOREGOS_SECRETS_KEKS")
+    monkeypatch.delenv("TRANIBOR_SECRETS_KEKS")
     with pytest.raises(ApiError, match="Error from the probe service") as refused:
         await _project_tracker(project)
     assert refused.value.status_code == 502
@@ -402,12 +402,12 @@ async def test_a_rewrap_after_a_key_rotation_keeps_every_secret_readable(
 ) -> None:
     await client.post(ORG, json=_declare(secret_values={"token": VALUE_1}))
     new_key = base64.b64encode(os.urandom(32)).decode()
-    monkeypatch.setenv("CHOREGOS_SECRETS_KEKS", f"k2:{new_key},k1:{sealed_key}")
+    monkeypatch.setenv("TRANIBOR_SECRETS_KEKS", f"k2:{new_key},k1:{sealed_key}")
     assert (await client.post(f"{ORG}/vendor/discover")).status_code == 200, "k1 still opens"
     done = await client.post("/api/v1/platform/secrets/rewrap")
     assert done.status_code == 200 and done.json() == {"rewrapped": 1}
     assert [r.kek_id for r in await _stored_rows()] == ["k2"]
-    monkeypatch.setenv("CHOREGOS_SECRETS_KEKS", f"k2:{new_key}")  # k1 retired
+    monkeypatch.setenv("TRANIBOR_SECRETS_KEKS", f"k2:{new_key}")  # k1 retired
     assert (await client.post(f"{ORG}/vendor/discover")).status_code == 200
     assert (await client.post("/api/v1/platform/secrets/rewrap")).json() == {"rewrapped": 0}
 

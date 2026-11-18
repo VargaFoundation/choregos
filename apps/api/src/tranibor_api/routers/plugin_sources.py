@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """The deployment's plugin sources (ADR 0093 §4, S43-03).
 
-Sources are set by the operator (`CHOREGOS_PLUGINS_CONFIG`, `CHOREGOS_PLUGINS_OFFLINE`), never through
+Sources are set by the operator (`TRANIBOR_PLUGINS_CONFIG`, `TRANIBOR_PLUGINS_OFFLINE`), never through
 the API; any member of an organisation reads them, each with its trust policy and what its index
 offers to this core. A source whose index cannot be read is listed with the reason.
 """

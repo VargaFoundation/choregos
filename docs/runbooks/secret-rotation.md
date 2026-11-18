@@ -72,7 +72,7 @@ quiet window**, not a transition.
    after the restart means a process still runs on the old key.
 ## Connector secrets key (`secrets-keks`)
 
-`CHOREGOS_SECRETS_KEKS` is a list `id:base64`; each sealed secret records the id of the key that
+`TRANIBOR_SECRETS_KEKS` is a list `id:base64`; each sealed secret records the id of the key that
 wrapped it, so a rotation is a list, never a swap ([ADR 0058](../adr/0058-connector-secrets-are-write-only-values.md)).
 
 1. Generate a key: `python -c "import os,base64;print('k2:'+base64.b64encode(os.urandom(32)).decode())"`.

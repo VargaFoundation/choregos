@@ -30,23 +30,23 @@ def test_the_platform_and_its_dependencies_are_all_there() -> None:
 
 
 def test_no_platform_process_runs_with_global_fakes() -> None:
-    """`CHOREGOS_FAKES=1` swaps Temporal for an in-memory fake in the API (`temporal.py`): the
+    """`TRANIBOR_FAKES=1` swaps Temporal for an in-memory fake in the API (`temporal.py`): the
     compose would start a Temporal server that nothing talks to, and no work item would run.
     Fakes mode is per project here (the demo project's connectors)."""
     for name in ("api", "worker", "seed", "migrate"):
-        assert "CHOREGOS_FAKES" not in _env(_services()[name]), name
+        assert "TRANIBOR_FAKES" not in _env(_services()[name]), name
 
 
 def test_development_sign_in_only_comes_with_the_dev_environment() -> None:
     """The API refuses development sign-in in staging and prod: the compose must say `dev`."""
     for name in ("api", "worker", "seed", "migrate"):
         env = _env(_services()[name])
-        assert env["CHOREGOS_ENV"] == "dev", name
+        assert env["TRANIBOR_ENV"] == "dev", name
 
 
 def test_the_platform_connects_as_the_non_superuser_role() -> None:
     """A superuser ignores row-level security: the API must connect as `choregos_app`."""
-    url = _env(_services()["api"])["CHOREGOS_DATABASE_URL"]
+    url = _env(_services()["api"])["TRANIBOR_DATABASE_URL"]
     assert "://choregos_app:" in url
     assert "choregos_app" in (ROOT / "dev/local/initdb/01-roles.sql").read_text(encoding="utf-8")
 
@@ -58,7 +58,7 @@ def test_published_ports_listen_on_localhost_only() -> None:
 
 
 def test_the_console_is_on_3000_by_default() -> None:
-    assert "127.0.0.1:${CHOREGOS_PORT_WEB:-3000}:3000" in _services()["web"]["ports"]
+    assert "127.0.0.1:${TRANIBOR_PORT_WEB:-3000}:3000" in _services()["web"]["ports"]
 
 
 def test_every_image_is_built_here_or_pinned() -> None:
@@ -82,9 +82,9 @@ def test_the_api_and_the_workers_share_the_run_token_key() -> None:
 def test_the_console_is_built_with_development_sign_in_and_the_api_address() -> None:
     args = _services()["web"]["build"]["args"]
     assert args["NEXT_PUBLIC_DEV_LOGIN"] == "true"
-    assert args["CHOREGOS_API_URL"] == "http://api:8000"
+    assert args["TRANIBOR_API_URL"] == "http://api:8000"
     dockerfile = (ROOT / "docker/web.Dockerfile").read_text(encoding="utf-8")
-    assert "ARG CHOREGOS_API_URL=" in dockerfile and "ARG NEXT_PUBLIC_DEV_LOGIN=" in dockerfile
+    assert "ARG TRANIBOR_API_URL=" in dockerfile and "ARG NEXT_PUBLIC_DEV_LOGIN=" in dockerfile
 
 
 def test_the_build_context_leaves_local_artefacts_and_secrets_out() -> None:
@@ -123,7 +123,7 @@ def test_litellm_reads_the_generated_configuration() -> None:
     assert services["litellm"]["command"][:2] == ["--config", "/litellm/config.yaml"]
     condition = services["litellm"]["depends_on"]["litellm-config"]["condition"]
     assert condition == "service_completed_successfully"
-    assert _env(services["seed"])["CHOREGOS_LOCAL_PROVIDER_FILE"] == "/litellm/provider"
+    assert _env(services["seed"])["TRANIBOR_LOCAL_PROVIDER_FILE"] == "/litellm/provider"
 
 
 def test_the_workers_run_agents_as_local_containers() -> None:
@@ -134,8 +134,8 @@ def test_the_workers_run_agents_as_local_containers() -> None:
     assert worker["build"]["target"] == "worker-local"
     assert "/var/run/docker.sock:/var/run/docker.sock" in worker["volumes"]
     env = _env(worker)
-    assert env["CHOREGOS_EXECUTOR_KIND"] == "local_docker"
-    assert env["CHOREGOS_RUNNER_IMAGE"].startswith(PUBLISHING.image("choregos-runner") + ":")
+    assert env["TRANIBOR_EXECUTOR_KIND"] == "local_docker"
+    assert env["TRANIBOR_RUNNER_IMAGE"].startswith(PUBLISHING.image("choregos-runner") + ":")
     # The run containers join the network by name: it must not depend on the project name.
     assert compose["networks"]["default"]["name"] == LOCAL_NETWORK
 

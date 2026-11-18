@@ -11,7 +11,7 @@ cosign 3 reports none for a bundle signature, so the expressions are passed to i
 and its exit code is the verdict on the signer.
 
 Every failure is a verdict, never an exception: cosign missing, a timeout, an exit code, an output
-that is not cosign's. Publication decides what a refusal means (`CHOREGOS_HOSTED_COSIGN`).
+that is not cosign's. Publication decides what a refusal means (`TRANIBOR_HOSTED_COSIGN`).
 """
 
 from __future__ import annotations

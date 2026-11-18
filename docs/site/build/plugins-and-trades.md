@@ -51,7 +51,7 @@ the platform's own processes.
 | Inbound event types, finding types, memory kinds, stage roles | | `INBOUND_EVENT_TYPES`, `FINDING_TYPES`, `MEMORY_KINDS` of `tranibor_contracts`, `stage_roles.declare_stage_roles` (ADR 0181, round C0) |
 | Durable code of its own (a release train) | | a worker seam (ADR 0181, round D) |
 
-A deterministic job step runs an image the operator allows (`CHOREGOS_JOB_IMAGES`); a plugin's template
+A deterministic job step runs an image the operator allows (`TRANIBOR_JOB_IMAGES`); a plugin's template
 names it.
 
 ## One example per trade

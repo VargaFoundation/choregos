@@ -369,7 +369,7 @@ async def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--api", required=True, help="console/API base URL, e.g. https://choregos.example")
     parser.add_argument("--org", required=True)
-    parser.add_argument("--token-file", help="file holding an org admin's API token (or CHOREGOS_TOKEN)")
+    parser.add_argument("--token-file", help="file holding an org admin's API token (or TRANIBOR_TOKEN)")
     parser.add_argument("--mapping", default=str(DEFAULT_MAPPING))
     parser.add_argument("--template-dir", default=str(DEFAULT_TEMPLATE))
     parser.add_argument("--apply", action="store_true", help="execute the plan (default: dry run)")
@@ -380,10 +380,10 @@ async def main(argv: list[str] | None = None) -> int:
     token = (
         pathlib.Path(args.token_file).expanduser().read_text(encoding="utf-8").strip()  # noqa: ASYNC240
         if args.token_file
-        else os.environ.get("CHOREGOS_TOKEN", "")
+        else os.environ.get("TRANIBOR_TOKEN", "")
     )
     if not token:
-        print("no token: pass --token-file or set CHOREGOS_TOKEN", file=sys.stderr)
+        print("no token: pass --token-file or set TRANIBOR_TOKEN", file=sys.stderr)
         return 2
     mapping = yaml.safe_load(pathlib.Path(args.mapping).read_text(encoding="utf-8"))  # noqa: ASYNC240
     async with httpx.AsyncClient(

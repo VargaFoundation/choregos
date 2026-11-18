@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from importlib import metadata as _metadata
 
+import tranibor_contracts  # noqa: F401 - adopts the former environment variable names, first (ADR 0176 R4)
 from tranibor_contracts.outpost import OUTPOST_PROTOCOL
 
 #: The daemon's own release, announced to the door as a fact to show. Read from the installed

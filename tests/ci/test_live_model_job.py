@@ -110,7 +110,7 @@ def test_a_failure_stays_red_and_a_skip_is_a_failure() -> None:
     assert "tests/live/test_litellm_live.py" in suite["run"]
     assert 'test "${PIPESTATUS[0]}" -eq 0' in suite["run"]
     assert "! grep -qi skipped" in suite["run"]
-    assert gateway["env"]["CHOREGOS_LIVE_REQUIRED"] == "litellm"
+    assert gateway["env"]["TRANIBOR_LIVE_REQUIRED"] == "litellm"
 
 
 def test_only_a_failed_night_opens_the_nightly_issue() -> None:
@@ -126,8 +126,8 @@ def test_the_job_reaches_the_gateway_the_stack_starts() -> None:
     (port,) = litellm["ports"]
     host_port = port.split(":")[1]
     assert port.startswith("127.0.0.1:"), "the gateway is not published beyond the runner"
-    assert env["CHOREGOS_LIVE_LITELLM_URL"] == f"http://127.0.0.1:{host_port}"
-    assert env["CHOREGOS_LIVE_LITELLM_KEY"] == litellm["environment"]["LITELLM_MASTER_KEY"]
+    assert env["TRANIBOR_LIVE_LITELLM_URL"] == f"http://127.0.0.1:{host_port}"
+    assert env["TRANIBOR_LIVE_LITELLM_KEY"] == litellm["environment"]["LITELLM_MASTER_KEY"]
     # The provider key reaches LiteLLM, and only LiteLLM.
     services = _compose()["services"]
     assert [name for name, service in services.items() if "ANTHROPIC_API_KEY" in str(service)] == ["litellm"]

@@ -75,7 +75,7 @@ SIGNATURE_PREFIX = "sha256="
 def signing_secret(token_sha256: str) -> str:
     """The HMAC key of a trigger with `auth: signature` (S56-04): derived from the token's digest
     under the deployment's session secret, so nothing more is stored and it changes with the token.
-    Rotating `CHOREGOS_SESSION_SECRET` changes it too: the senders take the new one from a new token."""
+    Rotating `TRANIBOR_SESSION_SECRET` changes it too: the senders take the new one from a new token."""
     from ..config import get_settings
 
     key = get_settings().session_secret.encode()

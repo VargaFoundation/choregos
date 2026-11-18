@@ -57,18 +57,18 @@ async def test_the_activity_syncs_as_the_workers_family(
     from tranibor_api.knowledge.sync import sync_source
     from tranibor_orchestrator.activities.knowledge import sync_knowledge_source
 
-    monkeypatch.setenv("CHOREGOS_EGRESS_MODE", "enforce")
+    monkeypatch.setenv("TRANIBOR_EGRESS_MODE", "enforce")
     reset_settings_cache()
     source_id = await _source(client)
     payload = {"org": "northwind", "source_id": source_id}
     # the API family is declared, the workers' is not: it is unknown, so only the org list governs
-    monkeypatch.setenv("CHOREGOS_EGRESS_CEILING", '{"api": ["elsewhere.example.test"]}')
+    monkeypatch.setenv("TRANIBOR_EGRESS_CEILING", '{"api": ["elsewhere.example.test"]}')
     reset_settings_cache()
     assert (await sync_knowledge_source(payload))["status"] == "synced"
     assert crawler, "the crawler reached the site"
     crawler.clear()
     # the workers' family is declared and excludes the host: refused before any request
-    monkeypatch.setenv("CHOREGOS_EGRESS_CEILING", '{"workers": ["elsewhere.example.test"]}')
+    monkeypatch.setenv("TRANIBOR_EGRESS_CEILING", '{"workers": ["elsewhere.example.test"]}')
     reset_settings_cache()
     with pytest.raises(Exception, match="outside the platform's declared network for the workers"):
         await sync_source("northwind", source_id)  # what the activity runs on its next due pass

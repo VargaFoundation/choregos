@@ -323,7 +323,7 @@
         "image": {
           "type": "string",
           "pattern": "^[a-z][a-z0-9-]{0,62}$",
-          "description": "A job image's name, as the platform maps it (CHOREGOS_JOB_IMAGES); absent: the runner image."
+          "description": "A job image's name, as the platform maps it (TRANIBOR_JOB_IMAGES); absent: the runner image."
         },
         "max_minutes": {
           "type": "integer",

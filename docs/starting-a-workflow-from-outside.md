@@ -85,12 +85,12 @@ export TOKEN=chg_...
 export A2A=https://choregos.example.com/a2a/orgs/acme
 ```
 
-The CLI reads the door's address from its profile (`CHOREGOS_API_URL`, `CHOREGOS_ORG`, or `choregos login`)
-and the token from `--token` or `CHOREGOS_A2A_TOKEN`. Without either it sends the profile's token, which is
+The CLI reads the door's address from its profile (`TRANIBOR_API_URL`, `TRANIBOR_ORG`, or `choregos login`)
+and the token from `--token` or `TRANIBOR_A2A_TOKEN`. Without either it sends the profile's token, which is
 usually a `*` one: the door answers `403 insufficient_scope`, and the CLI says which token to create.
 
 ```bash
-export CHOREGOS_API_URL=https://choregos.example.com CHOREGOS_ORG=acme CHOREGOS_A2A_TOKEN=chg_...
+export TRANIBOR_API_URL=https://choregos.example.com TRANIBOR_ORG=acme TRANIBOR_A2A_TOKEN=chg_...
 ```
 
 ### 3. See what you may start
@@ -325,7 +325,7 @@ The CLI and the REST API take a token of scope `*`, which the A2A door refuses, 
 [the steps above](#the-a2a-door-step-by-step). The commands below go through REST.
 
 ```bash
-export CHOREGOS_API_URL=https://choregos.example.com CHOREGOS_TOKEN=chg_... CHOREGOS_ORG=acme
+export TRANIBOR_API_URL=https://choregos.example.com TRANIBOR_TOKEN=chg_... TRANIBOR_ORG=acme
 choregos items create acme:billing-api --workflow ship-a-change \
   --title "Add credit notes" --body "Customers need a credit note when an invoice is refunded." \
   --field ticket=FIN-42 --field priority=high
@@ -338,10 +338,10 @@ the [CLI reference](cli.md#choregos-items-create). A script reads the same thing
 carries the `id` to poll:
 
 ```bash
-curl -s "$CHOREGOS_API_URL/api/v1/projects/acme:billing-api/work-items" -H "Authorization: Bearer $CHOREGOS_TOKEN" \
+curl -s "$TRANIBOR_API_URL/api/v1/projects/acme:billing-api/work-items" -H "Authorization: Bearer $TRANIBOR_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"title": "Add credit notes", "workflow": "ship-a-change", "fields": {"ticket": "FIN-42"}, "start": true}'
-curl -s "$CHOREGOS_API_URL/api/v1/work-items/<id>" -H "Authorization: Bearer $CHOREGOS_TOKEN"
+curl -s "$TRANIBOR_API_URL/api/v1/work-items/<id>" -H "Authorization: Bearer $TRANIBOR_TOKEN"
 ```
 
 ## From a system that only sends JSON

@@ -5,7 +5,7 @@ workers find each other, that Temporal resumes a run after the death of the pod 
 and above all that a resumption **does not bill twice** (S12-05).
 
 The stack is deliberately small: Postgres, a development Temporal, the API and a worker, all
-with `CHOREGOS_FAKES=1`. What is exercised here is the platform itself, not the third-party
+with `TRANIBOR_FAKES=1`. What is exercised here is the platform itself, not the third-party
 services.
 """
 
@@ -63,17 +63,17 @@ def _wait_namespace_gone() -> None:
 def _stack() -> str:
     """Postgres + dev Temporal + API + worker, from the repository image."""
     env = [
-        {"name": "CHOREGOS_FAKES", "value": "1"},
-        {"name": "CHOREGOS_ENV", "value": "test"},
-        {"name": "CHOREGOS_DEV_LOGIN_ENABLED", "value": "true"},
-        {"name": "CHOREGOS_DEV_ADMIN_EMAILS", "value": "admin@northwind.dev"},
+        {"name": "TRANIBOR_FAKES", "value": "1"},
+        {"name": "TRANIBOR_ENV", "value": "test"},
+        {"name": "TRANIBOR_DEV_LOGIN_ENABLED", "value": "true"},
+        {"name": "TRANIBOR_DEV_ADMIN_EMAILS", "value": "admin@northwind.dev"},
         {
-            "name": "CHOREGOS_DATABASE_URL",
+            "name": "TRANIBOR_DATABASE_URL",
             "value": "postgresql+asyncpg://choregos:choregos@postgres:5432/choregos",
         },
-        {"name": "CHOREGOS_TEMPORAL_ADDRESS", "value": "temporal:7233"},
-        {"name": "CHOREGOS_SESSION_SECRET", "value": "test-secret-not-a-real-one"},
-        {"name": "CHOREGOS_RECONCILE_INTERVAL_SECONDS", "value": "0"},
+        {"name": "TRANIBOR_TEMPORAL_ADDRESS", "value": "temporal:7233"},
+        {"name": "TRANIBOR_SESSION_SECRET", "value": "test-secret-not-a-real-one"},
+        {"name": "TRANIBOR_RECONCILE_INTERVAL_SECONDS", "value": "0"},
     ]
     return yaml.safe_dump_all(
         [

@@ -35,14 +35,14 @@ A token with an MCP or A2A scope is refused by the REST API, and the MCP and A2A
 full-access token: one token per use.
 
 ```shell
-export CHOREGOS_API_URL=https://choregos.example.com CHOREGOS_TOKEN=chg_...
+export TRANIBOR_API_URL=https://choregos.example.com TRANIBOR_TOKEN=chg_...
 ```
 
 ## 2. Open a work item
 
 ```shell
-curl -s "$CHOREGOS_API_URL/api/v1/projects/acme:billing-api/work-items" \
-  -H "Authorization: Bearer $CHOREGOS_TOKEN" -H 'Content-Type: application/json' -d '{
+curl -s "$TRANIBOR_API_URL/api/v1/projects/acme:billing-api/work-items" \
+  -H "Authorization: Bearer $TRANIBOR_TOKEN" -H 'Content-Type: application/json' -d '{
   "title": "Add credit notes",
   "body": "Customers need a credit note when an invoice is refunded.",
   "workflow": "ship-a-change",
@@ -77,8 +77,8 @@ choregos items create acme:billing-api --workflow ship-a-change --title "Add cre
 ## 3. Follow it
 
 ```bash
-curl -s "$CHOREGOS_API_URL/api/v1/work-items/BIL-12" -H "Authorization: Bearer $CHOREGOS_TOKEN"
-curl -s "$CHOREGOS_API_URL/api/v1/projects/acme:billing-api/work-items?limit=20" -H "Authorization: Bearer $CHOREGOS_TOKEN"
+curl -s "$TRANIBOR_API_URL/api/v1/work-items/BIL-12" -H "Authorization: Bearer $TRANIBOR_TOKEN"
+curl -s "$TRANIBOR_API_URL/api/v1/projects/acme:billing-api/work-items?limit=20" -H "Authorization: Bearer $TRANIBOR_TOKEN"
 ```
 
 A work item is named by its `id` or its key. The answer carries `state`, `state_display`,

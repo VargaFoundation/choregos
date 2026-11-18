@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any, ClassVar
 
 from tranibor_contracts import ArtifactDisplay, ContextPack, StageInput
+from tranibor_contracts.env import with_legacy
 
 from . import safe_files
 from .config import agent_base_environment
@@ -180,7 +181,7 @@ def agent_git_env(env: Mapping[str, str], workspace: Path) -> dict[str, str]:
 #: write. Under `agentIsolation: container` it is also a path of the runner's own container, which
 #: the agent cannot see; in `process` mode the agent and the runner share a user id, so the wall is
 #: the confinement alone, and it is said so in docs/security.md.
-GIT_DIR_ROOT_VARIABLE = "CHOREGOS_RUNNER_GIT_DIR_ROOT"
+GIT_DIR_ROOT_VARIABLE = "TRANIBOR_RUNNER_GIT_DIR_ROOT"
 DEFAULT_GIT_DIR_ROOT = Path("/var/tmp/choregos-git")  # noqa: S108 - not a write root of the agent
 
 
@@ -776,10 +777,10 @@ def workspace_env(stage_input: StageInput, extra: dict[str, Any] | None = None) 
         # ended up committed on the ticket's branch, and the run's diff became
         # unreadable. The directory is specific to this run and disappears with the pod.
         "HOME": str(home),
-        "CHOREGOS_RUN_ID": stage_input.run_id,
-        "CHOREGOS_PROJECT": stage_input.project.slug,
-        "CHOREGOS_WORK_ITEM": stage_input.work_item.key,
-        "CHOREGOS_ALLOWED_PATHS": ":".join(stage_input.allowed_paths),
+        "TRANIBOR_RUN_ID": stage_input.run_id,
+        "TRANIBOR_PROJECT": stage_input.project.slug,
+        "TRANIBOR_WORK_ITEM": stage_input.work_item.key,
+        "TRANIBOR_ALLOWED_PATHS": ":".join(stage_input.allowed_paths),
     }
     env.update({k: str(v) for k, v in (extra or {}).items()})
-    return env
+    return with_legacy(env)

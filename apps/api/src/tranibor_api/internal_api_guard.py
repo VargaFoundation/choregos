@@ -5,27 +5,27 @@
 each with a token of its own. A deployment routes the whole `/api` prefix of its public hostnames to
 this process, so those routes answered there as well: a token that left its pod could be presented
 from anywhere. Runs do not come that way: they call the address the workers give them
-(`CHOREGOS_INTERNAL_API_URL`), which is the in-cluster Service in the chart and the service name in
+(`TRANIBOR_INTERNAL_API_URL`), which is the in-cluster Service in the chart and the service name in
 the compose install.
 
 Rule: a request under `/api/v1/internal` that arrives under a public hostname of this API is answered
-404, as an unknown route is, unless that hostname is a run door (`CHOREGOS_RUN_DOOR_HOSTS`). Any
+404, as an unknown route is, unless that hostname is a run door (`TRANIBOR_RUN_DOOR_HOSTS`). Any
 other name (the Service, a compose service, `localhost`, an address) is served as before.
 
-- **Public** is what the deployment declares: the hosts of `CHOREGOS_PUBLIC_URL`, `CHOREGOS_API_URL`
-  and `CHOREGOS_CORS_ORIGINS`, and `CHOREGOS_PUBLIC_HOSTS` (the chart's ingress hostnames). Ports are
+- **Public** is what the deployment declares: the hosts of `TRANIBOR_PUBLIC_URL`, `TRANIBOR_API_URL`
+  and `TRANIBOR_CORS_ORIGINS`, and `TRANIBOR_PUBLIC_HOSTS` (the chart's ingress hostnames). Ports are
   not compared; a leading `*.` names every sub-domain. A host an organisation owns and PROVED (ADR 0175,
   `tenant_host`) is public too, without being listed: it is the same door as the console's own address.
 - **Arrives under** is the `Host` header and every `X-Forwarded-Host` entry. The second is there for
   a reverse proxy that rewrites `Host`: the console's own relay of `/api/v1` does, and says where
   the request came in with that header. A client can write the header too, which only gets its own
   request refused: a name in it never opens anything, the run door included.
-- **Never the address runs are sent to.** When the host of `CHOREGOS_INTERNAL_API_URL` (or of
-  `CHOREGOS_API_URL` without it) is itself a public one and no run door covers it, `enforce` would
+- **Never the address runs are sent to.** When the host of `TRANIBOR_INTERNAL_API_URL` (or of
+  `TRANIBOR_API_URL` without it) is itself a public one and no run door covers it, `enforce` would
   end every run at its first call. The guard then only warns, and `announce` says once at start-up
   what to configure.
 
-`CHOREGOS_INTERNAL_API_GUARD` is `off`, `warn` (the default: log `internal_api.would_refuse`, serve)
+`TRANIBOR_INTERNAL_API_GUARD` is `off`, `warn` (the default: log `internal_api.would_refuse`, serve)
 or `enforce`. A log line carries the host that matched, the header it was read from and the first path
 segment after `/internal`: never a token, another header or the query string.
 
@@ -178,8 +178,8 @@ def announce(settings: Settings) -> None:
                 f"runs call back on `{guard.callback}`, a public hostname of this API that is not a run "
                 f"door: {PREFIX} stays served there and `enforce` is not applied, so that no run is "
                 "refused. Send runs to the in-cluster Service, or give them a hostname of their own "
-                "(`choregos-api.runDoor.hostnames` in the chart, CHOREGOS_RUN_DOOR_HOSTS) and set "
-                "CHOREGOS_INTERNAL_API_URL (`global.internalApiUrl`) to it."
+                "(`choregos-api.runDoor.hostnames` in the chart, TRANIBOR_RUN_DOOR_HOSTS) and set "
+                "TRANIBOR_INTERNAL_API_URL (`global.internalApiUrl`) to it."
             ),
         )
 

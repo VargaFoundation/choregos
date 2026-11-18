@@ -40,7 +40,7 @@ def test_the_migrations_produce_the_schema_of_the_models(tmp_path: pathlib.Path)
     """
     file = tmp_path / "migrated.db"
     monkeypatch = pytest.MonkeyPatch()
-    monkeypatch.setenv("CHOREGOS_DATABASE_URL", f"sqlite+aiosqlite:///{file}")
+    monkeypatch.setenv("TRANIBOR_DATABASE_URL", f"sqlite+aiosqlite:///{file}")
     get_settings.cache_clear()
     try:
         command.upgrade(_config(f"sqlite:///{file}"), "head")
@@ -78,7 +78,7 @@ def test_the_migrations_go_back_down_and_up(tmp_path: pathlib.Path) -> None:
     """`downgrade base` then `upgrade head`: no migration had ever been brought back down."""
     file = tmp_path / "round-trip.db"
     monkeypatch = pytest.MonkeyPatch()
-    monkeypatch.setenv("CHOREGOS_DATABASE_URL", f"sqlite+aiosqlite:///{file}")
+    monkeypatch.setenv("TRANIBOR_DATABASE_URL", f"sqlite+aiosqlite:///{file}")
     get_settings.cache_clear()
     try:
         config = _config(f"sqlite:///{file}")

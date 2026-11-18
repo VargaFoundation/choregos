@@ -51,7 +51,7 @@ export default function PlatformPage() {
         </p>
         <p className="mb-3 text-xs text-ink-muted">
           Enabled here = counted as usable by readiness. Which backends a project may use is set by the deployment
-          (<Code>CHOREGOS_ALLOWED_AGENT_BACKENDS</Code>, chart <Code>defaultBackend</Code>) and the project&apos;s
+          (<Code>TRANIBOR_ALLOWED_AGENT_BACKENDS</Code>, chart <Code>defaultBackend</Code>) and the project&apos;s
           policy.
         </p>
         <ul className="space-y-3 text-xs">
@@ -66,7 +66,7 @@ export default function PlatformPage() {
         <p className="mb-3 text-xs text-ink-muted">
           An executor is the place where an agent stage runs. This list is read-only: it shows what this deployment
           runs. Change it in the deployment: chart <Code>global.runner.allowedExecutors</Code> /{" "}
-          <Code>CHOREGOS_EXECUTOR_KIND</Code>.
+          <Code>TRANIBOR_EXECUTOR_KIND</Code>.
         </p>
         {executors.data && (
           <p className="mb-3 text-sm" data-testid="executors-running">

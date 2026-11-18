@@ -100,7 +100,7 @@ class FakeIdentityProvider:
 
 
 def current_fake_identity_provider() -> FakeIdentityProvider:
-    """The fake identity provider of CHOREGOS_FAKES=1: one, scripted by the tests and the demo."""
+    """The fake identity provider of TRANIBOR_FAKES=1: one, scripted by the tests and the demo."""
     import tranibor_adapters as package
 
     if package.FAKE_IDP is None:

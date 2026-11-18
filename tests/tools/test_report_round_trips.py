@@ -292,9 +292,9 @@ def test_the_command_prints_the_table_and_never_the_token(
 def test_the_command_without_a_token_refuses(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    monkeypatch.delenv("CHOREGOS_TOKEN", raising=False)
+    monkeypatch.delenv("TRANIBOR_TOKEN", raising=False)
     assert main(["--api", "https://choregos.test", "--org", "acme"]) == 2
-    assert "no token: set CHOREGOS_TOKEN" in capsys.readouterr().err
+    assert "no token: set TRANIBOR_TOKEN" in capsys.readouterr().err
 
 
 def test_the_sql_mode_needs_no_api_and_no_token(capsys: pytest.CaptureFixture[str]) -> None:

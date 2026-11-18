@@ -6,7 +6,7 @@
     uv run python -m tools.plugins.update_lock --plugin software-delivery@1.1.0   # move one plugin
 
 The built-in agents left the core for their own repository (plan 2026-10-27, Decision 6).
-The core still runs offline — the tests, `make demo`, `CHOREGOS_FAKES=1`, `docker compose up` — because
+The core still runs offline — the tests, `make demo`, `TRANIBOR_FAKES=1`, `docker compose up` — because
 the published archives of the plugins it needs are committed here, byte for byte as the source signed
 them, and the API image copies them to its offline directory (`/opt/choregos/plugins`).
 

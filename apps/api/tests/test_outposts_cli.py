@@ -88,7 +88,7 @@ def profile(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 
     # No profile file and no version check: the CLI of whoever runs the suite is left alone.
     monkeypatch.setattr(client_module, "CONFIG_PATH", tmp_path / "config.json")
-    monkeypatch.setenv("CHOREGOS_NO_VERSION_CHECK", "1")
+    monkeypatch.setenv("TRANIBOR_NO_VERSION_CHECK", "1")
     monkeypatch.setenv("COLUMNS", "200")
 
 
@@ -112,7 +112,7 @@ async def test_the_switch_and_the_missing_key_are_said_in_the_apis_words(
 ) -> None:
     off = await cli(token_holder, "create", SLUG)
     assert off.exit_code == 1
-    assert "409 — outposts are switched off on this deployment (`CHOREGOS_OUTPOSTS`)" in said(off)
+    assert "409 — outposts are switched off on this deployment (`TRANIBOR_OUTPOSTS`)" in said(off)
 
     kit.configure(monkeypatch, outposts="on", outposts_door_url=kit.ORIGIN)
     assert (await cli(token_holder, "create", SLUG)).exit_code == 0

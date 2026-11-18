@@ -540,7 +540,7 @@ async def github_webhook(
         # Without a secret, the signature was not verified at all: anyone could inject tracker
         # events. Tolerated only where there is no GitHub.
         if settings.deployed:
-            raise unauthorized("GitHub webhook not configured: CHOREGOS_GITHUB_WEBHOOK_SECRET is missing")
+            raise unauthorized("GitHub webhook not configured: TRANIBOR_GITHUB_WEBHOOK_SECRET is missing")
     elif not verify_github_signature(secret, body, x_hub_signature_256):
         raise unauthorized("invalid HMAC signature")
     if await _already_seen(session, "github", x_github_delivery or body_digest(body), x_github_event, body):
@@ -586,7 +586,7 @@ async def tekton_webhook(
     supplied = x_choregos_secret or request.query_params.get("token", "")
     if not settings.generic_webhook_secret:
         if settings.deployed:
-            raise unauthorized("Tekton webhook not configured: CHOREGOS_GENERIC_WEBHOOK_SECRET is missing")
+            raise unauthorized("Tekton webhook not configured: TRANIBOR_GENERIC_WEBHOOK_SECRET is missing")
     elif not verify_shared_secret(settings.generic_webhook_secret, supplied):
         raise unauthorized("invalid shared secret")
     body = await request.body()

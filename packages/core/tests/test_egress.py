@@ -87,7 +87,7 @@ def test_check_modes() -> None:
 
 
 def test_scope_and_fail_closed_without_a_policy(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("CHOREGOS_EGRESS_MODE", "enforce")
+    monkeypatch.setenv("TRANIBOR_EGRESS_MODE", "enforce")
     assert current_scope() is None
     with pytest.raises(EgressRefusedError) as refused:
         check_current("a.example")
@@ -97,17 +97,17 @@ def test_scope_and_fail_closed_without_a_policy(monkeypatch: pytest.MonkeyPatch)
         with pytest.raises(EgressRefusedError):
             check_current("b.example")
     assert current_scope() is None
-    monkeypatch.setenv("CHOREGOS_EGRESS_MODE", "warn")
+    monkeypatch.setenv("TRANIBOR_EGRESS_MODE", "warn")
     check_current("a.example")
 
 
 def test_default_mode(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("CHOREGOS_EGRESS_MODE", raising=False)
-    monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
+    monkeypatch.delenv("TRANIBOR_EGRESS_MODE", raising=False)
+    monkeypatch.delenv("TRANIBOR_FAKES", raising=False)
     assert default_mode() == "enforce"
-    monkeypatch.setenv("CHOREGOS_FAKES", "1")
+    monkeypatch.setenv("TRANIBOR_FAKES", "1")
     assert default_mode() == "warn"
-    monkeypatch.setenv("CHOREGOS_EGRESS_MODE", "off")
+    monkeypatch.setenv("TRANIBOR_EGRESS_MODE", "off")
     assert default_mode() == "off"
     assert default_mode("enforce") == "enforce"
 

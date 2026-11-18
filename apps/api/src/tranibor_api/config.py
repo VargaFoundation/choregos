@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""API configuration (12-factor, `CHOREGOS_` prefix)."""
+"""API configuration (12-factor, `TRANIBOR_` prefix)."""
 
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ MIN_SESSION_SECRET_BYTES = 32
 OIDC_RELINK_MAX_DAYS = 31
 
 
-#: A hostname as `CHOREGOS_RUN_DOOR_HOSTS` and `CHOREGOS_PUBLIC_HOSTS` take it: no scheme, port or path;
+#: A hostname as `TRANIBOR_RUN_DOOR_HOSTS` and `TRANIBOR_PUBLIC_HOSTS` take it: no scheme, port or path;
 #: a leading `*.` names every sub-domain.
 HOSTNAME = re.compile(
     r"(\*\.)?[A-Za-z0-9_]([A-Za-z0-9_-]*[A-Za-z0-9_])?(\.[A-Za-z0-9_]([A-Za-z0-9_-]*[A-Za-z0-9_])?)*"
@@ -49,11 +49,11 @@ class OAuthClient(BaseModel):
     callback_port: int | None = Field(default=None, ge=1024, le=65535)
 
 
-#: The public documentation site (S62 shared contracts), when `CHOREGOS_DOCS_URL` names none: the
+#: The public documentation site (S62 shared contracts), when `TRANIBOR_DOCS_URL` names none: the
 #: publishing identity's (ADR 0156).
 DEFAULT_DOCS_URL = PUBLISHING.documentation
 
-#: An origin as `CHOREGOS_OUTPOSTS_DOOR_URL` takes it, and as an outpost's policy file writes its
+#: An origin as `TRANIBOR_OUTPOSTS_DOOR_URL` takes it, and as an outpost's policy file writes its
 #: `control_plane` (`outpost-policy.schema.json`): a scheme and a host, no path, query or user.
 ORIGIN = re.compile(r"https?://[^\s/@?#]+")
 #: A raw 32-byte public key as the outposts' contract writes one: unpadded base64url, one spelling
@@ -86,7 +86,7 @@ def ed25519_public_key(private_pem: str) -> str:
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="CHOREGOS_", env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="TRANIBOR_", env_file=".env", extra="ignore")
 
     env: Literal["dev", "staging", "prod", "test"] = "dev"
     # Listening port. In a container, 8000; on a development machine, 8000 is often already taken,
@@ -94,7 +94,7 @@ class Settings(BaseSettings):
     # editing the code.
     port: int = 8000
     debug: bool = False
-    fakes: bool = Field(default=False, validation_alias="CHOREGOS_FAKES")
+    fakes: bool = Field(default=False, validation_alias="TRANIBOR_FAKES")
     #: The edition that the DEPLOYMENT announces (ADR 0024). It is not the same thing as the edition
     #: that runs: that one is declared by the enterprise extension when it loads. The two are
     #: compared at startup, because a gap is silent otherwise: the chart would announce
@@ -131,7 +131,7 @@ class Settings(BaseSettings):
     #: provider grants the audience only if a default scope of the client carries it (S63-27).
     token_exchange_scopes: dict[str, str] = Field(default_factory=dict)
     #: RFC 7009 revocation endpoint of the provider, to kill a delegation's offline token (S63-14). Empty:
-    #: the fake's under CHOREGOS_FAKES, none otherwise (the sealed token is then only deleted here).
+    #: the fake's under TRANIBOR_FAKES, none otherwise (the sealed token is then only deleted here).
     token_revocation_endpoint: str = ""
     #: For an IdP that publishes no discovery document; set all three or none (ADR 0100).
     oidc_authorization_endpoint: str = ""
@@ -165,7 +165,7 @@ class Settings(BaseSettings):
     #: offers only tokens.
     mcp_oauth_clients: dict[str, OAuthClient] = Field(default_factory=dict)
     session_secret: str = DEFAULT_SESSION_SECRET
-    #: A verification-only key during a rotation (`CHOREGOS_SESSION_SECRET_PREVIOUS`): a value signed
+    #: A verification-only key during a rotation (`TRANIBOR_SESSION_SECRET_PREVIOUS`): a value signed
     #: with it still reads, and nothing is signed with it.
     session_secret_previous: str = ""
     session_cookie: str = "choregos_session"
@@ -207,23 +207,23 @@ class Settings(BaseSettings):
     run_token_public_key: str = ""
     run_token_issuer: str = "choregos-api"
     run_token_audience: str = "internal"
-    #: The egress proxy's own key (ADR 0145, `CHOREGOS_EGRESS_REPORT_KEY`): a report made with the
+    #: The egress proxy's own key (ADR 0145, `TRANIBOR_EGRESS_REPORT_KEY`): a report made with the
     #: egress token must carry it, so that the agent, which inherits that token, cannot rewrite its
     #: run's counters. Empty: the egress token alone is accepted, as before, and start-up says so.
     egress_report_key: str = ""
 
     #: Hosts no run of this deployment may reach, whatever an organisation or a project says (ADR 0070):
-    #: a comma-separated list of host patterns (`CHOREGOS_NETWORK_INSTANCE_DENY`).
+    #: a comma-separated list of host patterns (`TRANIBOR_NETWORK_INSTANCE_DENY`).
     network_instance_deny: str = ""
     #: Where an operator can reach this deployment, written into the User-Agent of what the platform
-    #: fetches (`CHOREGOS_USER_AGENT_CONTACT`); an organisation's own contact wins (ADR 0070).
+    #: fetches (`TRANIBOR_USER_AGENT_CONTACT`); an organisation's own contact wins (ADR 0070).
     user_agent_contact: str = ""
 
     # Services
     temporal_address: str = "localhost:7233"
     temporal_namespace: str = "default"
     temporal_task_queue: str = "orchestrator"
-    #: The tracker catch-up interval, as the orchestrator reads it (`CHOREGOS_RECONCILE_INTERVAL_SECONDS`):
+    #: The tracker catch-up interval, as the orchestrator reads it (`TRANIBOR_RECONCILE_INTERVAL_SECONDS`):
     #: the API starts a project's loop when the project becomes active; 0 disables the catch-up.
     reconcile_interval_seconds: int = 60
     gateway_url: str = "http://localhost:4000"
@@ -236,12 +236,12 @@ class Settings(BaseSettings):
     # What THIS deployment can run (#245): a new project inherits it when its request says nothing.
     # Without them, it starts on `claude-code` and no model profile; on the dev tenant, which serves
     # opencode behind the gateway, the first agent of the HR template never reached the model. Lists
-    # and tables as JSON: `CHOREGOS_ALLOWED_AGENT_BACKENDS='["opencode"]'`,
-    # `CHOREGOS_DEFAULT_MODEL_PROFILES='{"standard": "platform/standard"}'`.
+    # and tables as JSON: `TRANIBOR_ALLOWED_AGENT_BACKENDS='["opencode"]'`,
+    # `TRANIBOR_DEFAULT_MODEL_PROFILES='{"standard": "platform/standard"}'`.
     default_agent_backend: str | None = None
     # How long the broker waits for the outcome of a write called by a run, played as a governed
     # action (#241), before returning 202 and the action's identifier. The field keeps its French
-    # name: it is an environment variable, `CHOREGOS_COURTIER_ATTENTE_ECRITURE_S`.
+    # name: it is an environment variable, `TRANIBOR_COURTIER_ATTENTE_ECRITURE_S`.
     courtier_attente_ecriture_s: float = 30.0  # lang: fr-ok environment variable name
     #: The most a broker tool result may weigh, as JSON bytes, when it reaches the agent (#755): a
     #: larger one is cut to its text with a marker that says so. A third-party server does not decide
@@ -260,7 +260,7 @@ class Settings(BaseSettings):
     #: The hosts the API pod may reach, as the deployment's network policy lets it (`*.` wildcards
     #: allowed). Empty means the deployment does not say: the MCP catalogue then answers `unknown`
     #: instead of `undeclared` (ADR 0065). It restricts nothing; the network policy does.
-    #: Deprecated (S39-22): read as `CHOREGOS_EGRESS_CEILING` `{"api": …}` when that names no API family.
+    #: Deprecated (S39-22): read as `TRANIBOR_EGRESS_CEILING` `{"api": …}` when that names no API family.
     api_egress_hosts: list[str] = Field(default_factory=list)
     #: The operator's own MCP catalogue entries, merged after the shipped catalogue (ADR 0065).
     mcp_catalogue_extra: str | None = None
@@ -299,7 +299,7 @@ class Settings(BaseSettings):
     #: The public documentation site, for the links those tools give (S62 shared contracts).
     docs_url: str = DEFAULT_DOCS_URL
     #: Plugin servers (ADR 0096): `kubernetes` runs them in `plugin_servers_namespace` through the API's
-    #: Role there; `off` refuses a plugin that brings one (`CHOREGOS_FAKES` runs them in memory).
+    #: Role there; `off` refuses a plugin that brings one (`TRANIBOR_FAKES` runs them in memory).
     plugin_servers: Literal["off", "kubernetes"] = "off"
     plugin_servers_namespace: str = "choregos-plugins"
     #: Where a server's image may come from, as registry or repository prefixes matched by path
@@ -343,15 +343,15 @@ class Settings(BaseSettings):
     conversation_judge_model: str = ""
     #: A conversation suite an installed assistant ships must be played to let a version reach production.
     #: With no model to play it on (no gateway key, or an organisation's own gateway) the promotion is
-    #: REFUSED, with the reason. `CHOREGOS_CONVERSATION_SUITES_REQUIRE_MODEL=false` opts out: such a suite
+    #: REFUSED, with the reason. `TRANIBOR_CONVERSATION_SUITES_REQUIRE_MODEL=false` opts out: such a suite
     #: then adds no check (a deployment that gates by other means says so explicitly).
     conversation_suites_require_model: bool = True
-    #: The organisation egress allowlist (S39-22, ADR 0066). `CHOREGOS_EGRESS_MODE` is `enforce`,
+    #: The organisation egress allowlist (S39-22, ADR 0066). `TRANIBOR_EGRESS_MODE` is `enforce`,
     #: `warn` (log `egress.would_refuse` and pass) or `off`; empty means `enforce`, and `warn` under
-    #: `CHOREGOS_FAKES=1`.
+    #: `TRANIBOR_FAKES=1`.
     egress_mode: str = ""
     #: What the cluster's network lets through, per pod family (`api`, `workers`, `runners`), as host
-    #: patterns: `CHOREGOS_EGRESS_CEILING='{"api": ["api.github.com"]}'`. An absent or empty family
+    #: patterns: `TRANIBOR_EGRESS_CEILING='{"api": ["api.github.com"]}'`. An absent or empty family
     #: is unknown: the ceiling is not checked and the organisation's list alone governs.
     egress_ceiling: dict[str, list[str]] = Field(default_factory=dict)
     #: How the console renders "what the platform must still open": `format`, `template` (mustache:
@@ -359,7 +359,7 @@ class Settings(BaseSettings):
     #: `{{origin}}`, `{{requested_by}}`, `{{entry}}`, `{{selector}}`), `issueUrl`, `owner`, `entries`.
     egress_platform_change: dict[str, Any] | None = None
     #: Hosts an operator lists so that an organisation's MCP gateway may be plain http or a private
-    #: name (ADR 0105): `CHOREGOS_MCP_GATEWAY_INTERNAL_HOSTS`, a JSON list of exact host names. Any
+    #: name (ADR 0105): `TRANIBOR_MCP_GATEWAY_INTERNAL_HOSTS`, a JSON list of exact host names. Any
     #: other private or plain-http gateway address is refused when the setting is written.
     mcp_gateway_internal_hosts: list[str] = Field(default_factory=list)
     memory_url: str = "http://localhost:8432"
@@ -427,38 +427,38 @@ class Settings(BaseSettings):
     cli_dir: str = "/opt/choregos/cli"
 
     # Outposts (ADRs 0147-0149)
-    #: `CHOREGOS_OUTPOSTS`, `off` by default (ADR 0147 §12). Off, the outposts' door is not mounted and
+    #: `TRANIBOR_OUTPOSTS`, `off` by default (ADR 0147 §12). Off, the outposts' door is not mounted and
     #: creating an outpost or an enrolment token is refused (409 `outposts_disabled`): it is also the
     #: switch that stops every outpost at once. `on` or `off`, or any spelling of a boolean.
     outposts: bool = False
-    #: The public origin of the outposts' door (`CHOREGOS_OUTPOSTS_DOOR_URL`, ADR 0148 §8): scheme and
+    #: The public origin of the outposts' door (`TRANIBOR_OUTPOSTS_DOOR_URL`, ADR 0148 §8): scheme and
     #: host, no path (`https://outposts.example.com`). It is what an outpost's operator writes as
     #: `control_plane` in the policy file, what an enrolment token is returned with, and what the door
     #: compares a signature's `htu` with. Empty: the deployment declares none.
     outposts_door_url: str = ""
-    #: The Ed25519 key the door signs every call it hands over with (`CHOREGOS_OUTPOSTS_DOOR_SIGNING_KEY`,
+    #: The Ed25519 key the door signs every call it hands over with (`TRANIBOR_OUTPOSTS_DOOR_SIGNING_KEY`,
     #: ADR 0148 §13): a PEM private key (PKCS#8), a secret of the installation. Its public half is the
     #: first of the `door_keys` an operator pins. Empty: the door can sign nothing, and no enrolment
     #: token is issued.
     outposts_door_signing_key: str = ""
     #: Public keys announced beside the one that signs, for a rotation (ADR 0148 §13), as a JSON list
-    #: (`CHOREGOS_OUTPOSTS_DOOR_ANNOUNCED_KEYS`): the next key before the door signs with it, the former
+    #: (`TRANIBOR_OUTPOSTS_DOOR_ANNOUNCED_KEYS`): the next key before the door signs with it, the former
     #: one after. Each is the unpadded base64url of 32 raw bytes; three at most, since a policy file
     #: pins four keys.
     outposts_door_announced_keys: list[str] = Field(default_factory=list)
     #: The most requests one instance sends the door in a minute, counted per replica
-    #: (`CHOREGOS_OUTPOSTS_DOOR_RATE_PER_MINUTE`, ADR 0148 §9): beyond it the door answers 429
+    #: (`TRANIBOR_OUTPOSTS_DOOR_RATE_PER_MINUTE`, ADR 0148 §9): beyond it the door answers 429
     #: `rate_limited` with `retry_after`. A poll, an answer and a refusal each count for one; 0 lifts
     #: the limit.
     outposts_door_rate_per_minute: int = Field(default=1200, ge=0)
     #: The most calls an outpost, and all the outposts of an organisation, have in flight at once
-    #: (`CHOREGOS_OUTPOSTS_CALLS_IN_FLIGHT_PER_OUTPOST`, `…_PER_ORGANISATION`, ADR 0148 §10): a call
+    #: (`TRANIBOR_OUTPOSTS_CALLS_IN_FLIGHT_PER_OUTPOST`, `…_PER_ORGANISATION`, ADR 0148 §10): a call
     #: counts from the moment it is placed until it is answered, refused or out of time, and one more
     #: is refused where it is admitted, before anything is written.
     outposts_calls_in_flight_per_outpost: int = Field(default=128, ge=1)
     outposts_calls_in_flight_per_organisation: int = Field(default=512, ge=1)
     #: The most calls an outpost, and all the outposts of an organisation, are handed in a minute
-    #: (`CHOREGOS_OUTPOSTS_CALLS_PER_MINUTE_PER_OUTPOST`, `…_PER_ORGANISATION`, ADR 0148 §10): counted
+    #: (`TRANIBOR_OUTPOSTS_CALLS_PER_MINUTE_PER_OUTPOST`, `…_PER_ORGANISATION`, ADR 0148 §10): counted
     #: over the last sixty seconds from the calls' own rows, where a call is admitted, so every replica
     #: reads the same number; one more is refused before anything is written. A call counts from the
     #: moment it is placed, whatever becomes of it.
@@ -487,7 +487,7 @@ class Settings(BaseSettings):
     #: public like the probes: each answer can be tens of megabytes. 0 disables. See `rate_limit.py`.
     download_rate_limit_per_minute: int = 60
     #: The networks of the proxies in front of the API, as a JSON list
-    #: (`CHOREGOS_TRUSTED_PROXY_CIDRS='["10.0.0.0/8"]'`): the rate limit keys on the address the
+    #: (`TRANIBOR_TRUSTED_PROXY_CIDRS='["10.0.0.0/8"]'`): the rate limit keys on the address the
     #: nearest trusted proxy saw, the right-most `X-Forwarded-For` entry outside them. Empty: the TCP
     #: peer is the client and `X-Forwarded-For` is ignored.
     trusted_proxy_cidrs: list[str] = Field(default_factory=list)
@@ -498,14 +498,14 @@ class Settings(BaseSettings):
     #: of its public hostnames (ADR 0144): `off` (nothing), `warn` (log `internal_api.would_refuse` and
     #: serve it) or `enforce` (answer 404, as an unknown route does). See `internal_api_guard.py`.
     internal_api_guard: Literal["off", "warn", "enforce"] = "warn"
-    #: The run doors, as a JSON list (`CHOREGOS_RUN_DOOR_HOSTS='["runs.example.com"]'`): the hostnames
+    #: The run doors, as a JSON list (`TRANIBOR_RUN_DOOR_HOSTS='["runs.example.com"]'`): the hostnames
     #: runs call back on when they run outside the cluster. The run's API answers there even when the
     #: name is also a public one.
     run_door_hosts: list[str] = Field(default_factory=list)
     #: Hostnames this API is published under beyond those of `public_url`, `api_url` and `cors_origins`,
-    #: as a JSON list (`CHOREGOS_PUBLIC_HOSTS`): the chart passes its ingress hostnames.
+    #: as a JSON list (`TRANIBOR_PUBLIC_HOSTS`): the chart passes its ingress hostnames.
     public_hosts: list[str] = Field(default_factory=list)
-    #: Where runs call back (`CHOREGOS_INTERNAL_API_URL`, the setting the workers build
+    #: Where runs call back (`TRANIBOR_INTERNAL_API_URL`, the setting the workers build
     #: `callbacks.api_url` from). The guard reads it so that it never refuses the address runs are sent
     #: to. Empty: `api_url`.
     internal_api_url: str = ""
@@ -552,7 +552,7 @@ class Settings(BaseSettings):
         unknown = sorted(self.legacy_decision_route_set() - LEGACY_ROUTES)
         if unknown:
             raise ValueError(
-                f"CHOREGOS_LEGACY_DECISION_ROUTES names {', '.join(unknown)}: only "
+                f"TRANIBOR_LEGACY_DECISION_ROUTES names {', '.join(unknown)}: only "
                 f"{', '.join(sorted(LEGACY_ROUTES))} can keep accepting an API token (ADR 0154 §7)"
             )
         return self
@@ -564,7 +564,7 @@ class Settings(BaseSettings):
     def _no_back_door_in_production(self) -> Settings:
         if self.dev_login_enabled and self.env in {"staging", "prod"}:
             raise ValueError(
-                "CHOREGOS_DEV_LOGIN_ENABLED=true in staging/prod: the development sign-in "
+                "TRANIBOR_DEV_LOGIN_ENABLED=true in staging/prod: the development sign-in "
                 "opens the API to anyone who reaches /auth/callback. Refused."
             )
         return self
@@ -574,7 +574,7 @@ class Settings(BaseSettings):
         """A re-link window is temporary (ADR 0164): it has an end, and the end is near."""
         if self.oidc_relink_verified_email:
             raise ValueError(
-                "CHOREGOS_OIDC_RELINK_VERIFIED_EMAIL is replaced by CHOREGOS_OIDC_RELINK_UNTIL, the end of a "
+                "TRANIBOR_OIDC_RELINK_VERIFIED_EMAIL is replaced by TRANIBOR_OIDC_RELINK_UNTIL, the end of a "
                 "re-link window (an ISO 8601 instant, at most "
                 f"{OIDC_RELINK_MAX_DAYS} days ahead): a switch without an end stays open"
             )
@@ -585,7 +585,7 @@ class Settings(BaseSettings):
             until = self.oidc_relink_until = until.replace(tzinfo=UTC)
         if until - datetime.now(UTC) > timedelta(days=OIDC_RELINK_MAX_DAYS):
             raise ValueError(
-                f"CHOREGOS_OIDC_RELINK_UNTIL={until.isoformat()} is more than {OIDC_RELINK_MAX_DAYS} days "
+                f"TRANIBOR_OIDC_RELINK_UNTIL={until.isoformat()} is more than {OIDC_RELINK_MAX_DAYS} days "
                 "ahead: a re-link window is temporary, open a shorter one and extend it if needed"
             )
         return self
@@ -600,8 +600,8 @@ class Settings(BaseSettings):
         explicit = [self.oidc_authorization_endpoint, self.oidc_token_endpoint, self.oidc_userinfo_endpoint]
         if any(explicit) and not all(explicit):
             raise ValueError(
-                "set CHOREGOS_OIDC_AUTHORIZATION_ENDPOINT, CHOREGOS_OIDC_TOKEN_ENDPOINT and "
-                "CHOREGOS_OIDC_USERINFO_ENDPOINT together, or none"
+                "set TRANIBOR_OIDC_AUTHORIZATION_ENDPOINT, TRANIBOR_OIDC_TOKEN_ENDPOINT and "
+                "TRANIBOR_OIDC_USERINFO_ENDPOINT together, or none"
             )
         return self
 
@@ -615,9 +615,9 @@ class Settings(BaseSettings):
             try:
                 ipaddress.ip_network(entry, strict=False)
             except ValueError:
-                raise ValueError(f"CHOREGOS_TRUSTED_PROXY_CIDRS: `{entry}` is not a network") from None
+                raise ValueError(f"TRANIBOR_TRUSTED_PROXY_CIDRS: `{entry}` is not a network") from None
         if self.trusted_proxy_cidrs and self.trusted_proxy_hops > 0:
-            raise ValueError("set CHOREGOS_TRUSTED_PROXY_CIDRS or CHOREGOS_TRUSTED_PROXY_HOPS, not both")
+            raise ValueError("set TRANIBOR_TRUSTED_PROXY_CIDRS or TRANIBOR_TRUSTED_PROXY_HOPS, not both")
         return self
 
     @model_validator(mode="after")
@@ -625,8 +625,8 @@ class Settings(BaseSettings):
         """A URL or a port where a hostname goes would never equal a `Host` header: the door would stay
         shut, or the public name open, without a word. Refused, in every process (the workers set neither)."""
         for name, entries in (
-            ("CHOREGOS_RUN_DOOR_HOSTS", self.run_door_hosts),
-            ("CHOREGOS_PUBLIC_HOSTS", self.public_hosts),
+            ("TRANIBOR_RUN_DOOR_HOSTS", self.run_door_hosts),
+            ("TRANIBOR_PUBLIC_HOSTS", self.public_hosts),
         ):
             for entry in entries:
                 if not HOSTNAME.fullmatch(entry.strip()):
@@ -643,18 +643,18 @@ class Settings(BaseSettings):
         are unset."""
         if self.outposts_door_url and not ORIGIN.fullmatch(self.outposts_door_url):
             raise ValueError(
-                "CHOREGOS_OUTPOSTS_DOOR_URL is not an origin: a scheme and a host, no path "
+                "TRANIBOR_OUTPOSTS_DOOR_URL is not an origin: a scheme and a host, no path "
                 "(`https://outposts.example.com`)"
             )
         announced = self.outposts_door_announced_keys
         if any(not PUBLIC_KEY.fullmatch(key) for key in announced):
             raise ValueError(
-                "CHOREGOS_OUTPOSTS_DOOR_ANNOUNCED_KEYS: each entry is a public key, the unpadded "
+                "TRANIBOR_OUTPOSTS_DOOR_ANNOUNCED_KEYS: each entry is a public key, the unpadded "
                 "base64url of its 32 raw bytes"
             )
         if len(announced) > MAX_DOOR_KEYS - 1:
             raise ValueError(
-                f"CHOREGOS_OUTPOSTS_DOOR_ANNOUNCED_KEYS: at most {MAX_DOOR_KEYS - 1} keys beside the one "
+                f"TRANIBOR_OUTPOSTS_DOOR_ANNOUNCED_KEYS: at most {MAX_DOOR_KEYS - 1} keys beside the one "
                 f"that signs (a policy file pins {MAX_DOOR_KEYS})"
             )
         signing = None
@@ -662,18 +662,18 @@ class Settings(BaseSettings):
             try:
                 signing = ed25519_public_key(self.outposts_door_signing_key)
             except ValueError as error:
-                raise ValueError(f"CHOREGOS_OUTPOSTS_DOOR_SIGNING_KEY: {error}") from None
+                raise ValueError(f"TRANIBOR_OUTPOSTS_DOOR_SIGNING_KEY: {error}") from None
         if len({signing, *announced} - {None}) != len(announced) + (signing is not None):
             raise ValueError(
-                "CHOREGOS_OUTPOSTS_DOOR_ANNOUNCED_KEYS: a key is announced once, and the key that signs "
+                "TRANIBOR_OUTPOSTS_DOOR_ANNOUNCED_KEYS: a key is announced once, and the key that signs "
                 "is not announced beside itself"
             )
         return self
 
     @model_validator(mode="after")
     def _images_named_by_the_operator(self) -> Settings:
-        check_image_map("CHOREGOS_JOB_IMAGES", self.job_images, require_digest=self.require_image_digest)
-        check_image_map("CHOREGOS_AGENT_IMAGES", self.agent_images, require_digest=self.require_image_digest)
+        check_image_map("TRANIBOR_JOB_IMAGES", self.job_images, require_digest=self.require_image_digest)
+        check_image_map("TRANIBOR_AGENT_IMAGES", self.agent_images, require_digest=self.require_image_digest)
         return self
 
     @model_validator(mode="after")
@@ -682,7 +682,7 @@ class Settings(BaseSettings):
         unknown = sorted(set(self.mcp_oauth_clients) - OAUTH_CLIENTS)
         if unknown:
             raise ValueError(
-                f"CHOREGOS_MCP_OAUTH_CLIENTS: unknown clients {unknown}; the Integrations page "
+                f"TRANIBOR_MCP_OAUTH_CLIENTS: unknown clients {unknown}; the Integrations page "
                 f"knows {sorted(OAUTH_CLIENTS)}"
             )
         return self

@@ -20,9 +20,9 @@ from .kits.run_git_token import run_token_for, run_with_repository
 def minted(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
     from tranibor_adapters.github import GitHubAppAuth, InstallationToken
 
-    monkeypatch.setenv("CHOREGOS_GITHUB_APP_ID", "5242171")
+    monkeypatch.setenv("TRANIBOR_GITHUB_APP_ID", "5242171")
     monkeypatch.setenv(
-        "CHOREGOS_GITHUB_APP_PRIVATE_KEY", "-----BEGIN RSA PRIVATE KEY-----\nx\n-----END RSA PRIVATE KEY-----"
+        "TRANIBOR_GITHUB_APP_PRIVATE_KEY", "-----BEGIN RSA PRIVATE KEY-----\nx\n-----END RSA PRIVATE KEY-----"
     )
     # The App is read from the settings (ADR 0167), cached per process: read again.
     from tranibor_api.config import reset_settings_cache

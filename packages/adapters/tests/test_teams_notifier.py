@@ -102,11 +102,11 @@ def test_the_type_is_registered_with_its_url_as_a_secret_and_the_fake_serves_it(
 
     spec = spec_of("notify", "teams")
     assert spec is not None and spec.secret_fields == ("webhook_url",)
-    monkeypatch.setenv("CHOREGOS_FAKES", "1")
+    monkeypatch.setenv("TRANIBOR_FAKES", "1")
     monkeypatch.setattr(tranibor_adapters, "FAKE_TEAMS", None)
     built = build("notify", "teams", {"webhook_url": URL})
     assert isinstance(built, TeamsNotifier), (
-        "under CHOREGOS_FAKES the real card is built over the fake webhook"
+        "under TRANIBOR_FAKES the real card is built over the fake webhook"
     )
     assert isinstance(tranibor_adapters.FAKE_TEAMS, FakeTeamsWebhook)
     with pytest.raises(AdapterError):
@@ -116,7 +116,7 @@ def test_the_type_is_registered_with_its_url_as_a_secret_and_the_fake_serves_it(
 async def test_a_post_reaches_the_fake_of_the_process_under_fakes(monkeypatch: pytest.MonkeyPatch) -> None:
     import tranibor_adapters
 
-    monkeypatch.setenv("CHOREGOS_FAKES", "1")
+    monkeypatch.setenv("TRANIBOR_FAKES", "1")
     monkeypatch.setattr(tranibor_adapters, "FAKE_TEAMS", None)
     notifier = build("notify", "teams", {"webhook_url": URL})
     with use_policy(_policy("prod-12.westeurope.logic.azure.com")):

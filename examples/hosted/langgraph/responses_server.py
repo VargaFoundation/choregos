@@ -61,7 +61,7 @@ def response_object(text: str, *, status: str = "completed", error: str = "") ->
         "object": "response",
         "created_at": int(time.time()),
         "status": status,
-        "model": os.environ.get("CHOREGOS_MODEL", ""),
+        "model": os.environ.get("TRANIBOR_MODEL", ""),
         "output": [message] if text else [],
         "error": {"code": "server_error", "message": error} if error else None,
     }

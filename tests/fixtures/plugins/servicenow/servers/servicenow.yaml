@@ -6,7 +6,7 @@ name: servicenow
 image: ghcr.io/graalsystems/tranibor-agents/servicenow-mcp@sha256:0000000000000000000000000000000000000000000000000000000000000000
 port: 8080
 protocol: mcp-http
-# MCP at /mcp, behind the platform's bearer token (CHOREGOS_SERVER_TOKEN); the health probe stays open.
+# MCP at /mcp, behind the platform's bearer token (TRANIBOR_SERVER_TOKEN); the health probe stays open.
 paths: {mcp: /mcp, health: /healthz}
 
 # What an administrator types when installing the plugin. Each property reaches the server as the

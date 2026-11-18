@@ -14,11 +14,11 @@ What only a real execution can say, and the simulated transport never will:
 
 Prerequisites (see `docs/runbooks/aca-live.md`) :
 
-    export CHOREGOS_LIVE_AZURE_SUBSCRIPTION=$(az account show --query id -o tsv)
-    export CHOREGOS_LIVE_AZURE_RG=choregos-aca-test
-    export CHOREGOS_LIVE_AZURE_ENV_ID=$(az containerapp env show -n choregos-env \\
-        -g "$CHOREGOS_LIVE_AZURE_RG" --query id -o tsv)
-    export CHOREGOS_LIVE_AZURE_TOKEN=$(az account get-access-token \\
+    export TRANIBOR_LIVE_AZURE_SUBSCRIPTION=$(az account show --query id -o tsv)
+    export TRANIBOR_LIVE_AZURE_RG=choregos-aca-test
+    export TRANIBOR_LIVE_AZURE_ENV_ID=$(az containerapp env show -n choregos-env \\
+        -g "$TRANIBOR_LIVE_AZURE_RG" --query id -o tsv)
+    export TRANIBOR_LIVE_AZURE_TOKEN=$(az account get-access-token \\
         --resource https://management.azure.com --query accessToken -o tsv)
     uv run pytest tests/live/test_aca_live.py -m live
 
@@ -53,23 +53,23 @@ IMAGE = "mcr.microsoft.com/cbl-mariner/busybox:2.0"
 @pytest.fixture
 async def executor() -> AsyncIterator[AcaExecutor]:
     env = require(
-        "CHOREGOS_LIVE_AZURE_SUBSCRIPTION",
-        "CHOREGOS_LIVE_AZURE_RG",
-        "CHOREGOS_LIVE_AZURE_ENV_ID",
-        "CHOREGOS_LIVE_AZURE_TOKEN",
+        "TRANIBOR_LIVE_AZURE_SUBSCRIPTION",
+        "TRANIBOR_LIVE_AZURE_RG",
+        "TRANIBOR_LIVE_AZURE_ENV_ID",
+        "TRANIBOR_LIVE_AZURE_TOKEN",
     )
     # One client per test: httpx binds its connections to the loop that opened them, and a
     # module fixture would make them cross two different loops.
     async with httpx.AsyncClient(timeout=60.0) as client:
         arm = AzureArmClient(
-            subscription_id=env["CHOREGOS_LIVE_AZURE_SUBSCRIPTION"],
-            resource_group=env["CHOREGOS_LIVE_AZURE_RG"],
-            token=env["CHOREGOS_LIVE_AZURE_TOKEN"],
+            subscription_id=env["TRANIBOR_LIVE_AZURE_SUBSCRIPTION"],
+            resource_group=env["TRANIBOR_LIVE_AZURE_RG"],
+            token=env["TRANIBOR_LIVE_AZURE_TOKEN"],
             client=client,
         )
         yield AcaExecutor(
             arm,
-            environment_id=env["CHOREGOS_LIVE_AZURE_ENV_ID"],
+            environment_id=env["TRANIBOR_LIVE_AZURE_ENV_ID"],
             location="westeurope",
             cpu=0.5,
             memory="1Gi",

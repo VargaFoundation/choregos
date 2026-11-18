@@ -9,8 +9,8 @@ describe("snippets of the Integrations page (ADR 0030)", () => {
   it("Claude Code: the exact command, the token passed through a variable", () => {
     expect(extrait("claude-code", URL_HTTPS, TOKEN)?.code).toBe(
       [
-        `export CHOREGOS_TOKEN=${TOKEN}`,
-        `claude mcp add --transport http choregos ${URL_HTTPS} --header "Authorization: Bearer $CHOREGOS_TOKEN"`,
+        `export TRANIBOR_TOKEN=${TOKEN}`,
+        `claude mcp add --transport http choregos ${URL_HTTPS} --header "Authorization: Bearer $TRANIBOR_TOKEN"`,
       ].join("\n"),
     );
   });

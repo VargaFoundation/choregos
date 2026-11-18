@@ -19,32 +19,32 @@ from tranibor_core.publishing import PUBLISHING
 from .kits.identity_seams import extended_client, identity_extension  # noqa: F401
 from .kits.sqlite_template import copy_schema_to
 
-os.environ.setdefault("CHOREGOS_ENV", "test")
-os.environ.setdefault("CHOREGOS_FAKES", "1")
+os.environ.setdefault("TRANIBOR_ENV", "test")
+os.environ.setdefault("TRANIBOR_FAKES", "1")
 # The egress allowlist (S39-22) only warns in the suites: the tests that prove it ask for `enforce`.
-os.environ.setdefault("CHOREGOS_EGRESS_MODE", "warn")
+os.environ.setdefault("TRANIBOR_EGRESS_MODE", "warn")
 # The registry the test plugins' servers come from (ADR 0096): the tests that prove the allowlist set another.
-os.environ.setdefault("CHOREGOS_PLUGIN_SERVERS_REGISTRIES", json.dumps([PUBLISHING.image("tranibor-agents")]))
-os.environ.setdefault("CHOREGOS_DEV_LOGIN_ENABLED", "true")
-os.environ.setdefault("CHOREGOS_DEV_ADMIN_EMAILS", "admin@northwind.dev")
+os.environ.setdefault("TRANIBOR_PLUGIN_SERVERS_REGISTRIES", json.dumps([PUBLISHING.image("tranibor-agents")]))
+os.environ.setdefault("TRANIBOR_DEV_LOGIN_ENABLED", "true")
+os.environ.setdefault("TRANIBOR_DEV_ADMIN_EMAILS", "admin@northwind.dev")
 # The suites build prod and https apps, which refuse a short or default session secret at start.
-os.environ.setdefault("CHOREGOS_SESSION_SECRET", "test-session-secret-" + "x" * 32)
+os.environ.setdefault("TRANIBOR_SESSION_SECRET", "test-session-secret-" + "x" * 32)
 # A run's write is a governed action that Temporal plays (#241); here `FakeTemporal` does not play
 # it: the broker does not wait thirty seconds for an outcome that will never come.
-os.environ.setdefault("CHOREGOS_COURTIER_ATTENTE_ECRITURE_S", "0.3")
+os.environ.setdefault("TRANIBOR_COURTIER_ATTENTE_ECRITURE_S", "0.3")
 
 
 @pytest.fixture(autouse=True)
 def _plugin_files_in_tmp(monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path) -> None:
     # Stored plugin files are materialised on disk (#1777): a test never writes a directory the machine
     # shares with other accounts.
-    monkeypatch.setenv("CHOREGOS_PLUGIN_FILES_DIR", str(tmp_path / "plugin-files"))
+    monkeypatch.setenv("TRANIBOR_PLUGIN_FILES_DIR", str(tmp_path / "plugin-files"))
 
 
-#: `CHOREGOS_TEST_SUITE_ON_POSTGRES=1` (with `CHOREGOS_TEST_DATABASE_URL`): the WHOLE API suite runs on
+#: `TRANIBOR_TEST_SUITE_ON_POSTGRES=1` (with `TRANIBOR_TEST_DATABASE_URL`): the WHOLE API suite runs on
 #: PostgreSQL, migrated schema, non-superuser role, so under RLS. On SQLite there is no RLS: webhooks
 #: delivered nothing in production without a single test seeing it (#143).
-SUITE_ON_POSTGRES = bool(os.environ.get("CHOREGOS_TEST_SUITE_ON_POSTGRES"))
+SUITE_ON_POSTGRES = bool(os.environ.get("TRANIBOR_TEST_SUITE_ON_POSTGRES"))
 
 
 @pytest.fixture
@@ -56,7 +56,7 @@ async def app(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[A
     from tranibor_api.temporal import FakeTemporal, set_temporal
 
     if SUITE_ON_POSTGRES:
-        os.environ["CHOREGOS_DATABASE_URL"] = _app_url(PG_URL)
+        os.environ["TRANIBOR_DATABASE_URL"] = _app_url(PG_URL)
         # In the TESTS, `session_scope()` without a scope is a shortcut for "as the platform"
         # (setting the scene). The product code never calls it that way (checked with `grep`), so
         # translating it here hides no product defect, and `test_rls_postgres.py` (fixture
@@ -70,7 +70,7 @@ async def app(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[A
 
         monkeypatch.setattr(db_session, "session_scope", as_platform)
     else:
-        os.environ["CHOREGOS_DATABASE_URL"] = f"sqlite+aiosqlite:///{tmp_path}/test.db"
+        os.environ["TRANIBOR_DATABASE_URL"] = f"sqlite+aiosqlite:///{tmp_path}/test.db"
     reset_settings_cache()
     # A GitHub App a previous test registered lives in this process's cache, not in the new database.
     forget_stored_github_app()
@@ -143,9 +143,9 @@ async def project(client: AsyncClient, admin: str) -> dict[str, Any]:
 
 # ───────────────────────── a real PostgreSQL, when there is one ─────────────────────────
 
-PG_URL = os.environ.get("CHOREGOS_TEST_DATABASE_URL", "")
+PG_URL = os.environ.get("TRANIBOR_TEST_DATABASE_URL", "")
 without_postgres = pytest.mark.skipif(
-    not PG_URL.startswith("postgresql"), reason="CHOREGOS_TEST_DATABASE_URL absent: no PostgreSQL"
+    not PG_URL.startswith("postgresql"), reason="TRANIBOR_TEST_DATABASE_URL absent: no PostgreSQL"
 )
 API = pathlib.Path(__file__).resolve().parents[1]
 APP_ROLE, APP_PASSWORD = "choregos_app", "app"
@@ -186,7 +186,7 @@ async def _prepare_postgres() -> None:
         "EXCEPTION WHEN duplicate_object OR unique_violation THEN NULL; END $$",
         f"GRANT USAGE, CREATE ON SCHEMA public TO {APP_ROLE}",
     )
-    os.environ["CHOREGOS_DATABASE_URL"] = _app_url(PG_URL)
+    os.environ["TRANIBOR_DATABASE_URL"] = _app_url(PG_URL)
     # pgvector is not a trusted extension: the cluster's bootstrap creates it as a superuser
     # (`postInitApplicationSQL`, ADR 0051), never the application role. Done the same way here, when
     # the image carries it; on an image without it, the knowledge index serves full-text only.
@@ -269,7 +269,7 @@ async def _fresh_postgres() -> None:
     The schema is built once per process (95 migrations, about four seconds) and the following tests
     empty its tables. A test that drops or changes the schema (`_prepare_postgres()`, a downgrade)
     makes it differ from what was built: the next call rebuilds it. The caller has set
-    `CHOREGOS_DATABASE_URL` and reset the settings and the engine.
+    `TRANIBOR_DATABASE_URL` and reset the settings and the engine.
     """
     fingerprint = _built.get("fingerprint")
     if isinstance(fingerprint, str):
@@ -298,9 +298,9 @@ async def pg_app(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[Any]:
     from tranibor_api.main import create_app
     from tranibor_api.temporal import FakeTemporal, set_temporal
 
-    monkeypatch.setenv("CHOREGOS_DATABASE_URL", _app_url(PG_URL))
-    monkeypatch.setenv("CHOREGOS_OIDC_DEFAULT_ORG", "a")
-    monkeypatch.setenv("CHOREGOS_DEV_ADMIN_EMAILS", "admin@a.test")
+    monkeypatch.setenv("TRANIBOR_DATABASE_URL", _app_url(PG_URL))
+    monkeypatch.setenv("TRANIBOR_OIDC_DEFAULT_ORG", "a")
+    monkeypatch.setenv("TRANIBOR_DEV_ADMIN_EMAILS", "admin@a.test")
     reset_settings_cache()
     await db_session.dispose_engine()
     # The schema is the one of `python -m tranibor_api.migrate`, the chart Job's: this PostgreSQL bench

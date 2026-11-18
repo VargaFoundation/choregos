@@ -10,7 +10,7 @@ Scripting: `fixtures[symbol]` replaces the synthetic bars of a symbol, `instrume
 description, `errors[symbol]` makes it raise, `cross_checks[symbol]` adds the cross-check a
 `composite` would report (`{source, common_days, max_rel_diff, diverging_days}`); `calls` records
 every call (name and arguments).
-Used under `CHOREGOS_FAKES=1`, by the tests, the e2e and the demo.
+Used under `TRANIBOR_FAKES=1`, by the tests, the e2e and the demo.
 """
 
 from __future__ import annotations
@@ -133,7 +133,7 @@ class FakeMarketData(MarketDataProvider):
 __all__ = ["FakeMarketData", "MarketDataError", "seed_of", "synthetic_bars"]
 
 
-#: The process-wide fake of `CHOREGOS_FAKES=1`, scripted by the tests, the e2e and the demo. `None` until
+#: The process-wide fake of `TRANIBOR_FAKES=1`, scripted by the tests, the e2e and the demo. `None` until
 #: the first build; a test rebinds it here.
 FAKE: FakeMarketData | None = None
 

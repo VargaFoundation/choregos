@@ -74,7 +74,7 @@ export async function servedLook(): Promise<ServedLook> {
     const hit = memo.get(candidate);
     if (hit && now - hit.at < MEMO_MS) return { theme: hit.theme, hostOrg: hit.hostOrg };
   }
-  const base = process.env.CHOREGOS_API_URL ?? "http://localhost:8000";
+  const base = process.env.TRANIBOR_API_URL ?? "http://localhost:8000";
   const query = org ? `?org=${encodeURIComponent(org)}` : "";
   try {
     const response = await fetch(`${base}/api/v1/theme${query}`, {

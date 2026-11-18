@@ -36,7 +36,7 @@ def test_the_job_runs_both_tests_with_runsc_and_fails_on_a_skip() -> None:
     assert "pytest apps/orchestrator/tests/test_gvisor_policy.py" in runs
     assert "! grep -qi skipped pytest.out" in runs
     env = next(step["env"] for step in _job()["steps"] if "gvisor -rs" in str(step.get("run", "")))
-    assert env["CHOREGOS_TEST_RUNSC"] == "${{ runner.temp }}/gvisor/runsc"
+    assert env["TRANIBOR_TEST_RUNSC"] == "${{ runner.temp }}/gvisor/runsc"
     assert not any("if" in step for step in _job()["steps"]), "no step of the proof is skipped"
 
 

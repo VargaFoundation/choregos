@@ -16,7 +16,7 @@ S41-18 (`test_the_hosted_container_changes_the_files_the_runner_copied`): the ru
 pod's `fsGroup`; and it sees neither the runner's `/workspace`, nor a `.git`, nor a credential.
 
 Both need the runner image (`docker build -f docker/runner.Dockerfile -t choregos-runner:s41-24 .`,
-then `kind load docker-image`), named by `CHOREGOS_HOSTED_RUNNER_IMAGE`, and the reference image of
+then `kind load docker-image`), named by `TRANIBOR_HOSTED_RUNNER_IMAGE`, and the reference image of
 `test_hosted_native_sidecar.py`; without either they are skipped.
 """
 
@@ -61,9 +61,9 @@ DIGEST = "@sha256:" + "a" * 64
 
 
 def _runner_image() -> str:
-    image = os.environ.get("CHOREGOS_HOSTED_RUNNER_IMAGE", "")
+    image = os.environ.get("TRANIBOR_HOSTED_RUNNER_IMAGE", "")
     if not image:
-        pytest.skip("CHOREGOS_HOSTED_RUNNER_IMAGE unset: the runner's image is needed")
+        pytest.skip("TRANIBOR_HOSTED_RUNNER_IMAGE unset: the runner's image is needed")
     return image
 
 
@@ -312,7 +312,7 @@ async def test_the_hosted_container_changes_the_files_the_runner_copied(
     assert "new.txt: new" in runner_log and "new.txt group: 1000" in runner_log, runner_log
     assert "git copied: False" in runner_log, "the runner's `.git` was not copied into the shared volume"
     assert "GIT_VISIBLE" not in agent_log and "RUNNER_VOLUME_VISIBLE" not in agent_log
-    for secret_name in ("CHOREGOS_RUN_TOKEN", "CHOREGOS_RUN_GATEWAY_KEY", "GIT_", "GITHUB_", "TOKEN"):
+    for secret_name in ("TRANIBOR_RUN_TOKEN", "TRANIBOR_RUN_GATEWAY_KEY", "GIT_", "GITHUB_", "TOKEN"):
         assert not any(
             line.startswith(secret_name) or f"_{secret_name}" in line.split("=")[0]
             for line in agent_log.splitlines()

@@ -17,7 +17,7 @@ spec:
           workingDir: /app
           command: ["python", "/demo/seed.py", "--start"]
           env:
-            - { name: CHOREGOS_ENV, value: dev }
+            - { name: TRANIBOR_ENV, value: dev }
             # `litellm` (default): the projects go through the embedded gateway, one key per
             # run, cost counted. `direct`: the agent brings its own credentials, nothing is
             # counted. `make demo-seed GATEWAY=direct` replaces the value.
@@ -25,14 +25,14 @@ spec:
             # Suffix of the ticket keys (`DEMO-1b`, `RH-1b`): a ticket has only one
             # interpreter, replaying the demonstration takes new tickets.
             - { name: DEMO_SERIE, value: "__SERIE__" }
-            - name: CHOREGOS_GATEWAY_MASTER_KEY
+            - name: TRANIBOR_GATEWAY_MASTER_KEY
               valueFrom: { secretKeyRef: { name: choregos-gateway, key: master-key, optional: true } }
-            - { name: CHOREGOS_GATEWAY_URL, value: "http://choregos-litellm:4000" }
-            - { name: CHOREGOS_TEMPORAL_ADDRESS, value: "choregos-temporal:7233" }
-            - name: CHOREGOS_DATABASE_PASSWORD
+            - { name: TRANIBOR_GATEWAY_URL, value: "http://choregos-litellm:4000" }
+            - { name: TRANIBOR_TEMPORAL_ADDRESS, value: "choregos-temporal:7233" }
+            - name: TRANIBOR_DATABASE_PASSWORD
               valueFrom: { secretKeyRef: { name: choregos-postgresql, key: password } }
-            - name: CHOREGOS_DATABASE_URL
-              value: postgresql+asyncpg://choregos:$(CHOREGOS_DATABASE_PASSWORD)@choregos-postgresql:5432/choregos
+            - name: TRANIBOR_DATABASE_URL
+              value: postgresql+asyncpg://choregos:$(TRANIBOR_DATABASE_PASSWORD)@choregos-postgresql:5432/choregos
           volumeMounts:
             - { name: demo, mountPath: /demo }
       volumes:

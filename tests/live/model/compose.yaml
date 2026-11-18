@@ -4,7 +4,7 @@
 # the chart; the tests hold the master key, a local placeholder. Every port is bound to 127.0.0.1.
 #
 #   ANTHROPIC_API_KEY=… docker compose -p livemodel -f tests/live/model/compose.yaml up -d --wait
-#   CHOREGOS_LIVE_LITELLM_URL=http://127.0.0.1:14420 CHOREGOS_LIVE_LITELLM_KEY=sk-local-live-model-only \
+#   TRANIBOR_LIVE_LITELLM_URL=http://127.0.0.1:14420 TRANIBOR_LIVE_LITELLM_KEY=sk-local-live-model-only \
 #     uv run pytest tests/live/test_litellm_live.py -m live
 #   docker compose -p livemodel -f tests/live/model/compose.yaml down -v
 #

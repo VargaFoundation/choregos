@@ -160,7 +160,7 @@ def templates(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> pathli
         "  skills: [catalogue:madr-4]\n  agents: [catalogue:reviewer, catalogue:nobody-knows]\n",
         encoding="utf-8",
     )
-    monkeypatch.setenv("CHOREGOS_TEMPLATES_DIR", str(root))
+    monkeypatch.setenv("TRANIBOR_TEMPLATES_DIR", str(root))
     return folder
 
 
@@ -241,16 +241,16 @@ async def test_a_client_that_calls_from_the_cloud_is_not_offered_without_oauth_o
     refused = await client.post(f"{ORG}/agent-catalogue/chatgpt/connect")
     assert refused.status_code == 409 and "not offered" in refused.text
 
-    monkeypatch.setenv("CHOREGOS_MCP_OAUTH_ENABLED", "true")
-    monkeypatch.setenv("CHOREGOS_MCP_OAUTH_ISSUER", "https://sso.example/realms/northwind")
+    monkeypatch.setenv("TRANIBOR_MCP_OAUTH_ENABLED", "true")
+    monkeypatch.setenv("TRANIBOR_MCP_OAUTH_ISSUER", "https://sso.example/realms/northwind")
     monkeypatch.setenv(
-        "CHOREGOS_MCP_OAUTH_CLIENTS", json.dumps({"chatgpt": {"client_id": "choregos-chatgpt"}})
+        "TRANIBOR_MCP_OAUTH_CLIENTS", json.dumps({"chatgpt": {"client_id": "choregos-chatgpt"}})
     )
     reset_settings_cache()
     still = next(e for e in (await client.get(f"{ORG}/agent-catalogue")).json() if e["slug"] == "chatgpt")
     assert still["offered"] is False and "https" in still["unavailable_reason"], "OAuth, but over http"
 
-    monkeypatch.setenv("CHOREGOS_PUBLIC_URL", "https://choregos.example")
+    monkeypatch.setenv("TRANIBOR_PUBLIC_URL", "https://choregos.example")
     reset_settings_cache()
     claude_ai = next(
         e for e in (await client.get(f"{ORG}/agent-catalogue")).json() if e["slug"] == "claude-ai"

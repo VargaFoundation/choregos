@@ -41,7 +41,7 @@ def scripted(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     for name, behaviour in names.items():
         spec = ConnectorTypeSpec(name, ("tracker",), {"type": "object", "properties": {}}, ("api_token",))
         register("tracker", name, spec)(lambda cfg, b=behaviour: _Probe(b))
-    monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
+    monkeypatch.delenv("TRANIBOR_FAKES", raising=False)
     try:
         yield
     finally:
@@ -90,7 +90,7 @@ async def test_setting_or_clearing_a_secret_retests(
     pid = project["id"]
     await _put(client, project, "scripted-ok")
     key = base64.b64encode(os.urandom(32)).decode()
-    monkeypatch.setenv("CHOREGOS_SECRETS_KEKS", f"k1:{key}")  # the deployment's sealing key (ADR 0058)
+    monkeypatch.setenv("TRANIBOR_SECRETS_KEKS", f"k1:{key}")  # the deployment's sealing key (ADR 0058)
     set_ = await client.put(
         f"/api/v1/projects/{pid}/connectors/tracker/secrets/api_token", json={"value": FAKE_TOKEN}
     )

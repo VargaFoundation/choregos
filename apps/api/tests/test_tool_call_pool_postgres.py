@@ -8,7 +8,7 @@ provider. Without the fix the third call never reaches its provider and `/readyz
 with it, the three wait at the provider holding nothing, `pg_stat_activity` shows no session of the
 application role idle in transaction, and the calls are booked once they answer, under RLS.
 
-Runs only against a real PostgreSQL (`CHOREGOS_TEST_DATABASE_URL`), as the application role (not a
+Runs only against a real PostgreSQL (`TRANIBOR_TEST_DATABASE_URL`), as the application role (not a
 superuser, so RLS applies); the CI starts one, locally `docs/development.md` says how.
 """
 
@@ -62,9 +62,9 @@ async def _small_pool(monkeypatch: pytest.MonkeyPatch) -> None:
     from tranibor_api.config import reset_settings_cache
     from tranibor_api.db import session as db_session
 
-    monkeypatch.setenv("CHOREGOS_DB_POOL_SIZE", str(POOL_SIZE))
-    monkeypatch.setenv("CHOREGOS_DB_MAX_OVERFLOW", "0")
-    monkeypatch.setenv("CHOREGOS_DB_POOL_TIMEOUT_S", str(POOL_TIMEOUT_S))
+    monkeypatch.setenv("TRANIBOR_DB_POOL_SIZE", str(POOL_SIZE))
+    monkeypatch.setenv("TRANIBOR_DB_MAX_OVERFLOW", "0")
+    monkeypatch.setenv("TRANIBOR_DB_POOL_TIMEOUT_S", str(POOL_TIMEOUT_S))
     reset_settings_cache()
     await db_session.dispose_engine()
 
@@ -79,7 +79,7 @@ async def _runs_with_catalogue(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, 
 
     file = tmp_path / "catalogue.yaml"
     file.write_text(CATALOGUE, encoding="utf-8")
-    monkeypatch.setenv("CHOREGOS_TOOL_CATALOG", str(file))
+    monkeypatch.setenv("TRANIBOR_TOOL_CATALOG", str(file))
     monkeypatch.setenv("ANNUAIRE_API_KEY", "key-from-the-vault")
     catalogue_service.clear_cache()
     runs: list[tuple[str, dict[str, str]]] = []

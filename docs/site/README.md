@@ -12,7 +12,7 @@ needs the full detail, link to the reference page.
 ## Where a page goes
 
 The slugs are fixed by the S62 contract. Do not move or rename a page: the console and the API link to
-these addresses (`CHOREGOS_DOCS_URL`, by default `https://graalsystems.github.io/tranibor`).
+these addresses (`TRANIBOR_DOCS_URL`, by default `https://graalsystems.github.io/tranibor`).
 
 | Folder | Section | Order |
 | :-- | :-- | :-- |

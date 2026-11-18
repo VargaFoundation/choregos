@@ -92,7 +92,7 @@ async def test_what_the_container_writes_is_committed_and_pushed(
 
     assert outcome.exit_code is Exit.OK and client.results[-1].status is StageStatus.DONE
     assert agent.seen[0] == "def total(lines):\n    return sum(lines)\n", "the container sees the tree"
-    assert agent.env["CHOREGOS_WORKSPACE"] == "/workspace"
+    assert agent.env["TRANIBOR_WORKSPACE"] == "/workspace"
     assert _pushed(toy_repo, "src/orders.py") == fixed
     assert _pushed(toy_repo, "tests/test_total.py") is not None
     assert _events(client, "hosted.workspace.imported") == [
@@ -133,7 +133,7 @@ async def test_under_none_there_is_no_tree_and_nothing_is_pushed(
 ) -> None:
     _, client, agent = await _go(_hosted(stage_input), [("write", "src/orders.py", "x\n")], settings, shared)
 
-    assert agent.seen == ["no workspace"] and "CHOREGOS_WORKSPACE" not in agent.env
+    assert agent.seen == ["no workspace"] and "TRANIBOR_WORKSPACE" not in agent.env
     assert list(shared.iterdir()) == []
     assert not _branch_exists(toy_repo)
     assert _events(client, "hosted.workspace") == []

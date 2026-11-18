@@ -240,7 +240,7 @@ async def test_adding_the_source_opens_the_connectors_host_for_the_workers_that_
     from tranibor_api.config import reset_settings_cache
 
     await _base(client)
-    monkeypatch.setenv("CHOREGOS_EGRESS_MODE", "enforce")
+    monkeypatch.setenv("TRANIBOR_EGRESS_MODE", "enforce")
     reset_settings_cache()
     declared = await client.post(
         f"{ORG}/connectors",
@@ -326,7 +326,7 @@ async def test_unversioned_resources_beyond_the_bases_limit_are_never_read(
     the limit is listed (over many pages) and skipped, never read; what is in the base is read again."""
     from tranibor_api.config import reset_settings_cache
 
-    monkeypatch.setenv("CHOREGOS_KNOWLEDGE_MAX_DOCUMENTS", "20")
+    monkeypatch.setenv("TRANIBOR_KNOWLEDGE_MAX_DOCUMENTS", "20")
     reset_settings_cache()
     catalog.resources = [
         {"uri": f"catalog://bulk/{n:03}", "name": f"table-{n:03}", "mimeType": "text/markdown"}

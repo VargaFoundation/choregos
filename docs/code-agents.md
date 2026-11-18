@@ -186,7 +186,7 @@ make conformance        # the plain example runs here, in CI
 make conformance-agent IMAGE=<ref> COMMAND='["/opt/agents/plain/bin/python","-m","choregos_agent_examples.plain"]'
 ```
 
-`CHOREGOS_CONFORMANCE_CODE_AGENTS` (`{name: argv}` or `{name: {image, command}}`) names the agents
+`TRANIBOR_CONFORMANCE_CODE_AGENTS` (`{name: argv}` or `{name: {image, command}}`) names the agents
 the suite runs; an image is run with `docker run -i`. Each agent runs the seven checks twice: as the
 runner's child (`process`), and behind a launcher (`container`, ADR 0146 §10), where an image starts
 `launcher` as uid 1001 with a read-only root and the agent is started through it, as in a run.

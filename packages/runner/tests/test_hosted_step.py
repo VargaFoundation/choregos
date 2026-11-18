@@ -245,7 +245,7 @@ async def test_an_mcp_call_carries_the_servers_credential_the_container_never_ho
 
     assert crm.calls == [("lookup", {"customer": "acme"})]
     assert agent.seen[0][1]["result"]["content"][0]["text"] == "lookup done"
-    assert agent.env["CHOREGOS_MCP_SERVERS"] == "crm"
+    assert agent.env["TRANIBOR_MCP_SERVERS"] == "crm"
     assert client.results[-1].diagnostics.tool_calls == 1
     assert [e["tool"] for e in _events(client, "session/request_permission")] == ["crm/lookup"]
 
@@ -360,7 +360,7 @@ async def test_no_credential_is_in_the_containers_environment(stage_input: Stage
     assert env["OPENAI_API_KEY"] == env["ANTHROPIC_API_KEY"] == "choregos-loopback"
     assert env["OPENAI_BASE_URL"] == "http://127.0.0.1:4001/v1"
     assert env["HTTPS_PROXY"] == env["https_proxy"] == "http://127.0.0.1:4003"
-    assert env["CHOREGOS_MCP_URL"] == "http://127.0.0.1:4002/mcp/"
+    assert env["TRANIBOR_MCP_URL"] == "http://127.0.0.1:4002/mcp/"
     assert (env["LOG_LEVEL"], env["PORT"]) == ("debug", "8088"), "the platform's variables win"
 
 

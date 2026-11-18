@@ -463,12 +463,12 @@ async def test_the_callback_runs_under_the_organisations_egress_allowlist(
     from tranibor_api.config import reset_settings_cache
 
     await _declare(client)
-    monkeypatch.setenv("CHOREGOS_EGRESS_MODE", "enforce")
+    monkeypatch.setenv("TRANIBOR_EGRESS_MODE", "enforce")
     reset_settings_cache()
     try:
         done = await _begin_and_call_back(client, provider)
     finally:
-        monkeypatch.setenv("CHOREGOS_EGRESS_MODE", "warn")
+        monkeypatch.setenv("TRANIBOR_EGRESS_MODE", "warn")
         reset_settings_cache()
     assert done.status_code == 422, done.text
     assert provider.requests == [], "the authorization server received nothing"

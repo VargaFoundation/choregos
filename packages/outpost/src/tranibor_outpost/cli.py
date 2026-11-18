@@ -71,13 +71,13 @@ def _version(value: bool) -> None:
 def main_options(
     context: typer.Context,
     policy_file: Annotated[
-        Path, typer.Option("--policy", envvar="CHOREGOS_OUTPOST_POLICY", help="The policy file.")
+        Path, typer.Option("--policy", envvar="TRANIBOR_OUTPOST_POLICY", help="The policy file.")
     ] = DEFAULT_POLICY,
     state_dir: Annotated[
         Path,
         typer.Option(
             "--state-dir",
-            envvar="CHOREGOS_OUTPOST_STATE_DIR",
+            envvar="TRANIBOR_OUTPOST_STATE_DIR",
             help="Where the identity and the journal live.",
         ),
     ] = DEFAULT_STATE_DIR,
@@ -85,7 +85,7 @@ def main_options(
         Path | None,
         typer.Option(
             "--identity-dir",
-            envvar="CHOREGOS_OUTPOST_IDENTITY_DIR",
+            envvar="TRANIBOR_OUTPOST_IDENTITY_DIR",
             help="Where the keys live, when not under the state directory.",
         ),
     ] = None,
@@ -93,7 +93,7 @@ def main_options(
         Path | None,
         typer.Option(
             "--ca-file",
-            envvar="CHOREGOS_OUTPOST_CA_FILE",
+            envvar="TRANIBOR_OUTPOST_CA_FILE",
             help="An authority to trust besides the system's: an inspecting proxy's, a private one.",
         ),
     ] = None,
@@ -101,11 +101,11 @@ def main_options(
         str | None,
         typer.Option(
             "--proxy",
-            envvar="CHOREGOS_OUTPOST_PROXY",
+            envvar="TRANIBOR_OUTPOST_PROXY",
             help="The outbound proxy towards the door; HTTPS_PROXY and NO_PROXY apply otherwise.",
         ),
     ] = None,
-    log_level: Annotated[str, typer.Option("--log-level", envvar="CHOREGOS_OUTPOST_LOG_LEVEL")] = "INFO",
+    log_level: Annotated[str, typer.Option("--log-level", envvar="TRANIBOR_OUTPOST_LOG_LEVEL")] = "INFO",
     version: Annotated[
         bool, typer.Option("--version", callback=_version, is_eager=True, help="Print the version and exit.")
     ] = False,
@@ -149,7 +149,7 @@ def _token(token: str | None, token_file: Path | None) -> str:
         return token.strip()
     if sys.stdin.isatty():
         return str(typer.prompt("Enrolment token", hide_input=True)).strip()
-    raise _fail("no enrolment token: give `--token`, `--token-file` or CHOREGOS_OUTPOST_ENROLMENT_TOKEN", 2)
+    raise _fail("no enrolment token: give `--token`, `--token-file` or TRANIBOR_OUTPOST_ENROLMENT_TOKEN", 2)
 
 
 @app.command()
@@ -157,7 +157,7 @@ def enrol(
     context: typer.Context,
     token: Annotated[
         str | None,
-        typer.Option("--token", envvar="CHOREGOS_OUTPOST_ENROLMENT_TOKEN", help="The enrolment token."),
+        typer.Option("--token", envvar="TRANIBOR_OUTPOST_ENROLMENT_TOKEN", help="The enrolment token."),
     ] = None,
     token_file: Annotated[
         Path | None, typer.Option("--token-file", help="A file that holds the token.")
@@ -275,7 +275,7 @@ def run(
     grace_s: Annotated[
         float,
         typer.Option(
-            "--grace", envvar="CHOREGOS_OUTPOST_GRACE_S", help="Seconds calls in progress have to finish."
+            "--grace", envvar="TRANIBOR_OUTPOST_GRACE_S", help="Seconds calls in progress have to finish."
         ),
     ] = 20.0,
 ) -> None:

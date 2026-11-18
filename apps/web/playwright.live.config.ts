@@ -27,7 +27,7 @@ export default defineConfig({
     },
     {
       command: `pnpm dev -H 127.0.0.1 -p ${port}`,
-      env: { CHOREGOS_API_URL: `http://127.0.0.1:${apiPort}` },
+      env: { TRANIBOR_API_URL: `http://127.0.0.1:${apiPort}` },
       url: `http://127.0.0.1:${port}`,
       reuseExistingServer: true,
       timeout: 180_000,

@@ -31,13 +31,13 @@ def deployment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[list
     for name, content in {"ca.crt": b"CA", "tls.crt": b"CERT", "tls.key": b"KEY"}.items():
         (tmp_path / name).write_bytes(content)
     (tmp_path / "keys").write_text(f"k2:{base64.b64encode(os.urandom(32)).decode()}")
-    monkeypatch.setenv("CHOREGOS_TEMPORAL_TLS", "true")
-    monkeypatch.setenv("CHOREGOS_TEMPORAL_TLS_CA_FILE", str(tmp_path / "ca.crt"))
-    monkeypatch.setenv("CHOREGOS_TEMPORAL_TLS_CERT_FILE", str(tmp_path / "tls.crt"))
-    monkeypatch.setenv("CHOREGOS_TEMPORAL_TLS_KEY_FILE", str(tmp_path / "tls.key"))
-    monkeypatch.setenv("CHOREGOS_TEMPORAL_TLS_SERVER_NAME", "frontend.temporal")
-    monkeypatch.setenv("CHOREGOS_TEMPORAL_CODEC_KEYS_FILE", str(tmp_path / "keys"))
-    monkeypatch.setenv("CHOREGOS_FAKES", "0")
+    monkeypatch.setenv("TRANIBOR_TEMPORAL_TLS", "true")
+    monkeypatch.setenv("TRANIBOR_TEMPORAL_TLS_CA_FILE", str(tmp_path / "ca.crt"))
+    monkeypatch.setenv("TRANIBOR_TEMPORAL_TLS_CERT_FILE", str(tmp_path / "tls.crt"))
+    monkeypatch.setenv("TRANIBOR_TEMPORAL_TLS_KEY_FILE", str(tmp_path / "tls.key"))
+    monkeypatch.setenv("TRANIBOR_TEMPORAL_TLS_SERVER_NAME", "frontend.temporal")
+    monkeypatch.setenv("TRANIBOR_TEMPORAL_CODEC_KEYS_FILE", str(tmp_path / "keys"))
+    monkeypatch.setenv("TRANIBOR_FAKES", "0")
     from tranibor_orchestrator.config import get_settings
 
     get_settings.cache_clear()

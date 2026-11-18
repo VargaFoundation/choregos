@@ -1045,9 +1045,9 @@ def _outposts_switched_on() -> dict[str, str]:
         serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()
     )
     return {
-        "CHOREGOS_OUTPOSTS": "on",
-        "CHOREGOS_OUTPOSTS_DOOR_URL": "https://outposts.example.com",
-        "CHOREGOS_OUTPOSTS_DOOR_SIGNING_KEY": signing_key.decode(),
+        "TRANIBOR_OUTPOSTS": "on",
+        "TRANIBOR_OUTPOSTS_DOOR_URL": "https://outposts.example.com",
+        "TRANIBOR_OUTPOSTS_DOOR_SIGNING_KEY": signing_key.decode(),
     }
 
 
@@ -1056,9 +1056,9 @@ def _probe() -> dict[str, Any]:
     doors = [_module_of(path)[0] for path in _python_files(*DOOR_DIRS)]
     with tempfile.TemporaryDirectory() as directory:
         out = pathlib.Path(directory) / "probe.json"
-        # The outposts' door is mounted only when `CHOREGOS_OUTPOSTS` is on, with its origin and a signing
+        # The outposts' door is mounted only when `TRANIBOR_OUTPOSTS` is on, with its origin and a signing
         # key: the probe turns it on, so that its live routes are frozen with the others'.
-        environment = {**os.environ, "CHOREGOS_FAKES": "1", **_outposts_switched_on()}
+        environment = {**os.environ, "TRANIBOR_FAKES": "1", **_outposts_switched_on()}
         done = subprocess.run(
             [sys.executable, "-c", _PROBE, json.dumps(doors), json.dumps(RUNTIME_PACKAGES), str(out)],
             cwd=ROOT,
@@ -1170,7 +1170,7 @@ def test_every_module_imports_and_only_the_platform_run_servers_extend_the_mcp_c
 
 def test_nothing_in_the_orchestrator_or_the_runner_reads_the_gateway() -> None:
     assert all(
-        GATEWAY_NAME.search(text) for text in ("mcp_gateway", "CHOREGOS_MCP_GATEWAY_URL", "MCP gateway")
+        GATEWAY_NAME.search(text) for text in ("mcp_gateway", "TRANIBOR_MCP_GATEWAY_URL", "MCP gateway")
     )
     assert not any(GATEWAY_NAME.search(text) for text in ("gateway_url", "LiteLLM gateway", "mcp_server"))
     files = _tracked(*NO_GATEWAY_TREES)

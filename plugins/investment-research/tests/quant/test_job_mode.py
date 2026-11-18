@@ -21,7 +21,7 @@ def ws(workdir: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     shutil.copyfile(workdir / "campaign.json", root / ".choregos" / "fields.json")
     shutil.copyfile(workdir / "bars.csv", inputs / "bars.csv")
     shutil.copyfile(workdir / "strategies.json", inputs / "strategies.json")
-    monkeypatch.setenv("CHOREGOS_WORKSPACE", str(root))
+    monkeypatch.setenv("TRANIBOR_WORKSPACE", str(root))
     return root
 
 
@@ -65,7 +65,7 @@ def test_a_job_publishes_nothing_when_it_fails(ws: Path) -> None:
 
 
 def test_outside_a_job_the_paths_are_required(monkeypatch: pytest.MonkeyPatch, workdir: Path) -> None:
-    monkeypatch.delenv("CHOREGOS_WORKSPACE", raising=False)
+    monkeypatch.delenv("TRANIBOR_WORKSPACE", raising=False)
     assert main(["backtest"]) == 2
     assert main(["backtest", "--campaign", str(workdir / "campaign.json")]) == 2
 

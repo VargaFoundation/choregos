@@ -6,7 +6,7 @@ files to the internal API, which hashes them, stores them and records them.
 
 Two implementations: `S3ObjectStore`, which speaks the S3 protocol (AWS, RustFS, MinIO, Ceph) with
 a hand-written SigV4 signature over `httpx` — no SDK in the core — and `FakeObjectStore`
-(`tranibor_adapters.fakes.storage`), in memory, scriptable, for `CHOREGOS_FAKES=1` and tests.
+(`tranibor_adapters.fakes.storage`), in memory, scriptable, for `TRANIBOR_FAKES=1` and tests.
 """
 
 from __future__ import annotations

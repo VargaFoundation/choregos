@@ -6,7 +6,7 @@ callback let a `/v1/systemone` call through; that a run's virtual key carries th
 internal price lands in the spend log (ADR 0004). The stack is `tests/live/decisions/compose.yaml`:
 
     docker compose -p s5202 -f tests/live/decisions/compose.yaml up -d --build --wait
-    CHOREGOS_LIVE_DECISIONS=1 uv run pytest tests/live/test_decisions_live.py -m live
+    TRANIBOR_LIVE_DECISIONS=1 uv run pytest tests/live/test_decisions_live.py -m live
     docker compose -p s5202 -f tests/live/decisions/compose.yaml down -v
 """
 
@@ -25,7 +25,7 @@ from .conftest import require
 
 pytestmark = pytest.mark.live
 
-GATEWAY = os.environ.get("CHOREGOS_LIVE_DECISIONS_GATEWAY_URL", "http://127.0.0.1:14410")
+GATEWAY = os.environ.get("TRANIBOR_LIVE_DECISIONS_GATEWAY_URL", "http://127.0.0.1:14410")
 # The compose file's master key, a local-only placeholder (assembled, not a literal key).
 MASTER_KEY = "-".join(("sk", "local", "decisions", "only"))
 MODEL = "platform/decide"
@@ -50,7 +50,7 @@ QUESTIONS: dict[str, Any] = {
 
 @pytest.fixture
 def client() -> httpx.Client:
-    require("CHOREGOS_LIVE_DECISIONS")
+    require("TRANIBOR_LIVE_DECISIONS")
     return httpx.Client(timeout=60)
 
 
@@ -138,7 +138,7 @@ def test_a_key_minted_for_the_agents_cannot_ask_for_a_decision(client: httpx.Cli
 
 def test_the_catalogue_sync_reads_the_internal_price(client: httpx.Client) -> None:
     """`LiteLlmGateway.list_models` reads `/model/info`: the price must come back from there."""
-    require("CHOREGOS_LIVE_DECISIONS")
+    require("TRANIBOR_LIVE_DECISIONS")
     response = client.get(f"{GATEWAY}/model/info", headers=_master())
     assert response.status_code == 200, response.text[:300]
     (entry,) = [e for e in response.json()["data"] if e["model_name"] == MODEL]

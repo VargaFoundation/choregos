@@ -1,6 +1,6 @@
 """The audit log is a hash chain the database keeps, and the API's role cannot change (S80-05, ADR 0182).
 
-PostgreSQL only (`CHOREGOS_TEST_DATABASE_URL`): the schema of `python -m tranibor_api.migrate`, the
+PostgreSQL only (`TRANIBOR_TEST_DATABASE_URL`): the schema of `python -m tranibor_api.migrate`, the
 non-superuser role the API connects as, which OWNS the tables (as the chart's Job leaves them), under
 forced row-level security. The tampering is done as the superuser with the triggers off
 (`session_replication_role = replica`): what someone who holds the database itself can do, and what only
@@ -350,7 +350,7 @@ async def test_the_migration_chains_the_history_that_exists(monkeypatch: pytest.
     from tranibor_api.migrate import configuration
 
     await _prepare_postgres()
-    monkeypatch.setenv("CHOREGOS_DATABASE_URL", _app_url(PG_URL))
+    monkeypatch.setenv("TRANIBOR_DATABASE_URL", _app_url(PG_URL))
     reset_settings_cache()
     await db_session.dispose_engine()
     config = configuration()

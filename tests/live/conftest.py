@@ -5,16 +5,16 @@ They only run if the credentials are in the environment — never in the reposit
 does not run proves nothing, and saying so is half the work.
 
 A job that is meant to test a service cannot let a vanished secret turn into a skip. The
-`CHOREGOS_LIVE_REQUIRED` variable lists those services (comma-separated, case-insensitive: `gitlab`,
+`TRANIBOR_LIVE_REQUIRED` variable lists those services (comma-separated, case-insensitive: `gitlab`,
 `jira`, `litellm`, or `all`): when a variable of a listed service is missing, `require()` **fails**
 instead of skipping. Only the *missing* variables decide: an optional companion of a required service
 (the realtime model next to LiteLLM) still skips its own test.
 
-    CHOREGOS_LIVE_GITLAB_TOKEN=… CHOREGOS_LIVE_GITLAB_PROJECT=group/project \\
+    TRANIBOR_LIVE_GITLAB_TOKEN=… TRANIBOR_LIVE_GITLAB_PROJECT=group/project \\
     uv run pytest tests/live -m live
 
     # red, not skipped, when a GitLab variable is missing:
-    CHOREGOS_LIVE_REQUIRED=gitlab uv run pytest tests/live -m live
+    TRANIBOR_LIVE_REQUIRED=gitlab uv run pytest tests/live -m live
 """
 
 from __future__ import annotations
@@ -25,20 +25,20 @@ import pytest
 
 
 def required_services() -> set[str]:
-    """The services whose live tests must run, from `CHOREGOS_LIVE_REQUIRED` (`all` is allowed)."""
-    raw = os.environ.get("CHOREGOS_LIVE_REQUIRED", "")
+    """The services whose live tests must run, from `TRANIBOR_LIVE_REQUIRED` (`all` is allowed)."""
+    raw = os.environ.get("TRANIBOR_LIVE_REQUIRED", "")
     return {item.strip().lower() for item in raw.split(",") if item.strip()}
 
 
 def service_of(name: str) -> str:
-    """The service of a `CHOREGOS_LIVE_<SERVICE>_*` variable: `CHOREGOS_LIVE_GITLAB_TOKEN` -> `gitlab`."""
+    """The service of a `TRANIBOR_LIVE_<SERVICE>_*` variable: `TRANIBOR_LIVE_GITLAB_TOKEN` -> `gitlab`."""
     parts = name.lower().split("_")
     return parts[2] if len(parts) > 2 else ""
 
 
 def require(*names: str) -> dict[str, str]:
     """Return the requested variables, or say which ones are missing: the test is skipped, unless a
-    missing variable belongs to a service that `CHOREGOS_LIVE_REQUIRED` names, and then it fails."""
+    missing variable belongs to a service that `TRANIBOR_LIVE_REQUIRED` names, and then it fails."""
     values = {name: os.environ.get(name, "") for name in names}
     missing = [name for name, value in values.items() if not value]
     if missing:

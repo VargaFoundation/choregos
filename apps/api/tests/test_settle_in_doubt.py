@@ -11,7 +11,7 @@ second settlement with the same outcome changes nothing, another is a conflict.
 The outpost's side is the scripted daemon at the real door in front of `FakeOutpost`, as in
 `test_write_via_outpost.py`; the action is played by the orchestrator's own activities and, where the
 test says so, by the `ActionWorkflow` on a Temporal test server started through the API's own client.
-They run on SQLite and, with `CHOREGOS_TEST_SUITE_ON_POSTGRES`, on PostgreSQL under row-level security.
+They run on SQLite and, with `TRANIBOR_TEST_SUITE_ON_POSTGRES`, on PostgreSQL under row-level security.
 """
 
 from __future__ import annotations

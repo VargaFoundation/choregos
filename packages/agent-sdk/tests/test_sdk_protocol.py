@@ -24,7 +24,7 @@ def _env(gateway: Gateway, workspace: Path, **extra: str) -> dict[str, str]:
         "OPENAI_BASE_URL": gateway.url,
         "OPENAI_API_KEY": RUN_KEY,
         "OPENAI_MODEL": "platform/standard",
-        "CHOREGOS_MAX_TURNS": "10",
+        "TRANIBOR_MAX_TURNS": "10",
         **extra,
     }
 
@@ -135,7 +135,7 @@ async def test_a_refused_write_does_not_happen(tmp_path: Path, gateway: Gateway,
 
 
 async def test_the_agent_stops_at_the_steps_max_turns(tmp_path: Path, gateway: Gateway) -> None:
-    await _drive("two_model_calls", tmp_path, _env(gateway, tmp_path, CHOREGOS_MAX_TURNS="1"))
+    await _drive("two_model_calls", tmp_path, _env(gateway, tmp_path, TRANIBOR_MAX_TURNS="1"))
     assert len(gateway.seen) == 1, "the second call is refused before it is made"
     load = load_result(tmp_path / ".choregos" / "result.json")
     assert load.result is not None

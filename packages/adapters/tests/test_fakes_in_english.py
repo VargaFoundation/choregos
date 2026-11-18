@@ -94,7 +94,7 @@ def _free_port() -> int:
 def test_python_m_fakes_server_serves() -> None:
     """The chart's container command is `python -m tranibor_adapters.fakes.server`."""
     port = _free_port()
-    env = {**os.environ, "CHOREGOS_DEMO_PORT": str(port), "CONNECTOR_DEMO_TOKEN": "t"}
+    env = {**os.environ, "TRANIBOR_DEMO_PORT": str(port), "CONNECTOR_DEMO_TOKEN": "t"}
     process = subprocess.Popen(
         [sys.executable, "-m", "tranibor_adapters.fakes.server"],
         env=env,

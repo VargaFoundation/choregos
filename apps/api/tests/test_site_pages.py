@@ -47,7 +47,7 @@ def _blocks(name: str, language: str) -> list[str]:
 
 
 def _curls(name: str) -> list[tuple[str, str, Any]]:
-    """Each `curl` of the page's shell blocks to `$CHOREGOS_API_URL`: its method, its path in the test's
+    """Each `curl` of the page's shell blocks to `$TRANIBOR_API_URL`: its method, its path in the test's
     organisation, and its JSON body (None without one)."""
     found: list[tuple[str, str, Any]] = []
     for block in _blocks(name, "bash"):
@@ -61,11 +61,11 @@ def _curls(name: str) -> list[tuple[str, str, Any]]:
             pending = ""
             if not words or words[0] != "curl":
                 continue
-            url = next(w for w in words if w.startswith("$CHOREGOS_API_URL"))
+            url = next(w for w in words if w.startswith("$TRANIBOR_API_URL"))
             body = words[words.index("-d") + 1] if "-d" in words else None
             method = words[words.index("-X") + 1] if "-X" in words else ("POST" if body else "GET")
             path = (
-                url.removeprefix("$CHOREGOS_API_URL")
+                url.removeprefix("$TRANIBOR_API_URL")
                 .replace("/acme/", "/northwind/")
                 .replace("acme:", "northwind:")
             )
@@ -111,7 +111,7 @@ async def test_the_skill_of_the_page_is_taken_then_its_zip_is_the_next_version(
         bundle.writestr("SKILL.md", skill_md)
         bundle.writestr("examples/good.md", "- Add credit notes (FIN-42)\n- Fix VAT rounding (FIN-40)\n")
     ((path, _),) = [
-        (p, None) for p in re.findall(r'"\$CHOREGOS_API_URL(/api/v1/[^"]+)"', _page("build/skills.md"))
+        (p, None) for p in re.findall(r'"\$TRANIBOR_API_URL(/api/v1/[^"]+)"', _page("build/skills.md"))
     ]
     imported = await client.post(
         path.replace("/acme/", "/northwind/"),

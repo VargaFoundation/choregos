@@ -192,7 +192,7 @@ def _check_address(url: str, loc: list[str], internal_hosts: Iterable[str], *, w
             raise _bad(
                 loc,
                 f"{what} points at {inside} (`{host}`): an operator lists such a host in "
-                "CHOREGOS_MCP_GATEWAY_INTERNAL_HOSTS",
+                "TRANIBOR_MCP_GATEWAY_INTERNAL_HOSTS",
             )
     if not _is_ip(host) and not _HOST_NAME.fullmatch(host):
         raise _bad(loc, f"{what}'s host `{host}` is not a valid ASCII host name")

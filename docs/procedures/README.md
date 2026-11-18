@@ -2,7 +2,7 @@
 
 # Setup procedures
 
-One procedure per connector type, knowledge source kind, MCP-door client and external agent kind ([ADR 0067](../adr/0067-a-procedure-per-connector-and-agent-type.md)). The console shows the same text beside the form where you add the thing, with this deployment's own URLs filled in. A deployment adds its own notes (`<id>.site.md`) or procedures through `CHOREGOS_PROCEDURES_EXTRA`; see [deployment](../deployment.md#site-notes-on-the-setup-procedures).
+One procedure per connector type, knowledge source kind, MCP-door client and external agent kind ([ADR 0067](../adr/0067-a-procedure-per-connector-and-agent-type.md)). The console shows the same text beside the form where you add the thing, with this deployment's own URLs filled in. A deployment adds its own notes (`<id>.site.md`) or procedures through `TRANIBOR_PROCEDURES_EXTRA`; see [deployment](../deployment.md#site-notes-on-the-setup-procedures).
 
 63 procedures.
 

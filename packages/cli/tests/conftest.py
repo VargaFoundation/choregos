@@ -32,7 +32,7 @@ def _no_real_profile(
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(home / ".config"))
     monkeypatch.setenv("XDG_CACHE_HOME", str(home / ".cache"))
-    monkeypatch.delenv("CHOREGOS_CONFIG", raising=False)
+    monkeypatch.delenv("TRANIBOR_CONFIG", raising=False)
 
 
 @pytest.fixture(autouse=True)
@@ -47,7 +47,7 @@ def _currency_read_afresh() -> None:
 def _no_version_check(monkeypatch: pytest.MonkeyPatch) -> None:
     # The check reads `GET /edition` once a process and writes under ~/.cache: the suites mock
     # their own routes and must not write there. `test_self_update.py` turns it back on.
-    monkeypatch.setenv("CHOREGOS_NO_VERSION_CHECK", "1")
+    monkeypatch.setenv("TRANIBOR_NO_VERSION_CHECK", "1")
 
 
 @pytest.fixture(scope="session")

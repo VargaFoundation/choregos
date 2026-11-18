@@ -4,7 +4,7 @@
 The installer does not fetch: it asks a `PluginSupply` for the plugin `name` at `version` from
 `source`, and receives a plugin that `tranibor_core.plugins` has already loaded and validated.
 
-- `SourcesSupply` is the deployment's: every declared source of `CHOREGOS_PLUGINS_CONFIG` and the
+- `SourcesSupply` is the deployment's: every declared source of `TRANIBOR_PLUGINS_CONFIG` and the
   offline directory, through `plugin_sources.fetch_plugin`, so every install and upgrade passes the
   supply-chain checks (index, signature, git pin, digest, lock, content, core range). It is what the
   routes and the start-up reconcile use as soon as a configuration file or an offline directory is set.
@@ -195,7 +195,7 @@ _index_refresh: dict[str, asyncio.Task[tuple[float, Index | None]]] = {}
 
 
 class SourcesSupply:
-    """The deployment's sources (`CHOREGOS_PLUGINS_CONFIG`, `CHOREGOS_PLUGINS_OFFLINE`) through
+    """The deployment's sources (`TRANIBOR_PLUGINS_CONFIG`, `TRANIBOR_PLUGINS_OFFLINE`) through
     `fetch_plugin`: a refusal is a `SourceError` naming the check."""
 
     @asynccontextmanager

@@ -19,7 +19,7 @@ ROLES_DIR = Path(__file__).parent / "roles"
 
 
 # Playbooks supplied by the DEPLOYMENT, in addition to the package's own: directories separated
-# by `:` in `CHOREGOS_PLAYBOOKS_DIR`. This is what makes the engine usable outside software: a
+# by `:` in `TRANIBOR_PLAYBOOKS_DIR`. This is what makes the engine usable outside software: a
 # `sourcing` or `case_review` role has no business in this package, but the rest of the machine
 # (states, transitions, budgets, guarantees, memory) does not change from one domain to another.
 # Two forms are accepted, because a ConfigMap mounts a tree badly:
@@ -28,7 +28,7 @@ ROLES_DIR = Path(__file__).parent / "roles"
 # A deployment role wins over the package's: that is how `implement` is adapted to a house
 # without rewriting the platform.
 def extra_roles_dirs() -> list[Path]:
-    raw = os.environ.get("CHOREGOS_PLAYBOOKS_DIR", "")
+    raw = os.environ.get("TRANIBOR_PLAYBOOKS_DIR", "")
     return [Path(p) for p in raw.split(":") if p.strip()] + [d for d, _ in _DECLARED_DIRS]
 
 
@@ -38,7 +38,7 @@ _DECLARED_DIRS: list[tuple[Path, str]] = []
 
 
 def declare_roles_dir(directory: Path, *, plugin: str) -> list[str]:
-    """Add a plugin's playbook directory (same two forms as `CHOREGOS_PLAYBOOKS_DIR`), and return the
+    """Add a plugin's playbook directory (same two forms as `TRANIBOR_PLAYBOOKS_DIR`), and return the
     roles it holds. Use `tranibor_core.stage_roles.declare_stage_roles`, which also declares the roles
     in the contract's open list."""
     if not directory.is_dir():
@@ -156,7 +156,7 @@ PREVIEW_VARIABLES: dict[str, Any] = {
 
 
 def playbook_origin(role: str) -> str:
-    """`deployment` when `CHOREGOS_PLAYBOOKS_DIR` supplies the role's prompt, `package` otherwise."""
+    """`deployment` when `TRANIBOR_PLAYBOOKS_DIR` supplies the role's prompt, `package` otherwise."""
     return "package" if playbook_path(role).is_relative_to(ROLES_DIR) else "deployment"
 
 

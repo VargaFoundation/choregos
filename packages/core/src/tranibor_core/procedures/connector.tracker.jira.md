@@ -31,7 +31,7 @@ fields:
   is an Atlassian **service account** (no licence seat, no password, an organisation administrator
   creates it); a regular account dedicated to Tranibor works too.
 - The project key.
-- The platform's shared webhook secret (`CHOREGOS_GENERIC_WEBHOOK_SECRET`), held by whoever operates
+- The platform's shared webhook secret (`TRANIBOR_GENERIC_WEBHOOK_SECRET`), held by whoever operates
   Tranibor. Jira Cloud does not sign webhooks, so the platform accepts a delivery only if it carries this
   secret in an `X-Choregos-Secret` header.
 

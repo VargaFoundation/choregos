@@ -2,8 +2,8 @@
 """The reference hosted agent: a tool-calling loop over chat completions, standard library only.
 
 It reads what the platform gives every hosted container (ADR 0080) and nothing else: the model at
-`OPENAI_BASE_URL` with `OPENAI_API_KEY`, the MCP servers at `CHOREGOS_MCP_URL<name>` for each name of
-`CHOREGOS_MCP_SERVERS`. The same image runs anywhere these variables point to a model and to
+`OPENAI_BASE_URL` with `OPENAI_API_KEY`, the MCP servers at `TRANIBOR_MCP_URL<name>` for each name of
+`TRANIBOR_MCP_SERVERS`. The same image runs anywhere these variables point to a model and to
 streamable-HTTP MCP servers.
 """
 
@@ -80,10 +80,10 @@ class McpServer:
 def answer(text: str) -> str:
     base = os.environ["OPENAI_BASE_URL"].rstrip("/")
     headers = {"authorization": f"Bearer {os.environ['OPENAI_API_KEY']}"}
-    model = os.environ.get("CHOREGOS_MODEL", "default")
+    model = os.environ.get("TRANIBOR_MODEL", "default")
     servers = [
-        McpServer(name, os.environ["CHOREGOS_MCP_URL"] + name)
-        for name in os.environ.get("CHOREGOS_MCP_SERVERS", "").split(",")
+        McpServer(name, os.environ["TRANIBOR_MCP_URL"] + name)
+        for name in os.environ.get("TRANIBOR_MCP_SERVERS", "").split(",")
         if name
     ]
     owners: dict[str, McpServer] = {}

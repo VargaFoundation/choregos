@@ -222,7 +222,7 @@ def _warn_without_egress_report_key(settings: Any) -> None:
         return
     logger.warning(
         "egress.report_key_missing",
-        detail="CHOREGOS_EGRESS_REPORT_KEY is not set: an agent can rewrite its run's network counters",
+        detail="TRANIBOR_EGRESS_REPORT_KEY is not set: an agent can rewrite its run's network counters",
     )
 
 
@@ -346,7 +346,7 @@ def _check_the_sections(served: set[tuple[str, str]]) -> None:
 
 def _mount_the_outposts_door(app: FastAPI, settings: Any) -> None:
     """The outposts' door (ADR 0148), the third: at the root and out of the OpenAPI document like the
-    two others, and mounted only when `CHOREGOS_OUTPOSTS` is on. Off, an outpost's daemon meets a 404
+    two others, and mounted only when `TRANIBOR_OUTPOSTS` is on. Off, an outpost's daemon meets a 404
     that is none of its contract's problems: the switch stops every outpost at once (ADR 0147 §12).
     On, a door without its public origin or its signing key stops the start-up, naming the setting."""
     if not settings.outposts:
@@ -547,16 +547,16 @@ def create_app() -> FastAPI:
         return {"status": "ok"}
 
     def _build_revision() -> str | None:
-        """The source revision the image was built from (`CHOREGOS_BUILD_REVISION`, set by the build).
+        """The source revision the image was built from (`TRANIBOR_BUILD_REVISION`, set by the build).
 
         Public like the rest of `/edition`. Anything that is not a hex commit id is dropped, so a
         misconfigured variable cannot put free text in a public response.
         """
-        value = os.environ.get("CHOREGOS_BUILD_REVISION", "").strip()
+        value = os.environ.get("TRANIBOR_BUILD_REVISION", "").strip()
         return value if re.fullmatch(r"[0-9a-f]{7,40}", value) else None
 
     def _docs_url() -> str:
-        """Where the console's help links point (`CHOREGOS_DOCS_URL`, S62-11), without a trailing slash.
+        """Where the console's help links point (`TRANIBOR_DOCS_URL`, S62-11), without a trailing slash.
 
         Only an `http(s)` address is served: the console puts it in an `href`, and a `javascript:`
         value set by mistake must not become a link. Anything else gives the public site.

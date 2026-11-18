@@ -28,7 +28,7 @@ def _config(url: str) -> Config:
 @pytest.fixture
 def database(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[str]:
     file = tmp_path / "memories.db"
-    monkeypatch.setenv("CHOREGOS_DATABASE_URL", f"sqlite+aiosqlite:///{file}")
+    monkeypatch.setenv("TRANIBOR_DATABASE_URL", f"sqlite+aiosqlite:///{file}")
     get_settings.cache_clear()
     yield f"sqlite:///{file}"
     get_settings.cache_clear()

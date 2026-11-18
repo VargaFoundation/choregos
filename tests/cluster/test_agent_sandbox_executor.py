@@ -8,7 +8,7 @@ claim deletes the sandbox, and the pool replaces it with a NEW one — a sandbox
 out twice.
 
 It needs a runner image that has `await-assignment` (this release or later), named by
-`CHOREGOS_SANDBOX_RUNNER_IMAGE`, and the operator; without them it is skipped and says why.
+`TRANIBOR_SANDBOX_RUNNER_IMAGE`, and the operator; without them it is skipped and says why.
 The executor's push itself comes from the orchestrator's pod, inside the cluster; here a probe
 pod in the test namespace plays that part.
 """
@@ -46,9 +46,9 @@ def ns() -> Iterator[str]:
 
 
 def _runner_image() -> str:
-    image = os.environ.get("CHOREGOS_SANDBOX_RUNNER_IMAGE", "")
+    image = os.environ.get("TRANIBOR_SANDBOX_RUNNER_IMAGE", "")
     if not image:
-        pytest.skip("CHOREGOS_SANDBOX_RUNNER_IMAGE unset: a runner image with `await-assignment` is needed")
+        pytest.skip("TRANIBOR_SANDBOX_RUNNER_IMAGE unset: a runner image with `await-assignment` is needed")
     if shutil.which("helm") is None:
         pytest.skip("helm absent")
     return image

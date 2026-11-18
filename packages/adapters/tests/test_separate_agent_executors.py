@@ -35,7 +35,7 @@ def _spec(**changes: Any) -> StageJobSpec:
         "api_url": "http://choregos-api:8000",
         "run_token": "token",
         "gateway_key": "gk",
-        "env": {"HTTP_PROXY": "http://egress:3128", "CHOREGOS_ENV": "dev"},
+        "env": {"HTTP_PROXY": "http://egress:3128", "TRANIBOR_ENV": "dev"},
         "labels": {"choregos/work-item": "DEMO-1"},
         "runtime_class": "gvisor",
     }
@@ -110,7 +110,7 @@ def test_the_jobs_agent_is_a_native_sidecar_after_the_gate_holding_nothing_of_th
     assert agent["args"] == ["launcher", "--port", str(separate_agent.LAUNCHER_PORT)]
     assert agent["image"] == "registry.example/choregos-runner:1.0", "the platform's image, no second pull"
     text = yaml.safe_dump(agent)
-    for forbidden in ("secretKeyRef", "secretRef", "envFrom", "git-credentials", "CHOREGOS_RUN"):
+    for forbidden in ("secretKeyRef", "secretRef", "envFrom", "git-credentials", "TRANIBOR_RUN"):
         assert forbidden not in text
     assert {e["name"] for e in agent["env"]} == {"TMPDIR", "HOME"}
     assert {m["name"]: m["mountPath"] for m in agent["volumeMounts"]} == {
@@ -134,8 +134,8 @@ def test_the_runner_shares_the_tree_and_the_exchange_only_and_is_told_where_the_
     agent_mounts = {m["name"] for m in agent["volumeMounts"]}
     assert runner_mounts & agent_mounts == {"workspace", "exchange"}
     env = {e["name"]: e.get("value") for e in runner["env"]}
-    assert env["CHOREGOS_RUNNER_AGENT_ISOLATION"] == "container"
-    assert env["CHOREGOS_RUNNER_LAUNCHER_PORT"] == "8766"
+    assert env["TRANIBOR_RUNNER_AGENT_ISOLATION"] == "container"
+    assert env["TRANIBOR_RUNNER_LAUNCHER_PORT"] == "8766"
     assert env["TMPDIR"] == "/exchange"
     names = [e["name"] for e in runner["env"]]
     assert len(names) == len(set(names)), "one value per variable"
@@ -228,15 +228,15 @@ async def test_docker_starts_the_agents_container_without_a_secret() -> None:
     agent_env = [agent[i + 1] for i, a in enumerate(agent) if a == "--env"]
     assert sorted(agent_env) == ["HOME=/exchange", "TMPDIR=/exchange"]
     assert not any(secret in " ".join(agent) for secret in SECRETS)
-    assert "CHOREGOS_RUN_TOKEN" not in " ".join(agent) and "--env-file" not in agent
+    assert "TRANIBOR_RUN_TOKEN" not in " ".join(agent) and "--env-file" not in agent
     assert docker.envs[docker.calls.index(agent)] is None, "docker's own environment carries no secret"
     volumes = {agent[i + 1] for i, a in enumerate(agent) if a == "--volume"}
     assert volumes == {"choregos-run-r-1-tree:/workspace", "choregos-run-r-1-exchange:/exchange"}
     runner_volumes = {runner[i + 1] for i, a in enumerate(runner) if a == "--volume"}
     assert volumes <= runner_volumes
     runner_env = [runner[i + 1] for i, a in enumerate(runner) if a == "--env"]
-    assert "CHOREGOS_RUNNER_AGENT_ISOLATION=container" in runner_env and "TMPDIR=/exchange" in runner_env
-    assert "CHOREGOS_RUN_TOKEN" in runner_env, "the runner's, by name"
+    assert "TRANIBOR_RUNNER_AGENT_ISOLATION=container" in runner_env and "TMPDIR=/exchange" in runner_env
+    assert "TRANIBOR_RUN_TOKEN" in runner_env, "the runner's, by name"
     # The exchange is a tmpfs the runner's group owns: a new volume's root is root's otherwise.
     exchange = next(c for c in docker.calls if c[:2] == ["volume", "create"] and c[-1].endswith("-exchange"))
     assert "o=uid=1000,gid=1000,mode=2775" in exchange
@@ -252,19 +252,19 @@ async def test_docker_stops_and_removes_the_agents_container_with_the_run() -> N
 
 
 def test_the_deployment_sets_the_runners_own_resources(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The chart's `runner.ownResources` reaches the executor (`CHOREGOS_RUNNER_OWN_RESOURCES`)."""
+    """The chart's `runner.ownResources` reaches the executor (`TRANIBOR_RUNNER_OWN_RESOURCES`)."""
     from tranibor_adapters import build
 
-    monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
+    monkeypatch.delenv("TRANIBOR_FAKES", raising=False)
     monkeypatch.setenv(
-        "CHOREGOS_RUNNER_OWN_RESOURCES",
+        "TRANIBOR_RUNNER_OWN_RESOURCES",
         json.dumps({"requests": {"cpu": "100m", "memory": "300Mi"}, "limits": {"memory": "1Gi"}}),
     )
     kube = {"kubernetes": {"base_url": "https://example.invalid", "token": "outside", "verify": False}}
     executor = build("runtime", "k8s_job", kube)
     assert executor.runner_requests == {"cpu": "100m", "memory": "300Mi"}
     assert executor.runner_limits == {"memory": "1Gi"}
-    monkeypatch.setenv("CHOREGOS_RUNNER_OWN_RESOURCES", "")
+    monkeypatch.setenv("TRANIBOR_RUNNER_OWN_RESOURCES", "")
     assert build("runtime", "k8s_job", kube).runner_requests == separate_agent.RUNNER_REQUESTS
 
 

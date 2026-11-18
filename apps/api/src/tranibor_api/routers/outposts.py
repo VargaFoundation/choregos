@@ -5,7 +5,7 @@ Every route is `outpost:manage`, the organisation administrator's. They keep the
 an outpost, its instances, its enrolment tokens, the calls routed to it as digests. They are not the
 door an outpost dials (`/outposts/v1`, ADR 0148), and nothing here connects to an outpost: the
 platform stores no address of one. Creating an outpost or an enrolment token is refused while the
-deployment keeps outposts switched off (`CHOREGOS_OUTPOSTS`); everything else still answers, so that
+deployment keeps outposts switched off (`TRANIBOR_OUTPOSTS`); everything else still answers, so that
 what exists can be read, revoked and removed.
 """
 
