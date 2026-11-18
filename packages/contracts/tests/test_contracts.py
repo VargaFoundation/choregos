@@ -569,6 +569,16 @@ def test_the_policy_and_a_stage_input_with_the_new_network_keys_validate_against
     StageInput.model_validate(stage)
 
 
+def test_a_missed_status_comment_is_an_event_of_the_work_item() -> None:
+    """S62-20: once the status comment is best-effort (S62-17), a comment the tracker did not take is
+    published, so a person sees why the board may lag."""
+    from tranibor_contracts.enums import EventType
+
+    missed = "choregos.workitem.status_comment_missed"
+    assert EventType.WORKITEM_STATUS_COMMENT_MISSED.value == missed
+    assert missed in contracts.load_schema("event.schema.json")["properties"]["type"]["enum"]
+
+
 def test_the_network_denied_event_is_declared_and_the_openapi_names_the_four_operations() -> None:
     from tranibor_contracts.enums import EventType
 

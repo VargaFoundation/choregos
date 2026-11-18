@@ -4,7 +4,9 @@
 
 - **Status**: accepted, 2026-11-17 (decided by the product owner on 2026-11-15, D6, and confirmed on
   2026-11-17: "do the renames now", the trademark gate being skipped); R1 is implemented by S75-01,
-  R3 steps (a) and (b) by S75-03 (2026-11-18), R2 by S75-02 (2026-11-18), R4 and the rest of R3 are not started
+  R3 steps (a) and (b) by S75-03 (2026-11-18), R2 by S75-02 (2026-11-18), shipped by release 0.27.14,
+  and R3 step (c) on the Diametral deployments (2026-11-18, see the amendment "0.27.14 on a real
+  release"); R4 and R3 steps (d) and (e) are not started
 - **Concerns**: the whole repository (25,000 occurrences of the old name in 4,600 files, counted on
   2026-11-17), and above all `packages/*` (the distributions and import packages), `publishing.json` and
   `tools/publishing_identity.py`, `charts/`, `docker/`, `infra/policies/`, the `CHOREGOS_*` variables;
@@ -222,3 +224,28 @@ One commit cannot rename all four, and the fourth layer must not be renamed by a
   `tranibor_api.*`; a log filter or dashboard keyed on the old logger name moves with them.
 - **The PyPI job** (off) builds `tranibor-contracts` and `tranibor-agent-sdk`; the old names ship
   only as release wheels, until the shims go.
+
+## Amendment (2026-11-18, release 0.27.14): R2 and R3 on a real release, R3 step (c) deployed
+
+- **The release publishes both names.** v0.27.14 carries the thirteen `tranibor_*` wheels and the thirteen
+  `choregos_*` shim wheels (plus the workspace's), and each of the seven images under both names with one
+  digest (`imagetools create` across the two repositories, first run there). The API image carries the
+  shims: on the deployed API, `choregos_api.extensions is tranibor_api.extensions`, and the `choregos-*`
+  distributions are installed.
+- **What the shims do not cover.** They are runtime aliases only. A strict `mypy` downstream does not see
+  through them (no `py.typed`, no stubs: 86 `import-untyped` errors in the enterprise edition), and
+  `python -m choregos_<x>.<module>` fails (`'_AliasLoader' object has no attribute 'get_code'`, finding
+  #1899). A consumer that type-checks or runs modules moves to the new names; the enterprise edition did,
+  in the same release (`DiametralGroup/choregos-ee#112`: it imports `tranibor_*`, downloads and installs
+  both wheel sets by path, and its floor is 0.27.14). That is the package half of step (d); its base
+  images keep the former names.
+- **Step (c), as done for the Diametral deployments** (`DiametralGroup/choregos-deploy#298` dev, `#299`
+  prod): those clusters pull the core's images from a private Harbor project into which each release is
+  copied byte for byte, now under both names. The values set `choregos-web.image.repository:
+  tranibor-web` and `choregos-orchestrator.runner.image: tranibor-runner` (the warm sandbox, the
+  `k8s_job` image and the egress gate); the pods run the same digests as before the switch. The
+  registry admission there matches Harbor references by registry, not by name, so step (a)'s policy
+  change was not on that path. **Not switched**: `choregos-tools` (disabled there), the API and
+  orchestrator (enterprise images, step (d)), the chart's own name (the deployments still vendor the
+  `choregos` chart, which renders the same objects), the CLI files.
+
