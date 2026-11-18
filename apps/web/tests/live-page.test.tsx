@@ -23,13 +23,18 @@ import type { WorkflowGraph, WorkItemDto } from "@/lib/types";
  */
 const search = { current: new URLSearchParams() };
 const replace = vi.fn();
+const orgCurrency = vi.hoisted(() => ({ current: "EUR" }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace, push: vi.fn() }),
   useSearchParams: () => search.current,
   usePathname: () => "/p/acme-web/live",
 }));
 vi.mock("@/lib/session", () => ({
-  useSession: () => ({ org: "acme", orgs: [{ slug: "acme" }], me: null }),
+  useSession: () => ({
+    org: "acme",
+    orgs: [{ slug: "acme", currency: orgCurrency.current }],
+    me: null,
+  }),
 }));
 vi.mock("@/lib/api", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/api")>();
@@ -41,6 +46,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
       workflows: vi.fn(),
       workflowNamed: vi.fn(),
       validateWorkflow: vi.fn(),
+      costs: vi.fn(),
     },
   };
 });
@@ -133,20 +139,35 @@ function stubReducedMotion(reduce: boolean) {
   );
 }
 
-async function showPage(items: WorkItemDto[]) {
+const costReport = {
+  rows: [
+    {
+      key: new Date().toISOString().slice(0, 10),
+      cost_usd: 10,
+      cost_eur: 9,
+    },
+  ],
+  total: { cost_usd: 20, cost_eur: 18 },
+};
+
+async function showPage(
+  items: WorkItemDto[],
+  names: string[] = ["delivery"],
+) {
   vi.mocked(api.allWorkItems).mockResolvedValue({
     items,
     meta: { has_more: false },
   } as never);
-  vi.mocked(api.workflows).mockResolvedValue([
-    { name: "delivery", is_default: true, version: 1 },
-  ] as never);
+  vi.mocked(api.workflows).mockResolvedValue(
+    names.map((name, i) => ({ name, is_default: i === 0, version: 1 })) as never,
+  );
   vi.mocked(api.workflowNamed).mockResolvedValue({
     name: "delivery",
     version: 1,
     yaml: "name: delivery",
   } as never);
   vi.mocked(api.validateWorkflow).mockResolvedValue({ graph } as never);
+  vi.mocked(api.costs).mockResolvedValue(costReport as never);
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
@@ -194,6 +215,7 @@ beforeEach(() => {
   vi.stubGlobal("EventSource", FakeSource);
   search.current = new URLSearchParams();
   stubReducedMotion(false);
+  orgCurrency.current = "EUR";
 });
 afterEach(() => {
   cleanup();
@@ -279,8 +301,9 @@ describe("the lanes and the cards", () => {
     expect(running.className).toContain("live-running");
     expect(running.textContent).toContain("developer");
     expect(running.textContent).toContain("dev-agent");
+    expect(running.textContent).not.toContain("US$");
     expect(running.textContent).toContain("10 s");
-    expect(running.textContent).toContain("US$1.92");
+    expect(running.textContent).toContain("$1.92");
     await act(async () => {
       vi.advanceTimersByTime(2000);
     });
@@ -474,12 +497,128 @@ describe("motion", () => {
       resolve(import.meta.dirname, "../src/app/globals.css"),
       "utf8",
     );
-    const reduced = css.slice(
-      css.indexOf("@media (prefers-reduced-motion: reduce) {\n  .live-running"),
-    );
-    expect(reduced).toContain(".live-running");
-    expect(reduced).toContain(".live-dot");
+    const reduced = css.slice(css.lastIndexOf("@media (prefers-reduced-motion: reduce)"));
+    for (const name of [".live-running", ".live-arrived", ".live-progress::after"])
+      expect(reduced).toContain(name);
     expect(reduced).toContain("animation: none");
+    expect(css).toContain(
+      "@media (prefers-reduced-motion: reduce) {\n  .live-dot {\n    animation: none;",
+    );
+  });
+});
+
+describe("the polish", () => {
+  it("has one row for the workflow switcher, with LIVE at its right, and the workflow named once", async () => {
+    await showPage([item("1", "todo")], ["delivery", "hotfix"]);
+    const switcher = screen.getByRole("navigation", { name: "Live workflow" });
+    expect(within(switcher).getAllByRole("link").map((a) => a.textContent)).toEqual(["delivery", "hotfix"]);
+    const row = switcher.parentElement!;
+    expect(row.contains(screen.getByTestId("live-indicator"))).toBe(true);
+    expect(
+      switcher.compareDocumentPosition(screen.getByTestId("live-indicator")) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(screen.getAllByText("delivery")).toHaveLength(1);
+  });
+
+  it("names the workflow once when it is the only one", async () => {
+    await showPage([item("1", "todo")]);
+    expect(screen.getAllByText("delivery")).toHaveLength(1);
+    expect(screen.queryAllByRole("link", { name: "delivery" })).toHaveLength(0);
+  });
+
+  it("says the stage, and the agent only when it differs", async () => {
+    await showBoard([item("1", "doing"), item("2", "doing")]);
+    await act(async () => {
+      source().emit("activity.upsert", run("r1", "1", "running", { agent_slug: "developer" }));
+      source().emit("activity.upsert", run("r2", "2", "running", { agent_slug: "dev-agent" }));
+    });
+    const lines = screen.getAllByTestId("stage-line").map((el) => el.textContent);
+    expect(lines).toEqual(["developer", "developer · dev-agent"]);
+  });
+
+  it("draws no filler in an empty lane", async () => {
+    await showPage([item("1", "todo")]);
+    expect(lane("done").textContent).not.toContain("·");
+    expect(within(lane("done")).queryAllByRole("listitem")).toHaveLength(0);
+  });
+
+  it("tells the spend in the organisation's currency, the symbol only", async () => {
+    await showBoard([item("1", "doing")]);
+    // The board alone has no rate: dollars, never a guessed euro.
+    await act(async () =>
+      source().emit("activity.upsert", run("r1", "1", "running", { spend: { cost_usd: 2, tokens_in: 1, tokens_out: 1, tokens_cached: 0, read_at: "" } })),
+    );
+    expect(card("1")!.textContent).toContain("$2.00");
+    cleanup();
+    await showPage([item("1", "doing")]);
+    await act(async () =>
+      source().emit("activity.upsert", run("r1", "1", "running", { spend: { cost_usd: 2, tokens_in: 1, tokens_out: 1, tokens_cached: 0, read_at: "" } })),
+    );
+    // 18 EUR for 20 USD in the ledger: 2 USD read as 1.80 EUR.
+    await waitFor(() => expect(card("1")!.textContent).toContain("€1.80"));
+    expect(card("1")!.textContent).not.toMatch(/US\$|EUR/);
+    expect(screen.getByTestId("sum-spend").textContent).toContain("€9.00");
+  });
+
+  it("keeps the dollars of an organisation that reads in dollars", async () => {
+    orgCurrency.current = "USD";
+    await showPage([item("1", "doing")]);
+    await act(async () =>
+      source().emit("activity.upsert", run("r1", "1", "running", { spend: { cost_usd: 2, tokens_in: 1, tokens_out: 1, tokens_cached: 0, read_at: "" } })),
+    );
+    await waitFor(() => expect(card("1")!.textContent).toContain("$2.00"));
+    expect(screen.getByTestId("sum-spend").textContent).toContain("$10.00");
+  });
+
+  it("sums what is in flight, waiting, failed and done, in a slim bar", async () => {
+    await showPage([
+      item("1", "doing"),
+      item("2", "doing", {
+        pending_request: { id: "p", kind: "approval", payload: { title: "Approve" }, decided_at: null },
+      }),
+      item("3", "todo"),
+    ]);
+    await act(async () => {
+      source().emit("activity.upsert", run("r1", "1", "running"));
+      source().emit("activity.ended", run("r3", "3", "failed", { ended_at: new Date().toISOString() }));
+    });
+    expect(screen.getByTestId("sum-running").textContent).toContain("1");
+    expect(screen.getByTestId("sum-waiting").textContent).toContain("1");
+    expect(screen.getByTestId("sum-failed").textContent).toContain("1");
+    expect(screen.getByTestId("sum-done").textContent).toContain("0");
+  });
+
+  it("lights a card when it arrives in a lane, and not the ones that stay", async () => {
+    await showPage([item("1", "todo"), item("2", "todo")]);
+    expect(card("1")!.dataset.arrived).toBeUndefined();
+    vi.mocked(api.allWorkItems).mockResolvedValue({
+      items: [item("1", "doing"), item("2", "todo")],
+      meta: { has_more: false },
+    } as never);
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    await act(async () =>
+      source().emit("activity.ended", run("r1", "1", "succeeded", { ended_at: new Date().toISOString() })),
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(400);
+    });
+    expect(card("1")!.dataset.arrived).toBe("true");
+    expect(card("1")!.className).toContain("live-arrived");
+    expect(card("2")!.dataset.arrived).toBeUndefined();
+  });
+
+  it("shows the project and workflow as a large title, and a clock, on the wall only", async () => {
+    search.current = new URLSearchParams("wall=1");
+    await showPage([item("1", "todo")]);
+    expect(screen.getByTestId("live-title").textContent).toContain("acme-web");
+    expect(screen.getByTestId("live-title").textContent).toContain("delivery");
+    expect(screen.getByTestId("live-clock").textContent).toMatch(/^\d\d:\d\d$/);
+    cleanup();
+    search.current = new URLSearchParams();
+    await showPage([item("1", "todo")]);
+    expect(screen.queryByTestId("live-clock")).toBeNull();
+    expect(screen.queryByTestId("live-title")).toBeNull();
   });
 });
 

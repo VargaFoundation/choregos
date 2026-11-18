@@ -12,6 +12,7 @@ import { itemsOf } from "@/components/workflows/board";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { useSession } from "@/lib/session";
+import { type Currency, monthStart, usdToCurrency } from "@/lib/spend";
 import { workflowHueClasses } from "@/lib/workflow-hue";
 
 /**
@@ -26,7 +27,10 @@ export default function LivePage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = use(params);
-  const { org } = useSession();
+  const { org, orgs } = useSession();
+  const currency: Currency =
+    orgs.find((o) => o.slug === org)?.currency === "USD" ? "USD" : "EUR";
+  const today = new Date().toISOString().slice(0, 10);
   const router = useRouter();
   const pathname = usePathname();
   const search = useSearchParams();
@@ -57,6 +61,17 @@ export default function LivePage({
     queryFn: () => api.validateWorkflow(definition.data?.yaml ?? ""),
     enabled: Boolean(definition.data?.yaml),
   });
+
+  // What the ledger says for this month in this project: today's spend, and the rate to the org's currency.
+  const spendReport = useQuery({
+    queryKey: ["live-spend", slug, today],
+    queryFn: () => api.costs(slug, "day", { since: monthStart(new Date()) }),
+    refetchInterval: 60_000,
+  });
+  const spentToday =
+    spendReport.data?.rows.find((r) => r.key === today)?.cost_usd ??
+    (spendReport.data ? 0 : null);
+  const usdTo = spendReport.data ? usdToCurrency(spendReport.data.total) : null;
 
   // One array for as long as the read is the same, so that the flow reads each fresh answer once.
   const mine = useMemo(
@@ -99,6 +114,45 @@ export default function LivePage({
     !validation.isLoading;
   if (!ready || !current) return <Empty>Reading the workflow…</Empty>;
 
+  // One row, the workflow switcher (the chips only link when there is a choice); LIVE sits at its right.
+  const switcher = (
+    <nav
+      aria-label="Live workflow"
+      className="flex flex-wrap items-center gap-1.5"
+    >
+      {list.map((w) => {
+        const hue = workflowHueClasses(w.name);
+        const active = w.name === current.name;
+        const style = cn(
+          "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm no-underline whitespace-nowrap",
+          active
+            ? cn(hue.pill, "font-medium")
+            : "border-line text-ink-muted hover:text-ink",
+        );
+        const inner = (
+          <>
+            <span aria-hidden className={cn("size-2 rounded-full", hue.solid)} />
+            {w.name}
+          </>
+        );
+        return list.length > 1 ? (
+          <Link
+            key={w.name}
+            href={href({ workflow: w.name })}
+            aria-current={active ? "page" : undefined}
+            data-verbatim
+            className={style}
+          >
+            {inner}
+          </Link>
+        ) : (
+          <span key={w.name} data-verbatim className={style}>
+            {inner}
+          </span>
+        );
+      })}
+    </nav>
+  );
   const board = (
     <LiveBoard
       // A new workflow or graph starts a new flow.
@@ -109,6 +163,10 @@ export default function LivePage({
       slug={slug}
       workflow={current.name}
       wall={wall}
+      switcher={wall ? undefined : switcher}
+      currency={currency}
+      usdTo={usdTo}
+      spentTodayUsd={spentToday}
       toolbar={
         wall ? (
           <Button size="sm" onClick={exitWall}>
@@ -126,40 +184,9 @@ export default function LivePage({
     />
   );
   if (wall) return <Wall onExit={exitWall}>{board}</Wall>;
+  // `data-full-width`: the lanes use the whole window (app/layout.tsx).
   return (
-    // `data-full-width`: the lanes use the whole window (app/layout.tsx).
     <div className="space-y-4" data-full-width>
-      {list.length > 1 && (
-        <nav
-          aria-label="Live workflow"
-          className="flex flex-wrap items-center gap-1.5"
-        >
-          {list.map((w) => {
-            const hue = workflowHueClasses(w.name);
-            const active = w.name === current.name;
-            return (
-              <Link
-                key={w.name}
-                href={href({ workflow: w.name })}
-                aria-current={active ? "page" : undefined}
-                data-verbatim
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm no-underline whitespace-nowrap",
-                  active
-                    ? cn(hue.pill, "font-medium")
-                    : "border-line text-ink-muted hover:text-ink",
-                )}
-              >
-                <span
-                  aria-hidden
-                  className={cn("size-2 rounded-full", hue.solid)}
-                />
-                {w.name}
-              </Link>
-            );
-          })}
-        </nav>
-      )}
       {board}
     </div>
   );

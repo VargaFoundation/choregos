@@ -250,28 +250,81 @@
 
 
 /*
- * The live view (S67-27): a running card breathes (a soft ring, never a flash), the LIVE dot blinks
+ * The live view (S67-27): the LIVE dot blinks
  * slowly. A card that changes lane is moved by the page with CSS transforms (FLIP), not by a library.
  * Nothing moves for whoever asked for less motion: the page then changes plainly.
  */
-@keyframes live-breathe {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 transparent;
-  }
-  50% {
-    box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-running) 20%, transparent);
-  }
-}
-.live-running {
-  animation: live-breathe 3s ease-in-out infinite;
-}
 .live-dot {
   animation: journey-blink 1.8s ease-in-out infinite;
 }
 @media (prefers-reduced-motion: reduce) {
-  .live-running,
   .live-dot {
     animation: none;
+  }
+}
+
+/*
+ * The live view's polish (S67-27): a running card glows softly in the workflow's hue and carries a thin
+ * indeterminate line at its foot; a card that has just arrived in a lane is lit for a moment.
+ * `--live-hue` is set on the card from the workflow's hue. All of it stops for whoever asked for less motion.
+ */
+@keyframes live-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--live-hue) 30%, transparent),
+      0 0 10px 0 color-mix(in srgb, var(--live-hue) 18%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--live-hue) 55%, transparent),
+      0 0 18px 2px color-mix(in srgb, var(--live-hue) 32%, transparent);
+  }
+}
+.live-running {
+  animation: live-glow 3.2s ease-in-out infinite;
+}
+@keyframes live-slide {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(350%);
+  }
+}
+.live-progress {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: 2px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--live-hue) 18%, transparent);
+}
+.live-progress::after {
+  content: "";
+  display: block;
+  width: 30%;
+  height: 100%;
+  background: var(--live-hue);
+  animation: live-slide 1.8s ease-in-out infinite;
+}
+@keyframes live-arrive {
+  0% {
+    background-color: color-mix(in srgb, var(--live-hue) 28%, var(--choregos-raised));
+  }
+  100% {
+    background-color: var(--choregos-raised);
+  }
+}
+.live-arrived {
+  animation: live-arrive 2.5s ease-out 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .live-running,
+  .live-arrived,
+  .live-progress::after {
+    animation: none;
+  }
+  .live-progress::after {
+    width: 100%;
+    opacity: 0.35;
   }
 }

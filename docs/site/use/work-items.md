@@ -69,14 +69,16 @@ there does not move the work item. Move it from the console.
 full-height lanes in the workflow's colour, with a count in each header. It listens to the organisation's activity
 stream, narrowed to the project and the workflow, and shows what happens as it happens:
 
-- A running card pulses softly and says the stage, the agent, how long it has run and what it has spent so far.
+- A slim bar under the title counts what is in flight, waiting for a person, failed, done today, and what was spent today.
+- A running card glows softly in the workflow's colour, with a thin moving line at its foot, and says the stage (and the agent when it is not the stage's own name), how long it has run and what it has spent so far, in the organisation's currency.
+- A card that has just arrived in a lane is lit for a moment.
 - A card slides to its next lane when its work item changes state.
 - A failed card turns red and names the reason; hover it or focus it with the keyboard for the summary.
 - A card that waits for a person turns amber and says what it waits for.
 - The ticker at the bottom lists the latest events. **LIVE** turns to **RECONNECTING** when the stream drops; the page then reads the work items every few seconds until it is back.
 
 `?workflow=` picks the workflow, as on the board. **Wall mode** (`?wall=1`, or the button) takes the page out of the
-console, full screen and in larger type, for a screen on a wall; Escape leaves it. With *reduce motion* set in your
+console, full screen and in larger type, with the project and workflow as a title and a clock at the top right, for a screen on a wall; Escape leaves it. With *reduce motion* set in your
 system, nothing pulses or slides: the page changes plainly.
 
 ### On its page
