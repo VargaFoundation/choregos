@@ -5667,3 +5667,15 @@ stories:
     size: L
     depends_on: []
     notes: "Decision of 2026-11-18. NOTICE, licence headers, console footer, publishing identity (security contact, commit address, plugin repository and index) and docs name GRAAL.SYSTEMS SAS; the default plugin source varga becomes tranibor (migration, old name still resolved); guarded by tests/licences/test_no_varga.py."
+  - id: S4-09
+    title: "Non-interactive model work through a batch API at -50 % — distillation map step first, evals after"
+    stream: S4
+    sprint: 2
+    priority: 9
+    size: M
+    depends_on: [S4-03]
+    acceptance:
+      - "Opt-in setting, default off; one batch submitted once with its id stored; a restart polls, never submits again"
+      - "Results mapped by custom_id; each part booked at the batch price; the synchronous path stays the fallback"
+      - "Evals (activities/evals.py) through the same adapter — follow-up; cache columns (S4-07) and caching markers (S4-08) are siblings"
+    notes: "ADR 0190"

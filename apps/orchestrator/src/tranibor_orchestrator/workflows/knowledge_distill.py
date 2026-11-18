@@ -5,6 +5,13 @@ plan, then one `distill_part` per part (the budget is checked before each call),
 `reduce_distillation`, then `publish_distillation`. Every activity stores its result by digest, so a
 retry or a replay makes no second model call. A refusal (too large, over budget, nothing cited) or
 a failing part ends the run through `fail_distillation`: the base says why, nothing is published.
+
+Batch mode (S4-09, ADR 0190), only when the plan says `batch`: before the parts, the parts nobody has
+stored go to the provider's batch API in one `submit_distillation_batch` (it keeps the batch id, so a
+replay submits nothing), then `collect_distillation_batch` is polled between durable timers until the
+batch has ended. The `distill_part` activities that follow find the stored answers and call the model
+only for a part the batch could not answer. A plan without `batch` (every history recorded before
+this) takes the unchanged path.
 """
 
 from __future__ import annotations
@@ -25,6 +32,16 @@ with workflow.unsafe.imports_passed_through():
 RETRY = RetryPolicy(maximum_attempts=3, initial_interval=timedelta(seconds=10))
 TIMEOUT = timedelta(minutes=20)
 EPSILON = 1e-9
+#: Polling a batch rides out a provider's bad hour: many attempts, spaced, none counted as a failure
+#: of the distillation until they are spent.
+POLL_RETRY = RetryPolicy(
+    maximum_attempts=8,
+    initial_interval=timedelta(seconds=30),
+    backoff_coefficient=2.0,
+    maximum_interval=timedelta(minutes=10),
+)
+#: A batch ends within 24 hours; the workflow stops waiting a little after that.
+MAX_BATCH_WAIT = timedelta(hours=26)
 
 
 def _code_of(error: BaseException) -> tuple[str, str]:
@@ -47,11 +64,31 @@ class KnowledgeDistill:
     def status(self) -> dict[str, Any]:
         return {"phase": self.phase, "parts_done": self.parts_done, "spent_usd": self.spent}
 
-    async def _call(self, activity: Any, payload: dict[str, Any]) -> dict[str, Any]:
+    async def _call(
+        self, activity: Any, payload: dict[str, Any], retry: RetryPolicy = RETRY
+    ) -> dict[str, Any]:
         result: dict[str, Any] = await execute_on_its_queue(
-            activity, payload, start_to_close_timeout=TIMEOUT, retry_policy=RETRY
+            activity, payload, start_to_close_timeout=TIMEOUT, retry_policy=retry
         )
         return result
+
+    async def _map_in_batch(self, base: dict[str, Any], planned: dict[str, Any]) -> set[str]:
+        """Submits, then polls on timers until the batch ends; returns the parts it stored."""
+        sent = await self._call(activities.submit_distillation_batch, base)
+        if sent.get("status") != "submitted":  # nothing to do, or no batch: the synchronous path
+            return set()
+        pause = timedelta(seconds=max(int(planned.get("batch_poll_s") or 120), 1))
+        waited = timedelta()
+        while waited <= MAX_BATCH_WAIT:
+            got = await self._call(activities.collect_distillation_batch, base, POLL_RETRY)
+            if got.get("status") == "done":
+                self.spent += float(got["cost_usd"])
+                return {str(d) for d in got["digests"]}
+            await workflow.sleep(pause)
+            waited += pause
+        raise ApplicationError(
+            "the batch did not end within 26 hours", "gateway", type="DistillationError", non_retryable=True
+        )
 
     @workflow.run
     async def run(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -65,9 +102,15 @@ class KnowledgeDistill:
             budget = float(planned["budget_usd"])
             digests: list[str] = []
             self.phase = "map"
+            batched = await self._map_in_batch(base, planned) if planned.get("batch") else set()
             for part in planned["parts"]:
                 cost = part["est_usd"]
-                if cost is not None and self.spent + float(cost) > budget + EPSILON:
+                # a part the batch stored costs nothing more: its price is already in `spent`
+                if (
+                    part["digest"] not in batched
+                    and cost is not None
+                    and self.spent + float(cost) > budget + EPSILON
+                ):
                     raise ApplicationError(
                         f"stopped before part {part['index'] + 1}: ${self.spent:.2f} spent, the next "
                         f"call would pass the budget of ${budget:.2f}; nothing was published",
