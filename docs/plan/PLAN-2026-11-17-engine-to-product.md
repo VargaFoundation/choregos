@@ -39,7 +39,7 @@ waits. Three consequences:
 | :-- | :-- | :-- | :-- | :-- | :-- |
 | **S2** The fakes are refused in production | Refuse `CHOREGOS_FAKES` in the API, the workers and the chart; move the internal API guard (`CHOREGOS_INTERNAL_API_GUARD`, `apps/api/src/choregos_api/internal_api_guard.py`, ADR 0144) from `warn`, its default, to `enforce` after two to four weeks of observation | 2026-11-30 → 2027-03-26 | 8 to 14 | nothing | Rendering the chart for production with the fakes on fails |
 | **S5** The supply chain is pinned | Actions pinned by commit SHA, base images by digest; then signed charts, high vulnerabilities blocking, static security analysis | 2026-12-14 → 2027-04-16 | 7 to 12 | nothing | A test fails on any unpinned action and any `latest` |
-| **S1** The agent is isolated | The agent in its own container by default (ADR 0146, the S65-04 stories); the three real agents behind the launcher; the Kubernetes and Docker executors. Tekton and Azure Container Apps are frozen (ADR 0180) | 2027-01-18 → 2027-04-09 | 30 to 45 | a cluster with gVisor | Under gVisor, the agent reads the run's token from no process |
+| **S1** The agent is isolated | The agent in its own container by default (ADR 0146, the S65-04 stories); the three real agents behind the launcher; the Kubernetes and Docker executors. Tekton and Azure Container Apps are frozen (ADR 0180) | 2027-01-18 → 2027-04-09 | 30 to 45 | none: `dev` and `prod` have the `gvisor` RuntimeClass (since 2026-10-21 and 2026-10-25) and the runner pods already run under it | Under gVisor, the agent reads the run's token from no process |
 | **S3** A tamper-evident audit log | Hash chaining, an append-only table, a verifier, a signed checkpoint; SIEM export and retention in May | 2027-02-15 → 2027-04-09 | 15 to 22 | human review (ADR 0180 §3): the migration cannot be undone | An update to the log by the API's database role is refused |
 | **S6** Kyverno policies | Rules on the service account token, host namespaces, a read-only root file system | 2027-04-12 → 2027-05-07 | 6 to 10 | S1, S5 | One refusal per rule, observed on a cluster |
 | **S4** Encryption and keys | TLS and a payload codec for Temporal first; per-organisation keys behind a KMS in the autumn | 2027-06-01 → 2027-10-29 | 22 to 38 | S2; the choice of a KMS | No ticket text in clear in an exported history |
@@ -142,7 +142,7 @@ Each gate opens on measurements, not on a date. Only the technical criteria are 
 
 | Gate | Date | Technical criteria, all measured | If one is missing |
 | :-- | :-- | :-- | :-- |
-| **J1** Pilotable | 2027-01-15 | 7 green nights of the local install with a real model; ServiceNow green on a real instance; the fakes refused in production; a cluster with gVisor available | S1's proof moves with the cluster |
+| **J1** Pilotable | 2027-01-15 | 7 green nights of the local install with a real model; ServiceNow green on a real instance; the fakes refused in production; a cluster with gVisor available (met: `dev` and `prod`, checked 2026-11-18) | S1's proof runs on `dev` |
 | **J2** Installable | 2027-03-12 | 5 green nights of the single-node test (a blank machine, a backup, a restore); a human review on every change to contracts, security and migrations | The freeze is extended (ADR 0180) |
 | **J3** First outside installation in production | 2027-05-14 | The agent isolated by default, its test green under gVisor; the audit log tamper-evident; 14 green nights on real systems; the single-node mode's limits (one node, a 24-hour recovery point) written down | The installation waits. Never ship with the agent not isolated |
 | **J4** 1.0 | 2027-06-30 | Guards in place on the five surfaces; no French name left in the seams; 4 testers of 5 succeed alone in 10 minutes | 1.0 slips by a month |
@@ -172,6 +172,7 @@ Each gate opens on measurements, not on a date. Only the technical criteria are 
       (ADR 0180, S80-01)
 - [x] The partial stories sorted into finish, frozen, abandon (TRIAGE-2026-11-17, S80-01)
 - [x] `STATUS.md` split and the deployment guide corrected (S80-02, workstream A6)
-- [ ] A cluster with gVisor (Kubernetes 1.29 or later), a ServiceNow development instance, a capped
-      model key: requested
+- [x] A cluster with gVisor (Kubernetes 1.29 or later): `dev` and `prod` (k3s 1.31, Cilium) have the
+      `gvisor` RuntimeClass, and the `choregos-runner` pods run under it (checked 2026-11-18)
+- [ ] A ServiceNow development instance, a capped model key: requested
 - [ ] The local install run once to its end with a real model, then every night (P1)
