@@ -151,7 +151,7 @@ and what was spent today (`—` when the platform cannot say, never a false zero
 | --- | --- |
 | 1 Conversation | The conversation, and the composer (`›`, the cost of the turn at its right) |
 | 2 Activity | The live tree: projects, work items, runs; what ended in the last hour |
-| 3 Projects | Every project of the organisation (coming) |
+| 3 Projects | Every project you can read, including those with no activity: running, waiting for you, spend this month. Enter opens a project's work items, Enter again an item's runs, Enter again a run's plan and steps; Backspace or Esc goes back up. Amounts here are in euros, as the platform reports them. |
 | 4 Decisions | What waits for you, grouped by project, with its count in the tab |
 | 5 Artefacts | What was delivered to you |
 | 6 Live | The live flow of a workflow (coming) |
