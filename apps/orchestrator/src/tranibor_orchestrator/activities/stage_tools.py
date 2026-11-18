@@ -6,6 +6,7 @@ Helpers of `stage`, which re-exports them; none of them is a Temporal activity.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -17,13 +18,15 @@ from tranibor_contracts import (
     SkillRef,
     StageMemory,
 )
-from tranibor_core.memory_bindings import Binding, legacy_scope
+from tranibor_core.memory_bindings import SHARED, Binding, legacy_scope
 from tranibor_core.run_journal import MEMORY_SKIPPED
 
 logger = structlog.get_logger("choregos.stage")
 
 
-def _mcp_servers(settings: Any, memory_scope: str = "project") -> dict[str, McpServerRef]:
+def _mcp_servers(
+    settings: Any, memories: Sequence[StageMemory] = (), memory_adapter: Any = None
+) -> dict[str, McpServerRef]:
     """The MCP servers announced to the agent: the ones that exist, and only those.
 
     Both were hard-coded, and both were wrong on the dev tenant of 2026-09-27: the tools sidecar
@@ -32,15 +35,21 @@ def _mcp_servers(settings: Any, memory_scope: str = "project") -> dict[str, McpS
     the memory share a host. There, the gateway is `http://litellm:4000`: the memory became
     `http://litellm:8432`, measured without an answer in eight seconds, when
     `http://ecphoria:8432/mcp` answers in nine milliseconds.
+
+    The memory server is the PROJECT's shared memory, and only when the run binds it (read or write): a run
+    whose bindings are anything else (its own memory, none, several, a global one) does not get it, it would
+    read and write past its bindings (S32-02, S40-11). It carries the credential, the tenant and the tool
+    list of the binding (`EcphoriaMemory.mcp_server`): the runner serves it on its loopback and forces
+    them, the agent never holds the key nor names the tenant (2026-11-18, ADR 0146 §7). Before, it was
+    announced bare, and Ecphoria answered every call 401.
     """
     servers: dict[str, McpServerRef] = {}
     if url := settings.tools_sidecar_url:
         servers["choregos"] = McpServerRef(url=url)
-    # The memory server serves the PROJECT's shared memory: a run whose bindings are anything else (its
-    # own memory, none, several, a global one) does not get it — it would read and write past its
-    # bindings (S32-02, S40-11).
-    if settings.memory_url and memory_scope == "project":
-        servers["memory"] = McpServerRef(url=f"{settings.memory_url.rstrip('/')}/mcp")
+    shared = next((m for m in memories if m.scope == "project" and m.slug == SHARED), None)
+    served_by = getattr(memory_adapter, "mcp_server", None)
+    if settings.memory_url and shared is not None and served_by is not None:
+        servers["memory"] = served_by(shared.namespace, writes=shared.mode == "write")
     return servers
 
 

@@ -74,6 +74,8 @@ of the three, is uid 1001, and the shared volumes still carry the work both ways
 gVisor, the operator's behaviour with the sidecar (readiness, suspension), the real runner image
 with a real harness.
 
+**Built after, S65-04j (§7)**: the memory MCP server of an agent is a credentialed server like the others, and a *scoped* one. `McpServerRef` gained `scope_arguments` (arguments the runner overwrites in every `tools/call`) and `allowed_tools` (the only tools the loopback relays). For memory the orchestrator announces `tenant_id = <project>` and the tools of the binding's mode; the key stays in `env` and never reaches the agent. A scoped server goes through the loopback even without a header, and where there is no container isolation it is withheld from the agent, because nothing there could keep the key or the scope out of its reach. Ecphoria's MCP does not read `X-Ecphoria-Tenant` and the platform key has no tenant, so the tools that are not scoped by their `tenant_id` argument (`query`, `ingest`, `set_state`, the graph tools, and the id-based `update_memory`, `delete_memory`, `memory_history`, `link_memory`, `memory_feedback`, `memory_provenance`) are not offered. They come back when Ecphoria scopes keys or the MCP honours the tenant header.
+
 ## Context
 
 Paths below without a directory are under `packages/runner/src/tranibor_runner/`; the executors

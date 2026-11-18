@@ -1,9 +1,8 @@
 image:
-  # The frozen namespace, as `compose.yaml` (S80-07d): the memory edition is published there and
-  # not yet under graalsystems/ecphoria, where `0.2.5-memory` does not exist and no pod could start.
-  # `tests/charts/test_ecphoria_image.py` keeps the chart on the image the local install runs.
-  repository: ghcr.io/vargafoundation/ecphoria
-  tag: "0.2.5-memory"
+  # Published by graalsystems/ecphoria since 0.2.6 (`-memory` is the memory edition). The tag is the
+  # one `compose.yaml` runs: `tests/charts/test_ecphoria_image.py` keeps the chart on it.
+  repository: ghcr.io/graalsystems/ecphoria
+  tag: "0.2.6-memory"
 persistence:
   enabled: true
   size: 5Gi
@@ -15,6 +14,11 @@ embedding:
   # embedding calls fail silently on every write.
   provider: openai_compatible
   model: platform/embed
+  # Vector size the model returns (`openai/text-embedding-3-small`, the `platform/embed` alias: 1536).
+  # Ecphoria's default is 768: with no value here every write answered "embedding dimension
+  # mismatch: expected 768, got 1536" and no memory was ever indexed (prod, 2026-11-18). Change it
+  # WITH the model, then re-embed (`POST /admin/memory/reembed`).
+  dimension: 1536
 resources:
   requests: { cpu: 100m, memory: 256Mi }
   limits: { cpu: "1", memory: 2Gi }
