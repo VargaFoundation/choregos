@@ -38,6 +38,7 @@ organisations must assume **a member of one will try to read another**.
 | lying about evidence | the runner **runs** the tests and overwrites declared evidence; gates read the diff, not the prose | `dod.py`, `result.py`, `gates/` |
 | reading another organisation | PostgreSQL row-level security, **fail-closed**: every session declares the organisations it may see, an undeclared session sees nothing | `db/session.py`, `deps.py`, migrations `b2d4f6a8c0e1` and `c3e5a7f9b1d4` |
 | reading another organisation's audit trail | `audit_log` carries an organisation and is under the same policy; `GET /audit` additionally restricts to the organisations where the caller really holds `audit:read` — being a member is not enough. Platform-level rows (`org_id IS NULL`: logins, API tokens) are returned only when that right covers every organisation of the instance | `routers/admin.py`, `audit.py`, migration `c3e5a7f9b1d4` |
+| changing or erasing the audit trail after the fact | on PostgreSQL the log is a hash chain per organisation (and one for the platform's entries) that the database links at every insert, whoever writes; `UPDATE` and `TRUNCATE` are revoked from the API's role and refused by a trigger, and an entry is deleted only by its organisation's own deletion; `choregos-admin audit verify` reports the first altered, missing, forked or unlinked entry, and checkpoints signed with a key kept outside the database see a rewrite of the whole chain ([ADR 0182](adr/0182-the-audit-log-is-a-hash-chain-the-database-keeps.md); [below](#the-audit-log-as-evidence)) | migration `e2a4c6b8d0f3`, `audit_chain.py`, `admin_cli.py`, `apps/api/tests/test_audit_chain_postgres.py`, `apps/api/tests/test_audit_chain.py` |
 | a governed action running without a kept approval, or an approval never run | its workflow starts only after the approval commits, a relay in every API replica starts an action left `approved` (every `CHOREGOS_ACTION_RELAY_INTERVAL_S`, 30 s by default; two API processes relaying it still run it once, S40-23j), and the workflow's first activity runs nothing for an action that is not `approved` (a failed commit, a hand-made start, a finished action); an audit row and an event commit with the change they record, or not at all ([ADR 0085](adr/0085-the-approved-row-is-the-outbox-of-a-governed-action.md)) | `db/session.py`, `services/action_relay.py`, `activities/actions.py` |
 | an extension running code in the console | an extension's screens are **data** — forms, tables, actions, secrets shown once — rendered by the console's own blocks; the CSP stays `script-src 'self'`; a section naming a path no route serves stops start-up | `extensions.py`, `routers/ui.py`, `main.py`, ADR 0032 |
 | an organisation left without an administrator | the last `org_admin` of an organisation cannot be removed (409) | `routers/admin.py` |
@@ -179,6 +180,12 @@ or another organisation.
   code owners). And on GitHub, auto-merge is pinned to a commit when it is enabled, not when it
   merges: it applies when the forge still waits for something as the platform merges, and a pull
   request already mergeable is merged directly, at its commit.
+- **The audit log is tamper-evident, not tamper-proof.** The API's role owns the tables (the
+  migration Job runs as it): with DDL it could grant itself `UPDATE` again or drop the triggers, and a
+  superuser can rewrite anything. The application sends neither; what such a hand changes, the chain
+  shows, and a rewrite of every hash from some entry on is shown only by a checkpoint kept where that hand
+  did not reach. Entries written before the upgrade were chained by the migration: they are evidence from
+  then on, not before. SQLite keeps no chain ([ADR 0182](adr/0182-the-audit-log-is-a-hash-chain-the-database-keeps.md)).
 - **Row-level security needs a non-superuser role.** A PostgreSQL superuser ignores every
   policy. The API refuses to start as one in `staging` and `prod`; the embedded PostgreSQL
   creates `choregos_app` at initdb for that reason.
@@ -930,6 +937,46 @@ What it does **not** protect, and is said so:
 - Workflow ids (which carry a ticket's key, never its text), search attributes, type and queue names,
   timers and headers stay in clear: Temporal reads them.
 - No codec server for the Temporal UI: payloads show encrypted there.
+
+## The audit log as evidence
+
+([ADR 0182](adr/0182-the-audit-log-is-a-hash-chain-the-database-keeps.md), S80-05.) On PostgreSQL every
+entry of `audit_log` is a link: a trigger gives it its place in its organisation's chain (`seq`), the hash
+of the entry before it (`prev_hash`) and its own, `sha256(prev_hash || canonical(entry))`, under a lock on
+the chain's head that puts concurrent writers in a line. The database does it, so the API, the
+orchestrator, the enterprise edition and the pods of the previous release during an upgrade are all
+chained. The API's role cannot update or truncate the log (the privilege is revoked and a trigger refuses
+it anyway) and cannot delete an entry; an organisation's deletion takes its own chain with it, and nothing
+else.
+
+What an operator does with it:
+
+```bash
+# Walk every chain; exit 1 and the first break if one is broken.
+kubectl -n choregos exec deploy/choregos-api -- choregos-admin audit verify
+
+# A checkpoint key of its own, kept where the database and the API are not (never the outposts' door key).
+openssl genpkey -algorithm ed25519 -out audit-checkpoint.pem
+openssl pkey -in audit-checkpoint.pem -pubout -outform DER | tail -c 32 | basenc --base64url | tr -d '='
+
+# Verify each chain and sign its last entry; the key goes in on standard input and stays out of the pod.
+# Keep the printed lines OUTSIDE the database: they are what shows a rewrite of the whole chain.
+kubectl -n choregos exec -i deploy/choregos-api -- choregos-admin audit checkpoint --key-file - \
+  < audit-checkpoint.pem >> audit-anchors.jsonl
+
+# Later, against the kept lines and the trusted public key (repeat --trust across a rotation).
+kubectl -n choregos exec -i deploy/choregos-api -- choregos-admin audit verify --anchor - \
+  --trust <public key> < audit-anchors.jsonl
+```
+
+A report names, for each chain, the entries the upgrade chained ("evidence from then on, not before")
+and the signed checkpoints it matched. What it can report: an entry altered, missing, appearing twice,
+not linking to the one before, outside the chain (inserted with the trigger off), not the one a checkpoint
+vouched for, or entries deleted from the end. A checkpoint whose signature does not verify, or whose key is
+not among the `--trust` keys, fails the verdict too.
+
+Not yet: an export to a SIEM, a retention rule for the log, checkpoints signed on a schedule, the chain
+in `GET /audit`, and a migration role distinct from the API's own (each its own story).
 
 ## Secrets
 

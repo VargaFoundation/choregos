@@ -2088,6 +2088,20 @@ WHERE w.is_active;
 
 No row: nothing to do. The rule needs no migration.
 
+**The audit log becomes a hash chain, append-only** (S80-05, [ADR 0182](adr/0182-the-audit-log-is-a-hash-chain-the-database-keeps.md)).
+The migration `e2a4c6b8d0f3` adds `seq`, `prev_hash` and `hash` to `audit_log`, the tables
+`audit_chain_heads` and `audit_checkpoints`, and the triggers that link every new entry and refuse an
+update or a delete; it revokes `UPDATE` and `TRUNCATE` on `audit_log` and `audit_checkpoints` from every
+role, the API's own included. It chains the entries that exist, once, in one transaction that holds
+`audit_log` locked: until it commits, the pods still serving wait to write an audit entry. Count them
+first (`SELECT count(*) FROM audit_log`); a log of millions of rows takes minutes, and a
+`VACUUM (ANALYZE) audit_log` afterwards reclaims the rows the chaining replaced. A script that empties or
+edits the log as the API's role is refused from then on. A full restore of a `pg_dump` creates the
+triggers after the data, as the dump orders them; a data-only restore into a migrated schema must run as
+the database's administrator with `pg_restore --disable-triggers`, or the restored entries are linked
+again on arrival. Its downgrade drops the chain. Then walk it, and start keeping signed checkpoints outside the database
+([the audit log as evidence](security.md#the-audit-log-as-evidence)).
+
 **The GitHub App can be created from the console** (S70-21, [ADR 0167](adr/0167-the-github-app-is-created-from-a-manifest.md)). A platform administrator registers it on GitHub from a manifest; its credentials are sealed in the new table `github_app_registrations` (created empty by the migration). Nothing to do for a deployment whose settings name the App: they still win. To use it, keep `secrets-keks` configured ([the GitHub App](#the-github-app)).
 
 **The re-link switch becomes a window** (S70-20, [ADR 0164](adr/0164-a-change-of-identity-provider-re-links-accounts-in-a-time-boxed-window.md)).

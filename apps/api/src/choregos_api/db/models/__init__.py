@@ -55,7 +55,7 @@ from .assistants import (
     ConnectedAccount,
     ConversationAction,
 )
-from .audit import AuditLog, NetworkDecision
+from .audit import AuditChainHead, AuditCheckpoint, AuditLog, NetworkDecision
 from .connectors import (
     ConnectorOperation,
     GitHubAppRegistration,
@@ -146,6 +146,8 @@ ALL_TABLES = [
     Deployment,
     CostLedger,
     AuditLog,
+    AuditChainHead,
+    AuditCheckpoint,
     ApiToken,
     MemoryFact,
     WebhookDelivery,
@@ -215,6 +217,8 @@ __all__ = [
     "AssistantLaunchBinding",
     "AssistantRead",
     "AssistantToolBinding",
+    "AuditChainHead",
+    "AuditCheckpoint",
     "AuditLog",
     "BackendRegistryRow",
     "Base",

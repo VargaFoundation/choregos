@@ -24,9 +24,14 @@ class AuditLog(Base, PkMixin):
     """The audit log. `org_id` is NULL for a platform event (a sign-in, a
     token): those rows are visible only to a session with scope `*`. Without this column,
     the table was outside RLS and the route filtered nothing: a `project_owner` of one
-    organisation read the audit of all the others."""
+    organisation read the audit of all the others.
+
+    On PostgreSQL it is a hash chain per organisation and append-only (ADR 0182): `seq`, `prev_hash` and
+    `hash` are written by the database's own trigger at the insert, whatever the writer put there, and
+    stay NULL on SQLite. Nothing in the application reads them; `choregos_api.audit_chain` verifies them."""
 
     __tablename__ = "audit_log"
+    __table_args__ = (Index("ix_audit_log_chain", "org_id", "seq"),)
 
     actor_id: Mapped[str | None] = mapped_column(String(200), nullable=True, index=True)
     actor_kind: Mapped[str] = mapped_column(String(16), default="user")
@@ -38,6 +43,50 @@ class AuditLog(Base, PkMixin):
     target_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     payload: Mapped[dict[str, Any]] = mapped_column(Json, default=dict)
     ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    #: The entry's place in its chain (1, 2, ...), the hash of the entry before it, and its own hash.
+    seq: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    prev_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+
+class AuditChainHead(Base):
+    """The last link of one audit chain (ADR 0182): an organisation's, or the platform's (`chain = ''`).
+
+    Written only by the trigger that links an entry, whose lock on this row puts the writers of one chain
+    in a line. A cache of the chain's end, not evidence: the verifier walks the entries, and compares their
+    end with this row to see entries deleted from the end."""
+
+    __tablename__ = "audit_chain_heads"
+
+    #: The organisation's id, or `''` for the platform's entries.
+    chain: Mapped[str] = mapped_column(String(36), primary_key=True)
+    org_id: Mapped[str | None] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    seq: Mapped[int] = mapped_column(BigInteger)
+    hash: Mapped[str] = mapped_column(String(64))
+
+
+class AuditCheckpoint(Base, PkMixin):
+    """A point of a chain someone vouched for (ADR 0182), append-only like the log.
+
+    `genesis`: what the migration chained of the history that existed, unsigned; the chain proves nothing
+    of those entries before that moment. `signed`: a head `choregos-admin audit checkpoint` verified and
+    signed with an Ed25519 key the deployment keeps outside the database (`key_id` is its public half, as
+    the outposts write a key; `signature` the unpadded base64url of 64 bytes)."""
+
+    __tablename__ = "audit_checkpoints"
+
+    org_id: Mapped[str | None] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    seq: Mapped[int] = mapped_column(BigInteger)
+    hash: Mapped[str] = mapped_column(String(64))
+    #: `genesis` or `signed`
+    kind: Mapped[str] = mapped_column(String(16))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    key_id: Mapped[str | None] = mapped_column(String(43), nullable=True)
+    signature: Mapped[str | None] = mapped_column(String(86), nullable=True)
 
 
 class NetworkDecision(Base, PkMixin, TimestampMixin):

@@ -5413,7 +5413,15 @@ stories:
     priority: 5
     size: L
     depends_on: []
-    notes: "Plan workstream S3. A migration that cannot be undone: human review (ADR 0180). Done when an update to the log by the API's database role is refused."
+    notes: "Plan workstream S3, first part (ADR 0182, accepted). A migration that cannot be undone: human review (ADR 0180). Done when an update to the log by the API's database role is refused. Delivered: a hash chain per organisation linked by a PostgreSQL trigger, UPDATE/TRUNCATE revoked and refused, the history chained once with a genesis checkpoint, Ed25519-signed checkpoints and `choregos-admin audit verify|checkpoint`. The rest is S80-05b."
+  - id: S80-05b
+    title: "feat(api,charts): the audit log leaves the database: SIEM export, checkpoints signed on a schedule, retention behind a signed checkpoint, a migration role distinct from the API's"
+    stream: S80
+    sprint: 2
+    priority: 5
+    size: M
+    depends_on: [S80-05]
+    notes: "Plan workstream S3, second part (ADR 0182 point 9; the plan dates the SIEM export and retention in May 2027). Also: the enterprise edition's `org.delete` entry carrying the deleted chain's last seq and hash; `seq` and `hash` in `GET /audit` (a contract change)."
   - id: S80-03
     title: "fix(api,orchestrator,runner,charts): the fakes are refused in staging and prod: the render fails, and the API, the outposts' door, the workers and the runner refuse to start"
     stream: S80

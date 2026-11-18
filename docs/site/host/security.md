@@ -62,6 +62,15 @@ Connector secrets typed in the console are sealed with AES-256-GCM under a key t
 Every sign-in, token, door call, decision and change of rights is in the audit log (**Admin ›
 Audit**), under the same organisation isolation as the rest.
 
+On PostgreSQL the log is evidence, not just a table: each organisation's entries form a hash chain the
+database links at every insert, the API's own role can neither update nor truncate it, and an entry goes
+only with its organisation's deletion. `choregos-admin audit verify`, run in the API's pod, walks every
+chain and names the first entry that was altered, deleted or rewritten. `choregos-admin audit checkpoint`
+signs each chain's end with an Ed25519 key you keep outside the database and the pods; keep the lines it
+prints outside too, since they are what shows a rewrite of a whole chain. Entries written before the
+upgrade are chained from the upgrade on, not before. How to run both, and what the chain does not stop:
+[the audit log as evidence](../../security.md#the-audit-log-as-evidence).
+
 ## Supply chain
 
 The images are signed with cosign (keyless), with an SBOM and SLSA provenance attached; the Kyverno
