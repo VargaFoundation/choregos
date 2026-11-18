@@ -440,3 +440,80 @@ async def test_a_late_event_of_an_ended_run_and_a_session_tool_call_reach_the_st
         assert await entry_of_event(session, someone_else, tool) is None, (
             "another person's session is streamed"
         )
+
+
+# ───────────────────────────── why a run failed (S67-20) ─────────────────────────────
+
+_KEY = "sk-proj-" + "A1b2C3d4" * 5  # key-shaped, not a credential
+_BUDGET = (
+    "the gateway refused the run's key: {'code': -32603, 'message': 'Internal error: Budget has been "
+    f"exceeded! Key=run-1-t-implement-2 ({_KEY}) Current cost: 0.74, Max budget: 0.69'}}"
+)
+
+
+async def _from_stream(entry_id: str, **event_data: Any) -> dict[str, Any]:
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.rbac import Principal, Role
+    from tranibor_api.services.activity import ActivityFilters, ActivityReader, entry_of_event
+    from tranibor_contracts import ChoregosEvent, EventType
+
+    admin = Principal(user_id="u-a", email="a@northwind.dev", org_roles={"northwind": Role.ORG_ADMIN})
+    finished = ChoregosEvent.emit(EventType.RUN_FINISHED, source="/t", run_id=entry_id, **event_data)
+    async with session_scope() as session:
+        reader = ActivityReader(admin, await _org_id(), "northwind", ActivityFilters())
+        found = await entry_of_event(session, reader, finished)
+    assert found is not None
+    return json.loads(found[1].model_dump_json())
+
+
+async def test_a_failed_run_says_why_in_the_list_and_the_stream_alike(
+    client: AsyncClient, project: dict[str, Any]
+) -> None:
+    loop = {
+        "status": "failed",
+        "reason": "loop",
+        "summary": "stopped by the runner: the same call 5 times in a row: execute/bash",
+    }
+    await _run(project["id"], "r-loop", status="failed", ended_ago=timedelta(minutes=1), result=loop)
+    listed = {e["id"]: e for e in (await client.get(ACTIVITY)).json()["finished"]}["r-loop"]
+    assert listed["failure"] == {"reason": "loop", "summary": loop["summary"]}
+    assert (await _from_stream("r-loop", status="failed"))["failure"] == listed["failure"]
+    Draft202012Validator(contracts.load_openapi()["components"]["schemas"]["ActivityFailure"]).validate(
+        listed["failure"]
+    )
+
+
+async def test_a_gateway_refusal_is_redacted_and_cut_to_300_characters(
+    client: AsyncClient, project: dict[str, Any]
+) -> None:
+    result = {"status": "failed", "reason": "budget", "summary": _BUDGET}
+    await _run(project["id"], "r-budget", status="failed", ended_ago=timedelta(minutes=1), result=result)
+    # A key that straddles the cut: redacted before the cut, so no head of it survives.
+    padded = {"reason": "budget", "summary": "x" * 285 + f" {_KEY}"}
+    await _run(project["id"], "r-edge", status="failed", ended_ago=timedelta(minutes=1), result=padded)
+    finished = {e["id"]: e for e in (await client.get(ACTIVITY)).json()["finished"]}
+    budget = finished["r-budget"]["failure"]
+    assert budget["reason"] == "budget"
+    assert _KEY not in budget["summary"] and "[REDACTED]" in budget["summary"]
+    assert "Budget has been exceeded" in budget["summary"], "the rest of the refusal stays readable"
+    edge = finished["r-edge"]["failure"]["summary"]
+    assert len(edge) <= 300 and "sk-" not in edge
+    long = {"reason": "timeout", "summary": "y" * 1000}
+    await _run(project["id"], "r-long", status="failed", ended_ago=timedelta(minutes=1), result=long)
+    finished = {e["id"]: e for e in (await client.get(ACTIVITY)).json()["finished"]}
+    assert finished["r-long"]["failure"]["summary"] == "y" * 300
+    for entry_id in ("r-budget", "r-edge"):
+        assert (await _from_stream(entry_id, status="failed"))["failure"] == finished[entry_id]["failure"]
+
+
+async def test_only_a_failed_run_carries_a_failure(client: AsyncClient, project: dict[str, Any]) -> None:
+    said = {"reason": "loop", "summary": "a summary that is not about a failure"}
+    await _run(project["id"], "r-ok", status="succeeded", ended_ago=timedelta(minutes=1), result=said)
+    await _run(project["id"], "r-live", status="running", result=said)
+    await _run(project["id"], "r-bare", status="failed", ended_ago=timedelta(minutes=2))
+    body = (await client.get(ACTIVITY)).json()
+    entries = {e["id"]: e for part in ("in_flight", "finished") for e in body[part]}
+    assert entries["r-ok"]["failure"] is None
+    assert entries["r-live"]["failure"] is None
+    assert entries["r-bare"]["failure"] is None, "a failed run without a result says nothing, not a guess"
+    assert (await _from_stream("r-ok", status="succeeded"))["failure"] is None

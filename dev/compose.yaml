@@ -90,9 +90,9 @@ services:
 
   ecphoria:
     # `:memory` does not exist — the memory edition's tag is suffixed, not named:
-    # `0.2.5-memory`, `0.2-memory`, `latest-memory`. Pinned rather than `latest-memory`,
+    # `0.2.6-memory`, `0.2-memory`, `latest-memory`. Pinned rather than `latest-memory`,
     # so the development stack is the same from one machine to the next.
-    image: ghcr.io/vargafoundation/ecphoria:0.2.5-memory@sha256:1ca5011d0012ad5f6b2133a23ac26ca7752b97145d06511eeea40b53f0faa402
+    image: ghcr.io/graalsystems/ecphoria:0.2.6-memory@sha256:c019a8d1e4222f0e628dd22d213287b508c5cac3be2568395d0f98dd35dc10a1
     environment:
       ECPHORIA_EMBEDDING__PROVIDER: openai_compatible
       # `OPENAI_BASE_URL`, not `BASE_URL`: the field is called `openai_base_url`. With the
