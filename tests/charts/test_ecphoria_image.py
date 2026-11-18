@@ -1,7 +1,7 @@
 """S80-07d: the chart's embedded memory runs the Ecphoria image the local install runs.
 
-The move of the publication to graalsystems (S73-01) rewrote the chart's Ecphoria repository to
-`ghcr.io/graalsystems/ecphoria`, where the memory edition was never published: every embedded
+The move of the publication to graalsystems (S73-01) rewrote the chart's Ecphoria repository to the
+publishing registry, where the memory edition was never published: every embedded
 memory (the single-node profile among them) stayed in `ImagePullBackOff`, found by the first real
 run of `tools/single-node/proof.sh`. `compose.yaml` kept the frozen address that serves it. Both
 are read here and must agree, so that what the local install proves is what the chart deploys.
