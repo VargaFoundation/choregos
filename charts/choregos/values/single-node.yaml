@@ -114,6 +114,11 @@ choregos-orchestrator:
     # At most four agent runs at once; the next ones wait without a pod.
     maxActive: 4
     limits: { cpu: "2", memory: 4Gi }
+    # k3s's kube-router applies a new agent pod's egress policy only seconds after it starts (#1854):
+    # the gate holds every agent pod until a direct connection out is refused (S80-07f). Measured on
+    # k3d: open 1.2 to 5.2 s without it. Never turn it off on this profile.
+    egressGate:
+      enabled: true
 
 choregos-postgresql:
   persistence: { enabled: true, size: 50Gi, storageClass: local-path }

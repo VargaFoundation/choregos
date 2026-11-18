@@ -37,6 +37,11 @@ and sign-in, the demonstration fakes) stay refused whatever the profile.
 {{- if and $singleNode (not ($g.egress | default dict).enabled) }}
 {{- fail "singleNode.enabled=true needs global.egress.enabled=true: without the egress proxy an agent pod has no governed way out (ADR 0184)." }}
 {{- end }}
+{{- /* S80-07f: k3s's kube-router applies a new pod's egress policy seconds after it starts (#1854); the
+       gate is what keeps an agent from acting in that window. */}}
+{{- if and $singleNode (eq (toString ((((index .Values "choregos-orchestrator") | default dict).runner | default dict).egressGate | default dict).enabled) "false") }}
+{{- fail "singleNode.enabled=true needs choregos-orchestrator.runner.egressGate.enabled=true: k3s applies a new agent pod's egress policy seconds after it starts, and the gate keeps the agent from acting before (ADR 0184, S80-07f)." }}
+{{- end }}
 {{- if has $g.environment (list "staging" "prod") }}
 {{- $fautes := list }}
 {{- if not $singleNode }}

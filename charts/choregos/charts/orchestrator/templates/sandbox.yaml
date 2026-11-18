@@ -41,6 +41,8 @@ pass `--api-versions extensions.agents.x-k8s.io/v1beta1/SandboxTemplate` or set
 {{- $launcherPort := int ($sandbox.launcherPort | default 8766) }}
 {{- $agentUid := int ($sandbox.agentUid | default 1001) }}
 {{- $separate := eq $isolation "container" }}
+{{- $gate := .Values.runner.egressGate | default dict }}
+{{- $gated := ne (toString $gate.enabled) "false" }}
 {{- $image := printf "%s/%s:%s" .Values.global.imageRegistry .Values.runner.image (.Values.runner.tag | default .Values.global.imageTag) }}
 apiVersion: extensions.agents.x-k8s.io/v1beta1
 kind: SandboxTemplate
@@ -79,13 +81,52 @@ spec:
         runAsUser: 1000
         fsGroup: 1000
         seccompProfile: { type: RuntimeDefault }
-      {{- if $separate }}
-      # ADR 0146: the agent is a native sidecar (an init container that keeps running, Kubernetes
-      # >= 1.29), so it is Ready before the runner is. It has NO secret, no envFrom and no
-      # environment but what the runner sends per process: the runner's run token, git token and
-      # egress report key stay in the `runner` container, which it cannot read (own PID and
-      # mount namespaces, another uid). The two share /workspace and /exchange only.
+      {{- if or $gated $separate }}
       initContainers:
+      {{- end }}
+      {{- if $gated }}
+        # The egress gate (S80-07f), FIRST: nothing else of the pod starts, the agent's container
+        # below included, until a direct connection out is refused three times in a row. k3s's
+        # kube-router applies a new pod's egress policy seconds after it starts (#1854). Still open
+        # after `deadlineSeconds`: exit 115, the pod fails, the warm pool replaces it. The same
+        # container `k8s_job` builds (`choregos_adapters.executor.egress_gate`).
+        - name: egress-gate
+          image: {{ $image }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          command:
+            - /app/.venv/bin/python
+            - -m
+            - choregos_core.egress_gate
+            - --target
+            - {{ $gate.target | default "1.1.1.1:443" | quote }}
+            - --deadline
+            - {{ $gate.deadlineSeconds | default 30 | quote }}
+            - --closed-streak
+            - "3"
+            - --timeout
+            - "1"
+            - --interval
+            - "0.25"
+            - --report
+            - /egress-gate/report.json
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 500m, memory: 256Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            seccompProfile: { type: RuntimeDefault }
+          volumeMounts:
+            - { name: egress-gate, mountPath: /egress-gate }
+      {{- end }}
+      {{- if $separate }}
+        # ADR 0146: the agent is a native sidecar (an init container that keeps running, Kubernetes
+        # >= 1.29), so it is Ready before the runner is. It has NO secret, no envFrom and no
+        # environment but what the runner sends per process: the runner's run token, git token and
+        # egress report key stay in the `runner` container, which it cannot read (own PID and
+        # mount namespaces, another uid). The two share /workspace and /exchange only.
         - name: agent
           image: {{ $image }}
           imagePullPolicy: {{ .Values.global.imagePullPolicy }}
@@ -130,7 +171,7 @@ spec:
           readinessProbe:
             httpGet: { path: /healthz, port: assignment }
             periodSeconds: 2
-          {{- if or .Values.runner.env $separate }}
+          {{- if or .Values.runner.env $separate $gated }}
           # Plain values for every run of the deployment, never a secret. What is per run, the
           # token included, is pushed with the assignment.
           env:
@@ -145,6 +186,10 @@ spec:
             # surface both containers see.
             - { name: TMPDIR, value: /exchange }
             {{- end }}
+            {{- if $gated }}
+            # What the egress gate measured, which the runner journals (`egress.gate`).
+            - { name: CHOREGOS_EGRESS_GATE_REPORT, value: /egress-gate/report.json }
+            {{- end }}
           {{- end }}
           resources:
             requests: { cpu: 500m, memory: 1Gi }
@@ -158,10 +203,18 @@ spec:
             {{- if $separate }}
             - { name: exchange, mountPath: /exchange }
             {{- end }}
-  {{- if $separate }}
+            {{- if $gated }}
+            - { name: egress-gate, mountPath: /egress-gate, readOnly: true }
+            {{- end }}
+  {{- if or $separate $gated }}
       volumes:
+        {{- if $separate }}
         - { name: exchange, emptyDir: {} }
         - { name: agent-tmp, emptyDir: {} }
+        {{- end }}
+        {{- if $gated }}
+        - { name: egress-gate, emptyDir: { sizeLimit: 1Mi } }
+        {{- end }}
   {{- end }}
   # A volume, not an emptyDir: a suspended sandbox loses its pod and keeps this (ADR 0016).
   volumeClaimTemplates:

@@ -190,6 +190,76 @@ isolation() {
   return $failed
 }
 
+# S80-07f, #1854: k3s applies a NEW pod's egress policy 1.2 to 5.2 s after its containers start
+# (measured on k3d, 15 starts open out of 15). The `k8s_job` executor puts the egress gate first in an
+# agent pod; nothing else of the pod starts until a direct connection out is refused. The Job below is
+# built by the executor itself, in the executor worker, with the deployment's own settings
+# (`runner.egressGate`); only its runner container is replaced, by a loop that tries the outside
+# directly from its first instruction for 10 s. Gated, its first attempt must be refused and none may
+# connect. The same pod without the gate is the control: it shows the window the gate closes, and is
+# reported, not judged (a faster node may close it before the first attempt). The images are the
+# API's, already on the node: the gate runs from any image that carries `choregos_core`.
+AGENT_JOB='
+import json, sys
+from types import SimpleNamespace
+from choregos_adapters.executor.k8s_job import KubernetesJobExecutor
+from choregos_core.domain import StageJobSpec
+from choregos_core.egress_gate import gate_from_env
+name, image, gated, loop = sys.argv[1], sys.argv[2], sys.argv[3] == "1", sys.argv[4]
+gate = gate_from_env()
+if gated and gate is None:
+    sys.exit("this deployment does not turn the egress gate on (runner.egressGate.enabled)")
+executor = KubernetesJobExecutor(client=SimpleNamespace(), egress_gate=gate if gated else None)
+spec = StageJobSpec(run_id=name, project_slug="proof", namespace="choregos", runner_image=image,
+                    api_url="http://choregos-api:8000", run_token="unused")
+job = executor._job(spec, name)
+pod = job["spec"]["template"]["spec"]
+runner = next(c for c in pod["containers"] if c["name"] == "runner")
+runner["env"] = [e for e in runner["env"] if "valueFrom" not in e]
+runner["command"] = ["/app/.venv/bin/python", "-c", loop]
+runner.pop("args", None)
+print(json.dumps(job))
+'
+FIRST_PACKETS='
+import json, socket, time
+start, tries = time.monotonic(), []
+while time.monotonic() - start < 10:
+    try:
+        socket.create_connection(("1.1.1.1", 443), timeout=1).close()
+        tries.append("open")
+    except OSError:
+        tries.append("closed")
+    time.sleep(0.2)
+print(json.dumps({"first": tries[0], "open": tries.count("open"), "attempts": len(tries)}))
+'
+agent_pod() {
+  local name=$1 gated=$2 image phase
+  image=$(k get deploy choregos-api -o jsonpath='{.spec.template.spec.containers[0].image}')
+  k exec deploy/choregos-orchestrator-executor -- python -c "$AGENT_JOB" "$name" "$image" "$gated" "$FIRST_PACKETS" |
+    k apply -f - >/dev/null
+  for _ in $(seq 60); do
+    phase=$(k get pod -l "job-name=$name" -o jsonpath='{.items[0].status.phase}' 2>/dev/null || true)
+    case "$phase" in Succeeded | Failed) break ;; esac
+    sleep 2
+  done
+  echo "$phase"
+}
+
+egress_gate() {
+  local phase report gate failed=0
+  phase=$(agent_pod proof-gated 1)
+  report=$(k logs job/proof-gated -c runner 2>/dev/null || true)
+  gate=$(k logs job/proof-gated -c egress-gate 2>/dev/null || true)
+  echo "  gated agent pod ($phase): gate $gate"
+  echo "  gated agent pod, its first direct connections: $report"
+  case "$report" in *'"first": "closed", "open": 0,'*) ;; *) failed=1 ;; esac
+  [ "$phase" = Succeeded ] || failed=1
+  phase=$(agent_pod proof-ungated 0)
+  echo "  control pod without the gate ($phase): $(k logs job/proof-ungated -c runner 2>/dev/null || true)"
+  k delete job proof-gated proof-ungated --wait=false >/dev/null
+  return $failed
+}
+
 token() {
   k exec deploy/choregos-api -- choregos-admin tokens create --email "$ADMIN" --name proof --expires-in-days 1
 }
@@ -208,6 +278,8 @@ step "install the chart (values/single-node.yaml)"
 install
 step "an agent pod reaches what a run uses, and not the database or Temporal"
 isolation
+step "an agent pod's first packet out is refused: the egress gate holds it until its policy applies"
+egress_gate
 step "one work item to completion"
 TOKEN=$(token)
 ITEM=$(k exec -i deploy/choregos-api -- python - run "$ORG" "$TOKEN" <"$ROOT/tools/single-node/work_item.py")

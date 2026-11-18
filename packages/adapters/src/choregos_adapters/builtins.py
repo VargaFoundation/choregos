@@ -651,6 +651,8 @@ def _register_forges() -> None:
 
 def _register_runtimes() -> None:
     """The executors of the agents' steps."""
+    from choregos_core.egress_gate import gate_from_env
+
     from .executor.aca import AcaExecutor, AzureArmClient
     from .executor.agent_sandbox import DEFAULT_TTL_SECONDS, AgentSandboxExecutor
     from .executor.k8s_job import KubernetesJobExecutor
@@ -674,6 +676,9 @@ def _register_runtimes() -> None:
             max_active=int(cfg.get("max_active", os.environ.get("CHOREGOS_RUNNER_MAX_ACTIVE", "") or 0)),
             # The chart's `global.imagePullSecrets` (S51-09): a step's own image may be private.
             image_pull_secrets=_names(os.environ.get("CHOREGOS_RUNNER_IMAGE_PULL_SECRETS", "")),
+            # The egress gate (S80-07f), the chart's `runner.egressGate`: the deployment's, never a
+            # connector's, so a project cannot turn it off.
+            egress_gate=gate_from_env(os.environ),
         )
     )
     register("runtime", "agent_sandbox", _SHIPPED_SPECS[("runtime", "agent_sandbox")])(

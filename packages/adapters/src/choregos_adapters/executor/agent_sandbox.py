@@ -62,6 +62,7 @@ from choregos_core.exit_codes import explanation
 
 from ..errors import ConfigurationError, UpstreamError
 from ..sealing import key_from_log, seal
+from . import egress_gate
 from .tekton import (
     CORE_API,
     GATEWAY_KEY_FIELD,
@@ -455,6 +456,9 @@ class AgentSandboxExecutor:
         """The runner container's exit code and reason, read on the sandbox's pod. Never logs."""
         name = _annotations(sandbox).get(POD_NAME_ANNOTATION) or sandbox.get("metadata", {}).get("name")
         pod = await self.client.request("GET", f"{CORE_API}/namespaces/{namespace}/pods/{name}")
+        gate = egress_gate.gate_failure(pod)
+        if gate is not None:
+            return gate
         states = ((pod or {}).get("status") or {}).get("containerStatuses") or []
         runner = next((c for c in states if c.get("name") == "runner"), states[0] if states else None)
         if runner is None:

@@ -70,6 +70,10 @@ choregos-orchestrator:
     # Neither NetworkPolicy nor proxy in this namespace: the agents exit directly.
     egressProxy: ""
     limits: { cpu: "2", memory: 4Gi }
+    # Nothing here forbids a direct way out, so the egress gate (S80-07f) would refuse every agent
+    # pod. A bench, never a site: the single-node profile (`values/single-node.yaml`) keeps it on.
+    egressGate:
+      enabled: false
 
 # Tools sidecar: a Tekton Task, hence not applicable on a local bench.
 choregos-tools:

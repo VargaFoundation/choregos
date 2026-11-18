@@ -5498,6 +5498,14 @@ stories:
     size: S
     depends_on: [S80-07d]
     notes: ".github/workflows/single-node-proof.yml: nightly at 02:30 UTC, on dispatch, and on a pull request that changes the proof; builds the api, worker and web images of the commit, installs k3d by version and checksum (k3s node pinned by digest, new PROOF_K3S_IMAGE), runs tools/single-node/proof.sh, uploads the cluster's diagnostics on failure, opens the nightly issue when a night fails. The product profile fits the 4-vCPU runner as it is: no CI overlay."
+  - id: S80-07f
+    title: "feat(runner,charts): every agent pod waits for its egress policy: the egress gate, first init container (ADR 0184, #1854)"
+    stream: S80
+    sprint: 1
+    priority: 7
+    size: M
+    depends_on: [S80-07e]
+    notes: "Issue #1854: k3s's kube-router applies a new pod's egress NetworkPolicy 1.2-5.2 s after its containers start (15/15 open on k3d), Cilium before (10/10 closed on a Cilium cluster). choregos_core.egress_gate: tries a direct TCP connection to runner.egressGate.target (1.1.1.1:443) until 3 in a row fail, exit 115 (EGRESS_OPEN) if still open at deadlineSeconds (30). FIRST init container of the k8s_job pod (before a hosted agent's sidecar) and of the agent_sandbox template (before the ADR 0146 agent container), from the runner's image; the runner journals egress.gate. On by default everywhere, refused off by the single-node guard, off in values/local.yaml. proof.sh starts an executor-built agent pod and checks its first direct connection is refused. Not covered: Tekton, ACA, local Docker; a policy that regresses after the gate."
   - id: S80-07c
     title: "fix(charts): on the single-node profile an agent pod reaches nothing it should not: the NetworkPolicies for the embedded layout and the egress proxy (ADR 0184)"
     stream: S80

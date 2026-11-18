@@ -93,6 +93,9 @@ class RunnerSettings(BaseSettings):
     launcher_port: int = Field(default=8766, validation_alias="CHOREGOS_RUNNER_LAUNCHER_PORT")
     #: How long the runner waits for the launcher before it ends the run.
     launcher_wait_seconds: float = Field(default=60.0, validation_alias="CHOREGOS_RUNNER_LAUNCHER_WAIT")
+    #: The egress gate's report (S80-07f), written by the pod's first init container before anything
+    #: else ran: how long the pod's egress policy took to be in force. Unset: no gate in this pod.
+    egress_gate_report: Path | None = Field(default=None, validation_alias="CHOREGOS_EGRESS_GATE_REPORT")
     #: The headroom the runner starts when a run asks for compression (ADR 0055).
     headroom_command: str = "headroom"
 

@@ -1439,6 +1439,12 @@ API, the backup bucket). The chart refuses the profile with `networkPolicies.ena
 `--disable-network-policy`: do not start it so, or the isolation is gone without a word (the proof
 checks it).
 
+**The egress gate** (S80-07f, [the egress gate](#the-egress-gate)). k3s applies a new pod's egress
+NetworkPolicy 1.2 to 5.2 s after its containers start (measured, #1854): in that window an agent pod
+reaches the outside directly. So every agent pod's first init container is a gate that lets nothing
+else of the pod start until a direct connection out is refused. The profile keeps it on, and the chart
+refuses `choregos-orchestrator.runner.egressGate.enabled: false` with it.
+
 **What it does not have**, said before anyone signs:
 
 - no high availability: the machine is a single point of failure, and a reboot or a k3s upgrade is a
@@ -1451,13 +1457,67 @@ checks it).
 
 **The proof.** `tools/single-node/proof.sh` installs from a blank node (k3s in Docker with k3d, or
 k3s itself on a throwaway VM with `PROOF_CLUSTER=k3s`), checks from a pod with an agent's labels that
-the API, the gateway, the memory and the egress proxy open and PostgreSQL and Temporal do not, takes
+the API, the gateway, the memory and the egress proxy open and PostgreSQL and Temporal do not, starts
+an agent pod built by the `k8s_job` executor itself and checks that its first direct connection out is
+refused (and, as a control, that the same pod without the gate gets out), takes
 one work item to `approved` (its agent simulated), backs up, destroys the node, installs on a new one, restores, and reads the work item
 back. It is not yet run every night by CI; `docs/plan/STATUS.md` says when it last ran. To prove an
 unreleased commit, build its images (`make images`, tagged under the chart's registry) and pass them
 with `PROOF_IMPORT_IMAGES` and `PROOF_IMAGE_TAG`: k3d imports them into each new node. On a
 workstation whose Docker disk is large but more than 85 % used, `PROOF_EVICTION=2%` lowers the
 kubelet's hard eviction thresholds, without which the node reports disk pressure and runs no pod.
+
+### The egress gate
+
+**Why.** A NetworkPolicy is only as good as the program that enforces it, and not every one enforces it
+from a pod's first packet. k3s's embedded kube-router builds a pod's firewall chain only once it has read
+the pod's IP in the API, then rewrites the whole table: measured on k3d (k3s v1.35.5), a new pod with a
+namespace-wide default-deny already in place reached `1.1.1.1:443` directly in 15 starts out of 15, for
+1.15 to 5.16 s (median 4.08 s), and as long as a failed sync lasts if one fails. Cilium programs the pod
+before its containers start: 10 starts out of 10 refused from the first attempt on a Cilium 1.16 cluster,
+under runc and under gVisor. A hosted agent's container (ADR 0080) runs its author's code from its first
+instant, before the runner.
+
+**What it does.** Every pod that runs agent code gets, as its FIRST init container, `egress-gate`: the
+`k8s_job` pod (before a hosted agent's sidecar) and the `agent_sandbox` template (before the ADR 0146
+agent container). It runs from the runner's image (`python -m choregos_core.egress_gate`), tries a
+direct TCP connection to `target` again and again, and exits 0 once three attempts in a row did not
+connect (refused, reset, unreachable or timed out: a REJECT rule answers like a closed port, a DROP rule
+like a dead host). An attempt that connects starts the count again. Still open after
+`deadlineSeconds`, it exits **115** (`EGRESS_OPEN`): the pod fails, the agent never starts, and the run
+fails with `egress gate exited with 115 … (phase: isolation)` (a warm sandbox's pod fails and the pool
+replaces it). The runner journals what the gate measured as `egress.gate` (`waited_s`, `open_attempts`,
+`open_at_s`).
+
+```yaml
+choregos-orchestrator:
+  runner:
+    egressGate:
+      enabled: true          # the default; the single-node profile refuses false
+      target: "1.1.1.1:443"  # a destination the runner pods' egress policy forbids
+      deadlineSeconds: 30
+```
+
+**Its price.** Under kube-router, the window itself (1 to 5 s per pod). Under Cilium, which drops
+rather than refuses, three connection timeouts: about 3.5 s per pod (none for a warm sandbox, which
+waits before it is claimed). Starting Python adds well under a second.
+
+**What to know about the target.** It must be a listener that accepts a connection whenever the path to
+it is open: a destination that is down looks closed, and the gate would let the pod go on without having
+proved anything. It must also be something the runner pods' policy forbids; a target the policy allows
+holds every pod until its deadline. A node with no route out at all (an **air-gapped** site, or a site
+firewall that drops the target) passes at once: no attempt connects, which is the same safe state for
+this gate (nothing leaves the pod directly), but the gate then says nothing about the NetworkPolicy
+itself. On such a site, point `target` at an address of the site's network that answers and that the
+runner pods' policy refuses.
+
+**When to turn it off.** Where nothing forbids a direct way out on purpose: a laptop bench without
+NetworkPolicies (`values/local.yaml` turns it off). A cluster whose engine enforces from the first packet
+(Cilium, measured) may turn it off to save the seconds; it stays on by default because it also turns a
+cluster that enforces nothing (k3s started with `--disable-network-policy`, a CNI without NetworkPolicy
+support, a policy engine that failed) into refused runs rather than unfenced agents. Not covered: the
+Tekton executor's pods (opt-in clusters with Tekton), the ACA and local Docker executors (no
+NetworkPolicy), and a policy that regresses after the gate passed.
 
 ## A single-node bench in twenty minutes
 
@@ -2057,6 +2117,17 @@ value>` on the first model call. Nothing said the key had never resolved.
 
 If the API refuses to start with `réglages non résolus`, fix the source of the secret — the key
 is missing where it is stored, not where it is read.
+
+## Upgrading past 0.27.13: the egress gate
+
+**Every agent pod waits for its egress policy** (S80-07f, [the egress gate](#the-egress-gate)). From
+this release, `choregos-orchestrator.runner.egressGate.enabled` is `true`: the `k8s_job` pods and the
+`agent_sandbox` template get a first init container that refuses to let the agent start while a direct
+connection to `1.1.1.1:443` still succeeds. Before upgrading, check that your runner pods cannot reach
+the outside directly (the chart's `choregos-runner-egress` does it when `networkPolicies.enabled`; a
+platform team's own policies do it otherwise): where they can, every run now fails with exit 115, which
+is the gate telling you the agents were not fenced. Where nothing applies NetworkPolicies on purpose,
+set `egressGate.enabled: false`; where `1.1.1.1` is not the right outside address, set `egressGate.target`.
 
 ## Upgrading past 0.27.13
 
