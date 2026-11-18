@@ -172,6 +172,55 @@ def test_extra_env_cannot_shadow_the_guard(name: str, value: str) -> None:
     assert value in rendered.stderr, "the error says where to set it instead"
 
 
+# ───────────────────────── the shipped presets (S80-03b) ─────────────────────────
+
+
+def _preset_documents(preset: str, *json_sets: str) -> list[dict[str, Any]]:
+    command = ["helm", "template", "choregos", str(CHART), "-f", str(CHART / "values" / f"{preset}.yaml")]
+    for value in json_sets:
+        command += ["--set-json", value]
+    rendered = subprocess.run(command, capture_output=True, text=True, check=False)
+    assert rendered.returncode == 0, rendered.stderr[-600:]
+    return [doc for doc in yaml.safe_load_all(rendered.stdout) if doc]
+
+
+def _guard_of_env(env: dict[str, str], monkeypatch: pytest.MonkeyPatch) -> Any:
+    from choregos_api.config import Settings
+    from choregos_api.internal_api_guard import guard_of
+
+    for name in (GUARD, DOORS, PUBLIC, CALLBACK, "CHOREGOS_PUBLIC_URL", "CHOREGOS_API_URL"):
+        monkeypatch.setenv(name, env.get(name, ""))
+    monkeypatch.setenv("CHOREGOS_CORS_ORIGINS", env.get("CHOREGOS_CORS_ORIGINS", "[]") or "[]")
+    return guard_of(Settings())
+
+
+@pytest.mark.parametrize("preset", ["staging", "prod"])
+def test_the_production_presets_enforce_and_the_api_can_apply_it(
+    preset: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`staging` and `prod` refuse the run's API on the public hostnames, not merely log it.
+
+    The mode alone is not enough: the guard never refuses the address runs are sent to, so the
+    preset must also keep runs on the in-cluster Service for `enforce` to be applied.
+    """
+    env = _env(_preset_documents(preset), "choregos-api")
+    assert env[GUARD] == "enforce", f"values/{preset}.yaml does not enforce the run's API guard"
+    guard = _guard_of_env(env, monkeypatch)
+    assert guard.callback == "choregos-api"
+    assert guard.refuses, "enforce is held back: runs would call back on a public hostname"
+
+
+@pytest.mark.parametrize("preset", ["staging", "prod"])
+def test_an_operator_can_still_take_a_production_preset_back_to_warn(preset: str) -> None:
+    env = _env(_preset_documents(preset, 'choregos-api.internalApiGuard="warn"'), "choregos-api")
+    assert env[GUARD] == "warn"
+
+
+@pytest.mark.parametrize("preset", ["dev", "local"])
+def test_the_bench_presets_keep_the_default(preset: str) -> None:
+    assert _env(_preset_documents(preset), "choregos-api")[GUARD] == "warn"
+
+
 # ───────────────────────── the run door ─────────────────────────
 
 

@@ -5,9 +5,11 @@ global:
   fakes: false
   logLevel: INFO
 choregos-api:
-  # The run's API on the public hostnames (ADR 0144): `warn` logs what `enforce` would refuse. Staging
-  # is where to switch first, once that log shows none of your own callers.
-  internalApiGuard: warn
+  # The run's API on the public hostnames (ADR 0144): `enforce` answers 404 there (S80-03b). Runs call
+  # the in-cluster Service (`global.internalApiUrl`'s default) and are not concerned; runs that call
+  # back through a public hostname need a run door first, or `warn` (docs/deployment.md, "The run's
+  # API and the run door").
+  internalApiGuard: enforce
   replicaCount: 2
 choregos-web:
   replicaCount: 2

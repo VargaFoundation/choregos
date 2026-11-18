@@ -2085,6 +2085,21 @@ admission policies beside `choregos-*` (`infra/policies/images.yaml` does; a pol
 former names stop being published two minor versions after the enterprise edition has moved, and the
 chart's defaults switch before that; each step is announced here.
 
+**The `staging` and `prod` presets enforce the run's API guard** (S80-03b,
+[ADR 0144](adr/0144-the-run-s-api-answers-only-where-runs-are.md)). `values/staging.yaml` and
+`values/prod.yaml` now set `choregos-api.internalApiGuard: enforce`: a request for `/api/v1/internal/*`
+that arrives under a public hostname of the API gets the 404 of an unknown route, before any token is
+read (`internal_api.refused`). Runs that call the in-cluster Service (`global.internalApiUrl`'s default,
+`http://choregos-api:8000`) are not concerned. **If your runs call back through the public hostname**
+(the `aca` executor, or a `global.internalApiUrl` you pointed at the API's public name), do one of two
+things before upgrading: give them a run door and set `global.internalApiUrl` to it ("The run's API and
+the run door"), or set `choregos-api.internalApiGuard: warn` in your values to keep the former behaviour.
+When `global.internalApiUrl` is itself a public hostname with no door, the API does not apply `enforce`
+anyway and says so at start-up (`internal_api.guard_not_enforced`), so those runs are not ended, but the
+guard then refuses nothing. A relay or a script of yours that calls `/api/v1/internal` through the public
+hostname is refused: read `internal_api.would_refuse` on the release you run now before upgrading. The
+`dev`, `local` and `single-node` presets and the chart's default keep `warn`.
+
 ## Upgrading past 0.27.3
 
 **The fakes are refused in staging and prod** (S80-03). `CHOREGOS_FAKES` (`global.fakes`, ADR 0005)
@@ -2494,7 +2509,7 @@ you changed it. The API therefore guards these routes by the name a request arri
 
 | Setting | Chart value | Default | What it does |
 | :-- | :-- | :-- | :-- |
-| `CHOREGOS_INTERNAL_API_GUARD` | `choregos-api.internalApiGuard` | `warn` | `off`: nothing. `warn`: a request for the run's API that arrives under a public hostname is served and logged (`internal_api.would_refuse`). `enforce`: it gets the 404 of an unknown route, before any token is read (`internal_api.refused`) |
+| `CHOREGOS_INTERNAL_API_GUARD` | `choregos-api.internalApiGuard` | `warn`; `enforce` in `values/staging.yaml` and `values/prod.yaml` | `off`: nothing. `warn`: a request for the run's API that arrives under a public hostname is served and logged (`internal_api.would_refuse`). `enforce`: it gets the 404 of an unknown route, before any token is read (`internal_api.refused`) |
 | `CHOREGOS_PUBLIC_HOSTS` | `choregos-api.ingress.hostnames` when the chart renders the route, plus `choregos-api.publicHostnames` and `global.customHosts.hosts` | code: `[]`; chart: the route's hostnames | public hostnames beyond the hosts of `global.publicUrl`, `global.apiUrl` and `choregos-api.corsOrigins`, which always count. Put in `publicHostnames` a name the chart cannot know: a route made outside it, a second name on a load balancer. `*.` may lead |
 | `CHOREGOS_RUN_DOOR_HOSTS` | `choregos-api.runDoor.hostnames` | `[]` | run doors: hostnames the run's API answers under although they are public. The chart renders their route, `choregos-run-door` |
 | — | `choregos-api.runDoor.annotations` | `{}` | the door Ingress's own annotations (`ingress.kind: ingress`) |
@@ -2560,7 +2575,9 @@ choregos-api:
       nginx.ingress.kubernetes.io/limit-rps: "50"
 ```
 
-**Upgrading.** The default is `warn`, and no preset of the chart enforces: an upgrade refuses nothing.
+**Upgrading.** The default is `warn` in the code, the chart and the bench presets; the shipped `staging`
+and `prod` presets enforce (S80-03b, "Upgrading past 0.27.13"). An installation of its own values, or
+one that overrides the presets' mode, follows these steps:
 
 1. Deploy the release as it is and let runs go through it, hosted sessions and the outbound relay
    included if you use them.
@@ -2575,9 +2592,11 @@ choregos-api:
 4. Set `choregos-api.internalApiGuard: enforce`, staging first. `internal_api.refused` then counts what
    is refused. To go back, set `warn`: nothing else changes.
 
-The default stays `warn` in the code, the chart and every preset. Turning the shipped `staging` and
-`prod` presets to `enforce` is planned once a release in `warn` has been observed for two to four weeks
-(S80-03, `docs/plan/STATUS.md`); until then the switch is the operator's, as above.
+The default stays `warn` in the code, the chart and the `dev`, `local` and `single-node` presets. The
+shipped `staging` and `prod` presets enforce since the first release after 0.27.13 (S80-03b): runs call
+the in-cluster Service there, which `enforce` never refuses. An installation built on them whose runs
+call back through a public hostname sets a run door and `global.internalApiUrl` (above), or writes
+`choregos-api.internalApiGuard: warn` back.
 
 An installation that decides to keep its runs on a public hostname sets `off`: `warn` logs one line
 per call back.

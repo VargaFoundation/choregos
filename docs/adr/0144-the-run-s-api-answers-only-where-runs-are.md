@@ -71,7 +71,8 @@ name. On 2026-09-27 a wrong callback address ended every run of an installation 
    request `enforce` would refuse; `enforce` logs `internal_api.refused`. A line carries the host that
    matched, the header it was read from and the first path segment after `/internal`, never a token.
    No preset of the chart enforces: an installation switches after a release in `warn` has shown that
-   log empty of its own callers.
+   log empty of its own callers. *Amended by S80-03b (2026-11-18): the shipped `staging` and `prod`
+   presets enforce; the code, the chart and the bench presets keep `warn`.*
 6. **Never the address runs are sent to.** The API is told the workers' callback address (the chart
    gives it the same `CHOREGOS_INTERNAL_API_URL`; compose shares it). When that address is itself a
    public hostname and no run door covers it, `enforce` is not applied: the guard keeps warning, and
