@@ -28,11 +28,28 @@ def agent_view(stage_input: StageInput, ports: tuple[int, int, int], *, model: b
         update["model"] = stage_input.model.model_copy(update={"base_url": loopback_url(model_port)})
         update["gateway_key"] = LOOPBACK_KEY
     servers = {
-        name: McpServerRef(url=f"{loopback_url(mcp_port)}/mcp/{name}") if ref.url and ref.env else ref
+        name: McpServerRef(url=f"{loopback_url(mcp_port)}/mcp/{name}")
+        if ref.url and (ref.env or ref.scoped)
+        else ref
         for name, ref in stage_input.tools.mcp.items()
     }
     update["tools"] = stage_input.tools.model_copy(update={"mcp": servers})
     return stage_input.model_copy(update=update)
+
+
+def without_unenforceable_servers(stage_input: StageInput) -> tuple[StageInput, list[str]]:
+    """The step without the credentialed servers the runner scopes, when no loopback can serve them.
+
+    With the agent as the runner's own child (no `container` isolation) it would be handed the server's
+    header and its `tenant_id` freedom: the credential is worth more than the tool. Such a server is
+    left out, and named, so the run's journal says why the agent has no memory tools."""
+    dropped = [name for name, ref in stage_input.tools.mcp.items() if ref.scoped and ref.env]
+    if not dropped:
+        return stage_input, []
+    kept = {name: ref for name, ref in stage_input.tools.mcp.items() if name not in dropped}
+    return stage_input.model_copy(
+        update={"tools": stage_input.tools.model_copy(update={"mcp": kept})}
+    ), dropped
 
 
 def proxy_environment(env: Mapping[str, str], ports: tuple[int, int, int]) -> dict[str, str]:

@@ -32,3 +32,14 @@ def _chart_image() -> str:
 def test_the_chart_and_the_local_installs_run_the_same_ecphoria() -> None:
     for compose in COMPOSES:
         assert _chart_image() == _compose_image(compose), compose.relative_to(ROOT)
+
+
+def test_the_index_is_as_wide_as_the_embedding_model_vectors() -> None:
+    """Without `ECPHORIA_EMBEDDING__DIMENSION` Ecphoria sized its index at 768 and the gateway's
+    `platform/embed` (text-embedding-3-small) answered 1536: every write was refused ("embedding
+    dimension mismatch: expected 768, got 1536") and no memory was indexed (prod, 2026-11-18)."""
+    values = yaml.safe_load(CHART_VALUES.read_text())
+    assert values["embedding"]["dimension"] == 1536
+    template = (CHART_VALUES.parent / "templates" / "deployment.yaml").read_text()
+    assert "ECPHORIA_EMBEDDING__DIMENSION" in template
+    assert "ECPHORIA_MEMORY__SEMANTIC__DEFAULT_DIMENSION" in template

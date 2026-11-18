@@ -44,6 +44,9 @@ spec:
             - name: ECPHORIA_EMBEDDING__OPENAI_API_KEY
               valueFrom: { secretKeyRef: { name: {{ include "choregos.gatewaySecret" . }}, key: master-key } }
             {{- end }}
+            # The index must be as wide as the vectors (`ecphoria doctor` warns when they differ).
+            - { name: ECPHORIA_EMBEDDING__DIMENSION, value: {{ .Values.embedding.dimension | quote }} }
+            - { name: ECPHORIA_MEMORY__SEMANTIC__DEFAULT_DIMENSION, value: {{ .Values.embedding.dimension | quote }} }
             - { name: ECPHORIA_MEMORY__EPISODIC__DB_PATH, value: /data/episodic.duckdb }
             - { name: ECPHORIA_MEMORY__STATE__DB_PATH, value: /data/state.db }
             - { name: ECPHORIA_MEMORY__COGNITION__DB_PATH, value: /data/cognition.duckdb }
