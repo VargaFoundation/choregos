@@ -34,12 +34,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from tranibor_contracts import ChoregosEvent, EventType
 from tranibor_core import utcnow
 from tranibor_core.domain import aware
+from tranibor_core.redaction import redact
 
 from ..db.models import AgentSessionEvent, AgentSessionRecord, Project, Run, RunEvent, WorkflowDef, WorkItem
 from ..knowledge.marked import readable
 from ..logging import get_logger
 from ..rbac import Permission
-from ..schemas.activity import ActivityEntry, ActivityList, SpendSoFar
+from ..schemas.activity import ActivityEntry, ActivityFailure, ActivityList, SpendSoFar
 from .activity_turns import turn_entries
 from .initiator import initiator
 
@@ -226,6 +227,23 @@ async def _steps(
     return {str(owner): (int(steps), str(last or "")) for owner, steps, last in rows.all()}
 
 
+#: How much of a failed run's summary an entry carries (the contract's `maxLength`).
+FAILURE_SUMMARY_MAX = 300
+
+
+def _failure(run: Run) -> ActivityFailure | None:
+    """Why a failed run failed, from its stage result: `None` for any other status, and for a failed run
+    whose result was not written. The summary is redacted as the run's log is, then cut: a cut before
+    the redaction could split a key and let its head through."""
+    if run.status != "failed" or not isinstance(run.result, dict):
+        return None
+    reason = str(run.result.get("reason") or "").strip()
+    summary = redact(str(run.result.get("summary") or "")).strip()
+    if not reason and not summary:
+        return None
+    return ActivityFailure(reason=reason or "failed", summary=summary[:FAILURE_SUMMARY_MAX])
+
+
 async def _run_entries(
     session: AsyncSession,
     reader: ActivityReader,
@@ -267,6 +285,7 @@ async def _run_entries(
                 spend=spend,
                 can_stop=in_flight
                 and reader.principal.can(Permission.ITEM_CONTROL, reader.org_slug, project.slug),
+                failure=_failure(run),
             )
         )
     return entries
