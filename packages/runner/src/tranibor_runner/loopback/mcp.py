@@ -77,6 +77,17 @@ class McpProxy:
             return JSONResponse({"error": f"the server `{server}` is outside the step's network"}, 403)
         content = await request.body()
         message = _json(content)
+        if ref.scoped:
+            # A server the runner scopes (the memory's tenant, its tool list) is reached by single JSON-RPC
+            # requests only: a batch would carry `tools/call`s past the checks below.
+            if _is_batch(content):
+                await self.record("hosted.mcp_refused", {"server": server, "reason": "batch"})
+                return JSONResponse({"error": "a JSON-RPC batch is not served for this server"}, 400)
+            refused = await self._scope(server, ref, message)
+            if refused is not None:
+                return refused
+            if message.get("method") == "tools/call":
+                content = _with_scope_arguments(message, ref.scope_arguments)
         if message.get("method") == "tools/call":
             refused = await self._judge(server, message)
             if refused is not None:
@@ -89,7 +100,37 @@ class McpProxy:
             await self.record("hosted.mcp_unavailable", {"server": server, "error": str(exc)[:300]})
             return JSONResponse({"error": f"the MCP server `{server}` did not answer"}, 502)
         kept = {k: v for k, v in answer.headers.items() if k.lower() in _RETURNED}
-        return Response(answer.content, status_code=answer.status_code, headers=kept)
+        body = answer.content
+        if ref.allowed_tools is not None and message.get("method") == "tools/list":
+            body = _only_tools(body, ref.allowed_tools)
+        return Response(body, status_code=answer.status_code, headers=kept)
+
+    async def _scope(self, server: str, ref: Any, message: dict[str, Any]) -> Response | None:
+        """The server's tool list, enforced: a `tools/call` of a tool outside `allowed_tools` is answered
+        with a tool error and never reaches the server (journaled, as a guard-rail refusal is)."""
+        if ref.allowed_tools is None or message.get("method") != "tools/call":
+            return None
+        tool = str((message.get("params") or {}).get("name") or "")
+        if tool in ref.allowed_tools:
+            return None
+        await self.record(
+            "hosted.mcp_refused", {"server": server, "tool": tool[:100], "reason": "tool_not_granted"}
+        )
+        return JSONResponse(
+            {
+                "jsonrpc": "2.0",
+                "id": message.get("id"),
+                "result": {
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": f"the tool `{tool[:100]}` is not granted here (server `{server}`)",
+                        }
+                    ],
+                    "isError": True,
+                },
+            }
+        )
 
     async def _judge(self, server: str, message: dict[str, Any]) -> Response | None:
         params = message.get("params") or {}
@@ -124,6 +165,37 @@ def _credential(env: dict[str, str]) -> dict[str, str]:
             return {"authorization": f"Bearer {value.removeprefix('Bearer ').strip()}"}
         return {header: value}
     return {}
+
+
+def _is_batch(content: bytes) -> bool:
+    try:
+        return isinstance(json.loads(content or b"{}"), list)
+    except json.JSONDecodeError:
+        return False
+
+
+def _with_scope_arguments(message: dict[str, Any], scope: dict[str, str]) -> bytes:
+    """The `tools/call` with the server's scope arguments set over the agent's: what the agent wrote for
+    `tenant_id` is gone, the run's project is there."""
+    params = dict(message.get("params") or {})
+    arguments = params.get("arguments")
+    arguments = dict(arguments) if isinstance(arguments, dict) else {}
+    arguments.update(scope)
+    return json.dumps({**message, "params": {**params, "arguments": arguments}}).encode()
+
+
+def _only_tools(body: bytes, allowed: list[str]) -> bytes:
+    """A `tools/list` answer cut to the granted tools; anything that is not that JSON is left as it is (the
+    calls are refused anyway)."""
+    try:
+        answer = json.loads(body)
+        tools = answer["result"]["tools"]
+    except (json.JSONDecodeError, KeyError, TypeError):
+        return body
+    if not isinstance(tools, list):
+        return body
+    answer["result"]["tools"] = [t for t in tools if isinstance(t, dict) and t.get("name") in allowed]
+    return json.dumps(answer).encode()
 
 
 def _json(content: bytes) -> dict[str, Any]:

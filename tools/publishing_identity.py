@@ -109,6 +109,7 @@ DERIVED: tuple[str, ...] = (
     # Images built FROM the platform's, and the local install.
     ".env.example",
     "compose.yaml",
+    "dev/compose.yaml",
     "dev/Tiltfile",
     "docker/base.Dockerfile",
     "examples/agents/langgraph/Dockerfile",
