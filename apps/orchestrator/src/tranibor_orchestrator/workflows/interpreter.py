@@ -148,6 +148,10 @@ RUN_STOPPED_GOES_TO_A_PERSON = "run-stopped-goes-to-a-person"
 #: mirrors the platform's state, and the next mirror rewrites it whole. Before this marker the failure
 #: failed the interpreter (FON-277 stood still for two days, 2026-11-09).
 STATUS_COMMENT_BEST_EFFORT = "status-comment-best-effort"
+#: A status comment missed under `STATUS_COMMENT_BEST_EFFORT` is published on the work item
+#: (`record_status_comment_missed`, S62-20), so its timeline says why the board may lag. Before this
+#: marker only the worker's log said so.
+STATUS_COMMENT_MISS_PUBLISHED = "status-comment-miss-published"
 #: A decision that names the request it answers (`request_id`) is applied only while that request is
 #: the one pending (#1795, S67-15). A decision made for a request that has since been closed, or
 #: replaced by another (an approval in `pr_open` delivered once the work item had escalated to

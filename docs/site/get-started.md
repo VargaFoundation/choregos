@@ -190,6 +190,8 @@ production from measured facts, and the work item ends in **Verified in producti
 ### What you should see
 
 - On the issue: a status comment with the state, the cost so far and a link to the work item.
+  If the tracker does not take that comment (down, or slow for about ten minutes), the work item
+  goes on: its timeline says the comment was not updated, and the next state rewrites it.
 - On the work item's page: every step of the journey green, the cost per stage, the artifacts (the
   specification, the plan, the test report, the release notes).
 - In **Spend**: what the work item cost, by agent and by model.
