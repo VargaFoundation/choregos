@@ -22,6 +22,8 @@ from .scheduling import execute_on_its_queue
 with workflow.unsafe.imports_passed_through():
     from tranibor_contracts import Workflow
     from tranibor_core import WorkflowEngine
+    from tranibor_core.domain import TRIAL_STATE
+    from tranibor_core.dsl import UnknownStateError
 
     from ..activities import tracker as tracker_activities
     from ..activities.interpretation import (
@@ -211,6 +213,11 @@ __all__ = [
 ]
 
 
+def _is_a_trial(exc: BaseException) -> bool:
+    """The interpreter met a trial's work item: its state is `trial`, which no workflow declares."""
+    return isinstance(exc, UnknownStateError) and exc.state == TRIAL_STATE
+
+
 @workflow.defn(name="WorkflowInterpreter", sandboxed=False)
 class WorkflowInterpreter(
     ExternalMixin,
@@ -378,6 +385,12 @@ class WorkflowInterpreter(
                     start_to_close_timeout=timedelta(seconds=30),
                     retry_policy=RetryPolicy(maximum_attempts=3, initial_interval=timedelta(seconds=1)),
                 )
+            if _is_a_trial(exc):
+                # A trial's work item has no interpreter (#1781): one started on it before 0.27.11
+                # stayed open, its workflow task failing on every replay (#1865). It ends here, after
+                # the same commands as before, so the histories left over replay and close.
+                workflow.logger.warning("interpreter on a trial work item ended", extra={"state": self.state})
+                return {"state": self.state, "cost_usd": self.cost_usd, "stopped": True}
             raise
 
     async def _run(self, params: InterpreterInput, payload: dict[str, Any]) -> dict[str, Any]:
