@@ -12,9 +12,9 @@ from typing import Any
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
-HISTORY = (
-    Path(__file__).resolve().parents[3] / "tests" / "replay" / "histories" / "knowledge-distill-S42-10.json"
-)
+HISTORIES = Path(__file__).resolve().parents[3] / "tests" / "replay" / "histories"
+HISTORY = HISTORIES / "knowledge-distill-S42-10.json"
+BATCH_HISTORY = HISTORIES / "knowledge-distill-batch-S4-09.json"
 PAYLOAD = {
     "org": "northwind",
     "base_id": "kb-1",
@@ -36,10 +36,34 @@ def plan_of(costs: list[float | None], budget: float = 5.0) -> dict[str, Any]:
     }
 
 
+def batch_plan(costs: list[float | None], budget: float = 5.0) -> dict[str, Any]:
+    return {**plan_of(costs, budget), "batch": True, "batch_poll_s": 60}
+
+
 def stubs(
-    planned: dict[str, Any], *, part_cost: float = 1.0, failing: int | None = None, refuse: bool = False
+    planned: dict[str, Any],
+    *,
+    part_cost: float = 1.0,
+    failing: int | None = None,
+    refuse: bool = False,
+    submitted: str = "submitted",
+    in_progress: int = 2,
 ) -> Any:
     calls: list[tuple[str, dict[str, Any]]] = []
+    polls = {"left": in_progress}
+
+    @activity.defn(name="submit_distillation_batch")
+    async def submit_distillation_batch(payload: dict[str, Any]) -> dict[str, Any]:
+        calls.append(("submit", payload))
+        return {"status": submitted, "batch_id": "msgbatch_1", "requests": 3, "resumed": False}
+
+    @activity.defn(name="collect_distillation_batch")
+    async def collect_distillation_batch(payload: dict[str, Any]) -> dict[str, Any]:
+        calls.append(("collect", payload))
+        if polls["left"] > 0:
+            polls["left"] -= 1
+            return {"status": "in_progress"}
+        return {"status": "done", "cost_usd": 0.5, "digests": ["sha256:0", "sha256:1"], "fallback": 1}
 
     @activity.defn(name="plan_distillation")
     async def plan_distillation(payload: dict[str, Any]) -> dict[str, Any]:
@@ -74,7 +98,15 @@ def stubs(
         calls.append(("fail", payload))
         return {"status": "failed", "code": payload["code"]}
 
-    found = [plan_distillation, distill_part, reduce_distillation, publish_distillation, fail_distillation]
+    found = [
+        plan_distillation,
+        distill_part,
+        reduce_distillation,
+        publish_distillation,
+        fail_distillation,
+        submit_distillation_batch,
+        collect_distillation_batch,
+    ]
     return found, calls
 
 
@@ -193,6 +225,58 @@ async def test_a_cancelled_run_is_completed_as_cancelled_and_publishes_nothing()
     assert result == {"status": "failed", "code": "cancelled"}
 
 
+async def test_a_batch_plan_submits_once_polls_on_timers_and_only_the_unanswered_part_is_called() -> None:
+    result, calls, _ = await run(batch_plan([1.0, 1.0, 1.0]))
+    names = [name for name, _ in calls]
+    assert names == [
+        "plan",
+        "submit",
+        "collect",
+        "collect",
+        "collect",
+        "part",
+        "part",
+        "part",
+        "reduce",
+        "publish",
+    ]
+    assert result["status"] == "pending_review"
+    # the batch's 0.5 is in the spend before any part; the two stored parts are not priced again
+    assert [c[1]["spent_usd"] for c in calls if c[0] == "part"] == [0.5, 1.5, 2.5]
+    assert calls[-2][1]["digests"] == ["sha256:0", "sha256:1", "sha256:2"]
+    assert calls[-1][1]["spent_usd"] == 3.6
+
+
+async def test_a_batched_part_is_not_stopped_by_the_budget_but_a_sync_one_still_is() -> None:
+    # budget 1.2, batch cost 0.5: parts 0 and 1 are stored (no check), part 2 (1.0) would pass the budget
+    result, calls, _ = await run(batch_plan([1.0, 1.0, 1.0], budget=1.2), in_progress=0)
+    assert [name for name, _ in calls] == ["plan", "submit", "collect", "part", "part", "fail"]
+    assert result["code"] == "over_budget"
+
+
+async def test_without_a_provider_the_batch_plan_falls_back_to_the_synchronous_parts() -> None:
+    result, calls, _ = await run(batch_plan([1.0, 1.0]), submitted="unavailable")
+    assert [name for name, _ in calls] == ["plan", "submit", "part", "part", "reduce", "publish"]
+    assert result["status"] == "pending_review"
+
+
+async def test_a_plan_without_the_batch_key_never_touches_the_batch_activities() -> None:
+    _, calls, _ = await run(plan_of([1.0, 1.0]))
+    assert {"submit", "collect"}.isdisjoint(name for name, _ in calls)
+
+
+async def test_the_batch_history_replays() -> None:
+    from temporalio.client import WorkflowHistory
+    from temporalio.worker import Replayer
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
+
+    _, _, history = await run(batch_plan([1.0, 1.0, 1.0]))
+    replayer = Replayer(workflows=ALL_WORKFLOWS)
+    await replayer.replay_workflow(history)
+    archived = json.loads(BATCH_HISTORY.read_text(encoding="utf-8"))
+    await replayer.replay_workflow(WorkflowHistory.from_json("knowledge-distill-kb-1", archived))
+
+
 async def test_the_archived_history_replays() -> None:
     from temporalio.client import WorkflowHistory
     from temporalio.worker import Replayer
@@ -211,5 +295,7 @@ if __name__ == "__main__":  # `python -m` from the repository root: records the 
     async def _record() -> None:
         _, _, history = await run(plan_of([1.0, 1.0]))
         HISTORY.write_text(history.to_json(), encoding="utf-8")
+        _, _, batched = await run(batch_plan([1.0, 1.0, 1.0]))
+        BATCH_HISTORY.write_text(batched.to_json(), encoding="utf-8")
 
     asyncio.run(_record())

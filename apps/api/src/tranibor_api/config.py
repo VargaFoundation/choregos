@@ -414,6 +414,19 @@ class Settings(BaseSettings):
     knowledge_distill_budget_usd: float = 10.0
     #: The output a call is assumed to produce, to estimate a cost before spending it.
     knowledge_distill_output_tokens_per_call: int = 6_000
+    #: Distil the parts of a base through a provider's batch API, at half the price (S4-09, ADR 0190).
+    #: Off by default: it needs a provider key and a route to the provider that the gateway does not
+    #: carry. A provider without batch, or an unset key or model, keeps the synchronous path.
+    knowledge_distill_batch: bool = False
+    #: The provider's own model id the batch calls (the gateway alias `platform/standard` means
+    #: nothing to the provider); it must be the model the alias resolves to, the price is the alias's.
+    knowledge_distill_batch_model: str = ""
+    knowledge_distill_batch_api_key: str = ""
+    knowledge_distill_batch_base_url: str = "https://api.anthropic.com"
+    #: Seconds between two polls of a batch.
+    knowledge_distill_batch_poll_seconds: int = 120
+    #: `max_tokens` of one batched part (a batch request has no default).
+    knowledge_distill_batch_max_tokens: int = 16_000
     #: The gateway model that embeds knowledge chunks, unless `default_model_profiles["embed"]` says.
     knowledge_embedding_model: str = "platform/embed"
     #: A directory of `<id>.site.md` notes and `<new-id>.md` procedures a deployment adds to the
