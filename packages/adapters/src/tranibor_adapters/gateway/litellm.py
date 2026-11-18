@@ -133,6 +133,7 @@ class LiteLlmGateway:
         tokens_in = sum(int(entry.get("prompt_tokens", 0)) for entry in logs)
         tokens_out = sum(int(entry.get("completion_tokens", 0)) for entry in logs)
         cached = sum(_cache_read_tokens(entry) for entry in logs)
+        cache_write = sum(_cache_write_tokens(entry) for entry in logs)
         models = sorted({str(entry.get("model", "")) for entry in logs if entry.get("model")})
         if not total and logs:
             total = sum(float(entry.get("spend", 0.0)) for entry in logs)
@@ -140,6 +141,7 @@ class LiteLlmGateway:
             tokens_in=tokens_in,
             tokens_out=tokens_out,
             tokens_cached=cached,
+            tokens_cache_write=cache_write,
             cost_usd=round(total, 6),
             requests=len(logs),
             models_used=models,
@@ -260,3 +262,13 @@ def _cache_read_tokens(entry: dict[str, Any]) -> int:
     if usage.get("cache_read_input_tokens"):
         return int(usage["cache_read_input_tokens"])
     return int((usage.get("prompt_tokens_details") or {}).get("cached_tokens") or 0)
+
+
+def _cache_write_tokens(entry: dict[str, Any]) -> int:
+    """The prompt tokens a spend log entry wrote to the provider's cache: Anthropic's
+    `cache_creation_input_tokens`, at the top of the entry or in the request's usage (S4-07). OpenAI
+    reports no write: its cache is filled for free, so the count is zero there."""
+    if entry.get("cache_creation_input_tokens"):
+        return int(entry["cache_creation_input_tokens"])
+    usage = (entry.get("metadata") or {}).get("usage_object") or {}
+    return int(usage.get("cache_creation_input_tokens") or 0)
