@@ -13,6 +13,12 @@ from tranibor_core.models import estimate_tokens
 class FakeMemory:
     """Test memory: enough to test the context pack, the supersession and the pending queue."""
 
+    def mcp_server(self, namespace: str, *, writes: bool) -> Any:
+        """Serves an MCP server as the Ecphoria adapter does (scope and tools of the binding)."""
+        from ..memory.ecphoria import EcphoriaMemory
+
+        return EcphoriaMemory("http://fake-memory:8432").mcp_server(namespace, writes=writes)
+
     def __init__(self) -> None:
         self.facts: dict[str, list[Memory]] = {}
         self.pending: dict[str, list[Memory]] = {}
