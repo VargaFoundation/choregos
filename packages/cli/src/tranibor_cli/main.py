@@ -17,7 +17,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from . import __version__, device_login, theme
+from . import __version__, device_login, money, theme
 from . import chat as chat_module
 from . import client as client_module
 from .a2a import a2a_app
@@ -152,12 +152,15 @@ class TransportSafeClient(Client):
 
 
 class _ReadableClient(TransportSafeClient):
-    """Also: an API error becomes a red line and exit code 1."""
+    """Also: an API error becomes a red line and exit code 1 (`quiet=True`: the caller reads the error)."""
 
     def request(self, method: str, path: str, **kwargs: Any) -> Any:
+        quiet = bool(kwargs.pop("quiet", False))
         try:
             return super().request(method, path, **kwargs)
         except ApiError as exc:
+            if quiet:
+                raise
             fail(str(exc))
             return None
 
@@ -169,6 +172,15 @@ def client() -> Client:
 def fail(message: str) -> None:
     console.print(f"[red]✗[/red] {message}")
     raise typer.Exit(1)
+
+
+def _currency(api: Client, org: str | None = None) -> str | None:
+    """The organisation's currency (`money.currency_of`), the profile's organisation when none is named;
+    `None` where there is none or it cannot be read: amounts then keep their own symbol."""
+    try:
+        return money.currency_of(api, api.profile.organisation(org))
+    except NoOrganisationError:
+        return None
 
 
 def _organisation(profile: Profile, org: str | None) -> str:
@@ -507,7 +519,8 @@ def projects_list(org: Annotated[str | None, typer.Option()] = None) -> None:
     api = client()
     organization = _organisation(api.profile, org)
     page = api.get(f"/orgs/{organization}/projects")
-    table = Table("slug", "name", "status", "active work items", "cost this month (€)", "trains")
+    table = Table("slug", "name", "status", "active work items", "cost this month", "trains")
+    currency = money.currency_of(api, organization)
     for project in page["items"]:
         stats = project.get("stats", {})
         table.add_row(
@@ -515,7 +528,7 @@ def projects_list(org: Annotated[str | None, typer.Option()] = None) -> None:
             project["name"],
             project["status"],
             str(stats.get("active_work_items", 0)),
-            f"{stats.get('cost_month_eur', 0):.2f}",
+            money.amount(stats, eur="cost_month_eur").text(currency),
             str(stats.get("trains_pending", 0)),
         )
     console.print(table)
@@ -602,8 +615,10 @@ def projects_readiness(project: str) -> None:
 
 @items_app.command("list")
 def items_list(project: str, state: Annotated[str | None, typer.Option()] = None) -> None:
-    page = client().get(f"/projects/{project}/work-items", params={"state": state} if state else None)
-    table = Table("work item", "title", "state", "size", "cost (€)", "PR")
+    api = client()
+    page = api.get(f"/projects/{project}/work-items", params={"state": state} if state else None)
+    currency = _currency(api)
+    table = Table("work item", "title", "state", "size", "cost", "PR")
     for item in page["items"]:
         totals = item.get("totals", {})
         table.add_row(
@@ -611,7 +626,7 @@ def items_list(project: str, state: Annotated[str | None, typer.Option()] = None
             item["title"][:60],
             item.get("state_display") or item["state"],
             item.get("size") or "—",
-            f"{totals.get('cost_eur', 0):.2f}",
+            money.amount(totals).text(currency),
             item.get("pr_url") or "—",
         )
     console.print(table)
@@ -677,7 +692,7 @@ def items_show(item_id: str) -> None:
     console.print(f"[bold]{item['tracker_key']}[/bold] — {item['title']}")
     console.print(f"state: {item.get('state_display') or item['state']} · size {item.get('size') or '—'}")
     totals = item.get("totals", {})
-    console.print(f"cost: {totals.get('cost_eur', 0):.2f} € ({totals.get('runs', 0)} runs)")
+    console.print(f"cost: {money.amount(totals).text(_currency(api))} ({totals.get('runs', 0)} runs)")
     timeline = api.get(f"/work-items/{item_id}/timeline")
     table = Table("when", "what", "detail")
     for entry in timeline[-15:]:
@@ -731,8 +746,10 @@ def items_action(
 
 @runs_app.command("list")
 def runs_list(item_id: str) -> None:
-    runs = client().get(f"/work-items/{item_id}/runs")
-    table = Table("run", "stage", "attempt", "status", "backend · model", "cost ($)")
+    api = client()
+    runs = api.get(f"/work-items/{item_id}/runs")
+    currency = _currency(api)
+    table = Table("run", "stage", "attempt", "status", "backend · model", "cost")
     for run in runs:
         table.add_row(
             run["id"][:12],
@@ -740,7 +757,7 @@ def runs_list(item_id: str) -> None:
             str(run.get("attempt", 1)),
             run["status"],
             f"{run.get('backend') or '—'} · {(run.get('model') or '—').split('/')[-1]}",
-            f"{run.get('cost_usd', 0):.2f}",
+            money.amount(run).text(currency),
         )
     console.print(table)
 

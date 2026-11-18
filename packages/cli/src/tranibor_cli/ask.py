@@ -20,7 +20,7 @@ from typing import Annotated, Any
 
 import typer
 
-from . import theme
+from . import money, theme
 from .client import ApiError, Client, NoOrganisationError
 
 #: The answer's statuses a turn ends with (`AgentResponse.status`).
@@ -212,7 +212,7 @@ def _footer(err: Any, api: Client, cid: str, final: dict[str, Any], pending: lis
     err.print(
         f"conversation {cid} · {int(usage.get('input_tokens') or 0)} in / "
         f"{int(usage.get('output_tokens') or 0)} out tokens · "
-        f"${float(summary.get('cost_usd') or 0):.4f} spent in this conversation",
+        f"{money.amount(summary).text(None, places=4)} spent in this conversation",
         markup=False,
     )
     for action in pending:

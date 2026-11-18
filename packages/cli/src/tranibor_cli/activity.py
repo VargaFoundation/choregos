@@ -29,7 +29,7 @@ from rich.panel import Panel
 from rich.text import Text
 from rich.tree import Tree
 
-from . import theme
+from . import money, theme
 from .client import ApiError, Client, NoOrganisationError
 
 #: The statuses of an entry still in flight (`ActivityEntry.status`).
@@ -153,24 +153,24 @@ def activity(
         board = Board.of(api.get(f"/orgs/{organisation}/activity", params=filters))
         board.read_agents(api, clock())
         today = _today_spend(api, organisation)
+        currency = money.currency_of(api, organisation)
         if not watch:
-            out.print(render(board, organisation, today, out))
+            out.print(render(board, organisation, today, out, currency=currency))
             return
-        _follow(api, organisation, filters, board, today, out)
+        _follow(api, organisation, filters, board, today, out, currency)
     except ApiError as exc:
         main.fail(str(exc))
 
 
-def _today_spend(api: Client, organisation: str) -> float | None:
-    """The organisation's spend today, in USD; `None` for a person who may not read it (a project member)."""
+def _today_spend(api: Client, organisation: str) -> money.Amount | None:
+    """The organisation's spend today, as the report gives it (dollars and euros); `None` for a person who
+    may not read it (a project member)."""
     day = date.today().isoformat()
     try:
         report = api.get(f"/orgs/{organisation}/costs", params={"since": day, "until": day})
     except ApiError:
         return None
-    total = (report or {}).get("total") or {}
-    value = total.get("cost_usd")
-    return float(value) if isinstance(value, int | float) else None
+    return money.amount((report or {}).get("total"))
 
 
 def _follow(
@@ -178,8 +178,9 @@ def _follow(
     organisation: str,
     filters: dict[str, str],
     board: Board,
-    today: float | None,
+    today: money.Amount | None,
     out: Console,
+    currency: str | None = None,
 ) -> None:
     """Apply the stream's events as they come, redrawing at least every second; stop when the stream ends."""
     events: queue.Queue[tuple[str, dict[str, Any]] | BaseException | None] = queue.Queue()
@@ -195,7 +196,9 @@ def _follow(
 
     threading.Thread(target=read, name="choregos-activity-stream", daemon=True).start()
     try:
-        with Live(render(board, organisation, today, out), console=out, auto_refresh=False) as live:
+        with Live(
+            render(board, organisation, today, out, currency=currency), console=out, auto_refresh=False
+        ) as live:
             for item in _drain(events):
                 if item is not None:
                     board.apply(*item)
@@ -222,7 +225,14 @@ def _drain(
         yield item
 
 
-def render(board: Board, organisation: str, today: float | None, out: Console) -> RenderableType:
+def render(
+    board: Board,
+    organisation: str,
+    today: money.Amount | float | None,
+    out: Console,
+    *,
+    currency: str | None = None,
+) -> RenderableType:
     """The tree in its blue frame, what ended below it, the status line last."""
     now = clock()
     parts: list[RenderableType] = [
@@ -237,14 +247,24 @@ def render(board: Board, organisation: str, today: float | None, out: Console) -
         parts.append(
             _tree(list(board.finished.values()), now, out, "", board.agents, label="Ended in the last hour")
         )
-    parts.append(status_line(board, organisation, today))
+    parts.append(status_line(board, organisation, today, currency=currency))
     return Group(*parts)
 
 
-def status_line(board: Board, organisation: str, today: float | None, waiting: int | None = None) -> Text:
-    """`acme · 3 running · 2 waiting for you · $1.24 today`: `waiting` is what `GET /me/pending` lists, "—"
-    where it is not read (`choregos activity` reads no such list)."""
-    spent = DASH if today is None else f"${today:.2f}"
+def status_line(
+    board: Board,
+    organisation: str,
+    today: money.Amount | float | None,
+    waiting: int | None = None,
+    *,
+    currency: str | None = None,
+) -> Text:
+    """`acme · 3 running · 2 waiting for you · €1.24 today`: `waiting` is what `GET /me/pending` lists, "—"
+    where it is not read (`choregos activity` reads no such list). `today` is an `Amount` (the organisation's
+    `currency` picks the figure); a bare number is dollars, as the gateway counts them."""
+    if isinstance(today, int | float):
+        today = money.Amount(usd=float(today))
+    spent = DASH if today is None else today.text(currency)
     count = DASH if waiting is None else str(waiting)
     return Text(f"{organisation} · {board.running()} running · {count} waiting for you · {spent} today")
 
@@ -399,10 +419,11 @@ def _count(tokens: Any) -> str:
 
 
 def spend(value: Any) -> str:
-    """Tokens and cost so far; "—" when the gateway cannot say (ADR 0141 §2): unknown is never shown as 0."""
+    """Tokens and cost so far; "—" when the gateway cannot say (ADR 0141 §2): unknown is never shown as 0.
+    A run's spend is the gateway's, in dollars only: it is printed with its own symbol (no rate is stated)."""
     if not isinstance(value, dict):
         return DASH
     return (
         f"{_count(value.get('tokens_in'))} in / {_count(value.get('tokens_out'))} out · "
-        f"${float(value.get('cost_usd') or 0):.2f}"
+        f"{money.amount(value).text(None)}"
     )
