@@ -117,6 +117,15 @@ spec:
             # The proxy through which an agent pod gets out: the one the provisioning deploys
             # in the runners namespace, with the allowlist of the project's policy.
             # Empty on a bench whose namespace has neither NetworkPolicy nor proxy.
+            # The egress gate (S80-07f): the `k8s_job` pod's first init container. The chart's, never
+            # a connector's: a project cannot turn it off.
+            {{- $gate := $root.Values.runner.egressGate | default dict }}
+            - name: CHOREGOS_RUNNER_EGRESS_GATE
+              value: {{ ne (toString $gate.enabled) "false" | quote }}
+            - name: CHOREGOS_RUNNER_EGRESS_GATE_TARGET
+              value: {{ $gate.target | default "1.1.1.1:443" | quote }}
+            - name: CHOREGOS_RUNNER_EGRESS_GATE_DEADLINE
+              value: {{ $gate.deadlineSeconds | default 30 | quote }}
             - name: CHOREGOS_RUNNER_EGRESS_PROXY
               value: {{ $root.Values.runner.egressProxy | default "" | quote }}
             - name: CHOREGOS_EGRESS_IMAGE

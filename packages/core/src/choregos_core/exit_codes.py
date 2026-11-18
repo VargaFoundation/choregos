@@ -40,6 +40,10 @@ class Exit(IntEnum):
     WORKSPACE_UNSAFE = 110
     #: `CHOREGOS_FAKES` is on and `CHOREGOS_ENV` is staging or prod: the runner does not start (S80-03).
     FAKES_IN_PRODUCTION = 120
+    #: The egress gate (S80-07f): a direct connection out of the pod still succeeded at its deadline,
+    #: so the pod's egress NetworkPolicy is not in force and nothing the agent controls is started.
+    #: The gate's exit, read on its init container (`choregos_core.egress_gate`).
+    EGRESS_OPEN = 115
 
     @property
     def explanation(self) -> str:
@@ -58,6 +62,7 @@ class Exit(IntEnum):
             Exit.AGENT_ISOLATION_UNAVAILABLE: "the agent's own container is required and has no launcher",
             Exit.WORKSPACE_UNSAFE: "a link or a second name in the workspace stands where the runner writes",
             Exit.FAKES_IN_PRODUCTION: "the fakes are on in staging or prod: the runner refuses to start",
+            Exit.EGRESS_OPEN: "the pod still reached the outside directly: its egress policy is not in force",
         }[self]
 
 

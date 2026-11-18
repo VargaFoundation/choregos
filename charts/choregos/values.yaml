@@ -745,6 +745,23 @@ choregos-orchestrator:
       # `agent_sandbox` only: the runner refuses (exit 100) rather than fall back to `process`.
       # Needs Kubernetes >= 1.29 (native sidecar). Roll back by setting `process`.
       agentIsolation: process
+    # The egress gate (S80-07f, ADR 0184 "Amendment: the egress gate"): the FIRST init container of
+    # every pod that runs agent code (the `k8s_job` pod, its hosted agent's sidecar included, and the
+    # `agent_sandbox` template, its ADR 0146 agent container included). It tries a direct TCP
+    # connection to `target`, which the runner pods' egress policy forbids, until it is refused three
+    # times in a row; still open after `deadlineSeconds`, the pod fails (exit 115) and the agent never
+    # starts. Why: k3s's kube-router applies a NEW pod's egress policy 1.2 to 5.2 s after its
+    # containers start (15/15 starts open on k3d, #1854); Cilium applies it before (10/10 closed on
+    # dev), where the gate costs about three connection timeouts (~3 s) per pod. On by default
+    # everywhere: it also turns a cluster that enforces no NetworkPolicy into refused runs rather than
+    # unfenced agents. `target` must accept connections whenever the path is open (a refusal and a
+    # dead host look alike), and a node with no route out passes at once (nothing leaves directly
+    # either). Turn it off only where nothing applies NetworkPolicies on purpose (a laptop's
+    # `values/local.yaml`).
+    egressGate:
+      enabled: true
+      target: "1.1.1.1:443"
+      deadlineSeconds: 30
     # Context reduction (ADR 0055): rtk filters shell output, headroom compresses tool results.
     # `enabled: false` refuses both to every run; `true` lets each project's policy decide, and a
     # policy without `context` reduces nothing.

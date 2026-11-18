@@ -141,7 +141,11 @@ def test_a_warm_sandbox_holds_no_credential() -> None:
         assert forbidden not in text, f"a warm sandbox would carry `{forbidden}` before any assignment"
     runner = pod["containers"][0]
     assert runner["args"][0] == "await-assignment"
-    assert {e["name"]: e["value"] for e in runner["env"]} == {"LOG_FORMAT": "json"}
+    # The egress gate's report path (S80-07f) is a plain value too, and names no secret.
+    assert {e["name"]: e["value"] for e in runner["env"]} == {
+        "LOG_FORMAT": "json",
+        "CHOREGOS_EGRESS_GATE_REPORT": "/egress-gate/report.json",
+    }
 
 
 @needs_helm
@@ -281,13 +285,20 @@ def _pod(*overrides: str) -> dict[str, Any]:
 SEPARATE = "choregos-orchestrator.runner.sandbox.agentIsolation=container"
 
 
+def _agent(pod: dict[str, Any]) -> dict[str, Any]:
+    """The ADR 0146 agent container, behind the egress gate (S80-07f), which comes first."""
+    [agent] = [c for c in pod["initContainers"] if c["name"] == "agent"]
+    return agent
+
+
 @needs_helm
 def test_by_default_the_agent_shares_the_runners_container() -> None:
-    """The rollback: `process` (the default) renders the pod this chart rendered before ADR 0146."""
+    """The rollback: `process` (the default) renders the pod this chart rendered before ADR 0146,
+    with only the egress gate (S80-07f) before the runner."""
     pod = _pod()
-    assert "initContainers" not in pod
+    assert [c["name"] for c in pod["initContainers"]] == ["egress-gate"]
     assert [c["name"] for c in pod["containers"]] == ["runner"]
-    assert "volumes" not in pod
+    assert [v["name"] for v in pod["volumes"]] == ["egress-gate"]
     names = {e["name"] for e in pod["containers"][0].get("env", [])}
     assert "CHOREGOS_RUNNER_AGENT_ISOLATION" not in names
 
@@ -295,7 +306,7 @@ def test_by_default_the_agent_shares_the_runners_container() -> None:
 @needs_helm
 def test_the_separate_agent_is_a_sidecar_with_another_uid_and_no_secret() -> None:
     pod = _pod(SEPARATE, "choregos-orchestrator.runner.envFromSecrets={git-credentials}")
-    [agent] = pod["initContainers"]
+    agent = _agent(pod)
     runner = pod["containers"][0]
     assert agent["name"] == "agent"
     assert agent["restartPolicy"] == "Always", "a native sidecar: Ready before the runner starts"
@@ -321,7 +332,7 @@ def test_the_separate_agent_is_a_sidecar_with_another_uid_and_no_secret() -> Non
 @needs_helm
 def test_the_two_containers_share_the_workspace_and_the_exchange_directory_only() -> None:
     pod = _pod(SEPARATE)
-    [agent] = pod["initContainers"]
+    agent = _agent(pod)
     runner = pod["containers"][0]
     mounts = {c["name"]: {m["name"]: m["mountPath"] for m in c["volumeMounts"]} for c in (agent, runner)}
     shared = set(mounts["agent"]) & set(mounts["runner"])
@@ -349,7 +360,7 @@ def test_an_unknown_isolation_is_refused() -> None:
 @needs_helm
 def test_the_launcher_probe_is_an_exec_inside_the_pod() -> None:
     """The kubelet's TCP probe connects from the node: it cannot reach a loopback listener."""
-    agent = _pod(SEPARATE)["initContainers"][0]
+    agent = _agent(_pod(SEPARATE))
     probe = agent["startupProbe"]
     assert "tcpSocket" not in probe
     assert probe["exec"]["command"][0] == "python"

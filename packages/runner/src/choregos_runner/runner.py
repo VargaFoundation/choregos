@@ -33,6 +33,7 @@ from choregos_contracts import (
 )
 from choregos_core import telemetry
 from choregos_core.context_breakdown import PARTS_EVENT, Hints, register
+from choregos_core.egress_gate import REPORT_EVENT as EGRESS_GATE_EVENT
 from choregos_core.hosted import CONNECT_PORT, MCP_PORT, MODEL_PORT
 from choregos_core.redaction import REDACTED, redact
 from pydantic import ValidationError
@@ -351,7 +352,7 @@ class Runner:
         await journal.record(
             "run.started", {"run_id": stage_input.run_id, "role": stage_input.transition.role}
         )
-        await journal.record("agent.isolation", self.isolation)
+        await self._journal_isolation(journal)
 
         self.tools = await self._start_tools(client, journal, stage_input)
 
@@ -748,6 +749,13 @@ class Runner:
         )
         final = await self._publish(client, journal, workspace, stage_input, final, base, start_ref)
         return RunOutcome(Exit.OK, final, transcript_path=journal.path)
+
+    async def _journal_isolation(self, journal: EventJournal) -> None:
+        """Where the agent runs (ADR 0146 §9), and what the pod's egress gate measured before anything
+        of the run started (S80-07f), when the pod has one."""
+        await journal.record("agent.isolation", self.isolation)
+        if self.settings.egress_gate_report is not None:
+            await journal.record(EGRESS_GATE_EVENT, egress_gate_report(self.settings.egress_gate_report))
 
     async def _isolate(self, journal: EventJournal) -> RunOutcome | None:
         """Where the agent will run, journaled with `run.started`, so before the agent starts
@@ -1736,3 +1744,18 @@ def main_async(settings: RunnerSettings | None = None) -> RunOutcome:
 def _mask(text: str, token: str) -> str:
     """`text` without the run token and without any secret `redact` recognises."""
     return redact(text.replace(token, REDACTED) if token else text)
+
+
+def egress_gate_report(path: Path) -> dict[str, Any]:
+    """What the pod's egress gate measured (S80-07f), as it wrote it; or why it cannot be read.
+
+    The gate exited 0, or the runner would not be running: the report says how long the pod waited
+    for its egress policy, and how many direct connections got out before it held."""
+    try:
+        report = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        return {"error": f"report unreadable: {exc}"[:300]}
+    if not isinstance(report, dict):
+        return {"error": "report is not an object"}
+    report.pop("event", None)
+    return report

@@ -32,10 +32,12 @@ from choregos_core.domain import (
     ExecStatus,
     StageJobSpec,
 )
+from choregos_core.egress_gate import EgressGate
 from choregos_core.exit_codes import explanation
 from choregos_core.hosted import SHARED_WORKSPACE_AGENT, SHARED_WORKSPACE_RUNNER, native_sidecars_refusal
 
 from ..errors import UnsupportedClusterError
+from . import egress_gate
 from .tekton import (
     CORE_API,
     GATEWAY_KEY_FIELD,
@@ -60,7 +62,7 @@ class KubernetesJobExecutor:
     # assumed is what will allow plugging in another one without breaking anything.
     capabilities = frozenset({"queue", "renew"})
 
-    def __init__(
+    def __init__(  # noqa: PLR0913 - one option per deployment knob
         self,
         client: KubernetesClient | None = None,
         *,
@@ -71,6 +73,7 @@ class KubernetesJobExecutor:
         env_from_secrets: list[str] | None = None,
         max_active: int = 0,
         image_pull_secrets: list[str] | None = None,
+        egress_gate: EgressGate | None = None,
     ) -> None:
         self.client = client or KubernetesClient()
         self.service_account = service_account
@@ -92,6 +95,10 @@ class KubernetesJobExecutor:
         #: The API server's `/version`, read once: a cluster is not upgraded under a running worker
         #: often enough to read it at every start (S41-16).
         self._server_version: dict[str, Any] | None = None
+        #: The egress gate (S80-07f): the pod's first init container, which lets nothing of the agent's
+        #: start until a direct connection out is refused. `None`: no gate (the chart's
+        #: `runner.egressGate.enabled: false`, or a caller that says nothing).
+        self.egress_gate = egress_gate
 
     async def server_version(self) -> dict[str, Any]:
         """The API server's `/version` body, read at the first call and kept. A failed read raises
@@ -326,6 +333,10 @@ class KubernetesJobExecutor:
             pod_spec["imagePullSecrets"] = [{"name": name} for name in self.image_pull_secrets]
         if spec.agent_container is not None:
             self._add_agent_container(pod_spec, spec.agent_container)
+        if self.egress_gate is not None:
+            # Last, so that it lands FIRST: before the hosted agent's sidecar, which starts before
+            # the runner and runs the author's code from its first instant (#1854).
+            egress_gate.add_to_pod(pod_spec, spec.runner_image, self.egress_gate)
         return {
             "apiVersion": "batch/v1",
             "kind": "Job",
@@ -375,7 +386,7 @@ class KubernetesJobExecutor:
                     "readOnly": agent.workspace == "read",
                 }
             )
-        pod_spec["initContainers"] = [
+        pod_spec.setdefault("initContainers", []).append(
             {
                 "name": AGENT_CONTAINER,
                 "image": agent.image,
@@ -394,7 +405,7 @@ class KubernetesJobExecutor:
                     "seccompProfile": {"type": "RuntimeDefault"},
                 },
             }
-        ]
+        )
         # The cluster's services are not announced to the container as variables.
         pod_spec["enableServiceLinks"] = False
         pod_spec["terminationGracePeriodSeconds"] = agent.termination_grace_s
@@ -480,6 +491,9 @@ class KubernetesJobExecutor:
         )
         if not items:
             return None, "no pod for the run: refused at admission, or already deleted"
+        gate = egress_gate.gate_failure(items[-1])
+        if gate is not None:
+            return gate
         states = (items[-1].get("status") or {}).get("containerStatuses") or []
         container = next((c for c in states if c.get("name") == "runner"), states[0] if states else None)
         if container is None:
@@ -512,6 +526,9 @@ class KubernetesJobExecutor:
         )
         if not items:
             return None
+        if egress_gate.gate_failure(items[-1]) is not None:
+            # The runner never started (`PodInitializing`): the gate is what ended the pod.
+            return egress_gate.GATE_REASON
         statuses = (items[-1].get("status") or {}).get("containerStatuses") or []
         container = next(
             (c for c in statuses if c.get("name") == "runner"), statuses[0] if statuses else None
