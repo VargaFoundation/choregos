@@ -9,7 +9,7 @@ import pytest
 from httpx import AsyncClient
 from tranibor_adapters.fakes.batch import FakeBatches
 
-from .test_knowledge_distillation_ops import _ledger, _set_record
+from .kits.distillation_ledger import _ledger, _set_record
 from .test_knowledge_distillation_passes import FOUR, _base, _price
 
 KEY = ("northwind", "admin@northwind.dev")

@@ -2659,11 +2659,12 @@ parts is refused with its biggest documents. Each call is kept by the digest of 
 costs nothing, and distilling again after one document changed pays for that document's part only. A
 distillation that shows `running` with no progress for 30 minutes no longer blocks a new one.
 
-Batch mode (S4-09, ADR 0190, off by default): with `CHOREGOS_KNOWLEDGE_DISTILL_BATCH=true`, a provider key
-(`..._BATCH_API_KEY`) and the model the gateway alias resolves to (`..._BATCH_MODEL`), the map step goes to
-the provider's batch API as one batch at half the price and the run ends within a day (polled every
-`..._BATCH_POLL_SECONDS`, 120). The estimate is halved, each part is booked at half its price, and a part the
-batch cannot answer, or a provider that refuses it, falls back to the synchronous call.
+Batch mode (S4-09, ADR 0190, off by default): with `CHOREGOS_KNOWLEDGE_DISTILL_BATCH=true` the map step goes
+through the gateway's OpenAI-compatible batch API (same gateway URL, key and alias as the synchronous call) as one
+batch at half the price, and the run ends within a day (polled every `..._BATCH_POLL_SECONDS`, 120). It needs an
+upstream that serves batches for `platform/standard` (OpenAI-backed aliases do) and a gateway whose managed-files
+hook is on. The estimate is halved, each part is booked at half its price, and a part the batch cannot answer, or a
+gateway or upstream that refuses it, falls back to the synchronous call.
 
 A distillation is a job (S42-10d, ADR 0092). **Stop** (`POST …/distill/stop`) marks the run `stopped`
 at once, names who stopped it and cancels its workflow: the call in flight finishes and is booked,

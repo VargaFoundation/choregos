@@ -1,4 +1,4 @@
-"""The batch adapters (S4-09, ADR 0190): the Anthropic wire, and the fake that stands for it."""
+"""The batch adapters (S4-09, ADR 0190): the gateway's OpenAI-shaped wire, and the fake that stands for it."""
 
 from __future__ import annotations
 
@@ -6,96 +6,107 @@ import json
 
 import httpx
 import pytest
-from tranibor_adapters.batch import AnthropicBatches, BatchError, BatchRequest, json_text
+from tranibor_adapters.batch import BatchError, BatchRequest, GatewayBatches, json_text
 from tranibor_adapters.fakes.batch import FakeBatches
 
 REQUESTS = [
     BatchRequest("part-0", "sys", "=== DOCUMENT: a.md | A ===\nx", 100),
     BatchRequest("part-1", "s", "u", 5),
 ]
+BATCH = {
+    "id": "batch_1",
+    "status": "completed",
+    "output_file_id": "file_out",
+    "error_file_id": "file_err",
+    "request_counts": {"total": 2, "completed": 1, "failed": 1},
+}
 
 
-def backend(
-    handler: httpx.MockTransport | None = None, seen: list[httpx.Request] | None = None
-) -> AnthropicBatches:
+def ok(custom_id: str, text: str) -> dict:
+    body = {
+        "choices": [{"message": {"content": text}}],
+        "usage": {"prompt_tokens": 10, "completion_tokens": 4},
+    }
+    return {"custom_id": custom_id, "response": {"status_code": 200, "body": body}, "error": None}
+
+
+def backend(seen: list[httpx.Request] | None = None, batch: dict | None = None) -> GatewayBatches:
     def reply(request: httpx.Request) -> httpx.Response:
         if seen is not None:
             seen.append(request)
         path = request.url.path
-        if request.method == "POST" and path == "/v1/messages/batches":
-            return httpx.Response(200, json={"id": "msgbatch_1", "processing_status": "in_progress"})
-        if path.endswith("/results"):
-            lines = [
-                {
-                    "custom_id": "part-1",
-                    "result": {"type": "errored", "error": {"error": {"message": "overloaded"}}},
-                },
-                {
-                    "custom_id": "part-0",
-                    "result": {
-                        "type": "succeeded",
-                        "message": {
-                            "content": [{"type": "text", "text": '{"principles": []}'}],
-                            "usage": {"input_tokens": 10, "output_tokens": 4, "cache_read_input_tokens": 3},
-                        },
-                    },
-                },
-            ]
-            return httpx.Response(200, text="\n".join(json.dumps(x) for x in lines) + "\n")
+        if request.method == "POST" and path == "/v1/files":
+            return httpx.Response(200, json={"id": "file_in"})
+        if request.method == "POST" and path == "/v1/batches":
+            return httpx.Response(200, json={"id": "batch_1", "status": "validating"})
+        if path == "/v1/files/file_out/content":
+            return httpx.Response(200, text=json.dumps(ok("part-0", '{"principles": []}')) + "\n")
+        if path == "/v1/files/file_err/content":
+            row = {"custom_id": "part-1", "response": None, "error": {"code": "x", "message": "overloaded"}}
+            return httpx.Response(200, text=json.dumps(row) + "\n")
         if path.endswith("/cancel"):
-            return httpx.Response(200, json={"id": "msgbatch_1"})
-        return httpx.Response(
-            200, json={"id": "msgbatch_1", "processing_status": "ended", "request_counts": {"succeeded": 1}}
-        )
+            return httpx.Response(200, json={"id": "batch_1", "status": "cancelling"})
+        return httpx.Response(200, json=batch or BATCH)
 
-    return AnthropicBatches("sk-test", transport=handler or httpx.MockTransport(reply))
+    return GatewayBatches("http://gw/", "sk-run", transport=httpx.MockTransport(reply))
 
 
-async def test_submit_sends_one_request_per_custom_id_with_the_key_and_version() -> None:
+async def test_submit_uploads_the_alias_rows_then_creates_the_batch_with_the_gateway_key() -> None:
     seen: list[httpx.Request] = []
-    batch_id = await backend(seen=seen).submit("claude-x", REQUESTS)
-    assert batch_id == "msgbatch_1"
-    request = seen[0]
-    assert request.headers["x-api-key"] == "sk-test" and request.headers["anthropic-version"] == "2023-06-01"
-    body = json.loads(request.content)
-    assert [r["custom_id"] for r in body["requests"]] == ["part-0", "part-1"]
-    first = body["requests"][0]["params"]
-    assert first["model"] == "claude-x" and first["max_tokens"] == 100 and first["system"] == "sys"
-    assert first["messages"] == [{"role": "user", "content": REQUESTS[0].user}]
+    batch_id = await backend(seen=seen).submit("platform/standard", REQUESTS)
+    assert batch_id == "batch_1"
+    upload, create = seen
+    assert upload.headers["authorization"] == "Bearer sk-run" and str(upload.url) == "http://gw/v1/files"
+    content = upload.content.decode()
+    assert 'name="purpose"' in content and "batch" in content
+    assert 'name="target_model_names"' in content and "platform/standard" in content
+    rows = [json.loads(line) for line in content.splitlines() if line.startswith('{"custom_id"')]
+    assert [r["custom_id"] for r in rows] == ["part-0", "part-1"]
+    assert rows[0]["method"] == "POST" and rows[0]["url"] == "/v1/chat/completions"
+    assert rows[0]["body"]["model"] == "platform/standard" and rows[0]["body"]["max_tokens"] == 100
+    assert rows[0]["body"]["messages"][0] == {"role": "system", "content": "sys"}
+    assert json.loads(create.content) == {
+        "input_file_id": "file_in",
+        "endpoint": "/v1/chat/completions",
+        "completion_window": "24h",
+    }
 
 
-async def test_poll_reads_the_processing_status() -> None:
-    status = await backend().poll("msgbatch_1")
-    assert status.state == "ended" and status.counts == {"succeeded": 1}
-    pending = httpx.MockTransport(lambda r: httpx.Response(200, json={"processing_status": "in_progress"}))
-    assert (await backend(pending).poll("msgbatch_1")).state == "in_progress"
+async def test_poll_ends_on_a_terminal_status_and_waits_for_the_output_file() -> None:
+    assert (await backend().poll("batch_1")).state == "ended"
+    assert (await backend(batch={"status": "in_progress"}).poll("b")).state == "in_progress"
+    no_output = {"status": "completed", "request_counts": {"total": 1, "completed": 1}}
+    assert (await backend(batch=no_output).poll("b")).state == "in_progress"
+    all_failed = {"status": "completed", "request_counts": {"total": 1, "completed": 0, "failed": 1}}
+    assert (await backend(batch=all_failed).poll("b")).state == "ended"
+    assert (await backend(batch={"status": "failed"}).poll("b")).state == "ended"
 
 
-async def test_results_come_keyed_by_custom_id_in_whatever_order_the_provider_chose() -> None:
-    results = {r.custom_id: r for r in await backend().results("msgbatch_1")}
+async def test_results_come_keyed_by_custom_id_from_the_output_and_the_error_file() -> None:
+    results = {r.custom_id: r for r in await backend().results("batch_1")}
     assert results["part-0"].status == "succeeded" and results["part-0"].text == '{"principles": []}'
-    assert (
-        results["part-0"].usage["input_tokens"] == 10
-        and results["part-0"].usage["cache_read_input_tokens"] == 3
-    )
+    assert results["part-0"].usage == {"input_tokens": 10, "output_tokens": 4}
     assert results["part-1"].status == "errored" and results["part-1"].error == "overloaded"
+    assert await backend(batch={"status": "failed"}).results("b") == []
 
 
 async def test_a_refusal_and_a_missing_key_are_batch_errors() -> None:
-    refusing = httpx.MockTransport(lambda r: httpx.Response(400, json={"error": "bad"}))
+    refusing = GatewayBatches(
+        "http://gw", "k", transport=httpx.MockTransport(lambda r: httpx.Response(400, json={"error": "bad"}))
+    )
     with pytest.raises(BatchError) as caught:
-        await backend(refusing).submit("m", REQUESTS)
+        await refusing.submit("m", REQUESTS)
     assert caught.value.status == 400
-    with pytest.raises(BatchError, match="no Anthropic API key"):
-        await AnthropicBatches("").poll("x")
+    with pytest.raises(BatchError, match="no gateway key"):
+        await GatewayBatches("http://gw", "").poll("x")
     with pytest.raises(BatchError, match="1 to"):
         await backend().submit("m", [])
 
 
 async def test_cancel_posts_to_the_cancel_endpoint() -> None:
     seen: list[httpx.Request] = []
-    await backend(seen=seen).cancel("msgbatch_1")
-    assert (seen[0].method, seen[0].url.path) == ("POST", "/v1/messages/batches/msgbatch_1/cancel")
+    await backend(seen=seen).cancel("batch_1")
+    assert (seen[0].method, seen[0].url.path) == ("POST", "/v1/batches/batch_1/cancel")
 
 
 def test_json_text_takes_the_object_with_or_without_a_fence_and_refuses_the_rest() -> None:

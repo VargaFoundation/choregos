@@ -43,10 +43,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import undefer
 from tranibor_adapters.batch import (
     DISCOUNT,
-    AnthropicBatches,
     BatchBackend,
     BatchError,
     BatchRequest,
+    GatewayBatches,
     json_text,
 )
 from tranibor_adapters.fakes.batch import FakeBatches
@@ -956,7 +956,7 @@ async def step_part(
 
 # ------------------------------------------------------------------- the map step, in a batch (S4-09)
 #
-# Nobody waits on a distillation: its parts go to the provider's batch API as ONE batch (half the
+# Nobody waits on a distillation: its parts go to the gateway's batch API as ONE batch (half the
 # price on every token), polled until it ends. The batch id is kept in the base's `distillation`
 # record (`batch`), so a restart resumes the poll instead of submitting again; results are mapped
 # back by `custom_id`, never by position; each part is stored by its digest like a synchronous one, so
@@ -969,18 +969,17 @@ MAX_BATCH_WAIT_S = 26 * 3600
 
 
 def get_batch_backend(settings: Settings | None = None) -> tuple[BatchBackend, str] | None:
-    """The batch provider and its model, or `None` (off, or not configured): the synchronous path."""
+    """The batch backend and the alias it asks, or `None` (off, or no gateway key): the synchronous path.
+
+    The same gateway, key and alias as `get_distiller`: a batch is one more way to call the model."""
     settings = settings or get_settings()
     if not settings.knowledge_distill_batch:
         return None
     if settings.fakes:
-        return FAKE_BATCHES, settings.knowledge_distill_batch_model or "fake/batch"
-    if not settings.knowledge_distill_batch_api_key or not settings.knowledge_distill_batch_model:
+        return FAKE_BATCHES, distiller_model(settings)
+    if not settings.gateway_master_key:
         return None
-    backend = AnthropicBatches(
-        settings.knowledge_distill_batch_api_key, base_url=settings.knowledge_distill_batch_base_url
-    )
-    return backend, settings.knowledge_distill_batch_model
+    return GatewayBatches(settings.gateway_url, settings.gateway_master_key), distiller_model(settings)
 
 
 def _batchable(loaded: Loaded) -> tuple[BatchBackend, str] | None:

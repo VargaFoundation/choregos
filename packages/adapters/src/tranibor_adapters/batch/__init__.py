@@ -1,9 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Batch model APIs (S4-09, ADR 0190): the providers' 50 %-off asynchronous endpoints."""
+"""Batch model APIs (S4-09, ADR 0190): the gateway's 50 %-off asynchronous endpoints."""
 
 from __future__ import annotations
 
-from .anthropic import AnthropicBatches
 from .base import (
     DISCOUNT,
     BatchBackend,
@@ -13,14 +12,15 @@ from .base import (
     BatchStatus,
     json_text,
 )
+from .gateway import GatewayBatches
 
 __all__ = [
     "DISCOUNT",
-    "AnthropicBatches",
     "BatchBackend",
     "BatchError",
     "BatchRequest",
     "BatchResult",
     "BatchStatus",
+    "GatewayBatches",
     "json_text",
 ]
