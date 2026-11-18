@@ -104,7 +104,7 @@ describe("an index base (S33-03)", () => {
         ],
       },
     };
-    render(<KnowledgeIndex org="varga" base={measured} onChange={vi.fn()} />);
+    render(<KnowledgeIndex org="northwind" base={measured} onChange={vi.fn()} />);
     const recall = screen.getByTestId("knowledge-recall");
     expect(recall).toHaveTextContent("first hit right: 50 %");
     expect(recall).toHaveTextContent("right section: 25 %");

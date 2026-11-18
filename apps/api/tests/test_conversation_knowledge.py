@@ -185,7 +185,7 @@ async def test_a_long_document_ends_with_its_outline_and_one_section_is_read_by_
     upstream.model.call("knowledge_get", get).call("knowledge_get", {**get, "section": "1.2.1"}).call(
         "knowledge_get", {**get, "section": "coach-policies.md > Refund handbook > Delays > Damaged goods"}
     ).call("knowledge_get", {**get, "section": "Shipping"}).say("ok")
-    conversation = await _open("varga", admin, installation_id=ids["installation"])
+    conversation = await _open("northwind", admin, installation_id=ids["installation"])
     assert (await _say(client, conversation, "how long is a refund?")).status_code == 200
     whole, returns, damaged, unknown = _tool_results(upstream)
     # Read as it is served, with its OKF header (ADR 0174): longer than the markdown stored.

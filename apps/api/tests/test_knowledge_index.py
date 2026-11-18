@@ -467,8 +467,8 @@ async def test_a_run_reads_a_cited_document_by_section_and_only_from_its_bases(
     assert elsewhere.status_code == 404
     assert (await read(document_id="nope")).status_code == 404
     await client.post(
-        "/api/v1/orgs/varga/projects",
-        json={"slug": "web", "name": "Web", "config": {"slug": "web", "org": "varga"}},
+        "/api/v1/orgs/northwind/projects",
+        json={"slug": "web", "name": "Web", "config": {"slug": "web", "org": "northwind"}},
     )
     await client.patch(f"{BASE}/framework", json={"scope": "projects", "projects": ["web"]})
     assert (await read(document_id=hit["document_id"])).status_code == 404, "no longer served: not read"
