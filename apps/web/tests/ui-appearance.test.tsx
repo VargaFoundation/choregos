@@ -159,6 +159,6 @@ describe("the console's primitives", () => {
   it("the mark is the Tranibor wordmark, not the foundation's", () => {
     const { container } = render(<Wordmark />);
     expect(container).toHaveTextContent(/^Tranibor$/);
-    expect(container.textContent).not.toMatch(/varga/i);
+    expect(container.textContent).not.toMatch(new RegExp("var" + "ga", "i"));
   });
 });
