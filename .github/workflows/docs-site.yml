@@ -1,0 +1,71 @@
+name: Documentation site
+
+# The public documentation (`docs/site/`) is built with Docusaurus (`website/`) and published on GitHub
+# Pages of this repository: https://graalsystems.github.io/tranibor/ (ADR 0185). A pull request that
+# touches the pages or the site builds it, to prove it; a push to main and a release publish it.
+
+on:
+  pull_request:
+    paths:
+      - "docs/site/**"
+      - "website/**"
+      - ".github/workflows/docs-site.yml"
+  push:
+    branches: [main]
+    paths:
+      - "docs/site/**"
+      - "website/**"
+      - ".github/workflows/docs-site.yml"
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-site-${{ github.event_name == 'pull_request' && github.ref || 'pages' }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: website
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+      - run: npm ci
+      - name: Test the copy of the pages
+        run: npm test
+      - name: Copy docs/site, rewriting the links that leave it to GitHub
+        env:
+          REF: ${{ github.event_name == 'release' && github.event.release.tag_name || github.sha }}
+        run: node scripts/import-docs.mjs --source .. --ref "$REF"
+      - name: Build
+        run: npm run build
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+        if: github.event_name != 'pull_request'
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        if: github.event_name != 'pull_request'
+        with:
+          path: website/build
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

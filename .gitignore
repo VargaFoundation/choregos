@@ -58,3 +58,7 @@ choregos.db-wal
 
 # test_confinement.py: a directory outside $TMPDIR, removed by the test, left only if it is killed
 .confinement-*/
+
+# The documentation site (ADR 0181): `website/docs/` is copied from `docs/site/` at build time.
+website/docs/
+website/.docusaurus/

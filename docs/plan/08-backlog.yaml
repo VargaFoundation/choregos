@@ -5465,3 +5465,11 @@ stories:
     size: S
     depends_on: []
     notes: "Plan workstream S5, phase 1. Every uses: at a 40-character SHA with its version in a comment, every FROM / COPY --from / compose / CI service / docker run / kind image at tag@sha256:<index digest>, the runner's npm and pnpm at exact versions; Dependabot extended to the new pins. Not done (later phases): a signed chart, a release blocked on HIGH, SAST."
+  - id: S80-09
+    title: "docs: the documentation site is built from this repository and published on GitHub Pages of graalsystems/tranibor (ADR 0185)"
+    stream: S80
+    sprint: 1
+    priority: 2
+    size: M
+    depends_on: []
+    notes: "Decision of 2026-11-18: the products no longer depend on the Varga Foundation. website/ (Docusaurus) copies docs/site/ and rewrites its outside links to GitHub; docs-site.yml builds on pull requests and publishes from main and releases to https://graalsystems.github.io/tranibor/; publishing.json documentation follows. Guarded by tests/docs/test_docs_site_pipeline.py."

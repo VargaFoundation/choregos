@@ -3,7 +3,7 @@
   "owner": "graalsystems",
   "registry": "ghcr.io/graalsystems",
   "source_repository": "https://github.com/graalsystems/tranibor",
-  "documentation": "https://docs.varga.foundation/choregos",
+  "documentation": "https://graalsystems.github.io/tranibor",
   "security_contact": "security@varga.foundation",
   "commit_email": "choregos-bot@varga.foundation",
   "plugin_repository": "https://github.com/VargaFoundation/choregos-agents",
