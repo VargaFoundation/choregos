@@ -6,12 +6,15 @@ from __future__ import annotations
 import json
 import os
 import platform
+import shutil
+import subprocess
 import sys
 import webbrowser
 from pathlib import Path
 from typing import Annotated, Any
 from urllib.parse import urlsplit
 
+import click
 import httpx
 import typer
 from rich.console import Console
@@ -91,6 +94,12 @@ def _root(
             "--no-color", help="No colour, as `NO_COLOR` does: glyphs and words carry every status."
         ),
     ] = False,
+    org: Annotated[
+        str | None,
+        typer.Option(
+            "--org", help="The organisation the bare `choregos` workspace opens on (the profile's otherwise)."
+        ),
+    ] = None,
 ) -> None:
     """Options of `choregos` itself, before any command."""
     if no_color:
@@ -99,7 +108,7 @@ def _root(
         # A bare `choregos` (ADR 0154 §3): the workspace in a terminal, the help anywhere else, so that no
         # script which pipes it changes behaviour.
         if chat_module.interactive():
-            chat_module.open_workspace()
+            chat_module.open_workspace(org=org)
         else:
             typer.echo(ctx.get_help())
         raise typer.Exit()
@@ -210,6 +219,8 @@ def login(
     one: get it from the console, under My account, then pass it with `--token`).
     """
     api_url = api_url or _known_instance() or typer.prompt("Instance address (https://…)")
+    # Signing in again to the same instance keeps the organisation chosen the first time.
+    org = org or _saved_organisation(api_url)
     if token:
         profile = Profile(api_url=api_url, token=token, org=org)
     else:
@@ -231,7 +242,12 @@ def login(
     except ApiError as exc:
         fail(f"sign-in refused: {exc}")
         return
-    console.print(f"[green]✓[/green] signed in as {me['email']} — profile written to {path}")
+    if not profile.org:
+        profile.org = _choose_organisation(TransportSafeClient(profile))
+        if profile.org:
+            path = profile.save()
+    where = f" in [bold]{profile.org}[/bold]" if profile.org else ""
+    console.print(f"[green]✓[/green] signed in as {me['email']}{where} — profile written to {path}")
 
 
 def _device_sign_in(profile: Profile, *, org: str | None, fresh: bool, open_browser: bool) -> str:
@@ -252,6 +268,33 @@ def _device_sign_in(profile: Profile, *, org: str | None, fresh: bool, open_brow
     return str(session["access_token"])
 
 
+def _saved_organisation(api_url: str) -> str:
+    """The organisation the profile already holds for this instance; "" for another instance or none."""
+    if not client_module.CONFIG_PATH.exists():
+        return ""
+    saved = Profile.load()
+    return saved.org if saved.api_url.rstrip("/") == api_url.rstrip("/") else ""
+
+
+def _choose_organisation(http: Client) -> str:
+    """The person's only organisation, or the one they pick in a terminal; "" when it cannot be decided."""
+    try:
+        slugs = [str(org["slug"]) for org in http.get("/orgs")]
+    except ApiError:
+        return ""
+    if len(slugs) <= 1:
+        return slugs[0] if slugs else ""
+    if chat_module.interactive():
+        console.print("Your organisations: " + ", ".join(slugs))
+        chosen: str = typer.prompt("Default organisation", default=slugs[0], type=click.Choice(slugs))
+        return chosen
+    console.print(
+        f"[yellow]![/yellow] you belong to {len(slugs)} organisations ({', '.join(slugs)}): "
+        "save one with `choregos login --org <slug>`"
+    )
+    return ""
+
+
 def _known_instance() -> str:
     """The instance this CLI already talks to: the saved profile's, else `CHOREGOS_API_URL`; "" when none."""
     if client_module.CONFIG_PATH.exists():
@@ -265,14 +308,28 @@ def _browser_reachable() -> bool:
     if os.environ.get("SSH_CONNECTION") or os.environ.get("SSH_TTY"):
         return False
     if sys.platform.startswith("linux"):
-        wsl = "microsoft" in platform.release().lower()
-        return wsl or bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+        return _wsl() or bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
     return True
 
 
+def _wsl() -> bool:
+    return sys.platform.startswith("linux") and "microsoft" in platform.release().lower()
+
+
 def _open(url: str) -> bool:
-    """Ask the system to open `url`; False when it could not (then the link is all the person gets)."""
+    """Ask the system to open `url`; False when it could not (then the link is all the person gets).
+
+    Under WSL the Windows browser is started directly, its output discarded: through `webbrowser`, the
+    interop of a detached Windows program printed `tcgetpgrp failed: Not a tty` in the middle of the sign-in.
+    """
     try:
+        if _wsl():
+            wslview = shutil.which("wslview")
+            command = [wslview, url] if wslview else ["rundll32.exe", "url.dll,FileProtocolHandler", url]
+            subprocess.Popen(  # noqa: S603 — a fixed program and the console's own link
+                command, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            )
+            return True
         return bool(webbrowser.open(url))
     except Exception:  # a broken browser setup must not stop the sign-in
         return False

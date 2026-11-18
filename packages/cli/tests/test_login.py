@@ -99,6 +99,7 @@ def test_login_fresh_asks_the_console_for_a_recent_sign_in(profile: Path, contra
     respx.post(f"{API}/api/v1/auth/device").mock(return_value=Response(200, json=_codes(contract)))
     respx.post(f"{API}/api/v1/auth/device/token").mock(return_value=_session(contract))
     respx.get(f"{API}/api/v1/me").mock(return_value=Response(200, json={"email": "v@example.test"}))
+    respx.get(f"{API}/api/v1/orgs").mock(return_value=Response(200, json=[]))
     result = _run("login", "--api-url", API, "--fresh", "--no-browser")
     assert result.exit_code == 0, result.output
     assert "user_code=BCDF-GH23&fresh=1" in result.output.replace("\n", "")
@@ -117,6 +118,7 @@ def test_login_slow_down_lengthens_the_wait(
         side_effect=[_error("slow_down", interval=10), _error("authorization_pending"), _session(contract)]
     )
     respx.get(f"{API}/api/v1/me").mock(return_value=Response(200, json={"email": "v@example.test"}))
+    respx.get(f"{API}/api/v1/orgs").mock(return_value=Response(200, json=[]))
     assert _run("login", "--api-url", API, "--no-browser").exit_code == 0
     assert waits == [5.0, 10.0, 10.0]
 
@@ -155,6 +157,7 @@ def test_login_gives_up_when_the_code_expires_unanswered(
 @respx.mock
 def test_login_with_a_token_keeps_the_old_path(profile: Path) -> None:
     respx.get(f"{API}/api/v1/me").mock(return_value=Response(200, json={"email": "v@example.test"}))
+    respx.get(f"{API}/api/v1/orgs").mock(return_value=Response(200, json=[]))
     result = _run("login", "--api-url", API, "--token", "chg_x")
     assert result.exit_code == 0, result.output
     assert json.loads(profile.read_text())["token"] == "chg_x"
@@ -190,6 +193,11 @@ def _signs_in(contract: Any) -> None:
     respx.post(f"{API}/api/v1/auth/device").mock(return_value=Response(200, json=_codes(contract)))
     respx.post(f"{API}/api/v1/auth/device/token").mock(return_value=_session(contract))
     respx.get(f"{API}/api/v1/me").mock(return_value=Response(200, json={"email": "v@example.test"}))
+    respx.get(f"{API}/api/v1/orgs").mock(return_value=Response(200, json=[_org("acme")]))
+
+
+def _org(slug: str) -> dict[str, Any]:
+    return {"slug": slug, "name": slug.title(), "role": "member"}
 
 
 @pytest.fixture
@@ -199,6 +207,7 @@ def desktop(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     for name in ("SSH_CONNECTION", "SSH_TTY"):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("DISPLAY", ":0")
+    monkeypatch.setattr("choregos_cli.main._wsl", lambda: False)
     monkeypatch.setattr("webbrowser.open", lambda url: opened.append(url) or True)
     return opened
 
@@ -247,7 +256,83 @@ def test_login_without_an_address_signs_in_to_the_saved_instance(
 ) -> None:
     profile.write_text(json.dumps({"api_url": API, "token": "", "org": "acme"}))
     _signs_in(contract)
+    respx.get(f"{API}/api/v1/orgs").mock(return_value=Response(200, json=[_org("globex"), _org("acme")]))
     result = _run("login")
     assert result.exit_code == 0, result.output
     assert "Instance address" not in result.output, "a known instance is not asked again"
-    assert json.loads(profile.read_text())["api_url"] == API
+    saved = json.loads(profile.read_text())
+    assert saved["api_url"] == API
+    assert saved["org"] == "acme", "signing in again keeps the organisation chosen the first time"
+
+
+@respx.mock
+def test_login_saves_the_only_organisation_of_the_person(
+    profile: Path, contract: Any, desktop: list[str]
+) -> None:
+    _signs_in(contract)
+    result = _run("login", "--api-url", API)
+    assert result.exit_code == 0, result.output
+    assert json.loads(profile.read_text())["org"] == "acme"
+    assert "signed in as v@example.test in acme" in " ".join(result.output.split())
+
+
+@respx.mock
+def test_login_names_the_organisations_it_cannot_choose_between(
+    profile: Path, contract: Any, desktop: list[str]
+) -> None:
+    _signs_in(contract)
+    respx.get(f"{API}/api/v1/orgs").mock(return_value=Response(200, json=[_org("acme"), _org("globex")]))
+    result = _run("login", "--api-url", API)
+    assert result.exit_code == 0, result.output
+    assert json.loads(profile.read_text())["org"] == "", "no organisation is picked for the person"
+    said = " ".join(result.output.split())
+    assert "acme, globex" in said and "choregos login --org <slug>" in said
+
+
+@respx.mock
+def test_login_asks_which_organisation_in_a_terminal(
+    profile: Path, contract: Any, desktop: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("choregos_cli.chat.interactive", lambda: True)
+    _signs_in(contract)
+    respx.get(f"{API}/api/v1/orgs").mock(return_value=Response(200, json=[_org("acme"), _org("globex")]))
+    from choregos_cli.main import app
+
+    result = CliRunner().invoke(app, ["login", "--api-url", API], input="globex\n")
+    assert result.exit_code == 0, result.output
+    assert json.loads(profile.read_text())["org"] == "globex"
+
+
+@respx.mock
+def test_login_under_wsl_starts_the_windows_browser_and_hides_its_output(
+    profile: Path, contract: Any, desktop: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import subprocess
+
+    started: list[tuple[list[str], dict[str, Any]]] = []
+    monkeypatch.setattr("choregos_cli.main._wsl", lambda: True)
+    monkeypatch.setattr("choregos_cli.main.shutil.which", lambda _name: None)
+    monkeypatch.setattr("choregos_cli.main.subprocess.Popen", lambda cmd, **kw: started.append((cmd, kw)))
+    _signs_in(contract)
+    result = _run("login", "--api-url", API)
+    assert result.exit_code == 0, result.output
+    assert desktop == [], "webbrowser is not used under WSL"
+    ((command, options),) = started
+    assert command == [
+        "rundll32.exe",
+        "url.dll,FileProtocolHandler",
+        "http://console.test/device?user_code=BCDF-GH23",
+    ]
+    assert options["stdout"] is options["stderr"] is subprocess.DEVNULL, (
+        "nothing of the browser reaches the screen"
+    )
+    assert "Opening your browser" in result.output
+
+
+def test_a_bare_choregos_takes_the_organisation_of_its_workspace(monkeypatch: pytest.MonkeyPatch) -> None:
+    opened: list[str | None] = []
+    monkeypatch.setattr("choregos_cli.chat.interactive", lambda: True)
+    monkeypatch.setattr("choregos_cli.chat.open_workspace", lambda *, org=None: opened.append(org))
+    result = _run("--org", "diametral")
+    assert result.exit_code == 0, result.output
+    assert opened == ["diametral"]
