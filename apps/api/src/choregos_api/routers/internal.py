@@ -63,7 +63,12 @@ from ..schemas import (
     ScopeChangeDecision,
     ScopeChangeRequestIn,
 )
-from ..schemas.knowledge import KnowledgeSearchRequest, KnowledgeSearchResult
+from ..schemas.knowledge import (
+    KnowledgeReading,
+    KnowledgeReadRequest,
+    KnowledgeSearchRequest,
+    KnowledgeSearchResult,
+)
 from ..schemas.memory import RunMemoryHit, RunMemorySearch
 from ..schemas.network import EgressToken, NetworkDecisionBatch, RunNetwork
 from ..services import (
@@ -739,6 +744,77 @@ async def search_knowledge(
     result = await search(session, bases, body.query, k=body.k)
     return KnowledgeSearchResult.model_validate(
         {"mode": result.mode, "hits": [asdict(h) for h in result.hits]}
+    )
+
+
+@router.post(
+    "/runs/{id}/knowledge/read",
+    response_model=KnowledgeReading,
+    operation_id="readRunKnowledge",
+)
+async def read_knowledge(
+    id: str, body: KnowledgeReadRequest, session: Db, claims: OpenRunAuth
+) -> KnowledgeReading:
+    """`knowledge_read` of the sidecar (ADR 0051 decision 33): one document of an `index` base the run's
+    `StageInput` names, whole or one section, under the same reach as `knowledge_search` — served to the
+    run's project and, when restricted, readable by the person the run acts for (ADR 0097). Anything else
+    is 404, the same answer as a document that does not exist."""
+    from sqlalchemy.orm import undefer
+
+    from ..db.models import KnowledgeBase, KnowledgeDocument
+    from ..knowledge import okf
+    from ..knowledge.on_behalf import OnBehalf
+    from ..knowledge.reading import read
+
+    run, item, project = await _run_and_item(session, id)
+    named = {
+        str(ref.get("slug"))
+        for ref in (run.stage_input or {}).get("knowledge", [])
+        if ref.get("mode") == "index"
+    }
+    base = (
+        (
+            await session.execute(
+                select(KnowledgeBase).where(
+                    KnowledgeBase.org_id == project.org_id, KnowledgeBase.slug == body.knowledge_base
+                )
+            )
+        ).scalar_one_or_none()
+        if body.knowledge_base in named
+        else None
+    )
+    on_behalf = OnBehalf(session, project.org_id, project.id, item.initiated_by)
+    if base is None or await on_behalf.refusal(base, project.slug) is not None:
+        raise not_found("Knowledge base of the run", body.knowledge_base)
+    document = (
+        await session.execute(
+            select(KnowledgeDocument)
+            .options(undefer(KnowledgeDocument.markdown))
+            .where(
+                KnowledgeDocument.id == body.document_id,
+                KnowledgeDocument.knowledge_base_id == base.id,
+                KnowledgeDocument.status == "ready",
+            )
+        )
+    ).scalar_one_or_none()
+    # A document that declares itself withdrawn is neither indexed nor served (ADR 0174): not read either.
+    if document is None or okf.deprecated(document.markdown or ""):
+        raise not_found("Knowledge document", body.document_id)
+    # Read as it is laid down for a run: with its OKF header (ADR 0174).
+    reading = read(okf.served_document(document), document.filename, body.section)
+    return KnowledgeReading(
+        found=reading.found,
+        knowledge_base=base.slug,
+        document_id=document.id,
+        document=document.title,
+        filename=document.filename,
+        version=document.source_version or document.digest,
+        section=reading.section,
+        heading_path=reading.heading_path,
+        text=reading.text,
+        characters=reading.characters,
+        cut=reading.cut,
+        outline=reading.outline,
     )
 
 

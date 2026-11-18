@@ -186,6 +186,18 @@ class InternalClient:
             )
         )
 
+    async def read_knowledge(
+        self, knowledge_base: str, document_id: str, section: str | None = None
+    ) -> dict[str, Any]:
+        """One document of the run's `index` knowledge bases, whole or one section (ADR 0051 decision 33)."""
+        return dict(
+            await self._request(
+                "POST",
+                "/knowledge/read",
+                json={"knowledge_base": knowledge_base, "document_id": document_id, "section": section},
+            )
+        )
+
     async def search_memory(self, query: str, k: int = 5, memory: str | None = None) -> list[dict[str, Any]]:
         """Search the memories the run reads (S40-11): hits, each with the label of its memory."""
         return list(

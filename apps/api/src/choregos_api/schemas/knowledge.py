@@ -188,10 +188,36 @@ class KnowledgeEvalCase(Dto):
     question: str = Field(min_length=1, max_length=2000)
     #: the documents expected among the first results, by file name or title
     expected: list[str] = Field(min_length=1, max_length=20)
+    #: the section expected to answer, by its headings (`Encryption > In transit`, or only `In transit`)
+    section: str | None = Field(default=None, max_length=500)
 
 
 class KnowledgeEvalSet(Dto):
     cases: list[KnowledgeEvalCase] = Field(default_factory=list, max_length=200)
+
+
+class KnowledgeReadRequest(Dto):
+    #: one `index` base of the run
+    knowledge_base: str
+    #: as a search hit gives it
+    document_id: str
+    #: a number in the document's outline (`2.3`) or a heading path; absent, the document from the top
+    section: str | None = Field(default=None, max_length=500)
+
+
+class KnowledgeReading(Dto):
+    found: bool
+    knowledge_base: str
+    document_id: str
+    document: str
+    filename: str
+    version: str
+    section: str | None = None
+    heading_path: list[str] = Field(default_factory=list)
+    text: str
+    characters: int
+    cut: bool
+    outline: str
 
 
 class KnowledgeSearchRequest(Dto):

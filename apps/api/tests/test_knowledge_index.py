@@ -276,6 +276,42 @@ async def test_recall_at_5_on_the_eval_set_is_reported(client: AsyncClient, admi
     assert (await client.get(f"{BASE}/framework")).json()["eval_result"]["recall"] == 1.0, "kept for the page"
 
 
+async def test_the_eval_measures_the_first_hit_and_the_section_that_answers(
+    client: AsyncClient, admin: str
+) -> None:
+    """Recall@5 says the right document is somewhere in five passages; hit@1 says whether the first one
+    is it, and section recall whether the passage found is the part of the document that answers."""
+    await _indexed_base(client)
+    cases = [
+        {**EVAL_SET[0], "section": "Encryption standard > In transit"},
+        {**EVAL_SET[4], "section": "certificate EXPIRED in production"},
+        {**EVAL_SET[1], "section": "Key rotation"},  # no such section: not found, and said
+        EVAL_SET[2],  # names no section: not counted in the section recall
+    ]
+    assert (await client.put(f"{BASE}/framework/eval", json={"cases": cases})).status_code == 200
+    stored = (await client.get(f"{BASE}/framework")).json()["eval_set"]
+    assert stored[0]["section"] == "Encryption standard > In transit" and stored[3]["section"] is None
+    result = (await client.post(f"{BASE}/framework/eval/run")).json()["eval_result"]
+    assert result["section_recall"] == round(2 / 3, 4), result["cases"]
+    assert [c["section_found"] for c in result["cases"]] == [True, True, False, None]
+    assert result["hit_at_1"] == sum(c["first"] in c["expected"] for c in result["cases"]) / 4
+    assert result["hit_at_1"] >= 0.75, result["cases"]
+    assert result["cases"][0]["first"] == "encryption.docx"
+
+
+def test_a_hit_is_in_a_section_when_its_headings_run_through_it() -> None:
+    from choregos_api.knowledge.index import in_section
+
+    path = ["Security policy", "Encryption", "In transit"]
+    assert in_section(path, "Encryption > In transit")
+    assert in_section(path, "in  TRANSIT")
+    assert in_section(path, "Encryption"), "a chunk of a subsection is in its parent section"
+    assert not in_section(path, "In transit > Encryption")
+    assert not in_section(path, "At rest")
+    assert not in_section(path, " > ")
+    assert not in_section([], "Encryption")
+
+
 async def test_a_files_base_switched_to_index_is_indexed(client: AsyncClient, admin: str) -> None:
     from choregos_api.knowledge.conversion import conversions
 
@@ -346,6 +382,96 @@ async def test_a_run_searches_only_the_bases_it_is_served(
     )
     await client.patch(f"{BASE}/framework", json={"projects": ["web"]})
     assert await bases_found("TLS") == set(), "a base no longer served to the project answers nothing"
+
+
+async def test_a_run_reads_a_cited_document_by_section_and_only_from_its_bases(
+    client: AsyncClient, admin: str, project: dict[str, Any]
+) -> None:
+    """The sidecar's `knowledge_read` (ADR 0051 decision 33): the section a search hit cites, read whole,
+    from the run's `index` bases only, while they are served to its project."""
+    from choregos_api.db.models import KnowledgeDocument, Run, WorkItem
+    from choregos_api.db.session import session_scope
+    from choregos_api.knowledge.reading import READ_CHARS
+    from choregos_api.security import mint_run_token
+
+    await _indexed_base(client, "framework")
+    other = await _indexed_base(client, "other-team", scope="projects", projects=["billing-api"])
+    async with session_scope() as session:
+        item = WorkItem(project_id=project["id"], tracker_key="BILLING-9", title="T", state="ready")
+        session.add(item)
+        await session.flush()
+        session.add(
+            Run(
+                id="run-read", work_item_id=item.id, project_id=project["id"], stage_role="implement",
+                status="running", stage_input={"knowledge": [{"slug": "framework", "mode": "index"}]},
+            )
+        )  # fmt: skip
+    headers = {
+        "Authorization": "Bearer "
+        + mint_run_token("run-read", project_slug="billing-api", work_item_key="BILLING-9", ttl_minutes=30)
+    }
+    route = "/api/v1/internal/runs/run-read/knowledge"
+    found = await client.post(f"{route}/search", json={"query": "TLS version in transit"}, headers=headers)
+    hit = next(h for h in found.json()["hits"] if h["filename"] == "encryption.docx")
+
+    async def read(**body: Any) -> Any:
+        return await client.post(
+            f"{route}/read", json={"knowledge_base": "framework", **body}, headers=headers
+        )
+
+    section = await read(document_id=hit["document_id"], section=" > ".join(hit["heading_path"]))
+    assert section.status_code == 200, section.text
+    answer = section.json()
+    assert answer["found"] and answer["section"] == "1.1" and answer["filename"] == "encryption.docx"
+    assert answer["heading_path"] == ["Encryption standard", "In transit"] and not answer["cut"]
+    assert "TLS 1.3 is required" in answer["text"] and "vault" not in answer["text"], "that section only"
+    assert answer["version"]
+
+    whole = (await read(document_id=hit["document_id"])).json()
+    assert whole["section"] is None and "vault" in whole["text"] and "TLS 1.3" in whole["text"]
+
+    missing = (await read(document_id=hit["document_id"], section="Key rotation")).json()
+    assert not missing["found"] and missing["text"] == ""
+    assert "1.1 In transit" in missing["outline"] and "1.2 At rest" in missing["outline"]
+
+    async with session_scope() as session:
+        document = await session.get(KnowledgeDocument, hit["document_id"])
+        assert document is not None
+        document.markdown = "# Long\n\n## Part one\n\n" + "x " * READ_CHARS + "\n\n## Part two\n\nend\n"
+    cut = (await read(document_id=hit["document_id"])).json()
+    assert cut["cut"] and len(cut["text"]) == READ_CHARS and cut["characters"] > READ_CHARS
+    assert "1.1 Part one" in cut["outline"] and "1.2 Part two" in cut["outline"]
+
+    # Read as it is served (ADR 0174): with its OKF header, whose `# comment` is no section.
+    async with session_scope() as session:
+        document = await session.get(KnowledgeDocument, hit["document_id"])
+        assert document is not None
+        document.markdown = "---\ntype: Policy\n# reviewed yearly\n---\n# Policy\n\n## Scope\n\nAll.\n"
+    served = (await read(document_id=hit["document_id"])).json()
+    assert served["text"].startswith("---\n") and "type: Policy" in served["text"]
+    scope = (await read(document_id=hit["document_id"], section="1.1")).json()
+    assert scope["heading_path"] == ["Policy", "Scope"] and scope["text"].startswith("## Scope")
+    # A document that declares itself withdrawn is not read, as it is neither served nor indexed.
+    async with session_scope() as session:
+        document = await session.get(KnowledgeDocument, hit["document_id"])
+        assert document is not None
+        document.markdown = "---\nstatus: deprecated\n---\n# Policy\n"
+    assert (await read(document_id=hit["document_id"])).status_code == 404
+
+    # A base the run does not name, a document of another base, an unknown document: the same 404.
+    other_document = other["documents"][0]["id"]
+    assert (await read(document_id=other_document)).status_code == 404
+    elsewhere = await client.post(
+        f"{route}/read", json={"knowledge_base": "other-team", "document_id": other_document}, headers=headers
+    )
+    assert elsewhere.status_code == 404
+    assert (await read(document_id="nope")).status_code == 404
+    await client.post(
+        "/api/v1/orgs/varga/projects",
+        json={"slug": "web", "name": "Web", "config": {"slug": "web", "org": "varga"}},
+    )
+    await client.patch(f"{BASE}/framework", json={"scope": "projects", "projects": ["web"]})
+    assert (await read(document_id=hit["document_id"])).status_code == 404, "no longer served: not read"
 
 
 # ───────────────────────────── PostgreSQL ─────────────────────────────

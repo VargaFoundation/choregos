@@ -56,20 +56,26 @@ export function searchModeLabel(mode: string | undefined): string {
   return mode ?? "—";
 }
 
-/** One question per line: `question | expected.docx, other.pdf`. Lines without `|` are ignored. */
+/**
+ * One question per line: `question | expected.docx, other.pdf`, and optionally `| Section > Subsection`,
+ * the section expected to answer. Lines without `|` are ignored.
+ */
 export function parseEvalSet(text: string): KnowledgeEvalCase[] {
   return text
     .split("\n")
     .map((line) => line.split("|"))
-    .filter((parts) => parts.length === 2 && parts[0]!.trim() && parts[1]!.trim())
-    .map(([question, expected]) => ({
+    .filter((parts) => (parts.length === 2 || parts.length === 3) && parts[0]!.trim() && parts[1]!.trim())
+    .map(([question, expected, section]) => ({
       question: question!.trim(),
       expected: expected!.split(",").map((e) => e.trim()).filter(Boolean),
+      ...(section?.trim() ? { section: section.trim() } : {}),
     }));
 }
 
 export function formatEvalSet(cases: KnowledgeEvalCase[] | undefined): string {
-  return (cases ?? []).map((c) => `${c.question} | ${c.expected.join(", ")}`).join("\n");
+  return (cases ?? [])
+    .map((c) => `${c.question} | ${c.expected.join(", ")}${c.section ? ` | ${c.section}` : ""}`)
+    .join("\n");
 }
 
 /** `0.8` → `80 %`; nothing measured yet → `not measured`. */

@@ -121,6 +121,26 @@ def test_a_second_apply_changes_nothing(manifest: Path) -> None:
     assert "= 6 unchanged" in result.output and "0 change" in result.output
 
 
+def test_an_eval_case_names_its_section_and_a_second_apply_still_changes_nothing(manifest: Path) -> None:
+    section = "Offers > Pricing"
+    text = manifest.read_text().replace(
+        "expected: [offers.md]}", f"expected: [offers.md], section: {section}}}"
+    )
+    manifest.write_text(text)
+    with respx.mock(assert_all_called=False) as mock:
+        mock.get(KB + "/acme").mock(return_value=Response(200, json=_existing()))
+        mock.put(KB + "/acme/eval").mock(return_value=Response(200, json={}))
+        changed = _run("knowledge", "apply", "-f", str(manifest))
+        assert changed.exit_code == 0, changed.output
+        assert _mutations(mock) == [("PUT", "/api/v1/orgs/acme/knowledge/acme/eval")]
+        assert json.loads(mock.calls[-1].request.content)["cases"][0]["section"] == section
+    stored = [{"question": "What does Acme sell?", "expected": ["offers.md"], "section": section}]
+    with respx.mock(assert_all_called=False) as mock:
+        mock.get(KB + "/acme").mock(return_value=Response(200, json=_existing(eval_set=stored)))
+        again = _run("knowledge", "apply", "-f", str(manifest))
+        assert again.exit_code == 0 and _mutations(mock) == []
+
+
 def test_a_changed_corpus_file_replaces_its_document(manifest: Path) -> None:
     (manifest.parent / "corpus" / "offers.md").write_text("# Offers, revised\n")
     with respx.mock(assert_all_called=False) as mock:
@@ -224,9 +244,11 @@ def test_sync_and_eval_call_the_endpoints() -> None:
         mock.post(KB + "/acme/eval/run").mock(
             return_value=Response(
                 200,
-                json={"eval_result": {"k": 5, "recall": 0.5, "mode": "hybrid", "cases": [
+                json={"eval_result": {"k": 5, "recall": 0.5, "hit_at_1": 0.5, "section_recall": 0.0,
+                    "mode": "hybrid", "cases": [
                     {"question": "q1", "expected": ["a"], "found": ["a"]},
-                    {"question": "q2", "expected": ["b"], "found": []},
+                    {"question": "q2", "expected": ["b"], "found": [],
+                     "section": "S > T", "section_found": False},
                 ]}},
             )
         )  # fmt: skip
@@ -235,6 +257,8 @@ def test_sync_and_eval_call_the_endpoints() -> None:
         evaluated = _run("knowledge", "eval", "acme")
         assert evaluated.exit_code == 0
     assert "recall@5 = 0.5" in evaluated.output and "✗ q2" in evaluated.output
+    assert "hit@1 = 0.5" in evaluated.output and "section recall = 0.0" in evaluated.output
+    assert "§ S > T (not found)" in evaluated.output
 
 
 def test_the_shipped_example_is_a_valid_manifest() -> None:

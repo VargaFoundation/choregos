@@ -86,22 +86,57 @@ def xlsx(sheets: dict[str, list[list[object]]]) -> bytes:
     return out.getvalue()
 
 
-def pdf(lines: list[str]) -> bytes:
-    """A one-page PDF with `lines` of Helvetica text, written by hand (no PDF library needed)."""
-    text = (
-        "BT /F1 12 Tf 72 720 Td 14 TL "
-        + " ".join(
-            "(" + line.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)") + ") '" for line in lines
+def _pdf_string(text: str) -> str:
+    return "(" + text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)") + ")"
+
+
+def _outline_objects(bookmarks: list[tuple[int, str]], first: int) -> list[bytes]:
+    """The `/Outlines` dictionary (object `first`) and one item per bookmark (depth from 1, title),
+    nested by depth, each pointing at page 3."""
+    parents: list[int] = []  # for each item, the object number of its parent
+    stack: list[tuple[int, int]] = []  # depth, object number
+    for n, (depth, _) in enumerate(bookmarks):
+        while stack and stack[-1][0] >= depth:
+            stack.pop()
+        parents.append(stack[-1][1] if stack else first)
+        stack.append((depth, first + 1 + n))
+    numbers = [first + 1 + n for n in range(len(bookmarks))]
+    kids = {
+        parent: [k for k, p in zip(numbers, parents, strict=True) if p == parent]
+        for parent in {first, *numbers}
+    }
+
+    def links(number: int) -> str:
+        children = kids.get(number) or []
+        return (
+            f" /First {children[0]} 0 R /Last {children[-1]} 0 R /Count {len(children)}" if children else ""
         )
-        + " ET"
-    )
+
+    objects = [f"<< /Type /Outlines{links(first)} >>".encode()]
+    for number, parent, (_, title) in zip(numbers, parents, bookmarks, strict=True):
+        siblings = kids[parent]
+        at = siblings.index(number)
+        around = (f" /Prev {siblings[at - 1]} 0 R" if at else "") + (
+            f" /Next {siblings[at + 1]} 0 R" if at + 1 < len(siblings) else ""
+        )
+        item = f"/Title {_pdf_string(title)} /Parent {parent} 0 R{around}{links(number)} /Dest [3 0 R /Fit]"
+        objects.append(f"<< {item} >>".encode())
+    return objects
+
+
+def pdf(lines: list[str], bookmarks: list[tuple[int, str]] | None = None) -> bytes:
+    """A one-page PDF with `lines` of Helvetica text, written by hand (no PDF library needed); with
+    `bookmarks` (depth from 1, title), its outline, as a word processor exports its headings."""
+    text = "BT /F1 12 Tf 72 720 Td 14 TL " + " ".join(_pdf_string(line) + " '" for line in lines) + " ET"
+    outlines = " /Outlines 6 0 R /PageMode /UseOutlines" if bookmarks else ""
     objects = [
-        b"<< /Type /Catalog /Pages 2 0 R >>",
+        f"<< /Type /Catalog /Pages 2 0 R{outlines} >>".encode(),
         b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
         b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R "
         b"/Resources << /Font << /F1 5 0 R >> >> >>",
         b"<< /Length " + str(len(text)).encode() + b" >>\nstream\n" + text.encode() + b"\nendstream",
         b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+        *(_outline_objects(bookmarks, 6) if bookmarks else []),
     ]
     out = io.BytesIO()
     out.write(b"%PDF-1.4\n")

@@ -106,6 +106,7 @@ that follows from it. Rule since that day: nothing is ✅ without a test that fa
 | [S73](status/S73.md) | The publication moves to graalsystems |
 | [S74](status/S74.md) | An organisation may own a host (ADR 0175) |
 | [S75](status/S75.md) | The core is named Tranibor: visible name, packages, images and charts, environment variables (ADR 0176) |
+| [S76](status/S76.md) | The corpus's own structure is a retrieval key: outlines, section reading, PDF bookmarks (ADR 0051) |
 | [S80](status/S80.md) | From engine to product: the plan of 2026-11-16 |
 | [owner review](status/owner-review.md) | The owner review of 2026-11-03 |
 | [—](status/outside-backlog.md) | Rows that are not backlog stories, named by their pull request |

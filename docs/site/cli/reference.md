@@ -628,7 +628,8 @@ Options:
 ```text
 Usage: choregos knowledge eval [OPTIONS] {slug}
 
-  Run the base's eval set against its index and print recall@5.
+  Run the base's eval set against its index and print recall@5, hit@1 and the
+  sections found.
 
 Arguments:
   slug  [required]

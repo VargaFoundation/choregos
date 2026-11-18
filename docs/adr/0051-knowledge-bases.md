@@ -262,3 +262,58 @@ API's event loop. Since S39-26:
 What a `files` base lays down is an Open Knowledge Format bundle, and a document's own OKF header is
 read: [ADR 0174](0174-the-open-knowledge-format-at-the-edge-of-a-knowledge-base.md). `INDEX.md` (§5)
 becomes `index.md`.
+
+## Update 2026-11-16 — the corpus's own structure is a retrieval key (S76-01 to S76-04)
+
+Context: STAIR (Kumar et al., IBM, arXiv 2609.03874) shows that a document's table of contents is a
+strong retrieval key: a model fine-tuned to answer a passage's identifier *along the table of contents*
+finds the right passage first in 82.6 % of questions over 18 books, against 76.9 % for plain generative
+retrieval (DSI), 68.7 % for DPR and 59.5 % for BM25. Its method — the corpus memorised in a fine-tuned
+model's weights — is **rejected** here: fine-tuning is out of scope (Context above); every source sync
+would mean training again, per base and per organisation; what a model memorised cannot be filtered by
+the RLS, the scope, the grants or the restricted reading of ADR 0097, which are the point of a base; and
+an organisation brings its own model gateway (ADR 0109). The paper also does not compare against what
+this ADR does (hybrid retrieval over chunks prefixed by their heading path, decision 5). Its idea is kept,
+at no training cost, where the structure already is:
+
+28. **A document has an outline** (`choregos_core.outline`): its ATX headings, fence-aware, numbered by
+    nesting (`2.3`), each section running to the next heading of its level or above, with its line and
+    size. It needs no model and no storage: it is read from the converted markdown when needed.
+29. **A `files` base lists each document's outline in `index.md`** (three levels deep, 40 sections per
+    document, the rest counted), with the line each section starts on; the prompt tells the agent to
+    read the outlines, then the section that answers. The digest is unchanged: it covers the documents,
+    not `index.md`, which the runner writes.
+30. **A conversation's `knowledge_get` reads by section** (amends ADR 0138 point 4): an optional
+    `section` names one by its number or by the heading path a search hit printed (a file name in front
+    is ignored; a title alone is enough when only one section bears it). A text longer than the 20 000
+    characters returned (the document, or the section) ends with its outline, so the rest is read section
+    by section instead of being lost. An unknown section answers the outline. Tool names are unchanged.
+31. **A PDF's bookmarks become its headings** (amends decision 4). Most PDFs exported from a word
+    processor or LaTeX carry their table of contents as bookmarks; pdfminer, already under MarkItDown,
+    reads them without rendering. Each is looked for in the text, in order, on a line that says its title
+    (case, spacing and punctuation aside, possibly after a section number, possibly broken over two
+    lines) and that line becomes a heading of the bookmark's depth. A bookmark not found gets no heading
+    and is not a conversion warning (`warnings` say what was cut, and nothing is). The placement is
+    indexed, linear in the text. A PDF without bookmarks (a scan, a print to PDF) is unchanged: Docling,
+    which infers headings from the layout, stays out for the weight decision 4 gave. A PDF converted
+    before keeps its old text until converted again (`POST …/documents/{id}/convert`).
+32. **The eval measures the first hit and the section** (amends decision 7, contract change). A case may
+    name the `section` expected to answer, by its headings (`Encryption > In transit`, or only the end of
+    the path). Beside recall@5, a run records `hit_at_1` (questions whose first hit is an expected
+    document) and `section_recall` (questions naming a section whose top 5 hold a hit of an expected
+    document under those headings, in sequence anywhere in the hit's heading path; `null` when no case
+    names one), and per case `first`, `section`, `section_found`. The console's eval set takes the section
+    as a third column (`question | documents | section`).
+
+33. **A run reads the section a search cites** (S76-04). The sidecar offers `knowledge_read(knowledge_base,
+    document_id, section?)` beside `knowledge_search`, whose hits now print their document's id; it calls
+    `POST /internal/runs/{id}/knowledge/read` (contract change), which reads under exactly the reach of the
+    search: an `index` base the run's `StageInput` names, served to its project and, when restricted,
+    readable by the person the run acts for (ADR 0097); anything else, a document of another base included,
+    is the same 404 as one that does not exist, and a closed run is refused like on every route of its API
+    (ADR 0143). The reading rule is the conversation's (`knowledge.reading`, shared): a number or a heading
+    path, 20 000 characters, the outline of what lies under a cut text, `found: false` and the document's
+    outline for a section it lacks. The new path is under `/internal/*`, which the route-client guard
+    already explains (machine-only); it adds no import any ceiling of ADR 0099 counts.
+
+Not shown here: whether 28-31 and 33 move the measures of 32 on a real corpus; that is what 32 is for.

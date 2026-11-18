@@ -37,6 +37,16 @@ describe("the eval set and the search mode, in words", () => {
     expect(formatEvalSet(cases)).toBe("Which TLS? | encryption.docx, policy.pdf");
   });
 
+  it("reads and writes the section expected to answer, as a third column", () => {
+    const cases = parseEvalSet("Which TLS? | encryption.docx | Encryption > In transit\nWho? | owners.xlsx |  ");
+    expect(cases).toEqual([
+      { question: "Which TLS?", expected: ["encryption.docx"], section: "Encryption > In transit" },
+      { question: "Who?", expected: ["owners.xlsx"] },
+    ]);
+    expect(cases[1]).not.toHaveProperty("section");
+    expect(formatEvalSet(cases)).toBe("Which TLS? | encryption.docx | Encryption > In transit\nWho? | owners.xlsx");
+  });
+
   it("says when pgvector is missing, and what was not measured", () => {
     expect(searchModeLabel("full-text")).toContain("pgvector is not installed");
     expect(searchModeLabel("hybrid")).toContain("embeddings");
@@ -65,12 +75,40 @@ describe("an index base (S33-03)", () => {
     render(<KnowledgeIndex org="varga" base={base} onChange={onChange} />);
     expect(screen.getByTestId("knowledge-index-state")).toHaveTextContent("5 document(s) in 12 chunks · full-text only");
     expect(screen.getByTestId("knowledge-recall")).toHaveTextContent("recall@5: 80 %");
+    expect(screen.getByTestId("knowledge-recall")).not.toHaveTextContent("first hit right");
     fireEvent.change(screen.getByLabelText("Search the knowledge base"), { target: { value: "TLS" } });
     fireEvent.click(screen.getByRole("button", { name: "Search" }));
     const hits = await screen.findByTestId("knowledge-hits");
     expect(hits).toHaveTextContent("Encryption standard");
     expect(hits).toHaveTextContent("encryption.docx — Encryption standard > In transit");
     expect(api.searchKnowledgeBase).toHaveBeenCalledWith("varga", "framework", "TLS");
+  });
+
+  it("shows the first hit's precision and the sections found, per question", () => {
+    const measured: KnowledgeBase = {
+      ...base,
+      eval_result: {
+        ...base.eval_result,
+        hit_at_1: 0.5,
+        section_recall: 0.25,
+        cases: [
+          {
+            question: "Which TLS version?",
+            expected: ["encryption.docx"],
+            found: ["encryption.docx"],
+            returned: ["encryption.docx"],
+            first: "encryption.docx",
+            section: "Encryption > In transit",
+            section_found: false,
+          },
+        ],
+      },
+    };
+    render(<KnowledgeIndex org="varga" base={measured} onChange={vi.fn()} />);
+    const recall = screen.getByTestId("knowledge-recall");
+    expect(recall).toHaveTextContent("first hit right: 50 %");
+    expect(recall).toHaveTextContent("right section: 25 %");
+    expect(screen.getByText(/§ Encryption > In transit \(not found\)/)).toBeInTheDocument();
   });
 
   it("saves the eval set and measures recall", async () => {
