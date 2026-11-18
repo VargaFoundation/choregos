@@ -46,6 +46,7 @@ from ..schemas.identity import (
     DeviceTokenDto,
     DeviceTokenRequestDto,
 )
+from ..tenant_host import org_base_url, request_base_url
 
 router = APIRouter(tags=["session"])
 
@@ -85,7 +86,7 @@ def _error(error: str, description: str, **extra: Any) -> JSONResponse:
 
 @router.post("/auth/device", response_model=DeviceAuthorizationDto, operation_id="startDeviceSignIn")
 async def start_device_sign_in(
-    body: DeviceAuthorizationRequestDto, session: Db, settings: Config
+    body: DeviceAuthorizationRequestDto, request: Request, session: Db, settings: Config
 ) -> DeviceAuthorizationDto:
     """Two codes: the surface keeps `device_code`; the person is shown `user_code` at `verification_uri`."""
     org_slug: str | None = None
@@ -118,7 +119,14 @@ async def start_device_sign_in(
             break
         else:  # pragma: no cover - 27^8 codes, five draws
             raise ApiError(503, "Try again", "no free sign-in code")
-    base = settings.public_url.rstrip("/") + "/device"
+    # The page where the person signs in: the organisation's verified host when it has one, else the door
+    # the request came in on (a verified host or the instance's), ADR 0175 S74-03.
+    door = (
+        await org_base_url(org_slug, settings)
+        if org_slug
+        else await request_base_url(request.headers, settings)
+    )
+    base = door + "/device"
     return DeviceAuthorizationDto(
         device_code=device_code,
         user_code=_display(user_code),

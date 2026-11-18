@@ -5506,3 +5506,11 @@ stories:
     size: M
     depends_on: []
     notes: "Decision of 2026-11-18: the products no longer depend on the Varga Foundation. website/ (Docusaurus) copies docs/site/ and rewrites its outside links to GitHub; docs-site.yml builds on pull requests and publishes from main and releases to https://graalsystems.github.io/tranibor/; publishing.json documentation follows. Guarded by tests/docs/test_docs_site_pipeline.py."
+  - id: S74-03
+    title: "feat(api,orchestrator): links built for an organisation use its verified custom host (reverse seam, MCP, A2A, notifications, device page)"
+    stream: S74
+    sprint: 1
+    priority: 2
+    size: L
+    depends_on: [S74-01, S74-02]
+    notes: "Delivered by the S74-03 PR (core side; ADR 0175 amendment). Needs the EE reverse resolver (choregos-ee hote_de). Return URLs of consent, forge and GitHub App stay canonical (a later story, with per-host provider registration)."

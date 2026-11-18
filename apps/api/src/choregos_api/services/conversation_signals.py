@@ -115,10 +115,13 @@ async def pending_actions_of(session: AsyncSession, conversation_id: str) -> lis
     """The writes the assistant proposed and the person has not decided, each with the console link where
     they decide. The MCP door and the REST turn both answer with this list (ADR 0154 §4, G1): they
     list them, they never execute one (ADR 0030)."""
+    from ..tenant_host import org_base_url_of_id
     from .conversation_actions import actions_of, confirm_url
 
+    record = await session.get(AgentSessionRecord, conversation_id)
+    base = await org_base_url_of_id(session, record.org_id if record is not None else None)
     return [
-        {"id": a.id, "summary": a.summary, "confirm_url": confirm_url(conversation_id, a.id)}
+        {"id": a.id, "summary": a.summary, "confirm_url": confirm_url(conversation_id, a.id, base)}
         for a in await actions_of(session, conversation_id, status="proposed")
     ]
 

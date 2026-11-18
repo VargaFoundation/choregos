@@ -24,7 +24,7 @@ from choregos_adapters import (
 from choregos_api.adapter_wiring import attach_lexical_memory, attach_outposts
 from choregos_api.db.models import Connector, Organization, OrgConnector, PolicyDef, Project, WorkItem
 from choregos_api.db.session import ALL_ORGS, session_scope
-from choregos_api.services import default_workflow, policy_model, workflow_model
+from choregos_api.services import default_workflow, org_base_url, policy_model, workflow_model
 from choregos_api.services import work_item_workflow as _workflow_du_ticket
 from choregos_api.services.definitions import ceiling_of
 from choregos_api.services.github_app import pin_for_runtime
@@ -350,6 +350,14 @@ async def scm_for(session: AsyncSession, bundle: ProjectBundle, repository_url: 
             "scm", "github", pinned, spec["secret_refs"], spec["secret_ref"], preresolved=spec["resolved"]
         ),
     )
+
+
+async def console_base(bundle: ProjectBundle) -> str:
+    """The console's base URL for a link about this project's organisation: its verified host when it has one,
+    else the instance's `CHOREGOS_PUBLIC_URL` (ADR 0175, S74-03). A courtesy's link: never raises."""
+    from ..config import get_settings
+
+    return await org_base_url(bundle.org_slug, public_url=get_settings().public_url)
 
 
 async def project_bundle(session: AsyncSession, project_id: str) -> ProjectBundle:

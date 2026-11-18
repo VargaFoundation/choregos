@@ -18,7 +18,7 @@ from temporalio import activity
 
 from ..config import get_settings
 from ..wire_names import read_key
-from .base import db, notification_target, project_bundle, send_courtesy
+from .base import console_base, db, notification_target, project_bundle, send_courtesy
 
 logger = get_logger("choregos.train")
 
@@ -284,7 +284,6 @@ async def soak(payload: dict[str, Any]) -> dict[str, Any]:
 
 @activity.defn(name="request_approval")
 async def request_approval(payload: dict[str, Any]) -> dict[str, Any]:
-    settings = get_settings()
     async with db() as session:
         bundle = await project_bundle(session, payload["project_slug"])
         release = await session.get(Release, payload["release_id"])
@@ -296,7 +295,7 @@ async def request_approval(payload: dict[str, Any]) -> dict[str, Any]:
             Message(
                 title=f"Approval requested — {bundle.slug} → {payload['env']}",
                 body=f"Batch {release.batch_no}: {len(release.items)} work item(s).",
-                url=f"{settings.public_url}/p/{bundle.slug}/trains",
+                url=f"{await console_base(bundle)}/p/{bundle.slug}/trains",
                 severity="warning",
             ),
         )
