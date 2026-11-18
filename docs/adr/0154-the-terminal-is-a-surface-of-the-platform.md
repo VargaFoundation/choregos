@@ -179,3 +179,9 @@ sign-in (§6) and the decision rule (§7); it proves none of the stories that im
 one by one. The record this ADR calls "ADR 0153 (an assistant proposes to start a project's workflow)" was
 numbered [ADR 0158](0158-an-assistant-may-propose-to-start-a-project-s-workflow.md) when it was written; it
 is still proposed, so the launches of §2 and §7 wait for it.
+
+## Amendment, 2026-11-18: the workspace's screen model
+
+§3's five framed panes are replaced by one screen of tabs with a context pane, without frames, by
+[ADR 0187](0187-the-workspace-is-one-screen-and-the-flow-is-live.md) §1; the colours, glyphs, keys and the
+`NO_COLOR` rule of §3 stand.
