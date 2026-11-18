@@ -195,6 +195,9 @@ class EventType(StrEnum):
     #: An impossible migration (state missing from the target, no mapping): the ticket stays alive,
     #: on its own definition. This event is what says so.
     WORKITEM_MIGRATION_REFUSED = "choregos.workitem.migration_refused"
+    #: The tracker did not take the work item's status comment once its retries were spent: the work
+    #: item goes on (S62-17), and this says the board may lag until the next state rewrites the comment.
+    WORKITEM_STATUS_COMMENT_MISSED = "choregos.workitem.status_comment_missed"
     RUN_QUEUED = "choregos.run.queued"
     RUN_STARTED = "choregos.run.started"
     RUN_PROGRESS = "choregos.run.progress"
