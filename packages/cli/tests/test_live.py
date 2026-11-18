@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -805,8 +806,10 @@ def test_live_is_documented_in_the_help() -> None:
 
     done = CliRunner().invoke(app, ["live", "--help"])
     assert done.exit_code == 0
+    # Rich colours each option's dashes apart when GITHUB_ACTIONS forces a terminal (as on CI).
+    text = re.sub(r"\x1b\[[0-9;?]*[A-Za-z]", "", done.output)
     for option in ("--project", "--workflow", "--org", "--no-motion"):
-        assert option in done.output
+        assert option in text
 
 
 def test_the_project_and_the_workflow_are_picked_or_refused_with_the_choices() -> None:
