@@ -10,6 +10,15 @@
 #   PROOF_CLUSTER=k3s tools/single-node/proof.sh # k3s itself, on THIS machine (a throwaway VM, root)
 #
 # Needs: helm, kubectl, openssl, and docker + k3d (k3d mode) or curl and root (k3s mode).
+#
+# k3d mode only:
+#   PROOF_IMPORT_IMAGES="img:tag ..."  images built here (`make images`, retagged), imported into each
+#                                      new node before the install: the chart of an unreleased commit
+#                                      with its own images. Pair with PROOF_IMAGE_TAG.
+#   PROOF_EVICTION="2%"                the kubelet's hard eviction thresholds (imagefs and nodefs), for a
+#                                      workstation whose Docker disk is large but more than 85 % used:
+#                                      the defaults (15 % and 10 %) put the node under disk pressure
+#                                      and no pod is scheduled.
 # The backups go to an S3 bucket OFF the node, because the node is destroyed: in k3d mode a SeaweedFS
 # container beside the cluster; in k3s mode PROOF_S3_ENDPOINT, PROOF_S3_BUCKET, PROOF_S3_ACCESS_KEY
 # and PROOF_S3_SECRET_KEY name one. The site's secrets (the "vault") are drawn once into PROOF_WORKDIR
@@ -40,14 +49,19 @@ s3_up() {
     docker network inspect "$NAME" >/dev/null 2>&1 || docker network create "$NAME" >/dev/null
     if ! docker inspect "$NAME-s3" >/dev/null 2>&1; then
       # Without `-s3.config` the gateway accepts any keys: the proof's keys are checked by nobody.
-      docker run -d --name "$NAME-s3" --network "$NAME" chrislusf/seaweedfs:3.97 server -s3 -dir=/data >/dev/null
+      # 4.x, not 3.97: 3.97 answers `object not found` to the HEAD rclone sends after each upload,
+      # and the backup's `ship` failed on it (S80-07d); 4.47 answers as an S3 store does.
+      docker run -d --name "$NAME-s3" --network "$NAME" \
+        chrislusf/seaweedfs:4.47@sha256:ce9e796f1fe6f06968f4c04bdaf8f678dad9c8acdfef3d244133d71bfa6bf882 \
+        server -s3 -dir=/data >/dev/null
     fi
     S3_ENDPOINT="http://$(docker inspect -f "{{(index .NetworkSettings.Networks \"$NAME\").IPAddress}}" "$NAME-s3"):8333"
     S3_BUCKET=choregos-backups
     S3_ACCESS_KEY=proof
     S3_SECRET_KEY=proof-secret
     for _ in $(seq 60); do
-      docker exec "$NAME-s3" sh -c "echo 's3.bucket.create -name $S3_BUCKET' | weed shell" >/dev/null 2>&1 && break
+      # A `weed shell` started before the master is up can hang for good: bounded, then tried again.
+      timeout 30 docker exec "$NAME-s3" sh -c "echo 's3.bucket.create -name $S3_BUCKET' | weed shell" >/dev/null 2>&1 && break
       sleep 2
     done
   else
@@ -62,9 +76,16 @@ s3_up() {
 # ---------------------------------------------------------------- the node
 node_up() {
   if [ "$MODE" = k3d ]; then
+    local extra=()
+    if [ -n "${PROOF_EVICTION:-}" ]; then
+      local t="memory.available<100Mi,imagefs.available<$PROOF_EVICTION,nodefs.available<$PROOF_EVICTION"
+      extra=(--k3s-arg "--kubelet-arg=eviction-hard=$t@server:*")
+    fi
     k3d cluster create "$NAME" --network "$NAME" --wait --timeout 300s \
-      --kubeconfig-update-default=false --kubeconfig-switch-context=false >/dev/null
+      --kubeconfig-update-default=false --kubeconfig-switch-context=false "${extra[@]}" >/dev/null
     k3d kubeconfig get "$NAME" >"$KUBECONFIG"
+    # shellcheck disable=SC2086 # a list of image references
+    [ -z "${PROOF_IMPORT_IMAGES:-}" ] || k3d image import -c "$NAME" $PROOF_IMPORT_IMAGES
   else
     curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=${PROOF_K3S_VERSION:-v1.33.5+k3s1} sh -
     cp /etc/rancher/k3s/k3s.yaml "$KUBECONFIG"
@@ -119,15 +140,29 @@ install() {
   for d in $(k get deploy -o name); do k rollout status "$d" --timeout=900s; done
 }
 
-# A pod with the labels the `k8s_job` executor puts on an agent pod tries one TCP connection; prints
-# `open` or `closed`. Its image is the API's, already on the node: nothing is pulled.
+# A pod with the labels the `k8s_job` executor puts on an agent pod tries TCP connections for 30 s;
+# prints `open` if one succeeds, `closed` if none does. Not a single try: k3s's NetworkPolicy
+# controller (kube-router) adds a pod to the source set of an ingress rule only once it has seen the
+# pod, about 3 s after it starts (measured on k3s 1.35, S80-07d): a single early try read the allowed
+# path to the egress proxy as `closed`, so a `closed` from it said nothing about the paths that must
+# stay closed either. Its image is the API's, already on the node: nothing is pulled.
+PROBE='
+import socket, sys, time
+deadline = time.monotonic() + 30
+while time.monotonic() < deadline:
+    try:
+        socket.create_connection((sys.argv[1], int(sys.argv[2])), timeout=5).close()
+        sys.exit(0)
+    except OSError:
+        time.sleep(1)
+sys.exit(1)
+'
 probe() {
   local name="probe-$1-$2" image phase
   image=$(k get deploy choregos-api -o jsonpath='{.spec.template.spec.containers[0].image}')
   k run "$name" --restart=Never --image="$image" --image-pull-policy=IfNotPresent \
     --labels=app.kubernetes.io/name=choregos-runner,app.kubernetes.io/component=runner,choregos/run-id=proof \
-    --command -- python -c 'import socket, sys; socket.create_connection((sys.argv[1], int(sys.argv[2])), timeout=10)' \
-    "$1" "$2" >/dev/null
+    --command -- python -c "$PROBE" "$1" "$2" >/dev/null
   for _ in $(seq 60); do
     phase=$(k get pod "$name" -o jsonpath='{.status.phase}')
     case "$phase" in Succeeded | Failed) break ;; esac

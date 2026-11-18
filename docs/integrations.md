@@ -41,7 +41,7 @@ The API image carries the Markdown of the user documentation (`docs/site/` in th
 own version, at `/opt/choregos/docs` (`CHOREGOS_DOCS_DIR` overrides). `docs_search` and `docs_read`
 read it, so your assistant answers from the documentation of the version you run, behind your firewall,
 without internet. The links they give point to the public site, `CHOREGOS_DOCS_URL` (default
-`https://docs.varga.foundation/choregos`). Every token that opens the door may use them, bound to a
+`https://graalsystems.github.io/tranibor`). Every token that opens the door may use them, bound to a
 project or not; they are audited (`mcp.call`) and rate limited like the other reads. A build without
 documentation answers so, with the public URL. Ask *"how do gates work in Choregos?"*: the client
 should call `docs_search`, then `docs_read`.

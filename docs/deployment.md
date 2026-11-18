@@ -1234,7 +1234,7 @@ whose value is a path. Outside the chart, the setting is `CHOREGOS_PROCEDURES_EX
 ## Where the console's help links point
 
 The console's **Help** entry, in the top bar, and the "Learn more" links of its pages open the user
-documentation, `https://docs.varga.foundation/choregos` by default. An installation that cannot reach it
+documentation, `https://graalsystems.github.io/tranibor` by default. An installation that cannot reach it
 (air-gapped) or serves its own copy sets `CHOREGOS_DOCS_URL` on the API, with the chart's `extraEnv`:
 
 ```yaml
@@ -1451,7 +1451,11 @@ checks it).
 k3s itself on a throwaway VM with `PROOF_CLUSTER=k3s`), checks from a pod with an agent's labels that
 the API, the gateway, the memory and the egress proxy open and PostgreSQL and Temporal do not, takes
 one work item to `approved` (its agent simulated), backs up, destroys the node, installs on a new one, restores, and reads the work item
-back. It is not yet run every night by CI; `docs/plan/STATUS.md` says when it last ran.
+back. It is not yet run every night by CI; `docs/plan/STATUS.md` says when it last ran. To prove an
+unreleased commit, build its images (`make images`, tagged under the chart's registry) and pass them
+with `PROOF_IMPORT_IMAGES` and `PROOF_IMAGE_TAG`: k3d imports them into each new node. On a
+workstation whose Docker disk is large but more than 85 % used, `PROOF_EVICTION=2%` lowers the
+kubelet's hard eviction thresholds, without which the node reports disk pressure and runs no pod.
 
 ## A single-node bench in twenty minutes
 
