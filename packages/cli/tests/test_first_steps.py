@@ -143,5 +143,6 @@ def test_the_environment_names_the_organisation(tmp_path: Path, monkeypatch: pyt
     route = respx.get(f"{API}/api/v1/orgs/globex/projects").mock(
         return_value=Response(200, json={"items": []})
     )
+    respx.get(f"{API}/api/v1/orgs").mock(return_value=Response(200, json=[]))
     assert _run("projects", "list").exit_code == 0
     assert route.called

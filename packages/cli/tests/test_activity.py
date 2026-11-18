@@ -103,6 +103,7 @@ class Platform:
     def __init__(self, router: respx.Router, contract: Any) -> None:
         self.router, self.contract = router, contract
         self.listing([_run_entry("run-a1b2c3d4e5f6a7b8")], [])
+        self.org("USD")
         self.today(1.2345)
         # Every run is flat unless a test says otherwise: the run's own agent and nothing under it.
         self.served: dict[str, Response] = {}
@@ -126,10 +127,14 @@ class Platform:
             body = self.contract("RunAgentList", {"items": list(nodes)})
         self.served[run_id] = Response(status, json=body)
 
-    def today(self, cost: float | None, status: int = 200) -> None:
+    def org(self, currency: str) -> None:
+        body = self.contract("Org", {"slug": "acme", "name": "Acme", "currency": currency})
+        self.orgs = self.router.get(f"{V1}/orgs").mock(return_value=Response(200, json=[body]))
+
+    def today(self, cost: float | None, status: int = 200, eur: float = 0.0) -> None:
         body: dict[str, Any] = {"title": "Forbidden", "detail": "no"}
         if status == 200:
-            body = {"group_by": "day", "rows": [], "total": {"cost_usd": cost, "cost_eur": 0.0}}
+            body = {"group_by": "day", "rows": [], "total": {"cost_usd": cost, "cost_eur": eur}}
             self.contract("CostReport", body)
         self.costs = self.router.get(f"{V1}/orgs/acme/costs").mock(return_value=Response(status, json=body))
 
