@@ -207,7 +207,7 @@ def desktop(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     for name in ("SSH_CONNECTION", "SSH_TTY"):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("DISPLAY", ":0")
-    monkeypatch.setattr("choregos_cli.main._wsl", lambda: False)
+    monkeypatch.setattr("tranibor_cli.main._wsl", lambda: False)
     monkeypatch.setattr("webbrowser.open", lambda url: opened.append(url) or True)
     return opened
 
@@ -293,10 +293,10 @@ def test_login_names_the_organisations_it_cannot_choose_between(
 def test_login_asks_which_organisation_in_a_terminal(
     profile: Path, contract: Any, desktop: list[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr("choregos_cli.chat.interactive", lambda: True)
+    monkeypatch.setattr("tranibor_cli.chat.interactive", lambda: True)
     _signs_in(contract)
     respx.get(f"{API}/api/v1/orgs").mock(return_value=Response(200, json=[_org("acme"), _org("globex")]))
-    from choregos_cli.main import app
+    from tranibor_cli.main import app
 
     result = CliRunner().invoke(app, ["login", "--api-url", API], input="initech\nglobex\n")
     assert result.exit_code == 0, result.output
@@ -311,9 +311,9 @@ def test_login_under_wsl_starts_the_windows_browser_and_hides_its_output(
     import subprocess
 
     started: list[tuple[list[str], dict[str, Any]]] = []
-    monkeypatch.setattr("choregos_cli.main._wsl", lambda: True)
-    monkeypatch.setattr("choregos_cli.main.shutil.which", lambda _name: None)
-    monkeypatch.setattr("choregos_cli.main.subprocess.Popen", lambda cmd, **kw: started.append((cmd, kw)))
+    monkeypatch.setattr("tranibor_cli.main._wsl", lambda: True)
+    monkeypatch.setattr("tranibor_cli.main.shutil.which", lambda _name: None)
+    monkeypatch.setattr("tranibor_cli.main.subprocess.Popen", lambda cmd, **kw: started.append((cmd, kw)))
     _signs_in(contract)
     result = _run("login", "--api-url", API)
     assert result.exit_code == 0, result.output
@@ -332,8 +332,8 @@ def test_login_under_wsl_starts_the_windows_browser_and_hides_its_output(
 
 def test_a_bare_choregos_takes_the_organisation_of_its_workspace(monkeypatch: pytest.MonkeyPatch) -> None:
     opened: list[str | None] = []
-    monkeypatch.setattr("choregos_cli.chat.interactive", lambda: True)
-    monkeypatch.setattr("choregos_cli.chat.open_workspace", lambda *, org=None: opened.append(org))
+    monkeypatch.setattr("tranibor_cli.chat.interactive", lambda: True)
+    monkeypatch.setattr("tranibor_cli.chat.open_workspace", lambda *, org=None: opened.append(org))
     result = _run("--org", "globex")
     assert result.exit_code == 0, result.output
     assert opened == ["globex"]
