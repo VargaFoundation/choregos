@@ -2516,6 +2516,23 @@ for the whole base with `POST …/knowledge/{slug}/sync`, **Sync all now** on th
   open to, whatever the page restrictions say for other people. A space larger than 5 000 pages is
   refused until a `page_id` narrows it. Signing in per person (OAuth 2.0, 3LO) is a possible
   follow-up; today the service account is the identity.
+- **An MCP server's resources** ([ADR 0191](adr/0191-a-knowledge-base-reads-the-resources-of-an-mcp-server.md)):
+  name an organisation connector of kind `mcp` (type `mcp`, or `mcp-gateway` to go through the
+  organisation's gateway; an outpost's connector is refused). Each sync lists the server's resources
+  (`resources/list`, every page) and reads each one (`resources/read`); optionally `uri_prefix` keeps
+  only the resources whose URI starts with it and `mime_types` (at most 20) only those types. A
+  resource is stored under its `name` with the extension its `mimeType` calls for (`text/markdown` is
+  `.md`, `application/pdf` is `.pdf`; an image is skipped as "format not converted"); two resources of
+  one name both carry a short digest of their URI. One that declares `annotations.lastModified` is read
+  again only when that changes; one that does not is read at every sync and kept when its digest is
+  the same. A resource the server no longer lists leaves the base; a listing that fails stops the sync
+  and deletes nothing. The sync calls the server under the connector's own credential (`service`): a
+  connector that answers people only is refused, and everything that credential can read under the
+  prefix becomes readable by everyone the base is open to. A resource's own OKF header is read as for
+  any source (`status: deprecated` keeps it out of runs and searches). Adding the source opens the
+  connector's host for the workers that sync it (409 `egress_required` until it is). This is how a
+  data platform, a catalogue or any product that publishes an MCP server feeds a base, with nothing
+  in Tranibor naming it.
 - **A web site**: an https `url`; same host, under its path, `robots.txt` obeyed, `max_depth` ≤ 5,
   `max_pages` ≤ 500; a host that resolves to a private address is refused. `exclude` is a list of
   path globs (at most 50, each starting with `/`, for example `["/es", "/es/*"]`) that are neither

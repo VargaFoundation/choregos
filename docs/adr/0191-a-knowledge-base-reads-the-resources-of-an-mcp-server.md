@@ -3,7 +3,8 @@
 - **Status**: accepted, 2026-11-18 (asked by the project lead; story S72-05)
 - **Concerns**: `packages/adapters/src/tranibor_adapters/documents/mcp.py`, `mcp/client.py`
   (`list_resources`, `read_resource`), `apps/api/src/tranibor_api/knowledge/sync.py` (`_mcp_source`),
-  `routers/knowledge/source_config.py`; extends [ADR 0051](0051-knowledge-bases.md) (a base's sources);
+  `routers/knowledge/source_config.py`, `mcp/resources.py` (the door's documentation as resources);
+  extends [ADR 0051](0051-knowledge-bases.md) (a base's sources);
   keeps [ADR 0079](0079-choregos-and-graal-are-autonomous-products.md) (products meet through public
   interfaces), [ADR 0174](0174-the-open-knowledge-format-at-the-edge-of-a-knowledge-base.md) (a
   document's own header) and [ADR 0081](0081-knowledge-base-rights.md) (rights)
@@ -58,6 +59,12 @@ Three shapes were weighed (see the rejected alternatives); the project lead chos
    `knowledge-source:<name>`; a connector at an outpost is refused, its rendezvous carries tool calls
    only. Adding the source opens the connector's host for the workers that sync it (the connector was
    opened for the API's calls only), through the same egress gate as any source.
+8. **The platform's own door publishes its documentation as resources.** The pages `docs_search` and
+   `docs_read` serve (ADR 0150) are also listed by `resources/list` and given by `resources/read`:
+   the URI is the page's public URL, the `name` its slug, `lastModified` the file's, the text the
+   page under an OKF header carrying its title. Any token that opens the door reads them, each call
+   audited as `mcp_resource`. One instance's knowledge base can thus copy the documentation of
+   another (or of itself), and it is the real server this source is proved against.
 
 ## Consequences
 
