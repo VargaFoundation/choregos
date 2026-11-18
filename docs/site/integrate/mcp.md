@@ -68,6 +68,11 @@ connected to the door answers how Tranibor works from the documentation of the v
 with no access to the internet. An instance built without the documentation answers that it carries
 none.
 
+The same pages are also MCP **resources**: `resources/list` gives each page (its public URL as URI,
+its slug as name, `text/markdown`, the date it was last written) and `resources/read` its Markdown
+under a header carrying its title. A client that reads resources, a knowledge base of type **MCP
+server's resources** among them, can copy this documentation and refresh it only when a page changes.
+
 ## 1. Mint a token for the client
 
 The clients that run on your machine (Claude Code, Claude Desktop, Cursor, VS Code, most others) take

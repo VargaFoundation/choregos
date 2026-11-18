@@ -5410,6 +5410,14 @@ stories:
     size: M
     depends_on: [S72-03]
     notes: "Delivered 2026-11-17 for the lexical memory: the decider is the audit log's memory.accept by a user (a decision now records found), the listing is list_facts. Ecphoria is refused: it ignores X-Ecphoria-Namespace, so a listing would mix memories (the same gap affects search and context_pack, ADR 0075)."
+  - id: S72-05
+    title: "feat(adapters,api,web): a knowledge source reads the resources of an MCP server (ADR 0191)"
+    stream: S72
+    sprint: 3
+    priority: 3
+    size: M
+    depends_on: [S72-01]
+    notes: "Asked by the project lead on 2026-11-18: external knowledge bases that a data platform feeds, built generically (ADR 0079). Source kind `mcp` on an mcp/mcp or mcp/mcp-gateway connector, its service identity; resources/list complete, resources/read per item, lastModified as version, OKF header kept. Contract first (kind enum), then the implementation. The platform's own MCP door publishes its documentation as resources, the real server the source is proved against. The push of an OKF bundle is a rejected alternative, kept for later."
   - id: S73-01
     title: "chore(publishing): the publication moves to graalsystems (owner, registry, source repository; ADR 0156 amendment)"
     stream: S73

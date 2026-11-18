@@ -128,9 +128,15 @@ export const CREDENTIAL_HEADER = /auth|cookie|token|key|secret|session|password|
 
 /** The configuration a source form sends, by kind. */
 export function sourceConfig(
-  kind: "sharepoint" | "confluence" | "web" | "git",
-  fields: { site: string; folder: string; url: string; ref: string; paths: string; space?: string; pageId?: string; attachments?: boolean; exclude?: string; descendants?: boolean; pageOnly?: boolean; depth?: string; maxPages?: string; documents?: boolean; headers?: string; githubApp?: boolean },
+  kind: SourceKind,
+  fields: { site: string; folder: string; url: string; ref: string; paths: string; uriPrefix?: string; mimeTypes?: string; space?: string; pageId?: string; attachments?: boolean; exclude?: string; descendants?: boolean; pageOnly?: boolean; depth?: string; maxPages?: string; documents?: boolean; headers?: string; githubApp?: boolean },
 ): Record<string, unknown> {
+  if (kind === "mcp") {
+    // An MCP server's resources (ADR 0191): everything it lists, narrowed by a URI prefix and media types.
+    const prefix = (fields.uriPrefix ?? "").trim();
+    const types = (fields.mimeTypes ?? "").split(",").map((t) => t.trim()).filter(Boolean);
+    return { ...(prefix ? { uri_prefix: prefix } : {}), ...(types.length ? { mime_types: types } : {}) };
+  }
   if (kind === "confluence") {
     const ids = pageIdsOf(fields.pageId ?? "");
     const pages = ids.length === 1 ? { page_id: ids[0] } : ids.length > 1 ? { page_ids: ids } : {};
@@ -609,17 +615,30 @@ export function sourceState(source: Pick<KnowledgeSource, "status" | "last_error
   return { label: "Never synced", tone: "neutral" };
 }
 
-export type SourceKind = "sharepoint" | "confluence" | "web" | "git";
-/** The kinds that cannot sync without a `documents/<kind>` connector. */
-export const CONNECTED_KINDS: SourceKind[] = ["sharepoint", "confluence"];
+export type SourceKind = "sharepoint" | "confluence" | "web" | "git" | "mcp";
+/** The kinds that cannot sync without a connector: `documents/<kind>`, or an `mcp` one for `mcp`. */
+export const CONNECTED_KINDS: SourceKind[] = ["sharepoint", "confluence", "mcp"];
+
+/** The connector kind a source kind is served by (ADR 0191: an `mcp` source reads an `mcp` connector). */
+export function connectorKindOf(kind: SourceKind): "documents" | "mcp" {
+  return kind === "mcp" ? "mcp" : "documents";
+}
+
+/** Whether `connector` can serve a source of `kind`: the API's `SOURCE_CONNECTOR_TYPES`, kept in step. */
+export function servesSource(kind: SourceKind, connector: Pick<OrgConnector, "kind" | "type">): boolean {
+  if (kind === "mcp") return connector.kind === "mcp" && (connector.type === "mcp" || connector.type === "mcp-gateway");
+  return connector.kind === "documents" && connector.type === kind;
+}
 
 /**
  * The kind the "add a source" form opens on: the first connected kind the organisation has a
  * connector for, else a web site (which needs none). Never a kind that could not be saved.
  */
 export function firstUsableKind(connectors: Pick<OrgConnector, "kind" | "type">[] | undefined): SourceKind {
-  const has = (type: SourceKind) => (connectors ?? []).some((c) => c.kind === "documents" && c.type === type);
-  return CONNECTED_KINDS.find(has) ?? "web";
+  const has = (kind: SourceKind) => (connectors ?? []).some((c) => servesSource(kind, c));
+  // Not `mcp`: an organisation declares MCP servers for its runs, and a run's server is no reason to
+  // open the form on reading one's resources.
+  return CONNECTED_KINDS.filter((k) => k !== "mcp").find(has) ?? "web";
 }
 
 /**

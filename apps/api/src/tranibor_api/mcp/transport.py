@@ -38,11 +38,18 @@ from ..logging import get_logger
 from ..origin_guard import tenant_origin_allowed
 from ..rbac import Permission
 from ..tenant_host import org_base_url, request_base_url
+from . import resources
 from .assistants import prompt_get, prompt_list, resolve_connector
 from .caller import Caller, Refusal, identify
 from .limits import RATE_LIMITER, WRITES_PER_DAY, truncate, writes_today
 from .oauth import metadata
-from .tools import INSTRUCTIONS, Context, ToolRefused, announced_tools
+from .tools import (
+    INSTRUCTIONS,
+    Context,
+    ToolRefused,
+    announced_tools,
+    file_under_the_callers_organisation,
+)
 
 router = APIRouter(include_in_schema=False)
 log = get_logger(__name__)
@@ -218,6 +225,7 @@ async def _answer(ctx: Context, message: dict[str, Any], request: Request) -> di
                 "protocolVersion": negotiate(params.get("protocolVersion")),
                 "capabilities": {
                     "tools": {"listChanged": False},
+                    "resources": {"listChanged": False},
                     **({"prompts": {"listChanged": False}} if ctx.assistant is not None else {}),
                 },
                 "serverInfo": {"name": "choregos", "title": "Tranibor", "version": __version__},
@@ -230,6 +238,8 @@ async def _answer(ctx: Context, message: dict[str, Any], request: Request) -> di
         return ok(request_id, {"tools": [tool.announcement() for tool in await announced_tools(ctx)]})
     if method == "tools/call":
         return await _call(ctx, request_id, params, request)
+    if method in {"resources/list", "resources/read"}:
+        return await _resources(ctx, request_id, method, params, request)
     if method == "prompts/list" and ctx.assistant is not None:
         return ok(request_id, {"prompts": await prompt_list(ctx)})
     if method == "prompts/get" and ctx.assistant is not None:
@@ -261,7 +271,27 @@ async def _call(ctx: Context, request_id: Any, params: dict[str, Any], request: 
     return ok(request_id, result)
 
 
-async def _audit(ctx: Context, tool: str, write: bool, issue: str, request: Request) -> None:
+async def _resources(
+    ctx: Context, request_id: Any, method: str, params: dict[str, Any], request: Request
+) -> dict[str, Any]:
+    """The documentation as resources (ADR 0191 §8): read only, audited like a tool's read."""
+    target = "*"
+    await file_under_the_callers_organisation(ctx)
+    try:
+        if method == "resources/list":
+            result = resources.listing(params)
+        else:
+            target, result = resources.reading(params)
+    except resources.ResourceRefusedError as refusal:
+        await _audit(ctx, target, False, "refused", request, kind="mcp_resource")
+        return error_response(request_id, refusal.code, str(refusal))
+    await _audit(ctx, target, False, "ok", request, kind="mcp_resource")
+    return ok(request_id, result)
+
+
+async def _audit(
+    ctx: Context, tool: str, write: bool, issue: str, request: Request, kind: str = "mcp_tool"
+) -> None:
     """Every call leaves a row (R-SOC-MCP-06) — and the day's writes are counted from them."""
     await record(
         ctx.session,
@@ -273,8 +303,8 @@ async def _audit(ctx: Context, tool: str, write: bool, issue: str, request: Requ
         org_id=ctx.target_org_id
         or (ctx.project.org_id if ctx.project is not None else None)
         or ctx.caller.agent_org_id,
-        target_type="mcp_tool",
-        target_id=tool,
+        target_type=kind,
+        target_id=tool[:64],
         write=write,
         issue=issue,
         token=ctx.caller.key,

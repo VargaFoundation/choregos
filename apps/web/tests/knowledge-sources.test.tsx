@@ -301,6 +301,49 @@ describe("the sources of a base (S33-04)", () => {
     await waitFor(() => expect(screen.queryByRole("form", { name: "Add a source" })).toBeNull());
   });
 
+  it("adds an MCP server's resources through an mcp connector, never a documents one or an outpost's (ADR 0191)", async () => {
+    vi.mocked(api.createKnowledgeSource).mockResolvedValue(source);
+    vi.mocked(api.orgConnectors).mockResolvedValue([
+      connector("wiki", "documents", "confluence"),
+      connector("catalog", "mcp", "mcp"),
+      connector("gated", "mcp", "mcp-gateway"),
+      connector("far", "mcp", "mcp-outpost"),
+    ]);
+    adding();
+    fireEvent.change(screen.getByLabelText("source kind"), { target: { value: "mcp" } });
+    await screen.findByRole("option", { name: "catalog" });
+    expect(screen.getByRole("option", { name: "gated" })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "far" })).toBeNull();
+    expect(screen.queryByRole("option", { name: "wiki" })).toBeNull();
+    fireEvent.change(screen.getByLabelText("mcp connector"), { target: { value: "catalog" } });
+    fireEvent.change(screen.getByLabelText("uri prefix"), { target: { value: " catalog://sales/ " } });
+    fireEvent.change(screen.getByLabelText("media types"), { target: { value: "text/markdown, application/pdf" } });
+    expect(screen.getByText(/connector's own credential/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Add source" }));
+    await waitFor(() =>
+      expect(api.createKnowledgeSource).toHaveBeenCalledWith("northwind", "framework", {
+        kind: "mcp",
+        name: "MCP server's resources",
+        connector: "catalog",
+        config: { uri_prefix: "catalog://sales/", mime_types: ["text/markdown", "application/pdf"] },
+        refresh_mode: "interval",
+        interval_minutes: 60,
+      }),
+    );
+  });
+
+  it("says an MCP source cannot sync before an mcp connector exists, and opens on it only when chosen", async () => {
+    expect(firstUsableKind([connector("github", "mcp", "mcp")])).toBe("web");
+    expect(sourceConfig("mcp", { site: "", folder: "", url: "", ref: "", paths: "" })).toEqual({});
+    vi.mocked(api.orgConnectors).mockResolvedValue([connector("wiki", "documents", "confluence")]);
+    adding();
+    await screen.findByRole("option", { name: "MCP server's resources (a data platform, a catalogue…) — no connector yet" });
+    fireEvent.change(screen.getByLabelText("source kind"), { target: { value: "mcp" } });
+    const note = await screen.findByTestId("no-documents-connector");
+    expect(note).toHaveTextContent("no MCP connector yet");
+    expect(within(note).getByRole("link")).toHaveAttribute("href", "/admin/connectors?type=mcp/mcp");
+  });
+
   it("extracts page ids from numbers and pasted Confluence URLs (S42-09d)", () => {
     const url = "https://acme.atlassian.net/wiki/spaces/ENG/pages/555/Deploy+guide";
     expect(pageIdsOf(`12, ${url}  12\n https://acme.atlassian.net/wiki/pages/viewpage.action?pageId=77 junk`)).toEqual(["12", "555", "77"]);
