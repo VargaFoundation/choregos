@@ -7,8 +7,8 @@ import json
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-import choregos_contracts as contracts
 import pytest
+import tranibor_contracts as contracts
 from httpx import AsyncClient
 
 REPO = {"full_name": "northwind/billing-api"}
@@ -17,8 +17,8 @@ KEY = "northwind/billing-api#7"
 
 async def _work_item(project: dict[str, Any], key: str = KEY, *, closed: bool = False) -> tuple[str, str]:
     """A work item and one run of it: `(work item id, run id)`."""
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Run, WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         item = WorkItem(
@@ -52,15 +52,15 @@ async def _record(
 ) -> list[str]:
     """One work item per decision, `(question, probability, right)`: right → ended in success, wrong →
     sent back by a person, `None` → nothing observed yet. Returns the work items' ids."""
-    from choregos_api.db.models import Project
-    from choregos_api.db.session import session_scope
-    from choregos_api.services import (
+    from tranibor_api.db.models import Project
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services import (
         DecidedBy,
         record_decisions,
         record_human_verdict,
         record_terminal_outcome,
     )
-    from choregos_core.decision_ledger import Answered
+    from tranibor_core.decision_ledger import Answered
 
     async with session_scope() as session:
         org_id = (await session.get(Project, project["id"])).org_id  # type: ignore[union-attr]
@@ -113,7 +113,7 @@ async def test_the_contract_declares_the_calibration_route() -> None:
         "agent",
         "router",
     ]
-    from choregos_api.schemas import QuestionCalibration, StepCalibration
+    from tranibor_api.schemas import QuestionCalibration, StepCalibration
 
     assert set(StepCalibration.model_fields) == set(schemas["StepCalibration"]["properties"])
     assert set(QuestionCalibration.model_fields) == set(schemas["QuestionCalibration"]["properties"])
@@ -207,9 +207,9 @@ async def _post(client: AsyncClient, delivery: str, body: dict[str, Any]) -> Non
 
 
 async def _reopened(item_id: str) -> set[bool]:
-    from choregos_api.db.models import DecisionRecordRow
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import DecisionRecordRow
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = await session.execute(
@@ -229,8 +229,8 @@ def _issue(item_key: str, action: str) -> dict[str, Any]:
 
 
 async def _rekey(item_id: str, key: str) -> None:
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         item = await session.get(WorkItem, item_id)
@@ -275,6 +275,6 @@ async def test_a_running_work_item_is_not_reopened(client: AsyncClient, project:
 def test_which_tracker_events_say_an_ended_issue_is_open_again(
     event_type: str, payload: dict[str, Any], reopened: bool
 ) -> None:
-    from choregos_api.services.decision_ledger import tracker_says_reopened
+    from tranibor_api.services.decision_ledger import tracker_says_reopened
 
     assert tracker_says_reopened(event_type, payload, ["Done", "Cancelled"]) is reopened

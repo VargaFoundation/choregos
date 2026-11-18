@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from choregos_adapters import (
+from tranibor_adapters import (
     AdapterSet,
     connector_types,
     default_type,
@@ -18,8 +18,8 @@ from choregos_adapters import (
     resolved_configuration,
     spec_of,
 )
-from choregos_adapters.registry import _REGISTRY, _SPECS
-from choregos_core.secrets import SecretNotFound
+from tranibor_adapters.registry import _REGISTRY, _SPECS
+from tranibor_core.secrets import SecretNotFound
 
 
 def test_every_shipped_type_declares_itself_and_no_fake_is_shown() -> None:
@@ -120,7 +120,7 @@ def test_a_project_without_a_tracker_connector_gets_the_internal_tracker(
 
     `tracker_is_internal` already reads "no tracker connector" as internal; the adapters agree.
     """
-    from choregos_adapters.tracker.internal import InternalTracker
+    from tranibor_adapters.tracker.internal import InternalTracker
 
     kinds = ("scm", "ci", "cd", "runtime", "memory", "gateway", "notify")
     try:

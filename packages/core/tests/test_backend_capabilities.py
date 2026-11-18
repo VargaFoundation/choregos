@@ -1,8 +1,8 @@
-"""The six backends and their capabilities are declared once, in choregos_core.models."""
+"""The six backends and their capabilities are declared once, in tranibor_core.models."""
 
 from __future__ import annotations
 
-from choregos_core.models import KNOWN_BACKEND_CAPABILITIES, KNOWN_BACKEND_NAMES
+from tranibor_core.models import KNOWN_BACKEND_CAPABILITIES, KNOWN_BACKEND_NAMES
 
 
 def test_the_names_follow_the_capability_table() -> None:

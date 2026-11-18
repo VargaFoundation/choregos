@@ -11,8 +11,8 @@ the story's id — `S65-04a` to `S65-04n` — so that they stay under it. This p
 
 Status words: **exists** (in the code), **missing**, **broken** (exists and is wrong for this question).
 
-Paths without a directory are under `packages/runner/src/choregos_runner/`; the executors are under
-`packages/adapters/src/choregos_adapters/executor/`; `sandbox.yaml` is
+Paths without a directory are under `packages/runner/src/tranibor_runner/`; the executors are under
+`packages/adapters/src/tranibor_adapters/executor/`; `sandbox.yaml` is
 `charts/choregos/charts/orchestrator/templates/sandbox.yaml`.
 
 ---
@@ -30,18 +30,18 @@ Paths without a directory are under `packages/runner/src/choregos_runner/`; the 
 | The runner's git | `workspace.py:72-79`, `:240-267`, `:485-502` | In the tree's own `.git`, which the agent writes; protected by a list of overrides (#1345); the git token on the command line of the push |
 | The gateway key | `runner.py:365-369`, `backends/base.py:122-146` | In the agent's environment, by design |
 | The egress token | `runner.py:246-250`, `egress.py:24` | In the proxy variables the agent inherits (ADR 0115, first consequence) |
-| The MCP servers' headers | `backends/base.py:76-104`; `apps/orchestrator/src/choregos_orchestrator/activities/stage_tools.py:25` | Sent to the agent in `session/new` |
+| The MCP servers' headers | `backends/base.py:76-104`; `apps/orchestrator/src/tranibor_orchestrator/activities/stage_tools.py:25` | Sent to the agent in `session/new` |
 | The run's tool server | `local_tools.py:53-87`, `runner.py:553-585` | **Exists**: served by the runner on loopback with the runner's client; the agent gets no credential and the API governs each call (ADR 0122 §2) |
 | The ACP file methods | `acp/client.py:463-534`; `terminal: false` at `:208` | Served by the runner on its own file system, inside the workspace or the script directory |
 | What the runner reads in the tree | `result.py:57`, `outputs.py:47-82`, `job.py:82`, `runner.py:1430` | Plain `Path` calls, written when the tree's writer shared the container. Opening from a descriptor with `O_NOFOLLOW` **exists** in `hosted_workspace.py:45`, `:185-240` only |
 | The runner's own files in the tree | `runner.py:270-272`, `:1390`, `workspace.py:23` | The transcript, the saved session id and the final result are under `.choregos/` |
 | The agent's home, the tool client, the scripts | `workspace.py:615-640`, `tool_scripts.py:145-152` | Under the container's temporary directory, which both share |
-| Hosted agents | `k8s_job.py:355-400`, `local_docker.py:125-159`, `packages/core/src/choregos_core/hosted.py`, `loopback/` | **Exists**: a container beside the runner, no secret, three loopback listeners, a copy of the tree |
+| Hosted agents | `k8s_job.py:355-400`, `local_docker.py:125-159`, `packages/core/src/tranibor_core/hosted.py`, `loopback/` | **Exists**: a container beside the runner, no secret, three loopback listeners, a copy of the tree |
 | The model listener | `loopback/model.py:38`, `:88`, `:94`, `:121` | **Exists** for hosted steps: five paths, the run's key and model, every request counted as a turn |
 | The MCP listener | `loopback/mcp.py:44-75` | **Exists**: one endpoint per granted server that has a URL, `tools/call` judged, server streams refused |
 | The CONNECT listener | `loopback/connect.py:34-86` | **Exists**: TLS tunnels only, the run's identity added upstream |
 | A second container, per executor | `agent_sandbox.py:141-146`, `tekton.py:104-109`, `aca.py:153-158`, `routing.py:38-42` | `k8s_job` and `local_docker` run one; the three others refuse; the routing executor sends such a step to `k8s_job` |
-| What an executor declares | `k8s_job.py:61`, `agent_sandbox.py:94`, `tekton.py:84`, `aca.py:117`, `local_docker.py:31`; read by `apps/orchestrator/src/choregos_orchestrator/activities/execution.py:188-198` | **Exists**: `capabilities`, where `separate_agent` goes |
+| What an executor declares | `k8s_job.py:61`, `agent_sandbox.py:94`, `tekton.py:84`, `aca.py:117`, `local_docker.py:31`; read by `apps/orchestrator/src/tranibor_orchestrator/activities/execution.py:188-198` | **Exists**: `capabilities`, where `separate_agent` goes |
 | The sandbox template | `sandbox.yaml:52-112`, `infra/policies/sandbox-template.yaml`, `tests/fixtures/agent_sandbox/crds-v1.0.6.json` | One container. The pinned schema accepts an init container with `restartPolicy` and mounts with `subPath`; the admission policy already judges init containers |
 | The assignment's key | `agent_sandbox.py:358-426`, `assignment.py` | Read from the pod's log without naming a container (`:374`, `:569`) |
 | A code agent | ADR 0063 §6, `backends/code.py` | The operator's image is built from the runner image and the runner is its entry point |

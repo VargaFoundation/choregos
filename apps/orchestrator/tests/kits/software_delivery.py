@@ -69,9 +69,9 @@ async def decide(ticket: Any, approved: bool = True, reason: str = "") -> None:
 
 
 async def requests_of_item(item_id: str) -> list[str]:
-    from choregos_api.db.models import HumanRequest
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import HumanRequest
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = (
@@ -85,7 +85,7 @@ async def requests_of_item(item_id: str) -> list[str]:
 
 
 async def start_interpreter(env: Any, setup: Fixture, project_id: str, item_id: str, key: str) -> Any:
-    from choregos_api.temporal import interpreter_id
+    from tranibor_api.temporal import interpreter_id
 
     return await env.client.start_workflow(
         "WorkflowInterpreter",
@@ -113,10 +113,10 @@ def study_results(adr: str) -> dict[str, Callable[[], Any]]:
 
 async def create_dev_project(setup: Fixture) -> str:
     """A second project of the organisation, born from the template: its workflows, policy and agents."""
-    from choregos_api.db.models import Organization, Project
-    from choregos_api.db.session import session_scope
-    from choregos_api.services import ensure_defaults
     from sqlalchemy import select
+    from tranibor_api.db.models import Organization, Project
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services import ensure_defaults
 
     async with session_scope() as session:
         org = (
@@ -144,18 +144,18 @@ async def create_dev_project(setup: Fixture) -> str:
 
 
 async def releases_of(env: str) -> list[Any]:
-    from choregos_api.db.models import Release
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Release
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         return list((await session.execute(select(Release).where(Release.env == env))).scalars())
 
 
 async def runs_of(item_id: str) -> list[tuple[str, str]]:
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = (
@@ -165,10 +165,10 @@ async def runs_of(item_id: str) -> list[tuple[str, str]]:
 
 
 async def create_ticket(setup: Fixture, project_id: str, number: int, workflow: str) -> tuple[str, str]:
-    from choregos_api.db.models import WorkflowDef, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_core.domain import WorkItemData
     from sqlalchemy import select
+    from tranibor_api.db.models import WorkflowDef, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_core.domain import WorkItemData
 
     key = f"{REPOSITORY}#{number}"
     async with session_scope() as session:
@@ -198,7 +198,7 @@ async def create_ticket(setup: Fixture, project_id: str, number: int, workflow: 
 
 async def start_requested_train(env: Any, name: str) -> tuple[Any, dict[str, Any]]:
     """The train the work item asked for (an in-memory signal under the fakes), started for real."""
-    from choregos_orchestrator.train_client import fake_signals
+    from tranibor_orchestrator.train_client import fake_signals
 
     train_id = f"train-dev-{name}"
     for _ in range(600):
@@ -221,7 +221,7 @@ def verdict_result(name: str, verdict: str = "approve", **outputs_extra: Any) ->
 
 
 def prod_verifier_result() -> Any:
-    from choregos_contracts import Evidence
+    from tranibor_contracts import Evidence
 
     proof = Evidence(tests_passed=True, tests_run=3, facts={"smoke_ok": True})
     return stage_result("go: error rate unchanged", outputs={"verdict": "approve"}, evidence=proof)

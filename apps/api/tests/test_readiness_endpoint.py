@@ -29,8 +29,8 @@ async def _project(client: AsyncClient) -> dict[str, Any]:
 
 
 async def _activate(project_id: str) -> None:
-    from choregos_api.db.models import Project
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Project
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         row = await session.get(Project, project_id)
@@ -40,9 +40,9 @@ async def _activate(project_id: str) -> None:
 
 async def _forget_the_tests(project_id: str) -> None:
     """Saving a connector tests it (S40-05): put the cards back to "never tested" to read that state."""
-    from choregos_api.db.models import Connector
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Connector
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         for row in (
@@ -162,9 +162,9 @@ async def test_a_github_owner_without_an_installation_is_to_do(
     assert "github-app-scm" in _by_state(body, "done")
     github.remove_installation(1)
     github.add_installation(2, "someone-else")
-    from choregos_api.db.models import GitHubInstallation
-    from choregos_api.db.session import session_scope
     from sqlalchemy import delete
+    from tranibor_api.db.models import GitHubInstallation
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         await session.execute(delete(GitHubInstallation))
@@ -199,9 +199,9 @@ async def test_readiness_says_a_gvisor_policy_the_warm_pool_cannot_run(
 
 async def test_the_probe_of_the_object_store_is_cached_and_reports_its_failure() -> None:
     """A store that fails is named; the answer is reused for a minute; the fake answers."""
-    from choregos_adapters.fakes import FakeObjectStore
-    from choregos_api.object_store import use_object_store
-    from choregos_api.services import readiness
+    from tranibor_adapters.fakes import FakeObjectStore
+    from tranibor_api.object_store import use_object_store
+    from tranibor_api.services import readiness
 
     store = FakeObjectStore()
     use_object_store(store)
@@ -222,9 +222,9 @@ async def test_the_probe_of_the_object_store_is_cached_and_reports_its_failure()
 async def test_readiness_of_a_project_that_writes_files_lists_the_object_store(
     client: AsyncClient, admin: str
 ) -> None:
-    from choregos_adapters.fakes import FakeObjectStore
-    from choregos_api.object_store import use_object_store
-    from choregos_api.services import readiness
+    from tranibor_adapters.fakes import FakeObjectStore
+    from tranibor_api.object_store import use_object_store
+    from tranibor_api.services import readiness
 
     store = FakeObjectStore()
     use_object_store(store)
@@ -255,9 +255,9 @@ async def test_readiness_of_a_project_that_writes_files_lists_the_object_store(
 
 async def _store_an_older_copy(project_id: str, name: str, drop: str) -> None:
     """The copy a project made of its template before the template was fixed (#817): the line is gone."""
-    from choregos_api.db.models import WorkflowDef
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import WorkflowDef
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         row = (
@@ -355,10 +355,10 @@ async def test_a_workflow_published_by_hand_or_a_project_with_no_template_is_not
 
 
 async def test_a_plugin_server_is_not_a_direct_connector(client: AsyncClient, admin: str) -> None:
-    from choregos_api.db.models import Organization, OrgConnector
-    from choregos_api.db.session import session_scope
-    from choregos_api.secret_store import FakeSecretStore, set_secret_store
     from sqlalchemy import select
+    from tranibor_api.db.models import Organization, OrgConnector
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.secret_store import FakeSecretStore, set_secret_store
 
     set_secret_store(FakeSecretStore())
     try:

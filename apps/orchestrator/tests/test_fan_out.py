@@ -85,10 +85,10 @@ SYMBOLS = [{"symbol": "AAA", "dsr": 0.97}, {"symbol": "BBB", "dsr": 0.91}]
 
 
 async def _install(setup: Fixture, research: dict[str, Any], fields: dict[str, Any]) -> None:
-    from choregos_adapters.tracker.internal import InternalTracker
-    from choregos_api.db.models import WorkflowDef, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_contracts import Workflow
+    from tranibor_adapters.tracker.internal import InternalTracker
+    from tranibor_api.db.models import WorkflowDef, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_contracts import Workflow
 
     setup.adapters.tracker = InternalTracker()
     async with session_scope() as session:
@@ -141,9 +141,9 @@ async def _until(what: str, probe: Any, *, within_s: float = 120.0) -> Any:
 
 
 async def _items(setup: Fixture) -> dict[str, Any]:
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = await session.execute(select(WorkItem).where(WorkItem.project_id == setup.project_id))
@@ -184,9 +184,9 @@ async def _waiting(env: Any, workflow_id: str) -> None:
 async def test_the_parent_waits_for_every_child_then_reads_what_they_concluded(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.api.enums.v1 import EventType
     from temporalio.worker import Replayer
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     await _install(setup, _research(), {"symbols": SYMBOLS})
     with temporal_env.auto_time_skipping_disabled():
@@ -273,7 +273,7 @@ async def test_a_lost_signal_is_caught_up_by_the_re_read(
     setup: Fixture, temporal_env: Any, worker_factory: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Without `child_settled`, the parent still learns at its next re-read (time skipped)."""
-    from choregos_orchestrator.activities import children as children_activities
+    from tranibor_orchestrator.activities import children as children_activities
 
     async def lost(_settled: dict[str, str]) -> None:
         return None
@@ -293,8 +293,8 @@ async def test_a_lost_signal_is_caught_up_by_the_re_read(
 
 async def test_opening_twice_opens_nothing_new(setup: Fixture) -> None:
     """A retried activity, a parent replayed after a crash: the children are found, not opened again."""
-    from choregos_orchestrator.activities.children import spawn_children
     from temporalio.testing import ActivityEnvironment
+    from tranibor_orchestrator.activities.children import spawn_children
 
     await _install(setup, _research(), {"symbols": SYMBOLS})
     started: list[str] = []
@@ -318,7 +318,7 @@ async def test_opening_twice_opens_nothing_new(setup: Fixture) -> None:
 
 
 def test_the_list_is_read_from_the_fields_or_from_an_output_kept_as_json() -> None:
-    from choregos_orchestrator.activities.children import SpawnRefusedError, items_of
+    from tranibor_orchestrator.activities.children import SpawnRefusedError, items_of
 
     assert items_of("fields.symbols", {"symbols": ["A"]}, {}) == ["A"]
     metrics = {"metrics": json.dumps({"relevant": [{"symbol": "A"}]})}
@@ -330,7 +330,7 @@ def test_the_list_is_read_from_the_fields_or_from_an_output_kept_as_json() -> No
 
 
 def test_the_rendering_keeps_a_type_and_refuses_what_it_cannot_render() -> None:
-    from choregos_orchestrator.activities.children import SpawnRefusedError, render
+    from tranibor_orchestrator.activities.children import SpawnRefusedError, render
 
     context = {"item": {"symbol": "A", "dsr": 0.9}, "rank": 2}
     assert render({"dsr": "{{ item.dsr }}", "t": "#{{ rank }} {{ item.symbol }}"}, context) == {
@@ -344,7 +344,7 @@ def test_the_rendering_keeps_a_type_and_refuses_what_it_cannot_render() -> None:
 
 
 async def test_the_local_mode_stops_at_a_fan_out_instead_of_passing_it(setup: Fixture) -> None:
-    from choregos_orchestrator.local import run_local
+    from tranibor_orchestrator.local import run_local
 
     await _install(setup, _research(), {"symbols": SYMBOLS})
     trace = await run_local(setup.project_id, setup.work_item_id)

@@ -1,6 +1,6 @@
 """A resolved connector secret does not leave the process in an error or a log line (S39-06c, ADR 0058).
 
-The pattern rules of `choregos_core.redaction` know token SHAPES; a vendor key has none. What the
+The pattern rules of `tranibor_core.redaction` know token SHAPES; a vendor key has none. What the
 platform resolved is remembered, and masked wherever it would be written."""
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ VALUE = "plain-vendor-key-9f8e7d"
 
 @pytest.fixture(autouse=True)
 def key(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    from choregos_core.redaction import forget_secrets
+    from tranibor_core.redaction import forget_secrets
 
     monkeypatch.setenv("CHOREGOS_SECRETS_KEKS", "k1:" + base64.b64encode(os.urandom(32)).decode())
     forget_secrets()
@@ -32,8 +32,8 @@ def key(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 @pytest.fixture
 def leaky(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """A tracker type whose factory fails with the key in its message, as a careless SDK would."""
-    from choregos_adapters import ConnectorTypeSpec, register
-    from choregos_adapters.registry import _REGISTRY, _SPECS
+    from tranibor_adapters import ConnectorTypeSpec, register
+    from tranibor_adapters.registry import _REGISTRY, _SPECS
 
     def factory(config: dict[str, Any]) -> Any:
         raise RuntimeError(f"upstream refused the key {config['api_token']} for this account")
@@ -67,8 +67,8 @@ async def test_a_failing_connector_test_leaves_no_secret_in_its_answer_or_last_e
 
 
 def test_the_log_processor_masks_remembered_values_in_every_field() -> None:
-    from choregos_api.logging import redact_known_secrets
-    from choregos_core.redaction import remember_secret
+    from tranibor_api.logging import redact_known_secrets
+    from tranibor_core.redaction import remember_secret
 
     remember_secret(VALUE)
     event = redact_known_secrets(
@@ -80,8 +80,8 @@ def test_the_log_processor_masks_remembered_values_in_every_field() -> None:
 
 
 def test_a_configured_logger_does_not_print_a_remembered_value(monkeypatch: pytest.MonkeyPatch) -> None:
-    from choregos_api.logging import configure_logging, get_logger
-    from choregos_core.redaction import remember_secret
+    from tranibor_api.logging import configure_logging, get_logger
+    from tranibor_core.redaction import remember_secret
 
     out = io.StringIO()
     configure_logging("INFO", True)

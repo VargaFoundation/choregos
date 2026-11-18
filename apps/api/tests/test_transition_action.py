@@ -62,11 +62,11 @@ transitions:
 
 @pytest.fixture
 def graph(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
-    import choregos_adapters
-    from choregos_adapters.fakes.entra import FakeEntra
+    import tranibor_adapters
+    from tranibor_adapters.fakes.entra import FakeEntra
 
     fake_entra = FakeEntra()
-    monkeypatch.setattr(choregos_adapters, "FAKE_ENTRA", fake_entra)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_ENTRA", fake_entra)
     monkeypatch.setenv("CONNECTOR_ENTRA_CLIENT_SECRET", "connector-secret")
     yield fake_entra
 
@@ -96,7 +96,7 @@ async def _work_item(client: AsyncClient, pid: str, fields: dict[str, Any]) -> d
 async def test_a_changed_field_is_validated_by_its_workflow_and_the_interpreter_learns_it(
     client: AsyncClient, project: dict[str, Any], graph: Any, app: Any
 ) -> None:
-    from choregos_api.temporal import FakeTemporal, get_temporal
+    from tranibor_api.temporal import FakeTemporal, get_temporal
 
     pid = project["id"]
     assert (await _publish(client, pid)).status_code == 200
@@ -141,9 +141,9 @@ async def test_an_unknown_effect_is_refused_at_publication(
 async def test_an_operation_the_project_forbids_is_neither_proposed_nor_run(
     client: AsyncClient, project: dict[str, Any], graph: Any
 ) -> None:
-    from choregos_api.db.models import Action, Project
-    from choregos_api.db.session import session_scope
-    from choregos_api.effects import EffectContext, EffectRefused, effect
+    from tranibor_api.db.models import Action, Project
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.effects import EffectContext, EffectRefused, effect
 
     pid = project["id"]
     await _directory(client)
@@ -200,10 +200,10 @@ async def test_an_operation_reserved_to_other_groups_is_forbidden_to_this_projec
 
 
 async def _propose_from_the_transition(pid: str, item_id: str, attempt: int = 1, **action: Any) -> Any:
-    from choregos_api.db.models import Project, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.actions import propose_for_transition
-    from choregos_core.dsl import parse_workflow
+    from tranibor_api.db.models import Project, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.actions import propose_for_transition
+    from tranibor_core.dsl import parse_workflow
 
     spec = parse_workflow(ARRIVAL.replace("EFFECT", "connector.call"))[0].transitions[0].action
     assert spec is not None
@@ -257,7 +257,7 @@ async def test_the_policy_decides_when_everything_is_allowed_otherwise_a_person(
 
 
 def test_a_template_that_escapes_the_sandbox_is_a_refusal_not_a_failure() -> None:
-    from choregos_api.effects import EffectRefused, render
+    from tranibor_api.effects import EffectRefused, render
 
     for template in ("{{ fields.__class__.__mro__ }}", "{{ fields.upn"):
         with pytest.raises(EffectRefused, match="template refused"):
@@ -267,7 +267,7 @@ def test_a_template_that_escapes_the_sandbox_is_a_refusal_not_a_failure() -> Non
 async def test_a_rejection_warns_the_work_item_that_waits(
     client: AsyncClient, project: dict[str, Any], graph: Any
 ) -> None:
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.temporal import get_temporal
 
     pid = project["id"]
     await _directory(client)

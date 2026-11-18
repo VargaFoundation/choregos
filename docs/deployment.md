@@ -269,7 +269,7 @@ What the platform puts in the manifest, derived from the instance and the adapte
 | `public` | as chosen |
 
 The permissions and events are the adapters' own list (`APP_PERMISSIONS`, `APP_EVENTS` in
-`choregos_adapters.github`), the one the GitHub procedures show; a test holds this table to it.
+`tranibor_adapters.github`), the one the GitHub procedures show; a test holds this table to it.
 Add `workflows: write` on GitHub by hand only if agents edit `.github/workflows`.
 
 **What is stored where.** One row of `github_app_registrations`, readable in the platform scope only:
@@ -559,11 +559,11 @@ digest, `60`: an input that does not match its digest, `80`: the context reducti
 
 The community edition serves one theme, its default (`GET /api/v1/theme`, public). Customising the
 look (colours per mode, radii, title font, logo, product name, footer, default mode) is an
-enterprise feature: an extension calls `choregos_api.extensions.declare_theme_provider(fn)` with
+enterprise feature: an extension calls `tranibor_api.extensions.declare_theme_provider(fn)` with
 `fn(session, org) -> dict | None` and the core validates what it returns (schema, then the
 console's contrast budget on the effective colours). An invalid theme is replaced by the default
 (`X-Choregos-Theme: fallback`, with the violations in the API log); an extension can check a theme
-itself with `choregos_api.theme.validate_theme`. A theme cannot change the mono font, the layout or
+itself with `tranibor_api.theme.validate_theme`. A theme cannot change the mono font, the layout or
 the attribution line. Fonts and images are served by the API under `/api/v1/` so that the console's
 CSP stays unchanged; hand files to a plugin with `choregos-api.extraVolumes` (S39-03c).
 The console reads the instance theme on the server before drawing anything (`CHOREGOS_API_URL`,
@@ -672,7 +672,7 @@ Two things have to be true for an agent to actually get a tool, and both are eas
 
 When a run is offered tool scripts (`tools.scripts` in its stage input,
 [ADR 0122](adr/0122-an-agent-may-call-its-run-s-tools-from-a-script.md)), the server on `localhost:7777` also
-serves the **tool bridge** (`choregos_tools_mcp/bridge.py`): a script the agent writes calls the run's tools
+serves the **tool bridge** (`tranibor_tools_mcp/bridge.py`): a script the agent writes calls the run's tools
 through it, holding no credential of its own.
 
 | Route | What it does |
@@ -700,7 +700,7 @@ runner's; each carries its own time.
 The runner also writes the client a script imports (S57-08, [ADR 0122](adr/0122-an-agent-may-call-its-run-s-tools-from-a-script.md)
 §3): `choregos_tools` under `$TMPDIR/choregos/tools`, outside the workspace and anew for each run, from the list
 `GET /bridge/v1/tools` hands back (the runner reads it with its own client, so the same list whether it or the
-Tekton sidecar serves the bridge); the package's code is `packages/runner/src/choregos_runner/tool_client.py`,
+Tekton sidecar serves the bridge); the package's code is `packages/runner/src/tranibor_runner/tool_client.py`,
 copied, and only the per-server modules and the index are generated. The agent's environment gains
 `CHOREGOS_TOOLS_DIR` (that directory), `CHOREGOS_TOOLS_BRIDGE` (`http://<the tool server's host:port>/bridge/v1`),
 `PYTHONPATH` (the directory first, an existing value kept after it) and `TMPDIR` (the runner's temporary
@@ -1100,7 +1100,7 @@ former and the new key run side by side, a daemon may be refused a few times in 
 [ADR 0148](adr/0148-the-outpost-door-is-a-third-door-with-its-own-contract.md) §8). Polls wait by the
 hundred. Split out, they take no worker and no pooled connection from the console and the runs: the
 chart renders a Deployment `choregos-outposts-door` from the API image, started as
-`python -m choregos_api.outposts` (`apps/api/src/choregos_api/outposts/alone.py`), a Service of the
+`python -m tranibor_api.outposts` (`apps/api/src/tranibor_api/outposts/alone.py`), a Service of the
 same name, a disruption budget, and the route then leads there.
 
 | Value (under `global.outposts.door`) | Default | What it does |
@@ -1374,7 +1374,7 @@ global:
 
 ## Database migrations
 
-Alembic runs as a Helm hook before the API starts, through `python -m choregos_api.migrate`
+Alembic runs as a Helm hook before the API starts, through `python -m tranibor_api.migrate`
 (`upgrade heads`: the core, then the branch of any installed plugin that ships a schema):
 
 ```yaml
@@ -1480,7 +1480,7 @@ instant, before the runner.
 
 **What it does.** Every pod that runs agent code gets, as its FIRST init container, `egress-gate`: the
 `k8s_job` pod (before a hosted agent's sidecar) and the `agent_sandbox` template (before the ADR 0146
-agent container). It runs from the runner's image (`python -m choregos_core.egress_gate`), tries a
+agent container). It runs from the runner's image (`python -m tranibor_core.egress_gate`), tries a
 direct TCP connection to `target` again and again, and exits 0 once three attempts in a row did not
 connect (refused, reset, unreachable or timed out: a REJECT rule answers like a closed port, a DROP rule
 like a dead host). An attempt that connects starts the count again. Still open after
@@ -1913,7 +1913,7 @@ corrected (ADR 0004). A drift is a platform audit line `trace.drift` (no organis
 platform session reads it: `GET /audit` as a platform administrator), written once per run; a run
 whose trace has no gateway usage is counted as `missing` and not recorded, since a trace may be
 sampled or dropped. The job prints its counts as one JSON line and fails only when Tempo answers
-with an error. Run it by hand with `python -m choregos_api.trace_drift --hours 72`.
+with an error. Run it by hand with `python -m tranibor_api.trace_drift --hours 72`.
 
 The agent pods are not given the endpoint, and `choregos-runner-egress` does not open the
 collector to them (#946): they run the agent's code, which could otherwise forge the gateway's
@@ -2002,7 +2002,7 @@ The migration job follows the API's image. An image from another registry is ano
 ### Demonstration fakes (`demoFakes`)
 
 `demoFakes.enabled: true` deploys **one** pod — the API image, `python -m
-choregos_adapters.fakes.server` — serving the fakes of the HR scenario: MCP endpoints for the device
+tranibor_adapters.fakes.server` — serving the fakes of the HR scenario: MCP endpoints for the device
 manager, the carrier, the badge readers and the supplier's agent
 (`http://choregos-demo-fakes:8090/{mdm,shipping,access_control,supplier}/mcp`), and a fake
 Microsoft Graph (`…/graph/v1.0`, `…/login`). One replica is the point: the API runs two and the
@@ -2289,10 +2289,10 @@ group `choregos.plugins`, the Grafana dashboard uids and the French ticket fixtu
 | :-- | :-- | :-- |
 | `CHOREGOS_ESSAI_ONTOLOGIE=1` | `CHOREGOS_ONTOLOGY_TRIAL=1` | Rename it in `global.extraEnv` (or `.env`): the former variable no longer activates the ontology extension. <!-- lang: fr-ok --> |
 | `CONNECTOR_DEMO_JETON` | `CONNECTOR_DEMO_TOKEN` | Rename it: the former variable is no longer read, and a demo fakes process with only it set asks for no token. <!-- lang: fr-ok --> |
-| `python -m choregos_api.migrer` | `python -m choregos_api.migrate` | Change a custom migration command; the chart already runs the new one. <!-- lang: fr-ok --> |
-| `choregos-admin = choregos_api.outils:main`, `choregos_api.outils` | `choregos_api.admin_cli:main`, `choregos_api.admin_cli` | The `choregos-admin` script already points at the new module. <!-- lang: fr-ok --> |
-| `python -m choregos_core.catalogue_d_agents.evals` | `python -m choregos_core.agent_catalogue.evals` | Change a scheduled eval job. <!-- lang: fr-ok --> |
-| `python -m choregos_adapters.fakes.serveur` | `python -m choregos_adapters.fakes.server` | Change your own container command of the demo fakes; the chart already runs the new one. <!-- lang: fr-ok --> |
+| `python -m tranibor_api.migrer` | `python -m tranibor_api.migrate` | Change a custom migration command; the chart already runs the new one. <!-- lang: fr-ok --> |
+| `choregos-admin = tranibor_api.outils:main`, `tranibor_api.outils` | `tranibor_api.admin_cli:main`, `tranibor_api.admin_cli` | The `choregos-admin` script already points at the new module. <!-- lang: fr-ok --> |
+| `python -m tranibor_core.catalogue_d_agents.evals` | `python -m tranibor_core.agent_catalogue.evals` | Change a scheduled eval job. <!-- lang: fr-ok --> |
+| `python -m tranibor_adapters.fakes.serveur` | `python -m tranibor_adapters.fakes.server` | Change your own container command of the demo fakes; the chart already runs the new one. <!-- lang: fr-ok --> |
 | `outils:` (top-level key of the tool catalogue) | `tools:` | Rename the key: a catalogue with the former key is refused at load. <!-- lang: fr-ok --> |
 | `…/api/v1/webhooks/tekton?jeton=<secret>` | `…/api/v1/webhooks/tekton?token=<secret>` | Change the Tekton CloudEvents sink URL: the former parameter is no longer read, so the sink gets a 401. <!-- lang: fr-ok --> |
 | The `legacy_alertname` label on `ChoregosApi5xxErrors`, `ChoregosRunPending`, `ChoregosDailyBudgetHigh` and `ChoregosTrainFrozen` | `alertname` with the English name | Rewrite an Alertmanager route, inhibition or silence that matched `legacy_alertname`. |
@@ -2315,7 +2315,7 @@ The choregos-ee coordination is [#1229](https://github.com/graalsystems/tranibor
 
 | Removed | Replacement |
 | :-- | :-- |
-| module `choregos_api.greffons` | `choregos_api.extensions` <!-- lang: fr-ok --> |
+| module `tranibor_api.greffons` | `tranibor_api.extensions` <!-- lang: fr-ok --> |
 | `declarer_un_routeur`, `routeurs_declares`, `reinitialiser` | `declare_router`, `declared_routers`, `reset` <!-- lang: fr-ok --> |
 | `declarer_une_section_d_administration`, `sections_declarees`, `chemins_d_une_section` | `declare_admin_section`, `declared_sections`, `section_paths` <!-- lang: fr-ok --> |
 | `FournisseurDOutils`, `declarer_un_fournisseur_d_outils`, `fournisseurs_d_outils` | `ToolProvider`, `declare_tool_provider`, `tool_providers` <!-- lang: fr-ok --> |
@@ -2327,20 +2327,20 @@ The choregos-ee coordination is [#1229](https://github.com/graalsystems/tranibor
 | `_ROUTEURS`, `_FOURNISSEURS_D_OUTILS`, `_FOURNISSEURS_HUMAINS`, `_INSTALLATEURS`, `_CONTROLES`, `_televersements` | `_ROUTERS`, `_TOOL_PROVIDERS`, `_HUMAN_TOOL_PROVIDERS`, `_INSTALLERS`, `_GESTURE_CHECKS`, `_uploads` <!-- lang: fr-ok --> |
 | keywords `lister=`, `appeler=`, `en_attente=` (and the attributes of the same names) of the tool providers | `list_tools=`, `call_tool=`, `pending=` <!-- lang: fr-ok --> |
 | `ecriture: true` in a tool announced by a human tool provider | `write: true` (the former key has no effect: the tool is a read) <!-- lang: fr-ok --> |
-| module `choregos_api.effets` | `choregos_api.effects` <!-- lang: fr-ok --> |
+| module `tranibor_api.effets` | `tranibor_api.effects` <!-- lang: fr-ok --> |
 | `EffetRefuse`, `ContexteEffet`, `Executer` | `EffectRefused`, `EffectContext`, `Execute` <!-- lang: fr-ok --> |
 | `declarer_un_effet(..., politique=)`, `politique_de_l_effet`, `effet`, `effets_declares`, `rendre`, `reinitialiser` | `declare_effect(..., policy=)`, `effect_policy`, `effect`, `declared_effects`, `render`, `reset` <!-- lang: fr-ok --> |
-| `choregos_core.quotas`: `DEFAUT`, `Fournisseur`, `declarer_un_quota`, `quota_pour`, `reinitialiser`, `Quota(memoire=)`, `Quota.memoire` | `DEFAULT`, `QuotaProvider`, `declare_quota`, `quota_for`, `reset`, `Quota(memory=)`, `Quota.memory` <!-- lang: fr-ok --> |
-| `choregos_core.admission`: `DemandeDeRun`, `AdmissionRefusee`, `Controle`, `declarer_une_admission`, `admissions_declarees`, `verifier`, `reinitialiser` | `RunRequest`, `AdmissionRefused`, `AdmissionCheck`, `declare_admission`, `declared_admissions`, `check`, `reset` <!-- lang: fr-ok --> |
-| `choregos_core.secrets`: `SecretIntrouvable`, `declarer_un_resolveur` | `SecretNotFound`, `declare_resolver` <!-- lang: fr-ok --> |
-| `choregos_api.edition`: `COMMUNAUTAIRE`, `ENTREPRISE`, `declarer(..., fonctions=)`, `declarer_le_mappeur_de_groupes`, `mappeur_de_groupes`, `courante`, `fonctions`, `est_entreprise` | `COMMUNITY`, `ENTERPRISE`, `declare(..., features=)`, `declare_group_mapper`, `group_mapper`, `current`, `features`, `is_enterprise` <!-- lang: fr-ok --> |
-| `choregos_api.edition`: `SessionRefusee`, `declarer_une_validation_de_session`, `validations_de_session`, `declarer_un_administrateur_de_plateforme`, `administrateurs_de_plateforme`, `reinitialiser` | `SessionRefused`, `declare_session_validation`, `session_validations`, `declare_platform_administrator`, `platform_administrators`, `reset` <!-- lang: fr-ok --> |
+| `tranibor_core.quotas`: `DEFAUT`, `Fournisseur`, `declarer_un_quota`, `quota_pour`, `reinitialiser`, `Quota(memoire=)`, `Quota.memoire` | `DEFAULT`, `QuotaProvider`, `declare_quota`, `quota_for`, `reset`, `Quota(memory=)`, `Quota.memory` <!-- lang: fr-ok --> |
+| `tranibor_core.admission`: `DemandeDeRun`, `AdmissionRefusee`, `Controle`, `declarer_une_admission`, `admissions_declarees`, `verifier`, `reinitialiser` | `RunRequest`, `AdmissionRefused`, `AdmissionCheck`, `declare_admission`, `declared_admissions`, `check`, `reset` <!-- lang: fr-ok --> |
+| `tranibor_core.secrets`: `SecretIntrouvable`, `declarer_un_resolveur` | `SecretNotFound`, `declare_resolver` <!-- lang: fr-ok --> |
+| `tranibor_api.edition`: `COMMUNAUTAIRE`, `ENTREPRISE`, `declarer(..., fonctions=)`, `declarer_le_mappeur_de_groupes`, `mappeur_de_groupes`, `courante`, `fonctions`, `est_entreprise` | `COMMUNITY`, `ENTERPRISE`, `declare(..., features=)`, `declare_group_mapper`, `group_mapper`, `current`, `features`, `is_enterprise` <!-- lang: fr-ok --> |
+| `tranibor_api.edition`: `SessionRefusee`, `declarer_une_validation_de_session`, `validations_de_session`, `declarer_un_administrateur_de_plateforme`, `administrateurs_de_plateforme`, `reinitialiser` | `SessionRefused`, `declare_session_validation`, `session_validations`, `declare_platform_administrator`, `platform_administrators`, `reset` <!-- lang: fr-ok --> |
 | `Principal.authentifie_le` | `Principal.authenticated_at` <!-- lang: fr-ok --> |
-| module `choregos_api.migrer` (with `emplacements_des_greffons`, `GROUPE_DE_MIGRATIONS`), `configuration(avec_les_greffons=)` | `choregos_api.migrate` (`extension_locations`, `MIGRATIONS_GROUP`), `configuration(with_extensions=)` <!-- lang: fr-ok --> |
-| package `choregos_core.catalogue_d_agents` (and `.evals`): `EntreeDuCatalogue`, `DOSSIER`, `entrees`, `entree`, `skills_du_catalogue`, `fichiers_de_la_skill` | `choregos_core.agent_catalogue` (and `.evals`): `CatalogueEntry`, `FOLDER`, `entries`, `entry`, `catalogue_skills`, `skill_files` <!-- lang: fr-ok --> |
-| module `choregos_adapters.fakes.serveur` | `choregos_adapters.fakes.server` <!-- lang: fr-ok --> |
-| module `choregos_contracts.issue_codes` (`RENAMED_ISSUE_CODES`, `canonical_issue_code`, `deprecated_issue_code`) | none: issue codes are English only <!-- lang: fr-ok --> |
-| `choregos_core.compat.EXTERNAL_ALIAS_REMOVAL` | none: pass the release to `alias_names(..., removed_in=)` |
+| module `tranibor_api.migrer` (with `emplacements_des_greffons`, `GROUPE_DE_MIGRATIONS`), `configuration(avec_les_greffons=)` | `tranibor_api.migrate` (`extension_locations`, `MIGRATIONS_GROUP`), `configuration(with_extensions=)` <!-- lang: fr-ok --> |
+| package `tranibor_core.catalogue_d_agents` (and `.evals`): `EntreeDuCatalogue`, `DOSSIER`, `entrees`, `entree`, `skills_du_catalogue`, `fichiers_de_la_skill` | `tranibor_core.agent_catalogue` (and `.evals`): `CatalogueEntry`, `FOLDER`, `entries`, `entry`, `catalogue_skills`, `skill_files` <!-- lang: fr-ok --> |
+| module `tranibor_adapters.fakes.serveur` | `tranibor_adapters.fakes.server` <!-- lang: fr-ok --> |
+| module `tranibor_contracts.issue_codes` (`RENAMED_ISSUE_CODES`, `canonical_issue_code`, `deprecated_issue_code`) | none: issue codes are English only <!-- lang: fr-ok --> |
+| `tranibor_core.compat.EXTERNAL_ALIAS_REMOVAL` | none: pass the release to `alias_names(..., removed_in=)` |
 
 ## Upgrading to 0.21
 
@@ -2448,7 +2448,7 @@ What the chart does for a multi-node installation, and the knobs behind it:
 | A node drain must not take the API, the front or a worker queue down | one `PodDisruptionBudget` per component, and per orchestrator queue — rendered only when there is more than one replica (a budget on a single replica blocks the drain and protects nothing) | `choregos-api.podDisruptionBudget`, `choregos-web.podDisruptionBudget`, `choregos-orchestrator.podDisruptionBudget` |
 | Two replicas must not share a node | pod anti-affinity on `kubernetes.io/hostname`: `soft` (preferred, the default — a one-node bench still schedules), `hard` (one replica per node, or no pod), `none` | `global.antiAffinity` |
 | The database must not be exhausted under load | a **bounded** connection pool per process: at most `size + maxOverflow` connections, a short wait beyond. Size PostgreSQL's `max_connections` as (API replicas + workers) × (size + maxOverflow), plus room for migrations and an operator | `global.database.pool.{size,maxOverflow,timeoutSeconds}` |
-| A serious environment must not run on bench dependencies | the chart **refuses to render** in `staging` and `prod` when any `embedded` dependency, `devSecrets`, `devLogin`, `demoFakes`, the fakes (`global.fakes`) or fakes handed to every run (`choregos-orchestrator.runner.env.CHOREGOS_FAKES`) is on, and names the value; the API, the outposts' door, the workers and the runner refuse to start on `CHOREGOS_FAKES` there too (S80-03) | `templates/guard.yaml`, `choregos_core/production.py` |
+| A serious environment must not run on bench dependencies | the chart **refuses to render** in `staging` and `prod` when any `embedded` dependency, `devSecrets`, `devLogin`, `demoFakes`, the fakes (`global.fakes`) or fakes handed to every run (`choregos-orchestrator.runner.env.CHOREGOS_FAKES`) is on, and names the value; the API, the outposts' door, the workers and the runner refuse to start on `CHOREGOS_FAKES` there too (S80-03) | `templates/guard.yaml`, `tranibor_core/production.py` |
 | A worker must not stay attached to a dead node | tolerations of 20 s instead of Kubernetes' 300 s | `choregos-orchestrator.unreachableTolerationSeconds` |
 | A worker pod's load is bounded, and the bound is yours to set | the Temporal worker's slots, as `CHOREGOS_WORKER_MAX_CONCURRENT_ACTIVITIES` / `_WORKFLOW_TASKS` / `_LOCAL_ACTIVITIES` and `CHOREGOS_WORKER_MAX_CACHED_WORKFLOWS`. Defaults 20 / 100 / 100 / 1000, the values the worker always had. An executor activity holds a run's stage for its whole length, so `activities` × executor replicas bounds the simultaneous runs (20 × 2 = 40 by default) | `choregos-orchestrator.concurrency.{activities,workflowTasks,localActivities,cachedWorkflows}`, overridden per queue by `queues[].concurrency` |
 | An agent must not reach the Internet except where the policy says | in **per-project runner namespaces** the provisioning deploys a **Squid proxy per project** with the policy's `allow_domains` (project-level, host-level, no per-agent wall), and every agent pod gets `HTTPS_PROXY` pointing to it. No allowed domain, no proxy, no door. In the **release namespace** (the `agent_sandbox` executor) the chart's **`choregos-egress`** proxy is per run: it knows which run is calling, applies the agent ∩ project ∩ organisation network, and reports every decision ([ADR 0070](adr/0070-network-access-is-bounded-and-enforced-per-run.md)) | `policy.sandbox.network.allow_domains`, `choregos-orchestrator.runner.egressProxy` (empty on a bench), `runner.egressImage` to pin by digest; `global.egress.*` for `choregos-egress` |
@@ -2462,7 +2462,7 @@ allowed domain answers 200 through the proxy, any other gets 403 from Squid).
 ### The per-run egress proxy (`choregos-egress`)
 
 `global.egress.enabled: true` renders a Deployment and a Service named `choregos-egress` in the release
-namespace, from the API image (`python -m choregos_api.egress`), with a restricted pod (non-root,
+namespace, from the API image (`python -m tranibor_api.egress`), with a restricted pod (non-root,
 read-only root file system, all capabilities dropped, `RuntimeDefault` seccomp, no service account
 token). Nothing is rendered by default.
 
@@ -2817,20 +2817,20 @@ held until 0.23.0. "Upgrading to 0.24" lists what was removed.
 **Internal aliases and shims are gone (S45-40).** Where a Python row below says "internal" and
 "alias keeps working" or "a shim keeps it importable", that held while another package still
 imported the former name. Every user has switched, and the aliases and shims defined under
-`packages/` are deleted: `choregos_core.acces`, `choregos_core.sorties`,
-`choregos_core.dsl.exigences`, `choregos_adapters.fakes.rh`, `choregos_adapters.fakes.cd_de_demo`,
-`choregos_adapters.familles`, `choregos_adapters.memory.lexicale`,
-`choregos_adapters.tracker.champs`, `choregos_adapters.tracker.interne` and
-`choregos_runner.outils_locaux`, and every former name of those packages' `alias:internal` lines.
+`packages/` are deleted: `tranibor_core.acces`, `tranibor_core.sorties`,
+`tranibor_core.dsl.exigences`, `tranibor_adapters.fakes.rh`, `tranibor_adapters.fakes.cd_de_demo`,
+`tranibor_adapters.familles`, `tranibor_adapters.memory.lexicale`,
+`tranibor_adapters.tracker.champs`, `tranibor_adapters.tracker.interne` and
+`tranibor_runner.outils_locaux`, and every former name of those packages' `alias:internal` lines.
 The names marked `alias:external` resolved until 0.23.0 and were removed in 0.24.0 (S45-49).
 
 **Internal aliases and shims under `apps/` are gone too (S45-46).** The same holds for the rows
 below whose former name is marked internal or "a shim": every importer has switched, and the shims
-defined under `apps/api` and `apps/orchestrator` are deleted: `choregos_api.adaptateurs`,
+defined under `apps/api` and `apps/orchestrator` are deleted: `tranibor_api.adaptateurs`,
 `amorcage`, `fraicheur`, `limiteur`, `metriques`, `mcp.appelant`, `mcp.garde_fous`, `mcp.outils`,
 `schemas.identite`, `livraison`, `mesures`, `plateforme`, `projets`, `services.catalogue_d_agents`,
 `connecteurs`, `courtier`, `couts`, `evenements`, `gabarits`, `memoire`, `parcours`, `projets`,
-`recus`, `routage`, `choregos_orchestrator.repartition`, `workflows.planification`,
+`recus`, `routage`, `tranibor_orchestrator.repartition`, `workflows.planification`,
 `activities.bilan` and `activities.garde`, with every former name of the `alias:internal` lines of
 those apps and the former keywords of the wrappers (`proposer`, `publier_workflow`,
 `installer_skills_et_agents`, `Caller(jeton=...)`, `RateLimiter(par_minute=...)`,
@@ -2925,9 +2925,9 @@ must match the rule name instead.
 | :-- | :-- | :-- |
 | `CHOREGOS_ESSAI_ONTOLOGIE=1` | `CHOREGOS_ONTOLOGY_TRIAL=1` | Rename it in `global.extraEnv`; the former one still works until 0.23.0 and warns. <!-- lang: fr-ok --> |
 | `CONNECTOR_DEMO_JETON` | `CONNECTOR_DEMO_TOKEN` | The demo fakes' chart switches itself; rename it in your own values or `.env`; the former one is still read when the new one is unset (until 0.23.0). <!-- lang: fr-ok --> |
-| `python -m choregos_adapters.fakes.serveur` | `python -m choregos_adapters.fakes.server` | The chart switches the demo fakes' command; change your own container command; the former one still serves until 0.23.0. <!-- lang: fr-ok --> |
-| `python -m choregos_api.migrer` | `python -m choregos_api.migrate` | Change a custom migration command; the former one still works until 0.23.0. <!-- lang: fr-ok --> |
-| `python -m choregos_core.catalogue_d_agents.evals` | `python -m choregos_core.agent_catalogue.evals` | Same. <!-- lang: fr-ok --> |
+| `python -m tranibor_adapters.fakes.serveur` | `python -m tranibor_adapters.fakes.server` | The chart switches the demo fakes' command; change your own container command; the former one still serves until 0.23.0. <!-- lang: fr-ok --> |
+| `python -m tranibor_api.migrer` | `python -m tranibor_api.migrate` | Change a custom migration command; the former one still works until 0.23.0. <!-- lang: fr-ok --> |
+| `python -m tranibor_core.catalogue_d_agents.evals` | `python -m tranibor_core.agent_catalogue.evals` | Same. <!-- lang: fr-ok --> |
 
 ### Operator-facing names
 
@@ -2937,11 +2937,11 @@ Variables, commands, catalogue keys, files and the trial scripts a person runs o
 
 | Former | New |
 | :-- | :-- |
-| `python -m choregos_api.migrer` | `python -m choregos_api.migrate` <!-- lang: fr-ok --> |
-| `choregos-admin = choregos_api.outils:main` | `choregos-admin = choregos_api.admin_cli:main` (`choregos_api.outils.app` and `.main` are the same objects) <!-- lang: fr-ok --> |
+| `python -m tranibor_api.migrer` | `python -m tranibor_api.migrate` <!-- lang: fr-ok --> |
+| `choregos-admin = tranibor_api.outils:main` | `choregos-admin = tranibor_api.admin_cli:main` (`tranibor_api.outils.app` and `.main` are the same objects) <!-- lang: fr-ok --> |
 | `CHOREGOS_ESSAI_ONTOLOGIE=1` (logs a deprecation warning when it is the only one set) | `CHOREGOS_ONTOLOGY_TRIAL=1` <!-- lang: fr-ok --> |
 | `CHOREGOS_TEST_SUITE_SUR_POSTGRES` (CI sets both; the conftest switches in S45-42) | `CHOREGOS_TEST_SUITE_ON_POSTGRES` <!-- lang: fr-ok --> |
-| `python -m choregos_core.catalogue_d_agents.evals` | `python -m choregos_core.agent_catalogue.evals` <!-- lang: fr-ok --> |
+| `python -m tranibor_core.catalogue_d_agents.evals` | `python -m tranibor_core.agent_catalogue.evals` <!-- lang: fr-ok --> |
 
 #### S45-08: the rest of the core in English
 
@@ -3027,7 +3027,7 @@ trial by hand uses the new paths, environment variables and names below.
 | Compose projects `essai-socle`, `essai-lakehouse`; images `choregos-api:essai`, `choregos-orchestrator:essai` | `trial-foundation`, `trial-lakehouse`; `choregos-api:trial`, `choregos-orchestrator:trial` |
 | Development credentials `essai-dev-only` and the S3 key `essai` | `trial-dev-only` and `trial` |
 | Agent role `analyse_infra` and the workflow actors and transitions of `workflow-it4it.yaml` (`analyste`, `exploitant`, `t-instruire`, `t-clore`, outputs `proposition` and `constat`) | `infra_analysis`, `analyst`, `operator`, `t-investigate`, `t-close`, outputs `proposal` and `finding` |
-| `python -m choregos_api.migrer` in the local-start compose file | `python -m choregos_api.migrate` |
+| `python -m tranibor_api.migrer` in the local-start compose file | `python -m tranibor_api.migrate` |
 
 The Rust crate keeps its name `choregos-runtime-essai`, because `Cargo.lock` is recorded data.
 
@@ -3064,11 +3064,11 @@ rewritten. <!-- lang: fr-ok -->
 An **extension** is a package loaded through the `choregos.plugins` entry point (a "plugin" is the
 ADR 0093 package). Every French name of the extension API below keeps working until 0.23.0 and
 raises a `DeprecationWarning` naming its English replacement. The two former modules
-`choregos_api.greffons` and `choregos_api.effets` are the same module objects as
-`choregos_api.extensions` and `choregos_api.effects`, so a patch on one is a patch on the other.
+`tranibor_api.greffons` and `tranibor_api.effets` are the same module objects as
+`tranibor_api.extensions` and `tranibor_api.effects`, so a patch on one is a patch on the other.
 <!-- lang: fr-ok -->
 
-#### `choregos_api.extensions` (was `choregos_api.greffons`) (S45-04)
+#### `tranibor_api.extensions` (was `tranibor_api.greffons`) (S45-04)
 
 | Former | New |
 | :-- | :-- |
@@ -3101,7 +3101,7 @@ raises a `DeprecationWarning` naming its English replacement. The two former mod
 Unchanged: `signatures`, `SECTION_FEATURES` (its three values `block_permission`, `asset_upload`,
 `section_icon`), `declare_theme_provider`, `theme_provider`.
 
-#### `choregos_api.effects` (was `choregos_api.effets`) (S45-04)
+#### `tranibor_api.effects` (was `tranibor_api.effets`) (S45-04)
 
 | Former | New |
 | :-- | :-- |
@@ -3125,7 +3125,7 @@ The Temporal error type string `EffetRefuse` is not renamed either.
 Nothing today: no deployment setting, row or workflow history changes. A package that imports these
 names (choregos-ee) switches to the English ones before 0.23.0, which removes the former names.
 
-#### `choregos_api.edition` (external, removed in 0.23.0) (S45-12)
+#### `tranibor_api.edition` (external, removed in 0.23.0) (S45-12)
 
 An extension that calls the edition API reads the new names; the former ones warn.
 
@@ -3148,7 +3148,7 @@ a `Principal` that way, and an extension builds one from a session, not from a l
 
 Internal names. A former module path is a shim that is the same module object as the new one; a former name is an alias. An operator has nothing to change unless a row says so.
 
-#### `choregos_core` (S45-04)
+#### `tranibor_core` (S45-04)
 
 | Former | New |
 | :-- | :-- |
@@ -3160,12 +3160,12 @@ Internal names. A former module path is a shim that is the same module object as
 
 #### S45-05: English entry points, ontology activation variable and agent catalogue, French names kept until 0.23.0
 
-Every former name below keeps working until 0.23.0. The former modules `choregos_api.migrer`,
-`choregos_api.outils` and `choregos_core.catalogue_d_agents` are shims; the former package is the
-same module object as `choregos_core.agent_catalogue`, so a patch on one is a patch on the other.
+Every former name below keeps working until 0.23.0. The former modules `tranibor_api.migrer`,
+`tranibor_api.outils` and `tranibor_core.catalogue_d_agents` are shims; the former package is the
+same module object as `tranibor_core.agent_catalogue`, so a patch on one is a patch on the other.
 <!-- lang: fr-ok -->
 
-#### `choregos_api.migrate` (was `choregos_api.migrer`) (S45-05)
+#### `tranibor_api.migrate` (was `tranibor_api.migrer`) (S45-05)
 
 | Former | New |
 | :-- | :-- |
@@ -3176,7 +3176,7 @@ same module object as `choregos_core.agent_catalogue`, so a patch on one is a pa
 `choregos-admin orgs bootstrap` now prints `organisations created: ...; admins: ...` (`none` when
 nothing was created) instead of the French sentence; scripts that matched `aucune` match `none`.
 
-#### `choregos_core.agent_catalogue` (was `choregos_core.catalogue_d_agents`) (S45-05)
+#### `tranibor_core.agent_catalogue` (was `tranibor_core.catalogue_d_agents`) (S45-05)
 
 | Former | New |
 | :-- | :-- |
@@ -3201,19 +3201,19 @@ S43-09, so there is no YAML left to translate in this package.
 
 | Former | New | What an operator does |
 | :-- | :-- | :-- |
-| `choregos_core.dsl.exigences` (`Exigence`, `exigences`, `ORDRE`, `ROLES_DANS_UN_DEPOT`, `ROLES_EN_PRODUCTION`) | `choregos_core.dsl.requirements` (`Requirement`, `requirements`, `ORDER`, `ROLES_IN_A_REPOSITORY`, `ROLES_IN_PRODUCTION`) | Nothing: an internal module path, a shim keeps it importable. <!-- lang: fr-ok --> |
+| `tranibor_core.dsl.exigences` (`Exigence`, `exigences`, `ORDRE`, `ROLES_DANS_UN_DEPOT`, `ROLES_EN_PRODUCTION`) | `tranibor_core.dsl.requirements` (`Requirement`, `requirements`, `ORDER`, `ROLES_IN_A_REPOSITORY`, `ROLES_IN_PRODUCTION`) | Nothing: an internal module path, a shim keeps it importable. <!-- lang: fr-ok --> |
 | `Exigence.capacite`, `Exigence.raisons` | `Requirement.capability`, `Requirement.reasons` | Nothing: internal attributes, read-only aliases keep working. <!-- lang: fr-ok --> |
-| `choregos_core.dsl.trains`: `approbation_du_train`, `env_du_train`, `train_apres_fusion`, `prend_le_train`, `ApprobationDuTrain` | `train_approval`, `train_env`, `train_after_merge`, `takes_the_train`, `TrainApproval` | Nothing: internal names, aliases keep working. <!-- lang: fr-ok --> |
-| `choregos_core.dsl.dates`: `DateIllisible`, `champ_de`, `echeance` | `UnreadableDate`, `field_of`, `due_date` | Nothing: internal names, aliases keep working. <!-- lang: fr-ok --> |
-| `choregos_core.dsl.edition`: `EditionRefusee`, `editer`, `PREFIXES_A_EFFET`, `Edition.avertissements` | `EditRefused`, `edit`, `PREFIXES_WITH_EFFECT`, `Edition.warnings` | Nothing: internal names, aliases keep working. <!-- lang: fr-ok --> |
-| `choregos_core.gates`: `ACTION_REGLEE`, `MOTIF_ADR` | `ACTION_SETTLED`, `ADR_PATTERN` | Nothing: internal names, aliases keep working. <!-- lang: fr-ok --> |
-| `choregos_core.instructions`: `rendre_les_instructions`, `erreurs_des_instructions`, `VARIABLES_D_EXEMPLE` | `render_instructions`, `instruction_errors`, `SAMPLE_VARIABLES` | Nothing: internal names, aliases keep working. <!-- lang: fr-ok --> |
-| `choregos_core.dsl.oublier_les_templates`, `validator.GATES_A_MATIERE`, `policy.CLES_D_APPROBATION` | `forget_templates`, `GATES_NEEDING_PARAMS`, `APPROVAL_KEYS` | Nothing: no importer outside core, renamed without an alias. <!-- lang: fr-ok --> |
+| `tranibor_core.dsl.trains`: `approbation_du_train`, `env_du_train`, `train_apres_fusion`, `prend_le_train`, `ApprobationDuTrain` | `train_approval`, `train_env`, `train_after_merge`, `takes_the_train`, `TrainApproval` | Nothing: internal names, aliases keep working. <!-- lang: fr-ok --> |
+| `tranibor_core.dsl.dates`: `DateIllisible`, `champ_de`, `echeance` | `UnreadableDate`, `field_of`, `due_date` | Nothing: internal names, aliases keep working. <!-- lang: fr-ok --> |
+| `tranibor_core.dsl.edition`: `EditionRefusee`, `editer`, `PREFIXES_A_EFFET`, `Edition.avertissements` | `EditRefused`, `edit`, `PREFIXES_WITH_EFFECT`, `Edition.warnings` | Nothing: internal names, aliases keep working. <!-- lang: fr-ok --> |
+| `tranibor_core.gates`: `ACTION_REGLEE`, `MOTIF_ADR` | `ACTION_SETTLED`, `ADR_PATTERN` | Nothing: internal names, aliases keep working. <!-- lang: fr-ok --> |
+| `tranibor_core.instructions`: `rendre_les_instructions`, `erreurs_des_instructions`, `VARIABLES_D_EXEMPLE` | `render_instructions`, `instruction_errors`, `SAMPLE_VARIABLES` | Nothing: internal names, aliases keep working. <!-- lang: fr-ok --> |
+| `tranibor_core.dsl.oublier_les_templates`, `validator.GATES_A_MATIERE`, `policy.CLES_D_APPROBATION` | `forget_templates`, `GATES_NEEDING_PARAMS`, `APPROVAL_KEYS` | Nothing: no importer outside core, renamed without an alias. <!-- lang: fr-ok --> |
 
 Three messages are now English: the unknown-template error of `template_path`
 (`unknown workflow template: <name> (known: ...)`), the unknown-preset error of `load_preset`
 (`unknown policy preset: <name> (known: ...)`) and the unreadable-date error of
-`choregos_core.dsl.dates` (`unreadable date expression: ...`). Nothing in the platform matches
+`tranibor_core.dsl.dates` (`unreadable date expression: ...`). Nothing in the platform matches
 them; a script that matched the French text must read the English one. Issue codes, DSL keywords
 and JSON keys are unchanged.
 
@@ -3224,10 +3224,10 @@ workflow fingerprint) is unchanged.
 
 | Former | New |
 | :-- | :-- |
-| `choregos_core.acces` (`Acces`, `RapportAcces`, `rapport_d_acces`) | `choregos_core.access` (`AccessLine`, `AccessReport`, `access_report`) |
+| `tranibor_core.acces` (`Acces`, `RapportAcces`, `rapport_d_acces`) | `tranibor_core.access` (`AccessLine`, `AccessReport`, `access_report`) |
 | `Acces.cible`, `.demandes`, `.refus`, `.motifs`, `.refuse` | `AccessLine.target`, `.requests`, `.refusals`, `.reasons`, `.refused` |
 | `RapportAcces.acces`, `.evenements`, `.deduites`, `.refuses`, `.par_nature()` | `AccessReport.lines`, `.events`, `.inferred`, `.refused_lines`, `.by_nature()` |
-| `choregos_core.sorties.explication` | `choregos_core.exit_codes.explanation` |
+| `tranibor_core.sorties.explication` | `tranibor_core.exit_codes.explanation` |
 | `mcp.ERREUR_DE_SYNTAXE`, `REQUETE_INVALIDE`, `METHODE_INCONNUE`, `PARAMETRES_INVALIDES`, `ERREUR_INTERNE` | `PARSE_ERROR`, `INVALID_REQUEST`, `METHOD_NOT_FOUND`, `INVALID_PARAMS`, `INTERNAL_ERROR` (codes unchanged) |
 | `mcp.negocier`, `version_acceptable`, `erreur`, `resultat_texte`, `est_notification`, `defaut_du_message` | `negotiate`, `acceptable_version`, `error`, `text_result`, `is_notification`, `message_defect` |
 | `resultat_texte(en_erreur=, structure=)` | `text_result(is_error=, structured=)` (the former keywords are still accepted) |
@@ -3236,20 +3236,20 @@ workflow fingerprint) is unchanged.
 | `catalogue.OutilInconnuError`, `ArgumentRefuseError`, `valider_les_arguments`, `construire_requete`, `charger_catalogue`, `GABARIT` | `UnknownToolError`, `ArgumentRefusedError`, `validate_arguments`, `build_request`, `load_catalogue`, `PLACEHOLDER` |
 | `secrets.est_une_reference_du_magasin`, `ReferenceInvalide`, `VariableRefusee`, `PATTERN_PAR_DEFAUT`, `verifier`, `resoudre`, `reinitialiser` | `is_store_reference`, `InvalidReference`, `RefusedVariable`, `DEFAULT_PATTERN`, `check`, `resolve`, `reset` |
 
-`choregos_core` re-exports `Acces`, `RapportAcces`, `rapport_d_acces`, `OutilCatalogue`,
+`tranibor_core` re-exports `Acces`, `RapportAcces`, `rapport_d_acces`, `OutilCatalogue`,
 `charger_catalogue` and `construire_requete` as aliases of the English objects.
 
 #### S45-09: the fakes, families, memory, market data, identity, documents and storage adapters in English
 
 | Former | New | What an operator does |
 | :-- | :-- | :-- |
-| `python -m choregos_adapters.fakes.serveur` | `python -m choregos_adapters.fakes.server` | Change the container command of the demo fakes when you next edit it (the chart switches in S45-33); the former command still serves (`alias:external`, removed in 0.23.0). <!-- lang: fr-ok --> |
+| `python -m tranibor_adapters.fakes.serveur` | `python -m tranibor_adapters.fakes.server` | Change the container command of the demo fakes when you next edit it (the chart switches in S45-33); the former command still serves (`alias:external`, removed in 0.23.0). <!-- lang: fr-ok --> |
 | `CONNECTOR_DEMO_JETON` | `CONNECTOR_DEMO_TOKEN` | Rename it in your values or `.env`; the former variable is still read when the new one is unset, and warns (`alias:external`, removed in 0.23.0). <!-- lang: fr-ok --> |
-| `choregos_adapters.fakes.rh` | `choregos_adapters.fakes.hr` | Nothing: an internal module path, a shim keeps it importable. <!-- lang: fr-ok --> |
-| `choregos_adapters.fakes.serveur` | `choregos_adapters.fakes.server` | Nothing: a shim keeps it importable. <!-- lang: fr-ok --> |
-| `choregos_adapters.fakes.cd_de_demo` | `choregos_adapters.fakes.demo_cd` | Nothing: a shim keeps it importable. <!-- lang: fr-ok --> |
-| `choregos_adapters.familles` | `choregos_adapters.families` | Nothing: a shim keeps it importable. <!-- lang: fr-ok --> |
-| `choregos_adapters.memory.lexicale` | `choregos_adapters.memory.lexical` | Nothing: a shim keeps it importable. <!-- lang: fr-ok --> |
+| `tranibor_adapters.fakes.rh` | `tranibor_adapters.fakes.hr` | Nothing: an internal module path, a shim keeps it importable. <!-- lang: fr-ok --> |
+| `tranibor_adapters.fakes.serveur` | `tranibor_adapters.fakes.server` | Nothing: a shim keeps it importable. <!-- lang: fr-ok --> |
+| `tranibor_adapters.fakes.cd_de_demo` | `tranibor_adapters.fakes.demo_cd` | Nothing: a shim keeps it importable. <!-- lang: fr-ok --> |
+| `tranibor_adapters.familles` | `tranibor_adapters.families` | Nothing: a shim keeps it importable. <!-- lang: fr-ok --> |
+| `tranibor_adapters.memory.lexicale` | `tranibor_adapters.memory.lexical` | Nothing: a shim keeps it importable. <!-- lang: fr-ok --> |
 | `FakeFournisseur`, `FakeTransporteur`, `FauxMetier` | `FakeSupplier`, `FakeCarrier`, `BusinessFake` | Nothing: internal names, aliases keep working. <!-- lang: fr-ok --> |
 | `Guichet`, `GuichetDistant`, `serveur_mcp(faux, jeton=)` | `Desk`, `RemoteDesk`, `mcp_server(fake, token=)` | Nothing: internal names, aliases (and the former `jeton=` keyword) keep working. <!-- lang: fr-ok --> |
 | `FAUX_PAR_FAMILLE`, `OUTILS_DU_FOURNISSEUR`, `ANCIENS_OUTILS_DU_FOURNISSEUR` | `FAKES_BY_FAMILY`, `SUPPLIER_TOOLS`, `FORMER_SUPPLIER_TOOLS` | Nothing: internal names, aliases keep working. <!-- lang: fr-ok --> |
@@ -3274,19 +3274,19 @@ match them. <!-- lang: fr-ok -->
 
 Every former name below keeps working: a module path through a shim, a name through a typed alias,
 and the names that tests patch (`FAUX_ENTRA`, `FAUX_MARKETDATA`, `FAUX_WEB_SEARCH`,
-`charger_les_greffons`, `GROUPE_DE_GREFFONS`) through `choregos_core.compat.alias_names`: reading,
+`charger_les_greffons`, `GROUPE_DE_GREFFONS`) through `tranibor_core.compat.alias_names`: reading,
 patching and undoing the former name reach the English one. The aliases are internal
 (`alias:internal`); an operator has nothing to change. <!-- lang: fr-ok -->
 
 | Former | New | What an operator does |
 | :-- | :-- | :-- |
-| `choregos_adapters.charger_les_greffons()` | `choregos_adapters.load_extensions()` | Nothing: the former name still loads the extensions (`apps/api` and the orchestrator worker keep calling it until their own stories switch). <!-- lang: fr-ok --> |
-| `choregos_adapters.GROUPE_DE_GREFFONS` | `choregos_adapters.EXTENSION_GROUP` | Nothing. Its value is still `choregos.plugins`: the entry-point group never changes (ADR 0093, ADR 0098 §7). <!-- lang: fr-ok --> |
-| `choregos_adapters.FAUX_ENTRA`, `FAUX_MARKETDATA`, `FAUX_WEB_SEARCH` | `FAKE_ENTRA`, `FAKE_MARKETDATA`, `FAKE_WEB_SEARCH` | Nothing: the process-wide fakes; patching a former name patches the English one. <!-- lang: fr-ok --> |
-| `choregos_adapters.POLITIQUES`, `registry.TYPES_PAR_DEFAUT`, `type_par_defaut`, `configuration_resolue`, `references_de_secret`, `schema_d_entree` | `POLICIES`, `DEFAULT_TYPES`, `default_type`, `resolved_configuration`, `secret_references`, `build_input_schema` | Nothing: internal names, typed aliases keep working. <!-- lang: fr-ok --> |
-| `choregos_adapters.base.CAPACITES_EXECUTEUR` | `EXECUTOR_CAPABILITIES` | Nothing: an internal name, an alias keeps working. <!-- lang: fr-ok --> |
-| `choregos_adapters.tracker.interne` | `choregos_adapters.tracker.internal` | Nothing: a shim keeps the former path importable. <!-- lang: fr-ok --> |
-| `choregos_adapters.tracker.champs` (`COUT`, `TAILLE`, `RISQUE`, `ANCIENS_NOMS`, `NOMS_ACTUELS`, `nom_actuel`, `nom_present`) | `choregos_adapters.tracker.fields` (`COST`, `SIZE`, `RISK`, `FORMER_NAMES`, `CURRENT_NAMES`, `current_name`, `present_name`) | Nothing: a shim keeps the former path importable, with `nom_actuel` and `nom_present`. The French board field names (`Coût (€)`, `Taille`, `Risque`) stay in `FORMER_NAMES`, as data: they are names a tracker still carries. <!-- lang: fr-ok --> |
+| `tranibor_adapters.charger_les_greffons()` | `tranibor_adapters.load_extensions()` | Nothing: the former name still loads the extensions (`apps/api` and the orchestrator worker keep calling it until their own stories switch). <!-- lang: fr-ok --> |
+| `tranibor_adapters.GROUPE_DE_GREFFONS` | `tranibor_adapters.EXTENSION_GROUP` | Nothing. Its value is still `choregos.plugins`: the entry-point group never changes (ADR 0093, ADR 0098 §7). <!-- lang: fr-ok --> |
+| `tranibor_adapters.FAUX_ENTRA`, `FAUX_MARKETDATA`, `FAUX_WEB_SEARCH` | `FAKE_ENTRA`, `FAKE_MARKETDATA`, `FAKE_WEB_SEARCH` | Nothing: the process-wide fakes; patching a former name patches the English one. <!-- lang: fr-ok --> |
+| `tranibor_adapters.POLITIQUES`, `registry.TYPES_PAR_DEFAUT`, `type_par_defaut`, `configuration_resolue`, `references_de_secret`, `schema_d_entree` | `POLICIES`, `DEFAULT_TYPES`, `default_type`, `resolved_configuration`, `secret_references`, `build_input_schema` | Nothing: internal names, typed aliases keep working. <!-- lang: fr-ok --> |
+| `tranibor_adapters.base.CAPACITES_EXECUTEUR` | `EXECUTOR_CAPABILITIES` | Nothing: an internal name, an alias keeps working. <!-- lang: fr-ok --> |
+| `tranibor_adapters.tracker.interne` | `tranibor_adapters.tracker.internal` | Nothing: a shim keeps the former path importable. <!-- lang: fr-ok --> |
+| `tranibor_adapters.tracker.champs` (`COUT`, `TAILLE`, `RISQUE`, `ANCIENS_NOMS`, `NOMS_ACTUELS`, `nom_actuel`, `nom_present`) | `tranibor_adapters.tracker.fields` (`COST`, `SIZE`, `RISK`, `FORMER_NAMES`, `CURRENT_NAMES`, `current_name`, `present_name`) | Nothing: a shim keeps the former path importable, with `nom_actuel` and `nom_present`. The French board field names (`Coût (€)`, `Taille`, `Risque`) stay in `FORMER_NAMES`, as data: they are names a tracker still carries. <!-- lang: fr-ok --> |
 | `tests`: `Fil`, `sans_attente`, `.requetes`, `.corps()`, `.envoyees()` of `packages/adapters/tests/_transport.py` | `Wire`, `no_wait`, `.requests`, `.body()`, `.sent()` | Nothing: test helpers; the former names are kept for the tests of other stories (`test_ecphoria.py`). <!-- lang: fr-ok --> |
 
 Messages that were French and are now English (an operator who matched one now reads English):
@@ -3313,11 +3313,11 @@ key was renamed.
 
 | Former | New | What an operator does |
 | :-- | :-- | :-- |
-| `choregos_runner.outils_locaux` | `choregos_runner.local_tools` | Nothing: the former module is a shim. <!-- lang: fr-ok --> |
+| `tranibor_runner.outils_locaux` | `tranibor_runner.local_tools` | Nothing: the former module is a shim. <!-- lang: fr-ok --> |
 | `outils_locaux.demarrer_si_absent`, `arreter` | `local_tools.start_if_absent`, `stop` | Nothing: the former names are aliases. <!-- lang: fr-ok --> |
-| `choregos_runner.skills.poser`, `SkillInvalide`, `REPLI` | `place_skills`, `InvalidSkill`, `FALLBACK_DIR` | Nothing: used only inside the runner. <!-- lang: fr-ok --> |
-| `choregos_runner.runner.RAPPORT_DEPART`, `ARBRE_VIDE` | `REPORT_START_COMMIT`, `EMPTY_TREE` | Nothing: used only inside the runner. <!-- lang: fr-ok --> |
-| `choregos_runner.exits` (read `choregos_core.sorties`) | reads `choregos_core.exit_codes` | Nothing. <!-- lang: fr-ok --> |
+| `tranibor_runner.skills.poser`, `SkillInvalide`, `REPLI` | `place_skills`, `InvalidSkill`, `FALLBACK_DIR` | Nothing: used only inside the runner. <!-- lang: fr-ok --> |
+| `tranibor_runner.runner.RAPPORT_DEPART`, `ARBRE_VIDE` | `REPORT_START_COMMIT`, `EMPTY_TREE` | Nothing: used only inside the runner. <!-- lang: fr-ok --> |
+| `tranibor_runner.exits` (read `tranibor_core.sorties`) | reads `tranibor_core.exit_codes` | Nothing. <!-- lang: fr-ok --> |
 
 The run-event key `demarre` of the `tools.local` journal event is written `started` since S45-39
 (see [Persisted keys and error types](#persisted-keys-and-error-types-s45-39)).
@@ -3326,9 +3326,9 @@ The run-event key `demarre` of the `tools.local` journal event is written `start
 #### S45-12: API root modules, edition extension API, Principal and configuration in English
 
 The API root modules are English. The five renamed modules keep their former dotted path: each
-former module is the same module object as the new one (`importlib.import_module("choregos_api.fraicheur")
-is choregos_api.freshness`), so a patch on one is a patch on the other. The edition extension API
-(`choregos_api.edition`) is an `alias:external` window: every former name keeps working until 0.23.0
+former module is the same module object as the new one (`importlib.import_module("tranibor_api.fraicheur")
+is tranibor_api.freshness`), so a patch on one is a patch on the other. The edition extension API
+(`tranibor_api.edition`) is an `alias:external` window: every former name keeps working until 0.23.0
 and warns with a `DeprecationWarning` that names its replacement. The other former names below are
 internal and do not warn. Settings fields and environment variables did not change.
 <!-- lang: fr-ok -->
@@ -3337,11 +3337,11 @@ internal and do not warn. Settings fields and environment variables did not chan
 
 | Former | New | What an operator does |
 | :-- | :-- | :-- |
-| `choregos_api.adaptateurs` | `choregos_api.adapter_wiring` | Nothing: the former module is a shim. <!-- lang: fr-ok --> |
-| `choregos_api.amorcage` | `choregos_api.bootstrap` | Nothing: the former module is a shim. <!-- lang: fr-ok --> |
-| `choregos_api.fraicheur` | `choregos_api.freshness` | Nothing: the former module is a shim. <!-- lang: fr-ok --> |
-| `choregos_api.limiteur` | `choregos_api.rate_limit` | Nothing: the former module is a shim. <!-- lang: fr-ok --> |
-| `choregos_api.metriques` | `choregos_api.metrics` | Nothing: the former module is a shim. <!-- lang: fr-ok --> |
+| `tranibor_api.adaptateurs` | `tranibor_api.adapter_wiring` | Nothing: the former module is a shim. <!-- lang: fr-ok --> |
+| `tranibor_api.amorcage` | `tranibor_api.bootstrap` | Nothing: the former module is a shim. <!-- lang: fr-ok --> |
+| `tranibor_api.fraicheur` | `tranibor_api.freshness` | Nothing: the former module is a shim. <!-- lang: fr-ok --> |
+| `tranibor_api.limiteur` | `tranibor_api.rate_limit` | Nothing: the former module is a shim. <!-- lang: fr-ok --> |
+| `tranibor_api.metriques` | `tranibor_api.metrics` | Nothing: the former module is a shim. <!-- lang: fr-ok --> |
 
 #### Names inside the root modules (internal, no warning) (S45-12)
 
@@ -3365,7 +3365,7 @@ internal and do not warn. Settings fields and environment variables did not chan
 
 #### S45-14: the inbound MCP door in English
 
-`choregos_api.mcp` (ADR 0030) is English. The three renamed modules keep their former dotted path:
+`tranibor_api.mcp` (ADR 0030) is English. The three renamed modules keep their former dotted path:
 each former module is the same module object as the new one, so a patch on one is a patch on the
 other. Every name the A2A door and the tests of other stories import keeps a typed alias. MCP tool
 names, scopes, JSON-RPC errors, HTTP statuses and the persisted audit keys (`jeton`, `ecriture`, the
@@ -3377,9 +3377,9 @@ value `refus`) did not change. The two log keys of the `mcp.call` event are now 
 
 | Former | New | What an operator does |
 | :-- | :-- | :-- |
-| `choregos_api.mcp.appelant` | `choregos_api.mcp.caller` | Nothing: the former module is a shim. <!-- lang: fr-ok --> |
-| `choregos_api.mcp.garde_fous` | `choregos_api.mcp.limits` | Nothing: the former module is a shim. <!-- lang: fr-ok --> |
-| `choregos_api.mcp.outils` | `choregos_api.mcp.tools` | Nothing: the former module is a shim. <!-- lang: fr-ok --> |
+| `tranibor_api.mcp.appelant` | `tranibor_api.mcp.caller` | Nothing: the former module is a shim. <!-- lang: fr-ok --> |
+| `tranibor_api.mcp.garde_fous` | `tranibor_api.mcp.limits` | Nothing: the former module is a shim. <!-- lang: fr-ok --> |
+| `tranibor_api.mcp.outils` | `tranibor_api.mcp.tools` | Nothing: the former module is a shim. <!-- lang: fr-ok --> |
 
 #### Names (internal, no warning) (S45-14)
 
@@ -3409,7 +3409,7 @@ change. The OpenAPI descriptions that FastAPI takes from the routers' docstrings
 | :-- | :-- | :-- |
 | `routers.auth.oublier_la_decouverte` | `forget_discovery` | Nothing: the former name is an alias. <!-- lang: fr-ok --> |
 | `routers.auth.roles_des_groupes` | `roles_from_groups` | Nothing: the former name is an alias (an edition's group mapper receives the same function). <!-- lang: fr-ok --> |
-| the routers' imports of `exiger_admin_de_plateforme`, `DbPlateforme`, `mappeur_de_groupes`, `est_entreprise`, `exiger_une_authentification_fraiche`, `outils_du_projet`, `choregos_api.greffons`, `DemandeDeGeste`, `controler`, `sections_declarees` | `require_platform_admin`, `PlatformDb`, `group_mapper`, `is_enterprise`, `require_fresh_authentication`, `project_tools`, `choregos_api.extensions`, `GestureRequest`, `check_gesture`, `declared_sections` | Nothing: the routers read the English names that S45-04 and S45-12 introduced. <!-- lang: fr-ok --> |
+| the routers' imports of `exiger_admin_de_plateforme`, `DbPlateforme`, `mappeur_de_groupes`, `est_entreprise`, `exiger_une_authentification_fraiche`, `outils_du_projet`, `tranibor_api.greffons`, `DemandeDeGeste`, `controler`, `sections_declarees` | `require_platform_admin`, `PlatformDb`, `group_mapper`, `is_enterprise`, `require_fresh_authentication`, `project_tools`, `tranibor_api.extensions`, `GestureRequest`, `check_gesture`, `declared_sections` | Nothing: the routers read the English names that S45-04 and S45-12 introduced. <!-- lang: fr-ok --> |
 
 #### S45-17: the action, agent, definition, template and installation services are English
 
@@ -3420,7 +3420,7 @@ patch on one is a patch on the other. Nothing here needs an operator action. Imp
 orchestrator, the ontology, migrations, the broker, `services/__init__.py`, tests) were not switched:
 they still use the former names.
 
-#### Modules (`choregos_api.services`) (S45-17)
+#### Modules (`tranibor_api.services`) (S45-17)
 
 | Former | New | What an operator does |
 | :-- | :-- | :-- |
@@ -3474,12 +3474,12 @@ they still use the former names.
 
 Routes, operation ids, response fields, error codes, timeline sentences and every persisted value
 did not change. Every former name below keeps working: it is an alias in the module that defines the
-new name (and in `choregos_api.services`), and the three renamed modules leave a shim at their former
+new name (and in `tranibor_api.services`), and the three renamed modules leave a shim at their former
 path that is the same module object, so a patch on one is a patch on the other. Nothing here needs an
 operator action. Importers (the orchestrator, the routers, the MCP door, the knowledge distiller,
 `plugin_installer`, tools, tests) were not switched: they still use the former names.
 
-#### Modules (`choregos_api.services`) (S45-18)
+#### Modules (`tranibor_api.services`) (S45-18)
 
 | Former | New | What an operator does |
 | :-- | :-- | :-- |
@@ -3524,18 +3524,18 @@ operator action. Importers (the orchestrator, the routers, the MCP door, the kno
 | `skills.Entete` | `FrontMatter` | Nothing: alias. <!-- lang: fr-ok --> |
 | `skills.MAX_FICHIERS`, `MAX_OCTETS`, `NOM` | `MAX_FILES`, `MAX_BYTES`, `NAME` | Nothing: aliases. <!-- lang: fr-ok --> |
 
-`choregos_api.services` re-exports the English names first, and keeps every former name in
+`tranibor_api.services` re-exports the English names first, and keeps every former name in
 `__all__` as an alias. `agent_releases` now imports the extension API by its English names
-(`choregos_api.extensions`: `GestureRequest`, `check_gesture`). The `courtier` shim and the broker
+(`tranibor_api.extensions`: `GestureRequest`, `check_gesture`). The `courtier` shim and the broker
 were not touched.
 
 #### S45-22: the orchestrator's workflows, queue routing, worker and configuration are English
 
 | Former | New | What an operator does |
 | :-- | :-- | :-- |
-| `choregos_orchestrator.repartition` | `choregos_orchestrator.queues` | Nothing: the former module path is a shim. <!-- lang: fr-ok --> |
+| `tranibor_orchestrator.repartition` | `tranibor_orchestrator.queues` | Nothing: the former module path is a shim. <!-- lang: fr-ok --> |
 | `ACTIVITES_PAR_FILE`, `FILE_PAR_ACTIVITE`, `nom_de_l_activite`, `file_de` | `ACTIVITIES_BY_QUEUE`, `QUEUE_BY_ACTIVITY`, `activity_name`, `queue_of` | Nothing: the former names still work. The routing table itself did not change. <!-- lang: fr-ok --> |
-| `choregos_orchestrator.workflows.planification` | `choregos_orchestrator.workflows.scheduling` | Nothing: the former module path is a shim. <!-- lang: fr-ok --> |
+| `tranibor_orchestrator.workflows.planification` | `tranibor_orchestrator.workflows.scheduling` | Nothing: the former module path is a shim. <!-- lang: fr-ok --> |
 | `executer_activite`, `demarrer_activite` | `execute_on_its_queue`, `start_on_its_queue` | Nothing: the former names still work. <!-- lang: fr-ok --> |
 | `OrchestratorSettings.url_du_sidecar_d_outils` | `OrchestratorSettings.tools_sidecar_url` | Nothing: a property, the former name still works. No environment variable changed. <!-- lang: fr-ok --> |
 | `testing.workers_repartis`, `avec_doublures`, `repartir` | `workers_by_queue`, `with_doubles`, `group_by_queue` | Nothing: the former names still work, and `workers_by_queue` also accepts the former keywords `activites`, `file_du_workflow` and `remplacements`. <!-- lang: fr-ok --> |
@@ -3556,7 +3556,7 @@ queues, the workflow-id prefixes, the payload keys of ADR 0098 §4 (`cle`, `refu
 `self.done`, `self.evidence_by_position`, `self.fields`, ...) are not serialized, and the query
 outputs keep their keys. <!-- lang: fr-ok -->
 
-The activities (`apps/orchestrator/src/choregos_orchestrator/activities/`) are not part of this
+The activities (`apps/orchestrator/src/tranibor_orchestrator/activities/`) are not part of this
 story: they are still partly French until S45-23.
 
 #### S45-23: the orchestrator's activities are English, wire names unchanged
@@ -3567,8 +3567,8 @@ an operator has nothing to change. <!-- lang: fr-ok -->
 
 | Former | New | What an operator does |
 | :-- | :-- | :-- |
-| `choregos_orchestrator.activities.bilan` | `choregos_orchestrator.activities.outcome` | Nothing: the former module path is a shim, the same module answers to both dotted names. <!-- lang: fr-ok --> |
-| `choregos_orchestrator.activities.garde` (`garde_contre_l_injection`) | `choregos_orchestrator.activities.injection_guard` (`guard_against_injection`) | Nothing: the former module path is a shim. <!-- lang: fr-ok --> |
+| `tranibor_orchestrator.activities.bilan` | `tranibor_orchestrator.activities.outcome` | Nothing: the former module path is a shim, the same module answers to both dotted names. <!-- lang: fr-ok --> |
+| `tranibor_orchestrator.activities.garde` (`garde_contre_l_injection`) | `tranibor_orchestrator.activities.injection_guard` (`guard_against_injection`) | Nothing: the former module path is a shim. <!-- lang: fr-ok --> |
 | `activities.base.workflow_du_ticket`, `tracker_possede_les_tickets`, `cle_de_ticket_interne` | `work_item_workflow`, `tracker_owns_items`, `internal_ticket_key` | Nothing: `workflow_du_ticket` keeps an alias; the two others were used only inside the activities. <!-- lang: fr-ok --> |
 | `activities.execution.hotes_a_joindre_en_direct`, `env_du_runner`, `classe_d_execution`, `FILE_MAX_MINUTES` | `hosts_to_reach_directly`, `runner_environment`, `runtime_class`, `QUEUE_MAX_MINUTES` | Nothing: the former names still work, also through `activities.stage`. <!-- lang: fr-ok --> |
 | `activities.gates.texte_ajoute` | `added_text_of` | Nothing: the former name still works. <!-- lang: fr-ok --> |
@@ -3576,7 +3576,7 @@ an operator has nothing to change. <!-- lang: fr-ok -->
 | `activities.provisioning.repertoire_templates`, `etiquettes_du_pas`, `COULEUR_PAR_DEFAUT`, `CHAMPS_DU_BOARD` | `templates_dir`, `step_labels`, `DEFAULT_COLOUR`, `BOARD_FIELDS` | Nothing: the first two keep an alias. <!-- lang: fr-ok --> |
 | `activities.stage._serveurs_mcp` | `_mcp_servers` | Nothing: an internal name, an alias keeps working. <!-- lang: fr-ok --> |
 | `activities.stage` reads `settings.url_du_sidecar_d_outils` | `settings.tools_sidecar_url` (S45-22) | Nothing: no environment variable changed. <!-- lang: fr-ok --> |
-| `choregos_adapters.charger_les_greffons`, `choregos_api.effets` names, `choregos_core.quotas.quota_pour` | `load_extensions`, `choregos_api.effects` (`EffectContext`, `EffectRefused`, `effect`, `render`), `quota_for` | Nothing: the activities now call the English names that already exist on main (S45-10, the effects module, S45-08). <!-- lang: fr-ok --> |
+| `tranibor_adapters.charger_les_greffons`, `tranibor_api.effets` names, `tranibor_core.quotas.quota_pour` | `load_extensions`, `tranibor_api.effects` (`EffectContext`, `EffectRefused`, `effect`, `render`), `quota_for` | Nothing: the activities now call the English names that already exist on main (S45-10, the effects module, S45-08). <!-- lang: fr-ok --> |
 
 Messages that were French and are now English (an operator who matched one now reads English):
 
@@ -3597,7 +3597,7 @@ and the `actions.result` keys `attente`, `preuves` and `jusqu_a`. Every history 
 
 #### S45-48: the database layer, the A2A door, egress and knowledge in English
 
-`choregos_api.db`, `a2a`, `egress` and `knowledge` are English. Tables, columns, indexes and
+`tranibor_api.db`, `a2a`, `egress` and `knowledge` are English. Tables, columns, indexes and
 constraints did not change, and neither did the persisted audit keys of the A2A door (`jeton`,
 `ecriture`, the value `refus`; S45-39 switches them). Every former name that another module imports
 keeps a typed alias. Nothing here is an operator setting.
@@ -3647,7 +3647,7 @@ to be updated. This change does not prove that any ops log filter was updated.
 | Former | New |
 | :-- | :-- |
 | the `# HELP` lines of the Prometheus series (`/metrics`) were French | English; the series names, labels and types are unchanged <!-- lang: fr-ok --> |
-| `choregos_api.__version__` of a tree that is not installed: `0.0.0+inconnue` | `0.0.0+unknown` <!-- lang: fr-ok --> |
+| `tranibor_api.__version__` of a tree that is not installed: `0.0.0+inconnue` | `0.0.0+unknown` <!-- lang: fr-ok --> |
 | start-up refusals: the edition mismatch, the PostgreSQL superuser, `CHOREGOS_DEV_LOGIN_ENABLED` in staging or prod, the unknown `CHOREGOS_MCP_OAUTH_CLIENTS` clients | English (the message still names the setting and the fix) <!-- lang: fr-ok --> |
 
 Still French on purpose, because a test or a page of `docs/deployment.md` matches them (the stories

@@ -29,7 +29,7 @@ ANSWER: dict[str, Any] = {
 }
 
 PLUGIN = f"""
-from choregos_api.extensions import declare_tool_provider
+from tranibor_api.extensions import declare_tool_provider
 
 TOOL = {{
     "name": "ticket_reader",
@@ -53,7 +53,7 @@ def brancher():
 
 @pytest.fixture
 def plugin(tmp_path: pathlib.Path) -> Iterator[None]:
-    from choregos_api.extensions import reset
+    from tranibor_api.extensions import reset
 
     root = tmp_path / "site"
     root.mkdir()
@@ -76,7 +76,7 @@ def plugin(tmp_path: pathlib.Path) -> Iterator[None]:
 
 
 def test_readable_text_holds_the_structured_content() -> None:
-    from choregos_api.services.broker import readable_text
+    from tranibor_api.services.broker import readable_text
 
     text = readable_text(ANSWER)
     assert "Ticket 42: two comments." in text and INJECTION in text

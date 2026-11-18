@@ -10,10 +10,10 @@ pytestmark = pytest.mark.asyncio
 
 
 async def test_the_gate_sees_the_call_in_the_registry(setup: Any) -> None:
-    from choregos_api.db.models import CostLedger, Run
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
-    from choregos_orchestrator.activities.gates import evaluate_gates
+    from tranibor_api.db.models import CostLedger, Run
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
+    from tranibor_orchestrator.activities.gates import evaluate_gates
 
     async with session_scope(orgs="*") as session:
         run = Run(
@@ -75,11 +75,11 @@ async def test_a_place_held_under_the_cap_is_not_a_call(setup: Any) -> None:
     """S57-03: a call under the tool-call cap holds its place with a provisional line before it
     leaves. A request that died during its call leaves that line behind; the call never answered, so
     the gate does not take it for one."""
-    from choregos_api.db.models import CostLedger, Run
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
-    from choregos_core.tool_ledger import IN_FLIGHT
-    from choregos_orchestrator.activities.gates import evaluate_gates
+    from tranibor_api.db.models import CostLedger, Run
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
+    from tranibor_core.tool_ledger import IN_FLIGHT
+    from tranibor_orchestrator.activities.gates import evaluate_gates
 
     async with session_scope(orgs="*") as session:
         run = Run(

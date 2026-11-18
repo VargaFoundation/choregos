@@ -13,8 +13,8 @@ from __future__ import annotations
 import inspect
 
 import pytest
-from choregos_adapters import available, build
-from choregos_adapters.base import EXECUTOR_CAPABILITIES
+from tranibor_adapters import available, build
+from tranibor_adapters.base import EXECUTOR_CAPABILITIES
 
 pytestmark = pytest.mark.conformance
 

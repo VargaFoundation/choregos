@@ -14,7 +14,7 @@ from typing import Any
 
 import pytest
 import yaml
-from choregos_core.publishing import PUBLISHING
+from tranibor_core.publishing import PUBLISHING
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 CHART = ROOT / "charts" / "choregos"

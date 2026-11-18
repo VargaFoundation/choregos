@@ -11,8 +11,8 @@ pytestmark = pytest.mark.asyncio
 
 
 async def _give(setup: Fixture, budget_usd: float) -> None:
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         item = await session.get(WorkItem, setup.work_item_id)
@@ -21,7 +21,7 @@ async def _give(setup: Fixture, budget_usd: float) -> None:
 
 
 async def test_the_key_is_minted_within_the_given_budget(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.stage import prepare_stage
+    from tranibor_orchestrator.activities.stage import prepare_stage
 
     await _give(setup, 1.0)
     await spend(setup, 0.25)
@@ -30,7 +30,7 @@ async def test_the_key_is_minted_within_the_given_budget(setup: Fixture) -> None
 
 
 async def test_the_ticket_stops_at_the_given_amount(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.stage import prepare_stage
+    from tranibor_orchestrator.activities.stage import prepare_stage
 
     await _give(setup, 1.0)
     await spend(setup, 0.6)

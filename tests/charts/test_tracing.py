@@ -21,7 +21,7 @@ import yaml
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 CHART = ROOT / "charts" / "choregos"
 CHART_COPY = CHART / "charts" / "litellm" / "files" / "choregos_llm_spans.py"
-SOURCE = ROOT / "packages" / "core" / "src" / "choregos_core" / "llm_spans.py"
+SOURCE = ROOT / "packages" / "core" / "src" / "tranibor_core" / "llm_spans.py"
 COLLECTOR = ROOT / "infra" / "bootstrap" / "otel-collector.yaml"
 DASHBOARD = CHART / "dashboards" / "traces.json"
 ENDPOINT = "http://otel-collector.monitoring.svc:4318"
@@ -60,7 +60,7 @@ def _tracing_processes(docs: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
 
 
 def test_the_chart_ships_the_callback_the_tests_prove_byte_for_byte() -> None:
-    """`choregos_core.llm_spans` is tested; the chart's copy is what LiteLLM runs."""
+    """`tranibor_core.llm_spans` is tested; the chart's copy is what LiteLLM runs."""
     assert CHART_COPY.read_bytes() == SOURCE.read_bytes(), (
         f"copy {SOURCE.relative_to(ROOT)} to {CHART_COPY.relative_to(ROOT)}"
     )
@@ -229,7 +229,7 @@ def test_every_traces_panel_also_reads_tempos_metrics_generator() -> None:
 
 
 def test_the_gateway_panels_name_the_gateways_service() -> None:
-    from choregos_core import llm_spans
+    from tranibor_core import llm_spans
 
     assert any(f'service_name="{llm_spans.SERVICE_NAME}"' in expr for expr in _exprs())
     assert any(f'service="{llm_spans.SERVICE_NAME}"' in expr for expr in _targets("tempo"))

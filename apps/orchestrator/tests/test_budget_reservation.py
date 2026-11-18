@@ -35,8 +35,8 @@ def _plan(setup: Fixture, attempt: int = 1) -> dict[str, Any]:
 
 
 async def _engine(setup: Fixture) -> Any:
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities.base import project_bundle
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities.base import project_bundle
 
     async with session_scope() as session:
         return (await project_bundle(session, setup.project_id)).engine
@@ -44,9 +44,9 @@ async def _engine(setup: Fixture) -> Any:
 
 async def spend(setup: Fixture, usd: float, *, work_item: bool = True, kind: str = "model") -> None:
     """A line in the cost ledger, as `collect_spend` (model) or the tool route (tool) writes it."""
-    from choregos_api.db.models import CostLedger
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
+    from tranibor_api.db.models import CostLedger
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
 
     async with session_scope() as session:
         session.add(
@@ -72,7 +72,7 @@ async def _run_count(setup: Fixture) -> int:
 
 
 async def test_a_ticket_with_ten_cents_left_gets_a_ten_cent_key(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.stage import prepare_stage, start_run
+    from tranibor_orchestrator.activities.stage import prepare_stage, start_run
 
     await leave_on_ticket(setup, 0.10)
     prepared = await prepare_stage(_plan(setup))
@@ -91,7 +91,7 @@ async def test_a_ticket_with_ten_cents_left_gets_a_ten_cent_key(setup: Fixture) 
 
 
 async def test_at_zero_no_run_starts(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.stage import prepare_stage
+    from tranibor_orchestrator.activities.stage import prepare_stage
 
     await leave_on_ticket(setup, 0.0)
     prepared = await prepare_stage(_plan(setup))
@@ -103,10 +103,10 @@ async def test_at_zero_no_run_starts(setup: Fixture) -> None:
 
 async def test_an_open_key_is_reserved(setup: Fixture) -> None:
     """A key still open may spend up to its cap: what is left excludes it."""
-    from choregos_api.db.models import GatewayKeyRow, Run
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
-    from choregos_orchestrator.activities.stage import prepare_stage
+    from tranibor_api.db.models import GatewayKeyRow, Run
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
+    from tranibor_orchestrator.activities.stage import prepare_stage
 
     await leave_on_ticket(setup, 2.0)
     async with session_scope() as session:
@@ -130,10 +130,10 @@ async def test_an_open_key_is_reserved(setup: Fixture) -> None:
 
 
 async def test_the_project_day_bounds_the_key(setup: Fixture) -> None:
-    from choregos_api.db.models import PolicyDef
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities.stage import prepare_stage
     from sqlalchemy import select
+    from tranibor_api.db.models import PolicyDef
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities.stage import prepare_stage
 
     async with session_scope() as session:
         row = (
@@ -152,8 +152,8 @@ async def test_the_project_day_bounds_the_key(setup: Fixture) -> None:
 async def test_a_ticket_with_nothing_left_goes_to_a_person_without_a_run(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.worker import Replayer
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     await leave_on_ticket(setup, 0.0)
     async with worker_factory():

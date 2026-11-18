@@ -20,7 +20,7 @@ import pathlib
 from collections.abc import Mapping
 
 import pytest
-from choregos_adapters import available, build
+from tranibor_adapters import available, build
 
 from .test_capabilities import CONFIGS
 

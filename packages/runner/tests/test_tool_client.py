@@ -23,9 +23,9 @@ from types import ModuleType
 from typing import Any
 
 import pytest
-from choregos_runner import tool_client, tool_scripts
-from choregos_tools_mcp import bridge as tools_bridge
-from choregos_tools_mcp import client as tools_client
+from tranibor_runner import tool_client, tool_scripts
+from tranibor_tools_mcp import bridge as tools_bridge
+from tranibor_tools_mcp import client as tools_client
 
 RUN = "run-test-1"
 #: `getRunTools` as the API lists it (`_run_tool`, `BrokerTool.announcement`): awkward names included.

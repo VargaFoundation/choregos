@@ -14,10 +14,10 @@ from collections.abc import Iterator
 from typing import Any
 
 import pytest
-from choregos_api.services import plugin_supply as supply_module
-from choregos_api.services import workflow_catalogue
-from choregos_api.services.plugin_supply import Shipped, SourcesSupply
 from httpx import AsyncClient
+from tranibor_api.services import plugin_supply as supply_module
+from tranibor_api.services import workflow_catalogue
+from tranibor_api.services.plugin_supply import Shipped, SourcesSupply
 
 BASE = "/api/v1/orgs/northwind/workflow-catalogue"
 
@@ -122,7 +122,7 @@ class _AskedSupply(_CountingSupply):
 
 
 async def test_the_listing_does_not_wait_for_the_plugin_sources(client: AsyncClient, admin: str) -> None:
-    from choregos_api.services.plugin_supply import use_plugin_supply
+    from tranibor_api.services.plugin_supply import use_plugin_supply
 
     supply = _AskedSupply()  # its read is held: a listing that waited for it would time out
     use_plugin_supply(supply)
@@ -137,8 +137,8 @@ async def test_the_listing_does_not_wait_for_the_plugin_sources(client: AsyncCli
 
 
 async def test_the_api_reads_the_sources_index_when_it_starts() -> None:
-    from choregos_api.config import get_settings
-    from choregos_api.services.plugin_supply import use_plugin_supply, warm_shipping
+    from tranibor_api.config import get_settings
+    from tranibor_api.services.plugin_supply import use_plugin_supply, warm_shipping
 
     supply = _CountingSupply()
     supply.release.set()

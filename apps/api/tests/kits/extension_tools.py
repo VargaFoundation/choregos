@@ -10,7 +10,7 @@ from typing import Any
 import pytest
 
 EXTENSION = """
-from choregos_api.extensions import declare_tool_provider
+from tranibor_api.extensions import declare_tool_provider
 
 TOOL = {
     "name": "internal_directory",
@@ -35,7 +35,7 @@ def attach():
 @pytest.fixture(name="extension_tools")
 def installed_extension(tmp_path: pathlib.Path) -> Iterator[None]:
     """An extension installed as a real module with its `.dist-info`, loaded by `create_app()`."""
-    from choregos_api.extensions import reset
+    from tranibor_api.extensions import reset
 
     root = tmp_path / "site"
     root.mkdir()
@@ -59,9 +59,9 @@ def installed_extension(tmp_path: pathlib.Path) -> Iterator[None]:
 
 async def run_extension_tool(project_id: str) -> tuple[str, dict[str, str]]:
     """A running run of the project and the headers of its run token."""
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.security import mint_run_token
+    from tranibor_api.db.models import Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.security import mint_run_token
 
     async with session_scope() as session:
         item = WorkItem(project_id=project_id, tracker_key="northwind/x#11", title="T", state="ready")

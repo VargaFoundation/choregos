@@ -8,10 +8,10 @@ import json
 from pathlib import Path
 
 import pytest
-from choregos_contracts.enums import OutpostAnswerOutcome, OutpostAuditEvent, OutpostRefusalCode
-from choregos_contracts.outpost import OutpostAssertedNames, arguments_sha256
-from choregos_outpost.audit import AuditLog, AuditWriteError, logged_names
 from pydantic import ValidationError
+from tranibor_contracts.enums import OutpostAnswerOutcome, OutpostAuditEvent, OutpostRefusalCode
+from tranibor_contracts.outpost import OutpostAssertedNames, arguments_sha256
+from tranibor_outpost.audit import AuditLog, AuditWriteError, logged_names
 
 from ._bench import AUDIT_LINE, bench
 

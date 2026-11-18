@@ -27,9 +27,9 @@ async def _run(
     agent: tuple[str, int] | None = None,
     attempt: int = 1,
 ) -> dict[str, str]:
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
-    from choregos_api.security import mint_run_token
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.security import mint_run_token
 
     async with session_scope() as session:
         session.add(
@@ -58,8 +58,8 @@ async def _post(client: AsyncClient, run_id: str, headers: dict[str, str], outpu
 
 
 async def _rows(item_id: str) -> list[Any]:
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.artifacts import artifacts_of
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.artifacts import artifacts_of
 
     async with session_scope() as session:
         return await artifacts_of(session, item_id)

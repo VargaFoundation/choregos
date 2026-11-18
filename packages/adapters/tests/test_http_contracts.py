@@ -12,11 +12,11 @@ import json
 
 import pytest
 import respx
-from choregos_adapters.errors import UpstreamError
-from choregos_adapters.gateway.litellm import LiteLlmGateway
-from choregos_adapters.notify.slack import SlackNotifier
-from choregos_core.domain import Message
 from httpx import Response
+from tranibor_adapters.errors import UpstreamError
+from tranibor_adapters.gateway.litellm import LiteLlmGateway
+from tranibor_adapters.notify.slack import SlackNotifier
+from tranibor_core.domain import Message
 
 LITELLM = "http://litellm.test"
 
@@ -264,7 +264,7 @@ ECPHORIA = "http://ecphoria.test"
 
 @respx.mock
 async def test_ecphoria_the_tenant_and_the_token_go_in_the_headers() -> None:
-    from choregos_adapters.memory.ecphoria import EcphoriaMemory
+    from tranibor_adapters.memory.ecphoria import EcphoriaMemory
 
     route = respx.post(f"{ECPHORIA}/api/v1/context-pack").mock(
         return_value=Response(
@@ -293,7 +293,7 @@ async def test_ecphoria_the_tenant_and_the_token_go_in_the_headers() -> None:
 @respx.mock
 async def test_ecphoria_an_outage_returns_an_empty_pack_then_opens_the_circuit() -> None:
     """Any outage returns an EMPTY pack, never an error; after three, stop waiting."""
-    from choregos_adapters.memory.ecphoria import EcphoriaMemory
+    from tranibor_adapters.memory.ecphoria import EcphoriaMemory
 
     route = respx.post(f"{ECPHORIA}/api/v1/context-pack").mock(return_value=Response(503, text="quorum lost"))
     memory = EcphoriaMemory(ECPHORIA, read_timeout_ms=200)
@@ -307,7 +307,7 @@ async def test_ecphoria_an_outage_returns_an_empty_pack_then_opens_the_circuit()
 
 @respx.mock
 async def test_ecphoria_the_search_reads_the_hits_with_their_score() -> None:
-    from choregos_adapters.memory.ecphoria import EcphoriaMemory
+    from tranibor_adapters.memory.ecphoria import EcphoriaMemory
 
     respx.post(f"{ECPHORIA}/api/v1/memories/search").mock(
         return_value=Response(
@@ -337,7 +337,7 @@ ARGO = "http://argocd.test"
 
 @respx.mock
 async def test_argocd_health_revision_and_unknown_application() -> None:
-    from choregos_adapters.cd.argocd import ArgoCdAdapter
+    from tranibor_adapters.cd.argocd import ArgoCdAdapter
 
     respx.get(f"{ARGO}/api/v1/applications/billing-api-prod").mock(
         return_value=Response(
@@ -361,7 +361,7 @@ async def test_argocd_health_revision_and_unknown_application() -> None:
 
 @respx.mock
 async def test_argocd_an_aborted_rollout_reads_from_its_conditions() -> None:
-    from choregos_adapters.cd.argocd import ArgoCdAdapter
+    from tranibor_adapters.cd.argocd import ArgoCdAdapter
 
     manifest = {
         "spec": {"strategy": {"canary": {"steps": [{"setWeight": 10}, {"pause": {}}, {"setWeight": 50}]}}},

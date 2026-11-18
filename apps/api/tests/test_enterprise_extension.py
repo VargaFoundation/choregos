@@ -33,10 +33,10 @@ import pytest
 #: A credible `choregos-ee` in miniature: it makes the four gestures the enterprise edition will
 #: really make, and nothing else. Written as a real module, because it will be one.
 EE_EXTENSION = '''
-from choregos_adapters import register
-from choregos_api.edition import ENTERPRISE, declare, declare_group_mapper
-from choregos_contracts import Role
-from choregos_core.gates import GateOutcome, gate
+from tranibor_adapters import register
+from tranibor_api.edition import ENTERPRISE, declare, declare_group_mapper
+from tranibor_contracts import Role
+from tranibor_core.gates import GateOutcome, gate
 
 
 class SandboxedExecutor:
@@ -54,7 +54,7 @@ def per_organisation_mapper(groups, default_org):
     This extension's first draft did not delegate, and the development sign-in gave no role at
     all: `403 ['northwind'] is missing` on the creation of an organisation.
     """
-    from choregos_api.routers.auth import roles_from_groups
+    from tranibor_api.routers.auth import roles_from_groups
 
     roles = dict(roles_from_groups(groups, default_org))
     for group in groups:
@@ -90,9 +90,9 @@ def _install(root: pathlib.Path, name: str, source: str) -> None:
 @pytest.fixture
 def ee_extension_installed(tmp_path: pathlib.Path) -> Iterator[pathlib.Path]:
     """Installs the extension, and **cleans everything**: the edition and the mapper are module states."""
-    from choregos_adapters import registry
-    from choregos_api.edition import reset
-    from choregos_core import gates
+    from tranibor_adapters import registry
+    from tranibor_api.edition import reset
+    from tranibor_core import gates
 
     # The extension registers a gate (`@gate`) in the core's module-level registries: snapshot them, or
     # the gate outlives the test and `packages/core` tests that expect the shipped gates only (and
@@ -124,8 +124,8 @@ def test_the_extension_declares_its_edition_through_the_entry_point(
     ee_extension_installed: pathlib.Path,
 ) -> None:
     """The gesture the whole model depends on: the edition comes from the PACKAGE, not from a test call."""
-    from choregos_adapters import available, load_extensions
-    from choregos_api.edition import current, features, is_enterprise
+    from tranibor_adapters import available, load_extensions
+    from tranibor_api.edition import current, features, is_enterprise
 
     assert not is_enterprise(), "the test would start from an already polluted state"
 
@@ -148,9 +148,9 @@ def test_the_api_starts_whereas_it_refused_without_an_extension(
     extension did not lift it, the guard would forbid the enterprise edition instead of checking
     it, and nobody would notice before having a `choregos-ee` to deploy.
     """
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.edition import reset
-    from choregos_api.main import _check_the_edition, create_app
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.edition import reset
+    from tranibor_api.main import _check_the_edition, create_app
 
     monkeypatch.setenv("CHOREGOS_EDITION", "enterprise")
     reset_settings_cache()
@@ -158,7 +158,7 @@ def test_the_api_starts_whereas_it_refused_without_an_extension(
         # Without a loaded extension: refusal, with the cause named.
         reset()
         with pytest.raises(RuntimeError, match="choregos-ee"):
-            _check_the_edition(__import__("choregos_api.config", fromlist=["get_settings"]).get_settings())
+            _check_the_edition(__import__("tranibor_api.config", fromlist=["get_settings"]).get_settings())
         # With one: the application builds.
         assert create_app() is not None
     finally:
@@ -174,7 +174,7 @@ async def test_the_extension_opens_the_second_organisation(
 
     It must therefore open through the extension, and through it alone.
     """
-    from choregos_adapters import load_extensions
+    from tranibor_adapters import load_extensions
 
     load_extensions()
     response = await client.post("/api/v1/orgs", json={"slug": "second", "name": "Second"})
@@ -183,11 +183,11 @@ async def test_the_extension_opens_the_second_organisation(
 
 def test_the_extension_replaces_the_mapper_and_the_gate(ee_extension_installed: pathlib.Path) -> None:
     """Seam C3 and the gates seam, through the real PATH this time."""
-    from choregos_adapters import load_extensions
-    from choregos_api.edition import group_mapper
-    from choregos_api.routers.auth import roles_from_groups
-    from choregos_contracts import Role
-    from choregos_core.gates import known_gates
+    from tranibor_adapters import load_extensions
+    from tranibor_api.edition import group_mapper
+    from tranibor_api.routers.auth import roles_from_groups
+    from tranibor_contracts import Role
+    from tranibor_core.gates import known_gates
 
     load_extensions()
 

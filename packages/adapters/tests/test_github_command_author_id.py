@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from choregos_adapters.tracker.github_events import parse_github_event
-from choregos_contracts import InboundEventType
+from tranibor_adapters.tracker.github_events import parse_github_event
+from tranibor_contracts import InboundEventType
 
 
 def _comment(user: dict[str, Any]) -> dict[str, Any]:

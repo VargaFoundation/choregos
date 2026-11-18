@@ -11,15 +11,15 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from choregos_core import Spend
+from tranibor_core import Spend
 
 from .conftest import Fixture
 from .test_resolver_sees_the_gateway import _prepare
 
 
 async def _catalogue(setup: Fixture, **row: Any) -> None:
-    from choregos_api.db.models import ModelCatalogueRow, Project
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import ModelCatalogueRow, Project
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         project = await session.get(Project, setup.project_id)
@@ -28,8 +28,8 @@ async def _catalogue(setup: Fixture, **row: Any) -> None:
 
 
 async def _curate(setup: Fixture) -> None:
-    from choregos_api.db.models import Organization, Project
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Organization, Project
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         project = await session.get(Project, setup.project_id)
@@ -92,11 +92,11 @@ async def test_a_role_the_model_is_not_allowed_for_is_refused(setup: Fixture) ->
 
 
 async def _collect(setup: Fixture, *, capabilities: frozenset[str] | None = None) -> dict[str, Any]:
-    from choregos_api.db.models import CostLedger, Run
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
-    from choregos_orchestrator.activities.outcome import collect_spend
     from sqlalchemy import select
+    from tranibor_api.db.models import CostLedger, Run
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
+    from tranibor_orchestrator.activities.outcome import collect_spend
 
     gateway = setup.adapters.gateway
     if capabilities is not None:

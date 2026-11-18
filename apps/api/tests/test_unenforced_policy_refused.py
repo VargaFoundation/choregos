@@ -46,7 +46,7 @@ async def test_a_policy_promising_an_approval_is_refused(
 
 
 async def _new_project(session: Any, slug: str) -> Any:
-    from choregos_api.db.models import Organization, Project
+    from tranibor_api.db.models import Organization, Project
 
     org = Organization(slug=slug, name=slug)
     session.add(org)
@@ -60,9 +60,9 @@ async def _new_project(session: Any, slug: str) -> Any:
 
 
 async def test_a_lazy_provisioning_does_not_refuse(app: Any, monkeypatch: pytest.MonkeyPatch) -> None:
-    from choregos_api.db.session import session_scope
-    from choregos_api.errors import ApiError
-    from choregos_api.services import definitions, templates
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.errors import ApiError
+    from tranibor_api.services import definitions, templates
 
     real = templates.delivery
 
@@ -84,8 +84,8 @@ async def test_a_lazy_provisioning_does_not_refuse(app: Any, monkeypatch: pytest
 
 
 async def test_a_stored_workflow_with_review_humans_still_loads(app: Any) -> None:
-    from choregos_api.db.models import WorkflowDef
-    from choregos_api.services.definitions import workflow_model
+    from tranibor_api.db.models import WorkflowDef
+    from tranibor_api.services.definitions import workflow_model
 
     row = WorkflowDef(project_id="p", name="stored", version=1, yaml=WORKFLOW_WITH_REVIEW_HUMANS, json_doc={})
     assert workflow_model(row).transitions[0].review is not None

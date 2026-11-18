@@ -4,17 +4,17 @@ from __future__ import annotations
 
 from typing import Any
 
-from choregos_core import llm_spans
 from sqlalchemy import select
+from tranibor_core import llm_spans
 
 
 async def run_with_events(
     project: dict[str, Any], run_id: str, backend: str | None, events: list[tuple[str, dict[str, Any]]]
 ) -> None:
     """The run `run_id` of `backend`, on a work item of its own, with `events` as its seq 1, 2, ..."""
-    from choregos_api.db.models import Run, RunEvent, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
+    from tranibor_api.db.models import Run, RunEvent, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
 
     async with session_scope() as session:
         item = WorkItem(
@@ -41,7 +41,7 @@ MASTER_KEY = "-".join(["sk", "master", "c0ffee" * 3])
 
 def set_master_key(monkeypatch: Any) -> None:
     """The gateway's master key the callback signs with, for the API under test."""
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     monkeypatch.setenv("CHOREGOS_GATEWAY_MASTER_KEY", MASTER_KEY)
     reset_settings_cache()
@@ -66,8 +66,8 @@ def gateway_breakdown(call: int, tokens: int, **extra: Any) -> dict[str, Any]:
 
 
 async def journal(run_id: str) -> list[tuple[int, str, dict[str, Any]]]:
-    from choregos_api.db.models import RunEvent
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import RunEvent
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = await session.execute(

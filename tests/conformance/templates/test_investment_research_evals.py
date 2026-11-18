@@ -22,7 +22,7 @@ CASES = yaml.safe_load((TEMPLATE / "evals" / "cases.yaml").read_text(encoding="u
 
 
 def _gates(transition_id: str, workflow_file: str = "campaign.yaml") -> list[tuple[str, dict[str, Any]]]:
-    from choregos_core.dsl import parse_workflow
+    from tranibor_core.dsl import parse_workflow
 
     workflow, report = parse_workflow((TEMPLATE / "workflows" / workflow_file).read_text(encoding="utf-8"))
     assert workflow is not None, report
@@ -54,8 +54,8 @@ def _score(
     parent: dict[str, Any] | None = None,
     workflow_file: str = "campaign.yaml",
 ) -> list[str]:
-    from choregos_contracts import StageOutputs, StageResult, StageStatus
-    from choregos_core import GateContext, evaluate
+    from tranibor_contracts import StageOutputs, StageResult, StageStatus
+    from tranibor_core import GateContext, evaluate
 
     ctx = GateContext(
         result=StageResult(status=StageStatus.DONE, summary="eval", outputs=StageOutputs(**outputs)),

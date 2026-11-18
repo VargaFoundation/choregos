@@ -16,16 +16,16 @@ from typing import Any
 
 import httpx
 import pytest
-from choregos_adapters.fakes.mcp import FakeMcpServer
-from choregos_contracts import McpServerRef, StageInput
-from choregos_core.hosted import LOOPBACK_KEY, loopback_url
-from choregos_runner.backends import get_backend
-from choregos_runner.exits import Exit
-from choregos_runner.guardrails import GuardRails
-from choregos_runner.loopback.agent import agent_view, proxy_environment
-from choregos_runner.loopback.mcp import McpProxy
-from choregos_runner.loopback.model import ModelProxy
-from choregos_runner.runner import Runner
+from tranibor_adapters.fakes.mcp import FakeMcpServer
+from tranibor_contracts import McpServerRef, StageInput
+from tranibor_core.hosted import LOOPBACK_KEY, loopback_url
+from tranibor_runner.backends import get_backend
+from tranibor_runner.exits import Exit
+from tranibor_runner.guardrails import GuardRails
+from tranibor_runner.loopback.agent import agent_view, proxy_environment
+from tranibor_runner.loopback.mcp import McpProxy
+from tranibor_runner.loopback.model import ModelProxy
+from tranibor_runner.runner import Runner
 
 from .conftest import FakeInternalClient, agent_script, loopback_ports, port_of, valid_result
 from .test_agent_holds_no_run_token import _read_probe
@@ -385,7 +385,7 @@ async def test_gemini_cli_gets_the_loopback_key_and_address_too(
     runner = Runner(settings, client)  # type: ignore[arg-type]
     runner.loopback_ports = loopback_ports(avoid=[port_of(settings.tools_url)])
     seen: list[dict[str, str]] = []
-    import choregos_runner.runner as module
+    import tranibor_runner.runner as module
 
     real = module.AcpClient
 

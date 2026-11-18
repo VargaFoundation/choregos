@@ -54,8 +54,8 @@ class _InterruptedSession:
 async def test_a_read_cancelled_in_the_middle_raises_the_cancellation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from choregos_api.db import session as db_session
-    from choregos_api.services import outposts
+    from tranibor_api.db import session as db_session
+    from tranibor_api.services import outposts
 
     # The settings are PostgreSQL's: under SQLite the two settings are not statements at all.
     monkeypatch.setattr(db_session, "get_settings", lambda: SimpleNamespace(is_sqlite=False))
@@ -67,8 +67,8 @@ async def test_a_read_cancelled_in_the_middle_raises_the_cancellation(
 
 async def test_a_read_that_finds_the_outpost_narrows_the_scope(monkeypatch: pytest.MonkeyPatch) -> None:
     """The way out is unchanged: the outpost found, the session is narrowed to its organisation."""
-    from choregos_api.db import session as db_session
-    from choregos_api.services import outposts
+    from tranibor_api.db import session as db_session
+    from tranibor_api.services import outposts
 
     monkeypatch.setattr(db_session, "get_settings", lambda: SimpleNamespace(is_sqlite=False))
     said: list[dict[str, Any]] = []
@@ -91,9 +91,9 @@ async def test_a_read_that_finds_the_outpost_narrows_the_scope(monkeypatch: pyte
 
 @pytest.fixture
 async def pg_client(pg_app: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[AsyncClient]:
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
 
     daemon_kit.key_wrapper(monkeypatch)
     kit.switch_on(monkeypatch)
@@ -161,8 +161,8 @@ async def test_a_look_cancelled_while_postgresql_runs_its_read_raises_the_cancel
     the connection the cancellation spoiled is thrown away, never handed to the next look; and the
     next look works. Red before S65-29: `PendingRollbackError`, as on the CI's runner (#1710)."""
     import asyncpg
-    from choregos_api.db.session import get_engine
-    from choregos_api.outposts import rendezvous
+    from tranibor_api.db.session import get_engine
+    from tranibor_api.outposts import rendezvous
 
     await kit.create(pg_client, "factory-floor")
     outpost_id = str((await kit.outpost_row("factory-floor")).id)
@@ -189,8 +189,8 @@ async def test_a_placement_cancelled_while_postgresql_runs_it_raises_the_cancell
     use, and its `PendingRollbackError` replaced the cancellation. Nothing was placed, and the same
     call placed again is placed once."""
     import asyncpg
-    from choregos_api.db.models import OutpostCall
-    from choregos_api.db.session import get_engine
+    from tranibor_api.db.models import OutpostCall
+    from tranibor_api.db.session import get_engine
 
     await kit.create(pg_client, "factory-floor")
     call_id = "placed-by-a-worker-that-stops"

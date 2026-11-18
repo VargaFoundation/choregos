@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import pytest
-from choregos_core.network import (
+from tranibor_core.network import (
     allowed,
     effective_network,
     host_matches,

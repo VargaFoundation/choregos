@@ -8,8 +8,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
-from choregos_core.dsl.flow import PULL_REQUEST_SECTIONS
-from choregos_orchestrator.activities.scm import _pr_body
+from tranibor_core.dsl.flow import PULL_REQUEST_SECTIONS
+from tranibor_orchestrator.activities.scm import _pr_body
 
 ITEM = SimpleNamespace(tracker_key="northwind/billing-api#7", body_snapshot="The total ignores credits.")
 

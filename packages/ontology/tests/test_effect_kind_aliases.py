@@ -16,9 +16,9 @@ import pytest
 def test_both_effect_kinds_resolve(plugin: None, monkeypatch: pytest.MonkeyPatch) -> None:
     """With the ontology extension active, each effect resolves under its English kind and its
     former one, to the same executor, under the same policy."""
-    from choregos_api import effects
-    from choregos_ontology.service import actions
-    from choregos_ontology.service.plugin import register
+    from tranibor_api import effects
+    from tranibor_ontology.service import actions
+    from tranibor_ontology.service.plugin import register
 
     # This test's effect registry only: nothing leaks into the next test.
     monkeypatch.setattr(effects, "_EFFECTS", dict(effects._EFFECTS))
@@ -43,7 +43,7 @@ def test_both_effect_kinds_resolve(plugin: None, monkeypatch: pytest.MonkeyPatch
 
 
 def test_params_read_ontology_then_ontologie() -> None:  # lang: fr-ok - names the persisted key
-    from choregos_ontology.service.actions import FORMER_PARAMS_KEY, PARAMS_KEY, _meta
+    from tranibor_ontology.service.actions import FORMER_PARAMS_KEY, PARAMS_KEY, _meta
 
     known = {"action_type": "verify_finding_fixed", "target_ids": ["t-1"]}
     assert (PARAMS_KEY, FORMER_PARAMS_KEY) == ("ontology", "ontologie")  # lang: fr-ok

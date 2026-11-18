@@ -10,8 +10,8 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from choregos_adapters.fakes.model_server import FakeModelServer
 from httpx import AsyncClient
+from tranibor_adapters.fakes.model_server import FakeModelServer
 
 
 def _workflow(name: str, state: str, description: str) -> str:
@@ -58,17 +58,17 @@ async def _born(client: AsyncClient, pid: str, title: str, **fields: Any) -> Any
 
 
 async def _route_lines() -> list[Any]:
-    from choregos_api.db.models import CostLedger
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import CostLedger
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         return list((await session.execute(select(CostLedger).where(CostLedger.kind == "route"))).scalars())
 
 
 async def _documents(item_id: str) -> dict[str, Any]:
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         item = await session.get(WorkItem, item_id)
@@ -78,7 +78,7 @@ async def _documents(item_id: str) -> dict[str, Any]:
 
 def _scripted(monkeypatch: pytest.MonkeyPatch, server: FakeModelServer) -> None:
     """The real gateway client, against a scripted model server."""
-    from choregos_api.services import llm_routing
+    from tranibor_api.services import llm_routing
 
     def router(model: str, settings: Any = None) -> llm_routing.WorkflowRouter:
         return llm_routing.GatewayWorkflowRouter(
@@ -198,10 +198,10 @@ async def test_the_gateway_client_reads_the_answer_and_its_usage(
 async def test_checking_a_birth_then_creating_it_asks_the_model_once(
     client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.db.models import Project
-    from choregos_api.db.session import session_scope
-    from choregos_api.services import llm_routing
-    from choregos_api.services.routing import WorkItemBirth, new_work_item, verify_birth
+    from tranibor_api.db.models import Project
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services import llm_routing
+    from tranibor_api.services.routing import WorkItemBirth, new_work_item, verify_birth
 
     pid = project["id"]
     await _two_workflows(client, pid)
@@ -396,7 +396,7 @@ def _systemone(answer: dict[str, Any] | None, status: int = 200) -> tuple[Any, l
 
 
 def _scripted_decider(monkeypatch: pytest.MonkeyPatch, transport: Any) -> None:
-    from choregos_api.services import llm_routing
+    from tranibor_api.services import llm_routing
 
     def router(model: str, settings: Any = None) -> llm_routing.WorkflowRouter:
         return llm_routing.DecisionWorkflowRouter("http://gateway/v1", "key", model, transport=transport)
@@ -556,9 +556,9 @@ async def test_a_wrong_or_failed_decision_leaves_the_item_to_the_default(
 
 
 async def _routing_records() -> list[Any]:
-    from choregos_api.db.models import DecisionRecordRow
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import DecisionRecordRow
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = await session.execute(select(DecisionRecordRow).order_by(DecisionRecordRow.decided_at))
@@ -570,8 +570,8 @@ async def _reroute(client: AsyncClient, item: dict[str, Any], **body: Any) -> An
 
 
 async def _item(item_id: str) -> Any:
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         return await session.get(WorkItem, item_id)
@@ -615,9 +615,9 @@ async def test_below_the_threshold_the_record_keeps_the_answer_beside_the_defaul
 async def test_a_reroute_moves_the_work_item_and_judges_its_routing(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.db.models import AuditLog
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import AuditLog
+    from tranibor_api.db.session import session_scope
 
     pid = project["id"]
     await _two_workflows(client, pid)
@@ -668,10 +668,10 @@ async def test_a_reroute_against_the_model_overrides_it(client: AsyncClient, pro
 async def test_a_started_work_item_is_rerouted_by_its_interpreter_even_while_a_person_is_asked(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.db.models import HumanRequest, Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.temporal import get_temporal
-    from choregos_core import utcnow
+    from tranibor_api.db.models import HumanRequest, Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.temporal import get_temporal
+    from tranibor_core import utcnow
 
     pid = project["id"]
     await _two_workflows(client, pid)
@@ -711,8 +711,8 @@ async def test_a_started_work_item_is_rerouted_by_its_interpreter_even_while_a_p
 async def test_the_end_judges_a_routing_no_one_moved_and_a_human_step_never_does(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.db.session import session_scope
-    from choregos_api.services import record_human_verdict, record_terminal_outcome
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services import record_human_verdict, record_terminal_outcome
 
     pid = project["id"]
     await _two_workflows(client, pid)

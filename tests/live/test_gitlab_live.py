@@ -10,10 +10,10 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 
 import pytest
-from choregos_adapters.http import RestClient
-from choregos_adapters.tracker.gitlab import GitLabTracker
-from choregos_contracts import ProjectConfig, RepoConfig
-from choregos_core.domain import NewItem, TrackerStateMapping
+from tranibor_adapters.http import RestClient
+from tranibor_adapters.tracker.gitlab import GitLabTracker
+from tranibor_contracts import ProjectConfig, RepoConfig
+from tranibor_core.domain import NewItem, TrackerStateMapping
 
 from .conftest import require
 
@@ -96,7 +96,7 @@ async def test_full_cycle_on_a_real_ticket(tracker: GitLabTracker) -> None:
 
 
 async def test_a_missing_project_gives_a_readable_error(tracker: GitLabTracker) -> None:
-    from choregos_adapters.errors import UpstreamError
+    from tranibor_adapters.errors import UpstreamError
 
     absent = GitLabTracker(tracker.client, "northwind/this-project-does-not-exist-999")
     with pytest.raises(UpstreamError) as error:

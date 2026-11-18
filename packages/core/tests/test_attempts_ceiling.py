@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from choregos_contracts import Policy, StageResult, StageStatus
-from choregos_core import PolicyEngine, WorkflowEngine, load_template, policy_warnings
+from tranibor_contracts import Policy, StageResult, StageStatus
+from tranibor_core import PolicyEngine, WorkflowEngine, load_template, policy_warnings
 
 
 def test_a_ceiling_only_lowers_max_attempts() -> None:

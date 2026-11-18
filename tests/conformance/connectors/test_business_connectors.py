@@ -23,8 +23,8 @@ from typing import Any
 
 import pytest
 import structlog
-from choregos_adapters.errors import AdapterError
 from jsonschema import Draft202012Validator
+from tranibor_adapters.errors import AdapterError
 
 pytestmark = pytest.mark.conformance
 
@@ -88,7 +88,7 @@ def _example(name: str, schema: dict[str, Any]) -> Any:
 
 
 def _typees(famille: str) -> list[Operation]:
-    from choregos_adapters import spec_of
+    from tranibor_adapters import spec_of
 
     spec = spec_of(*famille.split("/"))
     assert spec is not None, f"{famille} is not registered"
@@ -97,12 +97,12 @@ def _typees(famille: str) -> list[Operation]:
 
 async def _typee(famille: str, key: str, monkeypatch: pytest.MonkeyPatch) -> Cas:
     """A `<family>: demo` connector, built by the registry, as the platform does."""
-    import choregos_adapters
-    from choregos_adapters import build
-    from choregos_adapters.fakes.hr import FAKES_BY_FAMILY
+    import tranibor_adapters
+    from tranibor_adapters import build
+    from tranibor_adapters.fakes.hr import FAKES_BY_FAMILY
 
     fake = FAKES_BY_FAMILY[famille](expected_key=SECRET)
-    monkeypatch.setitem(choregos_adapters.FAUX_METIER, famille, fake)
+    monkeypatch.setitem(tranibor_adapters.FAUX_METIER, famille, fake)
     client = build(famille, "demo", {"api_key": key})
     surcharges = {"create_return": {"reference": "reference-retour"}}
     return Cas(_typees(f"{famille}/demo"), client.execute, fake.state, client, surcharges)
@@ -110,8 +110,8 @@ async def _typee(famille: str, key: str, monkeypatch: pytest.MonkeyPatch) -> Cas
 
 async def _en_mcp(fake: Any, key: str) -> Cas:
     """The same fake, served over MCP: its tools are discovered, and the client calls them."""
-    from choregos_adapters.fakes.hr import mcp_server
-    from choregos_adapters.mcp import McpClient
+    from tranibor_adapters.fakes.hr import mcp_server
+    from tranibor_adapters.mcp import McpClient
 
     client = McpClient(URL, token=key, transport=mcp_server(fake, token=SECRET).transport())
 
@@ -137,9 +137,9 @@ async def _servie(famille: str, key: str) -> Cas:
     """A `demo` connector that carries a `url`: the fake served by ONE process (`fakes/server.py`),
     what the dev deploys — its operations are the family's, declared, not discovered."""
     import httpx
-    from choregos_adapters.fakes.hr import RemoteDesk
-    from choregos_adapters.fakes.server import DemoApplication
-    from choregos_adapters.mcp import McpClient
+    from tranibor_adapters.fakes.hr import RemoteDesk
+    from tranibor_adapters.fakes.server import DemoApplication
+    from tranibor_adapters.mcp import McpClient
 
     app = DemoApplication(token=SECRET)
     client = RemoteDesk(
@@ -150,8 +150,8 @@ async def _servie(famille: str, key: str) -> Cas:
 
 
 async def _entra(key: str) -> Cas:
-    from choregos_adapters.fakes.entra import FakeEntra
-    from choregos_adapters.identity import EntraIdentity
+    from tranibor_adapters.fakes.entra import FakeEntra
+    from tranibor_adapters.identity import EntraIdentity
 
     graph = FakeEntra(expected_secret=SECRET)
     client = EntraIdentity(
@@ -178,7 +178,7 @@ async def _entra(key: str) -> Cas:
 
 
 async def ouvrir(name: str, monkeypatch: pytest.MonkeyPatch, key: str = SECRET) -> Cas:
-    from choregos_adapters.fakes.hr import FAKES_BY_FAMILY, FakeSupplier
+    from tranibor_adapters.fakes.hr import FAKES_BY_FAMILY, FakeSupplier
 
     forme, _, famille = name.partition(":")
     if forme == "demo":
@@ -250,8 +250,8 @@ def test_the_schema_and_the_signature_say_the_same_thing(name: str) -> None:
     import inspect
     import typing
 
-    from choregos_adapters.fakes.hr import FAKES_BY_FAMILY
-    from choregos_adapters.identity import EntraIdentity
+    from tranibor_adapters.fakes.hr import FAKES_BY_FAMILY
+    from tranibor_adapters.identity import EntraIdentity
 
     forme, _, famille = name.partition(":")
     implementation: type[Any] = FAKES_BY_FAMILY[famille] if forme == "demo" else EntraIdentity

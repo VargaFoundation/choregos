@@ -1,6 +1,6 @@
 # Plain-Python example: a ticket triager
 
-One async function on the `choregos-agent-sdk`: it reads the ticket, asks the knowledge search (one
+One async function on the `tranibor-agent-sdk`: it reads the ticket, asks the knowledge search (one
 governed tool call, when the run offers it), asks the model for a two-sentence reading (one counted
 turn; a rule takes over when the run has no gateway) and delivers `triage.md`.
 

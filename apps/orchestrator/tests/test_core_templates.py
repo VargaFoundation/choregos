@@ -21,11 +21,11 @@ pytestmark = pytest.mark.asyncio
 
 async def _pin(setup: Fixture, name: str) -> None:
     """Publish the core template `name` in the project and pin the fixture work item to it."""
-    from choregos_api.db.models import Project, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.rbac import SYSTEM
-    from choregos_api.services.definitions import publish_workflow
-    from choregos_core.dsl import template_yaml
+    from tranibor_api.db.models import Project, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.rbac import SYSTEM
+    from tranibor_api.services.definitions import publish_workflow
+    from tranibor_core.dsl import template_yaml
 
     async with session_scope() as session:
         project = await session.get(Project, setup.project_id)
@@ -85,9 +85,9 @@ async def _ci(setup: Fixture, work_item_run: Any, conclusion: str, delivery: str
 
 
 async def _played_transitions(setup: Fixture) -> list[str]:
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = (

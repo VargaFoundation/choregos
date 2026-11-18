@@ -9,7 +9,7 @@ from typing import Any
 
 import httpx
 import pytest
-from choregos_adapters.web_search import (
+from tranibor_adapters.web_search import (
     BACKENDS,
     BraveSearch,
     FirecrawlSearch,
@@ -18,7 +18,7 @@ from choregos_adapters.web_search import (
     TavilySearch,
     declared,
 )
-from choregos_core.web_search import DataHandling
+from tranibor_core.web_search import DataHandling
 
 KEY = "search-key-under-test"
 
@@ -115,16 +115,16 @@ def test_firecrawl_without_a_usable_base_url_is_refused_not_defaulted(bad: str) 
 def test_a_stored_connector_without_base_url_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
     """Connectors saved when the cloud was the default carry no `base_url`: built through the registry
     they raise an explicit error, before any client exists, so nothing can be sent."""
-    from choregos_adapters import build
+    from tranibor_adapters import build
 
-    monkeypatch.setattr("choregos_adapters.registry.fakes_enabled", lambda: False)  # the real type
+    monkeypatch.setattr("tranibor_adapters.registry.fakes_enabled", lambda: False)  # the real type
 
     with pytest.raises(SearchError, match="self-hosted"):
         build("web_search", "firecrawl", {"api_key": "k", "timeout_s": 5})
 
 
 def test_the_connector_type_requires_base_url_and_declares_the_self_hosted_host_as_egress() -> None:
-    from choregos_adapters import egress_hosts, spec_of, validate_config
+    from tranibor_adapters import egress_hosts, spec_of, validate_config
 
     spec = spec_of("web_search", "firecrawl")
     assert spec is not None
@@ -192,7 +192,7 @@ def test_the_real_backends_declare_nothing_they_have_not_reviewed() -> None:
 
 
 async def test_the_fake_is_deterministic_and_scriptable() -> None:
-    from choregos_adapters.fakes.web_search import FakeSearchBackend
+    from tranibor_adapters.fakes.web_search import FakeSearchBackend
 
     fake = FakeSearchBackend()
     first = await fake.search("q", max_results=2)

@@ -12,9 +12,9 @@ import pathlib
 import pytest
 from alembic import command
 from alembic.config import Config
-from choregos_api.config import get_settings
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import IntegrityError
+from tranibor_api.config import get_settings
 
 API = pathlib.Path(__file__).resolve().parents[1]
 BEFORE = "d7f0a2c4e6b8"
@@ -25,7 +25,7 @@ EVALUATIONS = "a8c0e2b4d6f8"
 
 def _config(url: str) -> Config:
     config = Config(str(API / "alembic.ini"))
-    config.set_main_option("script_location", str(API / "src" / "choregos_api" / "migrations"))
+    config.set_main_option("script_location", str(API / "src" / "tranibor_api" / "migrations"))
     config.set_main_option("sqlalchemy.url", url)
     return config
 

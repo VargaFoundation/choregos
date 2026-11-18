@@ -16,11 +16,11 @@ from typing import Any
 
 import httpx
 import pytest
-from choregos_api.scanners import osv_mirror
-from choregos_api.services import skill_scanner
-from choregos_api.services.skill_gate import Assessment, Finding, assess
-from choregos_api.services.skill_scanner import FakeSkillScanner, Scan, findings_from_report, with_scan
 from httpx import AsyncClient
+from tranibor_api.scanners import osv_mirror
+from tranibor_api.services import skill_scanner
+from tranibor_api.services.skill_gate import Assessment, Finding, assess
+from tranibor_api.services.skill_scanner import FakeSkillScanner, Scan, findings_from_report, with_scan
 
 REQUESTS = {
     "id": "GHSA-test-requests",
@@ -169,7 +169,7 @@ def test_the_mirror_gives_the_whole_record_and_says_when_it_was_built(mirror: Pa
 
 
 async def test_the_mirror_is_rebuilt_from_osv_s_archives(tmp_path: Path) -> None:
-    from choregos_api.config import Settings
+    from tranibor_api.config import Settings
 
     archives = {
         "/osv/PyPI/all.zip": _zip(tmp_path / "p.zip", [REQUESTS]).read_bytes(),

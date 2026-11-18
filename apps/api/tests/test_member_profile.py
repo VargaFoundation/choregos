@@ -13,8 +13,8 @@ from datetime import timedelta
 from typing import Any
 
 import pytest
-from choregos_core import utcnow
 from httpx import AsyncClient
+from tranibor_core import utcnow
 
 from .conftest import login
 
@@ -25,7 +25,7 @@ ORG = "/api/v1/orgs/northwind"
 def elsewhere(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """The development sign-in lands a new person in every organisation unless a default one is set: from
     here on it lands them in `other`, so a northwind role is only one a test grants."""
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     monkeypatch.setenv("CHOREGOS_OIDC_DEFAULT_ORG", "other")
     reset_settings_cache()
@@ -44,8 +44,8 @@ async def _profile(client: AsyncClient, user_id: str) -> Any:
 
 
 async def _other_organisation() -> None:
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         session.add(Organization(slug="other", name="Other"))
@@ -54,8 +54,8 @@ async def _other_organisation() -> None:
 async def _work(project_id: str, dev_email: str) -> dict[str, str]:
     """A work item with three waiting requests (to the person, to a group they are in, to someone else), one
     decided by them, and a run of a work item they started."""
-    from choregos_api.db.models import HumanRequest, Run, WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import HumanRequest, Run, WorkItem
+    from tranibor_api.db.session import session_scope
 
     now = utcnow()
     async with session_scope() as session:
@@ -120,8 +120,8 @@ async def _work(project_id: str, dev_email: str) -> dict[str, str]:
 
 
 async def _book_spend(project_id: str, user_id: str, cost: float) -> None:
-    from choregos_api.db.models import CostLedger
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import CostLedger
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         session.add(CostLedger(project_id=project_id, user_id=user_id, cost_usd=cost, ts=utcnow()))
@@ -205,8 +205,8 @@ async def test_the_person_reads_their_own_work_but_not_the_administration(
 async def test_outside_the_organisation_the_profile_is_refused_and_a_stranger_is_not_found(
     client: AsyncClient, admin: str, elsewhere: None
 ) -> None:
-    from choregos_api.db.models import User
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import User
+    from tranibor_api.db.session import session_scope
 
     dev = await _member(client, "dev@northwind.dev")
     async with session_scope() as session:

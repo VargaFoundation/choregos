@@ -9,15 +9,15 @@ loosening one rule turns a cell red.
 from __future__ import annotations
 
 import pytest
-from choregos_api.rbac import ROLE_PERMISSIONS, Permission, Principal
-from choregos_api.services.agent_governance import (
+from tranibor_api.rbac import ROLE_PERMISSIONS, Permission, Principal
+from tranibor_api.services.agent_governance import (
     TABLE,
     Action,
     Subject,
     decide,
     usable_in_project,
 )
-from choregos_contracts import Role
+from tranibor_contracts import Role
 
 ORG = "northwind"
 

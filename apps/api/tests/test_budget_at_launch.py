@@ -41,10 +41,10 @@ async def test_wider_than_the_policy_is_refused(client: AsyncClient, project: di
 
 
 async def test_a_tighter_budget_is_kept(client: AsyncClient, project: dict[str, Any]) -> None:
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.services import policy_engine
-    from choregos_api.services.budgets import ticket_budget
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services import policy_engine
+    from tranibor_api.services.budgets import ticket_budget
 
     await _tracker(client, project)
     created = await _create(client, project, size="M", budget_usd=1.5)
@@ -74,9 +74,9 @@ async def test_the_workflow_budget_applies_and_bounds_the_launch(
 async def test_a_workflow_budget_wider_than_the_policy_is_refused_at_publish(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.db.session import session_scope
-    from choregos_api.services import policy_engine
-    from choregos_contracts import Size
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services import policy_engine
+    from tranibor_contracts import Size
 
     async with session_scope() as session:
         engine = await policy_engine(session, project["id"])

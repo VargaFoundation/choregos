@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from choregos_core import parse_workflow, to_process
+from tranibor_core import parse_workflow, to_process
 
 ROOT = Path(__file__).resolve().parents[3]
 DEV_COMPLEX = ROOT / "templates/github-software-delivery/workflows/dev-complex.yaml"

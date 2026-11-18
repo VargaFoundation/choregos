@@ -13,10 +13,10 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from choregos_adapters.fakes.identity_provider import FakeIdentityProvider
-from choregos_adapters.token_exchange import claims_of
 from httpx import AsyncClient
 from sqlalchemy import select
+from tranibor_adapters.fakes.identity_provider import FakeIdentityProvider
+from tranibor_adapters.token_exchange import claims_of
 
 from .agent_scopes_kit import add_member, as_user
 from .kits.assistant_door import ORG, offline  # noqa: F401
@@ -46,7 +46,7 @@ ARGUMENTS = {"item": "laptop", "quantity": 2}
 
 async def _installation(*, approval: str = "inline") -> dict[str, str]:
     """An installation whose need `orders` is bound to the declared connector `fournisseur`."""
-    from choregos_api.db.models import (
+    from tranibor_api.db.models import (
         AssistantInstallation,
         AssistantToolBinding,
         ConnectorOperation,
@@ -54,7 +54,7 @@ async def _installation(*, approval: str = "inline") -> dict[str, str]:
         OrgConnector,
         User,
     )
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         org = (
@@ -256,8 +256,8 @@ async def test_a_console_approval_is_not_offered_and_a_raised_one_is_not_execute
     source: Any,  # noqa: F811
     idp: FakeIdentityProvider,  # noqa: F811
 ) -> None:
-    from choregos_api.db.models import AssistantToolBinding
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import AssistantToolBinding
+    from tranibor_api.db.session import session_scope
 
     ids = await _ready(client)
     conversation, action_id = await _propose(client, admin, upstream, ids)
@@ -298,8 +298,8 @@ async def test_the_mcp_door_lists_the_proposal_with_a_console_link_and_never_exe
     source: Any,  # noqa: F811
     idp: FakeIdentityProvider,  # noqa: F811
 ) -> None:
-    from choregos_api.db.models import AssistantInstallation
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import AssistantInstallation
+    from tranibor_api.db.session import session_scope
 
     from .kits.mcp_assistants import _call, _names
 
@@ -353,8 +353,8 @@ async def _variant(offline_root: Any) -> None:
 
 
 async def _writing_connector(name: str, operation: str) -> None:
-    from choregos_api.db.models import ConnectorOperation, Organization, OrgConnector
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import ConnectorOperation, Organization, OrgConnector
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         org_id = (await session.execute(select(Organization.id))).scalar_one()
@@ -438,8 +438,8 @@ async def test_a_confirmed_call_is_booked_by_the_ledger_and_the_events_like_a_to
     source: Any,  # noqa: F811
     idp: FakeIdentityProvider,  # noqa: F811
 ) -> None:
-    from choregos_api.db.models import AgentSessionRecord, CostLedger, User
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import AgentSessionRecord, CostLedger, User
+    from tranibor_api.db.session import session_scope
 
     from .kits.user_exchange import _tool_events
 
@@ -508,8 +508,8 @@ async def test_a_console_approval_of_a_service_write_is_a_governed_action_decide
     source: Any,  # noqa: F811
     idp: FakeIdentityProvider,  # noqa: F811
 ) -> None:
-    from choregos_api.db.models import Action, Agent, AssistantToolBinding, Project
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Action, Agent, AssistantToolBinding, Project
+    from tranibor_api.db.session import session_scope
 
     ids = await _ready(client, approval="console")
     async with session_scope(orgs="*") as session:
@@ -571,8 +571,8 @@ async def test_a_console_write_bound_to_a_persons_identity_is_not_offered(
     source: Any,  # noqa: F811
     idp: FakeIdentityProvider,  # noqa: F811
 ) -> None:
-    from choregos_api.db.models import Agent, AssistantToolBinding
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Agent, AssistantToolBinding
+    from tranibor_api.db.session import session_scope
 
     ids = await _ready(client, approval="console")  # identity `user_exchange` under a console approval
     async with session_scope(orgs="*") as session:
@@ -607,11 +607,11 @@ async def test_an_inline_write_bound_for_user_consent_executes_under_the_persons
     import base64
     from urllib.parse import urlparse
 
-    from choregos_adapters.fakes.oauth_provider import AUTHORIZE, TOKEN, FakeOAuthProvider
-    from choregos_api.db.models import AssistantToolBinding, OrgConnector
-    from choregos_api.db.session import session_scope
-    from choregos_api.secret_store import SealedDbSecretStore, parse_keyring, set_secret_store
-    from choregos_api.services.connected_accounts import set_consent_transport
+    from tranibor_adapters.fakes.oauth_provider import AUTHORIZE, TOKEN, FakeOAuthProvider
+    from tranibor_api.db.models import AssistantToolBinding, OrgConnector
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.secret_store import SealedDbSecretStore, parse_keyring, set_secret_store
+    from tranibor_api.services.connected_accounts import set_consent_transport
 
     ring = parse_keyring("k1:" + base64.b64encode(b"k" * 32).decode())
     assert ring is not None

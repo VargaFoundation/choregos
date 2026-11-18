@@ -40,7 +40,7 @@ INSTALLATION = f"{ORG}/assistants/investment-assistant"
 
 
 async def _key(task: str = "meeting_prep") -> str:
-    from choregos_api.services.task_events import event_key
+    from tranibor_api.services.task_events import event_key
 
     return event_key(await _installation_id(), 0, task)
 
@@ -73,8 +73,8 @@ def _event(email: str, event_id: str = "ev-1") -> dict[str, Any]:
 
 
 async def _journal() -> list[Any]:
-    from choregos_api.db.models import TaskEvent
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import TaskEvent
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         rows = (
@@ -148,8 +148,8 @@ async def test_the_event_id_is_the_senders_key_or_the_bodys_digest_when_the_trig
 async def test_an_event_that_names_nobody_or_several_or_nobody_subscribed_is_refused_and_journaled(
     client: AsyncClient, org: str, app: Any, offline: Path, markets: Any
 ) -> None:
-    from choregos_api.db.models import User
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import User
+    from tranibor_api.db.session import session_scope
 
     await _ready(client)
     ann = await _subscriber(client, app, "ann@northwind.dev")
@@ -218,9 +218,9 @@ async def test_the_door_takes_only_the_signature_of_that_task(
 async def test_the_subscribers_gate_judges_an_event_as_it_judges_a_window(
     client: AsyncClient, org: str, app: Any, offline: Path, markets: Any
 ) -> None:
-    from choregos_api.db.models import CostLedger, Organization, User
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
+    from tranibor_api.db.models import CostLedger, Organization, User
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
 
     await _ready(client)
     dee = await _subscriber(client, app, "dee@northwind.dev")

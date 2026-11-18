@@ -17,10 +17,10 @@ from .kits.registry_agent import agent_stage_plan, install_agent
 
 
 async def test_the_agent_instructions_replace_the_playbook_within_their_frame(setup: Fixture) -> None:
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities.stage import prepare_stage
-    from choregos_playbooks import OUTPUT_CONTRACT, playbook_source
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities.stage import prepare_stage
+    from tranibor_playbooks import OUTPUT_CONTRACT, playbook_source
 
     await install_agent(setup)
     prepare = await prepare_stage(agent_stage_plan(setup, agent="coordinateur"))
@@ -39,7 +39,7 @@ async def test_the_agent_instructions_replace_the_playbook_within_their_frame(se
 
 
 async def test_the_project_pin_tightens_the_budget(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.stage import prepare_stage
+    from tranibor_orchestrator.activities.stage import prepare_stage
 
     await install_agent(setup, pin={"budget": {"run_usd": 0.2}})
     stage_input = (await prepare_stage(agent_stage_plan(setup, agent="coordinateur")))["stage_input"]
@@ -59,7 +59,7 @@ async def test_the_project_pin_tightens_the_budget(setup: Fixture) -> None:
 async def test_what_cannot_start_says_so_without_retrying(
     setup: Fixture, agent: dict[str, Any], reason: str
 ) -> None:
-    from choregos_orchestrator.activities.stage import prepare_stage
+    from tranibor_orchestrator.activities.stage import prepare_stage
 
     await install_agent(setup, **agent)
     with pytest.raises(ApplicationError, match=reason) as refusal:
@@ -79,7 +79,7 @@ async def test_an_agent_that_may_not_run_here_stops_the_run_without_a_retry(
 ) -> None:
     """Whatever got the name into the workflow (the publication check is bypassed here), the run
     refuses a personal agent and another project's agent (ADR 0061)."""
-    from choregos_orchestrator.activities.stage import prepare_stage
+    from tranibor_orchestrator.activities.stage import prepare_stage
 
     await install_agent(setup, **agent)
     with pytest.raises(ApplicationError, match=reason) as refusal:
@@ -88,7 +88,7 @@ async def test_an_agent_that_may_not_run_here_stops_the_run_without_a_retry(
 
 
 async def test_a_project_agent_runs_in_its_own_project(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.stage import prepare_stage
+    from tranibor_orchestrator.activities.stage import prepare_stage
 
     await install_agent(setup, scope="project", project="this")
     stage_input = (await prepare_stage(agent_stage_plan(setup, agent="coordinateur")))["stage_input"]
@@ -99,10 +99,10 @@ async def test_the_interpreter_passes_on_the_agent_the_actor_names(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
     """End to end: a workflow whose actor names an agent; the run carries its name."""
-    from choregos_api.db.models import Run, WorkflowDef, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_contracts import Workflow
     from sqlalchemy import select
+    from tranibor_api.db.models import Run, WorkflowDef, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_contracts import Workflow
 
     await install_agent(setup)
     document = {
@@ -155,10 +155,10 @@ async def test_the_interpreter_passes_on_the_agent_the_actor_names(
 
 
 async def test_an_agent_that_spent_its_daily_budget_starts_no_more_runs(setup: Fixture) -> None:
-    from choregos_api.db.models import CostLedger, Run
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
-    from choregos_orchestrator.activities.stage import prepare_stage
+    from tranibor_api.db.models import CostLedger, Run
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
+    from tranibor_orchestrator.activities.stage import prepare_stage
 
     await install_agent(setup)  # daily budget: $5
     async with session_scope() as session:
@@ -190,11 +190,11 @@ async def test_an_agent_that_spent_its_daily_budget_starts_no_more_runs(setup: F
 
 
 async def test_the_agent_skills_go_in_the_stage_input_with_their_digest(setup: Fixture) -> None:
-    from choregos_api.db.models import AgentVersion, Project, Skill, SkillVersion
-    from choregos_api.db.session import session_scope
-    from choregos_contracts import skill_digest
-    from choregos_orchestrator.activities.stage import prepare_stage
     from sqlalchemy import select
+    from tranibor_api.db.models import AgentVersion, Project, Skill, SkillVersion
+    from tranibor_api.db.session import session_scope
+    from tranibor_contracts import skill_digest
+    from tranibor_orchestrator.activities.stage import prepare_stage
 
     files = {"SKILL.md": "---\nname: procedure-onboarding\ndescription: x\n---\n"}
     await install_agent(setup)
@@ -224,8 +224,8 @@ async def test_the_agent_skills_go_in_the_stage_input_with_their_digest(setup: F
 
 async def _knowledge(setup: Fixture, slug: str, **fields: Any) -> None:
     """A knowledge base of the project's organisation, with one ready and one failed document."""
-    from choregos_api.db.models import KnowledgeBase, KnowledgeDocument, Project
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import KnowledgeBase, KnowledgeDocument, Project
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         project = await session.get(Project, setup.project_id)
@@ -250,9 +250,9 @@ async def _knowledge(setup: Fixture, slug: str, **fields: Any) -> None:
 
 
 async def _reads(slugs: list[str]) -> None:
-    from choregos_api.db.models import AgentVersion
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import AgentVersion
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         version = (await session.execute(select(AgentVersion))).scalar_one()
@@ -261,9 +261,9 @@ async def _reads(slugs: list[str]) -> None:
 
 async def test_the_knowledge_bases_of_the_agent_are_pinned_in_the_stage_input(setup: Fixture) -> None:
     """S33-02: prepare_stage passes the agent's bases — its ready documents and their digest."""
-    from choregos_api.knowledge import okf
-    from choregos_contracts import knowledge_digest
-    from choregos_orchestrator.activities.stage import prepare_stage
+    from tranibor_api.knowledge import okf
+    from tranibor_contracts import knowledge_digest
+    from tranibor_orchestrator.activities.stage import prepare_stage
 
     await install_agent(setup)
     await _knowledge(setup, "architecture", scope="org", projects=[], groups=[], serving_mode="files")
@@ -292,7 +292,7 @@ async def test_the_knowledge_bases_of_the_agent_are_pinned_in_the_stage_input(se
 async def test_a_base_the_project_is_not_served_stops_the_run(
     setup: Fixture, fields: dict[str, Any] | None, reason: str
 ) -> None:
-    from choregos_orchestrator.activities.stage import prepare_stage
+    from tranibor_orchestrator.activities.stage import prepare_stage
 
     await install_agent(setup)
     if fields is not None:
@@ -305,9 +305,9 @@ async def test_a_base_the_project_is_not_served_stops_the_run(
 
 async def test_a_restricted_base_is_pinned_only_for_an_initiator_who_reads_it(setup: Fixture) -> None:
     """S42-11e (ADR 0097): the run acts for the person who started the work item."""
-    from choregos_api.db.models import Membership, Project, User, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities.stage import prepare_stage
+    from tranibor_api.db.models import Membership, Project, User, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities.stage import prepare_stage
 
     await install_agent(setup)
     await _knowledge(setup, "hr", scope="org", projects=[], groups=[], serving_mode="files", restricted=True)
@@ -345,12 +345,12 @@ async def test_a_run_carries_the_latest_approved_skill_version_never_one_pending
 ) -> None:
     """S32-06: a high-risk version waits for a second reviewer; unpinned, the run reads the latest
     APPROVED one; pinned to the pending one, the run does not start."""
-    from choregos_api.db.models import AgentVersion, Project, Skill, SkillVersion
-    from choregos_api.db.session import session_scope
-    from choregos_contracts import skill_digest
-    from choregos_orchestrator.activities.stage import prepare_stage
     from sqlalchemy import select
     from temporalio.exceptions import ApplicationError
+    from tranibor_api.db.models import AgentVersion, Project, Skill, SkillVersion
+    from tranibor_api.db.session import session_scope
+    from tranibor_contracts import skill_digest
+    from tranibor_orchestrator.activities.stage import prepare_stage
 
     files = {"SKILL.md": "---\nname: fill-forms\ndescription: x\n---\n"}
     await install_agent(setup)
@@ -389,10 +389,10 @@ async def test_a_run_carries_the_latest_approved_skill_version_never_one_pending
 async def _memory_of_the_run(
     setup: Fixture, scope: str | None, attempt: int
 ) -> tuple[dict[str, Any], list[str]]:
-    from choregos_api.db.models import AgentVersion, Run
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities.stage import prepare_stage
     from sqlalchemy import select
+    from tranibor_api.db.models import AgentVersion, Run
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities.stage import prepare_stage
 
     async with session_scope() as session:
         version = (await session.execute(select(AgentVersion))).scalar_one()
@@ -410,7 +410,7 @@ async def test_the_agent_memory_scope_decides_what_the_run_reads(setup: Fixture)
     """S32-02: `project` reads the project's memory (as before), `agent` its own within the
     project, `none` nothing — and the memory server, which serves the project's memory, is only
     handed to a run whose scope is the project."""
-    from choregos_core import memory_namespace
+    from tranibor_core import memory_namespace
 
     await install_agent(setup)
     setup.adapters.memory.seed(
@@ -439,9 +439,9 @@ async def test_the_agent_memory_scope_decides_what_the_run_reads(setup: Fixture)
 async def test_the_instructions_read_the_fields_of_the_work_item(setup: Fixture) -> None:
     """A child opened by a fan-out holds there what its parent measured for it (S38-15): the agent's
     instructions render them, as the work item stores them."""
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities.stage import prepare_stage
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities.stage import prepare_stage
 
     async with session_scope() as session:
         item = await session.get(WorkItem, setup.work_item_id)
@@ -456,9 +456,9 @@ async def test_the_instructions_read_the_fields_of_the_work_item(setup: Fixture)
 async def test_the_agent_reads_who_filed_the_work_item_before_its_body(setup: Fixture) -> None:
     """An access request is checked against its requester (#1179): the body the agent reads opens with
     who filed it, and `ticket.reporter` names them on its own."""
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities.stage import prepare_stage
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities.stage import prepare_stage
 
     async with session_scope() as session:
         item = await session.get(WorkItem, setup.work_item_id)
@@ -474,9 +474,9 @@ async def test_the_agent_reads_who_filed_the_work_item_before_its_body(setup: Fi
 
 
 async def test_a_work_item_without_a_reporter_reads_its_body_unchanged(setup: Fixture) -> None:
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities.stage import prepare_stage
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities.stage import prepare_stage
 
     async with session_scope() as session:
         item = await session.get(WorkItem, setup.work_item_id)

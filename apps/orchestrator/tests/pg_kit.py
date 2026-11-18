@@ -54,7 +54,7 @@ async def prepare(url: str) -> None:
 
 async def migrate() -> None:
     """The schema by the migration command of the chart's Job (every head)."""
-    from choregos_api.migrate import configuration
+    from tranibor_api.migrate import configuration
 
     await asyncio.to_thread(command.upgrade, configuration(), "heads")
 

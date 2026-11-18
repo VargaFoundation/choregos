@@ -1,6 +1,6 @@
 {{- $tempo := (.Values.global.tracing | default dict).tempoUrl }}
 {{- if and .Values.enabled $tempo }}
-# The nightly ledger-vs-trace comparison (ADR 0018 point 3, `python -m choregos_api.trace_drift`):
+# The nightly ledger-vs-trace comparison (ADR 0018 point 3, `python -m tranibor_api.trace_drift`):
 # each run's model tokens in the ledger against the gateway's spans of its trace, read from Tempo.
 # A drift is a platform audit line (`trace.drift`), never a correction of the ledger. Rendered
 # only with `global.tracing.tempoUrl`: without Tempo there is no trace to read.
@@ -38,7 +38,7 @@ spec:
               command:
                 - python
                 - -m
-                - choregos_api.trace_drift
+                - tranibor_api.trace_drift
                 - --hours
                 - {{ .Values.traceDrift.hours | quote }}
                 - --settle-minutes

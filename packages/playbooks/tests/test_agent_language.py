@@ -7,7 +7,7 @@ prompt it always ran. Any other tag swaps the language line, and only it.
 from __future__ import annotations
 
 import pytest
-from choregos_playbooks import INVARIANTS, OUTPUT_CONTRACT, frame, invariants_in, language_name
+from tranibor_playbooks import INVARIANTS, OUTPUT_CONTRACT, frame, invariants_in, language_name
 
 ENGLISH = "Write in English everything a person will read"
 

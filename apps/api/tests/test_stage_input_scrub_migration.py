@@ -15,18 +15,18 @@ from typing import Any
 import pytest
 from alembic import command
 from alembic.config import Config
-from choregos_api.config import get_settings
 from sqlalchemy import create_engine, text
+from tranibor_api.config import get_settings
 
 API = pathlib.Path(__file__).resolve().parents[1]
 BEFORE = "2c4e6a8b0d1f"
-MIGRATION = API / "src/choregos_api/migrations/versions/20261014_1500_stage_input_without_secrets.py"
+MIGRATION = API / "src/tranibor_api/migrations/versions/20261014_1500_stage_input_without_secrets.py"
 REDACTED = "[REDACTED]"
 
 
 def _config(url: str) -> Config:
     config = Config(str(API / "alembic.ini"))
-    config.set_main_option("script_location", str(API / "src" / "choregos_api" / "migrations"))
+    config.set_main_option("script_location", str(API / "src" / "tranibor_api" / "migrations"))
     config.set_main_option("sqlalchemy.url", url)
     return config
 

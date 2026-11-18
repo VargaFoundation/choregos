@@ -30,7 +30,7 @@ export function toolSources(spec: Pick<AgentSpec, "tools">): Array<{ id: ToolSou
 }
 
 /**
- * What a version leaves to its project, as ADR 0127 §7 says it (mirrors `choregos_core.agent_completeness`):
+ * What a version leaves to its project, as ADR 0127 §7 says it (mirrors `tranibor_core.agent_completeness`):
  * a remote (a2a) agent is complete by construction, a voice agent needs only its model. The Access tab
  * says the same from the API for one project; this one reads the spec alone, so a page may say it without one.
  */

@@ -17,10 +17,10 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from choregos_adapters.fakes.plugin_servers import FakePluginServer, use_fake_plugin_server
-from choregos_core.agent_catalogue import OFFLINE_ENV
-from choregos_orchestrator.activities import eval_doors, evals
-from choregos_playbooks.evals.agents import judge
+from tranibor_adapters.fakes.plugin_servers import FakePluginServer, use_fake_plugin_server
+from tranibor_core.agent_catalogue import OFFLINE_ENV
+from tranibor_orchestrator.activities import eval_doors, evals
+from tranibor_playbooks.evals.agents import judge
 
 from .conftest import Fixture
 
@@ -86,7 +86,7 @@ def test_a_plugin_case_name_resolves_to_the_case_its_plugin_ships(servicenow: li
     assert case["connectors"] == {"servicenow": {"kind": "plugin:servicenow/servicenow", "scene": "default"}}
     assert evals.load_agent_case("plugin:servicenow/no-such-case") is None
     assert evals.load_agent_case("plugin:no-such-plugin/itsm-triage-similar-incidents") is None
-    from choregos_playbooks.evals.agents import case_instructions, score_instructions
+    from tranibor_playbooks.evals.agents import case_instructions, score_instructions
 
     instructions = case_instructions(case)
     assert instructions is not None and score_instructions(case, instructions) == [], "its plugin's agent"
@@ -245,7 +245,7 @@ async def test_a_scene_the_fakes_do_not_have_is_still_the_case_s_error(
     setup: Fixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Only a plugin's server without a fake is skipped: a case naming a scene that does not exist fails."""
-    from choregos_adapters.errors import AdapterError
+    from tranibor_adapters.errors import AdapterError
 
     broken = {
         **_case("netops-ssh-exposure"),

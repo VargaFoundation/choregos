@@ -5,7 +5,7 @@ from __future__ import annotations
 import base64
 
 import pytest
-from choregos_core import analyser, suspicions
+from tranibor_core import analyser, suspicions
 
 
 @pytest.mark.parametrize(

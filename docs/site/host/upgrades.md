@@ -29,7 +29,7 @@ helm upgrade --install choregos oci://ghcr.io/graalsystems/charts/choregos \
 ```
 
 - The database migrations run as a Helm hook **before** the new API starts
-  (`python -m choregos_api.migrate`, in a Job that waits for the database up to 300 seconds). With an
+  (`python -m tranibor_api.migrate`, in a Job that waits for the database up to 300 seconds). With an
   embedded database the hook runs after the install instead: keep `choregos-api.migrations.hook` as
   the chart sets it.
 - Work items in flight finish on the workflow version they started on; Temporal keeps their position

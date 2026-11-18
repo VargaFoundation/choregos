@@ -90,7 +90,7 @@ def test_a_settlement_request_says_an_outcome_and_a_note() -> None:
 
 
 def test_the_outcomes_are_the_enum_s() -> None:
-    from choregos_contracts import SettlementOutcome
+    from tranibor_contracts import SettlementOutcome
 
     assert SCHEMAS["SettlementOutcome"]["enum"] == [outcome.value for outcome in SettlementOutcome]
     assert [outcome.value for outcome in SettlementOutcome] == ["made", "not_made"]
@@ -118,7 +118,7 @@ def test_the_settlement_is_on_the_action_and_on_its_effect_with_the_doubt_s_evid
 
 
 def test_a_person_s_settlement_is_an_event_of_its_own() -> None:
-    from choregos_contracts.enums import EventType
+    from tranibor_contracts.enums import EventType
 
     assert EventType.ACTION_SETTLED.value == "choregos.action.settled"
     event = json.loads((CONTRACTS / "schemas" / "event.schema.json").read_text())

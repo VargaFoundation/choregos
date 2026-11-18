@@ -214,7 +214,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.spec.containers[0].command
-          value: ["python", "-m", "choregos_orchestrator.worker"]
+          value: ["python", "-m", "tranibor_orchestrator.worker"]
       - equal:
           path: spec.template.spec.containers[0].args
           value: ["--queues", "orchestrator"]

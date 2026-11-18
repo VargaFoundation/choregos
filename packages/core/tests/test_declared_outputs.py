@@ -8,9 +8,9 @@ older image, a fake executor, a result posted by hand) let the stage pass on the
 from __future__ import annotations
 
 import pytest
-from choregos_contracts import ArtifactFile, Artifacts, StageResult, StageStatus, missing_outputs
-from choregos_contracts.workflow import Transition
-from choregos_core import GateContext, ValidationError, WorkflowEngine, evaluate, parse_workflow
+from tranibor_contracts import ArtifactFile, Artifacts, StageResult, StageStatus, missing_outputs
+from tranibor_contracts.workflow import Transition
+from tranibor_core import GateContext, ValidationError, WorkflowEngine, evaluate, parse_workflow
 
 WORKFLOW = """
 apiVersion: choregos/v1

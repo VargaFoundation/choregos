@@ -50,8 +50,8 @@ def _token(private_key: Any, kid: str = "k1", **overrides: Any) -> str:
 
 @pytest.fixture
 def idp(monkeypatch: pytest.MonkeyPatch) -> Iterator[dict[str, Any]]:
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.mcp.oauth import KEYS
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.mcp.oauth import KEYS
 
     monkeypatch.setenv("CHOREGOS_MCP_OAUTH_ENABLED", "true")
     # The door follows the console's IdP: `mcp_oauth_issuer` is empty.
@@ -76,9 +76,9 @@ def idp(monkeypatch: pytest.MonkeyPatch) -> Iterator[dict[str, Any]]:
 
 
 async def _link_admin(sub: str = "sub-admin") -> None:
-    from choregos_api.db.models import User
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import User
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         admin = (await session.execute(select(User).where(User.email == "admin@northwind.dev"))).scalar_one()
@@ -203,7 +203,7 @@ async def test_writing_is_asked_for_and_the_call_is_audited_in_the_clients_name(
 async def test_another_idp_does_not_find_anyone_by_their_sub(
     idp: dict[str, Any], client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     await _link_admin()
     # The console signs in elsewhere: the same `sub` no longer designates the same person.
@@ -223,7 +223,7 @@ async def test_the_integrations_page_says_where_and_with_which_client_to_connect
 ) -> None:
     """Before, `/integrations` said `enabled: false` whatever the deployment said: the page only
     offered tokens, even when the door accepted the IdP's."""
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     clients = {
         "claude-code": {"client_id": "choregos-claude-code", "callback_port": 33418},
@@ -246,8 +246,8 @@ def test_an_oauth_client_the_page_does_not_know_stops_the_startup(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """`claude_code` instead of `claude-code` would show nothing, silently: refused at startup."""
-    from choregos_api.config import Settings
     from pydantic import ValidationError
+    from tranibor_api.config import Settings
 
     monkeypatch.setenv("CHOREGOS_MCP_OAUTH_CLIENTS", json.dumps({"claude_code": {"client_id": "x"}}))
     with pytest.raises(ValidationError, match="claude_code"):

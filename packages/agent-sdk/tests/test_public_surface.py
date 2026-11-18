@@ -1,4 +1,4 @@
-"""`choregos-agent-sdk` is a run-contract adapter, not an agent framework: its surface is frozen.
+"""`tranibor-agent-sdk` is a run-contract adapter, not an agent framework: its surface is frozen.
 
 A planner, a memory, a graph primitive added here turns this red. It needs an amendment of ADR 0063
 ("No Tranibor framework"), not a quiet export.
@@ -6,8 +6,8 @@ A planner, a memory, a graph primitive added here turns this red. It needs an am
 
 from __future__ import annotations
 
-import choregos_agent_sdk
-from choregos_agent_sdk import integrations
+import tranibor_agent_sdk
+from tranibor_agent_sdk import integrations
 
 FROZEN = {
     "Agent",
@@ -29,7 +29,7 @@ FROZEN = {
 
 
 def test_the_public_names_are_the_frozen_ones() -> None:
-    assert set(choregos_agent_sdk.__all__) == FROZEN
+    assert set(tranibor_agent_sdk.__all__) == FROZEN
 
 
 def test_the_integrations_are_the_three_bridges() -> None:

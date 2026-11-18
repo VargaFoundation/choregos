@@ -9,8 +9,8 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from choregos_contracts import ExecutorKind
-from choregos_core.domain import ExecRef, ExecStatus, StageJobSpec
+from tranibor_contracts import ExecutorKind
+from tranibor_core.domain import ExecRef, ExecStatus, StageJobSpec
 
 from .conftest import Fixture
 
@@ -44,7 +44,7 @@ class _QueueingExecutor:
 
 
 async def _run_prepare(setup: Fixture) -> dict[str, Any]:
-    from choregos_orchestrator.activities import stage as activities
+    from tranibor_orchestrator.activities import stage as activities
 
     return await activities.prepare_stage(
         {
@@ -61,9 +61,9 @@ async def _run_prepare(setup: Fixture) -> dict[str, Any]:
 
 
 async def test_a_queued_run_is_not_called_running(setup: Fixture) -> None:
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities import stage as activities
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities import stage as activities
 
     executor = _QueueingExecutor()
     setup.adapters.executor = executor
@@ -95,8 +95,8 @@ async def test_a_queued_run_is_not_called_running(setup: Fixture) -> None:
     async with session_scope() as session:
         run = await session.get(Run, run_id)
         assert run is not None and run.started_at is not None, "admitted, so started"
-        from choregos_api.db.models import Event
         from sqlalchemy import select
+        from tranibor_api.db.models import Event
 
         types = (
             (await session.execute(select(Event.type).where(Event.work_item_id == setup.work_item_id)))
@@ -111,9 +111,9 @@ async def test_preparing_the_same_stage_twice_does_not_break(setup: Fixture) -> 
     deterministic. A bare `INSERT` answered "duplicate key value violates unique
     constraint" — a database error that came up to the workflow, which died. Seen on the
     bench of 2026-09-24. AGENTS.md requires it: replayable without a double effect."""
-    from choregos_api.db.models import GatewayKeyRow
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import GatewayKeyRow
+    from tranibor_api.db.session import session_scope
 
     first = await _run_prepare(setup)
     second = await _run_prepare(setup)
@@ -147,7 +147,7 @@ FINISHED = ExecStatus(state="succeeded")
 
 
 async def _started(setup: Fixture, executor: Any) -> str:
-    from choregos_orchestrator.activities import stage as activities
+    from tranibor_orchestrator.activities import stage as activities
 
     setup.adapters.executor = executor
     plan = await _run_prepare(setup)
@@ -167,7 +167,7 @@ async def test_the_wait_in_the_queue_does_not_count_against_the_stage_budget(set
     """Two HR runs "exceeded 20 min" without a pod having run (bench of 2026-09-25):
     their Job was waiting for a slot. Here the queue lasts ten times the stage budget, and the
     run still ends well."""
-    from choregos_orchestrator.activities import stage as activities
+    from tranibor_orchestrator.activities import stage as activities
 
     executor = _ScriptedExecutor(*([QUEUED] * 20), RUNNING, FINISHED)
     run_id = await _started(setup, executor)
@@ -185,9 +185,9 @@ async def test_the_wait_in_the_queue_does_not_count_against_the_stage_budget(set
 
 
 async def test_a_never_admitted_run_fails_on_the_queue_and_removes_its_job(setup: Fixture) -> None:
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities import stage as activities
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities import stage as activities
 
     executor = _ScriptedExecutor(QUEUED)
     run_id = await _started(setup, executor)
@@ -212,7 +212,7 @@ async def test_a_never_admitted_run_fails_on_the_queue_and_removes_its_job(setup
 
 
 async def test_a_run_that_exceeds_its_budget_also_removes_its_job(setup: Fixture) -> None:
-    from choregos_orchestrator.activities import stage as activities
+    from tranibor_orchestrator.activities import stage as activities
 
     executor = _ScriptedExecutor(RUNNING)
     run_id = await _started(setup, executor)

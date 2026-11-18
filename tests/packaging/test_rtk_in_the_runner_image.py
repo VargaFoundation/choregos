@@ -15,7 +15,7 @@ import re
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 DOCKERFILE = ROOT / "docker/runner.Dockerfile"
-LOCK = ROOT / "packages/runner/src/choregos_runner/backends/versions.lock"
+LOCK = ROOT / "packages/runner/src/tranibor_runner/backends/versions.lock"
 STAGE = re.compile(r"^FROM\s+(?:--platform=\S+\s+)?\S+(?:\s+AS\s+(\S+))?\s*$", re.M | re.I)
 
 

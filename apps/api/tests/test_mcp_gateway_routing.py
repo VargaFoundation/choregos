@@ -13,16 +13,16 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
-import choregos_adapters
 import httpx
 import pytest
-from choregos_adapters.fakes.kubernetes import FakeKubernetesApi
-from choregos_adapters.fakes.mcp import FakeMcpServer
-from choregos_adapters.fakes.mcp_gateway import FakeMcpGateway, GatewayUpstream
-from choregos_adapters.plugin_servers import PluginServerRuntime
-from choregos_api.secret_store import FakeSecretStore, set_secret_store
+import tranibor_adapters
 from httpx import AsyncClient
 from sqlalchemy import func, select
+from tranibor_adapters.fakes.kubernetes import FakeKubernetesApi
+from tranibor_adapters.fakes.mcp import FakeMcpServer
+from tranibor_adapters.fakes.mcp_gateway import FakeMcpGateway, GatewayUpstream
+from tranibor_adapters.plugin_servers import PluginServerRuntime
+from tranibor_api.secret_store import FakeSecretStore, set_secret_store
 
 from .test_broker import ORG, TOOLS, _prepare
 from .test_plugin_servers import HELLO, INSTALL, SECOND
@@ -37,7 +37,7 @@ KEY_PREFIX = "org/mcp-gateway/assertion-key/"
 
 @pytest.fixture(autouse=True)
 def store() -> Iterator[FakeSecretStore]:
-    from choregos_api.services import mcp_gateway as service
+    from tranibor_api.services import mcp_gateway as service
 
     fake = FakeSecretStore()
     set_secret_store(fake)
@@ -51,7 +51,7 @@ def store() -> Iterator[FakeSecretStore]:
 def direct_server(monkeypatch: pytest.MonkeyPatch) -> Iterator[FakeMcpServer]:
     """The server of the direct `fournisseur` connector (the one `test_broker._prepare` declares)."""
     server = _server(TOOLS, token="cle-fournisseur")
-    monkeypatch.setattr(choregos_adapters, "FAKE_MCP", server)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_MCP", server)
     monkeypatch.setenv("CONNECTOR_TEST_CLE_FOURNISSEUR", "cle-fournisseur")
     yield server
 
@@ -88,7 +88,7 @@ async def _install_gateway(
             "supplier": GatewayUpstream(server=_server(TOOLS, token="upstream-key"), token="upstream-key")
         },
     )
-    monkeypatch.setattr(choregos_adapters, "FAKE_MCP_GATEWAY", fake)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_MCP_GATEWAY", fake)
     return fake
 
 
@@ -99,9 +99,9 @@ def _upstream(fake: FakeMcpGateway) -> FakeMcpServer:
 
 
 async def _agent_and_run(client: AsyncClient, project: dict[str, Any], connector: str) -> dict[str, str]:
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.security import mint_run_token
+    from tranibor_api.db.models import Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.security import mint_run_token
 
     spec = {"mcp_servers": [{"connector": connector, "tools": ["*"]}]}
     agent = await client.post(
@@ -162,8 +162,8 @@ async def _prepare_direct(client: AsyncClient, project: dict[str, Any]) -> tuple
 
 
 async def _ledger(provider: str) -> int:
-    from choregos_api.db.models import CostLedger
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import CostLedger
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         count = await session.execute(
@@ -173,16 +173,16 @@ async def _ledger(provider: str) -> int:
 
 
 async def _actions() -> int:
-    from choregos_api.db.models import Action
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Action
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         return int((await session.execute(select(func.count()).select_from(Action))).scalar_one())
 
 
 async def _connector_status(name: str) -> str:
-    from choregos_api.db.models import OrgConnector
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import OrgConnector
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         row = (await session.execute(select(OrgConnector).where(OrgConnector.name == name))).scalar_one()
@@ -195,9 +195,9 @@ def _lose_the_assertion_key(store: FakeSecretStore) -> None:
 
 
 async def _call_effect(project_id: str, operation: str, *, approved_by: list[str] | None = None) -> Any:
-    from choregos_api.db.models import Action, Project, Run
-    from choregos_api.db.session import session_scope
-    from choregos_api.effects import EffectContext, effect
+    from tranibor_api.db.models import Action, Project, Run
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.effects import EffectContext, effect
 
     async with session_scope() as session:
         project = await session.get(Project, project_id)
@@ -269,8 +269,8 @@ async def test_discovery_goes_through_the_gateway_and_tools_are_born_closed(
 async def test_a_runs_read_reaches_the_server_through_the_gateway_with_its_identity(
     client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.db.models import CostLedger, Event
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import CostLedger, Event
+    from tranibor_api.db.session import session_scope
 
     fake, headers = await _prepare_gateway(client, project, monkeypatch)
     answer = await client.post(f"{BASE}/supplier__suivi_commande", headers=headers, json={"numero": "42"})
@@ -390,7 +390,7 @@ async def test_off_mode_refuses_gateway_connectors_without_calling(
 async def test_a_lost_assertion_key_is_a_refusal_not_a_crash(
     client: AsyncClient, project: dict[str, Any], store: FakeSecretStore, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.effects import EffectRefused
+    from tranibor_api.effects import EffectRefused
 
     fake, headers = await _prepare_gateway(client, project, monkeypatch)
     before = len(fake.calls)
@@ -409,8 +409,8 @@ async def test_a_lost_assertion_key_is_a_refusal_not_a_crash(
 async def test_the_network_bounds_judge_the_gateway_host(
     client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.db.models import NetworkDecision
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import NetworkDecision
+    from tranibor_api.db.session import session_scope
 
     fake, headers = await _prepare_gateway(client, project, monkeypatch)
     ceiling = await client.put(
@@ -429,9 +429,9 @@ async def test_the_network_bounds_judge_the_gateway_host(
 async def test_the_connector_timeout_wins_over_the_gateways(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.db.models import OrgConnector
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.mcp_gateway import connector_client
+    from tranibor_api.db.models import OrgConnector
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.mcp_gateway import connector_client
 
     await _install_gateway(client, monkeypatch, timeout_s=30)
     for name, config in (("slow", {"server": "supplier", "timeout_s": 5}), ("plain", {"server": "supplier"})):
@@ -441,7 +441,7 @@ async def test_the_connector_timeout_wins_over_the_gateways(
         assert made.status_code == 201, made.text
 
     async def identity() -> Any:
-        from choregos_api.services.mcp_gateway_identity import CallIdentity
+        from tranibor_api.services.mcp_gateway_identity import CallIdentity
 
         return CallIdentity(org="northwind", org_id="x", subject="person:admin@northwind.dev", purpose="test")
 
@@ -459,9 +459,9 @@ async def test_an_effect_refused_by_the_gateway_route_is_final(
     direct_server: Any,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from choregos_api.db.models import Action, Project
-    from choregos_api.db.session import session_scope
-    from choregos_api.effects import EffectContext, EffectRefused, effect
+    from tranibor_api.db.models import Action, Project
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.effects import EffectContext, EffectRefused, effect
 
     await _prepare_direct(client, project)
     await _install_gateway(client, monkeypatch, "required")
@@ -499,8 +499,8 @@ async def test_required_mode_exempts_plugin_servers(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A plugin's server is deployed by the platform (ADR 0096): `required` does not refuse it."""
-    from choregos_api.services.plugin_servers import use_plugin_runtime, use_plugin_transport
-    from choregos_api.services.plugin_supply import OfflineDirectory, use_plugin_supply
+    from tranibor_api.services.plugin_servers import use_plugin_runtime, use_plugin_transport
+    from tranibor_api.services.plugin_supply import OfflineDirectory, use_plugin_supply
 
     from .agent_scopes_kit import add_member, as_user
     from .test_plugin_servers import _mcp_server

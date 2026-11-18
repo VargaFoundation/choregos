@@ -24,7 +24,7 @@ docker_build_with_restart(
     # Explicit `target`: without it, buildx builds the **last** stage of the file, which is
     # `worker` — the API would start with a worker's command.
     target='api',
-    entrypoint=['uvicorn', 'choregos_api.main:app', '--host', '0.0.0.0', '--port', '8000', '--reload'],
+    entrypoint=['uvicorn', 'tranibor_api.main:app', '--host', '0.0.0.0', '--port', '8000', '--reload'],
     live_update=[
         sync('../apps/api/src', '/app/apps/api/src'),
         sync('../packages', '/app/packages'),
@@ -36,7 +36,7 @@ docker_build_with_restart(
     context='..',
     dockerfile='../docker/api.Dockerfile',
     target='worker',
-    entrypoint=['python', '-m', 'choregos_orchestrator.worker'],
+    entrypoint=['python', '-m', 'tranibor_orchestrator.worker'],
     live_update=[
         sync('../apps/orchestrator/src', '/app/apps/orchestrator/src'),
         sync('../packages', '/app/packages'),

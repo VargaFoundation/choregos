@@ -59,10 +59,10 @@ def _fake_provider(monkeypatch: pytest.MonkeyPatch) -> list[httpx.Request]:
 async def _run(
     project: dict[str, Any], tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, read_only: bool
 ) -> tuple[str, dict[str, str]]:
-    from choregos_api import catalogue as service_catalogue
-    from choregos_api.db.models import Project, Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.security import mint_run_token
+    from tranibor_api import catalogue as service_catalogue
+    from tranibor_api.db.models import Project, Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.security import mint_run_token
 
     path = tmp_path / "catalogue.yaml"
     path.write_text(_catalogue(read_only=read_only), encoding="utf-8")
@@ -94,9 +94,9 @@ async def _run(
 
 
 async def _ledger_rows(run_id: str) -> int:
-    from choregos_api.db.models import CostLedger
-    from choregos_api.db.session import session_scope
     from sqlalchemy import func, select
+    from tranibor_api.db.models import CostLedger
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         count = await session.execute(
@@ -140,7 +140,7 @@ async def test_a_tool_marked_read_only_is_called(
 async def test_a_writing_tool_is_not_listed_anywhere(
     client: AsyncClient, project: dict[str, Any], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.catalogue import project_tools
+    from tranibor_api.catalogue import project_tools
 
     run_id, headers = await _run(project, tmp_path, monkeypatch, read_only=False)
 

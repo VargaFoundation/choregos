@@ -63,7 +63,7 @@ async def test_a_skill_published_under_that_slug_before_keeps_its_next_versions(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """An organisation that already has one is not locked out of it: its next versions still publish."""
-    from choregos_api.services import skills
+    from tranibor_api.services import skills
 
     with monkeypatch.context() as before:
         before.setattr(skills, "RESERVED_SKILL_SLUGS", frozenset())

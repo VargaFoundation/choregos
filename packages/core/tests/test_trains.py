@@ -6,9 +6,9 @@ shipped every merged work item to prod, a study included.
 
 from __future__ import annotations
 
-from choregos_core import parse_workflow
-from choregos_core.dsl import load_template
-from choregos_core.dsl.trains import train_after_merge, train_approval, train_env
+from tranibor_core import parse_workflow
+from tranibor_core.dsl import load_template
+from tranibor_core.dsl.trains import train_after_merge, train_approval, train_env
 
 STUDY = """apiVersion: choregos/v1
 kind: Workflow

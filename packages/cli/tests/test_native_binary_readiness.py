@@ -2,8 +2,8 @@
 
 - `choregos --version` prints the release's version (the binary's smoke test checks it too);
 - the CLI imports no OpenTelemetry, whatever it runs: OpenTelemetry is the `telemetry` extra of
-  `choregos-core`, which only the services that emit spans ask for;
-- every workspace package that imports `choregos_core.telemetry`, `choregos_core.llm_spans` or
+  `tranibor-core`, which only the services that emit spans ask for;
+- every workspace package that imports `tranibor_core.telemetry`, `tranibor_core.llm_spans` or
   `opentelemetry` declares that extra, and the CLI declares none of it.
 """
 
@@ -16,15 +16,15 @@ import textwrap
 import tomllib
 from pathlib import Path
 
-from choregos_cli import __version__
-from choregos_cli.main import app
+from tranibor_cli import __version__
+from tranibor_cli.main import app
 from typer.testing import CliRunner
 
 ROOT = Path(__file__).resolve().parents[3]
-TEMPLATE = ROOT / "packages" / "core" / "src" / "choregos_core" / "dsl" / "templates" / "default-simple.yaml"
+TEMPLATE = ROOT / "packages" / "core" / "src" / "tranibor_core" / "dsl" / "templates" / "default-simple.yaml"
 USES_TELEMETRY = re.compile(
-    r"^\s*(from choregos_core(\.telemetry|\.llm_spans)? import .*\b(telemetry|llm_spans)\b"
-    r"|from choregos_core\.(telemetry|llm_spans) import"
+    r"^\s*(from tranibor_core(\.telemetry|\.llm_spans)? import .*\b(telemetry|llm_spans)\b"
+    r"|from tranibor_core\.(telemetry|llm_spans) import"
     r"|import opentelemetry|from opentelemetry)",
     re.M,
 )
@@ -48,7 +48,7 @@ def test_the_cli_imports_no_opentelemetry() -> None:
         f"""
         import sys
         from typer.testing import CliRunner
-        from choregos_cli.main import app
+        from tranibor_cli.main import app
 
         runner = CliRunner()
         for args in (["--version"], ["workflow", "templates"], ["workflow", "validate", {str(TEMPLATE)!r}],
@@ -88,7 +88,7 @@ def test_every_package_that_traces_declares_the_extra_and_the_cli_does_not() -> 
         if any(USES_TELEMETRY.search(p.read_text(encoding="utf-8")) for p in sources.rglob("*.py")):
             tracing.add(directory.name)
             dependencies = _pyproject(directory)["project"]["dependencies"]
-            assert "choregos-core[telemetry]" in dependencies, f"{directory.name} traces without the extra"
+            assert "tranibor-core[telemetry]" in dependencies, f"{directory.name} traces without the extra"
     assert {"api", "orchestrator", "runner"} <= tracing, tracing
     assert "cli" not in tracing
-    assert "choregos-core[telemetry]" not in _pyproject(ROOT / "packages" / "cli")["project"]["dependencies"]
+    assert "tranibor-core[telemetry]" not in _pyproject(ROOT / "packages" / "cli")["project"]["dependencies"]

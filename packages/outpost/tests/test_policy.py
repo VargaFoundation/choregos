@@ -9,9 +9,9 @@ from typing import Any
 
 import pytest
 import yaml
-from choregos_contracts import schemas_dir
-from choregos_contracts.outpost import OutpostEndpoint
-from choregos_outpost import policy as policies
+from tranibor_contracts import schemas_dir
+from tranibor_contracts.outpost import OutpostEndpoint
+from tranibor_outpost import policy as policies
 
 EXAMPLE = schemas_dir() / "examples" / "outpost-policy.example.yaml"
 

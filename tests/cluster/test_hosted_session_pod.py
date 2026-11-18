@@ -32,8 +32,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from choregos_adapters.executor.k8s_job import AGENT_CONTAINER, KubernetesJobExecutor
-from choregos_contracts import (
+from tranibor_adapters.executor.k8s_job import AGENT_CONTAINER, KubernetesJobExecutor
+from tranibor_contracts import (
     AgentRef,
     Budget,
     Callbacks,
@@ -45,8 +45,8 @@ from choregos_contracts import (
     TransitionRef,
     WorkItemRef,
 )
-from choregos_core.domain import AgentContainer, StageJobSpec
-from choregos_core.hosted import NATIVE_SIDECARS_MIN, agent_container
+from tranibor_core.domain import AgentContainer, StageJobSpec
+from tranibor_core.hosted import NATIVE_SIDECARS_MIN, agent_container
 
 from .conftest import kubectl_shared
 from .test_hosted_native_sidecar import _cluster_version, _pod, _reference_image
@@ -237,7 +237,7 @@ SIDECAR_SCRIPT = (
 )
 RUNNER_SCRIPT = """
 import os, pathlib, stat, sys, time
-from choregos_runner.hosted_workspace import export_tree
+from tranibor_runner.hosted_workspace import export_tree
 
 tree = pathlib.Path('/tmp/tree')
 (tree / 'sub').mkdir(parents=True)

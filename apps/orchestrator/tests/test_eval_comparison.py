@@ -12,8 +12,8 @@ from collections import Counter
 from typing import Any
 
 import pytest
-from choregos_orchestrator import eval_comparison as comparison
-from choregos_orchestrator.eval_comparison import Unit
+from tranibor_orchestrator import eval_comparison as comparison
+from tranibor_orchestrator.eval_comparison import Unit
 
 
 def _unit(

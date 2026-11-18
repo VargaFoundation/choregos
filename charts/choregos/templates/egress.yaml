@@ -52,7 +52,7 @@ spec:
         - name: egress
           image: {{ include "choregos.image" (dict "global" .Values.global "image" ($api.image | default dict)) }}
           imagePullPolicy: {{ .Values.global.imagePullPolicy }}
-          command: ["python", "-m", "choregos_api.egress"]
+          command: ["python", "-m", "tranibor_api.egress"]
           securityContext: {{- toYaml .Values.global.securityContext | nindent 12 }}
           ports:
             - { name: proxy, containerPort: {{ $port }} }

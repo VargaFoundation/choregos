@@ -35,8 +35,8 @@ def _plan(setup: Fixture, **extra: Any) -> dict[str, Any]:
 
 
 async def _agent(setup: Fixture, **spec: Any) -> None:
-    from choregos_api.db.models import Agent, AgentVersion, Project
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Agent, AgentVersion, Project
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         project = await session.get(Project, setup.project_id)
@@ -58,7 +58,7 @@ async def _agent(setup: Fixture, **spec: Any) -> None:
 
 
 async def _prompt(setup: Fixture, **extra: Any) -> str:
-    from choregos_orchestrator.activities.stage import prepare_stage
+    from tranibor_orchestrator.activities.stage import prepare_stage
 
     stage_input = (await prepare_stage(_plan(setup, **extra)))["stage_input"]
     return str(stage_input["playbook"]["prompt"])

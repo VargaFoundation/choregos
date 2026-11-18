@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from choregos_orchestrator.activities import stage as stage_activities
+from tranibor_orchestrator.activities import stage as stage_activities
 
 from .conftest import Fixture
 from .test_backend_toggle_enforced import _switch
@@ -17,15 +17,15 @@ pytestmark = pytest.mark.asyncio
 async def _every_backend_enabled(setup: Fixture) -> None:
     """Review rotation is the subject here, not the platform's switch (S42-07c): on a fresh install
     only `claude-code` is enabled, and a reviewer is never drawn from a disabled backend."""
-    from choregos_core import KNOWN_BACKEND_NAMES
+    from tranibor_core import KNOWN_BACKEND_NAMES
 
     for name in KNOWN_BACKEND_NAMES:
         await _switch(name, enabled=True)
 
 
 async def _set_cross_backend(project_id: str, value: bool) -> None:
-    from choregos_api.db.session import session_scope
-    from choregos_api.services import active_policy, policy_model
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services import active_policy, policy_model
 
     async with session_scope() as session:
         row = await active_policy(session, project_id)
@@ -36,8 +36,8 @@ async def _set_cross_backend(project_id: str, value: bool) -> None:
 
 
 async def _implemented_by(setup: Fixture, backend: str) -> None:
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         session.add(
@@ -108,8 +108,8 @@ async def test_the_other_roles_are_not_touched(setup: Fixture) -> None:
 
 async def test_a_single_allowed_backend_degrades_without_blocking(setup: Fixture) -> None:
     """A project that allows only one backend must not see its work items block."""
-    from choregos_api.db.models import Project
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Project
+    from tranibor_api.db.session import session_scope
 
     await _set_cross_backend(setup.project_id, True)
     await _implemented_by(setup, "codex")
@@ -137,8 +137,8 @@ async def test_the_tools_server_is_announced_to_every_agent() -> None:
     `runner/local_tools.py` starts the server when nothing answers, but the agent only knows it
     if it is told.
     """
-    from choregos_orchestrator.activities.stage import _mcp_servers
-    from choregos_orchestrator.config import OrchestratorSettings
+    from tranibor_orchestrator.activities.stage import _mcp_servers
+    from tranibor_orchestrator.config import OrchestratorSettings
 
     for executor in ("tekton", "k8s_job", "local_docker", "aca"):
         servers = _mcp_servers(
@@ -154,8 +154,8 @@ async def test_the_memory_url_comes_from_its_setting_not_from_a_port_replacement
     gateway is `http://litellm:4000`: the memory became `http://litellm:8432` — measured with no
     answer in eight seconds, whereas `http://ecphoria:8432/mcp` answers 401 in nine milliseconds.
     """
-    from choregos_orchestrator.activities.stage import _mcp_servers
-    from choregos_orchestrator.config import OrchestratorSettings
+    from tranibor_orchestrator.activities.stage import _mcp_servers
+    from tranibor_orchestrator.config import OrchestratorSettings
 
     settings_under_test = OrchestratorSettings(
         executor_kind="k8s_job", gateway_url="http://litellm:4000", memory_url="http://ecphoria:8432"

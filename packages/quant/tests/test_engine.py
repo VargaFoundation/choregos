@@ -8,13 +8,13 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from choregos_quant import engine
-from choregos_quant.bars import Bar, Series, read_bars, write_bars
-from choregos_quant.campaign import parse_campaign
-from choregos_quant.cli import main
-from choregos_quant.errors import InputError
-from choregos_quant.profile import anonymisation_order, build_profile
-from choregos_quant.strategies import Strategy, validate_strategies
+from tranibor_quant import engine
+from tranibor_quant.bars import Bar, Series, read_bars, write_bars
+from tranibor_quant.campaign import parse_campaign
+from tranibor_quant.cli import main
+from tranibor_quant.errors import InputError
+from tranibor_quant.profile import anonymisation_order, build_profile
+from tranibor_quant.strategies import Strategy, validate_strategies
 
 from .conftest import (  # type: ignore[attr-defined]
     CAMPAIGN,

@@ -6,11 +6,11 @@ import base64
 from typing import Any
 
 import pytest
-from choregos_adapters.executor.k8s_job import RUNNER_POD_LABELS, KubernetesJobExecutor
-from choregos_adapters.fakes.kubernetes import FakeKubernetesApi
-from choregos_adapters.registry import default_executor_kind
-from choregos_contracts import ExecutorKind
-from choregos_core.domain import ExecRef, StageJobSpec
+from tranibor_adapters.executor.k8s_job import RUNNER_POD_LABELS, KubernetesJobExecutor
+from tranibor_adapters.fakes.kubernetes import FakeKubernetesApi
+from tranibor_adapters.registry import default_executor_kind
+from tranibor_contracts import ExecutorKind
+from tranibor_core.domain import ExecRef, StageJobSpec
 
 
 class _RecordingClient:
@@ -71,7 +71,7 @@ def test_a_project_without_a_runtime_takes_the_deployments_executor(monkeypatch:
 
 
 def test_the_allowed_executors_default_to_the_deployment_s(monkeypatch: pytest.MonkeyPatch) -> None:
-    from choregos_adapters.registry import allowed_executor_kinds, executors_declared
+    from tranibor_adapters.registry import allowed_executor_kinds, executors_declared
 
     monkeypatch.delenv("CHOREGOS_EXECUTOR_KIND", raising=False)
     monkeypatch.delenv("CHOREGOS_EXECUTORS_ALLOWED", raising=False)
@@ -89,7 +89,7 @@ def test_the_allowed_executors_default_to_the_deployment_s(monkeypatch: pytest.M
 def test_the_memory_takes_the_deployments_url_and_token(monkeypatch: pytest.MonkeyPatch) -> None:
     """`CHOREGOS_MEMORY_URL` was set by the chart and ignored: every project aimed at
     `ecphoria.choregos-memory`, a service that exists only in one installation."""
-    from choregos_adapters import build
+    from tranibor_adapters import build
 
     monkeypatch.delenv("CHOREGOS_FAKES", raising=False)  # CI runs on fakes
     monkeypatch.setenv("CHOREGOS_MEMORY_URL", "http://ecphoria:8432")
@@ -124,7 +124,7 @@ async def test_without_a_declared_secret_the_pod_has_no_envfrom() -> None:
 async def test_the_direct_gateway_returns_the_given_key_and_measures_nothing() -> None:
     """Without a gateway, there is neither ceiling nor cost: `spend()` returns zero, which means
     "not measured": the cost table will show 0, which is the accepted counterpart."""
-    from choregos_adapters.gateway.direct import DirectGateway
+    from tranibor_adapters.gateway.direct import DirectGateway
 
     gateway = DirectGateway(key="jeton-fourni", models=["anthropic/claude-sonnet-5"])
     minted = await gateway.mint_key({"run": "r-1"}, budget_usd=1.0, ttl_s=60, models=["m"])
@@ -136,8 +136,8 @@ async def test_the_direct_gateway_returns_the_given_key_and_measures_nothing() -
 def test_without_a_run_key_the_backend_leaves_the_authentication_variables_alone() -> None:
     """The agent then brings its own credentials (subscription): writing an empty key
     would overwrite them, and the failure would look like a refusal by the provider."""
-    from choregos_contracts import ModelRef
-    from choregos_runner.backends.base import Backend
+    from tranibor_contracts import ModelRef
+    from tranibor_runner.backends.base import Backend
 
     model = ModelRef(litellm_model="anthropic/claude-sonnet-5", base_url="https://api.anthropic.com")
     assert Backend.anthropic_env(model, None) == {"ANTHROPIC_MODEL": "anthropic/claude-sonnet-5"}
@@ -149,7 +149,7 @@ def test_without_a_run_key_the_backend_leaves_the_authentication_variables_alone
 async def test_the_direct_gateway_gives_a_key_identifier_per_run() -> None:
     """`key_id` carries a unique index in the database: a constant identifier would make the
     second run fail on a constraint violation."""
-    from choregos_adapters.gateway.direct import DirectGateway
+    from tranibor_adapters.gateway.direct import DirectGateway
 
     gateway = DirectGateway(key="jeton")
     first_key = await gateway.mint_key({"run_id": "r-1"}, budget_usd=1, ttl_s=60, models=[])
@@ -551,7 +551,7 @@ async def test_without_pull_secrets_the_pod_names_none() -> None:
 
 def test_the_deployment_s_pull_secrets_reach_the_executor(monkeypatch: pytest.MonkeyPatch) -> None:
     """What the chart sets from `global.imagePullSecrets`, read where the executor is built."""
-    from choregos_adapters import build
+    from tranibor_adapters import build
 
     monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
     monkeypatch.setenv("CHOREGOS_RUNNER_IMAGE_PULL_SECRETS", "harbor-prive, ghcr-ee,")

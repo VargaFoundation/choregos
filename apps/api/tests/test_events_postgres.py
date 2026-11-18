@@ -18,11 +18,11 @@ pytestmark = without_postgres
 
 
 async def test_a_persisted_event_crosses_the_replicas(pg_app: Any) -> None:
-    from choregos_api.db.models import Organization, Project
-    from choregos_api.db.session import session_scope
-    from choregos_api.events import PostgresRelay, get_bus
-    from choregos_api.services import persist_event
-    from choregos_contracts import EventType
+    from tranibor_api.db.models import Organization, Project
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.events import PostgresRelay, get_bus
+    from tranibor_api.services import persist_event
+    from tranibor_contracts import EventType
 
     async with session_scope(orgs="*") as session:
         org = Organization(slug="a", name="A")
@@ -71,6 +71,6 @@ async def test_a_persisted_event_crosses_the_replicas(pg_app: Any) -> None:
     assert relay.received >= 1
 
     async with session_scope(orgs="*") as session:
-        from choregos_api.db.models import Event
+        from tranibor_api.db.models import Event
 
         assert (await session.execute(select(Event).where(Event.subject == "p-1"))).scalar_one()

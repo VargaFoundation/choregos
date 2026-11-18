@@ -21,8 +21,8 @@ REPO = {"url": "https://github.com/northwind/billing-api.git", "base_branch": "m
 
 def test_a_version_that_declares_no_workspace_keeps_its_digest_and_writes() -> None:
     """Absent, `workspace` is left out of the stored spec: no published version's digest moves."""
-    from choregos_api.schemas.agents import AgentSpec
-    from choregos_api.services.agents import digest
+    from tranibor_api.schemas.agents import AgentSpec
+    from tranibor_api.services.agents import digest
 
     legacy = AgentSpec.model_validate(LEGACY_SPEC)
     assert "workspace" not in legacy.model_dump(mode="json")
@@ -35,7 +35,7 @@ def test_a_version_that_declares_no_workspace_keeps_its_digest_and_writes() -> N
 
 
 def test_a_remote_agent_gets_no_workspace_and_says_none() -> None:
-    from choregos_api.schemas.agents import AgentSpec
+    from tranibor_api.schemas.agents import AgentSpec
 
     assert AgentSpec.model_validate({"runtime": A2A}).effective_workspace() == "none"
     with pytest.raises(ValidationError, match="no workspace"):
@@ -43,7 +43,7 @@ def test_a_remote_agent_gets_no_workspace_and_says_none() -> None:
 
 
 def test_a_hosted_agent_says_its_workspace_once() -> None:
-    from choregos_api.schemas.agents import AgentSpec
+    from tranibor_api.schemas.agents import AgentSpec
 
     runtime = {**HOSTED, "workspace": "read"}
     assert AgentSpec.model_validate({"runtime": runtime}).effective_workspace() == "read"

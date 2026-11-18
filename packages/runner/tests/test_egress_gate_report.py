@@ -7,10 +7,10 @@ import json
 from pathlib import Path
 from typing import Any
 
-from choregos_contracts import StageInput
-from choregos_core.egress_gate import EgressGate, wait_until_closed
-from choregos_runner.exits import Exit
-from choregos_runner.runner import Runner, egress_gate_report
+from tranibor_contracts import StageInput
+from tranibor_core.egress_gate import EgressGate, wait_until_closed
+from tranibor_runner.exits import Exit
+from tranibor_runner.runner import Runner, egress_gate_report
 
 from .conftest import FakeInternalClient, agent_script, valid_result
 

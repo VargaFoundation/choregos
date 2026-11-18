@@ -19,10 +19,10 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-from choregos_adapters.fakes.notify import FakeNotifier
-from choregos_api.services.task_poll import condition_holds, due_objects, object_keys, resolve, when_holds
 from httpx import AsyncClient
 from sqlalchemy import select
+from tranibor_adapters.fakes.notify import FakeNotifier
+from tranibor_api.services.task_poll import condition_holds, due_objects, object_keys, resolve, when_holds
 
 from .kits.assistant_install import (
     ORG,
@@ -100,14 +100,14 @@ async def test_a_window_that_passed_before_subscribing_does_not_run(
     offline: Path,  # noqa: F811
     markets: Any,  # noqa: F811
 ) -> None:
-    from choregos_api.db.session import session_scope
-    from choregos_api.schemas.tasks import TaskSubscriptionPut
-    from choregos_api.services.assistant_tasks import put_subscription
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.schemas.tasks import TaskSubscriptionPut
+    from tranibor_api.services.assistant_tasks import put_subscription
 
     await _ready(client)
     await _subscriber(client, app, "late@northwind.dev")
-    from choregos_api.db.models import User
-    from choregos_api.rbac import Principal, Role
+    from tranibor_api.db.models import User
+    from tranibor_api.rbac import Principal, Role
 
     async with session_scope(orgs="*") as session:
         user = (await session.execute(select(User).where(User.email == "late@northwind.dev"))).scalar_one()
@@ -139,8 +139,8 @@ async def test_a_poll_starts_one_run_per_object_and_never_the_same_object_twice(
     offline: Path,  # noqa: F811
     markets: Any,  # noqa: F811
 ) -> None:
-    from choregos_api.db.models import TaskSubscription
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import TaskSubscription
+    from tranibor_api.db.session import session_scope
 
     await _ready(client)
     person = await _subscriber(client, app, "poller@northwind.dev")
@@ -186,8 +186,8 @@ async def test_a_poll_whose_read_fails_starts_nothing_and_says_why(
     person = await _subscriber(client, app, "poller@northwind.dev")
     await person.put(f"{TASKS}/threshold_alert", json={"kind": "poll"})
     markets.structured["get_quote"] = {"events": [{"id": "e1", "change_pct": 9}]}
-    from choregos_api.db.models import ConnectorOperation
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import ConnectorOperation
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         for row in (
@@ -282,9 +282,9 @@ async def test_the_other_channels_send_each_artifact_once(
     offline: Path,  # noqa: F811
     markets: Any,  # noqa: F811
 ) -> None:
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.remote_agents import set_a2a_transport
-    from choregos_api.services.task_delivery import deliver_pending, set_notifier_factory, webhook_secret
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.remote_agents import set_a2a_transport
+    from tranibor_api.services.task_delivery import deliver_pending, set_notifier_factory, webhook_secret
 
     await _ready(client)
     mine = await _subscriber(client, app, "mine@northwind.dev")
@@ -341,8 +341,8 @@ async def test_a_channel_nobody_configured_is_recorded_not_silent(
     offline: Path,  # noqa: F811
     markets: Any,  # noqa: F811
 ) -> None:
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.task_delivery import deliver_pending
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.task_delivery import deliver_pending
 
     await _ready(client)
     mine = await _subscriber(client, app, "mine@northwind.dev")
@@ -408,9 +408,9 @@ async def test_a_run_is_refused_when_the_subscribers_month_is_spent(
     offline: Path,  # noqa: F811
     markets: Any,  # noqa: F811
 ) -> None:
-    from choregos_api.db.models import CostLedger, Organization, User
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
+    from tranibor_api.db.models import CostLedger, Organization, User
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
 
     await _ready(client)
     mine = await _subscriber(client, app, "mine@northwind.dev")
@@ -450,10 +450,10 @@ async def test_the_spend_of_a_task_run_is_attributed_to_the_installation_and_sto
     offline: Path,  # noqa: F811
     markets: Any,  # noqa: F811
 ) -> None:
-    from choregos_api.db.models import CostLedger, Project, Run, User, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.assistant_access import month_spend
-    from choregos_api.services.costs import record_cost
+    from tranibor_api.db.models import CostLedger, Project, Run, User, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.assistant_access import month_spend
+    from tranibor_api.services.costs import record_cost
 
     await _ready(client)
     mine = await _subscriber(client, app, "mine@northwind.dev")
@@ -502,9 +502,9 @@ async def test_the_webhook_key_is_shown_once_to_a_manager_and_rotates(
     offline: Path,  # noqa: F811
     markets: Any,  # noqa: F811
 ) -> None:
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.remote_agents import set_a2a_transport
-    from choregos_api.services.task_delivery import deliver_pending, webhook_secret
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.remote_agents import set_a2a_transport
+    from tranibor_api.services.task_delivery import deliver_pending, webhook_secret
 
     await _ready(client)
     mine = await _subscriber(client, app, "mine@northwind.dev")
@@ -561,9 +561,9 @@ async def test_a_conversation_is_offered_run_task_which_starts_the_task_as_the_p
     offline: Path,  # noqa: F811
     markets: Any,  # noqa: F811
 ) -> None:
-    from choregos_api.db.models import AgentSessionRecord, AssistantInstallation
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.conversation_extras import conversation_extras
+    from tranibor_api.db.models import AgentSessionRecord, AssistantInstallation
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.conversation_extras import conversation_extras
 
     from .kits.conversations import _open
 
@@ -633,8 +633,8 @@ async def test_run_task_is_called_by_the_model_in_a_turn_and_starts_the_task_as_
 
 
 async def _journal() -> list[Any]:
-    from choregos_api.db.models import AssistantRead
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import AssistantRead
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         rows = list((await session.execute(select(AssistantRead).order_by(AssistantRead.at))).scalars())

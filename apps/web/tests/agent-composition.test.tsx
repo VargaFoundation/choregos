@@ -191,7 +191,7 @@ describe("AgentComposition", () => {
 });
 
 describe("resolveModel", () => {
-  it("follows choregos_core.models: S and M standard, L and XL strong with 1.5 times the turns, the org's tier first", () => {
+  it("follows tranibor_core.models: S and M standard, L and XL strong with 1.5 times the turns, the org's tier first", () => {
     const rows = resolveModel("profile:by_size", CATALOGUE);
     expect(rows.map((r) => [r.size, r.profile, r.modelName, r.turnsFactor])).toEqual([
       ["S", "standard", "platform/standard", 1],

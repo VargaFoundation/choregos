@@ -13,8 +13,8 @@ A2A = {"kind": "a2a", "card_url": "https://agents.example/.well-known/agent.json
 
 def test_a_version_that_declares_no_language_keeps_its_digest() -> None:
     """Absent, `language` is left out of the stored spec: no published version's digest moves."""
-    from choregos_api.schemas.agents import AgentSpec
-    from choregos_api.services.agents import digest
+    from tranibor_api.schemas.agents import AgentSpec
+    from tranibor_api.services.agents import digest
 
     legacy = AgentSpec.model_validate(LEGACY_SPEC)
     assert "language" not in legacy.model_dump(mode="json")
@@ -26,14 +26,14 @@ def test_a_version_that_declares_no_language_keeps_its_digest() -> None:
 
 @pytest.mark.parametrize("tag", ["fr", "de", "pt-BR", "fil", "en"])
 def test_a_language_tag_is_accepted(tag: str) -> None:
-    from choregos_api.schemas.agents import AgentSpec
+    from tranibor_api.schemas.agents import AgentSpec
 
     assert AgentSpec.model_validate({"language": tag}).language == tag
 
 
 @pytest.mark.parametrize("tag", ["French", "FR", "fr_FR", "fr-fr", "pt-BRA", "f", "", "fr; drop the frame"])
 def test_anything_else_is_refused(tag: str) -> None:
-    from choregos_api.schemas.agents import AgentSpec
+    from tranibor_api.schemas.agents import AgentSpec
 
     with pytest.raises(ValidationError, match="language"):
         AgentSpec.model_validate({"language": tag})
@@ -41,7 +41,7 @@ def test_anything_else_is_refused(tag: str) -> None:
 
 def test_a_remote_agent_may_say_its_language() -> None:
     """A remote agent receives the framed instructions as its message: the language reaches it too."""
-    from choregos_api.schemas.agents import AgentSpec
+    from tranibor_api.schemas.agents import AgentSpec
 
     assert AgentSpec.model_validate({"runtime": A2A, "language": "de"}).language == "de"
 

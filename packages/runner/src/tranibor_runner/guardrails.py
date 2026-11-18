@@ -1,0 +1,392 @@
+# SPDX-License-Identifier: Apache-2.0
+"""Runner guardrails: what the agent is allowed to do, and what is checked afterwards.
+
+Permission is not the guarantee: the guarantee is the diff verification and the
+gates. Here we refuse at once what can be refused, and we journal everything.
+"""
+
+from __future__ import annotations
+
+import re
+import shlex
+from dataclasses import dataclass, field
+from typing import Any
+
+from tranibor_contracts import Permissions
+from tranibor_core import matches_any
+from tranibor_core.network import allowed as host_allowed
+from tranibor_core.network import validate_pattern
+
+from .tool_scripts import is_under
+
+DANGEROUS_PATTERNS: tuple[tuple[str, str], ...] = (
+    (r"\brm\s+-rf\s+/(?!\w)", "recursive deletion of the root"),
+    (r":\(\)\s*\{\s*:\|:&\s*\};:", "fork bomb"),
+    (r"\bcurl\b[^|]*\|\s*(ba)?sh", "running a downloaded script"),
+    (r"\bwget\b[^|]*\|\s*(ba)?sh", "running a downloaded script"),
+    (r"\bgit\s+push\s+.*--force(?!-with-lease)", "force push"),
+    (r"\bgit\s+reset\s+--hard\s+origin", "rewriting the remote history"),
+    (r"\bchmod\s+777\b", "permissions too broad"),
+    (r"\bhistory\s+-c\b", "erasing traces"),
+    (r">\s*/dev/sd[a-z]", "raw disk write"),
+)
+
+#: What rtk renames when it rewrites a command (rtk 0.50, `src/discover/rules.rs`): `rtk read`
+#: stands for `cat`, `head` or `tail`. Its other rewrites keep the name after `rtk` (`rtk git
+#: push`, `rtk kubectl get`), which the rules below still see.
+RTK_RENAMES: dict[str, tuple[str, ...]] = {
+    "read": ("cat", "head", "tail"),
+    "pip": ("pip3",),
+    "lint": ("eslint", "biome"),
+}
+#: `rtk` where a command starts: the start of the line, or after a separator. `rtk proxy X` needs
+#: nothing more: the policy's rules find `X` among its words.
+_RTK = re.compile(r"(^|[\s;&|(])(?:\S*/)?rtk\s+(\S+)")
+
+SECRET_FILE_PATTERNS = (".env", ".git-credentials", "id_rsa", ".npmrc", ".pypirc", ".netrc")
+
+
+@dataclass(slots=True)
+class Decision:
+    """Verdict on a permission request, always reasoned."""
+
+    allowed: bool
+    reason: str
+    kind: str = "unknown"
+    target: str = ""
+    #: The nature was not in the ACP request: it was INFERRED from the title or the arguments.
+    #: Said in the journal, because an inference is read differently from a declaration.
+    inferred: bool = False
+
+    def to_event(self) -> dict[str, Any]:
+        return {
+            "allowed": self.allowed,
+            "reason": self.reason,
+            "kind": self.kind,
+            "target": self.target,
+            "inferred": self.inferred,
+        }
+
+
+#: First word of the ACP title → nature. Claude Code's titles are "Write /path",
+#: "Edit /path", "Read /path", "Bash: …"; those of other agents follow the same
+#: habit. What we do not recognise stays empty: the general rule then decides.
+_WRITE_VERBS = {
+    "write",
+    "edit",
+    "multiedit",
+    "create",
+    "delete",
+    "remove",
+    "move",
+    "rename",
+    "mkdir",
+    "touch",
+}
+_READ_VERBS = {"read", "glob", "grep", "ls", "search", "view", "cat", "find", "list"}
+_EXECUTE_VERBS = {"bash", "run", "exec", "execute", "shell", "sh", "terminal"}
+_NETWORK_VERBS = {"webfetch", "fetch", "curl", "http", "websearch", "download"}
+
+
+def _nature_deduite(title: str, raw: dict[str, Any], *, path: str, command: str, url: str) -> str:
+    """Infer `edit`/`read`/`execute`/`network` from an ACP request that has no `kind`."""
+    if command:
+        return "execute"
+    if url:
+        return "network"
+    if any(k in raw for k in ("content", "new_string", "old_string", "edits", "new_str", "text")) and path:
+        return "edit"
+    first = title.split(" ", 1)[0].rstrip(":").lower() if title else ""
+    if first in _WRITE_VERBS:
+        return "edit"
+    if first in _READ_VERBS:
+        return "read"
+    if first in _EXECUTE_VERBS:
+        return "execute"
+    if first in _NETWORK_VERBS:
+        return "network"
+    return ""
+
+
+@dataclass
+class GuardRails:
+    """Permission policy applied live during the ACP session."""
+
+    permissions: Permissions
+    allowed_paths: list[str] = field(default_factory=list)
+    decisions: list[Decision] = field(default_factory=list)
+    #: Workspace root: agents ask for ABSOLUTE paths (`/workspace/src/x.py`),
+    #: the scope is written relative (`src/**`). Without removing it, everything is "out of
+    #: scope", which nobody had seen, since `check_write` never ran.
+    workspace: str = "/workspace"
+    #: The run's script directory when it is offered tool scripts (`tool_scripts.offered_script_directory`,
+    #: ADR 0122), `""` otherwise: the one place outside the workspace a write is allowed (#1365).
+    scripts_dir: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.allowed_paths:
+            self.allowed_paths = list(self.permissions.write_paths)
+
+    # ───────────────────────── main entry ─────────────────────────
+
+    def decide(self, params: dict[str, Any]) -> Decision:
+        """Analyse an ACP `session/request_permission` request and decide."""
+        tool = params.get("toolCall", params.get("tool_call", params)) or {}
+        kind = str(tool.get("kind") or tool.get("type") or "").lower()
+        raw = tool.get("rawInput") or tool.get("input") or {}
+        title = str(tool.get("title") or "")
+
+        command = _first_str(raw, ("command", "cmd", "script", "shell"))
+        path = _first_str(raw, ("path", "file", "filePath", "file_path", "abs_path"))
+        url = _first_str(raw, ("url", "endpoint"))
+
+        inferred = False
+        if not kind:
+            # Claude Code does NOT send `kind` in `session/request_permission`: only
+            # `title` ("Write /workspace/x.py") and `rawInput`. Without this inference, every
+            # write fell into "read or search: allowed" and the path scope was
+            # never consulted: 23 writes out of 23, bench of 2026-09-24.
+            kind = _nature_deduite(title, raw, path=path, command=command, url=url)
+            inferred = bool(kind)
+
+        if command:
+            decision = self.check_command(command)
+        elif not self.permissions.builtin_web_tools and _builtin_web_tool(title):
+            # ADR 0070: the policy, the agent or the organisation switched the CLI's own web tools
+            # off. The backend's settings deny them too; this is the net behind that wall.
+            decision = Decision(
+                False,
+                "the built-in web tools (WebFetch, WebSearch) are switched off for this run "
+                "(sandbox.network.builtin_web_tools, the agent's Network section or the "
+                "organisation's ceiling); reading the web goes through the platform's tools",
+                "network",
+                url or title,
+            )
+        elif path and kind in {"edit", "write", "create", "delete", "move"}:
+            decision = self.check_write(path)
+        elif url:
+            decision = self.check_network(url)
+        elif kind in {"read", "search", "fetch", "think", "other"}:
+            decision = Decision(True, "read or search: allowed", kind, path or title)
+        elif not kind and self.permissions.unknown_requests == "reject":
+            # Closed: the policy (`sandbox.unknown_requests: reject`) refuses what it cannot
+            # name. The message tells the agent which way to go: a mute refusal makes
+            # an agent that retries another way.
+            decision = Decision(
+                False,
+                "request of unknown kind, refused by the project's policy "
+                "(sandbox.unknown_requests: reject); to report something or ask for a wider "
+                "scope: `report_finding`, `request_scope_change`",
+                "unknown",
+                path or title,
+            )
+        elif not kind:
+            decision = Decision(
+                True, "unknown kind: allowed and logged (a net, not a wall)", "read", path or title
+            )
+        else:
+            decision = Decision(
+                True, f"operation `{kind}` without an identified target: allowed", kind, title
+            )
+        decision.inferred = inferred
+        self.decisions.append(decision)
+        return decision
+
+    # ───────────────────────── rules ─────────────────────────
+
+    def check_write(self, path: str) -> Decision:
+        normalized = self._relatif(path)
+        if any(normalized.endswith(pattern) or pattern in normalized for pattern in SECRET_FILE_PATTERNS):
+            return Decision(False, f"writing to a sensitive file is forbidden: {path}", "write", path)
+        if self._is_script(path):
+            return Decision(
+                True,
+                "writing a script in the run's script directory: allowed (outside the workspace, "
+                "never committed)",
+                "write",
+                path,
+            )
+        if normalized == ".choregos/result.json":
+            return Decision(True, "writing the step's result: allowed", "write", path)
+        if normalized.startswith(".choregos/outputs/") and ".." not in normalized.split("/"):
+            # The step's deliverables (ADR 0049): stored as artifacts, never committed.
+            return Decision(True, "writing a deliverable in `.choregos/outputs/`: allowed", "write", path)
+        if normalized.startswith(".choregos/"):
+            return Decision(
+                False,
+                "the agent cannot change the Tranibor configuration "
+                "(only `.choregos/result.json` is expected)",
+                "write",
+                path,
+            )
+        if (denied := self.denied_by(normalized)) is not None:
+            return Decision(False, denied_reason(path, denied), "write", path)
+        if not self.allowed_paths:
+            return Decision(True, "no scope declared: write allowed", "write", path)
+        if matches_any(normalized, self.allowed_paths):
+            return Decision(True, "within the allowed paths", "write", path)
+        return Decision(
+            False,
+            f"`{path}` is outside the allowed paths. Use `report_finding` if it is another "
+            "problem, or `request_scope_change` if it is essential to this work item.",
+            "write",
+            path,
+        )
+
+    def denied_by(self, relative: str) -> str | None:
+        """The policy's `scope.deny_paths` pattern that forbids this workspace path, or nothing. A
+        deny wins over the allowed paths: a work item's scope, or a granted widening, never reopens
+        it (the API refuses to grant one, `PolicyEngine.path_denied`)."""
+        return next((p for p in self.permissions.deny_paths if matches_any(relative, [p])), None)
+
+    def _is_script(self, path: str) -> bool:
+        """A file of the run's script directory (#1365), when the run is offered tool scripts: outside the
+        workspace — a path under it is the scope's to judge —, so nothing written there reaches a commit.
+        Elsewhere outside the workspace, the client's directory included, the scope refuses as before."""
+        root = self.workspace.rstrip("/")
+        inside = bool(root) and (path == root or path.startswith(root + "/"))
+        return not inside and is_under(path, self.scripts_dir)
+
+    def _relatif(self, path: str) -> str:
+        """The path as the scope names it: relative to the workspace root."""
+        root = self.workspace.rstrip("/")
+        if root and (path == root or path.startswith(root + "/")):
+            path = path[len(root) :]
+        return path.removeprefix("./").lstrip("/")  # `lstrip(".")` mangerait `.choregos`
+
+    def check_command(self, command: str) -> Decision:
+        """Judges the command, and every form the agent may have written before rtk rewrote it
+        (ADR 0055): a command refused as written stays refused once rewritten."""
+        for form in _before_rtk(command):
+            lowered = form.lower()
+            for pattern, why in DANGEROUS_PATTERNS:
+                if re.search(pattern, lowered):
+                    return Decision(False, f"command refused ({why})", "execute", command[:200])
+            for denied in self.permissions.deny_commands:
+                if _command_matches(lowered, denied.lower()):
+                    return Decision(
+                        False, f"command forbidden by the policy: `{denied}`", "execute", command[:200]
+                    )
+        return Decision(True, "command allowed", "execute", command[:200])
+
+    def check_network(self, url: str) -> Decision:
+        """The host against the run's network (ADR 0070): the deny list first, then the allowlist.
+
+        With `egress: listed` the list is complete and an empty one means no internet. Otherwise
+        (an older orchestrator) an empty list keeps its old meaning: no list, the sandbox filters.
+        """
+        perms = self.permissions
+        host = _host_of(url)
+        allow = _patterns(perms.allow_domains)
+        deny = _patterns(perms.deny_domains)
+        where = (
+            "change it in the agent's Network section, the project's policy "
+            "(sandbox.network) or the organisation's policy ceiling"
+        )
+        ok, reason = host_allowed(host, allow, deny)
+        if reason.startswith("denied:"):
+            return Decision(False, f"domain denied: {host} ({reason}); {where}", "network", url)
+        if perms.egress == "listed" and not allow:
+            return Decision(
+                False,
+                f"no internet for this run: the agent's network is [] or the project allows no host "
+                f"({host} refused); {where}",
+                "network",
+                url,
+            )
+        if not allow:
+            return Decision(True, "no network allowlist: allowed (the sandbox filters)", "network", url)
+        if ok:
+            return Decision(True, f"allowed domain: {host}", "network", url)
+        return Decision(
+            False,
+            f"domain not allowed: {host} (allowlist: {', '.join(allow)}); {where}",
+            "network",
+            url,
+        )
+
+    def extend_scope(self, paths: list[str]) -> None:
+        """Widen the scope live after a granted `request_scope_change`."""
+        for path in paths:
+            if path not in self.allowed_paths:
+                self.allowed_paths.append(path)
+
+    @property
+    def denials(self) -> int:
+        return sum(1 for decision in self.decisions if not decision.allowed)
+
+
+def denied_reason(path: str, pattern: str) -> str:
+    """Why a write under `scope.deny_paths` is refused, in the words every guard uses (C2)."""
+    return (
+        f"`{path}` is forbidden by the project's policy (scope.deny_paths: `{pattern}`), whatever "
+        "the allowed paths say, and no scope change grants it. Use `report_finding` if it needs a change."
+    )
+
+
+def _first_str(payload: Any, keys: tuple[str, ...]) -> str:
+    if not isinstance(payload, dict):
+        return ""
+    for key in keys:
+        value = payload.get(key)
+        if isinstance(value, str) and value.strip():
+            return value
+        if isinstance(value, list) and value and isinstance(value[0], str):
+            return " ".join(value)
+    return ""
+
+
+def _before_rtk(command: str) -> list[str]:
+    """The command, then what it was before rtk's rewrite: `rtk` removed, and each renamed
+    command under every name it stands for. A policy that forbids `head` thus also refuses
+    `rtk read` written from `cat`: refusing too much here is the safe side."""
+    if not _RTK.search(command):
+        return [command]
+
+    def unwrapped(renamed: str, original: str) -> str:
+        return _RTK.sub(lambda m: m.group(1) + (original if m.group(2) == renamed else m.group(2)), command)
+
+    forms = [command, unwrapped("", "")]
+    forms += [
+        unwrapped(renamed, original) for renamed, originals in RTK_RENAMES.items() for original in originals
+    ]
+    return list(dict.fromkeys(forms))
+
+
+def _command_matches(command: str, denied: str) -> bool:
+    """`kubectl` forbidden forbids `kubectl get pods`; `terraform apply` does not forbid `terraform plan`."""
+    try:
+        tokens = shlex.split(command)
+    except ValueError:
+        tokens = command.split()
+    denied_tokens = denied.split()
+    if not denied_tokens:
+        return False
+    for index in range(len(tokens) - len(denied_tokens) + 1):
+        if [t.rsplit("/", 1)[-1] for t in tokens[index : index + len(denied_tokens)]] == denied_tokens:
+            return True
+    return False
+
+
+def _patterns(values: list[str]) -> list[str]:
+    """Host patterns as the core reads them; an entry it cannot parse is kept lower-cased."""
+    out: list[str] = []
+    for value in values:
+        try:
+            out.append(validate_pattern(value))
+        except ValueError:
+            out.append(value.strip().lower())
+    return out
+
+
+def _builtin_web_tool(title: str) -> bool:
+    """Whether an ACP request is the CLI's own `WebFetch` or `WebSearch` (a search has no URL)."""
+    first = title.split(" ", 1)[0].rstrip(":").lower() if title else ""
+    return first in {"webfetch", "websearch"}
+
+
+def _host_of(url: str) -> str:
+    from urllib.parse import urlparse
+
+    parsed = urlparse(url if "://" in url else f"https://{url}")
+    return (parsed.hostname or "").lower()

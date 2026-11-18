@@ -2,7 +2,7 @@
 
 import asyncio
 
-from choregos_agent_sdk import Context, Result, agent
+from tranibor_agent_sdk import Context, Result, agent
 
 
 @agent(name="slow")

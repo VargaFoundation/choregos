@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""`choregos_core.publishing`: the one definition of the publishing identity (ADR 0156)."""
+"""`tranibor_core.publishing`: the one definition of the publishing identity (ADR 0156)."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import json
 from dataclasses import asdict
 
 import pytest
-from choregos_core.publishing import PUBLISHING, SIGNING_ISSUER, load, parse
+from tranibor_core.publishing import PUBLISHING, SIGNING_ISSUER, load, parse
 
 EXAMPLE = {
     "owner": "ExampleOrg",

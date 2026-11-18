@@ -10,13 +10,13 @@ from typing import Any
 
 import httpx
 import pytest
-from choregos_adapters.errors import ConfigurationError, UpstreamError
-from choregos_adapters.http import RestClient
-from choregos_adapters.tracker.adf import markdown_to_adf, text_of_adf
-from choregos_adapters.tracker.jira import JiraTracker
-from choregos_adapters.tracker.jira_events import parse_jira_event
-from choregos_contracts import InboundEventType, Risk, Size
-from choregos_core.domain import NewItem, TrackerStateMapping
+from tranibor_adapters.errors import ConfigurationError, UpstreamError
+from tranibor_adapters.http import RestClient
+from tranibor_adapters.tracker.adf import markdown_to_adf, text_of_adf
+from tranibor_adapters.tracker.jira import JiraTracker
+from tranibor_adapters.tracker.jira_events import parse_jira_event
+from tranibor_contracts import InboundEventType, Risk, Size
+from tranibor_core.domain import NewItem, TrackerStateMapping
 
 BASE = "https://northwind.atlassian.net"
 
@@ -69,7 +69,7 @@ async def test_the_candidates_go_through_a_jql_query() -> None:
         vu["jql"] = request.url.params.get("jql")
         return httpx.Response(200, json={"issues": [{"key": "BILL-7"}, {"key": "BILL-9"}]})
 
-    from choregos_contracts import ProjectConfig, RepoConfig
+    from tranibor_contracts import ProjectConfig, RepoConfig
 
     config = ProjectConfig(slug="bill", org="northwind", repo=RepoConfig(url="https://x/y.git"))
     assert await tracker(handler).list_candidates(config) == ["BILL-7", "BILL-9"]
@@ -218,7 +218,7 @@ async def test_two_statuses_of_the_same_category_are_not_told_apart_by_chance() 
 
 
 async def test_the_status_comment_is_rewritten_not_duplicated() -> None:
-    from choregos_adapters.tracker.jira import STATUS_COMMENT_MARKER
+    from tranibor_adapters.tracker.jira import STATUS_COMMENT_MARKER
 
     calls: list[tuple[str, str]] = []
 
@@ -422,7 +422,7 @@ async def test_the_poll_also_asks_for_the_project_s_start_rules() -> None:
         vu["jql"] = request.url.params.get("jql")
         return httpx.Response(200, json={"issues": []})
 
-    from choregos_contracts import ProjectConfig
+    from tranibor_contracts import ProjectConfig
 
     config = ProjectConfig.model_validate(
         {
@@ -447,7 +447,7 @@ async def test_the_poll_also_asks_for_the_project_s_start_rules() -> None:
 
 
 def _scoped(handler: Any, cloud_id: str | None = None) -> JiraTracker:
-    from choregos_adapters.tracker.jira import JiraGatewayClient
+    from tranibor_adapters.tracker.jira import JiraGatewayClient
 
     client = JiraGatewayClient(
         BASE,
@@ -520,8 +520,8 @@ async def test_a_refused_test_says_what_to_fix(status: int, says: str) -> None:
 
 
 def test_the_registry_builds_a_scoped_jira_on_the_gateway() -> None:
-    from choregos_adapters import _jira_tracker  # the registered builder: the suite runs on fakes
-    from choregos_adapters.tracker.jira import JiraGatewayClient
+    from tranibor_adapters import _jira_tracker  # the registered builder: the suite runs on fakes
+    from tranibor_adapters.tracker.jira import JiraGatewayClient
 
     config = {"base_url": BASE, "email": "svc@x", "api_token": "t", "project_key": "BILL"}
     classic = _jira_tracker(config)
@@ -532,7 +532,7 @@ def test_the_registry_builds_a_scoped_jira_on_the_gateway() -> None:
 
 
 def test_a_scoped_jira_opens_the_gateway_in_its_egress() -> None:
-    from choregos_adapters.registry import egress_hosts
+    from tranibor_adapters.registry import egress_hosts
 
     hosts = egress_hosts("tracker", "jira", {"base_url": BASE, "auth": "scoped"})
     assert ("api.atlassian.com", 443) in hosts and ("northwind.atlassian.net", 443) in hosts
@@ -540,8 +540,8 @@ def test_a_scoped_jira_opens_the_gateway_in_its_egress() -> None:
 
 async def test_a_connector_jql_selects_the_candidates_without_the_agent_ready_label() -> None:
     # The factory itself, not `build`: under CHOREGOS_FAKES=1 (the CI) `build` hands out the fake.
-    from choregos_adapters import _jira_tracker
-    from choregos_contracts import ProjectConfig
+    from tranibor_adapters import _jira_tracker
+    from tranibor_contracts import ProjectConfig
 
     seen: list[str] = []
 
@@ -570,7 +570,7 @@ async def test_a_connector_jql_selects_the_candidates_without_the_agent_ready_la
 
 
 async def test_without_a_connector_jql_the_candidates_are_the_agent_ready_issues() -> None:
-    from choregos_contracts import ProjectConfig
+    from tranibor_contracts import ProjectConfig
 
     seen: list[str] = []
 

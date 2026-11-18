@@ -7,12 +7,12 @@ import time
 import httpx
 import jwt
 import pytest
-from choregos_adapters.errors import UpstreamError
-from choregos_adapters.github import client as client_module
-from choregos_adapters.github.auth import RUNNER_PERMISSIONS, GitHubAppAuth
-from choregos_adapters.github.client import GitHubClient
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
+from tranibor_adapters.errors import UpstreamError
+from tranibor_adapters.github import client as client_module
+from tranibor_adapters.github.auth import RUNNER_PERMISSIONS, GitHubAppAuth
+from tranibor_adapters.github.client import GitHubClient
 
 from ._transport import Wire, no_wait
 
@@ -82,7 +82,7 @@ async def test_a_token_asks_for_statuses_and_does_without_when_the_app_lacks_the
 ) -> None:
     """S59-10: the adapters' token asks for `statuses: read` (a Tekton CI's commit statuses). An App
     installed before it was asked for refuses the whole token (422): it is asked again without it."""
-    from choregos_adapters.github.auth import DEFAULT_PERMISSIONS
+    from tranibor_adapters.github.auth import DEFAULT_PERMISSIONS
 
     pem, _ = private_key
     assert DEFAULT_PERMISSIONS["statuses"] == "read"
@@ -194,7 +194,7 @@ async def test_a_pinned_installation_is_used_without_discovery(private_key: tupl
 
 
 async def test_a_pinned_installation_refuses_another_owner(private_key: tuple[str, str]) -> None:
-    from choregos_adapters.errors import ConfigurationError
+    from tranibor_adapters.errors import ConfigurationError
 
     pem, _ = private_key
     wire = Wire({("POST", "/app/installations/77/access_tokens"): (201, {"token": "ghs_stolen"})})
@@ -224,7 +224,7 @@ async def test_list_installations_paginates(private_key: tuple[str, str]) -> Non
 
 
 def test_the_connector_factory_pins_the_injected_installation(monkeypatch: pytest.MonkeyPatch) -> None:
-    from choregos_adapters import _github_client
+    from tranibor_adapters import _github_client
 
     monkeypatch.setenv("CHOREGOS_GITHUB_APP_ID", "1")
     monkeypatch.setenv("CHOREGOS_GITHUB_APP_PRIVATE_KEY", "pem")

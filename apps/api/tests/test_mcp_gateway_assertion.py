@@ -9,10 +9,10 @@ from typing import Any
 
 import jwt
 import pytest
-from choregos_adapters.errors import ConfigurationError
-from choregos_api.secret_store import FakeSecretStore, set_secret_store
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
+from tranibor_adapters.errors import ConfigurationError
+from tranibor_api.secret_store import FakeSecretStore, set_secret_store
 
 from .conftest import login
 
@@ -34,8 +34,8 @@ async def _anonymous(app: Any, url: str) -> Any:
 
 
 async def _organisation(slug: str = "northwind") -> Any:
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         found = (await session.execute(select(Organization).where(Organization.slug == slug))).scalar_one()
@@ -44,8 +44,8 @@ async def _organisation(slug: str = "northwind") -> Any:
 
 
 async def _audit(action: str) -> list[dict[str, Any]]:
-    from choregos_api.db.models import AuditLog
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import AuditLog
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = (await session.execute(select(AuditLog).where(AuditLog.action == action))).scalars()
@@ -70,8 +70,8 @@ async def test_an_admin_creates_a_key_and_the_jwks_publishes_it(
 async def test_a_minted_assertion_verifies_against_the_jwks(
     client: AsyncClient, admin: str, app: Any, store: FakeSecretStore
 ) -> None:
-    from choregos_api.db.session import session_scope
-    from choregos_api.services import mcp_gateway_identity as gw
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services import mcp_gateway_identity as gw
 
     await client.post(KEY_URL)
     jwks = (await _anonymous(app, JWKS_URL)).json()
@@ -144,8 +144,8 @@ async def test_the_rotation_is_audited_without_key_material(
 async def test_signing_key_fails_closed_when_the_pem_is_lost(
     client: AsyncClient, admin: str, store: FakeSecretStore
 ) -> None:
-    from choregos_api.db.session import session_scope
-    from choregos_api.services import mcp_gateway_identity as gw
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services import mcp_gateway_identity as gw
 
     organisation = await _organisation()
     async with session_scope() as session:
@@ -164,8 +164,8 @@ async def test_signing_key_fails_closed_when_the_pem_is_lost(
 async def test_a_renamed_organisation_keeps_its_issuer_and_jwks_url(
     client: AsyncClient, admin: str, app: Any, store: FakeSecretStore
 ) -> None:
-    from choregos_api.db.session import session_scope
-    from choregos_api.services import mcp_gateway_identity as gw
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services import mcp_gateway_identity as gw
 
     before = (await client.post(KEY_URL)).json()
     organisation = await _organisation()

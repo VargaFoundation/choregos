@@ -26,9 +26,9 @@ OWN_LINE = {"seq": 8, "type": "session/update", "payload": {"text": "implementin
 
 
 async def _journal(run_id: str) -> list[tuple[int, str]]:
-    from choregos_api.db.models import RunEvent
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import RunEvent
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         rows = (await session.execute(select(RunEvent).where(RunEvent.run_id == run_id))).scalars().all()

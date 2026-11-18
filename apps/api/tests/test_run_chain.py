@@ -12,8 +12,8 @@ from collections.abc import Iterator
 from typing import Any
 
 import pytest
-from choregos_adapters.fakes import FakeObjectStore
 from httpx import AsyncClient
+from tranibor_adapters.fakes import FakeObjectStore
 
 DECK = b"PK\x03\x04" + b"slides" * 50
 SPEC = "# Spec\n\nDeduct credit notes from the total.\n"
@@ -21,7 +21,7 @@ SPEC = "# Spec\n\nDeduct credit notes from the total.\n"
 
 @pytest.fixture
 def store() -> Iterator[FakeObjectStore]:
-    from choregos_api.object_store import use_object_store
+    from tranibor_api.object_store import use_object_store
 
     fake = FakeObjectStore()
     use_object_store(fake)
@@ -48,9 +48,9 @@ async def _run(
     initiated_by: str | None = None,
     agent: tuple[str, int] | None = None,
 ) -> dict[str, str]:
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
-    from choregos_api.security import mint_run_token
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.security import mint_run_token
 
     async with session_scope() as session:
         session.add(
@@ -74,7 +74,7 @@ async def _run(
 
 
 def _access_schema() -> dict[str, Any]:
-    import choregos_contracts as contracts
+    import tranibor_contracts as contracts
 
     route = contracts.load_openapi()["paths"]["/runs/{id}/access"]["get"]
     return dict(route["responses"]["200"]["content"]["application/json"]["schema"])
@@ -86,8 +86,8 @@ def _access_schema() -> dict[str, Any]:
 async def test_a_work_item_created_in_the_console_names_the_person(
     client: AsyncClient, project: dict[str, Any], admin: str
 ) -> None:
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     item = await _work_item(client, project)
     async with session_scope() as session:
@@ -96,8 +96,8 @@ async def test_a_work_item_created_in_the_console_names_the_person(
 
 
 def test_the_initiator_names_its_door_and_refuses_an_unknown_kind() -> None:
-    from choregos_api.rbac import SYSTEM, Principal
-    from choregos_api.services.initiator import initiator, of_principal
+    from tranibor_api.rbac import SYSTEM, Principal
+    from tranibor_api.services.initiator import initiator, of_principal
 
     ada = Principal(user_id="u1", email="ada@example.org")
     assert of_principal(ada, "api") == "person:ada@example.org"
@@ -185,10 +185,10 @@ async def test_a_run_recorded_before_the_chain_shows_none_and_a_foreign_run_is_n
 async def test_a_step_cannot_read_an_artefact_it_did_not_declare_as_an_input(
     client: AsyncClient, project: dict[str, Any], store: FakeObjectStore
 ) -> None:
-    from choregos_api.db.models import HandOffReceipt, Project, Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.artifacts import record_inline_outputs, store_file
     from sqlalchemy import select
+    from tranibor_api.db.models import HandOffReceipt, Project, Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.artifacts import record_inline_outputs, store_file
 
     item = await _work_item(client, project)
     await _run(item, project, "T-1-write-1", "write", agent=("presenter", 2))

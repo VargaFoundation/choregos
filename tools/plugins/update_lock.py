@@ -16,7 +16,7 @@ against the source's keyless identity (`--no-verify` skips it, and says so in th
 archive's content digest is the index's, then writes the archive and the lock. Nothing else changes a
 file of `plugins/offline/`.
 
-The lock is what `choregos_core.plugins.sources.read_lock` reads (`plugins: {name: {version, digest}}`)
+The lock is what `tranibor_core.plugins.sources.read_lock` reads (`plugins: {name: {version, digest}}`)
 plus where each archive came from: an offline directory that holds a lock refuses any plugin not in it
 or with another digest.
 """
@@ -32,16 +32,16 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from choregos_core.plugins import PluginError, opened
-from choregos_core.plugins.sources import (
+from tranibor_core.plugins import PluginError, opened
+from tranibor_core.plugins.sources import (
     INDEX_MEDIA_TYPE,
     LOCK,
     PLUGIN_MEDIA_TYPE,
     SourceError,
     parse_index,
 )
-from choregos_core.plugins.versions import Version
-from choregos_core.publishing import PUBLISHING, SIGNING_ISSUER
+from tranibor_core.plugins.versions import Version
+from tranibor_core.publishing import PUBLISHING, SIGNING_ISSUER
 
 ROOT = Path(__file__).resolve().parents[2]
 OFFLINE = ROOT / "plugins" / "offline"
@@ -142,7 +142,7 @@ def problems(directory: Path = OFFLINE) -> list[str]:
 async def _refresh(
     directory: Path, index_ref: str, wanted: dict[str, str | None], verify: bool, cosign: str
 ) -> dict[str, Locked]:
-    from choregos_adapters.oci import CosignVerifier, OciRegistryClient, parse_ref
+    from tranibor_adapters.oci import CosignVerifier, OciRegistryClient, parse_ref
 
     client = OciRegistryClient(timeout_s=60.0)
     verifier = CosignVerifier(

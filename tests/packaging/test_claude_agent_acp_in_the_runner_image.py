@@ -13,7 +13,7 @@ import re
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 DOCKERFILE = ROOT / "docker/runner.Dockerfile"
-LOCK = ROOT / "packages/runner/src/choregos_runner/backends/versions.lock"
+LOCK = ROOT / "packages/runner/src/tranibor_runner/backends/versions.lock"
 
 
 def _runtime() -> str:

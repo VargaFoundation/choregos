@@ -11,7 +11,7 @@ from typing import Any
 
 import pytest
 import yaml
-from choregos_core.plugins import PluginError, load_directory
+from tranibor_core.plugins import PluginError, load_directory
 
 FIXTURE = Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "plugins" / "investment-assistant"
 ASSISTANT = "assistants/investment-assistant.yaml"
@@ -343,7 +343,7 @@ def test_a_task_workflow_must_be_a_valid_workflow(plugin: Path) -> None:
 
 
 def test_the_fixture_workflows_are_valid_workflows() -> None:
-    from choregos_core.dsl.parser import parse_workflow_file
+    from tranibor_core.dsl.parser import parse_workflow_file
 
     for name in ("morning-brief", "threshold-alert"):
         workflow, report = parse_workflow_file(FIXTURE / "workflows" / f"{name}.yaml")

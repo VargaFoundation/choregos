@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from choregos_contracts import WorkflowBudget
-from choregos_core import WorkflowEngine, load_template
-from choregos_core.dsl.validator import validate_workflow
+from tranibor_contracts import WorkflowBudget
+from tranibor_core import WorkflowEngine, load_template
+from tranibor_core.dsl.validator import validate_workflow
 
 
 def _with_budget(on_exceeded: str) -> WorkflowEngine:
@@ -26,8 +26,8 @@ def test_on_exceeded_must_name_a_state() -> None:
 
 
 def test_the_block_round_trips_through_the_schema() -> None:
-    from choregos_core import parse_workflow
-    from choregos_core.dsl import template_yaml
+    from tranibor_core import parse_workflow
+    from tranibor_core.dsl import template_yaml
 
     source = template_yaml("default-simple") + "budget: {ticket_usd: 2.5, on_exceeded: needs_human}\n"
     wf, report = parse_workflow(source, strict=False)

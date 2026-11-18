@@ -15,9 +15,9 @@ pytestmark = pytest.mark.asyncio
 
 
 async def _documents(setup: Fixture) -> dict[str, Any]:
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
     from sqlalchemy import func, select
+    from tranibor_api.db.models import Run, WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         item = await session.get(WorkItem, setup.work_item_id)
@@ -81,7 +81,7 @@ async def test_the_reason_for_a_refusal_reaches_the_work_item_and_an_approval_cl
 
 
 async def test_the_labels_step_adds_the_templates_without_touching_the_platforms() -> None:
-    from choregos_orchestrator.activities.provisioning import LABELS, _github_ensure_labels, step_labels
+    from tranibor_orchestrator.activities.provisioning import LABELS, _github_ensure_labels, step_labels
 
     assert step_labels({}) == LABELS
     from_list = step_labels({"labels": ["bug", "adr"]})
@@ -102,7 +102,7 @@ async def test_the_labels_step_adds_the_templates_without_touching_the_platforms
 
 
 def test_the_pr_carries_the_release_notes_in_english() -> None:
-    from choregos_orchestrator.activities.scm import _pr_body
+    from tranibor_orchestrator.activities.scm import _pr_body
 
     item = SimpleNamespace(tracker_key="northwind/billing-api#7", body_snapshot="The total ignores credits.")
     body = _pr_body(item, {"release_notes_markdown": "- Credits are now deducted from the total."})

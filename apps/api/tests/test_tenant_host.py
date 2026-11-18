@@ -6,9 +6,9 @@ from collections.abc import Iterator
 from typing import Any
 
 import pytest
-from choregos_api import edition, extensions
-from choregos_api.tenant_host import declare_host_resolver, has_host_resolver, normalise_host, resolve_host
 from httpx import AsyncClient
+from tranibor_api import edition, extensions
+from tranibor_api.tenant_host import declare_host_resolver, has_host_resolver, normalise_host, resolve_host
 
 from .theme_fixtures import sample
 

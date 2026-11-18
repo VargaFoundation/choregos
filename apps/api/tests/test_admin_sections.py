@@ -12,8 +12,8 @@ import json
 from collections.abc import Iterator
 from typing import Any
 
-import choregos_contracts as contracts
 import pytest
+import tranibor_contracts as contracts
 from fastapi import APIRouter
 from httpx import AsyncClient
 
@@ -62,7 +62,7 @@ def _scim_router() -> APIRouter:
 
 @pytest.fixture
 def extension() -> Iterator[Any]:
-    from choregos_api import extensions
+    from tranibor_api import extensions
 
     extensions.declare_router(_scim_router())
     extensions.declare_admin_section(SCIM)
@@ -140,8 +140,8 @@ async def test_the_administrator_sees_the_sections_the_developer_does_not(
     ],
 )
 def test_a_section_that_does_not_hold_stops_the_start_up(alteration: Any, reason: str) -> None:
-    from choregos_api import extensions
-    from choregos_api.main import create_app
+    from tranibor_api import extensions
+    from tranibor_api.main import create_app
 
     faulty = copy.deepcopy(SCIM)
     alteration(faulty)
@@ -157,7 +157,7 @@ def test_a_section_that_does_not_hold_stops_the_start_up(alteration: Any, reason
 def test_the_same_extension_loaded_twice_declares_only_one_section() -> None:
     """The orchestrator the API imports loads the extensions, then `create_app()` reloads them: the
     same section comes back, and must not stop the start-up. A DIFFERENT one under the same name does."""
-    from choregos_api import extensions
+    from tranibor_api import extensions
 
     try:
         extensions.declare_admin_section(SCIM)
@@ -177,8 +177,8 @@ async def test_an_organisation_section_that_asks_for_the_platform_shows_only_to_
     """`org_admin` has every permission in its organisation, `platform:admin` included: without a
     guard, the section of the ceilings of an organisation, which only the platform can write, was
     shown to the administrator of any tenant, and every save answered 403."""
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
 
     extension.declare_admin_section(
         {
@@ -208,8 +208,8 @@ async def test_a_block_the_caller_lacks_is_filtered_and_the_section_stays(
 ) -> None:
     """S42-02: the example's last block needs `platform:admin`. With two organisations the
     organisation administrator keeps the section and its other blocks, not that block."""
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
 
     first = (await client.get("/api/v1/ui/admin-sections")).json()[0]
     assert [b["kind"] for b in first["blocks"]] == ["form", "table", "secret_once"]
@@ -225,8 +225,8 @@ async def test_a_block_the_caller_lacks_is_filtered_and_the_section_stays(
 async def test_a_section_with_no_visible_block_is_not_listed(
     extension: Any, client: AsyncClient, admin: str
 ) -> None:
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
 
     extension.declare_admin_section(
         {
@@ -254,14 +254,14 @@ async def test_a_section_with_no_visible_block_is_not_listed(
 
 
 def test_the_core_announces_block_permission() -> None:
-    from choregos_api.extensions import SECTION_FEATURES
+    from tranibor_api.extensions import SECTION_FEATURES
 
     assert "block_permission" in SECTION_FEATURES
 
 
 def test_the_core_announces_asset_upload_and_a_section_lists_its_upload_paths() -> None:
     """S42-13: the paths a section calls include the POST path of each `format: asset` property."""
-    from choregos_api.extensions import SECTION_FEATURES, section_paths
+    from tranibor_api.extensions import SECTION_FEATURES, section_paths
 
     assert "asset_upload" in SECTION_FEATURES
     paths = section_paths(SCIM)
@@ -274,8 +274,8 @@ def test_the_core_announces_asset_upload_and_a_section_lists_its_upload_paths() 
 
 def test_the_core_announces_section_icon_and_accepts_the_vocabulary_only() -> None:
     """S42-15: a section names its navigation icon from the schema's closed vocabulary."""
-    from choregos_api.extensions import SECTION_FEATURES
     from jsonschema import Draft202012Validator
+    from tranibor_api.extensions import SECTION_FEATURES
 
     assert "section_icon" in SECTION_FEATURES
     schema = contracts.load_schema("ui-manifest.schema.json")
@@ -287,7 +287,7 @@ def test_the_core_announces_section_icon_and_accepts_the_vocabulary_only() -> No
 
 @pytest.fixture
 def extension_with_icon() -> Iterator[Any]:
-    from choregos_api import extensions
+    from tranibor_api import extensions
 
     extensions.declare_router(_scim_router())
     extensions.declare_admin_section({**SCIM, "icon": "fingerprint"})

@@ -18,8 +18,8 @@ from typing import Any
 
 import pytest
 import yaml
-from choregos_adapters.fakes.notify import FakeNotifier
 from httpx import AsyncClient
+from tranibor_adapters.fakes.notify import FakeNotifier
 
 from .agent_scopes_kit import as_user
 from .kits.assistant_install import (
@@ -65,7 +65,7 @@ def _tool(tools: list[dict[str, Any]], need: str) -> dict[str, Any]:
 
 @pytest.fixture
 def told() -> Iterator[FakeNotifier]:
-    from choregos_api.services.task_delivery import set_notifier_factory
+    from tranibor_api.services.task_delivery import set_notifier_factory
 
     notifier = FakeNotifier()
     set_notifier_factory(lambda row, channel: notifier if channel == "email" else None)

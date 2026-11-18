@@ -7,18 +7,18 @@ from typing import Any
 
 import pytest
 import yaml
-from choregos_contracts import ProjectConfig, RepoConfig
-from choregos_core import load_preset
-from choregos_orchestrator.activities import stage as stage_activities
-from choregos_orchestrator.gitops import EGRESS_NAME, render_project_manifests
-from choregos_orchestrator.org_egress import merged_domains, org_runner_hosts, runner_domain
+from tranibor_contracts import ProjectConfig, RepoConfig
+from tranibor_core import load_preset
+from tranibor_orchestrator.activities import stage as stage_activities
+from tranibor_orchestrator.gitops import EGRESS_NAME, render_project_manifests
+from tranibor_orchestrator.org_egress import merged_domains, org_runner_hosts, runner_domain
 
 from .conftest import Fixture
 
 
 async def _rule(setup: Fixture, host: str, used_by: list[str], status: str = "allowed") -> None:
-    from choregos_api.db.models import OrgEgressRule, Project
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import OrgEgressRule, Project
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         project = await session.get(Project, setup.project_id)
@@ -72,8 +72,8 @@ async def test_a_runners_rule_joins_the_stage_input_and_an_api_rule_does_not(set
 
 @pytest.mark.asyncio
 async def test_the_union_reads_only_the_organisations_own_rules(setup: Fixture) -> None:
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
 
     await _rule(setup, "a2a.example.test", ["runners"])
     async with session_scope() as session:
@@ -109,10 +109,10 @@ async def test_a_remote_agents_admission_reads_the_union_not_the_project_alone(s
     """S39-08b: the host the card pins must be allowed; an administrator's `runners` rule is enough."""
     from types import SimpleNamespace
 
-    from choregos_api.db.models import Project
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities.remote import check_remote_agent
     from temporalio.exceptions import ApplicationError
+    from tranibor_api.db.models import Project
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities.remote import check_remote_agent
 
     runtime = SimpleNamespace(
         pinned_card=SimpleNamespace(url="https://a2a.example.test/v1/rpc"), credential=None
@@ -138,8 +138,8 @@ async def test_a_remote_agents_admission_reads_the_union_not_the_project_alone(s
 async def test_a_runners_rule_the_ceiling_denies_does_not_join_the_run(setup: Fixture) -> None:
     """ADR 0070, amended at integration: what the organisation opened for its runners joins a run as
     an implied host, and the deny lists still win over it."""
-    from choregos_api.db.models import Organization, Project
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Organization, Project
+    from tranibor_api.db.session import session_scope
 
     await _rule(setup, "a2a.example.test", ["runners"])
     await _rule(setup, "blocked.example.test", ["runners"])
@@ -160,10 +160,10 @@ async def test_a_runners_rule_the_ceiling_denies_does_not_join_the_run(setup: Fi
 async def test_a_remote_agents_host_a_deny_list_names_is_refused_even_when_opened(setup: Fixture) -> None:
     from types import SimpleNamespace
 
-    from choregos_api.db.models import Project
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities.remote import check_remote_agent
     from temporalio.exceptions import ApplicationError
+    from tranibor_api.db.models import Project
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities.remote import check_remote_agent
 
     await _rule(setup, "a2a.example.test", ["runners"])
     runtime = SimpleNamespace(

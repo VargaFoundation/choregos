@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import pytest
-from choregos_contracts import ProjectConfig, Size
-from choregos_core import (
+from tranibor_contracts import ProjectConfig, Size
+from tranibor_core import (
     CatalogueEntry,
     GatewayModel,
     ModelPolicy,

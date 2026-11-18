@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import pathlib
 
-from choregos_adapters import connector_types
+from tranibor_adapters import connector_types
 
 FIXTURE = (
     pathlib.Path(__file__).resolve().parents[2]

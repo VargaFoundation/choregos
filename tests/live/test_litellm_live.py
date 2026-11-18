@@ -19,9 +19,9 @@ from uuid import uuid4
 
 import httpx
 import pytest
-from choregos_adapters.gateway.litellm import LiteLlmGateway
-from choregos_core import ModelResolver
-from choregos_core.domain import GatewayModel
+from tranibor_adapters.gateway.litellm import LiteLlmGateway
+from tranibor_core import ModelResolver
+from tranibor_core.domain import GatewayModel
 
 from .conftest import require
 
@@ -235,7 +235,7 @@ async def test_the_environment_claude_code_receives_works(gateway: LiteLlmGatewa
     then `backend.model_env()` — and use it to call. If a variable is misnamed or points to the
     wrong place, the call fails here rather than on the first real run.
     """
-    from choregos_runner.backends import get_backend
+    from tranibor_runner.backends import get_backend
 
     key = await gateway.mint_key(
         {"project": "billing-api", "run_id": f"live-{RUN}-7"},

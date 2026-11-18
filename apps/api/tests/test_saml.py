@@ -14,14 +14,14 @@ from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 import pytest
-from choregos_api.db.models import AuditLog, Membership, Organization, SamlConsumedAssertion, User
-from choregos_api.db.session import session_scope
-from choregos_api.errors import ApiError
-from choregos_api.security import sign_session
-from choregos_api.services import saml as engine
 from httpx import ASGITransport, AsyncClient
 from lxml import etree
 from sqlalchemy import select
+from tranibor_api.db.models import AuditLog, Membership, Organization, SamlConsumedAssertion, User
+from tranibor_api.db.session import session_scope
+from tranibor_api.errors import ApiError
+from tranibor_api.security import sign_session
+from tranibor_api.services import saml as engine
 
 from .kits import saml_idp as kit
 
@@ -421,7 +421,7 @@ async def test_the_configuration_is_refused_when_it_is_wrong(
 async def test_only_a_platform_administrator_configures_a_provider(
     app: Any, org: str, admin: str, idp: kit.Idp
 ) -> None:
-    from choregos_api.db.models import Membership, Organization, User
+    from tranibor_api.db.models import Membership, Organization, User
 
     async with session_scope(orgs="*") as session:
         other = Organization(slug="acme", name="Acme")
@@ -471,8 +471,8 @@ async def test_a_domain_belongs_to_one_organisation(client: AsyncClient, configu
 async def test_a_domain_or_an_organisation_held_by_an_extension_s_provider_is_refused(
     client: AsyncClient, admin: str, idp: kit.Idp
 ) -> None:
-    from choregos_api.edition import reset
-    from choregos_api.tenant_sign_in import OidcProvider, TenantSignIn, declare_sign_in_resolver
+    from tranibor_api.edition import reset
+    from tranibor_api.tenant_sign_in import OidcProvider, TenantSignIn, declare_sign_in_resolver
 
     async def resolver(session: Any, hint: Any) -> Any:
         oidc = OidcProvider(issuer="https://login.example", client_id="c", client_secret="s")
@@ -488,7 +488,7 @@ async def test_a_domain_or_an_organisation_held_by_an_extension_s_provider_is_re
 
 
 async def test_the_core_announces_saml() -> None:
-    from choregos_api.extensions import IDENTITY_FEATURES
+    from tranibor_api.extensions import IDENTITY_FEATURES
 
     assert {"approval_freshness", "session_revocation", "saml"} <= IDENTITY_FEATURES
 
@@ -503,7 +503,7 @@ async def test_the_sign_in_page_leads_to_the_organisation_s_provider(
     by_address = await client.get("/api/v1/auth/login", params={"login_hint": "ann@globex.example"})
     assert by_address.headers["location"].startswith("/api/v1/saml/northwind/login?")
     async with session_scope(orgs="*") as session:
-        from choregos_api.tenant_sign_in import SignInHint, resolve
+        from tranibor_api.tenant_sign_in import SignInHint, resolve
 
         assert await resolve(session, SignInHint(org=None, email_domain="unrelated.example")) is None
 
@@ -711,6 +711,6 @@ async def test_the_authn_request_names_our_service_and_escapes_the_provider_url(
 @pytest.fixture(autouse=True)
 def _no_extension_left_behind() -> Iterator[None]:
     yield
-    from choregos_api.edition import reset
+    from tranibor_api.edition import reset
 
     reset()

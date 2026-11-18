@@ -21,20 +21,20 @@ TOOL = "/api/v1/internal/runs/run-same-proposal/tools/pfsense__update_firewall_r
 
 @pytest.fixture
 def firewall(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
-    import choregos_adapters
-    from choregos_adapters.fakes.netops import FakePfSense
+    import tranibor_adapters
+    from tranibor_adapters.fakes.netops import FakePfSense
 
     fake = FakePfSense()
-    monkeypatch.setattr(choregos_adapters, "FAKE_NETOPS", {"pfsense": fake})
+    monkeypatch.setattr(tranibor_adapters, "FAKE_NETOPS", {"pfsense": fake})
     monkeypatch.setenv("CONNECTOR_SAME_PROPOSAL_PFSENSE_KEY", "-".join(("pfsense", "same", "proposal")))
     yield fake
 
 
 async def _run_token(client: AsyncClient, project: dict[str, Any]) -> str:
     """The pfSense connector (its rule update needs a person), a netops agent and one of its runs."""
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.security import mint_run_token
+    from tranibor_api.db.models import Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.security import mint_run_token
 
     body = {"name": "pfsense", "type": "pfsense", "config": {"base_url": "https://fw.example.test"},
             "secret_refs": {"api_key": "env:CONNECTOR_SAME_PROPOSAL_PFSENSE_KEY"}}  # fmt: skip
@@ -68,9 +68,9 @@ async def _run_token(client: AsyncClient, project: dict[str, Any]) -> str:
 async def test_the_same_call_under_approval_proposes_one_action(
     client: AsyncClient, project: dict[str, Any], firewall: Any
 ) -> None:
-    from choregos_api.db.models import Action
-    from choregos_api.db.session import session_scope
     from sqlalchemy import func, select
+    from tranibor_api.db.models import Action
+    from tranibor_api.db.session import session_scope
 
     token = await _run_token(client, project)
     headers = {"Authorization": f"Bearer {token}"}

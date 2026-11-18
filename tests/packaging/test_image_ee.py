@@ -87,10 +87,10 @@ def test_the_common_base_lays_the_ee_wheel_in_the_venv() -> None:
 #: What the platform does at startup: the API calls `create_app()` (edition guard included),
 #: the orchestrator loads the plugins by importing its activities.
 VERIFICATION = """
-from choregos_api.main import create_app
+from tranibor_api.main import create_app
 create_app()
-import choregos_orchestrator.activities.base
-from choregos_api.edition import current, features
+import tranibor_orchestrator.activities.base
+from tranibor_api.edition import current, features
 print(current(), ",".join(sorted(features())))
 """
 

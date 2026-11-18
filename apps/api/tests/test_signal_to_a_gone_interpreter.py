@@ -31,10 +31,10 @@ transitions:
 
 async def _waiting_ticket(client: AsyncClient, project: dict[str, Any]) -> tuple[str, str]:
     """A work item with a pending approval, and the id of its interpreter."""
-    from choregos_api.db.models import HumanRequest
-    from choregos_api.db.session import session_scope
-    from choregos_api.temporal import interpreter_id
-    from choregos_core import utcnow
+    from tranibor_api.db.models import HumanRequest
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.temporal import interpreter_id
+    from tranibor_core import utcnow
 
     pid = project["id"]
     saved = await client.put(f"/api/v1/projects/{pid}/workflows/release", json={"yaml": WORKFLOW})
@@ -59,9 +59,9 @@ async def _waiting_ticket(client: AsyncClient, project: dict[str, Any]) -> tuple
 
 
 async def _pending(item_id: str) -> bool:
-    from choregos_api.db.models import HumanRequest
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import HumanRequest
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         row = (
@@ -71,7 +71,7 @@ async def _pending(item_id: str) -> bool:
 
 
 def _fake() -> Any:
-    from choregos_api.temporal import FakeTemporal, get_temporal
+    from tranibor_api.temporal import FakeTemporal, get_temporal
 
     fake = get_temporal()
     assert isinstance(fake, FakeTemporal)
@@ -81,7 +81,7 @@ def _fake() -> Any:
 async def test_a_decision_for_a_stopped_interpreter_is_a_409_and_the_request_stays_pending(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.temporal import WorkflowState
+    from tranibor_api.temporal import WorkflowState
 
     item_id, workflow_id = await _waiting_ticket(client, project)
     fake = _fake()
@@ -112,7 +112,7 @@ async def test_a_decision_for_a_stopped_interpreter_is_a_409_and_the_request_sta
 async def test_a_decision_for_a_completed_interpreter_says_nothing_will_restart_it(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.temporal import WorkflowState
+    from tranibor_api.temporal import WorkflowState
 
     item_id, workflow_id = await _waiting_ticket(client, project)
     fake = _fake()

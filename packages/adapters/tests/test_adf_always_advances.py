@@ -14,12 +14,12 @@ import sys
 from typing import Any
 
 import pytest
-from choregos_adapters.tracker.adf import markdown_to_adf, text_of_adf
+from tranibor_adapters.tracker.adf import markdown_to_adf, text_of_adf
 
 _CONVERT = """
 import json, resource, sys
 resource.setrlimit(resource.RLIMIT_AS, (1024 * 2**20, 1024 * 2**20))
-from choregos_adapters.tracker.adf import markdown_to_adf
+from tranibor_adapters.tracker.adf import markdown_to_adf
 print(json.dumps(markdown_to_adf(sys.stdin.read())))
 """
 

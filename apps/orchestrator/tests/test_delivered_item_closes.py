@@ -56,7 +56,7 @@ async def test_a_work_item_delivered_by_the_train_closes_its_issue_naming_the_re
     assert "release `R-" in comment and "`prod`" in comment, comment
 
     # A replayed close_out (activity retry) posts no second comment and does not reopen anything.
-    from choregos_orchestrator.activities.tracker import close_out
+    from tranibor_orchestrator.activities.tracker import close_out
 
     closed_at = item.closed_at
     again = await close_out({"project_id": setup.project_id, "work_item_id": setup.work_item_id})
@@ -76,9 +76,9 @@ async def test_a_tracker_failure_does_not_kill_the_delivered_work_item(
 
 async def test_an_abandoned_or_never_released_work_item_is_not_closed(setup: Fixture) -> None:
     """Abandoned after a departure, or terminal without a train: neither is a delivery."""
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities.tracker import close_out
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities.tracker import close_out
 
     for state, documents in (("abandoned", {"deployed_release": "r-1"}), ("deployed_prod", {})):
         async with session_scope() as session:

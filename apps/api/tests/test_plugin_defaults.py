@@ -17,8 +17,8 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
-import choregos_contracts as contracts
 import pytest
+import tranibor_contracts as contracts
 import yaml
 from httpx import AsyncClient
 from jsonschema import Draft202012Validator
@@ -56,7 +56,7 @@ def _contract(name: str) -> Draft202012Validator:
 @pytest.fixture
 def configure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
     """Writes `CHOREGOS_PLUGINS_CONFIG` with an offline directory; returns that directory."""
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     def write(defaults: list[dict[str, str]] | None = None, *, server: bool = True) -> Path:
         offline = tmp_path / "offline"
@@ -74,14 +74,14 @@ def configure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
 
 
 async def _count(model: Any) -> int:
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         return int((await session.execute(select(func.count()).select_from(model))).scalar_one())
 
 
 async def _counts() -> dict[str, int]:
-    from choregos_api.db.models import Agent, AuditLog, OrgPlugin, OrgPluginApproval, OrgPluginFile, Skill
+    from tranibor_api.db.models import Agent, AuditLog, OrgPlugin, OrgPluginApproval, OrgPluginFile, Skill
 
     return {
         m.__tablename__: await _count(m)
@@ -122,7 +122,7 @@ async def test_the_routes_obtain_plugins_through_the_sources_and_their_checks(
 async def test_a_plugin_that_brings_a_server_waits_for_a_second_administrator(
     client: AsyncClient, admin: str, configure: Any
 ) -> None:
-    from choregos_api.db.models import OrgPlugin
+    from tranibor_api.db.models import OrgPlugin
 
     configure()
     before = await _counts()
@@ -166,7 +166,7 @@ async def test_a_plugin_that_brings_a_server_waits_for_a_second_administrator(
 async def test_an_approval_installs_only_the_content_that_was_checked(
     client: AsyncClient, admin: str, configure: Any
 ) -> None:
-    from choregos_api.db.models import OrgPlugin
+    from tranibor_api.db.models import OrgPlugin
 
     offline = configure()
     asked = await client.post(f"{ORG}/plugins/install", json=INSTALL)
@@ -185,7 +185,7 @@ async def test_an_approval_installs_only_the_content_that_was_checked(
 async def test_an_upgrade_to_a_version_that_brings_a_server_waits_and_uninstall_drops_it(
     client: AsyncClient, admin: str, tmp_path: Path
 ) -> None:
-    from choregos_api.services.plugin_supply import OfflineDirectory, use_plugin_supply
+    from tranibor_api.services.plugin_supply import OfflineDirectory, use_plugin_supply
 
     root = tmp_path / "plugins"
     _hello(root / "hello" / "1.0.0", server=False)
@@ -241,9 +241,9 @@ DEFAULT = [{"source": "offline", "name": "hello", "version": "^1"}]
 async def test_the_reconcile_installs_each_default_plugin_once(
     client: AsyncClient, admin: str, configure: Any
 ) -> None:
-    from choregos_api.db.models import OrgPlugin
-    from choregos_api.db.session import session_scope
-    from choregos_api.services import plugin_defaults
+    from tranibor_api.db.models import OrgPlugin
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services import plugin_defaults
 
     configure(DEFAULT, server=False)
     first = await plugin_defaults.reconcile_all()
@@ -262,8 +262,8 @@ async def test_the_reconcile_installs_each_default_plugin_once(
 async def test_a_default_plugin_that_brings_a_server_waits_and_is_never_approved_by_the_platform(
     client: AsyncClient, admin: str, configure: Any
 ) -> None:
-    from choregos_api.db.models import OrgPlugin, OrgPluginApproval
-    from choregos_api.services import plugin_defaults
+    from tranibor_api.db.models import OrgPlugin, OrgPluginApproval
+    from tranibor_api.services import plugin_defaults
 
     offline = configure(DEFAULT)
     first = await plugin_defaults.reconcile_all()
@@ -289,7 +289,7 @@ async def test_a_default_plugin_that_brings_a_server_waits_and_is_never_approved
 async def test_a_default_plugin_that_fails_does_not_stop_the_others(
     client: AsyncClient, admin: str, configure: Any
 ) -> None:
-    from choregos_api.services import plugin_defaults
+    from tranibor_api.services import plugin_defaults
 
     configure([{"source": "offline", "name": "absent", "version": "*"}, *DEFAULT], server=False)
     outcomes = await plugin_defaults.reconcile_all()
@@ -299,7 +299,7 @@ async def test_a_default_plugin_that_fails_does_not_stop_the_others(
 async def test_a_new_organisation_gets_the_default_plugins(
     client: AsyncClient, admin: str, org: str, configure: Any
 ) -> None:
-    from choregos_api import edition
+    from tranibor_api import edition
 
     configure(DEFAULT, server=False)
     edition.declare(edition.ENTERPRISE, features=frozenset({"multi-org"}))
@@ -319,9 +319,9 @@ async def test_a_new_organisation_gets_the_default_plugins(
 def test_an_unusable_configuration_stops_the_api_at_start_up(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.main import create_app
-    from choregos_api.services.plugin_defaults import PluginsConfigurationError, check_configuration
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.main import create_app
+    from tranibor_api.services.plugin_defaults import PluginsConfigurationError, check_configuration
 
     path = tmp_path / "plugins.yaml"
     path.write_text(yaml.safe_dump({"sources": [{"name": "acme", "index": "https://a.example/i.yaml"}]}))

@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from choregos_api import tenant_host
+from tranibor_api import tenant_host
 
 from .conftest import Fixture
 
@@ -35,7 +35,7 @@ def _no_host() -> Any:
 
 
 async def _ask(setup: Fixture) -> tuple[list[str], list[str]]:
-    from choregos_orchestrator.activities.tracker import create_human_request
+    from tranibor_orchestrator.activities.tracker import create_human_request
 
     await create_human_request(
         {

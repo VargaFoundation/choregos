@@ -43,13 +43,13 @@ def _at(seconds: float) -> datetime:
 
 
 def _quota(**per_minute: int) -> Any:
-    from choregos_api.outposts import rendezvous
+    from tranibor_api.outposts import rendezvous
 
     return rendezvous.Quota(per_outpost=100, per_organisation=100, **per_minute)
 
 
 async def _calls(slug: str = SLUG) -> list[Any]:
-    from choregos_api.db.models import OutpostCall
+    from tranibor_api.db.models import OutpostCall
 
     return list(await kit.rows_of(slug, OutpostCall))
 
@@ -57,8 +57,8 @@ async def _calls(slug: str = SLUG) -> list[Any]:
 async def test_an_outpost_is_handed_no_more_calls_in_a_minute_than_its_cap(
     client: AsyncClient, daemon: Daemon
 ) -> None:
-    from choregos_api.db.models import OutpostCall
-    from choregos_api.outposts import rendezvous
+    from tranibor_api.db.models import OutpostCall
+    from tranibor_api.outposts import rendezvous
 
     two = _quota(per_minute_per_outpost=2)
     first = await daemon_kit.place(quota=two, now=_at(0))
@@ -85,9 +85,9 @@ async def test_an_outpost_is_handed_no_more_calls_in_a_minute_than_its_cap(
 async def test_the_organisations_cap_counts_all_its_outposts_and_no_other_organisations(
     client: AsyncClient, daemon: Daemon
 ) -> None:
-    from choregos_api.db.models import Organization, Outpost
-    from choregos_api.db.session import session_scope
-    from choregos_api.outposts import rendezvous
+    from tranibor_api.db.models import Organization, Outpost
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.outposts import rendezvous
 
     await daemon_kit.approved(client, "cold-store")
     three = _quota(per_minute_per_outpost=2, per_minute_per_organisation=3)
@@ -128,8 +128,8 @@ async def test_a_call_placed_again_under_its_id_counts_in_the_minute_it_is_place
 ) -> None:
     """Only a call no instance ever claimed is placed again under its id (ADR 0149 §5). It is handed
     to the outpost a second time, so it counts a second time, in its new minute."""
-    from choregos_api.db.models import OutpostCall
-    from choregos_api.outposts import rendezvous
+    from tranibor_api.db.models import OutpostCall
+    from tranibor_api.outposts import rendezvous
 
     one = _quota(per_minute_per_outpost=1)
     first = await daemon_kit.place(call_id="a-write-nobody-claimed", quota=one, now=_at(0), write=True)
@@ -147,7 +147,7 @@ async def test_a_call_placed_again_under_its_id_counts_in_the_minute_it_is_place
 async def test_calls_in_flight_are_said_before_calls_per_minute_and_a_cap_may_be_lifted(
     client: AsyncClient, daemon: Daemon
 ) -> None:
-    from choregos_api.outposts import rendezvous
+    from tranibor_api.outposts import rendezvous
 
     both = rendezvous.Quota(per_outpost=1, per_organisation=9, per_minute_per_outpost=1)
     await daemon_kit.place(quota=both, now=_at(0))
@@ -164,8 +164,8 @@ async def test_calls_in_flight_are_said_before_calls_per_minute_and_a_cap_may_be
 async def test_a_placement_without_a_quota_of_its_own_is_under_the_deployments(
     client: AsyncClient, daemon: Daemon, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.config import get_settings
-    from choregos_api.outposts import rendezvous
+    from tranibor_api.config import get_settings
+    from tranibor_api.outposts import rendezvous
 
     settings = get_settings()
     assert (
@@ -199,8 +199,8 @@ async def test_a_placement_without_a_quota_of_its_own_is_under_the_deployments(
     "name", ["outposts_calls_per_minute_per_outpost", "outposts_calls_per_minute_per_organisation"]
 )
 def test_a_cap_per_minute_is_at_least_one(monkeypatch: pytest.MonkeyPatch, name: str) -> None:
-    from choregos_api.config import Settings
     from pydantic import ValidationError
+    from tranibor_api.config import Settings
 
     monkeypatch.setenv(f"CHOREGOS_{name.upper()}", "0")
     with pytest.raises(ValidationError):
@@ -210,7 +210,7 @@ def test_a_cap_per_minute_is_at_least_one(monkeypatch: pytest.MonkeyPatch, name:
 def test_the_calls_of_the_last_minute_are_read_through_an_index() -> None:
     """`outpost_calls` keeps a row per call for good: without an index that leads with the outpost and
     the moment a call was placed, every placement would walk all the calls the outpost ever took."""
-    from choregos_api.db.models import OutpostCall
+    from tranibor_api.db.models import OutpostCall
 
     indexed = {
         index.name: [column.name for column in index.columns] for index in OutpostCall.__table__.indexes

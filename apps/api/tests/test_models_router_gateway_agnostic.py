@@ -7,15 +7,15 @@ from typing import Any
 import httpx
 import pytest
 import respx
-from choregos_core.domain import GatewayModel
 from httpx import AsyncClient
+from tranibor_core.domain import GatewayModel
 
 
 async def test_the_catalogue_comes_from_the_configured_gateway_type(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Red when the router builds `litellm`: the models listed are the other gateway's."""
-    from choregos_adapters import register, registry
+    from tranibor_adapters import register, registry
 
     asked: list[str] = []
 

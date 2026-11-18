@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from choregos_core.outline import find, outline, render
+from tranibor_core.outline import find, outline, render
 
 DOCUMENT = """# Security policy
 

@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from choregos_core.pseudonymise import Pseudonymiser
+from tranibor_core.pseudonymise import Pseudonymiser
 
 
 def test_emails_and_upns_become_stable_placeholders() -> None:

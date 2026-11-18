@@ -9,7 +9,7 @@ string literals are read too (the same words, whole, plural allowed; `market dat
 or an underscore): the core's messages and prompts must not name the business either.
 
 To see it fail, add a business word to any identifier of the core, for instance `def isin_of(...)` in
-`apps/api/src/choregos_api/services/assistants.py`: the test names the file, the line and the word. To
+`apps/api/src/tranibor_api/services/assistants.py`: the test names the file, the line and the word. To
 allow a word that is legitimately there (a connector of S38, say), add the file to `ALLOWED` with the reason:
 the allowlist is checked both ways, so an entry that no longer matches anything fails too.
 """
@@ -36,19 +36,19 @@ VOCABULARY = {
 }
 #: file -> reason. Each entry names a word the file legitimately carries.
 ALLOWED: dict[str, str] = {
-    "packages/adapters/src/choregos_adapters/marketdata": (
+    "packages/adapters/src/tranibor_adapters/marketdata": (
         "S38's market-data connectors (Tiingo, composite) are a product feature, not of assistants"
     ),
-    "packages/adapters/src/choregos_adapters/fakes/marketdata.py": "the fake of the S38 market-data provider",
-    "packages/adapters/src/choregos_adapters/fakes/scenes.py": "the S38 scene that builds the fake provider",
-    "packages/adapters/src/choregos_adapters/families.py": "the operations of the S38 `marketdata` family",
-    "packages/adapters/src/choregos_adapters/__init__.py": "exports the S38 fake `FAKE_MARKETDATA`",
-    "packages/adapters/src/choregos_adapters/specs.py": "registers the S38 `marketdata` connector type",
-    "packages/adapters/src/choregos_adapters/builtins.py": "registers the S38 `marketdata` connector type",
-    "packages/contracts/src/choregos_contracts/workflow.py": (
+    "packages/adapters/src/tranibor_adapters/fakes/marketdata.py": "the fake of the S38 market-data provider",
+    "packages/adapters/src/tranibor_adapters/fakes/scenes.py": "the S38 scene that builds the fake provider",
+    "packages/adapters/src/tranibor_adapters/families.py": "the operations of the S38 `marketdata` family",
+    "packages/adapters/src/tranibor_adapters/__init__.py": "exports the S38 fake `FAKE_MARKETDATA`",
+    "packages/adapters/src/tranibor_adapters/specs.py": "registers the S38 `marketdata` connector type",
+    "packages/adapters/src/tranibor_adapters/builtins.py": "registers the S38 `marketdata` connector type",
+    "packages/contracts/src/tranibor_contracts/workflow.py": (
         "a comment names the S38 `marketdata` connector family a command may call"
     ),
-    "packages/quant/src/choregos_quant": "S38's research tooling reads market data through the S38 connector",
+    "packages/quant/src/tranibor_quant": "S38's research tooling reads market data through the S38 connector",
 }
 
 

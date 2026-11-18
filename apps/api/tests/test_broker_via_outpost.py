@@ -24,12 +24,12 @@ import time
 from datetime import UTC, datetime
 from typing import Any
 
-import choregos_adapters
 import pytest
-from choregos_adapters.fakes.mcp import FakeMcpServer
-from choregos_adapters.fakes.outpost import FakeOutpost
-from choregos_contracts import arguments_sha256, load_openapi
+import tranibor_adapters
 from httpx import AsyncClient
+from tranibor_adapters.fakes.mcp import FakeMcpServer
+from tranibor_adapters.fakes.outpost import FakeOutpost
+from tranibor_contracts import arguments_sha256, load_openapi
 
 from .kits import outpost_daemon as daemon_kit
 from .kits import outpost_route as route
@@ -89,7 +89,7 @@ async def _both_connectors(
 ) -> tuple[Daemon, FakeOutpost, dict[str, str]]:
     """One server, reached twice: by a direct `mcp` connector (`direct`) and at an outpost
     (`tracker`); the same two reads opened on each, and a run of an agent that names both."""
-    monkeypatch.setattr(choregos_adapters, "FAKE_MCP", served)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_MCP", served)
     monkeypatch.setenv("CONNECTOR_TEST_DIRECT_KEY", served.token)
     declared = await client.post(
         f"{ORG}/connectors",
@@ -262,7 +262,7 @@ async def test_the_calls_record_holds_digests_written_when_the_answer_is_opened(
 async def test_an_outpost_nobody_polls_is_a_refusal_at_once_that_writes_and_books_nothing(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.db.models import OutpostInstance
+    from tranibor_api.db.models import OutpostInstance
 
     fake = route.outpost()
     daemon, headers = await route.prepared(client, project, fake)
@@ -360,7 +360,7 @@ async def test_a_call_the_door_cannot_carry_is_refused_with_the_doors_own_code(
 ) -> None:
     """A call that passed admission and weighs too much once sealed for its claimer is not handed
     over: the door refuses it with the code an outpost gives a payload above its ceiling."""
-    from choregos_api.outposts import rendezvous
+    from tranibor_api.outposts import rendezvous
 
     served = route.server()
     fake = route.outpost(served)
@@ -377,7 +377,7 @@ async def test_a_call_too_large_to_cross_the_door_is_refused_where_it_is_admitte
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
     """The contract's bound (`max_sealed_call_bytes`, 2 MiB): refused before anything is written."""
-    from choregos_contracts.outpost import MAX_SEALED_CALL_BYTES
+    from tranibor_contracts.outpost import MAX_SEALED_CALL_BYTES
 
     fake = route.outpost()
     daemon, headers = await route.prepared(client, project, fake)
@@ -458,7 +458,7 @@ async def test_a_deployment_without_a_secrets_key_hands_nothing_to_an_outpost(
 ) -> None:
     """Outposts on, fakes off, and no key to seal a call's arguments under while they wait: a typed
     refusal that says so, not the store's exception."""
-    from choregos_api.secret_store import ENV_KEKS
+    from tranibor_api.secret_store import ENV_KEKS
 
     fake = route.outpost()
     daemon, headers = await route.prepared(client, project, fake)
@@ -503,9 +503,9 @@ async def test_a_call_the_door_does_not_carry_is_a_refusal_not_a_crash(
 ) -> None:
     """A row edited behind the API (a timeout beyond the longest lease): the rendezvous says the
     call is not one it takes, and the caller reads a refusal, never a 500."""
-    from choregos_api.db.models import OrgConnector
-    from choregos_api.db.session import session_scope
     from sqlalchemy import update
+    from tranibor_api.db.models import OrgConnector
+    from tranibor_api.db.session import session_scope
 
     fake = route.outpost()
     daemon, headers = await route.prepared(client, project, fake)
@@ -528,9 +528,9 @@ async def test_a_connector_that_references_no_outpost_of_its_organisation_is_han
 ) -> None:
     """A row written behind the API, without the reference a declaration writes, or with one to an
     outpost that is not its organisation's: fail closed, under whatever scope the caller has."""
-    from choregos_api.db.models import Organization, OrgConnector, Outpost
-    from choregos_api.db.session import session_scope
     from sqlalchemy import update
+    from tranibor_api.db.models import Organization, OrgConnector, Outpost
+    from tranibor_api.db.session import session_scope
 
     fake = route.outpost()
     daemon, headers = await route.prepared(client, project, fake)
@@ -558,7 +558,7 @@ def test_a_refusal_that_reached_no_server_carries_a_type_no_booking_counts() -> 
     """What decides that a call is booked is its `type`: every booking of a tool call (a run's, a
     session's, a conversation's) skips `network_policy` and `rate_limited`. A refusal says whether
     the outpost's server may have received the call, and its tool error follows."""
-    from choregos_adapters.outpost import (
+    from tranibor_adapters.outpost import (
         OutpostInDoubt,
         OutpostNotAdmitted,
         OutpostOffline,
@@ -566,9 +566,9 @@ def test_a_refusal_that_reached_no_server_carries_a_type_no_booking_counts() -> 
         OutpostRefused,
         OutpostTimeout,
     )
-    from choregos_api.services.mcp_gateway import tool_error
-    from choregos_api.services.outpost_route import NEVER_LEFT
-    from choregos_contracts import OutpostRefusalCode
+    from tranibor_api.services.mcp_gateway import tool_error
+    from tranibor_api.services.outpost_route import NEVER_LEFT
+    from tranibor_contracts import OutpostRefusalCode
 
     where = {"outpost": SLUG, "endpoint": ALIAS}
     refusals = [
@@ -594,9 +594,9 @@ def test_a_refusal_that_reached_no_server_carries_a_type_no_booking_counts() -> 
 def test_the_asserted_names_are_cut_to_what_the_door_carries() -> None:
     """A name is what an outpost logs. One too long to log, or a seventeenth approver, is no reason
     to refuse the call: the contract's bounds are applied before the call is placed."""
-    from choregos_api.services.mcp_gateway_identity import CallIdentity
-    from choregos_api.services.outpost_route import asserted_names
-    from choregos_contracts.outpost import OutpostAssertedNames
+    from tranibor_api.services.mcp_gateway_identity import CallIdentity
+    from tranibor_api.services.outpost_route import asserted_names
+    from tranibor_contracts.outpost import OutpostAssertedNames
 
     identity = CallIdentity(
         org="northwind",
@@ -732,9 +732,9 @@ async def test_the_gateways_mode_required_does_not_refuse_a_connector_at_an_outp
 
 
 async def _effect(project_id: str, operation: str, arguments: dict[str, Any], **action: Any) -> Any:
-    from choregos_api.db.models import Action, Project, Run
-    from choregos_api.db.session import session_scope
-    from choregos_api.effects import EffectContext, effect
+    from tranibor_api.db.models import Action, Project, Run
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.effects import EffectContext, effect
 
     async with session_scope() as session:
         project = await session.get(Project, project_id)
@@ -785,7 +785,7 @@ async def test_a_refusal_of_the_route_is_final_for_an_effect(
 ) -> None:
     """In the workers a refusal is an `EffectRefused`: the action fails and compensates, and Temporal
     does not retry it (ADR 0149 §7)."""
-    from choregos_api.effects import EffectRefused
+    from tranibor_api.effects import EffectRefused
 
     fake = route.outpost()
     daemon, _headers = await route.prepared(client, project, fake)
@@ -807,7 +807,7 @@ async def test_a_refusal_of_the_route_is_final_for_an_effect(
 async def test_a_direct_connectors_write_is_opened_as_before(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(choregos_adapters, "FAKE_MCP", route.server())
+    monkeypatch.setattr(tranibor_adapters, "FAKE_MCP", route.server())
     declared = await client.post(
         f"{ORG}/connectors",
         json={"name": "direct", "type": "mcp", "config": {"url": "https://direct.test/mcp"}},
@@ -823,9 +823,9 @@ async def _open_behind_the_api(operation: str) -> None:
     """A row edited behind the API: what the route must not trust. It states that an in-doubt
     outcome is accepted, as the API asks of whoever opens a write (S65-14): what is left to refuse
     it is the route alone."""
-    from choregos_api.db.models import ConnectorOperation
-    from choregos_api.db.session import session_scope
     from sqlalchemy import update
+    from tranibor_api.db.models import ConnectorOperation
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         await session.execute(
@@ -840,13 +840,13 @@ async def test_a_write_that_carries_no_key_is_not_placed(
 ) -> None:
     """The lock of the route: a write reaches it without the key of a governed effect (an effect
     played by nothing that journals it, a client built by hand), and it places none."""
-    from choregos_api.effects import EffectRefused
+    from tranibor_api.effects import EffectRefused
 
     served = route.server()
     fake = route.outpost(served)
     fake.writes_allowed.add(ALIAS)
     daemon, _headers = await route.prepared(client, project, fake)
-    from choregos_adapters.outpost import OutpostNotAdmitted
+    from tranibor_adapters.outpost import OutpostNotAdmitted
 
     await _open_behind_the_api("create_issue")
     async with route.serving(client, daemon, fake):
@@ -868,10 +868,10 @@ async def test_a_write_that_carries_no_key_is_not_placed(
 
 async def _write_client(project_id: str, effect_key: str | None) -> Any:
     """The client of the seam, as a governed effect will build it for a write: with its key."""
-    from choregos_api.db.models import Project
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.mcp_gateway import connector_client
-    from choregos_api.services.mcp_gateway_identity import CallIdentity
+    from tranibor_api.db.models import Project
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.mcp_gateway import connector_client
+    from tranibor_api.services.mcp_gateway_identity import CallIdentity
 
     session = session_scope(orgs="*")
     opened = await session.__aenter__()
@@ -899,7 +899,7 @@ async def test_a_claimed_write_that_gets_no_answer_is_in_doubt_and_is_never_plac
 ) -> None:
     """Delivery at most once (ADR 0149 §5): the write's id comes from its effect's key, so a retry
     meets the first row, in doubt, and nothing is delivered a second time."""
-    from choregos_adapters.outpost import OutpostInDoubt
+    from tranibor_adapters.outpost import OutpostInDoubt
 
     served = route.server()
     fake = route.outpost(served)
@@ -926,7 +926,7 @@ async def test_a_claimed_write_that_gets_no_answer_is_in_doubt_and_is_never_plac
 async def test_a_retried_write_reads_what_the_first_delivery_answered(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.db.models import OutpostInstance
+    from tranibor_api.db.models import OutpostInstance
 
     served = route.server(structured={"create_issue": {"key": "OPS-7"}})
     fake = route.outpost(served)
@@ -965,8 +965,8 @@ async def test_a_write_nobody_claimed_reached_no_server_and_may_be_placed_again(
     """Only a call no instance ever claimed is placed again under its id (ADR 0149 §5): it reached
     no server, so a retry delivers it for the first time. While nobody is there, it is not even
     written again."""
-    from choregos_adapters.outpost import OutpostOffline
-    from choregos_api.db.models import OutpostInstance
+    from tranibor_adapters.outpost import OutpostOffline
+    from tranibor_api.db.models import OutpostInstance
 
     served = route.server(structured={"create_issue": {"key": "OPS-7"}})
     fake = route.outpost(served)
@@ -1027,8 +1027,8 @@ async def test_a_conversation_does_not_propose_an_action_at_an_outpost_that_is_h
     route is judged first there too, and a refusal is said, not raised."""
     from types import SimpleNamespace
 
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.conversation_actions import _propose_governed
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.conversation_actions import _propose_governed
 
     fake = route.outpost()
     await route.prepared(client, project, fake)
@@ -1047,7 +1047,7 @@ async def test_a_refusal_at_admission_does_not_keep_the_organisations_placements
     """An admission is judged under a lock that serialises the organisation's placements, until the
     transaction that took it ends. A call that is refused ends it there, not when its caller's
     request does: the caller may go on for as long as it likes, and nobody waits behind it."""
-    from choregos_adapters.outpost import OutpostNotAdmitted
+    from tranibor_adapters.outpost import OutpostNotAdmitted
 
     fake = route.outpost()
     daemon, _headers = await route.prepared(client, project, fake)
@@ -1070,9 +1070,9 @@ async def test_the_route_reads_the_outposts_state_again_at_every_call(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
     """A pause is a commit away: a session that already read the outpost does not keep what it read."""
-    from choregos_adapters.outpost import OutpostPaused
-    from choregos_api.db.session import session_scope
-    from choregos_api.services import outpost_route
+    from tranibor_adapters.outpost import OutpostPaused
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services import outpost_route
 
     fake = route.outpost()
     await route.prepared(client, project, fake)

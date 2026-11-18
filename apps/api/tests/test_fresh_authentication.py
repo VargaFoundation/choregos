@@ -37,8 +37,8 @@ def _id_token(**claims: Any) -> str:
 
 @pytest.fixture
 def idp(org: str, monkeypatch: pytest.MonkeyPatch) -> Any:
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.routers.auth import forget_discovery
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.routers.auth import forget_discovery
 
     monkeypatch.setenv("CHOREGOS_DEV_LOGIN_ENABLED", "false")
     monkeypatch.setenv("CHOREGOS_OIDC_ISSUER", ISSUER)
@@ -74,7 +74,7 @@ async def _sign_in(client: AsyncClient, *, reauth: bool) -> Response:
 
 
 def _session(client: AsyncClient) -> dict[str, Any]:
-    from choregos_api.security import read_session
+    from tranibor_api.security import read_session
 
     payload = read_session(client.cookies.get("choregos_session", ""))
     assert payload is not None, "no session opened"
@@ -83,10 +83,10 @@ def _session(client: AsyncClient) -> dict[str, Any]:
 
 async def _authenticated_at(client: AsyncClient) -> int | None:
     """What a door sees: `Principal.authenticated_at`, resolved by the real dependency."""
-    from choregos_api.config import get_settings
-    from choregos_api.db.session import session_scope
-    from choregos_api.deps import current_principal
     from starlette.requests import Request
+    from tranibor_api.config import get_settings
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.deps import current_principal
 
     cookie = f"choregos_session={client.cookies.get('choregos_session')}"
     request = Request({"type": "http", "headers": [(b"cookie", cookie.encode())], "query_string": b""})

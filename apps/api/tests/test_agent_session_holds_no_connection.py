@@ -58,14 +58,14 @@ GRANT = [{"connector": "fournisseur", "tools": ["suivi_*"]}]
 
 def checked_out() -> int:
     """The connections the API's engine has lent out right now."""
-    from choregos_api.db.session import get_engine
+    from tranibor_api.db.session import get_engine
 
     return int(get_engine().pool.checkedout())
 
 
 def _watch_the_model(behind: Upstream, seen: list[int]) -> None:
     """The model behind the gateway, which notes the connections lent out each time it is asked."""
-    from choregos_api.services.agent_sessions import set_model_transport
+    from tranibor_api.services.agent_sessions import set_model_transport
 
     def answer(request: httpx.Request) -> httpx.Response:
         seen.append(checked_out())
@@ -105,10 +105,10 @@ def _a_commit_refused_once() -> Iterator[Callable[[], None]]:
 
 
 async def _tool_events(session_id: str) -> list[Any]:
-    from choregos_api.db.models import Event
-    from choregos_api.db.session import session_scope
-    from choregos_contracts.enums import EventType
     from sqlalchemy import select
+    from tranibor_api.db.models import Event
+    from tranibor_api.db.session import session_scope
+    from tranibor_contracts.enums import EventType
 
     async with session_scope() as db:
         query = select(Event).where(Event.type == EventType.TOOL_CALLED.value, Event.subject == session_id)
@@ -174,11 +174,11 @@ async def test_a_response_that_cannot_be_booked_is_said_and_keeps_what_its_calls
     commit together at the end. When that last transaction fails — a statement of it, or its commit —,
     the caller gets a 500, the log says what the response had asked for, and the history the next
     response sends the model is unchanged."""
-    from choregos_api.db.models import AgentSessionRecord
-    from choregos_api.db.session import session_scope
-    from choregos_api.services import agent_sessions
-    from choregos_api.services.agent_sessions import set_model_transport
     from sqlalchemy import select
+    from tranibor_api.db.models import AgentSessionRecord
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services import agent_sessions
+    from tranibor_api.services.agent_sessions import set_model_transport
 
     await _supplier(client)
     await _agent(client, mcp_servers=GRANT)
@@ -275,7 +275,7 @@ async def test_a_pods_tool_call_that_cannot_be_booked_is_said(
     """The connector answered; its count, its line and its event are one transaction after it. When that
     fails — a statement of it, or its commit —, the pod gets a 500 and the log names what the line
     would have held."""
-    from choregos_api.services import agent_sessions
+    from tranibor_api.services import agent_sessions
 
     await _supplier(client)
     await _hosted(client, mcp_servers=GRANT)

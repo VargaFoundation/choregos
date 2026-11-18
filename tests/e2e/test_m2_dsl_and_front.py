@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 
 import pytest
-from choregos_core.dsl import TEMPLATE_NAMES, template_yaml
+from tranibor_core.dsl import TEMPLATE_NAMES, template_yaml
 
 from .conftest import Platform, login
 
@@ -68,8 +68,8 @@ async def test_a_card_moved_on_the_board_does_not_move_the_work_item(platform: P
         },
         "sender": {"login": "augustin"},
     }
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         session.add(
@@ -91,7 +91,7 @@ async def test_a_card_moved_on_the_board_does_not_move_the_work_item(platform: P
         },
     )
     assert response.status_code == 202
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.temporal import get_temporal
 
     # A signal to the ticket's interpreter would be recorded here, even without a running workflow.
     attempts = get_temporal().missing  # type: ignore[attr-defined]
@@ -121,7 +121,7 @@ async def test_the_wizard_creates_a_project_and_starts_provisioning(platform: Pl
     assert provision.status_code == 202
     assert provision.json()["status"] == "running"
 
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.temporal import get_temporal
 
     attempts = get_temporal().missing  # type: ignore[attr-defined]
     assert any(workflow_id.startswith("prov-") for _, workflow_id in attempts), attempts
@@ -130,9 +130,9 @@ async def test_the_wizard_creates_a_project_and_starts_provisioning(platform: Pl
 async def test_cost_estimate_shown_on_a_ticket(platform: Platform) -> None:
     """The estimate comes from comparable tickets already finished, not from a formula."""
     await login(platform.client)
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
 
     async with session_scope() as session:
         for index in range(5):

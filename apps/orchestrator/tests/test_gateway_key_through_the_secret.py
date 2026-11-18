@@ -39,7 +39,7 @@ def _plan(setup: Fixture, attempt: int = 1) -> dict[str, Any]:
 
 
 async def _prepare_and_start(setup: Fixture, attempt: int = 1) -> str:
-    from choregos_orchestrator.activities import stage as activities
+    from tranibor_orchestrator.activities import stage as activities
 
     prepared = await activities.prepare_stage(_plan(setup, attempt))
     await activities.start_run(
@@ -53,8 +53,8 @@ async def _prepare_and_start(setup: Fixture, attempt: int = 1) -> str:
 
 
 async def _run(run_id: str) -> Any:
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         run = await session.get(Run, run_id)
@@ -64,9 +64,9 @@ async def _run(run_id: str) -> Any:
 
 
 async def _key_rows(setup: Fixture) -> dict[str, Any]:
-    from choregos_api.db.models import GatewayKeyRow
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import GatewayKeyRow
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = (
@@ -78,8 +78,8 @@ async def _key_rows(setup: Fixture) -> dict[str, Any]:
 
 
 async def _open_reservations(setup: Fixture) -> float:
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.budgets import open_reservations
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.budgets import open_reservations
 
     async with session_scope() as session:
         return await open_reservations(session, work_item_id=setup.work_item_id)
@@ -90,7 +90,7 @@ async def _open_reservations(setup: Fixture) -> float:
 
 async def test_a_prepared_run_reserves_its_cap_before_its_key_exists(setup: Fixture) -> None:
     """No key yet, but the money is held: another run cannot take it in between."""
-    from choregos_orchestrator.activities import stage as activities
+    from tranibor_orchestrator.activities import stage as activities
 
     prepared = await activities.prepare_stage(_plan(setup))
     assert not setup.adapters.gateway.keys
@@ -113,9 +113,9 @@ async def test_a_prepared_run_reserves_its_cap_before_its_key_exists(setup: Fixt
 
 async def test_a_run_prepared_before_523_hands_its_row_key_to_the_secret(setup: Fixture) -> None:
     """A run prepared by an older orchestrator has its key on the row: it is used, and leaves it."""
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities import stage as activities
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities import stage as activities
 
     prepared = await activities.prepare_stage(_plan(setup))
     async with session_scope() as session:
@@ -138,7 +138,7 @@ async def test_a_run_prepared_before_523_hands_its_row_key_to_the_secret(setup: 
 
 
 async def test_cancel_run_books_the_spend_and_revokes_the_key(setup: Fixture) -> None:
-    from choregos_orchestrator.activities import stage as activities
+    from tranibor_orchestrator.activities import stage as activities
 
     run_id = await _prepare_and_start(setup)
     [key_id] = setup.adapters.gateway.keys
@@ -156,7 +156,7 @@ async def test_cancel_run_books_the_spend_and_revokes_the_key(setup: Fixture) ->
 
 
 async def test_a_run_cancelled_before_it_started_frees_its_reservation(setup: Fixture) -> None:
-    from choregos_orchestrator.activities import stage as activities
+    from tranibor_orchestrator.activities import stage as activities
 
     prepared = await activities.prepare_stage(_plan(setup))
     assert await _open_reservations(setup) > 0
@@ -167,7 +167,7 @@ async def test_a_run_cancelled_before_it_started_frees_its_reservation(setup: Fi
 
 async def test_a_dying_interpreter_revokes_the_key_of_its_run(setup: Fixture) -> None:
     """`await_run` gave up: the interpreter records its death, and its run's key dies with it."""
-    from choregos_orchestrator.activities.interpretation import record_workflow_failure
+    from tranibor_orchestrator.activities.interpretation import record_workflow_failure
 
     run_id = await _prepare_and_start(setup)
     [key_id] = setup.adapters.gateway.keys
@@ -188,7 +188,7 @@ async def test_a_gateway_that_cannot_answer_does_not_keep_the_key_alive_on_cance
     setup: Fixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The spend cannot be read: the key is still revoked, the run still cancelled."""
-    from choregos_orchestrator.activities import stage as activities
+    from tranibor_orchestrator.activities import stage as activities
 
     async def unreachable(key_id: str) -> Any:
         raise ConnectionError("gateway unreachable")
@@ -269,7 +269,7 @@ async def test_a_resumed_run_key_joins_the_project_day_team(
 ) -> None:
     """The continuation's key is minted like any run key (S27-10): it joins the project's day team,
     so what the resumed run spends counts against the project's daily cap."""
-    from choregos_orchestrator.activities.provisioning import project_team_id
+    from tranibor_orchestrator.activities.provisioning import project_team_id
 
     from .test_project_day_team import _daily
     from .test_suspend_around_human import QUESTION, _answer, _can_suspend

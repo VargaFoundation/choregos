@@ -39,7 +39,7 @@ def _bodies() -> list[dict[str, Any]]:
 async def _publish(
     client: AsyncClient, project: dict[str, Any], *, input_modes: list[str] | None = None
 ) -> None:
-    from choregos_core.dsl import template_yaml
+    from tranibor_core.dsl import template_yaml
 
     tracker = await client.put(
         f"/api/v1/projects/{project['id']}/connectors/tracker", json={"type": "internal", "config": {}}
@@ -87,9 +87,9 @@ def _same_shape(sample: Any, real: Any, path: str = "result") -> None:
 
 
 async def test_the_guide_s_requests_work_in_its_order(client: AsyncClient, project: dict[str, Any]) -> None:
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.temporal import get_temporal
 
     await _publish(client, project)
     token = await _token(client)
@@ -155,8 +155,8 @@ async def test_the_fields_the_guide_declares_are_enforced(
 
 async def test_the_card_says_which_fields_a_skill_takes(client: AsyncClient, project: dict[str, Any]) -> None:
     """A2A's skill has no input schema: the guide points at the card's extension, which carries it."""
-    from choregos_adapters.a2a import parse_card
-    from choregos_api.a2a.door import SKILL_FIELDS_EXTENSION
+    from tranibor_adapters.a2a import parse_card
+    from tranibor_api.a2a.door import SKILL_FIELDS_EXTENSION
 
     assert SKILL_FIELDS_EXTENSION in _page()
     await _publish(client, project)
@@ -199,7 +199,7 @@ async def test_the_guide_s_first_request_in_a2a_1_0_opens_a_task(
 
 
 def test_the_1_0_names_the_guide_lists_are_the_door_s() -> None:
-    from choregos_api.a2a import v1
+    from tranibor_api.a2a import v1
 
     section = _page().split("### In A2A 1.0", 1)[1].split("\n## ", 1)[0]
     names = set(re.findall(r"`([A-Z][A-Za-z]+)`", section))

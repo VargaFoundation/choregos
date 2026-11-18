@@ -5,10 +5,10 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 import pytest
-from choregos_contracts import StageInput, StageResult, StageStatus
-from choregos_core import telemetry
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from opentelemetry.trace import StatusCode
+from tranibor_contracts import StageInput, StageResult, StageStatus
+from tranibor_core import telemetry
 
 from .conftest import Fixture
 from .test_lost_run import _await, _ScriptedExecutor
@@ -26,7 +26,7 @@ def spans() -> Iterator[InMemorySpanExporter]:
 
 
 async def _prepared_and_started(setup: Fixture) -> tuple[str, StageInput]:
-    from choregos_orchestrator.activities import stage as activities
+    from tranibor_orchestrator.activities import stage as activities
 
     plan = await activities.prepare_stage(
         {

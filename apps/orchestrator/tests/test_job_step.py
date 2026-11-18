@@ -6,9 +6,9 @@ import json
 from typing import Any
 
 import pytest
-from choregos_core.redaction import REDACTED
-from choregos_orchestrator.activities import stage as stage_activities
 from temporalio.exceptions import ApplicationError
+from tranibor_core.redaction import REDACTED
+from tranibor_orchestrator.activities import stage as stage_activities
 
 from .conftest import Fixture
 
@@ -36,15 +36,15 @@ def _plan(setup: Fixture, image: str | None = None) -> dict[str, Any]:
 
 @pytest.fixture
 def images(monkeypatch: pytest.MonkeyPatch) -> None:
-    from choregos_orchestrator.config import reset_settings_cache
+    from tranibor_orchestrator.config import reset_settings_cache
 
     monkeypatch.setenv("CHOREGOS_JOB_IMAGES", json.dumps({"quant": QUANT}))
     reset_settings_cache()
 
 
 async def test_a_job_is_prepared_without_a_model_or_a_key(setup: Fixture, images: None) -> None:
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
 
     prepared = await stage_activities.prepare_stage(_plan(setup, image="quant"))
 
@@ -80,7 +80,7 @@ async def test_an_image_the_platform_does_not_know_stops_the_step(setup: Fixture
 async def test_a_job_starts_in_its_image_and_a_plain_job_in_the_runner_image(
     setup: Fixture, images: None
 ) -> None:
-    from choregos_orchestrator.config import get_settings
+    from tranibor_orchestrator.config import get_settings
 
     for image, expected in (("quant", QUANT), (None, get_settings().runner_image)):
         plan = _plan(setup, image=image)

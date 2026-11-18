@@ -223,7 +223,7 @@ async def test_dev_complex_without_documentation_waits_for_a_person(
 async def test_study_merges_an_approved_madr_adr_and_goes_nowhere(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
-    from choregos_orchestrator.train_client import fake_signals
+    from tranibor_orchestrator.train_client import fake_signals
 
     project_id = await create_dev_project(setup)
     item_id, tracker_key = await create_ticket(setup, project_id, 11, "study")

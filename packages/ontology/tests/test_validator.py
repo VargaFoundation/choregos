@@ -6,11 +6,11 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from choregos_ontology import compile_directory
-from choregos_ontology.compiler import compile_package
-from choregos_ontology.errors import OntologyError
-from choregos_ontology.loader import load_package
-from choregos_ontology.validator import NOT_YET, Registry
+from tranibor_ontology import compile_directory
+from tranibor_ontology.compiler import compile_package
+from tranibor_ontology.errors import OntologyError
+from tranibor_ontology.loader import load_package
+from tranibor_ontology.validator import NOT_YET, Registry
 
 
 def _codes(root: Path, registry: Registry | None = None) -> dict[str, list[str]]:

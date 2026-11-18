@@ -43,9 +43,9 @@ def door(monkeypatch: pytest.MonkeyPatch) -> outposts_kit.Door:
 @pytest.fixture
 async def client(pg_app: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[AsyncClient]:
     """The application on the migrated schema, an organisation and its administrator signed in."""
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
 
     monkeypatch.setenv("CHOREGOS_OIDC_DEFAULT_ORG", outposts_kit.ORG)
     monkeypatch.setenv("CHOREGOS_DEV_ADMIN_EMAILS", "admin@northwind.dev")
@@ -95,9 +95,9 @@ async def test_two_retries_that_place_one_write_at_once_place_it_once(
     second arrives while the first has written its row and not committed: it waits, then meets that
     row and is told so. And without any lock the table holds an id once."""
     import asyncpg
-    from choregos_api.db.session import session_scope
-    from choregos_api.outposts import rendezvous
-    from choregos_api.services.outpost_route import write_call_id
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.outposts import rendezvous
+    from tranibor_api.services.outpost_route import write_call_id
 
     _served, fake = kit.outpost()
     await kit.prepared(client, project, fake, opened={"create_issue": ACCEPTED})
@@ -136,7 +136,7 @@ async def test_two_retries_that_place_one_write_at_once_place_it_once(
 async def test_the_migrated_schema_holds_the_two_statements_with_their_defaults(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         columns = {

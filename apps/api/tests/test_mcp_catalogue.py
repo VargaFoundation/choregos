@@ -13,8 +13,8 @@ from typing import Any
 
 import pytest
 import yaml
-from choregos_core import mcp_catalogue
 from httpx import AsyncClient
+from tranibor_core import mcp_catalogue
 
 from .conftest import login
 
@@ -36,11 +36,11 @@ def _fresh_catalogue_cache() -> Iterator[None]:
 @pytest.fixture
 def vendor(monkeypatch: pytest.MonkeyPatch) -> Any:
     """The server behind the catalogue's entries, faked: it demands the connector's key."""
-    import choregos_adapters
-    from choregos_adapters.fakes.mcp import FakeMcpServer
+    import tranibor_adapters
+    from tranibor_adapters.fakes.mcp import FakeMcpServer
 
     server = FakeMcpServer(tools=[dict(t) for t in TOOLS], token="vendor-key")
-    monkeypatch.setattr(choregos_adapters, "FAKE_MCP", server)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_MCP", server)
     monkeypatch.setenv("CONNECTOR_CATALOGUE_TEST", "vendor-key")
     return server
 
@@ -115,9 +115,9 @@ async def test_install_declares_a_closed_connector_with_a_reference(
 
 
 async def test_install_leaves_an_audit_row_naming_the_entry(client: AsyncClient, admin: str) -> None:
-    from choregos_api.db.models import AuditLog
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import AuditLog
+    from tranibor_api.db.session import session_scope
 
     await client.post(f"{BASE}/exa/install", json={"name": "web-search"})
     async with session_scope() as session:
@@ -204,7 +204,7 @@ async def test_a_credential_typed_at_install_is_sealed_and_never_returned(
     import base64
     import os
 
-    from choregos_core.redaction import forget_secrets
+    from tranibor_core.redaction import forget_secrets
 
     monkeypatch.setenv("CHOREGOS_SECRETS_KEKS", "k1:" + base64.b64encode(os.urandom(32)).decode())
     forget_secrets()
@@ -238,7 +238,7 @@ async def test_a_new_catalogue_version_shows_as_an_update(
 async def test_egress_is_declared_open_undeclared_or_unknown(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     unknown = _by_id((await client.get(BASE)).json())
     assert unknown["github"]["egress"] == "unknown", "the deployment declares nothing"
@@ -255,7 +255,7 @@ async def test_egress_is_declared_open_undeclared_or_unknown(
 async def test_a_site_catalogue_adds_entries_after_the_shipped_one(
     client: AsyncClient, admin: str, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     site = tmp_path / "site.yaml"
     site.write_text(
@@ -284,7 +284,7 @@ async def test_a_site_catalogue_adds_entries_after_the_shipped_one(
 async def test_a_site_entry_cannot_shadow_a_shipped_one_nor_be_malformed(
     client: AsyncClient, admin: str, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     entry = {
         "id": "github", "title": "Fake", "description": "x", "publisher": "x", "official": True,
@@ -311,9 +311,9 @@ async def test_a_site_entry_cannot_shadow_a_shipped_one_nor_be_malformed(
 async def test_a_header_entry_installs_with_its_header_and_the_key_travels_in_it(
     client: AsyncClient, admin: str, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import choregos_adapters
-    from choregos_adapters.fakes.mcp import FakeMcpServer
-    from choregos_api.config import reset_settings_cache
+    import tranibor_adapters
+    from tranibor_adapters.fakes.mcp import FakeMcpServer
+    from tranibor_api.config import reset_settings_cache
 
     entry = {
         "id": "keyed", "title": "Keyed", "description": "A server that wants X-API-Key.", "publisher": "x",
@@ -327,7 +327,7 @@ async def test_a_header_entry_installs_with_its_header_and_the_key_travels_in_it
     monkeypatch.setenv("CONNECTOR_CATALOGUE_KEYED", "the-raw-key")
     reset_settings_cache()
     server = FakeMcpServer(tools=[dict(t) for t in TOOLS])
-    monkeypatch.setattr(choregos_adapters, "FAKE_MCP", server)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_MCP", server)
 
     installed = await client.post(
         f"{BASE}/keyed/install", json={"secret_refs": {"token": "env:CONNECTOR_CATALOGUE_KEYED"}}

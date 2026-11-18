@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from choregos_core import load_preset
-from choregos_orchestrator.activities.stage import runtime_class
+from tranibor_core import load_preset
+from tranibor_orchestrator.activities.stage import runtime_class
 
 
 def test_the_runtimeclass_comes_from_the_policy_otherwise_from_the_deployment() -> None:

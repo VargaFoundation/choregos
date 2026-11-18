@@ -9,13 +9,13 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from choregos_api.approval_freshness import is_approval
-from choregos_api.db.models import AuditLog, Membership, User
-from choregos_api.db.session import session_scope
-from choregos_api.errors import ApiError
-from choregos_api.extensions import GestureRequest, check_gesture
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
+from tranibor_api.approval_freshness import is_approval
+from tranibor_api.db.models import AuditLog, Membership, User
+from tranibor_api.db.session import session_scope
+from tranibor_api.errors import ApiError
+from tranibor_api.extensions import GestureRequest, check_gesture
 
 ADMIN = "admin@northwind.dev"
 MEMBER = "member@northwind.dev"

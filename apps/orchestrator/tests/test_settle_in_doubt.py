@@ -24,8 +24,8 @@ from .conftest import Fixture
 @pytest.fixture
 def sent() -> Iterator[list[str]]:
     """Every delivery of the write, in order: a settlement must never add one."""
-    from choregos_api import effects
-    from choregos_api.effects import EffectInDoubt
+    from tranibor_api import effects
+    from tranibor_api.effects import EffectInDoubt
 
     deliveries: list[str] = []
 
@@ -40,10 +40,10 @@ def sent() -> Iterator[list[str]]:
 
 async def _settle(setup: Fixture, action_id: str, outcome: str) -> Any:
     """As a person does through `settleAction`: the API's service, in a committed session."""
-    from choregos_api.db.models import Organization, Project
-    from choregos_api.db.session import session_scope
-    from choregos_api.schemas.actions import ActionSettlementBody
-    from choregos_api.services.actions import settle
+    from tranibor_api.db.models import Organization, Project
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.schemas.actions import ActionSettlementBody
+    from tranibor_api.services.actions import settle
 
     async with session_scope() as session:
         project = await session.get(Project, setup.project_id)
@@ -68,7 +68,7 @@ async def _settle(setup: Fixture, action_id: str, outcome: str) -> Any:
 async def _waits_then_is_settled(
     setup: Fixture, temporal_env: Any, worker_factory: Any, outcome: str
 ) -> tuple[dict[str, Any], Any]:
-    from choregos_api.temporal import RealTemporal, get_temporal, set_temporal
+    from tranibor_api.temporal import RealTemporal, get_temporal, set_temporal
 
     from .test_dated_action import _actions, _arrival, _iso, _start, _wait_for, _work_item
 

@@ -16,8 +16,8 @@ async def _review(
     caught: bool,
 ) -> None:
     """A work item implemented by `implementer`, reviewed by `reviewer`, with or without a finding."""
-    from choregos_api.db.models import Finding, Run, WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Finding, Run, WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         item = WorkItem(
@@ -96,8 +96,8 @@ async def test_a_review_without_a_known_implementer_is_ignored(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
     """Without an implementation run there is nothing to compare with: it is not counted."""
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Run, WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         item = WorkItem(
@@ -127,8 +127,8 @@ async def test_a_review_without_a_known_implementer_is_ignored(
 async def test_the_report_says_whether_the_policy_demands_it(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.db.session import session_scope
-    from choregos_api.services import active_policy, policy_model
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services import active_policy, policy_model
 
     async with session_scope() as session:
         row = await active_policy(session, project["id"])

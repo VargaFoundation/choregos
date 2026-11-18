@@ -14,10 +14,11 @@ import asyncio
 from typing import Any
 
 import pytest
-from choregos_adapters.fakes.mcp import FakeMcpServer
-from choregos_adapters.fakes.outpost import FakeOutpost
-from choregos_adapters.mcp import McpClient, McpError, McpTool
-from choregos_adapters.outpost import (
+from jsonschema import Draft202012Validator
+from tranibor_adapters.fakes.mcp import FakeMcpServer
+from tranibor_adapters.fakes.outpost import FakeOutpost
+from tranibor_adapters.mcp import McpClient, McpError, McpTool
+from tranibor_adapters.outpost import (
     OutpostInDoubt,
     OutpostNotAdmitted,
     OutpostOffline,
@@ -28,8 +29,7 @@ from choregos_adapters.outpost import (
     OutpostToolClient,
     port,
 )
-from choregos_contracts import OutpostAnswer, OutpostCallState, OutpostRefusalCode, load_schema
-from jsonschema import Draft202012Validator
+from tranibor_contracts import OutpostAnswer, OutpostCallState, OutpostRefusalCode, load_schema
 
 TOOLS: list[dict[str, Any]] = [
     {

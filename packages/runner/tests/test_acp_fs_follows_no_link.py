@@ -12,8 +12,8 @@ import os
 from pathlib import Path
 
 import pytest
-from choregos_runner.acp.client import AcpClient
-from choregos_runner.acp.protocol import FS_READ_TEXT_FILE, FS_WRITE_TEXT_FILE, Request, Response
+from tranibor_runner.acp.client import AcpClient
+from tranibor_runner.acp.protocol import FS_READ_TEXT_FILE, FS_WRITE_TEXT_FILE, Request, Response
 
 SECRET = "SECRET-BEHIND-THE-LINK"
 

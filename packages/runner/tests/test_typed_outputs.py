@@ -11,9 +11,9 @@ import json
 from pathlib import Path
 from typing import Any
 
-from choregos_contracts import ArtifactDisplay, ArtifactLevel, StageInput
-from choregos_runner.result import load_result
-from choregos_runner.workspace import _task_markdown, inline_outputs
+from tranibor_contracts import ArtifactDisplay, ArtifactLevel, StageInput
+from tranibor_runner.result import load_result
+from tranibor_runner.workspace import _task_markdown, inline_outputs
 
 
 def _typed(stage_input: StageInput) -> StageInput:
@@ -88,7 +88,7 @@ def test_a_task_with_nothing_typed_says_nothing_of_it(stage_input: StageInput) -
 
 
 def test_an_agent_cannot_deliver_a_file_named_like_the_diff(stage_input: StageInput, tmp_path: Path) -> None:
-    from choregos_runner.outputs import OUTPUTS_DIR, collect
+    from tranibor_runner.outputs import OUTPUTS_DIR, collect
 
     folder = tmp_path / OUTPUTS_DIR
     folder.mkdir(parents=True)

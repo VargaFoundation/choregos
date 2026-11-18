@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import pytest
-from choregos_api.db.session import session_scope
-from choregos_api.errors import ApiError, not_found
-from choregos_api.services.organisations import organisation_by_slug
+from tranibor_api.db.session import session_scope
+from tranibor_api.errors import ApiError, not_found
+from tranibor_api.services.organisations import organisation_by_slug
 
 
 async def test_an_unknown_organisation_is_the_same_404(org: str) -> None:

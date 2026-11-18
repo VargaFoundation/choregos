@@ -30,7 +30,7 @@ def test_the_docs_stage_keeps_the_markdown_of_docs_site() -> None:
 
 
 def test_the_api_target_copies_it_where_the_setting_points() -> None:
-    from choregos_api.config import Settings
+    from tranibor_api.config import Settings
 
     stages = _stages(DOCKERFILE.read_text(encoding="utf-8"))
     copy = re.compile(r"^COPY\s+--from=docs\s+/out\s+(\S+)\s*$", re.M)

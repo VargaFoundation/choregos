@@ -3,7 +3,7 @@
 - **Status**: accepted, 2026-11-18 (decided by the product owner on 2026-11-18: the products no longer
   belong to or point at the Varga Foundation); S80-10 implements it
 - **Concerns**: `NOTICE`, `LICENSE`, `docs/TRADEMARK.md`, the console's attribution line, the
-  publishing identity (`packages/core/src/choregos_core/publishing.json`), the default plugin source,
+  publishing identity (`packages/core/src/tranibor_core/publishing.json`), the default plugin source,
   `tests/licences/test_no_varga.py`; amends [ADR 0024](0024-two-editions.md),
   [ADR 0048](0048-the-console-owns-its-primitives.md),
   [ADR 0064](0064-a-theme-is-data-the-console-applies.md),

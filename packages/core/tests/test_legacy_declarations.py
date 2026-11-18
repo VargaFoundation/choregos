@@ -8,10 +8,10 @@ upgraded to the fixed declarations, and a modified copy keeps those legacy outpu
 from __future__ import annotations
 
 import pytest
-from choregos_contracts import StageResult, StageStatus, Workflow
-from choregos_core import WorkflowEngine, parse_workflow
-from choregos_core.dsl import template_yaml
-from choregos_core.dsl.legacy import (
+from tranibor_contracts import StageResult, StageStatus, Workflow
+from tranibor_core import WorkflowEngine, parse_workflow
+from tranibor_core.dsl import template_yaml
+from tranibor_core.dsl.legacy import (
     OLD_DECLARATIONS,
     legacy_declarations,
     old_template,
@@ -42,7 +42,7 @@ def _done(outputs: dict[str, object]) -> StageResult:
 
 @pytest.mark.parametrize("name", sorted(OLD_DECLARATIONS))
 def test_an_untouched_copy_is_upgraded_to_the_fixed_declarations(name: str) -> None:
-    from choregos_core import load_template
+    from tranibor_core import load_template
 
     old = old_template(name)
     old["metadata"] = {"name": "default", "version": 4}

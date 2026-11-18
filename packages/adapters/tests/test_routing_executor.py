@@ -5,11 +5,11 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import pytest
-from choregos_adapters.executor.routing import RoutingExecutor
-from choregos_adapters.fakes.executor import FakeExecutor
-from choregos_adapters.registry import with_custom_image_executor
-from choregos_contracts import ExecutorKind
-from choregos_core.domain import ExecStatus, StageJobSpec
+from tranibor_adapters.executor.routing import RoutingExecutor
+from tranibor_adapters.fakes.executor import FakeExecutor
+from tranibor_adapters.registry import with_custom_image_executor
+from tranibor_contracts import ExecutorKind
+from tranibor_core.domain import ExecStatus, StageJobSpec
 
 POOL = "registry.example/choregos-runner:1.0"
 

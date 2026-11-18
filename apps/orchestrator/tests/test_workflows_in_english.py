@@ -14,7 +14,7 @@ from types import ModuleType
 import pytest
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
-PACKAGE = ROOT / "apps" / "orchestrator" / "src" / "choregos_orchestrator"
+PACKAGE = ROOT / "apps" / "orchestrator" / "src" / "tranibor_orchestrator"
 WORKFLOWS = PACKAGE / "workflows"
 
 #: The root modules S45-22 owns, next to every module of `workflows/`. `wire_names.py` is S45-03's
@@ -172,16 +172,16 @@ def test_signal_and_query_wire_names_unchanged() -> None:
 
 
 def test_the_former_french_modules_and_test_helpers_are_gone() -> None:
-    from choregos_orchestrator import testing as testing_module
+    from tranibor_orchestrator import testing as testing_module
 
-    for former in ("choregos_orchestrator.repartition", "choregos_orchestrator.workflows.planification"):
+    for former in ("tranibor_orchestrator.repartition", "tranibor_orchestrator.workflows.planification"):
         assert importlib.util.find_spec(former) is None, former
     for helper in ("workers_by_queue", "with_doubles", "group_by_queue"):
         assert callable(getattr(testing_module, helper))
 
 
 def test_the_queue_table_routes_by_activity_name() -> None:
-    from choregos_orchestrator.queues import ACTIVITIES_BY_QUEUE, QUEUE_BY_ACTIVITY, activity_name, queue_of
+    from tranibor_orchestrator.queues import ACTIVITIES_BY_QUEUE, QUEUE_BY_ACTIVITY, activity_name, queue_of
 
     assert set(ACTIVITIES_BY_QUEUE) == {"executor", "tracker", "memory"}
     assert QUEUE_BY_ACTIVITY["start_run"] == "executor"
@@ -192,14 +192,14 @@ def test_the_queue_table_routes_by_activity_name() -> None:
 
 
 def test_the_tools_sidecar_url_has_its_english_name() -> None:
-    from choregos_orchestrator.config import OrchestratorSettings
+    from tranibor_orchestrator.config import OrchestratorSettings
 
     settings = OrchestratorSettings(tools_mcp_url="http://tools:7777/mcp")
     assert settings.tools_sidecar_url == "http://tools:7777/mcp"
 
 
 def test_the_train_reads_a_recorded_former_threshold_input() -> None:
-    from choregos_orchestrator.workflows import train
+    from tranibor_orchestrator.workflows import train
 
     old = train.TrainInput(project_slug="p", env="e", seuil_de_relais=40)  # lang: fr-ok
     assert old.former_idle_threshold() == 40
@@ -208,7 +208,7 @@ def test_the_train_reads_a_recorded_former_threshold_input() -> None:
 
 
 def test_the_action_workflow_names() -> None:
-    from choregos_orchestrator.workflows import action
+    from tranibor_orchestrator.workflows import action
 
     assert issubclass(action.MissingEvidence, Exception)
     assert action.EFFECT.non_retryable_error_types
@@ -227,4 +227,4 @@ def test_the_action_workflow_names() -> None:
 )
 def test_the_patch_ids_keep_their_values(module: str, name: str, value: str) -> None:
     """The renamed Python constants hold the recorded ids: a history marks them."""
-    assert getattr(importlib.import_module(f"choregos_orchestrator.workflows.{module}"), name) == value
+    assert getattr(importlib.import_module(f"tranibor_orchestrator.workflows.{module}"), name) == value

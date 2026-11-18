@@ -56,7 +56,7 @@ def test_the_gate_waits_for_the_job_and_the_filter_covers_what_it_proves() -> No
     filters = yaml.safe_load(workflow["jobs"]["changes"]["steps"][1]["with"]["filters"])["hosted-gvisor"]
     for path in (
         "tests/conformance/hosted/**",
-        "apps/orchestrator/src/choregos_orchestrator/gitops.py",
+        "apps/orchestrator/src/tranibor_orchestrator/gitops.py",
         "apps/orchestrator/tests/test_gvisor_policy.py",
         "dev/scripts/gvisor.sh",
     ):

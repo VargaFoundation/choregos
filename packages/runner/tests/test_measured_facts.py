@@ -20,8 +20,8 @@ from __future__ import annotations
 import pathlib
 
 import pytest
-from choregos_contracts import Evidence, StageInput
-from choregos_runner.dod import merge_evidence, run_checks
+from tranibor_contracts import Evidence, StageInput
+from tranibor_runner.dod import merge_evidence, run_checks
 
 pytestmark = pytest.mark.asyncio
 
@@ -99,8 +99,8 @@ async def test_the_evidence_facts_guarantee_judges_the_measurement(
     value: bool, make_input, tmp_path: pathlib.Path
 ) -> None:
     """The end of the chain: the guarantee rules on the MEASURED fact, not on the declared one."""
-    from choregos_contracts import StageResult
-    from choregos_core.gates import GateContext, evaluate
+    from tranibor_contracts import StageResult
+    from tranibor_core.gates import GateContext, evaluate
 
     command = "true" if value else "false"
     report = await run_checks(make_input({"finding_resolved": command}), tmp_path, timeout=30)

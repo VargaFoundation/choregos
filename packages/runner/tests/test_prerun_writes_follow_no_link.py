@@ -14,15 +14,15 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from choregos_contracts import KnowledgeRef, SkillRef, StageInput, knowledge_digest, skill_digest
-from choregos_runner import safe_files
-from choregos_runner.exits import Exit
-from choregos_runner.inputs import INPUTS_DIR, mount_inputs
-from choregos_runner.job import FIELDS, write_fields
-from choregos_runner.knowledge import ROOT, lay_out
-from choregos_runner.runner import Runner
-from choregos_runner.skills import FALLBACK_DIR, place_skills
-from choregos_runner.workspace import Workspace
+from tranibor_contracts import KnowledgeRef, SkillRef, StageInput, knowledge_digest, skill_digest
+from tranibor_runner import safe_files
+from tranibor_runner.exits import Exit
+from tranibor_runner.inputs import INPUTS_DIR, mount_inputs
+from tranibor_runner.job import FIELDS, write_fields
+from tranibor_runner.knowledge import ROOT, lay_out
+from tranibor_runner.runner import Runner
+from tranibor_runner.skills import FALLBACK_DIR, place_skills
+from tranibor_runner.workspace import Workspace
 
 from .conftest import FakeInternalClient, valid_result
 
@@ -54,7 +54,7 @@ KINDS = {"symlink": _symlink, "hardlink": _hardlink}
 
 class _Inputs:
     async def fetch_inputs(self) -> list[dict[str, Any]]:
-        from choregos_contracts import artifact_digest
+        from tranibor_contracts import artifact_digest
 
         return [{"name": "deck", "version": 1, "filename": "deck.md", "digest": artifact_digest(b"x")}]
 
@@ -228,8 +228,8 @@ async def test_a_resumed_workspace_without_a_link_runs_as_before(
 
 @pytest.mark.parametrize("kind", KINDS)
 def test_a_remote_agents_file_over_a_link_is_refused(kind: str, tree: tuple[Path, Path]) -> None:
-    from choregos_adapters.a2a.client import A2aArtifact, A2aPart
-    from choregos_runner.remote import _land
+    from tranibor_adapters.a2a.client import A2aArtifact, A2aPart
+    from tranibor_runner.remote import _land
 
     workspace, other = tree
     KINDS[kind](workspace / ".choregos" / "outputs" / "report.md", other)

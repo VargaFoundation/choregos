@@ -6,8 +6,8 @@ from collections.abc import Iterator
 from typing import Any
 
 import pytest
-from choregos_adapters.fakes.a2a import FakeA2aAgent
 from httpx import AsyncClient
+from tranibor_adapters.fakes.a2a import FakeA2aAgent
 
 from .conftest_remote import remote_agent, set_sealing_key
 from .egress_support import ORG, add_member, as_person, rules_in_db
@@ -19,7 +19,7 @@ TOKEN = {"token": "env:CONNECTOR_CATALOGUE_TEST"}
 
 @pytest.fixture
 def enforce(app: Any, monkeypatch: pytest.MonkeyPatch) -> None:
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     monkeypatch.setenv("CHOREGOS_EGRESS_MODE", "enforce")
     reset_settings_cache()
@@ -90,8 +90,8 @@ async def test_a_remote_agent_opens_its_card_host_for_the_api_and_the_runners(
 
 
 def test_the_deprecated_api_hosts_fold_into_the_api_ceiling() -> None:
-    from choregos_api.config import Settings
-    from choregos_api.services.egress import ceiling_of
+    from tranibor_api.config import Settings
+    from tranibor_api.services.egress import ceiling_of
 
     assert ceiling_of(Settings(api_egress_hosts=["*.notion.com"])) == {"api": ("*.notion.com",)}
     both = Settings(api_egress_hosts=["a.test"], egress_ceiling={"api": ["b.test"]})

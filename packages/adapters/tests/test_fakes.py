@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 
 import pytest
-from choregos_adapters import (
+from tranibor_adapters import (
     AdapterSet,
     CdAdapter,
     CiAdapter,
@@ -16,9 +16,9 @@ from choregos_adapters import (
     ScmAdapter,
     TrackerAdapter,
 )
-from choregos_adapters.fakes import BudgetExceeded
-from choregos_contracts import Size, StageResult, StageStatus
-from choregos_core.domain import Change, Fact, Message, NewItem, Provenance, StageJobSpec, TrackerStateMapping
+from tranibor_adapters.fakes import BudgetExceeded
+from tranibor_contracts import Size, StageResult, StageStatus
+from tranibor_core.domain import Change, Fact, Message, NewItem, Provenance, StageJobSpec, TrackerStateMapping
 
 
 def test_adapter_set_satisfies_protocols() -> None:
@@ -111,8 +111,8 @@ async def test_scm_a_branch_has_a_head_that_every_write_moves() -> None:
 
 async def test_scm_a_merge_names_its_commit_and_a_stale_one_is_refused() -> None:
     """ADR 0171: a merge that names a commit the head has left merges nothing; merged, it stays."""
-    from choregos_adapters.base import ScmAdapter, merge_at_commit_refusal
-    from choregos_adapters.errors import HeadMovedError
+    from tranibor_adapters.base import ScmAdapter, merge_at_commit_refusal
+    from tranibor_adapters.errors import HeadMovedError
 
     scm = AdapterSet.fakes().scm
     assert isinstance(scm, ScmAdapter) and merge_at_commit_refusal(scm) is None

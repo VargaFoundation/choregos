@@ -22,9 +22,9 @@ pytestmark = without_postgres
 @pytest.fixture
 async def two_organisations(pg_app: Any) -> dict[str, str]:
     """`a` and `b`, each with a `billing-api` project and a work item."""
-    from choregos_api.db.models import Organization, Project, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.services import ensure_defaults
+    from tranibor_api.db.models import Organization, Project, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services import ensure_defaults
 
     ids: dict[str, str] = {}
     async with session_scope(orgs="*") as session:
@@ -50,8 +50,8 @@ async def two_organisations(pg_app: Any) -> dict[str, str]:
 
 
 async def test_a_session_without_an_organisation_sees_nothing(two_organisations: dict[str, str]) -> None:
-    from choregos_api.db.models import Project, WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Project, WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:  # no scope: it was the omission that opened everything
         assert (await session.execute(select(Project))).scalars().all() == []
@@ -105,9 +105,9 @@ async def test_an_administrator_creates_a_project_in_their_organisation(
 async def test_a_run_token_sees_its_run_whatever_the_organisation(
     pg_app: Any, two_organisations: dict[str, str]
 ) -> None:
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.security import mint_run_token
+    from tranibor_api.db.models import Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.security import mint_run_token
 
     async with session_scope(orgs="*") as session:
         item = (await session.execute(select(WorkItem).where(WorkItem.tracker_key == "b-1"))).scalar_one()
@@ -139,9 +139,9 @@ async def test_a_run_token_sees_its_run_whatever_the_organisation(
 @pytest.fixture
 async def three_traces(two_organisations: dict[str, str]) -> dict[str, str]:
     """A trace for `a`, one for `b`, one for the platform (no organisation)."""
-    from choregos_api.db.models import AuditLog, Organization
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
+    from tranibor_api.db.models import AuditLog, Organization
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
 
     ids: dict[str, str] = {}
     async with session_scope(orgs="*") as session:
@@ -180,8 +180,8 @@ async def test_the_audit_trace_of_an_organisation_is_invisible_to_the_other(
     pg_app: Any, three_traces: dict[str, str]
 ) -> None:
     """`audit_log` was the last mutation table outside RLS, and without an organisation column."""
-    from choregos_api.db.models import AuditLog
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import AuditLog
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs=["a"]) as session:
         seen = (await session.execute(select(AuditLog.id))).scalars().all()
@@ -205,8 +205,8 @@ async def test_through_the_api_member_of_both_but_audit_read_in_only_one(
 
     Removing the filter of `routers/admin.py` turns this test red, and this test alone.
     """
-    from choregos_api.db.models import Membership, Organization, User
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Membership, Organization, User
+    from tranibor_api.db.session import session_scope
 
     async with AsyncClient(transport=ASGITransport(app=pg_app), base_url="http://test") as client:
         await login(client, "admin@a.test")  # ORG_ADMIN of `a`, hence `audit:read` on `a`
@@ -233,9 +233,9 @@ async def test_through_the_api_member_of_both_but_audit_read_in_only_one(
 @pytest.fixture
 async def attached(two_organisations: dict[str, str]) -> None:
     """For each organisation: a run and its event, a release and its deployment, a key."""
-    from choregos_api.db.base import utcnow
-    from choregos_api.db.models import Deployment, GatewayKeyRow, Release, Run, RunEvent, WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.base import utcnow
+    from tranibor_api.db.models import Deployment, GatewayKeyRow, Release, Run, RunEvent, WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         for slug, project_row in two_organisations.items():
@@ -259,8 +259,8 @@ async def attached(two_organisations: dict[str, str]) -> None:
 
 
 async def test_the_attached_tables_show_only_the_organisation_of_the_session(attached: None) -> None:
-    from choregos_api.db.models import Deployment, GatewayKeyRow, Release, RunEvent
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Deployment, GatewayKeyRow, Release, RunEvent
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs=["a"]) as session:
         assert (await session.execute(select(RunEvent.run_id))).scalars().all() == ["run-a"]
@@ -285,10 +285,10 @@ async def test_the_attached_tables_show_only_the_organisation_of_the_session(att
 
 async def test_a_session_of_a_cannot_write_an_event_on_the_run_of_b(attached: None) -> None:
     """`USING` serves as `WITH CHECK` for the INSERT: a row is not attributed to the other organisation."""
-    from choregos_api.db.base import utcnow
-    from choregos_api.db.models import RunEvent
-    from choregos_api.db.session import session_scope
     from sqlalchemy.exc import DBAPIError
+    from tranibor_api.db.base import utcnow
+    from tranibor_api.db.models import RunEvent
+    from tranibor_api.db.session import session_scope
 
     with pytest.raises(DBAPIError, match="row-level security"):
         async with session_scope(orgs=["a"]) as session:
@@ -314,8 +314,8 @@ async def test_named_memories_and_their_facts_are_invisible_across_organisations
 ) -> None:
     """S40-11: `memory_stores` and the facts of a global memory (no project) are under forced RLS, keyed on
     the organisation; a project fact is keyed the same way since `memory_facts.org_id`."""
-    from choregos_api.db.models import MemoryFact, MemoryStore, Organization
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import MemoryFact, MemoryStore, Organization
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         orgs = {o.slug: o.id for o in (await session.execute(select(Organization))).scalars()}
@@ -370,10 +370,10 @@ async def test_a_renamed_organisation_is_still_seen_and_its_old_slug_still_scope
     """RLS compares CURRENT slugs. After `a` becomes `z`: the new slug sees the rows, and a scope built
     from the OLD slug (a workflow payload written before the rename) is resolved to the new one instead
     of seeing nothing (ADR 0090). An alias never leaks another organisation's rows."""
-    from choregos_api.db.models import Organization, Project
-    from choregos_api.db.org_aliases import current_slug, keep_old_slug
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Organization, Project
+    from tranibor_api.db.org_aliases import current_slug, keep_old_slug
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         org = (await session.execute(select(Organization).where(Organization.slug == "a"))).scalar_one()
@@ -396,8 +396,8 @@ async def test_a_renamed_organisation_is_still_seen_and_its_old_slug_still_scope
 
 
 async def test_every_table_is_under_rls_or_exempted(pg_app: Any) -> None:
-    from choregos_api.db.session import session_scope
     from sqlalchemy import text
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         rows = (
@@ -426,8 +426,8 @@ async def test_a_webhook_routes_its_event_under_rls(pg_app: Any, two_organisatio
     Its session must therefore see the projects: the fail-closed RLS hid them all, and every CI, CD
     or tracker event was dropped as "no known project" on PostgreSQL, without the tests (SQLite)
     seeing it."""
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         # `billing-api` exists in `a` AND `b`: we give a unique slug so that routing is
@@ -435,7 +435,7 @@ async def test_a_webhook_routes_its_event_under_rls(pg_app: Any, two_organisatio
         (work_item,) = (
             await session.execute(select(WorkItem).where(WorkItem.tracker_key == "a-1"))
         ).scalars()
-        from choregos_api.db.models import Project
+        from tranibor_api.db.models import Project
 
         project_row = await session.get(Project, work_item.project_id)
         assert project_row is not None
@@ -461,8 +461,8 @@ async def test_a_project_role_does_not_become_an_organisation_role(
     """The principal was resolved BEFORE the scope was set; the join on `projects` (under RLS) then
     saw no project, and a PROJECT membership arrived without a project, hence as a role on the whole
     organisation. A developer invited on one project read the others."""
-    from choregos_api.db.models import Membership, Organization, Project, User
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Membership, Organization, Project, User
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         a = (await session.execute(select(Organization).where(Organization.slug == "a"))).scalar_one()
@@ -482,7 +482,7 @@ async def test_a_project_role_does_not_become_an_organisation_role(
     # resolution, which itself sets `*` before the join, and bounds afterwards. A development
     # login would additionally give "developer" in the default organisation, and blur the
     # proof.
-    from choregos_api.deps import _principal_from_user
+    from tranibor_api.deps import _principal_from_user
 
     async with session_scope(orgs="*") as session:
         user = await session.get(User, invited.id)
@@ -491,7 +491,7 @@ async def test_a_project_role_does_not_become_an_organisation_role(
     assert principal.project_roles == {"a/billing-api": "developer"}, principal.project_roles
     assert principal.org_roles == {}, f"the project role became an organisation role: {principal.org_roles}"
     assert not principal.can(
-        __import__("choregos_api.rbac", fromlist=["Permission"]).Permission.PROJECT_READ, "a", "secret"
+        __import__("tranibor_api.rbac", fromlist=["Permission"]).Permission.PROJECT_READ, "a", "secret"
     )
     assert secret_id
 
@@ -501,7 +501,7 @@ async def test_creating_a_second_organisation_under_rls(
 ) -> None:
     """`POST /orgs` answered 500 on PostgreSQL: the audit trace of the new organisation was refused
     by RLS, the session being bounded to the caller's existing organisations."""
-    from choregos_api.edition import ENTERPRISE, declare, reset
+    from tranibor_api.edition import ENTERPRISE, declare, reset
 
     declare(ENTERPRISE, features=frozenset({"multi_org"}))
     try:
@@ -510,8 +510,8 @@ async def test_creating_a_second_organisation_under_rls(
             # the admin of `a` does not administer `b`: the core rule (admin of ALL) refuses.
             refusal = await client.post("/api/v1/orgs", json={"slug": "c", "name": "C"})
             assert refusal.status_code == 403
-        from choregos_api.db.models import Membership, Organization, User
-        from choregos_api.db.session import session_scope
+        from tranibor_api.db.models import Membership, Organization, User
+        from tranibor_api.db.session import session_scope
 
         async with session_scope(orgs="*") as session:
             admin = (await session.execute(select(User).where(User.email == "admin@a.test"))).scalar_one()
@@ -531,8 +531,8 @@ async def test_creating_a_second_organisation_under_rls(
 async def test_an_organisation_sees_neither_the_name_nor_the_members_of_the_other(
     pg_app: Any, two_organisations: dict[str, str]
 ) -> None:
-    from choregos_api.db.models import ApiToken, Membership, Organization, User
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import ApiToken, Membership, Organization, User
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         orgs = {o.slug: o.id for o in (await session.execute(select(Organization))).scalars()}
@@ -558,8 +558,8 @@ async def test_inviting_a_user_already_a_member_elsewhere_creates_no_duplicate(
 ) -> None:
     """The e-mail is unique across the instance; under the RLS of `users`, a member of `b` is
     invisible from `a`, and the invitation tried a duplicate."""
-    from choregos_api.db.models import Membership, Organization, User
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Membership, Organization, User
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         b = (await session.execute(select(Organization).where(Organization.slug == "b"))).scalar_one()
@@ -585,9 +585,9 @@ async def test_a_user_without_a_membership_reads_themselves(
     """Empty scope, but `app.current_user`: they read their account and their tokens, nothing else."""
     import time
 
-    from choregos_api.db.models import User
-    from choregos_api.db.session import session_scope
-    from choregos_api.security import sign_session
+    from tranibor_api.db.models import User
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.security import sign_session
 
     async with session_scope(orgs="*") as session:
         alone = User(oidc_sub="dev|alone", email="alone@nowhere.test", display_name="alone")
@@ -609,8 +609,8 @@ async def test_an_agent_and_its_versions_do_not_leave_their_organisation(
 ) -> None:
     """The agent registry (ADR 0033): an agent of `b` does not exist for a session bounded to `a`,
     nor its versions, nor its pin on a project."""
-    from choregos_api.db.models import Agent, AgentVersion, Organization, ProjectAgent
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Agent, AgentVersion, Organization, ProjectAgent
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         for slug in ("a", "b"):
@@ -638,8 +638,8 @@ async def test_a_skill_and_its_versions_do_not_leave_their_organisation(
     two_organisations: dict[str, str],
 ) -> None:
     """The skill library (ADR 0033): a skill of `b` does not exist for `a`."""
-    from choregos_api.db.models import Organization, Skill, SkillVersion
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Organization, Skill, SkillVersion
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         for slug in ("a", "b"):
@@ -659,8 +659,8 @@ async def test_a_knowledge_base_and_its_documents_stay_in_their_organisation(
     two_organisations: dict[str, str],
 ) -> None:
     """Knowledge bases (ADR 0051): a base of `b`, and its documents, do not exist for `a`."""
-    from choregos_api.db.models import KnowledgeBase, KnowledgeDocument, Organization
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import KnowledgeBase, KnowledgeDocument, Organization
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         for slug in ("a", "b"):
@@ -697,11 +697,11 @@ async def test_org_secrets_are_isolated(two_organisations: dict[str, str]) -> No
     import base64
     import os
 
-    from choregos_api.db.models import Organization, OrgSecret
-    from choregos_api.db.session import session_scope
-    from choregos_api.secret_store import SealedDbSecretStore, parse_keyring
     from sqlalchemy import update
     from sqlalchemy.exc import DBAPIError
+    from tranibor_api.db.models import Organization, OrgSecret
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.secret_store import SealedDbSecretStore, parse_keyring
 
     store = SealedDbSecretStore(parse_keyring("k1:" + base64.b64encode(os.urandom(32)).decode()))
     async with session_scope(orgs="*") as session:
@@ -733,9 +733,9 @@ async def test_org_secrets_are_isolated(two_organisations: dict[str, str]) -> No
 async def test_github_installations_are_isolated(two_organisations: dict[str, str]) -> None:
     """GitHub App installations (ADR 0073): a claimed row is its organisation's, an unclaimed one is
     the platform's, and an organisation cannot claim into another by writing the row."""
-    from choregos_api.db.models import GitHubInstallation, Organization
-    from choregos_api.db.session import session_scope
     from sqlalchemy.exc import DBAPIError
+    from tranibor_api.db.models import GitHubInstallation, Organization
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         ids = {o.slug: o.id for o in (await session.execute(select(Organization))).scalars()}
@@ -774,9 +774,9 @@ async def test_github_installations_are_isolated(two_organisations: dict[str, st
 async def test_network_decisions_stay_in_their_organisation(two_organisations: dict[str, str]) -> None:
     """Network decisions (ADR 0070): what org `b`'s runs reached is invisible to `a`, and a session
     scoped to `a` cannot write a decision into `b`."""
-    from choregos_api.db.models import NetworkDecision, Organization
-    from choregos_api.db.session import session_scope
     from sqlalchemy.exc import DBAPIError
+    from tranibor_api.db.models import NetworkDecision, Organization
+    from tranibor_api.db.session import session_scope
 
     def row(org_id: str, project_id: str, host: str) -> NetworkDecision:
         now = datetime.now(UTC)
@@ -808,9 +808,9 @@ async def test_network_decisions_stay_in_their_organisation(two_organisations: d
 async def test_received_events_stay_in_their_organisation(two_organisations: dict[str, str]) -> None:
     """Received webhook events (S42-06f): org `a` reads none of `b`'s, writes none into it, and a
     session with no scope reads nothing."""
-    from choregos_api.db.models import Organization, ReceivedEvent
-    from choregos_api.db.session import session_scope
     from sqlalchemy.exc import DBAPIError
+    from tranibor_api.db.models import Organization, ReceivedEvent
+    from tranibor_api.db.session import session_scope
 
     def row(org_id: str, project_id: str, key: str) -> ReceivedEvent:
         return ReceivedEvent(
@@ -840,9 +840,9 @@ async def test_received_events_stay_in_their_organisation(two_organisations: dic
 async def test_trigger_tokens_stay_in_their_organisation(two_organisations: dict[str, str]) -> None:
     """HTTP trigger tokens (S56-01): org `a` reads none of `b`'s digests, writes none into it, and a
     session with no scope reads nothing."""
-    from choregos_api.db.models import Organization, TriggerToken
-    from choregos_api.db.session import session_scope
     from sqlalchemy.exc import DBAPIError
+    from tranibor_api.db.models import Organization, TriggerToken
+    from tranibor_api.db.session import session_scope
 
     def row(org_id: str, project_id: str, name: str) -> TriggerToken:
         return TriggerToken(org_id=org_id, project_id=project_id, name=name, token_sha256="0" * 64)
@@ -863,9 +863,9 @@ async def test_trigger_tokens_stay_in_their_organisation(two_organisations: dict
 async def test_machine_accounts_stay_in_their_organisation(two_organisations: dict[str, str]) -> None:
     """Machine accounts (ADR 0131): org `a` reads none of `b`'s, writes none into it, and a session
     with no scope reads nothing."""
-    from choregos_api.db.models import MachineAccount, Organization, User
-    from choregos_api.db.session import session_scope
     from sqlalchemy.exc import DBAPIError
+    from tranibor_api.db.models import MachineAccount, Organization, User
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         ids = {o.slug: o.id for o in (await session.execute(select(Organization))).scalars()}
@@ -906,9 +906,9 @@ async def test_org_groups_and_their_members_stay_in_their_organisation(
 ) -> None:
     """An organisation's groups and who is in them (ADR 0160): org `a` reads none of `b`'s, writes none
     into it, and a session with no scope reads nothing."""
-    from choregos_api.db.models import Organization, OrgGroup, OrgGroupMember, User
-    from choregos_api.db.session import session_scope
     from sqlalchemy.exc import DBAPIError
+    from tranibor_api.db.models import Organization, OrgGroup, OrgGroupMember, User
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         ids = {o.slug: o.id for o in (await session.execute(select(Organization))).scalars()}
@@ -936,14 +936,14 @@ async def test_assistant_installations_stay_in_their_organisation(
 ) -> None:
     """Assistant installations and their bindings (ADR 0133): org `a` reads none of `b`'s, writes none into
     it, and a session with no scope reads nothing."""
-    from choregos_api.db.models import (
+    from sqlalchemy.exc import DBAPIError
+    from tranibor_api.db.models import (
         AssistantInstallation,
         AssistantToolBinding,
         Organization,
         OrgConnector,
     )
-    from choregos_api.db.session import session_scope
-    from sqlalchemy.exc import DBAPIError
+    from tranibor_api.db.session import session_scope
 
     def installation(org_id: str, slug: str) -> AssistantInstallation:
         return AssistantInstallation(
@@ -988,8 +988,8 @@ async def test_task_subscriptions_are_the_subscribers_own_in_their_organisation(
 ) -> None:
     """Task subscriptions (ADR 0137): the organisation's scope is not enough, only the subscriber (or the
     platform scope, the scheduler) reads a row; org `a` reads none of `b`'s."""
-    from choregos_api.db.models import AssistantInstallation, Organization, TaskSubscription, User
-    from choregos_api.db.session import name_the_user, session_scope
+    from tranibor_api.db.models import AssistantInstallation, Organization, TaskSubscription, User
+    from tranibor_api.db.session import name_the_user, session_scope
 
     async with session_scope(orgs="*") as session:
         ids = {o.slug: o.id for o in (await session.execute(select(Organization))).scalars()}
@@ -1033,10 +1033,10 @@ async def test_task_subscriptions_are_the_subscribers_own_in_their_organisation(
 async def test_org_egress_rules_are_isolated(two_organisations: dict[str, str]) -> None:
     """The egress allowlist (S39-22): org `a` reads none of `b`'s rules, writes none into it, and a
     session without a scope sees nothing."""
-    from choregos_api.db.models import Organization, OrgEgressRule
-    from choregos_api.db.session import session_scope
     from sqlalchemy import update
     from sqlalchemy.exc import DBAPIError
+    from tranibor_api.db.models import Organization, OrgEgressRule
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         ids = {o.slug: o.id for o in (await session.execute(select(Organization))).scalars()}

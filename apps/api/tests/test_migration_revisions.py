@@ -13,7 +13,7 @@ import pathlib
 import re
 from collections import Counter
 
-VERSIONS = pathlib.Path(__file__).resolve().parents[1] / "src" / "choregos_api" / "migrations" / "versions"
+VERSIONS = pathlib.Path(__file__).resolve().parents[1] / "src" / "tranibor_api" / "migrations" / "versions"
 #: `revision = "x"` or `revision: str = "x"`, as the files write it.
 REVISION = re.compile(r"""^revision(?:\s*:\s*[\w\[\]| ]+)?\s*=\s*["']([^"']+)["']""", re.M)
 
@@ -38,7 +38,7 @@ def test_each_revision_id_is_written_once() -> None:
 
 def test_the_core_has_one_head() -> None:
     from alembic.script import ScriptDirectory
-    from choregos_api.migrate import configuration
+    from tranibor_api.migrate import configuration
 
     script = ScriptDirectory.from_config(configuration(with_extensions=False))
     assert len(script.get_heads()) == 1, f"several heads: {script.get_heads()}"

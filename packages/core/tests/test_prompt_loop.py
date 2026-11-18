@@ -6,7 +6,7 @@ import json
 from typing import Any
 
 import pytest
-from choregos_core.prompt_loop import LoopOutcome, LoopRequest, LoopTool, run_loop
+from tranibor_core.prompt_loop import LoopOutcome, LoopRequest, LoopTool, run_loop
 
 pytestmark = pytest.mark.asyncio
 

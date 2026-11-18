@@ -18,8 +18,8 @@ OWNER_SUFFIX = "/human-review"
 #: The three areas of ADR 0180 §3: each must keep at least one line.
 AREAS = (
     "/packages/contracts/",
-    "/apps/api/src/choregos_api/migrations/",
-    "/apps/api/src/choregos_api/security.py",
+    "/apps/api/src/tranibor_api/migrations/",
+    "/apps/api/src/tranibor_api/security.py",
 )
 
 

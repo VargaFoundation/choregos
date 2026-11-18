@@ -1,0 +1,398 @@
+# SPDX-License-Identifier: Apache-2.0
+"""The routes an extension adds to the API, without forking `main.py`.
+
+An extension (a `choregos.plugins` entry-point package, loaded by the adapters' extension loader)
+could already register a connector, a guarantee, declare an edition or a group mapper. It could not
+**serve** anything: `create_app()` only included its own routers. Any feature that needs a route (an
+organisation's life cycle, an in-house integration) therefore asked for a patch of the core.
+
+The extension calls `declare_router(router)` from its `register()`; `create_app()` includes it under
+`/api/v1`, **after** the core's. The authentication and permission dependencies stay the ones the
+router declares itself, as for any core router.
+
+**A route of the extension that overlaps a core route (same path, same method) stops the start.**
+Starlette serves the first route that matches: the extension would be ignored without a word, or, if
+the order ever changed, would silently replace a core route, an authentication route included. A
+replacement is not an addition; it is asked for through a named seam, like the group mapper.
+
+The French names this module had before 0.21 (`greffons.py`, `declarer_un_routeur`...) were removed
+in 0.24.0 (S45-49); `docs/deployment.md` ("Upgrading to 0.24") lists their replacements.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Any
+
+from fastapi import APIRouter
+from fastapi.routing import APIRoute, APIWebSocketRoute
+
+_ROUTERS: list[APIRouter] = []
+
+
+def declare_router(router: APIRouter) -> None:
+    """Called by an extension when it loads. The core never calls it."""
+    if not isinstance(router, APIRouter):
+        raise TypeError(f"a FastAPI router is expected, not {type(router).__name__}")
+    if router not in _ROUTERS:
+        _ROUTERS.append(router)
+
+
+def declared_routers() -> tuple[APIRouter, ...]:
+    return tuple(_ROUTERS)
+
+
+def signatures(router: APIRouter, prefix: str = "") -> set[tuple[str, str]]:
+    """{(method, path)} served by a router, prefix included.
+
+    A NESTED router (`include_router` inside the router) is refused rather than skipped: FastAPI
+    only exposes it through a private object, and a route one cannot see is a route one cannot
+    guarantee overlaps nothing.
+    """
+    served: set[tuple[str, str]] = set()
+    for route in router.routes:
+        if isinstance(route, APIWebSocketRoute):  # a socket is served on its path, like a method
+            served.add(("WEBSOCKET", prefix + route.path))
+            continue
+        if not isinstance(route, APIRoute):
+            raise TypeError(
+                f"route {type(route).__name__} in an extension router: only direct routes "
+                "(`@router.get`, `@router.post`...) are supported, not a nested router."
+            )
+        for method in route.methods or ():
+            served.add((method, prefix + route.path))
+    return served
+
+
+def reset() -> None:
+    """For tests: no extension router, no gesture check, no tool, no section, no template installer."""
+    _ROUTERS.clear()
+    _TOOL_PROVIDERS.clear()
+    _HUMAN_TOOL_PROVIDERS.clear()
+    _SECTIONS.clear()
+    _INSTALLERS.clear()
+    _THEME_PROVIDER.clear()
+    reset_gesture_checks()
+
+
+# ───────────────────────────── administration sections ─────────────────────────────
+#
+# An extension that serves administration routes (the enterprise edition: organisations, SAML, SCIM,
+# sessions) has no screen of its own. It declares its sections as DATA (a manifest: form, table,
+# action, secret shown once), and the console renders them with its own blocks: no extension code
+# runs in the page that carries the session and the decisions (ADR 0032). `create_app()` validates
+# each manifest and checks that each of its paths is served.
+
+_SECTIONS: list[dict[str, Any]] = []
+
+# What the core's section manifests support, so an extension detects a feature without parsing versions
+# (S42-02). `block_permission`: a block may carry its own `permission`. `asset_upload` (S42-13): a form
+# property of `format: "asset"` uploads its file to its `x-upload` path. `section_icon` (S42-15): a
+# section may name its navigation icon from the schema's closed `icon` vocabulary.
+SECTION_FEATURES: frozenset[str] = frozenset({"block_permission", "asset_upload", "section_icon"})
+
+#: The identity functions the core serves itself since ADR 0170, so that an extension that used to provide
+#: them detects it by announcement, never by version: `approval_freshness` (the organisation's demand for
+#: a recent authentication to approve, `GET|PUT /orgs/{org}/security`), `session_revocation` (an
+#: administrator ends a member's sessions, `revoke_user_sessions`), `saml` (an identity provider per
+#: organisation, `PUT /orgs/{org}/saml` and `/saml/{org}/{login,acs,metadata}`). An extension that serves
+#: the same route would stop the start (overlap check): it asks this set first.
+IDENTITY_FEATURES: frozenset[str] = frozenset({"approval_freshness", "session_revocation", "saml"})
+
+
+def declare_admin_section(manifest: dict[str, Any]) -> None:
+    """Called by an extension when it loads; the validation happens when the API starts."""
+    import copy
+
+    if not isinstance(manifest, dict):
+        raise TypeError(f"a manifest is an object, not {type(manifest).__name__}")
+    for section in _SECTIONS:
+        if section.get("id") != manifest.get("id"):
+            continue
+        # The same extension loaded twice (by the orchestrator the API imports, then by
+        # `create_app()`) declares the same section again: nothing to redo, as for a router. ANOTHER
+        # section under the same identifier would hide one.
+        if section == manifest:
+            return
+        # The message is pinned by tests that stay unchanged until their own story.
+        raise ValueError(f"section d'administration déclarée deux fois : {manifest.get('id')}")  # lang: fr-ok
+    _SECTIONS.append(copy.deepcopy(manifest))
+
+
+def declared_sections() -> tuple[dict[str, Any], ...]:
+    return tuple(_SECTIONS)
+
+
+def _uploads(schema: Any) -> list[tuple[str, str]]:
+    """The POST paths of a form schema's `format: "asset"` properties (`x-upload`, S42-13)."""
+    if not isinstance(schema, dict):
+        return []
+    properties = schema.get("properties")
+    if not isinstance(properties, dict):
+        return []
+    return [
+        ("POST", str(prop["x-upload"]))
+        for prop in properties.values()
+        if isinstance(prop, dict) and prop.get("format") == "asset" and "x-upload" in prop
+    ]
+
+
+def section_paths(manifest: dict[str, Any]) -> list[tuple[str, str]]:
+    """{(method, path)} a section calls: the console calls no other."""
+    paths: list[tuple[str, str]] = []
+
+    def action(block: dict[str, Any], default: str = "POST") -> None:
+        paths.append((str(block.get("method") or default), str(block["path"])))
+
+    for block in manifest.get("blocks", []):
+        kind = block.get("kind")
+        if kind == "form":
+            paths.append(("GET", str(block["read"])))
+            paths.append((str(block.get("write_method") or "PUT"), str(block["write"])))
+            paths.extend(_uploads(block.get("schema")))
+        elif kind == "table":
+            paths.append(("GET", str(block["list"])))
+            for row in block.get("row_actions", []):
+                action(row)
+        elif kind in {"action", "secret_once"}:
+            action(block)
+    return paths
+
+
+# ───────────────────────────── tools of the runs ─────────────────────────────
+#
+# The tool catalogue (`catalogue.py`) describes third-party APIs, declared by the deployment in a
+# file. An extension can have its own, which depend on the run's PROJECT and not on the deployment:
+# the tools generated from a project's ontology, for example. They go through the same path as the
+# catalogue's: `GET /internal/runs/{id}/tools` announces them to the agent's `choregos-tools` MCP
+# server, `POST /internal/runs/{id}/tools/{name}` calls them under the same per-run call ceiling,
+# with the same cost ledger line and the same event. The run token stays the only authentication: the
+# provider receives the run and its project, already verified, never the token.
+
+
+@dataclass(frozen=True)
+class ToolProvider:
+    """`list_tools(session, run, project)` returns tools in the MCP format (`name`, `description`,
+    `inputSchema`); `call_tool(session, run, project, name, arguments)` returns `(HTTP code, body)`.
+    A code of 400 or more is an answer the agent reads, not a failure.
+
+    A listed tool may carry `result_max_bytes` (an integer of at least 1024): how much of its answer
+    the agent reads, as a catalogue entry declares it (S40-17b); the agent is never shown it. It may
+    carry `x-choregos-access` (`read`, `write` or `approval`: a call proposes what a person decides),
+    which the run's tool list announces (ADR 0122); without it, a tool annotated `readOnlyHint: true`
+    is a read and any other a write.
+
+    `call_tool` is handed the request's session with no transaction open (#1354): the request holds no
+    pooled connection while the extension works. What it reads or writes begins a transaction under the
+    run token's scope, kept with the call's ledger line; a provider that reads first and then calls out
+    wraps that call in `tranibor_api.db.session.outside_the_transaction(session)`, or it holds a
+    connection for as long as its call takes."""
+
+    list_tools: Any
+    call_tool: Any
+
+
+_TOOL_PROVIDERS: dict[str, ToolProvider] = {}
+
+
+def declare_tool_provider(name: str, list_tools: Any, call_tool: Any) -> None:
+    """Called by an extension when it loads. Two extensions do not declare the same name."""
+    provider = ToolProvider(list_tools, call_tool)
+    if name in _TOOL_PROVIDERS and _TOOL_PROVIDERS[name] != provider:
+        raise ValueError(f"tool provider “{name}” already declared")
+    _TOOL_PROVIDERS[name] = provider
+
+
+def tool_providers() -> dict[str, ToolProvider]:
+    return dict(_TOOL_PROVIDERS)
+
+
+# ───────────────────────────── tools served to humans, through the MCP door ─────────────────────────────
+
+
+@dataclass(frozen=True)
+class HumanToolProvider:
+    """The tools an extension serves at the MCP door of external clients (ADR 0030), with the rights
+    of the HUMAN who minted the token, never those of a platform agent.
+
+    - `list_tools(session, principal, project, org)` returns tools in the MCP format (`name`,
+      `description`, `inputSchema`), plus `write: bool`: a write tool is only announced to an
+      `mcp:write` token;
+    - `call_tool(session, principal, project, org, name, arguments)` returns `(HTTP code, body)`; a
+      code >= 400 is a refusal the model reads;
+    - `pending(session, principal, project, org)`, optional, returns what waits for a human decision:
+      `[{key, title, kind, question, requested_at, can_decide, decision_path}]`, where
+      `decision_path` is the console path where the decision is taken.
+
+    An extension's tool never takes the name of a core tool: the gate would discard it.
+    """
+
+    list_tools: Any
+    call_tool: Any
+    pending: Any = None
+
+
+_HUMAN_TOOL_PROVIDERS: dict[str, HumanToolProvider] = {}
+
+
+def declare_human_tools(name: str, list_tools: Any, call_tool: Any, pending: Any = None) -> None:
+    """Called by an extension when it loads. Two extensions do not declare the same name."""
+    provider = HumanToolProvider(list_tools, call_tool, pending)
+    if name in _HUMAN_TOOL_PROVIDERS and _HUMAN_TOOL_PROVIDERS[name] != provider:
+        raise ValueError(f"human tool provider “{name}” already declared")
+    _HUMAN_TOOL_PROVIDERS[name] = provider
+
+
+def human_tool_providers() -> dict[str, HumanToolProvider]:
+    return dict(_HUMAN_TOOL_PROVIDERS)
+
+
+# ───────────────────────────── what a template ships to an extension ─────────────────────────────
+#
+# A template ships workflows, a policy, agents and skills: the core knows how to install them. It can
+# also ship what only an extension understands, an ontology for example:
+# `defaults.extensions: {<installer>: <template folder>}`. When the project is born, the core reads
+# the folder (never leaving it, no symbolic link) and hands it to the installer declared under that
+# name, in the transaction that creates the project: a refusal of the installer (`HTTPException`)
+# fails the birth, like an invalid workflow. Without an installer (the extension is not there, or not
+# active) the project is born without, and the audit log says so (S20-09).
+
+_INSTALLERS: dict[str, Any] = {}
+
+
+def declare_template_installer(name: str, installer: Any) -> None:
+    """`installer(session, project, files, author)`, asynchronous, returns what it installed (an
+    object the audit keeps); `files`: path relative to the folder -> text. Two extensions do not
+    declare the same name."""
+    if name in _INSTALLERS and _INSTALLERS[name] is not installer:
+        # The message is pinned by tests that stay unchanged until their own story.
+        raise ValueError(f"installateur de gabarit « {name} » déjà déclaré")  # lang: fr-ok
+    _INSTALLERS[name] = installer
+
+
+def template_installers() -> dict[str, Any]:
+    return dict(_INSTALLERS)
+
+
+# ───────────────────────────── checks of human gestures ─────────────────────────────
+#
+# Some human gestures carry an operating rule the core does not know: a ceiling of projects per
+# organisation, a FRESH authentication to approve a production release. An extension declares a
+# check, played by the route BEFORE it acts, after the core's permissions, which stay the first
+# judges: a check can only refuse more.
+
+#: The gestures that can be checked, and what the route passes in `target`.
+GESTURES = {
+    "project.create": "slug of the project to create",
+    "workitem.decision": "work item, transition, kind of the request and of the decision",
+    "release.approve": "release, environment",
+    # Releasing an agent revision to production or to a canary share (S40-02, ADR 0071).
+    "agent.release": "agent, channel, version, kind",
+}
+
+
+@dataclass(frozen=True)
+class GestureRequest:
+    gesture: str
+    org: str
+    principal: Any
+    target: dict[str, Any] = field(default_factory=dict)
+
+
+_NATURES = {"forbidden", "conflict", "reauth"}
+
+
+class GestureRefused(Exception):  # noqa: N818 - a decision, not an error
+    """`nature` picks the answer: `forbidden` (403), `conflict` (409), `reauth` (401: sign in again
+    with `GET /api/v1/auth/login?reauth=1`, then the gesture)."""
+
+    def __init__(self, reason: str, nature: str = "forbidden") -> None:
+        if nature not in _NATURES:
+            raise ValueError(f"unknown nature: {nature!r}")
+        super().__init__(reason)
+        self.nature = nature
+
+
+_GESTURE_CHECKS: dict[str, dict[str, Any]] = {gesture: {} for gesture in GESTURES}
+
+
+def declare_gesture_check(gesture: str, name: str, function: Any) -> None:
+    """`function(db_session, request)`, sync or async; raises `GestureRefused` to refuse. Any other
+    exception goes up: a check that is down is not an authorisation."""
+    if gesture not in GESTURES:
+        # The message is pinned by tests that stay unchanged until their own story.
+        raise ValueError(f"geste inconnu : {gesture!r} (connus : {sorted(GESTURES)})")  # lang: fr-ok
+    _GESTURE_CHECKS[gesture][name] = function
+
+
+async def check_gesture(session: Any, request: GestureRequest) -> None:
+    """Called by the core's routes. Turns the first refusal into an HTTP answer, prefixed by the name."""
+    import inspect
+
+    from .errors import conflict, forbidden, unauthorized
+
+    # The core's own check comes first: an extension can only refuse more (ADR 0170).
+    await _approval_freshness(session, request)
+    for name, function in _GESTURE_CHECKS[request.gesture].items():
+        try:
+            result = function(session, request)
+            if inspect.isawaitable(result):
+                await result
+        except GestureRefused as refusal:
+            reason = f"{name}: {refusal}"
+            if refusal.nature == "conflict":
+                raise conflict(reason) from refusal
+            if refusal.nature == "reauth":
+                raise unauthorized(f"{reason} — sign in again (GET /api/v1/auth/login?reauth=1)") from refusal
+            raise forbidden(reason) from refusal
+
+
+async def _approval_freshness(session: Any, request: GestureRequest) -> None:
+    """The organisation's demand for a recent authentication to approve (ADR 0170)."""
+    from sqlalchemy import select
+
+    from .approval_freshness import is_approval, stale_reason
+    from .db.models import Organization
+    from .errors import unauthorized
+
+    if not is_approval(request.gesture, request.target):
+        return
+    organisation = (
+        await session.execute(select(Organization).where(Organization.slug == request.org))
+    ).scalar_one_or_none()
+    if organisation is None:
+        return
+    reason = stale_reason(organisation, getattr(request.principal, "authenticated_at", None), request.org)
+    if reason is not None:
+        raise unauthorized(f"approval_freshness: {reason} — sign in again (GET /api/v1/auth/login?reauth=1)")
+
+
+def reset_gesture_checks() -> None:
+    for checks in _GESTURE_CHECKS.values():
+        checks.clear()
+
+
+# ───────────────────────────── the theme provider (S39-03, ADR 0064) ─────────────────────────────
+#
+# The community edition serves its default theme. An extension that customises the look declares ONE
+# provider: `provider(session, org) -> dict | None` (sync or async), where `org` is the slug the
+# console asked for, or None for the instance. The core validates whatever it returns against the
+# contract and the console's contrast budget (`tranibor_api.theme`); an invalid theme is replaced by
+# the default, never served.
+
+_THEME_PROVIDER: list[Any] = []
+
+
+def declare_theme_provider(provider: Any) -> None:
+    """Called by an extension when it loads. A second declaration stops the start: two extensions
+    deciding the look of the same console would be a silent last-one-wins."""
+    if not callable(provider):
+        raise TypeError("a theme provider is a callable (session, org) -> dict | None")
+    if _THEME_PROVIDER and _THEME_PROVIDER[0] is not provider:
+        raise RuntimeError("a theme provider is already declared; only one is allowed")
+    if not _THEME_PROVIDER:
+        _THEME_PROVIDER.append(provider)
+
+
+def theme_provider() -> Any | None:
+    return _THEME_PROVIDER[0] if _THEME_PROVIDER else None

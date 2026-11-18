@@ -6,15 +6,15 @@ import base64
 
 import httpx
 import pytest
-from choregos_adapters import registry
-from choregos_adapters.documents.base import SourceRefusedError
-from choregos_adapters.documents.web import (
+from tranibor_adapters import registry
+from tranibor_adapters.documents.base import SourceRefusedError
+from tranibor_adapters.documents.web import (
     WebCrawlSource,
     WebDocumentsConnector,
     check_connector_config,
     plain_headers,
 )
-from choregos_adapters.errors import ConfigurationError
+from tranibor_adapters.errors import ConfigurationError
 
 ROOT = "https://intranet.example.com/docs/"
 

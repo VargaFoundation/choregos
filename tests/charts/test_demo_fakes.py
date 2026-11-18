@@ -49,7 +49,7 @@ def test_one_single_pod_that_the_api_and_the_orchestrator_reach() -> None:
     deployment, service = served["Deployment"], served["Service"]
     assert deployment["spec"]["replicas"] == 1 and deployment["spec"]["strategy"]["type"] == "Recreate"
     (conteneur,) = deployment["spec"]["template"]["spec"]["containers"]
-    assert conteneur["command"] == ["python", "-m", "choregos_adapters.fakes.server"]
+    assert conteneur["command"] == ["python", "-m", "tranibor_adapters.fakes.server"]
     assert conteneur["image"].split("/")[-1].startswith("choregos-api:"), "the API image carries the fakes"
     token = next(e for e in conteneur["env"] if e["name"] == "CONNECTOR_DEMO_TOKEN")
     assert token["valueFrom"]["secretKeyRef"] == {"name": "demo", "key": "jeton"}, "by reference"

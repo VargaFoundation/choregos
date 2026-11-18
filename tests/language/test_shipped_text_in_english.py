@@ -58,15 +58,15 @@ VISIBLE_KEYS = {
     "summary",
 }
 SHIPPED_YAML = [
-    *sorted((ROOT / "packages/core/src/choregos_core/dsl/templates").glob("*.yaml")),
-    *sorted((ROOT / "packages/core/src/choregos_core/presets").glob("*.yaml")),
+    *sorted((ROOT / "packages/core/src/tranibor_core/dsl/templates").glob("*.yaml")),
+    *sorted((ROOT / "packages/core/src/tranibor_core/presets").glob("*.yaml")),
     *sorted((ROOT / "templates").rglob("*.yaml")),
     *sorted((ROOT / "demo/workflows").glob("*.yaml")),
-    *sorted((ROOT / "packages/core/src/choregos_core/agent_catalogue").rglob("*.yaml")),
+    *sorted((ROOT / "packages/core/src/tranibor_core/agent_catalogue").rglob("*.yaml")),
 ]
 SHIPPED_TEXTS = sorted(
     path
-    for folder in ("templates", "packages/core/src/choregos_core/agent_catalogue")
+    for folder in ("templates", "packages/core/src/tranibor_core/agent_catalogue")
     for path in (ROOT / folder).rglob("*")
     if path.is_file() and path.suffix in {".md", ".j2"}
 )
@@ -116,7 +116,7 @@ def test_no_dropped_file_nor_skill_is_in_french(path: pathlib.Path) -> None:
 
 def test_the_core_messages_are_in_english() -> None:
     """Validator, parser, map, guarantees, engine, typed editions, policy, secrets (S21-10)."""
-    faults = _CHECK_ENGLISH.french_spoken_strings("packages/core/src/choregos_core")
+    faults = _CHECK_ENGLISH.french_spoken_strings("packages/core/src/tranibor_core")
     assert not faults, "French in what the core says:\n  " + "\n  ".join(faults)
 
 
@@ -142,5 +142,5 @@ def test_the_contracts_are_in_english() -> None:
         for key, text in _visible_texts(document)
         if looks_french(_prose(text))
     ]
-    faults += _CHECK_ENGLISH.french_spoken_strings("packages/contracts/src/choregos_contracts")
+    faults += _CHECK_ENGLISH.french_spoken_strings("packages/contracts/src/tranibor_contracts")
     assert not faults, "French in the contracts:\n  " + "\n  ".join(faults)

@@ -60,13 +60,13 @@ async def test_an_archived_global_memory_cannot_be_bound(client: AsyncClient, ad
 
 async def test_an_invisible_global_memory_is_unknown_not_forbidden(client: AsyncClient, admin: str) -> None:
     """A publisher who does not see the memory gets the same sentence as for one that does not exist."""
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
-    from choregos_api.errors import ApiError
-    from choregos_api.rbac import Principal, Role
-    from choregos_api.schemas import AgentSpec
-    from choregos_api.services.memory_access import check_bindings_at_publish
     from sqlalchemy import select
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.errors import ApiError
+    from tranibor_api.rbac import Principal, Role
+    from tranibor_api.schemas import AgentSpec
+    from tranibor_api.services.memory_access import check_bindings_at_publish
 
     await make_project(client, "billing-api")
     await make_project(client, "checkout-web")
@@ -142,8 +142,8 @@ async def test_the_checksum_of_a_version_without_memories_is_unchanged(
 ) -> None:
     """Computed by hand over the keys that existed before the field: a `memories: null` leaking into the
     digest would move every checksum in the registry."""
-    from choregos_api.schemas import AgentSpec
-    from choregos_api.services.agents import digest
+    from tranibor_api.schemas import AgentSpec
+    from tranibor_api.services.agents import digest
 
     before = {
         "instructions": "",

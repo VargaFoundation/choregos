@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import pytest
-from choregos_adapters.fakes.identity_provider import ENDPOINT, FakeIdentityProvider
-from choregos_adapters.token_exchange import (
+from tranibor_adapters.fakes.identity_provider import ENDPOINT, FakeIdentityProvider
+from tranibor_adapters.token_exchange import (
     GRANT_EXCHANGE,
     TOKEN_TYPE_ACCESS,
     ExchangeRefused,

@@ -24,7 +24,7 @@ BACKTICKED = re.compile(r"`([^`\n]+)`")
 SUFFIX = re.compile(r"[:#].*$")
 
 #: Pages that are not read. `docs/procedures` is not listed at all: it is generated from
-#: `choregos_core/procedures` and refused on drift by `tests/procedures/test_export_docs.py`. The
+#: `tranibor_core/procedures` and refused on drift by `tests/procedures/test_export_docs.py`. The
 #: plan pages below are dated records that quote the paths of the day (a story that has since
 #: renamed a file does not edit the plan that named it): STATUS is the ledger of every merged story,
 #: the PLAN files are the wave plans, BLOCKERS and the state-of-the-project page are dated.
@@ -97,9 +97,9 @@ def test_no_upgrade_fragment_left() -> None:
     # One row of each kind of fragment: operator names, extension API, services, log keys, trials.
     for name in (
         "CHOREGOS_ONTOLOGY_TRIAL",
-        "`choregos_api.extensions`",
-        "`choregos_api.edition`",
-        "`choregos_api.services`",
+        "`tranibor_api.extensions`",
+        "`tranibor_api.edition`",
+        "`tranibor_api.services`",
         "`a2a.call` log key",
         "TRIAL_FAKES_URL",
         "CHOREGOS_RECORD_HISTORY",

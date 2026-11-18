@@ -6,7 +6,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from choregos_runner.result import load_result
+from tranibor_runner.result import load_result
 
 
 def _write(tmp_path: Path, facts: object) -> Path:

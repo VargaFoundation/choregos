@@ -130,8 +130,8 @@ async def test_the_tested_adapter_receives_the_resolved_secret_and_the_response_
 ) -> None:
     """Outside the fakes: the connector test builds the adapter with the value, never with the
     reference, and nothing of the value comes back in the response."""
-    from choregos_adapters import ConnectorTypeSpec, register
-    from choregos_adapters.registry import _REGISTRY, _SPECS
+    from tranibor_adapters import ConnectorTypeSpec, register
+    from tranibor_adapters.registry import _REGISTRY, _SPECS
 
     received: list[dict[str, Any]] = []
     spec = ConnectorTypeSpec("probe", ("tracker",), {"type": "object", "properties": {}}, ("api_token",))
@@ -164,9 +164,9 @@ def _jira(host: str, reference: str) -> dict[str, Any]:
 async def test_a_project_owner_cannot_write_an_env_reference(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.db.models import Membership, Organization, User
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Membership, Organization, User
+    from tranibor_api.db.session import session_scope
 
     from .conftest import login
 
@@ -192,9 +192,9 @@ async def test_a_platform_secret_never_leaves_through_a_connector_test(
 ) -> None:
     import httpx
     import respx
-    from choregos_api.db.models import Connector
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Connector
+    from tranibor_api.db.session import session_scope
 
     monkeypatch.setenv("CHOREGOS_SESSION_SECRET", "platform-session-secret")
     url = f"/api/v1/projects/{project['id']}/connectors/tracker"

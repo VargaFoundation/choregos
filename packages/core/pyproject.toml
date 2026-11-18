@@ -1,11 +1,11 @@
 [project]
-name = "choregos-core"
+name = "tranibor-core"
 version = "0.27.13"
 description = "Cœur Choregos : DSL de workflow, politiques, résolution de modèles, gates"
 requires-python = ">=3.12,<3.13"
 license = { text = "Apache-2.0" }
 dependencies = [
-    "choregos-contracts",
+    "tranibor-contracts",
     "pydantic>=2.9",
     "PyYAML>=6.0",
     "jsonschema>=4.23",
@@ -14,16 +14,16 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# GenAI traces (ADR 0018): `choregos_core.telemetry` is the one module that knows the span and
+# GenAI traces (ADR 0018): `tranibor_core.telemetry` is the one module that knows the span and
 # attribute names; exact pins because the semantic conventions it targets are still incubating.
 # An extra, not a dependency (S62-07): the services that emit spans (the API, the orchestrator, the
-# runner) ask for `choregos-core[telemetry]`; the CLI does not, and its native binary carries no
+# runner) ask for `tranibor-core[telemetry]`; the CLI does not, and its native binary carries no
 # OpenTelemetry. Without the extra, `telemetry` turns into no-ops (tracing off).
 telemetry = [
     "opentelemetry-sdk==1.45.2",
     "opentelemetry-exporter-otlp-proto-http==1.45.2",
 ]
-# The one way a process connects to Temporal (ADR 0183, `choregos_core.temporal_connection`): TLS and
+# The one way a process connects to Temporal (ADR 0183, `tranibor_core.temporal_connection`): TLS and
 # the AES-256-GCM payload codec. An extra for the same reason as `telemetry`: the CLI never talks to
 # Temporal and its native binary carries neither.
 temporal = [
@@ -36,4 +36,4 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/choregos_core"]
+packages = ["src/tranibor_core"]

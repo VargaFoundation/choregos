@@ -21,7 +21,7 @@ New fields the cases use (story S57-09): `tools_cells`, `scripted_usage.<cell>.r
 ### As implemented (S57-09)
 
 The YAML below is the sketch the stream started from. The cases as they run are in
-`packages/playbooks/src/choregos_playbooks/evals/agent_cases/` (`netops-ssh-exposure`,
+`packages/playbooks/src/tranibor_playbooks/evals/agent_cases/` (`netops-ssh-exposure`,
 `netops-dropped-flows-top`, `identity-offboarding`, `research-injected-page`, `research-injected-page-block`,
 `marketdata-volatility`) and the matrix that plays them is described in
 [the eval matrix runbook](../runbooks/live-eval-matrix.md). Where they differ from the sketch:

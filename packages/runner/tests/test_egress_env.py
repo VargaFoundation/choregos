@@ -7,7 +7,7 @@ from typing import Any
 from urllib.parse import quote, urlsplit
 
 import pytest
-from choregos_runner.egress import authenticate_proxy_env
+from tranibor_runner.egress import authenticate_proxy_env
 
 PROXY = "http://choregos-egress.choregos.svc:3128"
 RUN = "billing-123-t-implement-1"
@@ -70,8 +70,8 @@ def test_the_runner_applies_them_before_anything_else_runs(monkeypatch: pytest.M
     """`Runner.run` updates the process environment first, so git, pip and the agent inherit it."""
     import asyncio
 
-    from choregos_runner.config import RunnerSettings
-    from choregos_runner.runner import Runner
+    from tranibor_runner.config import RunnerSettings
+    from tranibor_runner.runner import Runner
 
     token = _token()
     for name, value in _env().items():
@@ -104,7 +104,7 @@ def test_the_runner_applies_them_before_anything_else_runs(monkeypatch: pytest.M
 async def _run_with_proxy(
     monkeypatch: pytest.MonkeyPatch, stage_input: Any, runner_settings: Any, egress_token: Any
 ) -> tuple[str, Any]:
-    from choregos_runner.runner import Runner
+    from tranibor_runner.runner import Runner
 
     from .conftest import FakeInternalClient, agent_script, valid_result
 
@@ -133,7 +133,7 @@ async def test_the_agent_inherits_the_egress_token_never_the_run_token(
 async def test_an_api_without_egress_tokens_keeps_the_run_token(
     monkeypatch: pytest.MonkeyPatch, stage_input: Any, runner_settings: Any
 ) -> None:
-    from choregos_runner.client import InternalApiError
+    from tranibor_runner.client import InternalApiError
 
     proxy, _ = await _run_with_proxy(
         monkeypatch, stage_input, runner_settings, InternalApiError(404, "Not Found")
@@ -145,7 +145,7 @@ async def test_without_proxy_authentication_no_egress_token_is_asked(
     monkeypatch: pytest.MonkeyPatch, stage_input: Any, runner_settings: Any
 ) -> None:
     monkeypatch.setenv("CHOREGOS_EGRESS_AUTH", "")
-    from choregos_runner.runner import Runner
+    from tranibor_runner.runner import Runner
 
     from .conftest import FakeInternalClient, agent_script, valid_result
 
@@ -162,9 +162,9 @@ async def test_a_closed_run_refused_its_egress_token_ends_cleanly(
     API refuses it everything, its egress token first since that is the runner's first call. A pod
     that starts late has nothing to do: it ends with 0, as it does when its input is refused, and
     reads neither its input nor anything else."""
-    from choregos_runner.client import InternalApiError
-    from choregos_runner.exits import Exit
-    from choregos_runner.runner import Runner
+    from tranibor_runner.client import InternalApiError
+    from tranibor_runner.exits import Exit
+    from tranibor_runner.runner import Runner
 
     from .conftest import FakeInternalClient
 
@@ -187,8 +187,8 @@ async def test_a_closed_run_refused_its_egress_token_ends_cleanly(
 async def test_another_refusal_of_the_egress_token_is_still_a_failure(
     monkeypatch: pytest.MonkeyPatch, stage_input: Any, runner_settings: Any
 ) -> None:
-    from choregos_runner.client import InternalApiError
-    from choregos_runner.runner import Runner
+    from tranibor_runner.client import InternalApiError
+    from tranibor_runner.runner import Runner
 
     from .conftest import FakeInternalClient
 

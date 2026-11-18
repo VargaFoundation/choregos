@@ -12,8 +12,8 @@ from typing import Any
 
 import pytest
 import yaml
-from choregos_core.plugins import digest, pack
-from choregos_core.plugins.sources import (
+from tranibor_core.plugins import digest, pack
+from tranibor_core.plugins.sources import (
     LOCK,
     SourceError,
     extract_git_path,
@@ -23,7 +23,7 @@ from choregos_core.plugins.sources import (
     parse_index,
     resolve,
 )
-from choregos_core.plugins.versions import Range, Version, VersionError, admits, core_version
+from tranibor_core.plugins.versions import Range, Version, VersionError, admits, core_version
 
 HELLO = Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "plugins" / "hello"
 D1 = "sha256:" + "1" * 64
@@ -75,7 +75,7 @@ def test_an_unreadable_range_is_refused(bad: str) -> None:
 def test_the_core_version_is_the_installed_distributions() -> None:
     from importlib import metadata
 
-    assert core_version() == metadata.version("choregos-core")
+    assert core_version() == metadata.version("tranibor-core")
 
 
 # -- configuration -----------------------------------------------------------------------------------------

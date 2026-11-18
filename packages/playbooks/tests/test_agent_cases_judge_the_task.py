@@ -15,7 +15,7 @@ import uuid
 from typing import Any
 
 import pytest
-from choregos_playbooks.evals.agents import AGENT_CASES_DIR, fact_holds, judge, load_case
+from tranibor_playbooks.evals.agents import AGENT_CASES_DIR, fact_holds, judge, load_case
 
 GROUPS = ("G-FIN", "G-VPN", "G-SHAREPOINT", "G-CRM", "G-BI", "G-ALL")
 

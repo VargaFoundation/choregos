@@ -2,7 +2,7 @@
 
 - **Status**: proposed, 2026-11-11
 - **Concerns**: a new route at the root of the API process, `/outposts/v1` (a new package
-  `apps/api/src/choregos_api/outposts/`, mounted beside the two doors in `main.py`); its contract
+  `apps/api/src/tranibor_api/outposts/`, mounted beside the two doors in `main.py`); its contract
   `packages/contracts/outpost-door.yaml`; a new table `outpost_calls`; a second row-level security setting,
   `app.current_outpost` (`db/session.py`); the event relay (`events.py`, `PostgresRelay`);
   `choregos_adapters.sealing`; the key wrapper of `secret_store.py`; the door's signing key, a secret of

@@ -6,8 +6,8 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
-import choregos_orchestrator
-from choregos_orchestrator.activities.base import notification_target
+import tranibor_orchestrator
+from tranibor_orchestrator.activities.base import notification_target
 
 
 def _bundle(kind: str, emails: list[str], slack_channel: str = "") -> SimpleNamespace:
@@ -26,7 +26,7 @@ def test_an_email_notifier_gets_the_project_addresses() -> None:
 
 
 def test_no_activity_reads_the_slack_channel_directly() -> None:
-    root = Path(choregos_orchestrator.__file__).parent
+    root = Path(tranibor_orchestrator.__file__).parent
     base = root / "activities" / "base.py"
     offenders = [
         str(path.relative_to(root))

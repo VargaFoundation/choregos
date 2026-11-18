@@ -14,7 +14,7 @@ import pathlib
 from typing import Any
 
 import pytest
-from choregos_contracts import StageResult, StageStatus
+from tranibor_contracts import StageResult, StageStatus
 
 from .conftest import Fixture, recording_history
 from .kits.escalation import requests_of
@@ -42,8 +42,8 @@ async def test_a_decision_for_another_request_is_ignored_in_the_escalation(
 ) -> None:
     """The stale approval does not abandon the escalated work item: it is journaled, and the person's
     decision on the abandon request still does."""
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.worker import Replayer
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     async with worker_factory():
         handle, abandon_id = await _escalated(setup, temporal_env)

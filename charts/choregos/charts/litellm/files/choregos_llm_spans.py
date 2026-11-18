@@ -11,7 +11,7 @@ Why not LiteLLM's own `otel` callback: it starts a trace of its own unless the r
 This one attaches each call to the run's trace with nothing from the request: the run id comes from
 the **key's** metadata (`user_api_key_metadata`, written by the platform when it minted the run's
 key, overwritten by the proxy on every request), and the trace id and the stage span id are derived
-from it exactly as `choregos_core.telemetry.run_trace_ids` derives them. A call made with a key that
+from it exactly as `tranibor_core.telemetry.run_trace_ids` derives them. A call made with a key that
 names no run (the platform's own key, an agent session's) has no span.
 
 What a span carries: the operation (`chat`, `embeddings`, `text_completion`), the provider, the
@@ -25,7 +25,7 @@ error here is logged and never reaches the call.
 
 The same callback measures what fills an ACP CLI's context (ADR 0141 §4, S64-08b): for a call made
 with the key of a run whose backend is a third-party CLI, the request it holds is split into sections
-as `choregos_core.context_breakdown` splits a foreign request — a copy, kept equal by a test: a
+as `tranibor_core.context_breakdown` splits a foreign request — a copy, kept equal by a test: a
 paragraph whose digest the runner registered (`context.parts`) counts in its section, a tool named
 `server__tool` after a server of the run in `tools.mcp`, everything else in `backend` — and scaled to
 the `prompt_tokens` the gateway reported. The breakdown (numbers only: no text, no digest) is posted
@@ -60,7 +60,7 @@ from opentelemetry.sdk.trace import SpanProcessor, TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor, SimpleSpanProcessor, SpanExporter
 from opentelemetry.trace import NonRecordingSpan, SpanContext, SpanKind, Status, StatusCode, TraceFlags
 
-#: The names, as `choregos_core.telemetry` spells them (a test compares the two modules).
+#: The names, as `tranibor_core.telemetry` spells them (a test compares the two modules).
 SEMCONV_SCHEMA_URL = "https://opentelemetry.io/schemas/1.44.0"
 OPERATION_NAME = "gen_ai.operation.name"
 CHAT = "chat"
@@ -113,7 +113,7 @@ _logger = logging.getLogger("choregos.llm_spans")
 
 
 def run_trace_ids(run_id: str) -> tuple[int, int]:
-    """The run's trace id and stage span id: `choregos_core.telemetry.run_trace_ids`, copied."""
+    """The run's trace id and stage span id: `tranibor_core.telemetry.run_trace_ids`, copied."""
     digest = hashlib.sha256(f"choregos-run:{run_id}".encode()).digest()
     trace_id = int.from_bytes(digest[:16], "big") or 1
     span_id = int.from_bytes(digest[16:24], "big") or 1
@@ -194,7 +194,7 @@ CONTEXT_URL_VARIABLE = "CHOREGOS_CONTEXT_API_URL"
 #: The backends whose context only the gateway sees: the third-party CLIs. The `prompt` and `hosted`
 #: backends are measured where their requests are built (ADR 0141 §4); `code` and `remote` not at all.
 ACP_CLIS = frozenset({"claude-code", "codex", "gemini-cli", "goose", "opencode", "copilot-cli"})
-#: `choregos_core.context_breakdown`, copied (a test compares the two modules).
+#: `tranibor_core.context_breakdown`, copied (a test compares the two modules).
 SECTIONS: tuple[str, ...] = (
     "system",
     "tools.platform",
@@ -232,7 +232,7 @@ def context_signature(master_key: str, run_id: str) -> str:
 
 
 def estimate_tokens(text: str) -> int:
-    """`choregos_core.models.estimate_tokens`, copied."""
+    """`tranibor_core.models.estimate_tokens`, copied."""
     return max(1, (len(text) + 3) // 4)
 
 

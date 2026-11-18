@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from choregos_core.cross_review import (
+from tranibor_core.cross_review import (
     MIN_REVIEWS_PER_ARM,
     Arm,
     StageRun,

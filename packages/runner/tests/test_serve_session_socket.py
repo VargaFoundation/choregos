@@ -15,9 +15,9 @@ from typing import Any
 
 import httpx
 import pytest
-from choregos_adapters.fakes import FakeHostedAgent, FakeModelServer
-from choregos_contracts import StageInput
-from choregos_runner.exits import Exit
+from tranibor_adapters.fakes import FakeHostedAgent, FakeModelServer
+from tranibor_contracts import StageInput
+from tranibor_runner.exits import Exit
 
 from .test_serve_session import KEY, SESSION, FakeSessionApi, _server, _session_input
 

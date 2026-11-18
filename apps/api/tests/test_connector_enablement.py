@@ -27,11 +27,11 @@ TOOLS: list[dict[str, Any]] = [
 
 @pytest.fixture
 def vendor(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
-    import choregos_adapters
-    from choregos_adapters.fakes.mcp import FakeMcpServer
+    import tranibor_adapters
+    from tranibor_adapters.fakes.mcp import FakeMcpServer
 
     server = FakeMcpServer(tools=[dict(o) for o in TOOLS], token="vendor-key")
-    monkeypatch.setattr(choregos_adapters, "FAKE_MCP", server)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_MCP", server)
     monkeypatch.setenv("CONNECTOR_ENABLEMENT_TEST", "vendor-key")
     yield server
 
@@ -40,9 +40,9 @@ async def _prepare(
     client: AsyncClient, project: dict[str, Any], **declare: Any
 ) -> tuple[str, dict[str, str]]:
     """A discovered server with `lookup` open, an agent that selects it, a run of that agent."""
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.security import mint_run_token
+    from tranibor_api.db.models import Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.security import mint_run_token
 
     body = {"name": "vendor", "type": "mcp", "config": {"url": "https://vendor.test/mcp"},
             "secret_refs": {"token": "env:CONNECTOR_ENABLEMENT_TEST"}, **declare}  # fmt: skip
@@ -132,12 +132,12 @@ async def test_an_action_on_a_connector_not_enabled_for_the_project_is_refused(
     client: AsyncClient, project: dict[str, Any], vendor: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The project policy behind governed actions agrees with the broker."""
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.connectors import policy_for_project
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.connectors import policy_for_project
 
     await _prepare(client, project, availability="selected_projects")
     await client.patch(f"{ORG}/connectors/vendor/operations/order", json={"policy": "approval"})
-    from choregos_api.db.models import Project
+    from tranibor_api.db.models import Project
 
     async def policy(operation: str) -> str:
         async with session_scope() as session:
@@ -235,9 +235,9 @@ async def test_only_the_administrator_changes_availability(
 async def test_the_gestures_leave_audit_rows(
     client: AsyncClient, project: dict[str, Any], vendor: Any
 ) -> None:
-    from choregos_api.db.models import AuditLog
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import AuditLog
+    from tranibor_api.db.session import session_scope
 
     await _prepare(client, project)
     await client.patch(f"{ORG}/connectors/vendor", json={"availability": "selected_projects"})

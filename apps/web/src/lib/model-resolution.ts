@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
  * What an agent's `model` field resolves to for one organisation, read from the organisation's model
- * catalogue (`GET /orgs/{org}/models`): the TypeScript twin of `choregos_core.models` for the part a
+ * catalogue (`GET /orgs/{org}/models`): the TypeScript twin of `tranibor_core.models` for the part a
  * page needs, `profile:by_size` included. A pure function, so a test pins it.
  *
  * It only says what the catalogue knows. A model the catalogue does not list, a provider or a
@@ -11,7 +11,7 @@ import type { ModelCatalogue } from "./types";
 
 export const BY_SIZE = "profile:by_size";
 
-/** `choregos_core.models.BY_SIZE_MAP`: the profile of each work item size, and the factor on its turns. */
+/** `tranibor_core.models.BY_SIZE_MAP`: the profile of each work item size, and the factor on its turns. */
 export const BY_SIZE_MAP: ReadonlyArray<{ size: string; profile: string; turnsFactor: number }> = [
   { size: "S", profile: "standard", turnsFactor: 1 },
   { size: "M", profile: "standard", turnsFactor: 1 },

@@ -1,0 +1,524 @@
+# SPDX-License-Identifier: Apache-2.0
+"""Artifacts: every output a step leaves is typed, stored and traced (S31-01, ADR 0049).
+
+An inline output (a specification, a list of profiles) keeps its value in the database; a file (a
+slide deck, a video) keeps its bytes in the object store. Either way the row records the type, the
+media type, the size, the sha256 of the bytes served on download, and the run that produced it —
+its stage, its attempt, its registry agent and version.
+
+A version is a distinct content: the same bytes produced again (a replayed activity, a retry that
+rewrites the same specification) make no new version, so recording is idempotent (ADR 0008).
+
+Every read recomputes the digest. Bytes that no longer match — an object rewritten behind the
+platform's back, a value edited in the database — are refused, never served.
+"""
+
+from __future__ import annotations
+
+import json
+import re
+from dataclasses import dataclass
+from typing import Any
+
+import structlog
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
+from tranibor_adapters.storage import ObjectStore
+from tranibor_contracts import (
+    ARTIFACT_NAME_PATTERN,
+    ARTIFACT_TYPES,
+    CHECKED_TYPES,
+    DIFF_ARTIFACT,
+    RESERVED_ARTIFACT_NAMES,
+    VALUE_TYPES,
+    Artifact,
+    ArtifactDiffStat,
+    ArtifactDisplay,
+    ArtifactProducer,
+    artifact_digest,
+    artifact_type,
+    coerce_value,
+    inline_bytes,
+    resolve_display,
+    type_of_value,
+)
+from tranibor_core.unified_diff import UnifiedDiff
+
+from ..db.models import ArtifactRecord, Run, WorkItem
+from ..errors import not_found
+
+log = structlog.get_logger(__name__)
+
+_NAME = re.compile(ARTIFACT_NAME_PATTERN)
+#: Two producers racing for the same next version: the unique constraint decides, and the loser
+#: tries the following number. Three rounds are plenty for outputs written once per run.
+_ROUNDS = 3
+
+
+class ArtifactCorruptedError(RuntimeError):
+    """The stored bytes no longer hash to the recorded digest: the artifact is not served."""
+
+
+def _present(value: Any) -> bool:
+    return value not in (None, "", [], {})
+
+
+def storage_key(org_id: str, work_item_id: str, name: str, digest: str) -> str:
+    """Content-addressed: writing the same bytes twice writes the same object."""
+    return f"orgs/{org_id}/work-items/{work_item_id}/artifacts/{name}/{digest.removeprefix('sha256:')}"
+
+
+async def latest(session: AsyncSession, work_item_id: str, name: str) -> ArtifactRecord | None:
+    return (
+        await session.execute(
+            select(ArtifactRecord)
+            .where(ArtifactRecord.work_item_id == work_item_id, ArtifactRecord.name == name)
+            .order_by(ArtifactRecord.version.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+
+
+async def producing_runs(
+    session: AsyncSession,
+    work_item_id: str,
+    names: list[str],
+    documents: dict[str, Any],
+    *,
+    reader: str,
+) -> list[str]:
+    """The runs whose outputs a step reads: the producer of the latest revision of each name (S40-22).
+
+    `documents` are the values the step's prompt embeds: one that no longer equals its latest
+    revision was edited by a person after the run, and that run is not where the step's value came
+    from, so it is left out rather than credited. The reader itself is never its own source, and a
+    file the caller sent is no run: the chain's initiator already names who sent it.
+    """
+    runs: list[str] = []
+    for name in dict.fromkeys(names):
+        row = await latest(session, work_item_id, name)
+        if row is None or row.run_id == reader or row.run_id in runs or sent_by_caller(row):
+            continue
+        if name in documents and row.storage_key is None and not _is_recorded_as(row, documents[name]):
+            continue
+        runs.append(row.run_id)
+    return runs
+
+
+async def _record(  # noqa: PLR0913 - one row, field by field, keyword-only
+    session: AsyncSession,
+    *,
+    org_id: str,
+    item: WorkItem,
+    run: Run | None,
+    name: str,
+    type_: str,
+    digest: str,
+    size: int,
+    content: Any = None,
+    key: str | None = None,
+    url: str | None = None,
+    producer: str | None = None,
+    display: ArtifactDisplay | None = None,
+) -> ArtifactRecord:
+    entry = artifact_type(type_)
+    produced_by = run.id if run is not None else producer
+    if produced_by is None:
+        raise ValueError(f"artifact `{name}`: a revision names its producer")
+    for _ in range(_ROUNDS):
+        previous = await latest(session, item.id, name)
+        if previous is not None and previous.digest == digest:
+            return previous
+        row = ArtifactRecord(
+            org_id=org_id,
+            work_item_id=item.id,
+            name=name,
+            version=(previous.version + 1) if previous else 1,
+            type=type_,
+            kind=str(entry.kind),
+            media_type=entry.media_type,
+            digest=digest,
+            size=size,
+            content=content,
+            storage_key=key,
+            storage_url=url,
+            run_id=produced_by,
+            stage=run.stage_role if run is not None else None,
+            attempt=run.attempt if run is not None else None,
+            agent_slug=run.agent_slug if run is not None else None,
+            agent_version=run.agent_version if run is not None else None,
+            display=display.model_dump(mode="json", exclude_none=True) if display is not None else None,
+        )
+        try:
+            async with session.begin_nested():
+                session.add(row)
+                await session.flush()
+        except IntegrityError:
+            continue
+        return row
+    raise RuntimeError(f"artifact `{name}`: could not take a version after {_ROUNDS} attempts")
+
+
+def _is_recorded_as(row: ArtifactRecord, value: Any) -> bool:
+    """A document's value is this revision: as written, parsed, or converted to its type (ADR 0129 §10)."""
+    if row.content in _as_recorded(value):
+        return True
+    display = display_of(row)
+    if display is None or display.type not in CHECKED_TYPES:
+        return False
+    try:
+        return bool(coerce_value(display, value) == row.content)
+    except ValueError:
+        return False
+
+
+def value_for_receipt(row: ArtifactRecord, documents: dict[str, Any]) -> Any:
+    """The value a *read* receipt hashes: as the step wrote it, the form its *produced* receipt hashed,
+    when converting it gave this revision (ADR 0129 §10); otherwise what the revision holds."""
+    if row.name in documents and _is_recorded_as(row, documents[row.name]):
+        return documents[row.name]
+    return row.content
+
+
+def _as_recorded(value: Any) -> list[Any]:
+    """A document's value as an inline revision may hold it: as written, or parsed when declared `json`."""
+    return [value, _parsed(value)]
+
+
+def declared_displays(run: Run) -> dict[str, ArtifactDisplay]:
+    """What the run's workflow declares of its outputs, as the stage input carried it (ADR 0129)."""
+    raw = ((run.stage_input or {}).get("transition") or {}).get("artifact_displays") or {}
+    return {name: ArtifactDisplay.model_validate(value) for name, value in raw.items()}
+
+
+def display_of(row: ArtifactRecord) -> ArtifactDisplay | None:
+    """How a revision is shown: its snapshot, or what its name means when it predates ADR 0129 (§9)."""
+    if row.display:
+        return ArtifactDisplay.model_validate(row.display)
+    return resolve_display(row.name)
+
+
+def _parsed(raw: Any) -> Any:
+    """Text that parses as JSON is the document it spells; anything else is kept as it is."""
+    if isinstance(raw, str):
+        try:
+            return json.loads(raw)
+        except ValueError:
+            return raw
+    return raw
+
+
+async def record_inline_outputs(
+    session: AsyncSession,
+    *,
+    org_id: str,
+    item: WorkItem,
+    run: Run,
+    outputs: dict[str, Any],
+    types: dict[str, str] | None = None,
+) -> list[ArtifactRecord]:
+    """One artifact revision per present output of a step, typed by its declaration or its value.
+
+    A declared inline type (`markdown`, `json`) is kept; a list declared `markdown` is JSON. Text
+    declared `json` that parses is the document it spells, not a JSON string: a model often answers
+    JSON as text, `output_schema` validates it parsed, and the next step reads `<name>.json` (S38-13).
+
+    A `level`, a `metric` or a `keyvalue` is converted to what it is, and snapshots how it is shown; one
+    that cannot be converted (an agent the runner does not supervise) keeps its plain type, without a
+    display, rather than being lost (ADR 0129 §10)."""
+    recorded: list[ArtifactRecord] = []
+    displays = declared_displays(run)
+    for name, raw in outputs.items():
+        if not _present(raw):
+            continue
+        if not _NAME.fullmatch(name):
+            log.warning("artifact name refused", work_item=item.tracker_key, name=name)
+            continue
+        if name in RESERVED_ARTIFACT_NAMES:
+            # The diff is what the SCM says, not what an agent writes (ADR 0129 §7).
+            log.warning("output under a reserved name not recorded", work_item=item.tracker_key, name=name)
+            continue
+        declared = (types or {}).get(name)
+        if declared in ARTIFACT_TYPES and not ARTIFACT_TYPES[declared].inline:
+            # A file-typed output is the file the agent wrote in `.choregos/outputs/` (ADR 0049); an
+            # inline value under its name (often the file's path) would become its latest revision
+            # and hide the file.
+            log.warning("inline value of a file output not recorded", work_item=item.tracker_key, name=name)
+            continue
+        display = displays.get(name) or resolve_display(name)
+        if display is None and declared in CHECKED_TYPES:
+            display = ArtifactDisplay(type=declared)
+        checked: str | None = None
+        value = raw
+        if display is not None and display.type in CHECKED_TYPES:
+            try:
+                value = coerce_value(display, raw)
+                checked = display.type
+            except ValueError as error:
+                log.warning(
+                    "typed output off its type", work_item=item.tracker_key, name=name, why=str(error)
+                )
+                display = None
+        if checked is not None:
+            type_ = checked
+        else:
+            value = _parsed(raw) if declared == "json" else raw
+            type_ = declared if declared in {"markdown", "json"} else type_of_value(value)
+            if type_ == "markdown" and not isinstance(value, str):
+                type_ = "json"
+        if display is not None:
+            display = display.model_copy(update={"type": type_})
+        data = inline_bytes(value)
+        recorded.append(
+            await _record(
+                session,
+                org_id=org_id,
+                item=item,
+                run=run,
+                name=name,
+                type_=type_,
+                digest=artifact_digest(data),
+                size=len(data),
+                content=value,
+                display=display,
+            )
+        )
+    return recorded
+
+
+async def record_diff(
+    session: AsyncSession,
+    *,
+    org_id: str,
+    item: WorkItem,
+    run: Run,
+    diff: UnifiedDiff,
+) -> ArtifactRecord:
+    """The branch's diff as an artifact: a new revision only when the branch changed (ADR 0129 §7)."""
+    data = inline_bytes(diff.text)
+    declared = declared_displays(run).get(DIFF_ARTIFACT) or resolve_display(DIFF_ARTIFACT)
+    shown = declared if declared is not None else ArtifactDisplay()
+    return await _record(
+        session,
+        org_id=org_id,
+        item=item,
+        run=run,
+        name=DIFF_ARTIFACT,
+        type_=DIFF_ARTIFACT,
+        digest=artifact_digest(data),
+        size=len(data),
+        content=diff.text,
+        display=shown.model_copy(
+            update={
+                "type": DIFF_ARTIFACT,
+                "diff": ArtifactDiffStat(
+                    files=diff.files,
+                    additions=diff.additions,
+                    deletions=diff.deletions,
+                    truncated=diff.truncated,
+                    withheld=diff.withheld,
+                ),
+            }
+        ),
+    )
+
+
+async def store_file(
+    session: AsyncSession,
+    store: ObjectStore,
+    *,
+    org_id: str,
+    item: WorkItem,
+    run: Run,
+    name: str,
+    type_: str,
+    data: bytes,
+) -> ArtifactRecord:
+    """Writes a file artifact to the object store, then records it. Same bytes, same version."""
+    if not _NAME.fullmatch(name):
+        raise ValueError(f"artifact name `{name}` refused: {ARTIFACT_NAME_PATTERN}")
+    if name in RESERVED_ARTIFACT_NAMES:
+        raise ValueError(f"artifact name `{name}` refused: it is measured by the platform")
+    entry = artifact_type(type_)
+    digest = artifact_digest(data)
+    previous = await latest(session, item.id, name)
+    if previous is not None and previous.digest == digest:
+        return previous
+    key = storage_key(org_id, item.id, name, digest)
+    url = await store.put(key, data, entry.media_type)
+    declared = declared_displays(run).get(name)
+    return await _record(
+        session,
+        org_id=org_id,
+        item=item,
+        run=run,
+        name=name,
+        type_=type_,
+        digest=digest,
+        size=len(data),
+        key=key,
+        url=url,
+        display=declared.model_copy(update={"type": type_}) if declared is not None else None,
+    )
+
+
+#: The producer of a file a caller sent with its message (ADR 0078 §6): `a2a:<task id>`, not a run.
+SENT_BY_A2A = "a2a:"
+
+
+def sent_by_caller(row: ArtifactRecord) -> bool:
+    """An input artefact a caller sent, as opposed to an output a step produced."""
+    return row.run_id.startswith(SENT_BY_A2A)
+
+
+@dataclass(frozen=True, slots=True)
+class StoredInput:
+    """A file a caller sent, already in the object store, waiting for its work item's row."""
+
+    name: str
+    type: str
+    digest: str
+    size: int
+    key: str
+    url: str
+
+
+async def put_input_file(
+    store: ObjectStore, *, org_id: str, work_item_id: str, name: str, type_: str, data: bytes
+) -> StoredInput:
+    """Writes a file a caller sent with its A2A message to the object store (ADR 0078 §6).
+
+    Done before the work item exists, under the id it will have: a store that fails then leaves
+    no work item behind, and content addressing makes a retry write the same object.
+    """
+    if not _NAME.fullmatch(name):
+        raise ValueError(f"artifact name `{name}` refused: {ARTIFACT_NAME_PATTERN}")
+    entry = artifact_type(type_)
+    digest = artifact_digest(data)
+    key = storage_key(org_id, work_item_id, name, digest)
+    url = await store.put(key, data, entry.media_type)
+    return StoredInput(name=name, type=type_, digest=digest, size=len(data), key=key, url=url)
+
+
+async def record_input_file(
+    session: AsyncSession, *, org_id: str, item: WorkItem, stored: StoredInput
+) -> ArtifactRecord:
+    """The input artefact of a file a caller sent: stored like a step's file, produced by no run.
+
+    Its producer is `a2a:<work item id>`; a step reads it by declaring its name in `inputs`.
+    """
+    return await _record(
+        session,
+        org_id=org_id,
+        item=item,
+        run=None,
+        producer=f"{SENT_BY_A2A}{item.id}",
+        name=stored.name,
+        type_=stored.type,
+        digest=stored.digest,
+        size=stored.size,
+        key=stored.key,
+        url=stored.url,
+    )
+
+
+async def read_content(store: ObjectStore, row: ArtifactRecord) -> bytes:
+    """The bytes of a revision, after checking they still hash to its digest."""
+    data = await store.get(row.storage_key) if row.storage_key else inline_bytes(row.content)
+    found = artifact_digest(data)
+    if found != row.digest:
+        log.error(
+            "artifact digest mismatch",
+            work_item_id=row.work_item_id,
+            name=row.name,
+            version=row.version,
+            recorded=row.digest,
+            found=found,
+        )
+        raise ArtifactCorruptedError(
+            f"artifact `{row.name}` v{row.version}: its content no longer matches its digest "
+            f"(recorded {row.digest}, found {found}) — it is not served"
+        )
+    return data
+
+
+def _checked_value(row: ArtifactRecord, display: ArtifactDisplay) -> str | int | float | None:
+    """A `level` or `metric` for the list, after the check any read makes (ADR 0049 §5, ADR 0129 §11)."""
+    if row.storage_key is not None or artifact_digest(inline_bytes(row.content)) != row.digest:
+        return None
+    try:
+        value = coerce_value(display, row.content)
+    except ValueError:
+        return None
+    return value if isinstance(value, str | int | float) else None
+
+
+def to_contract(row: ArtifactRecord) -> Artifact:
+    display = display_of(row)
+    value: str | int | float | None = None
+    if display is not None and display.type in VALUE_TYPES:
+        value = _checked_value(row, display)
+        if value is None:
+            display = None  # it cannot be drawn as what it should be: its bytes are read, or refused
+    return Artifact.model_validate(
+        {
+            "name": row.name,
+            "type": row.type,
+            "kind": row.kind,
+            "media_type": row.media_type,
+            "version": row.version,
+            "digest": row.digest,
+            "size": row.size,
+            "produced_by": ArtifactProducer(
+                run_id=row.run_id,
+                stage=row.stage,
+                attempt=row.attempt,
+                agent=row.agent_slug,
+                agent_version=row.agent_version,
+            ),
+            "storage_url": row.storage_url,
+            "created_at": row.created_at,
+            "display": display,
+            "value": value,
+        }
+    )
+
+
+async def artifacts_of(session: AsyncSession, work_item_id: str) -> list[ArtifactRecord]:
+    """Every revision of every artifact of a work item, by name then version."""
+    return list(
+        (
+            await session.execute(
+                select(ArtifactRecord)
+                .where(ArtifactRecord.work_item_id == work_item_id)
+                .order_by(ArtifactRecord.name, ArtifactRecord.version)
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+
+def filename_of(row: ArtifactRecord) -> str:
+    """The file name a revision is downloaded and mounted under: its name, with its type's extension."""
+    extension = ARTIFACT_TYPES[row.type].extension if row.type in ARTIFACT_TYPES else ""
+    if not extension or row.name.lower().endswith(f".{extension}"):
+        return row.name
+    return f"{row.name}.{extension}"
+
+
+async def revision(session: AsyncSession, work_item_id: str, ref: str) -> ArtifactRecord:
+    """`name` is the latest revision, `name@3` the third; an artifact name never holds `@`."""
+    name, _, version = ref.partition("@")
+    query = select(ArtifactRecord).where(
+        ArtifactRecord.work_item_id == work_item_id, ArtifactRecord.name == name
+    )
+    if version:
+        if not version.isdigit():
+            raise not_found("Artifact", ref)
+        query = query.where(ArtifactRecord.version == int(version))
+    row = (await session.execute(query.order_by(ArtifactRecord.version.desc()).limit(1))).scalar_one_or_none()
+    if row is None:
+        raise not_found("Artifact", ref)
+    return row

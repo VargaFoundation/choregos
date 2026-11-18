@@ -159,10 +159,10 @@ async def test_restore_of_the_current_spec_is_no_change_and_a_stale_base_is_refu
 
 
 async def test_pinned_by_lists_the_projects_the_caller_may_see(client: AsyncClient, org: str) -> None:
-    from choregos_api.db.models import Agent
-    from choregos_api.db.session import session_scope
-    from choregos_api.rbac import Principal, Role
-    from choregos_api.services.agent_views import agent_pins
+    from tranibor_api.db.models import Agent
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.rbac import Principal, Role
+    from tranibor_api.services.agent_views import agent_pins
 
     dev = await make_project(client, "dev")
     ops = await make_project(client, "ops")
@@ -193,7 +193,7 @@ async def test_platform_written_versions_have_a_message(
 ) -> None:
     import dataclasses
 
-    from choregos_core.agent_catalogue import entries, entry
+    from tranibor_core.agent_catalogue import entries, entry
 
     await as_user(client, ADMIN)
     created = await create_agent(client, "plain", message="  The first draft ")
@@ -215,7 +215,7 @@ async def test_platform_written_versions_have_a_message(
     document = {**old.document, "spec": {**old.document["spec"], "instructions": "Triage it, briefly."}}
     new = dataclasses.replace(old, version=old.version + 1, document=document)
     others = tuple(e for e in entries() if e.slug != "triager")
-    from choregos_api.services import agent_catalogue as service
+    from tranibor_api.services import agent_catalogue as service
 
     view = dataclasses.replace(service.offline_catalogue(), entries=(*others, new))
     monkeypatch.setattr(service, "offline_catalogue", lambda: view)
@@ -226,9 +226,9 @@ async def test_platform_written_versions_have_a_message(
 async def test_restore_copies_the_stored_bytes_not_a_re_serialisation(client: AsyncClient, org: str) -> None:
     """A version written before a field existed has a stored spec and checksum a re-serialisation would
     change: the restore keeps both as they were."""
-    from choregos_api.db.models import AgentVersion
-    from choregos_api.db.session import session_scope
     from sqlalchemy import update
+    from tranibor_api.db.models import AgentVersion
+    from tranibor_api.db.session import session_scope
 
     await _agent(client)
     await _publish(client, "helper", "Second.", 1)

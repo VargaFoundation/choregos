@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
-from choregos_adapters.oci import CosignVerifier
+from tranibor_adapters.oci import CosignVerifier
 
 REGISTRY = os.environ.get("CHOREGOS_COSIGN_REAL_REGISTRY", "")
 

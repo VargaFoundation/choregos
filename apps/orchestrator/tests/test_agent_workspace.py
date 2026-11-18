@@ -20,8 +20,8 @@ ITEM_SCOPE = ["src/orders/**", "tests/orders/**"]
 
 
 async def _network(setup: Fixture, *, project: dict[str, Any]) -> None:
-    from choregos_api.db.session import session_scope
-    from choregos_api.services import active_policy, policy_model
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services import active_policy, policy_model
 
     async with session_scope() as session:
         row = await active_policy(session, setup.project_id)
@@ -47,8 +47,8 @@ def _plan(setup: Fixture, **extra: Any) -> dict[str, Any]:
 
 
 async def _agent(setup: Fixture, **spec: Any) -> None:
-    from choregos_api.db.models import Agent, AgentVersion, Project
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Agent, AgentVersion, Project
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         project = await session.get(Project, setup.project_id)
@@ -70,14 +70,14 @@ async def _agent(setup: Fixture, **spec: Any) -> None:
 
 
 async def _prepared(setup: Fixture, **extra: Any) -> dict[str, Any]:
-    from choregos_orchestrator.activities.stage import prepare_stage
+    from tranibor_orchestrator.activities.stage import prepare_stage
 
     return dict((await prepare_stage(_plan(setup, **extra)))["stage_input"])
 
 
 async def _recorded_scope(setup: Fixture) -> list[str]:
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         run = await session.get(Run, f"{setup.work_item_id}-t-implement-1")
@@ -144,11 +144,11 @@ async def test_the_diff_gates_pass_on_a_run_that_never_cloned(
 ) -> None:
     """No branch (the SCM says 404), and whatever the agent wrote in its empty directory is no
     change to the repository: `diff_size_max files: 0` passes instead of "diff unavailable"."""
-    from choregos_adapters.errors import UpstreamError
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
-    from choregos_contracts import StageResult, StageStatus
-    from choregos_orchestrator.activities.gates import evaluate_gates
+    from tranibor_adapters.errors import UpstreamError
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
+    from tranibor_contracts import StageResult, StageStatus
+    from tranibor_orchestrator.activities.gates import evaluate_gates
 
     async def compare(repo: str, base: str, head: str) -> Any:
         raise UpstreamError("github", f"compare {base}...{head}", status_code=404)

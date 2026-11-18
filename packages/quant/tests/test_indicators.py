@@ -5,7 +5,7 @@ from __future__ import annotations
 import random
 
 import pytest
-from choregos_quant.strategies import BOUNDS, SIGNALS, Strategy, ema, rsi, signals, sma
+from tranibor_quant.strategies import BOUNDS, SIGNALS, Strategy, ema, rsi, signals, sma
 
 
 def test_sma() -> None:

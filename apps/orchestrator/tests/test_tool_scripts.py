@@ -9,12 +9,12 @@ from collections.abc import Iterator
 from typing import Any
 
 import pytest
-from choregos_contracts import StageInput, ToolScripts, ToolsPolicy
-from choregos_core.tool_scripts_switch import org_tool_scripts, tool_scripts_refusal, tool_scripts_switched_on
-from choregos_orchestrator.activities import evals
-from choregos_orchestrator.activities import stage as stage_activities
-from choregos_orchestrator.config import reset_settings_cache
-from choregos_orchestrator.context_reduction import resolve_tool_scripts, stage_input_payload
+from tranibor_contracts import StageInput, ToolScripts, ToolsPolicy
+from tranibor_core.tool_scripts_switch import org_tool_scripts, tool_scripts_refusal, tool_scripts_switched_on
+from tranibor_orchestrator.activities import evals
+from tranibor_orchestrator.activities import stage as stage_activities
+from tranibor_orchestrator.config import reset_settings_cache
+from tranibor_orchestrator.context_reduction import resolve_tool_scripts, stage_input_payload
 
 from .conftest import Fixture
 
@@ -34,8 +34,8 @@ def switch_on(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 
 
 async def _set_tools(project_id: str, tools: dict[str, Any] | None) -> None:
-    from choregos_api.db.session import session_scope
-    from choregos_api.services import active_policy, policy_model
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services import active_policy, policy_model
 
     async with session_scope() as session:
         row = await active_policy(session, project_id)
@@ -48,9 +48,9 @@ async def _set_tools(project_id: str, tools: dict[str, Any] | None) -> None:
 
 
 async def _set_ceiling(project_id: str, ceiling: dict[str, Any]) -> None:
-    from choregos_api.db.models import Organization, Project
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.definitions import CEILING_KEY
+    from tranibor_api.db.models import Organization, Project
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.definitions import CEILING_KEY
 
     async with session_scope() as session:
         project = await session.get(Project, project_id)
@@ -123,7 +123,7 @@ def test_an_inactive_setting_is_absent_from_the_payload_an_active_one_present(
 def stage_input_example() -> dict[str, Any]:
     import json
 
-    import choregos_contracts as contracts
+    import tranibor_contracts as contracts
 
     with (contracts.schemas_dir() / "examples" / "stage-input.example.json").open(encoding="utf-8") as fh:
         loaded: dict[str, Any] = json.load(fh)
@@ -162,8 +162,8 @@ async def test_the_organisation_s_ceiling_forbids_them(setup: Fixture, switch_on
 async def test_an_eval_cell_runs_the_mcp_door_only(setup: Fixture, switch_on: None) -> None:
     """An `mcp` cell (the default, S57-09) gives its run the MCP door only, whatever the policy offers."""
     await _set_tools(setup.project_id, OFFERED)
-    from choregos_api.db.session import session_scope
-    from choregos_api.services import active_policy, policy_model
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services import active_policy, policy_model
 
     async with session_scope() as session:
         row = await active_policy(session, setup.project_id)
@@ -223,8 +223,8 @@ def deployment(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
 
 async def _set_org_choice(project_id: str, choice: str | None) -> None:
     """What `PATCH /orgs/{org}` with `tool_scripts` writes (`apps/api/tests/test_org_tool_scripts.py`)."""
-    from choregos_api.db.models import Organization, Project
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Organization, Project
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         project = await session.get(Project, project_id)
@@ -327,8 +327,8 @@ async def test_the_ceiling_still_forbids_them_in_an_organisation_that_enables_th
 
 async def _eval_project(setup: Fixture) -> None:
     """The matrix's eval project: memory off, no `tools` in its policy (the cell decides)."""
-    from choregos_api.db.session import session_scope
-    from choregos_api.services import active_policy, policy_model
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services import active_policy, policy_model
 
     async with session_scope() as session:
         row = await active_policy(session, setup.project_id)
@@ -395,8 +395,8 @@ AGENT = "net-analyst"
 
 async def _agent_with(setup: Fixture, tools: dict[str, Any] | None) -> None:
     """A registry agent of the project's organisation; `tools` is its spec's `tools` (`None`: no default)."""
-    from choregos_api.db.models import Agent, AgentVersion, Project
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Agent, AgentVersion, Project
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         project = await session.get(Project, setup.project_id)
@@ -527,9 +527,9 @@ async def test_a_policy_stored_by_0_24_0_keeps_its_off_and_one_stored_now_says_n
 ) -> None:
     """0.23.0 to 0.24.0 wrote the default `off` into every stored policy: it still says `off`. A policy saved
     now from a YAML that does not write `scripts` is stored without it, and the agent's default applies."""
-    from choregos_api.db.session import session_scope
-    from choregos_api.services import active_policy
-    from choregos_core.policy import parse_policy
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services import active_policy
+    from tranibor_core.policy import parse_policy
 
     deployment(default=True)
     await _agent_with(setup, OFFERS)

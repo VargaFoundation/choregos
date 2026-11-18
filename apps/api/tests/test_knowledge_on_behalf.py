@@ -32,8 +32,8 @@ async def _grant_to(client: AsyncClient, *grants: dict[str, str], slug: str = "a
 
 
 async def _parent(project: dict[str, Any], key: str, initiated_by: str | None) -> None:
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         session.add(
@@ -58,7 +58,7 @@ async def _parent(project: dict[str, Any], key: str, initiated_by: str | None) -
 async def test_a_run_with_no_reader_behind_it_is_refused_a_restricted_base(
     client: AsyncClient, admin: str, project: dict[str, Any], initiated_by: str | None
 ) -> None:
-    from choregos_api.knowledge.serving import KnowledgeRefusedError
+    from tranibor_api.knowledge.serving import KnowledgeRefusedError
 
     await _restricted(client)
     with pytest.raises(KnowledgeRefusedError, match="restricted"):
@@ -76,7 +76,7 @@ async def test_a_base_that_is_not_restricted_is_served_whoever_started_the_run(
 async def test_the_initiator_reads_through_a_user_a_group_or_a_project_grant(
     client: AsyncClient, admin: str, project: dict[str, Any]
 ) -> None:
-    from choregos_api.knowledge.serving import KnowledgeRefusedError
+    from tranibor_api.knowledge.serving import KnowledgeRefusedError
 
     await _restricted(client)
     uid = await _uid(client, "reader@northwind.dev", org_role="viewer", groups=["hr"])
@@ -106,7 +106,7 @@ async def test_an_administrator_reads_every_restricted_base(
 async def test_a_fan_out_child_acts_for_its_parents_initiator(
     client: AsyncClient, admin: str, project: dict[str, Any]
 ) -> None:
-    from choregos_api.knowledge.serving import KnowledgeRefusedError
+    from tranibor_api.knowledge.serving import KnowledgeRefusedError
 
     await _restricted(client)
     uid = await _uid(client, "reader@northwind.dev", org_role="viewer")

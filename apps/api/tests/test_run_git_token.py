@@ -19,14 +19,14 @@ from .kits.run_git_token import run_token_for, run_with_repository
 @pytest.fixture
 def github_app(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
     """A GitHub App set up, and its token minting intercepted: we keep what it was asked for."""
-    from choregos_adapters.github import GitHubAppAuth, InstallationToken
+    from tranibor_adapters.github import GitHubAppAuth, InstallationToken
 
     monkeypatch.setenv("CHOREGOS_GITHUB_APP_ID", "5242171")
     monkeypatch.setenv(
         "CHOREGOS_GITHUB_APP_PRIVATE_KEY", "-----BEGIN RSA PRIVATE KEY-----\nx\n-----END RSA PRIVATE KEY-----"
     )
     # The App is read from the settings (ADR 0167), cached per process: read again.
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     reset_settings_cache()
     requests: list[dict[str, Any]] = []
@@ -48,7 +48,7 @@ async def test_a_run_receives_a_token_limited_to_its_repository(
     body = response.json()
     assert (body["token"], body["repository"]) == ("ghs_of_the_run", "globex/choregos-sandbox-dev")
     assert body["expires_at"]
-    from choregos_adapters.github import RUNNER_PERMISSIONS
+    from tranibor_adapters.github import RUNNER_PERMISSIONS
 
     assert github_app == [
         {"repo": "globex/choregos-sandbox-dev", "permissions": RUNNER_PERMISSIONS, "ttl_s": 3600}
@@ -61,7 +61,7 @@ async def test_a_run_receives_a_token_limited_to_its_repository(
 async def test_without_an_app_or_outside_github_the_token_is_null(
     client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     monkeypatch.delenv("CHOREGOS_GITHUB_APP_ID", raising=False)
     reset_settings_cache()

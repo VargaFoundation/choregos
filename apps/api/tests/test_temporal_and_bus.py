@@ -13,9 +13,9 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from choregos_api.events import EventBus, _payload_of, emit
-from choregos_api.temporal import RealTemporal, _readable_cause
-from choregos_contracts import EventType
+from tranibor_api.events import EventBus, _payload_of, emit
+from tranibor_api.temporal import RealTemporal, _readable_cause
+from tranibor_contracts import EventType
 
 
 class _Handle:
@@ -89,7 +89,7 @@ async def test_a_missing_or_slow_temporal_answers_unknown_rather_than_failing() 
     temporal = _temporal(_Slow("RUNNING"))
     with pytest.MonkeyPatch.context() as mp:
         # two seconds of wait at most: we do not pay for them in a test
-        import choregos_api.temporal as module
+        import tranibor_api.temporal as module
 
         original = module.asyncio.wait_for
 
@@ -158,7 +158,7 @@ async def test_a_subscriber_receives_the_replay_then_the_live_events() -> None:
 
 
 def test_a_payload_too_heavy_is_lightened_for_the_notification() -> None:
-    from choregos_api import events as module
+    from tranibor_api import events as module
 
     event = emit(
         EventType.RUN_PROGRESS,
@@ -177,7 +177,7 @@ def test_a_payload_too_heavy_is_lightened_for_the_notification() -> None:
 
 
 def bus_event(bus: EventBus, type_: EventType, **data: Any) -> Any:
-    from choregos_api.events import ChoregosEvent
+    from tranibor_api.events import ChoregosEvent
 
     subject = data.pop("subject", None)
     project_slug = data.pop("project_slug", None)

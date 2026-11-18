@@ -9,10 +9,10 @@ import tarfile
 from typing import Any
 
 import pytest
-from choregos_api.services.skill_gate import OPEN_LICENCES, assess
-from choregos_api.services.skill_sources import read_tarball
-from choregos_api.services.skills import digest, front_matter
-from choregos_core import skill_catalogue
+from tranibor_api.services.skill_gate import OPEN_LICENCES, assess
+from tranibor_api.services.skill_sources import read_tarball
+from tranibor_api.services.skills import digest, front_matter
+from tranibor_core import skill_catalogue
 
 from tools.catalogues import _github, _recording
 from tools.catalogues import build_skill_catalogue as gen

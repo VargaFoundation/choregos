@@ -33,10 +33,10 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from choregos_adapters.fakes.executor import FakeExecutor
-from choregos_contracts import StageInput, StageResult, StageStatus
-from choregos_core.domain import ExecRef, ExecStatus, StageJobSpec, utcnow
 from httpx import AsyncClient
+from tranibor_adapters.fakes.executor import FakeExecutor
+from tranibor_contracts import StageInput, StageResult, StageStatus
+from tranibor_core.domain import ExecRef, ExecStatus, StageJobSpec, utcnow
 
 from .conftest import Platform, login
 
@@ -62,8 +62,8 @@ async def _replayed(handle: Any, archive: str) -> None:
     """The campaign's history replays against the current code, and is archived for the next ones
     (`CHOREGOS_RECORD_HISTORY=1`): a change to the interpreter that would decide differently
     on a job step fails `tests/replay`."""
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.worker import Replayer
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     history = await handle.fetch_history()
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
@@ -128,8 +128,8 @@ class Bench(FakeExecutor):
         return ref
 
     async def _job(self, spec: StageJobSpec) -> None:
-        from choregos_runner.config import RunnerSettings
-        from choregos_runner.runner import Runner
+        from tranibor_runner.config import RunnerSettings
+        from tranibor_runner.runner import Runner
 
         settings = RunnerSettings(
             run_id=spec.run_id,
@@ -152,13 +152,13 @@ class Bench(FakeExecutor):
 
 @pytest.fixture
 def market(monkeypatch: pytest.MonkeyPatch) -> Any:
-    import choregos_adapters
-    from choregos_adapters.fakes.marketdata import FakeMarketData
+    import tranibor_adapters
+    from tranibor_adapters.fakes.marketdata import FakeMarketData
 
     fake = FakeMarketData()
     fake.fixtures["TRND.US"] = sawtooth()
     fake.fixtures["TRN2.US"] = sawtooth(seed=11, phase=20)
-    monkeypatch.setattr(choregos_adapters, "FAKE_MARKETDATA", fake)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_MARKETDATA", fake)
     monkeypatch.setenv("CONNECTOR_E2E_MARKETDATA_KEY", KEY)
     return fake
 
@@ -167,8 +167,8 @@ def market(monkeypatch: pytest.MonkeyPatch) -> Any:
 async def api_url(platform: Platform, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[str]:
     """The API on a real port: the runner, and the job's subprocess, reach it over HTTP."""
     import uvicorn
-    from choregos_api.main import create_app
-    from choregos_orchestrator.config import reset_settings_cache
+    from tranibor_api.main import create_app
+    from tranibor_orchestrator.config import reset_settings_cache
 
     server = uvicorn.Server(
         uvicorn.Config(create_app(), host="127.0.0.1", port=0, log_level="warning", lifespan="off")
@@ -192,9 +192,9 @@ async def api_url(platform: Platform, monkeypatch: pytest.MonkeyPatch) -> AsyncI
 async def _child_fields(stage_input: StageInput) -> dict[str, Any]:
     """The fields of the product's work item, as the platform stored them: the product's measured
     metrics, copied from the campaign's backtest when the child was opened."""
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         item = (
@@ -262,9 +262,9 @@ async def editing_analyst(stage_input: StageInput) -> StageResult:
     oos = fields["product"]["strategies"][fields["product"]["best_in_sample"]]["oos"]
     if oos["cagr"] != FORGED_CAGR:
         oos["cagr"] = FORGED_CAGR
-        from choregos_api.db.models import WorkItem
-        from choregos_api.db.session import session_scope
         from sqlalchemy import select
+        from tranibor_api.db.models import WorkItem
+        from tranibor_api.db.session import session_scope
 
         async with session_scope() as session:
             item_id = (
@@ -312,7 +312,7 @@ class _Items(dict[str, Any]):
     state to a tracker that has never heard of it — the fake learns it on first sight."""
 
     def __missing__(self, key: str) -> Any:
-        from choregos_core.domain import WorkItemData
+        from tranibor_core.domain import WorkItemData
 
         self[key] = WorkItemData(key=key, title=key, state="Todo")
         return self[key]
@@ -321,8 +321,8 @@ class _Items(dict[str, Any]):
 async def _campaign(
     platform: Platform, project: dict[str, Any], fields: dict[str, Any]
 ) -> tuple[dict[str, str], Any]:
-    from choregos_api.temporal import interpreter_id
-    from choregos_core.domain import WorkItemData
+    from tranibor_api.temporal import interpreter_id
+    from tranibor_core.domain import WorkItemData
 
     if not isinstance(platform.adapters.tracker.items, _Items):
         platform.adapters.tracker.items = _Items(platform.adapters.tracker.items)
@@ -373,9 +373,9 @@ async def _artifact(client: AsyncClient, item_id: str, name: str) -> dict[str, A
 
 async def _child(client: AsyncClient, parent_key: str, rank: int) -> dict[str, Any]:
     """The child work item of a fan-out, by its key (`<parent>.<rank>`): id, state, fields."""
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     for _ in range(600):
         async with session_scope() as session:
@@ -391,9 +391,9 @@ async def _child(client: AsyncClient, parent_key: str, rank: int) -> dict[str, A
 
 
 async def _children(parent_key: str) -> list[dict[str, Any]]:
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = (
@@ -441,9 +441,9 @@ async def test_a_trending_product_opens_a_child_the_owner_adopts_then_the_campai
         assert all(KEY not in s.model_dump_json() for s in bench.started), "no provider key reaches a run"
 
         # The verdict rests on the facts the backtest job MEASURED.
-        from choregos_api.db.models import Run
-        from choregos_api.db.session import session_scope
         from sqlalchemy import select
+        from tranibor_api.db.models import Run
+        from tranibor_api.db.session import session_scope
 
         async with session_scope() as session:
             backtest = (await session.execute(select(Run).where(Run.stage_role == "backtest"))).scalar_one()
@@ -630,8 +630,8 @@ async def test_a_child_whose_fields_were_edited_is_checked_against_the_parents_m
 async def test_a_product_memo_created_by_hand_has_no_measured_numbers_to_quote(
     platform: Platform, worker: Any, market: Any, api_url: str, tmp_path: Path
 ) -> None:
-    from choregos_api.temporal import interpreter_id
-    from choregos_core.domain import WorkItemData
+    from tranibor_api.temporal import interpreter_id
+    from tranibor_core.domain import WorkItemData
 
     client = platform.client
     await login(client)
@@ -691,9 +691,9 @@ async def test_sources_that_disagree_send_the_campaign_to_review_before_any_back
     roles = [s.stage_input.transition.role for s in bench.started if s.stage_input]
     assert roles == ["snapshot"], f"nothing runs after a refused snapshot: {roles}"
 
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         snapshot = (await session.execute(select(Run).where(Run.stage_role == "snapshot"))).scalar_one()
@@ -767,10 +767,10 @@ async def test_a_relaunched_campaign_reads_the_stored_snapshot_and_computes_the_
     `t-snapshot` and `t-backtest` again on the same request. The provider is called by the first
     snapshot only; the second snapshot reuses the stored bars; both backtests read bars with the same
     SHA-256; the same job on the same snapshot gives the same metrics."""
-    from choregos_api.db.models import ArtifactRecord, Run
-    from choregos_api.db.session import session_scope
-    from choregos_contracts import artifact_digest
     from sqlalchemy import select
+    from tranibor_api.db.models import ArtifactRecord, Run
+    from tranibor_api.db.session import session_scope
+    from tranibor_contracts import artifact_digest
 
     client = platform.client
     await login(client)

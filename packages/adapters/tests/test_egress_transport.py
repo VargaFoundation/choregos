@@ -6,11 +6,11 @@ from __future__ import annotations
 import httpx
 import pytest
 import structlog
-from choregos_adapters.errors import AdapterError
-from choregos_adapters.fakes.mcp import FakeMcpServer
-from choregos_adapters.http.egress import GuardedTransport, guarded
-from choregos_adapters.mcp import McpClient
-from choregos_core.egress import AllowedRule, EgressPolicy, EgressRefusedError, use_policy
+from tranibor_adapters.errors import AdapterError
+from tranibor_adapters.fakes.mcp import FakeMcpServer
+from tranibor_adapters.http.egress import GuardedTransport, guarded
+from tranibor_adapters.mcp import McpClient
+from tranibor_core.egress import AllowedRule, EgressPolicy, EgressRefusedError, use_policy
 
 TOOLS = [{"name": "read", "inputSchema": {"type": "object"}, "annotations": {"readOnlyHint": True}}]
 

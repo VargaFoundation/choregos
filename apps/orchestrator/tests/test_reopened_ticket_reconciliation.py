@@ -13,12 +13,12 @@ from typing import Any
 
 import httpx
 import pytest
-from choregos_adapters.github.client import GitHubClient
-from choregos_adapters.http import RestClient
-from choregos_adapters.tracker.github import GitHubTracker
-from choregos_adapters.tracker.jira import JiraTracker
-from choregos_orchestrator.activities import tracker as tracker_activities
-from choregos_orchestrator.train_client import clear_fake_signals, fake_restarts, fake_starts
+from tranibor_adapters.github.client import GitHubClient
+from tranibor_adapters.http import RestClient
+from tranibor_adapters.tracker.github import GitHubTracker
+from tranibor_adapters.tracker.jira import JiraTracker
+from tranibor_orchestrator.activities import tracker as tracker_activities
+from tranibor_orchestrator.train_client import clear_fake_signals, fake_restarts, fake_starts
 
 from .conftest import Fixture
 
@@ -31,8 +31,8 @@ ENDED = datetime(2026, 11, 2, 9, 0, tzinfo=UTC)
 
 async def _end(setup: Fixture, key: str | None = None, state: str = "deployed_prod") -> str:
     """The fixture's work item (or a new one under `key`) at its end, on 2 November."""
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         if key is None:
@@ -47,8 +47,8 @@ async def _end(setup: Fixture, key: str | None = None, state: str = "deployed_pr
 
 
 async def _item(item_id: str) -> Any:
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         item = await session.get(WorkItem, item_id)

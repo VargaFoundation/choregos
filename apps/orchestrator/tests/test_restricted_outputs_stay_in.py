@@ -20,8 +20,8 @@ SECRET = "Ana earns 91k in band E4"
 
 
 async def _mark(setup: Fixture, marked: bool) -> None:
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         item = await session.get(WorkItem, setup.work_item_id)
@@ -44,9 +44,9 @@ def _memory_text(setup: Fixture) -> str:
 
 @pytest.mark.parametrize("marked", [True, False])
 async def test_the_status_comment_carries_no_run_summary(setup: Fixture, marked: bool) -> None:
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities.tracker import update_status_comment
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities.tracker import update_status_comment
 
     await _mark(setup, marked)
     async with session_scope() as session:
@@ -68,8 +68,8 @@ async def test_the_status_comment_carries_no_run_summary(setup: Fixture, marked:
 async def test_the_question_goes_to_the_console_not_to_the_tracker_or_slack(
     setup: Fixture, marked: bool
 ) -> None:
-    from choregos_api.knowledge.marked import WITHHELD
-    from choregos_orchestrator.activities.tracker import create_human_request
+    from tranibor_api.knowledge.marked import WITHHELD
+    from tranibor_orchestrator.activities.tracker import create_human_request
 
     await _mark(setup, marked)
     await create_human_request(
@@ -91,10 +91,10 @@ async def test_the_question_goes_to_the_console_not_to_the_tracker_or_slack(
 async def test_a_finding_of_a_marked_work_item_files_nothing_of_it_and_is_marked(
     setup: Fixture, marked: bool
 ) -> None:
-    from choregos_api.db.models import Finding, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities import findings as findings_activities
     from sqlalchemy import select
+    from tranibor_api.db.models import Finding, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities import findings as findings_activities
 
     await _mark(setup, marked)
     async with session_scope() as session:
@@ -127,11 +127,11 @@ async def test_a_finding_of_a_marked_work_item_files_nothing_of_it_and_is_marked
 
 @pytest.mark.parametrize("marked", [True, False])
 async def test_a_marked_work_item_writes_no_shared_memory(setup: Fixture, marked: bool) -> None:
-    from choregos_api.db.models import Finding, Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
-    from choregos_orchestrator.activities.memory import ingest_sources
-    from choregos_orchestrator.activities.tracker import close_out
+    from tranibor_api.db.models import Finding, Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
+    from tranibor_orchestrator.activities.memory import ingest_sources
+    from tranibor_orchestrator.activities.tracker import close_out
 
     await _mark(setup, marked)
     async with session_scope() as session:
@@ -174,10 +174,10 @@ async def test_a_marked_work_item_writes_no_shared_memory(setup: Fixture, marked
 async def test_the_pull_request_body_is_the_link_and_the_code_still_ships(
     setup: Fixture, marked: bool
 ) -> None:
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.knowledge.marked import WITHHELD
-    from choregos_orchestrator.activities.scm import open_pull_request
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.knowledge.marked import WITHHELD
+    from tranibor_orchestrator.activities.scm import open_pull_request
 
     await _mark(setup, marked)
     async with session_scope() as session:
@@ -192,8 +192,8 @@ async def test_the_pull_request_body_is_the_link_and_the_code_still_ships(
 
 
 async def test_a_fan_out_child_of_a_marked_parent_is_marked(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.children import spawn_children
     from temporalio.testing import ActivityEnvironment
+    from tranibor_orchestrator.activities.children import spawn_children
 
     from .test_fan_out import PARENT_ID, SYMBOLS, _install, _items, _research
 
@@ -219,10 +219,10 @@ async def test_a_fan_out_child_of_a_marked_parent_is_marked(setup: Fixture) -> N
 
 @pytest.mark.parametrize("marked", [True, False])
 async def test_a_duplicate_finding_comments_without_its_evidence(setup: Fixture, marked: bool) -> None:
-    from choregos_api.db.models import Finding, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities import findings as findings_activities
     from sqlalchemy import select
+    from tranibor_api.db.models import Finding, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities import findings as findings_activities
 
     async def finding() -> str:
         async with session_scope() as session:

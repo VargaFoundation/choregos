@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from choregos_orchestrator.activities import tracker as tracker_activities
-from choregos_orchestrator.train_client import clear_fake_signals
+from tranibor_orchestrator.activities import tracker as tracker_activities
+from tranibor_orchestrator.train_client import clear_fake_signals
 
 from .conftest import Fixture
 from .kits.registry_agent import agent_stage_plan, install_agent
@@ -25,9 +25,9 @@ BLOCK: dict[str, Any] = {
 
 async def test_the_poll_files_what_the_tracker_says_about_the_ticket(setup: Fixture) -> None:
     """The issue the poll takes on keeps its requester, labels and answers: `fields.tracker`."""
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     clear_fake_signals()
     key = setup.adapters.tracker.seed("New project", labels=["agent-ready"])
@@ -44,10 +44,10 @@ async def test_the_poll_files_what_the_tracker_says_about_the_ticket(setup: Fixt
 async def test_the_instructions_read_the_requester_and_the_catalogue_context_marks_it_as_data(
     setup: Fixture,
 ) -> None:
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_core.agent_catalogue import _context
-    from choregos_orchestrator.activities.stage import prepare_stage
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_core.agent_catalogue import _context
+    from tranibor_orchestrator.activities.stage import prepare_stage
 
     async with session_scope() as session:
         item = await session.get(WorkItem, setup.work_item_id)

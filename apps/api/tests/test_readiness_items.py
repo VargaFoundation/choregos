@@ -6,8 +6,8 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
-from choregos_adapters.executor.agent_sandbox import runtime_class_refusal
-from choregos_api.services.readiness import (
+from tranibor_adapters.executor.agent_sandbox import runtime_class_refusal
+from tranibor_api.services.readiness import (
     ConnectorFact,
     Facts,
     ObjectStoreFact,
@@ -35,7 +35,7 @@ from choregos_api.services.readiness import (
     item_workflow_template,
     runtime_fact,
 )
-from choregos_contracts import Policy, ProjectConfig
+from tranibor_contracts import Policy, ProjectConfig
 
 NOW = datetime(2026, 10, 16, 12, 0, tzinfo=UTC)
 

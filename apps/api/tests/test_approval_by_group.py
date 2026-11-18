@@ -19,20 +19,20 @@ GROUP = "netops-approvers"
 
 @pytest.fixture
 def firewall(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
-    import choregos_adapters
-    from choregos_adapters.fakes.netops import FakePfSense
+    import tranibor_adapters
+    from tranibor_adapters.fakes.netops import FakePfSense
 
     fake = FakePfSense()
-    monkeypatch.setattr(choregos_adapters, "FAKE_NETOPS", {"pfsense": fake})
+    monkeypatch.setattr(tranibor_adapters, "FAKE_NETOPS", {"pfsense": fake})
     monkeypatch.setenv("CONNECTOR_APPROVAL_TEST_PFSENSE_KEY", "-".join(("pfsense", "approval", "test")))
     yield fake
 
 
 async def _member(client: AsyncClient, email: str, role: str, groups: list[str]) -> None:
     """An organisation member whose identity provider says `groups` (as its sign-in would store them)."""
-    from choregos_api.db.models import User
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import User
+    from tranibor_api.db.session import session_scope
 
     added = await client.post(f"{ORG}/members", json={"email": email, "role": role})
     assert added.status_code in {200, 201}, added.text
@@ -49,9 +49,9 @@ async def _session(app: Any, email: str) -> AsyncClient:
 
 async def _proposed_rule_change(client: AsyncClient, project: dict[str, Any], group: str = GROUP) -> str:
     """The pfSense connector, its update approved by `netops-approvers`, and a netops run proposing one."""
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.security import mint_run_token
+    from tranibor_api.db.models import Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.security import mint_run_token
 
     body = {"name": "pfsense", "type": "pfsense", "config": {"base_url": "https://fw.example.test"},
             "secret_refs": {"api_key": "env:CONNECTOR_APPROVAL_TEST_PFSENSE_KEY"}}  # fmt: skip
@@ -89,7 +89,7 @@ async def _proposed_rule_change(client: AsyncClient, project: dict[str, Any], gr
 async def test_only_a_member_of_the_named_group_approves_a_firewall_rule(
     client: AsyncClient, project: dict[str, Any], firewall: Any, app: Any
 ) -> None:
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.temporal import get_temporal
 
     action_id = await _proposed_rule_change(client, project)
     path = f"/api/v1/projects/{project['id']}/actions/{action_id}"
@@ -138,11 +138,11 @@ async def test_a_read_has_no_approver_and_the_group_can_be_cleared(
 async def test_the_identity_provider_s_groups_are_kept_at_sign_in_and_replaced_at_the_next(
     client: AsyncClient, org: str
 ) -> None:
-    from choregos_api.config import get_settings
-    from choregos_api.db.models import User
-    from choregos_api.db.session import session_scope
-    from choregos_api.routers.auth import terminer_la_connexion
     from sqlalchemy import select
+    from tranibor_api.config import get_settings
+    from tranibor_api.db.models import User
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.routers.auth import terminer_la_connexion
 
     async def sign_in(groups: list[str]) -> list[str]:
         async with session_scope() as session:

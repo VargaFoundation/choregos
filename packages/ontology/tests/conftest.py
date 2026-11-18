@@ -50,7 +50,7 @@ def mutate(core_ref: Path) -> Mutate:
 def plugin(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """The plugin, active for the duration of the test: its entry points come from the installed
     package, and `CHOREGOS_ONTOLOGY_TRIAL=1` switches it on — exactly as in a deployment."""
-    from choregos_api.extensions import reset
+    from tranibor_api.extensions import reset
 
     monkeypatch.setenv("CHOREGOS_ONTOLOGY_TRIAL", "1")
     try:
@@ -62,11 +62,11 @@ def plugin(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 @pytest.fixture
 async def app(plugin: None, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[Any]:
     """The core's application, built AFTER the plugin is installed — as a pod would start."""
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.db import session as db_session
-    from choregos_api.db.session import create_all
-    from choregos_api.main import create_app
-    from choregos_api.temporal import FakeTemporal, set_temporal
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.db import session as db_session
+    from tranibor_api.db.session import create_all
+    from tranibor_api.main import create_app
+    from tranibor_api.temporal import FakeTemporal, set_temporal
 
     monkeypatch.setenv("CHOREGOS_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/plugin.db")
     reset_settings_cache()
@@ -83,8 +83,8 @@ async def app(plugin: None, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
 @pytest.fixture
 async def client(app: Any) -> AsyncIterator[AsyncClient]:
     """An admin of the `northwind` organisation, logged in."""
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
 
     from .helpers import sign_in
 
@@ -148,11 +148,11 @@ class TestServerGateway:
 async def temporal(app: Any) -> AsyncIterator[Any]:
     """A Temporal test server and the platform's workers: the `ActionWorkflow` plays the ontology's
     effects, as in a deployment."""
-    from choregos_api.temporal import set_temporal
-    from choregos_orchestrator.activities import ALL_ACTIVITIES
-    from choregos_orchestrator.testing import workers_by_queue
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS, WORKFLOW_ACTIVITIES
     from temporalio.testing import WorkflowEnvironment
+    from tranibor_api.temporal import set_temporal
+    from tranibor_orchestrator.activities import ALL_ACTIVITIES
+    from tranibor_orchestrator.testing import workers_by_queue
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS, WORKFLOW_ACTIVITIES
 
     environment = await WorkflowEnvironment.start_time_skipping()
     set_temporal(TestServerGateway(environment.client))

@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import pytest
-from choregos_contracts import Policy
-from choregos_core import load_preset, policy_warnings
-from choregos_core.policy_ceiling import PolicyCeiling, clamp, widenings
 from pydantic import ValidationError
+from tranibor_contracts import Policy
+from tranibor_core import load_preset, policy_warnings
+from tranibor_core.policy_ceiling import PolicyCeiling, clamp, widenings
 
 
 def _policy(**network: object) -> Policy:

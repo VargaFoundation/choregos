@@ -10,9 +10,9 @@ from __future__ import annotations
 import copy
 from typing import Any
 
-import choregos_contracts as contracts
 import pytest
-from choregos_contracts import HumanActor, Workflow
+import tranibor_contracts as contracts
+from tranibor_contracts import HumanActor, Workflow
 
 from .test_contracts import _compare, _load
 from .test_decision_contract import _both

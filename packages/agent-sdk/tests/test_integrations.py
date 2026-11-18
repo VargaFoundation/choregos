@@ -12,9 +12,9 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from choregos_agent_sdk import PermissionDenied
-from choregos_agent_sdk.integrations import langchain, openai_agents, pydantic_ai
-from choregos_agent_sdk.tools import ToolResult, Tools, ToolSpec
+from tranibor_agent_sdk import PermissionDenied
+from tranibor_agent_sdk.integrations import langchain, openai_agents, pydantic_ai
+from tranibor_agent_sdk.tools import ToolResult, Tools, ToolSpec
 
 from .fakes import FakeConn, make_session
 

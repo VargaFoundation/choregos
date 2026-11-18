@@ -15,10 +15,10 @@ import sys
 def test_the_activities_register_the_factory_that_supplies_the_rendezvous() -> None:
     """A process of its own, as a worker is: what another test registered is not taken for it."""
     probe = (
-        "from choregos_adapters import registry, builtins\n"
+        "from tranibor_adapters import registry, builtins\n"
         "assert registry._REGISTRY[('mcp', 'mcp-outpost')] is builtins._mcp_outpost_client\n"
-        "import choregos_orchestrator.activities.base\n"
-        "from choregos_api import adapter_wiring\n"
+        "import tranibor_orchestrator.activities.base\n"
+        "from tranibor_api import adapter_wiring\n"
         "assert registry._REGISTRY[('mcp', 'mcp-outpost')] is adapter_wiring._outpost_tools\n"
     )
     done = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True, check=False)

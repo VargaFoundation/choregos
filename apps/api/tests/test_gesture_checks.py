@@ -20,7 +20,7 @@ from sqlalchemy import func, select
 EXTENSION = """
 import time
 
-from choregos_api.extensions import GestureRefused, declare_gesture_check
+from tranibor_api.extensions import GestureRefused, declare_gesture_check
 
 STATE = {"max_projects": None, "freshness_s": None, "seen": []}
 
@@ -50,8 +50,8 @@ def plug_in():
 
 @pytest.fixture
 def extension(tmp_path: pathlib.Path) -> Iterator[dict[str, Any]]:
-    from choregos_adapters import load_extensions
-    from choregos_api.extensions import reset
+    from tranibor_adapters import load_extensions
+    from tranibor_api.extensions import reset
 
     root = tmp_path / "site"
     root.mkdir()
@@ -91,8 +91,8 @@ def _project(slug: str) -> dict[str, Any]:
 
 
 async def _count_projects() -> int:
-    from choregos_api.db.models import Project
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Project
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         return int((await session.execute(select(func.count()).select_from(Project))).scalar_one())
@@ -119,9 +119,9 @@ async def test_one_project_too_many_is_refuseded_before_it_is_created(
 
 
 async def _human_request(client: AsyncClient, project: dict[str, Any]) -> str:
-    from choregos_api.db.base import utcnow
-    from choregos_api.db.models import HumanRequest
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.base import utcnow
+    from tranibor_api.db.models import HumanRequest
+    from tranibor_api.db.session import session_scope
 
     await client.put(
         f"/api/v1/projects/{project['id']}/connectors/tracker", json={"type": "internal", "config": {}}
@@ -146,8 +146,8 @@ async def _human_request(client: AsyncClient, project: dict[str, Any]) -> str:
 async def test_an_approval_without_a_fresh_authentication_is_refused_with_401(
     client: AsyncClient, project: dict[str, Any], extension: dict[str, Any]
 ) -> None:
-    from choregos_api.db.models import HumanRequest
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import HumanRequest
+    from tranibor_api.db.session import session_scope
 
     item = await _human_request(client, project)
     extension["freshness_s"] = -1  # no session is fresh enough
@@ -171,8 +171,8 @@ async def test_an_approval_without_a_fresh_authentication_is_refused_with_401(
 async def test_a_release_approval_goes_through_the_same_check(
     client: AsyncClient, project: dict[str, Any], extension: dict[str, Any]
 ) -> None:
-    from choregos_api.db.models import Release
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Release
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         release = Release(project_id=project["id"], env="prod", status="awaiting_approval", items=[])
@@ -188,7 +188,7 @@ async def test_a_release_approval_goes_through_the_same_check(
 
 
 async def test_an_unknown_gesture_is_refused_at_declaration() -> None:
-    from choregos_api.extensions import declare_gesture_check
+    from tranibor_api.extensions import declare_gesture_check
 
     with pytest.raises(ValueError, match="geste inconnu"):  # lang: fr-ok - the message is pinned
         declare_gesture_check("project.delete", "x", lambda s, d: None)

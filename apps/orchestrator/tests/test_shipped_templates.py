@@ -15,7 +15,7 @@ def test_the_image_ships_the_templates() -> None:
 
 
 def test_the_templates_directory_is_configurable(monkeypatch) -> None:  # type: ignore[no-untyped-def]
-    from choregos_orchestrator.activities.provisioning import templates_dir
+    from tranibor_orchestrator.activities.provisioning import templates_dir
 
     assert (templates_dir() / "github-tekton-argo-k8s" / "manifest.yaml").exists()
     monkeypatch.setenv("CHOREGOS_TEMPLATES_DIR", "/app/templates")

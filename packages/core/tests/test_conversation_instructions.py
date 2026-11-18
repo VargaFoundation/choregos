@@ -4,12 +4,12 @@ installation's config and the caller's preferences, never with a sample (S63-28,
 from __future__ import annotations
 
 import pytest
-from choregos_core.instructions import (
+from jinja2.exceptions import SecurityError
+from tranibor_core.instructions import (
     SAMPLE_VARIABLES,
     instruction_errors,
     render_conversation_instructions,
 )
-from jinja2.exceptions import SecurityError
 
 
 def test_a_template_that_reads_preferences_publishes() -> None:
@@ -55,7 +55,7 @@ def test_an_empty_preferences_is_falsy_in_a_condition() -> None:
 
 
 def test_the_work_item_context_of_a_plugin_agent_is_left_out_of_a_conversation() -> None:
-    from choregos_core.agent_catalogue import entry_of, without_context
+    from tranibor_core.agent_catalogue import entry_of, without_context
 
     entry = entry_of(
         {
@@ -78,8 +78,8 @@ def test_a_task_run_renders_the_values_and_keeps_its_run_variables_strict() -> N
     """#1784: a task run reads the installation's values; a missing key renders empty, `default` applies,
     `items` is a key, and a run variable that does not exist is still an error, as in any run."""
     import pytest
-    from choregos_core.instructions import render_task_instructions
     from jinja2 import UndefinedError
+    from tranibor_core.instructions import render_task_instructions
 
     source = (
         "{{ config.house_name }}|{{ preferences.missing }}|{{ preferences.horizon | default('none') }}"

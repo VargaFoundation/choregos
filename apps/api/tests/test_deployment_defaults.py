@@ -19,7 +19,7 @@ ORG = "/api/v1/orgs/northwind"
 
 @pytest.fixture
 def deployment(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     monkeypatch.setenv("CHOREGOS_DEFAULT_AGENT_BACKEND", "opencode")
     monkeypatch.setenv("CHOREGOS_ALLOWED_AGENT_BACKENDS", '["opencode", "codex"]')
@@ -71,7 +71,7 @@ async def test_without_a_deployment_default_nothing_changes(client: AsyncClient,
 async def test_a_lone_backend_is_also_the_only_one_allowed(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     monkeypatch.setenv("CHOREGOS_DEFAULT_AGENT_BACKEND", "opencode")
     reset_settings_cache()

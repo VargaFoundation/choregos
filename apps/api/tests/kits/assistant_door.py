@@ -25,7 +25,7 @@ AUDIENCE = "choregos-mcp"
 
 @pytest.fixture
 def offline(tmp_path: Path) -> Iterator[Path]:
-    from choregos_api.services.plugin_supply import OfflineDirectory, use_plugin_supply
+    from tranibor_api.services.plugin_supply import OfflineDirectory, use_plugin_supply
 
     root = tmp_path / "plugins"
     shutil.copytree(FIXTURE, root / "investment-assistant" / "0.1.0")
@@ -43,9 +43,9 @@ async def install_plugin(client: AsyncClient) -> None:
 
 
 async def connector(name: str, operations: tuple[str, ...]) -> None:
-    from choregos_api.db.models import ConnectorOperation, Organization, OrgConnector
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import ConnectorOperation, Organization, OrgConnector
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         org_id = (await session.execute(select(Organization.id))).scalar_one()
@@ -84,8 +84,8 @@ def idp_token(private_key: Any, **overrides: Any) -> str:
 @pytest.fixture
 def idp(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
     """An identity provider that publishes one key; the door follows the console's issuer."""
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.mcp.oauth import KEYS
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.mcp.oauth import KEYS
 
     monkeypatch.setenv("CHOREGOS_MCP_OAUTH_ENABLED", "true")
     monkeypatch.setenv("CHOREGOS_OIDC_ISSUER", ISSUER)

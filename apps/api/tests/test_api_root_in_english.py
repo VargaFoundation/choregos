@@ -13,7 +13,7 @@ from types import ModuleType
 import pytest
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
-SRC = "apps/api/src/choregos_api/"
+SRC = "apps/api/src/tranibor_api/"
 
 OWNED = (
     "__init__",
@@ -61,7 +61,7 @@ def test_api_root_has_no_french() -> None:
 
 
 def test_the_rate_limiter_reads_its_window_from_the_module(monkeypatch: pytest.MonkeyPatch) -> None:
-    from choregos_api import rate_limit
+    from tranibor_api import rate_limit
 
     monkeypatch.setattr(rate_limit, "WINDOW_S", 1.0)
     limiter = rate_limit.RateLimiter(per_minute=1)
@@ -90,13 +90,13 @@ FORMER_EDITION_NAMES = (
 
 @pytest.mark.parametrize("former", FORMER_EDITION_NAMES)
 def test_edition_former_names_are_gone(former: str) -> None:
-    from choregos_api import edition
+    from tranibor_api import edition
 
     assert not hasattr(edition, former)
 
 
 def test_edition_declare_refuses_the_former_keyword() -> None:
-    from choregos_api import edition
+    from tranibor_api import edition
 
     edition.reset()
     try:
@@ -113,7 +113,7 @@ def test_edition_declare_refuses_the_former_keyword() -> None:
 
 
 def test_principal_former_attribute_is_gone() -> None:
-    from choregos_api.rbac import Principal
+    from tranibor_api.rbac import Principal
 
     principal = Principal(user_id="u", email="u@example.test")
     assert principal.authenticated_at is None

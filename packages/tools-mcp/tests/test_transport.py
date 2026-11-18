@@ -2,16 +2,16 @@
 
 MCP's Streamable HTTP transport wants 202 for a notification. The sidecar used to answer 204,
 which clients tolerate although the protocol does not allow it; the API gateway (ADR 0030) and
-the sidecar now share the same envelope (`choregos_core.mcp`).
+the sidecar now share the same envelope (`tranibor_core.mcp`).
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from choregos_tools_mcp.app import create_app
-from choregos_tools_mcp.server import McpServer
 from httpx import ASGITransport, AsyncClient
+from tranibor_tools_mcp.app import create_app
+from tranibor_tools_mcp.server import McpServer
 
 
 async def test_a_notification_answers_202() -> None:

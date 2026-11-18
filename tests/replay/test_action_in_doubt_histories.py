@@ -65,7 +65,7 @@ def _failures(events: list[dict[str, Any]]) -> list[tuple[str, bool]]:
 
 
 def test_the_patch_is_declared_under_the_id_the_archive_holds() -> None:
-    from choregos_orchestrator.workflows import action
+    from tranibor_orchestrator.workflows import action
 
     assert action.IN_DOUBT_PATCH == MARKER, "a patch id is never renamed: histories hold it"
 

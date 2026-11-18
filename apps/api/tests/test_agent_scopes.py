@@ -78,9 +78,9 @@ async def test_a_project_owner_owns_the_agents_of_their_project_only(client: Asy
 
 
 async def test_an_org_admin_changes_a_common_agent_and_it_is_audited(client: AsyncClient, org: str) -> None:
-    from choregos_api.db.models import AuditLog
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import AuditLog
+    from tranibor_api.db.session import session_scope
 
     common = await install_common(client)
     assert common["scope"] == "platform"
@@ -143,9 +143,9 @@ async def test_a_project_member_does_not_see_another_projects_agents(client: Asy
     await create_agent(client, "dev-helper", scope="project", project="dev")
     await add_member(client, OWNER, "project_owner", project="dev")
     # a person who belongs to `dev` only: no organisation role
-    from choregos_api.db.models import Membership
-    from choregos_api.db.session import session_scope
     from sqlalchemy import delete, select
+    from tranibor_api.db.models import Membership
+    from tranibor_api.db.session import session_scope
 
     await as_user(client, OWNER)
     async with session_scope() as session:

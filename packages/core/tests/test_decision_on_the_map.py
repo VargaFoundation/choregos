@@ -13,11 +13,11 @@ from __future__ import annotations
 from typing import Any
 
 import yaml
-from choregos_contracts import Workflow
-from choregos_core import parse_workflow
-from choregos_core.dsl.edition import edit
-from choregos_core.dsl.graph import to_graph, to_mermaid
-from choregos_core.dsl.process import to_process
+from tranibor_contracts import Workflow
+from tranibor_core import parse_workflow
+from tranibor_core.dsl.edition import edit
+from tranibor_core.dsl.graph import to_graph, to_mermaid
+from tranibor_core.dsl.process import to_process
 
 WORKFLOW = """apiVersion: choregos/v1
 kind: Workflow

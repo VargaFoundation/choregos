@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from choregos_core import access_report
+from tranibor_core import access_report
 
 
 def _permission(kind: str, target: str, allowed: bool = True, reason: str = "") -> dict[str, object]:

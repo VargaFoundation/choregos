@@ -14,8 +14,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from choregos_runner.acp import AcpClient
-from choregos_runner.result import load_result
+from tranibor_runner.acp import AcpClient
+from tranibor_runner.result import load_result
 
 from .conftest import RUN_KEY, Gateway, McpFake
 

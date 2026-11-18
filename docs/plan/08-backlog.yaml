@@ -5553,7 +5553,7 @@ stories:
     priority: 2
     size: L
     depends_on: [S75-01]
-    notes: "Shim = sys.modules alias plus a meta-path finder for submodules, one DeprecationWarning; old distributions republished as empty wheels depending on the new ones; a test imports every public module through both names; the EE and the plugins move during the cycle."
+    notes: "Shim = sys.modules alias plus a meta-path finder for submodules, one DeprecationWarning; old distributions republished as empty wheels depending on the new ones; a test imports every public module through both names; the EE and the plugins move during the cycle. Built (2026-11-18): the shims are compat/choregos-<x> workspace members, the helper tranibor_contracts._compat; the removal of the shims is its own PR."
   - id: S75-03
     title: "chore(publishing): R3, tranibor-* images, charts and CLI files published beside the old names (ADR 0176 point 4)"
     stream: S75

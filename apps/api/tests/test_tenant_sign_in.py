@@ -39,7 +39,7 @@ class Directory:
     """The extension's storage, as a test sets it."""
 
     def __init__(self) -> None:
-        from choregos_api.tenant_sign_in import OidcProvider, TenantSignIn
+        from tranibor_api.tenant_sign_in import OidcProvider, TenantSignIn
 
         self.tenants: dict[str, TenantSignIn] = {
             "acme": TenantSignIn(
@@ -59,8 +59,8 @@ class Directory:
 
 @pytest.fixture
 def directory() -> Iterator[Directory]:
-    from choregos_api.edition import reset
-    from choregos_api.tenant_sign_in import declare_sign_in_resolver
+    from tranibor_api.edition import reset
+    from tranibor_api.tenant_sign_in import declare_sign_in_resolver
 
     found = Directory()
     declare_sign_in_resolver(found.resolve)
@@ -75,12 +75,12 @@ async def client(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> Asy
     monkeypatch.setenv("CHOREGOS_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/tenants.db")
     monkeypatch.setenv("CHOREGOS_DEV_LOGIN_ENABLED", "false")
     monkeypatch.setenv("CHOREGOS_OIDC_ISSUER", INSTANCE)
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.db import session as db_session
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import create_all, session_scope
-    from choregos_api.main import create_app
-    from choregos_api.routers.auth import forget_discovery
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.db import session as db_session
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import create_all, session_scope
+    from tranibor_api.main import create_app
+    from tranibor_api.routers.auth import forget_discovery
 
     reset_settings_cache()
     forget_discovery()
@@ -203,7 +203,7 @@ async def test_a_tenant_provider_without_discovery_fails_instead_of_being_guesse
 
 
 async def test_explicit_endpoints_need_no_discovery(client: AsyncClient, directory: Directory) -> None:
-    from choregos_api.tenant_sign_in import OidcProvider, TenantSignIn
+    from tranibor_api.tenant_sign_in import OidcProvider, TenantSignIn
 
     directory.tenants["acme"] = TenantSignIn(
         org="acme",
@@ -226,9 +226,9 @@ async def test_explicit_endpoints_need_no_discovery(client: AsyncClient, directo
 async def test_a_tenant_sign_in_grants_roles_in_its_tenant_only(
     client: AsyncClient, directory: Directory
 ) -> None:
-    from choregos_api.db.models import Organization, User
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Organization, User
+    from tranibor_api.db.session import session_scope
 
     done, token = await _acme_sign_in(
         client,
@@ -253,9 +253,9 @@ async def test_a_tenant_sign_in_grants_roles_in_its_tenant_only(
 async def test_a_tenant_provider_cannot_sign_in_another_tenant_address(
     client: AsyncClient, directory: Directory
 ) -> None:
-    from choregos_api.db.models import User
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import User
+    from tranibor_api.db.session import session_scope
 
     done, _ = await _acme_sign_in(
         client, {"sub": "u-2", "email": "eve@globex.example", "groups": ["org-admins"]}
@@ -286,9 +286,9 @@ async def test_a_tenant_provider_relinks_a_member_of_its_domain_and_audits_it(
     client: AsyncClient, directory: Directory
 ) -> None:
     """An organisation that switches to its own provider must not lock out the members it already has."""
-    from choregos_api.db.models import AuditLog, User
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import AuditLog, User
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         session.add(User(email="bob@acme.example", display_name="Bob", oidc_sub="instance-uuid-1"))
@@ -304,8 +304,8 @@ async def test_a_tenant_provider_relinks_a_member_of_its_domain_and_audits_it(
 async def test_a_tenant_provider_still_refuses_an_unverified_member_address(
     client: AsyncClient, directory: Directory
 ) -> None:
-    from choregos_api.db.models import User
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import User
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         session.add(User(email="bob@acme.example", display_name="Bob", oidc_sub="instance-uuid-1"))
@@ -333,9 +333,9 @@ async def test_a_tenant_that_lost_its_provider_mid_sign_in_is_refused(
 
 
 async def _finish(org: str | None, email: str, sub: str, groups: list[str]) -> int:
-    from choregos_api.db.session import session_scope
-    from choregos_api.errors import ApiError
-    from choregos_api.routers.auth import terminer_la_connexion
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.errors import ApiError
+    from tranibor_api.routers.auth import terminer_la_connexion
 
     try:
         async with session_scope(orgs="*") as session:
@@ -348,9 +348,9 @@ async def _finish(org: str | None, email: str, sub: str, groups: list[str]) -> i
 
 
 async def _roles_of(email: str) -> set[tuple[str, str]]:
-    from choregos_api.db.models import Membership, Organization, User
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Membership, Organization, User
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         rows = await session.execute(
@@ -377,9 +377,9 @@ async def test_an_extension_sign_in_keeps_its_identity_handling(
     client: AsyncClient, directory: Directory
 ) -> None:
     """`terminer_la_connexion(org=...)` is not an OIDC sign-in: it does not bind to a subject (ADR 0100)."""
-    from choregos_api.db.models import User
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import User
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         session.add(User(email="ann@globex.example", display_name="Ann", oidc_sub="instance-uuid-2"))
@@ -403,7 +403,7 @@ async def test_without_an_organisation_the_finish_is_unchanged(client: AsyncClie
 
 
 def test_a_tenant_sign_in_has_exactly_one_way_in() -> None:
-    from choregos_api.tenant_sign_in import OidcProvider, TenantSignIn
+    from tranibor_api.tenant_sign_in import OidcProvider, TenantSignIn
 
     provider = OidcProvider(issuer=ACME, client_id="c")
     with pytest.raises(ValueError, match="not both"):
@@ -419,7 +419,7 @@ def test_a_tenant_sign_in_has_exactly_one_way_in() -> None:
 
 
 def test_the_email_domain_is_lowercased() -> None:
-    from choregos_api.tenant_sign_in import email_domain
+    from tranibor_api.tenant_sign_in import email_domain
 
     assert email_domain("Bob@ACME.Example ") == "acme.example"
     assert email_domain("bob") is None
@@ -428,7 +428,7 @@ def test_the_email_domain_is_lowercased() -> None:
 
 
 async def test_a_groups_map_translates_the_provider_groups(client: AsyncClient, directory: Directory) -> None:
-    from choregos_api.tenant_sign_in import OidcProvider, TenantSignIn
+    from tranibor_api.tenant_sign_in import OidcProvider, TenantSignIn
 
     directory.tenants["acme"] = TenantSignIn(
         org="acme",
@@ -448,7 +448,7 @@ async def test_a_groups_map_translates_the_provider_groups(client: AsyncClient, 
 
 
 def test_the_mapped_groups_ignore_a_claim_that_is_not_a_list() -> None:
-    from choregos_api.tenant_sign_in import OidcProvider
+    from tranibor_api.tenant_sign_in import OidcProvider
 
     provider = OidcProvider(issuer=ACME, client_id="c", groups_map={"a": "viewers"})
     assert provider.mapped_groups("a") == []

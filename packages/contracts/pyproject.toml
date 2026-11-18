@@ -1,5 +1,5 @@
 [project]
-name = "choregos-contracts"
+name = "tranibor-contracts"
 version = "0.27.13"
 description = "Contrats Choregos : schémas JSON, OpenAPI, types générés"
 requires-python = ">=3.12,<3.13"
@@ -11,9 +11,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/choregos_contracts"]
+packages = ["src/tranibor_contracts"]
 
 [tool.hatch.build.targets.wheel.force-include]
-"schemas" = "choregos_contracts/schemas"
-"openapi.yaml" = "choregos_contracts/openapi.yaml"
-"outpost-door.yaml" = "choregos_contracts/outpost-door.yaml"
+"schemas" = "tranibor_contracts/schemas"
+"openapi.yaml" = "tranibor_contracts/openapi.yaml"
+"outpost-door.yaml" = "tranibor_contracts/outpost-door.yaml"

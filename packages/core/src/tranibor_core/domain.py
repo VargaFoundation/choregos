@@ -1,0 +1,557 @@
+# SPDX-License-Identifier: Apache-2.0
+"""Domain models shared by the adapters, the orchestrator and the API.
+
+These are the types that travel in the signatures of `packages/adapters/base.py` (§1.9).
+They are serialisable (pydantic) because they cross the Temporal activity boundaries.
+"""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime
+from typing import Any, Literal
+
+from pydantic import BaseModel, ConfigDict, Field
+from tranibor_contracts import (
+    ExecutorKind,
+    MemoryKind,
+    ReleaseStatus,
+    Risk,
+    RunStatus,
+    Size,
+    StageInput,
+    StageResult,
+)
+
+
+def utcnow() -> datetime:
+    return datetime.now(UTC)
+
+
+def aware(value: datetime | None) -> datetime | None:
+    """Make a timestamp timezone-aware: SQLite returns naive `datetime` values."""
+    if value is None:
+        return None
+    return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+
+
+def elapsed_seconds(start: datetime | None, end: datetime | None) -> float:
+    """Duration in seconds between two timestamps, robust to naive or missing values."""
+    start_aware, end_aware = aware(start), aware(end)
+    if start_aware is None or end_aware is None:
+        return 0.0
+    return max(0.0, (end_aware - start_aware).total_seconds())
+
+
+class Model(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+# ───────────────────────────── tracker ─────────────────────────────
+
+
+#: The work item field the platform reserves for what the tracker knows about the ticket (S51-04): who
+#: filed it, its labels, its form's answers. Written from the tracker only; a workflow input may not
+#: take this name, and a person or an agent may not write it.
+TRACKER_FIELD = "tracker"
+
+#: The state of the work item an agent trial runs on: no interpreter ever runs on it (#1781).
+TRIAL_STATE = "trial"
+
+#: The work item field that names the repository it works on (ADR 0124): one of its project's
+#: repository names, the primary when absent. The platform's, not the workflow's: a workflow input may
+#: not take this name, and `metadata.inputs` does not validate it.
+REPOSITORY_FIELD = "repository"
+
+
+class WorkItemData(Model):
+    """Canonical representation of a work item, whatever the tracker."""
+
+    key: str
+    title: str
+    body: str = ""
+    url: str | None = None
+    state: str | None = None
+    labels: list[str] = Field(default_factory=list)
+    #: The item's type in its tracker (Jira: `issuetype`), read by workflow routing (ADR 0031).
+    item_type: str | None = None
+    size: Size | None = None
+    risk: Risk | None = None
+    assignees: list[str] = Field(default_factory=list)
+    #: Who filed the item in its tracker (Jira: the reporter, `Name <e-mail>` when the site shows it).
+    author: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    closed_at: datetime | None = None
+    #: When the tracker last brought the item back to work, when it says so (C1): GitHub's last
+    #: `reopened` event of an open issue, Jira's move into a To Do or In Progress status. The tracker
+    #: catch-up restarts an ended work item whose ticket came back after it ended.
+    reopened_at: datetime | None = None
+    fields: dict[str, Any] = Field(default_factory=dict)
+    comments: list[Comment] = Field(default_factory=list)
+
+
+class Comment(Model):
+    id: str | None = None
+    author: str = ""
+    body: str = ""
+    ts: datetime = Field(default_factory=utcnow)
+    marker: str | None = None
+
+
+class NewItem(Model):
+    title: str
+    body: str
+    labels: list[str] = Field(default_factory=list)
+    assignees: list[str] = Field(default_factory=list)
+    fields: dict[str, Any] = Field(default_factory=dict)
+    repo: str | None = None
+
+
+class TrackerStateMapping(Model):
+    """How a DSL state is reflected in the tracker."""
+
+    status: str | None = None
+    label: str | None = None
+    remove_labels: list[str] = Field(default_factory=list)
+
+
+# ───────────────────────────── SCM ─────────────────────────────
+
+
+class PrRef(Model):
+    repo: str
+    number: int
+    url: str | None = None
+    head: str | None = None
+    base: str | None = None
+
+
+class ReviewState(Model):
+    reviewer: str
+    state: Literal["approved", "changes_requested", "commented", "dismissed"]
+    submitted_at: datetime = Field(default_factory=utcnow)
+    body: str = ""
+
+
+class CheckRun(Model):
+    name: str
+    status: Literal["queued", "in_progress", "completed"] = "completed"
+    conclusion: Literal["success", "failure", "neutral", "cancelled", "timed_out", "skipped"] | None = None
+    url: str | None = None
+    details: str = ""
+
+
+class PrState(Model):
+    ref: PrRef
+    title: str = ""
+    body: str = ""
+    draft: bool = False
+    merged: bool = False
+    mergeable: bool | None = None
+    head_sha: str | None = None
+    checks: list[CheckRun] = Field(default_factory=list)
+    reviews: list[ReviewState] = Field(default_factory=list)
+    files: list[str] = Field(default_factory=list)
+    labels: list[str] = Field(default_factory=list)
+
+    def checks_conclusion(self) -> str | None:
+        """Aggregate of the check runs: `failure` wins, then `pending`, otherwise `success`."""
+        if not self.checks:
+            return None
+        if any(c.status != "completed" for c in self.checks):
+            return "pending"
+        if any(c.conclusion in {"failure", "timed_out", "cancelled"} for c in self.checks):
+            return "failure"
+        return "success"
+
+    def review_conclusion(self) -> str | None:
+        if not self.reviews:
+            return None
+        latest: dict[str, ReviewState] = {}
+        for review in sorted(self.reviews, key=lambda r: r.submitted_at):
+            latest[review.reviewer] = review
+        states = {r.state for r in latest.values()}
+        if "changes_requested" in states:
+            return "changes_requested"
+        if "approved" in states:
+            return "approved"
+        return "commented"
+
+
+class DiffFile(Model):
+    path: str
+    status: Literal["added", "modified", "removed", "renamed"] = "modified"
+    additions: int = 0
+    deletions: int = 0
+    patch: str | None = None
+    #: The path before a rename.
+    old_path: str | None = None
+
+
+class DiffSummary(Model):
+    base: str | None = None
+    head: str | None = None
+    files: list[DiffFile] = Field(default_factory=list)
+
+    @property
+    def additions(self) -> int:
+        return sum(f.additions for f in self.files)
+
+    @property
+    def deletions(self) -> int:
+        return sum(f.deletions for f in self.files)
+
+    def paths(self) -> list[str]:
+        return [f.path for f in self.files]
+
+
+# ───────────────────────────── CI / CD ─────────────────────────────
+
+
+class CiStatus(Model):
+    state: Literal["pending", "running", "success", "failure", "error", "unknown"] = "unknown"
+    runs: list[CheckRun] = Field(default_factory=list)
+    url: str | None = None
+    sha: str | None = None
+
+
+class Change(Model):
+    """A change to promote: an image on an app."""
+
+    app: str
+    image: str | None = None
+    tag: str | None = None
+    values: dict[str, Any] = Field(default_factory=dict)
+
+
+class PromotionRef(Model):
+    kind: Literal["pr", "commit"] = "pr"
+    url: str | None = None
+    ref: str | None = None
+    merged: bool = False
+
+
+class Health(Model):
+    status: Literal["Healthy", "Progressing", "Degraded", "Suspended", "Missing", "Unknown"] = "Unknown"
+    message: str = ""
+    revision: str | None = None
+
+
+class RolloutState(Model):
+    phase: Literal["Progressing", "Paused", "Healthy", "Degraded", "Aborted", "Unknown"] = "Unknown"
+    current_step: int = 0
+    total_steps: int = 0
+    canary_weight: int = 0
+    message: str = ""
+
+
+class Window(Model):
+    """Argo CD sync window (`kind=allow|deny`)."""
+
+    kind: Literal["allow", "deny"] = "allow"
+    schedule: str = "* * * * *"
+    duration: str = "1h"
+    applications: list[str] = Field(default_factory=list)
+    timezone: str = "Europe/Paris"
+
+
+# ───────────────────────────── execution ─────────────────────────────
+
+
+#: The variable through which an executor gives the runner its run's gateway key (#523).
+RUN_GATEWAY_KEY_ENV = "CHOREGOS_RUN_GATEWAY_KEY"
+#: The variable through which an executor gives the runner the access token of its remote agent (ADR 0062).
+RUN_REMOTE_TOKEN_ENV = "CHOREGOS_RUN_REMOTE_TOKEN"  # noqa: S105 - a variable name, not a secret
+
+
+class AgentContainer(Model):
+    """A hosted agent's container (ADR 0080), started beside the runner in the run's pod and sharing
+    its network namespace. Its environment is `tranibor_core.hosted.sidecar_env`: no secret, only
+    loopback addresses. No Secret, no volume of the runner is ever given to it: with a `workspace`,
+    it gets a volume of its own that the runner fills with a copy of the working tree (S41-18)."""
+
+    image: str = Field(pattern=r"@sha256:[0-9a-f]{64}$")
+    env: dict[str, str] = Field(default_factory=dict)
+    port: int = 8088
+    #: `read` mounts the copy read-only, `write` lets the container change it; `none`, no volume.
+    workspace: Literal["none", "read", "write"] = "none"
+    #: How long the container is given between SIGTERM and SIGKILL.
+    termination_grace_s: int = 30
+    cpu: str = "1"
+    memory: str = "2Gi"
+
+
+class StageJobSpec(Model):
+    """What an `Executor` must launch for a stage."""
+
+    run_id: str
+    project_slug: str
+    namespace: str
+    runner_image: str
+    api_url: str
+    run_token: str
+    #: The run's gateway key, for the run's Secret only, next to its token (#523): the executor
+    #: hands it to the runner as `CHOREGOS_RUN_GATEWAY_KEY`. Never stored on the `runs` row, never
+    #: in a Temporal payload; `stage_input.gateway_key` stays empty.
+    gateway_key: str | None = None
+    #: The access token of the run's remote agent (ADR 0062), for the run's Secret only, like the
+    #: gateway key: short-lived, exchanged by `start_run`, never in a payload or on the `runs` row.
+    remote_token: str | None = None
+    stage_input: StageInput | None = None
+    timeout_minutes: int = 120
+    runtime_class: str | None = None
+    labels: dict[str, str] = Field(default_factory=dict)
+    env: dict[str, str] = Field(default_factory=dict)
+    cpu: str = "1"
+    memory: str = "2Gi"
+    #: Set for a step a hosted agent carries (ADR 0080): the agent's container beside the runner.
+    agent_container: AgentContainer | None = None
+    #: The runner's arguments: `run` for a step, `serve-session` for a hosted session's pod (S41-11).
+    runner_command: list[str] = Field(default_factory=lambda: ["run"])
+
+
+class ExecRef(Model):
+    kind: ExecutorKind
+    name: str
+    namespace: str | None = None
+    url: str | None = None
+    run_id: str | None = None
+
+
+class ExecStatus(Model):
+    state: Literal["pending", "running", "succeeded", "failed", "cancelled", "unknown"] = "unknown"
+    exit_code: int | None = None
+    message: str = ""
+    #: Why the runner container ended or never started, as the runtime names it: `OOMKilled`,
+    #: `Error`, `ErrImagePull`, `ImagePullBackOff`, `DeadlineExceeded`… `None` when unknown.
+    reason: str | None = None
+    result_url: str | None = None
+    started_at: datetime | None = None
+    ended_at: datetime | None = None
+
+    @property
+    def finished(self) -> bool:
+        return self.state in {"succeeded", "failed", "cancelled"}
+
+
+class RunLogArchive(Model):
+    """What is kept of a run's pod once it is gone (S36-02): how it ended, and its last lines.
+
+    Written once per run by the orchestrator at the end of the run, success or failure, through
+    the `Executor` protocol only (`status` and `logs`). Every line and the message are redacted.
+    """
+
+    state: str = "unknown"
+    exit_code: int | None = None
+    reason: str | None = None
+    message: str = ""
+    #: The last lines of the runner's log, oldest first, each one redacted and capped in length.
+    lines: list[str] = Field(default_factory=list)
+    #: More lines existed than were kept.
+    truncated: bool = False
+    #: Why the logs could not be read, when they could not (the run still gets its archive).
+    error: str | None = None
+    #: `False` for a live snapshot taken while the pod runs (S36-03), replaced at each poll and
+    #: then by the final archive; `True` once the run has ended — and then never rewritten.
+    final: bool = True
+    archived_at: datetime = Field(default_factory=utcnow)
+
+
+# ───────────────────────────── gateway ─────────────────────────────
+
+
+class VirtualKey(Model):
+    key: str
+    key_id: str
+    budget_usd: float
+    expires_at: datetime | None = None
+    models: list[str] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class Spend(Model):
+    tokens_in: int = 0
+    tokens_out: int = 0
+    tokens_cached: int = 0
+    cost_usd: float = 0.0
+    requests: int = 0
+    models_used: list[str] = Field(default_factory=list)
+
+    def __add__(self, other: Spend) -> Spend:
+        return Spend(
+            tokens_in=self.tokens_in + other.tokens_in,
+            tokens_out=self.tokens_out + other.tokens_out,
+            tokens_cached=self.tokens_cached + other.tokens_cached,
+            cost_usd=self.cost_usd + other.cost_usd,
+            requests=self.requests + other.requests,
+            models_used=sorted(set(self.models_used) | set(other.models_used)),
+        )
+
+
+class GatewayModel(Model):
+    model_name: str
+    litellm_model: str
+    provider: str = ""
+    input_cost_per_1k: float | None = None
+    output_cost_per_1k: float | None = None
+    #: What a realtime model charges for audio, and any model for a cached input token (S41-15).
+    input_audio_cost_per_1k: float | None = None
+    output_audio_cost_per_1k: float | None = None
+    cached_input_cost_per_1k: float | None = None
+    max_input_tokens: int | None = None
+    supports_tool_calling: bool = True
+    supports_vision: bool = False
+    #: Whether the model reasons before it answers, as the gateway says; `None` when it does not say.
+    supports_reasoning: bool | None = None
+    #: What the gateway says the model does (`chat`, `embedding`, ...); LiteLLM lists a decision model
+    #: (Jev, Laya) as `evaluation` (ADR 0121).
+    mode: str = "chat"
+    internal_price: bool = False
+    #: Where the entry comes from: what the gateway lists, or what an admin added by hand.
+    source: Literal["gateway", "manual"] = "gateway"
+    owned_by: str = ""
+
+
+# ───────────────────────────── memory ─────────────────────────────
+
+
+class Provenance(Model):
+    source: str
+    ref: str | None = None
+    run_id: str | None = None
+    work_item_key: str | None = None
+    author: str | None = None
+    ts: datetime = Field(default_factory=utcnow)
+
+
+class Fact(Model):
+    kind: MemoryKind
+    subject: str
+    content: str
+    external_id: str | None = None
+    valid_from: datetime | None = None
+    valid_to: datetime | None = None
+    provenance: Provenance | None = None
+    paths: list[str] = Field(default_factory=list)
+
+
+class Memory(Model):
+    id: str
+    kind: MemoryKind
+    subject: str
+    content: str
+    score: float | None = None
+    status: Literal["active", "pending", "superseded", "rejected"] = "active"
+    valid_from: datetime | None = None
+    valid_to: datetime | None = None
+    provenance: dict[str, Any] = Field(default_factory=dict)
+    proposed_by: str | None = None
+
+
+# ───────────────────────────── notifications ─────────────────────────────
+
+
+class MessageAction(Model):
+    id: str
+    label: str
+    style: Literal["primary", "danger", "default"] = "default"
+    value: str = ""
+
+
+class Message(Model):
+    title: str
+    body: str = ""
+    url: str | None = None
+    severity: Literal["info", "warning", "error", "success"] = "info"
+    actions: list[MessageAction] = Field(default_factory=list)
+    context: dict[str, Any] = Field(default_factory=dict)
+
+
+# ───────────────────────────── enregistrements ─────────────────────────────
+
+
+class RunRecord(Model):
+    """What the orchestrator records for a run (a mirror of the `runs` table)."""
+
+    id: str
+    work_item_key: str
+    project_slug: str
+    transition_id: str
+    stage_role: str
+    attempt: int = 1
+    actor: str | None = None
+    backend: str | None = None
+    model: str | None = None
+    executor_kind: ExecutorKind | None = None
+    executor_ref: str | None = None
+    status: RunStatus = RunStatus.QUEUED
+    started_at: datetime | None = None
+    ended_at: datetime | None = None
+    spend: Spend = Field(default_factory=Spend)
+    cost_usd: float = 0.0
+    gateway_key_id: str | None = None
+    result: StageResult | None = None
+    transcript_url: str | None = None
+    context_pack_url: str | None = None
+    playbook_checksum: str | None = None
+    allowed_paths: list[str] = Field(default_factory=list)
+
+
+class ReleaseItem(Model):
+    work_item_key: str
+    title: str | None = None
+    sha: str
+    pr_url: str | None = None
+    risk: Risk | None = None
+    labels: list[str] = Field(default_factory=list)
+
+
+class ReleaseRecord(Model):
+    id: str
+    project_slug: str
+    env: str
+    batch_no: int
+    status: ReleaseStatus = ReleaseStatus.COLLECTING
+    items: list[ReleaseItem] = Field(default_factory=list)
+    started_at: datetime | None = None
+    ended_at: datetime | None = None
+    approved_by: str | None = None
+    verdict: dict[str, Any] = Field(default_factory=dict)
+    notes: str | None = None
+    promotion_url: str | None = None
+
+
+class FindingRecord(Model):
+    id: str
+    project_slug: str
+    title: str
+    type: str
+    severity: str
+    evidence: str
+    suggested_fix: str | None = None
+    estimate: str | None = None
+    status: str = "pending"
+    origin_work_item_key: str | None = None
+    origin_run_id: str | None = None
+    created_work_item_key: str | None = None
+    duplicate_of: str | None = None
+    occurrences: int = 1
+    relevant: bool | None = None
+    created_at: datetime = Field(default_factory=utcnow)
+
+
+class LaunchContext(Model):
+    """What a backend needs to write its configuration into the workspace."""
+
+    workspace: str
+    stage_input: StageInput
+    agents_md: str | None = None
+    playbook_prompt: str = ""
+    mcp_servers: dict[str, dict[str, Any]] = Field(default_factory=dict)
+
+
+class LaunchSpec(Model):
+    command: list[str]
+    env: dict[str, str] = Field(default_factory=dict)
+    files: dict[str, str] = Field(default_factory=dict)
+    cwd: str | None = None

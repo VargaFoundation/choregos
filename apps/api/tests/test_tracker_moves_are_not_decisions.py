@@ -17,7 +17,7 @@ SECRET = "s3cret"
 
 
 def _inbound_types() -> list[Any]:
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.temporal import get_temporal
 
     signals = get_temporal().signals  # type: ignore[attr-defined]
     return [s[2].get("type") for s in signals if s[1] == "inbound"]
@@ -71,7 +71,7 @@ async def test_a_github_card_move_is_not_signalled(client: AsyncClient, project:
 async def test_a_jira_status_change_is_not_signalled(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.config import get_settings
+    from tranibor_api.config import get_settings
 
     monkeypatch.setattr(get_settings(), "generic_webhook_secret", SECRET)
     monkeypatch.setenv("CONNECTOR_JIRA_TEST_TOKEN", "t")

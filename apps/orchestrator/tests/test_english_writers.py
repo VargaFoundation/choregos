@@ -39,12 +39,12 @@ def _sent(history: Any, activity: str) -> list[dict[str, Any]]:
 async def test_activities_raise_english_types(monkeypatch: pytest.MonkeyPatch) -> None:
     """An unknown agent raises `AgentUnavailable`, and the interpreter still treats it (and the
     French spelling a history recorded before) as a refusal of configuration."""
-    from choregos_api.services import agents
-    from choregos_orchestrator.activities import actions
-    from choregos_orchestrator.activities.remote import refuse
-    from choregos_orchestrator.activities.stage import _plan_agent
-    from choregos_orchestrator.workflows.interpreter_parts.helpers import CONFIGURATION_REFUSALS
     from temporalio.exceptions import ApplicationError
+    from tranibor_api.services import agents
+    from tranibor_orchestrator.activities import actions
+    from tranibor_orchestrator.activities.remote import refuse
+    from tranibor_orchestrator.activities.stage import _plan_agent
+    from tranibor_orchestrator.workflows.interpreter_parts.helpers import CONFIGURATION_REFUSALS
 
     async def unknown(*_: Any, **__: Any) -> Any:
         raise agents.AgentUnavailable("the agent `ghost` does not exist")
@@ -106,7 +106,7 @@ async def test_proposed_action_refusal_is_english(
 ) -> None:
     """`propose_transition_action` returns `{refusal: ...}`, and the interpreter fails the transition
     on it (`action_succeeded`, with the refusal as its detail)."""
-    from choregos_orchestrator.activities.actions import propose_transition_action
+    from tranibor_orchestrator.activities.actions import propose_transition_action
 
     start = await temporal_env.get_current_time()
     fields = {"upn": "lea@acme.test", "arrival_date": start.isoformat()}
@@ -136,10 +136,10 @@ async def test_proposed_action_refusal_is_english(
     assert result["state"] == "to_review" and result["stopped"]
     assert status["attempts"] == {"t-accounts": 1}
     # The interpreter read `refusal` and failed the transition: no action was ever proposed.
-    from choregos_api.db.models import Event
-    from choregos_api.db.session import session_scope
-    from choregos_contracts import EventType
     from sqlalchemy import select
+    from tranibor_api.db.models import Event
+    from tranibor_api.db.session import session_scope
+    from tranibor_contracts import EventType
 
     async with session_scope() as session:
         rows = (

@@ -34,7 +34,7 @@ async def _issue(client: AsyncClient, delivery: str, action: str, labels: list[s
 async def test_an_event_for_an_ended_interpreter_is_kept(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.temporal import get_temporal, interpreter_id
+    from tranibor_api.temporal import get_temporal, interpreter_id
 
     opened = await _issue(client, "e0", "opened", ["agent-ready"])
     assert opened.status_code == 202, opened.text
@@ -49,10 +49,10 @@ async def test_an_event_for_an_ended_interpreter_is_kept(
 async def test_a_plugin_tracker_event_for_an_ended_interpreter_is_kept(
     client: AsyncClient, admin: str, kube: Any
 ) -> None:
-    from choregos_api.db.models import Project, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.temporal import get_temporal, interpreter_id
     from sqlalchemy import select
+    from tranibor_api.db.models import Project, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.temporal import get_temporal, interpreter_id
 
     fake = await _ready(client, kube)
     fake.add("INC0000001", "VPN drops")

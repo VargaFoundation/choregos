@@ -15,7 +15,7 @@ import pytest
 
 @pytest.fixture
 def synthetic_installation(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    from choregos_api.services import conversations
+    from tranibor_api.services import conversations
 
     async def skip(session: object, record: object) -> None:
         return None

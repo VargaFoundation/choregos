@@ -27,8 +27,8 @@ class _Client:
     ["start_knowledge_sync", "start_interpreter", "start_train", "start_action"],
 )
 async def test_an_already_started_workflow_returns_its_id(start: str) -> None:
-    from choregos_api.temporal import RealTemporal
     from temporalio.exceptions import WorkflowAlreadyStartedError
+    from tranibor_api.temporal import RealTemporal
 
     temporal = RealTemporal("temporal:7233", "default", "orchestrator")
     client = _Client(WorkflowAlreadyStartedError("ks-1", "KnowledgeSync"))
@@ -42,7 +42,7 @@ async def test_an_already_started_workflow_returns_its_id(start: str) -> None:
 
 
 async def test_another_start_failure_still_raises() -> None:
-    from choregos_api.temporal import RealTemporal
+    from tranibor_api.temporal import RealTemporal
 
     temporal = RealTemporal("temporal:7233", "default", "orchestrator")
     client = _Client(RuntimeError("the namespace does not exist"))

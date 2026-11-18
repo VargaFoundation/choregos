@@ -11,7 +11,7 @@ import sys
 from types import ModuleType
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
-ACTIVITIES = ROOT / "apps" / "orchestrator" / "src" / "choregos_orchestrator" / "activities"
+ACTIVITIES = ROOT / "apps" / "orchestrator" / "src" / "tranibor_orchestrator" / "activities"
 
 #: The name every activity of `ALL_ACTIVITIES` is registered under, as recorded before S45-23. A
 #: history and every workflow in flight schedule an activity by this name: a rename of a function
@@ -139,7 +139,7 @@ def test_activities_have_no_french() -> None:
 
 
 def test_registered_activity_names_unchanged() -> None:
-    from choregos_orchestrator import activities
+    from tranibor_orchestrator import activities
 
     names = [
         definition.name
@@ -162,16 +162,16 @@ def test_no_activity_raises_a_former_error_type() -> None:
 
 
 def test_the_english_modules_hold_what_the_former_paths_forwarded() -> None:
-    outcome = importlib.import_module("choregos_orchestrator.activities.outcome")
-    guard = importlib.import_module("choregos_orchestrator.activities.injection_guard")
+    outcome = importlib.import_module("tranibor_orchestrator.activities.outcome")
+    guard = importlib.import_module("tranibor_orchestrator.activities.injection_guard")
     for former in ("bilan", "garde"):
-        assert importlib.util.find_spec(f"choregos_orchestrator.activities.{former}") is None  # lang: fr-ok
+        assert importlib.util.find_spec(f"tranibor_orchestrator.activities.{former}") is None  # lang: fr-ok
     assert hasattr(outcome, "collect_spend") and hasattr(outcome, "record_run_outcome")
     assert hasattr(guard, "guard_against_injection") and hasattr(guard, "guard_sources")
 
 
 def test_the_english_helpers_are_defined() -> None:
-    from choregos_orchestrator.activities import execution, gates, interpretation, provisioning, stage
+    from tranibor_orchestrator.activities import execution, gates, interpretation, provisioning, stage
 
     assert callable(execution.runner_environment) and callable(execution.runtime_class)
     assert callable(execution.hosts_to_reach_directly)

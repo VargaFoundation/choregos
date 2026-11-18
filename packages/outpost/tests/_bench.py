@@ -15,19 +15,19 @@ from typing import Any
 
 import httpx
 import yaml
-from choregos_adapters.fakes.mcp import FakeMcpServer
-from choregos_contracts import load_schema
-from choregos_contracts.outpost import OutpostPolicy
-from choregos_outpost import identity as identities
-from choregos_outpost import policy as policies
-from choregos_outpost import uplink
-from choregos_outpost.audit import AuditLog
-from choregos_outpost.daemon import Daemon, Exit
-from choregos_outpost.fakes import FakeDoor
-from choregos_outpost.journal import Journal
-from choregos_outpost.toolhost import ToolHost
 from cryptography.hazmat.primitives import serialization
 from jsonschema import Draft202012Validator
+from tranibor_adapters.fakes.mcp import FakeMcpServer
+from tranibor_contracts import load_schema
+from tranibor_contracts.outpost import OutpostPolicy
+from tranibor_outpost import identity as identities
+from tranibor_outpost import policy as policies
+from tranibor_outpost import uplink
+from tranibor_outpost.audit import AuditLog
+from tranibor_outpost.daemon import Daemon, Exit
+from tranibor_outpost.fakes import FakeDoor
+from tranibor_outpost.journal import Journal
+from tranibor_outpost.toolhost import ToolHost
 
 #: What the outpost's own server lists. `create_issue` and `delete_project` declare nothing, so they
 #: are writes; `delete_project` is outside the patterns of the bench's policy.

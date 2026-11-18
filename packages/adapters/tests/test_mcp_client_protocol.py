@@ -12,8 +12,8 @@ from typing import Any
 
 import httpx
 import pytest
-from choregos_adapters.mcp import CLIENT_VERSIONS, McpClient, McpError
-from choregos_core.mcp import acceptable_version, negotiate
+from tranibor_adapters.mcp import CLIENT_VERSIONS, McpClient, McpError
+from tranibor_core.mcp import acceptable_version, negotiate
 
 URL = "https://gateway.test/mcp"
 TOOLS = [{"name": "read_order", "inputSchema": {"type": "object"}}]

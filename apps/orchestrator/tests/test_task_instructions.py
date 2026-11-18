@@ -23,7 +23,7 @@ TEMPLATE = (
 async def test_a_task_run_sends_the_installations_values_to_the_model(
     setup: Fixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_orchestrator.activities import stage
+    from tranibor_orchestrator.activities import stage
 
     asked: list[str] = []
 
@@ -43,7 +43,7 @@ async def test_a_task_run_sends_the_installations_values_to_the_model(
 
 
 async def test_any_other_run_renders_as_before(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.stage import prepare_stage
+    from tranibor_orchestrator.activities.stage import prepare_stage
 
     await install_agent(setup, instructions=TEMPLATE)
     prompt = (await prepare_stage(agent_stage_plan(setup, agent="coordinateur")))["stage_input"]["playbook"][

@@ -224,7 +224,7 @@ name, no reuse, and no way for two projects to start from the same model.
 An extension can register a gate the same way it registers a connector, and nothing else is needed:
 
 ```python
-from choregos_core.gates import GateContext, GateOutcome, gate
+from tranibor_core.gates import GateContext, GateOutcome, gate
 
 @gate("collecteur_propre")
 def _collecteur_propre(ctx: GateContext, params: dict) -> GateOutcome:
@@ -263,7 +263,7 @@ my-tracker = "my_package:register_extension"
 
 ```python
 # my_package/__init__.py
-from choregos_adapters import register
+from tranibor_adapters import register
 
 def register_extension() -> None:
     register("tracker", "in_house")(lambda cfg: MyTracker(cfg))
@@ -278,7 +278,7 @@ dependencies for authentication and rights (`Me`, `Db`…), and declares it:
 
 ```python
 from fastapi import APIRouter
-from choregos_api.extensions import declare_router
+from tranibor_api.extensions import declare_router
 
 router = APIRouter(tags=["mine"])
 
@@ -304,7 +304,7 @@ row actions), `action` (a confirmation, `danger`, `reauth`), `secret_once` (a se
 never kept) — and the console renders it under `/admin/x/{section}`:
 
 ```python
-from choregos_api.extensions import declare_admin_section
+from tranibor_api.extensions import declare_admin_section
 
 def register_extension() -> None:
     declare_router(router)
@@ -331,7 +331,7 @@ vocabulary (`"permission": "platform:admin"` on an instance-wide form next to or
 section's permission still applies first; `GET /api/v1/ui/admin-sections` then leaves out the blocks the
 caller lacks, and lists the section only if at least one block remains. Start-up stops on an unknown
 block permission, as on a section's. Nested `row_actions` have no permission of their own. An extension
-detects the feature without parsing versions: `choregos_api.extensions.SECTION_FEATURES` is a frozenset,
+detects the feature without parsing versions: `tranibor_api.extensions.SECTION_FEATURES` is a frozenset,
 currently `{"block_permission", "asset_upload", "section_icon"}` (S42-13: a form property of `format: "asset"` uploads its file to its `x-upload` path; S42-15: a section names its navigation `icon` from the schema's closed vocabulary, see ADR 0032). Give a block a `description` ("this organisation", "the whole
 instance") to say which level it edits; every block kind renders it.
 
@@ -358,7 +358,7 @@ An extension also brings the **effects** a governed action can run
 ([ADR 0035](adr/0035-governed-actions-in-the-core.md)):
 
 ```python
-from choregos_api.effects import EffectRefused, declare_effect
+from tranibor_api.effects import EffectRefused, declare_effect
 
 async def activate_badge(ctx, params):          # ctx: session, action, project
     badge = await reader.activate(params["uid"])    # idempotent: activating twice is one badge
@@ -380,7 +380,7 @@ shows `awaiting_evidence` and waits for the signal `evidence` (its former name `
 the proof hands it over:
 
 ```python
-from choregos_api.services.actions import signaler_une_preuve
+from tranibor_api.services.actions import signaler_une_preuve
 
 await signaler_une_preuve(action_id, position, ok=False, detail="the key is still in the report")
 ```
@@ -395,16 +395,16 @@ exception is retried with backoff. Declaring the same function twice is harmless
 the same name stops start-up.
 
 A connector of a **business family** — `mdm`, `shipping`, `access_control` — declares that
-family's operations (`choregos_adapters.families`) and enters the shared conformance suite,
+family's operations (`tranibor_adapters.families`) and enters the shared conformance suite,
 `tests/conformance/connectors/`, with the fake of its API: a case of a few lines, and it is judged
 like the demo fakes, the Entra directory and the supplier's MCP server. Each operation declares a
 **closed** input schema that the implementation follows — same parameters, same types, required
 exactly when they have no default; a **write replayed changes nothing**, and a read writes nothing,
 not even for an object it does not know; the key **serves** — a wrong one is refused — and
 **appears nowhere**: not in the log (stdlib or structlog), not in a result, not in a refusal, not
-in the client's `repr`. The fakes of the HR scenario (`choregos_adapters.fakes.hr`) can be reached
+in the client's `repr`. The fakes of the HR scenario (`tranibor_adapters.fakes.hr`) can be reached
 typed, through a `demo` connector, or served as an MCP server (`mcp_server`), on the same state —
-and all of them by one process, `choregos_adapters.fakes.server` (an ASGI app with no framework),
+and all of them by one process, `tranibor_adapters.fakes.server` (an ASGI app with no framework),
 for a deployment where the API and the orchestrator would otherwise each see their own fakes: the
 chart deploys it with `demoFakes.enabled` (refused in staging and prod), and `trials/hr/` plays the
 HR scenario against it.
@@ -431,12 +431,12 @@ image FROM a community one and checks the edition the platform reports
 (`CHOREGOS_IMAGES_CE=choregos-api:local,choregos-orchestrator:local`).
 ## Shipping a schema from an extension
 
-The migrations live **inside** the `choregos_api` package and are run by one command, the one the
+The migrations live **inside** the `tranibor_api` package and are run by one command, the one the
 chart's migration Job runs:
 
 ```sh
-python -m choregos_api.migrate           # upgrade heads — the core, then every extension branch
-python -m choregos_api.migrate downgrade <extension_label>@base
+python -m tranibor_api.migrate           # upgrade heads — the core, then every extension branch
+python -m tranibor_api.migrate downgrade <extension_label>@base
 ```
 
 The former name of the same command was removed in 0.24.0 (`docs/deployment.md`, "Upgrading to 0.24").
@@ -469,7 +469,7 @@ The core caps spending per run and concurrency per executor. A rule that depends
 else — a suspended organisation, a monthly ceiling, a freeze window — is declared by an extension:
 
 ```python
-from choregos_core.admission import AdmissionRefused, declare_admission
+from tranibor_core.admission import AdmissionRefused, declare_admission
 
 async def organisation_active(request):          # a RunRequest: org, project, work_item, budget_usd…
     if await is_suspended(request.org):
@@ -496,7 +496,7 @@ with an extension installed for real.
 > the core changes what crosses them, and lands before the seams are frozen for 1.0
 > ([ADR 0168](adr/0168-the-surfaces-frozen-for-1-0.md)).
 
-Three hooks in `choregos_api.edition`, next to the group mapper:
+Three hooks in `tranibor_api.edition`, next to the group mapper:
 
 - **`declare_session_validation(fn)`** — `fn(session_db, user, payload)`, sync or async,
   runs on every cookie-authenticated request; raise `SessionRefused(reason)` to answer 401 with
@@ -519,7 +519,7 @@ Three routes consult extension checks **after** the core's rights and **before**
 `project.create`, `workitem.decision` and `release.approve`.
 
 ```python
-from choregos_api.extensions import GestureRefused, declare_gesture_check
+from tranibor_api.extensions import GestureRefused, declare_gesture_check
 
 def freshness(session, request):           # GestureRequest: gesture, org, principal, target
     when = request.principal.authenticated_at
@@ -537,7 +537,7 @@ than `GestureRefused` propagates. `apps/api/tests/test_gesture_checks.py` proves
 ## Running the API suite on PostgreSQL
 
 SQLite has no row-level security. The API suite therefore runs twice in CI: on SQLite, then on
-PostgreSQL with the schema migrated by `python -m choregos_api.migrate` and a **non-superuser** role
+PostgreSQL with the schema migrated by `python -m tranibor_api.migrate` and a **non-superuser** role
 (a superuser ignores RLS whatever the policies say):
 
 ```sh
@@ -561,7 +561,7 @@ Each project gets its namespaces and a `ResourceQuota`. The default is 32 CPU, 9
 extension can set it per organisation:
 
 ```python
-from choregos_core.quotas import Quota, declare_quota
+from tranibor_core.quotas import Quota, declare_quota
 
 async def quota(org: str, project: str) -> Quota | None:
     return Quota(cpu="8", memory="16Gi", pods=10) if org == "small" else None   # None: default
@@ -579,13 +579,13 @@ Temporal queue per organisation: [ADR 0027](adr/0027-noisy-neighbours-at-admissi
 Before 0.21 the extension API had French names. They raised a `DeprecationWarning` until 0.23.0
 ([ADR 0098](adr/0098-english-everywhere-finished.md) §3 (f)) and were removed in 0.24.0 (S45-49): the
 table below is the rename record, and none of the former names resolves any more.
-`choregos_api.greffons` and `choregos_api.effets` were the former modules of
-`choregos_api.extensions` and `choregos_api.effects`.
+`tranibor_api.greffons` and `tranibor_api.effets` were the former modules of
+`tranibor_api.extensions` and `tranibor_api.effects`.
 
 | Former | New |
 | :-- | :-- |
-| `choregos_api.greffons` | `choregos_api.extensions` <!-- lang: fr-ok --> |
-| `choregos_api.effets` | `choregos_api.effects` <!-- lang: fr-ok --> |
+| `tranibor_api.greffons` | `tranibor_api.extensions` <!-- lang: fr-ok --> |
+| `tranibor_api.effets` | `tranibor_api.effects` <!-- lang: fr-ok --> |
 | `declarer_un_routeur`, `routeurs_declares` | `declare_router`, `declared_routers` <!-- lang: fr-ok --> |
 | `declarer_une_section_d_administration`, `sections_declarees`, `chemins_d_une_section` | `declare_admin_section`, `declared_sections`, `section_paths` <!-- lang: fr-ok --> |
 | `FournisseurDOutils(lister, appeler)`, `declarer_un_fournisseur_d_outils`, `fournisseurs_d_outils` | `ToolProvider(list_tools, call_tool)`, `declare_tool_provider`, `tool_providers` <!-- lang: fr-ok --> |
@@ -598,16 +598,16 @@ table below is the rename record, and none of the former names resolves any more
 | `reinitialiser` | `reset` <!-- lang: fr-ok --> |
 | `EffetRefuse`, `ContexteEffet`, `Executer` | `EffectRefused`, `EffectContext`, `Execute` <!-- lang: fr-ok --> |
 | `declarer_un_effet(nom, executer, politique=)`, `politique_de_l_effet`, `effet`, `effets_declares`, `rendre` | `declare_effect(name, execute, policy=)`, `effect_policy`, `effect`, `declared_effects`, `render` <!-- lang: fr-ok --> |
-| `choregos_core.quotas`: `Quota(memoire=)`, `DEFAUT`, `Fournisseur`, `declarer_un_quota`, `quota_pour` | `Quota(memory=)`, `DEFAULT`, `QuotaProvider`, `declare_quota`, `quota_for` <!-- lang: fr-ok --> |
-| `choregos_core.admission`: `DemandeDeRun`, `AdmissionRefusee`, `Controle`, `declarer_une_admission`, `admissions_declarees`, `verifier` | `RunRequest`, `AdmissionRefused`, `AdmissionCheck`, `declare_admission`, `declared_admissions`, `check` <!-- lang: fr-ok --> |
-| `choregos_core.secrets`: `SecretIntrouvable`, `declarer_un_resolveur` | `SecretNotFound`, `declare_resolver` <!-- lang: fr-ok --> |
+| `tranibor_core.quotas`: `Quota(memoire=)`, `DEFAUT`, `Fournisseur`, `declarer_un_quota`, `quota_pour` | `Quota(memory=)`, `DEFAULT`, `QuotaProvider`, `declare_quota`, `quota_for` <!-- lang: fr-ok --> |
+| `tranibor_core.admission`: `DemandeDeRun`, `AdmissionRefusee`, `Controle`, `declarer_une_admission`, `admissions_declarees`, `verifier` | `RunRequest`, `AdmissionRefused`, `AdmissionCheck`, `declare_admission`, `declared_admissions`, `check` <!-- lang: fr-ok --> |
+| `tranibor_core.secrets`: `SecretIntrouvable`, `declarer_un_resolveur` | `SecretNotFound`, `declare_resolver` <!-- lang: fr-ok --> |
 
 A `GestureRequest` also reads `geste` and `cible`, a `GestureRefused` reads `raison`, and a `Quota`
 reads `memoire`, under the same warning. Not renamed here: the DSL value `verifier` of an action
 (a workflow written with it keeps running), the persisted `greffon:` prefixes and the entry-point
 group `choregos.plugins`. `load_extensions` follows in S45-10.
 
-The edition API (`choregos_api.edition`) and the `Principal` followed in 0.21 (S45-12):
+The edition API (`tranibor_api.edition`) and the `Principal` followed in 0.21 (S45-12):
 
 | Former | New |
 | :-- | :-- |
@@ -624,10 +624,10 @@ The edition API (`choregos_api.edition`) and the `Principal` followed in 0.21 (S
 
 Who publishes Tranibor and where (the image and chart namespace, the source repository and its
 releases, the documentation site, the security contact, the agent's commit address, the plugins'
-repository and signed index) is defined once, in `packages/core/src/choregos_core/publishing.json`
+repository and signed index) is defined once, in `packages/core/src/tranibor_core/publishing.json`
 ([ADR 0156](adr/0156-the-publishing-identity-is-one-file.md)).
 
-- In Python, read `choregos_core.publishing.PUBLISHING` (`PUBLISHING.image("choregos-runner", tag)`,
+- In Python, read `tranibor_core.publishing.PUBLISHING` (`PUBLISHING.image("choregos-runner", tag)`,
   `PUBLISHING.releases`, `PUBLISHING.signing_identity(ref)`, …); in the console, `@/lib/publishing`.
   Never write one of its values in code: `tests/tools/test_publishing_identity.py` refuses it.
 - A file that cannot read JSON (a chart's values, a policy, a workflow, a Dockerfile, a page of
@@ -683,8 +683,8 @@ The longest matching prefix wins; each area is one baseline file.
 
 | Area | Prefixes |
 | :-- | :-- |
-| `api-mcp`, `api-routers`, `api-services`, `api-schemas`, `api-migrations` | `apps/api/src/choregos_api/` + `mcp/`, `routers/`, `services/`, `schemas/`, `migrations/` |
-| `api-subsystems` | `apps/api/src/choregos_api/` + `db/`, `a2a/`, `egress/`, `knowledge/` |
+| `api-mcp`, `api-routers`, `api-services`, `api-schemas`, `api-migrations` | `apps/api/src/tranibor_api/` + `mcp/`, `routers/`, `services/`, `schemas/`, `migrations/` |
+| `api-subsystems` | `apps/api/src/tranibor_api/` + `db/`, `a2a/`, `egress/`, `knowledge/` |
 | `api-tests`, `api-root` | `apps/api/tests/`, then the rest of `apps/api/` |
 | `orchestrator-tests`, `orchestrator-src` | `apps/orchestrator/tests/`, then the rest of `apps/orchestrator/` |
 | `web` | `apps/web/` |
@@ -729,10 +729,10 @@ A renamed name that only gets imported keeps a typed alias in the module that de
 `Old = New  # lang: fr-ok alias:internal` (ADR 0098 §3 (b)). A plain alias does not forward a patch:
 `monkeypatch.setattr(module, "Old", fake)` rebinds `Old` and leaves `New`, which the module's own
 code reads. A module whose former names tests patch keeps the typed alias and calls
-`choregos_core.compat.alias_names` once, at its end:
+`tranibor_core.compat.alias_names` once, at its end:
 
 ```python
-from choregos_core.compat import alias_names
+from tranibor_core.compat import alias_names
 
 LIMITER = Limiter(CALLS_PER_MINUTE)
 
@@ -753,14 +753,14 @@ A renamed module leaves a shim at its former path that ends with
 
 Never a module `__getattr__`: strict mypy types what it returns as `Any`, and the former name
 loses its type. Never `alias_names` or `replace_module` in a module under
-`apps/orchestrator/src/choregos_orchestrator/workflows/`: the Temporal sandbox re-imports those
+`apps/orchestrator/src/tranibor_orchestrator/workflows/`: the Temporal sandbox re-imports those
 modules, and they keep plain typed aliases.
 
 ## Layering: what may import what
 
 The API is a dependency that only shrinks ([ADR 0099](adr/0099-the-api-is-a-dependency-that-only-shrinks.md)).
 
-- The orchestrator and extensions (entry-point packages such as `choregos_ontology`) may import the
+- The orchestrator and extensions (entry-point packages such as `tranibor_ontology`) may import the
   API's persistence and services, never its HTTP layer (`routers`, `deps`, `main`, `mcp`, `a2a`,
   `fastapi`).
 - Services never import routers. One import remains (`services/readiness.py`), ratcheted and
@@ -775,8 +775,8 @@ Five guards count the crossings that exist today and refuse a new one. Each asse
 
 | Guard | Counts |
 |---|---|
-| `tests/architecture/test_orchestrator_imports_of_the_api.py` | `choregos_api` imports in `apps/orchestrator/src` |
-| `tests/architecture/test_packages_imports_of_the_api.py` | `choregos_api` imports in `packages/*/src` (only `choregos_ontology/service`) |
+| `tests/architecture/test_orchestrator_imports_of_the_api.py` | `tranibor_api` imports in `apps/orchestrator/src` |
+| `tests/architecture/test_packages_imports_of_the_api.py` | `tranibor_api` imports in `packages/*/src` (only `tranibor_ontology/service`) |
 | `apps/api/tests/test_layering_services_do_not_import_routers.py` | modules outside `routers/` that import a router |
 | `apps/api/tests/test_layering_router_private_imports.py` | private names imported between router units |
 | `apps/api/tests/test_one_organisation_lookup.py` | module-level `_organisation` / `_org` helpers in routers |

@@ -5,10 +5,10 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from typing import Any
 
-from choregos_adapters.executor.log_archive import MAX_LINE_CHARS, archive_run_logs, tail_logs
-from choregos_adapters.fakes.executor import FakeExecutor
-from choregos_contracts import ExecutorKind
-from choregos_core.domain import ExecRef, ExecStatus, StageJobSpec
+from tranibor_adapters.executor.log_archive import MAX_LINE_CHARS, archive_run_logs, tail_logs
+from tranibor_adapters.fakes.executor import FakeExecutor
+from tranibor_contracts import ExecutorKind
+from tranibor_core.domain import ExecRef, ExecStatus, StageJobSpec
 
 # Assembled at run time: a whole fake token would trip the repository's secret scanner.
 TOKEN = "ghs_" + "x1" * 15

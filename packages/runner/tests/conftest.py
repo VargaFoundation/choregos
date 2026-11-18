@@ -13,7 +13,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 import pytest
-from choregos_contracts import (
+from tranibor_contracts import (
     AgentRef,
     Budget,
     Callbacks,
@@ -30,7 +30,7 @@ from choregos_contracts import (
     TransitionRef,
     WorkItemRef,
 )
-from choregos_tools_mcp.client import Relayed
+from tranibor_tools_mcp.client import Relayed
 
 FAKE_AGENT = Path(__file__).parent / "fixtures" / "fake_agent.py"
 
@@ -253,7 +253,7 @@ def valid_result(summary: str = "fix applied", **kwargs: Any) -> dict[str, Any]:
 
 @pytest.fixture
 def runner_settings(tmp_path: Path) -> Any:
-    from choregos_runner.config import RunnerSettings
+    from tranibor_runner.config import RunnerSettings
 
     os.environ.setdefault("CHOREGOS_RUNNER_DRY_RUN", "0")
     return RunnerSettings(

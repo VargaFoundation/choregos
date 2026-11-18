@@ -14,9 +14,9 @@ from typing import Any
 
 import httpx
 import pytest
-from choregos_adapters.fakes import FakeGateway
-from choregos_adapters.fakes.model_server import FakeModelServer
 from httpx import AsyncClient
+from tranibor_adapters.fakes import FakeGateway
+from tranibor_adapters.fakes.model_server import FakeModelServer
 
 from .egress_support import as_person
 from .test_broker import TOOLS
@@ -52,7 +52,7 @@ class Upstream:
 
 @pytest.fixture
 def upstream() -> Iterator[Upstream]:
-    from choregos_api.services.agent_sessions import set_model_transport, set_session_gateway
+    from tranibor_api.services.agent_sessions import set_model_transport, set_session_gateway
 
     gateway = FakeGateway()
     found = Upstream(gateway)
@@ -74,18 +74,18 @@ async def _ask(client: AsyncClient, text: str, **extra: Any) -> httpx.Response:
 
 
 async def _ledger() -> list[Any]:
-    from choregos_api.db.models import CostLedger
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import CostLedger
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         return list((await session.execute(select(CostLedger).order_by(CostLedger.ts))).scalars())
 
 
 async def _key_rows() -> list[Any]:
-    from choregos_api.db.models import GatewayKeyRow
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import GatewayKeyRow
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         return list((await session.execute(select(GatewayKeyRow))).scalars())
@@ -149,9 +149,9 @@ async def test_a_session_calls_the_organisations_own_gateway(
 ) -> None:
     """ADR 0109: the session's key comes from the organisation's gateway, so its model is called
     there, not at the deployment's `gateway_url`."""
-    from choregos_api.db.models import Organization, OrgConnector
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Organization, OrgConnector
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         org = (
@@ -206,9 +206,9 @@ async def test_an_expired_sessions_close_is_kept_when_its_response_is_refused(
     database would keep open a session whose key the gateway has revoked."""
     from datetime import timedelta
 
-    from choregos_api.db.models import AgentSessionRecord
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
+    from tranibor_api.db.models import AgentSessionRecord
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
 
     await _agent(client)
     upstream.model.say("Order 42 shipped yesterday.")
@@ -319,11 +319,11 @@ async def test_a_personal_agent_works_in_no_project(
 
 @pytest.fixture
 def supplier(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
-    import choregos_adapters
-    from choregos_adapters.fakes.mcp import FakeMcpServer
+    import tranibor_adapters
+    from tranibor_adapters.fakes.mcp import FakeMcpServer
 
     server = FakeMcpServer(tools=[dict(o) for o in TOOLS], token="supplier-key")
-    monkeypatch.setattr(choregos_adapters, "FAKE_MCP", server)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_MCP", server)
     monkeypatch.setenv("CONNECTOR_TEST_SUPPLIER_KEY", "supplier-key")
     yield server
 
@@ -408,7 +408,7 @@ async def _policy(client: AsyncClient, project: dict[str, Any], **sections: dict
 
 
 def _refuses(arguments: dict[str, Any]) -> dict[str, Any]:
-    from choregos_adapters.errors import AdapterError
+    from tranibor_adapters.errors import AdapterError
 
     raise AdapterError("the supplier refused: no stock for this item")
 
@@ -448,7 +448,7 @@ async def test_the_policy_s_llm_guard_marks_the_session_key(
 ) -> None:
     """S40-21 (ADR 0084): a session's model calls go through the gateway's guard like a run's."""
     import yaml
-    from choregos_core.llm_guardrail import GUARD_METADATA_KEY, GUARD_REDACT
+    from tranibor_core.llm_guardrail import GUARD_METADATA_KEY, GUARD_REDACT
 
     url = f"/api/v1/projects/{project['id']}/policy"
     policy = yaml.safe_load((await client.get(url)).json()["yaml"])

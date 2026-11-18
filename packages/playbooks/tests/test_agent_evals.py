@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from choregos_playbooks.evals.agents import (
+from tranibor_playbooks.evals.agents import (
     AGENT_CASES_DIR,
     evaluate_agent_case,
     evidence,

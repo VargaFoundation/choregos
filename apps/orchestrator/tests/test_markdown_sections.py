@@ -33,14 +33,14 @@ RULE = {
 
 
 def test_added_text_keeps_the_plus_lines_without_their_sign() -> None:
-    from choregos_orchestrator.activities.gates import added_text_of
+    from tranibor_orchestrator.activities.gates import added_text_of
 
     patch = "--- a/x.md\n+++ b/x.md\n@@ -1,2 +1,3 @@\n # Title\n-old line\n+new line\n+## Decision Outcome\n"
     assert added_text_of(patch) == "new line\n## Decision Outcome"
 
 
 async def test_the_added_text_of_the_diff_reaches_the_gate(setup: Any) -> None:
-    from choregos_orchestrator.activities.gates import evaluate_gates
+    from tranibor_orchestrator.activities.gates import evaluate_gates
 
     charge = {"project_id": setup.project_id, "work_item_id": setup.work_item_id, "gates": [RULE]}
     patch_complet = "\n".join(f"+{line}" for line in ADR.splitlines())
@@ -62,7 +62,7 @@ async def test_the_added_text_of_the_diff_reaches_the_gate(setup: Any) -> None:
 
 def test_a_multi_line_summary_stays_on_its_row() -> None:
     """S62-06: a run summary with line breaks and a `|` no longer breaks the status table."""
-    from choregos_orchestrator.markdown import StageLine
+    from tranibor_orchestrator.markdown import StageLine
 
     row = StageLine(
         index=1, label="Triaged", actor="agent triage", outcome="contract:\n- `a`: bad | worse"

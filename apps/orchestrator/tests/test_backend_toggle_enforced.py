@@ -26,9 +26,9 @@ HISTORIES = pathlib.Path(__file__).resolve().parents[3] / "tests" / "replay" / "
 
 async def _switch(name: str, *, enabled: bool, reason: str | None = None) -> None:
     """What `PUT /platform/backends` stores."""
-    from choregos_api.db.models import BackendRegistryRow
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import BackendRegistryRow
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         row = (
@@ -42,15 +42,15 @@ async def _switch(name: str, *, enabled: bool, reason: str | None = None) -> Non
 
 
 async def _planned_backend(setup: Fixture) -> str:
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities.base import project_bundle
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities.base import project_bundle
 
     async with session_scope() as session:
         return str((await project_bundle(session, setup.project_id)).config.agent.default_backend)
 
 
 async def test_a_disabled_backend_refuses_the_stage_and_starts_nothing(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.stage import prepare_stage
+    from tranibor_orchestrator.activities.stage import prepare_stage
 
     backend = await _planned_backend(setup)
     await _switch(backend, enabled=False, reason="under security review")
@@ -66,7 +66,7 @@ async def test_a_disabled_backend_refuses_the_stage_and_starts_nothing(setup: Fi
 
 
 async def test_an_enabled_backend_runs(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.stage import prepare_stage
+    from tranibor_orchestrator.activities.stage import prepare_stage
 
     await _switch(await _planned_backend(setup), enabled=True)
     assert "refused" not in await prepare_stage(_plan(setup))
@@ -74,8 +74,8 @@ async def test_an_enabled_backend_runs(setup: Fixture) -> None:
 
 async def test_no_setting_means_enabled_for_claude_code_only(setup: Fixture) -> None:
     """A fresh install has no `agent_backends` row: only `claude-code` is on, as the console says."""
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities.stage import _require_backend_enabled
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities.stage import _require_backend_enabled
 
     async with session_scope() as session:
         await _require_backend_enabled(session, None, "claude-code")
@@ -86,9 +86,9 @@ async def test_no_setting_means_enabled_for_claude_code_only(setup: Fixture) -> 
 
 
 async def test_the_listing_and_the_orchestrator_agree_on_the_same_rows(setup: Fixture) -> None:
-    from choregos_api.db.session import session_scope
-    from choregos_api.routers.admin import list_backends
-    from choregos_orchestrator.activities.stage import _require_backend_enabled
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.routers.admin import list_backends
+    from tranibor_orchestrator.activities.stage import _require_backend_enabled
 
     await _switch("claude-code", enabled=False)
     await _switch("gemini-cli", enabled=True)  # opencode, codex...: no row
@@ -105,17 +105,17 @@ async def test_the_listing_and_the_orchestrator_agree_on_the_same_rows(setup: Fi
 
 
 async def test_the_reviewer_swap_skips_a_disabled_backend(setup: Fixture) -> None:
-    from choregos_api.db.session import session_scope
-    from choregos_core import ModelResolver
-    from choregos_orchestrator.activities import stage as st
-    from choregos_orchestrator.activities.base import project_bundle
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import ModelResolver
+    from tranibor_orchestrator.activities import stage as st
+    from tranibor_orchestrator.activities.base import project_bundle
 
     await _switch("gemini-cli", enabled=False)
     await _switch("opencode", enabled=True)
     async with session_scope() as session:
         bundle = await project_bundle(session, setup.project_id)
         item = type("I", (), {"id": setup.work_item_id, "size": "m", "tracker_key": "K-1"})()
-        from choregos_api.db.models import Run
+        from tranibor_api.db.models import Run
 
         session.add(
             Run(
@@ -138,8 +138,8 @@ async def test_the_reviewer_swap_skips_a_disabled_backend(setup: Fixture) -> Non
 async def test_a_disabled_backend_escalates_then_runs_once_enabled(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.worker import Replayer
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     backend = await _planned_backend(setup)
     await _switch(backend, enabled=False)

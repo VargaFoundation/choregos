@@ -21,8 +21,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from choregos_contracts import ModelRef
-from choregos_runner.backends import get_backend
+from tranibor_contracts import ModelRef
+from tranibor_runner.backends import get_backend
 
 from .test_units import _minimal_stage_input
 

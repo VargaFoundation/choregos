@@ -7,12 +7,12 @@ from collections.abc import AsyncIterator, Iterator
 from typing import Any
 
 import pytest
-from choregos_api.config import get_settings, reset_settings_cache
-from choregos_api.db.models import AuditLog, User, UserSession
-from choregos_api.db.session import session_scope
-from choregos_api.security import sign_session
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
+from tranibor_api.config import get_settings, reset_settings_cache
+from tranibor_api.db.models import AuditLog, User, UserSession
+from tranibor_api.db.session import session_scope
+from tranibor_api.security import sign_session
 
 ALICE = "alice@northwind.dev"
 LINUX_FIREFOX = "Mozilla/5.0 (X11; Linux x86_64) Firefox/140.0"

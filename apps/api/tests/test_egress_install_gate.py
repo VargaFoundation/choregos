@@ -18,7 +18,7 @@ VENDOR = {"name": "vendor", "type": "mcp", "config": {"url": "https://mcp.exampl
 @pytest.fixture
 def fake() -> Iterator[Any]:
     """A recorded repository: no test reaches GitHub."""
-    from choregos_api.services.skill_sources import FakeSourceFetcher, set_fetcher
+    from tranibor_api.services.skill_sources import FakeSourceFetcher, set_fetcher
 
     fetcher = FakeSourceFetcher()
     fetcher.add(ANTHROPICS, SHA1, tarball(REPO_V1), refs={"v1": SHA1})
@@ -29,7 +29,7 @@ def fake() -> Iterator[Any]:
 
 @pytest.fixture
 def enforce(app: Any, monkeypatch: pytest.MonkeyPatch) -> None:
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     monkeypatch.setenv("CHOREGOS_EGRESS_MODE", "enforce")
     reset_settings_cache()
@@ -154,7 +154,7 @@ async def test_a_web_knowledge_source_is_gated(client: AsyncClient, admin: str, 
 async def test_the_ceiling_is_reported_and_the_platform_change_is_rendered(
     client: AsyncClient, admin: str, enforce: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     monkeypatch.setenv("CHOREGOS_EGRESS_CEILING", '{"api": ["api.github.com"]}')
     monkeypatch.setenv(

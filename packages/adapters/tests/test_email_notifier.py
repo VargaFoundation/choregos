@@ -7,11 +7,11 @@ from collections.abc import AsyncIterator
 from email import message_from_bytes
 
 import pytest
-from choregos_adapters.errors import UpstreamError
-from choregos_adapters.fakes.smtp import FakeSmtpServer
-from choregos_adapters.notify.email import EmailNotifier
-from choregos_adapters.registry import spec_of
-from choregos_core.domain import Message
+from tranibor_adapters.errors import UpstreamError
+from tranibor_adapters.fakes.smtp import FakeSmtpServer
+from tranibor_adapters.notify.email import EmailNotifier
+from tranibor_adapters.registry import spec_of
+from tranibor_core.domain import Message
 
 
 @pytest.fixture

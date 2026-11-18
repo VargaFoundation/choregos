@@ -57,8 +57,8 @@ FIX = {
 @pytest.fixture
 def scm() -> Iterator[Any]:
     """One SCM shared by every request of the test, and the engine's clock reset."""
-    from choregos_adapters.fakes import FakeScm
-    from choregos_ontology.service import actions
+    from tranibor_adapters.fakes import FakeScm
+    from tranibor_ontology.service import actions
 
     fake = FakeScm()
     actions.replace_scm(fake)
@@ -185,7 +185,7 @@ async def test_approving_needs_a_recent_authentication_then_the_platform_opens_t
 ) -> None:
     import time
 
-    from choregos_api import freshness
+    from tranibor_api import freshness
 
     proposal = (await _propose(client, it4it))["result"]["proposal"]
 
@@ -372,8 +372,8 @@ async def test_without_a_report_in_time_the_evidence_fails(
 
 async def _through_the_mcp_server(app: Any, headers: dict[str, str], tool: str, arguments: Any) -> Any:
     """What the agent's model reads of one call: `choregos-tools` relays it to the internal API."""
-    from choregos_tools_mcp.client import InternalClient
-    from choregos_tools_mcp.server import McpServer
+    from tranibor_tools_mcp.client import InternalClient
+    from tranibor_tools_mcp.server import McpServer
 
     internal = InternalClient("http://test/api/v1/internal", RUN, "unused")
     await internal.aclose()
@@ -435,10 +435,10 @@ async def test_a_script_s_proposal_is_a_proposal_and_its_journal_line_names_the_
     (`choregos_tools`, S57-08) returns a `Proposal`, never a result (#1350)."""
     import json
 
-    from choregos_contracts import ToolScripts
-    from choregos_runner import tool_client
-    from choregos_tools_mcp.bridge import CALL_EVENT, Bridge
-    from choregos_tools_mcp.client import InternalClient
+    from tranibor_contracts import ToolScripts
+    from tranibor_runner import tool_client
+    from tranibor_tools_mcp.bridge import CALL_EVENT, Bridge
+    from tranibor_tools_mcp.client import InternalClient
 
     class Journal:
         def __init__(self) -> None:

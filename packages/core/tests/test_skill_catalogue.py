@@ -9,9 +9,9 @@ from typing import Any
 
 import pytest
 import yaml
-from choregos_core import skill_catalogue
-from choregos_core.catalogues import CatalogueError, read_catalogue
-from choregos_core.skill_catalogue import BundleTamperedError, read_bundled
+from tranibor_core import skill_catalogue
+from tranibor_core.catalogues import CatalogueError, read_catalogue
+from tranibor_core.skill_catalogue import BundleTamperedError, read_bundled
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 PUBLISHERS = yaml.safe_load((ROOT / "tools/catalogues/skills/publishers.yaml").read_text("utf-8"))
@@ -64,7 +64,7 @@ def test_a_copyleft_skill_is_never_bundled_and_the_bundled_tree_holds_exactly_th
 
 
 def test_every_bundled_skill_matches_its_provenance_and_its_catalogue_line() -> None:
-    from choregos_contracts import skill_digest
+    from tranibor_contracts import skill_digest
 
     for e in skill_catalogue.load().entries:
         if e.delivery != "bundled":

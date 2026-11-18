@@ -18,9 +18,9 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
-from choregos_adapters import sealing
-from choregos_contracts import OutpostCallState, outpost
 from httpx import AsyncClient
+from tranibor_adapters import sealing
+from tranibor_contracts import OutpostCallState, outpost
 
 from .kits import outpost_daemon as daemon_kit
 from .kits import outposts as kit
@@ -40,7 +40,7 @@ async def daemon(client: AsyncClient, admin: str) -> Daemon:
 
 @pytest.fixture
 def quick_looks(monkeypatch: pytest.MonkeyPatch) -> None:
-    from choregos_api.outposts import rendezvous
+    from tranibor_api.outposts import rendezvous
 
     monkeypatch.setattr(rendezvous, "LOOK_S", (0.02, 0.05))
 
@@ -50,21 +50,21 @@ async def _outpost_id(slug: str = SLUG) -> str:
 
 
 def _session(scope: Any = None) -> Any:
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.session import session_scope
 
     return session_scope(orgs=scope or [kit.ORG])
 
 
 async def _past(call_id: str, slug: str = SLUG, **moments: str) -> None:
     """Move a call's clocks into the past: what waiting would do."""
-    from choregos_api.db.models import OutpostCall
+    from tranibor_api.db.models import OutpostCall
 
     long_ago = datetime.now(UTC) - timedelta(seconds=1)
     await daemon_kit.change(OutpostCall, call_id, slug, **dict.fromkeys(moments or ("expires_at",), long_ago))
 
 
 async def _calls(slug: str = SLUG) -> list[Any]:
-    from choregos_api.db.models import OutpostCall
+    from tranibor_api.db.models import OutpostCall
 
     return list(await kit.rows_of(slug, OutpostCall))
 
@@ -75,8 +75,8 @@ async def _calls(slug: str = SLUG) -> list[Any]:
 async def test_a_call_is_placed_as_a_row_that_waits_with_its_arguments_sealed(
     client: AsyncClient, daemon: Daemon
 ) -> None:
-    from choregos_api.outposts import rendezvous
-    from choregos_api.services import outposts as service
+    from tranibor_api.outposts import rendezvous
+    from tranibor_api.services import outposts as service
 
     connector = await kit.connector_at(SLUG)
     arguments = {"title": "Door stuck", "labels": ["bug"]}
@@ -137,7 +137,7 @@ async def test_a_call_is_placed_as_a_row_that_waits_with_its_arguments_sealed(
 async def test_the_same_id_is_the_same_call_and_is_placed_once(client: AsyncClient, daemon: Daemon) -> None:
     """A write's id is derived from its effect's key: a retried effect meets the first row, whatever
     became of it, and creates no second delivery (ADR 0149 §5)."""
-    from choregos_api.outposts import rendezvous
+    from tranibor_api.outposts import rendezvous
 
     call = {"call_id": rendezvous.call_id_of("an-action", "0"), "write": True, "tool": "create_issue"}
     first = await daemon_kit.place(**call)
@@ -171,7 +171,7 @@ async def test_a_call_is_not_placed_at_an_outpost_that_takes_none(
     client: AsyncClient, daemon: Daemon, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Outposts switched off, an outpost paused or revoked: nothing is written (ADR 0149 §7)."""
-    from choregos_api.outposts import rendezvous
+    from tranibor_api.outposts import rendezvous
 
     assert (await client.post(f"{kit.BASE}/{SLUG}/pause")).status_code == 200
     with pytest.raises(rendezvous.NotAdmitted) as paused:
@@ -216,7 +216,7 @@ async def test_a_call_that_is_not_shaped_as_its_kind_says_is_the_callers_fault(
 async def test_without_a_key_wrapper_no_call_is_written(
     client: AsyncClient, daemon: Daemon, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.secret_store import ENV_KEKS, SecretStoreUnavailable
+    from tranibor_api.secret_store import ENV_KEKS, SecretStoreUnavailable
 
     monkeypatch.delenv(ENV_KEKS)
     with pytest.raises(SecretStoreUnavailable):
@@ -231,7 +231,7 @@ async def test_calls_in_flight_are_bounded_per_outpost_and_per_organisation(
 ) -> None:
     """Where a call is admitted (ADR 0148 §10): one more than the quota is refused before anything is
     written, and a place comes back when a call is answered, refused or out of time."""
-    from choregos_api.outposts import rendezvous
+    from tranibor_api.outposts import rendezvous
 
     other = await daemon_kit.approved(client, "cold-store")
     two, five = (
@@ -274,7 +274,7 @@ async def test_calls_in_flight_are_bounded_per_outpost_and_per_organisation(
 async def test_a_transaction_places_several_calls(client: AsyncClient, daemon: Daemon) -> None:
     """The organisation's placements are serialised until the transaction ends; a transaction that
     places a second call does not wait for itself."""
-    from choregos_api.outposts import rendezvous
+    from tranibor_api.outposts import rendezvous
 
     row = await kit.outpost_row(SLUG)
     async with _session() as session:
@@ -303,9 +303,9 @@ async def test_a_claimer_that_finds_a_call_claimed_since_it_read_it_hands_nothin
     """Of two claimers one wins, whichever database holds the row. The claim is a compare-and-set: a
     claimer that read a call as free hands it over only if the row is still unclaimed when it writes.
     PostgreSQL also locks what a claimer reads, so the second one skips it instead."""
-    from choregos_api.db.models import OutpostInstance
-    from choregos_api.outposts import rendezvous
     from sqlalchemy import select
+    from tranibor_api.db.models import OutpostInstance
+    from tranibor_api.outposts import rendezvous
 
     (other,) = await daemon_kit.instances(1)
     placed = await daemon_kit.place()
@@ -345,7 +345,7 @@ async def test_a_call_is_claimed_only_while_the_outpost_is_active_and_the_instan
     client: AsyncClient, daemon: Daemon
 ) -> None:
     """The conditions of a claim, at the claim itself: whoever calls it."""
-    from choregos_api.outposts import rendezvous
+    from tranibor_api.outposts import rendezvous
 
     placed = await daemon_kit.place()
     outpost_id = await _outpost_id()
@@ -387,7 +387,7 @@ async def test_a_call_is_claimed_only_while_the_outpost_is_active_and_the_instan
 async def test_what_runs_out_of_time_is_closed_by_what_it_was(client: AsyncClient, daemon: Daemon) -> None:
     """An unclaimed call is `expired`: nothing reached any server. A claimed read is `timed_out`. A
     claimed write is `in_doubt`: nobody knows whether the server executed it (ADR 0149 §5)."""
-    from choregos_api.outposts import rendezvous
+    from tranibor_api.outposts import rendezvous
 
     read, write = await daemon_kit.place(), await daemon_kit.place(write=True, tool="create_issue")
     answered = await daemon_kit.place()
@@ -431,7 +431,7 @@ async def test_a_call_no_instance_claimed_is_placed_again_under_its_id_and_no_ot
 ) -> None:
     """A write nobody claimed reached no server: it alone is retried. A read whose lease ended is asked
     again as a new call: the journal of the instance that held it would refuse a copy under its id."""
-    from choregos_api.outposts import rendezvous
+    from tranibor_api.outposts import rendezvous
 
     write = {"call_id": "write-0", "write": True, "tool": "create_issue"}
     read = {"call_id": "read-0"}
@@ -465,7 +465,7 @@ async def test_a_call_no_instance_claimed_is_placed_again_under_its_id_and_no_ot
 
 
 async def test_a_cancel_closes_a_call_whatever_the_time(client: AsyncClient, daemon: Daemon) -> None:
-    from choregos_api.outposts import rendezvous
+    from tranibor_api.outposts import rendezvous
 
     unclaimed, answered = await daemon_kit.place(), await daemon_kit.place(endpoint="forge")
     (call,) = await daemon.calls(client, endpoints=["forge"])
@@ -485,7 +485,7 @@ async def test_a_cancel_closes_a_call_whatever_the_time(client: AsyncClient, dae
 async def test_waiting_returns_what_the_door_recorded(
     client: AsyncClient, daemon: Daemon, quick_looks: None
 ) -> None:
-    from choregos_api.outposts import rendezvous
+    from tranibor_api.outposts import rendezvous
 
     placed = await daemon_kit.place()
     outpost_id = await _outpost_id()
@@ -515,7 +515,7 @@ async def test_waiting_ends_when_the_calls_time_is_up(
 ) -> None:
     """A read fails fast when no instance claims it in time; a claimed write that gets no answer
     within its lease is in doubt. Whoever waits closes the call itself: nothing else has to run."""
-    from choregos_api.outposts import rendezvous
+    from tranibor_api.outposts import rendezvous
 
     started = time.monotonic()
     placed = await daemon_kit.place(write=write, timeout_s=2)
@@ -534,7 +534,7 @@ async def test_an_answer_that_says_unanswered_leaves_a_write_in_doubt(
 ) -> None:
     """The call was sent, or begun, and the outpost holds no answer: executed or not, nobody knows.
     The reader moves the state; what the door recorded does not move."""
-    from choregos_api.outposts import rendezvous
+    from tranibor_api.outposts import rendezvous
 
     placed = await daemon_kit.place(write=write)
     (call,) = await daemon.calls(client)
@@ -556,7 +556,7 @@ async def test_an_answer_that_says_unanswered_leaves_a_write_in_doubt(
 async def test_an_answer_that_does_not_open_is_no_answer(client: AsyncClient, daemon: Daemon) -> None:
     """A hostile or broken outpost may store anything: an envelope sealed to another key, an answer to
     another call, something that is not an answer. Whoever reads it learns nothing, and says so."""
-    from choregos_api.outposts import rendezvous
+    from tranibor_api.outposts import rendezvous
 
     placed = [await daemon_kit.place(write=index == 0) for index in range(3)]
     calls = {call["id"]: call for call in await daemon.calls(client)}
@@ -582,7 +582,7 @@ async def test_an_answer_that_does_not_open_is_no_answer(client: AsyncClient, da
 
 
 async def test_reading_before_anything_is_known_says_so(client: AsyncClient, daemon: Daemon) -> None:
-    from choregos_api.outposts import rendezvous
+    from tranibor_api.outposts import rendezvous
 
     placed = await daemon_kit.place()
     outpost_id = await _outpost_id()
@@ -605,7 +605,7 @@ async def test_the_sweep_closes_what_ran_out_of_time_at_every_outpost(
 ) -> None:
     """For the outposts nobody polls or calls any more. It runs as the platform, under whose scope no
     outpost's row exists until an outpost is named: it lists the registry and names each in turn."""
-    from choregos_api.outposts import rendezvous
+    from tranibor_api.outposts import rendezvous
 
     other = await daemon_kit.approved(client, "cold-store")
     here, there = (
@@ -641,7 +641,7 @@ async def test_the_api_sweeps_while_it_runs_when_outposts_are_on(
     app: Any, client: AsyncClient, daemon: Daemon, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The sweep is started with the application, and only where outposts are switched on."""
-    from choregos_api.main import create_app
+    from tranibor_api.main import create_app
 
     placed = await daemon_kit.place(write=True, tool="create_issue")
     await daemon.calls(client)

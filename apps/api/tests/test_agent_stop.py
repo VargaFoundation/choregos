@@ -50,8 +50,8 @@ async def _second_project(client: AsyncClient) -> dict[str, Any]:
 async def _run(
     project_id: str, run_id: str, *, slug: str = SLUG, status: str = "running", result: Any = None
 ) -> str:
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Run, WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         item = WorkItem(project_id=project_id, tracker_key=run_id.upper(), title="T", state="ready")
@@ -73,9 +73,9 @@ async def _run(
 
 
 async def _open_session(project_id: str, *, slug: str = SLUG) -> str:
-    from choregos_api.db.models import AgentSessionRecord, Project
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
+    from tranibor_api.db.models import AgentSessionRecord, Project
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
 
     async with session_scope() as session:
         project_row = await session.get(Project, project_id)
@@ -95,9 +95,9 @@ async def _open_session(project_id: str, *, slug: str = SLUG) -> str:
 
 
 async def _runs() -> dict[str, tuple[str, Any]]:
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = (await session.execute(select(Run))).scalars()
@@ -105,9 +105,9 @@ async def _runs() -> dict[str, tuple[str, Any]]:
 
 
 async def _sessions() -> dict[str, tuple[str, str | None]]:
-    from choregos_api.db.models import AgentSessionRecord
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import AgentSessionRecord
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = (await session.execute(select(AgentSessionRecord))).scalars()
@@ -115,18 +115,18 @@ async def _sessions() -> dict[str, tuple[str, str | None]]:
 
 
 async def _status(slug: str = SLUG) -> str:
-    from choregos_api.db.models import Agent
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Agent
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         return str((await session.execute(select(Agent.status).where(Agent.slug == slug))).scalar_one())
 
 
 async def _audited(action: str) -> list[dict[str, Any]]:
-    from choregos_api.db.models import AuditLog
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import AuditLog
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = (
@@ -136,7 +136,7 @@ async def _audited(action: str) -> list[dict[str, Any]]:
 
 
 def _cancellations() -> set[str]:
-    from choregos_api.temporal import FakeTemporal, get_temporal
+    from tranibor_api.temporal import FakeTemporal, get_temporal
 
     fake = get_temporal()
     assert isinstance(fake, FakeTemporal)
@@ -148,7 +148,7 @@ async def test_the_agent_is_suspended_before_any_run_is_stopped(
 ) -> None:
     """Each cancel sees the agent `suspended` from ANOTHER session: committed, not only flushed, so
     `resolve` refuses a new run while the others are being stopped."""
-    from choregos_api.services import agent_stop
+    from tranibor_api.services import agent_stop
 
     await _agent(client)
     await _run(project["id"], "run-a")
@@ -171,7 +171,7 @@ async def test_the_agent_is_suspended_before_any_run_is_stopped(
 async def test_a_stop_cancels_every_run_of_the_agent_in_every_project_and_closes_its_sessions(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.services.agents import AgentUnavailable, resolve_agent
+    from tranibor_api.services.agents import AgentUnavailable, resolve_agent
 
     await _agent(client)
     await _agent(client, "other-agent")
@@ -215,8 +215,8 @@ async def test_a_stop_cancels_every_run_of_the_agent_in_every_project_and_closes
     assert len(audited) == 1
     assert audited[0]["reason"] == "it deletes branches"
     assert (audited[0]["runs_cancelled"], audited[0]["sessions_closed"]) == (2, 2)
-    from choregos_api.db.models import Project
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Project
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         project_row = await session.get(Project, project["id"])
@@ -230,9 +230,9 @@ async def test_a_stop_cancels_every_run_of_the_agent_in_every_project_and_closes
 
 
 async def _member(email: str, role: str, project_id: str | None = None) -> None:
-    from choregos_api.db.models import Membership, Organization, User
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Membership, Organization, User
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         org = (
@@ -336,8 +336,8 @@ async def test_a_run_that_cannot_be_stopped_is_named_and_the_others_go_on(
 ) -> None:
     """A run that ended between the list and the stop (409) is skipped silently; any other refusal
     is named in `not_stopped`, and the other runs are still stopped."""
-    from choregos_api.errors import conflict, not_found
-    from choregos_api.services import agent_stop
+    from tranibor_api.errors import conflict, not_found
+    from tranibor_api.services import agent_stop
 
     await _agent(client)
     for run_id in ("run-ended", "run-lost", "run-ok"):

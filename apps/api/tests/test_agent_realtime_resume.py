@@ -14,8 +14,8 @@ from collections.abc import Callable
 from typing import Any
 
 import pytest
-from choregos_adapters.fakes.realtime import AUDIO_B64
 from httpx import AsyncClient
+from tranibor_adapters.fakes.realtime import AUDIO_B64
 
 from .egress_support import as_person
 from .test_agent_realtime import (
@@ -60,7 +60,7 @@ async def _closed_reason(client: AsyncClient) -> str | None:
 async def test_a_caller_back_in_time_misses_nothing_and_nothing_is_counted_twice(
     client: AsyncClient, project: dict[str, Any], voice: Voice
 ) -> None:
-    from choregos_api.services.agent_realtime import held_relay
+    from tranibor_api.services.agent_realtime import held_relay
 
     await _agent(client)
     voice.model.say(GREETING).hear("Where is order 42?").say("It shipped yesterday.")
@@ -101,7 +101,7 @@ async def _answered(relay: Any) -> bool:
 async def test_past_the_grace_the_session_closes_caller_gone_and_its_key_is_revoked(
     client: AsyncClient, project: dict[str, Any], voice: Voice, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.services import agent_realtime
+    from tranibor_api.services import agent_realtime
 
     monkeypatch.setattr(agent_realtime, "RESUME_GRACE_S", 0.2)
     await _agent(client)
@@ -125,7 +125,7 @@ async def test_past_the_grace_the_session_closes_caller_gone_and_its_key_is_revo
 async def test_a_hang_up_closes_the_session_at_once(
     client: AsyncClient, project: dict[str, Any], voice: Voice
 ) -> None:
-    from choregos_api.services.agent_realtime import held_relay
+    from tranibor_api.services.agent_realtime import held_relay
 
     await _agent(client)
     voice.model.say(GREETING)
@@ -176,7 +176,7 @@ async def test_a_newer_socket_takes_over_the_older_one(
 async def test_events_no_longer_held_are_refused_not_skipped(
     client: AsyncClient, project: dict[str, Any], voice: Voice, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.services import agent_realtime
+    from tranibor_api.services import agent_realtime
 
     monkeypatch.setattr(agent_realtime, "RESUME_BUFFER_BYTES", 1)  # only the last event is held
     await _agent(client)
@@ -194,7 +194,7 @@ async def test_events_no_longer_held_are_refused_not_skipped(
 async def test_a_session_this_process_does_not_hold_is_answered_1013(
     client: AsyncClient, project: dict[str, Any], voice: Voice, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.routers import agent_realtime as router
+    from tranibor_api.routers import agent_realtime as router
 
     await _agent(client)
     voice.model.say(GREETING)
@@ -226,9 +226,9 @@ async def test_a_caller_who_lost_the_project_cannot_resume(
 
 
 async def _demote(email: str, role: str) -> None:
-    from choregos_api.db.models import Membership, User
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Membership, User
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as db:
         user = (await db.execute(select(User).where(User.email == email))).scalar_one()

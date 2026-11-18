@@ -20,11 +20,11 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from choregos_contracts import StageContext, StageInput
-from choregos_runner import compression
-from choregos_runner.exits import Exit
-from choregos_runner.runner import Runner
-from choregos_runner.workspace import git_dir_for
+from tranibor_contracts import StageContext, StageInput
+from tranibor_runner import compression
+from tranibor_runner.exits import Exit
+from tranibor_runner.runner import Runner
+from tranibor_runner.workspace import git_dir_for
 
 from .conftest import FakeInternalClient, agent_script, valid_result
 

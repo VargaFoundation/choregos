@@ -203,8 +203,8 @@ async def test_create_work_item_opens_a_work_item_in_the_persons_name(
     await login(client, ADMIN)
     items = (await client.get(f"/api/v1/projects/{project['id']}/work-items")).json()["items"]
     assert [t["tracker_key"] for t in items] == [key]
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         born = await session.get(WorkItem, result["structuredContent"]["work_item"])
@@ -218,8 +218,8 @@ async def test_create_work_item_opens_a_work_item_in_the_persons_name(
 async def test_an_external_tracker_files_the_issue_through_mcp(
     client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_adapters.fakes.tracker import FakeTracker
-    from choregos_api.services import tickets
+    from tranibor_adapters.fakes.tracker import FakeTracker
+    from tranibor_api.services import tickets
 
     fake = FakeTracker("billing-api")
     real = tickets.project_tracker
@@ -263,9 +263,9 @@ async def test_a_token_bound_to_a_project_sees_only_that_project(
 async def test_the_awaited_decision_is_taken_in_the_console(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.db.models import HumanRequest, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
+    from tranibor_api.db.models import HumanRequest, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
 
     async with session_scope() as session:
         item = WorkItem(project_id=project["id"], tracker_key="BIL-7", title="To validate", state="review")
@@ -295,11 +295,11 @@ async def test_the_awaited_decision_is_taken_in_the_console(
 
 
 async def test_the_budget_of_writes_of_the_day(client: AsyncClient, project: dict[str, Any]) -> None:
-    from choregos_api.db.models import AuditLog, Organization, User
-    from choregos_api.db.session import session_scope
-    from choregos_api.mcp.limits import WRITES_PER_DAY
-    from choregos_core import utcnow
     from sqlalchemy import select
+    from tranibor_api.db.models import AuditLog, Organization, User
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.mcp.limits import WRITES_PER_DAY
+    from tranibor_core import utcnow
 
     await _internal_tracker(client, project)
     async with session_scope() as session:
@@ -329,8 +329,8 @@ async def test_the_budget_of_writes_of_the_day(client: AsyncClient, project: dic
 
 
 async def test_the_rate_per_token(client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch) -> None:
-    from choregos_api.mcp import transport
-    from choregos_api.rate_limit import RateLimiter
+    from tranibor_api.mcp import transport
+    from tranibor_api.rate_limit import RateLimiter
 
     monkeypatch.setattr(transport, "RATE_LIMITER", RateLimiter(2))
     token = await _token(client, "mcp:read")
@@ -340,7 +340,7 @@ async def test_the_rate_per_token(client: AsyncClient, admin: str, monkeypatch: 
 
 
 def test_a_result_too_long_is_truncated_and_says_so() -> None:
-    from choregos_api.mcp.limits import truncate
+    from tranibor_api.mcp.limits import truncate
 
     assert truncate("short") == "short"
     long = truncate("x" * 70_000, size=60_000)

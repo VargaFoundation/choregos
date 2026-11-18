@@ -43,9 +43,9 @@ async def _labeling(client: AsyncClient, delivery: str, action: str, label: str,
 
 
 async def _labels() -> list[str]:
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         item = (
@@ -79,7 +79,7 @@ async def test_the_webhook_boards_the_work_item_with_its_labels(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
     """The PR does not carry `hotfix`; the work item does: it takes the express lane."""
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.temporal import get_temporal
 
     await _labeling(client, "e1", "labeled", "agent-ready", ["agent-ready", "hotfix"])
     pr = {

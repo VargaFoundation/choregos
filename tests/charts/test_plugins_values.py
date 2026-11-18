@@ -2,7 +2,7 @@
 
 By default (S43-09) the built-in agents' four plugins are installed from the `tranibor` source, pre-approved,
 taken from the image's offline directory; emptied, nothing is rendered or mounted. With values, the file
-is the one `choregos_core.plugins.sources.parse_config` accepts, mounted read-only and named by
+is the one `tranibor_core.plugins.sources.parse_config` accepts, mounted read-only and named by
 `CHOREGOS_PLUGINS_CONFIG`; a source without a trust policy refuses to render.
 """
 
@@ -15,7 +15,7 @@ from typing import Any
 
 import pytest
 import yaml
-from choregos_core.publishing import PUBLISHING
+from tranibor_core.publishing import PUBLISHING
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 CHART = ROOT / "charts" / "choregos"
@@ -84,7 +84,7 @@ NONE: dict[str, Any] = {"sources": [], "defaultPlugins": [], "offline": ""}
 def test_by_default_the_built_in_agents_are_installed_pre_approved(tmp_path: pathlib.Path) -> None:
     import re
 
-    from choregos_core.plugins.sources import parse_config
+    from tranibor_core.plugins.sources import parse_config
 
     docs = _docs(None, tmp_path)
     config_map = _config_map(docs)
@@ -116,7 +116,7 @@ def test_emptied_there_is_no_plugin_configuration(tmp_path: pathlib.Path) -> Non
 
 
 def test_the_values_become_the_file_the_api_reads(tmp_path: pathlib.Path) -> None:
-    from choregos_core.plugins.sources import parse_config
+    from tranibor_core.plugins.sources import parse_config
 
     docs = _docs({"global": {"plugins": PLUGINS}}, tmp_path)
     config_map = _config_map(docs)

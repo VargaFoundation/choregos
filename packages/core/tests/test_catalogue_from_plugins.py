@@ -11,8 +11,8 @@ import shutil
 from pathlib import Path
 
 import pytest
-from choregos_core import agent_catalogue as catalogue
-from choregos_core.agent_catalogue import Catalogue, entries, entry, load, offline_directory
+from tranibor_core import agent_catalogue as catalogue
+from tranibor_core.agent_catalogue import Catalogue, entries, entry, load, offline_directory
 
 ROOT = Path(__file__).resolve().parents[3]
 OFFLINE = ROOT / "plugins" / "offline"

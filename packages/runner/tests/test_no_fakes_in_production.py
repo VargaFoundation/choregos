@@ -1,6 +1,6 @@
 """The runner does not start on the fakes in staging and prod (S80-03).
 
-Under `CHOREGOS_FAKES` the egress control only warns (`choregos_core.egress.default_mode`). The runner
+Under `CHOREGOS_FAKES` the egress control only warns (`tranibor_core.egress.default_mode`). The runner
 learns its environment from its pod or from its assignment (the orchestrator puts `CHOREGOS_ENV` in
 both), and refuses either way, before it runs anything.
 """
@@ -13,11 +13,11 @@ from typing import Any
 
 import httpx
 import pytest
-from choregos_adapters.sealing import key_from_log, seal
-from choregos_runner import cli
-from choregos_runner.assignment import AssignmentServer
-from choregos_runner.exits import Exit
-from choregos_runner.runner import RunOutcome
+from tranibor_adapters.sealing import key_from_log, seal
+from tranibor_runner import cli
+from tranibor_runner.assignment import AssignmentServer
+from tranibor_runner.exits import Exit
+from tranibor_runner.runner import RunOutcome
 from typer.testing import CliRunner
 
 

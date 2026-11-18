@@ -18,7 +18,7 @@ import os
 from typing import Any
 
 import pytest
-from choregos_core.temporal_connection import TemporalSecurity, data_converter, parse_codec_keys
+from tranibor_core.temporal_connection import TemporalSecurity, data_converter, parse_codec_keys
 
 TICKET = "HR-77 Salary review for Jane Doe: 81500 EUR, medical leave since March"
 
@@ -37,9 +37,9 @@ def _stub_activities() -> list[Any]:
 async def _record(converter: Any) -> Any:
     """Run one ReleaseTrain under `converter`; the ticket is in its input, an activity's result and a
     signal. Returns its history."""
-    from choregos_orchestrator.testing import workers_by_queue
-    from choregos_orchestrator.workflows.train import ReleaseTrain
     from temporalio.testing import WorkflowEnvironment
+    from tranibor_orchestrator.testing import workers_by_queue
+    from tranibor_orchestrator.workflows.train import ReleaseTrain
 
     environment = await WorkflowEnvironment.start_time_skipping(data_converter=converter)
     try:
@@ -81,10 +81,10 @@ async def test_a_run_with_the_codec_leaves_no_ticket_text_in_the_exported_histor
 
 
 async def test_a_history_recorded_with_the_codec_replays_with_the_codec_and_not_without() -> None:
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.client import WorkflowHistory
     from temporalio.converter import DataConverter
     from temporalio.worker import Replayer
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     converter = data_converter(_security())
     archived = json.loads((await _record(converter)).to_json())

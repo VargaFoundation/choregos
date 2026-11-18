@@ -32,8 +32,8 @@ EXTRA = """  - { name: instrument_views, scope: user_subject, subject: { type: i
 
 @pytest.fixture
 def markets(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
-    import choregos_adapters
-    from choregos_adapters.fakes.mcp import FakeMcpServer
+    import tranibor_adapters
+    from tranibor_adapters.fakes.mcp import FakeMcpServer
 
     tools = [
         {
@@ -49,14 +49,14 @@ def markets(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
     server.structured["get_quote"] = {
         "relations": [{"subject": {"type": "instrument", "key": "FR0000120073"}}]
     }
-    monkeypatch.setattr(choregos_adapters, "FAKE_MCP", server)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_MCP", server)
     monkeypatch.setenv("CONNECTOR_TEST_MARKETS_KEY", "markets-key")
     yield server
 
 
 async def _groups(email: str, groups: list[str]) -> None:
-    from choregos_api.db.models import User
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import User
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         user = (await session.execute(select(User).where(User.email == email))).scalar_one()
@@ -66,8 +66,8 @@ async def _groups(email: str, groups: list[str]) -> None:
 async def _assistant(client: AsyncClient, *, with_markets: bool = False) -> str:
     """The plugin installed, the assistant installed and (when asked) its resolver need bound to a connector
     served by the fake MCP server. Returns the installation id."""
-    from choregos_api.db.models import AssistantInstallation
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import AssistantInstallation
+    from tranibor_api.db.session import session_scope
 
     await _agent(client)  # the agent of the conversations, unless the test made its own first
     await _plugin(client)
@@ -90,10 +90,10 @@ async def _assistant(client: AsyncClient, *, with_markets: bool = False) -> str:
 
 
 async def _open(installation_id: str, email: str = "admin@northwind.dev", agent: str = "helper") -> str:
-    from choregos_api.db.models import Organization, User
-    from choregos_api.db.session import session_scope
-    from choregos_api.rbac import Principal
-    from choregos_api.services.conversations import open_conversation
+    from tranibor_api.db.models import Organization, User
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.rbac import Principal
+    from tranibor_api.services.conversations import open_conversation
 
     async with session_scope(orgs="*") as session:
         organisation = (await session.execute(select(Organization))).scalar_one()
@@ -109,9 +109,9 @@ async def _open(installation_id: str, email: str = "admin@northwind.dev", agent:
 
 
 async def _tool(conversation: str, name: str, **arguments: Any) -> dict[str, Any]:
-    from choregos_api.db.models import AgentSessionRecord
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.assistant_memory import call_tool
+    from tranibor_api.db.models import AgentSessionRecord
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.assistant_memory import call_tool
 
     async with session_scope(orgs="*") as session:
         record = await session.get(AgentSessionRecord, conversation)
@@ -133,8 +133,8 @@ SUBJECT = {"type": "instrument", "key": ISIN}
 
 
 async def _stored(space: str) -> list[Any]:
-    from choregos_api.db.models import MemoryFact, MemoryStore
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import MemoryFact, MemoryStore
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         rows = await session.execute(
@@ -153,9 +153,9 @@ async def _profile(
     installation_id: str, document: dict[str, Any], email: str = "admin@northwind.dev"
 ) -> None:
     """An active version of the person's `investor_profile`, as the memory page writes one."""
-    from choregos_api.db.models import AssistantInstallation, MemoryProfile, User
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.assistant_memory import ensure_store, spaces_of
+    from tranibor_api.db.models import AssistantInstallation, MemoryProfile, User
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.assistant_memory import ensure_store, spaces_of
 
     async with session_scope(orgs="*") as session:
         user = (await session.execute(select(User).where(User.email == email))).scalar_one()

@@ -17,10 +17,10 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from choregos_contracts.enums import OutpostAnswerOutcome, OutpostRefusalCode
-from choregos_outpost.audit import AuditLog
-from choregos_outpost.daemon import Exit
-from choregos_outpost.journal import Journal, JournalError
+from tranibor_contracts.enums import OutpostAnswerOutcome, OutpostRefusalCode
+from tranibor_outpost.audit import AuditLog
+from tranibor_outpost.daemon import Exit
+from tranibor_outpost.journal import Journal, JournalError
 
 from ._bench import Bench, bench
 

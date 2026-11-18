@@ -10,10 +10,10 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from choregos_contracts import StageInput
-from choregos_runner.config import RunnerSettings
-from choregos_runner.exits import Exit
-from choregos_runner.runner import Runner, RunOutcome
+from tranibor_contracts import StageInput
+from tranibor_runner.config import RunnerSettings
+from tranibor_runner.exits import Exit
+from tranibor_runner.runner import Runner, RunOutcome
 
 from .conftest import FakeInternalClient
 

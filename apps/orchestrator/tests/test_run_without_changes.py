@@ -24,9 +24,9 @@ DIFF_GATES = [
 async def _implement_run(
     setup: Any, *, diff_files: int, diff_lines: int, commits: list[str], measured: bool = True
 ) -> str:
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
-    from choregos_contracts import StageResult, StageStatus
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
+    from tranibor_contracts import StageResult, StageStatus
 
     result = StageResult(status=StageStatus.DONE, summary="Already fixed on main: nothing to change")
     result.artifacts.branch = BRANCH
@@ -52,7 +52,7 @@ async def _implement_run(
 
 
 def _scm_answers(setup: Any, monkeypatch: pytest.MonkeyPatch, status_code: int) -> None:
-    from choregos_adapters.errors import UpstreamError
+    from tranibor_adapters.errors import UpstreamError
 
     async def compare(repo: str, base: str, head: str) -> Any:
         raise UpstreamError("github", f"compare {base}...{head}", status_code=status_code)
@@ -61,7 +61,7 @@ def _scm_answers(setup: Any, monkeypatch: pytest.MonkeyPatch, status_code: int) 
 
 
 async def _verdicts(setup: Any, run_id: str) -> list[dict[str, Any]]:
-    from choregos_orchestrator.activities.gates import evaluate_gates
+    from tranibor_orchestrator.activities.gates import evaluate_gates
 
     payload = {
         "project_id": setup.project_id,

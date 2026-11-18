@@ -12,9 +12,9 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import Any
 
-from choregos_core import utcnow
 from httpx import AsyncClient
 from sqlalchemy import select
+from tranibor_core import utcnow
 
 from .agent_scopes_kit import make_project
 from .kits.conversations import _open
@@ -39,8 +39,8 @@ async def _action(
     age: timedelta = timedelta(0),
 ) -> str:
     """A governed action waiting for approval (the fake of this kind: a row, nothing reaches Temporal)."""
-    from choregos_api.db.models import Action, Project
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Action, Project
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         project = await session.get(Project, project_id)
@@ -69,8 +69,8 @@ async def _action(
 
 async def _proposal(conversation_id: str, user_email: str, summary: str, *, kind: str = "write") -> str:
     """A write or a launch an assistant proposed (the fake of this kind: a row, nothing reaches a source)."""
-    from choregos_api.db.models import AgentSessionRecord, ConversationAction, User
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import AgentSessionRecord, ConversationAction, User
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         record = await session.get(AgentSessionRecord, conversation_id)
@@ -133,8 +133,8 @@ async def test_a_human_step_is_listed_for_its_assignee_and_with_the_route_that_d
 async def test_a_step_addressed_to_a_group_is_not_listed_outside_it(
     client: AsyncClient, project: dict[str, Any], app: Any
 ) -> None:
-    from choregos_api.db.models import HumanRequest
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import HumanRequest
+    from tranibor_api.db.session import session_scope
 
     await _member(client, LEA, "developer", ["finance"])
     await _member(client, MAX, "developer", [])

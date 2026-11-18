@@ -33,12 +33,15 @@ def _files() -> list[tuple[pathlib.Path, list[tuple[re.Pattern[str], str]]]]:
         if ".venv" in pyproject.parts or "node_modules" in pyproject.parts:
             continue
         text = pyproject.read_text(encoding="utf-8")
-        if not re.search(r'^name = "choregos', text, re.M):
+        if not re.search(r'^name = "(choregos|tranibor)', text, re.M):
             continue
         patterns = [(re.compile(r'^(version = ")[^"]+(")', re.M), r"\g<1>{v}\g<2>")]
-        if 'name = "choregos-agent-sdk"' in text:
+        if 'name = "tranibor-agent-sdk"' in text:
             # The SDK is published beside the contracts it validates against: same version, pinned.
-            patterns.append((re.compile(r'("choregos-contracts==)[^"]+(")'), r"\g<1>{v}\g<2>"))
+            patterns.append((re.compile(r'("tranibor-contracts==)[^"]+(")'), r"\g<1>{v}\g<2>"))
+        if re.search(r'^name = "choregos-', text, re.M) and "compat" in pyproject.parts:
+            # An old distribution (ADR 0176 R2) is an empty wheel that pins the new one it aliases.
+            patterns.append((re.compile(r'("tranibor-[a-z-]+==)[^"]+(")'), r"\g<1>{v}\g<2>"))
         targets.append((pyproject, patterns))
     umbrella = ROOT / "charts" / "choregos" / "Chart.yaml"
     targets.append(
@@ -100,7 +103,10 @@ def install_docs() -> list[tuple[pathlib.Path, list[tuple[re.Pattern[str], str]]
     refuses a page whose version is not the repository's.
     """
     helm = (re.compile(rf"(--version ){_CHART_VERSION}(?= )"), r"\g<1>{v}")
-    wheel = (re.compile(rf"(choregos_[a-z_]+-){_WHEEL_VERSION}(-py3-none-any\.whl)"), r"\g<1>{v}\g<2>")
+    wheel = (
+        re.compile(rf"((?:choregos|tranibor)_[a-z_]+-){_WHEEL_VERSION}(-py3-none-any\.whl)"),
+        r"\g<1>{v}\g<2>",
+    )
     docs = ROOT / "docs"
     return [
         (

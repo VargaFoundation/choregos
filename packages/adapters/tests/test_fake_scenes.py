@@ -7,9 +7,9 @@ import json
 from typing import Any
 
 import pytest
-from choregos_adapters.errors import AdapterError
-from choregos_adapters.fakes import entra, netops
-from choregos_adapters.fakes.scenes import (
+from tranibor_adapters.errors import AdapterError
+from tranibor_adapters.fakes import entra, netops
+from tranibor_adapters.fakes.scenes import (
     EVAL_FAKE_SCENES_ENV,
     FAKE_SCENE_FIELD,
     WEB_FIELD,
@@ -171,15 +171,15 @@ def test_no_declaration_or_edit_may_bind_a_connector_to_a_fake(
 ) -> None:
     """A person, a project or an organisation never sets the field, even on a deployment that serves eval
     fakes: only the matrix's seeding, which writes its rows itself, does (`registry.validate_config`)."""
-    from choregos_adapters import validate_config
-    from choregos_adapters.errors import ConfigurationError
+    from tranibor_adapters import validate_config
+    from tranibor_adapters.errors import ConfigurationError
 
     with pytest.raises(ConfigurationError, match="fake_scene"):
         validate_config(kind, type_name, {FAKE_SCENE_FIELD: "ssh-exposure"})
 
 
 def test_each_kind_with_scenes_runs_a_registered_type() -> None:
-    from choregos_adapters import spec_of
+    from tranibor_adapters import spec_of
 
     assert {kind: scene_type(kind) for kind in scenes()} == {
         "firewall": "pfsense",

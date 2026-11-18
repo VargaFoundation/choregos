@@ -19,8 +19,8 @@ from typing import Any
 
 import pytest
 import yaml
-from choregos_adapters.fakes.notify import FakeNotifier
 from httpx import AsyncClient
+from tranibor_adapters.fakes.notify import FakeNotifier
 
 from .agent_scopes_kit import as_user
 from .kits.assistant_install import (
@@ -54,7 +54,7 @@ def _need(**changes: Any) -> dict[str, Any]:
 @pytest.fixture
 def told() -> Iterator[FakeNotifier]:
     """The owners' notices of an upgrade (the installation's email notifier)."""
-    from choregos_api.services.task_delivery import set_notifier_factory
+    from tranibor_api.services.task_delivery import set_notifier_factory
 
     notifier = FakeNotifier()
     set_notifier_factory(lambda row, channel: notifier if channel == "email" else None)
@@ -83,9 +83,9 @@ def _publish(offline: Path, version: str, change: Callable[[list[dict[str, Any]]
 
 
 async def _base(slug: str, *, restricted: bool = False, status: str = "active") -> str:
-    from choregos_api.db.models import KnowledgeBase, Organization
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import KnowledgeBase, Organization
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         org_id = (
@@ -101,9 +101,9 @@ async def _base(slug: str, *, restricted: bool = False, status: str = "active") 
 
 
 async def _bases() -> dict[str, Any]:
-    from choregos_api.db.models import KnowledgeBase
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import KnowledgeBase
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         return {b.slug: b.installation_id for b in (await session.execute(select(KnowledgeBase))).scalars()}
@@ -168,9 +168,9 @@ async def test_an_optional_knowledge_need_left_unbound_is_not_a_gap(
 async def test_the_binder_reads_what_they_bind_and_a_missing_base_answers_alike(
     client: AsyncClient, org: str, offline: Path
 ) -> None:
-    from choregos_api.db.models import KnowledgeGrant, Organization, User
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import KnowledgeGrant, Organization, User
+    from tranibor_api.db.session import session_scope
 
     _with_need(offline)
     await _plugin(client)

@@ -12,10 +12,10 @@ from collections.abc import Iterator
 from typing import Any
 
 import pytest
-from choregos_api.errors import ApiError
-from choregos_api.secret_store import FakeSecretStore, set_secret_store
 from httpx import AsyncClient
 from sqlalchemy import select
+from tranibor_api.errors import ApiError
+from tranibor_api.secret_store import FakeSecretStore, set_secret_store
 
 from .egress_support import ORG, rules_in_db
 
@@ -26,7 +26,7 @@ ENDPOINT = "https://gw.example.test/{server}/mcp"
 
 @pytest.fixture(autouse=True)
 def isolated() -> Iterator[FakeSecretStore]:
-    from choregos_api.services import mcp_gateway as service
+    from tranibor_api.services import mcp_gateway as service
 
     store = FakeSecretStore()
     set_secret_store(store)
@@ -38,7 +38,7 @@ def isolated() -> Iterator[FakeSecretStore]:
 
 @pytest.fixture
 def enforce(app: Any, monkeypatch: pytest.MonkeyPatch) -> None:
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     monkeypatch.setenv("CHOREGOS_EGRESS_MODE", "enforce")
     reset_settings_cache()
@@ -62,8 +62,8 @@ async def _set_gateway(client: AsyncClient, endpoint: str = ENDPOINT, **over: An
 
 
 async def _organisation() -> Any:
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         found = (
@@ -74,8 +74,8 @@ async def _organisation() -> Any:
 
 
 async def _seed_rule(host: str, used_by: list[str], status: str = "allowed", origin: str = "manual") -> str:
-    from choregos_api.db.models import OrgEgressRule
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import OrgEgressRule
+    from tranibor_api.db.session import session_scope
 
     org = await _organisation()
     async with session_scope() as session:
@@ -95,8 +95,8 @@ async def _seed_rule(host: str, used_by: list[str], status: str = "allowed", ori
 
 
 async def _audit(action: str) -> list[dict[str, Any]]:
-    from choregos_api.db.models import AuditLog
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import AuditLog
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = (await session.execute(select(AuditLog).where(AuditLog.action == action))).scalars()
@@ -127,9 +127,9 @@ async def test_a_request_and_an_approval_for_runners_are_refused_too(client: Asy
 
 
 async def test_a_governed_add_cannot_open_the_gateway_for_runners(client: AsyncClient, admin: str) -> None:
-    from choregos_api.db.session import session_scope
-    from choregos_api.rbac import Principal
-    from choregos_api.services.egress import Target, allow_hosts
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.rbac import Principal
+    from tranibor_api.services.egress import Target, allow_hosts
 
     await _set_gateway(client)
     organisation = await _organisation()
@@ -150,10 +150,10 @@ async def test_a_governed_add_cannot_open_the_gateway_for_runners(client: AsyncC
 async def test_runs_never_reach_the_gateway_host(
     client: AsyncClient, admin: str, project: dict[str, Any]
 ) -> None:
-    from choregos_api.db.models import Project
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.egress import org_runner_hosts
-    from choregos_api.services.network import project_effective_network
+    from tranibor_api.db.models import Project
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.egress import org_runner_hosts
+    from tranibor_api.services.network import project_effective_network
 
     await _seed_rule(HOST, ["runners"])
     organisation = await _organisation()
@@ -203,8 +203,8 @@ async def test_a_rule_the_gateway_did_not_create_is_kept(client: AsyncClient, ad
 
 
 async def test_without_a_gateway_nothing_changes(client: AsyncClient, admin: str) -> None:
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.egress import org_runner_hosts
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.egress import org_runner_hosts
 
     created = await client.post(f"{ORG}/egress/rules", json=_rule(HOST, ["runners"]))
     assert created.status_code == 201, created.text

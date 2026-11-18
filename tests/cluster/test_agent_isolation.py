@@ -30,7 +30,7 @@ from .conftest import kubectl_shared
 pytestmark = pytest.mark.cluster
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-LAUNCHER = ROOT / "packages" / "runner" / "src" / "choregos_runner" / "launcher.py"
+LAUNCHER = ROOT / "packages" / "runner" / "src" / "tranibor_runner" / "launcher.py"
 IMAGE = "python:3.12-slim"
 PROBE_CODE = "import socket; socket.create_connection(('127.0.0.1', 8766))"
 SECRET = "secret-run-token-01"  # a test value: the probe looks for it, it protects nothing

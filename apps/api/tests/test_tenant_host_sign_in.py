@@ -18,12 +18,12 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest
 import respx
-from choregos_api import tenant_host
-from choregos_api.db.models import Membership, Organization, User
-from choregos_api.db.session import session_scope
-from choregos_api.security import read_session
 from httpx import ASGITransport, AsyncClient, Response
 from sqlalchemy import select
+from tranibor_api import tenant_host
+from tranibor_api.db.models import Membership, Organization, User
+from tranibor_api.db.session import session_scope
+from tranibor_api.security import read_session
 
 INSTANCE_IDP = "https://instance-idp.example.test/realms/choregos"
 ACME_IDP = "https://login.acme.example/oauth2"
@@ -63,7 +63,7 @@ class Claims:
 
 @pytest.fixture
 def claims() -> Iterator[Claims]:
-    from choregos_api import edition
+    from tranibor_api import edition
 
     found = Claims()
     tenant_host.declare_host_resolver(found.resolve)
@@ -87,11 +87,11 @@ async def client(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> Asy
     monkeypatch.setenv("CHOREGOS_API_URL", API)
     monkeypatch.setenv("CHOREGOS_INTERNAL_API_GUARD", "enforce")
     monkeypatch.setenv("CHOREGOS_INTERNAL_API_URL", "http://choregos-api:8000")
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.db import session as db_session
-    from choregos_api.db.session import create_all
-    from choregos_api.main import create_app
-    from choregos_api.routers.auth import forget_discovery
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.db import session as db_session
+    from tranibor_api.db.session import create_all
+    from tranibor_api.main import create_app
+    from tranibor_api.routers.auth import forget_discovery
 
     reset_settings_cache()
     forget_discovery()
@@ -177,7 +177,7 @@ async def test_a_verified_host_signs_in_with_its_own_callback(client: AsyncClien
     query = _query(response)
     assert query["redirect_uri"] == [f"https://{ACME_HOST}/api/v1/auth/callback"]
     state = read_session(
-        query["state"][0], __import__("choregos_api.config").config.get_settings(), purpose="oidc-state"
+        query["state"][0], __import__("tranibor_api.config").config.get_settings(), purpose="oidc-state"
     )
     assert state is not None
     assert state["h"] == ACME_HOST  # signed: the callback must come back to this host
@@ -212,7 +212,7 @@ async def test_an_unverified_host_gets_no_callback_of_its_own(
     assert _query(response)["redirect_uri"] == [f"{API}/api/v1/auth/callback"]
     state = read_session(
         _query(response)["state"][0],
-        __import__("choregos_api.config").config.get_settings(),
+        __import__("tranibor_api.config").config.get_settings(),
         purpose="oidc-state",
     )
     assert state is not None and "h" not in state
@@ -230,7 +230,7 @@ async def test_the_handshake_cookie_is_host_only(client: AsyncClient, claims: Cl
 async def test_the_host_implies_its_organisation_whatever_org_says(
     client: AsyncClient, claims: Claims
 ) -> None:
-    from choregos_api.tenant_sign_in import OidcProvider, TenantSignIn, declare_sign_in_resolver
+    from tranibor_api.tenant_sign_in import OidcProvider, TenantSignIn, declare_sign_in_resolver
 
     asked: list[Any] = []
 
@@ -253,7 +253,7 @@ async def test_the_host_implies_its_organisation_whatever_org_says(
 
 
 async def test_a_saml_tenant_signs_in_on_the_instances_host(client: AsyncClient, claims: Claims) -> None:
-    from choregos_api.tenant_sign_in import TenantSignIn, declare_sign_in_resolver
+    from tranibor_api.tenant_sign_in import TenantSignIn, declare_sign_in_resolver
 
     async def resolve(session: Any, hint: Any) -> Any:
         return TenantSignIn(org="globex", start_path=SAML_START) if hint.org == "globex" else None

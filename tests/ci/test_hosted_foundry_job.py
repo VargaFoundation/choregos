@@ -45,8 +45,8 @@ def test_the_gate_waits_for_the_job_and_the_filter_covers_what_it_proves() -> No
     for path in (
         f"{EXAMPLE}/**",
         "tests/conformance/hosted/**",
-        "packages/runner/src/choregos_runner/loopback/**",
-        "packages/core/src/choregos_core/hosted.py",
+        "packages/runner/src/tranibor_runner/loopback/**",
+        "packages/core/src/tranibor_core/hosted.py",
     ):
         assert path in filters, path
     assert "github.ref == 'refs/heads/main'" in _job()["if"]

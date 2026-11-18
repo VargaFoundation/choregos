@@ -10,7 +10,7 @@ import pathlib
 from typing import Any
 
 import yaml
-from choregos_core.publishing import PUBLISHING
+from tranibor_core.publishing import PUBLISHING
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 COMPOSE = ROOT / "compose.yaml"
@@ -127,7 +127,7 @@ def test_litellm_reads_the_generated_configuration() -> None:
 
 
 def test_the_workers_run_agents_as_local_containers() -> None:
-    from choregos_api.local_demo import LOCAL_NETWORK
+    from tranibor_api.local_demo import LOCAL_NETWORK
 
     compose = yaml.safe_load(COMPOSE.read_text(encoding="utf-8"))
     worker = compose["services"]["worker"]

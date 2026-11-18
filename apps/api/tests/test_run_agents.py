@@ -14,8 +14,8 @@ FIXTURES = Path(__file__).parents[3] / "packages" / "core" / "tests" / "fixtures
 
 
 async def _run(project: dict[str, Any], backend: str | None) -> str:
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Run, WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         item = WorkItem(project_id=project["id"], tracker_key="ACME-7", title="A fix", state="planned")

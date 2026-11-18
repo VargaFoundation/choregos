@@ -7,7 +7,7 @@
  * The harness is the version's `backend`, else the project's `agent.default_backend` (`claude-code` unless
  * the project says otherwise, `ProjectConfig.agent.default_backend`). The runner gives the Claude Code
  * harness a `PreToolUse` hook on `Write|Edit|MultiEdit` and `Bash`, and denies `WebFetch` and `WebSearch`
- * when `network.builtin_web_tools` is false (`choregos_runner/backends/claude_code.py`). Every other
+ * when `network.builtin_web_tools` is false (`tranibor_runner/backends/claude_code.py`). Every other
  * runtime (prompt, voice, hosted, a2a) has no coding harness: it has only what the sources below name.
  */
 import type { AgentSpec } from "./types";

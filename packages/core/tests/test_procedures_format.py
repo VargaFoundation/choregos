@@ -11,8 +11,8 @@ import pathlib
 from typing import Any
 
 import pytest
-from choregos_core import procedures as core
-from choregos_core.procedures import SECTION_KEYS, Context, ProcedureError
+from tranibor_core import procedures as core
+from tranibor_core.procedures import SECTION_KEYS, Context, ProcedureError
 
 SHIPPED = sorted(core.SHIPPED.glob("*.md"))
 

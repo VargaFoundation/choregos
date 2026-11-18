@@ -12,9 +12,9 @@ import json
 from typing import Any
 
 import pytest
-from choregos_core.mcp import RESULT_MAX_BYTES
-from choregos_tools_mcp import McpServer
-from choregos_tools_mcp.answer import MAX_NOTICES, MAX_TEXT
+from tranibor_core.mcp import RESULT_MAX_BYTES
+from tranibor_tools_mcp import McpServer
+from tranibor_tools_mcp.answer import MAX_NOTICES, MAX_TEXT
 
 TOOL = "crm__create_contact"
 PROPOSED = {
@@ -308,8 +308,8 @@ def test_the_platform_s_notices_fit_their_room() -> None:
     """The body has at least `RESULT_MAX_BYTES` when the notices fit `MAX_NOTICES`: the largest the
     platform writes — every reason the injection guard names, an unfinished write (or, where the
     channel has no error flag, a failure: #1399), the calls left."""
-    from choregos_core.injection import MOTIFS
-    from choregos_core.tool_answer import compose, failed, flagged, unfinished
+    from tranibor_core.injection import MOTIFS
+    from tranibor_core.tool_answer import compose, failed, flagged, unfinished
 
     suspicions = [{"motif": label, "extrait": "x" * 120} for _, label in MOTIFS]
     running = {**PROPOSED, "action": "a" * 64, "status": "running", "decision_path": "/p/" + "s" * 64}

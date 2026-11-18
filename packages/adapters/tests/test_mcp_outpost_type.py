@@ -12,15 +12,15 @@ from __future__ import annotations
 import pathlib
 from typing import Any
 
-import choregos_adapters
 import pytest
+import tranibor_adapters
 import yaml
-from choregos_adapters import build, egress_hosts, registry, spec_of, validate_config
-from choregos_adapters.errors import AdapterError
-from choregos_adapters.fakes.mcp import FakeMcpServer
-from choregos_adapters.fakes.outpost import FakeOutpost
-from choregos_adapters.mcp import McpClient
-from choregos_adapters.outpost import OutpostToolClient
+from tranibor_adapters import build, egress_hosts, registry, spec_of, validate_config
+from tranibor_adapters.errors import AdapterError
+from tranibor_adapters.fakes.mcp import FakeMcpServer
+from tranibor_adapters.fakes.outpost import FakeOutpost
+from tranibor_adapters.mcp import McpClient
+from tranibor_adapters.outpost import OutpostToolClient
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 TOOLS = [{"name": "read_file", "inputSchema": {"type": "object"}, "annotations": {"readOnlyHint": True}}]
@@ -43,7 +43,7 @@ def test_the_type_is_declared_with_the_contracts_schema_and_no_secret_or_host() 
     # The platform opens no connection for it: whatever its configuration holds, it has no host.
     assert egress_hosts("mcp", "mcp-outpost", {**STORED, "url": "https://evil.test"}) == []
     assert ("mcp", "mcp-outpost") in registry.BUILT_UNDER_FAKES
-    assert choregos_adapters.MCP_OUTPOST_TYPE == "mcp-outpost"
+    assert tranibor_adapters.MCP_OUTPOST_TYPE == "mcp-outpost"
 
 
 @pytest.mark.parametrize(
@@ -96,7 +96,7 @@ def test_the_adapters_factory_builds_nothing_without_a_rendezvous(
 ) -> None:
     """Under fakes too: the type stays itself (`BUILT_UNDER_FAKES`), and is never the fake `mcp`
     client, which would call the fake server as if no outpost stood in between."""
-    from choregos_adapters import builtins
+    from tranibor_adapters import builtins
 
     monkeypatch.setitem(registry._REGISTRY, ("mcp", "mcp-outpost"), builtins._mcp_outpost_client)
     if fakes is None:
@@ -113,7 +113,7 @@ def test_the_adapters_factory_builds_nothing_without_a_rendezvous(
 async def test_the_adapters_factory_builds_the_client_over_what_the_platform_injects(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from choregos_adapters import builtins
+    from tranibor_adapters import builtins
 
     monkeypatch.setitem(registry._REGISTRY, ("mcp", "mcp-outpost"), builtins._mcp_outpost_client)
     monkeypatch.setenv("CHOREGOS_FAKES", "1")
@@ -140,16 +140,16 @@ def test_the_client_has_the_two_methods_and_is_no_mcp_client() -> None:
 
 
 def test_the_package_imports_no_platform_and_the_root_does_not_import_the_mcp_client() -> None:
-    """`packages/*` never import `choregos_api`; and the adapters' root, which the outposts' door
+    """`packages/*` never import `tranibor_api`; and the adapters' root, which the outposts' door
     imports, must not pull in the MCP client through this package (ADR 0148 §12)."""
     import subprocess
     import sys
 
     probe = (
-        "import sys, choregos_adapters, choregos_adapters.sealing;"
-        "print('choregos_adapters.mcp' in sys.modules, 'choregos_adapters.outpost' in sys.modules);"
-        "import choregos_adapters.outpost, choregos_adapters.fakes.outpost;"
-        "print(any(name.split('.')[0] == 'choregos_api' for name in sys.modules))"
+        "import sys, tranibor_adapters, tranibor_adapters.sealing;"
+        "print('tranibor_adapters.mcp' in sys.modules, 'tranibor_adapters.outpost' in sys.modules);"
+        "import tranibor_adapters.outpost, tranibor_adapters.fakes.outpost;"
+        "print(any(name.split('.')[0] == 'tranibor_api' for name in sys.modules))"
     )
     done = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True, check=True)
     assert done.stdout.split() == ["False", "False", "False"], done.stdout
@@ -158,11 +158,11 @@ def test_the_package_imports_no_platform_and_the_root_does_not_import_the_mcp_cl
 def test_the_fake_outpost_of_the_process_serves_every_alias_from_the_current_fake_mcp(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(choregos_adapters, "FAKE_OUTPOST", None)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_OUTPOST", None)
     first, second = FakeMcpServer(tools=list(TOOLS)), FakeMcpServer(tools=[])
-    monkeypatch.setattr(choregos_adapters, "FAKE_MCP", first)
-    fake = choregos_adapters.fake_outpost()
-    assert fake is choregos_adapters.fake_outpost() is choregos_adapters.FAKE_OUTPOST
+    monkeypatch.setattr(tranibor_adapters, "FAKE_MCP", first)
+    fake = tranibor_adapters.fake_outpost()
+    assert fake is tranibor_adapters.fake_outpost() is tranibor_adapters.FAKE_OUTPOST
     assert fake._server("anything") is first
-    monkeypatch.setattr(choregos_adapters, "FAKE_MCP", second)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_MCP", second)
     assert fake._server("anything") is second, "a test that replaces the fake server is followed"

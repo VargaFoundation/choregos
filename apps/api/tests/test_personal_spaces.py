@@ -14,17 +14,17 @@ from .conftest import login, without_postgres
 
 
 async def _user(email: str) -> Any:
-    from choregos_api.db.models import User
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import User
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         return (await session.execute(select(User).where(User.email == email))).scalar_one()
 
 
 async def _space_of(org_slug: str, email: str) -> str:
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.personal_spaces import personal_space
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.personal_spaces import personal_space
 
     user = await _user(email)
     async with session_scope(orgs="*") as session:
@@ -38,9 +38,9 @@ async def _space_of(org_slug: str, email: str) -> str:
 
 
 async def test_a_person_has_one_space_per_organisation(client: AsyncClient, admin: str) -> None:
-    from choregos_api.db.models import Project
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.personal_spaces import personal_slug
+    from tranibor_api.db.models import Project
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.personal_spaces import personal_slug
 
     first = await _space_of("northwind", admin)
     assert await _space_of("northwind", admin) == first  # created once, found after
@@ -90,9 +90,9 @@ async def test_a_team_project_may_not_take_a_personal_slug(
 
 async def test_a_personal_space_has_an_owner_and_a_team_project_none(client: AsyncClient, admin: str) -> None:
     """The constraint holds in the database, not only in the service."""
-    from choregos_api.db.models import Organization, Project
-    from choregos_api.db.session import session_scope
     from sqlalchemy.exc import IntegrityError
+    from tranibor_api.db.models import Organization, Project
+    from tranibor_api.db.session import session_scope
 
     with pytest.raises(IntegrityError):
         async with session_scope(orgs="*") as session:
@@ -109,8 +109,8 @@ async def test_a_personal_space_has_an_owner_and_a_team_project_none(client: Asy
 @pytest.fixture
 async def organisation_a(pg_app: Any) -> str:
     """The organisation `a`, which sign-in joins (`OIDC_DEFAULT_ORG=a`)."""
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         organisation = Organization(slug="a", name="A")
@@ -123,8 +123,8 @@ async def organisation_a(pg_app: Any) -> str:
 async def test_another_person_never_reads_a_personal_space(pg_app: Any, organisation_a: str) -> None:
     """Even an administrator of the organisation, through the API and straight through RLS; and what the space
     holds (a work item) follows the space."""
-    from choregos_api.db.models import Project, WorkItem
-    from choregos_api.db.session import limit_to_organisations, name_the_user, session_scope
+    from tranibor_api.db.models import Project, WorkItem
+    from tranibor_api.db.session import limit_to_organisations, name_the_user, session_scope
 
     async with AsyncClient(transport=ASGITransport(app=pg_app), base_url="http://test") as client:
         await login(client, "admin@a.test")  # org_admin of `a` (OIDC_DEFAULT_ORG=a, DEV_ADMIN_EMAILS)
@@ -157,8 +157,8 @@ async def test_another_person_never_reads_a_personal_space(pg_app: Any, organisa
 @without_postgres
 async def test_the_platform_scope_reads_every_personal_space(pg_app: Any, organisation_a: str) -> None:
     """Tasks run by the orchestrator (ADR 0137) work in the subscriber's space under the platform scope."""
-    from choregos_api.db.models import Project
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Project
+    from tranibor_api.db.session import session_scope
 
     async with AsyncClient(transport=ASGITransport(app=pg_app), base_url="http://test") as client:
         await login(client, "dev@a.test")

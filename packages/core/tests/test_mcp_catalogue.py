@@ -10,9 +10,9 @@ from urllib.parse import urlparse
 
 import pytest
 import yaml
-from choregos_core import mcp_catalogue
-from choregos_core.catalogues import CatalogueError, read_catalogue
-from choregos_core.mcp_catalogue import McpEntry, install_kind
+from tranibor_core import mcp_catalogue
+from tranibor_core.catalogues import CatalogueError, read_catalogue
+from tranibor_core.mcp_catalogue import McpEntry, install_kind
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 EXCLUSIONS = yaml.safe_load((ROOT / "tools/catalogues/mcp/exclusions.yaml").read_text("utf-8"))

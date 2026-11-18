@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from choregos_core.redaction import REDACTED, redact
+from tranibor_core.redaction import REDACTED, redact
 
 # Fake secrets are assembled at run time: written whole, they would trip the repository's own
 # secret scanner (gitleaks reads every branch), which is right to refuse them.
@@ -52,7 +52,7 @@ def test_masking_twice_changes_nothing() -> None:
 
 def test_a_remembered_secret_is_masked_whatever_its_shape() -> None:
     """A resolved connector secret has no known shape (ADR 0058): only remembering it masks it."""
-    from choregos_core.redaction import forget_secrets, redact_known, remember_secret
+    from tranibor_core.redaction import forget_secrets, redact_known, remember_secret
 
     forget_secrets()
     value = "plain-vendor-key-9f8e7d"

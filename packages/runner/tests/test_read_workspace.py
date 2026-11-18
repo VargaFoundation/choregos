@@ -9,11 +9,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from choregos_contracts import Permissions, StageInput
-from choregos_core.workspace import READ_ONLY_WRITE_PATHS
-from choregos_runner.exits import Exit
-from choregos_runner.guardrails import GuardRails
-from choregos_runner.runner import Runner
+from tranibor_contracts import Permissions, StageInput
+from tranibor_core.workspace import READ_ONLY_WRITE_PATHS
+from tranibor_runner.exits import Exit
+from tranibor_runner.guardrails import GuardRails
+from tranibor_runner.runner import Runner
 
 from .conftest import FakeInternalClient, agent_script, valid_result
 

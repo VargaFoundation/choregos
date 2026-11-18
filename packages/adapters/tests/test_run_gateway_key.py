@@ -14,15 +14,15 @@ from datetime import UTC, datetime
 from typing import Any
 
 import httpx
-from choregos_adapters.executor.aca import AcaExecutor, AzureArmClient
-from choregos_adapters.executor.agent_sandbox import AgentSandboxExecutor
-from choregos_adapters.executor.k8s_job import KubernetesJobExecutor
-from choregos_adapters.executor.local_docker import LocalDockerExecutor
-from choregos_adapters.executor.tekton import CORE_API, TEKTON_API, KubernetesClient, TektonExecutor
-from choregos_adapters.fakes import FakeExecutor
-from choregos_adapters.fakes.agent_sandbox import FakeSandboxCluster
-from choregos_contracts import ExecutorKind, StageInput, StageResult, StageStatus
-from choregos_core.domain import RUN_GATEWAY_KEY_ENV, ExecRef, StageJobSpec
+from tranibor_adapters.executor.aca import AcaExecutor, AzureArmClient
+from tranibor_adapters.executor.agent_sandbox import AgentSandboxExecutor
+from tranibor_adapters.executor.k8s_job import KubernetesJobExecutor
+from tranibor_adapters.executor.local_docker import LocalDockerExecutor
+from tranibor_adapters.executor.tekton import CORE_API, TEKTON_API, KubernetesClient, TektonExecutor
+from tranibor_adapters.fakes import FakeExecutor
+from tranibor_adapters.fakes.agent_sandbox import FakeSandboxCluster
+from tranibor_contracts import ExecutorKind, StageInput, StageResult, StageStatus
+from tranibor_core.domain import RUN_GATEWAY_KEY_ENV, ExecRef, StageJobSpec
 
 from ._transport import Wire
 

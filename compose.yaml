@@ -116,15 +116,15 @@ services:
   litellm-config:
     # Decides the mode from `.env` and writes LiteLLM's configuration: the `platform/*` aliases
     # routed to Anthropic or OpenAI when a key is there, canned answers otherwise. The key itself
-    # is not written: the config says `os.environ/ANTHROPIC_API_KEY` (choregos_api.local_demo).
+    # is not written: the config says `os.environ/ANTHROPIC_API_KEY` (tranibor_api.local_demo).
     <<: *platform-image
-    command: ["python", "-m", "choregos_api.local_demo", "litellm-config", "/litellm"]
+    command: ["python", "-m", "tranibor_api.local_demo", "litellm-config", "/litellm"]
     user: "0"
     environment:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       LITELLM_REAL: ${LITELLM_REAL:-auto}
-      # `platform/decide` only when Laya runs (`choregos_api.local_demo.decisions_enabled`).
+      # `platform/decide` only when Laya runs (`tranibor_api.local_demo.decisions_enabled`).
       LITELLM_DECISIONS: ${LITELLM_DECISIONS:-${COMPOSE_PROFILES:-}}
       CHOREGOS_LOG_JSON: "false"
     volumes: ["litellm-config:/litellm"]
@@ -171,7 +171,7 @@ services:
 
   migrate:
     <<: *platform-image
-    command: ["python", "-m", "choregos_api.migrate"]
+    command: ["python", "-m", "tranibor_api.migrate"]
     environment: *platform-env
     depends_on:
       postgres: { condition: service_healthy }
@@ -182,7 +182,7 @@ services:
     command:
       - sh
       - -c
-      - export CHOREGOS_RUN_TOKEN_PRIVATE_KEY="$$(cat /keys/run-token.pem)" && exec uvicorn choregos_api.main:app --host 0.0.0.0 --port 8000
+      - export CHOREGOS_RUN_TOKEN_PRIVATE_KEY="$$(cat /keys/run-token.pem)" && exec uvicorn tranibor_api.main:app --host 0.0.0.0 --port 8000
     environment: *platform-env
     ports: ["127.0.0.1:${CHOREGOS_PORT_API:-8000}:8000"]
     depends_on:
@@ -213,7 +213,7 @@ services:
     command:
       - sh
       - -c
-      - export CHOREGOS_RUN_TOKEN_PRIVATE_KEY="$$(cat /keys/run-token.pem)" && exec python -m choregos_orchestrator.worker
+      - export CHOREGOS_RUN_TOKEN_PRIVATE_KEY="$$(cat /keys/run-token.pem)" && exec python -m tranibor_orchestrator.worker
     environment:
       <<: *platform-env
       # A project with no runtime connector runs its agents as local containers.
@@ -225,9 +225,9 @@ services:
       temporal: { condition: service_healthy }
 
   seed:
-    # The demo organisation and project, once; a second `up` changes nothing (choregos_api.local_demo).
+    # The demo organisation and project, once; a second `up` changes nothing (tranibor_api.local_demo).
     <<: *platform-image
-    command: ["python", "-m", "choregos_api.local_demo"]
+    command: ["python", "-m", "tranibor_api.local_demo"]
     environment:
       <<: *platform-env
       CHOREGOS_LOCAL_PROVIDER_FILE: /litellm/provider
@@ -281,7 +281,7 @@ services:
     # server: the MCP servers the fake gateway fronts. No port on the host.
     profiles: [mcp-gateway]
     <<: *platform-image
-    command: ["python", "-m", "choregos_adapters.fakes.server"]
+    command: ["python", "-m", "tranibor_adapters.fakes.server"]
     environment:
       CHOREGOS_DEMO_PORT: "8090"
       CONNECTOR_DEMO_TOKEN: local-upstream-only
@@ -292,7 +292,7 @@ services:
     # upstream token stays here, it never enters Choregos. No port on the host.
     profiles: [mcp-gateway]
     <<: *platform-image
-    command: ["python", "-m", "choregos_adapters.fakes.mcp_gateway"]
+    command: ["python", "-m", "tranibor_adapters.fakes.mcp_gateway"]
     depends_on: [demo-fakes]
     environment:
       CHOREGOS_FAKE_GATEWAY_PORT: "8091"
@@ -323,7 +323,7 @@ services:
       start_period: 60s
 
 # Named, not `<project>_default`: the local Docker executor attaches each run container to it
-# (`choregos_api.local_demo.LOCAL_NETWORK`), whatever the compose project is called.
+# (`tranibor_api.local_demo.LOCAL_NETWORK`), whatever the compose project is called.
 networks:
   default:
     name: choregos

@@ -70,7 +70,7 @@ async def test_the_install_link_carries_a_signed_state_and_the_setup_returns_to_
 
 
 async def test_a_forged_state_is_refused(client: AsyncClient, admin: str, github: Any) -> None:
-    from choregos_api.services.github_app import sign_state
+    from tranibor_api.services.github_app import sign_state
 
     # One organisation: a forged state that got through WOULD claim implicitly, so a 403 is the guard.
     github.add_installation(7, "northwind-inc")
@@ -88,9 +88,9 @@ async def test_a_forged_state_is_refused(client: AsyncClient, admin: str, github
     assert (await setup(expired)).status_code == 403, "an expired state"
     other_user = sign_state(org="northwind", project=None, user="someone@else.dev", return_to="/p/x")
     assert (await setup(other_user)).status_code == 403, "the state names the person who started it"
-    from choregos_api.db.models import GitHubInstallation
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import GitHubInstallation
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         assert (await session.execute(select(GitHubInstallation))).scalars().all() == [], "nothing claimed"
@@ -150,9 +150,9 @@ async def test_repositories_lists_only_claimed_installations(
     globex = await add_organisation("globex")
     northwind = (await client.get("/api/v1/orgs")).json()
     assert northwind, "the administrator is signed in"
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         northwind_id = (
@@ -219,8 +219,8 @@ async def test_installation_webhook_marks_it_suspended_and_deleted(
     assert (await event("created", "d1")).status_code == 202
     assert [(i["id"], i["suspended"]) for i in await listed()] == [(5, False)]
     assert (await event("suspend", "d2")).status_code == 202
-    from choregos_api.db.models import GitHubInstallation
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import GitHubInstallation
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         row = await session.get(GitHubInstallation, 5)
@@ -238,10 +238,10 @@ async def test_installation_webhook_marks_it_suspended_and_deleted(
 
 @pytest.mark.parametrize("login_", ["Acme", "acme"])
 async def test_owner_lookup_ignores_case(login_: str, client: AsyncClient, admin: str) -> None:
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.github_app import claimed_installation_for
     from sqlalchemy import select
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.github_app import claimed_installation_for
 
     async with session_scope(orgs="*") as session:
         org_id = (await session.execute(select(Organization.id))).scalar_one()
@@ -252,9 +252,9 @@ async def test_owner_lookup_ignores_case(login_: str, client: AsyncClient, admin
 
 
 async def _installations() -> list[Any]:
-    from choregos_api.db.models import GitHubInstallation
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import GitHubInstallation
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         return list((await session.execute(select(GitHubInstallation))).scalars().all())

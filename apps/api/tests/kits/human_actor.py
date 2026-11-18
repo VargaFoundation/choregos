@@ -10,9 +10,9 @@ from ..conftest import login
 
 
 async def _member(client: AsyncClient, email: str, role: str, groups: list[str]) -> None:
-    from choregos_api.db.models import User
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import User
+    from tranibor_api.db.session import session_scope
 
     added = await client.post("/api/v1/orgs/northwind/members", json={"email": email, "role": role})
     assert added.status_code in {200, 201}, added.text

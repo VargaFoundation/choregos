@@ -31,9 +31,9 @@ LIVE = {
 async def _play(
     payload: dict[str, Any], workflow_id: str
 ) -> tuple[dict[str, list[Any]], dict[str, Any], Any]:
-    from choregos_orchestrator.testing import workers_by_queue
-    from choregos_orchestrator.workflows.evals import EvalMatrix
     from temporalio.testing import WorkflowEnvironment
+    from tranibor_orchestrator.testing import workers_by_queue
+    from tranibor_orchestrator.workflows.evals import EvalMatrix
 
     asked: dict[str, list[Any]] = {}
 
@@ -77,8 +77,8 @@ async def _play(
 
 
 async def test_a_live_matrix_plays_each_agent_case_per_repetition_and_judges_it_as_a_case() -> None:
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.worker import Replayer
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     asked, result, history = await _play(LIVE, "evals-live-agent-cases-replay")
     seeds = [(s["tools"], s.get("repetition", 0), s.get("agent_case")) for s in asked["seed_eval_ticket"]]

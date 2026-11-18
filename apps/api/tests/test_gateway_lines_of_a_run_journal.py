@@ -12,8 +12,8 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from choregos_tools_mcp.bridge import SIDECAR_SEQ_BASE
 from httpx import AsyncClient
+from tranibor_tools_mcp.bridge import SIDECAR_SEQ_BASE
 
 from .kits.closed_runs import token_of
 from .kits.context_breakdown import gateway_breakdown, run_with_events, set_master_key, signed

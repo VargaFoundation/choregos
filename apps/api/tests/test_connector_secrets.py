@@ -27,7 +27,7 @@ TOOLS: list[dict[str, Any]] = [{"name": "order_status", "inputSchema": {"type": 
 @pytest.fixture(autouse=True)
 def sealed_key(monkeypatch: pytest.MonkeyPatch) -> str:
     """The deployment's key: without it nothing can be typed (ADR 0058)."""
-    from choregos_core.redaction import forget_secrets
+    from tranibor_core.redaction import forget_secrets
 
     key = base64.b64encode(os.urandom(32)).decode()
     monkeypatch.setenv("CHOREGOS_SECRETS_KEKS", f"k1:{key}")
@@ -38,11 +38,11 @@ def sealed_key(monkeypatch: pytest.MonkeyPatch) -> str:
 @pytest.fixture
 def vendor(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
     """The vendor's MCP server, faked: it demands the connector's key as a bearer token."""
-    import choregos_adapters
-    from choregos_adapters.fakes.mcp import FakeMcpServer
+    import tranibor_adapters
+    from tranibor_adapters.fakes.mcp import FakeMcpServer
 
     server = FakeMcpServer(tools=[dict(t) for t in TOOLS], token=VALUE_1)
-    monkeypatch.setattr(choregos_adapters, "FAKE_MCP", server)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_MCP", server)
     yield server
 
 
@@ -56,9 +56,9 @@ def _declare(**extra: Any) -> dict[str, Any]:
 
 
 async def _audit_text() -> str:
-    from choregos_api.db.models import AuditLog
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import AuditLog
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = (await session.execute(select(AuditLog))).scalars().all()
@@ -66,9 +66,9 @@ async def _audit_text() -> str:
 
 
 async def _stored_rows() -> list[Any]:
-    from choregos_api.db.models import OrgSecret
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import OrgSecret
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         return list((await session.execute(select(OrgSecret))).scalars().all())
@@ -201,9 +201,9 @@ async def test_a_cleared_secret_leaves_the_connector_in_error_with_a_message(
 async def test_a_reference_whose_stored_value_is_gone_fails_loudly(
     client: AsyncClient, admin: str, vendor: Any
 ) -> None:
-    from choregos_api.db.models import OrgSecret
-    from choregos_api.db.session import session_scope
     from sqlalchemy import delete
+    from tranibor_api.db.models import OrgSecret
+    from tranibor_api.db.session import session_scope
 
     await client.post(ORG, json=_declare(secret_values={"token": VALUE_1}))
     async with session_scope() as session:  # behind the API's back
@@ -262,8 +262,8 @@ async def test_deleting_a_connector_deletes_its_sealed_secrets(client: AsyncClie
 @pytest.fixture
 def probe(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[dict[str, Any]]]:
     """A `tracker` type that records what its factory receives."""
-    from choregos_adapters import ConnectorTypeSpec, register
-    from choregos_adapters.registry import _REGISTRY, _SPECS
+    from tranibor_adapters import ConnectorTypeSpec, register
+    from tranibor_adapters.registry import _REGISTRY, _SPECS
 
     received: list[dict[str, Any]] = []
     spec = ConnectorTypeSpec(
@@ -283,9 +283,9 @@ def probe(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[dict[str, Any]]]:
 
 
 async def _project_tracker(project: dict[str, Any]) -> Any:
-    from choregos_api.db.models import Project
-    from choregos_api.db.session import session_scope
-    from choregos_api.services import tickets
+    from tranibor_api.db.models import Project
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services import tickets
 
     async with session_scope(orgs="*") as session:
         row = await session.get(Project, project["id"])
@@ -317,7 +317,7 @@ async def test_a_tracker_whose_store_is_unavailable_is_an_upstream_error(
     client: AsyncClient, project: dict[str, Any], probe: list[dict[str, Any]], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A named 502, as for any tracker that cannot be built, and no adapter without its key."""
-    from choregos_api.errors import ApiError
+    from tranibor_api.errors import ApiError
 
     await _sealed_tracker(client, project, probe)
     monkeypatch.delenv("CHOREGOS_SECRETS_KEKS")
@@ -416,8 +416,8 @@ async def test_a_sharepoint_source_syncs_with_a_store_held_secret(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The sync used to resolve `env:` only: a `store:` reference raised and the source failed."""
-    from choregos_adapters.fakes.documents import fake_source
-    from choregos_api.knowledge import sync as sync_module
+    from tranibor_adapters.fakes.documents import fake_source
+    from tranibor_api.knowledge import sync as sync_module
 
     created = await client.post(
         "/api/v1/orgs/northwind/knowledge",
@@ -466,8 +466,8 @@ async def test_a_sharepoint_service_account_password_is_sealed_like_the_client_s
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The account's password is a secret of the type: typed, sealed, resolved when the source opens."""
-    from choregos_adapters.fakes.documents import fake_source
-    from choregos_api.knowledge import sync as sync_module
+    from tranibor_adapters.fakes.documents import fake_source
+    from tranibor_api.knowledge import sync as sync_module
 
     config = {"tenant_id": "acme", "client_id": "choregos-kb", "username": "reader@example.com"}
     in_clear = await client.post(
@@ -553,8 +553,8 @@ async def test_a_project_owner_types_values_but_does_not_write_references(
 
 
 async def _another_organisation() -> None:
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         session.add(Organization(slug="other", name="Other"))
@@ -602,10 +602,10 @@ async def test_an_organisation_gateway_with_a_typed_key_is_built_with_it(
 ) -> None:
     """The model catalogue reads the organisation's own gateway: its typed `master_key` is a `store:`
     reference, which the core resolver refuses on purpose. Read through the store (finding #985)."""
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
-    from choregos_api.services import gateway as gateway_module
     from sqlalchemy import select
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services import gateway as gateway_module
 
     made = await client.post(
         ORG,
@@ -638,10 +638,10 @@ async def test_a_pooled_field_takes_one_key_per_slot_and_resolves_to_the_list(
 ) -> None:
     """A slot is written like a field and never read back; the adapter gets the keys in slot order,
     so a key is replaced without a gap: add the new one in a free slot, then clear the old."""
-    from choregos_api.db.models import Organization, OrgConnector
-    from choregos_api.db.session import session_scope
-    from choregos_api.secret_store import resolved_configuration
     from sqlalchemy import select
+    from tranibor_api.db.models import Organization, OrgConnector
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.secret_store import resolved_configuration
 
     made = await client.post(
         ORG,

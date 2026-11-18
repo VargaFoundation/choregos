@@ -35,7 +35,7 @@ class Receiver:
 
 @pytest.fixture
 def receiver() -> Iterator[Receiver]:
-    from choregos_api.services.remote_agents import set_a2a_transport
+    from tranibor_api.services.remote_agents import set_a2a_transport
 
     receiver = Receiver()
     set_a2a_transport(httpx.MockTransport(receiver))
@@ -45,7 +45,7 @@ def receiver() -> Iterator[Receiver]:
 
 @pytest.fixture
 def enforce(app: Any, monkeypatch: pytest.MonkeyPatch) -> None:
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     monkeypatch.setenv("CHOREGOS_EGRESS_MODE", "enforce")
     reset_settings_cache()
@@ -59,10 +59,10 @@ async def _set(client: AsyncClient, token: str, task_id: str, **config: Any) -> 
 async def _happen(task_id: str, state: str | None = None) -> str:
     """An event of the work item, persisted as the product persists one: with its project's slug,
     so that it also reaches that project's streams (S40-23j); with `state`, the item moved first."""
-    from choregos_api.db.models import Project, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.events import persist_event
-    from choregos_contracts import EventType
+    from tranibor_api.db.models import Project, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.events import persist_event
+    from tranibor_contracts import EventType
 
     async with session_scope(orgs="*") as session:
         item = await session.get(WorkItem, task_id)
@@ -84,9 +84,9 @@ async def _happen(task_id: str, state: str | None = None) -> str:
 
 
 async def _config(task_id: str) -> Any:
-    from choregos_api.db.models import A2aPushConfig
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import A2aPushConfig
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         return (
@@ -147,9 +147,9 @@ async def test_a_registration_needs_an_https_url_and_no_inline_config(
 async def test_a_host_the_organisation_has_not_opened_is_refused_at_registration(
     client: AsyncClient, project: dict[str, Any], enforce: None
 ) -> None:
-    from choregos_api.db.models import A2aPushConfig, Organization, OrgEgressRule
-    from choregos_api.db.session import session_scope
     from sqlalchemy import func, select
+    from tranibor_api.db.models import A2aPushConfig, Organization, OrgEgressRule
+    from tranibor_api.db.session import session_scope
 
     token = await _ready(client, project)
     task = await _send(client, token)
@@ -168,7 +168,7 @@ async def test_a_host_the_organisation_has_not_opened_is_refused_at_registration
 async def test_a_notification_is_signed_carries_the_event_id_and_ends_with_the_task(
     client: AsyncClient, project: dict[str, Any], receiver: Receiver
 ) -> None:
-    from choregos_api.a2a.push import deliver_pending
+    from tranibor_api.a2a.push import deliver_pending
 
     token = await _ready(client, project)
     task = await _send(client, token)
@@ -200,10 +200,10 @@ async def test_a_notification_is_signed_carries_the_event_id_and_ends_with_the_t
 async def test_a_failed_call_is_sent_again_with_the_same_event_id(
     client: AsyncClient, project: dict[str, Any], receiver: Receiver
 ) -> None:
-    from choregos_api.a2a.push import deliver_pending
-    from choregos_api.db.models import A2aPushConfig
-    from choregos_api.db.session import session_scope
     from sqlalchemy import update
+    from tranibor_api.a2a.push import deliver_pending
+    from tranibor_api.db.models import A2aPushConfig
+    from tranibor_api.db.session import session_scope
 
     token = await _ready(client, project)
     task = await _send(client, token)
@@ -225,11 +225,11 @@ async def test_a_failed_call_is_sent_again_with_the_same_event_id(
 async def test_a_revoked_token_stops_the_notifications(
     client: AsyncClient, project: dict[str, Any], receiver: Receiver
 ) -> None:
-    from choregos_api.a2a.push import deliver_pending
-    from choregos_api.db.models import ApiToken
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
     from sqlalchemy import update
+    from tranibor_api.a2a.push import deliver_pending
+    from tranibor_api.db.models import ApiToken
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
 
     token = await _ready(client, project)
     task = await _send(client, token)

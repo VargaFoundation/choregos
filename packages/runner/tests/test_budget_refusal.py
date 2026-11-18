@@ -8,9 +8,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from choregos_contracts import StageInput, StageStatus
-from choregos_runner.budget import gateway_budget_refusal
-from choregos_runner.exits import Exit
+from tranibor_contracts import StageInput, StageStatus
+from tranibor_runner.budget import gateway_budget_refusal
+from tranibor_runner.exits import Exit
 
 from .conftest import valid_result
 from .test_runner_flow import execute

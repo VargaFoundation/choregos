@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import json
 
-from choregos_ontology.cli import EXIT_INVALID, EXIT_OK, main
+from tranibor_ontology.cli import EXIT_INVALID, EXIT_OK, main
 
 from .conftest import CORE_REF
 

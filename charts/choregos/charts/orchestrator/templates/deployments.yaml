@@ -54,7 +54,7 @@ spec:
           # is `tini`, and its `CMD` already carries `python -m …`. Sending only `--queues x`
           # replaced that CMD, and tini tried to execute "--queues" — "exec --queues
           # failed: No such file or directory", a message that does not blame the chart.
-          command: ["python", "-m", "choregos_orchestrator.worker"]
+          command: ["python", "-m", "tranibor_orchestrator.worker"]
           args: ["--queues", {{ .name | quote }}]
           env:
             {{- include "choregos.commonEnv" $root | nindent 12 }}

@@ -13,9 +13,9 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from choregos_contracts import StageInput
-from choregos_runner.exits import Exit
-from choregos_runner.runner import SAVED_SESSION
+from tranibor_contracts import StageInput
+from tranibor_runner.exits import Exit
+from tranibor_runner.runner import SAVED_SESSION
 
 from .conftest import valid_result
 from .test_runner_flow import execute

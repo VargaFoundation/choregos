@@ -155,7 +155,7 @@ spec:
 {{- end }}
 {{- if $dedicated }}
 {{- /*
-The door's own Deployment (ADR 0148 §8): the API image, started as `python -m choregos_api.outposts`,
+The door's own Deployment (ADR 0148 §8): the API image, started as `python -m tranibor_api.outposts`,
 which serves the four verbs, two probes, and nothing else of the API (`outposts/alone.py`).
 
 What it holds: the database (its own bounded pool), the door's signing key, and the key a call's
@@ -224,7 +224,7 @@ spec:
         - name: door
           image: {{ include "choregos.image" (dict "global" .Values.global "image" ($api.image | default dict)) }}
           imagePullPolicy: {{ .Values.global.imagePullPolicy }}
-          command: ["python", "-m", "choregos_api.outposts"]
+          command: ["python", "-m", "tranibor_api.outposts"]
           securityContext: {{- toYaml .Values.global.securityContext | nindent 12 }}
           ports:
             - { name: http, containerPort: {{ $doorPort }} }

@@ -13,9 +13,9 @@ from datetime import timedelta
 from typing import Any
 
 import pytest
-from choregos_core import utcnow
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
+from tranibor_core import utcnow
 
 from .conftest import login, without_postgres
 from .egress_support import as_person
@@ -113,8 +113,8 @@ async def test_a_spent_conversation_refuses_a_turn_before_the_model(
     await _agent(client)
     upstream.model.say("Ok.")
     conversation = await _open("northwind", admin, max_usd=0.05)
-    from choregos_api.db.models import AgentSessionRecord
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import AgentSessionRecord
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         record = await session.get(AgentSessionRecord, conversation)
@@ -162,7 +162,7 @@ async def test_a_conversation_resumed_after_two_hours_has_its_history(
     assert (await client.get(f"{ME}/{conversation}")).json()["status"] == "open"
 
     later = utcnow() + timedelta(hours=2)
-    monkeypatch.setattr("choregos_api.services.conversations.utcnow", lambda: later)
+    monkeypatch.setattr("tranibor_api.services.conversations.utcnow", lambda: later)
     listed = (await client.get(ME)).json()["items"]
     assert [(c["id"], c["status"]) for c in listed] == [(conversation, "idle")]
 
@@ -190,11 +190,11 @@ async def test_the_default_idle_window_is_four_hours(
     conversation = await _open("northwind", admin)
     assert (await _say(client, conversation, "Hi")).status_code == 200
     monkeypatch.setattr(
-        "choregos_api.services.conversations.utcnow", lambda: utcnow() + timedelta(hours=3, minutes=59)
+        "tranibor_api.services.conversations.utcnow", lambda: utcnow() + timedelta(hours=3, minutes=59)
     )
     assert (await client.get(f"{ME}/{conversation}")).json()["status"] == "open"
     monkeypatch.setattr(
-        "choregos_api.services.conversations.utcnow", lambda: utcnow() + timedelta(hours=4, minutes=1)
+        "tranibor_api.services.conversations.utcnow", lambda: utcnow() + timedelta(hours=4, minutes=1)
     )
     assert (await client.get(f"{ME}/{conversation}")).json()["status"] == "idle"
 
@@ -267,7 +267,7 @@ async def test_a_conversation_is_held_with_a_prompt_agent_only(
     project: dict[str, Any],
     upstream: Upstream,  # noqa: F811
 ) -> None:
-    from choregos_api.errors import ApiError
+    from tranibor_api.errors import ApiError
 
     await _agent(client, runtime=None)
     with pytest.raises(ApiError) as refused:
@@ -298,8 +298,8 @@ async def test_a_session_of_responses_still_lives_one_hour_on_one_key(
 
 @pytest.fixture
 async def organisation_a(pg_app: Any) -> str:
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         organisation = Organization(slug="a", name="A")
@@ -317,8 +317,8 @@ async def test_another_person_of_the_organisation_reads_nothing_of_a_conversatio
     """Straight through RLS, whatever the router does: an administrator of the organisation sees neither the
     conversation nor its transcript; its opener and the platform scope do; a request that names no user does
     not; and a `/responses` session of the same person stays as readable as before."""
-    from choregos_api.db.models import AgentSessionEvent, AgentSessionRecord, User
-    from choregos_api.db.session import limit_to_organisations, name_the_user, session_scope
+    from tranibor_api.db.models import AgentSessionEvent, AgentSessionRecord, User
+    from tranibor_api.db.session import limit_to_organisations, name_the_user, session_scope
 
     async with AsyncClient(transport=ASGITransport(app=pg_app), base_url="http://test") as client:
         await login(client, "dev@a.test")

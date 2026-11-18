@@ -7,7 +7,13 @@ import os
 from pathlib import Path
 
 import pytest
-from choregos_core.temporal_connection import (
+from cryptography.exceptions import InvalidTag
+from temporalio.api.common.v1 import Payload
+from temporalio.api.failure.v1 import Failure
+from temporalio.converter import DataConverter, DefaultFailureConverterWithEncodedAttributes
+from temporalio.exceptions import ApplicationError
+from temporalio.service import TLSConfig
+from tranibor_core.temporal_connection import (
     ENCRYPTED_ENCODING,
     KEY_ID_METADATA,
     AesGcmCodec,
@@ -18,12 +24,6 @@ from choregos_core.temporal_connection import (
     parse_codec_keys,
     tls_config,
 )
-from cryptography.exceptions import InvalidTag
-from temporalio.api.common.v1 import Payload
-from temporalio.api.failure.v1 import Failure
-from temporalio.converter import DataConverter, DefaultFailureConverterWithEncodedAttributes
-from temporalio.exceptions import ApplicationError
-from temporalio.service import TLSConfig
 
 TICKET = "HR-42: salary review for Jane Doe, 81 500 EUR"
 

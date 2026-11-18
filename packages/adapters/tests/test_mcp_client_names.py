@@ -6,10 +6,10 @@ canonical form is pinned here to the byte: a rename must not change a stored dig
 
 from __future__ import annotations
 
-import choregos_adapters
 import pytest
-from choregos_adapters.fakes.mcp import FakeMcpServer
-from choregos_adapters.mcp import McpClient, McpError, McpTool, schema_digest
+import tranibor_adapters
+from tranibor_adapters.fakes.mcp import FakeMcpServer
+from tranibor_adapters.mcp import McpClient, McpError, McpTool, schema_digest
 
 #: `schema_digest({"type": "object"})` as the client computed it before the rename, under its old name.
 OBJECT_SCHEMA_DIGEST = "sha256:a2c799262a3ce3c19ef5cdd983bf3d12b43ab3c426227091b909dcb7054738c0"
@@ -41,8 +41,8 @@ def test_the_client_holds_the_server_answer() -> None:
 def test_the_fake_mcp_hook_is_named_fake_mcp() -> None:
     # The former name is spelled in two parts, so that a grep for it finds no site in the tree.
     former = "FAUX_" + "MCP"
-    assert hasattr(choregos_adapters, "FAKE_MCP")
-    assert not hasattr(choregos_adapters, former)
+    assert hasattr(tranibor_adapters, "FAKE_MCP")
+    assert not hasattr(tranibor_adapters, former)
 
 
 async def test_the_client_says_why_in_english() -> None:

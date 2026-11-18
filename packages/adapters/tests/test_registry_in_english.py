@@ -14,7 +14,7 @@ from types import ModuleType
 import pytest
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
-SRC = "packages/adapters/src/choregos_adapters/"
+SRC = "packages/adapters/src/tranibor_adapters/"
 
 #: What S45-10 owns, as `scan_tree` prefixes. `__init__.py` is checked apart, below: S46-01's MCP
 #: parts live there.
@@ -95,22 +95,22 @@ def test_owned_adapters_have_no_french() -> None:
 
 
 def test_the_factories_read_the_english_fake_global(monkeypatch: pytest.MonkeyPatch) -> None:
-    import choregos_adapters
+    import tranibor_adapters
 
     sentinel = object()
-    monkeypatch.setattr(choregos_adapters, "FAKE_WEB_SEARCH", sentinel)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_WEB_SEARCH", sentinel)
     monkeypatch.setenv("CHOREGOS_FAKES", "1")
-    assert choregos_adapters.build("web_search", "fake") is sentinel
+    assert tranibor_adapters.build("web_search", "fake") is sentinel
 
 
 def test_the_extension_group_value_is_the_entry_point_group_of_adr_0093() -> None:
-    import choregos_adapters
+    import tranibor_adapters
 
-    assert choregos_adapters.EXTENSION_GROUP == "choregos.plugins"
+    assert tranibor_adapters.EXTENSION_GROUP == "choregos.plugins"
 
 
 def test_the_board_keeps_its_former_french_names_as_data() -> None:
-    from choregos_adapters.tracker import fields
+    from tranibor_adapters.tracker import fields
 
     assert fields.FORMER_NAMES == {"Cost (€)": "Coût (€)", "Size": "Taille", "Risk": "Risque"}  # lang: fr-ok
     assert fields.current_name("Taille") == "Size"  # lang: fr-ok
@@ -118,7 +118,7 @@ def test_the_board_keeps_its_former_french_names_as_data() -> None:
 
 
 def test_the_registry_names_are_english() -> None:
-    from choregos_adapters import POLICIES, registry
+    from tranibor_adapters import POLICIES, registry
 
     assert POLICIES is registry.POLICIES == ("allowed", "approval", "forbidden")
     assert registry.DEFAULT_TYPES["tracker"] == "internal"
@@ -126,7 +126,7 @@ def test_the_registry_names_are_english() -> None:
 
 def test_a_stored_connector_identifier_is_not_renamed() -> None:
     """Type ids and config fields live in `org_connectors` rows: the rename never touches them."""
-    from choregos_adapters import available, spec_of
+    from tranibor_adapters import available, spec_of
 
     assert {"internal", "jira", "github-issues", "gitlab-issues", "plugin"} <= set(available("tracker"))
     plugin = spec_of("tracker", "plugin")
@@ -135,7 +135,7 @@ def test_a_stored_connector_identifier_is_not_renamed() -> None:
 
 
 def test_the_english_group_is_the_one_the_loader_reads_by_default() -> None:
-    from choregos_adapters import EXTENSION_GROUP, load_extensions
+    from tranibor_adapters import EXTENSION_GROUP, load_extensions
 
     # Declared in the source as the loader's default: renaming one without the other breaks discovery.
     source = (ROOT / SRC / "__init__.py").read_text(encoding="utf-8")

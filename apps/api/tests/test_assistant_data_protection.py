@@ -15,10 +15,10 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from choregos_core import utcnow
-from choregos_core.domain import aware
 from httpx import AsyncClient
 from sqlalchemy import select
+from tranibor_core import utcnow
+from tranibor_core.domain import aware
 
 from .agent_scopes_kit import as_user
 from .conftest import without_postgres
@@ -42,7 +42,7 @@ BY_SUBJECT = {"subject": SUBJECT}
 
 
 def _plugin_copy(tmp_path: Path, erasure: str) -> Iterator[Path]:
-    from choregos_api.services.plugin_supply import OfflineDirectory, use_plugin_supply
+    from tranibor_api.services.plugin_supply import OfflineDirectory, use_plugin_supply
 
     root = tmp_path / "plugins"
     target = root / "investment-assistant" / "0.1.0"
@@ -71,8 +71,8 @@ def offline_by_user_only(tmp_path: Path) -> Iterator[Path]:
 
 async def _audience(email: str) -> None:
     """Puts the person in the installation's audience (a turn is refused outside it since S63-15)."""
-    from choregos_api.db.models import AssistantInstallation, User
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import AssistantInstallation, User
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         for row in (await session.execute(select(AssistantInstallation))).scalars():
@@ -83,8 +83,8 @@ async def _audience(email: str) -> None:
 
 async def _resolved(conversation: str, *, messages: bool = False) -> None:
     """Marks the subject as resolved in the conversation, as a resolver tool would have."""
-    from choregos_api.db.models import AgentSessionRecord
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import AgentSessionRecord
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         record = await session.get(AgentSessionRecord, conversation)
@@ -112,8 +112,8 @@ async def _remember(conversation: str, content: str) -> None:
 
 
 async def _conversation(conversation: str) -> Any:
-    from choregos_api.db.models import AgentSessionRecord
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import AgentSessionRecord
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         record = await session.get(AgentSessionRecord, conversation)
@@ -123,8 +123,8 @@ async def _conversation(conversation: str) -> Any:
 
 
 async def _events(conversation: str) -> list[Any]:
-    from choregos_api.db.models import AgentSessionEvent
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import AgentSessionEvent
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         return list(
@@ -142,10 +142,10 @@ async def _events(conversation: str) -> list[Any]:
 async def test_the_purge_deletes_an_expired_conversation_with_its_events_and_keeps_a_fresh_one(
     client: AsyncClient, admin: str, upstream: Upstream, offline: Path
 ) -> None:
-    from choregos_api.db.models import AgentSessionRecord, MemoryFact, MemoryStore
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.agent_sessions import journal
-    from choregos_api.services.assistant_retention import purge_once
+    from tranibor_api.db.models import AgentSessionRecord, MemoryFact, MemoryStore
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.agent_sessions import journal
+    from tranibor_api.services.assistant_retention import purge_once
 
     installation = await _assistant(client)
     old, fresh = await _open(installation), await _open(installation)
@@ -238,8 +238,8 @@ async def test_every_tool_call_of_a_conversation_writes_one_line_with_the_subjec
 async def _two_people(client: AsyncClient) -> tuple[str, str, str]:
     """An installation and, for the administrator and a colleague, a conversation where the subject was
     resolved with a memory of it; the administrator has a third conversation about nothing."""
-    from choregos_api.db.models import AgentSessionRecord
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import AgentSessionRecord
+    from tranibor_api.db.session import session_scope
 
     installation = await _assistant(client)
     await as_user(client, "colleague@northwind.dev")
@@ -278,8 +278,8 @@ async def test_an_export_by_subject_lists_every_users_memory_and_the_conversatio
 async def test_an_erasure_by_subject_deletes_its_memories_across_two_users_and_redacts_the_conversations(
     client: AsyncClient, admin: str, upstream: Upstream, offline: Path
 ) -> None:
-    from choregos_api.db.models import AuditLog
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import AuditLog
+    from tranibor_api.db.session import session_scope
 
     mine, theirs, other = await _two_people(client)
     erased = await client.post(
@@ -352,8 +352,8 @@ async def test_a_manifest_that_does_not_list_by_subject_offers_no_erasure_by_sub
 async def test_an_erasure_by_user_removes_the_callers_data_and_leaves_other_peoples_intact(
     client: AsyncClient, admin: str, upstream: Upstream, offline: Path
 ) -> None:
-    from choregos_api.db.models import AuditLog
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import AuditLog
+    from tranibor_api.db.session import session_scope
 
     mine, theirs, other = await _two_people(client)
     gone = await client.delete(ME)
@@ -380,9 +380,9 @@ async def test_an_erasure_by_user_removes_the_callers_data_and_leaves_other_peop
 
 @without_postgres
 async def test_the_reads_journal_stays_in_its_organisation_on_postgresql(pg_app: Any) -> None:
-    from choregos_api.db.models import AssistantInstallation, AssistantRead, Organization
-    from choregos_api.db.session import session_scope
     from sqlalchemy.exc import DBAPIError
+    from tranibor_api.db.models import AssistantInstallation, AssistantRead, Organization
+    from tranibor_api.db.session import session_scope
 
     def read(org_id: str, installation_id: str, operation: str) -> AssistantRead:
         return AssistantRead(
@@ -429,8 +429,8 @@ async def test_the_reads_journal_stays_in_its_organisation_on_postgresql(pg_app:
 @pytest.fixture
 def store() -> Iterator[Any]:
     """A fresh in-memory object store, the platform's for the test (S63-24)."""
-    from choregos_adapters.fakes.storage import FakeObjectStore
-    from choregos_api.object_store import use_object_store
+    from tranibor_adapters.fakes.storage import FakeObjectStore
+    from tranibor_api.object_store import use_object_store
 
     fake = FakeObjectStore()
     use_object_store(fake)
@@ -443,9 +443,9 @@ async def _task_artifact(
 ) -> str:
     """A task work item in the person's personal space with one artifact; the work item's id. With
     `file_bytes`, a FILE artifact whose bytes are in the object store (`store` fixture)."""
-    from choregos_api.db.models import ArtifactRecord, Organization, User, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.personal_spaces import personal_space
+    from tranibor_api.db.models import ArtifactRecord, Organization, User, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.personal_spaces import personal_space
 
     async with session_scope(orgs="*") as session:
         user = (await session.execute(select(User).where(User.email == email))).scalar_one()
@@ -462,7 +462,7 @@ async def _task_artifact(
         await session.flush()
         file_key = f"orgs/{organisation.id}/work-items/{item.id}/artifacts/{name}/0" if file_bytes else None
         if file_key:
-            from choregos_api.object_store import object_store
+            from tranibor_api.object_store import object_store
 
             await object_store().put(file_key, file_bytes, "application/pdf")
         session.add(
@@ -476,8 +476,8 @@ async def _task_artifact(
 
 
 async def _artifacts() -> list[str]:
-    from choregos_api.db.models import ArtifactRecord, WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import ArtifactRecord, WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         rows = await session.execute(
@@ -489,7 +489,7 @@ async def _artifacts() -> list[str]:
 async def test_an_erasure_by_user_reaches_accounts_delegations_subscriptions_and_task_artifacts(
     client: AsyncClient, admin: str, upstream: Upstream, offline: Path, markets: Any
 ) -> None:
-    from choregos_api.db.models import (
+    from tranibor_api.db.models import (
         AssistantToolBinding,
         ConnectedAccount,
         Delegation,
@@ -497,7 +497,7 @@ async def test_an_erasure_by_user_reaches_accounts_delegations_subscriptions_and
         TaskSubscription,
         User,
     )
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.session import session_scope
 
     installation = await _assistant(client, with_markets=True)
     async with session_scope(orgs="*") as session:
@@ -546,8 +546,8 @@ async def test_an_erasure_by_user_reaches_accounts_delegations_subscriptions_and
 async def test_an_erasure_by_subject_deletes_the_artifacts_of_the_task_runs_that_read_about_it(
     client: AsyncClient, admin: str, upstream: Upstream, offline: Path
 ) -> None:
-    from choregos_api.db.models import AssistantRead, Organization, User
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import AssistantRead, Organization, User
+    from tranibor_api.db.session import session_scope
 
     installation = await _assistant(client)
     await _task_artifact("admin@northwind.dev", installation, "TASK-about", name="brief")
@@ -574,9 +574,9 @@ async def test_an_erasure_by_subject_deletes_the_artifacts_of_the_task_runs_that
 async def test_the_purge_deletes_old_task_artifacts_and_old_profile_versions(
     client: AsyncClient, admin: str, upstream: Upstream, offline: Path
 ) -> None:
-    from choregos_api.db.models import ArtifactRecord, MemoryProfile, MemoryStore, Organization, User
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.assistant_retention import purge_once
+    from tranibor_api.db.models import ArtifactRecord, MemoryProfile, MemoryStore, Organization, User
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.assistant_retention import purge_once
 
     installation = await _assistant(client)
     old = await _task_artifact("admin@northwind.dev", installation, "TASK-old")
@@ -624,8 +624,8 @@ async def test_the_purge_deletes_old_task_artifacts_and_old_profile_versions(
 
 async def _read_lines(installation: str, *specs: tuple[str, str, str, int]) -> str:
     """Journal lines `(need, operation, subject_key, days_ago)` for the admin; returns the admin's id."""
-    from choregos_api.db.models import AssistantRead, Organization, User
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import AssistantRead, Organization, User
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         me = (await session.execute(select(User).where(User.email == "admin@northwind.dev"))).scalar_one()
@@ -644,8 +644,8 @@ async def _read_lines(installation: str, *specs: tuple[str, str, str, int]) -> s
 async def test_the_reads_journal_filters_by_need_and_period_and_the_read_is_itself_audited(
     client: AsyncClient, admin: str, upstream: Upstream, offline: Path
 ) -> None:
-    from choregos_api.db.models import AuditLog
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import AuditLog
+    from tranibor_api.db.session import session_scope
 
     installation = await _assistant(client)
     await _read_lines(
@@ -699,9 +699,9 @@ async def test_the_reads_journal_filters_by_need_and_period_and_the_read_is_itse
 async def test_a_conversation_never_spoken_in_has_a_retention_and_is_purged(
     client: AsyncClient, admin: str, upstream: Upstream, offline: Path
 ) -> None:
-    from choregos_api.db.models import AgentSessionRecord
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.assistant_retention import purge_once
+    from tranibor_api.db.models import AgentSessionRecord
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.assistant_retention import purge_once
 
     installation = await _assistant(client)
     empty = await _open(installation)
@@ -732,8 +732,8 @@ async def test_a_conversation_never_spoken_in_has_a_retention_and_is_purged(
 async def test_an_export_by_subject_lists_the_artifacts_of_the_task_runs_that_read_about_it(
     client: AsyncClient, admin: str, upstream: Upstream, offline: Path
 ) -> None:
-    from choregos_api.db.models import AssistantRead, Organization, User
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import AssistantRead, Organization, User
+    from tranibor_api.db.session import session_scope
 
     installation = await _assistant(client)
     await _task_artifact("admin@northwind.dev", installation, "TASK-about", name="brief")
@@ -770,8 +770,8 @@ async def test_an_erasure_by_user_keeps_the_journal_lines_but_pseudonymises_the_
     mine = await _read_lines(
         installation, ("market_data", "get_quote", "A", 2), ("news", "search_news", "B", 1)
     )
-    from choregos_api.db.models import AssistantRead, Organization
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import AssistantRead, Organization
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         org = (await session.execute(select(Organization))).scalar_one()
@@ -799,8 +799,8 @@ async def test_an_erasure_by_user_keeps_the_journal_lines_but_pseudonymises_the_
 async def test_an_erasure_by_user_deletes_the_bytes_of_their_file_artifacts_and_keeps_the_colleagues(
     client: AsyncClient, admin: str, upstream: Upstream, offline: Path, store: Any
 ) -> None:
-    from choregos_api.db.models import User
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import User
+    from tranibor_api.db.session import session_scope
 
     installation = await _assistant(client)
     async with session_scope(orgs="*") as session:
@@ -827,8 +827,8 @@ async def test_an_erasure_by_user_deletes_the_bytes_of_their_file_artifacts_and_
 async def test_an_erasure_by_subject_deletes_the_bytes_of_the_file_artifacts_it_erases(
     client: AsyncClient, admin: str, upstream: Upstream, offline: Path, store: Any
 ) -> None:
-    from choregos_api.db.models import AssistantRead, Organization, User
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import AssistantRead, Organization, User
+    from tranibor_api.db.session import session_scope
 
     installation = await _assistant(client)
     about = await _task_artifact("admin@northwind.dev", installation, "TASK-about", file_bytes=b"%PDF-a")
@@ -854,9 +854,9 @@ async def test_an_erasure_by_subject_deletes_the_bytes_of_the_file_artifacts_it_
 async def test_the_purge_deletes_the_bytes_of_expired_file_artifacts_and_retries_a_refused_one(
     client: AsyncClient, admin: str, upstream: Upstream, offline: Path, store: Any
 ) -> None:
-    from choregos_api.db.models import ArtifactRecord
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.assistant_retention import purge_once
+    from tranibor_api.db.models import ArtifactRecord
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.assistant_retention import purge_once
 
     installation = await _assistant(client)
     old = await _task_artifact("admin@northwind.dev", installation, "TASK-old", file_bytes=b"%PDF-old")
@@ -882,9 +882,9 @@ async def test_the_purge_deletes_the_bytes_of_expired_file_artifacts_and_retries
 async def test_a_missing_object_does_not_fail_the_purge(
     client: AsyncClient, admin: str, upstream: Upstream, offline: Path, store: Any
 ) -> None:
-    from choregos_api.db.models import ArtifactRecord
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.assistant_retention import purge_once
+    from tranibor_api.db.models import ArtifactRecord
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.assistant_retention import purge_once
 
     installation = await _assistant(client)
     old = await _task_artifact("admin@northwind.dev", installation, "TASK-old", file_bytes=b"%PDF-old")

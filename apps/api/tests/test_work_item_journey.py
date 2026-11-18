@@ -14,8 +14,8 @@ from datetime import timedelta
 from typing import Any
 
 import pytest
-from choregos_core import parse_workflow, utcnow
 from httpx import AsyncClient
+from tranibor_core import parse_workflow, utcnow
 
 from .conftest import login
 
@@ -56,13 +56,13 @@ def dev_complex() -> Any:
 def test_each_move_names_the_edge_that_carried_it(
     dev_complex: Any, source: str | None, target: str, reason: str, expected: tuple[str, str | None]
 ) -> None:
-    from choregos_api.services import move_edge
+    from tranibor_api.services import move_edge
 
     assert move_edge(dev_complex, source, target, reason) == expected
 
 
 def test_a_default_from_any_agent_state_is_recognised(dev_complex: Any) -> None:
-    from choregos_api.services import move_edge
+    from tranibor_api.services import move_edge
 
     # `documented` has no escalation to `needs_human` on its transition: it is the `on_question` default.
     without_escalation = dev_complex.model_copy(deep=True)
@@ -130,8 +130,8 @@ async def _work_item(client: AsyncClient, pid: str) -> dict[str, Any]:
 async def _life_of_the_work_item(project: dict[str, Any], item: dict[str, Any]) -> dict[str, str]:
     """A complete life, written as the orchestrator writes it: a review that sends back once, a human
     approval, a train departure, and the platform action that is still waiting."""
-    from choregos_api.db.models import Action, Event, HumanRequest, Project, Release, Run
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Action, Event, HumanRequest, Project, Release, Run
+    from tranibor_api.db.session import session_scope
 
     begin = utcnow() - timedelta(hours=3)
     instant = iter(begin + timedelta(minutes=10 * i) for i in range(1, 40))
@@ -306,7 +306,7 @@ async def test_the_journey_keeps_the_map_where_the_work_item_is_pinned(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
     item = await _work_item(client, project["id"])
-    from choregos_core import template_yaml
+    from tranibor_core import template_yaml
 
     other = await client.put(
         f"/api/v1/projects/{project['id']}/workflow", json={"yaml": template_yaml("default-simple")}
@@ -322,8 +322,8 @@ async def test_the_journey_keeps_the_map_where_the_work_item_is_pinned(
 async def test_a_pending_human_request_shows_and_a_stranger_reads_nothing(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.db.models import HumanRequest
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import HumanRequest
+    from tranibor_api.db.session import session_scope
 
     item = await _work_item(client, project["id"])
     async with session_scope(orgs="*") as session:
@@ -345,8 +345,8 @@ async def test_a_pending_human_request_shows_and_a_stranger_reads_nothing(
     assert (await client.get("/api/v1/work-items/unknown/journey")).status_code == 404
     # An account with no role in the organisation: the development login sets one, we remove it.
     await login(client, "intruder@elsewhere.dev")
-    from choregos_api.db.models import Membership, User
     from sqlalchemy import delete, select
+    from tranibor_api.db.models import Membership, User
 
     async with session_scope(orgs="*") as session:
         intruder = (

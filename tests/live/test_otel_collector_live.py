@@ -24,7 +24,7 @@ from uuid import uuid4
 
 import httpx
 import pytest
-from choregos_core import telemetry
+from tranibor_core import telemetry
 
 from .conftest import require
 

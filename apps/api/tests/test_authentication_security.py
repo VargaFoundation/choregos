@@ -30,7 +30,7 @@ UNRESOLVED = "non résolus"  # lang: fr-ok
 
 
 async def test_the_development_login_is_refused_in_production() -> None:
-    from choregos_api.config import Settings
+    from tranibor_api.config import Settings
 
     with pytest.raises(ValueError, match="staging/prod"):
         Settings(env="prod", dev_login_enabled=True)
@@ -38,7 +38,7 @@ async def test_the_development_login_is_refused_in_production() -> None:
 
 
 async def test_the_development_login_is_off_by_default() -> None:
-    from choregos_api.config import Settings
+    from tranibor_api.config import Settings
 
     # The test process turns it on through the environment: it is the model's DEFAULT that is checked.
     assert Settings.model_fields["dev_login_enabled"].default is False
@@ -47,8 +47,8 @@ async def test_the_development_login_is_off_by_default() -> None:
 async def test_without_the_development_login_the_dev_code_is_refused(
     client: AsyncClient, org: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.routers.auth import forget_discovery
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.routers.auth import forget_discovery
 
     monkeypatch.setenv("CHOREGOS_DEV_LOGIN_ENABLED", "false")
     monkeypatch.setenv("CHOREGOS_OIDC_ISSUER", ISSUER)
@@ -100,8 +100,8 @@ async def test_an_email_that_starts_with_admin_is_not_admin(client: AsyncClient,
 
 
 async def _second_organisation(project_slug: str = "billing-api") -> str:
-    from choregos_api.db.models import Organization, Project
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Organization, Project
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         other = Organization(slug="other", name="Another organisation")
@@ -123,7 +123,7 @@ async def test_a_project_role_does_not_cross_organisations(
     client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """`a/billing-api` and `other/billing-api`: a developer of the first does not read the second."""
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     # the development login gives a role only in the default organisation
     monkeypatch.setenv("CHOREGOS_OIDC_DEFAULT_ORG", "northwind")
@@ -163,8 +163,8 @@ async def test_a_project_role_does_not_cross_organisations(
 
 
 async def test_the_oidc_groups_are_attached_to_their_organisation() -> None:
-    from choregos_api.routers.auth import roles_from_groups
-    from choregos_contracts import Role
+    from tranibor_api.routers.auth import roles_from_groups
+    from tranibor_contracts import Role
 
     roles = roles_from_groups(
         ["choregos:northwind:developers", "choregos:other:org-admins", "developers", "unrelated"],
@@ -191,8 +191,8 @@ def _discovery() -> dict[str, str]:
 async def test_the_oidc_flow_checks_state_and_pkce_and_bounds_the_redirection(
     client: AsyncClient, org: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.routers.auth import forget_discovery
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.routers.auth import forget_discovery
 
     monkeypatch.setenv("CHOREGOS_DEV_LOGIN_ENABLED", "false")
     monkeypatch.setenv("CHOREGOS_OIDC_ISSUER", ISSUER)
@@ -259,9 +259,9 @@ async def test_the_oidc_flow_checks_state_and_pkce_and_bounds_the_redirection(
 async def test_an_api_token_is_issued_used_and_revoked(client: AsyncClient, admin: str) -> None:
     from datetime import timedelta
 
-    from choregos_api.db.models import ApiToken
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
+    from tranibor_api.db.models import ApiToken
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
 
     created = await client.post("/api/v1/me/tokens", json={"name": "ci", "expires_in_days": 1})
     assert created.status_code == 201, created.text
@@ -300,7 +300,7 @@ async def test_an_api_token_is_issued_used_and_revoked(client: AsyncClient, admi
 
 
 def test_the_limiter_counts_per_address_and_sliding_window() -> None:
-    from choregos_api.rate_limit import RateLimiter
+    from tranibor_api.rate_limit import RateLimiter
 
     limiter = RateLimiter(per_minute=3)
     assert [limiter.admits("1.2.3.4", t)[0] for t in (0.0, 1.0, 2.0)] == [True, True, True]
@@ -314,10 +314,10 @@ def test_the_limiter_counts_per_address_and_sliding_window() -> None:
 async def test_the_routes_without_a_principal_are_limited(
     client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.main import create_app
+    from tranibor_api.main import create_app
 
     monkeypatch.setenv("CHOREGOS_RATE_LIMIT_PER_MINUTE", "2")
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     reset_settings_cache()
     try:
@@ -332,8 +332,8 @@ async def test_the_routes_without_a_principal_are_limited(
 async def test_a_github_webhook_without_a_secret_is_refused_in_production(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.main import create_app
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.main import create_app
 
     monkeypatch.setenv("CHOREGOS_ENV", "prod")
     monkeypatch.setenv("CHOREGOS_DEV_LOGIN_ENABLED", "false")
@@ -361,7 +361,7 @@ async def test_a_direct_gateway_is_not_written_in_production(
     like this for a week and "proved" a spend ceiling that had never measured any spend. So we
     refuse to write it, at the moment someone chooses it.
     """
-    from choregos_api.config import get_settings, reset_settings_cache
+    from tranibor_api.config import get_settings, reset_settings_cache
 
     path = f"/api/v1/projects/{project['id']}/connectors/gateway"
     accepted = await client.put(path, json={"type": "direct", "config": {}})
@@ -397,7 +397,7 @@ def test_an_unresolved_setting_prevents_the_start_up(artifact: str) -> None:
 
     The refusal holds in ALL environments: nobody writes `<no value>` on purpose.
     """
-    from choregos_api.config import Settings
+    from tranibor_api.config import Settings
 
     with pytest.raises(ValueError, match=UNRESOLVED):
         Settings(session_secret=artifact)
@@ -405,6 +405,6 @@ def test_an_unresolved_setting_prevents_the_start_up(artifact: str) -> None:
 
 def test_a_real_value_passes() -> None:
     """The guard must not refuse a secret that contains an angle bracket by chance."""
-    from choregos_api.config import Settings
+    from tranibor_api.config import Settings
 
     assert Settings(session_secret="<s3cr3t-with-brackets>").session_secret

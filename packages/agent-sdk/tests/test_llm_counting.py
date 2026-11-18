@@ -5,9 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from choregos_agent_sdk import MaxTurnsExceeded
-from choregos_agent_sdk.llm import Llm
 from openai import AsyncOpenAI
+from tranibor_agent_sdk import MaxTurnsExceeded
+from tranibor_agent_sdk.llm import Llm
 
 from .conftest import RUN_KEY, Gateway
 from .fakes import FakeConn, make_session
@@ -50,7 +50,7 @@ async def test_the_call_past_max_turns_is_refused_before_it_leaves(gateway: Gate
 async def test_a_framework_that_wraps_the_error_still_stops_the_step(
     gateway: Gateway, tmp_path: Path
 ) -> None:
-    from choregos_agent_sdk.errors import sdk_error_in
+    from tranibor_agent_sdk.errors import sdk_error_in
 
     llm = _llm(gateway, tmp_path, 0)
     raw = AsyncOpenAI(base_url=gateway.url, api_key=RUN_KEY, http_client=llm.http_client(), max_retries=0)

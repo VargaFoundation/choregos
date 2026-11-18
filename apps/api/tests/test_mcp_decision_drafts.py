@@ -52,27 +52,27 @@ async def _tool(app: Any, token: str, name: str, **arguments: Any) -> Any:
 
 
 async def _row(request_id: str) -> Any:
-    from choregos_api.db.models import HumanRequest
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import HumanRequest
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         return await session.get(HumanRequest, request_id)
 
 
 async def _audit(action: str) -> list[Any]:
-    from choregos_api.db.models import AuditLog
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import AuditLog
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         return list((await session.execute(select(AuditLog).where(AuditLog.action == action))).scalars())
 
 
 async def _decided_events() -> int:
-    from choregos_api.db.models import Event
-    from choregos_api.db.session import session_scope
-    from choregos_contracts import EventType
     from sqlalchemy import func, select
+    from tranibor_api.db.models import Event
+    from tranibor_api.db.session import session_scope
+    from tranibor_contracts import EventType
 
     async with session_scope() as session:
         return int(
@@ -137,11 +137,11 @@ async def test_a_person_reads_only_their_own_waiting_requests(
 async def test_a_draft_decides_nothing_and_is_counted_and_audited(
     client: AsyncClient, project: dict[str, Any], app: Any
 ) -> None:
-    from choregos_api.db.models import Event, User
-    from choregos_api.db.session import session_scope
-    from choregos_api.mcp.limits import writes_today
-    from choregos_contracts import EventType
     from sqlalchemy import select
+    from tranibor_api.db.models import Event, User
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.mcp.limits import writes_today
+    from tranibor_contracts import EventType
 
     made = await _setup(client, project)
     item_id, key, request_id = made["mine"]
@@ -244,7 +244,7 @@ async def test_the_person_discards_a_draft_or_decides_and_the_audit_says_which(
 
 
 def test_the_comparison_of_a_decision_with_its_draft() -> None:
-    from choregos_api.services.decision_drafts import compared
+    from tranibor_api.services.decision_drafts import compared
 
     assert compared(None, "approve", {}) is None
     assert compared({"kind": "approve"}, "approve", {}) == "same"

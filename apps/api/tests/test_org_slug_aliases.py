@@ -35,8 +35,8 @@ async def test_an_old_url_still_reaches_the_organisation_and_names_the_canonical
 async def test_an_old_qualified_id_and_mcp_address_still_resolve_to_the_project(
     client: AsyncClient, admin: str, project: dict[str, Any]
 ) -> None:
-    from choregos_api.db.session import session_scope
-    from choregos_api.deps import resolve_project
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.deps import resolve_project
 
     await _rename(client)
     for address in ("northwind:billing-api", "northwind/billing-api", "fondation:billing-api"):
@@ -47,11 +47,11 @@ async def test_an_old_qualified_id_and_mcp_address_still_resolve_to_the_project(
 
 
 async def test_an_old_idp_group_still_maps_and_the_current_one_too(client: AsyncClient, admin: str) -> None:
-    from choregos_api.config import Settings
-    from choregos_api.db.models import Membership, Organization, User
-    from choregos_api.db.session import session_scope
-    from choregos_api.routers.auth import _map_groups_to_roles
     from sqlalchemy import select
+    from tranibor_api.config import Settings
+    from tranibor_api.db.models import Membership, Organization, User
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.routers.auth import _map_groups_to_roles
 
     await _rename(client)
     async with session_scope(orgs="*") as session:
@@ -97,8 +97,8 @@ async def test_a_session_and_a_token_issued_before_the_rename_keep_working(
 async def test_a_restart_with_the_old_bootstrap_slug_does_not_create_a_second_organisation(
     client: AsyncClient, admin: str
 ) -> None:
-    from choregos_api.bootstrap import bootstrap_installation
-    from choregos_api.config import Settings
+    from tranibor_api.bootstrap import bootstrap_installation
+    from tranibor_api.config import Settings
 
     await _rename(client)
     done = await bootstrap_installation(
@@ -109,9 +109,9 @@ async def test_a_restart_with_the_old_bootstrap_slug_does_not_create_a_second_or
 
 
 async def _other_organisation(slug: str, *, admin_too: bool = True) -> None:
-    from choregos_api.db.models import Membership, Organization, User
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Membership, Organization, User
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         other = Organization(slug=slug, name=slug)
@@ -151,7 +151,7 @@ async def test_listing_shows_the_aliases_and_releasing_one_frees_it(
 async def test_releasing_an_alias_makes_the_old_address_a_404(
     app: Any, client: AsyncClient, admin: str
 ) -> None:
-    from choregos_api.edition import declare_platform_administrator, reset
+    from tranibor_api.edition import declare_platform_administrator, reset
 
     await _rename(client)
     reset()
@@ -181,10 +181,10 @@ async def test_a_background_scope_written_with_the_old_slug_resolves_to_the_orga
 ) -> None:
     """A workflow payload that waited for months names the old slug (SQLite: no RLS, so this proves the
     lookups; the RLS side is in `test_rls_postgres.py`)."""
-    from choregos_api.db.models import Project
-    from choregos_api.db.org_aliases import organisation_by_slug_or_alias
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Project
+    from tranibor_api.db.org_aliases import organisation_by_slug_or_alias
+    from tranibor_api.db.session import session_scope
 
     await _rename(client)
     async with session_scope(orgs=["northwind"]) as session:

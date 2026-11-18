@@ -21,8 +21,8 @@ import pathlib
 import subprocess
 
 import pytest
-from choregos_adapters.oci import BuildRequest, LocalDockerBuilder, OciRegistryClient
-from choregos_api.services.hosted_sources import build_key, dockerfile, read_source
+from tranibor_adapters.oci import BuildRequest, LocalDockerBuilder, OciRegistryClient
+from tranibor_api.services.hosted_sources import build_key, dockerfile, read_source
 
 from tools import hosted_dockerfile as tool
 

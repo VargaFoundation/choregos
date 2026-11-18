@@ -94,9 +94,9 @@ async def test_a_fork_reports_when_its_upstream_moved_and_defaults_to_the_latest
 
 
 async def test_a_fork_whose_source_is_gone_says_so(client: AsyncClient, org: str) -> None:
-    from choregos_api.db.models import Agent
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Agent
+    from tranibor_api.db.session import session_scope
 
     await install_common(client)
     await as_user(client, DEV)

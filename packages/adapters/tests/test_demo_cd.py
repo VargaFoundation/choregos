@@ -7,12 +7,12 @@ from typing import Any
 
 import httpx
 import pytest
-from choregos_adapters.errors import ConfigurationError
-from choregos_adapters.fakes.demo_cd import DemoCd, FakeDemoCd
-from choregos_adapters.fakes.hr import Desk, RemoteDesk
-from choregos_adapters.fakes.server import DemoApplication
-from choregos_adapters.mcp import McpClient
-from choregos_core.domain import Change
+from tranibor_adapters.errors import ConfigurationError
+from tranibor_adapters.fakes.demo_cd import DemoCd, FakeDemoCd
+from tranibor_adapters.fakes.hr import Desk, RemoteDesk
+from tranibor_adapters.fakes.server import DemoApplication
+from tranibor_adapters.mcp import McpClient
+from tranibor_core.domain import Change
 
 TOKEN = "demo-fakes-token"
 
@@ -67,7 +67,7 @@ async def test_a_read_writes_nothing() -> None:
 def test_the_demo_type_is_refused_in_staging_and_prod_and_reaches_the_fakes_process(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from choregos_adapters import available, build
+    from tranibor_adapters import available, build
 
     monkeypatch.setenv("CHOREGOS_FAKES", "0")
     assert "demo" in available("cd")

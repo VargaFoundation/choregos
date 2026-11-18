@@ -52,7 +52,7 @@ openssl ec -in run-token.pem -pubout -out run-token.pub
 
 The platform holds **one** pair at a time. The orchestrator signs run tokens with
 `run-token-private-key`; the API verifies them with `run-token-public-key`, or, when that entry is
-absent, with the public half derived from the private key (`apps/api/src/choregos_api/security.py`).
+absent, with the public half derived from the private key (`apps/api/src/tranibor_api/security.py`).
 There is no second key and no key id (`kid`): a token signed by the old key fails verification
 under the new one. Nothing reads a `-next` entry. A token lives `max_minutes + 15` minutes, and a
 run's agent holds its token for as long as the run lasts, so the rotation is a **replacement in a

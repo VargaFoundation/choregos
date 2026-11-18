@@ -18,10 +18,10 @@ pytestmark = pytest.mark.asyncio
 
 async def _publish(setup: Fixture, text: str) -> None:
     """The project's active workflow becomes `text` — what a publication would do."""
-    from choregos_api.db.models import WorkflowDef
-    from choregos_api.db.session import session_scope
-    from choregos_core import checksum, parse_workflow
     from sqlalchemy import select
+    from tranibor_api.db.models import WorkflowDef
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import checksum, parse_workflow
 
     wf, report = parse_workflow(text, strict=False)
     assert report.valid, [e.message for e in report.errors]
@@ -39,8 +39,8 @@ async def _publish(setup: Fixture, text: str) -> None:
 async def test_renamed_states_still_open_and_merge_the_pr(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
-    from choregos_core.dsl import template_yaml
-    from choregos_core.dsl.edition import edit
+    from tranibor_core.dsl import template_yaml
+    from tranibor_core.dsl.edition import edit
 
     from .test_interpreter import _pr_ref
 

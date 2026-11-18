@@ -80,9 +80,9 @@ async def test_a_photo_that_is_not_a_bounded_png_jpeg_or_webp_is_refused(
 async def test_the_photo_is_read_by_a_shared_organisation_only(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
 
     await _member(client, "dev@northwind.dev")
     status, body = await _put(client, _image("PNG"))

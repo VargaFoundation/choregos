@@ -1,6 +1,6 @@
 # the OpenAI Agents SDK example: the ticket triager
 
-The same agent as `../plain`, on the OpenAI Agents SDK and the `choregos-agent-sdk`: set_tracing_disabled(True) (its tracing would send run data to OpenAI).
+The same agent as `../plain`, on the OpenAI Agents SDK and the `tranibor-agent-sdk`: set_tracing_disabled(True) (its tracing would send run data to OpenAI).
 
 Two things stay governed, each in a few lines: the model goes through `ctx.llm.openai_client()` (the
 run's gateway and key; every request counts as a turn against `max_turns`), and the tools come from

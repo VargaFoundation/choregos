@@ -5,9 +5,9 @@ from __future__ import annotations
 import math
 
 import pytest
-from choregos_quant import metrics
-from choregos_quant.engine import daily_returns, positions_from_signals
-from choregos_quant.strategies import Strategy, signals
+from tranibor_quant import metrics
+from tranibor_quant.engine import daily_returns, positions_from_signals
+from tranibor_quant.strategies import Strategy, signals
 
 
 def test_cagr() -> None:

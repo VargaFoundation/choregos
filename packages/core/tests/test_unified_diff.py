@@ -4,8 +4,8 @@
 from __future__ import annotations
 
 import pytest
-from choregos_core.domain import DiffFile, DiffSummary
-from choregos_core.unified_diff import CUT, NO_PATCH, WITHHELD, unified_diff
+from tranibor_core.domain import DiffFile, DiffSummary
+from tranibor_core.unified_diff import CUT, NO_PATCH, WITHHELD, unified_diff
 
 HUNK = "@@ -1,2 +1,2 @@\n-old\n+new\n ctx"
 

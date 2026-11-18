@@ -46,7 +46,7 @@ def _publish(root: Path, version: str, upstream: str, corpus: dict[str, str]) ->
 
 @pytest.fixture
 def offline(tmp_path: Path) -> Iterator[Path]:
-    from choregos_api.services.plugin_supply import OfflineDirectory, use_plugin_supply
+    from tranibor_api.services.plugin_supply import OfflineDirectory, use_plugin_supply
 
     root = tmp_path / "plugins"
     shutil.copytree(FIXTURE, root / "investment-assistant" / "0.1.0")
@@ -56,9 +56,9 @@ def offline(tmp_path: Path) -> Iterator[Path]:
 
 
 async def _docs() -> dict[str, tuple[str, str]]:
-    from choregos_api.db.models import KnowledgeBase, KnowledgeDocument
-    from choregos_api.db.session import session_scope
     from sqlalchemy.orm import undefer
+    from tranibor_api.db.models import KnowledgeBase, KnowledgeDocument
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         rows = (
@@ -73,8 +73,8 @@ async def _docs() -> dict[str, tuple[str, str]]:
 
 
 async def _chunks(filename: str) -> str:
-    from choregos_api.db.models import KnowledgeChunk, KnowledgeDocument
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import KnowledgeChunk, KnowledgeDocument
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         found = await session.execute(
@@ -116,8 +116,8 @@ async def _installed(client: AsyncClient) -> None:
 async def test_the_base_is_created_at_install_from_the_seed(
     client: AsyncClient, org: str, offline: Path
 ) -> None:
-    from choregos_api.db.models import AssistantInstallation, KnowledgeBase, KnowledgeGrant
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import AssistantInstallation, KnowledgeBase, KnowledgeGrant
+    from tranibor_api.db.session import session_scope
 
     await _installed(client)
     docs = await _docs()

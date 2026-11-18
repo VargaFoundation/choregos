@@ -16,11 +16,11 @@ ORG = "/api/v1/orgs/northwind"
 
 @pytest.fixture
 def graph(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
-    import choregos_adapters
-    from choregos_adapters.fakes.entra import FakeEntra
+    import tranibor_adapters
+    from tranibor_adapters.fakes.entra import FakeEntra
 
     fake_entra = FakeEntra()
-    monkeypatch.setattr(choregos_adapters, "FAKE_ENTRA", fake_entra)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_ENTRA", fake_entra)
     monkeypatch.setenv("CONNECTOR_ENTRA_CLIENT_SECRET", "connector-secret")
     yield fake_entra
 
@@ -36,9 +36,9 @@ async def _declare(client: AsyncClient) -> dict[str, Any]:
 async def _run(
     client: AsyncClient, project: dict[str, Any], patterns: list[str]
 ) -> tuple[str, dict[str, str]]:
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.security import mint_run_token
+    from tranibor_api.db.models import Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.security import mint_run_token
 
     spec = {"mcp_servers": [{"connector": "entra-acme", "tools": patterns}]}
     created = await client.post(

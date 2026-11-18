@@ -27,10 +27,10 @@ OPEN_PR = "    does: open_pr\n"
 
 async def _publish(setup: Fixture, text: str) -> None:
     """The project's active workflow becomes `text`, as a publication would make it."""
-    from choregos_api.db.models import WorkflowDef
-    from choregos_api.db.session import session_scope
-    from choregos_core import checksum, parse_workflow
     from sqlalchemy import select
+    from tranibor_api.db.models import WorkflowDef
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import checksum, parse_workflow
 
     wf, report = parse_workflow(text, strict=False)
     assert report.valid, [e.message for e in report.errors]
@@ -46,7 +46,7 @@ async def _publish(setup: Fixture, text: str) -> None:
 
 
 def _draft_workflow() -> str:
-    from choregos_core.dsl import template_yaml
+    from tranibor_core.dsl import template_yaml
 
     text = template_yaml("default-simple")
     assert text.count(OPEN_PR) == 1
@@ -54,7 +54,7 @@ def _draft_workflow() -> str:
 
 
 async def _open(setup: Fixture, **extra: Any) -> Any:
-    from choregos_orchestrator.activities.scm import open_pull_request
+    from tranibor_orchestrator.activities.scm import open_pull_request
 
     await open_pull_request({"project_id": setup.project_id, "work_item_id": setup.work_item_id, **extra})
     (pr,) = setup.adapters.scm.prs.values()
@@ -82,8 +82,8 @@ async def test_a_draft_opened_again_keeps_the_state_a_person_gave_it(setup: Fixt
 async def test_a_workflow_that_asks_for_a_draft_opens_one(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.worker import Replayer
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     await _publish(setup, _draft_workflow())
     scripted(

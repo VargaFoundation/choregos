@@ -74,7 +74,7 @@ async def test_an_egress_token_is_for_its_own_run_only(client: AsyncClient, proj
 
 def test_the_two_tokens_do_not_stand_in_for_each_other() -> None:
     import jwt
-    from choregos_api.security import (
+    from tranibor_api.security import (
         RunClaims,
         mint_egress_token,
         mint_run_token,
@@ -97,7 +97,7 @@ KEY = "the-proxys-own-key"
 
 @pytest.fixture
 def report_key(app: Any, monkeypatch: pytest.MonkeyPatch) -> str:
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     monkeypatch.setenv("CHOREGOS_EGRESS_REPORT_KEY", KEY)
     reset_settings_cache()

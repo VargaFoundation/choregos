@@ -20,7 +20,7 @@ INJECTION = (
 
 
 async def _prepare(setup: Fixture) -> dict[str, Any]:
-    from choregos_orchestrator.activities import stage as activities
+    from tranibor_orchestrator.activities import stage as activities
 
     return await activities.prepare_stage(
         {
@@ -37,8 +37,8 @@ async def _prepare(setup: Fixture) -> dict[str, Any]:
 
 
 async def _ticket_body(setup: Fixture, text: str) -> None:
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         item = await session.get(WorkItem, setup.work_item_id)
@@ -47,8 +47,8 @@ async def _ticket_body(setup: Fixture, text: str) -> None:
 
 
 async def _policy(setup: Fixture, **sandbox: Any) -> None:
-    from choregos_api.db.session import session_scope
-    from choregos_api.services import active_policy, policy_model
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services import active_policy, policy_model
 
     async with session_scope() as session:
         row = await active_policy(session, setup.project_id)
@@ -60,8 +60,8 @@ async def _policy(setup: Fixture, **sandbox: Any) -> None:
 
 
 async def _events(setup: Fixture) -> list[Any]:
-    from choregos_api.db.models import Event
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Event
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         return list(

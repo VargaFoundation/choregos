@@ -17,7 +17,7 @@ import structlog
 
 
 def test_a_logger_cached_before_a_second_configuration_is_still_captured() -> None:
-    from choregos_api.logging import configure_logging
+    from tranibor_api.logging import configure_logging
 
     logger = structlog.get_logger("choregos.cached")
     configure_logging()  # a first lifespan
@@ -33,7 +33,7 @@ def test_a_logger_cached_before_a_second_configuration_is_still_captured() -> No
 
 
 def test_configuring_again_keeps_the_processors_list() -> None:
-    from choregos_api.logging import configure_logging
+    from tranibor_api.logging import configure_logging
 
     configure_logging()
     processors = structlog.get_config()["processors"]

@@ -45,7 +45,7 @@ Constraints that shape the answer:
    check when its operator writes a theme and refuses it there.
 4. **The defaults are generated from `theme.css`**, never typed twice:
    `apps/web/scripts/export-theme-defaults.mts` (`pnpm theme:defaults`) resolves the stylesheet
-   (the resolver of the contrast tests) into `apps/api/src/choregos_api/theme_defaults.json`; a
+   (the resolver of the contrast tests) into `apps/api/src/tranibor_api/theme_defaults.json`; a
    vitest drift test fails when the two diverge. The budget in `theme.py` is a line-by-line copy of
    `tests/theme-contraste.test.ts`; the API's tests pin it.
 5. **A new console role pair**, `--choregos-font-title` and `--choregos-font-title-weight` (default:

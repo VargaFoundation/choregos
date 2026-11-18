@@ -6,7 +6,7 @@ proven here is what `packages/contracts/outpost-door.yaml` says, on the model of
 `test_relay_route_contract.py`: that it declares the four verbs and no other, that nothing in it names
 a connector or a server (ADR 0148 §12), that every answer has a schema and every example is valid, and
 that the signatures and the envelope it describes are the ones the code already makes
-(`choregos_adapters.sealing`, the installed PyJWT). Two signatures cross the door: a request's is the
+(`tranibor_adapters.sealing`, the installed PyJWT). Two signatures cross the door: a request's is the
 instance's (ADR 0148 §4), a call's is the door's, under a key the outpost's policy file pins (ADR 0148
 §13). The two vectors are what S65-12 and S65-15 are built against: a door and a daemon that agree
 with them agree with each other.
@@ -26,13 +26,13 @@ import jsonschema
 import jwt
 import pytest
 import yaml
-from choregos_adapters import sealing
-from choregos_contracts import outpost
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey, X25519PublicKey
 from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+from tranibor_adapters import sealing
+from tranibor_contracts import outpost
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 CONTRACTS = ROOT / "packages" / "contracts"
@@ -524,7 +524,7 @@ def test_the_sealing_is_described_as_the_module_does_it() -> None:
     described = DOOR["x-sealing"]
     assert described["info"] == outpost.SEALING_INFO == sealing._INFO.decode()
     assert SEALED["info"] == described["info"]
-    assert "choregos_adapters.sealing" in described["construction"]
+    assert "tranibor_adapters.sealing" in described["construction"]
     for word, where in (
         ("X25519", "key_agreement"),
         ("HKDF-SHA256", "key_derivation"),
@@ -800,7 +800,7 @@ def test_nothing_else_of_an_answer_is_signed_and_the_document_says_so_in_one_pla
 
 def test_the_digest_of_arguments_is_the_one_the_platform_keeps() -> None:
     """The outpost's audit line and the `tool.called` event of the same call can be compared."""
-    from choregos_api.routers.internal import json_sha256
+    from tranibor_api.routers.internal import json_sha256
 
     for arguments in (
         {},
@@ -812,7 +812,7 @@ def test_the_digest_of_arguments_is_the_one_the_platform_keeps() -> None:
 
 def test_a_problem_the_api_builds_is_a_problem_of_the_door() -> None:
     """The API always adds `instance` to a problem; with a `code` and its clock it is the door's."""
-    from choregos_api.errors import ApiError
+    from tranibor_api.errors import ApiError
 
     for code, status in outpost.DOOR_STATUS.items():
         extra: dict[str, Any] = {"code": code.value, "server_time": "2026-11-12T10:07:31Z"}

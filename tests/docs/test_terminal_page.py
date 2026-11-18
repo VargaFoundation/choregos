@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 import typer.core
 import typer.main
-from choregos_cli.main import app
+from tranibor_cli.main import app
 
 # Typer 0.2x ships its own copy of click: the errors and groups of the application are its.
 from typer._click.core import Context

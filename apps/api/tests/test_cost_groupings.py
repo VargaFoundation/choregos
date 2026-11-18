@@ -19,9 +19,9 @@ GROUPS = [
 
 
 async def _seed(project_id: str) -> None:
-    from choregos_api.db.models import AssistantInstallation, CostLedger, Organization, WorkItem
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import AssistantInstallation, CostLedger, Organization, WorkItem
+    from tranibor_api.db.session import session_scope
 
     now = datetime.now(UTC)
     async with session_scope() as session:

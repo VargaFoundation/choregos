@@ -9,7 +9,7 @@ import os
 from typing import Any
 
 import pytest
-from choregos_api.secret_store import (
+from tranibor_api.secret_store import (
     ENV_KEKS,
     EnvKeyWrapper,
     KeyWrapper,
@@ -17,7 +17,7 @@ from choregos_api.secret_store import (
     SecretStoreUnavailable,
     parse_keyring,
 )
-from choregos_core.secrets import SecretNotFound
+from tranibor_core.secrets import SecretNotFound
 
 
 class FakeKms:
@@ -66,9 +66,9 @@ def _ring(kek_id: str = "k1") -> Any:
 
 
 async def _org_id() -> str:
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         return (await session.execute(select(Organization.id))).scalar_one()
@@ -77,9 +77,9 @@ async def _org_id() -> str:
 async def test_a_kms_wrapper_seals_without_the_env_key(
     app: Any, org: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.db.models import OrgSecret
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import OrgSecret
+    from tranibor_api.db.session import session_scope
 
     monkeypatch.delenv(ENV_KEKS, raising=False)
     kms = FakeKms()
@@ -96,7 +96,7 @@ async def test_a_kms_wrapper_seals_without_the_env_key(
 
 
 async def test_rows_sealed_by_the_env_keyring_still_open(app: Any, org: str) -> None:
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.session import session_scope
 
     ring = _ring()
     org_id = await _org_id()
@@ -110,9 +110,9 @@ async def test_rows_sealed_by_the_env_keyring_still_open(app: Any, org: str) -> 
 
 
 async def test_rewrap_moves_rows_to_the_wrapper(app: Any, org: str) -> None:
-    from choregos_api.db.models import OrgSecret
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import OrgSecret
+    from tranibor_api.db.session import session_scope
 
     org_id = await _org_id()
     ring = _ring("k1")

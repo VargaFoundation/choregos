@@ -13,11 +13,11 @@ import pathlib
 import re
 from collections.abc import Iterator
 
-import choregos_adapters
 import pytest
-from choregos_adapters import registry
-from choregos_api.knowledge.sync import KINDS as SOURCE_KINDS
-from choregos_core import procedures as core
+import tranibor_adapters
+from tranibor_adapters import registry
+from tranibor_api.knowledge.sync import KINDS as SOURCE_KINDS
+from tranibor_core import procedures as core
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 CATALOGUE = core.load()
@@ -43,7 +43,7 @@ SOURCE_FIELDS = {
 
 def connector_targets() -> list[str]:
     """Every shipped `kind/type`, deprecated aliases included, fakes (test doubles) excluded."""
-    return sorted(f"{kind}/{name}" for (kind, name) in choregos_adapters._SHIPPED_SPECS if name != "fake")
+    return sorted(f"{kind}/{name}" for (kind, name) in tranibor_adapters._SHIPPED_SPECS if name != "fake")
 
 
 def missing_connector_procedures(targets: list[str], catalogue: core.Catalogue = CATALOGUE) -> list[str]:
@@ -95,7 +95,7 @@ def test_every_door_client_of_the_integrations_page_has_a_procedure_that_links_t
 
 
 def test_every_agent_of_the_client_catalogue_is_covered() -> None:
-    from choregos_core.agent_catalogue import entries
+    from tranibor_core.agent_catalogue import entries
 
     # The clients ship in the offline plugin `mcp-clients` since S43-09 (ADR 0093 §6).
     slugs = [str(e.client) for e in entries() if e.kind == "external"]

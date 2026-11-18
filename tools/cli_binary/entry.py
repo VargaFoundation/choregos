@@ -12,6 +12,6 @@ for stream in (sys.stdout, sys.stderr):
     if stream is not None and encoding != "utf8" and hasattr(stream, "reconfigure"):
         stream.reconfigure(encoding="utf-8")
 
-from choregos_cli.main import main  # noqa: E402 - after the streams are set
+from tranibor_cli.main import main  # noqa: E402 - after the streams are set
 
 main()

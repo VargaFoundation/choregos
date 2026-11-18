@@ -40,8 +40,8 @@ def _refused(problem: dict[str, Any], what: str, slug: str) -> None:
 
 async def _skills() -> dict[str, int]:
     """Each skill of the organisation and its number of versions."""
-    from choregos_api.db.models import Skill, SkillVersion
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Skill, SkillVersion
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = await session.execute(
@@ -56,7 +56,7 @@ async def _skills() -> dict[str, int]:
 @pytest.fixture
 def hello_shipping(tmp_path: Path) -> Iterator[Any]:
     """The `hello` plugin, without its server (one administrator installs it), its skill renamed."""
-    from choregos_api.services.plugin_supply import OfflineDirectory, use_plugin_supply
+    from tranibor_api.services.plugin_supply import OfflineDirectory, use_plugin_supply
 
     def ship(slug: str) -> None:
         target = tmp_path / "plugins" / "hello" / "1.0.0"
@@ -100,8 +100,8 @@ async def test_the_agent_catalogue_installing_a_skill_under_that_slug_is_refused
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The architect's catalogue entry, naming a skill `library` its plugin ships."""
-    from choregos_api.services import agent_catalogue as service
-    from choregos_core.agent_catalogue import CatalogueSkill
+    from tranibor_api.services import agent_catalogue as service
+    from tranibor_core.agent_catalogue import CatalogueSkill
 
     base = service.offline_catalogue()
     architect = next(e for e in base.entries if e.slug == "architect")
@@ -128,11 +128,11 @@ async def test_the_shared_install_path_refuses_before_writing_and_spares_an_exis
     """`install_skills_and_agents`, the path a template's skills take (S20-07): a new skill under a
     reserved slug refuses the whole install, the skills before it included; one the organisation
     already has under that slug is kept, as an install never rewrites a skill."""
-    from choregos_api.db.models import Skill
-    from choregos_api.db.session import session_scope
-    from choregos_api.errors import ApiError
-    from choregos_api.services.installation import install_skills_and_agents
-    from choregos_api.services.plugin_installer import org_id_of
+    from tranibor_api.db.models import Skill
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.errors import ApiError
+    from tranibor_api.services.installation import install_skills_and_agents
+    from tranibor_api.services.plugin_installer import org_id_of
 
     what = "the template `hello-flow`"
     async with session_scope() as session:

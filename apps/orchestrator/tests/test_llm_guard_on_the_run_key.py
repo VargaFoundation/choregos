@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 
 import pytest
-from choregos_core.llm_guardrail import GUARD_METADATA_KEY, GUARD_REDACT
+from tranibor_core.llm_guardrail import GUARD_METADATA_KEY, GUARD_REDACT
 
 from .conftest import Fixture
 from .test_budget_reservation import _plan
@@ -19,9 +19,9 @@ pytestmark = pytest.mark.asyncio
 
 
 async def _analyzer(setup: Fixture, on: bool) -> None:
-    from choregos_api.db.models import PolicyDef
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import PolicyDef
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         row = (
@@ -35,7 +35,7 @@ async def _analyzer(setup: Fixture, on: bool) -> None:
 
 
 async def _start(setup: Fixture) -> dict[str, object]:
-    from choregos_orchestrator.activities.stage import prepare_stage, start_run
+    from tranibor_orchestrator.activities.stage import prepare_stage, start_run
 
     prepared = await prepare_stage(_plan(setup))
     await start_run(
@@ -66,8 +66,8 @@ async def test_a_gateway_without_the_guard_refuses_the_stage_before_anything_is_
 ) -> None:
     """S40-21b: on `direct` or `openai-compatible` the mark would reach no guard. The stage is
     refused as a configuration the project cannot run, which the interpreter escalates."""
-    from choregos_orchestrator.activities.stage import prepare_stage
     from temporalio.exceptions import ApplicationError
+    from tranibor_orchestrator.activities.stage import prepare_stage
 
     await _analyzer(setup, True)
     setup.adapters.gateway.capabilities = frozenset({"virtual_keys", "hard_budget"})
@@ -88,9 +88,9 @@ async def test_a_key_is_never_minted_unguarded_on_a_resume_either() -> None:
     """`mint_key` is every run key's door, the resumed run's included: it refuses on its own."""
     from types import SimpleNamespace
 
-    from choregos_adapters.errors import ConfigurationError
-    from choregos_adapters.fakes.gateway import FakeGateway
-    from choregos_orchestrator.activities.run_key import mint_key
+    from tranibor_adapters.errors import ConfigurationError
+    from tranibor_adapters.fakes.gateway import FakeGateway
+    from tranibor_orchestrator.activities.run_key import mint_key
 
     gateway = FakeGateway(capabilities=frozenset({"virtual_keys"}))
     bundle = SimpleNamespace(

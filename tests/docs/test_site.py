@@ -29,10 +29,10 @@ from typing import Any
 
 import pytest
 import yaml
-from choregos_cli.knowledge import Manifest
-from choregos_contracts import Policy
-from choregos_core import parse_workflow
-from choregos_core.policy import parse_policy
+from tranibor_cli.knowledge import Manifest
+from tranibor_contracts import Policy
+from tranibor_core import parse_workflow
+from tranibor_core.policy import parse_policy
 
 ROOT = Path(__file__).resolve().parents[2]
 SITE = ROOT / "docs" / "site"
@@ -322,7 +322,7 @@ def _pipeline(command: str) -> list[str]:
 def _root_usage() -> str:
     """The options of `choregos` itself (`--no-color`): the reference has no root section."""
     import typer.main
-    from choregos_cli.main import app
+    from tranibor_cli.main import app
 
     flags = [opt for param in typer.main.get_command(app).params for opt in param.opts]
     return "Usage: choregos " + " ".join(flags)

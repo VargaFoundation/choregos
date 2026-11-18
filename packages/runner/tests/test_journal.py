@@ -5,8 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, cast
 
-from choregos_runner.client import InternalClient
-from choregos_runner.runner import EventJournal
+from tranibor_runner.client import InternalClient
+from tranibor_runner.runner import EventJournal
 
 
 class _Client:

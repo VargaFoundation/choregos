@@ -14,7 +14,7 @@ import ast
 import pathlib
 import re
 
-VERSIONS = pathlib.Path(__file__).resolve().parents[1] / "src" / "choregos_api" / "migrations" / "versions"
+VERSIONS = pathlib.Path(__file__).resolve().parents[1] / "src" / "tranibor_api" / "migrations" / "versions"
 
 #: What writes rows: plain SQL, SQLAlchemy Core, and the helpers the migrations name after it.
 WRITES = re.compile(

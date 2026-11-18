@@ -8,9 +8,9 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from choregos_contracts import StageInput, StageStatus
-from choregos_runner.exits import Exit
-from choregos_runner.runner import Runner
+from tranibor_contracts import StageInput, StageStatus
+from tranibor_runner.exits import Exit
+from tranibor_runner.runner import Runner
 
 from .conftest import FakeInternalClient, agent_script, valid_result
 
@@ -296,7 +296,7 @@ async def test_result_announces_no_transcript_url_nothing_uploads(
 
 
 async def test_context_pack_is_written_to_workspace(stage_input: StageInput, runner_settings: Any) -> None:
-    from choregos_contracts import ContextPack, MemoryItem
+    from tranibor_contracts import ContextPack, MemoryItem
 
     agent_script({"turns": [{"result": valid_result()}]}, stage_input, runner_settings.workspace)
     client = FakeInternalClient(
@@ -394,7 +394,7 @@ async def test_the_run_git_token_serves_the_clone_and_is_written_nowhere(
 async def test_the_token_goes_in_a_header_for_a_single_command() -> None:
     import base64
 
-    from choregos_runner.workspace import _auth_header
+    from tranibor_runner.workspace import _auth_header
 
     assert _auth_header(None) == []
     flag, encoded = _auth_header("ghs_x")
@@ -407,7 +407,7 @@ async def test_a_result_whose_post_fails_is_still_in_the_journal(
 ) -> None:
     """#410: the Tekton `result-url` pointed at a `result.json` nothing uploaded, so a failed post
     lost the result. The runner journals the whole result before posting it."""
-    from choregos_contracts import StageResult
+    from tranibor_contracts import StageResult
 
     class _PostFails(FakeInternalClient):
         async def post_result(self, result: Any) -> dict[str, Any]:

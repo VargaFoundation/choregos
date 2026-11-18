@@ -18,9 +18,9 @@ IMAGE = "registry.internal/builds@sha256:" + "d" * 64
 
 async def play(claim: dict[str, Any], build: Any) -> tuple[dict[str, Any], dict[str, list[Any]], Any]:
     """The workflow against stub activities: its result, what each activity was asked, its history."""
-    from choregos_orchestrator.testing import workers_by_queue
-    from choregos_orchestrator.workflows.agent_build import HostedImageBuild
     from temporalio.testing import WorkflowEnvironment
+    from tranibor_orchestrator.testing import workers_by_queue
+    from tranibor_orchestrator.workflows.agent_build import HostedImageBuild
 
     asked: dict[str, list[Any]] = {"claim": [], "build": [], "record": []}
 
@@ -96,9 +96,9 @@ async def test_a_claim_with_nothing_left_to_do_builds_nothing() -> None:
 
 
 async def test_the_archived_history_replays() -> None:
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.client import WorkflowHistory
     from temporalio.worker import Replayer
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     _, _, history = await play({"status": "building"}, {"image": IMAGE, "builder": "fake", "built": True})
     replayer = Replayer(workflows=ALL_WORKFLOWS)

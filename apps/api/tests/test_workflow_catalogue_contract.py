@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import choregos_contracts as contracts
 import pytest
-from choregos_contracts import Workflow
-from choregos_core.dsl import template_yaml
+import tranibor_contracts as contracts
 from pydantic import ValidationError
+from tranibor_contracts import Workflow
+from tranibor_core.dsl import template_yaml
 
 
 def test_the_contract_declares_the_catalogue_operations() -> None:

@@ -16,8 +16,8 @@ from typing import Any
 import pytest
 from alembic import command
 from alembic.config import Config
-from choregos_api.config import get_settings
 from sqlalchemy import create_engine, text
+from tranibor_api.config import get_settings
 
 API = pathlib.Path(__file__).resolve().parents[1]
 BEFORE = "c9e1a3b5d7f8"
@@ -94,7 +94,7 @@ def check_upgraded(authors: list[Any], skills: list[Any], plugins: list[Any], so
 
 def _config(url: str) -> Config:
     config = Config(str(API / "alembic.ini"))
-    config.set_main_option("script_location", str(API / "src" / "choregos_api" / "migrations"))
+    config.set_main_option("script_location", str(API / "src" / "tranibor_api" / "migrations"))
     config.set_main_option("sqlalchemy.url", url)
     return config
 
@@ -143,10 +143,10 @@ def test_the_mapping_is_the_offline_plugins() -> None:
     """The migration writes its mapping out; it must be what the shipped plugins hold."""
     import importlib.util
 
-    from choregos_core.agent_catalogue import catalogue
+    from tranibor_core.agent_catalogue import catalogue
 
     path = next(
-        (API / "src" / "choregos_api" / "migrations" / "versions").glob(
+        (API / "src" / "tranibor_api" / "migrations" / "versions").glob(
             "*_catalogue_agents_become_plugins.py"
         )
     )
@@ -155,7 +155,7 @@ def test_the_mapping_is_the_offline_plugins() -> None:
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     shipped = catalogue()
-    from choregos_api.services.plugin_supply import semver_key
+    from tranibor_api.services.plugin_supply import semver_key
 
     for name, (version, _digest, agents, skills, _) in module.PLUGINS.items():
         # The migration records the version it wrote; a plugin shipped later moves on (netops 1.1.0,
@@ -167,7 +167,7 @@ def test_the_mapping_is_the_offline_plugins() -> None:
         )
         assert set(agents) == {e.slug for e in shipped.entries if e.plugin == name}, name
         assert set(skills) == {s for s, found in shipped.skills.items() if found.plugin == name}, name
-    from choregos_core.plugins.sources import read_lock
+    from tranibor_core.plugins.sources import read_lock
 
     locked = read_lock(pathlib.Path(__file__).resolve().parents[3] / "plugins" / "offline")
     assert locked is not None

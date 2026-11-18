@@ -1,17 +1,17 @@
 [project]
-name = "choregos-tools-mcp"
+name = "tranibor-tools-mcp"
 version = "0.27.13"
 description = "The choregos-tools MCP sidecar"
 requires-python = ">=3.12,<3.13"
 license = { text = "Apache-2.0" }
-dependencies = ["choregos-core", "choregos-contracts", "httpx>=0.27", "pydantic>=2.9", "structlog>=24.4", "typer>=0.15", "fastapi>=0.115", "uvicorn>=0.32"]
+dependencies = ["tranibor-core", "tranibor-contracts", "httpx>=0.27", "pydantic>=2.9", "structlog>=24.4", "typer>=0.15", "fastapi>=0.115", "uvicorn>=0.32"]
 
 [project.scripts]
-choregos-tools = "choregos_tools_mcp.app:main"
+choregos-tools = "tranibor_tools_mcp.app:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/choregos_tools_mcp"]
+packages = ["src/tranibor_tools_mcp"]

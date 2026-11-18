@@ -27,8 +27,8 @@ async def _item(client: AsyncClient, project: dict[str, Any]) -> dict[str, Any]:
 
 
 async def _run(item: dict[str, Any], run_id: str, *, status: str = "running", result: Any = None) -> str:
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         run = Run(
@@ -45,8 +45,8 @@ async def _run(item: dict[str, Any], run_id: str, *, status: str = "running", re
 
 
 async def _stored(run_id: str) -> Any:
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         run = await session.get(Run, run_id)
@@ -55,9 +55,9 @@ async def _stored(run_id: str) -> Any:
 
 
 async def _audited(action: str) -> list[dict[str, Any]]:
-    from choregos_api.db.models import AuditLog
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import AuditLog
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = (await session.execute(select(AuditLog).where(AuditLog.action == action))).scalars()
@@ -65,7 +65,7 @@ async def _audited(action: str) -> list[dict[str, Any]]:
 
 
 def _cancellations() -> dict[str, dict[str, Any]]:
-    from choregos_api.temporal import FakeTemporal, get_temporal
+    from tranibor_api.temporal import FakeTemporal, get_temporal
 
     fake = get_temporal()
     assert isinstance(fake, FakeTemporal)
@@ -152,7 +152,7 @@ async def test_a_reason_is_required(client: AsyncClient, project: dict[str, Any]
 async def test_the_runner_posting_after_the_stop_changes_nothing(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.security import mint_run_token
+    from tranibor_api.security import mint_run_token
 
     item = await _item(client, project)
     run_id = await _run(item, "run-stop-then-post")
@@ -176,8 +176,8 @@ async def test_a_stop_landing_while_the_runner_posts_keeps_the_stop(
 ) -> None:
     """The stop commits after the runner's post read the run and before it writes: the post finds a
     result in its conditional update and changes nothing, instead of overwriting the stop."""
-    from choregos_api.routers import internal
-    from choregos_api.security import mint_run_token
+    from tranibor_api.routers import internal
+    from tranibor_api.security import mint_run_token
 
     item = await _item(client, project)
     run_id = await _run(item, "run-post-race")
@@ -208,11 +208,11 @@ async def test_a_result_posted_between_the_read_and_the_write_wins(
 ) -> None:
     """The runner writes first while the stop holds a stale copy of the run: the conditional update
     finds a result and the stop changes nothing (first writer wins), instead of overwriting it."""
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
-    from choregos_api.errors import ApiError
-    from choregos_api.rbac import Principal, Role
-    from choregos_api.services.run_cancel import cancel_run_now
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.errors import ApiError
+    from tranibor_api.rbac import Principal, Role
+    from tranibor_api.services.run_cancel import cancel_run_now
 
     item = await _item(client, project)
     run_id = await _run(item, "run-stop-race")
@@ -248,8 +248,8 @@ async def test_a_resumed_run_whose_result_was_reset_can_be_stopped(
     ORM writes that `None` as SQL `NULL` or as the JSON `null`, depending on the database: both mean
     "no result", and the stop's condition reads both so. Each is written here in SQL, so each case
     exists on SQLite and on PostgreSQL alike (`'null'` is a `jsonb` null there, a text one here)."""
-    from choregos_api.db.session import session_scope
     from sqlalchemy import text
+    from tranibor_api.db.session import session_scope
 
     item = await _item(client, project)
     run_id = await _run(item, f"run-stop-reset-{'sql' if sql_null else 'json'}", result=DONE)
@@ -270,7 +270,7 @@ async def test_a_resumed_run_whose_result_was_reset_can_be_stopped(
 async def test_stopping_a_work_item_stops_its_run_with_the_same_reason(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.temporal import FakeTemporal, get_temporal
+    from tranibor_api.temporal import FakeTemporal, get_temporal
 
     item = await _item(client, project)
     over = await _run(item, "run-item-1", status="failed", result={**DONE, "status": "failed"})

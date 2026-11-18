@@ -13,7 +13,7 @@ PATCH = "@@ -0,0 +1 @@\n+Invoices are queued."
 
 
 async def test_the_diff_reaches_the_documentation_gate(setup: Any) -> None:
-    from choregos_orchestrator.activities.gates import evaluate_gates
+    from tranibor_orchestrator.activities.gates import evaluate_gates
 
     payload = {"project_id": setup.project_id, "work_item_id": setup.work_item_id, "gates": [RULE]}
     setup.adapters.scm.set_diff(

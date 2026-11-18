@@ -27,9 +27,9 @@ async def _move(client: AsyncClient, to: str, slug: str = "onboarding-coordinato
 
 
 async def _resolve(project_id: str, slug: str = "onboarding-coordinator") -> Any:
-    from choregos_api.db.models import Project
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.agents import resolve_agent
+    from tranibor_api.db.models import Project
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.agents import resolve_agent
 
     async with session_scope() as session:
         project_row = await session.get(Project, project_id)
@@ -40,8 +40,8 @@ async def _resolve(project_id: str, slug: str = "onboarding-coordinator") -> Any
 async def _run(
     project_id: str, status: str, key: str = "BILLING-1", slug: str = "onboarding-coordinator"
 ) -> None:
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Run, WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         item = WorkItem(project_id=project_id, tracker_key=key, title="T", state="ready")
@@ -63,7 +63,7 @@ async def _run(
 async def test_a_draft_is_neither_pinned_nor_run_until_activated(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.services.agents import AgentUnavailable
+    from tranibor_api.services.agents import AgentUnavailable
 
     assert (await _create(client, lifecycle="draft"))["lifecycle"] == "draft"
     pin = await client.put(
@@ -95,7 +95,7 @@ async def test_a_deprecated_agent_still_runs_and_its_pin_warns(
 async def test_retiring_runs_its_checklist_and_refuses_new_runs(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.services.agents import AgentUnavailable
+    from tranibor_api.services.agents import AgentUnavailable
 
     await _create(client, kind="external")
     token = await client.post("/api/v1/me/tokens", json={"name": "claude-code", "scopes": ["mcp:read"]})
@@ -153,10 +153,10 @@ async def test_a_finished_run_does_not_hold_the_retirement(
 
 
 async def test_an_agent_unused_for_60_days_says_so(client: AsyncClient, project: dict[str, Any]) -> None:
-    from choregos_api.db.models import Agent
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
     from sqlalchemy import select
+    from tranibor_api.db.models import Agent
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
 
     await _create(client)
     assert (await client.get(f"{AGENTS}/onboarding-coordinator")).json()["unused"] is False, "new, not unused"
@@ -171,9 +171,9 @@ async def test_an_agent_unused_for_60_days_says_so(client: AsyncClient, project:
 
 
 async def test_ownership_moves_and_the_credentials_stay(client: AsyncClient, admin: str) -> None:
-    from choregos_api.db.models import Membership, Organization, User
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Membership, Organization, User
+    from tranibor_api.db.session import session_scope
 
     await _create(client, kind="external")
     token = await client.post("/api/v1/me/tokens", json={"name": "claude-code", "scopes": ["mcp:read"]})
@@ -206,9 +206,9 @@ async def test_ownership_moves_and_the_credentials_stay(client: AsyncClient, adm
 async def test_an_agent_that_never_served_is_deleted_with_its_versions_and_credentials(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.db.models import Agent, AgentCredential, AgentVersion
-    from choregos_api.db.session import session_scope
     from sqlalchemy import func, select
+    from tranibor_api.db.models import Agent, AgentCredential, AgentVersion
+    from tranibor_api.db.session import session_scope
 
     await _create(client, kind="external", lifecycle="draft")
     token = await client.post("/api/v1/me/tokens", json={"name": "claude-code", "scopes": ["mcp:read"]})
@@ -231,8 +231,8 @@ async def test_an_agent_that_never_served_is_deleted_with_its_versions_and_crede
 async def test_a_trial_run_does_not_count_as_having_served(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Run, WorkItem
+    from tranibor_api.db.session import session_scope
 
     await _create(client)
     async with session_scope() as session:
@@ -301,9 +301,9 @@ transitions:
 async def test_deleting_needs_the_right_to_manage_the_agent(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.db.models import Membership
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Membership
+    from tranibor_api.db.session import session_scope
 
     await _create(client)
     async with session_scope() as session:

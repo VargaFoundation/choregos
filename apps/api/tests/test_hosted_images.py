@@ -9,8 +9,8 @@ from typing import Any
 
 import pytest
 import structlog
-from choregos_adapters.fakes import FakeImageVerifier, FakeRegistryClient
 from httpx import AsyncClient
+from tranibor_adapters.fakes import FakeImageVerifier, FakeRegistryClient
 
 AGENTS = "/api/v1/orgs/northwind/agents"
 REF = "ghcr.io/acme/triager:1.2"
@@ -19,8 +19,8 @@ FORGED = "sha256:" + "f" * 64
 
 @pytest.fixture
 def registry(monkeypatch: pytest.MonkeyPatch) -> Iterator[tuple[FakeRegistryClient, FakeImageVerifier]]:
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.services.hosted_images import set_image_services
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.services.hosted_images import set_image_services
 
     monkeypatch.setenv("CHOREGOS_HOSTED_REGISTRIES", json.dumps(["ghcr.io/acme"]))
     reset_settings_cache()
@@ -32,7 +32,7 @@ def registry(monkeypatch: pytest.MonkeyPatch) -> Iterator[tuple[FakeRegistryClie
 
 
 def _cosign(monkeypatch: pytest.MonkeyPatch, mode: str) -> None:
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     monkeypatch.setenv("CHOREGOS_HOSTED_COSIGN", mode)
     reset_settings_cache()
@@ -201,8 +201,8 @@ async def test_under_enforce_cosigns_verdict_decides_the_publication(
     case: str,
     refusal: str | None,
 ) -> None:
-    from choregos_adapters.oci import CosignVerifier
-    from choregos_api.services.hosted_images import set_image_services
+    from tranibor_adapters.oci import CosignVerifier
+    from tranibor_api.services.hosted_images import set_image_services
 
     _cosign(monkeypatch, "enforce")
     verifier = CosignVerifier(
@@ -235,9 +235,9 @@ async def test_under_enforce_cosigns_verdict_decides_the_publication(
 async def test_the_deployment_names_the_signer_and_a_wrong_name_trusts_nothing(
     monkeypatch: pytest.MonkeyPatch, env: dict[str, str], expected: str | None
 ) -> None:
-    from choregos_adapters.oci import CosignVerifier, UnconfiguredVerifier
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.services.hosted_images import image_verifier, set_image_services
+    from tranibor_adapters.oci import CosignVerifier, UnconfiguredVerifier
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.services.hosted_images import image_verifier, set_image_services
 
     monkeypatch.setenv("CHOREGOS_FAKES", "0")
     for name, value in env.items():
@@ -260,9 +260,9 @@ async def test_the_deployment_names_the_signer_and_a_wrong_name_trusts_nothing(
 def test_the_deployment_decides_whether_the_transparency_log_is_checked(
     monkeypatch: pytest.MonkeyPatch, tlog: str, skipped: bool
 ) -> None:
-    from choregos_adapters.oci import CosignVerifier
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.services.hosted_images import image_verifier, set_image_services
+    from tranibor_adapters.oci import CosignVerifier
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.services.hosted_images import image_verifier, set_image_services
 
     monkeypatch.setenv("CHOREGOS_FAKES", "0")
     monkeypatch.setenv("CHOREGOS_HOSTED_COSIGN_KEY", "/etc/choregos/cosign/cosign.pub")
@@ -279,7 +279,7 @@ def test_the_deployment_decides_whether_the_transparency_log_is_checked(
 
 
 def _cluster(monkeypatch: pytest.MonkeyPatch, version: str) -> None:
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     monkeypatch.setenv("CHOREGOS_CLUSTER_VERSION", version)
     reset_settings_cache()

@@ -12,8 +12,8 @@ from typing import Any
 
 import pytest
 from alembic import command
-from choregos_core.publishing import PUBLISHING
 from httpx import ASGITransport, AsyncClient
+from tranibor_core.publishing import PUBLISHING
 
 # Shared fixtures of the kits: every test module of the directory can use them by name.
 from .kits.identity_seams import extended_client, identity_extension  # noqa: F401
@@ -42,11 +42,11 @@ SUITE_ON_POSTGRES = bool(os.environ.get("CHOREGOS_TEST_SUITE_ON_POSTGRES"))
 
 @pytest.fixture
 async def app(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[Any]:
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.db import session as db_session
-    from choregos_api.main import create_app
-    from choregos_api.services.github_app_credentials import forget_cache as forget_stored_github_app
-    from choregos_api.temporal import FakeTemporal, set_temporal
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.db import session as db_session
+    from tranibor_api.main import create_app
+    from tranibor_api.services.github_app_credentials import forget_cache as forget_stored_github_app
+    from tranibor_api.temporal import FakeTemporal, set_temporal
 
     if SUITE_ON_POSTGRES:
         os.environ["CHOREGOS_DATABASE_URL"] = _app_url(PG_URL)
@@ -90,8 +90,8 @@ async def client(app: Any) -> AsyncIterator[AsyncClient]:
 
 @pytest.fixture
 async def org(app: Any) -> str:
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         session.add(Organization(slug="northwind", name="Northwind"))
@@ -189,8 +189,8 @@ async def _prepare_postgres() -> None:
 
 
 async def _migrate() -> None:
-    """The schema through `python -m choregos_api.migrate`, the command of the chart's Job."""
-    from choregos_api.migrate import configuration
+    """The schema through `python -m tranibor_api.migrate`, the command of the chart's Job."""
+    from tranibor_api.migrate import configuration
 
     await asyncio.to_thread(command.upgrade, configuration(), "heads")
 
@@ -274,7 +274,7 @@ async def _fresh_postgres() -> None:
             await _administer(PG_URL, _EMPTY_EVERY_TABLE)
             return
     await _prepare_postgres()
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     reset_settings_cache()
     await _migrate()
@@ -286,17 +286,17 @@ async def _fresh_postgres() -> None:
 async def pg_app(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[Any]:
     """The application on a PostgreSQL migrated by Alembic (not `create_all`), as the
     non-superuser application role, emptied at the start."""
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.db import session as db_session
-    from choregos_api.main import create_app
-    from choregos_api.temporal import FakeTemporal, set_temporal
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.db import session as db_session
+    from tranibor_api.main import create_app
+    from tranibor_api.temporal import FakeTemporal, set_temporal
 
     monkeypatch.setenv("CHOREGOS_DATABASE_URL", _app_url(PG_URL))
     monkeypatch.setenv("CHOREGOS_OIDC_DEFAULT_ORG", "a")
     monkeypatch.setenv("CHOREGOS_DEV_ADMIN_EMAILS", "admin@a.test")
     reset_settings_cache()
     await db_session.dispose_engine()
-    # The schema is the one of `python -m choregos_api.migrate`, the chart Job's: this PostgreSQL bench
+    # The schema is the one of `python -m tranibor_api.migrate`, the chart Job's: this PostgreSQL bench
     # therefore proves the command that is deployed, not a test variant. The tables belong to the
     # application role: `FORCE ROW LEVEL SECURITY` therefore applies to it too.
     await _fresh_postgres()
@@ -315,7 +315,7 @@ async def pg_app(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[Any]:
 @pytest.fixture
 def github() -> Iterator[Any]:
     """A deployment that HAS a GitHub App, scriptable; reset around the test."""
-    from choregos_adapters.fakes.github_app import FakeGitHubApp
+    from tranibor_adapters.fakes.github_app import FakeGitHubApp
 
     fake = FakeGitHubApp.shared()
     fake.reset()

@@ -1,6 +1,6 @@
 """Test agent: raises, and returns a bad fact."""
 
-from choregos_agent_sdk import Context, Result, agent
+from tranibor_agent_sdk import Context, Result, agent
 
 
 @agent(name="raises")

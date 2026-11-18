@@ -1,6 +1,6 @@
 """The audit log is a hash chain the database keeps, and the API's role cannot change (S80-05, ADR 0182).
 
-PostgreSQL only (`CHOREGOS_TEST_DATABASE_URL`): the schema of `python -m choregos_api.migrate`, the
+PostgreSQL only (`CHOREGOS_TEST_DATABASE_URL`): the schema of `python -m tranibor_api.migrate`, the
 non-superuser role the API connects as, which OWNS the tables (as the chart's Job leaves them), under
 forced row-level security. The tampering is done as the superuser with the triggers off
 (`session_replication_role = replica`): what someone who holds the database itself can do, and what only
@@ -44,8 +44,8 @@ async def _fetch(query: str) -> list[tuple[Any, ...]]:
 @pytest.fixture
 async def orgs(pg_app: Any) -> dict[str, str]:
     """Organisations `a` and `b`: slug -> id."""
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         rows = [Organization(slug=slug, name=slug.upper()) for slug in ("a", "b")]
@@ -55,16 +55,16 @@ async def orgs(pg_app: Any) -> dict[str, str]:
 
 
 async def _write(scope: Any, org_id: str | None, action: str, **payload: Any) -> None:
-    from choregos_api.audit import record
-    from choregos_api.db.session import session_scope
+    from tranibor_api.audit import record
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs=scope) as session:
         await record(session, None, action, org_id=org_id, target_type="test", target_id=action, **payload)
 
 
 async def _verify(chain: str, label: str = "x", **kwargs: Any) -> Any:
-    from choregos_api.audit_chain import verify
-    from choregos_api.db.session import session_scope
+    from tranibor_api.audit_chain import verify
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         return await verify(session, chain, label, **kwargs)
@@ -73,7 +73,7 @@ async def _verify(chain: str, label: str = "x", **kwargs: Any) -> Any:
 async def test_postgres_hashes_an_entry_as_the_verifier_does(pg_app: Any) -> None:
     """The database's function and the verifier's code are two writings of ADR 0182's canonical form: they
     agree on an entry made to trip one of them (a null, a tab, an accent, quotes, a long number)."""
-    from choregos_api.audit_chain import GENESIS
+    from tranibor_api.audit_chain import GENESIS
 
     [(computed,)] = await _fetch(
         "SELECT choregos_audit_hash("
@@ -90,7 +90,7 @@ async def test_every_entry_is_linked_in_its_own_chain(
     """Whoever writes, through `audit.record`: each organisation's entries and the platform's form a chain
     of their own, 1, 2, 3..., that the verifier walks clean, two entries a page. A session bounded to `a`
     that writes a platform entry (a sign-in) links it to the platform's chain, which it cannot read back."""
-    from choregos_api import audit_chain
+    from tranibor_api import audit_chain
 
     monkeypatch.setattr(audit_chain, "PAGE", 2)
     for n in range(3):
@@ -115,7 +115,7 @@ async def test_the_api_role_cannot_update_delete_or_truncate_the_log(orgs: dict[
     """The plan's acceptance: a modification of the log by the API's role is refused. That role owns the
     tables (the chart's Job migrates as it): `UPDATE` and `TRUNCATE` are revoked from it, and a `DELETE`
     of an organisation that still exists is refused by the trigger."""
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.session import session_scope
 
     await _write(["a"], orgs["a"], "a.thing")
     for statement, refusal in (
@@ -141,8 +141,8 @@ async def test_the_trigger_refuses_an_update_even_when_the_privilege_is_granted_
 ) -> None:
     """Two locks, each enough alone: with `UPDATE` granted back to the API's role (a `GRANT` the
     application never sends), the trigger still refuses."""
-    from choregos_api.admin_cli import checkpoint_chains
-    from choregos_api.db.session import session_scope
+    from tranibor_api.admin_cli import checkpoint_chains
+    from tranibor_api.db.session import session_scope
 
     await _write(["a"], orgs["a"], "a.thing")
     await checkpoint_chains(["a"], False, new_key(), [])
@@ -161,8 +161,8 @@ async def test_an_organisation_deleted_takes_its_chain_and_leaves_the_others_int
 ) -> None:
     """The enterprise edition's end of life deletes an organisation (`DELETE /orgs/{org}`), its entries
     going with it by the foreign key, then writes a platform entry. The one `DELETE` the log lets through."""
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
 
     for slug in ("a", "b"):
         await _write([slug], orgs[slug], f"{slug}.thing")
@@ -171,7 +171,7 @@ async def test_an_organisation_deleted_takes_its_chain_and_leaves_the_others_int
         organisation = await session.get(Organization, orgs["b"])
         await session.delete(organisation)
         await session.flush()
-        from choregos_api.audit import record
+        from tranibor_api.audit import record
 
         await record(session, None, "org.delete", org_id=None, target_type="org", target_id=orgs["b"])
 
@@ -213,8 +213,8 @@ async def test_a_rewrite_with_every_hash_recomputed_is_seen_against_the_signed_c
     """Someone who holds the database rewrites entry 2 and recomputes every hash after it and the head,
     with the database's own function: the chain walks clean, and only the checkpoint signed before, with a
     key the database does not hold, sees it."""
-    from choregos_api.admin_cli import checkpoint_chains, verify_chains
-    from choregos_api.config import ed25519_public_key
+    from tranibor_api.admin_cli import checkpoint_chains, verify_chains
+    from tranibor_api.config import ed25519_public_key
 
     for n in range(3):
         await _write(["a"], orgs["a"], "a.thing", n=n)
@@ -259,7 +259,7 @@ def _anchor_file(line: dict[str, Any]) -> Any:
 
 
 async def test_a_checkpoint_stored_in_the_database_sees_a_rewrite_that_left_it(orgs: dict[str, str]) -> None:
-    from choregos_api.admin_cli import checkpoint_chains
+    from tranibor_api.admin_cli import checkpoint_chains
 
     for n in range(3):
         await _write(["a"], orgs["a"], "a.thing", n=n)
@@ -278,8 +278,8 @@ async def test_a_checkpoint_stored_in_the_database_sees_a_rewrite_that_left_it(o
 async def test_concurrent_writers_keep_one_chain(orgs: dict[str, str]) -> None:
     """Twenty transactions write to the same organisation at once, each holding its transaction open after
     its insert: the head's lock puts them in a line, and the chain has twenty places, none twice."""
-    from choregos_api.audit import record
-    from choregos_api.db.session import session_scope
+    from tranibor_api.audit import record
+    from tranibor_api.db.session import session_scope
 
     async def writer(n: int) -> None:
         async with session_scope(orgs=["a"]) as session:
@@ -301,9 +301,9 @@ async def test_concurrent_writers_keep_one_chain(orgs: dict[str, str]) -> None:
 async def test_checkpoints_are_read_like_the_log_and_written_by_the_platform_only(
     orgs: dict[str, str],
 ) -> None:
-    from choregos_api.admin_cli import checkpoint_chains
-    from choregos_api.db.models import AuditCheckpoint
-    from choregos_api.db.session import session_scope
+    from tranibor_api.admin_cli import checkpoint_chains
+    from tranibor_api.db.models import AuditCheckpoint
+    from tranibor_api.db.session import session_scope
 
     for slug in ("a", "b"):
         await _write([slug], orgs[slug], f"{slug}.thing")
@@ -323,8 +323,8 @@ async def test_checkpoints_are_read_like_the_log_and_written_by_the_platform_onl
 async def test_a_rotation_signs_on_top_only_of_the_keys_it_is_told_to_trust(orgs: dict[str, str]) -> None:
     """After a rotation, the new key does not sign over a checkpoint of the former one unless the former one
     is named (`--trust`): nothing is ever signed on top of a checkpoint someone else made."""
-    from choregos_api.admin_cli import checkpoint_chains
-    from choregos_api.config import ed25519_public_key
+    from tranibor_api.admin_cli import checkpoint_chains
+    from tranibor_api.config import ed25519_public_key
 
     former, current = new_key(), new_key()
     await _write(["a"], orgs["a"], "a.thing")
@@ -345,9 +345,9 @@ BEFORE = "e7b9d1f3a5c8"
 async def test_the_migration_chains_the_history_that_exists(monkeypatch: pytest.MonkeyPatch) -> None:
     """Entries written before the chain existed are chained once by the upgrade, as the API's role under
     forced row-level security, with a genesis checkpoint per chain; the next entry follows them."""
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.db import session as db_session
-    from choregos_api.migrate import configuration
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.db import session as db_session
+    from tranibor_api.migrate import configuration
 
     await _prepare_postgres()
     monkeypatch.setenv("CHOREGOS_DATABASE_URL", _app_url(PG_URL))

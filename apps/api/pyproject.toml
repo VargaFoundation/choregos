@@ -1,15 +1,15 @@
 [project]
-name = "choregos-api"
+name = "tranibor-api"
 version = "0.27.13"
 description = "API Choregos (FastAPI)"
 requires-python = ">=3.12,<3.13"
 license = { text = "Apache-2.0" }
 dependencies = [
-    # Spans (ADR 0018): `choregos_core.telemetry` needs the extra.
-    "choregos-core[telemetry]",
+    # Spans (ADR 0018): `tranibor_core.telemetry` needs the extra.
+    "tranibor-core[telemetry]",
     # The Temporal connection every client and worker shares (ADR 0183).
-    "choregos-core[temporal]",
-    "choregos-adapters",
+    "tranibor-core[temporal]",
+    "tranibor-adapters",
     "fastapi>=0.115",
     "uvicorn[standard]>=0.32",
     "sqlalchemy[asyncio]>=2.0",
@@ -37,12 +37,12 @@ dependencies = [
 ]
 
 [project.scripts]
-choregos-api = "choregos_api.main:main"
-choregos-admin = "choregos_api.admin_cli:main"
+choregos-api = "tranibor_api.main:main"
+choregos-admin = "tranibor_api.admin_cli:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/choregos_api"]
+packages = ["src/tranibor_api"]

@@ -15,8 +15,8 @@ from httpx import AsyncClient
 
 
 async def _running_run(project: dict[str, Any]) -> str:
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Run, WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         item = WorkItem(project_id=project["id"], tracker_key="ACME-7", title="A fix", state="planned")
@@ -36,8 +36,8 @@ async def _running_run(project: dict[str, Any]) -> str:
 
 
 def _run_token(run_id: str) -> dict[str, str]:
-    from choregos_api.config import get_settings
-    from choregos_api.security import mint_run_token
+    from tranibor_api.config import get_settings
+    from tranibor_api.security import mint_run_token
 
     token = mint_run_token(
         run_id, project_slug="billing-api", work_item_key="ACME-7", ttl_minutes=5, settings=get_settings()

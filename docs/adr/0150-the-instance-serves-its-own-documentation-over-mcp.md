@@ -1,7 +1,7 @@
 # 0150 — The instance serves its own documentation over its MCP door
 
 - **Status**: accepted, 2026-11-11
-- **Concerns**: `docker/api.Dockerfile` (stage `docs`), `apps/api/src/choregos_api/mcp/docs.py`, the
+- **Concerns**: `docker/api.Dockerfile` (stage `docs`), `apps/api/src/tranibor_api/mcp/docs.py`, the
   MCP door's tools (`docs_search`, `docs_read`), the settings `CHOREGOS_DOCS_DIR` and
   `CHOREGOS_DOCS_URL`; extends [ADR 0030](0030-an-mcp-door-for-external-clients.md) §4
 

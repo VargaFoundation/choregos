@@ -196,7 +196,7 @@ one can be restored as the next.
 
 ## Part 2: an agent written in Python, with the agent SDK
 
-When the behaviour is a program rather than instructions, write it in Python. `choregos-agent-sdk` is
+When the behaviour is a program rather than instructions, write it in Python. `tranibor-agent-sdk` is
 not a framework: it connects a program, written with any framework or none, to the platform's
 guarantees. The runner starts your program, every tool call and every file it writes asks the runner's
 permission first, every model call counts against the step's `max_turns` and the run's budget, and its
@@ -205,7 +205,7 @@ result is checked like any agent's.
 ### 1. Write it
 
 ```shell
-pip install ./choregos_agent_sdk-0.27.13-py3-none-any.whl ./choregos_contracts-0.27.13-py3-none-any.whl
+pip install ./tranibor_agent_sdk-0.27.13-py3-none-any.whl ./tranibor_contracts-0.27.13-py3-none-any.whl
 ```
 
 The SDK's wheel and the contracts it validates against are attached to each
@@ -213,7 +213,7 @@ The SDK's wheel and the contracts it validates against are attached to each
 instance.
 
 ```python
-from choregos_agent_sdk import Context, Result, agent
+from tranibor_agent_sdk import Context, Result, agent
 
 
 @agent(name="ticket-triager")

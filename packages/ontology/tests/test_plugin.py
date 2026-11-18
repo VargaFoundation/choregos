@@ -2,7 +2,7 @@
 """The ontology plugged into the Choregos core as a plugin (trial, items 2 and 3).
 
 The plugin is installed as `pip` would: a `.dist-info` that declares its two entry points, found by
-`importlib.metadata`. `create_app()` loads it — not the test — and `python -m choregos_api.migrate`
+`importlib.metadata`. `create_app()` loads it — not the test — and `python -m tranibor_api.migrate`
 plays its migration branch.
 
 What these tests prove: uploading a package, the idempotent synchronisation of an observations NDJSON
@@ -206,8 +206,8 @@ async def test_a_reader_does_not_synchronise(
 
 async def _seed(project_id: str) -> None:
     """Hosts and services, put in the database as a synchronisation would (not written yet)."""
-    from choregos_api.db.session import session_scope
-    from choregos_ontology.service.store import ManagedObject
+    from tranibor_api.db.session import session_scope
+    from tranibor_ontology.service.store import ManagedObject
 
     objects = [
         ("host", "node-1", {"id": "node-1", "name": "node-1", "os": "ubuntu", "ip": "10.0.0.11"}),
@@ -264,8 +264,8 @@ async def test_the_run_sees_the_generated_tools_the_trial_can_serve(
 
 
 def test_every_served_kind_declares_its_result_cap() -> None:
-    from choregos_ontology.mcpgen import MAX_SEARCH_LIMIT
-    from choregos_ontology.service.tools import RESULT_CAPS, SERVED_KINDS
+    from tranibor_ontology.mcpgen import MAX_SEARCH_LIMIT
+    from tranibor_ontology.service.tools import RESULT_CAPS, SERVED_KINDS
 
     assert set(RESULT_CAPS) == SERVED_KINDS, "a kind without a cap falls back to the deployment's default"
     assert all(isinstance(cap, int) and cap >= 1024 for cap in RESULT_CAPS.values()), "the core refuses less"
@@ -277,8 +277,8 @@ async def test_a_full_page_of_hosts_reaches_the_agent_whole(
 ) -> None:
     """A page of 100 hosts weighs about 130 KiB: past the core's 64 KiB default it would be cut, its
     `next_cursor` lost; the plugin's declared cap keeps it whole (S40-17c)."""
-    from choregos_api.db.session import session_scope
-    from choregos_ontology.service.store import ManagedObject
+    from tranibor_api.db.session import session_scope
+    from tranibor_ontology.service.store import ManagedObject
 
     async with session_scope() as session:
         for n in range(100):
@@ -299,10 +299,10 @@ async def test_a_full_page_of_hosts_reaches_the_agent_whole(
 async def test_the_agent_reads_the_findings_and_a_host_through_the_tools(
     client: AsyncClient, infra_run: dict[str, str]
 ) -> None:
-    from choregos_api.db.models import CostLedger, Event
-    from choregos_api.db.session import session_scope
-    from choregos_contracts import EventType
     from sqlalchemy import select
+    from tranibor_api.db.models import CostLedger, Event
+    from tranibor_api.db.session import session_scope
+    from tranibor_contracts import EventType
 
     open_findings = await _call(
         client,
@@ -385,8 +385,8 @@ async def test_the_run_of_another_project_sees_only_its_own_objects(
 
 async def test_through_the_agents_mcp_server(app: Any, infra_run: dict[str, str]) -> None:
     """The agent's path: `choregos-tools` (the runner's MCP server) relays to the internal API."""
-    from choregos_tools_mcp.client import InternalClient
-    from choregos_tools_mcp.server import McpServer
+    from tranibor_tools_mcp.client import InternalClient
+    from tranibor_tools_mcp.server import McpServer
 
     internal = InternalClient("http://test/api/v1/internal", "run-infra-1", "unused")
     await internal.aclose()
@@ -422,9 +422,9 @@ def test_the_plugin_branch_creates_its_tables_and_goes_down_alone(
     plugin: None, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from alembic.script import ScriptDirectory
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.migrate import configuration, main
     from sqlalchemy import create_engine, inspect, text
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.migrate import configuration, main
 
     database = tmp_path / "migrated.db"
     monkeypatch.setenv("CHOREGOS_DATABASE_URL", f"sqlite+aiosqlite:///{database}")
@@ -484,12 +484,12 @@ def test_onto0003_copies_the_proposals_into_the_actions_then_drops_the_table(
     is closed, and says so (S20-08)."""
     import json
 
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.db.models import Organization
-    from choregos_api.migrate import main
-    from choregos_ontology.service.store import OntologyVersion
     from sqlalchemy import create_engine, inspect, text
     from sqlalchemy.orm import Session
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.db.models import Organization
+    from tranibor_api.migrate import main
+    from tranibor_ontology.service.store import OntologyVersion
 
     database = tmp_path / "onto0003.db"
     monkeypatch.setenv("CHOREGOS_DATABASE_URL", f"sqlite+aiosqlite:///{database}")
@@ -548,9 +548,9 @@ async def test_without_activation_the_plugin_is_inert(monkeypatch: pytest.Monkey
     """Shipped in every image, the plugin does nothing until `CHOREGOS_ONTOLOGY_TRIAL` is set."""
     import os
 
-    from choregos_api.extensions import declared_routers, reset
-    from choregos_api.main import create_app
-    from choregos_ontology.service.plugin import MIGRATIONS
+    from tranibor_api.extensions import declared_routers, reset
+    from tranibor_api.main import create_app
+    from tranibor_ontology.service.plugin import MIGRATIONS
 
     monkeypatch.delenv("CHOREGOS_ONTOLOGY_TRIAL", raising=False)
     reset()
@@ -566,9 +566,9 @@ async def test_without_activation_the_plugin_is_inert(monkeypatch: pytest.Monkey
 
 
 def test_without_activation_no_plugin_table(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.migrate import main
     from sqlalchemy import create_engine, inspect
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.migrate import main
 
     monkeypatch.delenv("CHOREGOS_ONTOLOGY_TRIAL", raising=False)
     database = tmp_path / "without-plugin.db"
@@ -588,7 +588,7 @@ def test_without_activation_no_plugin_table(tmp_path: pathlib.Path, monkeypatch:
 def test_former_activation_variable_has_no_effect(monkeypatch: pytest.MonkeyPatch) -> None:
     """`CHOREGOS_ONTOLOGY_TRIAL=1` activates the ontology extension; the former variable, removed in
     0.24.0 (S45-49), activates nothing."""
-    from choregos_ontology.service import plugin as module
+    from tranibor_ontology.service import plugin as module
 
     former = "CHOREGOS_ESSAI_ONTOLOGIE"  # lang: fr-ok - removed, asserted gone
     monkeypatch.delenv("CHOREGOS_ONTOLOGY_TRIAL", raising=False)

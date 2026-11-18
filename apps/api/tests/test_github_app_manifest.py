@@ -52,7 +52,7 @@ PEM = _pem()
 @pytest.fixture(autouse=True)
 def instance(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """An instance with its own URLs and a secrets key; no App in the deployment's settings."""
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     monkeypatch.setenv("CHOREGOS_PUBLIC_URL", PUBLIC_URL)
     monkeypatch.setenv("CHOREGOS_API_URL", API_URL)
@@ -70,7 +70,7 @@ def instance(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 
 @pytest.fixture
 def conversion() -> Iterator[Any]:
-    from choregos_adapters.fakes.github_app import FakeManifestConversion
+    from tranibor_adapters.fakes.github_app import FakeManifestConversion
 
     fake = FakeManifestConversion.shared()
     fake.reset()
@@ -79,7 +79,7 @@ def conversion() -> Iterator[Any]:
 
 
 def _settings_again() -> None:
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     reset_settings_cache()
 
@@ -113,18 +113,18 @@ async def _create(client: AsyncClient, conversion: Any, *, code: str = "c0de", *
 
 
 async def _rows() -> list[Any]:
-    from choregos_api.db.models import GitHubAppRegistration
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import GitHubAppRegistration
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         return list((await session.execute(select(GitHubAppRegistration))).scalars())
 
 
 async def _audit(action: str) -> list[Any]:
-    from choregos_api.db.models import AuditLog
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import AuditLog
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         return list((await session.execute(select(AuditLog).where(AuditLog.action == action))).scalars())
@@ -136,7 +136,7 @@ async def _audit(action: str) -> list[Any]:
 async def test_the_manifest_asks_for_what_the_adapters_use_and_points_at_this_instance(
     client: AsyncClient, admin: str
 ) -> None:
-    from choregos_adapters.github import APP_EVENTS, APP_PERMISSIONS
+    from tranibor_adapters.github import APP_EVENTS, APP_PERMISSIONS
 
     start = await _start(client, name="Tranibor acme", public=True, webhook_active=False)
     manifest = start["manifest"]
@@ -167,7 +167,7 @@ async def test_public_or_private_is_an_explicit_choice(client: AsyncClient, admi
 
 
 async def test_the_status_says_what_a_new_app_would_get(client: AsyncClient, admin: str) -> None:
-    from choregos_adapters.github import APP_EVENTS, APP_PERMISSIONS
+    from tranibor_adapters.github import APP_EVENTS, APP_PERMISSIONS
 
     response = await client.get("/api/v1/platform/github-app")
     assert response.status_code == 200, response.text
@@ -210,7 +210,7 @@ async def test_the_deployments_app_wins_and_the_console_creates_none(
 async def test_without_a_secrets_key_nothing_is_started_and_the_code_is_not_spent(
     client: AsyncClient, admin: str, conversion: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.services.github_app_manifest import sign_state
+    from tranibor_api.services.github_app_manifest import sign_state
 
     monkeypatch.delenv("CHOREGOS_SECRETS_KEKS")
     refused = await client.post("/api/v1/platform/github-app/manifest", json={"name": "x", "public": False})
@@ -229,8 +229,8 @@ async def test_without_a_secrets_key_nothing_is_started_and_the_code_is_not_spen
 async def test_a_state_that_is_not_this_persons_is_refused(
     client: AsyncClient, admin: str, conversion: Any, case: str
 ) -> None:
-    from choregos_api.security import sign_session
-    from choregos_api.services.github_app_manifest import sign_state
+    from tranibor_api.security import sign_session
+    from tranibor_api.services.github_app_manifest import sign_state
 
     if case == "forged":
         state = sign_session({"u": admin, "p": False, "exp": time.time() + 600}, purpose="session")
@@ -270,8 +270,8 @@ async def test_without_a_session_the_callback_sends_the_browser_to_sign_in(
 async def test_the_app_is_sealed_stored_audited_and_shown(
     client: AsyncClient, admin: str, conversion: Any
 ) -> None:
-    from choregos_api.secret_store import active_key_wrapper
-    from choregos_api.services.github_app_credentials import open_registration
+    from tranibor_api.secret_store import active_key_wrapper
+    from tranibor_api.services.github_app_credentials import open_registration
 
     response = await _create(client, conversion)
     assert response.status_code == 302, response.text
@@ -314,9 +314,9 @@ async def test_the_app_is_sealed_stored_audited_and_shown(
 async def test_the_stored_app_is_the_app_of_every_reader(
     client: AsyncClient, project: dict[str, Any], conversion: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_adapters import builtins
-    from choregos_adapters.github import GitHubApp, GitHubAppAuth, InstallationToken, app_credentials
-    from choregos_api.services import github_app as svc
+    from tranibor_adapters import builtins
+    from tranibor_adapters.github import GitHubApp, GitHubAppAuth, InstallationToken, app_credentials
+    from tranibor_api.services import github_app as svc
 
     assert (await _create(client, conversion)).status_code == 302
 
@@ -365,8 +365,8 @@ async def test_the_stored_app_is_the_app_of_every_reader(
 async def test_the_deployments_settings_win_over_a_stored_app(
     client: AsyncClient, admin: str, conversion: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_adapters.github import app_credentials
-    from choregos_api.services import github_app_credentials as credentials
+    from tranibor_adapters.github import app_credentials
+    from tranibor_api.services import github_app_credentials as credentials
 
     assert (await _create(client, conversion)).status_code == 302
     monkeypatch.setenv("CHOREGOS_GITHUB_APP_ID", "999")
@@ -384,7 +384,7 @@ async def test_the_deployments_settings_win_over_a_stored_app(
 async def test_a_stored_app_is_forgotten_and_audited(
     client: AsyncClient, admin: str, conversion: Any
 ) -> None:
-    from choregos_api.services import github_app_credentials as credentials
+    from tranibor_api.services import github_app_credentials as credentials
 
     assert (await _create(client, conversion)).status_code == 302
     forgotten = await client.delete("/api/v1/platform/github-app")
@@ -400,8 +400,8 @@ async def test_a_stored_app_is_forgotten_and_audited(
 async def test_a_key_rotation_moves_the_stored_app_to_the_new_key(
     client: AsyncClient, admin: str, conversion: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.db.session import session_scope
-    from choregos_api.services import github_app_credentials as credentials
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services import github_app_credentials as credentials
 
     assert (await _create(client, conversion)).status_code == 302
     monkeypatch.setenv("CHOREGOS_SECRETS_KEKS", f"{KEY_2},{KEY_1}")
@@ -420,8 +420,8 @@ async def test_under_the_fakes_a_stored_app_configures_the_fake(
     client: AsyncClient, admin: str, conversion: Any
 ) -> None:
     """The demo: after the flow, the console's GitHub screens see an App (the scriptable fake)."""
-    from choregos_adapters.fakes.github_app import FakeGitHubApp
-    from choregos_api.services import github_app as svc
+    from tranibor_adapters.fakes.github_app import FakeGitHubApp
+    from tranibor_api.services import github_app as svc
 
     FakeGitHubApp.shared().reset()
     assert svc.get_github_app() is None

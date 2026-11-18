@@ -11,10 +11,10 @@ from typing import Any
 
 import httpx
 import pytest
-from choregos_adapters.errors import ConfigurationError, UpstreamError
-from choregos_adapters.executor.aca import AcaExecutor, AzureArmClient
-from choregos_contracts import ExecutorKind
-from choregos_core.domain import ExecRef, StageJobSpec
+from tranibor_adapters.errors import ConfigurationError, UpstreamError
+from tranibor_adapters.executor.aca import AcaExecutor, AzureArmClient
+from tranibor_contracts import ExecutorKind
+from tranibor_core.domain import ExecRef, StageJobSpec
 
 SUB = "00000000-0000-0000-0000-000000000000"
 RG = "rg-choregos"

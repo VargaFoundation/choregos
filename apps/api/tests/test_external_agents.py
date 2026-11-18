@@ -134,9 +134,9 @@ async def test_a_token_of_someone_outside_the_organisation_cannot_be_attached(
     client: AsyncClient, admin: str
 ) -> None:
     """Finding #1520: knowing a token's id is not enough to bind it to an agent of another organisation."""
-    from choregos_api.db.models import ApiToken, User
-    from choregos_api.db.session import session_scope
-    from choregos_api.security import generate_api_token
+    from tranibor_api.db.models import ApiToken, User
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.security import generate_api_token
 
     await _external_agent(client, None)
     async with session_scope(orgs="*") as session:
@@ -172,9 +172,9 @@ async def test_an_internal_agent_carries_no_client(client: AsyncClient, admin: s
 
 async def test_an_oauth_client_embodies_its_agent(client: AsyncClient, admin: str) -> None:
     """The OAuth path (S15-08): the token's `azp` designates the attached client."""
-    from choregos_api.db.session import session_scope
-    from choregos_api.mcp.caller import Caller, act_as_agent
-    from choregos_api.rbac import Principal
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.mcp.caller import Caller, act_as_agent
+    from tranibor_api.rbac import Principal
 
     await _external_agent(client, ["list_projects"])
     attached = await client.post(

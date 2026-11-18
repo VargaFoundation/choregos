@@ -3,7 +3,7 @@
 > **Amended by [ADR 0186](0186-the-publisher-is-graal-systems-sas.md)** (2026-11-18): the publisher is GRAAL.SYSTEMS SAS and the product no longer names the Varga Foundation; the text below is kept as the history of the earlier decision.
 
 - **Status**: accepted, 2026-11-12; S69-01 implements it
-- **Concerns**: `packages/core/src/choregos_core/publishing.json` and `publishing.py`,
+- **Concerns**: `packages/core/src/tranibor_core/publishing.json` and `publishing.py`,
   `apps/web/src/lib/publishing.{json,ts}`, `tools/publishing_identity.py` (`make publishing-check`,
   `make publishing-rewrite`), and every file it lists: the charts' defaults, `infra/`, the workflows,
   `CODEOWNERS`, the Dockerfiles and compose files, the plugin lock, the documentation
@@ -28,7 +28,7 @@ The core names no operator, and the place it is published from is configuration,
 
 ## Decision
 
-1. **One definition.** `packages/core/src/choregos_core/publishing.json` holds eight values: `owner`,
+1. **One definition.** `packages/core/src/tranibor_core/publishing.json` holds eight values: `owner`,
    `registry`, `source_repository`, `documentation`, `security_contact`, `commit_email`,
    `plugin_repository`, `plugin_index`. It ships in the core's wheel and in the CLI binary (Nuitka
    includes `choregos_core`'s data). Each value is distinct, non-empty, without a trailing slash.

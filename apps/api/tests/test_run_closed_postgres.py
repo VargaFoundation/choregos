@@ -27,9 +27,9 @@ pytestmark = [without_postgres, pytest.mark.asyncio]
 
 
 async def _a_project() -> dict[str, Any]:
-    from choregos_api.db.models import Organization, Project
-    from choregos_api.db.session import session_scope
-    from choregos_api.services import ensure_defaults
+    from tranibor_api.db.models import Organization, Project
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services import ensure_defaults
 
     async with session_scope(orgs="*") as session:
         organisation = Organization(slug="a", name="A")
@@ -66,10 +66,10 @@ async def _waiting_for_a_lock() -> int:
 
 
 async def test_a_result_posted_while_the_run_is_being_closed_waits_and_changes_nothing(pg_app: Any) -> None:
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
-    from choregos_contracts import StageResult
-    from choregos_core.run_closure import close_run
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
+    from tranibor_contracts import StageResult
+    from tranibor_core.run_closure import close_run
 
     project = await _a_project()
     run_id = await a_run(project)

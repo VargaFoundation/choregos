@@ -45,14 +45,14 @@ async def setup(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator
         os.environ["CHOREGOS_DATABASE_URL"] = pg_kit.app_url(PG_URL)
     else:
         os.environ["CHOREGOS_DATABASE_URL"] = f"sqlite+aiosqlite:///{tmp_path}/orch.db"
-    from choregos_adapters import AdapterSet
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.db import session as db_session
-    from choregos_api.db.models import Organization, Project, WorkItem
-    from choregos_api.services import ensure_defaults
-    from choregos_orchestrator.activities.base import set_adapters_override
-    from choregos_orchestrator.config import reset_settings_cache as reset_orchestrator_cache
-    from choregos_orchestrator.train_client import clear_fake_signals
+    from tranibor_adapters import AdapterSet
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.db import session as db_session
+    from tranibor_api.db.models import Organization, Project, WorkItem
+    from tranibor_api.services import ensure_defaults
+    from tranibor_orchestrator.activities.base import set_adapters_override
+    from tranibor_orchestrator.config import reset_settings_cache as reset_orchestrator_cache
+    from tranibor_orchestrator.train_client import clear_fake_signals
 
     reset_settings_cache()
     reset_orchestrator_cache()
@@ -139,7 +139,7 @@ async def setup(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator
 
 
 def _fake_item(key: str, title: str) -> Any:
-    from choregos_core.domain import WorkItemData
+    from tranibor_core.domain import WorkItemData
 
     return WorkItemData(key=key, title=title, state="Todo")
 
@@ -166,9 +166,9 @@ def worker_factory(temporal_env: Any) -> Any:
     dev tenant, `start_run` ran on `orchestrator` while the network policy opened the Kubernetes API
     to `executor` only: the Job was never created.
     """
-    from choregos_orchestrator.activities import ALL_ACTIVITIES
-    from choregos_orchestrator.testing import workers_by_queue
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS, WORKFLOW_ACTIVITIES
+    from tranibor_orchestrator.activities import ALL_ACTIVITIES
+    from tranibor_orchestrator.testing import workers_by_queue
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS, WORKFLOW_ACTIVITIES
 
     def factory(task_queue: str = "test", **kwargs: Any) -> Any:
         return workers_by_queue(
@@ -184,7 +184,7 @@ def worker_factory(temporal_env: Any) -> Any:
 
 def stage_result(summary: str = "done", **kwargs: Any) -> Any:
     """A credible stage result: complete evidence, scope respected."""
-    from choregos_contracts import Evidence, StageResult, StageStatus
+    from tranibor_contracts import Evidence, StageResult, StageStatus
 
     payload: dict[str, Any] = {
         "status": StageStatus.DONE,

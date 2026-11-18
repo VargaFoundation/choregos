@@ -5,15 +5,15 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from choregos_adapters.errors import ConfigurationError, UnsupportedClusterError, UpstreamError
-from choregos_adapters.executor.aca import AcaExecutor
-from choregos_adapters.executor.agent_sandbox import AgentSandboxExecutor
-from choregos_adapters.executor.k8s_job import AGENT_CONTAINER, HOSTED_WORKSPACE_VOLUME, KubernetesJobExecutor
-from choregos_adapters.executor.routing import RoutingExecutor
-from choregos_adapters.executor.tekton import TektonExecutor
-from choregos_adapters.fakes.executor import FakeExecutor
-from choregos_contracts import ExecutorKind
-from choregos_core.domain import AgentContainer, StageJobSpec
+from tranibor_adapters.errors import ConfigurationError, UnsupportedClusterError, UpstreamError
+from tranibor_adapters.executor.aca import AcaExecutor
+from tranibor_adapters.executor.agent_sandbox import AgentSandboxExecutor
+from tranibor_adapters.executor.k8s_job import AGENT_CONTAINER, HOSTED_WORKSPACE_VOLUME, KubernetesJobExecutor
+from tranibor_adapters.executor.routing import RoutingExecutor
+from tranibor_adapters.executor.tekton import TektonExecutor
+from tranibor_adapters.fakes.executor import FakeExecutor
+from tranibor_contracts import ExecutorKind
+from tranibor_core.domain import AgentContainer, StageJobSpec
 
 POOL = "harbor.example/choregos-runner:0.19.0"
 IMAGE = "ghcr.io/acme/triager:1@sha256:" + "a" * 64

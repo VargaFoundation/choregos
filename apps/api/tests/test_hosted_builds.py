@@ -11,11 +11,11 @@ from collections.abc import Iterator
 from typing import Any
 
 import pytest
-from choregos_adapters.fakes import FakeImageBuilder
-from choregos_adapters.fakes.storage import FakeObjectStore
 from httpx import AsyncClient
 from temporalio.exceptions import ApplicationError
 from temporalio.testing import ActivityEnvironment
+from tranibor_adapters.fakes import FakeImageBuilder
+from tranibor_adapters.fakes.storage import FakeObjectStore
 
 from .test_hosted_sources import AGENT, AGENT_ZIP, ORG, _create, _runtime, _upload, _zip
 
@@ -26,7 +26,7 @@ THIRD_ZIP = _zip({"main.py": AGENT + "# the third one\n", "requirements.txt": "h
 
 @pytest.fixture
 def store() -> Iterator[FakeObjectStore]:
-    from choregos_api.object_store import use_object_store
+    from tranibor_api.object_store import use_object_store
 
     fake = FakeObjectStore()
     use_object_store(fake)
@@ -36,8 +36,8 @@ def store() -> Iterator[FakeObjectStore]:
 
 @pytest.fixture
 def builder(monkeypatch: pytest.MonkeyPatch) -> Iterator[FakeImageBuilder]:
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.services.hosted_builds import set_image_builder
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.services.hosted_builds import set_image_builder
 
     monkeypatch.setenv("CHOREGOS_HOSTED_BUILD_REPOSITORY", REPOSITORY)
     reset_settings_cache()
@@ -50,7 +50,7 @@ def builder(monkeypatch: pytest.MonkeyPatch) -> Iterator[FakeImageBuilder]:
 
 def _builds() -> dict[str, dict[str, Any]]:
     """The `HostedImageBuild` workflows publication started, by id."""
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.temporal import get_temporal
 
     started: dict[str, dict[str, Any]] = get_temporal().started  # type: ignore[attr-defined]
     return {wid: payload for wid, payload in started.items() if wid.startswith("hosted-build-")}
@@ -58,7 +58,7 @@ def _builds() -> dict[str, dict[str, Any]]:
 
 async def _run(payload: dict[str, Any]) -> dict[str, Any]:
     """What `HostedImageBuild` does: claim, build, record the outcome."""
-    from choregos_orchestrator.activities.hosted_build import (
+    from tranibor_orchestrator.activities.hosted_build import (
         build_hosted_image,
         claim_hosted_build,
         record_hosted_build,
@@ -124,7 +124,7 @@ async def test_a_version_with_the_same_zip_starts_nothing_and_reaches_production
     sha256 = (await _upload(client)).json()["sha256"]
     await _create(client, _runtime(sha256))
     await _run(next(iter(_builds().values())))
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.temporal import get_temporal
 
     get_temporal().started.clear()  # type: ignore[attr-defined]
     await _save(client, sha256, 2)
@@ -137,7 +137,7 @@ async def test_a_version_with_the_same_zip_starts_nothing_and_reaches_production
 async def test_a_build_replayed_after_it_was_recorded_changes_nothing(
     client: AsyncClient, admin: str, store: FakeObjectStore, builder: FakeImageBuilder
 ) -> None:
-    from choregos_orchestrator.activities.hosted_build import build_hosted_image, record_hosted_build
+    from tranibor_orchestrator.activities.hosted_build import build_hosted_image, record_hosted_build
 
     sha256 = (await _upload(client)).json()["sha256"]
     await _create(client, _runtime(sha256))
@@ -208,7 +208,7 @@ async def test_a_failed_build_says_why_and_a_new_publication_tries_again(
     await _save(client, sha256, 2)
     retry = _payload_for(key, attempt=2)
     assert (await _build_of(client, 1))["status"] == "pending", "the build is tried again for both"
-    from choregos_orchestrator.activities.hosted_build import claim_hosted_build
+    from tranibor_orchestrator.activities.hosted_build import claim_hosted_build
 
     stale = await ActivityEnvironment().run(claim_hosted_build, _payload_for(key, attempt=1))
     assert stale["status"] == "superseded", "the first attempt, replayed, builds nothing"
@@ -223,7 +223,7 @@ async def test_a_deployment_without_a_build_repository_fails_the_build_with_the_
     builder: FakeImageBuilder,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     monkeypatch.setenv("CHOREGOS_HOSTED_BUILD_REPOSITORY", "")
     reset_settings_cache()
@@ -235,7 +235,7 @@ async def test_a_deployment_without_a_build_repository_fails_the_build_with_the_
 
 
 def test_only_a_zip_version_has_a_build() -> None:
-    from choregos_api.services.hosted_builds import zip_build_key
+    from tranibor_api.services.hosted_builds import zip_build_key
 
     image = {"type": "image", "ref": "ghcr.io/acme/triager:1", "digest": "sha256:" + "c" * 64}
     assert zip_build_key({"runtime": {"kind": "hosted", "source": image}}) is None
@@ -244,9 +244,9 @@ def test_only_a_zip_version_has_a_build() -> None:
 
 
 def test_the_deployment_hands_buildkit_its_address_and_tls_directory(monkeypatch: pytest.MonkeyPatch) -> None:
-    from choregos_adapters.oci import BuildctlBuilder
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.services import hosted_builds
+    from tranibor_adapters.oci import BuildctlBuilder
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.services import hosted_builds
 
     monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
     monkeypatch.setenv("CHOREGOS_BUILDKIT_ADDRESS", "tcp://choregos-buildkitd:1234")

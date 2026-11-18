@@ -65,9 +65,9 @@ async def test_two_merges_go_out_in_the_same_batch(platform: Platform, worker: A
 
     # The deployment row is closed: without that, the delivery metrics could not tell a
     # successful production release from a promotion left hanging.
-    from choregos_api.db.models import Deployment
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Deployment
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = (await session.execute(select(Deployment))).scalars().all()
@@ -155,7 +155,7 @@ async def test_the_terraform_apply_goes_out_with_the_departure_after_approval(
 ) -> None:
     """Terraform applies within the train window, never between two departures (S9-05)."""
     await login(platform.client)
-    from choregos_core.domain import PrRef, PrState
+    from tranibor_core.domain import PrRef, PrState
 
     infra = "https://github.com/northwind/billing-api-infra/pull/9"
     ref = PrRef(repo="northwind/billing-api-infra", number=9, url=infra)

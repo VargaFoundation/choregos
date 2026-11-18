@@ -39,9 +39,9 @@ def door(monkeypatch: pytest.MonkeyPatch) -> kit.Door:
 
 @pytest.fixture
 async def client(pg_app: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[AsyncClient]:
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
 
     monkeypatch.setenv("CHOREGOS_OIDC_DEFAULT_ORG", kit.ORG)
     monkeypatch.setenv("CHOREGOS_DEV_ADMIN_EMAILS", "admin@northwind.dev")
@@ -61,9 +61,9 @@ async def daemon(client: AsyncClient) -> Daemon:
 @contextlib.asynccontextmanager
 async def _relay() -> AsyncIterator[Any]:
     """This replica's `LISTEN` connection, as the lifespan starts it when outposts are on."""
-    from choregos_api.config import get_settings
-    from choregos_api.events import PostgresRelay
-    from choregos_api.outposts import rendezvous
+    from tranibor_api.config import get_settings
+    from tranibor_api.events import PostgresRelay
+    from tranibor_api.outposts import rendezvous
 
     relay = PostgresRelay(get_settings().database_url)
     relay.listen_also(rendezvous.CHANNEL, rendezvous.woken)
@@ -125,10 +125,10 @@ async def _connections() -> int:
 async def test_a_hundred_waiting_polls_hold_no_pooled_connection(
     client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.config import get_settings
-    from choregos_api.db.models import OutpostInstance
-    from choregos_api.db.session import get_engine
-    from choregos_api.outposts import rendezvous
+    from tranibor_api.config import get_settings
+    from tranibor_api.db.models import OutpostInstance
+    from tranibor_api.db.session import get_engine
+    from tranibor_api.outposts import rendezvous
 
     await kit.create(client, SLUG)
     daemons = await daemon_kit.instances(100)
@@ -176,7 +176,7 @@ async def test_a_call_written_is_handed_over_through_the_notification(
     What is read is the mechanism, not the clock (#1710): a periodic look comes a minute after the
     last, so a call handed over within the poll's wait came through the wake-up, and the pause the poll
     was in ended because it was woken."""
-    from choregos_api.outposts import rendezvous
+    from tranibor_api.outposts import rendezvous
 
     monkeypatch.setattr(rendezvous, "LOOK_S", (60.0, 60.0))  # only a notification can wake it in time
     pauses = daemon_kit.record_pauses(monkeypatch)
@@ -212,8 +212,8 @@ async def test_a_call_written_is_handed_over_through_the_notification(
 async def test_a_call_is_not_handed_over_before_it_is_committed(
     client: AsyncClient, daemon: Daemon, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.db.session import session_scope
-    from choregos_api.outposts import rendezvous
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.outposts import rendezvous
 
     monkeypatch.setattr(rendezvous, "LOOK_S", (0.05, 0.1))  # it looks all the time, and finds nothing
     row = await kit.outpost_row(SLUG)
@@ -240,7 +240,7 @@ async def test_without_the_relay_a_call_is_still_handed_over_at_the_periodic_loo
 ) -> None:
     """A notification can be lost across a reconnection, and a relay can be down: a poll looks again
     every few seconds whatever it heard, so a call waits for the next look at most."""
-    from choregos_api.outposts import rendezvous
+    from tranibor_api.outposts import rendezvous
 
     monkeypatch.setattr(rendezvous, "LOOK_S", (1.0, 1.5))
     pauses = daemon_kit.record_pauses(monkeypatch)
@@ -263,10 +263,10 @@ async def test_the_relay_carries_the_wake_ups_beside_the_events_and_survives_a_b
 ) -> None:
     """One connection per replica, two channels: a wake-up is not a platform event, and what one
     channel's listener does with a payload never takes the connection down."""
-    from choregos_api.db.session import session_scope
-    from choregos_api.events import CHANNEL, PostgresRelay
-    from choregos_api.outposts import rendezvous
     from sqlalchemy import text
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.events import CHANNEL, PostgresRelay
+    from tranibor_api.outposts import rendezvous
 
     relay = PostgresRelay(PG_URL)
     heard: list[str] = []
@@ -298,9 +298,9 @@ async def test_the_api_listens_for_the_wake_ups_when_outposts_are_on(
     pg_app: Any, client: AsyncClient
 ) -> None:
     """The lifespan gives the replica's `LISTEN` connection the outposts' channel: no test starts it."""
-    from choregos_api.db.session import session_scope
-    from choregos_api.outposts import rendezvous
     from sqlalchemy import text
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.outposts import rendezvous
 
     heard = rendezvous.waiters().heard
     async with pg_app.router.lifespan_context(pg_app):

@@ -18,13 +18,13 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from choregos_adapters.fakes.scenes import EVAL_FAKE_SCENES_ENV
-from choregos_contracts import Diagnostics, StageInput, StageResult, StageStatus
-from choregos_orchestrator import eval_live_cases as live_cases
-from choregos_orchestrator.activities import eval_doors, evals
-from choregos_orchestrator.activities import stage as stage_activities
-from choregos_orchestrator.config import reset_settings_cache
-from choregos_orchestrator.eval_comparison import compare_cells
+from tranibor_adapters.fakes.scenes import EVAL_FAKE_SCENES_ENV
+from tranibor_contracts import Diagnostics, StageInput, StageResult, StageStatus
+from tranibor_orchestrator import eval_live_cases as live_cases
+from tranibor_orchestrator.activities import eval_doors, evals
+from tranibor_orchestrator.activities import stage as stage_activities
+from tranibor_orchestrator.config import reset_settings_cache
+from tranibor_orchestrator.eval_comparison import compare_cells
 
 from .conftest import Fixture
 
@@ -51,8 +51,8 @@ def scripts_on(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 @pytest.fixture
 async def eval_project(setup: Fixture, eval_fakes: None) -> Fixture:
     """The matrix's eval project: memory off, no tools section (the cell decides)."""
-    from choregos_api.db.session import session_scope
-    from choregos_api.services import active_policy, policy_model
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services import active_policy, policy_model
 
     async with session_scope() as session:
         row = await active_policy(session, setup.project_id)
@@ -68,9 +68,9 @@ async def eval_project(setup: Fixture, eval_fakes: None) -> Fixture:
 async def api(setup: Fixture) -> AsyncIterator[Any]:
     """The platform's API, on the suite's database: the broker that governs the scripted agent's calls."""
     import httpx
-    from choregos_api.config import reset_settings_cache as reset_api_settings
-    from choregos_api.main import create_app
-    from choregos_api.temporal import FakeTemporal, set_temporal
+    from tranibor_api.config import reset_settings_cache as reset_api_settings
+    from tranibor_api.main import create_app
+    from tranibor_api.temporal import FakeTemporal, set_temporal
 
     reset_api_settings()
     set_temporal(FakeTemporal())
@@ -94,8 +94,8 @@ def _cell(tools: str = "mcp", case: str = E4, **extra: Any) -> dict[str, Any]:
 
 
 async def _rows(model: Any, **where: Any) -> list[Any]:
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         query = select(model)
@@ -111,11 +111,11 @@ async def _install_netops(setup: Fixture) -> None:
 
 async def _install_catalogue_agent(slug: str) -> None:
     """A catalogue agent a case names, installed as an organisation installs it."""
-    from choregos_api.db.models import Agent, Organization
-    from choregos_api.db.session import session_scope
-    from choregos_api.rbac import SYSTEM
-    from choregos_api.services.agent_catalogue import catalogue_of, install
     from sqlalchemy import select
+    from tranibor_api.db.models import Agent, Organization
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.rbac import SYSTEM
+    from tranibor_api.services.agent_catalogue import catalogue_of, install
 
     async with session_scope() as session:
         org = (await session.execute(select(Organization))).scalar_one()
@@ -135,7 +135,7 @@ async def _install_catalogue_agent(slug: str) -> None:
 async def test_seeding_a_live_agent_case_twice_provisions_its_eval_project_once(
     eval_project: Fixture,
 ) -> None:
-    from choregos_api.db.models import (
+    from tranibor_api.db.models import (
         Agent,
         AgentVersion,
         ConnectorOperation,
@@ -191,7 +191,7 @@ async def test_seeding_a_live_agent_case_twice_provisions_its_eval_project_once(
 async def test_each_cell_and_repetition_files_its_work_item_in_the_same_eval_project(
     eval_project: Fixture, scripts_on: None
 ) -> None:
-    from choregos_api.db.models import Agent, OrgConnector, Project, WorkItem
+    from tranibor_api.db.models import Agent, OrgConnector, Project, WorkItem
 
     plans = [
         (await evals.seed_eval_ticket(cell))["plan"]
@@ -210,7 +210,7 @@ async def test_each_cell_and_repetition_files_its_work_item_in_the_same_eval_pro
 async def test_a_case_whose_spec_or_policy_changed_is_brought_up_to_date(
     eval_project: Fixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.db.models import Agent, AgentVersion, PolicyDef, ProjectOperationPolicy
+    from tranibor_api.db.models import Agent, AgentVersion, PolicyDef, ProjectOperationPolicy
 
     await evals.seed_eval_ticket(_cell())
     original = evals.load_agent_case(E4)
@@ -255,7 +255,7 @@ async def test_every_case_of_the_live_matrix_seeds_and_its_stage_is_prepared(
     stage_input = prepared["stage_input"]
     assert stage_input["tools"]["scripts"] == {"max_concurrent_calls": 4}
     assert stage_input.get("repo") is None and stage_input["project"]["fact_commands"] == {}
-    from choregos_api.db.models import OrgConnector, Run
+    from tranibor_api.db.models import OrgConnector, Run
 
     [row] = await _rows(OrgConnector, name=connector)
     assert row.config == {"fake_scene": scene}
@@ -269,7 +269,7 @@ async def test_every_case_of_the_live_matrix_seeds_and_its_stage_is_prepared(
 async def test_without_eval_fakes_a_live_agent_case_is_skipped_and_nothing_is_provisioned(
     setup: Fixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.db.models import OrgConnector, Project
+    from tranibor_api.db.models import OrgConnector, Project
 
     monkeypatch.delenv(EVAL_FAKE_SCENES_ENV, raising=False)
     seeded = await evals.seed_eval_ticket(_cell())
@@ -278,9 +278,9 @@ async def test_without_eval_fakes_a_live_agent_case_is_skipped_and_nothing_is_pr
 
 
 async def test_a_real_connector_of_the_same_name_is_never_played_against(eval_project: Fixture) -> None:
-    from choregos_api.db.models import Organization, OrgConnector
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Organization, OrgConnector
+    from tranibor_api.db.session import session_scope
 
     real = {"tenant_id": "acme", "client_id": "choregos", "administrative_unit_id": "au-1"}
     async with session_scope() as session:
@@ -293,9 +293,9 @@ async def test_a_real_connector_of_the_same_name_is_never_played_against(eval_pr
 
 
 async def test_an_organisation_agent_of_the_same_slug_is_never_replaced(eval_project: Fixture) -> None:
-    from choregos_api.db.models import Agent, Organization
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Agent, Organization
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         org = (await session.execute(select(Organization))).scalar_one()
@@ -307,7 +307,7 @@ async def test_an_organisation_agent_of_the_same_slug_is_never_replaced(eval_pro
 async def test_a_catalogue_agent_the_organisation_did_not_install_skips_the_case(
     eval_project: Fixture,
 ) -> None:
-    from choregos_api.db.models import Agent
+    from tranibor_api.db.models import Agent
 
     if await _rows(Agent, slug="netops"):
         pytest.skip("the suite's template installs netops")
@@ -370,7 +370,7 @@ async def _live(setup: Fixture, transport: Any, cell: dict[str, Any], agent: Scr
 
 
 def _client(transport: Any, stage_input: StageInput, token: str) -> Any:
-    from choregos_tools_mcp.client import InternalClient
+    from tranibor_tools_mcp.client import InternalClient
 
     return InternalClient(API, stage_input.run_id, token, transport=transport)
 
@@ -412,7 +412,7 @@ async def offboarding_through_mcp(
 
 
 async def test_a_live_agent_case_is_played_and_judged_not_skipped(eval_project: Fixture, api: Any) -> None:
-    from choregos_api.db.models import Action, Project
+    from tranibor_api.db.models import Action, Project
 
     verdict = await _live(eval_project, api, _cell("mcp"), offboarding_through_mcp)
     assert not verdict["skipped"] and not verdict.get("invalid"), verdict["reason"]
@@ -474,7 +474,7 @@ async def ssh_exposure_through_a_script(stage_input: StageInput, transport: Any,
     bridge's lines go to the run's journal through the API, as the runner's sidecar posts them."""
     import tempfile
 
-    from choregos_tools_mcp.bridge import ApiJournal
+    from tranibor_tools_mcp.bridge import ApiJournal
 
     case = evals.load_agent_case(E1)
     assert case is not None
@@ -520,9 +520,9 @@ INJECTED = "https://compare.flagreviews.example/2026"
 async def _open_web_search() -> None:
     """The eval organisation's ceiling opens web search, as an administrator opens it for any backend:
     the matrix never does (the runbook, "Agent cases in a live cell")."""
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         org = (await session.execute(select(Organization))).scalar_one()
@@ -536,7 +536,7 @@ async def _open_web_search() -> None:
 async def test_e5_seeds_its_fake_web_once_turned_on_for_its_eval_project_alone(
     eval_project: Fixture, case: str
 ) -> None:
-    from choregos_api.db.models import OrgConnector, OrgConnectorProject, PolicyDef, Project
+    from tranibor_api.db.models import OrgConnector, OrgConnectorProject, PolicyDef, Project
 
     await _install_catalogue_agent("researcher")
     first = await evals.seed_eval_ticket(_cell("mcp", case=case))
@@ -568,9 +568,9 @@ async def test_e5_seeds_its_fake_web_once_turned_on_for_its_eval_project_alone(
 
 
 async def test_e5_s_fake_web_follows_the_case_s_pages(eval_project: Fixture) -> None:
-    from choregos_api.db.models import OrgConnector
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import OrgConnector
+    from tranibor_api.db.session import session_scope
 
     await _install_catalogue_agent("researcher")
     assert not (await evals.seed_eval_ticket(_cell("mcp", case=E5)))["skipped"]
@@ -587,9 +587,9 @@ async def test_e5_s_fake_web_follows_the_case_s_pages(eval_project: Fixture) -> 
 async def test_a_web_connector_of_the_same_name_that_is_not_the_matrix_s_is_never_touched(
     eval_project: Fixture,
 ) -> None:
-    from choregos_api.db.models import Organization, OrgConnector
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Organization, OrgConnector
+    from tranibor_api.db.session import session_scope
 
     await _install_catalogue_agent("researcher")
     async with session_scope() as session:
@@ -606,9 +606,9 @@ async def test_the_matrix_s_fake_web_edited_off_its_scene_is_no_longer_the_matri
 ) -> None:
     """An edit can take `fake_scene` away (none can add it): the connector is then someone's search
     backend, and the seeding does not put a scene back on it."""
-    from choregos_api.db.models import OrgConnector
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import OrgConnector
+    from tranibor_api.db.session import session_scope
 
     await _install_catalogue_agent("researcher")
     assert not (await evals.seed_eval_ticket(_cell("mcp", case=E5)))["skipped"]
@@ -647,7 +647,7 @@ def _e5_through_a_script(case: str) -> ScriptedAgent:
     async def agent(stage_input: StageInput, transport: Any, token: str) -> StageResult:
         import tempfile
 
-        from choregos_tools_mcp.bridge import ApiJournal
+        from tranibor_tools_mcp.bridge import ApiJournal
 
         loaded = evals.load_agent_case(case)
         assert loaded is not None
@@ -707,9 +707,9 @@ async def test_e5_is_played_live_against_the_case_s_own_pages_and_judged(
 async def test_a_run_whose_ledger_and_events_disagree_is_invalid_reported_and_never_counted(
     eval_project: Fixture, api: Any
 ) -> None:
-    from choregos_api.db.models import CostLedger, Run
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import CostLedger, Run
+    from tranibor_api.db.session import session_scope
 
     played = await _live(eval_project, api, _cell("mcp"), offboarding_through_mcp)
     assert played["ok"], played["reason"]
@@ -818,13 +818,13 @@ E3_PROJECT = live_cases.case_project_slug("billing-api", "itsm-triage-similar-in
 def plugin_runtime(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
     """The plugins offline are the fixtures (servicenow mirrors choregos-agents#8); plugin servers run in
     an in-memory cluster, and the platform's calls to them reach the server's recorded fake."""
-    from choregos_adapters.fakes.kubernetes import FakeKubernetesApi
-    from choregos_adapters.fakes.plugin_servers import FakePluginServer
-    from choregos_adapters.plugin_servers import PluginServerRuntime
-    from choregos_api.config import reset_settings_cache as reset_api_settings
-    from choregos_api.services.plugin_servers import use_plugin_runtime, use_plugin_transport
-    from choregos_core.agent_catalogue import OFFLINE_ENV
-    from choregos_core.publishing import PUBLISHING
+    from tranibor_adapters.fakes.kubernetes import FakeKubernetesApi
+    from tranibor_adapters.fakes.plugin_servers import FakePluginServer
+    from tranibor_adapters.plugin_servers import PluginServerRuntime
+    from tranibor_api.config import reset_settings_cache as reset_api_settings
+    from tranibor_api.services.plugin_servers import use_plugin_runtime, use_plugin_transport
+    from tranibor_core.agent_catalogue import OFFLINE_ENV
+    from tranibor_core.publishing import PUBLISHING
 
     monkeypatch.setenv(OFFLINE_ENV, str(FIXTURES / "plugins"))
     monkeypatch.setenv(
@@ -853,12 +853,12 @@ def plugin_runtime(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
 
 async def _install_servicenow(directory: Path | None = None) -> None:
     """The servicenow plugin installed in the eval organisation, as an organisation installs it."""
-    from choregos_api.config import get_settings
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.plugin_installer import install
-    from choregos_core.plugins import load_directory
     from sqlalchemy import select
+    from tranibor_api.config import get_settings
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.plugin_installer import install
+    from tranibor_core.plugins import load_directory
 
     async with session_scope() as session:
         org = (await session.execute(select(Organization))).scalar_one()
@@ -869,11 +869,11 @@ async def _install_servicenow(directory: Path | None = None) -> None:
 async def _discover_servicenow() -> dict[str, Any]:
     """What the runbook asks of the operator once the connector is bound: discover its tools, which
     reaches the server's eval instance (the connector's route, as an administrator calls it)."""
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
-    from choregos_api.rbac import Principal, Role
-    from choregos_api.routers.org_connectors import discover_operations
     from sqlalchemy import select
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.rbac import Principal, Role
+    from tranibor_api.routers.org_connectors import discover_operations
 
     async with session_scope() as session:
         org = (await session.execute(select(Organization))).scalar_one()
@@ -890,7 +890,7 @@ async def _discover_servicenow() -> dict[str, Any]:
 async def test_a_plugin_case_binds_the_installed_server_to_its_eval_instance_for_its_project_alone(
     eval_project: Fixture, plugin_runtime: Any
 ) -> None:
-    from choregos_api.db.models import (
+    from tranibor_api.db.models import (
         ConnectorOperation,
         OrgConnector,
         OrgConnectorProject,
@@ -935,9 +935,9 @@ async def test_a_plugin_case_binds_the_installed_server_to_its_eval_instance_for
 async def test_a_plugin_server_configured_for_a_real_instance_is_never_bound(
     eval_project: Fixture, plugin_runtime: Any
 ) -> None:
-    from choregos_api.db.models import OrgConnector
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import OrgConnector
+    from tranibor_api.db.session import session_scope
 
     await _install_servicenow()
     async with session_scope() as session:
@@ -974,9 +974,9 @@ async def test_a_plugin_server_that_declares_no_fake_cannot_be_played_live(
 async def test_a_live_cell_plays_the_case_its_organisation_installed(
     eval_project: Fixture, plugin_runtime: Any
 ) -> None:
-    from choregos_api.db.models import Organization, OrgPluginFile
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Organization, OrgPluginFile
+    from tranibor_api.db.session import session_scope
 
     await _install_servicenow()
     async with session_scope() as session:
@@ -998,8 +998,8 @@ async def _e3_through_mcp(stage_input: StageInput, transport: Any, token: str) -
     """E3's agent as a model makes its calls, through the run's MCP server, then the case's report. The
     governed action its allowed write became is played as the action worker plays it (`ActionWorkflow`'s
     activities), while the run is still running."""
-    from choregos_api.db.models import Action
-    from choregos_orchestrator.activities.actions import close_action, execute_effect, load_action
+    from tranibor_api.db.models import Action
+    from tranibor_orchestrator.activities.actions import close_action, execute_effect, load_action
 
     case = evals.load_agent_case(E3)
     assert case is not None
@@ -1016,7 +1016,7 @@ async def _e3_through_mcp(stage_input: StageInput, transport: Any, token: str) -
 async def test_e3_is_played_live_against_the_server_s_eval_instance_and_judged(
     eval_project: Fixture, api: Any, plugin_runtime: Any
 ) -> None:
-    from choregos_api.db.models import OrgConnector
+    from tranibor_api.db.models import OrgConnector
 
     await _install_servicenow()
     assert (await evals.seed_eval_ticket(_cell("mcp", case=E3)))["skipped"], "bound, not discovered yet"

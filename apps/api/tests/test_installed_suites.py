@@ -15,17 +15,17 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from choregos_api.db.models import AgentSessionRecord, ConversationFeedback, Organization, Project
-from choregos_api.db.session import session_scope
-from choregos_api.services.conversation_gate import set_conversation_source
-from choregos_api.services.installed_suites import (
+from httpx import AsyncClient
+from sqlalchemy import select
+from tranibor_api.db.models import AgentSessionRecord, ConversationFeedback, Organization, Project
+from tranibor_api.db.session import session_scope
+from tranibor_api.services.conversation_gate import set_conversation_source
+from tranibor_api.services.installed_suites import (
     installed_suite_source,
     scripted_player,
     set_suite_player,
 )
-from choregos_core import utcnow
-from httpx import AsyncClient
-from sqlalchemy import select
+from tranibor_core import utcnow
 
 from .agent_scopes_kit import add_member, as_user
 from .kits.assistant_install import ORG as ORG_URL

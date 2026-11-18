@@ -19,11 +19,15 @@ import re
 from pathlib import Path
 from typing import Any
 
-import choregos_contracts as contracts
 import pytest
+import tranibor_contracts as contracts
 import yaml
-from choregos_contracts import outpost
-from choregos_contracts.enums import (
+from jsonschema import Draft202012Validator
+from jsonschema.exceptions import ValidationError as SchemaError
+from jsonschema.exceptions import best_match
+from pydantic import BaseModel, ValidationError
+from tranibor_contracts import outpost
+from tranibor_contracts.enums import (
     OutpostAnswerOutcome,
     OutpostAuditEvent,
     OutpostCallKind,
@@ -34,10 +38,6 @@ from choregos_contracts.enums import (
     OutpostRefusalCode,
     OutpostStatus,
 )
-from jsonschema import Draft202012Validator
-from jsonschema.exceptions import ValidationError as SchemaError
-from jsonschema.exceptions import best_match
-from pydantic import BaseModel, ValidationError
 
 from .test_contracts import _compare
 
@@ -178,7 +178,7 @@ def test_the_outpost_schemas_are_declared_and_shipped() -> None:
     assert contracts.outpost_door_path().name == "outpost-door.yaml"
     assert contracts.outpost_door_path().parent == contracts.openapi_path().parent
     pyproject = (contracts.contracts_dir() / "pyproject.toml").read_text(encoding="utf-8")
-    assert '"outpost-door.yaml" = "choregos_contracts/outpost-door.yaml"' in pyproject, (
+    assert '"outpost-door.yaml" = "tranibor_contracts/outpost-door.yaml"' in pyproject, (
         "the door's document must be in the wheel: the daemon reads the contract it was built against"
     )
 

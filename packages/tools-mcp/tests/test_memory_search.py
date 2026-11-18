@@ -5,12 +5,12 @@ from __future__ import annotations
 import json
 from typing import Any
 
-import choregos_contracts
 import pytest
-from choregos_contracts import ContextPack, MemoryItem, StageInput
-from choregos_tools_mcp import McpServer
-from choregos_tools_mcp.client import InternalApiError
-from choregos_tools_mcp.tools import TOOL_SCHEMAS
+import tranibor_contracts
+from tranibor_contracts import ContextPack, MemoryItem, StageInput
+from tranibor_tools_mcp import McpServer
+from tranibor_tools_mcp.client import InternalApiError
+from tranibor_tools_mcp.tools import TOOL_SCHEMAS
 
 
 class Client:
@@ -40,7 +40,7 @@ class Client:
         return self.context
 
     async def fetch_input(self) -> StageInput:
-        example = choregos_contracts.schemas_dir() / "examples" / "stage-input.example.json"
+        example = tranibor_contracts.schemas_dir() / "examples" / "stage-input.example.json"
         return StageInput.model_validate(json.loads(example.read_text(encoding="utf-8")))
 
 

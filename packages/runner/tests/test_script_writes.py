@@ -19,14 +19,14 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from choregos_contracts import StageInput, ToolScripts
-from choregos_runner import tool_scripts
-from choregos_runner.acp.client import AcpClient
-from choregos_runner.acp.protocol import FS_WRITE_TEXT_FILE, Request, Response
-from choregos_runner.backends.claude_code import ClaudeCodeBackend
-from choregos_runner.exits import Exit
-from choregos_runner.guardrails import GuardRails
-from choregos_runner.workspace import agent_home
+from tranibor_contracts import StageInput, ToolScripts
+from tranibor_runner import tool_scripts
+from tranibor_runner.acp.client import AcpClient
+from tranibor_runner.acp.protocol import FS_WRITE_TEXT_FILE, Request, Response
+from tranibor_runner.backends.claude_code import ClaudeCodeBackend
+from tranibor_runner.exits import Exit
+from tranibor_runner.guardrails import GuardRails
+from tranibor_runner.workspace import agent_home
 
 from .test_runner_flow import execute, valid_result
 

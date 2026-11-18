@@ -20,8 +20,8 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-from choregos_adapters.fakes.mcp import FakeMcpServer
-from choregos_outpost.fakes import FakeDoor
+from tranibor_adapters.fakes.mcp import FakeMcpServer
+from tranibor_outpost.fakes import FakeDoor
 
 from ._bench import AUDIT_LINE, CREDENTIAL, TOOLS, policy_document, private_spellings, write_policy
 from ._wire import served
@@ -32,7 +32,7 @@ async def _command(root: Path, *arguments: str) -> asyncio.subprocess.Process:
     return await asyncio.create_subprocess_exec(
         sys.executable,
         "-m",
-        "choregos_outpost.cli",
+        "tranibor_outpost.cli",
         *base,
         *arguments,
         stdout=asyncio.subprocess.PIPE,

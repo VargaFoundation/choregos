@@ -13,9 +13,9 @@ from .kits.registry_agent import agent_stage_plan, install_agent
 
 
 async def _with_cap(setup: Fixture, monthly: float, run_usd: float | None = 0.5) -> None:
-    from choregos_api.db.models import AgentVersion
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import AgentVersion
+    from tranibor_api.db.session import session_scope
 
     await install_agent(setup)
     async with session_scope() as session:
@@ -26,9 +26,9 @@ async def _with_cap(setup: Fixture, monthly: float, run_usd: float | None = 0.5)
 
 
 async def _spend_as_agent(setup: Fixture, usd: float, n: int) -> None:
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.costs import record_cost
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.costs import record_cost
 
     async with session_scope() as session:
         run = Run(
@@ -61,9 +61,9 @@ async def _spend_as_agent(setup: Fixture, usd: float, n: int) -> None:
 
 
 async def _tell(setup: Fixture) -> None:
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities.base import project_bundle
-    from choregos_orchestrator.activities.outcome import _tell_slack_of_agent_alerts
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities.base import project_bundle
+    from tranibor_orchestrator.activities.outcome import _tell_slack_of_agent_alerts
 
     async with session_scope() as session:
         bundle = await project_bundle(session, setup.project_id)
@@ -73,7 +73,7 @@ async def _tell(setup: Fixture) -> None:
 async def test_three_alerts_reach_slack_the_agent_is_suspended_and_its_runs_are_refused(
     setup: Fixture,
 ) -> None:
-    from choregos_orchestrator.activities.stage import prepare_stage
+    from tranibor_orchestrator.activities.stage import prepare_stage
 
     await _with_cap(setup, 10.0)
     notifier: Any = setup.adapters.notify
@@ -106,7 +106,7 @@ async def test_a_notifier_that_is_down_leaves_the_alert_to_the_next_try(setup: F
 
 async def test_the_key_is_minted_at_what_is_left_of_the_monthly_cap(setup: Fixture) -> None:
     """A run cannot overshoot the cap: its key is at most what the month still allows."""
-    from choregos_orchestrator.activities.stage import prepare_stage
+    from tranibor_orchestrator.activities.stage import prepare_stage
 
     await _with_cap(setup, 10.0, run_usd=None)
     await _spend_as_agent(setup, 9.7, 0)  # 97 %: not suspended yet

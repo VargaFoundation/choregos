@@ -79,10 +79,10 @@ async def test_the_definition_of_another_project_is_not_found(
 async def test_a_busy_work_item_does_not_migrate(client: AsyncClient, project: dict[str, Any]) -> None:
     """A pending decision, a run in progress: the state would move before the migration, and the
     mapping checked here would no longer hold."""
-    from choregos_api.db.models import HumanRequest, Run
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
     from sqlalchemy import select
+    from tranibor_api.db.models import HumanRequest, Run
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
 
     item, target = await make_work_item(client, project), await _target(client, project)
     mapping = {item["state"]: "request"}

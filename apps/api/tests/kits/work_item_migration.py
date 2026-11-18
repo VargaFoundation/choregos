@@ -20,6 +20,6 @@ async def make_work_item(client: AsyncClient, project: dict[str, Any]) -> dict[s
 
 
 def signals_of() -> list[tuple[str, str, Any]]:
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.temporal import get_temporal
 
     return list(get_temporal().signals)  # type: ignore[attr-defined]

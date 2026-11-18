@@ -30,7 +30,7 @@ def _base(name: str) -> str:
 
 
 def test_the_dashboards_and_the_alerts_only_cite_emitted_metrics() -> None:
-    from choregos_api.metrics import NAMES
+    from tranibor_api.metrics import NAMES
 
     cited: dict[str, set[str]] = {}
     for file in sorted(DASHBOARDS.glob("*.json")):
@@ -45,10 +45,10 @@ def test_the_dashboards_and_the_alerts_only_cite_emitted_metrics() -> None:
 async def test_metrics_exposes_the_series_from_the_database(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.db.models import CostLedger, Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.metrics import NAMES, refresh
-    from choregos_core import utcnow
+    from tranibor_api.db.models import CostLedger, Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.metrics import NAMES, refresh
+    from tranibor_core import utcnow
 
     async with session_scope() as session:
         item = WorkItem(

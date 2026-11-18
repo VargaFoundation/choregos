@@ -9,8 +9,8 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from choregos_contracts import StageResult, StageStatus
-from choregos_core.domain import ExecRef
+from tranibor_contracts import StageResult, StageStatus
+from tranibor_core.domain import ExecRef
 
 from .conftest import Fixture
 
@@ -21,7 +21,7 @@ TOKEN = "ghs_" + "x1" * 15
 
 
 async def _prepare_and_start(setup: Fixture) -> str:
-    from choregos_orchestrator.activities import stage as activities
+    from tranibor_orchestrator.activities import stage as activities
 
     plan = await activities.prepare_stage(
         {
@@ -46,7 +46,7 @@ async def _prepare_and_start(setup: Fixture) -> str:
 
 
 async def _await(setup: Fixture, run_id: str) -> dict[str, Any]:
-    from choregos_orchestrator.activities import stage as activities
+    from tranibor_orchestrator.activities import stage as activities
 
     return await activities.await_run(
         {"project_id": setup.project_id, "run_id": run_id, "timeout_minutes": 1, "poll_seconds": 0.01}
@@ -54,8 +54,8 @@ async def _await(setup: Fixture, run_id: str) -> dict[str, Any]:
 
 
 async def _archive(run_id: str) -> dict[str, Any] | None:
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         run = await session.get(Run, run_id)
@@ -103,8 +103,8 @@ async def test_a_replayed_await_keeps_the_first_archive(setup: Fixture) -> None:
 
 
 async def test_a_cancelled_run_is_archived_before_its_pod_is_deleted(setup: Fixture) -> None:
-    from choregos_adapters.fakes.executor import FakeExecutor
-    from choregos_orchestrator.activities import stage as activities
+    from tranibor_adapters.fakes.executor import FakeExecutor
+    from tranibor_orchestrator.activities import stage as activities
 
     class _DeletesLogsOnCancel(FakeExecutor):
         async def cancel(self, ref: ExecRef) -> None:
@@ -121,7 +121,7 @@ async def test_a_cancelled_run_is_archived_before_its_pod_is_deleted(setup: Fixt
 
 
 async def test_an_executor_without_readable_logs_does_not_stop_the_run(setup: Fixture) -> None:
-    from choregos_adapters.fakes.executor import FakeExecutor
+    from tranibor_adapters.fakes.executor import FakeExecutor
 
     class _NoLogs(FakeExecutor):
         def logs(self, ref: ExecRef) -> Any:
@@ -141,11 +141,11 @@ async def test_an_executor_without_readable_logs_does_not_stop_the_run(setup: Fi
 
 
 async def test_a_live_snapshot_is_refreshed_then_replaced_by_the_final_archive() -> None:
-    from choregos_adapters.fakes.executor import FakeExecutor
-    from choregos_api.db.models import Run
-    from choregos_contracts import ExecutorKind
-    from choregos_core.domain import ExecStatus
-    from choregos_orchestrator.activities.execution import archive_once, snapshot_live
+    from tranibor_adapters.fakes.executor import FakeExecutor
+    from tranibor_api.db.models import Run
+    from tranibor_contracts import ExecutorKind
+    from tranibor_core.domain import ExecStatus
+    from tranibor_orchestrator.activities.execution import archive_once, snapshot_live
 
     executor = FakeExecutor()
     ref = ExecRef(kind=ExecutorKind.FAKE, name="fake-r", run_id="r")
@@ -172,8 +172,8 @@ async def test_a_live_snapshot_is_refreshed_then_replaced_by_the_final_archive()
 
 
 async def test_await_run_takes_a_live_snapshot_while_the_pod_runs(setup: Fixture) -> None:
-    from choregos_adapters.fakes.executor import FakeExecutor
-    from choregos_core.domain import ExecStatus
+    from tranibor_adapters.fakes.executor import FakeExecutor
+    from tranibor_core.domain import ExecStatus
 
     class _Running(FakeExecutor):
         def __init__(self) -> None:
@@ -190,7 +190,7 @@ async def test_await_run_takes_a_live_snapshot_while_the_pod_runs(setup: Fixture
     executor = _Running()
     setup.adapters.executor = executor
     run_id = await _prepare_and_start(setup)
-    from choregos_orchestrator.activities import stage as activities
+    from tranibor_orchestrator.activities import stage as activities
 
     # A zero budget: one poll while the pod runs, then the run is abandoned and archived.
     await activities.await_run(

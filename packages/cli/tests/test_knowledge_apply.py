@@ -41,7 +41,7 @@ eval:
 def profile(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     path = tmp_path / "config.json"
     path.write_text(json.dumps({"api_url": API, "token": "chg_x", "org": "acme"}))
-    import choregos_cli.client as client_module
+    import tranibor_cli.client as client_module
 
     monkeypatch.setattr(client_module, "CONFIG_PATH", path)
 
@@ -57,7 +57,7 @@ def manifest(tmp_path: Path) -> Path:
 
 
 def _run(*args: str) -> Any:
-    from choregos_cli.main import app
+    from tranibor_cli.main import app
 
     return CliRunner().invoke(app, list(args))
 
@@ -218,7 +218,7 @@ def test_an_upload_pattern_that_matches_nothing_fails_before_any_call(tmp_path: 
 
 
 def test_a_url_upload_is_downloaded_over_https_with_a_cap(tmp_path: Path) -> None:
-    from choregos_cli.knowledge import ManifestError, collect_uploads, load_manifest
+    from tranibor_cli.knowledge import ManifestError, collect_uploads, load_manifest
 
     path = tmp_path / "kb.yaml"
     path.write_text(
@@ -262,7 +262,7 @@ def test_sync_and_eval_call_the_endpoints() -> None:
 
 
 def test_the_shipped_example_is_a_valid_manifest() -> None:
-    from choregos_cli.knowledge import collect_uploads, load_manifest
+    from tranibor_cli.knowledge import collect_uploads, load_manifest
 
     example = Path(__file__).parents[3] / "trials" / "knowledge" / "example-kb.yaml"
     manifest = load_manifest(example)

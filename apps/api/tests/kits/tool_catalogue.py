@@ -84,10 +84,10 @@ async def run_with_catalogue(
     tools: str = "recherche_profils",
     run_id: str = "run-outils-1",
 ) -> tuple[str, dict[str, str]]:
-    from choregos_api import catalogue as catalogue_service
-    from choregos_api.db.models import Project, Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.security import mint_run_token
+    from tranibor_api import catalogue as catalogue_service
+    from tranibor_api.db.models import Project, Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.security import mint_run_token
 
     file = tmp_path / "catalogue.yaml"
     file.write_text(CATALOGUE, encoding="utf-8")
@@ -125,10 +125,10 @@ async def project_with_mcp(
     *,
     groups: list[str],
 ) -> tuple[str, dict[str, str]]:
-    from choregos_api import catalogue as catalogue_service
-    from choregos_api.db.models import Project, Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.security import mint_run_token
+    from tranibor_api import catalogue as catalogue_service
+    from tranibor_api.db.models import Project, Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.security import mint_run_token
 
     file = tmp_path / "catalogue.yaml"
     file.write_text(MCP_CATALOGUE, encoding="utf-8")

@@ -8,8 +8,8 @@ from datetime import timedelta
 from typing import Any
 
 import pytest
-from choregos_orchestrator.activities import agent_session as pod_activities
 from temporalio.exceptions import ApplicationError
+from tranibor_orchestrator.activities import agent_session as pod_activities
 
 from .conftest import Fixture
 from .test_code_agent_step import _agent
@@ -27,11 +27,11 @@ def _hosted(**extra: Any) -> dict[str, Any]:
 
 
 async def _session(setup: Fixture) -> str:
-    from choregos_api.db.models import AgentSessionRecord, Project
-    from choregos_api.db.session import session_scope
-    from choregos_api.secret_store import get_secret_store
-    from choregos_api.services.agent_sessions import secret_name
-    from choregos_core import utcnow
+    from tranibor_api.db.models import AgentSessionRecord, Project
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.secret_store import get_secret_store
+    from tranibor_api.services.agent_sessions import secret_name
+    from tranibor_core import utcnow
 
     async with session_scope() as session:
         project = await session.get(Project, setup.project_id)
@@ -55,9 +55,9 @@ async def _session(setup: Fixture) -> str:
 
 
 async def _events(session_id: str) -> list[str]:
-    from choregos_api.db.models import AgentSessionEvent
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import AgentSessionEvent
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = await session.execute(
@@ -69,8 +69,8 @@ async def _events(session_id: str) -> list[str]:
 
 
 async def _record(session_id: str) -> Any:
-    from choregos_api.db.models import AgentSessionRecord
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import AgentSessionRecord
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         return await session.get(AgentSessionRecord, session_id)
@@ -114,8 +114,8 @@ async def test_a_session_pod_gets_no_workspace_whatever_the_version_asks(setup: 
 async def test_a_session_pod_calls_the_organisations_own_gateway(setup: Fixture) -> None:
     """ADR 0109: the session's key comes from the organisation's gateway, so the pod calls its models
     there, not at the deployment's `gateway_url`."""
-    from choregos_api.db.models import OrgConnector, Project
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import OrgConnector, Project
+    from tranibor_api.db.session import session_scope
 
     await _agent(setup, _hosted(protocols=["responses"]))
     async with session_scope(orgs="*") as session:
@@ -171,10 +171,10 @@ async def test_a_version_no_pod_could_run_is_refused_without_a_retry(setup: Fixt
 async def test_stopping_fails_the_waiting_turns_cancels_the_pod_and_closes_the_session(
     setup: Fixture,
 ) -> None:
-    from choregos_api.db.models import AgentSessionRecord
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.agent_hosted_sessions import next_turn
-    from choregos_api.services.agent_sessions import journal
+    from tranibor_api.db.models import AgentSessionRecord
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.agent_hosted_sessions import next_turn
+    from tranibor_api.services.agent_sessions import journal
 
     await _agent(setup, _hosted())
     session_id = await _session(setup)

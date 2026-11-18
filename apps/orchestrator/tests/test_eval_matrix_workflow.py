@@ -8,9 +8,9 @@ from temporalio import activity
 
 
 async def _play_matrix(payload: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    from choregos_orchestrator.testing import workers_by_queue
-    from choregos_orchestrator.workflows.evals import EvalMatrix
     from temporalio.testing import WorkflowEnvironment
+    from tranibor_orchestrator.testing import workers_by_queue
+    from tranibor_orchestrator.workflows.evals import EvalMatrix
 
     asked: list[dict[str, Any]] = []
 
@@ -59,10 +59,10 @@ async def test_a_matrix_without_contexts_asks_the_none_cells() -> None:
 
 async def _play_live(payload: dict[str, Any], *, failing: str = "") -> tuple[list[str], dict[str, Any]]:
     """The live path with stub activities: the names of the activities, in the order they ran."""
-    from choregos_orchestrator.testing import workers_by_queue
-    from choregos_orchestrator.workflows.evals import EvalMatrix
     from temporalio.exceptions import ApplicationError
     from temporalio.testing import WorkflowEnvironment
+    from tranibor_orchestrator.testing import workers_by_queue
+    from tranibor_orchestrator.workflows.evals import EvalMatrix
 
     calls: list[str] = []
     judged: list[dict[str, Any]] = []
@@ -168,10 +168,10 @@ async def _cancel_live(blocking: str) -> tuple[list[str], list[dict[str, Any]], 
     that ran, the payloads `cancel_run` received, the error of the workflow and its history."""
     import asyncio
 
-    from choregos_orchestrator.testing import workers_by_queue
-    from choregos_orchestrator.workflows.evals import EvalMatrix
     from temporalio.client import WorkflowFailureError
     from temporalio.testing import WorkflowEnvironment
+    from tranibor_orchestrator.testing import workers_by_queue
+    from tranibor_orchestrator.workflows.evals import EvalMatrix
 
     calls: list[str] = []
     stopped: list[dict[str, Any]] = []

@@ -200,7 +200,7 @@ Runs are idempotent: a replayed run does not pay twice and does not act twice.
 one that implemented the work item is given another backend (one the project allows, in its order of
 preference). The swap applies only to review stages of coding agents: a fixed runtime (`code`,
 `prompt`, `hosted`) and a remote agent keep their own. `GET /projects/{id}/metrics/cross-backend`
-measures whether it pays, with the same definitions (`choregos_core.cross_review`): it counts the
+measures whether it pays, with the same definitions (`tranibor_core.cross_review`): it counts the
 reviews by coding agents, not verify runs and not fixed-runtime or remote reviewers; a review is
 *caught* when it filed a finding or ended with a result other than `done`; each review is compared
 with the implementer at the time of that review, not with the latest one; and each side (the same

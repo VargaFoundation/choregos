@@ -52,7 +52,7 @@ def _publish(root: Path, version: str, *, risk: str = RISK) -> None:
 
 @pytest.fixture
 def offline(tmp_path: Path) -> Iterator[Path]:
-    from choregos_api.services.plugin_supply import OfflineDirectory, use_plugin_supply
+    from tranibor_api.services.plugin_supply import OfflineDirectory, use_plugin_supply
 
     root = tmp_path / "plugins"
     _publish(root, "0.1.0")
@@ -169,9 +169,9 @@ async def test_a_user_only_space_is_written_from_the_page_and_the_person_exports
 
 
 def test_facts_are_ranked_by_query_overlap_then_pinned_then_recency() -> None:
-    from choregos_api.db.models import MemoryFact
-    from choregos_api.services.assistant_memory import rank_facts
-    from choregos_core import utcnow
+    from tranibor_api.db.models import MemoryFact
+    from tranibor_api.services.assistant_memory import rank_facts
+    from tranibor_core import utcnow
 
     now = utcnow()
 
@@ -199,9 +199,9 @@ def test_facts_are_ranked_by_query_overlap_then_pinned_then_recency() -> None:
 async def test_the_injected_facts_are_the_relevant_ones_not_only_the_newest(
     client: AsyncClient, admin: str, offline: Path
 ) -> None:
-    from choregos_api.db.models import AgentSessionRecord
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.assistant_memory import INJECTED_FACTS, injection_text
+    from tranibor_api.db.models import AgentSessionRecord
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.assistant_memory import INJECTED_FACTS, injection_text
 
     conversation = await _open(await _assistant(client))
     await client.patch(f"{ME}/memory/my_rules", json={"action": "add", "content": "Follow Reuters closely."})
@@ -224,8 +224,8 @@ async def test_the_injected_facts_are_the_relevant_ones_not_only_the_newest(
 async def test_a_profile_store_follows_the_schema_of_the_upgraded_manifest_and_keeps_its_versions(
     client: AsyncClient, admin: str, offline: Path
 ) -> None:
-    from choregos_api.db.models import MemoryStore
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import MemoryStore
+    from tranibor_api.db.session import session_scope
 
     await _assistant(client)
     base = {"risk_tolerance": "low", "horizon_years": 3}
@@ -265,10 +265,10 @@ async def test_a_profile_store_follows_the_schema_of_the_upgraded_manifest_and_k
 async def test_a_subject_handed_in_the_opening_context_is_a_hint_that_opens_no_space(
     client: AsyncClient, admin: str, offline: Path, markets: Any
 ) -> None:
-    from choregos_api.db.models import AgentSessionRecord, Organization, User
-    from choregos_api.db.session import session_scope
-    from choregos_api.rbac import Principal
-    from choregos_api.services.conversations import open_conversation
+    from tranibor_api.db.models import AgentSessionRecord, Organization, User
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.rbac import Principal
+    from tranibor_api.services.conversations import open_conversation
 
     await _agent(client, mcp_servers=[{"connector": "markets", "tools": ["lookup_*"]}])
     installation = await _assistant(client, with_markets=True)

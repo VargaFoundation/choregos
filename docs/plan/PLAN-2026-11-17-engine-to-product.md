@@ -37,7 +37,7 @@ waits. Three consequences:
 
 | Workstream | Content | Start → end | Effort | Waits for | Done when |
 | :-- | :-- | :-- | :-- | :-- | :-- |
-| **S2** The fakes are refused in production | Refuse `CHOREGOS_FAKES` in the API, the workers and the chart; move the internal API guard (`CHOREGOS_INTERNAL_API_GUARD`, `apps/api/src/choregos_api/internal_api_guard.py`, ADR 0144) from `warn`, its default, to `enforce` after two to four weeks of observation | 2026-11-30 → 2027-03-26 | 8 to 14 | nothing | Rendering the chart for production with the fakes on fails |
+| **S2** The fakes are refused in production | Refuse `CHOREGOS_FAKES` in the API, the workers and the chart; move the internal API guard (`CHOREGOS_INTERNAL_API_GUARD`, `apps/api/src/tranibor_api/internal_api_guard.py`, ADR 0144) from `warn`, its default, to `enforce` after two to four weeks of observation | 2026-11-30 → 2027-03-26 | 8 to 14 | nothing | Rendering the chart for production with the fakes on fails |
 | **S5** The supply chain is pinned | Actions pinned by commit SHA, base images by digest; then signed charts, high vulnerabilities blocking, static security analysis | 2026-12-14 → 2027-04-16 | 7 to 12 | nothing | A test fails on any unpinned action and any `latest` |
 | **S1** The agent is isolated | The agent in its own container by default (ADR 0146, the S65-04 stories); the three real agents behind the launcher; the Kubernetes and Docker executors. Tekton and Azure Container Apps are frozen (ADR 0180) | 2027-01-18 → 2027-04-09 | 30 to 45 | none: `dev` and `prod` have the `gvisor` RuntimeClass (since 2026-10-21 and 2026-10-25) and the runner pods already run under it | Under gVisor, the agent reads the run's token from no process |
 | **S3** A tamper-evident audit log | Hash chaining, an append-only table, a verifier, a signed checkpoint; SIEM export and retention in May | 2027-02-15 → 2027-04-09 | 15 to 22 | human review (ADR 0180 §3): the migration cannot be undone | An update to the log by the API's database role is refused |
@@ -54,7 +54,7 @@ Where the code stands on 2026-11-17:
   are pinned now. Signed charts, blocking vulnerabilities and static analysis remain.
 - S1: `runner.sandbox.agentIsolation` defaults to `process` (`charts/choregos/values.yaml`); the
   `container` value is served by the `agent_sandbox` executor only (S65-04d, S65-04i).
-- S3: `apps/api/src/choregos_api/audit.py` adds an `AuditLog` row to the session (44 lines); nothing
+- S3: `apps/api/src/tranibor_api/audit.py` adds an `AuditLog` row to the session (44 lines); nothing
   chains, freezes or exports it.
 - S4: until S80-06 (2026-11-17, ADR 0183) every Temporal client called `Client.connect` in clear,
   with the default converter. Now `choregos_core.temporal_connection.connect_temporal` is the only

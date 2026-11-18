@@ -2,8 +2,8 @@
 
 - **Status**: accepted, 2026-11-15 (the product owner's decision D14 of the graal and Choregos offer of
   2026-11: the two doors between the products are MCP and A2A, and 1.0 freezes what a client can depend on)
-- **Concerns**: `packages/contracts` (`openapi.yaml`, the schemas), `apps/api/src/choregos_api/mcp/`,
-  `apps/api/src/choregos_api/a2a/`, the trigger route (ADR 0113), `edition.py`, `extensions.py` and
+- **Concerns**: `packages/contracts` (`openapi.yaml`, the schemas), `apps/api/src/tranibor_api/mcp/`,
+  `apps/api/src/tranibor_api/a2a/`, the trigger route (ADR 0113), `edition.py`, `extensions.py` and
   `tenant_sign_in.py`; follows [ADR 0001](0001-frozen-contracts.md) (what a contract is),
   [ADR 0024](0024-two-editions.md) (the seams), [ADR 0030](0030-an-mcp-door-for-external-clients.md),
   [ADR 0078](0078-governed-workflows-as-a2a-skills.md) (the A2A door),

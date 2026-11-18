@@ -8,10 +8,10 @@ from datetime import UTC, datetime, timedelta
 
 import httpx
 import respx
-from choregos_adapters import connector_types
-from choregos_adapters.http import RestClient
-from choregos_adapters.scm.gitlab import GitLabScm
-from choregos_core.domain import PrRef
+from tranibor_adapters import connector_types
+from tranibor_adapters.http import RestClient
+from tranibor_adapters.scm.gitlab import GitLabScm
+from tranibor_core.domain import PrRef
 
 BASE = "https://gitlab.com/api/v4/projects/northwind%2Fbilling-api"
 #: The commit the gates judged, and the one a later push put at the head.
@@ -244,7 +244,7 @@ def test_the_type_is_registered_with_a_secret_token() -> None:
 @respx.mock
 async def test_the_head_of_a_branch_is_the_commit_of_the_branch() -> None:
     import pytest
-    from choregos_adapters.errors import UpstreamError
+    from tranibor_adapters.errors import UpstreamError
 
     respx.get(f"{BASE}/repository/branches/feat%2Fx").mock(
         return_value=httpx.Response(200, json={"name": "feat/x", "commit": {"id": JUDGED}})
@@ -260,7 +260,7 @@ async def test_the_head_of_a_branch_is_the_commit_of_the_branch() -> None:
 @respx.mock
 async def test_a_head_that_moved_is_refused_before_anything_is_asked() -> None:
     import pytest
-    from choregos_adapters.errors import HeadMovedError
+    from tranibor_adapters.errors import HeadMovedError
 
     respx.get(f"{BASE}/merge_requests/7").mock(
         return_value=httpx.Response(200, json={"iid": 7, "state": "opened", "sha": LATER})
@@ -276,7 +276,7 @@ async def test_a_head_that_moved_is_refused_before_anything_is_asked() -> None:
 async def test_a_merge_the_forge_refuses_on_its_sha_is_a_moved_head() -> None:
     """The head moves between the read and the merge: GitLab answers 409 to the `sha` it was sent."""
     import pytest
-    from choregos_adapters.errors import HeadMovedError
+    from tranibor_adapters.errors import HeadMovedError
 
     respx.get(f"{BASE}/merge_requests/7").mock(
         return_value=httpx.Response(200, json={"iid": 7, "state": "opened", "sha": JUDGED})
@@ -294,7 +294,7 @@ async def test_a_merge_the_forge_refuses_on_its_sha_is_a_moved_head() -> None:
 @respx.mock
 async def test_another_refusal_of_the_merge_is_not_a_moved_head() -> None:
     import pytest
-    from choregos_adapters.errors import HeadMovedError, UpstreamError
+    from tranibor_adapters.errors import HeadMovedError, UpstreamError
 
     respx.get(f"{BASE}/merge_requests/7").mock(
         return_value=httpx.Response(200, json={"iid": 7, "state": "opened", "sha": JUDGED})
@@ -310,7 +310,7 @@ async def test_another_refusal_of_the_merge_is_not_a_moved_head() -> None:
 @respx.mock
 async def test_a_merge_request_already_merged_at_the_commit_is_not_merged_again() -> None:
     import pytest
-    from choregos_adapters.errors import HeadMovedError
+    from tranibor_adapters.errors import HeadMovedError
 
     merged = respx.get(f"{BASE}/merge_requests/7").mock(
         return_value=httpx.Response(200, json={"iid": 7, "state": "merged", "sha": JUDGED})
@@ -323,7 +323,7 @@ async def test_a_merge_request_already_merged_at_the_commit_is_not_merged_again(
 
 
 def test_the_adapter_says_it_merges_at_a_commit() -> None:
-    from choregos_adapters.base import SCM_CAPABILITIES, merge_at_commit_refusal
+    from tranibor_adapters.base import SCM_CAPABILITIES, merge_at_commit_refusal
 
     assert GitLabScm.capabilities <= SCM_CAPABILITIES
     assert merge_at_commit_refusal(adapter()) is None

@@ -15,9 +15,9 @@ from typing import Any
 
 import httpx
 import pytest
-from choregos_adapters.errors import AdapterError, ConfigurationError, UpstreamError
-from choregos_adapters.fakes.netops import DROPPED_FLOW_TRACE, FakeCiliumKubernetes, FakePfSense, FakeRepo
-from choregos_adapters.netops import (
+from tranibor_adapters.errors import AdapterError, ConfigurationError, UpstreamError
+from tranibor_adapters.fakes.netops import DROPPED_FLOW_TRACE, FakeCiliumKubernetes, FakePfSense, FakeRepo
+from tranibor_adapters.netops import (
     CiliumNetwork,
     FlowFilter,
     GitHubRepoReader,
@@ -242,7 +242,7 @@ async def test_nginx_reads_its_configuration_from_the_repository_and_stays_in_it
 
 
 async def test_the_github_reader_uses_the_trees_and_contents_api() -> None:
-    from choregos_adapters.github import GitHubClient
+    from tranibor_adapters.github import GitHubClient
 
     seen: list[str] = []
 

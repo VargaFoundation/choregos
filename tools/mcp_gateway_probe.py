@@ -23,8 +23,8 @@ from typing import Any
 from urllib.parse import urlsplit
 
 import httpx
-from choregos_adapters.mcp import McpClient
-from choregos_core.egress import AllowedRule, EgressPolicy, use_policy
+from tranibor_adapters.mcp import McpClient
+from tranibor_core.egress import AllowedRule, EgressPolicy, use_policy
 
 _DEFAULT_PORTS = {"http": 80, "https": 443}
 

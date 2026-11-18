@@ -52,7 +52,7 @@ class _Halfway(httpx.AsyncByteStream):
 
 def _halfway(upstream: Upstream, after: str, gate: asyncio.Event) -> None:  # noqa: F811
     """The model's streamed answer is cut after the chunk whose text is `after` until `gate` is set."""
-    from choregos_api.services.agent_sessions import set_model_transport
+    from tranibor_api.services.agent_sessions import set_model_transport
 
     async def handler(request: httpx.Request) -> httpx.Response:
         whole = upstream.handle(request)
@@ -69,8 +69,8 @@ def _halfway(upstream: Upstream, after: str, gate: asyncio.Event) -> None:  # no
 
 async def _proposal(conversation_id: str, email: str, summary: str) -> str:
     """A write the assistant proposed and the person has not decided."""
-    from choregos_api.db.models import AgentSessionRecord, ConversationAction, User
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import AgentSessionRecord, ConversationAction, User
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         record = await session.get(AgentSessionRecord, conversation_id)
@@ -93,9 +93,9 @@ async def _proposal(conversation_id: str, email: str, summary: str) -> str:
 
 
 async def _principal(email: str) -> Any:
-    from choregos_api.db.models import User
-    from choregos_api.db.session import session_scope
-    from choregos_api.rbac import Principal, Role
+    from tranibor_api.db.models import User
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.rbac import Principal, Role
 
     async with session_scope(orgs="*") as session:
         user = (await session.execute(select(User).where(User.email == email))).scalar_one()
@@ -156,7 +156,7 @@ async def test_a_client_attached_mid_turn_gets_the_rest_and_a_resume_repeats_no_
     admin: str,
     upstream: Upstream,  # noqa: F811
 ) -> None:
-    from choregos_api.services.turn_follow import run_of, start_turn
+    from tranibor_api.services.turn_follow import run_of, start_turn
 
     await _agent(client)
     conversation = await _open("northwind", admin)
@@ -243,8 +243,8 @@ async def test_a_detached_turn_is_booked_once_when_its_client_left_and_a_plain_o
     admin: str,
     upstream: Upstream,  # noqa: F811
 ) -> None:
-    from choregos_api.routers.conversations import _sent
-    from choregos_api.services.turn_follow import start_turn
+    from tranibor_api.routers.conversations import _sent
+    from tranibor_api.services.turn_follow import start_turn
 
     await _agent(client)
     principal = await _principal(admin)

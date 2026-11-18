@@ -14,7 +14,7 @@ from types import ModuleType
 import pytest
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
-DOOR = "apps/api/src/choregos_api/mcp/"
+DOOR = "apps/api/src/tranibor_api/mcp/"
 OWNED = (
     f"{DOOR}__init__.py",
     f"{DOOR}caller.py",
@@ -47,8 +47,8 @@ def test_mcp_door_has_no_french() -> None:
 
 
 def test_the_caller_and_the_refusal_carry_the_english_fields() -> None:
-    from choregos_api.mcp.caller import Caller, Refusal
-    from choregos_api.rbac import Principal
+    from tranibor_api.mcp.caller import Caller, Refusal
+    from tranibor_api.rbac import Principal
 
     principal = Principal(user_id="u", email="u@example.test")
     caller = Caller(principal=principal, token=None, scopes=frozenset({"mcp:write"}), key="oauth:c:s")
@@ -64,7 +64,7 @@ def test_the_caller_and_the_refusal_carry_the_english_fields() -> None:
 
 
 def test_the_http_refusal_names_the_oauth_error_and_the_door() -> None:
-    from choregos_api.mcp.transport import _http_refusal
+    from tranibor_api.mcp.transport import _http_refusal
 
     response = _http_refusal(401, "no", oauth_error="invalid_token", path="/mcp/projects/o:p")
     assert response.headers["www-authenticate"] == 'Bearer realm="choregos", error="invalid_token"'

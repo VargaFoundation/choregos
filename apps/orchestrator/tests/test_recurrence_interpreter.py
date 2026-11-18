@@ -15,7 +15,7 @@ import pathlib
 from typing import Any
 
 import pytest
-from choregos_contracts import StageResult, StageStatus
+from tranibor_contracts import StageResult, StageStatus
 
 from .conftest import Fixture, recording_history, stage_result
 from .kits.train_and_work_item import wait_until_state
@@ -53,10 +53,10 @@ def _failed(why: str) -> StageResult:
 
 
 async def _pin(setup: Fixture) -> None:
-    from choregos_api.db.models import Project, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.rbac import SYSTEM
-    from choregos_api.services.definitions import publish_workflow
+    from tranibor_api.db.models import Project, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.rbac import SYSTEM
+    from tranibor_api.services.definitions import publish_workflow
 
     async with session_scope() as session:
         project = await session.get(Project, setup.project_id)
@@ -69,9 +69,9 @@ async def _pin(setup: Fixture) -> None:
 
 async def _reopen(setup: Fixture) -> dict[str, Any]:
     """What a door does when the ticket comes back: claim the pass; returns the interpreter's payload."""
-    from choregos_api.db.models import Project, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.recurrence import reopen_work_item, restart_payload
+    from tranibor_api.db.models import Project, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.recurrence import reopen_work_item, restart_payload
 
     async with session_scope() as session:
         project = await session.get(Project, setup.project_id)
@@ -82,9 +82,9 @@ async def _reopen(setup: Fixture) -> dict[str, Any]:
 
 
 async def _runs(setup: Fixture) -> list[tuple[str, str]]:
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = (
@@ -98,10 +98,10 @@ async def _runs(setup: Fixture) -> list[tuple[str, str]]:
 async def test_a_new_pass_numbers_its_runs_past_the_first_and_gets_a_fresh_attempts_budget(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
-    from choregos_api.temporal import interpreter_id
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.common import WorkflowIDConflictPolicy, WorkflowIDReusePolicy
     from temporalio.worker import Replayer
+    from tranibor_api.temporal import interpreter_id
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     await _pin(setup)
     answers = [
@@ -162,10 +162,10 @@ async def test_a_new_pass_numbers_its_runs_past_the_first_and_gets_a_fresh_attem
 
 async def test_a_new_pass_reads_none_of_the_previous_passs_outputs_or_spend(setup: Fixture) -> None:
     """`load_context` of a new pass: no last outputs, no spend, the earlier attempts named."""
-    from choregos_api.db.models import CostLedger, Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
-    from choregos_orchestrator.activities.interpretation import load_context
+    from tranibor_api.db.models import CostLedger, Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
+    from tranibor_orchestrator.activities.interpretation import load_context
 
     await _pin(setup)
     async with session_scope() as session:

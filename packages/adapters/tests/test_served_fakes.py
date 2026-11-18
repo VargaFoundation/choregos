@@ -12,10 +12,10 @@ from typing import Any
 
 import httpx
 import pytest
-from choregos_adapters.errors import AdapterError
-from choregos_adapters.fakes.hr import RemoteDesk
-from choregos_adapters.fakes.server import DemoApplication, application
-from choregos_adapters.mcp import McpClient, McpError
+from tranibor_adapters.errors import AdapterError
+from tranibor_adapters.fakes.hr import RemoteDesk
+from tranibor_adapters.fakes.server import DemoApplication, application
+from tranibor_adapters.mcp import McpClient, McpError
 
 TOKEN = "demo-fakes-token"
 
@@ -37,7 +37,7 @@ async def test_two_processes_see_the_same_fleet() -> None:
 
 
 async def test_the_fake_graph_is_reached_by_its_address_and_its_secret() -> None:
-    from choregos_adapters.identity import EntraIdentity
+    from tranibor_adapters.identity import EntraIdentity
 
     app = DemoApplication(token=TOKEN)
 
@@ -98,8 +98,8 @@ async def test_demo_token_reads_the_english_variable_only(monkeypatch: pytest.Mo
 def test_a_demo_connector_that_carries_a_url_reaches_the_fakes_process(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from choregos_adapters import build
-    from choregos_adapters.fakes.hr import Desk
+    from tranibor_adapters import build
+    from tranibor_adapters.fakes.hr import Desk
 
     monkeypatch.setenv("CHOREGOS_FAKES", "0")
     monkeypatch.setenv("CHOREGOS_ENV", "dev")

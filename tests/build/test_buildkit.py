@@ -21,10 +21,10 @@ import shutil
 import zipfile
 
 import pytest
-from choregos_adapters.oci import BuildctlBuilder, BuildRequest, OciRegistryClient
-from choregos_adapters.oci.builder import run_command
-from choregos_api.schemas.agents import HostedRuntime
-from choregos_api.services.hosted_sources import build_key, dockerfile, read_source
+from tranibor_adapters.oci import BuildctlBuilder, BuildRequest, OciRegistryClient
+from tranibor_adapters.oci.builder import run_command
+from tranibor_api.schemas.agents import HostedRuntime
+from tranibor_api.services.hosted_sources import build_key, dockerfile, read_source
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 REFERENCE = ROOT / "examples" / "hosted" / "reference"

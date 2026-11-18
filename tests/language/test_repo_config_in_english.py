@@ -20,7 +20,7 @@ from typing import Any
 
 import pytest
 import yaml
-from choregos_core.catalogue import load_catalogue
+from tranibor_core.catalogue import load_catalogue
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 

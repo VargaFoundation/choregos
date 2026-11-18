@@ -36,7 +36,7 @@ ce = _load()
 
 #: One French sentence, reused so that this file's own French stays on lines that carry the escape.
 FR = "la demande est refusée pour le train"  # lang: fr-ok
-API = "apps/api/src/choregos_api"
+API = "apps/api/src/tranibor_api"
 
 
 def _in_a_git_checkout() -> bool:
@@ -263,7 +263,7 @@ READERS = [
     ("docker/Dockerfile", f"FROM python:3.12\n# {FR}\nRUN true\n"),
     ("justfile", f"build:\n    # {FR}\n    true\n"),
     ("CODEOWNERS", f"# {FR}\n* @team\n"),
-    ("apps/api/src/choregos_api/migrations/x.sql", f"SELECT 1; -- {FR}\n"),
+    ("apps/api/src/tranibor_api/migrations/x.sql", f"SELECT 1; -- {FR}\n"),
     ("apps/web/public/x.js", f"// {FR}\nconst a = 1;\n"),
     ("apps/web/public/x.mjs", f"/* {FR} */\nexport const a = 1;\n"),
     ("apps/web/src/x.css", f"/* {FR} */\na {{ color: red }}\n"),
@@ -305,7 +305,7 @@ def test_json_and_excluded_paths_are_not_read() -> None:
     for path in (
         "apps/web/package.json",
         "tests/replay/histories/x.json",
-        "packages/core/src/choregos_core/injection.py",
+        "packages/core/src/tranibor_core/injection.py",
         "docs/cli.md",
     ):
         assert not ce.is_scanned(path), path

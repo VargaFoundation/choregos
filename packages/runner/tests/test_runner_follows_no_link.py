@@ -14,11 +14,11 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from choregos_runner import safe_files
-from choregos_runner.outputs import collect
-from choregos_runner.remote import _input_parts, _message_text
-from choregos_runner.result import load_result, write_result
-from choregos_runner.runner import SAVED_SESSION, EventJournal, _events_already_journaled, _saved_session
+from tranibor_runner import safe_files
+from tranibor_runner.outputs import collect
+from tranibor_runner.remote import _input_parts, _message_text
+from tranibor_runner.result import load_result, write_result
+from tranibor_runner.runner import SAVED_SESSION, EventJournal, _events_already_journaled, _saved_session
 
 from .conftest import valid_result
 
@@ -67,7 +67,7 @@ def test_a_choregos_folder_that_is_a_link_is_refused(tmp_path: Path, tree: tuple
 
 
 def _stub() -> Any:
-    from choregos_contracts import StageResult
+    from tranibor_contracts import StageResult
 
     return StageResult.model_validate({**valid_result(), "schema": "choregos/StageResult/v1"})
 

@@ -175,7 +175,7 @@ def _platform(namespace: str) -> str:
         command=[
             "sh",
             "-c",
-            "python -m choregos_api.migrate && uvicorn choregos_api.main:app --host 0.0.0.0 --port 8000",
+            "python -m tranibor_api.migrate && uvicorn tranibor_api.main:app --host 0.0.0.0 --port 8000",
         ],
         ready={"httpGet": {"path": "/healthz", "port": 8000}},
     )
@@ -249,9 +249,9 @@ def _in_the_api(namespace: str, script: str) -> dict[str, Any]:
 
 SEED_ORGANISATION = """
 import asyncio, json
-from choregos_api.db.models import Organization, Project
-from choregos_api.db.session import session_scope
-from choregos_api.services import ensure_defaults
+from tranibor_api.db.models import Organization, Project
+from tranibor_api.db.session import session_scope
+from tranibor_api.services import ensure_defaults
 
 async def main():
     async with session_scope(orgs="*") as session:
@@ -273,9 +273,9 @@ asyncio.run(main())
 
 SEED_RUN = """
 import asyncio, json
-from choregos_api.db.models import Run, WorkItem
-from choregos_api.db.session import session_scope
-from choregos_api.security import mint_run_token
+from tranibor_api.db.models import Run, WorkItem
+from tranibor_api.db.session import session_scope
+from tranibor_api.security import mint_run_token
 
 async def main():
     async with session_scope(orgs="*") as session:
@@ -553,7 +553,7 @@ def site() -> Iterator[Site]:
 
 
 def test_the_read_goes_through_while_the_platform_cannot_connect_to_the_outpost(site: Site) -> None:
-    from choregos_contracts import arguments_sha256
+    from tranibor_contracts import arguments_sha256
 
     first = site.search("door stuck")
     assert first["status_code"] == 200, first

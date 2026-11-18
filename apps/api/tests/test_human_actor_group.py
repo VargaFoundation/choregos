@@ -33,9 +33,9 @@ transitions:
 
 
 async def _waiting_ticket(client: AsyncClient, pid: str) -> str:
-    from choregos_api.db.models import HumanRequest
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
+    from tranibor_api.db.models import HumanRequest
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
 
     assert (
         await client.put(f"/api/v1/projects/{pid}/workflows/release", json={"yaml": WORKFLOW})
@@ -69,9 +69,9 @@ async def test_a_project_owner_outside_the_group_cannot_answer_its_step(
         refused = await _decide(app, outsider, item_id)
         assert refused.status_code == 403 and GROUP in refused.text, (outsider, refused.text)
 
-    from choregos_api.db.models import HumanRequest
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import HumanRequest
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         row = (
@@ -83,9 +83,9 @@ async def test_a_project_owner_outside_the_group_cannot_answer_its_step(
 async def test_a_member_answers_and_an_administrator_overrides_with_an_audit_trail(
     client: AsyncClient, project: dict[str, Any], app: Any
 ) -> None:
-    from choregos_api.db.models import AuditLog
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import AuditLog
+    from tranibor_api.db.session import session_scope
 
     item_id = await _waiting_ticket(client, project["id"])
     await _member(client, "cap@northwind.dev", "developer", [GROUP])
@@ -120,9 +120,9 @@ async def test_a_member_answers_and_an_administrator_overrides_with_an_audit_tra
 
 
 async def _waiting_ticket_again(client: AsyncClient, pid: str) -> str:
-    from choregos_api.db.models import HumanRequest
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
+    from tranibor_api.db.models import HumanRequest
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
 
     created = await client.post(
         f"/api/v1/projects/{pid}/work-items", json={"title": "Ship 1.3", "workflow": "release"}
@@ -165,10 +165,10 @@ async def test_a_group_nobody_carries_is_warned_about_at_validation(
 async def test_a_group_namespaced_for_the_organisation_counts_as_its_bare_name(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.human_groups import groups_known_in
     from sqlalchemy import select
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.human_groups import groups_known_in
 
     path = f"/api/v1/projects/{project['id']}/workflows/validate"
     await _member(client, "other@northwind.dev", "developer", [f"choregos:other-org:{GROUP}"])
@@ -198,7 +198,7 @@ async def test_a_namespaced_group_answers_the_step_only_for_its_own_organisation
 
 
 def test_groups_for_org_keeps_bare_names_and_unwraps_only_its_own_prefix() -> None:
-    from choregos_api.services.human_groups import groups_for_org
+    from tranibor_api.services.human_groups import groups_for_org
 
     got = groups_for_org(
         ["architects", "choregos:northwind:pm", "choregos:other:ops", "choregos:northwind:"], "northwind"
@@ -209,8 +209,8 @@ def test_groups_for_org_keeps_bare_names_and_unwraps_only_its_own_prefix() -> No
 def test_knowledge_group_scope_and_grants_read_namespaced_groups_for_their_org() -> None:
     from types import SimpleNamespace
 
-    from choregos_api.knowledge import access
-    from choregos_api.rbac import Principal, Role
+    from tranibor_api.knowledge import access
+    from tranibor_api.rbac import Principal, Role
 
     base = SimpleNamespace(scope="groups", groups=["architects"], restricted=False)
     grant = SimpleNamespace(subject_type="group", subject="architects", role="viewer")

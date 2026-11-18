@@ -14,10 +14,10 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from choregos_contracts import StageInput
-from choregos_runner.acp import AcpClient, AgentUnreachableError
-from choregos_runner.backends import BACKEND_BINARIES, get_backend, known_backends
-from choregos_runner.result import load_result
+from tranibor_contracts import StageInput
+from tranibor_runner.acp import AcpClient, AgentUnreachableError
+from tranibor_runner.backends import BACKEND_BINARIES, get_backend, known_backends
+from tranibor_runner.result import load_result
 
 pytestmark = pytest.mark.conformance
 
@@ -63,7 +63,7 @@ def backend_available(name: str) -> bool:
 
 @pytest.fixture
 def stage_input(tmp_path: Path) -> StageInput:
-    from choregos_contracts import (
+    from tranibor_contracts import (
         AgentRef,
         Budget,
         Callbacks,

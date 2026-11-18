@@ -15,8 +15,8 @@ import time
 from typing import Any
 
 import pytest
-from choregos_contracts import StageResult, StageStatus
-from choregos_core.domain import ExecStatus
+from tranibor_contracts import StageResult, StageStatus
+from tranibor_core.domain import ExecStatus
 
 from .conftest import Fixture, recording_history
 from .test_interpreter import _runs, _wait_state, start
@@ -57,10 +57,10 @@ async def _in_flight(setup: Fixture, *, timeout: float = 30) -> str:
 
 async def stop_as_the_api_does(run_id: str, reason: str) -> dict[str, Any]:
     """`POST /runs/{id}/cancel`, as its service plays it: the result written, `run.cancel` audited."""
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
-    from choregos_api.rbac import Principal, Role
-    from choregos_api.services.run_cancel import cancel_run_now
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.rbac import Principal, Role
+    from tranibor_api.services.run_cancel import cancel_run_now
 
     principal = Principal(user_id="u-ops", email=WHO, org_roles={"northwind": Role.ORG_ADMIN})
     async with session_scope() as session:
@@ -71,9 +71,9 @@ async def stop_as_the_api_does(run_id: str, reason: str) -> dict[str, Any]:
 
 
 async def _ledger_lines(run_id: str) -> int:
-    from choregos_api.db.models import CostLedger
-    from choregos_api.db.session import session_scope
     from sqlalchemy import func, select
+    from tranibor_api.db.models import CostLedger
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         return int(
@@ -86,9 +86,9 @@ async def _ledger_lines(run_id: str) -> int:
 
 
 async def _requests(setup: Fixture) -> list[dict[str, Any]]:
-    from choregos_api.db.models import HumanRequest
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import HumanRequest
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = (
@@ -98,8 +98,8 @@ async def _requests(setup: Fixture) -> list[dict[str, Any]]:
 
 
 async def _run_status(run_id: str) -> str:
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         run = await session.get(Run, run_id)
@@ -110,7 +110,7 @@ async def _run_status(run_id: str) -> str:
 @pytest.fixture
 def one_second_polls(monkeypatch: pytest.MonkeyPatch) -> None:
     """`await_run` polls every `heartbeat_seconds`: one second here, so "within one poll" is short."""
-    from choregos_orchestrator.config import reset_settings_cache
+    from tranibor_orchestrator.config import reset_settings_cache
 
     monkeypatch.setenv("CHOREGOS_HEARTBEAT_SECONDS", "1")
     reset_settings_cache()
@@ -119,8 +119,8 @@ def one_second_polls(monkeypatch: pytest.MonkeyPatch) -> None:
 async def test_a_stopped_run_ends_its_stage_and_the_work_item_waits_for_a_person(
     setup: Fixture, temporal_env: Any, worker_factory: Any, one_second_polls: None
 ) -> None:
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.worker import Replayer
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     keep_the_first_run_running(setup)
     async with worker_factory():
@@ -222,7 +222,7 @@ async def test_before_the_marker_a_stopped_run_was_retried(
 ) -> None:
     """A history recorded before `run-stopped-goes-to-a-person` keeps its old decision on replay:
     the stopped run was a failed attempt, and the stage played again."""
-    from choregos_orchestrator.workflows import interpreter
+    from tranibor_orchestrator.workflows import interpreter
 
     real = interpreter.workflow.patched
     monkeypatch.setattr(
@@ -251,7 +251,7 @@ async def _wait_until_runs(setup: Fixture, count: int, *, timeout: float = 30) -
 
 async def test_await_run_returns_the_stop_within_one_poll(setup: Fixture) -> None:
     """The run keeps running on its executor; the written result ends the wait at the next poll."""
-    from choregos_orchestrator.activities import stage as activities
+    from tranibor_orchestrator.activities import stage as activities
 
     keep_the_first_run_running(setup)
     plan = await activities.prepare_stage(
@@ -297,11 +297,11 @@ async def test_await_run_returns_the_stop_within_one_poll(setup: Fixture) -> Non
 async def test_two_closings_of_one_run_book_its_spend_once(setup: Fixture) -> None:
     """The interpreter's `collect_spend` and a stop's `cancel_run` may close the same run at once: the
     second, holding a copy read before the first committed, books nothing."""
-    from choregos_api.db.models import Run
-    from choregos_orchestrator.activities import stage as activities
-    from choregos_orchestrator.activities.base import db, project_bundle
-    from choregos_orchestrator.activities.outcome import book_spend
-    from choregos_orchestrator.config import get_settings
+    from tranibor_api.db.models import Run
+    from tranibor_orchestrator.activities import stage as activities
+    from tranibor_orchestrator.activities.base import db, project_bundle
+    from tranibor_orchestrator.activities.outcome import book_spend
+    from tranibor_orchestrator.config import get_settings
 
     plan = await activities.prepare_stage(
         {

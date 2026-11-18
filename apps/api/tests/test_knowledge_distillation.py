@@ -16,7 +16,7 @@ ENCRYPTION = b"# Encryption standard\n\n## In transit\n\nTLS 1.3 is required for
 
 
 async def _framework(client: AsyncClient) -> None:
-    from choregos_api.knowledge.conversion import conversions
+    from tranibor_api.knowledge.conversion import conversions
 
     await client.post(BASE, json={"slug": "architecture", "name": "Architecture framework"})
     for name, data in (("zoning.pptx", ZONING), ("encryption.md", ENCRYPTION)):
@@ -27,7 +27,7 @@ async def _framework(client: AsyncClient) -> None:
 
 
 async def _distilled(client: AsyncClient) -> dict[str, Any]:
-    from choregos_api.knowledge.conversion import conversions
+    from tranibor_api.knowledge.conversion import conversions
 
     started = await client.post(f"{BASE}/architecture/distill")
     assert started.status_code == 202, started.text
@@ -72,10 +72,10 @@ async def test_a_distilled_version_waits_for_a_person_then_is_approved(
 async def test_a_principle_citing_nothing_of_the_base_is_dropped_and_said(
     client: AsyncClient, admin: str
 ) -> None:
-    from choregos_api.db.models import KnowledgeBase
-    from choregos_api.db.session import session_scope
-    from choregos_api.knowledge.distill import distill
     from sqlalchemy import select
+    from tranibor_api.db.models import KnowledgeBase
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.knowledge.distill import distill
 
     class Inventive:
         model = "test/inventive"
@@ -126,7 +126,7 @@ async def test_only_an_org_admin_distils(client: AsyncClient, admin: str) -> Non
 
 
 def test_the_distiller_is_in_the_catalogue_in_english() -> None:
-    from choregos_core.agent_catalogue import entry
+    from tranibor_core.agent_catalogue import entry
 
     distiller = entry("knowledge-distiller")
     assert distiller is not None and distiller.role == "distill"
@@ -135,9 +135,9 @@ def test_the_distiller_is_in_the_catalogue_in_english() -> None:
 
 def test_a_base_too_large_for_the_cap_names_its_biggest_documents() -> None:
     """The refusal says what to do: the size, the number of parts, and which documents weigh most."""
-    from choregos_api.config import Settings
-    from choregos_api.knowledge.distill import Source, build_estimate
-    from choregos_api.services.model_catalogue import Price
+    from tranibor_api.config import Settings
+    from tranibor_api.knowledge.distill import Source, build_estimate
+    from tranibor_api.services.model_catalogue import Price
 
     sizes = {"budget.xlsx": 1_500_000, "notes.md": 1_000, "prices.xlsx": 700_000, "plan.md": 60_000}
     corpus = [Source(name, name, "sha256:x", "x" * size) for name, size in sizes.items()]
@@ -158,11 +158,11 @@ async def test_a_stale_running_distillation_does_not_block(client: AsyncClient, 
     """A `running` record older than 30 minutes (or without a start) is a dead one: distil again."""
     from datetime import timedelta
 
-    from choregos_api.db.models import KnowledgeBase
-    from choregos_api.db.session import ALL_ORGS, session_scope
-    from choregos_api.knowledge.conversion import conversions
-    from choregos_core import utcnow
     from sqlalchemy import select
+    from tranibor_api.db.models import KnowledgeBase
+    from tranibor_api.db.session import ALL_ORGS, session_scope
+    from tranibor_api.knowledge.conversion import conversions
+    from tranibor_core import utcnow
 
     await _framework(client)
 
@@ -189,17 +189,17 @@ async def test_a_stale_running_distillation_does_not_block(client: AsyncClient, 
 
 
 async def test_a_restart_marks_the_running_distillation_failed(client: AsyncClient, admin: str) -> None:
-    from choregos_api.knowledge.conversion import conversions
-    from choregos_core import utcnow
+    from tranibor_api.knowledge.conversion import conversions
+    from tranibor_core import utcnow
 
     await _framework(client)
     started = await client.post(f"{BASE}/architecture/distill")
     assert started.status_code == 202
     await conversions.drain()
     # The task of a replica that stopped leaves `running` behind.
-    from choregos_api.db.models import KnowledgeBase
-    from choregos_api.db.session import ALL_ORGS, session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import KnowledgeBase
+    from tranibor_api.db.session import ALL_ORGS, session_scope
 
     async with session_scope(orgs=ALL_ORGS) as session:
         base = (await session.execute(select(KnowledgeBase))).scalars().one()

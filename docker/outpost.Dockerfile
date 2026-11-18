@@ -10,6 +10,7 @@ COPY --from=ghcr.io/astral-sh/uv:0.5.11@sha256:0ac957607303916420297a4c9c213bb33
 WORKDIR /app
 COPY pyproject.toml uv.lock README.md ./
 COPY packages packages
+COPY compat compat
 COPY apps/api/pyproject.toml apps/api/
 COPY apps/orchestrator/pyproject.toml apps/orchestrator/
 # `--no-editable`: the daemon and the three workspace packages it uses (the contract, the core's
@@ -17,7 +18,7 @@ COPY apps/orchestrator/pyproject.toml apps/orchestrator/
 # The runtime stage then copies that environment and nothing else: whoever runs this image in their
 # network gets the daemon, not the rest of the repository beside it.
 RUN mkdir -p apps/api/src apps/orchestrator/src \
- && uv sync --frozen --no-dev --no-editable --package choregos-outpost
+ && uv sync --frozen --no-dev --no-editable --package tranibor-outpost
 
 FROM python:3.12-slim-bookworm@sha256:935c3c5b12357a7e10caa9c1e6ca5692344d97cf229832ef584be2cec9fc03df AS runtime
 ENV PYTHONUNBUFFERED=1 PATH="/app/.venv/bin:$PATH" \
@@ -38,10 +39,10 @@ RUN apt-get update && apt-get upgrade -y --no-install-recommends \
 COPY --from=builder --chown=1000:1000 /app/.venv /app/.venv
 USER 1000
 # The daemon must START in this image, and find the contract it was built against: the wheel of
-# `choregos-contracts` carries the door's document and the policy file's schema, and a daemon that
+# `tranibor-contracts` carries the door's document and the policy file's schema, and a daemon that
 # cannot read them refuses every policy. Checked here, where a missing file fails the build.
 RUN choregos-outpost --version \
- && python -c "import choregos_contracts as c, choregos_outpost.policy as p; \
+ && python -c "import tranibor_contracts as c, tranibor_outpost.policy as p; \
       c.load_outpost_door(); p.load(c.schemas_dir() / 'examples' / 'outpost-policy.example.yaml')" \
  && test ! -e /app/packages
 ENTRYPOINT ["/usr/bin/tini", "--", "choregos-outpost"]

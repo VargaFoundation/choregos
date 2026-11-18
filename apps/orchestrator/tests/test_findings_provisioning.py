@@ -13,8 +13,8 @@ pytestmark = pytest.mark.asyncio
 
 
 async def _add_finding(setup: Fixture, title: str, evidence: str, **kwargs: Any) -> str:
-    from choregos_api.db.models import Finding
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Finding
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         row = Finding(
@@ -59,8 +59,8 @@ async def test_finding_creates_linked_ticket(setup: Fixture, temporal_env: Any, 
         await handle.signal("stop", {})
         await handle.result()
 
-    from choregos_api.db.models import Finding
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Finding
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         row = await session.get(Finding, finding_id)
@@ -115,8 +115,8 @@ async def test_provisioning_runs_steps_and_resumes(
     assert result["status"] in {"succeeded", "failed"}
     assert result["completed"], "at least one step executed"
 
-    from choregos_api.db.models import Project
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Project
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         project = await session.get(Project, setup.project_id)
@@ -168,9 +168,9 @@ NO_SLACK = "[slack] ni `bot_token` ni `webhook_url` configurés"  # lang: fr-ok 
 
 async def test_a_critical_finding_without_a_notifier_is_still_filed(setup: Fixture) -> None:
     """Raising from the notification rolled back the finding after its ticket was created."""
-    from choregos_api.db.models import Finding
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities import findings as findings_activities
+    from tranibor_api.db.models import Finding
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities import findings as findings_activities
 
     setup.adapters.notify.failure = NO_SLACK
     finding_id = await _add_finding(
@@ -189,9 +189,9 @@ async def test_a_critical_finding_without_a_notifier_is_still_filed(setup: Fixtu
 
 
 async def test_the_false_positive_alert_without_a_notifier_still_answers(setup: Fixture) -> None:
-    from choregos_api.db.models import Finding
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities import findings as findings_activities
+    from tranibor_api.db.models import Finding
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities import findings as findings_activities
 
     for index in range(3):
         finding_id = await _add_finding(setup, f"Noise {index}", "nothing to act on")
@@ -214,9 +214,9 @@ async def test_a_memory_timeout_does_not_undo_a_filed_finding(setup: Fixture) ->
     """The memory's `ReadTimeout` rolled back the finding after its ticket was created, and the
     activity's retry filed the same ticket again (dev tenant, 2026-10-18)."""
     import httpx
-    from choregos_api.db.models import Finding
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities import findings as findings_activities
+    from tranibor_api.db.models import Finding
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities import findings as findings_activities
 
     async def timeout(*args: Any, **kwargs: Any) -> None:
         raise httpx.ReadTimeout("memory did not answer")
@@ -247,9 +247,9 @@ async def test_a_memory_timeout_does_not_undo_a_filed_finding(setup: Fixture) ->
 async def test_a_failure_after_the_ticket_is_filed_files_it_once(setup: Fixture) -> None:
     """A tracker error after `create_item` rolled the finding back to `pending`, and each retry
     filed one more ticket (#744). The retry now answers with the ticket the first attempt filed."""
-    from choregos_api.db.models import Finding
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities import findings as findings_activities
+    from tranibor_api.db.models import Finding
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities import findings as findings_activities
 
     async def unreachable(*args: Any, **kwargs: Any) -> None:
         raise RuntimeError("tracker 502 on link")

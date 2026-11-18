@@ -13,8 +13,8 @@ from collections.abc import AsyncIterator
 from uuid import uuid4
 
 import pytest
-from choregos_adapters.memory.ecphoria import EcphoriaMemory
-from choregos_core.domain import Fact, Provenance
+from tranibor_adapters.memory.ecphoria import EcphoriaMemory
+from tranibor_core.domain import Fact, Provenance
 
 from .conftest import require
 

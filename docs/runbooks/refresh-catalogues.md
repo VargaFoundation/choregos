@@ -63,7 +63,7 @@ is kept under `tests/fixtures/catalogues/skills/`. Then read:
 - `note <id>: asked bundled, delivered by git`: the skill is not eligible to be vendored (a
   copyleft licence, or a high risk: a script, an executable bit, or any outbound URL).
 - The diff of `catalogue.yaml` per skill: a new `sha` means upstream changed. **Read the diff of
-  the bundled files** (`git diff packages/core/src/choregos_core/skill_catalogue/bundled/`): they
+  the bundled files** (`git diff packages/core/src/tranibor_core/skill_catalogue/bundled/`): they
   are what the image will redistribute and what an agent will read. A new finding or a risk change is
   a reason to drop the skill, not to merge.
 - `THIRD_PARTY_NOTICES.md` is regenerated with the bundled set.

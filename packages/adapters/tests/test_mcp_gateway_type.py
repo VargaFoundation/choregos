@@ -12,13 +12,13 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-import choregos_adapters
 import pytest
-from choregos_adapters import build, egress_hosts, spec_of, validate_config
-from choregos_adapters.errors import AdapterError
-from choregos_adapters.fakes.mcp import FakeMcpServer
-from choregos_adapters.fakes.mcp_gateway import FakeMcpGateway, GatewayUpstream
-from choregos_adapters.mcp import McpClient
+import tranibor_adapters
+from tranibor_adapters import build, egress_hosts, spec_of, validate_config
+from tranibor_adapters.errors import AdapterError
+from tranibor_adapters.fakes.mcp import FakeMcpServer
+from tranibor_adapters.fakes.mcp_gateway import FakeMcpGateway, GatewayUpstream
+from tranibor_adapters.mcp import McpClient
 
 TOOLS = [{"name": "read_file", "inputSchema": {"type": "object"}}]
 OTHER_TOOLS = [{"name": "list_pages", "inputSchema": {"type": "object"}}]
@@ -139,7 +139,7 @@ async def test_the_real_factory_uses_what_the_platform_injects(monkeypatch: pyte
 async def test_fakes_route_a_gateway_connector_to_the_fake_gateway(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CHOREGOS_FAKES", "1")
     gateway = FakeMcpGateway(upstreams={"x": GatewayUpstream(server=_server(TOOLS))}, auth="none")
-    monkeypatch.setattr(choregos_adapters, "FAKE_MCP_GATEWAY", gateway)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_MCP_GATEWAY", gateway)
     client = build("mcp", "mcp-gateway", _injected())
     assert await _names(client) == ["read_file"]
     assert gateway.calls, "the request went through the gateway"
@@ -147,7 +147,7 @@ async def test_fakes_route_a_gateway_connector_to_the_fake_gateway(monkeypatch: 
     assert all(call.headers["x-mcp-server"] == "x" for call in gateway.calls)
     through_gateway = len(gateway.calls)
     direct = _server(OTHER_TOOLS)
-    monkeypatch.setattr(choregos_adapters, "FAKE_MCP", direct)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_MCP", direct)
     assert await _names(build("mcp", "mcp", {"url": "https://s.test/mcp"})) == ["list_pages"]
     assert _received(direct), "a direct connector still reaches FAKE_MCP"
     assert len(gateway.calls) == through_gateway, "and never the gateway"
@@ -173,11 +173,11 @@ def test_fakes_check_a_gateway_connector_like_the_real_factory(monkeypatch: pyte
 
 async def test_the_fake_gateway_follows_the_current_fake_mcp(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CHOREGOS_FAKES", "1")
-    monkeypatch.setattr(choregos_adapters, "FAKE_MCP_GATEWAY", None)
-    monkeypatch.setattr(choregos_adapters, "FAKE_MCP", _server(TOOLS))
+    monkeypatch.setattr(tranibor_adapters, "FAKE_MCP_GATEWAY", None)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_MCP", _server(TOOLS))
     config = _injected(server="y", gateway_url="https://gw.test/y/mcp")
     assert await _names(build("mcp", "mcp-gateway", config)) == ["read_file"]
-    monkeypatch.setattr(choregos_adapters, "FAKE_MCP", _server(OTHER_TOOLS))
+    monkeypatch.setattr(tranibor_adapters, "FAKE_MCP", _server(OTHER_TOOLS))
     assert await _names(build("mcp", "mcp-gateway", config)) == ["list_pages"]
 
 

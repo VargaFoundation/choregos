@@ -52,7 +52,7 @@ async def test_a_card_on_a_denied_host_is_never_fetched_whatever_the_egress_mode
 ) -> None:
     """Under the fakes the egress mode is `warn`: the list alone would only log. The bounds ride in
     the same policy as the list, in the guarded transport, and refuse before the request is sent."""
-    from choregos_adapters.fakes.a2a import FakeA2aAgent
+    from tranibor_adapters.fakes.a2a import FakeA2aAgent
 
     from .conftest_remote import remote_agent, set_sealing_key
 

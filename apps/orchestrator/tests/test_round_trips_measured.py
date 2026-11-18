@@ -21,10 +21,10 @@ async def _book(
     capabilities: frozenset[str] | None = None,
 ) -> dict[str, Any]:
     """A run whose key made `calls` model calls at the fake gateway, then `collect_spend`."""
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
-    from choregos_orchestrator.activities.outcome import collect_spend
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
+    from tranibor_orchestrator.activities.outcome import collect_spend
 
     gateway = setup.adapters.gateway
     if capabilities is not None:
@@ -50,8 +50,8 @@ async def _book(
 
 
 async def _tokens(run_id: str) -> dict[str, Any]:
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         run = await session.get(Run, run_id)
@@ -60,8 +60,8 @@ async def _tokens(run_id: str) -> dict[str, Any]:
 
 
 async def _item_totals(setup: Fixture) -> dict[str, Any]:
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         item = await session.get(WorkItem, setup.work_item_id)
@@ -81,7 +81,7 @@ async def test_a_run_that_called_no_model_reads_zero_not_unknown(setup: Fixture)
 
 
 async def test_booking_twice_does_not_count_twice(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.outcome import collect_spend
+    from tranibor_orchestrator.activities.outcome import collect_spend
 
     await _book(setup, "run-twice", calls=4)
     again = await collect_spend({"project_id": setup.project_id, "run_id": "run-twice"})
@@ -116,8 +116,8 @@ async def test_the_work_item_sums_the_calls_of_its_runs(setup: Fixture) -> None:
 
 
 async def test_a_work_item_with_a_run_booked_before_the_count_stays_unknown(setup: Fixture) -> None:
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         item = await session.get(WorkItem, setup.work_item_id)

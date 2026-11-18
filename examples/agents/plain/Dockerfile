@@ -2,7 +2,7 @@
 # is a subprocess it starts from the version's `command`. The agent gets its own virtualenv, so its
 # dependencies never shadow the runner's.
 #
-# Build from the repository root (until the SDK is on PyPI; then `uv pip install choregos-agent-sdk`):
+# Build from the repository root (until the SDK is on PyPI; then `uv pip install tranibor-agent-sdk`):
 #   docker build -f examples/agents/plain/Dockerfile \
 #     --build-arg RUNNER_IMAGE=ghcr.io/graalsystems/choregos-runner:<tag> -t my-registry/ticket-triager .
 # Then pin the pushed image by digest in the operator's `CHOREGOS_AGENT_IMAGES`.

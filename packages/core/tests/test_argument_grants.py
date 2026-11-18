@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from choregos_core.argument_grants import (
+from tranibor_core.argument_grants import (
     constraint_error,
     interpolate,
     narrowed,

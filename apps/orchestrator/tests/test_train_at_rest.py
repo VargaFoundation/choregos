@@ -103,8 +103,8 @@ async def test_a_batch_waiting_for_its_window_passes_to_the_next_run(
     assert continued_input["batch_no"] == 3 and continued_input["relay_threshold"] == THRESHOLD
 
     # The history of the relay replays against the current code, and is archived for those to come.
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.worker import Replayer
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
     if recording_history():

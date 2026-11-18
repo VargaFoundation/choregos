@@ -2,9 +2,9 @@
 
 - **Status**: accepted, 2026-11-16; S72-01 implements points 1 to 5, S72-02 (contract) and S72-03 point 6;
   S72-04 point 7 (amended 2026-11-17): a memory's export, refused for Ecphoria
-- **Concerns**: `apps/api/src/choregos_api/knowledge/okf.py`, `knowledge/serving.py` (`files_of`,
+- **Concerns**: `apps/api/src/tranibor_api/knowledge/okf.py`, `knowledge/serving.py` (`files_of`,
   `_ready`, `file_name`), `knowledge/index.py` (`index_document`), `knowledge/conversion.py`
-  (`title_of`), `services/conversation_knowledge.py`, `packages/runner/src/choregos_runner/knowledge.py`;
+  (`title_of`), `services/conversation_knowledge.py`, `packages/runner/src/tranibor_runner/knowledge.py`;
   amends [ADR 0051](0051-knowledge-bases.md) §5 (what a `files` base lays down); keeps
   [ADR 0081](0081-knowledge-base-rights.md) (rights) and [ADR 0007](0007-optional-memory.md) (a young
   dependency earns its place)

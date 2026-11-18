@@ -19,10 +19,10 @@ from typing import Any
 
 import pytest
 import yaml
-from choregos_adapters.fakes.identity_provider import FakeIdentityProvider
-from choregos_adapters.token_exchange import claims_of
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
+from tranibor_adapters.fakes.identity_provider import FakeIdentityProvider
+from tranibor_adapters.token_exchange import claims_of
 
 from .conftest import login, without_postgres
 from .kits.assistant_install import FIXTURE, MARKET, NEWS, ORG, _bind, _connector, _install, _member, _plugin
@@ -100,7 +100,7 @@ def _write_manifest(root: Path, version: str, *, extra_need: bool) -> None:
 
 @pytest.fixture
 def offline(tmp_path: Path) -> Iterator[Path]:
-    from choregos_api.services.plugin_supply import OfflineDirectory, use_plugin_supply
+    from tranibor_api.services.plugin_supply import OfflineDirectory, use_plugin_supply
 
     root = tmp_path / "plugins"
     shutil.copytree(FIXTURE, root / "investment-assistant" / "0.1.0")
@@ -113,8 +113,8 @@ def offline(tmp_path: Path) -> Iterator[Path]:
 @pytest.fixture
 def markets(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
     """The source: it accepts any bearer and records them, so a test reads WHICH one arrived."""
-    import choregos_adapters
-    from choregos_adapters.fakes.mcp import FakeMcpServer
+    import tranibor_adapters
+    from tranibor_adapters.fakes.mcp import FakeMcpServer
 
     tools = [
         {
@@ -127,14 +127,14 @@ def markets(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
     ]
     server = FakeMcpServer(tools=tools, token="")
     server.structured["get_quote"] = {"events": [{"id": "e1", "change_pct": 4.2}]}
-    monkeypatch.setattr(choregos_adapters, "FAKE_MCP", server)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_MCP", server)
     monkeypatch.setenv("CONNECTOR_TEST_MARKETS_KEY", "markets-key")
     yield server
 
 
 @pytest.fixture
 async def idp() -> AsyncIterator[FakeIdentityProvider]:
-    from choregos_api.services.identity_exchange import set_exchange_transport
+    from tranibor_api.services.identity_exchange import set_exchange_transport
 
     provider = FakeIdentityProvider(refresh_tokens={SIGN_IN_REFRESH: SUBJECT})
     set_exchange_transport(provider.transport())
@@ -181,8 +181,8 @@ async def _ready(client: AsyncClient) -> None:
 
 
 async def _user_id(email: str = EMAIL) -> tuple[str, str]:
-    from choregos_api.db.models import Organization, User
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Organization, User
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         user = (await session.execute(select(User).where(User.email == email))).scalar_one()
@@ -193,8 +193,8 @@ async def _user_id(email: str = EMAIL) -> tuple[str, str]:
 
 
 async def _sign_in_sealed() -> None:
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.identity_exchange import seal_refresh_token
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.identity_exchange import seal_refresh_token
 
     user_id, org_id = await _user_id()
     async with session_scope(orgs="*") as session:
@@ -203,8 +203,8 @@ async def _sign_in_sealed() -> None:
 
 async def _forget_sign_in() -> None:
     """The person is away: their sign-in token is not there any more."""
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.identity_exchange import forget_refresh_token
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.identity_exchange import forget_refresh_token
 
     user_id, org_id = await _user_id()
     async with session_scope(orgs="*") as session:
@@ -232,16 +232,16 @@ async def _agree(person: AsyncClient, **extra: Any) -> dict[str, Any]:
 
 
 async def _pass(now: datetime) -> dict[str, str]:
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.assistant_tasks import run_due
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.assistant_tasks import run_due
 
     async with session_scope(orgs="*") as session:
         return await run_due(session, now)
 
 
 async def _subscription() -> Any:
-    from choregos_api.db.models import TaskSubscription
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import TaskSubscription
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         sub = (await session.execute(select(TaskSubscription))).scalar_one()
@@ -250,8 +250,8 @@ async def _subscription() -> Any:
 
 
 async def _delegation(delegation_id: str) -> Any:
-    from choregos_api.db.models import Delegation
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Delegation
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         row = await session.get(Delegation, delegation_id)
@@ -261,9 +261,9 @@ async def _delegation(delegation_id: str) -> Any:
 
 
 async def _sealed(name: str) -> str | None:
-    from choregos_api.db.session import session_scope
-    from choregos_api.secret_store import get_secret_store
-    from choregos_core.secrets import SecretNotFound
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.secret_store import get_secret_store
+    from tranibor_core.secrets import SecretNotFound
 
     _, org_id = await _user_id()
     async with session_scope(orgs="*") as session:
@@ -278,8 +278,8 @@ def _calls(source: Any) -> list[dict[str, str]]:
 
 
 async def _reads() -> list[Any]:
-    from choregos_api.db.models import AssistantRead
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import AssistantRead
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         rows = list((await session.execute(select(AssistantRead))).scalars())
@@ -357,8 +357,8 @@ async def test_what_cannot_be_delegated_is_refused(
 
 
 async def test_a_write_need_cannot_be_delegated() -> None:
-    from choregos_api.errors import ApiError
-    from choregos_api.services.assistant_delegations import agreement_of
+    from tranibor_api.errors import ApiError
+    from tranibor_api.services.assistant_delegations import agreement_of
 
     document = {"tools": [{"need": "orders", "operations": ["place_order"], "access": "write"}]}
     (found,) = agreement_of(document, {"needs": ["orders"]})
@@ -457,8 +457,8 @@ async def test_the_delegation_is_refused_after_revocation_and_the_token_is_kille
 async def test_the_delegation_is_refused_when_the_person_leaves_the_audience(
     client: AsyncClient, org: str, app: Any, offline: Path, markets: Any, idp: FakeIdentityProvider
 ) -> None:
-    from choregos_api.db.models import User
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import User
+    from tranibor_api.db.session import session_scope
 
     await _ready(client)
     person = await _traveller(client, app)
@@ -482,9 +482,9 @@ async def test_the_delegation_is_refused_when_the_person_leaves_the_audience(
 async def test_the_delegation_is_refused_when_the_person_is_no_longer_a_member(
     client: AsyncClient, org: str, app: Any, offline: Path, markets: Any, idp: FakeIdentityProvider
 ) -> None:
-    from choregos_api.db.models import Membership
-    from choregos_api.db.session import session_scope
     from sqlalchemy import delete
+    from tranibor_api.db.models import Membership
+    from tranibor_api.db.session import session_scope
 
     await _ready(client)
     person = await _traveller(client, app)
@@ -531,10 +531,10 @@ async def test_the_delegation_is_refused_when_the_needs_of_the_task_changed(
 async def test_a_write_under_a_delegation_is_a_typed_refusal_that_reaches_no_source(
     client: AsyncClient, org: str, app: Any, offline: Path, markets: Any, idp: FakeIdentityProvider
 ) -> None:
-    from choregos_api.db.models import AssistantInstallation, ConnectorOperation, Delegation
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.assistant_delegations import DelegationRefused
-    from choregos_api.services.assistant_tasks import read_operation
+    from tranibor_api.db.models import AssistantInstallation, ConnectorOperation, Delegation
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.assistant_delegations import DelegationRefused
+    from tranibor_api.services.assistant_tasks import read_operation
 
     await _ready(client)
     person = await _traveller(client, app)
@@ -559,10 +559,10 @@ async def test_a_write_under_a_delegation_is_a_typed_refusal_that_reaches_no_sou
 async def test_a_delegated_read_outside_the_agreement_is_refused(
     client: AsyncClient, org: str, app: Any, offline: Path, markets: Any, idp: FakeIdentityProvider
 ) -> None:
-    from choregos_api.db.models import AssistantInstallation, Delegation
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.assistant_delegations import DelegationRefused
-    from choregos_api.services.assistant_tasks import read_operation
+    from tranibor_api.db.models import AssistantInstallation, Delegation
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.assistant_delegations import DelegationRefused
+    from tranibor_api.services.assistant_tasks import read_operation
 
     await _ready(client)
     person = await _traveller(client, app)
@@ -588,8 +588,8 @@ async def test_a_need_bound_otherwise_than_when_the_person_agreed_suspends_the_d
     """Security review S63-14: the agreement names the need, but the person agreed to read it AS THEM, at the
     source it was bound to. An administrator who re-binds it (to the connector's own identity, or to another
     source) must not make the standing token read there: a new agreement is needed, and nothing is called."""
-    from choregos_api.db.models import AssistantToolBinding, OrgConnector
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import AssistantToolBinding, OrgConnector
+    from tranibor_api.db.session import session_scope
 
     await _ready(client)
     person = await _traveller(client, app)
@@ -617,9 +617,9 @@ async def test_a_need_bound_otherwise_than_when_the_person_agreed_suspends_the_d
 async def test_a_delegated_read_of_an_operation_the_person_did_not_agree_to_is_refused(
     client: AsyncClient, org: str, app: Any, offline: Path, markets: Any, idp: FakeIdentityProvider
 ) -> None:
-    from choregos_api.db.models import AssistantInstallation, AssistantToolBinding, Delegation
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.assistant_delegations import DelegationRefused, guard_read
+    from tranibor_api.db.models import AssistantInstallation, AssistantToolBinding, Delegation
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.assistant_delegations import DelegationRefused, guard_read
 
     await _ready(client)
     person = await _traveller(client, app)
@@ -684,10 +684,10 @@ async def test_erasing_a_person_from_an_assistant_removes_their_delegations_and_
 
 
 async def test_the_table_is_under_forced_rls_with_an_owner_only_policy() -> None:
-    from choregos_api.db.models import Delegation
+    from tranibor_api.db.models import Delegation
 
     assert Delegation.__tablename__ == "delegations"
-    migration = Path(__file__).parent.parent / "src/choregos_api/migrations/versions"
+    migration = Path(__file__).parent.parent / "src/tranibor_api/migrations/versions"
     text = next(migration.glob("*delegations.py")).read_text()
     assert "FORCE ROW LEVEL SECURITY" in text and "AS RESTRICTIVE" in text
     assert "user_id = choregos_utilisateur_courant()" in text
@@ -695,8 +695,8 @@ async def test_the_table_is_under_forced_rls_with_an_owner_only_policy() -> None
 
 @pytest.fixture
 async def organisation_a(pg_app: Any) -> str:
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         organisation = Organization(slug="a", name="A")
@@ -709,14 +709,14 @@ async def organisation_a(pg_app: Any) -> str:
 async def test_another_person_never_reads_someones_delegation_on_postgresql(
     pg_app: Any, organisation_a: str
 ) -> None:
-    from choregos_api.db.models import (
+    from sqlalchemy.exc import DBAPIError
+    from tranibor_api.db.models import (
         AssistantInstallation,
         Delegation,
         Organization,
         User,
     )
-    from choregos_api.db.session import limit_to_organisations, name_the_user, session_scope
-    from sqlalchemy.exc import DBAPIError
+    from tranibor_api.db.session import limit_to_organisations, name_the_user, session_scope
 
     async with AsyncClient(transport=ASGITransport(app=pg_app), base_url="http://test") as http:
         await login(http, "admin@a.test")
@@ -784,9 +784,9 @@ async def test_another_person_never_reads_someones_delegation_on_postgresql(
 
 async def _task_run_tools(client: AsyncClient) -> tuple[str, dict[str, str], str]:
     """An agent step on the task's work item (the personal space's): tool route, headers, work item key."""
-    from choregos_api.db.models import Project, Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.security import mint_run_token
+    from tranibor_api.db.models import Project, Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.security import mint_run_token
 
     spec = {"mcp_servers": [{"connector": "markets", "tools": ["get_quote"]}]}
     made = await client.post(f"{ORG}/agents", json={"slug": "briefer", "display_name": "B", "spec": spec})
@@ -822,10 +822,10 @@ async def _task_run_tools(client: AsyncClient) -> tuple[str, dict[str, str], str
 async def test_the_steps_of_a_delegated_task_read_as_the_person_and_are_journaled(
     client: AsyncClient, org: str, app: Any, offline: Path, markets: Any, idp: FakeIdentityProvider
 ) -> None:
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.assistant_delegations import DelegationRefused
-    from choregos_api.services.task_reads import refuse_write
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.assistant_delegations import DelegationRefused
+    from tranibor_api.services.task_reads import refuse_write
 
     await _ready(client)
     person = await _traveller(client, app)
@@ -883,10 +883,10 @@ async def test_the_person_is_reminded_once_before_the_delegation_ends(
 ) -> None:
     from datetime import timedelta
 
-    from choregos_adapters.fakes.notify import FakeNotifier
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.assistant_delegations import remind_expiring
-    from choregos_api.services.task_delivery import set_notifier_factory
+    from tranibor_adapters.fakes.notify import FakeNotifier
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.assistant_delegations import remind_expiring
+    from tranibor_api.services.task_delivery import set_notifier_factory
 
     await _ready(client)
     person = await _traveller(client, app)

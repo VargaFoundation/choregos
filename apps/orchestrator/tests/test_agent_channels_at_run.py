@@ -21,9 +21,9 @@ async def _channels(
     project_channel: str = "stable",
 ) -> None:
     """Agent `coordinateur` with revisions 1 and 2, and its channels set as asked."""
-    from choregos_api.db.models import Agent, AgentVersion, Project
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Agent, AgentVersion, Project
+    from tranibor_api.db.session import session_scope
 
     await install_agent(setup)
     async with session_scope() as session:
@@ -49,9 +49,9 @@ async def _channels(
 
 
 async def _recorded(setup: Fixture, **plan: Any) -> tuple[int | None, str]:
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities.stage import prepare_stage
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities.stage import prepare_stage
 
     prepared = await prepare_stage(agent_stage_plan(setup, agent="coordinateur", **plan))
     async with session_scope() as session:
@@ -83,9 +83,9 @@ async def test_a_work_item_outside_the_share_runs_production(setup: Fixture) -> 
 
 
 async def test_after_a_rollback_a_new_stage_records_the_rolled_back_revision(setup: Fixture) -> None:
-    from choregos_api.db.models import Agent
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Agent
+    from tranibor_api.db.session import session_scope
 
     await _channels(setup, stable=2, candidate=None)
     assert (await _recorded(setup, attempt=1))[0] == 2

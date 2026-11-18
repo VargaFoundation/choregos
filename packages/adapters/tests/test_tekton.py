@@ -6,12 +6,12 @@ import base64
 from typing import Any
 
 import pytest
-from choregos_adapters.ci.tekton import TektonCi
-from choregos_adapters.errors import UpstreamError
-from choregos_adapters.executor.tekton import CORE_API, TEKTON_API, KubernetesClient, TektonExecutor
-from choregos_adapters.fakes.kubernetes import FakeKubernetesApi
-from choregos_contracts import InboundEventType
-from choregos_core.domain import ExecRef, StageJobSpec
+from tranibor_adapters.ci.tekton import TektonCi
+from tranibor_adapters.errors import UpstreamError
+from tranibor_adapters.executor.tekton import CORE_API, TEKTON_API, KubernetesClient, TektonExecutor
+from tranibor_adapters.fakes.kubernetes import FakeKubernetesApi
+from tranibor_contracts import InboundEventType
+from tranibor_core.domain import ExecRef, StageJobSpec
 
 from ._transport import Wire
 

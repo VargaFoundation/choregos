@@ -21,7 +21,7 @@ import shutil
 import subprocess
 import tempfile
 
-from choregos_core.publishing import CHARTS, PUBLISHING, Publishing
+from tranibor_core.publishing import CHARTS, PUBLISHING, Publishing
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 _NAME = re.compile(r"^name: .+$", re.MULTILINE)

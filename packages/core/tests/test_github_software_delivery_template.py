@@ -7,8 +7,8 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from choregos_core.agent_catalogue import entry
-from choregos_core.dsl.parser import parse_workflow
+from tranibor_core.agent_catalogue import entry
+from tranibor_core.dsl.parser import parse_workflow
 
 TEMPLATE = Path(__file__).resolve().parents[3] / "templates" / "github-software-delivery"
 WORKFLOWS = TEMPLATE / "workflows"

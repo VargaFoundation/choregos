@@ -472,7 +472,7 @@ curl -X POST $API/orgs/acme/connectors -d '{"kind": "mcp", "name": "data", "type
 | `client_secret` | A secret field: typed once in `secret_values` (sealed, ADR 0058) or referenced in `secret_refs` by a platform administrator. Never in `config`. |
 | `scope`, `audience` | Sent with the token request only when filled in: the scopes the server expects, and the audience some providers require. |
 
-What the platform does with it (`choregos_adapters/mcp/client_credentials.py`):
+What the platform does with it (`tranibor_adapters/mcp/client_credentials.py`):
 
 - **The broker holds the token.** The platform asks the token endpoint for a token
   (`grant_type=client_credentials`, the client authenticated with HTTP Basic) and sends it to the

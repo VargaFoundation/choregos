@@ -1,4 +1,4 @@
-"""Former names that keep working after a rename (S45-41, ADR 0098 §3 (c)): `choregos_core.compat`.
+"""Former names that keep working after a rename (S45-41, ADR 0098 §3 (c)): `tranibor_core.compat`.
 
 A former name must read the English object, follow a monkeypatch in both directions, survive
 `from module import former`, compose across several calls, and warn only when it is external.
@@ -15,8 +15,8 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from choregos_core import compat
-from choregos_core.compat import alias_names, replace_module
+from tranibor_core import compat
+from tranibor_core.compat import alias_names, replace_module
 
 #: A module as a renaming story leaves it: the English names, the module's own code reading them,
 #: and the typed former names kept in the source.
@@ -128,7 +128,7 @@ def test_from_import_of_a_former_name_gets_the_current_object(
         package,
         "sample",
         """
-        from choregos_core.compat import alias_names
+        from tranibor_core.compat import alias_names
 
 
         def new() -> str:
@@ -168,7 +168,7 @@ def test_a_module_that_aliases_its_names_reloads(tmp_path: Path, package: str) -
         package,
         "sample",
         """
-        from choregos_core.compat import alias_names
+        from tranibor_core.compat import alias_names
 
         new = "english"
         old = new
@@ -214,7 +214,7 @@ def test_replace_module_makes_the_former_import_the_new_module(tmp_path: Path, p
         import sys
 
         import {package}.current
-        from choregos_core.compat import replace_module
+        from tranibor_core.compat import replace_module
 
         replace_module(__name__, sys.modules["{package}.current"])
         """,

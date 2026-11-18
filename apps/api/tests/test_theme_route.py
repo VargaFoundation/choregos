@@ -5,12 +5,12 @@ from __future__ import annotations
 from collections.abc import Iterator
 from typing import Any
 
-import choregos_contracts as contracts
 import jsonschema
 import pytest
 import structlog
-from choregos_api.extensions import declare_theme_provider, reset
+import tranibor_contracts as contracts
 from httpx import AsyncClient
+from tranibor_api.extensions import declare_theme_provider, reset
 
 from .theme_fixtures import SAMPLE_THEME, sample
 

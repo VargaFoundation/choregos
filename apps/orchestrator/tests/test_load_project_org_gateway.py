@@ -11,8 +11,8 @@ from collections.abc import Iterator
 from typing import Any
 
 import pytest
-from choregos_adapters import ConnectorTypeSpec, register
-from choregos_adapters.registry import _REGISTRY, _SPECS
+from tranibor_adapters import ConnectorTypeSpec, register
+from tranibor_adapters.registry import _REGISTRY, _SPECS
 
 from .conftest import Fixture
 
@@ -38,8 +38,8 @@ def built(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[dict[str, Any]]]:
 
 
 async def _org_gateway(setup: Fixture) -> None:
-    from choregos_api.db.models import Connector, OrgConnector, Project
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Connector, OrgConnector, Project
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         project = await session.get(Project, setup.project_id)
@@ -60,8 +60,8 @@ async def _org_gateway(setup: Fixture) -> None:
 async def test_a_project_without_a_gateway_runs_on_its_organisations(
     setup: Fixture, built: list[dict[str, Any]]
 ) -> None:
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities.base import load_project
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities.base import load_project
 
     await _org_gateway(setup)
     async with session_scope(orgs="*") as session:
@@ -71,9 +71,9 @@ async def test_a_project_without_a_gateway_runs_on_its_organisations(
 
 
 async def test_the_projects_own_gateway_still_wins(setup: Fixture, built: list[dict[str, Any]]) -> None:
-    from choregos_api.db.models import Connector
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities.base import load_project
+    from tranibor_api.db.models import Connector
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities.base import load_project
 
     await _org_gateway(setup)
     async with session_scope(orgs="*") as session:
@@ -92,8 +92,8 @@ async def test_the_projects_own_gateway_still_wins(setup: Fixture, built: list[d
 
 
 async def test_without_any_gateway_connector_nothing_changes(setup: Fixture) -> None:
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities.base import load_project
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities.base import load_project
 
     async with session_scope(orgs="*") as session:
         bundle = await load_project(session, setup.project_id)

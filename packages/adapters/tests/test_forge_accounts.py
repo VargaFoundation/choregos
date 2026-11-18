@@ -13,10 +13,10 @@ from urllib.parse import parse_qs, urlparse
 
 import httpx
 import pytest
-from choregos_adapters import build, egress_hosts, validate_config
-from choregos_adapters.errors import AdapterError, ConfigurationError
-from choregos_adapters.fakes.forge_accounts import FakeForge
-from choregos_adapters.forge_accounts import (
+from tranibor_adapters import build, egress_hosts, validate_config
+from tranibor_adapters.errors import AdapterError, ConfigurationError
+from tranibor_adapters.fakes.forge_accounts import FakeForge
+from tranibor_adapters.forge_accounts import (
     ForgeAccountError,
     ForgeAccounts,
     forge_accounts,

@@ -5,8 +5,8 @@ from __future__ import annotations
 import base64
 
 import pytest
-from choregos_adapters.fakes.mcp import FakeMcpServer
-from choregos_adapters.mcp import McpClient, McpError, schema_digest
+from tranibor_adapters.fakes.mcp import FakeMcpServer
+from tranibor_adapters.mcp import McpClient, McpError, schema_digest
 
 TOOLS = [
     {
@@ -101,7 +101,7 @@ def test_basic_without_a_username_or_an_unknown_scheme_is_refused() -> None:
 
 
 async def test_the_connector_type_builds_a_basic_client(monkeypatch: pytest.MonkeyPatch) -> None:
-    from choregos_adapters import build
+    from tranibor_adapters import build
 
     monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
     client = build(

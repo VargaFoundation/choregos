@@ -11,9 +11,9 @@ from httpx import AsyncClient
 
 async def _seed_releases(project_id: str) -> None:
     """Three production releases: two successful, one rolled back then restored."""
-    from choregos_api.db.models import Deployment, Release
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
+    from tranibor_api.db.models import Deployment, Release
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
 
     now = utcnow()
     plan = [
@@ -82,9 +82,9 @@ async def test_dora_filters_by_environment(client: AsyncClient, project: dict[st
 
 
 async def test_csv_export_of_the_costs(client: AsyncClient, project: dict[str, Any]) -> None:
-    from choregos_api.db.models import CostLedger
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
+    from tranibor_api.db.models import CostLedger
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
 
     async with session_scope() as session:
         session.add(

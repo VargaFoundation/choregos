@@ -11,8 +11,8 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from choregos_contracts import ExecutorKind, StageResult, StageStatus
-from choregos_core.domain import ExecRef, ExecStatus, StageJobSpec
+from tranibor_contracts import ExecutorKind, StageResult, StageStatus
+from tranibor_core.domain import ExecRef, ExecStatus, StageJobSpec
 
 from .conftest import Fixture
 from .test_result_from_journal import _journal, _started_run
@@ -51,7 +51,7 @@ class _ScriptedExecutor:
 
 
 async def _await(setup: Fixture, run_id: str) -> dict[str, Any]:
-    from choregos_orchestrator.activities import stage as activities
+    from tranibor_orchestrator.activities import stage as activities
 
     # 0.05 min of budget is 300 polls: the old wait went through all of them, then said "timed_out".
     return await activities.await_run(
@@ -60,9 +60,9 @@ async def _await(setup: Fixture, run_id: str) -> dict[str, Any]:
 
 
 async def test_a_run_the_executor_lost_fails_within_a_few_polls(setup: Fixture) -> None:
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities.execution import LOST_POLLS
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities.execution import LOST_POLLS
 
     executor = _ScriptedExecutor("running", "unknown")
     setup.adapters.executor = executor
@@ -94,7 +94,7 @@ async def test_a_lost_run_that_journaled_its_result_keeps_it(setup: Fixture) -> 
 
 
 async def test_a_brief_unknown_does_not_end_a_run_that_comes_back(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.execution import LOST_POLLS
+    from tranibor_orchestrator.activities.execution import LOST_POLLS
 
     # One poll short of the limit, then the run is seen again and ends on its own.
     executor = _ScriptedExecutor("running", *["unknown"] * (LOST_POLLS - 1), "running", "unknown", "failed")

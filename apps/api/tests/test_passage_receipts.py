@@ -31,9 +31,9 @@ async def _run(
     role: str,
     inputs: list[str] | None = None,
 ) -> dict[str, str]:
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
-    from choregos_api.security import mint_run_token
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.security import mint_run_token
 
     async with session_scope() as session:
         session.add(
@@ -98,8 +98,8 @@ async def test_an_output_modified_afterwards_changes_digest(
 ) -> None:
     """Rewritten by hand after its receipt, the spec no longer has the digest of its last "produced" receipt,
     and the stage that reads it next reads a revision no stage produced."""
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     ticket = await _work_item(client, project)
     refiner = await _run(ticket, project, "run-r1", "refine")
@@ -149,7 +149,7 @@ async def test_the_receipts_of_a_work_item_read_with_the_right_to_read_the_proje
 
 
 def test_the_digest_does_not_depend_on_key_order() -> None:
-    from choregos_api.services.receipts import digest, read_by_the_prompt
+    from tranibor_api.services.receipts import digest, read_by_the_prompt
 
     assert digest({"a": 1, "b": [1, 2]}) == digest({"b": [1, 2], "a": 1})
     assert digest("x") != digest("x ")
@@ -166,8 +166,8 @@ async def test_a_step_cannot_read_the_spec_or_plan_it_did_not_declare(
 ) -> None:
     """ADR 0077 section 4 (finding #890): `/ticket` follows the same partition as `/inputs/{name}`.
     A step that declares nothing gets neither the spec nor the plan, and leaves no read receipt."""
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     ticket = await _work_item(client, project)
     refiner = await _run(ticket, project, "run-refiner", "refine")

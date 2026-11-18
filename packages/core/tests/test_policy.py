@@ -6,8 +6,8 @@ import pathlib
 
 import pytest
 import yaml
-from choregos_contracts import Policy, Size
-from choregos_core import (
+from tranibor_contracts import Policy, Size
+from tranibor_core import (
     PolicyEngine,
     ValidationError,
     engine_for,
@@ -16,7 +16,7 @@ from choregos_core import (
     policy_warnings,
     preset_yaml,
 )
-from choregos_core.policy import PRESET_NAMES
+from tranibor_core.policy import PRESET_NAMES
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 TEMPLATE_POLICIES = sorted((ROOT / "templates").glob("*/policy.yaml"))

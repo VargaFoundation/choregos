@@ -38,10 +38,10 @@ pytestmark = pytest.mark.asyncio
 
 
 async def _governed_project(setup: Fixture) -> str:
-    from choregos_api.db.models import Organization, Project
-    from choregos_api.db.session import session_scope
-    from choregos_api.services import ensure_defaults
     from sqlalchemy import select
+    from tranibor_api.db.models import Organization, Project
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services import ensure_defaults
 
     async with session_scope() as session:
         org = (

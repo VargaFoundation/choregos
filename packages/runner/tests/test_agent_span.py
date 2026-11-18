@@ -7,12 +7,12 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from choregos_contracts import StageInput
-from choregos_core import telemetry
-from choregos_runner.exits import Exit
-from choregos_runner.runner import Runner
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from opentelemetry.trace import StatusCode
+from tranibor_contracts import StageInput
+from tranibor_core import telemetry
+from tranibor_runner.exits import Exit
+from tranibor_runner.runner import Runner
 
 from .test_job import _client, _job
 

@@ -10,12 +10,12 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest
 import respx
-from choregos_api.config import reset_settings_cache
-from choregos_api.db.models import User
-from choregos_api.db.session import session_scope
-from choregos_api.routers.auth import forget_discovery
 from httpx import AsyncClient, Response
 from sqlalchemy import select
+from tranibor_api.config import reset_settings_cache
+from tranibor_api.db.models import User
+from tranibor_api.db.session import session_scope
+from tranibor_api.routers.auth import forget_discovery
 
 ISSUER = "https://idp.example.test/realms/x"
 DISCOVERY = {
@@ -110,7 +110,7 @@ async def test_explicit_endpoints_skip_discovery(
 
 
 def test_explicit_endpoints_are_all_or_none(monkeypatch: pytest.MonkeyPatch) -> None:
-    from choregos_api.config import Settings
+    from tranibor_api.config import Settings
 
     with pytest.raises(ValueError, match="CHOREGOS_OIDC_TOKEN_ENDPOINT"):
         Settings(oidc_authorization_endpoint="https://sso.example/auth")

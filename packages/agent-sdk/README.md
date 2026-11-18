@@ -1,4 +1,4 @@
-# choregos-agent-sdk
+# tranibor-agent-sdk
 
 **This is not an agent framework: bring yours.** It is the run contract between an agent written in
 Python and the Tranibor runner (ACP, MCP tools through the runner's permission check, the gateway as
@@ -11,7 +11,7 @@ runner's permission path, its turns are counted, it is journaled, it can be canc
 result has the contract's shape.
 
 ```python
-from choregos_agent_sdk import Context, Result, agent
+from tranibor_agent_sdk import Context, Result, agent
 
 
 @agent(name="ticket-triager")
@@ -57,7 +57,7 @@ ChatOpenAI(
     http_async_client=ctx.llm.http_client(),
 )
 # the tools: every call asks the runner's guard (not the framework's own MCP client)
-from choregos_agent_sdk.integrations import langchain  # or openai_agents, pydantic_ai
+from tranibor_agent_sdk.integrations import langchain  # or openai_agents, pydantic_ai
 
 tools = await langchain.tools(await ctx.tools())
 ```

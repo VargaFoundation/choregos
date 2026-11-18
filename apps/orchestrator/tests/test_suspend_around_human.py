@@ -17,7 +17,7 @@ from datetime import timedelta
 from typing import Any
 
 import pytest
-from choregos_contracts import StageResult, StageStatus
+from tranibor_contracts import StageResult, StageStatus
 
 from .conftest import Fixture, recording_history, refine_result
 from .kits.escalation import requests_of
@@ -103,9 +103,9 @@ async def _idle_on_a_timer_after(handle: Any, activity: str, *, timeout: int = 6
 
 
 async def _run_row(setup: Fixture) -> Any:
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         (run,) = (await session.execute(select(Run).where(Run.work_item_id == setup.work_item_id))).scalars()
@@ -116,8 +116,8 @@ async def _run_row(setup: Fixture) -> Any:
 async def test_an_answered_question_costs_one_run_not_two(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.worker import Replayer
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     executor = _can_suspend(setup)
     scripted(setup.adapters, QUESTION, refine_result("spec"))
@@ -152,8 +152,8 @@ async def test_an_answered_question_costs_one_run_not_two(
 async def test_past_the_bound_the_sandbox_is_gone_and_the_stage_replays(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.worker import Replayer
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     executor = _can_suspend(setup)
     scripted(setup.adapters, QUESTION, refine_result("spec"))
@@ -207,8 +207,8 @@ async def test_without_the_capability_nothing_is_suspended(
 
 
 async def _work_item_totals(setup: Fixture) -> dict[str, Any]:
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         item = await session.get(WorkItem, setup.work_item_id)

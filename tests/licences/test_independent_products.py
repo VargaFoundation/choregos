@@ -51,7 +51,7 @@ TREES = (
 )
 
 #: Optional data: a catalogue entry for a data platform does not make Choregos need it.
-ALLOWED_FILES = frozenset({"packages/core/src/choregos_core/mcp_catalogue/catalogue.yaml"})
+ALLOWED_FILES = frozenset({"packages/core/src/tranibor_core/mcp_catalogue/catalogue.yaml"})
 
 #: The name, unless it is a wheel tag, the publisher (`graalsystems`, `graal.systems`, GRAAL.SYSTEMS SAS,
 #: ADR 0186) or the edition's product name.
@@ -96,7 +96,7 @@ def test_the_pattern_catches_a_dependency_and_spares_the_branding() -> None:
     caught = (
         "GRAAL_API_URL",
         "https://api.graal.example/v1",
-        "from choregos_adapters.graal import GraalClient",
+        "from tranibor_adapters.graal import GraalClient",
         "graal-mcp:8080",
     )
     spared = (

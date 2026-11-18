@@ -69,7 +69,7 @@ async def test_a_workflow_published_under_that_name_before_keeps_its_next_versio
     client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A project that already has one is not locked out of it: its next version still publishes."""
-    from choregos_api.services import definitions
+    from tranibor_api.services import definitions
 
     pid = project["id"]
     with monkeypatch.context() as before:

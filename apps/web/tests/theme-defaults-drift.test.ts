@@ -9,7 +9,7 @@ import { resolve } from "node:path";
 import { expect, it } from "vitest";
 import { themeDefaults } from "./theme-tokens";
 
-const COMMITTED = resolve(import.meta.dirname, "../../api/src/choregos_api/theme_defaults.json");
+const COMMITTED = resolve(import.meta.dirname, "../../api/src/tranibor_api/theme_defaults.json");
 
 it("theme_defaults.json is what theme.css resolves to (run `pnpm theme:defaults`)", () => {
   const committed = JSON.parse(readFileSync(COMMITTED, "utf-8"));

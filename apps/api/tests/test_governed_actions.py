@@ -22,10 +22,10 @@ EFFECTS = [
 async def directory(client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch) -> None:
     """The directory these actions call, declared in the organisation: an action that calls an
     unknown operation, or one forbidden to this project, is refuseded as soon as it is proposed (S20-05)."""
-    import choregos_adapters
-    from choregos_adapters.fakes.entra import FakeEntra
+    import tranibor_adapters
+    from tranibor_adapters.fakes.entra import FakeEntra
 
-    monkeypatch.setattr(choregos_adapters, "FAKE_ENTRA", FakeEntra())
+    monkeypatch.setattr(tranibor_adapters, "FAKE_ENTRA", FakeEntra())
     monkeypatch.setenv("CONNECTOR_ENTRA_CLIENT_SECRET", "connector-secret")
     body = {"name": "entra-acme", "type": "entra", "config": {"tenant_id": "acme", "client_id": "choregos"},
              "secret_refs": {"client_secret": "env:CONNECTOR_ENTRA_CLIENT_SECRET"}}  # fmt: skip
@@ -60,7 +60,7 @@ async def _open_session(app: Any, email: str) -> AsyncClient:
 async def test_an_approved_action_goes_to_temporal_with_no_effect_in_the_request(
     client: AsyncClient, project: dict[str, Any], app: Any
 ) -> None:
-    from choregos_api.temporal import FakeTemporal, get_temporal
+    from tranibor_api.temporal import FakeTemporal, get_temporal
 
     pid = project["id"]
     await _member(client, "dev@northwind.dev", "developer")
@@ -140,7 +140,7 @@ async def test_a_session_that_is_too_old_must_authenticate_again(
 ) -> None:
     import time
 
-    from choregos_api import freshness
+    from tranibor_api import freshness
 
     pid = project["id"]
     await _member(client, "dev@northwind.dev", "developer")
@@ -164,7 +164,7 @@ async def test_a_session_that_is_too_old_must_authenticate_again(
 async def test_two_are_needed_when_the_rule_asks_for_two(
     client: AsyncClient, project: dict[str, Any], app: Any
 ) -> None:
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.temporal import get_temporal
 
     pid = project["id"]
     await _member(client, "po@northwind.dev", "project_owner")
@@ -193,7 +193,7 @@ async def test_two_are_needed_when_the_rule_asks_for_two(
 async def test_of_two_simultaneous_approvals_only_one_starts_the_action(
     client: AsyncClient, project: dict[str, Any], app: Any
 ) -> None:
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.temporal import get_temporal
 
     pid = project["id"]
     await _member(client, "po@northwind.dev", "project_owner")
@@ -225,8 +225,8 @@ async def test_an_unknown_effect_is_refused_at_proposal(client: AsyncClient, pro
 
 async def test_evidence_is_handed_to_the_action_that_waits_for_it() -> None:
     """The evidence seam (S20-08): what establishes it hands it to `action-<id>`, by signal."""
-    from choregos_api.services.actions import signal_evidence
-    from choregos_api.temporal import FakeTemporal, set_temporal
+    from tranibor_api.services.actions import signal_evidence
+    from tranibor_api.temporal import FakeTemporal, set_temporal
 
     fake = FakeTemporal()
     set_temporal(fake)
@@ -245,9 +245,9 @@ async def test_a_rule_without_step_up_does_not_demand_a_recent_authentication(
     absent. An action proposed through the API always has one; this one is decided without a 401."""
     import time
 
-    from choregos_api import freshness
-    from choregos_api.db.models import Action
-    from choregos_api.db.session import session_scope
+    from tranibor_api import freshness
+    from tranibor_api.db.models import Action
+    from tranibor_api.db.session import session_scope
 
     pid = project["id"]
     await _member(client, "dev@northwind.dev", "developer")

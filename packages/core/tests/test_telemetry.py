@@ -5,12 +5,12 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 import pytest
-from choregos_core import telemetry
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from opentelemetry.semconv import schemas
 from opentelemetry.semconv._incubating.attributes import gen_ai_attributes as gen_ai
 from opentelemetry.semconv.attributes import error_attributes
 from opentelemetry.trace import StatusCode
+from tranibor_core import telemetry
 
 
 @pytest.fixture

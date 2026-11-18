@@ -11,8 +11,8 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from choregos_contracts import Role
 from httpx import ASGITransport, AsyncClient
+from tranibor_contracts import Role
 
 from .conftest import login
 
@@ -107,9 +107,9 @@ def _routes(project_id: str, workflow_yaml: str, policy_yaml: str) -> list[tuple
 
 
 async def _member(email: str, role: Role) -> None:
-    from choregos_api.db.models import Membership, Organization, User
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Membership, Organization, User
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         org = (
@@ -135,8 +135,8 @@ async def _member(email: str, role: Role) -> None:
 async def test_each_role_gets_exactly_its_permissions(
     client: AsyncClient, project: dict[str, Any], role: Role, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.rbac import ROLE_PERMISSIONS, Permission
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.rbac import ROLE_PERMISSIONS, Permission
 
     # the dev sign-in must neither demote nor promote: the role is set in the database, then we
     # sign in as that member (no dev admin, so the default `developers` is ignored)

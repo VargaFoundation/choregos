@@ -20,7 +20,7 @@ def doc(topic: str, sections: int) -> bytes:
 
 
 def source(name: str, markdown: str) -> Any:
-    from choregos_api.knowledge.distill import Source
+    from tranibor_api.knowledge.distill import Source
 
     return Source(name, name, f"sha256:{name}", markdown)
 
@@ -29,7 +29,7 @@ def source(name: str, markdown: str) -> Any:
 
 
 def test_every_part_stays_under_the_limit_and_every_section_lands_once() -> None:
-    from choregos_api.knowledge.distill import plan
+    from tranibor_api.knowledge.distill import plan
 
     corpus = [source(f"d{n}.md", doc(f"topic{n}", 4).decode()) for n in range(6)]
     parts = plan(corpus, 1500)
@@ -43,7 +43,7 @@ def test_every_part_stays_under_the_limit_and_every_section_lands_once() -> None
 
 
 def test_a_big_document_is_cut_on_its_headings() -> None:
-    from choregos_api.knowledge.distill import plan
+    from tranibor_api.knowledge.distill import plan
 
     big = source("big.md", doc("network", 30).decode())
     parts = plan([big], 1500)
@@ -58,7 +58,7 @@ def test_a_big_document_is_cut_on_its_headings() -> None:
 
 
 def test_excluded_documents_are_left_out_by_glob_not_by_case() -> None:
-    from choregos_api.knowledge.distill import plan
+    from tranibor_api.knowledge.distill import plan
 
     corpus = [
         source("Budget.XLSX", "# a\n\ntext"),
@@ -73,8 +73,8 @@ def test_excluded_documents_are_left_out_by_glob_not_by_case() -> None:
 
 
 async def test_the_merge_dedupes_unions_the_sources_and_never_cites_outside_the_corpus() -> None:
-    from choregos_api.knowledge.distill import FakeDistiller, _merge_tree
-    from choregos_api.services.model_catalogue import Price
+    from tranibor_api.knowledge.distill import FakeDistiller, _merge_tree
+    from tranibor_api.services.model_catalogue import Price
 
     class Rogue(FakeDistiller):
         async def merge(self, candidates: list[dict[str, Any]]) -> dict[str, Any]:
@@ -111,7 +111,7 @@ class Counting:
     """A distiller that counts its calls and can be told to under-report its price."""
 
     def __init__(self, usage: dict[str, int] | None = None) -> None:
-        from choregos_api.knowledge.distill import FakeDistiller
+        from tranibor_api.knowledge.distill import FakeDistiller
 
         self.inner, self.usage = FakeDistiller(), usage
         self.model = self.inner.model
@@ -130,11 +130,11 @@ class Counting:
 
 
 async def _base(client: AsyncClient, files: dict[str, bytes], monkeypatch: pytest.MonkeyPatch) -> str:
-    from choregos_api.config import get_settings
-    from choregos_api.db.models import KnowledgeBase
-    from choregos_api.db.session import session_scope
-    from choregos_api.knowledge.conversion import conversions
     from sqlalchemy import select
+    from tranibor_api.config import get_settings
+    from tranibor_api.db.models import KnowledgeBase
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.knowledge.conversion import conversions
 
     monkeypatch.setattr(get_settings(), "knowledge_distill_part_chars", 2500)
     await client.post(BASE, json={"slug": "architecture", "name": "Architecture framework"})
@@ -148,9 +148,9 @@ async def _base(client: AsyncClient, files: dict[str, bytes], monkeypatch: pytes
 
 
 async def _price(per_1k_in: float, per_1k_out: float) -> None:
-    from choregos_api.db.models import ModelCatalogueRow, Organization
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import ModelCatalogueRow, Organization
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         org_id = (await session.execute(select(Organization.id))).scalar_one()
@@ -175,7 +175,7 @@ async def _outcome(client: AsyncClient) -> dict[str, Any]:
 async def test_a_base_bigger_than_a_prompt_is_distilled_in_passes(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.knowledge.distill import distill
+    from tranibor_api.knowledge.distill import distill
 
     base_id = await _base(client, FOUR, monkeypatch)
     distiller = Counting()
@@ -194,7 +194,7 @@ async def test_a_base_bigger_than_a_prompt_is_distilled_in_passes(
 async def test_the_route_runs_the_same_steps_and_reports_the_progress(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.knowledge.conversion import conversions
+    from tranibor_api.knowledge.conversion import conversions
 
     await _base(client, FOUR, monkeypatch)
     started = await client.post(f"{BASE}/architecture/distill", json={"exclude": ["d3.md"], "max_usd": 5})
@@ -209,7 +209,7 @@ async def test_the_route_runs_the_same_steps_and_reports_the_progress(
 async def test_a_replayed_distillation_makes_no_second_call_and_no_second_version(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.knowledge.distill import distill
+    from tranibor_api.knowledge.distill import distill
 
     base_id = await _base(client, FOUR, monkeypatch)
     first = Counting()
@@ -224,7 +224,7 @@ async def test_a_replayed_distillation_makes_no_second_call_and_no_second_versio
 async def test_a_changed_document_pays_for_its_own_part_only(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.knowledge.distill import distill
+    from tranibor_api.knowledge.distill import distill
 
     base_id = await _base(client, FOUR, monkeypatch)
     first = Counting()
@@ -234,7 +234,7 @@ async def test_a_changed_document_pays_for_its_own_part_only(
     assert (await client.delete(f"{BASE}/architecture/documents/{old['id']}")).status_code == 204
     changed = doc("topic2", 5) + b"\n## One more\n\nEvery exception expires after ninety days.\n"
     await client.post(f"{BASE}/architecture/documents", files={"file": ("d2.md", changed)})
-    from choregos_api.knowledge.conversion import conversions
+    from tranibor_api.knowledge.conversion import conversions
 
     await conversions.drain()
     second = Counting()
@@ -247,8 +247,8 @@ async def test_a_changed_document_pays_for_its_own_part_only(
 async def test_the_budget_stops_the_run_before_the_next_call_and_publishes_nothing(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.config import get_settings
-    from choregos_api.knowledge.distill import distill
+    from tranibor_api.config import get_settings
+    from tranibor_api.knowledge.distill import distill
 
     base_id = await _base(client, FOUR, monkeypatch)
     await _price(0.01, 0.03)
@@ -264,7 +264,7 @@ async def test_the_budget_stops_the_run_before_the_next_call_and_publishes_nothi
 async def test_a_part_that_the_gateway_refuses_fails_the_run_and_publishes_nothing(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.knowledge.distill import DistillationError, distill
+    from tranibor_api.knowledge.distill import DistillationError, distill
 
     class Down(Counting):
         async def principles(self, instructions: str, corpus: list[Any]) -> dict[str, Any]:
@@ -279,7 +279,7 @@ async def test_a_part_that_the_gateway_refuses_fails_the_run_and_publishes_nothi
 async def test_a_part_keeps_only_the_principles_citing_its_own_documents(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.knowledge.distill import distill
+    from tranibor_api.knowledge.distill import distill
 
     class Wandering(Counting):
         async def principles(self, instructions: str, corpus: list[Any]) -> dict[str, Any]:
@@ -341,8 +341,8 @@ async def test_a_cap_below_the_estimate_is_refused_before_anything_starts(
 async def test_a_base_needing_more_parts_than_the_cap_is_refused_with_its_biggest_documents(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.config import get_settings
-    from choregos_api.knowledge.conversion import conversions
+    from tranibor_api.config import get_settings
+    from tranibor_api.knowledge.conversion import conversions
 
     await _base(client, FOUR, monkeypatch)
     monkeypatch.setattr(get_settings(), "knowledge_distill_max_parts", 1)
@@ -363,10 +363,10 @@ async def test_a_base_needing_more_parts_than_the_cap_is_refused_with_its_bigges
 async def test_a_second_start_while_one_runs_is_refused(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.db.models import KnowledgeBase
-    from choregos_api.db.session import ALL_ORGS, session_scope
-    from choregos_core import utcnow
     from sqlalchemy import select
+    from tranibor_api.db.models import KnowledgeBase
+    from tranibor_api.db.session import ALL_ORGS, session_scope
+    from tranibor_core import utcnow
 
     await _base(client, FOUR, monkeypatch)
     async with session_scope(orgs=ALL_ORGS) as session:
@@ -376,7 +376,7 @@ async def test_a_second_start_while_one_runs_is_refused(
 
 
 async def test_the_workflow_id_of_each_request_is_new() -> None:
-    from choregos_api.temporal import knowledge_distill_id
+    from tranibor_api.temporal import knowledge_distill_id
 
     first = knowledge_distill_id("b1", "2026-10-21T10:00:00+00:00")
     assert first.startswith("knowledge-distill-b1-")

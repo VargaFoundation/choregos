@@ -15,11 +15,11 @@ from collections.abc import Iterator
 from typing import Any
 
 import pytest
-from choregos_adapters.fakes import entra as fake_entra
-from choregos_contracts import Diagnostics, Evidence, StageInput, StageResult, StageStatus
-from choregos_orchestrator.activities import eval_doors, evals
-from choregos_orchestrator.activities import stage as stage_activities
-from choregos_orchestrator.config import reset_settings_cache
+from tranibor_adapters.fakes import entra as fake_entra
+from tranibor_contracts import Diagnostics, Evidence, StageInput, StageResult, StageStatus
+from tranibor_orchestrator.activities import eval_doors, evals
+from tranibor_orchestrator.activities import stage as stage_activities
+from tranibor_orchestrator.config import reset_settings_cache
 
 from .conftest import Fixture
 
@@ -109,7 +109,7 @@ async def test_e4_s_script_receives_eight_proposals_and_nothing_is_written() -> 
 async def test_e4_fails_its_assertions_when_its_writes_are_not_under_approval() -> None:
     """The failing fixture of `executed_actions` and `proposed_actions`, end to end: the same script under
     a policy that allows the writes executes them, and the case says so."""
-    from choregos_playbooks.evals.agents import judge
+    from tranibor_playbooks.evals.agents import judge
 
     case = evals.load_agent_case(E4)
     assert case is not None
@@ -220,9 +220,9 @@ async def test_the_coding_tickets_offered_the_door_tie_and_say_not_worse(setup: 
 
 
 async def test_only_an_mcp_cell_validates_a_backend(setup: Fixture) -> None:
-    from choregos_api.db.models import ModelProfileRow
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import ModelProfileRow
+    from tranibor_api.db.session import session_scope
 
     scripts = await evals.run_eval_cell(_cell("scripts", agent_cases=[E1]))
     assert scripts["validated"]
@@ -302,8 +302,8 @@ def scripts_on(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 
 @pytest.fixture
 async def eval_project(setup: Fixture) -> Fixture:
-    from choregos_api.db.session import session_scope
-    from choregos_api.services import active_policy, policy_model
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services import active_policy, policy_model
 
     async with session_scope() as session:
         row = await active_policy(session, setup.project_id)
@@ -366,9 +366,9 @@ async def test_a_live_cell_skips_an_agent_case_where_the_deployment_serves_no_ev
 
 async def _run(setup: Fixture, tools: str, events: list[tuple[str, dict[str, Any]]]) -> dict[str, Any]:
     """A live case's run with `events` in its journal, then judged in the cell `tools`."""
-    from choregos_api.db.models import RunEvent
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
+    from tranibor_api.db.models import RunEvent
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
 
     def agent(stage_input: StageInput) -> StageResult:
         setup.adapters.gateway.record_usage(
@@ -437,9 +437,9 @@ async def test_a_run_that_did_not_get_the_cell_s_door_is_skipped(
 async def test_a_run_offered_scripts_in_an_mcp_cell_is_skipped(
     eval_project: Fixture, scripts_on: None
 ) -> None:
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
 
     verdict = await _run(eval_project, "mcp", [])
     assert not verdict["skipped"], verdict["reason"]
@@ -456,10 +456,10 @@ async def test_a_run_offered_scripts_in_an_mcp_cell_is_skipped(
 async def test_a_live_run_s_tool_use_is_read_from_its_events_actions_and_journal(
     eval_project: Fixture, scripts_on: None
 ) -> None:
-    from choregos_api.db.models import Action, Event, Organization, Run
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
     from sqlalchemy import select
+    from tranibor_api.db.models import Action, Event, Organization, Run
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
 
     verdict = await _run(eval_project, "scripts", [CLIENT])
     async with session_scope() as session:
@@ -527,7 +527,7 @@ async def test_e5_s_injected_page_is_flagged_or_withheld_whatever_the_cell(name:
     """The guard runs on every result whoever calls: `warn` keeps it with its suspicions, `block` withholds
     it (451). The `scripts` cell runs E5's script through the real bridge (#1378): it reads the six pages
     and keeps none the platform flagged or withheld."""
-    from choregos_playbooks.evals.agents import judge
+    from tranibor_playbooks.evals.agents import judge
 
     case = evals.load_agent_case(name)
     assert case is not None

@@ -6,9 +6,9 @@ from __future__ import annotations
 async def _only(email: str, role: str | None = None, project_slug: str | None = None) -> None:
     """The person holds this one role on this one project, or nothing in the organisation (a development
     sign-in makes everyone a developer of it)."""
-    from choregos_api.db.models import Membership, Organization, Project, User
-    from choregos_api.db.session import session_scope
     from sqlalchemy import delete, select
+    from tranibor_api.db.models import Membership, Organization, Project, User
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         org = (

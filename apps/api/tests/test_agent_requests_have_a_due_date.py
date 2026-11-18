@@ -7,20 +7,20 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
-import choregos_contracts
+import tranibor_contracts
 from httpx import AsyncClient
 
 
 async def test_a_question_and_a_scope_change_carry_a_due_date(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.db.models import HumanRequest, Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.security import mint_run_token
-    from choregos_contracts import StageInput
     from sqlalchemy import select
+    from tranibor_api.db.models import HumanRequest, Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.security import mint_run_token
+    from tranibor_contracts import StageInput
 
-    example = Path(choregos_contracts.schemas_dir()) / "examples" / "stage-input.example.json"
+    example = Path(tranibor_contracts.schemas_dir()) / "examples" / "stage-input.example.json"
     stage_input = StageInput.model_validate(json.loads(example.read_text()))
     async with session_scope() as session:
         item = WorkItem(

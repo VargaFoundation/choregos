@@ -19,12 +19,12 @@ from typing import Any
 
 import httpx
 import pytest
-from choregos_adapters.fakes.kubernetes import FakeKubernetesApi
-from choregos_adapters.fakes.plugin_servers import FakePluginServer
-from choregos_adapters.fakes.scenes import EVAL_FAKE_SCENES_ENV, FAKE_SCENE_FIELD
-from choregos_adapters.plugin_servers import TOKEN_ENV, PluginServerRuntime
 from httpx import AsyncClient
 from sqlalchemy import select
+from tranibor_adapters.fakes.kubernetes import FakeKubernetesApi
+from tranibor_adapters.fakes.plugin_servers import FakePluginServer
+from tranibor_adapters.fakes.scenes import EVAL_FAKE_SCENES_ENV, FAKE_SCENE_FIELD
+from tranibor_adapters.plugin_servers import TOKEN_ENV, PluginServerRuntime
 
 from .agent_scopes_kit import add_member, as_user
 
@@ -36,8 +36,8 @@ SECOND = "second-admin@northwind.dev"
 @pytest.fixture
 def kube(tmp_path: Path) -> Iterator[FakeKubernetesApi]:
     """The offline source serves `servicenow` 0.1.1 and `hello` 1.0.0; servers run in memory."""
-    from choregos_api.services.plugin_servers import use_plugin_runtime, use_plugin_transport
-    from choregos_api.services.plugin_supply import OfflineDirectory, use_plugin_supply
+    from tranibor_api.services.plugin_servers import use_plugin_runtime, use_plugin_transport
+    from tranibor_api.services.plugin_supply import OfflineDirectory, use_plugin_supply
 
     root = tmp_path / "plugins"
     shutil.copytree(FIXTURES / "plugins" / "servicenow", root / "servicenow" / "0.1.1")
@@ -70,8 +70,8 @@ async def _install(client: AsyncClient, name: str = "servicenow", version: str =
 
 
 async def _connector(name: str = "servicenow") -> Any:
-    from choregos_api.db.models import OrgConnector
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import OrgConnector
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         return (await session.execute(select(OrgConnector).where(OrgConnector.name == name))).scalar_one()
@@ -79,8 +79,8 @@ async def _connector(name: str = "servicenow") -> Any:
 
 async def _bind(name: str = "servicenow", scene: str = "default") -> None:
     """What the matrix's seeding writes (`_case_plugin_server`): the binding, behind the API."""
-    from choregos_api.db.models import OrgConnector
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import OrgConnector
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         row = (await session.execute(select(OrgConnector).where(OrgConnector.name == name))).scalar_one()
@@ -88,9 +88,9 @@ async def _bind(name: str = "servicenow", scene: str = "default") -> None:
 
 
 async def _reconcile(name: str = "servicenow") -> None:
-    from choregos_api.db.models import OrgConnector
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.plugin_servers import reconcile
+    from tranibor_api.db.models import OrgConnector
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.plugin_servers import reconcile
 
     async with session_scope() as session:
         row = (await session.execute(select(OrgConnector).where(OrgConnector.name == name))).scalar_one()
@@ -173,8 +173,8 @@ async def test_no_edit_binds_a_server_s_connector_to_its_eval_instance(
 async def test_a_bound_connector_reaches_the_eval_instance_where_the_switch_is_on_and_only_there(
     client: AsyncClient, admin: str, kube: FakeKubernetesApi, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.plugin_servers import connector_client, use_plugin_transport
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.plugin_servers import connector_client, use_plugin_transport
 
     monkeypatch.setenv(EVAL_FAKE_SCENES_ENV, "1")
     await _install(client)

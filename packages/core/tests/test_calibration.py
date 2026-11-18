@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from choregos_core.calibration import (
+from tranibor_core.calibration import (
     MIN_ABOVE,
     MIN_OBSERVED,
     THRESHOLDS,

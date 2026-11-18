@@ -8,7 +8,7 @@ import shutil
 import zipfile
 
 import pytest
-from choregos_api.services.hosted_sources import SourceRefused, base_image, read_source
+from tranibor_api.services.hosted_sources import SourceRefused, base_image, read_source
 
 from tools import hosted_dockerfile as tool
 

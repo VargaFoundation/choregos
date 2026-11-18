@@ -7,8 +7,8 @@ from collections.abc import Iterator
 from typing import Any
 
 import pytest
-from choregos_adapters.fakes import FakeObjectStore
 from httpx import AsyncClient
+from tranibor_adapters.fakes import FakeObjectStore
 
 DECK = b"PK\x03\x04" + b"slides" * 40
 PPTX = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
@@ -17,7 +17,7 @@ DIGEST = "sha256:" + hashlib.sha256(DECK).hexdigest()
 
 @pytest.fixture
 def store() -> Iterator[FakeObjectStore]:
-    from choregos_api.object_store import use_object_store
+    from tranibor_api.object_store import use_object_store
 
     fake = FakeObjectStore()
     use_object_store(fake)
@@ -28,9 +28,9 @@ def store() -> Iterator[FakeObjectStore]:
 async def _run(
     client: AsyncClient, project: dict[str, Any], run_id: str
 ) -> tuple[dict[str, Any], dict[str, str]]:
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
-    from choregos_api.security import mint_run_token
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.security import mint_run_token
 
     created = await client.post(
         f"/api/v1/projects/{project['id']}/work-items", json={"title": "Board deck", "start": False}
@@ -112,7 +112,7 @@ async def test_bytes_that_do_not_match_the_announced_digest_are_refused(
 async def test_too_large_or_too_late_is_refused(
     client: AsyncClient, project: dict[str, Any], store: FakeObjectStore, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.config import get_settings
+    from tranibor_api.config import get_settings
 
     _, headers = await _run(client, project, "run-present")
     monkeypatch.setattr(get_settings(), "artifact_max_bytes", 16)

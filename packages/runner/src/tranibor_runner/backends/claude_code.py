@@ -1,0 +1,239 @@
+# SPDX-License-Identifier: Apache-2.0
+"""Backend Claude Code (adaptateur ACP `claude-agent-acp`)."""
+
+from __future__ import annotations
+
+import json
+import shlex
+from pathlib import Path
+from typing import Any, ClassVar
+
+from tranibor_contracts import ModelRef, StageInput
+
+from ..guardrails import SECRET_FILE_PATTERNS
+from ..tool_scripts import offered_script_directory
+from .base import Backend, LaunchPlan
+
+#: The hook rtk answers as (rtk 0.50: `rtk hook claude` reads a `PreToolUse` payload).
+RTK_HOOK = "rtk hook claude"
+#: Where rtk reads its configuration, relative to `$HOME` (`dirs::config_dir()` on Linux).
+RTK_CONFIG = ".config/rtk/config.toml"
+
+
+class ClaudeCodeBackend(Backend):
+    name: ClassVar[str] = "claude-code"
+    skills_dir: ClassVar[str | None] = ".claude/skills"
+    shell_filters: ClassVar[frozenset[str]] = frozenset({"rtk"})
+    capabilities: ClassVar[frozenset[str]] = frozenset({"acp", "mcp", "agents_md", "structured_output"})
+    model_constraint: ClassVar[tuple[str, ...]] = ("claude", "anthropic")
+
+    def launch_plan(self, stage_input: StageInput, workspace: Path) -> LaunchPlan:
+        # `@agentclientprotocol/claude-agent-acp` installs the `claude-agent-acp` binary (#436). The
+        # image also links `claude-code-acp`, the name of the deprecated Zed package, for a stage
+        # input that still names it.
+        command = list(stage_input.agent.launch.command) or ["claude-agent-acp"]
+        settings: dict[str, Any] = {
+            # Without a `model` here the adapter selects its own default (0.16.2, `setModel()` with
+            # the first model of the SDK's list): the run's model was replaced by Claude Code's
+            # built-in default (see `model_env`).
+            "model": stage_input.model.litellm_model,
+            "permissions": {
+                "deny": [f"Bash({command})" for command in stage_input.permissions.deny_commands],
+            },
+            "hooks": {
+                "PreToolUse": [
+                    {
+                        "matcher": "Write|Edit|MultiEdit",
+                        "hooks": [
+                            {
+                                "type": "command",
+                                "command": ".choregos/hooks/check_scope.sh",
+                            }
+                        ],
+                    }
+                ]
+            },
+        }
+        if not stage_input.permissions.builtin_web_tools:
+            # ADR 0070: the CLI's own web tools are switched off by the policy, the agent or the
+            # organisation. `WebSearch` runs at the model provider, outside every network layer
+            # of the platform: this setting is the only lever there is.
+            settings["permissions"]["deny"] += ["WebFetch", "WebSearch"]
+        env = {"CLAUDE_PROJECT_DIR": str(workspace)}
+        home_files: dict[str, str] = {}
+        if stage_input.context.shell_filter == "rtk":
+            # ADR 0055: rtk rewrites a Bash command into its filtered form before Claude Code runs
+            # it. No `permissions.allow` rule is written: rtk would then answer `allow` itself
+            # and skip the runner's guardrails. Its configuration goes under `$HOME`, outside
+            # the repository, so it never lands in the diff.
+            settings["hooks"]["PreToolUse"].append(
+                {"matcher": "Bash", "hooks": [{"type": "command", "command": RTK_HOOK}]}
+            )
+            home_files[RTK_CONFIG] = _rtk_config(stage_input)
+            env["RTK_TELEMETRY_DISABLED"] = "1"
+        files = {
+            ".mcp.json": self.mcp_config_json(stage_input),
+            ".claude/settings.json": json.dumps(settings, indent=2, ensure_ascii=False),
+            ".choregos/hooks/check_scope.sh": _scope_hook(
+                offered_script_directory(stage_input), list(stage_input.permissions.deny_paths)
+            ),
+            "CLAUDE.md": _claude_md(stage_input),
+        }
+        files.update(stage_input.agent.launch.files)
+        return LaunchPlan(
+            command=command,
+            env={**env, **stage_input.agent.launch.env},
+            files=files,
+            mcp_servers=self.mcp_servers(stage_input),
+            home_files=home_files,
+        )
+
+    def model_env(self, model: ModelRef, key: str | None) -> dict[str, str]:
+        self.validate_model(model)
+        # Every alias Claude Code may pick resolves to the run's model. `ANTHROPIC_MODEL` alone
+        # does not survive the adapter's `setModel(<alias>)`: on 2026-10-12 the gateway was asked
+        # for `claude-sonnet-4-5-20250929`, and the run's key, minted for one model, was refused.
+        pinned = dict.fromkeys(
+            (
+                "ANTHROPIC_DEFAULT_SONNET_MODEL",
+                "ANTHROPIC_DEFAULT_OPUS_MODEL",
+                "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+                "ANTHROPIC_SMALL_FAST_MODEL",
+                "CLAUDE_CODE_SUBAGENT_MODEL",
+            ),
+            model.litellm_model,
+        )
+        return {
+            **pinned,
+            **self.anthropic_env(model, key),
+            "CLAUDE_CODE_MAX_OUTPUT_TOKENS": "16000",
+            "DISABLE_TELEMETRY": "1",
+        }
+
+
+def _rtk_config(stage_input: StageInput) -> str:
+    """rtk's configuration for the run: the commands it must leave alone.
+
+    A command the policy forbids is never rewritten. rtk renames some commands (`cat` becomes
+    `rtk read`), and a renamed command would no longer match the policy's `deny_commands` when
+    the guardrails judge it. rtk also leaves alone what `.claude/settings.json` denies, but a
+    repository's own settings win over ours (`materialize` never overwrites), so the list is
+    written here too. Each entry matches a command segment that starts with it.
+    """
+    excluded = list(
+        dict.fromkeys([*stage_input.context.rtk_exclude_commands, *stage_input.permissions.deny_commands])
+    )
+    entries = ", ".join(json.dumps(command) for command in excluded)
+    return "\n".join(
+        [
+            "# Written by Tranibor for this run (ADR 0055).",
+            "[hooks]",
+            f"exclude_commands = [{entries}]",
+            "",
+        ]
+    )
+
+
+def _scope_hook(scripts_dir: str = "", deny_paths: list[str] | None = None) -> str:
+    """Local safety net: the real check remains the diff verification.
+
+    The script is dropped into the agent's workspace, which can read it: its comments
+    are in English (ADR 0039). It answers as `GuardRails.check_write` does, rule for rule and in
+    the same order (C2, `tests/test_write_guards_agree.py`): a secret-looking file, the run's script
+    directory, the platform's own files under `.choregos/`, the policy's `scope.deny_paths`, then
+    the allowed paths. The history of the `.choregos/` exception: `result.json` belongs to the
+    PLATFORM, not to the ticket's scope. That is where the agent must write it, as the output
+    contract requires. Refusing it put the agent in front of a contradiction; it wrote it in black
+    and white in its transcript ("there is a contradiction between the allowed scope and the
+    obligation to write result.json"), then it gave up, and the step failed on a missing result.
+    Its neighbours (the allowed paths, this very hook) are the platform's too, and are refused.
+
+    `scripts_dir` is the run's script directory when it is offered tool scripts (#1365), written in
+    by the runner, not read from the agent's environment. A write there is allowed as
+    `GuardRails.check_write` allows it: beneath it, with no `.` or `..` segment
+    (`tool_scripts.is_under`), outside the workspace, not a secret-looking file. `deny_paths` are
+    written in the same way, from the run's permissions.
+    """
+    secrets = "|".join(f'*"{pattern}"*' for pattern in SECRET_FILE_PATTERNS)
+    denied = " ".join(shlex.quote(pattern) for pattern in deny_paths or [])
+    return (
+        _SCOPE_HOOK.replace("@SCRIPTS_DIR@", shlex.quote(scripts_dir))
+        .replace("@SECRETS@", secrets)
+        .replace("@DENY_PATHS@", denied)
+    )
+
+
+_SCOPE_HOOK = r"""#!/usr/bin/env bash
+# Fallback hook: refuses a write the runner's guardrails refuse.
+# It is not the guarantee (the runner checks the diff); it is a useful shortcut.
+set -euo pipefail
+payload=$(cat)
+path=$(printf '%s' "$payload" | grep -o '"file_path"[^,]*' | head -1 | cut -d'"' -f4 || true)
+[ -z "${path:-}" ] && exit 0
+rel=${path#"$PWD/"}
+refuse() { echo "$1" >&2; exit 2; }
+# A pattern covers a path as the platform reads it: `src/**` covers `src` and all beneath it.
+covers() {
+  case "$1" in $2) return 0 ;; esac
+  case "$2" in */\*\*) [ "$1" = "${2%/\*\*}" ] && return 0 ;; esac
+  case "$2" in *\*\*) case "$1" in "${2%\*\*}"*) return 0 ;; esac ;; esac
+  return 1
+}
+case "$rel" in
+  @SECRETS@) refuse "writing to a sensitive file is forbidden: $path" ;;
+esac
+# The run's script directory, when the run is offered tool scripts: outside the workspace,
+# so nothing written there reaches a commit. A path with a `.` or `..` segment names
+# another place, and the scope below judges it; so does the client's directory beside it.
+scripts_dir=@SCRIPTS_DIR@
+if [ -n "$scripts_dir" ] && [ "$rel" = "$path" ]; then
+  case "$path" in
+    */./*|*/../*|*/.|*/..) ;;
+    "$scripts_dir"/?*) exit 0 ;;
+  esac
+fi
+# `.choregos/` belongs to the platform, not to the work item's scope: the agent writes its
+# `result.json` there, as the output contract requires, and its deliverables under `outputs/`.
+case "$rel" in
+  .choregos/result.json) exit 0 ;;
+  .choregos/outputs/*)
+    case "/$rel/" in */../*) ;; *) exit 0 ;; esac ;;
+esac
+case "$rel" in
+  .choregos/*)
+    refuse "the agent cannot change the Tranibor configuration (only .choregos/result.json is expected)" ;;
+esac
+# The project's policy forbids these paths whatever the allowed paths say (scope.deny_paths).
+for pattern in @DENY_PATHS@; do
+  if covers "$rel" "$pattern"; then
+    refuse "$rel is forbidden by the project's policy (scope.deny_paths: $pattern), whatever the scope"
+  fi
+done
+allowed_file=".choregos/allowed_paths.txt"
+[ -f "$allowed_file" ] || exit 0
+declared=0
+while read -r pattern; do
+  [ -z "$pattern" ] && continue
+  declared=1
+  if covers "$rel" "$pattern"; then
+    exit 0
+  fi
+done < "$allowed_file"
+[ "$declared" = 0 ] && exit 0
+refuse "path outside the allowed paths: $rel (see .choregos/allowed_paths.txt)"
+"""
+
+
+def _claude_md(stage_input: StageInput) -> str:
+    return "\n".join(
+        [
+            "# Instructions (Tranibor)",
+            "",
+            "This repository follows `AGENTS.md`. In addition, for this step:",
+            "",
+            f"- Work item: {stage_input.work_item.key} — {stage_input.work_item.title}",
+            f"- Role: {stage_input.transition.role}",
+            "- Allowed paths: see `.choregos/allowed_paths.txt`.",
+            "- Finish by writing `.choregos/result.json`.",
+        ]
+    )

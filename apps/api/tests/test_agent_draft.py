@@ -8,9 +8,9 @@ from typing import Any
 
 import httpx
 import pytest
-from choregos_api.services import agent_drafts
-from choregos_api.services.agent_drafts import DraftContext, DraftingError, GatewayAgentDrafter
 from httpx import AsyncClient
+from tranibor_api.services import agent_drafts
+from tranibor_api.services.agent_drafts import DraftContext, DraftingError, GatewayAgentDrafter
 
 from .conftest import login
 
@@ -176,7 +176,7 @@ async def test_the_org_can_override_the_drafter(
 ) -> None:
     drafter = _script(monkeypatch, {"instructions": "1. Go."})
     await client.post(f"{ORG}/agent-drafts", json=REQUEST)
-    from choregos_core.agent_catalogue import entry
+    from tranibor_core.agent_catalogue import entry
 
     assert drafter.instructions == entry("agent-drafter").document["spec"]["instructions"]  # type: ignore[union-attr]
     assert (await client.post(f"{ORG}/agent-catalogue/agent-drafter/install")).status_code == 201

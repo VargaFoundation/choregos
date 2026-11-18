@@ -48,12 +48,12 @@ def main(argv: list[str]) -> None:
     os.environ.setdefault("CHOREGOS_BOOTSTRAP_ORG_NAME", "Northwind")
     os.environ.setdefault("CHOREGOS_BOOTSTRAP_ADMINS", "admin@northwind.dev")
 
-    import choregos_adapters
+    import tranibor_adapters
     import uvicorn
-    from choregos_adapters.fakes.mcp import FakeMcpServer
+    from tranibor_adapters.fakes.mcp import FakeMcpServer
 
-    choregos_adapters.FAKE_MCP = FakeMcpServer(tools=[dict(t) for t in TOOLS])
-    uvicorn.run("choregos_api.main:app", host="127.0.0.1", port=port, log_level="warning")
+    tranibor_adapters.FAKE_MCP = FakeMcpServer(tools=[dict(t) for t in TOOLS])
+    uvicorn.run("tranibor_api.main:app", host="127.0.0.1", port=port, log_level="warning")
 
 
 if __name__ == "__main__":

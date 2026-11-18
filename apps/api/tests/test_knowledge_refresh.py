@@ -7,14 +7,14 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from choregos_api.knowledge.refresh import (
+from httpx import AsyncClient
+from tranibor_api.knowledge.refresh import (
     MANUAL_IDLE_S,
     MIN_SLEEP_S,
     check_cron,
     decide_pass,
     next_sync_after,
 )
-from httpx import AsyncClient
 
 NOW = datetime(2026, 10, 16, 8, 0, tzinfo=UTC)
 BASE = "/api/v1/orgs/northwind/knowledge"
@@ -130,9 +130,9 @@ async def test_a_refresh_is_refused_with_its_reason(
 
 
 async def test_editing_the_refresh_takes_effect_now(client: AsyncClient, admin: str, app: Any) -> None:
-    from choregos_api.db.models import KnowledgeSource
-    from choregos_api.db.session import session_scope
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.db.models import KnowledgeSource
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.temporal import get_temporal
 
     source = await _base_with_source(client)
     async with session_scope() as session:
@@ -163,7 +163,7 @@ async def test_editing_the_refresh_takes_effect_now(client: AsyncClient, admin: 
 async def test_sync_now_records_the_request_and_sync_all_signals_every_source(
     client: AsyncClient, admin: str, app: Any
 ) -> None:
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.temporal import get_temporal
 
     first = await _base_with_source(client)
     second = (

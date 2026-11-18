@@ -18,7 +18,7 @@ INITIATOR = "person:ada@example.org"
 
 
 async def _prepare(setup: Any) -> dict[str, Any]:
-    from choregos_orchestrator.activities import stage as activities
+    from tranibor_orchestrator.activities import stage as activities
 
     return await activities.prepare_stage(
         {
@@ -36,9 +36,9 @@ async def _prepare(setup: Any) -> dict[str, Any]:
 
 async def _planned(setup: Any, *, document: str) -> None:
     """A `plan` run produced the spec; the work item carries `document` as its spec today."""
-    from choregos_api.db.models import Project, Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.artifacts import record_inline_outputs
+    from tranibor_api.db.models import Project, Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.artifacts import record_inline_outputs
 
     async with session_scope(orgs="*") as session:
         item = await session.get(WorkItem, setup.work_item_id)
@@ -63,8 +63,8 @@ async def _planned(setup: Any, *, document: str) -> None:
 
 
 async def _chain_of(run_id: str) -> tuple[str | None, list[str] | None]:
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         run = await session.get(Run, run_id)

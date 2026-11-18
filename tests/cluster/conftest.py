@@ -19,8 +19,8 @@ import time
 from collections.abc import AsyncIterator, Iterator, Sequence
 
 import pytest
-from choregos_adapters.executor.k8s_job import KubernetesJobExecutor
-from choregos_adapters.executor.tekton import KubernetesClient
+from tranibor_adapters.executor.k8s_job import KubernetesJobExecutor
+from tranibor_adapters.executor.tekton import KubernetesClient
 
 
 def context(*, non_destructive: bool = False) -> str:

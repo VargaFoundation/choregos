@@ -21,7 +21,7 @@ ORG = "/api/v1/orgs/northwind"
 
 
 def _order(arguments: dict[str, Any]) -> dict[str, Any]:
-    from choregos_adapters.errors import AdapterError
+    from tranibor_adapters.errors import AdapterError
 
     if arguments.get("modele") == "introuvable":
         raise AdapterError("model unknown to the supplier catalogue")
@@ -31,11 +31,11 @@ def _order(arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 async def _prepare(platform: Platform, monkeypatch: pytest.MonkeyPatch) -> tuple[str, dict[str, str], Any]:
-    import choregos_adapters
-    from choregos_adapters.fakes.mcp import FakeMcpServer
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.security import mint_run_token
+    import tranibor_adapters
+    from tranibor_adapters.fakes.mcp import FakeMcpServer
+    from tranibor_api.db.models import Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.security import mint_run_token
 
     tools = [
         {"name": "commander_poste", "description": "orders a PC", "inputSchema": {"type": "object"}},
@@ -43,7 +43,7 @@ async def _prepare(platform: Platform, monkeypatch: pytest.MonkeyPatch) -> tuple
          "annotations": {"readOnlyHint": True}},
     ]  # fmt: skip
     server = FakeMcpServer(tools=tools, token="cle-fournisseur", gestures={"commander_poste": _order})
-    monkeypatch.setattr(choregos_adapters, "FAKE_MCP", server)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_MCP", server)
     monkeypatch.setenv("CONNECTOR_TEST_KEY_SUPPLIER", "cle-fournisseur")
     client = platform.client
     await login(client)
@@ -147,9 +147,9 @@ async def test_the_price_is_counted_once_and_the_result_passes_the_guard(
 ) -> None:
     """Replayed, the call does not count the write's price again; and what the write returns was
     written by a third-party server: it goes through the injection guard, like a read."""
-    from choregos_api.db.models import CostLedger
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import CostLedger
+    from tranibor_api.db.session import session_scope
 
     base, headers, _server = await _prepare(platform, monkeypatch)
     prix = await platform.client.patch(

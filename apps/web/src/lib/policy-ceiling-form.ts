@@ -4,7 +4,7 @@ import { STAGE_ROLES } from "@/components/model-catalogue";
 /**
  * The structured form of the organisation's policy ceiling (S42-08): the fields, their minimums, the
  * way a ceiling is read into form values and a form is written back into a ceiling. It mirrors
- * `packages/core/src/choregos_core/policy_ceiling.py` (`extra="forbid"` everywhere).
+ * `packages/core/src/tranibor_core/policy_ceiling.py` (`extra="forbid"` everywhere).
  *
  * A local type, not the generated `PolicyCeiling`: that one lacks `monthly_org_usd` and `network`
  * (contract drift, reported in the S42-08 PR; the contracts are not changed here).

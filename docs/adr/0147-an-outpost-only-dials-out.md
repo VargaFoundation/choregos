@@ -3,7 +3,7 @@
 - **Status**: proposed, 2026-11-11
 - **Concerns**: a new organisation object, the outpost, and its instances (new tables `outposts`,
   `outpost_instances` and `outpost_enrolments`, the management routes `/orgs/{org}/outposts/*`); a new
-  principal kind `outpost` and a permission `outpost:manage` (`apps/api/src/choregos_api/rbac.py`); the
+  principal kind `outpost` and a permission `outpost:manage` (`apps/api/src/tranibor_api/rbac.py`); the
   daemon `choregos-outpost` (a new package, `packages/outpost`) and its local policy file; the setting
   `CHOREGOS_OUTPOSTS`. When accepted, amends [ADR 0024](0024-two-editions.md) decision 2 (outposts are part
   of the community edition) and applies
@@ -166,7 +166,7 @@ Two things have to be separated before deciding.
   secret, gives the control plane code execution there under the label "tools". The operator deploys what
   runs at the outpost (ADR 0149).
 - **A Temporal worker at the outpost.** Activities open the platform's database and mint run tokens
-  (`apps/orchestrator/src/choregos_orchestrator/activities/execution.py`): the worker would hold both.
+  (`apps/orchestrator/src/tranibor_orchestrator/activities/execution.py`): the worker would hold both.
 - **The home cluster as "outpost zero".** Routing the platform's own cluster through the outpost protocol
   would put one more single point of failure under every run, to exercise a protocol. Not before runs at an
   outpost have proven themselves, and not by default then.

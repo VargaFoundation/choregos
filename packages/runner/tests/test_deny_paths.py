@@ -16,13 +16,13 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from choregos_contracts import Permissions, StageInput
-from choregos_runner.acp.client import AcpClient
-from choregos_runner.acp.protocol import FS_WRITE_TEXT_FILE, Request, Response
-from choregos_runner.backends.claude_code import ClaudeCodeBackend
-from choregos_runner.exits import Exit
-from choregos_runner.guardrails import GuardRails
-from choregos_runner.workspace import agent_home
+from tranibor_contracts import Permissions, StageInput
+from tranibor_runner.acp.client import AcpClient
+from tranibor_runner.acp.protocol import FS_WRITE_TEXT_FILE, Request, Response
+from tranibor_runner.backends.claude_code import ClaudeCodeBackend
+from tranibor_runner.exits import Exit
+from tranibor_runner.guardrails import GuardRails
+from tranibor_runner.workspace import agent_home
 
 from .test_runner_flow import execute, valid_result
 
@@ -142,7 +142,7 @@ def test_the_refusal_names_the_policy_and_no_scope_change_grants_it(workspace: P
 
 
 def test_the_task_lists_the_forbidden_paths(stage_input: StageInput) -> None:
-    from choregos_runner.workspace import _task_markdown
+    from tranibor_runner.workspace import _task_markdown
 
     task = _task_markdown(_with(stage_input, DENY))
     assert "## Forbidden paths" in task and "- `.github/workflows/**`" in task

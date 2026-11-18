@@ -17,8 +17,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from choregos_core import utcnow
 from httpx import AsyncClient
+from tranibor_core import utcnow
 
 from .kits.assistant_install import FIXTURE, ORG
 from .kits.assistant_memory import _agent, _assistant, _open, _profile
@@ -38,7 +38,7 @@ TEMPLATE = (
 @pytest.fixture
 def offline(tmp_path: Path) -> Iterator[Path]:
     """The fixture plugin, its `config_schema` given a `desk` key with a default."""
-    from choregos_api.services.plugin_supply import OfflineDirectory, use_plugin_supply
+    from tranibor_api.services.plugin_supply import OfflineDirectory, use_plugin_supply
 
     root = tmp_path / "plugins"
     target = root / "investment-assistant" / "0.1.0"
@@ -106,8 +106,8 @@ async def test_a_person_without_a_profile_reads_empty_preferences_not_a_sample(
 async def test_a_policy_without_memory_renders_no_preferences(
     client: AsyncClient, admin: str, upstream: Upstream, offline: Path
 ) -> None:
-    from choregos_api.db.models import AgentSessionRecord
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import AgentSessionRecord
+    from tranibor_api.db.session import session_scope
 
     await _agent(client, instructions=TEMPLATE)
     installation = await _assistant(client)
@@ -143,7 +143,7 @@ async def test_a_resumed_conversation_takes_the_installation_config_as_it_is_now
 
     # Resumed with nothing changed: the same instructions, nothing journaled.
     soon = utcnow() + timedelta(hours=5)  # past the default idle window of four hours
-    monkeypatch.setattr("choregos_api.services.conversations.utcnow", lambda: soon)
+    monkeypatch.setattr("tranibor_api.services.conversations.utcnow", lambda: soon)
     await _say(client, conversation, "Back")
     assert _system(upstream.model.requests[-1][1]).startswith("You serve Northwind from")
     assert "conversation.instructions_rendered" not in await _events(conversation)
@@ -153,7 +153,7 @@ async def test_a_resumed_conversation_takes_the_installation_config_as_it_is_now
     )
     assert changed.status_code == 200, changed.text
     later = utcnow() + timedelta(hours=10)  # idle again
-    monkeypatch.setattr("choregos_api.services.conversations.utcnow", lambda: later)
+    monkeypatch.setattr("tranibor_api.services.conversations.utcnow", lambda: later)
     await _say(client, conversation, "Still there?")
 
     system = _system(upstream.model.requests[-1][1])

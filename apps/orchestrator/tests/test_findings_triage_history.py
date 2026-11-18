@@ -35,10 +35,10 @@ async def play() -> tuple[dict[str, Any], dict[str, list[Any]], Any]:
     - the first triage starts while no workflow task is in flight, and ends once none is: the test
       server schedules one more workflow task when an activity starts or ends during one.
     """
-    from choregos_orchestrator.testing import wait_for_event, workers_by_queue
-    from choregos_orchestrator.workflows.findings import FindingsTriage
     from temporalio.api.enums.v1 import EventType
     from temporalio.testing import WorkflowEnvironment
+    from tranibor_orchestrator.testing import wait_for_event, workers_by_queue
+    from tranibor_orchestrator.workflows.findings import FindingsTriage
 
     asked: dict[str, list[Any]] = {"triage": []}
     first_triage_started = asyncio.Event()
@@ -99,10 +99,10 @@ async def test_a_finding_is_filed_a_duplicate_is_counted_and_stop_ends_the_loop(
 
 
 async def test_the_archived_history_replays() -> None:
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.api.enums.v1 import EventType
     from temporalio.client import WorkflowHistory
     from temporalio.worker import Replayer
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     _, _, history = await play()
     replayer = Replayer(workflows=ALL_WORKFLOWS)

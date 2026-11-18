@@ -15,8 +15,8 @@ from httpx import AsyncClient
 
 
 async def test_a_resumed_run_is_served_with_its_totals(client: AsyncClient, project: dict[str, Any]) -> None:
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Run, WorkItem
+    from tranibor_api.db.session import session_scope
 
     created = await client.post(
         "/api/v1/orgs/northwind/agents", json={"slug": "writer", "display_name": "Writer", "spec": {}}

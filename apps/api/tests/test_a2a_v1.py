@@ -24,7 +24,7 @@ from .test_a2a_push import HOOK, Receiver, _happen
 @pytest.fixture
 def hook() -> Iterator[Receiver]:
     """The receiver of a push, behind the platform's egress guard (as `test_a2a_push.receiver`)."""
-    from choregos_api.services.remote_agents import set_a2a_transport
+    from tranibor_api.services.remote_agents import set_a2a_transport
 
     receiver = Receiver()
     set_a2a_transport(httpx.MockTransport(receiver))
@@ -66,7 +66,7 @@ def _info(answer: dict[str, Any]) -> dict[str, Any]:
 async def test_the_card_offers_1_0_first_at_the_same_url(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_adapters.a2a import parse_card
+    from tranibor_adapters.a2a import parse_card
 
     token = await _ready(client, project)
     raw = (await client.get(CARD, headers={"Authorization": f"Bearer {token}"})).json()
@@ -102,7 +102,7 @@ async def test_send_message_is_message_send(client: AsyncClient, project: dict[s
 async def test_a_reference_1_0_client_drives_the_door(
     app: Any, client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_adapters.a2a import A2aClient, text_part
+    from tranibor_adapters.a2a import A2aClient, text_part
 
     token = await _ready(client, project)
     async with A2aClient(f"http://test{ENDPOINT}", token, "1.0", transport=ASGITransport(app=app)) as remote:
@@ -113,7 +113,7 @@ async def test_a_reference_1_0_client_drives_the_door(
 
 
 async def test_cancel_task_stops_the_work_item(client: AsyncClient, project: dict[str, Any]) -> None:
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.temporal import get_temporal
 
     token = await _ready(client, project)
     task = (await _send_v1(client, token))["result"]["task"]
@@ -125,9 +125,9 @@ async def test_cancel_task_stops_the_work_item(client: AsyncClient, project: dic
 
 
 async def test_a_file_is_sent_in_1_0_parts(client: AsyncClient, project: dict[str, Any]) -> None:
-    from choregos_api.db.models import ArtifactRecord
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import ArtifactRecord
+    from tranibor_api.db.session import session_scope
 
     token = await _ready(client, project, modes=["text/plain", "text/markdown"])
     raw = base64.b64encode(b"# Spec\n").decode()
@@ -174,7 +174,7 @@ async def test_a_refusal_carries_an_error_info(client: AsyncClient, project: dic
 async def test_fields_a_workflow_refuses_are_field_violations(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_core.dsl import template_yaml
+    from tranibor_core.dsl import template_yaml
 
     await client.put(
         f"/api/v1/projects/{project['id']}/connectors/tracker", json={"type": "internal", "config": {}}
@@ -234,7 +234,7 @@ async def test_the_1_0_methods_not_served_say_so(client: AsyncClient, project: d
 async def test_the_daily_budget_is_the_door_s_own_domain(
     client: AsyncClient, project: dict[str, Any], monkeypatch: Any
 ) -> None:
-    from choregos_api.a2a import door
+    from tranibor_api.a2a import door
 
     token = await _ready(client, project)
     monkeypatch.setattr(door, "WRITES_PER_DAY", 0)
@@ -249,8 +249,8 @@ async def test_the_daily_budget_is_the_door_s_own_domain(
 async def test_subscribe_to_a_finished_task_gives_the_task_and_closes(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     token = await _ready(client, project)
     task = (await _send_v1(client, token))["result"]["task"]
@@ -267,10 +267,10 @@ async def test_subscribe_to_a_finished_task_gives_the_task_and_closes(
 async def test_send_streaming_message_follows_the_work_item_to_its_end(
     app: Any, client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_adapters.a2a import A2aClient, text_part
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_adapters.a2a import A2aClient, text_part
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     token = await _ready(client, project)
 
@@ -298,7 +298,7 @@ async def test_send_streaming_message_follows_the_work_item_to_its_end(
 async def test_push_configs_in_1_0_are_flat_and_notified_as_a_stream_response(
     client: AsyncClient, project: dict[str, Any], hook: Receiver
 ) -> None:
-    from choregos_api.a2a.push import deliver_pending
+    from tranibor_api.a2a.push import deliver_pending
 
     token = await _ready(client, project)
     task = (await _send_v1(client, token))["result"]["task"]

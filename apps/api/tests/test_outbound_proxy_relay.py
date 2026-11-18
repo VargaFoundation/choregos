@@ -16,10 +16,11 @@ from dataclasses import dataclass, field
 import httpx
 import jwt
 import pytest
-from choregos_api.relay import ApiProxySource, CachedProxySource, ProxySourceError, Relay
-from choregos_api.relay.__main__ import settings_from
-from choregos_api.relay.server import MAX_HEAD_BYTES
-from choregos_api.security import (
+from httpx import AsyncClient
+from tranibor_api.relay import ApiProxySource, CachedProxySource, ProxySourceError, Relay
+from tranibor_api.relay.__main__ import settings_from
+from tranibor_api.relay.server import MAX_HEAD_BYTES
+from tranibor_api.security import (
     RELAY_TOKEN_AUDIENCE,
     mint_relay_token,
     mint_run_token,
@@ -27,8 +28,7 @@ from choregos_api.security import (
     verify_relay_token,
     verify_run_token,
 )
-from choregos_core.outbound_proxy import ProxyConfig
-from httpx import AsyncClient
+from tranibor_core.outbound_proxy import ProxyConfig
 
 from .test_outbound_proxy import BODY, PASSWORD, Net, _audit, _put
 
@@ -40,8 +40,8 @@ PUBLIC = "93.184.216.34"
 @pytest.fixture
 def net() -> Iterator[Net]:
     """`test_outbound_proxy.net`: a recording proxy transport and a fresh secret store."""
-    from choregos_adapters.http import proxy as proxy_transports
-    from choregos_api.secret_store import FakeSecretStore, set_secret_store
+    from tranibor_adapters.http import proxy as proxy_transports
+    from tranibor_api.secret_store import FakeSecretStore, set_secret_store
 
     seen = Net()
     proxy_transports.set_proxy_transport_factory(seen.proxy_factory)
@@ -134,7 +134,7 @@ async def test_the_route_refuses_every_credential_but_this_organisations_relay_t
 async def test_the_route_is_a_503_when_the_proxy_applies_but_has_lost_its_password(
     client: AsyncClient, admin: str, net: Net
 ) -> None:
-    from choregos_api.secret_store import FakeSecretStore, set_secret_store
+    from tranibor_api.secret_store import FakeSecretStore, set_secret_store
 
     await _put(client)
     set_secret_store(FakeSecretStore())

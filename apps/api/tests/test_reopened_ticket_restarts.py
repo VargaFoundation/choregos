@@ -22,15 +22,15 @@ SECRET = "s3cret"
 
 
 def _temporal() -> Any:
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.temporal import get_temporal
 
     return get_temporal()
 
 
 async def _ended(project_id: str, key: str, state: str = "deployed_prod") -> str:
     """A work item that went to its end: terminal state, closed, with a pull request."""
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         item = WorkItem(
@@ -48,8 +48,8 @@ async def _ended(project_id: str, key: str, state: str = "deployed_prod") -> str
 
 
 async def _row(item_id: str) -> Any:
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         item = await session.get(WorkItem, item_id)
@@ -59,9 +59,9 @@ async def _row(item_id: str) -> Any:
 
 
 async def _reopenings(item_id: str) -> list[dict[str, Any]]:
-    from choregos_api.db.models import Event
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Event
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = await session.execute(select(Event).where(Event.work_item_id == item_id).order_by(Event.ts))
@@ -188,7 +188,7 @@ async def _jira(client: AsyncClient, delivery: str, moves: tuple[str, str], cate
 @pytest.fixture
 async def bill(client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     """A project the Jira key routes to by its slug (no Jira connector: no call to Jira)."""
-    from choregos_api.config import get_settings
+    from tranibor_api.config import get_settings
 
     monkeypatch.setattr(get_settings(), "generic_webhook_secret", SECRET)
     created = await client.post(
@@ -242,7 +242,7 @@ async def test_a_move_between_working_statuses_of_an_ended_jira_ticket_restarts_
 def test_the_rule_reads_the_category_and_the_workflows_working_statuses(
     payload: dict[str, Any], reopened: bool
 ) -> None:
-    from choregos_api.services.decision_ledger import tracker_says_reopened
+    from tranibor_api.services.decision_ledger import tracker_says_reopened
 
     working = ["Todo", "In progress", "In review"]
     assert tracker_says_reopened("tracker.item.moved", payload, ["Done", "Cancelled"], working) is reopened
@@ -260,7 +260,7 @@ def test_the_rule_reads_the_category_and_the_workflows_working_statuses(
 def test_a_move_brings_a_work_item_back_only_into_a_to_do_or_in_progress_category(
     payload: dict[str, Any], back: bool
 ) -> None:
-    from choregos_api.services.recurrence import says_back_to_work
+    from tranibor_api.services.recurrence import says_back_to_work
 
     assert says_back_to_work("tracker.item.moved", payload) is back
     assert says_back_to_work("tracker.item.updated", {"reopened": True}) is True
@@ -317,9 +317,9 @@ async def _call(client: AsyncClient, token: str, payload: dict[str, Any]) -> Any
 
 
 async def _end(project_id: str, key: str) -> None:
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         item = (
@@ -369,9 +369,9 @@ async def test_a_door_that_read_the_work_item_before_another_pass_claims_nothing
 ) -> None:
     """Two doors read the ended work item; one claims the pass, which runs and ends again; the other,
     acting on what it read, must not start a third: the pass is claimed on the recurrence it saw."""
-    from choregos_api.db.models import Project, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.recurrence import reopen_work_item
+    from tranibor_api.db.models import Project, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.recurrence import reopen_work_item
 
     item_id = await _ended(project["id"], KEY)
     async with session_scope() as late:

@@ -18,10 +18,12 @@ from typing import Any
 import httpx
 import jwt
 import pytest
-from choregos_adapters import sealing
-from choregos_contracts import load_outpost_door, load_schema
-from choregos_contracts.enums import OutpostInstanceStatus, OutpostRefusalCode
-from choregos_contracts.outpost import (
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+from jsonschema import Draft202012Validator
+from tranibor_adapters import sealing
+from tranibor_contracts import load_outpost_door, load_schema
+from tranibor_contracts.enums import OutpostInstanceStatus, OutpostRefusalCode
+from tranibor_contracts.outpost import (
     DOOR_STATUS,
     MAX_BODY_BYTES,
     NONCE_HEADER,
@@ -30,10 +32,8 @@ from choregos_contracts.outpost import (
     call_signature_claims,
     call_signature_header,
 )
-from choregos_outpost.fakes import FakeDoor
-from choregos_outpost.uplink import DoorRefusedError
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
-from jsonschema import Draft202012Validator
+from tranibor_outpost.fakes import FakeDoor
+from tranibor_outpost.uplink import DoorRefusedError
 
 from ._bench import bench
 

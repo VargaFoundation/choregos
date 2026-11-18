@@ -13,7 +13,7 @@ import json
 import pathlib
 import re
 
-from choregos_core.policy import (
+from tranibor_core.policy import (
     DEFAULT_MAX_MINUTES,
     DEFAULT_MAX_TURNS,
     DEFAULT_STAGE_USD,
@@ -57,7 +57,7 @@ def test_the_form_placeholders_are_the_platform_defaults() -> None:
 
 def test_the_form_minimums_are_the_ceiling_models() -> None:
     """Every field the form offers exists in the ceiling model, with the same minimum."""
-    from choregos_core.policy_ceiling import PolicyCeiling
+    from tranibor_core.policy_ceiling import PolicyCeiling
 
     text = FORM.read_text(encoding="utf-8")
     model = PolicyCeiling.model_json_schema()["$defs"]

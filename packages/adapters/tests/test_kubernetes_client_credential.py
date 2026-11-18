@@ -8,8 +8,8 @@ is spoken to with the token the caller gave, or with none.
 from __future__ import annotations
 
 import pytest
-from choregos_adapters.executor import tekton
-from choregos_adapters.executor.tekton import KubernetesClient, is_own_cluster
+from tranibor_adapters.executor import tekton
+from tranibor_adapters.executor.tekton import KubernetesClient, is_own_cluster
 
 from ._transport import Wire
 

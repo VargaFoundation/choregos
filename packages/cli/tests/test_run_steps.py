@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from choregos_cli.run_steps import RunSteps, clean
+from tranibor_cli.run_steps import RunSteps, clean
 
 FIXTURES = Path(__file__).parent / "fixtures"
 

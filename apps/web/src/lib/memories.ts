@@ -2,7 +2,7 @@
 /**
  * What the console says about memories and an agent's bindings to them (S40-11, ADR 0075).
  *
- * `effectiveBindings` is the TypeScript twin of `choregos_core.memory_bindings.effective_bindings`:
+ * `effectiveBindings` is the TypeScript twin of `tranibor_core.memory_bindings.effective_bindings`:
  * a version without `memories` means what its legacy `memory` field says. A test pins the two on the
  * three legacy values.
  */

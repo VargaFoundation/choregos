@@ -7,8 +7,8 @@ namespace `proj-*`.
 
 from __future__ import annotations
 
-from choregos_adapters.executor.tekton import KubernetesClient, TektonExecutor
-from choregos_core.domain import StageJobSpec
+from tranibor_adapters.executor.tekton import KubernetesClient, TektonExecutor
+from tranibor_core.domain import StageJobSpec
 
 from .test_k8s_job import KubernetesJobExecutor, _RecordingClient, _spec
 

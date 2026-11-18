@@ -1,7 +1,7 @@
 # 0021 — SPIFFE identities behind the run token
 
 - **Status**: proposed, 2026-09-25 — not implemented; optional, platform-team install
-- **Concerns**: `apps/api/src/choregos_api/security.py`, the `k8s_job` and `agent_sandbox` executors, the chart
+- **Concerns**: `apps/api/src/tranibor_api/security.py`, the `k8s_job` and `agent_sandbox` executors, the chart
 
 ## Context
 

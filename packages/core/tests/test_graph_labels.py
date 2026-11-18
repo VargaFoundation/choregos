@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 
 import pytest
-from choregos_core.dsl import TEMPLATE_NAMES, load_template, to_graph
+from tranibor_core.dsl import TEMPLATE_NAMES, load_template, to_graph
 
 #: Every label a secondary edge may carry; `on failure (≤N)` is read by the console's pattern.
 ENGLISH_LABELS = {

@@ -41,9 +41,9 @@ async def test_the_organisation_s_agent_clients_come_in_one_list_with_their_agen
 
 
 async def test_the_registry_s_metrics_come_in_one_list(client: AsyncClient, project: dict[str, Any]) -> None:
-    from choregos_api.db.models import CostLedger, Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
+    from tranibor_api.db.models import CostLedger, Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
 
     await _agent(client, "writer")
     await _agent(client, "reader")
@@ -77,8 +77,8 @@ async def test_the_registry_s_metrics_come_in_one_list(client: AsyncClient, proj
 async def test_a_project_s_implicit_agents_are_computed_by_the_api(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.db.models import WorkflowDef
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import WorkflowDef
+    from tranibor_api.db.session import session_scope
 
     await _agent(client, "coordinator")
     actors = {

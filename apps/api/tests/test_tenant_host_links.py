@@ -13,8 +13,8 @@ from collections.abc import Iterator
 from typing import Any
 
 import pytest
-from choregos_api import tenant_host
 from httpx import AsyncClient
+from tranibor_api import tenant_host
 
 from .test_a2a_inbound import CARD, _ready
 
@@ -46,7 +46,7 @@ class Table:
 
 @pytest.fixture
 def table() -> Iterator[Table]:
-    from choregos_api import edition
+    from tranibor_api import edition
 
     found = Table()
     tenant_host.reset()
@@ -162,7 +162,7 @@ async def test_the_agent_card_stays_on_the_instance_without_a_verified_host(
 
 @pytest.fixture
 def oauth(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     monkeypatch.setenv("CHOREGOS_MCP_OAUTH_ENABLED", "true")
     monkeypatch.setenv("CHOREGOS_OIDC_ISSUER", "https://idp.test/realms/platform")
@@ -237,8 +237,8 @@ async def test_the_device_page_is_on_the_organisations_host(
 async def test_a_conversation_and_a_pending_link_use_the_organisations_base(
     client: AsyncClient, table: Table
 ) -> None:
-    from choregos_api.services.conversation_actions import confirm_url
-    from choregos_api.services.my_pending import _console
+    from tranibor_api.services.conversation_actions import confirm_url
+    from tranibor_api.services.my_pending import _console
 
     assert confirm_url("c1", "a1", f"http://{HOST}") == f"http://{HOST}/conversations/c1?action=a1"
     assert confirm_url("c1", "a1") == f"{INSTANCE}/conversations/c1?action=a1"

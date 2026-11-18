@@ -21,7 +21,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[3]
 
 
 async def test_the_status_comment_writes_the_board_fields_in_english(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.tracker import update_status_comment
+    from tranibor_orchestrator.activities.tracker import update_status_comment
 
     await update_status_comment({"project_id": setup.project_id, "work_item_id": setup.work_item_id})
 
@@ -34,8 +34,8 @@ async def test_the_status_comment_writes_the_board_fields_in_english(setup: Fixt
 
 
 async def test_the_board_step_renames_an_older_board_without_doubling_its_fields() -> None:
-    from choregos_adapters.fakes.tracker import FakeTracker
-    from choregos_orchestrator.activities.provisioning import _github_ensure_project_board
+    from tranibor_adapters.fakes.tracker import FakeTracker
+    from tranibor_orchestrator.activities.provisioning import _github_ensure_project_board
 
     tracker = FakeTracker()
     tracker.board_fields = ["Status", "Coût (€)", "Taille", "Risque"]  # lang: fr-ok
@@ -67,7 +67,7 @@ async def test_the_shipped_templates_name_the_english_fields(template: str) -> N
 
 
 async def test_without_a_board_number_the_step_says_so_instead_of_counting_zero() -> None:
-    from choregos_orchestrator.activities.provisioning import _github_ensure_project_board
+    from tranibor_orchestrator.activities.provisioning import _github_ensure_project_board
 
     async def ensure_project_fields(fields: list[str]) -> dict[str, list[str]]:
         return {"kept": [], "renamed": [], "created": []}

@@ -40,7 +40,7 @@ until then, upgrading is the fix.
 | Secrets never enter git: gitleaks is a gate on every pull request | `ci.yml` job `secrets` |
 | Organisations are isolated by fail-closed PostgreSQL RLS, audit included | migrations `b2d4f6a8c0e1`, `c3e5a7f9b1d4`, `db/session.py` |
 | Secrets rotate on the schedule in `docs/runbooks/secret-rotation.md` | that runbook |
-| A run that ended stays ended: the orchestrator closes the row before it asks the executor to cancel, and a closed run's API refuses everything but its journals (ADR 0143) | `choregos_core/run_closure.py`, `activities/execution.py`, `deps.py` (`OpenRunAuth`), `apps/api/tests/test_run_closed.py`, `apps/orchestrator/tests/test_run_closed_when_the_wait_ends.py` |
+| A run that ended stays ended: the orchestrator closes the row before it asks the executor to cancel, and a closed run's API refuses everything but its journals (ADR 0143) | `tranibor_core/run_closure.py`, `activities/execution.py`, `deps.py` (`OpenRunAuth`), `apps/api/tests/test_run_closed.py`, `apps/orchestrator/tests/test_run_closed_when_the_wait_ends.py` |
 
 ## What we do **not** guarantee, stated rather than discovered
 

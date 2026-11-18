@@ -12,7 +12,7 @@ from .agent_scopes_kit import ADMIN, as_user, create_agent, install_common, make
 
 
 async def _publish(client: AsyncClient, project_id: str, agent: str) -> tuple[int, str]:
-    from choregos_core.dsl import template_yaml
+    from tranibor_core.dsl import template_yaml
 
     yaml = template_yaml("default-simple").replace(
         'dev: { type: agent, role: implement, model: "profile:by_size" }',

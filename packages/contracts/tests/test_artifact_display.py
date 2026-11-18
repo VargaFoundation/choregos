@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
-import choregos_contracts as contracts
 import pytest
-from choregos_contracts import (
+import tranibor_contracts as contracts
+from jsonschema import Draft202012Validator
+from pydantic import ValidationError
+from tranibor_contracts import (
     ARTIFACT_TYPES,
     SCALES,
     Artifact,
@@ -19,8 +21,6 @@ from choregos_contracts import (
     coerce_value,
     resolve_display,
 )
-from jsonschema import Draft202012Validator
-from pydantic import ValidationError
 
 SIZE = resolve_display("size")
 assert SIZE is not None

@@ -16,11 +16,11 @@ import pytest
 
 from .conftest import Fixture
 
-PACKAGE = pathlib.Path(__file__).resolve().parents[1] / "src" / "choregos_orchestrator"
+PACKAGE = pathlib.Path(__file__).resolve().parents[1] / "src" / "tranibor_orchestrator"
 
 
 def test_read_key_prefers_english_then_former() -> None:
-    from choregos_orchestrator.wire_names import read_key
+    from tranibor_orchestrator.wire_names import read_key
 
     assert read_key({"effets": 2}, "effects") == 2  # lang: fr-ok
     assert read_key({"effects": 3, "effets": 2}, "effects") == 3  # lang: fr-ok
@@ -35,7 +35,7 @@ def test_read_key_prefers_english_then_former() -> None:
 def test_require_key_raises_like_the_direct_read() -> None:
     """Where a reader subscripted a former key, a payload with neither spelling still raises the
     same `KeyError`: what a workflow or an activity raises does not change (S45-03)."""
-    from choregos_orchestrator.wire_names import require_key
+    from tranibor_orchestrator.wire_names import require_key
 
     assert require_key({"cle": "k"}, "key") == "k"  # lang: fr-ok
     assert require_key({"key": "k2", "cle": "k"}, "key") == "k2"  # lang: fr-ok
@@ -61,7 +61,7 @@ def _direct_reads(path: pathlib.Path, former: set[str]) -> list[str]:
 def test_no_workflow_or_activity_reads_a_former_key_directly() -> None:
     """A recorded or persisted key is read through `read_key`, which accepts both spellings: a
     direct read of the French one would miss what S45-39 writes in English."""
-    from choregos_orchestrator.wire_names import FORMER_PAYLOAD_KEYS
+    from tranibor_orchestrator.wire_names import FORMER_PAYLOAD_KEYS
 
     former = set(FORMER_PAYLOAD_KEYS.values())
     modules = sorted([*PACKAGE.glob("workflows/*.py"), *PACKAGE.glob("activities/*.py")])
@@ -71,7 +71,7 @@ def test_no_workflow_or_activity_reads_a_former_key_directly() -> None:
 
 
 def test_configuration_refusals_accept_both_names() -> None:
-    from choregos_orchestrator.workflows.interpreter import CONFIGURATION_REFUSALS
+    from tranibor_orchestrator.workflows.interpreter import CONFIGURATION_REFUSALS
 
     english = {"AgentUnavailable", "InvalidInstructions", "SkillMissing"}
     former = {"AgentIndisponible", "InstructionsInvalides", "SkillAbsente"}  # lang: fr-ok
@@ -87,15 +87,15 @@ def test_configuration_refusals_accept_both_names() -> None:
 
 
 def test_effect_retry_policy_names_both() -> None:
-    from choregos_orchestrator.workflows.action import EFFECT
+    from tranibor_orchestrator.workflows.action import EFFECT
 
     expected = {"EffectRefused", "EffetRefuse", "ActionNotFound", "ActionIntrouvable"}  # lang: fr-ok
     assert set(EFFECT.non_retryable_error_types or []) == expected
 
 
 async def _action(setup: Fixture) -> str:
-    from choregos_api.db.models import Action, Project
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Action, Project
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         project = await session.get(Project, setup.project_id)
@@ -119,8 +119,8 @@ async def _action(setup: Fixture) -> str:
 
 
 async def _row(action_id: str) -> Any:
-    from choregos_api.db.models import Action
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Action
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         return await session.get(Action, action_id)
@@ -134,8 +134,8 @@ async def _row(action_id: str) -> Any:
 async def test_awaiting_evidence_reads_english_and_former_keys(
     setup: Fixture, waiting: str, until: str, evidence: str
 ) -> None:
-    from choregos_core import utcnow
-    from choregos_orchestrator.activities.actions import mark_awaiting_evidence
+    from tranibor_core import utcnow
+    from tranibor_orchestrator.activities.actions import mark_awaiting_evidence
 
     action_id = await _action(setup)
     deadline = (utcnow() + timedelta(hours=1)).isoformat()
@@ -154,7 +154,7 @@ async def test_awaiting_evidence_reads_english_and_former_keys(
 async def test_awaiting_evidence_without_a_deadline_still_fails(setup: Fixture) -> None:
     """A payload that says the action waits but gives no deadline, under either spelling, fails the
     activity as `entree['jusqu_a']` did, and leaves the row as it was."""
-    from choregos_orchestrator.activities.actions import mark_awaiting_evidence
+    from tranibor_orchestrator.activities.actions import mark_awaiting_evidence
 
     action_id = await _action(setup)
     with pytest.raises(KeyError):
@@ -164,10 +164,10 @@ async def test_awaiting_evidence_without_a_deadline_still_fails(setup: Fixture) 
 
 
 async def _migration_events(setup: Fixture) -> list[Any]:
-    from choregos_api.db.models import Event
-    from choregos_api.db.session import session_scope
-    from choregos_contracts import EventType
     from sqlalchemy import select
+    from tranibor_api.db.models import Event
+    from tranibor_api.db.session import session_scope
+    from tranibor_contracts import EventType
 
     types = (str(EventType.WORKITEM_MIGRATED), str(EventType.WORKITEM_MIGRATION_REFUSED))
     async with session_scope() as session:
@@ -180,7 +180,7 @@ async def _migration_events(setup: Fixture) -> list[Any]:
 async def test_migration_record_is_idempotent_across_key_names(setup: Fixture) -> None:
     """A replayed `record_migration` (ADR 0008) finds the key in the events already persisted,
     whichever spelling the payload uses."""
-    from choregos_orchestrator.activities.interpretation import record_migration
+    from tranibor_orchestrator.activities.interpretation import record_migration
 
     key = "wi-x/run-1/1"
     common = {"project_id": setup.project_id, "work_item_id": setup.work_item_id, "from_state": "inbox"}
@@ -195,11 +195,11 @@ async def test_migration_record_is_idempotent_across_key_names(setup: Fixture) -
 
 async def test_migration_record_finds_an_event_persisted_under_the_former_key(setup: Fixture) -> None:
     """A row written before S45-39 holds `cle`: a replayed record still finds it."""
-    from choregos_api.db.models import Event
-    from choregos_api.db.session import session_scope
-    from choregos_contracts import EventType
-    from choregos_core import utcnow
-    from choregos_orchestrator.activities.interpretation import record_migration
+    from tranibor_api.db.models import Event
+    from tranibor_api.db.session import session_scope
+    from tranibor_contracts import EventType
+    from tranibor_core import utcnow
+    from tranibor_orchestrator.activities.interpretation import record_migration
 
     async with session_scope() as session:
         session.add(
@@ -222,8 +222,8 @@ async def test_migration_record_finds_an_event_persisted_under_the_former_key(se
 
 
 async def test_migration_refusal_is_read_under_the_english_key(setup: Fixture) -> None:
-    from choregos_contracts import EventType
-    from choregos_orchestrator.activities.interpretation import record_migration
+    from tranibor_contracts import EventType
+    from tranibor_orchestrator.activities.interpretation import record_migration
 
     payload = {
         "project_id": setup.project_id,
@@ -243,7 +243,7 @@ async def test_migration_refusal_is_read_under_the_english_key(setup: Fixture) -
 async def test_migration_record_without_a_key_still_fails(setup: Fixture) -> None:
     """Without its idempotence key under either spelling, `record_migration` fails as
     `payload['cle']` did: it never persists an event keyed `'None'`."""
-    from choregos_orchestrator.activities.interpretation import record_migration
+    from tranibor_orchestrator.activities.interpretation import record_migration
 
     payload = {"project_id": setup.project_id, "work_item_id": setup.work_item_id, "refusal": "moved"}
     with pytest.raises(KeyError):
@@ -254,8 +254,8 @@ async def test_migration_record_without_a_key_still_fails(setup: Fixture) -> Non
 def test_train_input_decodes_with_and_without_relay_threshold() -> None:
     """A continue-as-new input recorded before S45-03 names the threshold `seuil_de_relais`; one
     written after S45-39 names it `relay_threshold`. Both decode, to the same threshold."""
-    from choregos_orchestrator.workflows.train import RELAY_THRESHOLD, TrainInput
     from temporalio.converter import DataConverter
+    from tranibor_orchestrator.workflows.train import RELAY_THRESHOLD, TrainInput
 
     converter = DataConverter.default.payload_converter
     base = {"project_slug": "billing-api", "env": "prod"}

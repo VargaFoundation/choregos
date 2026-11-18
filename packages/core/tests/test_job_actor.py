@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import pytest
-from choregos_contracts import JobActor, StateKind
-from choregos_core import ValidationError, WorkflowEngine, parse_workflow
-from choregos_core.dsl.graph import to_graph, to_mermaid
-from choregos_core.dsl.process import to_process
-from choregos_core.dsl.requirements import requirements
+from tranibor_contracts import JobActor, StateKind
+from tranibor_core import ValidationError, WorkflowEngine, parse_workflow
+from tranibor_core.dsl.graph import to_graph, to_mermaid
+from tranibor_core.dsl.process import to_process
+from tranibor_core.dsl.requirements import requirements
 
 WORKFLOW = """
 apiVersion: choregos/v1

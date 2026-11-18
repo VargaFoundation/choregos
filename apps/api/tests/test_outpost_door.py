@@ -20,9 +20,9 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
-from choregos_contracts import MAX_BODY_BYTES, NONCE_HEADER, SIGNATURE_HEADER, outpost
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from httpx import ASGITransport, AsyncClient
+from tranibor_contracts import MAX_BODY_BYTES, NONCE_HEADER, SIGNATURE_HEADER, outpost
 
 from .kits import outpost_daemon as daemon_kit
 from .kits import outposts as kit
@@ -48,19 +48,19 @@ async def daemon(client: AsyncClient, admin: str) -> Daemon:
 @pytest.fixture
 def quick_looks(monkeypatch: pytest.MonkeyPatch) -> None:
     """A poll that waits looks again at once: on SQLite nothing wakes it (ADR 0148, consequences)."""
-    from choregos_api.outposts import rendezvous
+    from tranibor_api.outposts import rendezvous
 
     monkeypatch.setattr(rendezvous, "LOOK_S", (0.02, 0.05))
 
 
 def _settings() -> Any:
-    from choregos_api.config import get_settings
+    from tranibor_api.config import get_settings
 
     return get_settings()
 
 
 def _nonce(age_s: float = 0) -> str:
-    from choregos_api.outposts import auth
+    from tranibor_api.outposts import auth
 
     return auth.nonces(_settings()).issue(at=time.time() - age_s)
 
@@ -88,9 +88,9 @@ async def _cut_short(poll: asyncio.Task[Any], daemon: Daemon) -> None:
 
 async def _door_events() -> list[str]:
     """Every audit event of the outposts so far, by action."""
-    from choregos_api.db.models import AuditLog
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import AuditLog
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         rows = await session.execute(select(AuditLog.action).where(AuditLog.action.like("outpost.%")))
@@ -103,7 +103,7 @@ async def _door_events() -> list[str]:
 async def test_the_door_is_not_mounted_while_outposts_are_off(monkeypatch: pytest.MonkeyPatch) -> None:
     """`CHOREGOS_OUTPOSTS` is the switch that stops every outpost at once (ADR 0147 §12): off, a daemon
     meets a 404 that is none of the contract's problems."""
-    from choregos_api.main import create_app
+    from tranibor_api.main import create_app
 
     kit.configure(monkeypatch, outposts="off")
     async with AsyncClient(transport=ASGITransport(app=create_app()), base_url="http://test") as http:
@@ -119,7 +119,7 @@ def test_a_door_switched_on_without_its_origin_or_its_key_stops_the_start_up(
 ) -> None:
     """A door that could not compare a signature's URL, or sign a call, is refused when the API
     starts, naming the setting, rather than found one refusal at a time by whoever runs an outpost."""
-    from choregos_api.main import create_app
+    from tranibor_api.main import create_app
 
     kit.configure(monkeypatch, **{missing: None})
     with pytest.raises(RuntimeError, match=f"CHOREGOS_{missing.upper()}"):
@@ -142,7 +142,7 @@ async def test_the_door_is_mounted_at_the_root_and_outside_the_api_document(
 async def test_an_instance_enrols_through_the_door_and_is_born_pending(
     client: AsyncClient, admin: str, door: kit.Door
 ) -> None:
-    from choregos_api.db.models import OutpostInstance
+    from tranibor_api.db.models import OutpostInstance
 
     await kit.create(client, SLUG)
     daemon = Daemon()
@@ -228,7 +228,7 @@ async def test_an_enrolment_token_is_checked_where_the_instance_would_be(
 ) -> None:
     """After the signature and before the protocol and the schema; and a request refused further down
     does not use the token up."""
-    from choregos_api.outposts import auth
+    from tranibor_api.outposts import auth
 
     await kit.create(client, SLUG)
     daemon = Daemon()
@@ -258,7 +258,7 @@ async def test_enrolments_under_one_outposts_tokens_are_rate_limited(
 ) -> None:
     """An enrolment has no instance to count against yet: it counts against the outpost its token is
     bound to, once that token is known to be good, and the token stays whole."""
-    from choregos_api.outposts import auth
+    from tranibor_api.outposts import auth
 
     await kit.create(client, SLUG)
     await kit.create(client, "cold-store")
@@ -421,7 +421,7 @@ async def test_a_signature_over_another_body_is_refused(client: AsyncClient, dae
 
 async def test_a_stale_iat_is_refused_with_the_doors_time(client: AsyncClient, daemon: Daemon) -> None:
     """60 seconds either way; the refusal carries `server_time`, so a daemon whose clock drifts learns it."""
-    from choregos_contracts import IAT_WINDOW_S
+    from tranibor_contracts import IAT_WINDOW_S
 
     assert IAT_WINDOW_S == 60
     for drift in (-(IAT_WINDOW_S + 5), IAT_WINDOW_S + 5, -1_000_000_000):
@@ -452,7 +452,7 @@ async def test_a_stale_nonce_is_refused_and_the_refusal_carries_a_fresh_one(
     for _ in range(2):
         assert (await daemon.send(client, POLL, body, nonce=kept)).status_code == 200
     # The door stores nothing to check it: another door with the same signing key takes it too.
-    from choregos_api.outposts import auth
+    from tranibor_api.outposts import auth
 
     assert auth.Nonces(auth._nonce_key(_settings().outposts_door_signing_key)).fresh(kept)
     assert not auth.Nonces(b"k" * 32).fresh(kept)
@@ -482,7 +482,7 @@ async def test_a_sequence_outside_the_claims_bound_is_a_malformed_signature(
     """One bound, the claim's: 1 to 2^53 - 1, a number every JSON parser reads exactly (S65-23, #1628
     row 2). Above it, the signature is malformed whatever the row could store, and it takes no
     sequence."""
-    from choregos_contracts.outpost import MAX_SEQUENCE
+    from tranibor_contracts.outpost import MAX_SEQUENCE
 
     assert MAX_SEQUENCE == 2**53 - 1
     body = daemon.poll_body()
@@ -514,7 +514,7 @@ async def test_a_sequence_stays_taken_when_the_request_then_fails(
 ) -> None:
     """The sequence is committed as soon as it is taken: a fault further down, which rolls the rest of
     the request back, does not give a copy of that request a second chance."""
-    from choregos_api.outposts import auth
+    from tranibor_api.outposts import auth
 
     def broken(_document: Any) -> None:
         raise RuntimeError("a fault after the signature was taken")
@@ -552,7 +552,7 @@ async def test_a_revoked_instance_is_refused(client: AsyncClient, daemon: Daemon
 
 
 async def test_the_instances_of_a_revoked_outpost_are_refused(client: AsyncClient, daemon: Daemon) -> None:
-    from choregos_api.db.models import Outpost, OutpostInstance
+    from tranibor_api.db.models import Outpost, OutpostInstance
 
     assert (await client.post(f"{kit.BASE}/{SLUG}/revoke")).status_code == 200
     refused(await daemon.poll(client), "instance_revoked", 403)
@@ -569,7 +569,7 @@ async def test_a_request_that_fails_several_checks_is_answered_for_the_first(
 ) -> None:
     """The contract's order: signature, binding, `iat`, nonce, sequence, instance, rate, protocol,
     schema, then the verb."""
-    from choregos_api.outposts import auth
+    from tranibor_api.outposts import auth
 
     await kit.create(client, SLUG)
     pending = await daemon_kit.enrolled(client)
@@ -702,7 +702,7 @@ async def test_an_instance_that_sends_too_much_is_told_when_to_come_back(
 ) -> None:
     """A rate limit per instance, in memory and per replica like every limit of the API: a 429 with
     `retry_after`. It is one instance's: another's requests are not counted with them."""
-    from choregos_api.outposts import auth
+    from tranibor_api.outposts import auth
 
     kit.configure(monkeypatch, outposts_door_rate_per_minute="3")
     monkeypatch.setattr(auth, "_limiter", auth.RateLimiter(0))
@@ -726,7 +726,7 @@ async def test_a_daemon_below_the_minimum_version_is_refused_with_the_minimum(
 ) -> None:
     """A clean refusal that names the window, and no assignment (ADR 0148 §3): the daemon stops
     polling and says so; nobody upgrades it for its operator."""
-    from choregos_api.outposts import auth
+    from tranibor_api.outposts import auth
 
     placed = await daemon_kit.place()
     monkeypatch.setattr(auth, "PROTOCOL_MINIMUM", 2)
@@ -784,7 +784,7 @@ async def test_a_poll_that_is_not_what_the_schema_describes_is_a_422_of_the_door
 async def test_a_call_is_handed_over_sealed_to_the_instance_and_signed_by_the_door(
     client: AsyncClient, daemon: Daemon, door: kit.Door
 ) -> None:
-    from choregos_api.services import outposts as service
+    from tranibor_api.services import outposts as service
 
     asserted = {
         "sub": "run:r-42",
@@ -873,7 +873,7 @@ async def test_a_lease_lasts_300_seconds_at_most_and_nothing_a_daemon_sends_exte
     with pytest.raises(ValueError, match="300 seconds at most"):
         await daemon_kit.place(timeout_s=301)
     # The bound is the lease's own: a row that says it waits an hour is still leased for 300 seconds.
-    from choregos_api.db.models import OutpostCall
+    from tranibor_api.db.models import OutpostCall
 
     patient = await daemon_kit.place(endpoint="forge")
     await daemon_kit.change(OutpostCall, patient.id, expires_at=datetime.now(UTC) + timedelta(hours=1))
@@ -887,8 +887,8 @@ async def test_a_call_claimed_late_in_its_second_reaches_the_daemon_with_its_who
     """#1641 (S65-23): the deadline inside the envelope is written to the millisecond. A call with a
     one-second timeout, placed and claimed at .999 of a second, reaches a daemon whose clock agrees
     with the door's with close to one second left; cut to the second, it had a millisecond."""
-    from choregos_api.outposts import door as served
-    from choregos_api.outposts import rendezvous
+    from tranibor_api.outposts import door as served
+    from tranibor_api.outposts import rendezvous
 
     second = datetime.now(UTC).replace(microsecond=0) + timedelta(seconds=1)
     late = second + timedelta(microseconds=999_000)  # .999 of a second, on both clocks
@@ -957,10 +957,10 @@ async def test_a_paused_outpost_is_handed_nothing_and_reads_stop(client: AsyncCl
 
 async def _placed_by_hand(slug: str = SLUG) -> str:
     """A call that waits at an outpost whatever its status: written as `place` writes one, by hand."""
-    from choregos_api.db.models import OutpostCall
-    from choregos_api.db.session import name_the_outpost, session_scope
-    from choregos_api.outposts import rendezvous
-    from choregos_api.services import outposts as service
+    from tranibor_api.db.models import OutpostCall
+    from tranibor_api.db.session import name_the_outpost, session_scope
+    from tranibor_api.outposts import rendezvous
+    from tranibor_api.services import outposts as service
 
     row = await kit.outpost_row(slug)
     async with session_scope(orgs="*") as session:
@@ -988,7 +988,7 @@ async def test_a_call_that_weighs_more_than_the_door_carries_is_not_handed_over(
     """The bound is on the call as carried: its id, its envelope and its signature together. A call
     above it is refused where it is admitted; one that reaches a claim all the same is not handed
     over, and is refused there with the code an outpost gives a payload above its ceiling."""
-    from choregos_api.outposts import rendezvous
+    from tranibor_api.outposts import rendezvous
 
     assert rendezvous.MAX_SEALED_CALL_BYTES == 2 * 1024 * 1024
     with pytest.raises(rendezvous.NotAdmitted) as refusal:
@@ -1034,8 +1034,8 @@ async def test_a_poll_answers_what_it_holds_that_is_awaited_no_more(
     client: AsyncClient, daemon: Daemon
 ) -> None:
     """`cancel`: the calls among `running` an answer to which would not be taken."""
-    from choregos_api.db.session import session_scope
-    from choregos_api.outposts import rendezvous
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.outposts import rendezvous
 
     held, done, dropped, late = [(await daemon_kit.place(write=index == 3)).id for index in range(4)]
     calls = {call["id"]: call for call in await daemon.calls(client)}
@@ -1064,7 +1064,7 @@ async def test_a_poll_with_nothing_to_hand_over_answers_at_the_end_of_its_wait(
 ) -> None:
     """The lower bound is the clock's (a loaded runner only makes a wait longer); "at once" is read
     from the pauses the poll took, not from the clock (#1710, #1725)."""
-    from choregos_api.outposts import door as door_module
+    from tranibor_api.outposts import door as door_module
 
     pauses = daemon_kit.record_pauses(monkeypatch)
     started = time.monotonic()
@@ -1098,8 +1098,8 @@ async def test_a_second_concurrent_poll_is_a_conflict_and_raises_an_alert(
     client: AsyncClient, daemon: Daemon, quick_looks: None
 ) -> None:
     """One poll per instance at a time: two holders of one key is what a stolen key looks like."""
-    from choregos_api.metrics import refresh
-    from choregos_api.services.outposts import POLL_CONFLICT
+    from tranibor_api.metrics import refresh
+    from tranibor_api.services.outposts import POLL_CONFLICT
 
     first = asyncio.create_task(daemon.poll(client, wait_s=20))
     await _poll_waits(daemon)
@@ -1130,7 +1130,7 @@ async def test_a_second_concurrent_poll_is_a_conflict_and_raises_an_alert(
     assert [call["id"] for call in answered.json()["calls"]] == [placed.id]
     assert (await daemon.poll(client)).status_code == 200
     # A minute later a conflict is an alert again.
-    from choregos_api.db.models import OutpostInstance
+    from tranibor_api.db.models import OutpostInstance
 
     long_ago = datetime.now(UTC) - timedelta(seconds=61)
     await daemon_kit.change(OutpostInstance, str(daemon.instance_id), poll_conflict_at=long_ago)
@@ -1171,7 +1171,7 @@ async def test_the_slot_is_given_back_when_the_request_is_cut_short(
 async def test_a_slot_nobody_gave_back_lapses_by_itself(client: AsyncClient, daemon: Daemon) -> None:
     """A replica that dies gives nothing back: the slot is on the row with an expiry, and the
     instance's next poll, at whichever replica, takes it once it has lapsed."""
-    from choregos_api.db.models import OutpostInstance
+    from tranibor_api.db.models import OutpostInstance
 
     now = datetime.now(UTC)
     held = {"poll_holder": "a-replica-that-died", "poll_expires_at": now + timedelta(seconds=12)}
@@ -1189,7 +1189,7 @@ async def test_a_poll_that_overstayed_its_slot_hands_nothing_over(
 ) -> None:
     """A slot lapses, and another poll takes it: the poll that held it finds the row is no longer its
     own at its next look, and ends with nothing rather than claim beside the other."""
-    from choregos_api.db.models import OutpostInstance
+    from tranibor_api.db.models import OutpostInstance
 
     waiting = asyncio.create_task(daemon.poll(client, wait_s=20))
     await _poll_waits(daemon)
@@ -1205,7 +1205,7 @@ async def test_a_poll_that_overstayed_its_slot_hands_nothing_over(
 async def test_a_poll_closes_what_ran_out_of_time_at_its_outpost(client: AsyncClient, daemon: Daemon) -> None:
     """Whoever looks at an outpost's calls closes those whose time is up: an outpost that polls keeps
     its own rows true, with nothing else running."""
-    from choregos_api.db.models import OutpostCall
+    from tranibor_api.db.models import OutpostCall
 
     unclaimed, write = await daemon_kit.place(endpoint="forge"), await daemon_kit.place(write=True)
     assert len(await daemon.calls(client)) == 1
@@ -1232,8 +1232,8 @@ async def test_a_poll_whose_instance_is_revoked_while_it_waits_ends_refused(
 async def test_an_answer_is_recorded_once_and_stored_sealed_for_whoever_placed_the_call(
     client: AsyncClient, daemon: Daemon
 ) -> None:
-    from choregos_api.db.session import session_scope
-    from choregos_api.outposts import rendezvous
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.outposts import rendezvous
 
     arguments = {"title": "Door stuck"}
     placed = await daemon_kit.place(tool="create_issue", arguments=arguments, write=True)
@@ -1291,7 +1291,7 @@ async def test_the_same_instance_sending_again_reads_what_was_recorded_whatever_
     client: AsyncClient, daemon: Daemon
 ) -> None:
     """A daemon sends its answer again until the deadline, and after a restart."""
-    from choregos_api.outposts import rendezvous
+    from tranibor_api.outposts import rendezvous
 
     placed = await daemon_kit.place()
     (call,) = await daemon.calls(client)
@@ -1326,7 +1326,7 @@ async def test_the_same_instance_sending_again_reads_what_was_recorded_whatever_
 async def test_a_refusal_is_recorded_once_with_a_code_of_the_closed_list(
     client: AsyncClient, daemon: Daemon
 ) -> None:
-    from choregos_api.outposts import rendezvous
+    from tranibor_api.outposts import rendezvous
 
     placed = await daemon_kit.place(write=True, tool="create_issue")
     (call,) = await daemon.calls(client)
@@ -1364,8 +1364,8 @@ async def test_every_code_of_the_contracts_list_is_taken_and_no_other(
     gains is taken the day it lands."""
     import inspect
 
-    from choregos_api.outposts import auth
-    from choregos_api.outposts import door as door_module
+    from tranibor_api.outposts import auth
+    from tranibor_api.outposts import door as door_module
 
     codes = daemon_kit.contracts.load_schema("outpost-refusal.schema.json")["properties"]["code"]["enum"]
     assert set(codes) == {code.value for code in outpost.OutpostRefusalCode}
@@ -1432,7 +1432,7 @@ async def test_an_answer_is_taken_only_from_the_instance_that_claimed_the_call(
 
 
 async def test_an_answer_after_the_deadline_is_refused(client: AsyncClient, daemon: Daemon) -> None:
-    from choregos_api.db.models import OutpostCall
+    from tranibor_api.db.models import OutpostCall
 
     placed = await daemon_kit.place()
     (call,) = await daemon.calls(client)
@@ -1494,7 +1494,7 @@ async def test_every_problem_carries_the_nonce_its_status_is_documented_with(
 ) -> None:
     """`Outpost-Nonce` goes on the answers that are taken and on 401, 403, 404 and 409, as the
     document's headers say; the daemon keeps the last one it received."""
-    from choregos_api.outposts import auth
+    from tranibor_api.outposts import auth
 
     document = daemon_kit.contracts.load_outpost_door()
     shared = document["components"]["responses"]

@@ -127,10 +127,10 @@ async def test_a_project_of_another_organisation_or_none_is_not_a_project(
 async def test_a_missing_workflow_inputs_it_cannot_take_and_a_personal_space_are_refused(
     client: AsyncClient, project: dict[str, Any], offline: Path
 ) -> None:
-    from choregos_api.db.models import Organization, User
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.personal_spaces import personal_space
     from sqlalchemy import select
+    from tranibor_api.db.models import Organization, User
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.personal_spaces import personal_space
 
     await install(client, offline)
     missing = await bind_launch(client)
@@ -175,8 +175,8 @@ async def test_a_workflow_that_stops_fitting_is_a_readiness_item(
 async def test_deleting_the_project_unbinds_the_launch(
     client: AsyncClient, project: dict[str, Any], offline: Path
 ) -> None:
-    from choregos_api.db.models import Project
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Project
+    from tranibor_api.db.session import session_scope
 
     await install(client, offline)
     await publish_review(client, project["id"])
@@ -222,9 +222,9 @@ async def test_an_upgrade_that_drops_the_launch_switches_its_binding_off_and_kee
     await _upgrade(client, "0.2.0")
     body = (await client.get(SLUG)).json()
     assert body["launches"] == [] and body["status"] == "ready"
-    from choregos_api.db.models import AssistantLaunchBinding
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import AssistantLaunchBinding
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         (kept,) = (await session.execute(select(AssistantLaunchBinding))).scalars()

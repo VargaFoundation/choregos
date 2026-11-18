@@ -12,7 +12,7 @@ import pathlib
 from typing import Any
 
 import yaml
-from choregos_core.publishing import PUBLISHING
+from tranibor_core.publishing import PUBLISHING
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 NIGHTLY = ROOT / ".github" / "workflows" / "nightly.yml"

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
-import choregos_contracts as contracts
+import tranibor_contracts as contracts
 from httpx import AsyncClient
 from jsonschema import Draft202012Validator
 
@@ -77,9 +77,9 @@ def _undeclared(value: Any, schema: dict[str, Any], where: str = "") -> list[str
 
 
 async def _run_with_access(project: dict[str, Any]) -> str:
-    from choregos_api.db.models import CostLedger, Run, RunEvent, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
+    from tranibor_api.db.models import CostLedger, Run, RunEvent, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
 
     async with session_scope() as session:
         item = WorkItem(project_id=project["id"], tracker_key="northwind/x#34", title="T", state="ready")

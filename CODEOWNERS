@@ -22,20 +22,20 @@
 # `tests/docs/test_human_review.py` keeps every path in it existing and owned here. The team is
 # created, and "Require review from Code Owners" turned on, when a second human reviewer joins.
 /packages/contracts/                                          @graalsystems/human-review
-/apps/api/src/choregos_api/migrations/                        @graalsystems/human-review
-/packages/ontology/src/choregos_ontology/service/migrations/  @graalsystems/human-review
-/apps/api/src/choregos_api/security.py                        @graalsystems/human-review
-/apps/api/src/choregos_api/rbac.py                            @graalsystems/human-review
-/apps/api/src/choregos_api/audit.py                           @graalsystems/human-review
-/apps/api/src/choregos_api/secret_store.py                    @graalsystems/human-review
-/apps/api/src/choregos_api/approval_freshness.py              @graalsystems/human-review
-/apps/api/src/choregos_api/internal_api_guard.py              @graalsystems/human-review
-/apps/api/src/choregos_api/origin_guard.py                    @graalsystems/human-review
-/apps/api/src/choregos_api/egress/                            @graalsystems/human-review
-/apps/api/src/choregos_api/routers/auth.py                    @graalsystems/human-review
-/apps/api/src/choregos_api/routers/internal.py                @graalsystems/human-review
-/packages/runner/src/choregos_runner/confine.py               @graalsystems/human-review
-/packages/runner/src/choregos_runner/safe_files.py            @graalsystems/human-review
+/apps/api/src/tranibor_api/migrations/                        @graalsystems/human-review
+/packages/ontology/src/tranibor_ontology/service/migrations/  @graalsystems/human-review
+/apps/api/src/tranibor_api/security.py                        @graalsystems/human-review
+/apps/api/src/tranibor_api/rbac.py                            @graalsystems/human-review
+/apps/api/src/tranibor_api/audit.py                           @graalsystems/human-review
+/apps/api/src/tranibor_api/secret_store.py                    @graalsystems/human-review
+/apps/api/src/tranibor_api/approval_freshness.py              @graalsystems/human-review
+/apps/api/src/tranibor_api/internal_api_guard.py              @graalsystems/human-review
+/apps/api/src/tranibor_api/origin_guard.py                    @graalsystems/human-review
+/apps/api/src/tranibor_api/egress/                            @graalsystems/human-review
+/apps/api/src/tranibor_api/routers/auth.py                    @graalsystems/human-review
+/apps/api/src/tranibor_api/routers/internal.py                @graalsystems/human-review
+/packages/runner/src/tranibor_runner/confine.py               @graalsystems/human-review
+/packages/runner/src/tranibor_runner/safe_files.py            @graalsystems/human-review
 /charts/choregos/templates/networkpolicies.yaml               @graalsystems/human-review
 /infra/policies/                                              @graalsystems/human-review
 /.github/workflows/                                           @graalsystems/human-review

@@ -18,9 +18,9 @@ RULE = {"name": "scope_respected", "params": {"paths": ["docs/adr/**"]}}
 
 
 async def _run_starting_at(setup: Any, start: str | None) -> str:
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
-    from choregos_contracts import StageResult, StageStatus
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
+    from tranibor_contracts import StageResult, StageStatus
 
     result = StageResult(status=StageStatus.DONE, summary="ADR written")
     result.artifacts.branch = BRANCH
@@ -42,7 +42,7 @@ async def _run_starting_at(setup: Any, start: str | None) -> str:
 
 
 async def test_the_work_of_earlier_steps_does_not_count(setup: Any) -> None:
-    from choregos_orchestrator.activities.gates import evaluate_gates
+    from tranibor_orchestrator.activities.gates import evaluate_gates
 
     setup.adapters.scm.set_diff(
         REPO,
@@ -64,7 +64,7 @@ async def test_the_work_of_earlier_steps_does_not_count(setup: Any) -> None:
 
 
 async def test_what_the_run_writes_out_of_perimeter_still_counts(setup: Any) -> None:
-    from choregos_orchestrator.activities.gates import evaluate_gates
+    from tranibor_orchestrator.activities.gates import evaluate_gates
 
     setup.adapters.scm.set_diff(REPO, "abc123", BRANCH, [("Makefile", 4, 0), ("docs/adr/0001-x.md", 30, 0)])
     run_id = await _run_starting_at(setup, "abc123")
@@ -80,7 +80,7 @@ async def test_what_the_run_writes_out_of_perimeter_still_counts(setup: Any) -> 
 
 async def test_a_run_that_does_not_say_where_it_starts_is_judged_on_the_ticket(setup: Any) -> None:
     """A runner from before S22-11: nothing changes, the ticket diff applies."""
-    from choregos_orchestrator.activities.gates import evaluate_gates
+    from tranibor_orchestrator.activities.gates import evaluate_gates
 
     setup.adapters.scm.set_diff(REPO, "main", BRANCH, [("Makefile", 4, 0), ("docs/adr/0001-x.md", 30, 0)])
     run_id = await _run_starting_at(setup, None)

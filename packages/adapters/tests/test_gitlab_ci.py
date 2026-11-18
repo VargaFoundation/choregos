@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import httpx
 import respx
-from choregos_adapters import connector_types
-from choregos_adapters.ci.gitlab import GitLabCi
-from choregos_adapters.http import RestClient
+from tranibor_adapters import connector_types
+from tranibor_adapters.ci.gitlab import GitLabCi
+from tranibor_adapters.http import RestClient
 
 BASE = "https://gitlab.com/api/v4/projects/northwind%2Fbilling-api"
 

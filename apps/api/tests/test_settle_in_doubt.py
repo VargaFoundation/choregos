@@ -95,7 +95,7 @@ async def _prepared(client: AsyncClient, project: dict[str, Any]) -> tuple[Any, 
 async def _in_doubt(client: AsyncClient, project: dict[str, Any]) -> tuple[Any, Any, Any, str]:
     """An action whose first write was answered and whose second was claimed and never answered,
     closed `in_doubt` as its workflow closes it."""
-    from choregos_orchestrator.activities.actions import close_action
+    from tranibor_orchestrator.activities.actions import close_action
 
     served, fake, daemon = await _prepared(client, project)
     action_id = await kit.action(project["id"], _effects())
@@ -114,9 +114,9 @@ def _path(project: dict[str, Any], action_id: str) -> str:
 
 
 async def _events(action_id: str, kind: str) -> list[dict[str, Any]]:
-    from choregos_api.db.models import Event
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Event
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         rows = await session.execute(select(Event).where(Event.subject == action_id, Event.type == kind))
@@ -124,7 +124,7 @@ async def _events(action_id: str, kind: str) -> list[dict[str, Any]]:
 
 
 def _fake_temporal() -> Any:
-    from choregos_api.temporal import FakeTemporal, get_temporal
+    from tranibor_api.temporal import FakeTemporal, get_temporal
 
     fake = get_temporal()
     assert isinstance(fake, FakeTemporal)
@@ -137,7 +137,7 @@ def _fake_temporal() -> Any:
 async def test_made_records_the_effect_done_with_the_stated_result_and_the_action_resumes(
     client: AsyncClient, project: dict[str, Any], ops: AsyncClient
 ) -> None:
-    from choregos_orchestrator.activities.actions import close_action
+    from tranibor_orchestrator.activities.actions import close_action
 
     served, fake, daemon, action_id = await _in_doubt(client, project)
     (_done, doubted) = await kit.journal(action_id)
@@ -192,7 +192,7 @@ async def test_made_records_the_effect_done_with_the_stated_result_and_the_actio
 async def test_not_made_is_never_attempted_and_the_action_compensates_what_came_before(
     client: AsyncClient, project: dict[str, Any], ops: AsyncClient
 ) -> None:
-    from choregos_orchestrator.activities.actions import close_action, compensate_effect
+    from tranibor_orchestrator.activities.actions import close_action, compensate_effect
 
     served, fake, daemon, action_id = await _in_doubt(client, project)
     note = "nothing changed in the tracker since 10:00"
@@ -268,8 +268,8 @@ async def test_a_developer_and_an_api_token_do_not_settle(
 async def test_a_group_the_rule_names_is_required_to_settle_as_to_approve(
     client: AsyncClient, project: dict[str, Any], ops: AsyncClient
 ) -> None:
-    from choregos_api.db.models import Action
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Action
+    from tranibor_api.db.session import session_scope
 
     _served, _fake, _daemon, action_id = await _in_doubt(client, project)
     async with session_scope(orgs="*") as session:
@@ -283,7 +283,7 @@ async def test_a_group_the_rule_names_is_required_to_settle_as_to_approve(
 async def test_a_session_that_is_too_old_must_authenticate_again(
     client: AsyncClient, project: dict[str, Any], ops: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api import freshness
+    from tranibor_api import freshness
 
     _served, _fake, _daemon, action_id = await _in_doubt(client, project)
     later = time.time() + 11 * 60
@@ -351,8 +351,8 @@ async def test_an_effect_in_doubt_that_its_workflow_still_retries_is_not_settled
     """An operation that takes the platform's idempotency key is delivered again after a doubt: its
     effect's row stays `in_doubt` while the action is still `running`. The workflow is not done with
     it, and a person does not settle what the platform is still trying."""
-    from choregos_api.db.models import Action, ActionEffect
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Action, ActionEffect
+    from tranibor_api.db.session import session_scope
 
     await _prepared(client, project)
     action_id = await kit.action(project["id"], [kit.call("create_issue", TITLE)], status="running")
@@ -384,9 +384,9 @@ async def test_an_evidence_waited_for_before_the_settled_effect_is_not_asked_aga
     """The run that follows a settlement answers the effects already done from the journal. One of
     them asked the workflow to wait for its evidence, and the run before waited for it: the replay
     does not ask for it again, or the action would wait for an evidence that already came."""
-    from choregos_api.db.models import ActionEffect
-    from choregos_api.db.session import session_scope
     from sqlalchemy import update
+    from tranibor_api.db.models import ActionEffect
+    from tranibor_api.db.session import session_scope
 
     _served, _fake, _daemon, action_id = await _in_doubt(client, project)
     waited = {"key": "OPS-7", "await_evidence": {"until": "2026-11-14T12:00:00+00:00"}}
@@ -419,9 +419,9 @@ async def temporal() -> AsyncIterator[Any]:
 
 
 def _workers(temporal: Any) -> Any:
-    from choregos_orchestrator.activities import ALL_ACTIVITIES
-    from choregos_orchestrator.testing import workers_by_queue
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS, WORKFLOW_ACTIVITIES
+    from tranibor_orchestrator.activities import ALL_ACTIVITIES
+    from tranibor_orchestrator.testing import workers_by_queue
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS, WORKFLOW_ACTIVITIES
 
     return workers_by_queue(
         temporal.client,
@@ -444,8 +444,8 @@ async def _settled_on_temporal(
     starts the workflow again; the run that follows ends. Returns what the server received, the action
     and what the second run returned. `start_lost`: the start that follows the settlement's commit is
     lost (the API's client reaches no Temporal), and the relay starts it."""
-    from choregos_api.services.action_relay import start_approved_actions
-    from choregos_api.temporal import FakeTemporal, RealTemporal, set_temporal
+    from tranibor_api.services.action_relay import start_approved_actions
+    from tranibor_api.temporal import FakeTemporal, RealTemporal, set_temporal
 
     served, fake, daemon = await _prepared(client, project)
     action_id = await kit.action(project["id"], _effects())

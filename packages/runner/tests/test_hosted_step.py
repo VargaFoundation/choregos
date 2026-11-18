@@ -15,9 +15,9 @@ import json
 from typing import Any
 
 import pytest
-from choregos_adapters.fakes import FakeHostedAgent, FakeModelServer
-from choregos_adapters.fakes.mcp import FakeMcpServer
-from choregos_contracts import (
+from tranibor_adapters.fakes import FakeHostedAgent, FakeModelServer
+from tranibor_adapters.fakes.mcp import FakeMcpServer
+from tranibor_contracts import (
     AgentRef,
     HostedCall,
     McpServerRef,
@@ -27,10 +27,10 @@ from choregos_contracts import (
     StageStatus,
     ToolsRef,
 )
-from choregos_core.hosted import sidecar_env
-from choregos_runner.exits import Exit
-from choregos_runner.loopback.connect import ConnectProxy
-from choregos_runner.runner import Runner
+from tranibor_core.hosted import sidecar_env
+from tranibor_runner.exits import Exit
+from tranibor_runner.loopback.connect import ConnectProxy
+from tranibor_runner.runner import Runner
 
 from .conftest import FakeInternalClient, loopback_ports, port_of
 

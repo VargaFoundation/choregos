@@ -52,9 +52,9 @@ async def test_an_extension_grants_platform_administration_without_withdrawing_i
 ) -> None:
     """Two organisations: the core's rule (admin of ALL) refuses the head of `northwind` alone; the
     extension can grant it to someone else, without withdrawing the right from whom the core gives it."""
-    from choregos_api.db.models import Membership, Organization, User
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Membership, Organization, User
+    from tranibor_api.db.session import session_scope
 
     await connect(extended_client, "admin@northwind.dev")
     # A second organisation, put in the database: the community edition refuses to create it through the API.
@@ -79,8 +79,8 @@ ISSUER = "https://idp.example.test/realms/x"
 async def test_reauth_asks_the_idp_to_authenticate_again(
     extended_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.routers.auth import forget_discovery
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.routers.auth import forget_discovery
 
     monkeypatch.setenv("CHOREGOS_DEV_LOGIN_ENABLED", "false")
     monkeypatch.setenv("CHOREGOS_OIDC_ISSUER", ISSUER)
@@ -114,9 +114,9 @@ async def test_reauth_asks_the_idp_to_authenticate_again(
 SAML_EXTENSION = '''
 from fastapi import APIRouter
 
-from choregos_api.deps import Db
-from choregos_api.extensions import declare_router
-from choregos_api.routers.auth import terminer_la_connexion  # lang: fr-ok
+from tranibor_api.deps import Db
+from tranibor_api.extensions import declare_router
+from tranibor_api.routers.auth import terminer_la_connexion  # lang: fr-ok
 
 router = APIRouter()
 
@@ -142,7 +142,7 @@ def plug_in():
 
 @pytest.fixture
 async def saml_client(tmp_path: pathlib.Path) -> AsyncIterator[AsyncClient]:
-    from choregos_api.extensions import reset
+    from tranibor_api.extensions import reset
 
     root = tmp_path / "site-saml"
     root.mkdir()
@@ -157,11 +157,11 @@ async def saml_client(tmp_path: pathlib.Path) -> AsyncIterator[AsyncClient]:
     )
     sys.path.insert(0, str(root))
     os.environ["CHOREGOS_DATABASE_URL"] = f"sqlite+aiosqlite:///{tmp_path}/saml.db"
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.db import session as db_session
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import create_all, session_scope
-    from choregos_api.main import create_app
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.db import session as db_session
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import create_all, session_scope
+    from tranibor_api.main import create_app
 
     reset_settings_cache()
     await db_session.dispose_engine()
@@ -181,10 +181,10 @@ async def saml_client(tmp_path: pathlib.Path) -> AsyncIterator[AsyncClient]:
 
 
 async def test_another_protocol_opens_a_session_exactly_like_oidc(saml_client: AsyncClient) -> None:
-    from choregos_api.db.models import AuditLog
-    from choregos_api.db.session import session_scope
-    from choregos_api.security import read_session
     from sqlalchemy import select
+    from tranibor_api.db.models import AuditLog
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.security import read_session
 
     response = await saml_client.post("/api/v1/extension/acs", params={"cible": "https://evil.example/theft"})
     assert response.status_code == 307

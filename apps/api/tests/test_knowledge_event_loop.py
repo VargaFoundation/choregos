@@ -32,7 +32,7 @@ def _mark() -> None:
 
 
 def heavy_chunk(markdown: str, title: str, **kw: Any) -> Any:
-    from choregos_api.knowledge.chunking import chunk
+    from tranibor_api.knowledge.chunking import chunk
 
     _mark()
     _spin(SPIN_S)
@@ -42,7 +42,7 @@ def heavy_chunk(markdown: str, title: str, **kw: Any) -> Any:
 
 
 def heavy_rankings(query: str, vector: list[float], rows: Any) -> Any:
-    from choregos_api.knowledge.index import _rankings
+    from tranibor_api.knowledge.index import _rankings
 
     _mark()
     _spin(SPIN_S)
@@ -51,7 +51,7 @@ def heavy_rankings(query: str, vector: list[float], rows: Any) -> Any:
 
 @pytest.fixture(autouse=True)
 async def _worker(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[None]:
-    from choregos_api.knowledge import offload
+    from tranibor_api.knowledge import offload
 
     monkeypatch.setenv("HEAVY_MARKER", str(tmp_path / "heavy"))
     # The spawned worker imports this module by name and inherits the parent's `sys.path`.
@@ -69,7 +69,7 @@ async def _warm(client: AsyncClient) -> None:
     """Starts the worker process and answers the probed route once, BEFORE any heavy work is queued:
     what is measured is the steady state (a cold start is slow on a CI runner whatever the loop does).
     """
-    from choregos_api.knowledge import offload
+    from tranibor_api.knowledge import offload
 
     await offload.run(_noop)
     assert (await client.get(f"{BASE}/heavy")).status_code == 200
@@ -146,8 +146,8 @@ async def _base(client: AsyncClient) -> None:
 async def test_a_cpu_heavy_indexing_does_not_starve_other_requests(
     client: AsyncClient, admin: str, monkeypatch: Any, tmp_path: Any
 ) -> None:
-    from choregos_api.knowledge import index
-    from choregos_api.knowledge.conversion import conversions
+    from tranibor_api.knowledge import index
+    from tranibor_api.knowledge.conversion import conversions
 
     monkeypatch.setattr(index, "chunk", heavy_chunk)
     await _base(client)
@@ -168,8 +168,8 @@ async def test_a_cpu_heavy_indexing_does_not_starve_other_requests(
 async def test_a_cpu_heavy_search_does_not_starve_other_requests(
     client: AsyncClient, admin: str, monkeypatch: Any, tmp_path: Any
 ) -> None:
-    from choregos_api.knowledge import index
-    from choregos_api.knowledge.conversion import conversions
+    from tranibor_api.knowledge import index
+    from tranibor_api.knowledge.conversion import conversions
 
     await _base(client)
     await client.post(f"{BASE}/heavy/documents", files={"file": ("a.md", b"# Title\n\ntls text\n")})
@@ -191,7 +191,7 @@ async def test_a_cpu_heavy_search_does_not_starve_other_requests(
 
 
 async def test_the_converter_runs_at_a_low_priority() -> None:
-    from choregos_api.knowledge.conversion import CONVERTER_NICE, _lower_priority
+    from tranibor_api.knowledge.conversion import CONVERTER_NICE, _lower_priority
 
     process = await asyncio.create_subprocess_exec(
         sys.executable,

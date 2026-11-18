@@ -24,7 +24,7 @@ type, shown when one is added.
 
 ## Decision
 
-1. **A procedure is a Markdown file in the core**, `packages/core/src/choregos_core/procedures/<id>.md`,
+1. **A procedure is a Markdown file in the core**, `packages/core/src/tranibor_core/procedures/<id>.md`,
    with a YAML front matter: `id`, `title`, `applies_to` (exactly one of `connector`, `source`, `agent`,
    `door_client`, plus an optional `card_host` or `preset` that makes it a preset), `audience`, `version`
    (+1 on any change of substance), `reviewed` (the day it was compared with the vendor's pages),

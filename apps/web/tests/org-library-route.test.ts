@@ -69,7 +69,7 @@ describe("the names a workflow may not take (S55-15)", () => {
   });
 
   it("is the list the API refuses", () => {
-    const api = readFileSync(join(import.meta.dirname, "../../api/src/choregos_api/services/definitions.py"), "utf8");
+    const api = readFileSync(join(import.meta.dirname, "../../api/src/tranibor_api/services/definitions.py"), "utf8");
     const declared = /RESERVED_WORKFLOW_NAMES = frozenset\(\{([^}]*)\}\)/.exec(api)?.[1];
     expect(declared?.match(/"[a-z-]+"/g)?.map((n) => n.slice(1, -1)).sort()).toEqual([...RESERVED_WORKFLOW_NAMES].sort());
   });

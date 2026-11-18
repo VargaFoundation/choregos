@@ -10,9 +10,9 @@ from typing import Any
 
 import httpx
 import pytest
-from choregos_adapters.errors import AdapterError
-from choregos_adapters.fakes.marketdata import FakeMarketData, seed_of, synthetic_bars
-from choregos_adapters.marketdata import (
+from tranibor_adapters.errors import AdapterError
+from tranibor_adapters.fakes.marketdata import FakeMarketData, seed_of, synthetic_bars
+from tranibor_adapters.marketdata import (
     AlphaVantageProvider,
     CompositeProvider,
     MarketDataError,
@@ -22,7 +22,7 @@ from choregos_adapters.marketdata import (
     UnknownSymbol,
     YahooProvider,
 )
-from choregos_adapters.marketdata.composite import compare_closes
+from tranibor_adapters.marketdata.composite import compare_closes
 
 KEY = "k3y-t0p-s3cret"
 
@@ -592,7 +592,7 @@ async def test_composite_instrument_prefers_a_source_that_knows_the_type() -> No
 def test_registry_builds_the_family_and_the_composite_gets_its_secrets_by_type(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from choregos_adapters import build, spec_of
+    from tranibor_adapters import build, spec_of
 
     # `CHOREGOS_FAKES=1` (set by the API's suite when everything runs together) would build the fake.
     monkeypatch.setenv("CHOREGOS_FAKES", "0")
@@ -626,7 +626,7 @@ def test_registry_builds_the_family_and_the_composite_gets_its_secrets_by_type(
     assert [name for name, _ in three._sources] == ["yahoo", "tiingo", "alphavantage"]
     assert spec_of("marketdata", "tiingo").secret_fields == ("api_key",)  # type: ignore[union-attr]
     assert KEY not in repr(composite)
-    from choregos_adapters.errors import ConfigurationError
+    from tranibor_adapters.errors import ConfigurationError
 
     for mauvaise in ({}, {"sources": ["bloomberg"]}, {"sources": ["alphavantage"]}):
         with pytest.raises((ConfigurationError, MarketDataError)):

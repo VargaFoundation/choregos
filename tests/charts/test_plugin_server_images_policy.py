@@ -14,8 +14,8 @@ from typing import Any
 
 import pytest
 import yaml
-from choregos_adapters.plugin_servers import ServerDeployment, server_manifests
-from choregos_core.publishing import PUBLISHING
+from tranibor_adapters.plugin_servers import ServerDeployment, server_manifests
+from tranibor_core.publishing import PUBLISHING
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 POLICY = ROOT / "infra" / "policies" / "plugin-servers.yaml"

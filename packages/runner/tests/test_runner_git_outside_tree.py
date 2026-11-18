@@ -15,11 +15,11 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from choregos_contracts import StageInput, StageStatus
-from choregos_runner import workspace as workspace_module
-from choregos_runner.exits import Exit
-from choregos_runner.runner import Runner
-from choregos_runner.workspace import Workspace, git_dir_for
+from tranibor_contracts import StageInput, StageStatus
+from tranibor_runner import workspace as workspace_module
+from tranibor_runner.exits import Exit
+from tranibor_runner.runner import Runner
+from tranibor_runner.workspace import Workspace, git_dir_for
 
 from .conftest import FakeInternalClient, agent_script, valid_result
 

@@ -22,7 +22,7 @@ HISTORIES = pathlib.Path(__file__).resolve().parents[3] / "tests" / "replay" / "
 
 @pytest.fixture
 def done() -> Iterator[list[tuple[str, dict[str, Any]]]]:
-    from choregos_api import effects
+    from tranibor_api import effects
 
     seen: list[tuple[str, dict[str, Any]]] = []
 
@@ -45,8 +45,8 @@ def done() -> Iterator[list[tuple[str, dict[str, Any]]]]:
 
 
 async def _action(setup: Fixture, until: str) -> str:
-    from choregos_api.db.models import Action, Project
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Action, Project
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         project = await session.get(Project, setup.project_id)
@@ -73,8 +73,8 @@ async def _action(setup: Fixture, until: str) -> str:
 
 
 async def _row(action_id: str) -> Any:
-    from choregos_api.db.models import Action
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Action
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         return await session.get(Action, action_id)
@@ -98,8 +98,8 @@ async def _awaiting(action_id: str) -> Any:
 async def test_an_action_awaits_its_evidence_and_succeeds_when_it_comes(
     setup: Fixture, temporal_env: Any, worker_factory: Any, done: list[Any]
 ) -> None:
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.worker import Replayer
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     until = (await temporal_env.get_current_time() + timedelta(hours=1)).isoformat()
     action_id = await _action(setup, until)
@@ -156,9 +156,9 @@ async def test_the_evidence_signal_and_english_activity_names(
 ) -> None:
     """S34-02: a new action schedules the English activity names, takes the `evidence` signal, and
     its history replays. Archived as the English counterpart of `action-evidence-S20-08`."""
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.api.enums.v1 import EventType
     from temporalio.worker import Replayer
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     until = (await temporal_env.get_current_time() + timedelta(hours=1)).isoformat()
     action_id = await _action(setup, until)

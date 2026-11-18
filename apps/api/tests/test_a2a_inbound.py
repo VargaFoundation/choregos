@@ -35,7 +35,7 @@ async def _token(client: AsyncClient, *scopes: str, project: str | None = None) 
 async def _publish(
     client: AsyncClient, project: dict[str, Any], *, opt_in: bool = True, modes: list[str] | None = None
 ) -> None:
-    from choregos_core.dsl import template_yaml
+    from tranibor_core.dsl import template_yaml
 
     tracker = await client.put(
         f"/api/v1/projects/{project['id']}/connectors/tracker", json={"type": "internal", "config": {}}
@@ -144,7 +144,7 @@ async def test_a_workflow_that_did_not_opt_in_is_not_a_skill(
 async def test_the_card_lists_the_opted_in_workflow_and_parses_as_a2a(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_adapters.a2a import AUTH_BEARER, parse_card
+    from tranibor_adapters.a2a import AUTH_BEARER, parse_card
 
     token = await _ready(client, project)
     raw = (await client.get(CARD, headers={"Authorization": f"Bearer {token}"})).json()
@@ -161,9 +161,9 @@ async def test_the_card_lists_the_opted_in_workflow_and_parses_as_a2a(
 
 
 async def test_a_resent_message_is_the_same_task(client: AsyncClient, project: dict[str, Any]) -> None:
-    from choregos_api.db.models import AuditLog, WorkItem
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import AuditLog, WorkItem
+    from tranibor_api.db.session import session_scope
 
     token = await _ready(client, project)
     first = await _send(client, token, message_id="m-42")
@@ -242,8 +242,8 @@ def _with_files(*parts: dict[str, Any], message_id: str = "m-f") -> dict[str, An
 
 @pytest.fixture
 def store() -> Any:
-    from choregos_adapters.fakes import FakeObjectStore
-    from choregos_api.object_store import use_object_store
+    from tranibor_adapters.fakes import FakeObjectStore
+    from tranibor_api.object_store import use_object_store
 
     fake = FakeObjectStore()
     use_object_store(fake)
@@ -254,13 +254,13 @@ def store() -> Any:
 async def test_a_file_part_is_an_input_artefact_a_step_reads(
     client: AsyncClient, project: dict[str, Any], store: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.a2a import door
-    from choregos_api.db.models import ArtifactRecord, AuditLog, Project, Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.security import mint_run_token
-    from choregos_api.temporal import get_temporal
-    from choregos_contracts import artifact_digest
     from sqlalchemy import select
+    from tranibor_api.a2a import door
+    from tranibor_api.db.models import ArtifactRecord, AuditLog, Project, Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.security import mint_run_token
+    from tranibor_api.temporal import get_temporal
+    from tranibor_contracts import artifact_digest
 
     token = await _ready(client, project, modes=FILE_MODES)
     order: list[str] = []
@@ -275,7 +275,7 @@ async def test_a_file_part_is_an_input_artefact_a_step_reads(
         return await real_record(session, **kw)
 
     monkeypatch.setattr(door, "start_work_item", start)
-    monkeypatch.setattr("choregos_api.services.tickets.start_work_item", start)
+    monkeypatch.setattr("tranibor_api.services.tickets.start_work_item", start)
     monkeypatch.setattr(door, "record_input_file", record_file)
     answer = (await _rpc(client, token, "message/send", _with_files(_file("contract.pdf", PDF)))).json()
     task = answer["result"]
@@ -322,7 +322,7 @@ async def test_a_file_part_is_an_input_artefact_a_step_reads(
     ]
     read = await client.get("/api/v1/internal/runs/run-review/inputs/contract.pdf", headers=headers)
     assert read.status_code == 200 and read.content == PDF
-    from choregos_api.services.artifacts import producing_runs
+    from tranibor_api.services.artifacts import producing_runs
 
     async with session_scope() as session:
         sources = await producing_runs(session, task["id"], ["contract.pdf"], {}, reader="run-review")
@@ -341,9 +341,9 @@ async def test_a_file_part_is_an_input_artefact_a_step_reads(
 async def test_file_parts_are_bounded_by_the_project(
     client: AsyncClient, project: dict[str, Any], store: Any
 ) -> None:
-    from choregos_api.db.models import ArtifactRecord, Project, WorkItem
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import ArtifactRecord, Project, WorkItem
+    from tranibor_api.db.session import session_scope
 
     token = await _ready(client, project, modes=FILE_MODES)
     async with session_scope() as session:
@@ -395,10 +395,10 @@ async def test_file_parts_are_bounded_by_the_project(
 async def test_the_door_reads_a_body_only_as_large_as_the_organisation_takes(
     client: AsyncClient, project: dict[str, Any], store: Any
 ) -> None:
-    from choregos_api.a2a.door import MAX_BODY
-    from choregos_api.db.models import Project
-    from choregos_api.db.session import session_scope
-    from choregos_api.mcp.transport import MAX_BODY_SIZE
+    from tranibor_api.a2a.door import MAX_BODY
+    from tranibor_api.db.models import Project
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.mcp.transport import MAX_BODY_SIZE
 
     token = await _ready(client, project, modes=FILE_MODES)
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
@@ -421,10 +421,10 @@ async def test_the_door_reads_a_body_only_as_large_as_the_organisation_takes(
 async def test_a_pending_decision_is_input_required_and_stays_in_the_console(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.db.models import HumanRequest
-    from choregos_api.db.session import session_scope
-    from choregos_api.temporal import get_temporal
-    from choregos_core import utcnow
+    from tranibor_api.db.models import HumanRequest
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.temporal import get_temporal
+    from tranibor_core import utcnow
 
     token = await _ready(client, project)
     task = await _send(client, token)
@@ -457,9 +457,9 @@ async def test_a_pending_decision_is_input_required_and_stays_in_the_console(
 
 
 async def test_states_map_one_way(client: AsyncClient, project: dict[str, Any]) -> None:
-    from choregos_api.db.models import ArtifactRecord, Project, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
+    from tranibor_api.db.models import ArtifactRecord, Project, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
 
     token = await _ready(client, project)
     ids = [(await _send(client, token, message_id=f"m-{n}"))["id"] for n in range(3)]
@@ -497,11 +497,11 @@ async def test_a_completed_task_carries_its_artefacts_content(
     """Small artefacts travel in parts, checked against their digest; a large one stays in the console."""
     import base64
 
-    from choregos_api.a2a.door import MAX_ARTIFACT_INLINE
-    from choregos_api.db.models import ArtifactRecord, Project, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.object_store import object_store
-    from choregos_contracts import artifact_digest, inline_bytes
+    from tranibor_api.a2a.door import MAX_ARTIFACT_INLINE
+    from tranibor_api.db.models import ArtifactRecord, Project, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.object_store import object_store
+    from tranibor_contracts import artifact_digest, inline_bytes
 
     token = await _ready(client, project)
     task_id = (await _send(client, token))["id"]
@@ -546,7 +546,7 @@ async def test_a_completed_task_carries_its_artefacts_content(
     assert {a["metadata"]["choregos"]["digest"] for a in task["artifacts"]} >= {artifact_digest(pdf)}
 
     # The task's own budget: once the deck is in, the rest is read in the console.
-    monkeypatch.setattr("choregos_api.a2a.door.MAX_ARTIFACTS_INLINE", len(pdf))
+    monkeypatch.setattr("tranibor_api.a2a.door.MAX_ARTIFACTS_INLINE", len(pdf))
     task = (await _rpc(client, token, "tasks/get", {"id": task_id})).json()["result"]
     parts = {a["name"]: a["parts"][0] for a in task["artifacts"]}
     assert parts["deck"]["kind"] == "file"
@@ -554,7 +554,7 @@ async def test_a_completed_task_carries_its_artefacts_content(
 
 
 async def test_tasks_cancel_stops_the_work_item(client: AsyncClient, project: dict[str, Any]) -> None:
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.temporal import get_temporal
 
     token = await _ready(client, project)
     task = await _send(client, token)
@@ -573,8 +573,8 @@ async def test_tasks_cancel_stops_the_work_item(client: AsyncClient, project: di
 async def test_the_door_is_rate_limited(
     client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.a2a import door
-    from choregos_api.rate_limit import RateLimiter
+    from tranibor_api.a2a import door
+    from tranibor_api.rate_limit import RateLimiter
 
     token = await _ready(client, project)
     monkeypatch.setattr(door, "RATE_LIMITER", RateLimiter(1))
@@ -588,7 +588,7 @@ async def test_a_reference_a2a_client_drives_the_door(
     app: Any, client: AsyncClient, project: dict[str, Any]
 ) -> None:
     """The platform's own outbound client (ADR 0062) speaks to the door as to any A2A agent."""
-    from choregos_adapters.a2a import A2aClient, text_part
+    from tranibor_adapters.a2a import A2aClient, text_part
 
     token = await _ready(client, project)
     async with A2aClient(f"http://test{ENDPOINT}", token, transport=ASGITransport(app=app)) as remote:
@@ -602,12 +602,12 @@ async def test_a_reference_a2a_client_sends_a_file_a_step_reads(
     app: Any, client: AsyncClient, project: dict[str, Any], store: Any
 ) -> None:
     """The outbound client's own `file_part`, not a hand-built dict: what a caller sends, a step reads."""
-    from choregos_adapters.a2a import A2aClient, file_part, text_part
-    from choregos_api.db.models import ArtifactRecord, Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.security import mint_run_token
-    from choregos_contracts import artifact_digest
     from sqlalchemy import select
+    from tranibor_adapters.a2a import A2aClient, file_part, text_part
+    from tranibor_api.db.models import ArtifactRecord, Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.security import mint_run_token
+    from tranibor_contracts import artifact_digest
 
     token = await _ready(client, project, modes=FILE_MODES)
     async with A2aClient(f"http://test{ENDPOINT}", token, transport=ASGITransport(app=app)) as remote:
@@ -671,7 +671,7 @@ async def _stream(
 
 async def _when_followed(then: Any) -> None:
     """Runs `then` once a stream listens to the project, as the orchestrator's events would come."""
-    from choregos_api.events import get_bus
+    from tranibor_api.events import get_bus
 
     for _ in range(200):
         if get_bus().subscriber_count("project:billing-api"):
@@ -681,8 +681,8 @@ async def _when_followed(then: Any) -> None:
 
 
 async def _touch(key: str) -> None:
-    from choregos_api.events import get_bus
-    from choregos_contracts import ChoregosEvent, EventType
+    from tranibor_api.events import get_bus
+    from tranibor_contracts import ChoregosEvent, EventType
 
     get_bus().publish(
         ChoregosEvent.emit(
@@ -694,11 +694,11 @@ async def _touch(key: str) -> None:
 async def test_message_stream_follows_the_work_item_to_its_end(
     app: Any, client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_adapters.a2a import A2aClient, text_part
-    from choregos_api.db.models import ArtifactRecord, HumanRequest, Project, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
     from sqlalchemy import select
+    from tranibor_adapters.a2a import A2aClient, text_part
+    from tranibor_api.db.models import ArtifactRecord, HumanRequest, Project, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
 
     token = await _ready(client, project)
     card = (await client.get(CARD, headers={"Authorization": f"Bearer {token}"})).json()
@@ -758,8 +758,8 @@ async def test_message_stream_follows_the_work_item_to_its_end(
 async def test_resubscribe_to_a_finished_task_says_final_and_closes(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     token = await _ready(client, project)
     task = await _send(client, token)
@@ -776,10 +776,10 @@ async def test_resubscribe_to_a_finished_task_says_final_and_closes(
 
 
 async def test_a_revoked_token_ends_the_stream(client: AsyncClient, project: dict[str, Any]) -> None:
-    from choregos_api.db.models import ApiToken, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
     from sqlalchemy import select
+    from tranibor_api.db.models import ApiToken, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
 
     token = await _ready(client, project)
     task = await _send(client, token)
@@ -803,7 +803,7 @@ async def test_a_revoked_token_ends_the_stream(client: AsyncClient, project: dic
 async def test_open_streams_are_capped_per_token(
     client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.a2a import door
+    from tranibor_api.a2a import door
 
     token = await _ready(client, project)
     monkeypatch.setattr(door, "MAX_STREAMS", 0)

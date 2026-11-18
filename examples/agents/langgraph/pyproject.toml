@@ -1,13 +1,13 @@
 [project]
 name = "choregos-agent-example-langgraph"
 version = "0.27.13"
-description = "Example: the ticket triager as a LangGraph graph on the choregos-agent-sdk"
+description = "Example: the ticket triager as a LangGraph graph on the tranibor-agent-sdk"
 requires-python = ">=3.12,<3.13"
 license = { text = "Apache-2.0" }
 # Not a member of the repository's workspace: LangGraph and LangChain are heavy and must not enter
 # its lock file. This example is built and checked by its own (manual) workflow.
 dependencies = [
-  "choregos-agent-sdk",
+  "tranibor-agent-sdk",
   "langgraph>=0.2",
   "langchain-core>=0.3",
   "langchain-openai>=0.2",

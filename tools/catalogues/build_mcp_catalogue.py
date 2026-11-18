@@ -30,14 +30,14 @@ from typing import Any
 
 import httpx
 import yaml
-from choregos_core.mcp_catalogue import INSTALL_ORDER, McpEntry
+from tranibor_core.mcp_catalogue import INSTALL_ORDER, McpEntry
 
 from tools.catalogues import _github, _recording
 
 ROOT = Path(__file__).resolve().parents[2]
 SEED_DIR = ROOT / "tools" / "catalogues" / "mcp"
 FIXTURES = ROOT / "tests" / "fixtures" / "catalogues" / "mcp"
-OUTPUT = ROOT / "packages" / "core" / "src" / "choregos_core" / "mcp_catalogue" / "catalogue.yaml"
+OUTPUT = ROOT / "packages" / "core" / "src" / "tranibor_core" / "mcp_catalogue" / "catalogue.yaml"
 #: The console's demo mode answers the catalogue from this file: the real entries, as the API shows them.
 WEB_MOCK = ROOT / "apps" / "web" / "src" / "mocks" / "mcp-catalogue.json"
 REGISTRY = "https://registry.modelcontextprotocol.io"

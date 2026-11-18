@@ -20,8 +20,8 @@ from datetime import timedelta
 from typing import Any
 
 import pytest
-from choregos_contracts import StageResult, StageStatus
 from httpx import AsyncClient
+from tranibor_contracts import StageResult, StageStatus
 
 from .conftest import Platform, login
 
@@ -39,9 +39,9 @@ class Fakes:
     """The systems the HR scenario touches, each with the key it expects."""
 
     def __init__(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        import choregos_adapters
-        from choregos_adapters.fakes.entra import FakeEntra
-        from choregos_adapters.fakes.hr import (
+        import tranibor_adapters
+        from tranibor_adapters.fakes.entra import FakeEntra
+        from tranibor_adapters.fakes.hr import (
             FakeBadges,
             FakeCarrier,
             FakeMdm,
@@ -55,14 +55,14 @@ class Fakes:
         self.readers = FakeBadges(expected_key=KEY_FLEET)
         self.supplier = FakeSupplier()
         self.server = mcp_server(self.supplier, token=KEY_SUPPLIER)
-        monkeypatch.setattr(choregos_adapters, "FAKE_ENTRA", self.directory)
-        monkeypatch.setattr(choregos_adapters, "FAKE_MCP", self.server)
+        monkeypatch.setattr(tranibor_adapters, "FAKE_ENTRA", self.directory)
+        monkeypatch.setattr(tranibor_adapters, "FAKE_MCP", self.server)
         for famille, fake in (
             ("mdm", self.fleet),
             ("shipping", self.carrier),
             ("access_control", self.readers),
         ):
-            monkeypatch.setitem(choregos_adapters.FAUX_METIER, famille, fake)
+            monkeypatch.setitem(tranibor_adapters.FAUX_METIER, famille, fake)
         monkeypatch.setenv("CONNECTOR_E2E_KEY_DIRECTORY", KEY_DIRECTORY)
         monkeypatch.setenv("CONNECTOR_E2E_KEY_FLEET", KEY_FLEET)
         monkeypatch.setenv("CONNECTOR_E2E_KEY_SUPPLIER", KEY_SUPPLIER)
@@ -163,8 +163,8 @@ async def _par_claude(platform: Platform, client: AsyncClient, fields: dict[str,
 
 async def _start(platform: Platform, project: dict[str, Any], ticket: dict[str, Any]) -> Any:
     """The scenario starts the interpreter on the workers' queue, under the API's identifier."""
-    from choregos_api.temporal import interpreter_id
-    from choregos_core.domain import WorkItemData
+    from tranibor_api.temporal import interpreter_id
+    from tranibor_core.domain import WorkItemData
 
     platform.adapters.tracker.items.setdefault(
         ticket["key"], WorkItemData(key=ticket["key"], title="RH", state="Todo")

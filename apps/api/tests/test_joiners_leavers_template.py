@@ -124,14 +124,14 @@ async def test_a_template_skill_reads_nothing_outside_itself(
 async def test_check_holds_or_refuses_and_an_mcp_server_returns_what_it_structured(
     client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import choregos_adapters
-    from choregos_adapters.fakes.hr import FakeSupplier, mcp_server
-    from choregos_api.db.models import Action, ConnectorOperation, OrgConnector, Project
-    from choregos_api.db.session import session_scope
-    from choregos_api.effects import EffectContext, EffectRefused, effect, effect_policy
+    import tranibor_adapters
+    from tranibor_adapters.fakes.hr import FakeSupplier, mcp_server
+    from tranibor_api.db.models import Action, ConnectorOperation, OrgConnector, Project
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.effects import EffectContext, EffectRefused, effect, effect_policy
 
     assert effect_policy("check") == "allowed", "a check touches nothing outside"
-    monkeypatch.setattr(choregos_adapters, "FAKE_MCP", mcp_server(FakeSupplier()))
+    monkeypatch.setattr(tranibor_adapters, "FAKE_MCP", mcp_server(FakeSupplier()))
     async with session_scope() as session:
         proj = await session.get(Project, project["id"])
         assert proj is not None

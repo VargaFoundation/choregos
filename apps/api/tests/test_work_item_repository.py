@@ -55,8 +55,8 @@ async def _file(client: AsyncClient, pid: str, **body: Any) -> Any:
 
 
 async def _documents(item_id: str, **documents: Any) -> None:
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         item = await session.get(WorkItem, item_id)
@@ -131,8 +131,8 @@ async def test_a_work_item_that_ran_on_a_repository_is_fixed_to_it(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
     """A run that cloned before the project held a second repository: no record, still fixed."""
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
 
     pid = await _two_repositories(client, project)
     item = (await _file(client, pid, fields={})).json()
@@ -171,9 +171,9 @@ async def test_a_task_that_names_the_repository_is_held_to_the_same_rules(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
     """A person's task values pour into the fields (S20-06): `repository` among them is checked too."""
-    from choregos_api.db.models import HumanRequest
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
+    from tranibor_api.db.models import HumanRequest
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
 
     pid = await _two_repositories(client, project)
     item = (await _file(client, pid, fields={"finding": "CVE-2026-1"})).json()

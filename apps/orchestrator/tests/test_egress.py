@@ -12,10 +12,10 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import yaml
-from choregos_contracts import ProjectConfig, RepoConfig
-from choregos_core import load_preset
-from choregos_orchestrator.activities.execution import runner_environment
-from choregos_orchestrator.gitops import EGRESS_NAME, KUBE_NS, render_project_manifests, squid_config
+from tranibor_contracts import ProjectConfig, RepoConfig
+from tranibor_core import load_preset
+from tranibor_orchestrator.activities.execution import runner_environment
+from tranibor_orchestrator.gitops import EGRESS_NAME, KUBE_NS, render_project_manifests, squid_config
 
 
 def _config() -> ProjectConfig:
@@ -121,7 +121,7 @@ def test_the_internal_callback_never_goes_through_the_egress_proxy() -> None:
 
 def test_the_direct_hosts_come_from_the_platforms_urls() -> None:
     """No name is guessed: a change of URL follows, without touching this list."""
-    from choregos_orchestrator.activities.execution import hosts_to_reach_directly
+    from tranibor_orchestrator.activities.execution import hosts_to_reach_directly
 
     hosts = hosts_to_reach_directly(
         SimpleNamespace(

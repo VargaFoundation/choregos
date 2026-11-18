@@ -23,9 +23,9 @@ async def _project(client: AsyncClient, slug: str) -> dict[str, Any]:
 
 
 async def _archives(project_id: str) -> list[dict[str, Any]]:
-    from choregos_api.db.models import AuditLog
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import AuditLog
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = (
@@ -70,7 +70,7 @@ async def test_archiving_twice_changes_nothing_and_records_nothing_more(
 
 
 async def test_archiving_stops_the_tracker_catch_up_loop(client: AsyncClient, admin: str) -> None:
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.temporal import get_temporal
 
     project = await _project(client, "polled")
     assert (await client.post(f"/api/v1/projects/{project['id']}/provision", json={})).status_code == 202
@@ -82,7 +82,7 @@ async def test_archiving_stops_the_tracker_catch_up_loop(client: AsyncClient, ad
 
 
 async def test_a_loop_that_does_not_run_does_not_stop_the_archive(client: AsyncClient, admin: str) -> None:
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.temporal import get_temporal
 
     project = await _project(client, "never-polled")
     get_temporal().gone.add("reconcile-never-polled")  # Temporal answers NOT_FOUND to the signal
@@ -94,8 +94,8 @@ async def test_a_loop_that_does_not_run_does_not_stop_the_archive(client: AsyncC
 async def test_with_the_catch_up_disabled_activation_starts_no_loop(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.config import get_settings
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.config import get_settings
+    from tranibor_api.temporal import get_temporal
 
     monkeypatch.setattr(get_settings(), "reconcile_interval_seconds", 0)
     project = await _project(client, "quiet")
@@ -110,9 +110,9 @@ async def test_with_the_catch_up_disabled_activation_starts_no_loop(
 
 
 async def _disable_memory(project_id: str) -> None:
-    from choregos_api.db.models import PolicyDef
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import PolicyDef
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         row = (
@@ -130,7 +130,7 @@ async def test_activation_starts_the_memory_loop_and_archiving_stops_it(
     client: AsyncClient, admin: str
 ) -> None:
     """Nothing started `MemoryIngestion`: the memory was never fed, and `mem-<slug>` signals went nowhere."""
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.temporal import get_temporal
 
     project = await _project(client, "remembers")
     assert (await client.post(f"/api/v1/projects/{project['id']}/provision", json={})).status_code == 202
@@ -141,7 +141,7 @@ async def test_activation_starts_the_memory_loop_and_archiving_stops_it(
 
 
 async def test_a_policy_without_memory_starts_no_memory_loop(client: AsyncClient, admin: str) -> None:
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.temporal import get_temporal
 
     project = await _project(client, "forgets")
     await _disable_memory(project["id"])
@@ -155,7 +155,7 @@ async def test_a_policy_without_memory_starts_no_memory_loop(client: AsyncClient
 async def test_a_memory_loop_that_does_not_run_does_not_stop_the_archive(
     client: AsyncClient, admin: str
 ) -> None:
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.temporal import get_temporal
 
     project = await _project(client, "never-remembered")
     get_temporal().gone.add("mem-never-remembered")  # Temporal answers NOT_FOUND to the signal

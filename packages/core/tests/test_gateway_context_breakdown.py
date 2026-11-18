@@ -21,9 +21,9 @@ import sys
 from typing import Any
 
 import pytest
-from choregos_core import context_breakdown as core
-from choregos_core import llm_spans
-from choregos_core.llm_spans import ChoregosLlmSpans, ContextMeasure, HttpContextApi, Registry
+from tranibor_core import context_breakdown as core
+from tranibor_core import llm_spans
+from tranibor_core.llm_spans import ChoregosLlmSpans, ContextMeasure, HttpContextApi, Registry
 
 RUN_ID = "PROJ-7-implement-1"
 #: Words the person wrote in the ticket: they reach the model, never a breakdown.

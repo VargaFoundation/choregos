@@ -6,9 +6,9 @@ import json
 from typing import Any
 
 import pytest
-from choregos_contracts import ContextPack, Finding, MemoryItem
-from choregos_tools_mcp import McpServer, ToolContext
-from choregos_tools_mcp.tools import TOOL_SCHEMAS
+from tranibor_contracts import ContextPack, Finding, MemoryItem
+from tranibor_tools_mcp import McpServer, ToolContext
+from tranibor_tools_mcp.tools import TOOL_SCHEMAS
 
 
 class StubClient:

@@ -9,10 +9,10 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from choregos_core import parse_workflow
-from choregos_core.dsl import NOT_DEPLOYED, TEMPLATE_NAMES, template_yaml
-from choregos_core.dsl.requirements import requirements
-from choregos_core.gates import gate_needs, known_gates
+from tranibor_core import parse_workflow
+from tranibor_core.dsl import NOT_DEPLOYED, TEMPLATE_NAMES, template_yaml
+from tranibor_core.dsl.requirements import requirements
+from tranibor_core.gates import gate_needs, known_gates
 
 STAFFING = Path(__file__).resolve().parents[3] / "demo/workflows/staffing.yaml"
 
@@ -84,10 +84,10 @@ def test_each_core_guarantee_knows_what_it_reads() -> None:
 
 def test_what_the_platform_does_is_required_by_the_effect_not_by_the_name() -> None:
     """#175: a renamed state keeps what it requires, because the effect is written (`does`, `production`)."""
-    from choregos_core import parse_workflow
-    from choregos_core.dsl import template_yaml
-    from choregos_core.dsl.edition import edit
-    from choregos_core.dsl.requirements import requirements
+    from tranibor_core import parse_workflow
+    from tranibor_core.dsl import template_yaml
+    from tranibor_core.dsl.edition import edit
+    from tranibor_core.dsl.requirements import requirements
 
     text = edit(
         template_yaml("default-simple"),

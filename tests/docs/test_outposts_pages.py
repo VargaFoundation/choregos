@@ -37,9 +37,9 @@ from typing import Any
 
 import pytest
 import yaml
-from choregos_contracts import load_schema
-from choregos_contracts.enums import OutpostRefusalCode
 from jsonschema import Draft202012Validator
+from tranibor_contracts import load_schema
+from tranibor_contracts.enums import OutpostRefusalCode
 
 ROOT = Path(__file__).resolve().parents[2]
 DOCS = ROOT / "docs"
@@ -181,7 +181,7 @@ def _links(text: str) -> list[str]:
 def _declaration() -> Any:
     """The daemon's command line as Click sees it. Read, never run (see the module's docstring)."""
     import typer
-    from choregos_outpost.cli import app
+    from tranibor_outpost.cli import app
 
     return typer.main.get_command(app)
 
@@ -346,8 +346,8 @@ def test_the_options_table_is_the_daemon_s_declaration() -> None:
 
 
 def test_the_exit_codes_are_the_daemon_s() -> None:
-    from choregos_outpost.cli import CANNOT_START
-    from choregos_outpost.daemon import Exit
+    from tranibor_outpost.cli import CANNOT_START
+    from tranibor_outpost.daemon import Exit
 
     listed = {int(code) for code in _first_cells(_section(GUIDE, "Exit codes"))}
     assert listed == {CANNOT_START, *(int(code) for code in Exit)}
@@ -359,9 +359,9 @@ def test_the_exit_codes_are_the_daemon_s() -> None:
 
 
 def test_the_checks_of_doctor_are_the_ones_it_runs(tmp_path: Path) -> None:
-    from choregos_outpost import doctor
-    from choregos_outpost import policy as policies
-    from choregos_outpost.settings import Settings
+    from tranibor_outpost import doctor
+    from tranibor_outpost import policy as policies
+    from tranibor_outpost.settings import Settings
 
     # On a machine with no policy file, `doctor` still names every check it would have run.
     checks = asyncio.run(doctor.diagnose(Settings(policy=tmp_path / "absent.yaml", state_dir=tmp_path)))
@@ -418,7 +418,7 @@ def test_the_guide_names_every_key_of_the_policy_file() -> None:
 
 
 def test_the_policy_example_is_one_the_daemon_takes() -> None:
-    from choregos_outpost import policy as policies
+    from tranibor_outpost import policy as policies
 
     (example,) = _blocks(_policy_table(), "yaml")
     policies.parse(example, GUIDE)

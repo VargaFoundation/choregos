@@ -43,10 +43,10 @@ async def netops_run(
 ) -> tuple[str, dict[str, str]]:
     """The catalogue's `netops` agent, installed as is (its selection extended to `connector` when
     given), and a run of it, on the work item `work_item_key`."""
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.security import mint_run_token
-    from choregos_core.agent_catalogue import entry
+    from tranibor_api.db.models import Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.security import mint_run_token
+    from tranibor_core.agent_catalogue import entry
 
     netops = entry("netops")
     assert netops is not None

@@ -20,12 +20,12 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from choregos_contracts import StageInput
-from choregos_runner import confine
-from choregos_runner.confine import Confinement, assess, connect_ports, wrap
-from choregos_runner.exits import Exit
-from choregos_runner.runner import Runner
-from choregos_runner.workspace import agent_home
+from tranibor_contracts import StageInput
+from tranibor_runner import confine
+from tranibor_runner.confine import Confinement, assess, connect_ports, wrap
+from tranibor_runner.exits import Exit
+from tranibor_runner.runner import Runner
+from tranibor_runner.workspace import agent_home
 
 from .conftest import FakeInternalClient, agent_script, valid_result
 
@@ -110,7 +110,7 @@ def _confined(confinement: Confinement, code: str) -> subprocess.CompletedProces
 
 
 def test_the_wrapper_adds_nothing_to_the_agents_stderr() -> None:
-    # `python -m choregos_runner.confine` printed a runpy RuntimeWarning at every launch (dev, 2026-10-28).
+    # `python -m tranibor_runner.confine` printed a runpy RuntimeWarning at every launch (dev, 2026-10-28).
     done = _confined(Confinement("best_effort", (tempfile.gettempdir(),)), "print('ok')")
     assert done.returncode == 0, done.stderr
     assert done.stdout.strip() == "ok"

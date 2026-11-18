@@ -1,0 +1,199 @@
+# SPDX-License-Identifier: Apache-2.0
+"""The preparation of a job step (ADR 0056): a command, run by the runner, with no model.
+
+What an agent step needs and a job does not is left out on purpose: no model is resolved, no gateway
+key is minted (a job that cannot reach a model cannot spend on one), no playbook is rendered, no
+memory is read. What it shares with an agent step is kept: the run row and its token, the declared
+inputs and outputs, the repository, the permissions, the admission check and the `run.queued` event.
+"""
+
+from __future__ import annotations
+
+from hashlib import sha256
+from typing import Any
+
+from temporalio.exceptions import ApplicationError
+from tranibor_api.db.models import Run
+from tranibor_api.services import persist_event
+from tranibor_api.services.artifacts import producing_runs
+from tranibor_contracts import (
+    AgentRef,
+    Budget,
+    Callbacks,
+    EventType,
+    JobSpec,
+    ModelRef,
+    PlaybookRef,
+    ProjectRef,
+    RepoRef,
+    StageInput,
+    TransitionRef,
+    WorkItemLinks,
+    WorkItemRef,
+)
+from tranibor_core import telemetry, utcnow
+from tranibor_core.redaction import REDACTED
+
+from ..org_egress import org_runner_hosts
+from .base import declared_artifact_displays, without_secrets
+from .images import named_image
+from .plan import StagePlan
+from .repositories import fix, target_of
+from .run_network import network_permissions, run_network
+
+#: What `agent.backend` and `run.backend` say for a job: there is no agent backend.
+JOB_BACKEND = "job"
+#: The model placeholder of a job's StageInput: nothing is called, the runner never reads it.
+NO_MODEL = ModelRef(litellm_model="none", base_url="")
+
+
+def job_image(settings: Any, name: str | None) -> str | None:
+    """The image reference a job's image name maps to; `None` runs it in the runner image."""
+    return named_image(settings, "job", name)
+
+
+def job_ref(command: list[str], image: str | None) -> str:
+    """What the run's `playbook_checksum` records for a job: its image and the digest of its argv."""
+    digest = sha256("\0".join(command).encode()).hexdigest()[:12]
+    return f"job:{image or 'runner'}@sha256:{digest}"[:80]
+
+
+async def prepare_job(
+    session: Any,
+    bundle: Any,
+    item: Any,
+    plan: StagePlan,
+    run_id: str,
+    existing: Run | None,
+    settings: Any,
+    admit: Any,
+) -> dict[str, Any]:
+    """Builds and records the StageInput of a job step; replayable by `run_id` like any stage."""
+    job = dict(plan.job or {})
+    command = [str(part) for part in job.get("command") or []]
+    if not command:
+        raise ApplicationError("a job step without a command", type="job_invalid", non_retryable=True)
+    image = job_image(settings, job.get("image"))
+    engine = bundle.engine
+    budget = engine.budget_for(plan.role, item.size)
+    if plan.max_minutes:
+        budget = Budget(usd=budget.usd, max_turns=budget.max_turns, max_minutes=plan.max_minutes)
+    # Admission runs as for an agent (a plugin may refuse a job too); the budget is the role's,
+    # recorded but never spent: a job holds no gateway key.
+    await admit(bundle, item, run_id, plan, JOB_BACKEND, budget.usd)
+    allowed_paths = list(item.allowed_paths or []) or ["**"]
+    documents = item.documents or {}
+    # The work item's target repository (ADR 0124): a job clones it, as an agent step does.
+    found = target_of(bundle, item)
+    depot = found.repo if found is not None else None
+    stage_input = StageInput(
+        run_id=run_id,
+        # The stage span's context, derived from the run id (ADR 0018): the runner's span hangs off it.
+        trace_parent=telemetry.traceparent(run_id),
+        attempt=plan.attempt,
+        project=ProjectRef(
+            slug=bundle.slug,
+            org=bundle.org_slug,
+            test_command=depot.test_command if depot else "",
+            lint_command=depot.lint_command if depot else "",
+            typecheck_command=depot.typecheck_command if depot else "",
+            fact_commands=dict(bundle.config.dod.facts),
+        ),
+        work_item=WorkItemRef(
+            key=item.tracker_key,
+            title=item.title,
+            body=item.body_snapshot or "",
+            url=item.url,
+            size=item.size,
+            risk=item.risk,
+            links=WorkItemLinks(
+                spec_comment=documents.get("spec_comment"),
+                plan_comment=documents.get("plan_comment"),
+                pr=item.pr_url,
+            ),
+        ),
+        transition=TransitionRef(
+            id=plan.transition_id,
+            role=plan.role,
+            **{"from": plan.from_state},
+            to=plan.to_state,
+            outputs=plan.outputs or [],
+            inputs=plan.inputs or [],
+            output_types=plan.output_types or {},
+            artifact_displays=await declared_artifact_displays(session, item, plan.outputs or []),
+        ),
+        repo=RepoRef(
+            url=depot.url,
+            base_branch=depot.default_branch,
+            work_branch=bundle.config.branch_for(item.tracker_key, repo=depot),
+            clone_depth=depot.clone_depth,
+        )
+        if depot
+        else None,
+        agent=AgentRef(backend=JOB_BACKEND),
+        model=NO_MODEL,
+        gateway_key=None,
+        budget=budget,
+        allowed_paths=allowed_paths,
+        playbook=PlaybookRef(ref=job_ref(command, image)),
+        permissions=network_permissions(
+            run_network(
+                bundle,
+                None,
+                settings,
+                await org_runner_hosts(session, bundle.project.org_id),
+                repo_url=depot.url if depot else None,
+            ),
+            write_paths=allowed_paths,
+            deny_paths=engine.deny_paths(),
+            deny_commands=engine.deny_commands(),
+            dod_iterations=0,
+            max_findings=engine.max_findings_per_run(),
+            unknown_requests=bundle.policy.sandbox.unknown_requests,
+        ),
+        # The run token lives in the run's Secret only (#519): `start_run` mints it.
+        callbacks=Callbacks(api_url=f"{settings.callback_url}/api/v1/internal", run_token=REDACTED),
+        job=JobSpec(
+            command=command,
+            image=image,
+            tools={str(c): [str(o) for o in ops] for c, ops in dict(job.get("tools") or {}).items()},
+        ),
+    )
+    if found is not None:
+        fix(bundle, item, found, plan.outputs or [])
+    payload = stage_input.model_dump(mode="json", by_alias=True)
+    run = existing or Run(id=run_id, work_item_id=item.id, project_id=bundle.project.id)
+    run.transition_id = plan.transition_id
+    run.stage_role = plan.role
+    run.attempt = plan.attempt
+    run.actor = plan.actor
+    run.backend = JOB_BACKEND
+    run.model = None
+    run.status = "queued"
+    run.stage_input = payload
+    run.gateway_key_id = None
+    run.playbook_checksum = stage_input.playbook.ref
+    run.allowed_paths = allowed_paths
+    run.started_at = utcnow()
+    # The run's chain (ADR 0077 §2): a job has no prompt, it reads only its declared inputs.
+    run.initiated_by = item.initiated_by
+    run.inputs_from = await producing_runs(session, item.id, list(plan.inputs or []), {}, reader=run_id)
+    if existing is None:
+        session.add(run)
+    await persist_event(
+        session,
+        EventType.RUN_QUEUED,
+        project_id=bundle.project.id,
+        work_item_id=item.id,
+        project_slug=bundle.slug,
+        subject=run_id,
+        run_id=run_id,
+        stage=plan.role,
+        backend=JOB_BACKEND,
+        model=None,
+    )
+    return {
+        "run_id": run_id,
+        "stage_input": without_secrets(payload, keep_gateway_key=False),
+        "reused": False,
+    }

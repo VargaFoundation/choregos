@@ -14,11 +14,11 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from choregos_adapters.fakes import FakeHostedAgent
-from choregos_contracts import HostedCall, StageInput, StageStatus
-from choregos_runner import hosted_workspace
-from choregos_runner.exits import Exit
-from choregos_runner.workspace import Workspace
+from tranibor_adapters.fakes import FakeHostedAgent
+from tranibor_contracts import HostedCall, StageInput, StageStatus
+from tranibor_runner import hosted_workspace
+from tranibor_runner.exits import Exit
+from tranibor_runner.workspace import Workspace
 
 from .conftest import FakeInternalClient, git
 from .test_hosted_step import IMAGE, _events, _hosted, _run

@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from choregos_core.agent_tree import RULES, SubagentRule, agent_nodes
+from tranibor_core.agent_tree import RULES, SubagentRule, agent_nodes
 
 FIXTURES = Path(__file__).parent / "fixtures" / "agent_tree"
 

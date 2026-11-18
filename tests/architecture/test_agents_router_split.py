@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from choregos_api.routers import agents
+from tranibor_api.routers import agents
 
 PACKAGE = Path(agents.__file__).parent
 FIXTURE = Path(__file__).parent / "fixtures" / "agents_routes.json"
@@ -36,7 +36,7 @@ def test_no_module_of_the_package_exceeds_600_lines() -> None:
 
 
 def test_the_public_names_still_import() -> None:
-    from choregos_api.routers.agents import AgentRef, Slug, router
+    from tranibor_api.routers.agents import AgentRef, Slug, router
 
     assert router is agents.router
     assert Slug is not None and AgentRef is not None

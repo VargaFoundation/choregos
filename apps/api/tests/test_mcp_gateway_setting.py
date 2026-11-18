@@ -11,13 +11,13 @@ import json
 from collections.abc import Iterator
 from typing import Any
 
-import choregos_adapters
 import pytest
-from choregos_adapters.fakes.mcp import FakeMcpServer
-from choregos_adapters.fakes.mcp_gateway import FakeMcpGateway, GatewayUpstream
-from choregos_api.secret_store import FakeSecretStore, set_secret_store
+import tranibor_adapters
 from httpx import AsyncClient
 from sqlalchemy import select
+from tranibor_adapters.fakes.mcp import FakeMcpServer
+from tranibor_adapters.fakes.mcp_gateway import FakeMcpGateway, GatewayUpstream
+from tranibor_api.secret_store import FakeSecretStore, set_secret_store
 
 from .conftest import login
 from .egress_support import ORG, rules_in_db
@@ -31,7 +31,7 @@ SECRET = "s3cr3t-credential-value"
 @pytest.fixture(autouse=True)
 def isolated() -> Iterator[FakeSecretStore]:
     """A fresh secret store, token cache and token transport, restored after the test."""
-    from choregos_api.services import mcp_gateway as service
+    from tranibor_api.services import mcp_gateway as service
 
     store = FakeSecretStore()
     set_secret_store(store)
@@ -59,13 +59,13 @@ def gateway(supplier: FakeMcpServer, monkeypatch: pytest.MonkeyPatch) -> FakeMcp
         auth="bearer",
         token=SECRET,
     )
-    monkeypatch.setattr(choregos_adapters, "FAKE_MCP_GATEWAY", fake)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_MCP_GATEWAY", fake)
     return fake
 
 
 @pytest.fixture
 def enforce(app: Any, monkeypatch: pytest.MonkeyPatch) -> None:
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     monkeypatch.setenv("CHOREGOS_EGRESS_MODE", "enforce")
     reset_settings_cache()
@@ -92,8 +92,8 @@ def _oauth(token_url: str = "https://gw.example.test/oauth/token", **over: Any) 
 
 
 async def _organisation() -> Any:
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         found = (
@@ -104,8 +104,8 @@ async def _organisation() -> Any:
 
 
 async def _audit(action: str) -> list[dict[str, Any]]:
-    from choregos_api.db.models import AuditLog
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import AuditLog
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = (await session.execute(select(AuditLog).where(AuditLog.action == action))).scalars()
@@ -113,8 +113,8 @@ async def _audit(action: str) -> list[dict[str, Any]]:
 
 
 async def _all_audit_text() -> str:
-    from choregos_api.db.models import AuditLog
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import AuditLog
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = (await session.execute(select(AuditLog))).scalars()
@@ -132,7 +132,7 @@ async def test_no_gateway_reads_as_null_with_the_assertion_block(client: AsyncCl
     assert got.status_code == 200, got.text
     state = got.json()
     assert state["gateway"] is None
-    from choregos_api.config import get_settings
+    from tranibor_api.config import get_settings
 
     public = get_settings().public_url.rstrip("/")
     assert state["assertion"]["issuer"] == f"{public}/api/v1/orgs/northwind/mcp-gateway"
@@ -195,7 +195,7 @@ async def test_endpoints_that_point_inside_are_refused_unless_the_operator_lists
 async def test_a_listed_host_may_be_private_and_plain_http(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     endpoint = "http://gw.mcp.svc:8080/{server}/mcp"
     assert (await client.put(URL, json=_body(endpoint=endpoint))).status_code == 422
@@ -335,8 +335,8 @@ async def test_the_gateway_host_is_a_governed_add_for_api_and_workers_only(
     assert isolated.values == {}, "the credential is not sealed before the egress check"
     assert await rules_in_db("allowed") == []
 
-    from choregos_api.db.models import OrgConnector
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import OrgConnector
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         session.add(OrgConnector(org_id=org.id, name="direct", kind="mcp", type="mcp", config={}))
@@ -402,7 +402,7 @@ async def test_header_routing_sends_the_server_name_in_its_header(
         server_header="X-MCP-Server",
         token=SECRET,
     )
-    monkeypatch.setattr(choregos_adapters, "FAKE_MCP_GATEWAY", fake)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_MCP_GATEWAY", fake)
     body = _body(routing="header", endpoint="https://gw.example.test/mcp", server_header="X-MCP-Server")
     assert (await client.put(URL, json=body)).status_code == 200
     assert (await _test(client))["ok"] is True
@@ -415,7 +415,7 @@ async def test_a_custom_header_carries_the_secret(
     fake = FakeMcpGateway(
         upstreams={"supplier": GatewayUpstream(server=supplier)}, auth="header", token=SECRET
     )
-    monkeypatch.setattr(choregos_adapters, "FAKE_MCP_GATEWAY", fake)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_MCP_GATEWAY", fake)
     body = _body(auth={"type": "header", "header_name": "X-Api-Key"})
     assert (await client.put(URL, json=body)).status_code == 200
     assert (await _test(client))["ok"] is True
@@ -431,7 +431,7 @@ async def test_client_credentials_are_fetched_once_and_refreshed_after_a_401(
         client_id="c",
         client_secret="client-secret-value",
     )
-    monkeypatch.setattr(choregos_adapters, "FAKE_MCP_GATEWAY", fake)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_MCP_GATEWAY", fake)
     assert (await client.put(URL, json=_oauth())).status_code == 200
     assert (await _test(client))["ok"] is True
     assert (await _test(client))["ok"] is True
@@ -452,7 +452,7 @@ async def test_a_new_secret_drops_the_cached_token(
         client_id="c",
         client_secret="client-secret-value",
     )
-    monkeypatch.setattr(choregos_adapters, "FAKE_MCP_GATEWAY", fake)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_MCP_GATEWAY", fake)
     assert (await client.put(URL, json=_oauth())).status_code == 200
     assert (await _test(client))["ok"] is True
     assert (await client.put(URL, json=_oauth(timeout_s=20))).status_code == 200
@@ -475,7 +475,7 @@ async def test_a_jwt_gateway_receives_a_verifiable_assertion(
         audience="gw",
         issuer=done.json()["assertion"]["issuer"],
     )
-    monkeypatch.setattr(choregos_adapters, "FAKE_MCP_GATEWAY", fake)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_MCP_GATEWAY", fake)
     assert (await _test(client))["ok"] is True
     claims = fake.calls[-1].claims
     assert claims is not None
@@ -497,7 +497,7 @@ async def test_an_identity_header_carries_a_second_signed_assertion(
         issuer=done.json()["assertion"]["issuer"],
         identity_header="X-Identity",
     )
-    monkeypatch.setattr(choregos_adapters, "FAKE_MCP_GATEWAY", fake)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_MCP_GATEWAY", fake)
     assert (await _test(client))["ok"] is True
     claims = fake.calls[-1].identity_header_claims
     assert claims is not None and claims["sub"] == "person:admin@northwind.dev"
@@ -508,7 +508,7 @@ async def test_a_failing_gateway_is_ok_false_not_an_http_error(
     client: AsyncClient, admin: str, supplier: FakeMcpServer, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     fake = FakeMcpGateway(upstreams={"supplier": GatewayUpstream(server=supplier)}, token="another-token")
-    monkeypatch.setattr(choregos_adapters, "FAKE_MCP_GATEWAY", fake)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_MCP_GATEWAY", fake)
     assert (await client.put(URL, json=_body())).status_code == 200
     result = await _test(client)
     assert result["ok"] is False and result["tools"] is None
@@ -549,7 +549,7 @@ async def test_the_token_request_is_checked_against_the_egress_list(
         client_id="c",
         client_secret="client-secret-value",
     )
-    monkeypatch.setattr(choregos_adapters, "FAKE_MCP_GATEWAY", fake)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_MCP_GATEWAY", fake)
     body = _oauth(token_url="https://auth.example.test/oauth/token", allow_egress=True)
     assert (await client.put(URL, json=body)).status_code == 200
     rule = next(r for r in await rules_in_db("allowed") if r.host == "auth.example.test")

@@ -8,9 +8,9 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from choregos_orchestrator.activities import schedules
-from choregos_orchestrator.activities import tracker as tracker_activities
-from choregos_orchestrator.train_client import clear_fake_signals, fake_starts
+from tranibor_orchestrator.activities import schedules
+from tranibor_orchestrator.activities import tracker as tracker_activities
+from tranibor_orchestrator.train_client import clear_fake_signals, fake_starts
 
 from .conftest import Fixture, recording_history
 
@@ -22,8 +22,8 @@ WEEKLY = {"name": "weekly", "cron": "0 6 * * mon", "title": "Weekly campaign"}
 
 
 async def _schedule(setup: Fixture, *declared: dict[str, Any]) -> None:
-    from choregos_api.db.models import Project
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Project
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         project = await session.get(Project, setup.project_id)
@@ -36,9 +36,9 @@ async def _fire(setup: Fixture, now: datetime) -> dict[str, Any]:
 
 
 async def _scheduled_items(setup: Fixture) -> list[Any]:
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = (
@@ -93,7 +93,7 @@ async def test_a_window_missed_for_more_than_the_catch_up_is_skipped(setup: Fixt
 
 
 async def test_the_reconciliation_pass_starts_what_the_schedule_opened(setup: Fixture) -> None:
-    from choregos_adapters.tracker.internal import InternalTracker
+    from tranibor_adapters.tracker.internal import InternalTracker
 
     clear_fake_signals()
     setup.adapters.tracker = InternalTracker()
@@ -110,9 +110,9 @@ async def test_the_reconciliation_pass_starts_what_the_schedule_opened(setup: Fi
 
 async def test_a_scheduled_key_does_not_move_the_numbering(setup: Fixture) -> None:
     """`<PREFIX>-<n>` counts numbers: the window's key ends with a letter and is not one."""
-    from choregos_api.db.models import Project
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.tickets import internal_work_item_key
+    from tranibor_api.db.models import Project
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.tickets import internal_work_item_key
 
     await _schedule(setup, WEEKLY)
     await _fire(setup, MONDAY)
@@ -138,8 +138,8 @@ async def test_a_refused_schedule_does_not_stop_the_others(setup: Fixture) -> No
 
 
 async def test_an_external_tracker_opens_nothing(setup: Fixture) -> None:
-    from choregos_api.db.models import Connector
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Connector
+    from tranibor_api.db.session import session_scope
 
     await _schedule(setup, WEEKLY)
     async with session_scope() as session:
@@ -157,8 +157,8 @@ def test_a_window_moves_the_fields_that_ask_for_it() -> None:
 
 
 def test_a_cron_has_five_fields() -> None:
-    from choregos_contracts import ScheduleConfig
     from pydantic import ValidationError
+    from tranibor_contracts import ScheduleConfig
 
     with pytest.raises(ValidationError, match="five fields"):
         ScheduleConfig(name="weekly", cron="0 6 * *", title="Weekly")
@@ -168,10 +168,10 @@ async def test_each_pass_fires_the_schedules_before_it_reconciles(temporal_env: 
     """The work item a schedule opens is started by the same pass, not the next one."""
     import uuid
 
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
-    from choregos_orchestrator.workflows.reconciliation import TrackerReconciliation
     from temporalio import activity
     from temporalio.worker import Replayer, Worker
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
+    from tranibor_orchestrator.workflows.reconciliation import TrackerReconciliation
 
     calls: list[str] = []
 
@@ -219,9 +219,9 @@ async def test_each_pass_fires_the_schedules_before_it_reconciles(temporal_env: 
 
 async def test_each_firing_is_recorded_among_the_project_s_received_events(setup: Fixture) -> None:
     """S56-01: "did the cron fire?" is answered where the webhooks are; a refusal once per window."""
-    from choregos_api.db.models import ReceivedEvent
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import ReceivedEvent
+    from tranibor_api.db.session import session_scope
 
     await _schedule(
         setup,

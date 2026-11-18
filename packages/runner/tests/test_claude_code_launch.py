@@ -11,8 +11,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from choregos_contracts import AgentRef, LaunchSpec
-from choregos_runner.backends import BACKEND_BINARIES, get_backend
+from tranibor_contracts import AgentRef, LaunchSpec
+from tranibor_runner.backends import BACKEND_BINARIES, get_backend
 
 from .test_units import _minimal_stage_input
 

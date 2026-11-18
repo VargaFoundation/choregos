@@ -8,9 +8,9 @@ import json
 from pathlib import Path
 from typing import Any
 
-from choregos_contracts import Workflow
-from choregos_core.dsl.parser import checksum, parse_workflow
-from choregos_core.dsl.process import to_process
+from tranibor_contracts import Workflow
+from tranibor_core.dsl.parser import checksum, parse_workflow
+from tranibor_core.dsl.process import to_process
 
 EXAMPLE = (
     Path(__file__).resolve().parents[2]

@@ -48,8 +48,8 @@ ISIN = "FR0000120271"
 @pytest.fixture
 def sources(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
     """One fake MCP server behind both connectors, `get_quote` scripted with a subject."""
-    import choregos_adapters
-    from choregos_adapters.fakes.mcp import FakeMcpServer
+    import tranibor_adapters
+    from tranibor_adapters.fakes.mcp import FakeMcpServer
 
     server = FakeMcpServer(tools=[dict(t) for t in TOOLS], token="feed-key")
     server.structured["get_quote"] = {
@@ -58,7 +58,7 @@ def sources(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
         "as_of": "2026-11-10T16:30:00Z",
         "source": "fake-exchange",
     }
-    monkeypatch.setattr(choregos_adapters, "FAKE_MCP", server)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_MCP", server)
     monkeypatch.setenv("CONNECTOR_TEST_FEED_KEY", "feed-key")
     yield server
 
@@ -71,8 +71,8 @@ async def test_the_investment_assistant_converses_end_to_end(
     upstream: Upstream,
     sources: Any,
 ) -> None:
-    from choregos_api.db.models import AgentSessionEvent, MemoryFact
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import AgentSessionEvent, MemoryFact
+    from tranibor_api.db.session import session_scope
 
     await _member(client, "reader@northwind.dev", [AUDIENCE])
     await _plugin(client)

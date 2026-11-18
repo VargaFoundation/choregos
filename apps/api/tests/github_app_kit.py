@@ -4,8 +4,8 @@ from __future__ import annotations
 
 
 async def add_organisation(slug: str) -> str:
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         org = Organization(slug=slug, name=slug.title())
@@ -16,8 +16,8 @@ async def add_organisation(slug: str) -> str:
 
 async def claim_for(installation_id: int, login: str, org_id: str | None) -> None:
     """Write an installation row as the platform would have (claimed by `org_id`, or unclaimed)."""
-    from choregos_api.db.models import GitHubInstallation
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import GitHubInstallation
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         session.add(

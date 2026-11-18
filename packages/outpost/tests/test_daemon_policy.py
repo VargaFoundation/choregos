@@ -15,8 +15,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from choregos_contracts.enums import OutpostRefusalCode
-from choregos_outpost.daemon import Exit
+from tranibor_contracts.enums import OutpostRefusalCode
+from tranibor_outpost.daemon import Exit
 
 from ._bench import Bench, bench
 

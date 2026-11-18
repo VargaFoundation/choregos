@@ -538,7 +538,7 @@ export function AgentBuilder({
                     </Select>
                   )}
                 </Field>
-                <Field label="Command" hint="The program the runner starts in the image, one argument per line. It speaks ACP on standard input and output: the choregos-agent-sdk does it.">
+                <Field label="Command" hint="The program the runner starts in the image, one argument per line. It speaks ACP on standard input and output: the tranibor-agent-sdk does it.">
                   {(id) => (
                     <Textarea
                       id={id}

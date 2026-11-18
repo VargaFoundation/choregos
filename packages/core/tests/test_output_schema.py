@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import json
 
-from choregos_contracts import Evidence, StageOutputs, StageResult, StageStatus
-from choregos_core import GateContext, evaluate, parse_workflow
-from choregos_core.dsl.process import RESUMES
+from tranibor_contracts import Evidence, StageOutputs, StageResult, StageStatus
+from tranibor_core import GateContext, evaluate, parse_workflow
+from tranibor_core.dsl.process import RESUMES
 
 STRATEGIES = {
     "type": "object",

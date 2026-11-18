@@ -67,9 +67,9 @@ async def post_report(http: AsyncClient, project: dict[str, Any], text: str) -> 
 
 async def stored_objects(project_id: str, type_: str = "finding") -> dict[str, tuple[int, dict[str, Any]]]:
     """The state in the database, read under the plugin: {id: (row_version, properties)}."""
-    from choregos_api.db.session import session_scope
-    from choregos_ontology.service.store import ManagedObject
     from sqlalchemy import select
+    from tranibor_api.db.session import session_scope
+    from tranibor_ontology.service.store import ManagedObject
 
     async with session_scope() as session:
         of_type = ManagedObject.project_id == project_id, ManagedObject.object_type == type_
@@ -79,9 +79,9 @@ async def stored_objects(project_id: str, type_: str = "finding") -> dict[str, t
 
 async def create_run(project: dict[str, Any], run_id: str) -> dict[str, str]:
     """A run of the project, and its token's header — as the orchestrator mints them."""
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.security import mint_run_token
+    from tranibor_api.db.models import Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.security import mint_run_token
 
     key = f"northwind/{run_id}#1"
     async with session_scope() as session:

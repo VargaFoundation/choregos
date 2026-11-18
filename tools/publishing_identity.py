@@ -5,8 +5,8 @@
     uv run python tools/publishing_identity.py                      # check: make publishing-check
     uv run python tools/publishing_identity.py --rewrite-from REF   # make publishing-rewrite FROM=REF
 
-The identity is `packages/core/src/choregos_core/publishing.json`. The code reads it
-(`choregos_core.publishing`); the console reads its copy, `apps/web/src/lib/publishing.json`. What
+The identity is `packages/core/src/tranibor_core/publishing.json`. The code reads it
+(`tranibor_core.publishing`); the console reads its copy, `apps/web/src/lib/publishing.json`. What
 cannot read a JSON file — a chart's values, a Kyverno policy, a workflow, a Dockerfile, a page of
 documentation — spells the values out, and is listed in `DERIVED` below.
 
@@ -40,18 +40,18 @@ import subprocess
 import sys
 from collections.abc import Iterable, Mapping
 
-from choregos_core.publishing import CHARTS, IMAGE_COMPONENTS
+from tranibor_core.publishing import CHARTS, IMAGE_COMPONENTS
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 GIT = shutil.which("git") or "git"
-CANONICAL = "packages/core/src/choregos_core/publishing.json"
+CANONICAL = "packages/core/src/tranibor_core/publishing.json"
 COPIES = ("apps/web/src/lib/publishing.json",)
 
 #: What records the past: decisions, the plan and its status, applied migrations, trial results.
 HISTORY = (
     "docs/adr/",
     "docs/plan/",
-    "apps/api/src/choregos_api/migrations/versions/",
+    "apps/api/src/tranibor_api/migrations/versions/",
     "trials/",
     # The archives shipped offline and their lock record who signed them: the old source, until
     # `make plugins-lock` refreshes them from the new one (ADR 0186).
@@ -133,7 +133,7 @@ DERIVED: tuple[str, ...] = (
     "packages/contracts/openapi.yaml",
     "packages/contracts/ts/api.ts",
     # A setup procedure (data the console shows) and what `make procedures` generates from it.
-    "packages/core/src/choregos_core/procedures/connector.tracker.plugin.md",
+    "packages/core/src/tranibor_core/procedures/connector.tracker.plugin.md",
     "docs/procedures/connector.tracker.plugin.md",
     "apps/web/src/mocks/procedures.json",
     # The documentation: commands, addresses and links a reader copies.
@@ -335,7 +335,7 @@ def problems(
             issues.append(f"{copy}: differs from {CANONICAL}; run `make publishing-rewrite FROM=HEAD`")
     for name in derived:
         if pathlib.PurePosixPath(name).suffix in CODE_SUFFIXES and name not in GENERATED_CODE:
-            issues.append(f"{name}: code is not a derived file, it reads choregos_core.publishing")
+            issues.append(f"{name}: code is not a derived file, it reads tranibor_core.publishing")
         elif not (root / name).is_file():
             issues.append(f"{name}: listed in DERIVED but absent")
         elif name not in found:
@@ -347,7 +347,7 @@ def problems(
         if name not in allowed:
             lines = ", ".join(f"{number}: {text}" for number, text in hits[:3])
             issues.append(
-                f"{name}: spells the publishing identity ({lines}); code reads choregos_core.publishing "
+                f"{name}: spells the publishing identity ({lines}); code reads tranibor_core.publishing "
                 "(or the console's copy), a file that cannot read it is added to DERIVED"
             )
             continue

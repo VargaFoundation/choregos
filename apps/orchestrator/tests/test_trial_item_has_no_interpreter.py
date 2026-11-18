@@ -9,10 +9,10 @@ revoked its gateway key before the agent's first model call.
 from __future__ import annotations
 
 import pytest
-from choregos_core import WorkflowEngine
-from choregos_core.dsl import UnknownStateError
-from choregos_orchestrator.activities import tracker as tracker_activities
-from choregos_orchestrator.train_client import clear_fake_signals, fake_starts
+from tranibor_core import WorkflowEngine
+from tranibor_core.dsl import UnknownStateError
+from tranibor_orchestrator.activities import tracker as tracker_activities
+from tranibor_orchestrator.train_client import clear_fake_signals, fake_starts
 
 from .conftest import Fixture
 from .test_gateway_key_through_the_secret import _plan, _run
@@ -21,8 +21,8 @@ pytestmark = pytest.mark.asyncio
 
 
 async def _make_trial(setup: Fixture) -> None:
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         item = await session.get(WorkItem, setup.work_item_id)
@@ -47,10 +47,10 @@ async def test_the_catch_up_pass_starts_no_interpreter_on_a_trial_item(
 
 
 async def test_a_dying_interpreter_leaves_a_trial_run_alone(setup: Fixture) -> None:
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities import stage as activities
-    from choregos_orchestrator.activities.interpretation import record_workflow_failure
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
+    from tranibor_orchestrator.activities import stage as activities
+    from tranibor_orchestrator.activities.interpretation import record_workflow_failure
 
     prepared = await activities.prepare_stage(_plan(setup))
     async with session_scope() as session:
@@ -73,7 +73,7 @@ async def test_a_dying_interpreter_leaves_a_trial_run_alone(setup: Fixture) -> N
 
 
 async def test_an_unknown_state_is_a_named_error() -> None:
-    from choregos_core import parse_workflow
+    from tranibor_core import parse_workflow
 
     wf, _ = parse_workflow(
         """apiVersion: choregos/v1

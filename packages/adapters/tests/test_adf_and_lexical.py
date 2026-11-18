@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from choregos_adapters.memory.lexical import lexical_vector, similarity
-from choregos_adapters.tracker.adf import markdown_to_adf, text_of_adf
+from tranibor_adapters.memory.lexical import lexical_vector, similarity
+from tranibor_adapters.tracker.adf import markdown_to_adf, text_of_adf
 
 
 def test_a_table_and_a_list_become_adf_nodes() -> None:

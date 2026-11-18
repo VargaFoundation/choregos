@@ -13,9 +13,9 @@ from typing import Any
 
 import httpx
 import pytest
-from choregos_adapters.http import proxy as proxy_transports
-from choregos_core.outbound_proxy import OutboundProxyError, ProxyConfig, use_proxies
 from httpx import AsyncClient
+from tranibor_adapters.http import proxy as proxy_transports
+from tranibor_core.outbound_proxy import OutboundProxyError, ProxyConfig, use_proxies
 
 from .conftest import login
 from .test_web_fetch_tool import HTML, PAGE, PUBLIC
@@ -76,7 +76,7 @@ class Net:
 
 @pytest.fixture
 def net(monkeypatch: pytest.MonkeyPatch) -> Iterator[Net]:
-    from choregos_api.secret_store import FakeSecretStore, set_secret_store
+    from tranibor_api.secret_store import FakeSecretStore, set_secret_store
 
     seen = Net()
     proxy_transports.set_proxy_transport_factory(seen.proxy_factory)
@@ -104,9 +104,9 @@ async def _put(client: AsyncClient, **over: Any) -> Any:
 
 
 async def _audit(action: str) -> list[dict[str, Any]]:
-    from choregos_api.db.models import AuditLog
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import AuditLog
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = (await session.execute(select(AuditLog).where(AuditLog.action == action))).scalars()
@@ -114,10 +114,10 @@ async def _audit(action: str) -> list[dict[str, Any]]:
 
 
 async def _resolve(org_slug: str, kind: str) -> ProxyConfig | None:
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.outbound_proxy import outbound_proxy_for
     from sqlalchemy import select
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.outbound_proxy import outbound_proxy_for
 
     async with session_scope() as session:
         org = (await session.execute(select(Organization).where(Organization.slug == org_slug))).scalar_one()
@@ -130,10 +130,10 @@ async def _resolve(org_slug: str, kind: str) -> ProxyConfig | None:
 async def test_the_password_is_sealed_and_never_returned_nor_audited(
     client: AsyncClient, admin: str, net: Net
 ) -> None:
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
-    from choregos_api.secret_store import get_secret_store
     from sqlalchemy import select
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.secret_store import get_secret_store
 
     assert (await client.get(URL)).json() == {"proxy": None, "updated_by": None, "updated_at": None}
     saved = await _put(client)
@@ -176,10 +176,10 @@ async def test_the_password_is_kept_when_absent_and_required_the_first_time(
 
 
 async def _resolve_stored() -> ProxyConfig:
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.outbound_proxy import stored_config
     from sqlalchemy import select
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.outbound_proxy import stored_config
 
     async with session_scope() as session:
         org = (await session.execute(select(Organization))).scalar_one()
@@ -191,7 +191,7 @@ async def _resolve_stored() -> ProxyConfig:
 async def test_a_deployment_without_a_secrets_key_is_a_409_and_stores_nothing(
     client: AsyncClient, admin: str, net: Net
 ) -> None:
-    from choregos_api.secret_store import FakeSecretStore, set_secret_store
+    from tranibor_api.secret_store import FakeSecretStore, set_secret_store
 
     set_secret_store(FakeSecretStore(available=False))
     refused = await _put(client)
@@ -215,10 +215,10 @@ async def test_the_endpoint_and_the_kinds_are_bounded(client: AsyncClient, admin
 async def test_delete_removes_the_setting_and_the_sealed_password(
     client: AsyncClient, admin: str, net: Net
 ) -> None:
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
-    from choregos_api.secret_store import get_secret_store
     from sqlalchemy import select
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.secret_store import get_secret_store
 
     await _put(client)
     assert (await client.delete(URL)).status_code == 204
@@ -307,7 +307,7 @@ async def test_the_resolver_honours_enabled_and_applies_to(client: AsyncClient, 
 async def test_a_proxy_that_applies_but_has_lost_its_password_fails_closed(
     client: AsyncClient, admin: str, net: Net
 ) -> None:
-    from choregos_api.secret_store import FakeSecretStore, set_secret_store
+    from tranibor_api.secret_store import FakeSecretStore, set_secret_store
 
     await _put(client)
     set_secret_store(FakeSecretStore())  # the sealed value is gone
@@ -316,8 +316,8 @@ async def test_a_proxy_that_applies_but_has_lost_its_password_fails_closed(
 
 
 async def test_an_organisation_never_gets_anothers_proxy(client: AsyncClient, admin: str, net: Net) -> None:
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         session.add(Organization(slug="other", name="Other"))
@@ -332,7 +332,7 @@ async def test_an_organisation_never_gets_anothers_proxy(client: AsyncClient, ad
 
 @pytest.fixture
 def web(net: Net) -> Iterator[Any]:
-    from choregos_api.services import web_fetch
+    from tranibor_api.services import web_fetch
 
     fake = web_fetch.FakeWebClient()
 
@@ -393,7 +393,7 @@ async def test_through_the_proxy_the_target_is_still_checked_for_private_address
 async def test_web_fetch_fails_closed_when_the_proxy_fails_and_never_goes_direct(
     client: AsyncClient, project: dict[str, Any], web: Any, net: Net, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.services import web_fetch
+    from tranibor_api.services import web_fetch
 
     web_fetch.set_web_client(web_fetch.HttpWebClient(transport=net.direct_transport()))
     await _put(client)
@@ -411,7 +411,7 @@ async def test_web_fetch_fails_closed_when_the_proxy_fails_and_never_goes_direct
 async def test_web_fetch_without_its_sealed_password_refuses_rather_than_going_direct(
     client: AsyncClient, project: dict[str, Any], web: Any, net: Net
 ) -> None:
-    from choregos_api.secret_store import FakeSecretStore, set_secret_store
+    from tranibor_api.secret_store import FakeSecretStore, set_secret_store
 
     await _put(client)
     base, headers = await _fetch_ready(client, project)
@@ -424,7 +424,7 @@ async def test_web_fetch_without_its_sealed_password_refuses_rather_than_going_d
 async def test_web_fetch_sends_connect_by_name_with_the_decoded_credentials() -> None:
     """A real listener stands for the proxy: the `CONNECT` line names the host, not the address that was
     checked locally, and the credentials arrive as typed (not as percent-encoded)."""
-    from choregos_api.services.web_fetch import HttpWebClient
+    from tranibor_api.services.web_fetch import HttpWebClient
 
     lines: list[list[str]] = []
 
@@ -458,13 +458,13 @@ async def test_web_fetch_sends_connect_by_name_with_the_decoded_credentials() ->
 @pytest.fixture
 def brave(monkeypatch: pytest.MonkeyPatch, net: Net) -> None:
     """The real Brave backend over the test's direct transport (not the fake the suite switches on)."""
-    import choregos_adapters
-    from choregos_adapters.web_search import BraveSearch
+    import tranibor_adapters
+    from tranibor_adapters.web_search import BraveSearch
 
     def build(kind: str, type_name: str, config: dict[str, Any]) -> Any:
         return BraveSearch(api_key=str(config.get("api_key", "")), transport=net.direct_transport())
 
-    monkeypatch.setattr(choregos_adapters, "build", build)
+    monkeypatch.setattr(tranibor_adapters, "build", build)
     monkeypatch.setenv("CONNECTOR_TEST_SEARCH_KEY", "search-key-from-the-vault")
 
 
@@ -512,7 +512,7 @@ async def test_web_search_fails_closed_and_names_the_proxy(
 
 
 async def test_a_self_hosted_firecrawl_is_not_sent_through_the_proxy(net: Net) -> None:
-    from choregos_adapters.web_search import FirecrawlSearch
+    from tranibor_adapters.web_search import FirecrawlSearch
 
     assert FirecrawlSearch.PROXIED is False
 
@@ -525,7 +525,7 @@ async def _public(host: str) -> list[str]:
 
 
 def _crawl(net: Net) -> Any:
-    from choregos_adapters.documents import WebCrawlSource
+    from tranibor_adapters.documents import WebCrawlSource
 
     return WebCrawlSource(
         url="https://docs.example.com/guide/", transport=net.direct_transport(), resolver=_public
@@ -566,8 +566,8 @@ async def test_the_proxy_never_widens_what_the_crawl_may_reach(
     net: Net, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The guard checks the TARGET before the proxy sees the request (ADR 0087 §3)."""
-    from choregos_adapters.http.egress import EgressRefusedHttpError
-    from choregos_core.egress import EgressPolicy, use_policy
+    from tranibor_adapters.http.egress import EgressRefusedHttpError
+    from tranibor_core.egress import EgressPolicy, use_policy
 
     proxy = ProxyConfig(BODY["endpoint"], "http", BODY["username"], PASSWORD)
     crawl = _crawl(net)
@@ -585,15 +585,15 @@ async def test_the_proxy_never_widens_what_the_crawl_may_reach(
 async def test_the_knowledge_sync_enters_the_organisations_proxy_scope(
     client: AsyncClient, admin: str, net: Net, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_adapters.documents import WebCrawlSource
-    from choregos_api.knowledge.sync import sync_source
+    from tranibor_adapters.documents import WebCrawlSource
+    from tranibor_api.knowledge.sync import sync_source
 
     async def open_source(session: Any, source: Any) -> Any:
         return WebCrawlSource(
             url="https://docs.example.test/guide/", transport=net.direct_transport(), resolver=_public
         )
 
-    monkeypatch.setattr("choregos_api.knowledge.sync.open_source", open_source)
+    monkeypatch.setattr("tranibor_api.knowledge.sync.open_source", open_source)
     base = "/api/v1/orgs/northwind/knowledge"
     await client.post(base, json={"slug": "docs", "name": "Docs", "serving_mode": "index"})
     created = await client.post(

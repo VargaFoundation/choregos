@@ -16,11 +16,11 @@ from typing import Any
 
 import httpx
 import pytest
-from choregos_contracts.outpost import FINGERPRINT_PATTERN
-from choregos_outpost import __version__
-from choregos_outpost import identity as identities
-from choregos_outpost.cli import app
-from choregos_outpost.fakes import FakeDoor
+from tranibor_contracts.outpost import FINGERPRINT_PATTERN
+from tranibor_outpost import __version__
+from tranibor_outpost import identity as identities
+from tranibor_outpost.cli import app
+from tranibor_outpost.fakes import FakeDoor
 from typer.testing import CliRunner
 
 from ._bench import policy_document, private_spellings, write_policy

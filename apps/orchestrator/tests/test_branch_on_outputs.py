@@ -63,11 +63,11 @@ def _answers(*answers: dict[str, Any]) -> tuple[Any, list[dict[str, Any]]]:
 
 
 async def _start(setup: Fixture, temporal_env: Any) -> Any:
-    from choregos_api.db.models import Project, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.rbac import SYSTEM
-    from choregos_api.services.definitions import publish_workflow
-    from choregos_api.temporal import interpreter_id
+    from tranibor_api.db.models import Project, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.rbac import SYSTEM
+    from tranibor_api.services.definitions import publish_workflow
+    from tranibor_api.temporal import interpreter_id
 
     async with session_scope() as session:
         project = await session.get(Project, setup.project_id)
@@ -90,8 +90,8 @@ async def _start(setup: Fixture, temporal_env: Any) -> Any:
 
 
 async def _replay_and_archive(handle: Any, name: str) -> None:
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.worker import Replayer
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     history = await handle.fetch_history()
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
@@ -121,8 +121,8 @@ async def test_the_agent_loops_until_it_answers_done(
 async def test_a_low_confidence_hands_the_work_item_to_a_person(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     play, asked = _answers({"done": True, "confidence": 0.3})
     setup.adapters.executor.handler = play
@@ -147,10 +147,10 @@ async def test_a_restarted_interpreter_reads_the_last_answer_back(setup: Fixture
     last answer: `load_context` reads the outputs of the work item's last finished run."""
     from datetime import timedelta
 
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
-    from choregos_orchestrator.activities.interpretation import load_context
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
+    from tranibor_orchestrator.activities.interpretation import load_context
 
     now = utcnow()
     async with session_scope(orgs="*") as session:

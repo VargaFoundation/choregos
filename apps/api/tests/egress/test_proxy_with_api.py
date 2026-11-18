@@ -8,11 +8,11 @@ from typing import Any
 
 import httpx
 import pytest
-from choregos_api.egress.config import EgressSettings
-from choregos_api.egress.proxy import EgressProxy
-from choregos_api.egress.report import HttpDecisionSink, Reporter
-from choregos_api.egress.sources import HttpRunNetworkSource, UnknownRunError
 from httpx import ASGITransport, AsyncClient
+from tranibor_api.egress.config import EgressSettings
+from tranibor_api.egress.proxy import EgressProxy
+from tranibor_api.egress.report import HttpDecisionSink, Reporter
+from tranibor_api.egress.sources import HttpRunNetworkSource, UnknownRunError
 
 from .helpers import LOOPBACK, Clock, _policy, _run, basic, connect_request, upstream_server
 
@@ -88,9 +88,9 @@ async def test_the_answer_is_cached_for_cache_seconds_then_the_api_is_asked_agai
 async def test_the_decisions_the_proxy_posts_land_in_the_journal_once_whatever_the_replays(
     client: AsyncClient, project: dict[str, Any], edge: tuple[Counting, AsyncClient]
 ) -> None:
-    from choregos_api.db.models import NetworkDecision
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import NetworkDecision
+    from tranibor_api.db.session import session_scope
 
     headers = await _run(project, "run-edge-4", agent_slug="pip", agent_version=1)
     _, http = edge
@@ -120,9 +120,9 @@ async def test_the_decisions_the_proxy_posts_land_in_the_journal_once_whatever_t
 async def test_end_to_end_the_proxy_obeys_the_policy_stored_in_the_database(
     client: AsyncClient, project: dict[str, Any], edge: tuple[Counting, AsyncClient]
 ) -> None:
-    from choregos_api.db.models import NetworkDecision
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import NetworkDecision
+    from tranibor_api.db.session import session_scope
 
     await _set_policy(client, project, ["pypi.org"])
     headers = await _run(project, "run-edge-5")
@@ -177,10 +177,10 @@ async def test_end_to_end_the_proxy_obeys_the_policy_stored_in_the_database(
 
 async def close(run_id: str, *, status: str = "failed", reason: str = "timeout") -> None:
     """Close the row as the orchestrator does when it stops waiting for the run (`close_run`)."""
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
-    from choregos_contracts import StageResult
-    from choregos_core.run_closure import close_run
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
+    from tranibor_contracts import StageResult
+    from tranibor_core.run_closure import close_run
 
     async with session_scope() as session:
         run = await session.get(Run, run_id)
@@ -270,7 +270,7 @@ async def test_the_proxys_reports_carry_its_key_and_land_when_the_api_requires_i
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """ADR 0145: the API refuses a report made with the egress token alone; the proxy's carry its key."""
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     monkeypatch.setenv("CHOREGOS_EGRESS_REPORT_KEY", "the-proxys-own-key")
     reset_settings_cache()

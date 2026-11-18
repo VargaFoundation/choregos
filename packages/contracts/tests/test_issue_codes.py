@@ -9,13 +9,13 @@ from __future__ import annotations
 
 import importlib
 
-import choregos_contracts as contracts
 import pytest
+import tranibor_contracts as contracts
 
 
 def test_the_issue_code_alias_module_is_gone() -> None:
     with pytest.raises(ImportError):
-        importlib.import_module("choregos_contracts.issue_codes")
+        importlib.import_module("tranibor_contracts.issue_codes")
 
 
 def test_the_contract_no_longer_declares_a_former_code() -> None:

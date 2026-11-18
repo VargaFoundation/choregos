@@ -8,8 +8,8 @@ from pathlib import Path
 
 import httpx
 import pytest
-from choregos_adapters.a2a import AUTH_OAUTH, CardError, digest_of, fetch_card, parse_card
-from choregos_adapters.fakes.a2a import FakeA2aAgent
+from tranibor_adapters.a2a import AUTH_OAUTH, CardError, digest_of, fetch_card, parse_card
+from tranibor_adapters.fakes.a2a import FakeA2aAgent
 
 ROVO = json.loads((Path(__file__).parent / "fixtures" / "a2a" / "rovo-agent-card.json").read_text())
 

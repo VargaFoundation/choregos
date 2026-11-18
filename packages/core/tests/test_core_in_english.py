@@ -12,7 +12,7 @@ import pytest
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 
 SOURCES = tuple(
-    f"packages/core/src/choregos_core/{name}"
+    f"packages/core/src/tranibor_core/{name}"
     for name in (
         "__init__.py",
         "access.py",
@@ -92,7 +92,7 @@ def test_core_outside_the_dsl_has_no_french() -> None:
 
 def test_the_demo_catalogue_still_loads() -> None:
     """An operator's catalogue, written with the former key, keeps loading."""
-    from choregos_core.catalogue import load_catalogue
+    from tranibor_core.catalogue import load_catalogue
 
     path = ROOT / "demo" / "outils" / "catalogue.yaml"  # lang: fr-ok
     if not path.exists():

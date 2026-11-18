@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from choregos_core.policy import PolicyEngine, load_preset
-from choregos_core.policy_ceiling import PolicyCeiling, clamp, widenings
+from tranibor_core.policy import PolicyEngine, load_preset
+from tranibor_core.policy_ceiling import PolicyCeiling, clamp, widenings
 
 CEILING = PolicyCeiling.model_validate(
     {
@@ -65,14 +65,14 @@ def test_no_ceiling_no_limit() -> None:
 
 
 def _offering(**tools: object) -> object:
-    from choregos_contracts import Policy
+    from tranibor_contracts import Policy
 
     solo = load_preset("solo")
     return Policy.model_validate(solo.model_dump(mode="json") | {"tools": tools})
 
 
 def test_a_ceiling_that_forbids_tool_scripts_refuses_each_offer() -> None:
-    from choregos_contracts import Policy
+    from tranibor_contracts import Policy
 
     ceiling = PolicyCeiling.model_validate({"tools": {"scripts": "off"}})
     policy = _offering(

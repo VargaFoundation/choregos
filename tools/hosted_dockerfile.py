@@ -20,8 +20,8 @@ import sys
 import zipfile
 from typing import Any
 
-from choregos_api.schemas import HostedRuntime
-from choregos_api.services.hosted_sources import SourceArchive, check_against, dockerfile, read_source
+from tranibor_api.schemas import HostedRuntime
+from tranibor_api.services.hosted_sources import SourceArchive, check_against, dockerfile, read_source
 
 #: What an upload of the directory leaves out: what an install or a build writes there.
 SKIPPED = frozenset({"node_modules", "bin", "obj", "__pycache__"})

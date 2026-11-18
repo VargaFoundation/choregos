@@ -21,10 +21,10 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
-from choregos_adapters.executor.agent_sandbox import AgentSandboxExecutor
-from choregos_adapters.executor.tekton import KubernetesClient
-from choregos_contracts import ExecutorKind
-from choregos_core.domain import ExecRef, StageJobSpec
+from tranibor_adapters.executor.agent_sandbox import AgentSandboxExecutor
+from tranibor_adapters.executor.tekton import KubernetesClient
+from tranibor_contracts import ExecutorKind
+from tranibor_core.domain import ExecRef, StageJobSpec
 
 from .conftest import context, kubectl_shared
 from .test_agent_sandbox import _condition, _get, _wait, operator_installed

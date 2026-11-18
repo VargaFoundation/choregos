@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import pytest
-from choregos_contracts import ProjectConfig
-from choregos_core import parse_workflow
-from choregos_core.repositories import (
+from tranibor_contracts import ProjectConfig
+from tranibor_core import parse_workflow
+from tranibor_core.repositories import (
     FIXED_KEY,
     RepositoryRefusedError,
     fixed_name,

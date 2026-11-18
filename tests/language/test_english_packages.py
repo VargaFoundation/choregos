@@ -65,7 +65,7 @@ def test_the_tree_is_within_its_baselines() -> None:
 
 def test_a_french_comment_in_a_translated_package_is_caught() -> None:
     content = '"""The sidecar."""\n\n# le serveur répond avant la fin du run\nx = 1\n'  # lang: fr-ok
-    found = ce.file_findings("packages/tools-mcp/src/choregos_tools_mcp/x.py", content)
+    found = ce.file_findings("packages/tools-mcp/src/tranibor_tools_mcp/x.py", content)
     assert [(f.kind, f.line) for f in found] == [("prose", 3)]
 
 
@@ -117,7 +117,7 @@ def test_no_alias_remains_anywhere(marker: str) -> None:
             ":(exclude)tests/language",
             ":(exclude)tests/web",
             ":(exclude)tools",
-            ":(exclude)packages/core/src/choregos_core/compat.py",
+            ":(exclude)packages/core/src/tranibor_core/compat.py",
         ],
         check=False,
         cwd=ROOT,

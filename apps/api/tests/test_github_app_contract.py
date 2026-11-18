@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-import choregos_contracts as contracts
+import tranibor_contracts as contracts
 
 OPERATIONS = {
     "getGitHubAppStatus": ("get", "/orgs/{org}/github"),

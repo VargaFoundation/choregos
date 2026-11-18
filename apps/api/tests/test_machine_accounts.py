@@ -20,7 +20,7 @@ def _base(project: dict[str, Any]) -> str:
 
 
 async def _publish(client: AsyncClient, project: dict[str, Any]) -> None:
-    from choregos_core.dsl import template_yaml
+    from tranibor_core.dsl import template_yaml
 
     tracker = await client.put(
         f"/api/v1/projects/{project['id']}/connectors/tracker", json={"type": "internal", "config": {}}
@@ -67,8 +67,8 @@ def _bearer(token: str) -> dict[str, str]:
 async def test_an_application_starts_a_workflow_under_its_own_name(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     await _publish(client, project)
     account, token = await _machine(client, project)
@@ -98,9 +98,9 @@ async def test_the_account_is_listed_with_its_tokens_and_never_their_value(
 
 
 async def test_it_outlives_the_person_who_created_it(client: AsyncClient, project: dict[str, Any]) -> None:
-    from choregos_api.db.models import Membership, User
-    from choregos_api.db.session import session_scope
     from sqlalchemy import delete, select
+    from tranibor_api.db.models import Membership, User
+    from tranibor_api.db.session import session_scope
 
     await _publish(client, project)
     _, token = await _machine(client, project)
@@ -136,10 +136,10 @@ async def test_it_cannot_answer_a_task(client: AsyncClient, project: dict[str, A
 
 
 async def test_its_principal_is_never_a_person(client: AsyncClient) -> None:
-    from choregos_api.db.models import User
-    from choregos_api.db.session import session_scope
-    from choregos_api.deps import _principal_from_user
-    from choregos_api.services.initiator import of_principal
+    from tranibor_api.db.models import User
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.deps import _principal_from_user
+    from tranibor_api.services.initiator import of_principal
 
     async with session_scope(orgs="*") as session:
         user = User(email="x.p@machines.choregos.invalid", display_name="x", is_service=True)
@@ -152,10 +152,10 @@ async def test_its_principal_is_never_a_person(client: AsyncClient) -> None:
 
 async def test_it_cannot_come_in_through_oauth(client: AsyncClient, monkeypatch: pytest.MonkeyPatch) -> None:
     """Even a provider that vouches for the address gets nothing: the OAuth path is a person's."""
-    from choregos_api.config import get_settings
-    from choregos_api.db.models import User
-    from choregos_api.db.session import session_scope
-    from choregos_api.mcp import caller
+    from tranibor_api.config import get_settings
+    from tranibor_api.db.models import User
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.mcp import caller
 
     address = "y.p@machines.choregos.invalid"
 
@@ -172,7 +172,7 @@ async def test_it_cannot_come_in_through_oauth(client: AsyncClient, monkeypatch:
 
 
 async def test_a_run_of_a_machine_acts_for_nobody() -> None:
-    from choregos_api.knowledge.on_behalf import PERSON_KINDS
+    from tranibor_api.knowledge.on_behalf import PERSON_KINDS
 
     assert "machine" not in PERSON_KINDS
 
@@ -229,10 +229,10 @@ async def test_an_ended_account_opens_nothing_even_with_a_token_left(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
     """Removal deletes the tokens; the door does not rely on that having happened."""
-    from choregos_api.db.models import MachineAccount
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
     from sqlalchemy import update
+    from tranibor_api.db.models import MachineAccount
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
 
     await _publish(client, project)
     _, token = await _machine(client, project)

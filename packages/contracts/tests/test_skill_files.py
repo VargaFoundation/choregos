@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 
 import pytest
-from choregos_contracts import (
+from tranibor_contracts import (
     INERT_BINARY_EXTENSIONS,
     MAX_BINARY_BYTES,
     check_inert_binary,

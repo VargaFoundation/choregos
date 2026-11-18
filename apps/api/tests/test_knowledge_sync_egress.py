@@ -18,7 +18,7 @@ async def _public(host: str) -> list[str]:
 @pytest.fixture
 def crawler(monkeypatch: pytest.MonkeyPatch) -> list[httpx.Request]:
     """`open_source` hands the sync a real crawler over a recording transport."""
-    from choregos_adapters.documents import WebCrawlSource
+    from tranibor_adapters.documents import WebCrawlSource
 
     sent: list[httpx.Request] = []
 
@@ -31,7 +31,7 @@ def crawler(monkeypatch: pytest.MonkeyPatch) -> list[httpx.Request]:
             url="https://docs.example.test/guide/", transport=httpx.MockTransport(answer), resolver=_public
         )
 
-    monkeypatch.setattr("choregos_api.knowledge.sync.open_source", open_source)
+    monkeypatch.setattr("tranibor_api.knowledge.sync.open_source", open_source)
     return sent
 
 
@@ -53,9 +53,9 @@ async def _source(client: AsyncClient) -> str:
 async def test_the_activity_syncs_as_the_workers_family(
     client: AsyncClient, admin: str, app: Any, monkeypatch: pytest.MonkeyPatch, crawler: list[httpx.Request]
 ) -> None:
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.knowledge.sync import sync_source
-    from choregos_orchestrator.activities.knowledge import sync_knowledge_source
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.knowledge.sync import sync_source
+    from tranibor_orchestrator.activities.knowledge import sync_knowledge_source
 
     monkeypatch.setenv("CHOREGOS_EGRESS_MODE", "enforce")
     reset_settings_cache()

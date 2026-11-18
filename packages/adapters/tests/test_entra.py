@@ -4,8 +4,8 @@ without a double effect, the administrative unit held, `Retry-After` honoured.""
 from __future__ import annotations
 
 import pytest
-from choregos_adapters.fakes.entra import FakeEntra
-from choregos_adapters.identity import EntraIdentity, OutsideUnit
+from tranibor_adapters.fakes.entra import FakeEntra
+from tranibor_adapters.identity import EntraIdentity, OutsideUnit
 
 
 def _directory(graph: FakeEntra) -> EntraIdentity:

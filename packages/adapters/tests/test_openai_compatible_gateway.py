@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import httpx
 import pytest
-from choregos_adapters.errors import UpstreamError
-from choregos_adapters.gateway.openai_compatible import OpenAiCompatibleGateway
+from tranibor_adapters.errors import UpstreamError
+from tranibor_adapters.gateway.openai_compatible import OpenAiCompatibleGateway
 
 
 def _gateway(handler: httpx.MockTransport, **options: str) -> OpenAiCompatibleGateway:

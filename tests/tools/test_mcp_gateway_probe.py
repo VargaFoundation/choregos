@@ -6,9 +6,9 @@ import socket
 
 import httpx
 import pytest
-from choregos_adapters.fakes.mcp import FakeMcpServer
-from choregos_adapters.fakes.mcp_gateway import FakeMcpGateway, GatewayUpstream
-from choregos_adapters.mcp import CLIENT_VERSIONS, McpError
+from tranibor_adapters.fakes.mcp import FakeMcpServer
+from tranibor_adapters.fakes.mcp_gateway import FakeMcpGateway, GatewayUpstream
+from tranibor_adapters.mcp import CLIENT_VERSIONS, McpError
 
 from tools.mcp_gateway_probe import main, probe
 

@@ -7,9 +7,9 @@ from typing import Any
 
 async def cap_the_project(project_id: str, cap: int) -> None:
     """`budgets.tool_calls_per_run` set to `cap` in the project's latest policy."""
-    from choregos_api.db.models import PolicyDef
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import PolicyDef
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         policy = (
@@ -31,9 +31,9 @@ async def cap_the_project(project_id: str, cap: int) -> None:
 
 async def tool_lines(run_id: str) -> list[Any]:
     """The run's `tool` lines: booked calls, and places still held under the cap (`IN_FLIGHT`)."""
-    from choregos_api.db.models import CostLedger
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import CostLedger
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         query = select(CostLedger).where(CostLedger.run_id == run_id, CostLedger.kind == "tool")

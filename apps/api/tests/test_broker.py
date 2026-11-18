@@ -24,11 +24,11 @@ ORG = "/api/v1/orgs/northwind"
 
 @pytest.fixture
 def supplier(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
-    import choregos_adapters
-    from choregos_adapters.fakes.mcp import FakeMcpServer
+    import tranibor_adapters
+    from tranibor_adapters.fakes.mcp import FakeMcpServer
 
     server = FakeMcpServer(tools=[dict(o) for o in TOOLS], token="cle-fournisseur")
-    monkeypatch.setattr(choregos_adapters, "FAKE_MCP", server)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_MCP", server)
     monkeypatch.setenv("CONNECTOR_TEST_CLE_FOURNISSEUR", "cle-fournisseur")
     yield server
 
@@ -38,9 +38,9 @@ async def _prepare(
 ) -> tuple[str, dict[str, str]]:
     """The server declared and discovered; `suivi_commande` and `stock` open, `commander_poste` under
     approval; an agent whose version names the server; a run of that agent."""
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.security import mint_run_token
+    from tranibor_api.db.models import Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.security import mint_run_token
 
     body = {"name": "fournisseur", "type": "mcp", "config": {"url": "https://fournisseur.test/mcp"},
              "secret_refs": {"token": "env:CONNECTOR_TEST_CLE_FOURNISSEUR"}}  # fmt: skip
@@ -120,9 +120,9 @@ async def test_a_forbidden_tool_answers_404_a_tool_under_approval_proposes_witho
 async def test_the_key_reaches_the_server_never_the_pod(
     client: AsyncClient, project: dict[str, Any], supplier: Any
 ) -> None:
-    from choregos_api.db.models import CostLedger
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import CostLedger
+    from tranibor_api.db.session import session_scope
 
     base, headers = await _prepare(client, project, ["*"])
     run_token = headers["Authorization"].removeprefix("Bearer ")
@@ -154,9 +154,9 @@ async def test_the_call_event_carries_the_digest_of_the_broker_response(
     import hashlib
     import json
 
-    from choregos_api.db.models import Event
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Event
+    from tranibor_api.db.session import session_scope
 
     base, headers = await _prepare(client, project, ["*"])
     response = await client.post(
@@ -190,9 +190,9 @@ async def test_an_argument_outside_the_schema_is_refused_before_the_server(
 async def test_the_run_call_ceiling_holds_for_the_broker(
     client: AsyncClient, project: dict[str, Any], supplier: Any
 ) -> None:
-    from choregos_api.db.models import PolicyDef
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import PolicyDef
+    from tranibor_api.db.session import session_scope
 
     base, headers = await _prepare(client, project, ["*"])
     async with session_scope() as session:
@@ -228,8 +228,8 @@ async def test_what_the_server_returns_goes_through_the_injection_guard(
 async def test_an_agent_that_does_not_name_the_server_sees_nothing_of_it(
     client: AsyncClient, project: dict[str, Any], supplier: Any
 ) -> None:
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
 
     base, headers = await _prepare(client, project, ["*"])
     async with session_scope() as session:
@@ -243,8 +243,8 @@ async def test_an_agent_that_does_not_name_the_server_sees_nothing_of_it(
 async def test_an_agent_that_names_another_server_does_not_see_this_one(
     client: AsyncClient, project: dict[str, Any], supplier: Any
 ) -> None:
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
 
     base, headers = await _prepare(client, project, ["*"])
     other = {"mcp_servers": [{"connector": "autre-serveur", "tools": ["*"]}]}
@@ -267,10 +267,10 @@ async def test_an_allowed_write_becomes_an_action_and_does_not_reach_the_server_
     """#241: a write the policy allows is not a direct call. It is born as a governed action,
     approved by the policy, started in Temporal: the `ActionWorkflow` reaches the server, under its
     key, once. The same call replayed returns the same action."""
-    from choregos_api.db.models import Action
-    from choregos_api.db.session import session_scope
-    from choregos_api.temporal import get_temporal
     from sqlalchemy import select
+    from tranibor_api.db.models import Action
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.temporal import get_temporal
 
     base, headers = await _prepare(client, project, ["*"])
     opened = await client.patch(
@@ -313,9 +313,9 @@ async def test_a_job_run_sees_the_operations_its_workflow_names(
 ) -> None:
     """A job (ADR 0056) has no registry agent: its selection is the `tools:` of its actor, copied by
     the orchestrator into the run's StageInput. Without it a snapshot job could reach no connector."""
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
-    from choregos_api.security import mint_run_token
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.security import mint_run_token
 
     _base, _ = await _prepare(client, project, ["suivi_*"])
     async with session_scope() as session:

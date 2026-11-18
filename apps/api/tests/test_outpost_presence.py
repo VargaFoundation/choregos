@@ -29,8 +29,8 @@ def door(monkeypatch: pytest.MonkeyPatch) -> kit.Door:
 
 
 async def _presence(now: datetime = NOW) -> Any:
-    from choregos_api.db.session import session_scope
-    from choregos_api.services import outposts as service
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services import outposts as service
 
     outpost = await kit.outpost_row(SLUG)
     async with session_scope(orgs=[kit.ORG]) as session:
@@ -39,7 +39,7 @@ async def _presence(now: datetime = NOW) -> Any:
 
 async def _instance(**row: Any) -> str:
     """An instance of the outpost as its last poll left it, written by hand."""
-    from choregos_api.db.models import OutpostInstance
+    from tranibor_api.db.models import OutpostInstance
 
     (daemon,) = await daemon_kit.instances(1)
     seen = {"last_seen_at": NOW, "endpoints": ["tracker"], "capabilities": ["tools"]} | row
@@ -56,7 +56,7 @@ async def test_an_outpost_nobody_enrolled_at_is_offline(client: AsyncClient, adm
 async def test_an_instance_that_polled_within_the_window_serves_the_aliases_it_announced(
     client: AsyncClient, admin: str
 ) -> None:
-    from choregos_api.services import outposts as service
+    from tranibor_api.services import outposts as service
 
     await kit.create(client, SLUG)
     await _instance(endpoints=["tracker", "forge"])
@@ -103,10 +103,10 @@ async def test_presence_reads_what_a_poll_wrote_a_moment_ago_in_another_session(
 ) -> None:
     """Columns are read, not the rows a session already holds: a session that loaded an instance
     before its last poll does not answer from what it loaded."""
-    from choregos_api.db.models import OutpostInstance
-    from choregos_api.db.session import in_outpost_scope, session_scope
-    from choregos_api.services import outposts as service
     from sqlalchemy import select
+    from tranibor_api.db.models import OutpostInstance
+    from tranibor_api.db.session import in_outpost_scope, session_scope
+    from tranibor_api.services import outposts as service
 
     await kit.create(client, SLUG)
     instance_id = await _instance(last_seen_at=None)

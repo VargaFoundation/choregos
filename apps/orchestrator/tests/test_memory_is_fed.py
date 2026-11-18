@@ -11,15 +11,15 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from choregos_orchestrator.train_client import clear_fake_signals, fake_starts
+from tranibor_orchestrator.train_client import clear_fake_signals, fake_starts
 
 from .conftest import Fixture
 
 
 async def _disable_memory(setup: Fixture) -> None:
-    from choregos_api.db.models import PolicyDef
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import PolicyDef
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         row = (
@@ -36,8 +36,8 @@ async def _disable_memory(setup: Fixture) -> None:
 
 
 async def _set_project(setup: Fixture, **fields: Any) -> None:
-    from choregos_api.db.models import Project
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Project
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         project = await session.get(Project, setup.project_id)
@@ -47,7 +47,7 @@ async def _set_project(setup: Fixture, **fields: Any) -> None:
 
 
 async def test_the_memory_loop_of_a_project_starts_once(setup: Fixture) -> None:
-    from choregos_orchestrator.train_client import start_memory_loop
+    from tranibor_orchestrator.train_client import start_memory_loop
 
     clear_fake_signals()
     assert await start_memory_loop("billing-api") is True
@@ -58,7 +58,7 @@ async def test_the_memory_loop_of_a_project_starts_once(setup: Fixture) -> None:
 async def test_the_worker_starts_a_loop_per_active_project_that_keeps_memory(
     setup: Fixture, monkeypatch: Any
 ) -> None:
-    from choregos_orchestrator import worker
+    from tranibor_orchestrator import worker
 
     asked: list[tuple[str, str, bool]] = []
 
@@ -68,7 +68,7 @@ async def test_the_worker_starts_a_loop_per_active_project_that_keeps_memory(
         asked.append((name, workflow_id, relancer_si_echoue))
         return True
 
-    monkeypatch.setattr("choregos_orchestrator.train_client.start_workflow_once", capture)
+    monkeypatch.setattr("tranibor_orchestrator.train_client.start_workflow_once", capture)
     assert await worker.start_memory_loops() == ["billing-api"]
     assert asked == [("MemoryIngestion", "mem-billing-api", True)], "a loop that died in failure restarts"
 
@@ -82,7 +82,7 @@ async def test_the_worker_starts_a_loop_per_active_project_that_keeps_memory(
 async def test_a_project_activated_by_its_provisioning_gets_its_memory_loop(
     setup: Fixture, memory: bool
 ) -> None:
-    from choregos_orchestrator.activities.provisioning import finish_provisioning
+    from tranibor_orchestrator.activities.provisioning import finish_provisioning
 
     clear_fake_signals()
     if not memory:
@@ -96,8 +96,8 @@ async def test_a_project_activated_by_its_provisioning_gets_its_memory_loop(
 
 
 async def _failed_run(setup: Fixture, run_id: str = "run-failed") -> str:
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         session.add(
@@ -114,8 +114,8 @@ async def _failed_run(setup: Fixture, run_id: str = "run-failed") -> str:
 
 
 async def _record_failure(run_id: str) -> dict[str, Any]:
-    from choregos_contracts import StageResult
-    from choregos_orchestrator.activities.outcome import record_run_outcome
+    from tranibor_contracts import StageResult
+    from tranibor_orchestrator.activities.outcome import record_run_outcome
 
     result = StageResult.failure("the tests did not pass", "tests")
     return await record_run_outcome(
@@ -124,7 +124,7 @@ async def _record_failure(run_id: str) -> dict[str, Any]:
 
 
 async def test_a_failed_run_leaves_its_lesson_once(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.memory import ingest_sources
+    from tranibor_orchestrator.activities.memory import ingest_sources
 
     run_id = await _failed_run(setup)
     assert (await _record_failure(run_id))["status"] == "failed"
@@ -156,7 +156,7 @@ async def test_a_lesson_that_cannot_be_written_does_not_fail_the_outcome(setup: 
 
 
 async def test_an_alert_is_not_kept_under_a_policy_without_memory(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.memory import ingest_alert
+    from tranibor_orchestrator.activities.memory import ingest_alert
 
     await _disable_memory(setup)
     event = {"delivery_id": "f-1", "payload": {"labels": {"alertname": "ErrorBudget"}}}

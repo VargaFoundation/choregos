@@ -17,7 +17,7 @@ SECRET = "s3cret"
 
 @pytest.fixture(autouse=True)
 def _secret(client: AsyncClient, monkeypatch: pytest.MonkeyPatch) -> None:
-    from choregos_api.config import get_settings
+    from tranibor_api.config import get_settings
 
     monkeypatch.setattr(get_settings(), "generic_webhook_secret", SECRET)
 

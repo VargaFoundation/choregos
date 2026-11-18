@@ -14,11 +14,11 @@ from contextlib import asynccontextmanager
 from datetime import timedelta
 from typing import Any
 
-import choregos_contracts as contracts
 import pytest
-from choregos_core import Spend, utcnow
+import tranibor_contracts as contracts
 from httpx import ASGITransport, AsyncClient
 from jsonschema import Draft202012Validator
+from tranibor_core import Spend, utcnow
 
 from .conftest import login
 from .kits.memberships import _only
@@ -28,7 +28,7 @@ ACTIVITY = "/api/v1/orgs/northwind/activity"
 
 @pytest.fixture(autouse=True)
 def _no_spend_remembered() -> Iterator[None]:
-    from choregos_api.services import activity
+    from tranibor_api.services import activity
 
     activity.forget_spends()
     yield
@@ -45,9 +45,9 @@ async def _project(client: AsyncClient, slug: str) -> dict[str, Any]:
 
 
 async def _org_id() -> str:
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         return str(
@@ -58,9 +58,9 @@ async def _org_id() -> str:
 
 
 async def _user_id(email: str) -> str:
-    from choregos_api.db.models import User
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import User
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         return str((await session.execute(select(User.id).where(User.email == email))).scalar_one())
@@ -77,8 +77,8 @@ async def _as(
 
 
 async def _workflow(project_id: str, name: str) -> str:
-    from choregos_api.db.models import WorkflowDef
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import WorkflowDef
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         row = WorkflowDef(project_id=project_id, name=name, version=1, yaml="", json_doc={}, checksum=name)
@@ -100,8 +100,8 @@ async def _run(
     events: tuple[str, ...] = (),
     **fields: Any,
 ) -> None:
-    from choregos_api.db.models import Run, RunEvent, WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Run, RunEvent, WorkItem
+    from tranibor_api.db.session import session_scope
 
     now = utcnow()
     async with session_scope() as session:
@@ -135,8 +135,8 @@ async def _run(
 
 
 async def _session(project: dict[str, Any], user_id: str, session_id: str, *, agent: str = "helper") -> None:
-    from choregos_api.db.models import AgentSessionRecord
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import AgentSessionRecord
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         session.add(
@@ -173,7 +173,7 @@ class _Gateway:
 
 
 def _use_gateway(monkeypatch: pytest.MonkeyPatch, gateway: _Gateway) -> None:
-    from choregos_api.services import gateway as gateway_service
+    from tranibor_api.services import gateway as gateway_service
 
     async def project_gateway(_session: Any, _project: Any) -> _Gateway:
         return gateway
@@ -287,7 +287,7 @@ async def test_spend_so_far_is_null_when_the_gateway_raises(
 async def test_spend_so_far_is_asked_once_in_30_seconds(
     client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.services import activity
+    from tranibor_api.services import activity
 
     now = [1000.0]
     monkeypatch.setattr(activity, "clock", lambda: now[0])
@@ -342,12 +342,12 @@ async def test_what_ended_is_shown_for_an_hour_and_at_most_50(
 async def test_the_stream_sends_an_upsert_then_an_ended_for_a_run(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
-    from choregos_api.events import get_bus
-    from choregos_api.rbac import Principal, Role
-    from choregos_api.routers.activity import stream_org_activity
-    from choregos_contracts import ChoregosEvent, EventType
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.events import get_bus
+    from tranibor_api.rbac import Principal, Role
+    from tranibor_api.routers.activity import stream_org_activity
+    from tranibor_contracts import ChoregosEvent, EventType
 
     vault = await _project(client, "vault")
     await _run(vault["id"], "r-hidden")
@@ -390,10 +390,10 @@ async def test_the_stream_sends_an_upsert_then_an_ended_for_a_run(
 async def test_the_stream_says_a_run_ended_from_its_event_before_the_row_is_read(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.db.session import session_scope
-    from choregos_api.rbac import Principal, Role
-    from choregos_api.services.activity import ActivityFilters, ActivityReader, entry_of_event
-    from choregos_contracts import ChoregosEvent, EventType
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.rbac import Principal, Role
+    from tranibor_api.services.activity import ActivityFilters, ActivityReader, entry_of_event
+    from tranibor_contracts import ChoregosEvent, EventType
 
     await _run(project["id"], "r-racing", agent="alpha")
     admin = Principal(user_id="u-a", email="a@northwind.dev", org_roles={"northwind": Role.ORG_ADMIN})
@@ -413,10 +413,10 @@ async def test_the_stream_says_a_run_ended_from_its_event_before_the_row_is_read
 async def test_a_late_event_of_an_ended_run_and_a_session_tool_call_reach_the_stream(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.db.session import session_scope
-    from choregos_api.rbac import Principal, Role
-    from choregos_api.services.activity import ActivityFilters, ActivityReader, entry_of_event
-    from choregos_contracts import ChoregosEvent, EventType
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.rbac import Principal, Role
+    from tranibor_api.services.activity import ActivityFilters, ActivityReader, entry_of_event
+    from tranibor_contracts import ChoregosEvent, EventType
 
     await _run(project["id"], "r-done", status="succeeded", ended_ago=timedelta(minutes=1))
     admin_id = await _user_id("admin@northwind.dev")

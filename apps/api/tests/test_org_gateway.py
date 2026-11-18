@@ -20,7 +20,7 @@ KEY = "sk-acme-gateway-0000"
 @pytest.fixture(autouse=True)
 def sealed_key(monkeypatch: pytest.MonkeyPatch) -> None:
     """The deployment's key: without it nothing can be typed (ADR 0058)."""
-    from choregos_core.redaction import forget_secrets
+    from tranibor_core.redaction import forget_secrets
 
     monkeypatch.setenv("CHOREGOS_SECRETS_KEKS", f"k1:{base64.b64encode(os.urandom(32)).decode()}")
     forget_secrets()
@@ -40,14 +40,14 @@ def _gateway(name: str, type_name: str = "openai-compatible") -> dict[str, objec
 async def test_the_organisation_gateway_is_built_with_the_key_typed_in_the_console(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.gateway import org_gateway_and_type
     from sqlalchemy import select
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.gateway import org_gateway_and_type
 
     built: list[tuple[str, str, dict[str, Any]]] = []
     monkeypatch.setattr(
-        "choregos_api.services.gateway.build",
+        "tranibor_api.services.gateway.build",
         lambda kind, type_name, config: built.append((kind, type_name, config)) or object(),
     )
 
@@ -74,7 +74,7 @@ async def test_an_organisation_brings_one_gateway(client: AsyncClient, admin: st
 async def test_the_direct_gateway_is_refused_in_prod(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api import config
+    from tranibor_api import config
 
     monkeypatch.setattr(config.get_settings(), "env", "prod")
     refused = await client.post(

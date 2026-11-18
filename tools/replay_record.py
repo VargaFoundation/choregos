@@ -40,7 +40,7 @@ async def main() -> int:
     )
     args = parser.parse_args()
 
-    from choregos_core.temporal_connection import TemporalSecurity, connect_temporal
+    from tranibor_core.temporal_connection import TemporalSecurity, connect_temporal
 
     # TLS as the deployment has it (ADR 0183). An encrypted history is not archived: CI replays the
     # archives without any key, and the archive would also have to be decrypted to be reviewed.

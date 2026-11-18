@@ -9,7 +9,7 @@ nothing else under both entry forms, the door has a signing key that no upgrade 
 
 Each test renders the chart with `helm template` and reads the objects. Where the chart hands a
 process its settings, the process's own code reads them back: the API's `Settings`, and the
-application of `python -m choregos_api.outposts`.
+application of `python -m tranibor_api.outposts`.
 """
 
 from __future__ import annotations
@@ -211,7 +211,7 @@ def _settings_of(
 ) -> dict[str, str]:
     """Give this process what the chart gives `workload`: its plain values, and the door's key read
     from the Secret the chart drew. The database is left out: no test here opens it."""
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     secret = _named(documents, "Secret", DOOR)
     assert secret is not None
@@ -233,8 +233,8 @@ def _settings_of(
 def test_what_the_chart_writes_is_what_the_api_accepts(monkeypatch: pytest.MonkeyPatch) -> None:
     """The API refuses to start on a door without its origin or its key, on an origin with a path and
     on a key that is not Ed25519 in PEM: its own settings read what the chart rendered."""
-    from choregos_api.config import Settings, reset_settings_cache
-    from choregos_api.outposts import check_the_door
+    from tranibor_api.config import Settings, reset_settings_cache
+    from tranibor_api.outposts import check_the_door
 
     announced = _public_key("choregos tests: the door's next key, announced for a rotation")
     documents = _documents(ON, HOSTS, f'global.outposts.door.announcedKeys=["{announced}"]')
@@ -380,7 +380,7 @@ def test_the_ingress_serves_outposts_under_the_doors_hostnames_only() -> None:
 def test_the_entrance_lets_a_poll_wait_its_twenty_five_seconds() -> None:
     """A poll waits up to 25 seconds before it answers with nothing (ADR 0148 §7): the HTTPRoute says
     how long a request may last, the Ingress carries the door's own annotations for it."""
-    from choregos_contracts.outpost import MAX_WAIT_S
+    from tranibor_contracts.outpost import MAX_WAIT_S
 
     route = _named(_documents(ON, HOSTS), "HTTPRoute", DOOR)
     assert route is not None
@@ -451,7 +451,7 @@ def _key_secrets(documents: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def test_the_chart_draws_a_key_the_door_can_sign_with() -> None:
-    from choregos_api.config import ed25519_public_key
+    from tranibor_api.config import ed25519_public_key
 
     (secret,) = _key_secrets(_documents(ON, HOSTS))
     assert secret["metadata"]["name"] == DOOR and secret["type"] == "Opaque"
@@ -512,8 +512,8 @@ def test_dedicated_a_deployment_serves_the_door_alone() -> None:
     (container,) = pod["containers"]
     # The API image, started as the entrypoint that mounts the door and nothing else of the API.
     assert container["image"] == api["spec"]["template"]["spec"]["containers"][0]["image"]
-    assert container["command"] == ["python", "-m", "choregos_api.outposts"]
-    assert importlib.util.find_spec("choregos_api.outposts.__main__") is not None
+    assert container["command"] == ["python", "-m", "tranibor_api.outposts"]
+    assert importlib.util.find_spec("tranibor_api.outposts.__main__") is not None
     assert door["spec"]["replicas"] == 2
     assert container["readinessProbe"]["httpGet"] == {"path": "/readyz", "port": "http"}
     assert container["livenessProbe"]["httpGet"] == {"path": "/healthz", "port": "http"}
@@ -625,11 +625,11 @@ def test_dedicated_the_door_takes_its_own_extra_variables() -> None:
 
 def test_dedicated_what_the_chart_gives_the_door_builds_the_door(monkeypatch: pytest.MonkeyPatch) -> None:
     """The entrypoint refuses to be built without outposts on, an origin and a key: the application of
-    `python -m choregos_api.outposts`, built from the variables of the rendered Deployment, serves
+    `python -m tranibor_api.outposts`, built from the variables of the rendered Deployment, serves
     the four verbs and its two probes."""
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.outposts.alone import create_app
     from fastapi.routing import iter_route_contexts
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.outposts.alone import create_app
 
     given = _settings_of(monkeypatch, _documents(ON, HOSTS, DEDICATED), f"Deployment/{DOOR}")
     assert given["CHOREGOS_OUTPOSTS"] == "on" and "PRIVATE KEY" in given["CHOREGOS_OUTPOSTS_DOOR_SIGNING_KEY"]
@@ -655,7 +655,7 @@ def test_dedicated_what_the_chart_gives_the_door_builds_the_door(monkeypatch: py
 def test_dedicated_a_pod_told_to_stop_is_given_longer_than_its_polls() -> None:
     """The process lets the polls it holds end by themselves, `GRACE_S` at most, then cancels what is
     left: the pod's own grace period is above that, or the kubelet would cut them first."""
-    from choregos_api.outposts.alone import GRACE_S
+    from tranibor_api.outposts.alone import GRACE_S
 
     door = _named(_documents(ON, HOSTS, DEDICATED), "Deployment", DOOR)
     assert door is not None
@@ -744,7 +744,7 @@ def test_dedicated_with_an_embedded_database_the_door_reaches_that_one() -> None
 def test_the_alert_on_a_second_poll_is_rendered_with_the_platforms_rules(flavour: str, kind: str) -> None:
     """ADR 0148 §7: two holders of one key is what a stolen key looks like. The rule reads the series
     the API exposes, in the chart's one group, in both flavours; off, it is not there."""
-    from choregos_api.metrics import NAMES
+    from tranibor_api.metrics import NAMES
 
     def rules(*sets: str) -> list[dict[str, Any]]:
         (rule,) = [d for d in _documents(f'monitoring.flavour="{flavour}"', *sets) if d["kind"] == kind]

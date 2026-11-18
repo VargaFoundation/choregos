@@ -28,8 +28,8 @@ FIELDS_EXTENSION = "https://choregos.dev/a2a/extensions/skill-fields/v1"
 def profile(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     path = tmp_path / "config.json"
     path.write_text(json.dumps({"api_url": API, "token": "chg_profile", "org": "acme"}))
-    import choregos_cli.a2a as a2a_module
-    import choregos_cli.client as client_module
+    import tranibor_cli.a2a as a2a_module
+    import tranibor_cli.client as client_module
 
     monkeypatch.setattr(client_module, "CONFIG_PATH", path)
     monkeypatch.setattr(a2a_module, "RECONNECT_PAUSE", 0.0)
@@ -39,7 +39,7 @@ def profile(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 def _cli(*args: str, env: dict[str, str] | None = None) -> Any:
-    from choregos_cli.main import app
+    from tranibor_cli.main import app
 
     return CliRunner().invoke(app, ["a2a", *args], env=env)
 

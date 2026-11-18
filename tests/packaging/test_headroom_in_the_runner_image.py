@@ -133,7 +133,7 @@ def test_the_build_proves_headroom_relays_the_gateway_budget_refusal() -> None:
     )
 
     probe = (ROOT / "docker/headroom/relays_budget_refusal.py").read_text(encoding="utf-8")
-    assert "from choregos_runner.budget import gateway_budget_refusal" in probe
+    assert "from tranibor_runner.budget import gateway_budget_refusal" in probe
     assert '"type": "budget_exceeded"' in probe
     # Both wires, each streamed and not.
     assert "/v1/messages" in probe and "/v1/chat/completions" in probe

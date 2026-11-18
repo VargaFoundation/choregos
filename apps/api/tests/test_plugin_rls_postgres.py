@@ -16,8 +16,8 @@ pytestmark = without_postgres
 
 
 async def test_a_plugin_row_and_its_files_are_invisible_to_another_organisation(pg_app: Any) -> None:
-    from choregos_api.db.models import Organization, OrgPlugin, OrgPluginFile
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Organization, OrgPlugin, OrgPluginFile
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         for slug in ("a", "b"):
@@ -43,8 +43,8 @@ async def test_a_plugin_row_and_its_files_are_invisible_to_another_organisation(
 
 
 async def test_a_waiting_plugin_approval_is_invisible_to_another_organisation(pg_app: Any) -> None:
-    from choregos_api.db.models import Organization, OrgPluginApproval
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Organization, OrgPluginApproval
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         for slug in ("a", "b"):

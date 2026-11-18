@@ -43,8 +43,8 @@ transitions:
 
 
 async def _records() -> list[Any]:
-    from choregos_api.db.models import DecisionRecordRow
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import DecisionRecordRow
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = await session.execute(select(DecisionRecordRow).order_by(DecisionRecordRow.question))
@@ -52,10 +52,10 @@ async def _records() -> list[Any]:
 
 
 async def _pin(setup: Fixture, yaml: str) -> None:
-    from choregos_api.db.models import Project, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.rbac import SYSTEM
-    from choregos_api.services.definitions import publish_workflow
+    from tranibor_api.db.models import Project, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.rbac import SYSTEM
+    from tranibor_api.services.definitions import publish_workflow
 
     async with session_scope() as session:
         project = await session.get(Project, setup.project_id)
@@ -67,8 +67,8 @@ async def _pin(setup: Fixture, yaml: str) -> None:
 
 
 async def _set_state(setup: Fixture, state: str) -> None:
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         item = await session.get(WorkItem, setup.work_item_id)
@@ -78,9 +78,9 @@ async def _set_state(setup: Fixture, state: str) -> None:
 
 def _decide_payload(setup: Fixture, attempt: int = 1) -> dict[str, Any]:
     import yaml
-    from choregos_contracts import Workflow
-    from choregos_core import WorkflowEngine
-    from choregos_orchestrator.activities.decision import decision_request
+    from tranibor_contracts import Workflow
+    from tranibor_core import WorkflowEngine
+    from tranibor_orchestrator.activities.decision import decision_request
 
     engine = WorkflowEngine(Workflow.model_validate(yaml.safe_load(ROUTE)))
     transition = next(t for t in engine.wf.transitions if t.key == "t-route")
@@ -97,7 +97,7 @@ def _decide_payload(setup: Fixture, attempt: int = 1) -> dict[str, Any]:
 
 
 async def _human_request(setup: Fixture, transition_id: str, kind: str = "approval") -> str:
-    from choregos_orchestrator.activities.tracker import create_human_request
+    from tranibor_orchestrator.activities.tracker import create_human_request
 
     created = await create_human_request(
         {
@@ -112,7 +112,7 @@ async def _human_request(setup: Fixture, transition_id: str, kind: str = "approv
 
 
 async def _close(request_id: str, **decision: Any) -> None:
-    from choregos_orchestrator.activities.tracker import close_human_request
+    from tranibor_orchestrator.activities.tracker import close_human_request
 
     await close_human_request({"request_id": request_id, "decided_by": "lead", "decision": decision})
 
@@ -121,7 +121,7 @@ async def _close(request_id: str, **decision: Any) -> None:
 
 
 async def test_a_decision_step_records_each_answer_once(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.decision import decide
+    from tranibor_orchestrator.activities.decision import decide
 
     await _publish(setup)
     setup.adapters.decisions.answer(route=("billing", 0.93), urgent=(False, 0.8))
@@ -143,7 +143,7 @@ async def test_a_decision_step_records_each_answer_once(setup: Fixture) -> None:
 
 
 async def test_a_decision_that_failed_records_nothing(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.decision import decide
+    from tranibor_orchestrator.activities.decision import decide
 
     await _publish(setup)
     setup.adapters.decisions.answer(route=("sales", 0.97))  # not an option offered
@@ -154,11 +154,11 @@ async def test_a_decision_that_failed_records_nothing(setup: Fixture) -> None:
 
 async def test_the_ledger_insert_ignores_a_question_already_recorded(setup: Fixture) -> None:
     """`ON CONFLICT DO NOTHING` on `(run_id, question)`: the second write of a run adds only what is new."""
-    from choregos_api.db.session import session_scope
-    from choregos_api.services import DecidedBy, record_decisions
-    from choregos_core import utcnow
-    from choregos_core.decision_ledger import Answered
-    from choregos_orchestrator.activities.decision import decide
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services import DecidedBy, record_decisions
+    from tranibor_core import utcnow
+    from tranibor_core.decision_ledger import Answered
+    from tranibor_orchestrator.activities.decision import decide
 
     await _publish(setup)
     decided = await decide(_decide_payload(setup))
@@ -190,9 +190,9 @@ async def test_the_ledger_insert_ignores_a_question_already_recorded(setup: Fixt
 
 
 async def _agent_run(setup: Fixture, outputs: dict[str, Any], *, backend: str = "claude-code") -> str:
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
+    from tranibor_core import utcnow
 
     async with session_scope() as session:
         session.add(
@@ -223,7 +223,7 @@ async def _agent_run(setup: Fixture, outputs: dict[str, Any], *, backend: str = 
 
 
 async def test_an_agent_s_declared_confidence_is_recorded_beside_its_answer(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.outcome import record_run_outcome
+    from tranibor_orchestrator.activities.outcome import record_run_outcome
 
     await _pin(setup, DEVELOP)
     run_id = await _agent_run(setup, {"done": True, "confidence": 0.85})
@@ -237,8 +237,8 @@ async def test_an_agent_s_declared_confidence_is_recorded_beside_its_answer(setu
 
 
 async def test_a_job_and_an_unfinished_stage_record_no_confidence(setup: Fixture) -> None:
-    from choregos_contracts import StageResult, StageStatus
-    from choregos_orchestrator.activities.outcome import record_run_outcome
+    from tranibor_contracts import StageResult, StageStatus
+    from tranibor_orchestrator.activities.outcome import record_run_outcome
 
     await _pin(setup, DEVELOP)
     run_id = await _agent_run(setup, {"done": True, "confidence": 0.85}, backend="job")
@@ -246,8 +246,8 @@ async def test_a_job_and_an_unfinished_stage_record_no_confidence(setup: Fixture
     await record_run_outcome({"project_id": setup.project_id, "run_id": run_id, "result": result})
     assert await _records() == [], "a job's figures are measured, not a confidence it declares"
 
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         run = await session.get(Run, run_id)
@@ -261,7 +261,7 @@ async def test_a_job_and_an_unfinished_stage_record_no_confidence(setup: Fixture
 
 
 async def test_the_transition_taken_is_written_once(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.decision import decide, note_transition_taken
+    from tranibor_orchestrator.activities.decision import decide, note_transition_taken
 
     await _publish(setup)
     decided = await decide(_decide_payload(setup))
@@ -275,7 +275,7 @@ async def test_the_transition_taken_is_written_once(setup: Fixture) -> None:
 
 
 async def test_the_first_human_step_after_a_decision_judges_it(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.decision import decide
+    from tranibor_orchestrator.activities.decision import decide
 
     await _publish(setup)
     await decide(_decide_payload(setup))
@@ -290,7 +290,7 @@ async def test_the_first_human_step_after_a_decision_judges_it(setup: Fixture) -
 
 
 async def test_an_approval_confirms_a_decision(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.decision import decide
+    from tranibor_orchestrator.activities.decision import decide
 
     await _publish(setup)
     await decide(_decide_payload(setup))
@@ -310,7 +310,7 @@ async def test_an_approval_confirms_a_decision(setup: Fixture) -> None:
 async def test_what_is_not_a_human_step_judges_nothing(
     setup: Fixture, transition_id: str, kind: str, decision: dict[str, Any]
 ) -> None:
-    from choregos_orchestrator.activities.decision import decide
+    from tranibor_orchestrator.activities.decision import decide
 
     await _publish(setup)
     await decide(_decide_payload(setup))
@@ -319,7 +319,7 @@ async def test_what_is_not_a_human_step_judges_nothing(
 
 
 async def test_a_human_step_asked_before_the_decision_does_not_judge_it(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.decision import decide
+    from tranibor_orchestrator.activities.decision import decide
 
     await _publish(setup)
     earlier = await _human_request(setup, "t-decide")
@@ -335,8 +335,8 @@ async def test_a_human_step_asked_before_the_decision_does_not_judge_it(setup: F
 async def test_the_end_of_the_work_item_is_its_decisions_terminal_outcome(
     setup: Fixture, state: str, terminal: str
 ) -> None:
-    from choregos_orchestrator.activities.decision import decide
-    from choregos_orchestrator.activities.tracker import close_out
+    from tranibor_orchestrator.activities.decision import decide
+    from tranibor_orchestrator.activities.tracker import close_out
 
     await _publish(setup)
     await decide(_decide_payload(setup))
@@ -347,8 +347,8 @@ async def test_the_end_of_the_work_item_is_its_decisions_terminal_outcome(
 
 
 async def test_a_declined_end_is_recorded_as_declined(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.outcome import record_run_outcome
-    from choregos_orchestrator.activities.tracker import close_out
+    from tranibor_orchestrator.activities.outcome import record_run_outcome
+    from tranibor_orchestrator.activities.tracker import close_out
 
     await _pin(setup, DEVELOP)
     run_id = await _agent_run(setup, {"done": True, "confidence": 0.85})
@@ -382,8 +382,8 @@ async def test_the_interpreter_records_the_branch_a_sure_decision_took(
 async def test_a_person_who_sends_back_an_unsure_decision_overrides_it(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
-    from choregos_api.db.models import HumanRequest
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import HumanRequest
+    from tranibor_api.db.session import session_scope
 
     setup.adapters.decisions.answer(route=("billing", 0.55))
     with temporal_env.auto_time_skipping_disabled():
@@ -420,7 +420,7 @@ async def test_a_person_who_sends_back_an_unsure_decision_overrides_it(
 async def test_the_interpreter_records_an_agent_s_confidence_and_where_it_led(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
-    from choregos_api.temporal import interpreter_id
+    from tranibor_api.temporal import interpreter_id
 
     await _pin(setup, DEVELOP)
     setup.adapters.executor.handler = lambda _stage: stage_result(
@@ -455,7 +455,7 @@ async def test_the_interpreter_records_an_agent_s_confidence_and_where_it_led(
 
 
 async def test_the_local_engine_feeds_the_ledger_as_the_interpreter_does(setup: Fixture) -> None:
-    from choregos_orchestrator.local import run_local
+    from tranibor_orchestrator.local import run_local
 
     await _publish(setup)
     setup.adapters.decisions.answer(route=("billing", 0.6))

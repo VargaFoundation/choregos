@@ -11,9 +11,9 @@ import json
 from typing import Any
 
 import pytest
-from choregos_adapters.fakes.tracker import FakeTracker
 from httpx import AsyncClient
 from sqlalchemy import select
+from tranibor_adapters.fakes.tracker import FakeTracker
 
 KEY = "northwind/billing-api#7"
 REPO = {"full_name": "northwind/billing-api"}
@@ -22,7 +22,7 @@ SECRET = "s3cr3t"
 
 @pytest.fixture
 def tracker(monkeypatch: pytest.MonkeyPatch) -> FakeTracker:
-    from choregos_api.services import tickets
+    from tranibor_api.services import tickets
 
     fake = FakeTracker("billing-api")
     seeded = fake.seed("Credit notes fail")
@@ -39,7 +39,7 @@ def tracker(monkeypatch: pytest.MonkeyPatch) -> FakeTracker:
 
 @pytest.fixture
 def signed(monkeypatch: pytest.MonkeyPatch) -> None:
-    from choregos_api.config import get_settings
+    from tranibor_api.config import get_settings
 
     monkeypatch.setattr(get_settings(), "github_webhook_secret", SECRET)
 
@@ -94,13 +94,13 @@ async def _link(client: AsyncClient, email: str, role: str, external_id: str, lo
 
 
 def _controls() -> list[tuple[str, str, Any]]:
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.temporal import get_temporal
 
     return [s for s in get_temporal().signals if s[1] == "control"]  # type: ignore[attr-defined]
 
 
 def _decisions() -> list[Any]:
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.temporal import get_temporal
 
     return [
         s
@@ -110,8 +110,8 @@ def _decisions() -> list[Any]:
 
 
 async def _audit(action: str) -> list[Any]:
-    from choregos_api.db.models import AuditLog
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import AuditLog
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = (await session.execute(select(AuditLog).where(AuditLog.action == action))).scalars().all()
@@ -123,8 +123,8 @@ def _replies(tracker: FakeTracker) -> list[str]:
 
 
 async def _paused() -> bool:
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         return bool((await session.execute(select(WorkItem.paused))).scalar_one())
@@ -165,7 +165,7 @@ async def test_a_renamed_github_login_does_not_inherit_the_link(
 async def test_an_unsigned_delivery_honours_nothing(
     client: AsyncClient, project: dict[str, Any], tracker: FakeTracker
 ) -> None:
-    from choregos_api.config import get_settings
+    from tranibor_api.config import get_settings
 
     assert not get_settings().github_webhook_secret
     await _routed_item(client, project, secret=None)
@@ -185,7 +185,7 @@ async def test_a_jira_display_name_is_not_an_identity(
     signed: None,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from choregos_api.config import get_settings
+    from tranibor_api.config import get_settings
 
     monkeypatch.setattr(get_settings(), "generic_webhook_secret", "generic")
     monkeypatch.setenv("CONNECTOR_JIRA_TEST_TOKEN", "t")
@@ -269,10 +269,10 @@ async def test_a_decision_is_never_taken_from_a_comment(
 async def test_two_commands_in_one_delivery_keep_their_own_members(
     client: AsyncClient, project: dict[str, Any], tracker: FakeTracker, signed: None
 ) -> None:
-    from choregos_api.db.models import AuditLog, User
-    from choregos_api.db.session import session_scope
-    from choregos_api.routers import webhooks
-    from choregos_contracts import InboundEvent, InboundEventType
+    from tranibor_api.db.models import AuditLog, User
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.routers import webhooks
+    from tranibor_contracts import InboundEvent, InboundEventType
 
     await _routed_item(client, project)
     await _link(client, "alice@northwind.dev", "developer", "1001", "alice")
@@ -311,9 +311,9 @@ async def test_two_commands_in_one_delivery_keep_their_own_members(
 async def test_a_principal_for_a_webhook_leaves_the_session_unnarrowed(
     client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api import deps
-    from choregos_api.db.models import User
-    from choregos_api.db.session import session_scope
+    from tranibor_api import deps
+    from tranibor_api.db.models import User
+    from tranibor_api.db.session import session_scope
 
     await _link(client, "alice@northwind.dev", "developer", "1001", "alice")
     scopes: list[Any] = []
@@ -340,8 +340,8 @@ async def test_a_link_as_the_migration_left_it_still_pauses_from_a_signed_commen
 ) -> None:
     """S66-41 (ADR 0161): a `tracker_identities` row became a `linked_accounts` row, `github` at
     `https://github.com`, NOT verified. It keeps working: requiring `verified` is a later switch."""
-    from choregos_api.db.models import LinkedAccount, Organization
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import LinkedAccount, Organization
+    from tranibor_api.db.session import session_scope
 
     await _routed_item(client, project)
     added = await client.post(

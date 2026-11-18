@@ -10,7 +10,7 @@ import ast
 import pathlib
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
-ALLOWED = {ROOT / "apps/api/src/choregos_api/services/human_requests.py"}
+ALLOWED = {ROOT / "apps/api/src/tranibor_api/services/human_requests.py"}
 
 
 def constructions(root: pathlib.Path) -> list[tuple[pathlib.Path, int]]:

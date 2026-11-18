@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from choregos_api.routers import knowledge
+from tranibor_api.routers import knowledge
 
 PACKAGE = Path(knowledge.__file__).parent
 FIXTURE = Path(__file__).parent / "fixtures" / "knowledge_routes.json"

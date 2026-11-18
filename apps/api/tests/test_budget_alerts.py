@@ -9,7 +9,7 @@ from httpx import AsyncClient
 
 
 def test_crossed_says_which_thresholds_a_spend_has_reached() -> None:
-    from choregos_api.services.budget_alerts import crossed, thresholds
+    from tranibor_api.services.budget_alerts import crossed, thresholds
 
     ratios = thresholds(0.8)
     assert ratios == (0.8, 1.0)
@@ -30,10 +30,10 @@ async def _set_daily_budget(client: AsyncClient, project: dict[str, Any], usd: f
 
 
 async def _spend(project_id: str, usd: float, *, agent: str | None = None, run_id: str = "r-budget") -> None:
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.costs import record_cost
     from sqlalchemy import select
+    from tranibor_api.db.models import Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.costs import record_cost
 
     async with session_scope() as session:
         run = await session.get(Run, run_id)

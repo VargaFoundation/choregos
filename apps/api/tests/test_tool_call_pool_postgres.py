@@ -59,8 +59,8 @@ class HeldProvider:
 
 async def _small_pool(monkeypatch: pytest.MonkeyPatch) -> None:
     """The engine built again with a pool of `POOL_SIZE`, no overflow, a short wait."""
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.db import session as db_session
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.db import session as db_session
 
     monkeypatch.setenv("CHOREGOS_DB_POOL_SIZE", str(POOL_SIZE))
     monkeypatch.setenv("CHOREGOS_DB_MAX_OVERFLOW", "0")
@@ -71,11 +71,11 @@ async def _small_pool(monkeypatch: pytest.MonkeyPatch) -> None:
 
 async def _runs_with_catalogue(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, count: int) -> list[Any]:
     """An organisation, a project offered the catalogue tool, `count` running runs and their tokens."""
-    from choregos_api import catalogue as catalogue_service
-    from choregos_api.db.models import Organization, Project, Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.security import mint_run_token
-    from choregos_api.services import ensure_defaults
+    from tranibor_api import catalogue as catalogue_service
+    from tranibor_api.db.models import Organization, Project, Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.security import mint_run_token
+    from tranibor_api.services import ensure_defaults
 
     file = tmp_path / "catalogue.yaml"
     file.write_text(CATALOGUE, encoding="utf-8")
@@ -137,8 +137,8 @@ async def _idle_in_transaction() -> int:
 async def test_calls_held_at_their_provider_leave_the_pool_to_the_other_requests(
     pg_app: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.db.models import CostLedger
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import CostLedger
+    from tranibor_api.db.session import session_scope
 
     await _small_pool(monkeypatch)
     runs = await _runs_with_catalogue(tmp_path, monkeypatch, HELD)
@@ -192,8 +192,8 @@ async def test_calls_held_at_their_provider_leave_the_pool_to_the_other_requests
 async def test_the_scope_and_the_user_are_carried_to_the_next_transaction_only(pg_app: Any) -> None:
     """`release_connection` commits; the session's next transaction starts in the scope and with the
     user the last one had, as `set_config(..., true)` would have lost them; the one after does not."""
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import (
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import (
         allow_release_during_calls,
         name_the_user,
         outside_the_transaction,

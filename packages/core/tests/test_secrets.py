@@ -5,8 +5,8 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 import pytest
-from choregos_core import secrets
-from choregos_core.secrets import InvalidReference, SecretNotFound
+from tranibor_core import secrets
+from tranibor_core.secrets import InvalidReference, SecretNotFound
 
 
 @pytest.fixture(autouse=True)

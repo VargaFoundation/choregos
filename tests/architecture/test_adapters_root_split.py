@@ -13,11 +13,11 @@ import json
 from pathlib import Path
 from typing import Any
 
-import choregos_adapters
 import pytest
-from choregos_adapters import registry
+import tranibor_adapters
+from tranibor_adapters import registry
 
-ROOT = Path(choregos_adapters.__file__).parent / "__init__.py"
+ROOT = Path(tranibor_adapters.__file__).parent / "__init__.py"
 FIXTURE = Path(__file__).parent / "fixtures" / "connector_registry.json"
 MAX_LINES = 300
 
@@ -92,31 +92,31 @@ def test_the_registry_is_unchanged() -> None:
 
 @pytest.mark.parametrize("name", ROOT_NAMES)
 def test_the_root_still_exposes_its_names(name: str) -> None:
-    assert hasattr(choregos_adapters, name)
+    assert hasattr(tranibor_adapters, name)
 
 
 def test_the_spec_table_is_one_object() -> None:
-    from choregos_adapters import specs
+    from tranibor_adapters import specs
 
-    assert choregos_adapters._SHIPPED_SPECS is specs._SHIPPED_SPECS
+    assert tranibor_adapters._SHIPPED_SPECS is specs._SHIPPED_SPECS
 
 
 def test_a_rebound_fake_is_the_one_the_factories_use(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Tests rebind `choregos_adapters.FAKE_*`: the moved factories must read the package attribute."""
-    from choregos_adapters import builtins
-    from choregos_adapters.fakes.mcp import FakeMcpServer
+    """Tests rebind `tranibor_adapters.FAKE_*`: the moved factories must read the package attribute."""
+    from tranibor_adapters import builtins
+    from tranibor_adapters.fakes.mcp import FakeMcpServer
 
     server = FakeMcpServer()
-    monkeypatch.setattr(choregos_adapters, "FAKE_MCP", server)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_MCP", server)
     assert builtins._current_fake_mcp() is server
 
-    monkeypatch.setattr(choregos_adapters, "FAKE_NETOPS", {"pfsense": "scripted"})
+    monkeypatch.setattr(tranibor_adapters, "FAKE_NETOPS", {"pfsense": "scripted"})
     assert builtins._fake_netops("pfsense") == "scripted"
 
 
 def test_a_fake_singleton_is_created_on_the_package(monkeypatch: pytest.MonkeyPatch) -> None:
-    from choregos_adapters import builtins
+    from tranibor_adapters import builtins
 
-    monkeypatch.setattr(choregos_adapters, "FAKE_WEB_SEARCH", None)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_WEB_SEARCH", None)
     created = builtins._fake_web_search({})
-    assert choregos_adapters.FAKE_WEB_SEARCH is created
+    assert tranibor_adapters.FAKE_WEB_SEARCH is created

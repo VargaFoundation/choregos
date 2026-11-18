@@ -19,9 +19,9 @@ RESULT = {"status": "done", "summary": "sorted: urgent"}
 
 async def play() -> tuple[dict[str, Any], dict[str, list[Any]], Any]:
     """The workflow against stub activities: its result, what each activity was asked, its history."""
-    from choregos_orchestrator.testing import workers_by_queue
-    from choregos_orchestrator.workflows.trial import AgentTrial
     from temporalio.testing import WorkflowEnvironment
+    from tranibor_orchestrator.testing import workers_by_queue
+    from tranibor_orchestrator.workflows.trial import AgentTrial
 
     asked: dict[str, list[Any]] = {"prepare": [], "start": [], "await": [], "spend": [], "record": []}
 
@@ -94,9 +94,9 @@ async def test_a_trial_prepares_starts_awaits_collects_the_spend_and_records_the
 
 
 async def test_the_archived_history_replays() -> None:
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.client import WorkflowHistory
     from temporalio.worker import Replayer
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     _, _, history = await play()
     replayer = Replayer(workflows=ALL_WORKFLOWS)

@@ -12,7 +12,7 @@ import asyncio
 from typing import Any
 
 import pytest
-from choregos_runner.local_tools import start_if_absent, stop
+from tranibor_runner.local_tools import start_if_absent, stop
 
 pytestmark = pytest.mark.asyncio
 

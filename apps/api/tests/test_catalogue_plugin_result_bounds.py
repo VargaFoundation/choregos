@@ -23,7 +23,7 @@ from .kits.tool_catalogue import intercept, run_with_catalogue
 pytestmark = pytest.mark.asyncio
 
 PLUGIN = """
-from choregos_api.extensions import declare_tool_provider
+from tranibor_api.extensions import declare_tool_provider
 
 TOOL = {
     "name": "verbose_log",
@@ -53,7 +53,7 @@ def plug_in():
 
 @pytest.fixture
 def plugin(tmp_path: pathlib.Path) -> Iterator[None]:
-    from choregos_api.extensions import reset
+    from tranibor_api.extensions import reset
 
     root = tmp_path / "site"
     root.mkdir()
@@ -97,7 +97,7 @@ async def _catalogue_call(
 async def test_an_oversized_catalogue_answer_is_cut_to_the_cap_with_a_marker(
     client: AsyncClient, project: dict[str, Any], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.config import get_settings
+    from tranibor_api.config import get_settings
 
     answer = await _catalogue_call(
         client, project, tmp_path, monkeypatch, {"profiles": [{"name": "a profile"}] * 20_000}
@@ -129,7 +129,7 @@ async def test_a_secret_in_a_catalogue_answer_is_masked(
 async def test_a_plugin_answer_is_masked_and_cut_to_the_cap(
     plugin: None, client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.config import get_settings
+    from tranibor_api.config import get_settings
 
     run_id, headers = await run_extension_tool(project["id"])
     url = f"/api/v1/internal/runs/{run_id}/tools/verbose_log"
@@ -151,7 +151,7 @@ async def test_a_plugin_tool_declares_its_own_cap_bounded_by_the_ceiling(
     plugin: None, client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """S40-17b: a plugin's tool says how much of its answer the agent reads, as a catalogue entry does."""
-    from choregos_api.config import get_settings
+    from tranibor_api.config import get_settings
 
     run_id, headers = await run_extension_tool(project["id"])
     listed = await client.get(f"/api/v1/internal/runs/{run_id}/tools", headers=headers)

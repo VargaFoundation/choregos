@@ -15,11 +15,11 @@ from typing import Any
 
 import httpx
 import pytest
-from choregos_adapters.fakes import FakeHostedAgent, FakeModelServer
-from choregos_contracts import AgentRef, HostedCall, ModelRef, StageInput
-from choregos_core.hosted import sidecar_env
-from choregos_runner.exits import Exit
-from choregos_runner.serve_session import SessionServer
+from tranibor_adapters.fakes import FakeHostedAgent, FakeModelServer
+from tranibor_contracts import AgentRef, HostedCall, ModelRef, StageInput
+from tranibor_core.hosted import sidecar_env
+from tranibor_runner.exits import Exit
+from tranibor_runner.serve_session import SessionServer
 
 from .conftest import loopback_ports
 

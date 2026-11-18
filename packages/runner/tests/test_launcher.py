@@ -10,7 +10,7 @@ from collections.abc import AsyncIterator
 from pathlib import Path
 
 import pytest
-from choregos_runner import launcher as lc
+from tranibor_runner import launcher as lc
 
 from .conftest import free_port
 

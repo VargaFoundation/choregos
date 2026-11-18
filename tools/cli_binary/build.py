@@ -13,12 +13,12 @@ cross-compile — so the release builds each of the five targets on a native run
 
 What goes in is exactly what the CLI needs, and nothing the workspace happens to have: a fresh
 virtual environment receives the CLI's own dependencies, pinned by `uv.lock` (`uv export
---package choregos-cli`), then `choregos-contracts`, `choregos-core` and `choregos-cli` as wheels.
-`choregos-core` comes WITHOUT its `telemetry` extra, so OpenTelemetry is not even installed, and
+--package tranibor-cli`), then `tranibor-contracts`, `tranibor-core` and `tranibor-cli` as wheels.
+`tranibor-core` comes WITHOUT its `telemetry` extra, so OpenTelemetry is not even installed, and
 the build fails if Nuitka's report names one of its modules anyway.
 
 The data the CLI reads at run time ships inside: the workflow templates, the policy presets and the
-catalogues of `choregos_core`, the JSON Schemas and the OpenAPI of `choregos_contracts`
+catalogues of `tranibor_core`, the JSON Schemas and the OpenAPI of `tranibor_contracts`
 (`importlib.resources`), and the distribution metadata `choregos --version` reads.
 
 On Linux the release builds with `--manylinux`: inside the PyPA `manylinux_2_28` image, whose
@@ -60,7 +60,7 @@ TARGETS: dict[tuple[str, str], str] = {
 #: The workspace packages the binary is built from, in install order.
 PACKAGES = ("packages/contracts", "packages/core", "packages/cli")
 #: Modules that must never be in the binary: the CLI does not trace, and the server is not its own.
-FORBIDDEN_MODULES = ("opentelemetry", "choregos_orchestrator", "choregos_api", "sqlalchemy", "temporalio")
+FORBIDDEN_MODULES = ("opentelemetry", "tranibor_orchestrator", "tranibor_api", "sqlalchemy", "temporalio")
 #: fnmatch patterns of the `pygments.lexers` modules left out: all but `python` and `_mapping`.
 PYGMENTS_LEFT_OUT = ("[a-oq-z]*", "p[a-xz]*", "py[a-su-z]*", "_[a-ln-z]*", "_m[b-z]*")
 #: The image of the Linux build (`--manylinux`), by architecture: glibc 2.28, a Python 3.12 inside.
@@ -145,7 +145,7 @@ def prepare_environment(work: pathlib.Path, python: str) -> pathlib.Path:
             "--no-dev",
             "--no-emit-workspace",
             "--package",
-            "choregos-cli",
+            "tranibor-cli",
             "--no-hashes",
             "--no-header",
             "--no-annotate",
@@ -176,20 +176,20 @@ def nuitka_command(python: pathlib.Path, work: pathlib.Path, name: str, version:
         f"--output-filename={name}",
         f"--report={work / 'report.xml'}",
         "--assume-yes-for-downloads",
-        # The data `choregos_core` and `choregos_contracts` read at run time.
-        "--include-package-data=choregos_core",
-        "--include-package-data=choregos_contracts",
+        # The data `tranibor_core` and `tranibor_contracts` read at run time.
+        "--include-package-data=tranibor_core",
+        "--include-package-data=tranibor_contracts",
         "--include-package-data=jsonschema_specifications",
         # The workspace (`choregos chat`, S67-09): Textual's stylesheets, its themes and its Unicode tables.
         "--include-package-data=textual",
         # `choregos --version` reads it (`importlib.metadata`).
-        "--include-distribution-metadata=choregos-cli",
+        "--include-distribution-metadata=tranibor-cli",
         # Typer finds the shell for `--install-completion` by importing a module by name.
         "--include-package=shellingham",
         # Rich loads its Unicode width tables by name too.
         "--include-package=rich._unicode_data",
         # Never followed even if present: the offline demo imports the orchestrator, lazily.
-        "--nofollow-import-to=choregos_orchestrator",
+        "--nofollow-import-to=tranibor_orchestrator",
         "--nofollow-import-to=opentelemetry",
         # Installed to compress the onefile payload, and an optional codec of httpx: not the CLI's.
         "--nofollow-import-to=zstandard",
@@ -224,8 +224,8 @@ def bundled_modules(report: pathlib.Path) -> list[str]:
 
 
 #: Distributions whose metadata the binary must carry: `choregos --version`, the version check
-#: against the instance and `choregos self update` (S62-08) read `choregos-cli`'s.
-REQUIRED_METADATA = ("choregos-cli",)
+#: against the instance and `choregos self update` (S62-08) read `tranibor-cli`'s.
+REQUIRED_METADATA = ("tranibor-cli",)
 
 
 def bundled_metadata(report: pathlib.Path) -> list[str]:

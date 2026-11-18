@@ -11,8 +11,8 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from choregos_core.conversation_evals import evaluate_case, loop_tools, play_case
-from choregos_core.plugins import load_directory
+from tranibor_core.conversation_evals import evaluate_case, loop_tools, play_case
+from tranibor_core.plugins import load_directory
 
 PLUGIN = Path(__file__).resolve().parents[3] / "examples" / "plugins" / "talk-to-your-data"
 SEARCH, DESCRIBE, QUERY = (

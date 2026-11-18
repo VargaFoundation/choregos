@@ -33,7 +33,7 @@ class Slow(httpx.AsyncBaseTransport):
 
 
 def _slow(model: Upstream, **terms: Any) -> Slow:
-    from choregos_api.services.agent_sessions import set_model_transport
+    from tranibor_api.services.agent_sessions import set_model_transport
 
     transport = Slow(model, **terms)
     set_model_transport(transport)

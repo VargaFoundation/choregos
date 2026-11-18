@@ -1,5 +1,5 @@
 [project]
-name = "choregos-agent-sdk"
+name = "tranibor-agent-sdk"
 version = "0.27.13"
 description = "Write a Tranibor agent in Python: an ACP agent without the protocol"
 readme = "README.md"
@@ -18,7 +18,7 @@ dependencies = [
   "mcp>=1.20",
   # The OpenAI-compatible client of `ctx.llm` (the gateway speaks that API).
   "openai==3.46.0",
-  "choregos-contracts==0.27.13",
+  "tranibor-contracts==0.27.13",
 ]
 
 [project.urls]
@@ -30,4 +30,4 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/choregos_agent_sdk"]
+packages = ["src/tranibor_agent_sdk"]

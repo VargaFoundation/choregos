@@ -56,8 +56,8 @@ def test_the_gate_waits_for_the_job_and_the_filter_covers_what_it_proves() -> No
     filters = yaml.safe_load(workflow["jobs"]["changes"]["steps"][1]["with"]["filters"])["hosted-cluster"]
     for path in (
         "tests/cluster/**",
-        "packages/adapters/src/choregos_adapters/executor/k8s_job.py",
-        "packages/runner/src/choregos_runner/serve_session.py",
+        "packages/adapters/src/tranibor_adapters/executor/k8s_job.py",
+        "packages/runner/src/tranibor_runner/serve_session.py",
         "examples/hosted/reference/**",
     ):
         assert path in filters, path

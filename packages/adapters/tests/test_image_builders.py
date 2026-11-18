@@ -15,8 +15,8 @@ from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
-from choregos_adapters.fakes import FakeImageBuilder, FakeRegistryClient
-from choregos_adapters.oci import BuildctlBuilder, BuildError, BuildRequest, LocalDockerBuilder
+from tranibor_adapters.fakes import FakeImageBuilder, FakeRegistryClient
+from tranibor_adapters.oci import BuildctlBuilder, BuildError, BuildRequest, LocalDockerBuilder
 
 KEY = "sha256:" + "b" * 64
 REPOSITORY = "registry.internal/choregos-builds/northwind"

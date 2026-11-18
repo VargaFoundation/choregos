@@ -17,8 +17,8 @@ from .test_network_policy_api import LEGACY_DIGEST, LEGACY_SPEC
 
 
 def test_a_version_that_names_no_source_keeps_its_digest() -> None:
-    from choregos_api.schemas.agents import AgentSpec
-    from choregos_api.services.agents import digest
+    from tranibor_api.schemas.agents import AgentSpec
+    from tranibor_api.services.agents import digest
 
     legacy = AgentSpec.model_validate(LEGACY_SPEC)
     assert "tools" not in legacy.model_dump(mode="json")
@@ -28,8 +28,8 @@ def test_a_version_that_names_no_source_keeps_its_digest() -> None:
 
 
 def test_a_version_that_names_its_sources_declares_them_even_empty() -> None:
-    from choregos_api.schemas.agents import AgentSpec
-    from choregos_api.services.agents import digest
+    from tranibor_api.schemas.agents import AgentSpec
+    from tranibor_api.services.agents import digest
 
     tools = {"catalogue": ["get_metrics", "group:observability"], "extensions": [], "web": ["search"]}
     declared = AgentSpec.model_validate({**LEGACY_SPEC, "tools": tools})
@@ -50,14 +50,14 @@ def test_a_version_that_names_its_sources_declares_them_even_empty() -> None:
     ],
 )
 def test_a_source_outside_the_contract_is_refused(tools: dict[str, Any]) -> None:
-    from choregos_api.schemas.agents import AgentSpec
+    from tranibor_api.schemas.agents import AgentSpec
 
     with pytest.raises(ValidationError, match="tools"):
         AgentSpec.model_validate({"tools": tools})
 
 
 def test_a_remote_agent_names_no_source() -> None:
-    from choregos_api.schemas.agents import AgentSpec
+    from tranibor_api.schemas.agents import AgentSpec
 
     a2a = {"kind": "a2a", "card_url": "https://rovo.example/.well-known/agent.json"}
     with pytest.raises(ValidationError, match="a2a"):

@@ -14,10 +14,10 @@ from .kits.work_item_migration import make_work_item, signals_of
 
 async def _spend_it_all(project: dict[str, Any], ticket: dict[str, Any]) -> float:
     """Books the whole ticket budget in the ledger; returns that budget."""
-    from choregos_api.db.models import CostLedger
-    from choregos_api.db.session import session_scope
-    from choregos_api.services import policy_engine
-    from choregos_core import utcnow
+    from tranibor_api.db.models import CostLedger
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services import policy_engine
+    from tranibor_core import utcnow
 
     async with session_scope() as session:
         budget = (await policy_engine(session, project["id"])).budget_ticket(None)
@@ -53,9 +53,9 @@ async def test_replaying_an_exhausted_ticket_without_a_top_up_is_refused(
 async def test_a_top_up_is_granted_recorded_and_passed_on(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.db.models import AuditLog, WorkItem
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import AuditLog, WorkItem
+    from tranibor_api.db.session import session_scope
 
     ticket = await make_work_item(client, project)
     await _spend_it_all(project, ticket)
@@ -85,10 +85,10 @@ async def test_a_ticket_with_money_left_replays_without_a_top_up(
 
 
 async def test_a_top_up_counts_in_what_is_left(client: AsyncClient, project: dict[str, Any]) -> None:
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.services import policy_engine
-    from choregos_api.services.budgets import ticket_left
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services import policy_engine
+    from tranibor_api.services.budgets import ticket_left
 
     ticket = await make_work_item(client, project)
     await _spend_it_all(project, ticket)

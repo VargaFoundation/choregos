@@ -79,7 +79,7 @@ def corpus() -> list[tuple[str, bytes]]:
 
 
 async def _indexed_base(client: AsyncClient, slug: str = "framework", **fields: Any) -> dict[str, Any]:
-    from choregos_api.knowledge.conversion import conversions
+    from tranibor_api.knowledge.conversion import conversions
 
     created = await client.post(
         BASE, json={"slug": slug, "name": "Framework", "serving_mode": "index", **fields}
@@ -96,7 +96,7 @@ async def _indexed_base(client: AsyncClient, slug: str = "framework", **fields: 
 
 
 def test_a_chunk_carries_its_document_title_and_heading_path() -> None:
-    from choregos_api.knowledge.chunking import chunk
+    from tranibor_api.knowledge.chunking import chunk
 
     markdown = (
         "<!-- Slide number: 1 -->\n# Encryption standard\n\nintro\n\n## In transit\n\nTLS 1.3.\n\n"
@@ -118,8 +118,8 @@ def test_a_chunk_carries_its_document_title_and_heading_path() -> None:
 
 def test_a_fenced_file_keeps_its_comments_as_code_and_every_chunk_reads_as_code() -> None:
     """S51-05: a YAML `# comment` is not a heading, and a long file is cut into fenced pieces."""
-    from choregos_api.knowledge.chunking import chunk
-    from choregos_api.knowledge.convert import fenced
+    from tranibor_api.knowledge.chunking import chunk
+    from tranibor_api.knowledge.convert import fenced
 
     yaml = "".join(f"# service {i}\nservice_{i}:\n  replicas: {i}\n\n" for i in range(60))
     chunks = chunk(f"# deploy/values.yaml\n\n{fenced(yaml, 'yaml')}", "deploy/values.yaml", limit=300)
@@ -133,13 +133,13 @@ def test_a_fenced_file_keeps_its_comments_as_code_and_every_chunk_reads_as_code(
 
 
 def test_a_fence_is_longer_than_any_backticks_it_holds() -> None:
-    from choregos_api.knowledge.convert import fenced
+    from tranibor_api.knowledge.convert import fenced
 
     assert fenced('\ufeff{"md": "````"}\r\n', "json") == '`````json\n{"md": "````"}\n`````\n'
 
 
 def test_reciprocal_rank_fusion_rewards_agreement() -> None:
-    from choregos_api.knowledge.index import bm25, fuse
+    from tranibor_api.knowledge.index import bm25, fuse
 
     assert [key for key, _ in fuse(["a", "b", "c"], ["b", "c", "d"])][:2] == ["b", "c"]
     ranked = bm25("tls version", {"1": "TLS 1.3 everywhere, tls only", "2": "disks at rest", "3": "tls"})
@@ -147,7 +147,7 @@ def test_reciprocal_rank_fusion_rewards_agreement() -> None:
 
 
 async def test_the_fake_embedder_is_deterministic() -> None:
-    from choregos_api.knowledge.embeddings import FakeEmbedder, cosine
+    from tranibor_api.knowledge.embeddings import FakeEmbedder, cosine
 
     one, two, other = await FakeEmbedder().embed(["TLS 1.3 in transit", "TLS 1.3 in transit", "backup owner"])
     assert one == two
@@ -157,7 +157,7 @@ async def test_the_fake_embedder_is_deterministic() -> None:
 async def test_the_gateway_embedder_tries_a_timed_out_batch_again(monkeypatch: pytest.MonkeyPatch) -> None:
     """A slow answer from the gateway (seen in production: a reindex lost to one `ReadTimeout`)."""
     import httpx
-    from choregos_api.knowledge.embeddings import GatewayEmbedder
+    from tranibor_api.knowledge.embeddings import GatewayEmbedder
 
     calls: list[int] = []
 
@@ -176,7 +176,7 @@ async def test_the_gateway_embedder_tries_a_timed_out_batch_again(monkeypatch: p
 async def test_the_gateway_embedder_does_not_retry_a_refusal(monkeypatch: pytest.MonkeyPatch) -> None:
     """A 422 (a budget exceeded, a refused key) would only be refused again."""
     import httpx
-    from choregos_api.knowledge.embeddings import GatewayEmbedder
+    from tranibor_api.knowledge.embeddings import GatewayEmbedder
 
     calls: list[int] = []
 
@@ -216,7 +216,7 @@ async def test_a_search_whose_embedding_the_gateway_refuses_ranks_by_words(
     """The gateway refused a query's embedding (422, seen in production): the search answers anyway,
     ranked by its words, instead of a 500 that leaves the run's agent without its sources."""
     import httpx
-    from choregos_api.knowledge import index
+    from tranibor_api.knowledge import index
 
     await _indexed_base(client)
 
@@ -238,10 +238,10 @@ async def test_a_reindex_keeps_every_document_it_can_embed(
 ) -> None:
     """One document the gateway cannot embed leaves only that document out, not the whole base."""
     import httpx
-    from choregos_api.db.models import KnowledgeBase
-    from choregos_api.db.session import session_scope
-    from choregos_api.knowledge import index
     from sqlalchemy import select
+    from tranibor_api.db.models import KnowledgeBase
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.knowledge import index
 
     base = await _indexed_base(client)
     real = index.index_document
@@ -300,7 +300,7 @@ async def test_the_eval_measures_the_first_hit_and_the_section_that_answers(
 
 
 def test_a_hit_is_in_a_section_when_its_headings_run_through_it() -> None:
-    from choregos_api.knowledge.index import in_section
+    from tranibor_api.knowledge.index import in_section
 
     path = ["Security policy", "Encryption", "In transit"]
     assert in_section(path, "Encryption > In transit")
@@ -313,7 +313,7 @@ def test_a_hit_is_in_a_section_when_its_headings_run_through_it() -> None:
 
 
 async def test_a_files_base_switched_to_index_is_indexed(client: AsyncClient, admin: str) -> None:
-    from choregos_api.knowledge.conversion import conversions
+    from tranibor_api.knowledge.conversion import conversions
 
     await _indexed_base(client, "framework", serving_mode="files")
     assert (await client.get(f"{BASE}/framework")).json()["index"] is None
@@ -339,9 +339,9 @@ async def test_a_run_searches_only_the_bases_it_is_served(
     client: AsyncClient, admin: str, project: dict[str, Any]
 ) -> None:
     """The sidecar's `knowledge_search`: the run's `index` bases, while served to its project."""
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.security import mint_run_token
+    from tranibor_api.db.models import Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.security import mint_run_token
 
     await _indexed_base(client, "framework")
     await _indexed_base(client, "other-team", scope="projects", projects=["billing-api"])
@@ -389,10 +389,10 @@ async def test_a_run_reads_a_cited_document_by_section_and_only_from_its_bases(
 ) -> None:
     """The sidecar's `knowledge_read` (ADR 0051 decision 33): the section a search hit cites, read whole,
     from the run's `index` bases only, while they are served to its project."""
-    from choregos_api.db.models import KnowledgeDocument, Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.knowledge.reading import READ_CHARS
-    from choregos_api.security import mint_run_token
+    from tranibor_api.db.models import KnowledgeDocument, Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.knowledge.reading import READ_CHARS
+    from tranibor_api.security import mint_run_token
 
     await _indexed_base(client, "framework")
     other = await _indexed_base(client, "other-team", scope="projects", projects=["billing-api"])
@@ -481,10 +481,10 @@ async def test_a_run_reads_a_cited_document_by_section_and_only_from_its_bases(
 async def test_postgres_ranks_hybrid_with_pgvector_and_full_text_without(pg_app: Any) -> None:
     """With pgvector the mode is `hybrid`; without it (the migration could not create the extension),
     `full-text` — and both find the right passage. Which one runs depends on the database given."""
-    from choregos_api.db.models import KnowledgeBase, KnowledgeDocument, Organization
-    from choregos_api.db.session import session_scope
-    from choregos_api.knowledge.index import has_vector_column, index_document, search
     from sqlalchemy import select
+    from tranibor_api.db.models import KnowledgeBase, KnowledgeDocument, Organization
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.knowledge.index import has_vector_column, index_document, search
 
     async with session_scope(orgs="*") as session:
         org = Organization(slug="a", name="A")

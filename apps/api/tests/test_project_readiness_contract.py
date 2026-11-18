@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-import choregos_contracts as contracts
+import tranibor_contracts as contracts
 
 
 def test_the_contract_declares_the_readiness_operation() -> None:

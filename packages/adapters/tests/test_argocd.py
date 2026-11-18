@@ -6,10 +6,10 @@ import base64
 import json
 
 import pytest
-from choregos_adapters.cd.argocd import ArgoCdAdapter, _replace_image_tag
-from choregos_adapters.errors import ConfigurationError
-from choregos_adapters.github.client import GitHubClient
-from choregos_core.domain import Change, Window
+from tranibor_adapters.cd.argocd import ArgoCdAdapter, _replace_image_tag
+from tranibor_adapters.errors import ConfigurationError
+from tranibor_adapters.github.client import GitHubClient
+from tranibor_core.domain import Change, Window
 
 from ._transport import Wire
 

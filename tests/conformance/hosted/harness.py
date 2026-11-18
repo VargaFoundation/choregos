@@ -45,7 +45,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
-from choregos_contracts import (
+from tranibor_contracts import (
     AgentRef,
     Budget,
     Callbacks,
@@ -60,13 +60,13 @@ from choregos_contracts import (
     TransitionRef,
     WorkItemRef,
 )
-from choregos_core.hosted import sidecar_env
-from choregos_runner.guardrails import GuardRails
-from choregos_runner.hosted import result_of, run_hosted
-from choregos_runner.loopback import Loopback
-from choregos_runner.loopback.connect import ConnectProxy
-from choregos_runner.loopback.mcp import McpProxy
-from choregos_runner.loopback.model import ModelProxy
+from tranibor_core.hosted import sidecar_env
+from tranibor_runner.guardrails import GuardRails
+from tranibor_runner.hosted import result_of, run_hosted
+from tranibor_runner.loopback import Loopback
+from tranibor_runner.loopback.connect import ConnectProxy
+from tranibor_runner.loopback.mcp import McpProxy
+from tranibor_runner.loopback.model import ModelProxy
 
 from ..backends.test_acp_conformance import ConformanceResult
 

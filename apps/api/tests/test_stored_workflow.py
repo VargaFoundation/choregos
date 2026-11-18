@@ -19,7 +19,7 @@ The most important test is the last one: it makes the round trip through a real 
 
 from __future__ import annotations
 
-from choregos_core import parse_workflow
+from tranibor_core import parse_workflow
 
 from .conftest import without_postgres
 
@@ -67,7 +67,7 @@ def test_a_json_round_trip_does_not_move_the_start() -> None:
     document["states"] = dict(sorted(document["states"].items(), key=lambda pair: (len(pair[0]), pair[0])))
     assert next(iter(document["states"])) == "end", "the test must really shuffle the order"
 
-    from choregos_contracts import Workflow
+    from tranibor_contracts import Workflow
 
     reread = Workflow.model_validate(document)
     assert reread.initial_state == "starts", (
@@ -89,11 +89,11 @@ def test_a_workflow_cannot_start_with_its_end() -> None:
 @without_postgres
 async def test_through_a_real_database_the_start_survives(pg_app: object) -> None:
     """The test that matters: `jsonb` stores the keys, and the start must hold anyway."""
-    from choregos_api.db.models import Organization, Project, WorkflowDef
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.definitions import workflow_model
-    from choregos_contracts import Workflow
     from sqlalchemy import select
+    from tranibor_api.db.models import Organization, Project, WorkflowDef
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.definitions import workflow_model
+    from tranibor_contracts import Workflow
 
     wf, _ = parse_workflow(WORKFLOW, strict=False)
     async with session_scope(orgs="*") as session:

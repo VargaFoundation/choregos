@@ -21,7 +21,7 @@ EFFECTS = [{"effect": "test.noop", "with": {}}]
 
 @pytest.fixture(autouse=True)
 def noop_effect() -> Iterator[None]:
-    from choregos_api import effects
+    from tranibor_api import effects
 
     async def noop(_ctx: Any, _params: dict[str, Any]) -> dict[str, Any]:
         return {}
@@ -52,8 +52,8 @@ async def _proposed(client: AsyncClient, app: Any, pid: str, count: int = 1) -> 
 
 
 async def _status(action_id: str) -> str:
-    from choregos_api.db.models import Action
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Action
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         action = await session.get(Action, action_id)
@@ -64,7 +64,7 @@ async def _status(action_id: str) -> str:
 async def test_an_approval_whose_commit_fails_starts_no_workflow(
     client: AsyncClient, project: dict[str, Any], app: Any
 ) -> None:
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.temporal import get_temporal
 
     [action_id] = await _proposed(client, app, project["id"])
 
@@ -91,10 +91,10 @@ async def test_an_approval_whose_commit_fails_starts_no_workflow(
 async def test_a_lost_start_is_relayed_once_and_only_for_approved_actions(
     client: AsyncClient, project: dict[str, Any], app: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.db.models import Action
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.action_relay import start_approved_actions
-    from choregos_api.temporal import FakeTemporal, get_temporal
+    from tranibor_api.db.models import Action
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.action_relay import start_approved_actions
+    from tranibor_api.temporal import FakeTemporal, get_temporal
 
     fake = get_temporal()
     assert isinstance(fake, FakeTemporal)
@@ -131,7 +131,7 @@ async def test_a_lost_start_is_relayed_once_and_only_for_approved_actions(
 async def test_what_waits_for_a_commit_dies_with_a_rollback(app: Any) -> None:
     """A transaction rolled back, then a new one committed on the same session: what the first one
     had registered never runs — it belonged to writes that were not kept."""
-    from choregos_api.db.session import after_commit, run_after_commit, session_scope
+    from tranibor_api.db.session import after_commit, run_after_commit, session_scope
 
     ran: list[str] = []
 

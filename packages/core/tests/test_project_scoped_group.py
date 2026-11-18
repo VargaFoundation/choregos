@@ -3,8 +3,8 @@ a train's approval group."""
 
 from __future__ import annotations
 
-from choregos_core import parse_workflow
-from choregos_core.dsl.groups import group_for, matches_some, placeholder_error
+from tranibor_core import parse_workflow
+from tranibor_core.dsl.groups import group_for, matches_some, placeholder_error
 
 BASE = """
 apiVersion: choregos/v1

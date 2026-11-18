@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import pytest
-from choregos_contracts import Workflow
-from choregos_core import parse_workflow
-from choregos_core.dsl import TEMPLATE_NAMES, load_template, to_graph, to_mermaid
+from tranibor_contracts import Workflow
+from tranibor_core import parse_workflow
+from tranibor_core.dsl import TEMPLATE_NAMES, load_template, to_graph, to_mermaid
 
 WILDCARD_YAML = """
 apiVersion: choregos/v1

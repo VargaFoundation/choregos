@@ -34,8 +34,8 @@ from collections.abc import AsyncIterator
 
 import httpx
 import pytest
-from choregos_adapters.executor.aca import AcaExecutor, AzureArmClient
-from choregos_core.domain import ExecRef, StageJobSpec
+from tranibor_adapters.executor.aca import AcaExecutor, AzureArmClient
+from tranibor_core.domain import ExecRef, StageJobSpec
 
 from .conftest import require
 

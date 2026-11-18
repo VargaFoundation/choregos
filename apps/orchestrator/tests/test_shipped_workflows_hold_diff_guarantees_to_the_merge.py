@@ -110,8 +110,8 @@ GUARANTEES = [
 
 async def _allow(setup: Fixture, paths: list[str], *, run_id: str = "") -> None:
     """The work item's allowed paths, and those of `run_id`: a run is given its work item's."""
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Run, WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         item = await session.get(WorkItem, setup.work_item_id)
@@ -153,7 +153,7 @@ async def test_a_diff_guarantee_at_a_merge_transition_judges_the_commit_that_wou
     none once it was started again. These guarantees read the work item's whole diff at the commit the
     evaluation judges, so the verdict is the same either way — and it is about the head as it stands,
     not about the commit an earlier step judged."""
-    from choregos_orchestrator.activities.gates import evaluate_gates
+    from tranibor_orchestrator.activities.gates import evaluate_gates
 
     scm = setup.adapters.scm
     scm.set_diff(REPOSITORY, "main", BRANCH, honoured)
@@ -182,7 +182,7 @@ async def test_a_diff_guarantee_at_a_merge_transition_judges_the_commit_that_wou
 async def test_without_a_run_a_branch_that_is_not_there_is_not_an_empty_diff(setup: Fixture) -> None:
     """A branch nobody pushed is an empty diff only for the run that measured it changed nothing. A
     merge transition judged without a run has no such measure: the guarantees refuse."""
-    from choregos_orchestrator.activities.gates import evaluate_gates
+    from tranibor_orchestrator.activities.gates import evaluate_gates
 
     setup.adapters.scm.delete_branch(REPOSITORY, BRANCH)
     gates = [{"name": name} for name in ("no_secrets", "diff_size_max", "docs_updated")]
@@ -200,7 +200,7 @@ async def test_without_over_scope_respected_judges_what_a_run_wrote(setup: Fixtu
     run's paths. At a merge transition the run is the last step's: a file that landed before it began
     is not among its writes, and the same branch is refused only when no run is passed. That is why
     the validator warns about this reading on a transition the platform takes."""
-    from choregos_orchestrator.activities.gates import evaluate_gates
+    from tranibor_orchestrator.activities.gates import evaluate_gates
 
     run_id = await _a_last_step_that_began_after(setup, [*CODE, DENIED])
     on_a_run = [{"name": "scope_respected"}]
@@ -217,7 +217,7 @@ async def test_over_the_work_item_the_verdict_is_the_same_with_the_last_steps_ru
     """A file under a path the policy forbids landed before the last step began. `over: work_item`
     reads the work item's whole diff at the judged commit and nothing of a run — no start commit, no
     run's paths —, so the verdict does not depend on whether the interpreter still knows that step."""
-    from choregos_orchestrator.activities.gates import evaluate_gates
+    from tranibor_orchestrator.activities.gates import evaluate_gates
 
     scm = setup.adapters.scm
     run_id = await _a_last_step_that_began_after(setup, [*CODE, DENIED])
@@ -246,7 +246,7 @@ async def test_over_the_work_item_the_work_items_allowed_paths_are_not_read(setu
     after an earlier step wrote, legitimately, elsewhere. Read at the merge they would refuse that
     work, so `over: work_item` holds the paths the transition declares, and without any the paths the
     policy forbids."""
-    from choregos_orchestrator.activities.gates import evaluate_gates
+    from tranibor_orchestrator.activities.gates import evaluate_gates
 
     scm = setup.adapters.scm
     scm.set_diff(REPOSITORY, "main", BRANCH, [*RECORD, NOT_THE_RECORD])  # a record, then the code
@@ -267,7 +267,7 @@ async def test_over_the_work_item_the_work_items_allowed_paths_are_not_read(setu
 
 async def test_the_scope_check_run_of_a_merge_transition_marks_the_commit_it_read(setup: Fixture) -> None:
     """`choregos/scope` on the pull request says what the merge transition read, on the judged commit."""
-    from choregos_orchestrator.activities.gates import evaluate_gates
+    from tranibor_orchestrator.activities.gates import evaluate_gates
 
     scm = setup.adapters.scm
     await _open_pull_request(setup)

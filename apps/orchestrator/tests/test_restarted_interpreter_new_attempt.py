@@ -16,7 +16,7 @@ import pathlib
 from typing import Any
 
 import pytest
-from choregos_contracts import StageResult, StageStatus
+from tranibor_contracts import StageResult, StageStatus
 
 from .conftest import Fixture, recording_history
 from .kits.software_delivery import (
@@ -35,8 +35,8 @@ FAILURE = StageResult(status=StageStatus.FAILED, summary="the smoke test failed"
 
 
 async def _set_state(item_id: str, state: str) -> None:
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         item = await session.get(WorkItem, item_id)
@@ -45,9 +45,9 @@ async def _set_state(item_id: str, state: str) -> None:
 
 
 async def _runs(item_id: str) -> list[tuple[str, str]]:
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = (
@@ -58,9 +58,9 @@ async def _runs(item_id: str) -> list[tuple[str, str]]:
 
 async def _undecide(item_id: str) -> int:
     """Forget that the runs' decisions were applied; returns how many runs had one recorded."""
-    from choregos_api.db.models import Run
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = (await session.execute(select(Run).where(Run.work_item_id == item_id))).scalars().all()
@@ -83,8 +83,8 @@ async def test_a_restart_after_a_failed_attempt_plays_the_next_one(
 ) -> None:
     """`t-verify-prod-1` failed; the interpreter died with the work item in `live` and was started
     again. It plays `t-verify-prod-2` — the old code got run 1 back and escalated at once."""
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.worker import Replayer
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     project_id, item_id, key = await _live_ticket(setup)
     played: list[str] = []
@@ -127,8 +127,8 @@ async def test_a_restart_while_the_attempt_runs_awaits_it(
 ) -> None:
     """The interpreter dies while `t-verify-prod-1` runs: the restarted one awaits that run, and
     starts no second one — only a run that is over is a spent attempt."""
-    from choregos_core.domain import ExecRef, ExecStatus, StageJobSpec
-    from choregos_orchestrator.config import reset_settings_cache
+    from tranibor_core.domain import ExecRef, ExecStatus, StageJobSpec
+    from tranibor_orchestrator.config import reset_settings_cache
 
     monkeypatch.setenv("CHOREGOS_HEARTBEAT_SECONDS", "1")  # `await_run` polls every second
     reset_settings_cache()

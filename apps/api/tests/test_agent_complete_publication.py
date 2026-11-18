@@ -10,8 +10,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from choregos_core.agent_completeness import ORG_SETTING, org_requires_complete
 from httpx import AsyncClient
+from tranibor_core.agent_completeness import ORG_SETTING, org_requires_complete
 
 from .conftest import login
 
@@ -26,9 +26,9 @@ COMPLETE = {
 
 
 async def _stored() -> dict[str, Any]:
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         organisation = (
@@ -126,7 +126,7 @@ def _incomplete_in_catalogue(monkeypatch: Any, *slugs: str) -> None:
     plugin's agents may (an operator's delivery plugin, in production)."""
     import dataclasses
 
-    from choregos_api.services import agent_catalogue as service
+    from tranibor_api.services import agent_catalogue as service
 
     base = service.offline_catalogue()
 
@@ -154,7 +154,7 @@ async def test_a_workflow_naming_catalogue_agents_already_installed_is_published
     template's workflow was refused, because publishing it judged the catalogue agents it names, already
     installed and so never rewritten, as if they were new versions. Only an agent the publication installs
     is judged, and the refusal names it."""
-    from choregos_core.dsl import template_yaml
+    from tranibor_core.dsl import template_yaml
 
     _incomplete_in_catalogue(monkeypatch, "developer", "tester")
     url = f"/api/v1/projects/{project['id']}/workflow"

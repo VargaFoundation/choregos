@@ -21,7 +21,7 @@ is enforced, the cold one is printed); `workflow templates` lists the core's tem
 files are inside); `workflow validate` passes a shipped template and fails a broken workflow and an
 unreadable YAML with exit code 1; `a2a skills` prints the skills of the fake door's card and its
 fields, and a refused token exits 1; `binary-info` (hidden), called by path and by bare name on the
-PATH, says its version comes from the `choregos-cli` metadata and the executable `self update`
+PATH, says its version comes from the `tranibor-cli` metadata and the executable `self update`
 (S62-08) would replace is the binary's real path; `chat --smoke` (hidden) starts the Textual workspace
 headless, finds its six parts and quits (S67-09: Textual and its data files are inside). Any failure exits 1:
 the release and the CI stop there.
@@ -61,10 +61,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-TEMPLATES = ROOT / "packages" / "core" / "src" / "choregos_core" / "dsl" / "templates"
+TEMPLATES = ROOT / "packages" / "core" / "src" / "tranibor_core" / "dsl" / "templates"
 MAX_SIZE_MB = 40.0
 MAX_WARM_START_S = 2.0
-#: The extension the CLI reads a skill's fields from (`choregos_cli.a2a.SKILL_FIELDS_EXTENSION`).
+#: The extension the CLI reads a skill's fields from (`tranibor_cli.a2a.SKILL_FIELDS_EXTENSION`).
 SKILL_FIELDS_EXTENSION = "https://choregos.dev/a2a/extensions/skill-fields/v1"
 ORG = "smoke"
 TOKEN = "smoke-a2a-token"  # noqa: S105 - the fake door's own, valid nowhere else
@@ -374,7 +374,7 @@ def functional_checks(runner: Runner, version: str) -> None:
 def self_knowledge_checks(runner: Runner, version: str) -> list[dict[str, Any]]:
     """What S62-08 relies on, asked of the binary itself (`choregos binary-info`, hidden).
 
-    The version comes from the `choregos-cli` distribution metadata the build embeds — not from a
+    The version comes from the `tranibor-cli` distribution metadata the build embeds — not from a
     string written in the code — and is the release's; the executable `self update` would replace
     is the binary's real path, whether it was called by its path or by its bare name on the PATH.
     """
@@ -393,7 +393,7 @@ def self_knowledge_checks(runner: Runner, version: str) -> list[dict[str, Any]]:
             )
         if info.get("metadata_version") != version:
             raise SmokeError(
-                f"{what}: the choregos-cli metadata says {info.get('metadata_version')!r}, expected "
+                f"{what}: the tranibor-cli metadata says {info.get('metadata_version')!r}, expected "
                 f"{version!r}: the build left the distribution metadata out\n{result.out}"
             )
         if info.get("version") != info["metadata_version"]:

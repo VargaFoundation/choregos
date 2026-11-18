@@ -17,8 +17,8 @@ MEMBERS = "/api/v1/orgs/northwind/members"
 
 
 async def test_a_stranger_does_not_read_the_organisation_s_members(client: AsyncClient, admin: str) -> None:
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         session.add(Organization(slug="globex", name="Globex"))

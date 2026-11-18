@@ -25,8 +25,8 @@ ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
 
 @pytest.fixture(autouse=True)
 def profile(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from choregos_cli import client as client_module
-    from choregos_cli import theme
+    from tranibor_cli import client as client_module
+    from tranibor_cli import theme
 
     monkeypatch.setattr(client_module, "CONFIG_PATH", tmp_path / "config.json")
     monkeypatch.setattr(theme, "MONOCHROME", False)
@@ -39,7 +39,7 @@ def profile(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _run(*words: str, stdin: str | None = None, env: dict[str, str] | None = None) -> Any:
-    from choregos_cli.main import app
+    from tranibor_cli.main import app
 
     return CliRunner().invoke(app, ["ask", *words], input=stdin, env=env)
 
@@ -347,7 +347,7 @@ def test_no_color_writes_no_escape_sequence(platform: Platform) -> None:
 
 
 def test_the_no_color_option_turns_colour_off(platform: Platform) -> None:
-    from choregos_cli.main import app
+    from tranibor_cli.main import app
 
     platform.actions([_action("act-new")])
     result = CliRunner().invoke(

@@ -48,7 +48,7 @@ def test_the_job_runs_the_comparison_against_the_named_tempo() -> None:
     pod = job["spec"]["jobTemplate"]["spec"]["template"]["spec"]
     assert pod["automountServiceAccountToken"] is False
     (container,) = pod["containers"]
-    assert container["command"][:3] == ["python", "-m", "choregos_api.trace_drift"]
+    assert container["command"][:3] == ["python", "-m", "tranibor_api.trace_drift"]
     importlib.import_module(container["command"][2])
     env = {item["name"]: item for item in container["env"]}
     assert env["CHOREGOS_TEMPO_URL"]["value"] == TEMPO

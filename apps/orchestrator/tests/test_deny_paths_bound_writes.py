@@ -22,8 +22,8 @@ DENY = [".github/workflows/**", "src/orders/generated/**"]
 
 
 async def _deny(setup: Fixture, paths: list[str]) -> None:
-    from choregos_api.db.session import session_scope
-    from choregos_api.services import active_policy, policy_model
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services import active_policy, policy_model
 
     async with session_scope() as session:
         row = await active_policy(session, setup.project_id)
@@ -47,7 +47,7 @@ def _plan(setup: Fixture) -> dict[str, Any]:
 
 
 async def test_the_run_carries_the_policys_denied_paths(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.stage import prepare_stage
+    from tranibor_orchestrator.activities.stage import prepare_stage
 
     await _deny(setup, DENY)
     stage_input = (await prepare_stage(_plan(setup)))["stage_input"]
@@ -56,7 +56,7 @@ async def test_the_run_carries_the_policys_denied_paths(setup: Fixture) -> None:
 
 
 async def test_scope_respected_fails_on_a_denied_path_inside_the_work_items_scope(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.gates import check_scope_violations, evaluate_gates
+    from tranibor_orchestrator.activities.gates import check_scope_violations, evaluate_gates
 
     setup.adapters.scm.set_diff(
         REPOSITORY, "main", "choregos/123", [("src/orders/total.py", 20, 4), (GENERATED, 400, 0)]

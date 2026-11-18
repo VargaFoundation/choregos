@@ -18,9 +18,9 @@ from httpx import AsyncClient
 async def test_a_provisioning_that_ends_before_the_request_returns_stays_ended(
     client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.db.models import Project
-    from choregos_api.db.session import ALL_ORGS, session_scope
-    from choregos_api.temporal import get_temporal
+    from tranibor_api.db.models import Project
+    from tranibor_api.db.session import ALL_ORGS, session_scope
+    from tranibor_api.temporal import get_temporal
 
     temporal = get_temporal()
     start = temporal.start_provisioning

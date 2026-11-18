@@ -19,8 +19,8 @@ from .kits.netops import netops_run as _run
 
 @pytest.fixture
 def estate(monkeypatch: pytest.MonkeyPatch) -> Iterator[dict[str, Any]]:
-    import choregos_adapters
-    from choregos_adapters.fakes.netops import FakeCiliumKubernetes, FakePfSense, FakeRepo, recorded_flows
+    import tranibor_adapters
+    from tranibor_adapters.fakes.netops import FakeCiliumKubernetes, FakePfSense, FakeRepo, recorded_flows
 
     fakes = {
         "pfsense": FakePfSense(api_key=PFSENSE_KEY),
@@ -28,7 +28,7 @@ def estate(monkeypatch: pytest.MonkeyPatch) -> Iterator[dict[str, Any]]:
         "flows": recorded_flows(),
         "repo": FakeRepo(),
     }
-    monkeypatch.setattr(choregos_adapters, "FAKE_NETOPS", fakes)
+    monkeypatch.setattr(tranibor_adapters, "FAKE_NETOPS", fakes)
     monkeypatch.setenv("CONNECTOR_NETOPS_TEST_PFSENSE_KEY", PFSENSE_KEY)
     monkeypatch.setenv("CONNECTOR_NETOPS_TEST_READER_TOKEN", READER_TOKEN)
     yield fakes
@@ -125,9 +125,9 @@ async def test_the_netops_agent_reads_the_estate_through_the_broker(
 
 async def _call_as_effect(action_id: str) -> dict[str, Any]:
     """What the `ActionWorkflow` does with the action's first effect — here, without Temporal."""
-    from choregos_api.db.models import Action, Project
-    from choregos_api.db.session import session_scope
-    from choregos_api.effects import EffectContext, effect
+    from tranibor_api.db.models import Action, Project
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.effects import EffectContext, effect
 
     async with session_scope() as session:
         action = await session.get(Action, action_id)
@@ -141,8 +141,8 @@ async def _call_as_effect(action_id: str) -> dict[str, Any]:
 
 
 async def _approve(action_id: str) -> None:
-    from choregos_api.db.models import Action
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Action
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         action = await session.get(Action, action_id)
@@ -155,9 +155,9 @@ async def test_a_pfsense_write_is_approved_by_a_person_always(
 ) -> None:
     """Not even the organisation's administrator opens it to the policy; a row forced behind the API
     does not either: the broker still proposes an action that waits for a person."""
-    from choregos_api.db.models import ConnectorOperation
-    from choregos_api.db.session import session_scope
     from sqlalchemy import update
+    from tranibor_api.db.models import ConnectorOperation
+    from tranibor_api.db.session import session_scope
 
     await _declare(client)
     for operation in ("create_firewall_rule", "update_firewall_rule", "delete_firewall_rule"):
@@ -193,7 +193,7 @@ async def test_a_pfsense_write_is_approved_by_a_person_always(
 async def test_an_unapproved_pfsense_write_is_refused_and_carries_its_compensation(
     client: AsyncClient, project: dict[str, Any], estate: dict[str, Any]
 ) -> None:
-    from choregos_api.effects import EffectRefused
+    from tranibor_api.effects import EffectRefused
 
     await _declare(client)
     base, headers = await _run(client, project)
@@ -233,9 +233,9 @@ MANIFEST = (
 async def test_a_cilium_policy_change_is_a_pull_request_that_rides_the_work_item_s_train(
     client: AsyncClient, project: dict[str, Any], estate: dict[str, Any]
 ) -> None:
-    from choregos_adapters.fakes import FakeScm
-    from choregos_adapters.tracker.github_events import parse_github_event
-    from choregos_api.effects import EffectRefused
+    from tranibor_adapters.fakes import FakeScm
+    from tranibor_adapters.tracker.github_events import parse_github_event
+    from tranibor_api.effects import EffectRefused
 
     scm = FakeScm()
     estate["scm"] = scm
@@ -280,8 +280,8 @@ async def test_a_cilium_policy_change_is_a_pull_request_that_rides_the_work_item
 async def test_a_proposal_that_is_not_one_cilium_policy_or_leaves_its_root_is_refused(
     client: AsyncClient, project: dict[str, Any], estate: dict[str, Any]
 ) -> None:
-    from choregos_adapters.fakes import FakeScm
-    from choregos_api.effects import EffectRefused
+    from tranibor_adapters.fakes import FakeScm
+    from tranibor_api.effects import EffectRefused
 
     estate["scm"] = FakeScm()
     await _declare(client)
@@ -306,7 +306,7 @@ async def test_a_proposal_that_is_not_one_cilium_policy_or_leaves_its_root_is_re
 async def test_an_nginx_change_is_a_pull_request_too(
     client: AsyncClient, project: dict[str, Any], estate: dict[str, Any]
 ) -> None:
-    from choregos_adapters.fakes import FakeScm
+    from tranibor_adapters.fakes import FakeScm
 
     scm = FakeScm()
     estate["scm"] = scm

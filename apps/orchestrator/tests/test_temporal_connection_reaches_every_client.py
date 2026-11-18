@@ -1,7 +1,7 @@
 """TLS and the payload codec reach every Temporal client the platform builds (S80-06, ADR 0183).
 
 The worker, the orchestrator's activities that start and signal workflows, and the API's client all
-connect through `choregos_core.temporal_connection.connect_temporal`. Each is driven here with the
+connect through `tranibor_core.temporal_connection.connect_temporal`. Each is driven here with the
 deployment's variables set, and the arguments `Client.connect` receives are checked: the CA, the
 client certificate and key, the server name, and a converter that carries the codec. A process
 connected another way would talk in clear, or write payloads the others cannot read.
@@ -16,9 +16,9 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from choregos_core.temporal_connection import AesGcmCodec
 from temporalio.client import Client
 from temporalio.service import TLSConfig
+from tranibor_core.temporal_connection import AesGcmCodec
 
 
 class _Stop(Exception):  # noqa: N818 - the test's stop signal
@@ -38,7 +38,7 @@ def deployment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[list
     monkeypatch.setenv("CHOREGOS_TEMPORAL_TLS_SERVER_NAME", "frontend.temporal")
     monkeypatch.setenv("CHOREGOS_TEMPORAL_CODEC_KEYS_FILE", str(tmp_path / "keys"))
     monkeypatch.setenv("CHOREGOS_FAKES", "0")
-    from choregos_orchestrator.config import get_settings
+    from tranibor_orchestrator.config import get_settings
 
     get_settings.cache_clear()
     calls: list[dict[str, Any]] = []
@@ -48,37 +48,37 @@ def deployment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[list
         raise _Stop
 
     monkeypatch.setattr(Client, "connect", connect)
-    monkeypatch.setattr("choregos_adapters.load_extensions", list)
+    monkeypatch.setattr("tranibor_adapters.load_extensions", list)
     yield calls
     get_settings.cache_clear()
 
 
 async def _worker() -> None:
-    from choregos_orchestrator import worker
+    from tranibor_orchestrator import worker
 
     await worker.run_worker(["orchestrator"])
 
 
 async def _signal() -> None:
-    from choregos_orchestrator.train_client import signal_workflow
+    from tranibor_orchestrator.train_client import signal_workflow
 
     await signal_workflow("wf-1", "abort", {})
 
 
 async def _start_once() -> None:
-    from choregos_orchestrator.train_client import start_workflow_once
+    from tranibor_orchestrator.train_client import start_workflow_once
 
     await start_workflow_once("ReleaseTrain", "wf-1", {})
 
 
 async def _restart() -> None:
-    from choregos_orchestrator.train_client import restart_interpreter
+    from tranibor_orchestrator.train_client import restart_interpreter
 
     await restart_interpreter("wf-1", {})
 
 
 async def _api() -> None:
-    from choregos_api.temporal import RealTemporal
+    from tranibor_api.temporal import RealTemporal
 
     await RealTemporal("temporal:7233", "default", "orchestrator").client()
 

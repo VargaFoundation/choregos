@@ -9,10 +9,10 @@ import time
 from pathlib import Path
 from typing import Any
 
-from choregos_api import embed_frame
-from choregos_api.config import get_settings
-from choregos_api.security import sign_session
 from httpx import ASGITransport, AsyncClient
+from tranibor_api import embed_frame
+from tranibor_api.config import get_settings
+from tranibor_api.security import sign_session
 
 from .conftest import login
 from .kits.assistant_install import (

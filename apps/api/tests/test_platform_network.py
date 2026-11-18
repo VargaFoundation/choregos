@@ -23,9 +23,9 @@ async def _ceiling(client: AsyncClient, network: dict[str, Any]) -> None:
 
 
 async def _decisions() -> list[Any]:
-    from choregos_api.db.models import NetworkDecision
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import NetworkDecision
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         return list((await session.execute(select(NetworkDecision))).scalars())
@@ -130,10 +130,10 @@ async def test_a_governed_write_reads_the_ceiling_again_when_it_runs(
 ) -> None:
     """The effect of an approved action is played later, by a workflow: it must not reach a host the
     organisation has closed since."""
-    from choregos_api.db.models import Action, Project
-    from choregos_api.db.session import session_scope
-    from choregos_api.effects import EffectContext, EffectRefused, _connector_call
     from sqlalchemy import select
+    from tranibor_api.db.models import Action, Project
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.effects import EffectContext, EffectRefused, _connector_call
 
     await _prepare(client, project, ["*"])
     await _ceiling(client, {"deny_domains": ["fournisseur.test"]})
@@ -171,11 +171,11 @@ async def test_the_rate_is_counted_over_the_last_minute_only(
     project: dict[str, Any],
     supplier: Any,  # noqa: F811  # lang: fr-ok: the fixture of S46-01's test_broker
 ) -> None:
-    from choregos_api.db.models import OrgConnector
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.platform_network import calls_to_host
-    from choregos_core import utcnow
     from sqlalchemy import select
+    from tranibor_api.db.models import OrgConnector
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.platform_network import calls_to_host
+    from tranibor_core import utcnow
 
     base, headers = await _prepare(client, project, ["*"])
     for _ in range(3):
@@ -197,7 +197,7 @@ async def test_mcp_calls_carry_the_organisations_contact(
     project: dict[str, Any],
     supplier: Any,  # noqa: F811  # lang: fr-ok: the fixture of S46-01's test_broker
 ) -> None:
-    from choregos_api import __version__
+    from tranibor_api import __version__
 
     base, headers = await _prepare(client, project, ["*"])
     await _ceiling(client, {"user_agent_contact": "security@ops.example"})
@@ -211,11 +211,11 @@ async def test_mcp_calls_carry_the_organisations_contact(
 async def test_the_user_agent_falls_back_to_the_deployments_contact_then_the_project_page(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.config import get_settings
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.platform_network import DEFAULT_CONTACT, user_agent
     from sqlalchemy import select
+    from tranibor_api.config import get_settings
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.platform_network import DEFAULT_CONTACT, user_agent
 
     async with session_scope() as session:
         org_id = (await session.execute(select(Organization.id))).scalar_one()
@@ -244,7 +244,7 @@ async def test_a_web_source_outside_the_ceiling_is_refused_at_creation(
 async def test_a_ceiling_tightened_after_creation_stops_the_next_sync(
     client: AsyncClient, admin: str
 ) -> None:
-    from choregos_api.knowledge.sync import SourceUnavailableError, sync_source
+    from tranibor_api.knowledge.sync import SourceUnavailableError, sync_source
 
     await client.post(BASE, json={"slug": "framework", "name": "Framework"})
     created = await client.post(
@@ -264,10 +264,10 @@ async def test_a_private_git_source_obeys_a_tightened_ceiling_and_carries_the_us
 ) -> None:
     """A source read through a `documents/git` connector was opened before the ceiling was read: a
     private repository kept syncing from a host the organisation had since denied (S47-49)."""
-    from choregos_adapters.documents.git import GitSource
-    from choregos_api.db.models import KnowledgeSource
-    from choregos_api.db.session import session_scope
-    from choregos_api.knowledge.sync import SourceUnavailableError, open_source, sync_source
+    from tranibor_adapters.documents.git import GitSource
+    from tranibor_api.db.models import KnowledgeSource
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.knowledge.sync import SourceUnavailableError, open_source, sync_source
 
     monkeypatch.setenv("CONNECTOR_KB_GIT_TOKEN", "t" + "ok")
     await client.post(BASE, json={"slug": "framework", "name": "Framework"})
@@ -304,7 +304,7 @@ async def test_a_private_git_source_obeys_a_tightened_ceiling_and_carries_the_us
 
 @pytest.fixture
 def recorded_skills() -> Any:
-    from choregos_api.services.skill_sources import FakeSourceFetcher, set_fetcher
+    from tranibor_api.services.skill_sources import FakeSourceFetcher, set_fetcher
 
     from .test_skills_from_git import ANTHROPICS, REPO_V1, SHA1, tarball
 

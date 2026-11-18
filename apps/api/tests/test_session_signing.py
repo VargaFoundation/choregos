@@ -23,8 +23,8 @@ from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
-from choregos_adapters.fakes.a2a import FakeA2aAgent
 from httpx import AsyncClient
+from tranibor_adapters.fakes.a2a import FakeA2aAgent
 
 from .conftest_remote import remote_agent, set_sealing_key
 
@@ -34,7 +34,7 @@ LONG_SECRET = "s" * 48
 @pytest.fixture(autouse=True)
 def _fresh_settings() -> Iterator[None]:
     """Each test reads the environment it sets, and leaves no cached `Settings` behind."""
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     reset_settings_cache()
     yield
@@ -43,7 +43,7 @@ def _fresh_settings() -> Iterator[None]:
 
 def _env(monkeypatch: pytest.MonkeyPatch, **env: str) -> None:
     """A deployed-looking environment without a session secret, plus `env` (CHOREGOS_ names)."""
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     monkeypatch.delenv("CHOREGOS_SESSION_SECRET", raising=False)
     # The dev sign-in is refused in staging/prod: the suites turn it on, a prod app needs it off.
@@ -65,21 +65,21 @@ def _env(monkeypatch: pytest.MonkeyPatch, **env: str) -> None:
 def test_the_api_refuses_the_published_secret_when_deployed(
     monkeypatch: pytest.MonkeyPatch, env: dict[str, str]
 ) -> None:
-    from choregos_api.main import create_app
+    from tranibor_api.main import create_app
 
     _env(monkeypatch, **env)
     with pytest.raises(RuntimeError, match="CHOREGOS_SESSION_SECRET"):
         create_app()
     # a 48-byte secret starts the same deployment
     monkeypatch.setenv("CHOREGOS_SESSION_SECRET", LONG_SECRET)
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     reset_settings_cache()
     assert create_app() is not None
 
 
 def test_the_error_says_what_to_do(monkeypatch: pytest.MonkeyPatch) -> None:
-    from choregos_api.main import create_app
+    from tranibor_api.main import create_app
 
     _env(monkeypatch, CHOREGOS_ENV="staging", CHOREGOS_SESSION_SECRET="x" * 31)
     with pytest.raises(RuntimeError, match=r"32 bytes.*openssl rand -base64 48"):
@@ -87,8 +87,8 @@ def test_the_error_says_what_to_do(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_the_limit_is_32_bytes_not_32_characters(monkeypatch: pytest.MonkeyPatch) -> None:
-    from choregos_api.config import Settings
-    from choregos_api.security import check_session_secret
+    from tranibor_api.config import Settings
+    from tranibor_api.security import check_session_secret
 
     _env(monkeypatch)
     deployed: dict[str, Any] = {"env": "prod", "dev_login_enabled": False}
@@ -105,8 +105,8 @@ def test_the_published_default_is_refused_by_value_not_only_by_length(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The default is 28 bytes today; a longer one, published the same way, must stay refused."""
-    from choregos_api import security
-    from choregos_api.config import Settings
+    from tranibor_api import security
+    from tranibor_api.config import Settings
 
     _env(monkeypatch)
     published = "d" * 40
@@ -118,14 +118,14 @@ def test_the_published_default_is_refused_by_value_not_only_by_length(
 
 def test_a_development_instance_over_http_keeps_starting(monkeypatch: pytest.MonkeyPatch) -> None:
     """`docker compose up` (a 31-character secret, env dev, http) and the suites must not break."""
-    from choregos_api.config import Settings
-    from choregos_api.main import create_app
-    from choregos_api.security import check_session_secret
+    from tranibor_api.config import Settings
+    from tranibor_api.main import create_app
+    from tranibor_api.security import check_session_secret
 
     _env(monkeypatch, CHOREGOS_ENV="dev")
     assert create_app() is not None  # the published default, on a dev instance over http
     monkeypatch.setenv("CHOREGOS_SESSION_SECRET", "local-install-only-not-a-secret")
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     reset_settings_cache()
     assert create_app() is not None
@@ -140,7 +140,7 @@ def test_settings_without_a_session_secret_still_build_for_the_workers(
     Fails if the length rule is moved into a `Settings` validator: every worker would crash-loop
     and the migrations hook would fail every install.
     """
-    from choregos_api.config import DEFAULT_SESSION_SECRET, Settings
+    from tranibor_api.config import DEFAULT_SESSION_SECRET, Settings
 
     _env(monkeypatch)
     settings = Settings(
@@ -155,7 +155,7 @@ def test_settings_without_a_session_secret_still_build_for_the_workers(
 def test_an_empty_session_secret_stops_the_api_everywhere(
     monkeypatch: pytest.MonkeyPatch, empty: str
 ) -> None:
-    from choregos_api.main import create_app
+    from tranibor_api.main import create_app
 
     _env(monkeypatch, CHOREGOS_ENV="test", CHOREGOS_SESSION_SECRET=empty)
     with pytest.raises(RuntimeError, match="CHOREGOS_SESSION_SECRET is empty"):
@@ -163,8 +163,8 @@ def test_an_empty_session_secret_stops_the_api_everywhere(
 
 
 def test_a_short_previous_key_stops_a_deployed_api_only(monkeypatch: pytest.MonkeyPatch) -> None:
-    from choregos_api.config import Settings
-    from choregos_api.security import check_session_secret
+    from tranibor_api.config import Settings
+    from tranibor_api.security import check_session_secret
 
     _env(monkeypatch)
     settings: dict[str, Any] = {"session_secret": LONG_SECRET, "session_secret_previous": "old-and-short"}
@@ -180,7 +180,7 @@ def test_a_short_previous_key_stops_a_deployed_api_only(monkeypatch: pytest.Monk
 
 
 def test_a_signed_value_carries_a_full_length_tag_bound_to_its_purpose() -> None:
-    from choregos_api.security import read_session, sign_session
+    from tranibor_api.security import read_session, sign_session
 
     payload = {"sub": "u", "exp": int(time.time()) + 60}
     cookie = sign_session(payload)
@@ -196,9 +196,9 @@ def test_a_signed_value_carries_a_full_length_tag_bound_to_its_purpose() -> None
 
 
 def test_an_oidc_state_is_not_a_session() -> None:
-    from choregos_api.config import get_settings
-    from choregos_api.routers import auth
-    from choregos_api.security import read_session
+    from tranibor_api.config import get_settings
+    from tranibor_api.routers import auth
+    from tranibor_api.security import read_session
 
     state, cookie, _, _ = auth._handshake(get_settings(), "/x")
     assert read_session(state) is None
@@ -212,7 +212,7 @@ def test_an_oidc_state_is_not_a_session() -> None:
 
 
 def test_a_remote_oauth_state_is_neither_a_session_nor_an_oidc_state() -> None:
-    from choregos_api.security import read_session, sign_session
+    from tranibor_api.security import read_session, sign_session
 
     payload = {"n": "nonce", "exp": int(time.time()) + 60}
     state = sign_session(payload, purpose="remote-oauth-state")
@@ -233,8 +233,8 @@ def _legacy_cookie(secret: str, payload: dict[str, Any]) -> str:
 
 
 def test_a_cookie_signed_before_this_release_is_still_read() -> None:
-    from choregos_api.config import get_settings
-    from choregos_api.security import read_session
+    from tranibor_api.config import get_settings
+    from tranibor_api.security import read_session
 
     payload = {"sub": "u", "exp": int(time.time()) + 60}
     legacy = _legacy_cookie(get_settings().session_secret, payload)
@@ -247,8 +247,8 @@ def test_a_cookie_signed_before_this_release_is_still_read() -> None:
 def test_a_legacy_cookie_needs_the_right_key_and_the_removal_switch_works(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from choregos_api import security
-    from choregos_api.config import Settings
+    from tranibor_api import security
+    from tranibor_api.config import Settings
 
     payload = {"sub": "u", "exp": int(time.time()) + 60}
     other_key = "o" * 48
@@ -270,7 +270,7 @@ async def test_a_session_cookie_signed_before_this_release_still_signs_you_in(
     client: AsyncClient, admin: str
 ) -> None:
     """Through the real dependency: the same body, re-tagged the previous release's way."""
-    from choregos_api.config import get_settings
+    from tranibor_api.config import get_settings
 
     cookie = client.cookies.get("choregos_session", "")
     body, tag = cookie.rsplit(".", 1)
@@ -301,7 +301,7 @@ async def test_a_remote_oauth_handshake_is_bound_to_its_purposes(
     client: AsyncClient, admin: str, remote: FakeA2aAgent
 ) -> None:
     """Through the real routes: what `authorize` hands out is no session and no OIDC value."""
-    from choregos_api.security import read_session
+    from tranibor_api.security import read_session
 
     base = "/api/v1/orgs/northwind/remote-credentials"
     created = await client.post(
@@ -326,8 +326,8 @@ async def test_a_remote_oauth_handshake_is_bound_to_its_purposes(
 
 
 def test_a_rotation_keeps_sessions_signed_with_the_previous_key() -> None:
-    from choregos_api.config import Settings
-    from choregos_api.security import read_session, sign_session
+    from tranibor_api.config import Settings
+    from tranibor_api.security import read_session, sign_session
 
     old, new = "a" * 48, "b" * 48
     payload = {"sub": "u", "exp": int(time.time()) + 60}
@@ -346,8 +346,8 @@ def test_a_rotation_keeps_sessions_signed_with_the_previous_key() -> None:
 
 
 def test_an_unset_previous_key_is_not_an_empty_key_anyone_can_sign_with() -> None:
-    from choregos_api.config import Settings
-    from choregos_api.security import read_session, sign_session
+    from tranibor_api.config import Settings
+    from tranibor_api.security import read_session, sign_session
 
     payload = {"sub": "attacker", "exp": int(time.time()) + 60}
     settings = Settings(session_secret=LONG_SECRET, session_secret_previous="")
@@ -357,6 +357,6 @@ def test_an_unset_previous_key_is_not_an_empty_key_anyone_can_sign_with() -> Non
 
 
 def test_a_non_ascii_signature_is_refused_not_a_server_error() -> None:
-    from choregos_api.security import read_session
+    from tranibor_api.security import read_session
 
     assert read_session("e30.é" + "0" * 63) is None

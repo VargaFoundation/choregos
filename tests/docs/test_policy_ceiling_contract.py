@@ -12,7 +12,7 @@ import pathlib
 from typing import Any
 
 import yaml
-from choregos_core.policy_ceiling import PolicyCeiling
+from tranibor_core.policy_ceiling import PolicyCeiling
 
 OPENAPI = pathlib.Path(__file__).resolve().parents[2] / "packages" / "contracts" / "openapi.yaml"
 BOUNDS = ("minimum", "exclusiveMinimum", "maximum", "exclusiveMaximum", "maxLength")

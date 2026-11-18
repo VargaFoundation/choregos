@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 
 import pytest
-from choregos_orchestrator.config import OrchestratorSettings
 from pydantic import ValidationError
+from tranibor_orchestrator.config import OrchestratorSettings
 
 PINNED = "registry.example/agent@sha256:" + "c" * 64
 

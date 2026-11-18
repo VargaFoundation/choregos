@@ -4,7 +4,7 @@ stops when the site says 429, and says who it is."""
 from __future__ import annotations
 
 import httpx
-from choregos_adapters.documents import WebCrawlSource
+from tranibor_adapters.documents import WebCrawlSource
 
 ROOT = "https://docs.example.com/guide/"
 LINKS = "".join(f'<a href="p{i}.html">p{i}</a>' for i in range(1, 4))

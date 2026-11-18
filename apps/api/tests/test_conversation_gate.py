@@ -14,16 +14,16 @@ from typing import Any
 
 import pytest
 import yaml
-from choregos_api.db.models import Agent
-from choregos_api.services.conversation_gate import (
+from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
+from tranibor_api.db.models import Agent
+from tranibor_api.services.conversation_gate import (
     SuiteOutcome,
     judge,
     set_conversation_source,
 )
-from choregos_core.conversation_evals import CaseResult, Check, SuiteResult, loop_tools, play_suite
-from choregos_core.conversation_judge import judge_with
-from httpx import AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession
+from tranibor_core.conversation_evals import CaseResult, Check, SuiteResult, loop_tools, play_suite
+from tranibor_core.conversation_judge import judge_with
 
 from .agent_scopes_kit import ADMIN, ORG, as_user, create_agent
 

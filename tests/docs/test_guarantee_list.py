@@ -10,14 +10,14 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from choregos_core.gates import _REGISTRY
+from tranibor_core.gates import _REGISTRY
 
 CONCEPTS = Path(__file__).resolve().parents[2] / "docs" / "concepts.md"
 
 
 def test_every_core_guarantee_is_named_in_the_concepts() -> None:
     # The core's guarantees only: an extension or a test can register others.
-    core_names = {name for name, fn in _REGISTRY.items() if fn.__module__ == "choregos_core.gates"}
+    core_names = {name for name, fn in _REGISTRY.items() if fn.__module__ == "tranibor_core.gates"}
     assert "adr_number_free" in core_names
     block = re.search(r"Gates shipped today:\n\n```\n(.*?)```", CONCEPTS.read_text(encoding="utf-8"), re.S)
     assert block is not None, "the list of guarantees left docs/concepts.md"

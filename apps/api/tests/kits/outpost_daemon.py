@@ -19,17 +19,17 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
-import choregos_contracts as contracts
 import jwt
 import pytest
-from choregos_adapters import sealing
-from choregos_contracts import NONCE_HEADER, SIGNATURE_HEADER, outpost
+import tranibor_contracts as contracts
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
 from httpx import AsyncClient, Response
 from jsonschema import Draft202012Validator
 from sqlalchemy import select
+from tranibor_adapters import sealing
+from tranibor_contracts import NONCE_HEADER, SIGNATURE_HEADER, outpost
 
 from . import outposts as kit
 
@@ -67,7 +67,7 @@ class Pauses:
 
 def record_pauses(monkeypatch: pytest.MonkeyPatch) -> Pauses:
     """Record every pause of every poll the door serves in this process, from now on."""
-    from choregos_api.outposts import door
+    from tranibor_api.outposts import door
 
     pauses = Pauses()
     pause = door._pause
@@ -85,7 +85,7 @@ def record_pauses(monkeypatch: pytest.MonkeyPatch) -> Pauses:
 
 def key_wrapper(monkeypatch: pytest.MonkeyPatch, label: str = KEY_WRAPPER_LABEL) -> None:
     """Give the deployment a key wrapper (ADR 0103): without one no call's arguments are written."""
-    from choregos_api.secret_store import ENV_KEKS
+    from tranibor_api.secret_store import ENV_KEKS
 
     key = base64.b64encode(hashlib.sha256(label.encode()).digest()).decode()
     monkeypatch.setenv(ENV_KEKS, f"k1:{key}")
@@ -291,7 +291,7 @@ class Daemon:
     def opened(self, handed: dict[str, Any], pinned: list[str] | None = None) -> dict[str, Any]:
         """The call inside an element of a poll's `calls`: verified under the door's key in service,
         then opened with this instance's sealing key, and what the contract says a call is."""
-        from choregos_api.config import get_settings
+        from tranibor_api.config import get_settings
 
         is_a("SealedCall", handed)
         pinned = get_settings().outposts_door_keys[:1] if pinned is None else pinned
@@ -343,9 +343,9 @@ async def approved(client: AsyncClient, slug: str = SLUG, *, create: bool = True
 async def place(slug: str = SLUG, *, scope: Any = None, **call: Any) -> Any:
     """Place a call as whoever routes one to an outpost will (S65-13), in a transaction of its own
     under the organisation's scope; `scope="*"` places it as a run's token would."""
-    from choregos_api.db.models import Organization, Outpost
-    from choregos_api.db.session import session_scope
-    from choregos_api.outposts import rendezvous
+    from tranibor_api.db.models import Organization, Outpost
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.outposts import rendezvous
 
     arguments: dict[str, Any] = {
         "call_id": rendezvous.new_call_id(),
@@ -369,7 +369,7 @@ async def place(slug: str = SLUG, *, scope: Any = None, **call: Any) -> Any:
 
 
 async def call_row(call_id: str, slug: str = SLUG) -> Any:
-    from choregos_api.db.models import OutpostCall
+    from tranibor_api.db.models import OutpostCall
 
     rows = [row for row in await kit.rows_of(slug, OutpostCall) if row.id == call_id]
     assert len(rows) == 1, f"{len(rows)} rows for the call {call_id}"
@@ -377,7 +377,7 @@ async def call_row(call_id: str, slug: str = SLUG) -> Any:
 
 
 async def instance_row(instance_id: str, slug: str = SLUG) -> Any:
-    from choregos_api.db.models import OutpostInstance
+    from tranibor_api.db.models import OutpostInstance
 
     (row,) = [row for row in await kit.rows_of(slug, OutpostInstance) if row.id == instance_id]
     return row
@@ -385,8 +385,8 @@ async def instance_row(instance_id: str, slug: str = SLUG) -> Any:
 
 async def change(model: Any, row_id: str, slug: str = SLUG, **values: Any) -> None:
     """Write a row of an outpost by hand: what time, a crash or another replica would have done."""
-    from choregos_api.db.session import name_the_outpost, session_scope
     from sqlalchemy import update
+    from tranibor_api.db.session import name_the_outpost, session_scope
 
     outpost_row = await kit.outpost_row(slug)
     async with session_scope(orgs="*") as session:
@@ -400,11 +400,11 @@ async def instances(count: int, slug: str = SLUG) -> list[Daemon]:
     person approving them one by one would leave. Each daemon holds a nonce of the door."""
     import time as clock
 
-    from choregos_api.config import get_settings
-    from choregos_api.db.base import uuid7
-    from choregos_api.db.models import OutpostInstance
-    from choregos_api.db.session import name_the_outpost, session_scope
-    from choregos_api.outposts import auth
+    from tranibor_api.config import get_settings
+    from tranibor_api.db.base import uuid7
+    from tranibor_api.db.models import OutpostInstance
+    from tranibor_api.db.session import name_the_outpost, session_scope
+    from tranibor_api.outposts import auth
 
     outpost_row = await kit.outpost_row(slug)
     nonce = auth.nonces(get_settings()).issue(at=clock.time())

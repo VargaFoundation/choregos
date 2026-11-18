@@ -39,10 +39,10 @@ def _naive(moment: datetime) -> datetime:
 async def _persisted_elsewhere(task_id: str) -> None:
     """The work item finishes and its event is persisted, as another replica or the orchestrator
     would: through `persist_event`, which only `NOTIFY`s on PostgreSQL, at the commit."""
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.services.events import persist_event
-    from choregos_contracts import EventType
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.events import persist_event
+    from tranibor_contracts import EventType
 
     async with session_scope(orgs="*") as session:
         item = await session.get(WorkItem, task_id)
@@ -62,9 +62,9 @@ async def _persisted_elsewhere(task_id: str) -> None:
 async def test_a_stream_wakes_up_on_an_event_another_replica_persists(
     client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.a2a import door
-    from choregos_api.config import get_settings
-    from choregos_api.events import PostgresRelay
+    from tranibor_api.a2a import door
+    from tranibor_api.config import get_settings
+    from tranibor_api.events import PostgresRelay
 
     monkeypatch.setattr(door, "STREAM_POLL", 60.0)  # within the test, only the event can wake it
     token = await _ready(client, project)
@@ -89,8 +89,8 @@ async def test_a_stream_wakes_up_on_an_event_another_replica_persists(
 async def test_two_replicas_delivering_at_once_send_a_notification_once(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.a2a.push import deliver_pending
-    from choregos_api.services.remote_agents import set_a2a_transport
+    from tranibor_api.a2a.push import deliver_pending
+    from tranibor_api.services.remote_agents import set_a2a_transport
 
     calls: list[httpx.Request] = []
 
@@ -118,8 +118,8 @@ async def test_two_replicas_delivering_at_once_send_a_notification_once(
 async def test_a_failed_notification_is_retried_on_a_growing_delay_then_given_up(
     client: AsyncClient, project: dict[str, Any], receiver: Receiver, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.a2a import push
-    from choregos_core import utcnow
+    from tranibor_api.a2a import push
+    from tranibor_core import utcnow
 
     now = [utcnow()]
     monkeypatch.setattr(push, "utcnow", lambda: now[0])
@@ -154,10 +154,10 @@ async def test_a_failed_notification_is_retried_on_a_growing_delay_then_given_up
 async def test_a_host_closed_after_registration_is_refused_at_delivery(
     client: AsyncClient, project: dict[str, Any], receiver: Receiver, enforce: None
 ) -> None:
-    from choregos_api.a2a.push import deliver_pending
-    from choregos_api.db.models import Organization, OrgEgressRule
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select, update
+    from tranibor_api.a2a.push import deliver_pending
+    from tranibor_api.db.models import Organization, OrgEgressRule
+    from tranibor_api.db.session import session_scope
 
     token = await _ready(client, project)
     task = await _send(client, token)
@@ -182,7 +182,7 @@ async def test_a_host_closed_after_registration_is_refused_at_delivery(
 def _recorded_wake(monkeypatch: pytest.MonkeyPatch, step: float = 0.0) -> list[float]:
     """Records how long each wait would be, waits a few milliseconds instead, and moves the
     stream's clock by `step` seconds each time."""
-    from choregos_api.a2a import door
+    from tranibor_api.a2a import door
 
     waits: list[float] = []
     now = [10_000.0]
@@ -203,7 +203,7 @@ def _recorded_wake(monkeypatch: pytest.MonkeyPatch, step: float = 0.0) -> list[f
 async def test_a_stream_ends_after_its_hour(
     client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.a2a import door
+    from tranibor_api.a2a import door
 
     waits = _recorded_wake(monkeypatch, step=1795.0)
     token = await _ready(client, project)
@@ -217,8 +217,8 @@ async def test_a_stream_ends_after_its_hour(
 async def test_a_stream_reads_the_task_again_when_no_event_comes(
     client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     waits = _recorded_wake(monkeypatch)
     token = await _ready(client, project)
@@ -240,7 +240,7 @@ async def test_a_stream_reads_the_task_again_when_no_event_comes(
 async def test_a_client_that_hangs_up_frees_its_stream(
     app: Any, client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.a2a import door
+    from tranibor_api.a2a import door
 
     token = await _ready(client, project)
     task = await _send(client, token)

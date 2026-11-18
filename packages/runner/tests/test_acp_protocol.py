@@ -8,8 +8,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from choregos_runner.acp import AcpClient, Notification, Request, Response, decode
-from choregos_runner.acp.protocol import (
+from tranibor_runner.acp import AcpClient, Notification, Request, Response, decode
+from tranibor_runner.acp.protocol import (
     FS_READ_TEXT_FILE,
     INITIALIZE,
     SESSION_NEW,
@@ -122,7 +122,7 @@ async def test_fs_requests_are_refused(tmp_path: Path) -> None:
 
 
 async def test_unreachable_binary_raises(tmp_path: Path) -> None:
-    from choregos_runner.acp import AgentUnreachableError
+    from tranibor_runner.acp import AgentUnreachableError
 
     client = AcpClient(["/introuvable/agent"], cwd=str(tmp_path))
     with pytest.raises(AgentUnreachableError):
@@ -130,7 +130,7 @@ async def test_unreachable_binary_raises(tmp_path: Path) -> None:
 
 
 async def test_initialize_failure_is_reported(tmp_path: Path) -> None:
-    from choregos_runner.acp import AgentUnreachableError
+    from tranibor_runner.acp import AgentUnreachableError
 
     client = await _client(tmp_path, {"fail_initialize": True})
     async with client:
@@ -162,7 +162,7 @@ async def test_prompt_timeout_cancels_session(tmp_path: Path) -> None:
 async def test_a_prompt_to_an_agent_that_died_is_unreachable_not_a_timeout(tmp_path: Path) -> None:
     """The other half of the distinction: an agent whose process exited during its turn did not run
     out of time, it crashed — `prompt` raises, saying the exit code, and cancels nothing."""
-    from choregos_runner.acp.client import AgentUnreachableError
+    from tranibor_runner.acp.client import AgentUnreachableError
 
     client = await _client(tmp_path, {"turns": [{"exit": 3}]})
     async with client:
@@ -175,7 +175,7 @@ async def test_a_prompt_to_an_agent_that_died_is_unreachable_not_a_timeout(tmp_p
 
 def test_protocol_methods_are_covered() -> None:
     """The protocol methods used by the runner are all named explicitly."""
-    from choregos_runner.acp import protocol
+    from tranibor_runner.acp import protocol
 
     expected = {
         INITIALIZE,
@@ -204,7 +204,7 @@ async def test_an_agent_that_does_not_answer_explains_what_is_known(tmp_path: Pa
     the process, nothing from its error output, although `stderr_tail` has collected it since
     day one and nobody read it at that place.
     """
-    from choregos_runner.acp.client import AgentUnreachableError
+    from tranibor_runner.acp.client import AgentUnreachableError
 
     silent = tmp_path / "silent.py"
     silent.write_text(
@@ -232,7 +232,7 @@ async def test_an_agent_that_does_not_answer_explains_what_is_known(tmp_path: Pa
 @pytest.mark.asyncio
 async def test_an_agent_that_dies_says_so_too(tmp_path: Path) -> None:
     """The dead process is the other half of the diagnosis: its exit code."""
-    from choregos_runner.acp.client import AgentUnreachableError
+    from tranibor_runner.acp.client import AgentUnreachableError
 
     dead = tmp_path / "dead.py"
     dead.write_text("import sys\nsys.stderr.write('config unreadable\\n')\nsys.exit(3)\n", encoding="utf-8")
@@ -307,7 +307,7 @@ async def test_a_dead_read_loop_fails_the_request_at_once_and_stop_does_not_hide
     again over the run's own (#498: a bare traceback, exit 1)."""
     import time
 
-    from choregos_runner.acp.client import AgentUnreachableError
+    from tranibor_runner.acp.client import AgentUnreachableError
 
     async def explode(params: dict[str, Any]) -> None:
         raise RuntimeError("handler broken")

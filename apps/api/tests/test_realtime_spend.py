@@ -5,15 +5,15 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from choregos_api.db.models import ModelCatalogueRow
-from choregos_api.services.realtime_spend import (
+from tranibor_api.db.models import ModelCatalogueRow
+from tranibor_api.services.realtime_spend import (
     RealtimePrices,
     realtime_prices,
     relayed_spend,
     response_cost,
     session_cap,
 )
-from choregos_core import GatewayModel
+from tranibor_core import GatewayModel
 
 PRICES = RealtimePrices(
     text_in=0.004, text_out=0.016, audio_in=0.032, audio_out=0.064, cached_in=0.0004, priced_by="gateway"

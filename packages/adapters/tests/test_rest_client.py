@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import httpx
 import pytest
-from choregos_adapters.errors import UpstreamError
-from choregos_adapters.http import rest
-from choregos_adapters.http.rest import RestClient
+from tranibor_adapters.errors import UpstreamError
+from tranibor_adapters.http import rest
+from tranibor_adapters.http.rest import RestClient
 
 from ._transport import Wire, no_wait
 

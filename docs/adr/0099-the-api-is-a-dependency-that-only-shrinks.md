@@ -1,7 +1,7 @@
 # 0099 — The API is a dependency that only shrinks: ratchets on the imports that cross layers
 
 - **Status**: accepted, 2026-10-29
-- **Concerns**: `apps/orchestrator`, `packages/*/src`, `apps/api/src/choregos_api` (services and
+- **Concerns**: `apps/orchestrator`, `packages/*/src`, `apps/api/src/tranibor_api` (services and
   routers); `tests/architecture/`, `apps/api/tests/test_layering_*.py`,
   `apps/api/tests/test_one_organisation_lookup.py`; `docs/development.md`
 

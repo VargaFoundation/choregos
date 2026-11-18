@@ -29,9 +29,9 @@ PLAIN = {"SKILL.md": SKILL_MD.replace("Run `scripts/fill.py` on the form.", "Rea
 
 
 async def _second_admin(email: str = "second@northwind.dev") -> None:
-    from choregos_api.db.models import Membership, Organization, User
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import Membership, Organization, User
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         org = (
@@ -69,13 +69,13 @@ async def _agent(client: AsyncClient, slug: str, skills: list[dict[str, Any]]) -
     ],
 )
 def test_the_risk_tier(files: dict[str, str], risk: str) -> None:
-    from choregos_api.services.skill_gate import assess
+    from tranibor_api.services.skill_gate import assess
 
     assert assess(files).risk == risk
 
 
 def test_an_executable_bit_is_high_risk() -> None:
-    from choregos_api.services.skill_gate import assess
+    from tranibor_api.services.skill_gate import assess
 
     assessment = assess({**PLAIN, "references/x.md": "x"}, executables=["references/x.md"])
     assert assessment.risk == "high"
@@ -99,7 +99,7 @@ def test_an_executable_bit_is_high_risk() -> None:
     ],
 )
 def test_the_scan_finds_what_a_reviewer_must_read(text: str, code: str) -> None:
-    from choregos_api.services.skill_gate import assess
+    from tranibor_api.services.skill_gate import assess
 
     assessment = assess({"SKILL.md": PLAIN["SKILL.md"] + "\n" + text + "\n"})
     found = [f for f in assessment.findings if f.code == code]
@@ -109,7 +109,7 @@ def test_the_scan_finds_what_a_reviewer_must_read(text: str, code: str) -> None:
 
 
 def test_a_clean_skill_has_no_finding_but_its_licence() -> None:
-    from choregos_api.services.skill_gate import assess
+    from tranibor_api.services.skill_gate import assess
 
     assert [f.code for f in assess(PLAIN).findings] == ["licence_missing"]
     licensed = assess({**PLAIN, "LICENSE": "MIT License\n\nPermission is hereby granted, free of charge"})
@@ -117,7 +117,7 @@ def test_a_clean_skill_has_no_finding_but_its_licence() -> None:
 
 
 def test_a_source_available_licence_is_flagged_not_refused() -> None:
-    from choregos_api.services.skill_gate import assess
+    from tranibor_api.services.skill_gate import assess
 
     anthropic_docx = (
         "© 2025 Anthropic, PBC. All rights reserved. LICENSE: Use of these materials is governed by..."
@@ -175,9 +175,9 @@ async def test_the_only_administrator_approves_their_own_high_risk_skill(
     approved = await client.post("/api/v1/orgs/northwind/skills/fill-forms/versions/1/approve")
     assert approved.status_code == 200, approved.text
     assert approved.json()["review_status"] == "approved"
-    from choregos_api.db.models import AuditLog
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import AuditLog
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = (await session.execute(select(AuditLog).where(AuditLog.action == "skill.approve"))).scalars()
@@ -205,9 +205,9 @@ async def test_the_importer_forces_the_approval_with_a_reason_and_the_audit_says
     forced = await client.post(url, json={"force": True, "reason": "demo for the board, second admin away"})
     assert forced.status_code == 200, forced.text
     assert forced.json()["review_status"] == "approved"
-    from choregos_api.db.models import AuditLog
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import AuditLog
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = (await session.execute(select(AuditLog).where(AuditLog.action == "skill.approve"))).scalars()
@@ -227,11 +227,11 @@ async def test_a_low_or_medium_skill_is_usable_at_once(client: AsyncClient, admi
 async def test_a_new_high_risk_version_does_not_replace_the_approved_one(
     client: AsyncClient, admin: str
 ) -> None:
-    from choregos_api.db.models import Skill, SkillVersion
-    from choregos_api.db.session import session_scope
-    from choregos_api.schemas import AgentSpec
-    from choregos_api.services.skill_review import unusable_skills
     from sqlalchemy import select
+    from tranibor_api.db.models import Skill, SkillVersion
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.schemas import AgentSpec
+    from tranibor_api.services.skill_review import unusable_skills
 
     await client.post("/api/v1/orgs/northwind/skills", json={"files": PLAIN})
     v2 = await client.post("/api/v1/orgs/northwind/skills/fill-forms/versions", json={"files": WITH_SCRIPT})
@@ -279,9 +279,9 @@ async def test_limits_are_raised_to_256_files_and_5_mib(client: AsyncClient, adm
 async def test_a_run_never_receives_a_version_waiting_for_review(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.security import mint_run_token
+    from tranibor_api.db.models import Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.security import mint_run_token
 
     created = (await client.post("/api/v1/orgs/northwind/skills", json={"files": WITH_SCRIPT})).json()
     digest = created["versions"][0]["digest"]

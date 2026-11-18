@@ -88,7 +88,7 @@ plugins-check:  ## No network: the archives of plugins/offline/ are what plugins
 docs-cli:  ## Regenerate docs/cli.md and docs/site/cli/reference.md from the CLI (to commit)
 	$(UV) run python tools/gen_cli_reference.py
 
-# The publishing identity (ADR 0156): one definition, packages/core/src/choregos_core/publishing.json.
+# The publishing identity (ADR 0156): one definition, packages/core/src/tranibor_core/publishing.json.
 .PHONY: publishing-check publishing-rewrite
 publishing-check:  ## No file spells the publishing identity outside its definition, copy, derived files and history
 	$(UV) run python tools/publishing_identity.py
@@ -316,7 +316,7 @@ compose-down:
 
 .PHONY: demo
 demo:  ## End-to-end scenario in memory (fakes, no cluster)
-	CHOREGOS_FAKES=1 $(UV) run python -m choregos_orchestrator.demo
+	CHOREGOS_FAKES=1 $(UV) run python -m tranibor_orchestrator.demo
 
 .PHONY: demo-investment
 demo-investment:  ## Investment campaigns on fakes with the real runner and engine: adopted, not relevant, refused memo (S38-09)
@@ -324,11 +324,11 @@ demo-investment:  ## Investment campaigns on fakes with the real runner and engi
 
 .PHONY: api
 api:  ## Run the API locally (fakes)
-	CHOREGOS_FAKES=1 $(UV) run uvicorn choregos_api.main:app --reload --port 8000
+	CHOREGOS_FAKES=1 $(UV) run uvicorn tranibor_api.main:app --reload --port 8000
 
 .PHONY: worker
 worker:  ## Run the Temporal workers
-	$(UV) run python -m choregos_orchestrator.worker --queues orchestrator,executor,tracker,memory
+	$(UV) run python -m tranibor_orchestrator.worker --queues orchestrator,executor,tracker,memory
 
 .PHONY: mock-api
 mock-api:  ## Serve the mocked API from the OpenAPI (Prism)
@@ -395,8 +395,8 @@ conformance-hosted:  ## The 8 checks of a hosted agent (ADR 0080): IMAGE=<ref>, 
 
 .PHONY: evals
 evals:  ## Evals of the playbooks and of the catalogue agents
-	$(UV) run python -m choregos_playbooks.evals.runner --all
-	$(UV) run python -m choregos_core.agent_catalogue.evals --all
+	$(UV) run python -m tranibor_playbooks.evals.runner --all
+	$(UV) run python -m tranibor_core.agent_catalogue.evals --all
 
 .PHONY: clean
 clean:  ## Clean the local artefacts

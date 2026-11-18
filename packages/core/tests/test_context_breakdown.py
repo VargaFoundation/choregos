@@ -13,7 +13,7 @@ import random
 from typing import Any
 
 import pytest
-from choregos_core.context_breakdown import (
+from tranibor_core.context_breakdown import (
     EVENT,
     SECTIONS,
     ContextMeter,
@@ -24,7 +24,7 @@ from choregos_core.context_breakdown import (
     prompt_tokens_of,
     scale,
 )
-from choregos_core.prompt_loop import LoopRequest, LoopTool, run_loop
+from tranibor_core.prompt_loop import LoopRequest, LoopTool, run_loop
 
 CANARY = "canary-7f3a-the-person-said-this"
 

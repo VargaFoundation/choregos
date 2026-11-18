@@ -31,8 +31,8 @@ RUN = "run-a1b2c3d4e5f6a7b8"
 
 @pytest.fixture(autouse=True)
 def profile(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from choregos_cli import activity, theme, workspace
-    from choregos_cli import client as client_module
+    from tranibor_cli import activity, theme, workspace
+    from tranibor_cli import client as client_module
 
     monkeypatch.setattr(client_module, "CONFIG_PATH", tmp_path / "config.json")
     monkeypatch.setattr(theme, "MONOCHROME", False)
@@ -376,8 +376,8 @@ def platform(contract: Any) -> Any:
 
 
 def make_app(**kwargs: Any) -> Any:
-    from choregos_cli.client import AsyncClient, Profile
-    from choregos_cli.workspace import Workspace
+    from tranibor_cli.client import AsyncClient, Profile
+    from tranibor_cli.workspace import Workspace
 
     return Workspace(AsyncClient(Profile(api_url=API, token="chg_test", org="acme")), "acme", **kwargs)
 
@@ -405,7 +405,7 @@ def node_with(app: Any, text: str) -> Any:
 
 
 async def put_cursor_on(pilot: Any, text: str) -> None:
-    from choregos_cli.workspace import FlightTree
+    from tranibor_cli.workspace import FlightTree
 
     tree = pilot.app.query_one(FlightTree)
     tree.focus()
@@ -766,7 +766,7 @@ async def test_a_run_that_has_ended_is_read_once(platform: Platform) -> None:
 
 
 async def test_a_run_stays_open_when_it_moves_to_the_ended_part(platform: Platform) -> None:
-    from choregos_cli.activity import Board
+    from tranibor_cli.activity import Board
 
     app = make_app()
     async with app.run_test(size=(160, 50)) as pilot:
@@ -804,7 +804,7 @@ async def test_what_a_backend_writes_in_meta_does_not_move_a_tool_call(platform:
 
 
 def test_no_workspace_module_reads_meta() -> None:
-    source = Path(__file__).parents[1] / "src" / "choregos_cli"
+    source = Path(__file__).parents[1] / "src" / "tranibor_cli"
     for name in ("workspace.py", "run_steps.py", "run_activity.py", "activity.py"):
         code = [
             line
@@ -928,7 +928,7 @@ def test_the_workspace_snapshot(
 
 
 def test_a_bare_choregos_piped_prints_the_help() -> None:
-    from choregos_cli.main import app
+    from tranibor_cli.main import app
 
     result = CliRunner().invoke(app, [])  # the runner's stdin and stdout are not terminals
     assert result.exit_code == 0, result.output
@@ -941,8 +941,8 @@ def test_a_bare_choregos_piped_prints_the_help() -> None:
 
 
 def test_a_bare_choregos_in_a_terminal_opens_the_workspace(monkeypatch: pytest.MonkeyPatch) -> None:
-    from choregos_cli import chat
-    from choregos_cli.main import app
+    from tranibor_cli import chat
+    from tranibor_cli.main import app
 
     opened: list[str] = []
     monkeypatch.setattr(chat, "interactive", lambda: True)
@@ -957,7 +957,7 @@ def test_a_bare_choregos_in_a_terminal_opens_the_workspace(monkeypatch: pytest.M
 def test_interactive_needs_both_standard_input_and_output_to_be_terminals(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from choregos_cli import chat
+    from tranibor_cli import chat
 
     class Stream:
         def __init__(self, tty: bool) -> None:
@@ -973,7 +973,7 @@ def test_interactive_needs_both_standard_input_and_output_to_be_terminals(
 
 
 def test_chat_refuses_to_run_without_a_terminal() -> None:
-    from choregos_cli.main import app
+    from tranibor_cli.main import app
 
     result = CliRunner().invoke(app, ["chat"])
     assert result.exit_code == 1 and "needs a terminal" in result.output
@@ -982,7 +982,7 @@ def test_chat_refuses_to_run_without_a_terminal() -> None:
 def test_version_and_the_other_commands_import_no_textual_module() -> None:
     code = (
         "import sys\n"
-        "from choregos_cli.main import app\n"
+        "from tranibor_cli.main import app\n"
         "from typer.testing import CliRunner\n"
         "for words in (['--version'], ['activity', '--help'], ['ask', '--help']):\n"
         "    assert CliRunner().invoke(app, words).exit_code == 0\n"
@@ -993,7 +993,7 @@ def test_version_and_the_other_commands_import_no_textual_module() -> None:
 
 
 def test_the_workspace_module_is_the_only_one_importing_textual() -> None:
-    source = Path(__file__).parents[1] / "src" / "choregos_cli"
+    source = Path(__file__).parents[1] / "src" / "tranibor_cli"
     importing = sorted(
         path.name
         for path in source.glob("*.py")

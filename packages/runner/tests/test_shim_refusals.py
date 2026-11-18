@@ -13,9 +13,9 @@ import re
 from pathlib import Path
 from typing import Any
 
-from choregos_contracts import StageInput
-from choregos_runner.exits import Exit
-from choregos_runner.refusal_shims import EVENT, SHIMMED, ShimRefusals
+from tranibor_contracts import StageInput
+from tranibor_runner.exits import Exit
+from tranibor_runner.refusal_shims import EVENT, SHIMMED, ShimRefusals
 
 from .test_runner_flow import execute, valid_result
 

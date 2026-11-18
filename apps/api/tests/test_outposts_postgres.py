@@ -31,8 +31,8 @@ OWN_ROWS = ("outpost_instances", "outpost_enrolments", "outpost_calls")
 async def three_outposts(pg_app: Any) -> dict[str, str]:
     """`a/north` and `a/south` in one organisation, `b/north` in another: each with one instance, one
     enrolment token and one waiting call. The ids, by `org/slug`."""
-    from choregos_api.db.models import Organization, Outpost, OutpostCall, OutpostEnrolment, OutpostInstance
-    from choregos_api.db.session import name_the_outpost, session_scope
+    from tranibor_api.db.models import Organization, Outpost, OutpostCall, OutpostEnrolment, OutpostInstance
+    from tranibor_api.db.session import name_the_outpost, session_scope
 
     ids: dict[str, str] = {}
     async with session_scope(orgs="*") as session:
@@ -94,7 +94,7 @@ async def test_a_session_that_names_no_outpost_sees_none_of_an_outposts_rows(
     three_outposts: dict[str, str],
 ) -> None:
     """Fails closed like the first setting: an omission shows nothing."""
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.session import session_scope
 
     a = {three_outposts["a/north"], three_outposts["a/south"]}
     async with session_scope() as session:  # no organisation, no outpost
@@ -114,7 +114,7 @@ async def test_a_session_that_names_an_outpost_reads_no_row_of_another(
     three_outposts: dict[str, str],
 ) -> None:
     """Of the same organisation or of another, from a query with no `WHERE` clause."""
-    from choregos_api.db.session import name_the_outpost, session_scope
+    from tranibor_api.db.session import name_the_outpost, session_scope
 
     north = three_outposts["a/north"]
     async with session_scope(orgs=["a"]) as session:
@@ -139,7 +139,7 @@ async def test_a_session_that_names_an_outpost_claims_no_row_of_another(
 ) -> None:
     """A claim, a revocation and a deletion written with no `WHERE` clause touch the named outpost's
     rows and no other: the policy judges writes as it judges reads."""
-    from choregos_api.db.session import name_the_outpost, session_scope
+    from tranibor_api.db.session import name_the_outpost, session_scope
 
     north = three_outposts["a/north"]
     async with session_scope(orgs=["a"]) as session:
@@ -180,8 +180,8 @@ async def test_a_row_is_not_written_into_another_outpost(
 ) -> None:
     """For writing as for reading: a session that names `a/north` cannot put a row at another outpost,
     of its organisation or of another."""
-    from choregos_api.db.models import Outpost
-    from choregos_api.db.session import name_the_outpost, session_scope
+    from tranibor_api.db.models import Outpost
+    from tranibor_api.db.session import name_the_outpost, session_scope
 
     async with session_scope(orgs="*") as session:
         target = await session.get(Outpost, three_outposts[other])
@@ -202,8 +202,8 @@ async def test_a_row_is_not_written_into_another_outpost(
 async def test_an_outpost_is_not_created_in_an_organisation_out_of_scope(
     three_outposts: dict[str, str],
 ) -> None:
-    from choregos_api.db.models import Organization, Outpost
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import Organization, Outpost
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         b = (await session.execute(select(Organization.id).where(Organization.slug == "b"))).scalar_one()
@@ -217,7 +217,7 @@ async def test_the_outpost_named_is_restored_after_a_block_and_carried_across_a_
 ) -> None:
     """`in_outpost_scope` gives back what was named before; `release_connection` carries the name to
     the session's next transaction, as it carries the organisation scope, and no further."""
-    from choregos_api.db.session import (
+    from tranibor_api.db.session import (
         allow_release_during_calls,
         in_outpost_scope,
         name_the_outpost,
@@ -253,7 +253,7 @@ async def test_the_outpost_named_is_restored_after_a_block_that_raised_on_a_usab
     """A block that fails and leaves the transaction usable (an exception that is not the database's,
     a statement that failed under a savepoint) still gives back what was named before (S65-34): only
     a transaction nobody may use any more is left without it, and dies with its naming."""
-    from choregos_api.db.session import in_outpost_scope, name_the_outpost, session_scope
+    from tranibor_api.db.session import in_outpost_scope, name_the_outpost, session_scope
 
     north, south = three_outposts["a/north"], three_outposts["a/south"]
     async with session_scope(orgs=["a"]) as session:
@@ -273,9 +273,9 @@ async def test_a_bare_session_is_given_the_scope_of_one_outpost_of_one_organisat
 ) -> None:
     """What the door does with a token or a signature in hand (`scope_to_outpost`): afterwards the
     session sees one organisation and one outpost, and never keeps the all-organisations scope."""
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import get_sessionmaker
-    from choregos_api.services.outposts import scope_to_outpost
+    from tranibor_api.db.models import Organization
+    from tranibor_api.db.session import get_sessionmaker
+    from tranibor_api.services.outposts import scope_to_outpost
 
     scope = "SELECT current_setting('app.current_orgs', true), current_setting('app.current_outpost', true)"
     north = three_outposts["b/north"]

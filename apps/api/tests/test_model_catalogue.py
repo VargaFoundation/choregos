@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from choregos_core import GatewayModel
 from httpx import AsyncClient
+from tranibor_core import GatewayModel
 
 from .conftest import login
 
@@ -42,8 +42,8 @@ def gateway(monkeypatch: pytest.MonkeyPatch) -> Scripted:
     async def with_type(session: Any, org_id: str) -> tuple[str, Scripted]:
         return "scripted", scripted
 
-    monkeypatch.setattr("choregos_api.routers.model_catalogue.org_gateway", org_gateway)
-    monkeypatch.setattr("choregos_api.routers.model_catalogue.org_gateway_and_type", with_type)
+    monkeypatch.setattr("tranibor_api.routers.model_catalogue.org_gateway", org_gateway)
+    monkeypatch.setattr("tranibor_api.routers.model_catalogue.org_gateway_and_type", with_type)
     return scripted
 
 
@@ -93,7 +93,7 @@ async def test_the_organisations_own_gateway_shows_its_address_to_its_members(
     async def brings(session: Any, org_id: str) -> bool:
         return True
 
-    monkeypatch.setattr("choregos_api.routers.model_catalogue.org_brings_its_gateway", brings)
+    monkeypatch.setattr("tranibor_api.routers.model_catalogue.org_brings_its_gateway", brings)
     gateway.base_url = "https://llm.acme.example/v1"  # type: ignore[attr-defined]
     await client.post(
         "/api/v1/orgs/northwind/members", json={"email": "po@northwind.dev", "role": "project_owner"}
@@ -389,13 +389,13 @@ async def test_switching_to_curated_needs_enabled_tier_models(
 async def test_indexing_is_refused_when_the_embedding_model_lost_its_usage(
     client: AsyncClient, admin: str, gateway: Scripted
 ) -> None:
-    from choregos_api.config import get_settings
-    from choregos_api.db.models import KnowledgeDocument
-    from choregos_api.db.session import session_scope
-    from choregos_api.knowledge.conversion import conversions
-    from choregos_api.knowledge.embeddings import ModelNotAllowedError, embedding_model
-    from choregos_api.knowledge.index import index_document
     from sqlalchemy import select
+    from tranibor_api.config import get_settings
+    from tranibor_api.db.models import KnowledgeDocument
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.knowledge.conversion import conversions
+    from tranibor_api.knowledge.embeddings import ModelNotAllowedError, embedding_model
+    from tranibor_api.knowledge.index import index_document
 
     await client.post(
         "/api/v1/orgs/northwind/knowledge", json={"slug": "kb", "name": "KB", "serving_mode": "index"}
@@ -420,7 +420,7 @@ async def test_indexing_is_refused_when_the_embedding_model_lost_its_usage(
 async def test_distillation_is_refused_when_its_model_lost_its_usage(
     client: AsyncClient, admin: str, gateway: Scripted
 ) -> None:
-    from choregos_api.knowledge.conversion import conversions
+    from tranibor_api.knowledge.conversion import conversions
 
     await client.post("/api/v1/orgs/northwind/knowledge", json={"slug": "kb", "name": "KB"})
     await client.post(

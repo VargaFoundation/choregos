@@ -11,8 +11,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from choregos_orchestrator import activities
-from choregos_orchestrator.activities import stage
+from tranibor_orchestrator import activities
+from tranibor_orchestrator.activities import stage
 
 STAGE = Path(stage.__file__)
 FIXTURE = Path(__file__).parent / "fixtures" / "activity_names.json"
@@ -53,9 +53,9 @@ def test_the_registered_activity_names_are_unchanged() -> None:
 
 
 def test_patched_names_are_resolved_from_stage() -> None:
-    assert stage._resolve_on_enabled_backend.__module__ == "choregos_orchestrator.activities.stage"
-    assert stage._resolve_model.__module__ == "choregos_orchestrator.activities.stage"
-    assert stage.prepare_stage.__module__ == "choregos_orchestrator.activities.stage"
+    assert stage._resolve_on_enabled_backend.__module__ == "tranibor_orchestrator.activities.stage"
+    assert stage._resolve_model.__module__ == "tranibor_orchestrator.activities.stage"
+    assert stage.prepare_stage.__module__ == "tranibor_orchestrator.activities.stage"
 
 
 def test_every_moved_helper_is_still_importable_from_stage() -> None:

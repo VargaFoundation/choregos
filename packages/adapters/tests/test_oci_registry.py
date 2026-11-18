@@ -6,9 +6,9 @@ import hashlib
 
 import httpx
 import pytest
-from choregos_adapters.base import ImageVerifier, RegistryClient
-from choregos_adapters.fakes import FakeImageVerifier, FakeRegistryClient
-from choregos_adapters.oci import (
+from tranibor_adapters.base import ImageVerifier, RegistryClient
+from tranibor_adapters.fakes import FakeImageVerifier, FakeRegistryClient
+from tranibor_adapters.oci import (
     OciRegistryClient,
     RegistryError,
     UnconfiguredVerifier,

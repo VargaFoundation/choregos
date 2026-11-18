@@ -16,7 +16,7 @@ import time
 from typing import Any
 
 import pytest
-from choregos_adapters.fakes.tracker import FakeTracker
+from tranibor_adapters.fakes.tracker import FakeTracker
 
 from .conftest import Fixture, recording_history, refine_result
 from .test_interpreter import _wait_state, scripted, start
@@ -45,8 +45,8 @@ async def _row_state(setup: Fixture, state: str, *, timeout: float = 60.0) -> st
 
     The `status` query answers the interpreter's state as soon as it moves; `mirror_state` writes the
     row in an activity right after. Read once, the row could still hold the previous state (#1718)."""
-    from choregos_api.db.models import WorkItem
-    from choregos_api.db.session import session_scope
+    from tranibor_api.db.models import WorkItem
+    from tranibor_api.db.session import session_scope
 
     deadline = time.monotonic() + timeout
     while True:
@@ -61,8 +61,8 @@ async def _row_state(setup: Fixture, state: str, *, timeout: float = 60.0) -> st
 async def test_a_refused_status_comment_does_not_stop_the_work_item(
     setup: Fixture, temporal_env: Any, worker_factory: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.worker import Replayer
+    from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     calls = _comment_refused(setup, monkeypatch)
     scripted(setup.adapters, refine_result("spec"))
@@ -90,8 +90,8 @@ async def test_a_history_before_the_marker_still_fails(
     setup: Fixture, temporal_env: Any, worker_factory: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A run recorded before the marker answers no to `patched`: the refused comment fails it, as then."""
-    from choregos_orchestrator.workflows import interpreter
     from temporalio.client import WorkflowFailureError
+    from tranibor_orchestrator.workflows import interpreter
 
     real = interpreter.workflow.patched
     monkeypatch.setattr(

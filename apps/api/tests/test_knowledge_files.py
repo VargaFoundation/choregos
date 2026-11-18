@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from choregos_contracts import knowledge_digest
 from httpx import AsyncClient
+from tranibor_contracts import knowledge_digest
 
 from . import knowledge_fixtures as fx
 
@@ -15,9 +15,9 @@ BASE = "/api/v1/orgs/northwind/knowledge"
 async def _run(
     project: dict[str, Any], knowledge: list[dict[str, Any]], initiated_by: str | None = None
 ) -> str:
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.security import mint_run_token
+    from tranibor_api.db.models import Run, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.security import mint_run_token
 
     async with session_scope() as session:
         item = WorkItem(
@@ -45,11 +45,11 @@ async def _run(
 async def _pinned(
     project: dict[str, Any], initiated_by: str | None = None, slug: str = "architecture"
 ) -> list[dict[str, Any]]:
-    from choregos_api.db.models import Organization, Project
-    from choregos_api.db.session import session_scope
-    from choregos_api.knowledge.on_behalf import OnBehalf
-    from choregos_api.knowledge.serving import pin
     from sqlalchemy import select
+    from tranibor_api.db.models import Organization, Project
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.knowledge.on_behalf import OnBehalf
+    from tranibor_api.knowledge.serving import pin
 
     async with session_scope() as session:
         org = (
@@ -68,7 +68,7 @@ async def _pinned(
 async def test_a_run_reads_exactly_the_documents_it_was_prepared_with(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    from choregos_api.knowledge.conversion import conversions
+    from tranibor_api.knowledge.conversion import conversions
 
     await client.post(BASE, json={"slug": "architecture", "name": "Architecture framework"})
     deck = fx.pptx([("Network zoning principles", "Every zone has a firewall")])
@@ -113,8 +113,8 @@ async def test_a_base_no_longer_served_to_the_project_is_not_delivered(
 async def test_an_agent_names_its_knowledge_bases_without_changing_older_digests(
     client: AsyncClient, admin: str
 ) -> None:
-    from choregos_api.schemas import AgentSpec
-    from choregos_api.services.agents import digest
+    from tranibor_api.schemas import AgentSpec
+    from tranibor_api.services.agents import digest
 
     before = digest(AgentSpec(instructions="x"))
     assert before == digest(AgentSpec(instructions="x", knowledge=[])), "an empty list changes nothing"
@@ -187,7 +187,7 @@ def _workbook() -> bytes:
 
 
 def test_a_workbook_reads_as_figures_not_as_a_dataframe() -> None:
-    from choregos_api.knowledge.convert import to_markdown
+    from tranibor_api.knowledge.convert import to_markdown
 
     markdown, _ = to_markdown(_workbook(), ".xlsx")
     assert "NaN" not in markdown and "Unnamed" not in markdown
@@ -203,7 +203,7 @@ def test_a_workbook_reads_as_figures_not_as_a_dataframe() -> None:
 
 
 def test_a_long_sheet_is_capped_and_says_so() -> None:
-    from choregos_api.knowledge.convert import to_markdown
+    from tranibor_api.knowledge.convert import to_markdown
 
     rows: list[list[object]] = [["id", "value"]] + [[i, i * 2] for i in range(10_000)]
     markdown, _ = to_markdown(fx.xlsx({"Big": rows}), ".xlsx", 2000)
@@ -213,7 +213,7 @@ def test_a_long_sheet_is_capped_and_says_so() -> None:
 
 
 def test_a_workbook_openpyxl_cannot_read_falls_back_to_markitdown(monkeypatch) -> None:  # type: ignore[no-untyped-def]
-    from choregos_api.knowledge import convert, xlsx
+    from tranibor_api.knowledge import convert, xlsx
 
     def refuse(*_args: object, **_kwargs: object) -> str:
         raise ValueError("unreadable")
@@ -224,7 +224,7 @@ def test_a_workbook_openpyxl_cannot_read_falls_back_to_markitdown(monkeypatch) -
 
 
 def test_a_deck_keeps_its_speaker_notes_tables_and_chart_text() -> None:
-    from choregos_api.knowledge.convert import to_markdown
+    from tranibor_api.knowledge.convert import to_markdown
 
     deck = fx.pptx(
         [("Group strategy", "Three pillars")],
@@ -240,7 +240,7 @@ def test_a_deck_keeps_its_speaker_notes_tables_and_chart_text() -> None:
 
 async def test_the_row_cap_reaches_the_child_process_by_argv() -> None:
     """The child's environment is bare by design: the cap is an argument, not a variable."""
-    from choregos_api.knowledge.conversion import run_converter
+    from tranibor_api.knowledge.conversion import run_converter
 
     rows: list[list[object]] = [["id"]] + [[i] for i in range(50)]
     answer = await run_converter(
@@ -251,7 +251,7 @@ async def test_the_row_cap_reaches_the_child_process_by_argv() -> None:
 
 def test_a_cut_sheet_is_named_in_the_warnings_and_a_short_one_is_not() -> None:
     """S42-09e: the people who read the document's page are told what the agents are told."""
-    from choregos_api.knowledge.convert import convert
+    from tranibor_api.knowledge.convert import convert
 
     rows: list[list[object]] = [["id"]] + [[i] for i in range(30)]
     book = fx.xlsx({"Big": rows, "Small": [["a"], [1]]})
@@ -263,7 +263,7 @@ def test_a_cut_sheet_is_named_in_the_warnings_and_a_short_one_is_not() -> None:
 
 
 async def test_the_child_process_hands_its_warnings_to_the_parent() -> None:
-    from choregos_api.knowledge.conversion import run_converter
+    from tranibor_api.knowledge.conversion import run_converter
 
     rows: list[list[object]] = [["id"]] + [[i] for i in range(50)]
     answer = await run_converter(

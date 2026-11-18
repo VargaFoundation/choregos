@@ -17,7 +17,7 @@ DEMOS = {("mdm", "demo"), ("shipping", "demo"), ("access_control", "demo"), ("cd
 
 @pytest.fixture
 def prod(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     monkeypatch.setenv("CHOREGOS_ENV", "prod")
     # the development login is refused in prod: the cookie already set is enough

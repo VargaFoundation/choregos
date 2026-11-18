@@ -24,7 +24,7 @@ import sys
 os.environ["TYPER_USE_RICH"] = "0"
 from typing import Any
 
-from choregos_core.publishing import PUBLISHING, SIGNING_ISSUER
+from tranibor_core.publishing import PUBLISHING, SIGNING_ISSUER
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 TARGET = ROOT / "docs" / "cli.md"
@@ -151,7 +151,7 @@ def _render(command: Any, path: list[str], output: list[str]) -> None:
 
 def generate(header: str = HEADER) -> str:
     import typer.core
-    from choregos_cli.main import app
+    from tranibor_cli.main import app
 
     root = typer.main.get_command(app)
     output: list[str] = [header]

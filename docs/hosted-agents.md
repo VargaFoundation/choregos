@@ -86,7 +86,7 @@ waits for the container (`GET /readiness`, up to `readiness_timeout_s`), sends i
   An accepted tunnel goes through the pod's egress proxy with the run's credentials
   (`hosted.egress`, `hosted.egress_refused`).
 
-The container's environment (`choregos_core.hosted.sidecar_env`) holds the version's own variables,
+The container's environment (`tranibor_core.hosted.sidecar_env`) holds the version's own variables,
 then the platform's, which win: `PORT`, `CHOREGOS_RUN_ID`, `CHOREGOS_AGENT_SLUG`,
 `CHOREGOS_AGENT_VERSION`, `CHOREGOS_MODEL`, the addresses above, `NO_PROXY`. It holds no credential:
 not the run's key, not the run token, not an MCP server's header.

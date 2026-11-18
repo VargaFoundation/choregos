@@ -22,7 +22,7 @@ from typing import Any
 import pytest
 
 EXTENSION = '''
-from choregos_adapters import register
+from tranibor_adapters import register
 
 
 class InHouseTracker:
@@ -53,7 +53,7 @@ def _install(root: pathlib.Path, name: str, source: str) -> None:
 
 @pytest.fixture
 def temporary_path(tmp_path: pathlib.Path) -> Iterator[pathlib.Path]:
-    from choregos_adapters import registry
+    from tranibor_adapters import registry
 
     # The extensions register connector types in module-level tables: restore them, or
     # `tracker/in-house` outlives the test and `tests/web`'s icon fixture check fails in a full run.
@@ -80,7 +80,7 @@ def test_an_extension_outside_the_tree_registers_its_connector(
     whatever the type asked for. Without this zero, the test passes alone and turns red in a
     group; the trap already cost twice today.
     """
-    from choregos_adapters import available, build, load_extensions
+    from tranibor_adapters import available, build, load_extensions
 
     monkeypatch.setenv("CHOREGOS_FAKES", "0")
 
@@ -102,7 +102,7 @@ def test_a_declared_extension_that_does_not_load_stops_everything(temporary_path
     The same rule as `guard.yaml` and as the refusal of an unresolved setting: someone installed
     it so that it would serve. Better not to start, and to name the culprit.
     """
-    from choregos_adapters import load_extensions
+    from tranibor_adapters import load_extensions
 
     _install(temporary_path, "extension_broken", BROKEN_EXTENSION)
     with pytest.raises(RuntimeError, match="extension_broken") as failure:
@@ -111,6 +111,6 @@ def test_a_declared_extension_that_does_not_load_stops_everything(temporary_path
 
 
 def test_without_an_installed_extension_loading_does_nothing() -> None:
-    from choregos_adapters import load_extensions
+    from tranibor_adapters import load_extensions
 
     assert load_extensions("choregos.group.that.does.not.exist") == []

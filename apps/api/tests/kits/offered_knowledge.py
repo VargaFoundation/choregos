@@ -49,7 +49,7 @@ def publish(
 
 @pytest.fixture
 def offline(tmp_path: Path) -> Iterator[Path]:
-    from choregos_api.services.plugin_supply import OfflineDirectory, use_plugin_supply
+    from tranibor_api.services.plugin_supply import OfflineDirectory, use_plugin_supply
 
     root = tmp_path / "plugins"
     shutil.copytree(FIXTURE, root / "investment-assistant" / "0.1.0")
@@ -60,9 +60,9 @@ def offline(tmp_path: Path) -> Iterator[Path]:
 
 async def docs() -> dict[str, tuple[str, str]]:
     """The base's documents: file name to (origin, text)."""
-    from choregos_api.db.models import KnowledgeBase, KnowledgeDocument
-    from choregos_api.db.session import session_scope
     from sqlalchemy.orm import undefer
+    from tranibor_api.db.models import KnowledgeBase, KnowledgeDocument
+    from tranibor_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         rows = (

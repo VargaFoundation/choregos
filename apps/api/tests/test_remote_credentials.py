@@ -15,8 +15,8 @@ from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
-from choregos_adapters.fakes.a2a import FakeA2aAgent
 from httpx import AsyncClient
+from tranibor_adapters.fakes.a2a import FakeA2aAgent
 
 from .conftest import login
 from .conftest_remote import remote_agent, set_sealing_key
@@ -43,9 +43,9 @@ async def _create_oauth(client: AsyncClient, remote: FakeA2aAgent, name: str = "
 
 async def _everything_stored() -> str:
     """Every row a secret could leak into, as text: the credential rows, the audit log, the events."""
-    from choregos_api.db.models import AuditLog, RemoteCredential
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import AuditLog, RemoteCredential
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as session:
         rows = (await session.execute(select(RemoteCredential))).scalars().all()
@@ -113,10 +113,10 @@ async def test_authorising_sends_a_pkce_challenge_and_the_callback_proves_the_ve
 async def test_the_refresh_token_is_sealed_and_in_no_row_no_response_no_audit_line(
     client: AsyncClient, admin: str, remote: FakeA2aAgent
 ) -> None:
-    from choregos_api.db.models import Organization, RemoteCredential
-    from choregos_api.db.session import session_scope
-    from choregos_api.secret_store import get_secret_store
     from sqlalchemy import select
+    from tranibor_api.db.models import Organization, RemoteCredential
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.secret_store import get_secret_store
 
     await _create_oauth(client, remote)
     started = await client.post(f"{BASE}/rovo-oauth/authorize")
@@ -205,9 +205,9 @@ async def test_a_bearer_credential_is_sealed_and_never_returned(
 async def test_revoking_deletes_the_sealed_values(
     client: AsyncClient, admin: str, remote: FakeA2aAgent
 ) -> None:
-    from choregos_api.db.models import OrgSecret
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import OrgSecret
+    from tranibor_api.db.session import session_scope
 
     await client.post(BASE, json={"name": "static", "type": "bearer", "token": "a-token-value"})
     async with session_scope() as session:

@@ -8,10 +8,10 @@ from datetime import UTC, datetime
 from typing import Any
 
 import pytest
-from choregos_core.dsl import parse_workflow, to_process
-from choregos_core.dsl.dates import UnreadableDate, due_date, field_of
-from choregos_core.dsl.engine import WorkflowEngine
-from choregos_core.gates import GateContext, evaluate
+from tranibor_core.dsl import parse_workflow, to_process
+from tranibor_core.dsl.dates import UnreadableDate, due_date, field_of
+from tranibor_core.dsl.engine import WorkflowEngine
+from tranibor_core.gates import GateContext, evaluate
 
 ARRIVAL = """
 apiVersion: choregos/v1
@@ -161,7 +161,7 @@ def test_an_action_in_doubt_does_not_settle_its_transition_which_waits() -> None
     """ADR 0149 §5: an action in doubt is never replayed. Read as a failure it would follow `on_fail`,
     whose retry proposes the action again under a new attempt: a second delivery of a write nobody
     knows was made. So the transition's guarantee waits, and the work item stays where it is."""
-    from choregos_core.gates import ACTION_SETTLED
+    from tranibor_core.gates import ACTION_SETTLED
 
     assert "in_doubt" not in ACTION_SETTLED
     verdict = evaluate("action_succeeded", GateContext(action_status="in_doubt"))

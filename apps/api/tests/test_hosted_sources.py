@@ -10,8 +10,8 @@ from collections.abc import Iterator
 from typing import Any
 
 import pytest
-from choregos_adapters.fakes.storage import FakeObjectStore
 from httpx import AsyncClient
+from tranibor_adapters.fakes.storage import FakeObjectStore
 
 from .conftest import login
 
@@ -37,7 +37,7 @@ AGENT_ZIP = _zip({"main.py": AGENT, "responses_server.py": "...", "requirements.
 
 @pytest.fixture
 def store() -> Iterator[FakeObjectStore]:
-    from choregos_api.object_store import use_object_store
+    from tranibor_api.object_store import use_object_store
 
     fake = FakeObjectStore()
     use_object_store(fake)
@@ -91,14 +91,14 @@ async def _create(client: AsyncClient, runtime: dict[str, Any]) -> Any:
     ],
 )
 def test_a_zip_that_could_harm_the_build_is_refused(data: bytes, reason: str) -> None:
-    from choregos_api.services.hosted_sources import SourceRefused, read_source
+    from tranibor_api.services.hosted_sources import SourceRefused, read_source
 
     with pytest.raises(SourceRefused, match=reason):
         read_source(data)
 
 
 def test_an_encrypted_entry_or_a_name_twice_is_refused() -> None:
-    from choregos_api.services.hosted_sources import SourceRefused, read_source
+    from tranibor_api.services.hosted_sources import SourceRefused, read_source
 
     encrypted = bytearray(_zip({"main.py": AGENT}))
     # The general purpose flag of the local header (offset 6) and of the central directory entry.
@@ -118,7 +118,7 @@ def test_an_encrypted_entry_or_a_name_twice_is_refused() -> None:
 def test_a_flat_zip_is_read_with_its_digest() -> None:
     import hashlib
 
-    from choregos_api.services.hosted_sources import read_source
+    from tranibor_api.services.hosted_sources import read_source
 
     archive = read_source(_zip({"main.py": AGENT, "pkg/mod.py": "", "requirements.txt": ""}))
     assert archive.files == ("main.py", "pkg/mod.py", "requirements.txt")
@@ -137,7 +137,7 @@ DOTNET = {"entry_point": ["dotnet", "Triager.dll"]}
 
 
 def _source(**changes: Any) -> Any:
-    from choregos_api.schemas import HostedZipSource
+    from tranibor_api.schemas import HostedZipSource
 
     return HostedZipSource.model_validate({**_runtime("sha256:" + "0" * 64)["source"], **changes})
 
@@ -189,7 +189,7 @@ def _source(**changes: Any) -> Any:
 def test_a_version_that_its_zip_cannot_run_is_refused(
     files: dict[str, str], changes: dict[str, Any], reason: str
 ) -> None:
-    from choregos_api.services.hosted_sources import SourceRefused, check_against, read_source
+    from tranibor_api.services.hosted_sources import SourceRefused, check_against, read_source
 
     with pytest.raises(SourceRefused, match=reason):
         check_against(read_source(_zip(files)), _source(**changes))
@@ -221,7 +221,7 @@ def test_a_version_that_its_zip_cannot_run_is_refused(
     ],
 )
 def test_a_version_its_zip_can_run_is_accepted(files: dict[str, str], changes: dict[str, Any]) -> None:
-    from choregos_api.services.hosted_sources import check_against, read_source
+    from tranibor_api.services.hosted_sources import check_against, read_source
 
     check_against(read_source(_zip(files)), _source(**changes))
 
@@ -296,7 +296,7 @@ ENTRYPOINT ["dotnet", "Triager.dll"]
 
 
 def _hosted(**changes: Any) -> Any:
-    from choregos_api.schemas import HostedRuntime
+    from tranibor_api.schemas import HostedRuntime
 
     return HostedRuntime.model_validate(
         {**_runtime("sha256:" + "0" * 64), "source": _source(**changes).model_dump()}
@@ -304,13 +304,13 @@ def _hosted(**changes: Any) -> Any:
 
 
 def test_the_dockerfile_is_written_by_the_platform_from_a_pinned_base() -> None:
-    from choregos_api.services.hosted_sources import dockerfile, read_source
+    from tranibor_api.services.hosted_sources import dockerfile, read_source
 
     assert dockerfile(_hosted(), read_source(AGENT_ZIP)) == GOLDEN
 
 
 def test_the_dockerfile_follows_the_dependency_mode_and_never_the_zips_own() -> None:
-    from choregos_api.services.hosted_sources import dockerfile, read_source
+    from tranibor_api.services.hosted_sources import dockerfile, read_source
 
     own = {"Dockerfile": "FROM evil.example/root\nUSER root\n"}
     pyproject = dockerfile(_hosted(), read_source(_zip({"main.py": AGENT, "pyproject.toml": "", **own})))
@@ -330,7 +330,7 @@ def test_the_dockerfile_follows_the_dependency_mode_and_never_the_zips_own() -> 
 
 
 def test_a_node_zip_is_installed_from_its_lock_file_or_carries_node_modules() -> None:
-    from choregos_api.services.hosted_sources import dockerfile, read_source
+    from tranibor_api.services.hosted_sources import dockerfile, read_source
 
     own = {"Dockerfile": "FROM evil.example/root\nUSER root\n"}
     node = {"runtime": "node_22", "entry_point": ["node", "main.js"]}
@@ -345,7 +345,7 @@ def test_a_node_zip_is_installed_from_its_lock_file_or_carries_node_modules() ->
 
 
 def test_a_dotnet_zip_is_published_in_the_sdk_and_runs_without_it() -> None:
-    from choregos_api.services.hosted_sources import dockerfile, read_source
+    from tranibor_api.services.hosted_sources import dockerfile, read_source
 
     dotnet = {"runtime": "dotnet_10", **DOTNET}
     project = read_source(_zip({"Triager.csproj": "<Project/>", "Program.cs": ""}))
@@ -363,8 +363,8 @@ def test_a_dotnet_zip_is_published_in_the_sdk_and_runs_without_it() -> None:
 def test_the_build_key_changes_with_every_input_and_only_with_them(monkeypatch: pytest.MonkeyPatch) -> None:
     import json
 
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.services.hosted_sources import pending_build, read_source
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.services.hosted_sources import pending_build, read_source
 
     zipped = read_source(AGENT_ZIP)
     first = pending_build(_hosted(), zipped)
@@ -403,8 +403,8 @@ def test_the_build_key_changes_with_every_input_and_only_with_them(monkeypatch: 
 def test_a_dotnet_build_records_and_keys_its_sdk_image(monkeypatch: pytest.MonkeyPatch) -> None:
     import json
 
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.services.hosted_sources import pending_build, read_source
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.services.hosted_sources import pending_build, read_source
 
     dotnet = {"runtime": "dotnet_10", **DOTNET}
     project = read_source(_zip({"Triager.csproj": "", "Program.cs": ""}))
@@ -440,8 +440,8 @@ def test_a_dotnet_build_records_and_keys_its_sdk_image(monkeypatch: pytest.Monke
 def test_an_operator_takes_a_runtime_away_with_an_empty_base_image(
     monkeypatch: pytest.MonkeyPatch, taken: str, source: dict[str, Any], files: dict[str, str], reason: str
 ) -> None:
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.services.hosted_sources import SourceRefused, check_against, read_source
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.services.hosted_sources import SourceRefused, check_against, read_source
 
     monkeypatch.setenv("CHOREGOS_HOSTED_BASE_IMAGES", f'{{"{taken}": ""}}')
     reset_settings_cache()
@@ -457,8 +457,8 @@ def test_an_operator_takes_a_runtime_away_with_an_empty_base_image(
 
 
 def test_a_base_image_without_a_digest_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.services.hosted_sources import SourceRefused, base_image
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_api.services.hosted_sources import SourceRefused, base_image
 
     monkeypatch.setenv("CHOREGOS_HOSTED_BASE_IMAGES", '{"python_3_13": "python:3.13-slim"}')
     reset_settings_cache()
@@ -493,9 +493,9 @@ async def test_an_upload_is_stored_once_under_its_digest(
 async def _audited_targets() -> list[str]:
     """The uploads' audit targets, checked against their column: SQLite ignores a length that
     PostgreSQL enforces."""
-    from choregos_api.db.models import AuditLog
-    from choregos_api.db.session import session_scope
     from sqlalchemy import select
+    from tranibor_api.db.models import AuditLog
+    from tranibor_api.db.session import session_scope
 
     async with session_scope() as db:
         query = select(AuditLog.target_id).where(AuditLog.action == "agent.hosted_source_upload")
@@ -538,7 +538,7 @@ async def test_a_member_who_cannot_create_an_agent_cannot_upload(
 async def test_a_zip_version_gets_the_build_the_platform_computes(
     client: AsyncClient, admin: str, store: FakeObjectStore
 ) -> None:
-    from choregos_api.services.hosted_sources import pending_build, read_source
+    from tranibor_api.services.hosted_sources import pending_build, read_source
 
     sha256 = (await _upload(client)).json()["sha256"]
     forged = {"status": "ready", "key": "sha256:" + "f" * 64, "image": "evil.example/a@sha256:" + "f" * 64}
@@ -583,7 +583,7 @@ async def test_a_zip_version_whose_source_cannot_be_built_is_refused(
 async def test_a_zip_runtime_without_a_base_image_is_refused_before_anything_is_read(
     client: AsyncClient, admin: str, store: FakeObjectStore, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.config import reset_settings_cache
+    from tranibor_api.config import reset_settings_cache
 
     monkeypatch.setenv("CHOREGOS_HOSTED_BASE_IMAGES", '{"dotnet_10": ""}')
     reset_settings_cache()

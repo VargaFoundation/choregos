@@ -12,10 +12,10 @@ import json
 from typing import Any
 
 import httpx
-from choregos_contracts import ModelRef, StageInput, StageStatus
-from choregos_runner.exits import Exit
-from choregos_runner.gateway_probe import PROBE_EVENT, ask_the_gateway
-from choregos_runner.runner import Runner
+from tranibor_contracts import ModelRef, StageInput, StageStatus
+from tranibor_runner.exits import Exit
+from tranibor_runner.gateway_probe import PROBE_EVENT, ask_the_gateway
+from tranibor_runner.runner import Runner
 
 from .conftest import FakeInternalClient, agent_script
 
