@@ -1,0 +1,150 @@
+# Every night, the single-node proof (ADR 0184, S80-07e): `tools/single-node/proof.sh` on k3d, with
+# the images of this commit. Blank node -> k3s -> the chart with values/single-node.yaml -> one work
+# item to `approved` -> the chart's backup -> the node destroyed -> a new node -> the chart -> the
+# restore -> the same work item read back. Exit 0 only if every step held.
+#
+# On a GitHub-hosted runner (4 vCPU, 16 GiB): the profile requests about 2.1 CPU and 6.2 GiB with its
+# backup job, k3s's own pods about 0.2 CPU, so the product's values fit as they are and no CI-only
+# overlay lowers them. The runner's disk is the tight resource: the preinstalled toolchains the proof
+# does not use are removed first.
+#
+# A pull request that changes the proof (this file or `tools/single-node/`) runs it too: a change to
+# the proof is proven before it reaches the night.
+name: single-node proof
+
+on:
+  schedule:
+    - cron: "30 2 * * *"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/single-node-proof.yml
+      - tools/single-node/**
+
+permissions:
+  contents: read
+
+# `bash -eo pipefail`: the proof's exit status must survive its `tee`.
+defaults:
+  run:
+    shell: bash
+
+# Two nights never overlap; a newer push to a pull request replaces its older run.
+concurrency:
+  group: single-node-proof-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  K3D_VERSION: v5.9.0
+  K3D_SHA256: 06d8f25bc3a971c4eb29e0ff08429b180402db0f4dec838c9eac427e296800a0
+  # k3d 5.9.0's default node, pinned to its index digest.
+  PROOF_K3S_IMAGE: rancher/k3s:v1.35.5-k3s1@sha256:2074403abe1bded11ef3dde09d457e13be8e0b64c218b1c4f8269b4565cfbc65
+
+jobs:
+  proof:
+    name: install, work item, backup, destroy, restore
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      PROOF_IMAGE_TAG: proof
+      PROOF_IMPORT_IMAGES: >-
+        ghcr.io/graalsystems/choregos-api:proof
+        ghcr.io/graalsystems/choregos-orchestrator:proof
+        ghcr.io/graalsystems/choregos-web:proof
+      # The kubelet's default hard eviction (15 % of the image disk) is close to what a runner has
+      # left once the images are in: the node would be tainted `disk-pressure` and nothing scheduled.
+      PROOF_EVICTION: "5%"
+      # The cluster is kept on failure so the step below can read it; the runner is thrown away.
+      PROOF_KEEP: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: room on the runner's disk
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup \
+            /opt/hostedtoolcache/CodeQL /usr/share/swift
+          docker image prune -af >/dev/null
+          df -h /
+          # k3s in a container watches many files; the runner's defaults are those of a desktop.
+          sudo sysctl -w fs.inotify.max_user_watches=524288 fs.inotify.max_user_instances=512
+          nproc
+          free -g
+      - uses: azure/setup-helm@2f5e7bc67f1f9972ab16657bb795f36d8f04de0e # v5.1.0
+        with: { version: v3.22.0 }
+      - name: k3d ${{ env.K3D_VERSION }}, checked against its checksum
+        run: |
+          curl -sfLo "$RUNNER_TEMP/k3d" "https://github.com/k3d-io/k3d/releases/download/$K3D_VERSION/k3d-linux-amd64"
+          echo "$K3D_SHA256  $RUNNER_TEMP/k3d" | sha256sum -c -
+          sudo install -m 0755 "$RUNNER_TEMP/k3d" /usr/local/bin/k3d
+          k3d version
+          kubectl version --client
+      - name: the images of this commit (api, worker, web)
+        run: |
+          docker build -f docker/api.Dockerfile --target api --build-arg REVISION="$GITHUB_SHA" \
+            -t ghcr.io/graalsystems/choregos-api:proof .
+          docker build -f docker/api.Dockerfile --target worker --build-arg REVISION="$GITHUB_SHA" \
+            -t ghcr.io/graalsystems/choregos-orchestrator:proof .
+          docker build -f docker/web.Dockerfile \
+            -t ghcr.io/graalsystems/choregos-web:proof .
+          docker builder prune -af >/dev/null
+          df -h /
+      - name: the proof
+        run: PROOF_WORKDIR="$RUNNER_TEMP/proof" tools/single-node/proof.sh 2>&1 | tee "$RUNNER_TEMP/proof.log"
+      - name: the cluster and the bucket, on failure
+        if: failure()
+        run: |
+          out="$RUNNER_TEMP/diagnostics"
+          mkdir -p "$out"
+          cp "$RUNNER_TEMP/proof.log" "$out/" 2>/dev/null || true
+          df -h / >"$out/disk.txt" 2>&1 || true
+          docker ps -a >"$out/docker-ps.txt" 2>&1 || true
+          docker logs choregos-proof-s3 >"$out/s3.log" 2>&1 || true
+          export KUBECONFIG="$RUNNER_TEMP/proof/kubeconfig"
+          [ -f "$KUBECONFIG" ] || exit 0
+          kubectl get nodes -o wide >"$out/nodes.txt" 2>&1 || true
+          kubectl describe nodes >"$out/nodes-describe.txt" 2>&1 || true
+          kubectl get all,pvc,jobs,cronjobs,networkpolicies -A -o wide >"$out/resources.txt" 2>&1 || true
+          kubectl get events -A --sort-by=.lastTimestamp >"$out/events.txt" 2>&1 || true
+          kubectl -n choregos describe pods >"$out/pods-describe.txt" 2>&1 || true
+          for pod in $(kubectl -n choregos get pods -o name 2>/dev/null); do
+            kubectl -n choregos logs "$pod" --all-containers --prefix >"$out/${pod#pod/}.log" 2>&1 || true
+          done
+      # Only the diagnostics: the proof's workdir also holds the throwaway site's keys, and a public
+      # repository's artifacts are readable by anyone.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure()
+        with:
+          name: single-node-proof-diagnostics
+          path: ${{ runner.temp }}/diagnostics
+          if-no-files-found: ignore
+          retention-days: 14
+
+  alert:
+    # A failed NIGHT opens (or comments on) the `nightly` issue, as the nightly workflow does; a
+    # failed pull request run is already red on the pull request.
+    needs: [proof]
+    if: failure() && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const title = `single-node proof failed — ${new Date().toISOString().slice(0, 10)}`;
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner, repo: context.repo.repo,
+              state: "open", labels: "nightly",
+            });
+            const body = `The nightly single-node proof failed: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            if (existing.data.length === 0) {
+              await github.rest.issues.create({
+                owner: context.repo.owner, repo: context.repo.repo,
+                title, body, labels: ["nightly", "needs-triage"],
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: existing.data[0].number, body,
+              });
+            }
