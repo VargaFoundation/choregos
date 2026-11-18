@@ -77,8 +77,7 @@ stream, narrowed to the project and the workflow, and shows what happens as it h
 
 `?workflow=` picks the workflow, as on the board. **Wall mode** (`?wall=1`, or the button) takes the page out of the
 console, full screen and in larger type, for a screen on a wall; Escape leaves it. With *reduce motion* set in your
-system, nothing pulses or slides: the page changes plainly. The terminal shows the same flow (`tranibor live`, when
-S67-24 ships).
+system, nothing pulses or slides: the page changes plainly.
 
 ### On its page
 
