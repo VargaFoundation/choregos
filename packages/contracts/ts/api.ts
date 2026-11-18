@@ -6159,6 +6159,8 @@ export type CostReport = {
     tokens_in?: number;
     tokens_out?: number;
     tokens_cached?: number;
+    /** the input tokens the provider wrote to its cache (Anthropic cache creation), part of tokens_in; absent from a line booked before S4-07 */
+    tokens_cache_write?: number;
     runs?: number;
   }>;
   total: {
@@ -6170,6 +6172,8 @@ export type CostReport = {
     tokens_out?: number;
     /** the input tokens the model read from its cache, part of tokens_in */
     tokens_cached?: number;
+    /** the input tokens the provider wrote to its cache, part of tokens_in (S4-07) */
+    tokens_cache_write?: number;
   };
 };
 
