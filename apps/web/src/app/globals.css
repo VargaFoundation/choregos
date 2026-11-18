@@ -248,3 +248,30 @@
   }
 }
 
+
+/*
+ * The live view (S67-27): a running card breathes (a soft ring, never a flash), the LIVE dot blinks
+ * slowly. A card that changes lane is moved by the page with CSS transforms (FLIP), not by a library.
+ * Nothing moves for whoever asked for less motion: the page then changes plainly.
+ */
+@keyframes live-breathe {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+  50% {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-running) 20%, transparent);
+  }
+}
+.live-running {
+  animation: live-breathe 3s ease-in-out infinite;
+}
+.live-dot {
+  animation: journey-blink 1.8s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .live-running,
+  .live-dot {
+    animation: none;
+  }
+}

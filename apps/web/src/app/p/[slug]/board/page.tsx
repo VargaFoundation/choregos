@@ -102,7 +102,11 @@ export default function BoardPage({ params }: { params: Promise<{ slug: string }
             {showEmpty ? "Hide empty columns" : `Show empty columns (${hiddenColumns})`}
           </Button>
         )}
-        <span className="ml-auto">
+        <span className="ml-auto flex items-center gap-3">
+          {/* The same work, as it happens (S67-27). */}
+          <Link href={`/p/${slug}/live${chosen ? `?workflow=${encodeURIComponent(chosen)}` : ""}`} className="text-sm" data-testid="board-live-link">
+            Live view
+          </Link>
           <Button tone="accent" size="sm" onClick={() => setNouvelle(true)}>
             New work item
           </Button>

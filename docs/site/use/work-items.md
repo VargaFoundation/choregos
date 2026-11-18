@@ -63,6 +63,23 @@ them.
 The board on your tracker (GitHub Projects, Jira) follows Tranibor, not the reverse: moving a card
 there does not move the work item. Move it from the console.
 
+### On the live view
+
+**Live**, next to **Board** in the project's navigation (or **Live view** on the board), draws the same columns as
+full-height lanes in the workflow's colour, with a count in each header. It listens to the organisation's activity
+stream, narrowed to the project and the workflow, and shows what happens as it happens:
+
+- A running card pulses softly and says the stage, the agent, how long it has run and what it has spent so far.
+- A card slides to its next lane when its work item changes state.
+- A failed card turns red and names the reason; hover it or focus it with the keyboard for the summary.
+- A card that waits for a person turns amber and says what it waits for.
+- The ticker at the bottom lists the latest events. **LIVE** turns to **RECONNECTING** when the stream drops; the page then reads the work items every few seconds until it is back.
+
+`?workflow=` picks the workflow, as on the board. **Wall mode** (`?wall=1`, or the button) takes the page out of the
+console, full screen and in larger type, for a screen on a wall; Escape leaves it. With *reduce motion* set in your
+system, nothing pulses or slides: the page changes plainly. The terminal shows the same flow (`tranibor live`, when
+S67-24 ships).
+
 ### On its page
 
 Open a work item. From top to bottom:
