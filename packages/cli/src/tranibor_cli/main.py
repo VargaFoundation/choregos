@@ -14,7 +14,6 @@ from pathlib import Path
 from typing import Annotated, Any
 from urllib.parse import urlsplit
 
-import click
 import httpx
 import typer
 from rich.console import Console
@@ -286,8 +285,11 @@ def _choose_organisation(http: Client) -> str:
         return slugs[0] if slugs else ""
     if chat_module.interactive():
         console.print("Your organisations: " + ", ".join(slugs))
-        chosen: str = typer.prompt("Default organisation", default=slugs[0], type=click.Choice(slugs))
-        return chosen
+        while True:  # `click.Choice` would do it, but the native binary ships Typer without `click`
+            chosen = str(typer.prompt("Default organisation", default=slugs[0])).strip()
+            if chosen in slugs:
+                return chosen
+            console.print(f"[yellow]![/yellow] {chosen!r} is not one of yours")
     console.print(
         f"[yellow]![/yellow] you belong to {len(slugs)} organisations ({', '.join(slugs)}): "
         "save one with `choregos login --org <slug>`"

@@ -298,8 +298,9 @@ def test_login_asks_which_organisation_in_a_terminal(
     respx.get(f"{API}/api/v1/orgs").mock(return_value=Response(200, json=[_org("acme"), _org("globex")]))
     from choregos_cli.main import app
 
-    result = CliRunner().invoke(app, ["login", "--api-url", API], input="globex\n")
+    result = CliRunner().invoke(app, ["login", "--api-url", API], input="initech\nglobex\n")
     assert result.exit_code == 0, result.output
+    assert "'initech' is not one of yours" in result.output, "a slug outside the list is asked again"
     assert json.loads(profile.read_text())["org"] == "globex"
 
 
