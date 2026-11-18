@@ -92,6 +92,15 @@ describe("parkTokens", () => {
     expect([...parked.keys()].filter((k) => k.startsWith("i"))).toHaveLength(MAX_TOKENS - 1);
     expect(overflow.get("done")).toBe(4);
   });
+
+  it("keeps tokens inside a narrow station, and fills extra height with room", () => {
+    const narrow = flowGeometry(graph, "triage", new Map(), [], { stationW: 176 });
+    const { parked } = parkTokens(narrow, [{ state: "plan", cards: ["a", "b"] }]);
+    const plan = narrow.byId.get("plan")!;
+    expect(parked.get("b")!.x + narrow.token.w).toBeLessThanOrEqual(plan.x + plan.w);
+    const tall = flowGeometry(graph, "triage", new Map(), [], { stretch: 200 });
+    expect(tall.height).toBeGreaterThan(flowGeometry(graph, "triage", new Map()).height + 150);
+  });
 });
 
 describe("a token's way", () => {

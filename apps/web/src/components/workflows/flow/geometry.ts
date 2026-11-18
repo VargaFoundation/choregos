@@ -21,19 +21,23 @@ import {
   type GraphNode,
 } from "../map/layout";
 
-export const STATION_W = 214;
-export const GAP_X = 58;
-export const HEAD_H = 64;
-export const TOKEN_W = 96;
-export const TOKEN_H = 26;
-export const TOKEN_GAP = 6;
-export const PAD = 8;
+export const STATION_W = 256;
+export const GAP_X = 72;
+export const HEAD_H = 72;
+export const TOKEN_W = 108;
+export const TOKEN_H = 30;
+export const TOKEN_GAP = 8;
+export const PAD = 10;
 export const COLS = 2;
 /** Tokens a station shows; beyond this the last place says how many more. */
 export const MAX_TOKENS = 6;
 const MARGIN_X = 20;
 const SIDE_GAP = 120;
 const SIDE_SPACING = 28;
+/** The narrowest a station gets when the wall squeezes the row to keep its text large. */
+export const MIN_STATION_W = 148;
+/** The narrowest a token gets (a key like `ACME-206` still fits); a station too narrow for two of them holds one column. */
+export const MIN_TOKEN_W = 92;
 const SAMPLES = 28;
 
 export interface Pt {
@@ -73,17 +77,29 @@ export interface FlowEdge {
   back: boolean;
 }
 
+/** What can be tuned: the wall asks for narrower stations (so the text stays large) and a taller drawing. */
+export interface FlowOptions {
+  stationW?: number;
+  gapX?: number;
+  /** Extra height to spread over the rows, in design pixels: the wall's flow fills the screen. */
+  stretch?: number;
+}
+
 export interface FlowGeometry {
   stations: Station[];
   edges: FlowEdge[];
   width: number;
   height: number;
   byId: Map<string, Station>;
+  /** The size of a token, in the drawing's own pixels, and how many sit side by side in a station. */
+  token: { w: number; h: number };
+  cols: number;
 }
 
 export const edgeId = (edge: GraphEdge): string => edge.id ?? `${edge.from}->${edge.to}`;
 
-const rowsFor = (count: number) => Math.max(2, Math.ceil(Math.min(count, MAX_TOKENS) / COLS));
+const columnsFor = (stationW: number) => (stationW >= 2 * MIN_TOKEN_W + 2 * PAD + TOKEN_GAP ? COLS : 1);
+const rowsFor = (count: number, cols: number) => Math.max(2, Math.ceil(Math.min(count, MAX_TOKENS) / cols));
 const heightFor = (rows: number) => HEAD_H + 8 + rows * (TOKEN_H + TOKEN_GAP) + 6;
 
 function cubic(a: Pt, b: Pt, c: Pt, d: Pt, t: number): Pt {
@@ -111,16 +127,23 @@ export function flowGeometry(
   counts: ReadonlyMap<string, number>,
   /** States work items sit in that the graph does not define. */
   outside: { id: string; display: string }[] = [],
+  options: FlowOptions = {},
 ): FlowGeometry {
+  const stationW = options.stationW ?? STATION_W;
+  const gapX = options.gapX ?? GAP_X;
+  const stretch = Math.max(0, options.stretch ?? 0);
+  const cols = columnsFor(stationW);
   const nodes = graph.nodes as GraphNode[];
   const edges = (graph.edges as GraphEdge[]).filter((e) => e.kind !== "default" && !e.wildcard && e.from !== e.to);
   const layout = layoutMap(graph, initial);
   const node = new Map(nodes.map((n) => [n.id, n]));
   const sideIds = [...layout.sides.map((s) => s.id), ...outside.filter((o) => !node.has(o.id)).map((o) => o.id)];
 
-  const rowRows = (ids: string[]) => ids.reduce((m, id) => Math.max(m, rowsFor(counts.get(id) ?? 0)), 2);
-  const pathH = heightFor(rowRows(layout.path));
-  const sideH = heightFor(rowRows(sideIds));
+  const rowRows = (ids: string[]) => ids.reduce((m, id) => Math.max(m, rowsFor(counts.get(id) ?? 0, cols)), 2);
+  const hasSides = sideIds.length > 0;
+  // The extra height goes to the stations (more room for tokens) and, in part, between the two rows.
+  const pathH = heightFor(rowRows(layout.path)) + Math.round(stretch * (hasSides ? 0.4 : 1));
+  const sideH = heightFor(rowRows(sideIds)) + Math.round(stretch * 0.3);
   const back = edges.some((e) => {
     const i = layout.path.indexOf(e.from);
     const j = layout.path.indexOf(e.to);
@@ -128,7 +151,7 @@ export function flowGeometry(
   });
   const top = back ? 78 : 24;
   const pathY = top;
-  const sideY = pathY + pathH + SIDE_GAP;
+  const sideY = pathY + pathH + SIDE_GAP + Math.round(stretch * 0.3);
 
   const stations: Station[] = [];
   layout.path.forEach((id, i) => {
@@ -140,9 +163,9 @@ export function flowGeometry(
       row: "path",
       terminal: Boolean(n?.terminal),
       outside: false,
-      x: MARGIN_X + i * (STATION_W + GAP_X),
+      x: MARGIN_X + i * (stationW + gapX),
       y: pathY,
-      w: STATION_W,
+      w: stationW,
       h: pathH,
       reached: [],
     });
@@ -154,7 +177,7 @@ export function flowGeometry(
     const side = layout.sides.find((s) => s.id === id);
     const anchor = side?.reachedFrom.map((d) => byId.get(d.id)).find((s) => s?.row === "path");
     const x = Math.max(cursor, anchor ? anchor.x + 24 : cursor);
-    cursor = x + STATION_W + SIDE_SPACING;
+    cursor = x + stationW + SIDE_SPACING;
     const extra = outside.find((o) => o.id === id);
     const station: Station = {
       id,
@@ -165,7 +188,7 @@ export function flowGeometry(
       outside: !n,
       x,
       y: sideY,
-      w: STATION_W,
+      w: stationW,
       h: sideH,
       reached: (side?.reachedFrom ?? []).map((d) => d.how),
     };
@@ -193,8 +216,8 @@ export function flowGeometry(
       const i = layout.path.indexOf(a.id);
       const j = layout.path.indexOf(b.id);
       if (j === i + 1) {
-        const p0 = { x: a.x + a.w, y: a.y + 30 + shift };
-        const p3 = { x: b.x, y: b.y + 30 + shift };
+        const p0 = { x: a.x + a.w, y: a.y + 34 + shift };
+        const p3 = { x: b.x, y: b.y + 34 + shift };
         const dx = (p3.x - p0.x) * 0.5;
         shape = curve(p0, { x: p0.x + dx, y: p0.y }, { x: p3.x - dx, y: p3.y }, p3);
       } else {
@@ -217,8 +240,8 @@ export function flowGeometry(
       shape = curve(p0, { x: p0.x, y: p0.y - dy }, { x: p3.x, y: p3.y + dy }, p3);
     } else {
       const forward = b.x >= a.x;
-      const p0 = { x: forward ? a.x + a.w : a.x, y: a.y + 30 + shift };
-      const p3 = { x: forward ? b.x : b.x + b.w, y: b.y + 30 + shift };
+      const p0 = { x: forward ? a.x + a.w : a.x, y: a.y + 34 + shift };
+      const p3 = { x: forward ? b.x : b.x + b.w, y: b.y + 34 + shift };
       const dx = (p3.x - p0.x) * 0.5;
       shape = curve(p0, { x: p0.x + dx, y: p0.y }, { x: p3.x - dx, y: p3.y }, p3);
     }
@@ -232,7 +255,9 @@ export function flowGeometry(
       back: isBack,
     });
   }
-  return { stations, edges: flowEdges, width, height, byId };
+  return { stations, edges: flowEdges, width, height, byId, cols,
+    token: { w: Math.min(TOKEN_W, Math.floor((stationW - 2 * PAD - (cols - 1) * TOKEN_GAP) / cols)), h: TOKEN_H },
+  };
 }
 
 /** The edge a move took: by the reduction's edge id, else the first edge between the two states. */
@@ -269,8 +294,8 @@ export function parkTokens(
     lane.cards.slice(0, shown).forEach((id, i) => {
       parked.set(id, {
         station: station.id,
-        x: station.x + PAD + (i % COLS) * (TOKEN_W + TOKEN_GAP),
-        y: station.y + HEAD_H + 6 + Math.floor(i / COLS) * (TOKEN_H + TOKEN_GAP),
+        x: station.x + PAD + (i % geometry.cols) * (geometry.token.w + TOKEN_GAP),
+        y: station.y + HEAD_H + 6 + Math.floor(i / geometry.cols) * (geometry.token.h + TOKEN_GAP),
       });
     });
     if (many) overflow.set(station.id, lane.cards.length - shown);
@@ -283,8 +308,13 @@ export function parkTokens(
  * edge's points, then the new place, as top-left corners (the edge's points are where the token's
  * centre goes). Reaching each point at a time eased over the whole distance is the caller's.
  */
-export function travelPath(from: Pt, to: Pt, edge: FlowEdge | undefined): Pt[] {
-  const half = { x: TOKEN_W / 2, y: TOKEN_H / 2 };
+export function travelPath(
+  from: Pt,
+  to: Pt,
+  edge: FlowEdge | undefined,
+  token: { w: number; h: number } = { w: TOKEN_W, h: TOKEN_H },
+): Pt[] {
+  const half = { x: token.w / 2, y: token.h / 2 };
   const along = (edge?.points ?? []).map((p) => ({ x: p.x - half.x, y: p.y - half.y }));
   return [from, ...along, to];
 }
