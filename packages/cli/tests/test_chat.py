@@ -240,6 +240,7 @@ class Platform:
             )
         )
         self.spend(1.2345)
+        self.currency("USD")
         self.pending([])
         router.get(f"{V1}/orgs/acme/activity").mock(side_effect=self._listing)
         router.get(f"{V1}/orgs/acme/activity/stream").mock(side_effect=self._stream)
@@ -267,13 +268,25 @@ class Platform:
         self.router.get(f"{V1}/me/assistants").mock(return_value=Response(200, json=body))
 
     def spend(self, cost: float | None) -> None:
-        body = {"group_by": "day", "rows": [], "total": {"cost_usd": cost, "cost_eur": 0.0}}
+        body = {
+            "group_by": "day",
+            "rows": [],
+            "total": {"cost_usd": cost, "cost_eur": None if cost is None else cost * 0.9},
+        }
         status = 200 if cost is not None else 403
         self.router.get(f"{V1}/orgs/acme/costs").mock(
             return_value=Response(
                 status, json=self.contract("CostReport", body) if cost is not None else {"detail": "no"}
             )
         )
+
+    def currency(self, code: str | None) -> None:
+        """`GET /orgs`: the organisation's currency (None: the route is refused)."""
+        if code is None:
+            self.router.get(f"{V1}/orgs").mock(return_value=Response(403, json={"detail": "no"}))
+            return
+        org = {"slug": "acme", "name": "Acme", "currency": code}
+        self.router.get(f"{V1}/orgs").mock(return_value=Response(200, json=[org]))
 
     def pending(self, items: list[dict[str, Any]] | None) -> None:
         """`GET /me/pending`: what waits for the person (None: the route is refused)."""
@@ -1160,3 +1173,20 @@ async def test_a_read_that_lands_after_the_workspace_closed_draws_nothing(platfo
     async with app.run_test(size=(160, 40)) as pilot:
         await ready(pilot)
     app.draw_tree()  # the widgets are gone
+
+
+async def test_the_amounts_follow_the_organisations_currency(platform: Platform) -> None:
+    platform.currency("EUR")
+    async with make_app(conversation=CID).run_test(size=(160, 40)) as pilot:
+        app = pilot.app
+        await until(pilot, lambda: app.live and app.conversation is not None, "the workspace")
+        text = screen_text(app)
+        assert "€1.11 today" in text and "$" not in text.split("today")[0].splitlines()[-1]
+
+
+async def test_an_unreadable_currency_keeps_each_amounts_own_symbol(platform: Platform) -> None:
+    platform.currency(None)
+    async with make_app(conversation=CID).run_test(size=(160, 40)) as pilot:
+        app = pilot.app
+        await until(pilot, lambda: app.live and app.conversation is not None, "the workspace")
+        assert "today" in screen_text(app) and "€1.11 today" in screen_text(app)

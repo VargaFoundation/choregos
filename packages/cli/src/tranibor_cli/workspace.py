@@ -49,7 +49,7 @@ from textual.widgets import ContentSwitcher, Footer, Input, OptionList, Static, 
 from textual.widgets.option_list import Option
 from textual.widgets.tree import TreeNode
 
-from . import activity, decide, run_activity, theme
+from . import activity, decide, money, run_activity, theme
 from .client import ApiError, AsyncClient, Profile
 from .run_steps import RunSteps
 
@@ -73,12 +73,6 @@ TABS = (
 DASH = activity.DASH
 Key = tuple[str, ...]
 Row = tuple[Key, Key | None, Text, dict[str, Any]]
-
-
-def money(amount: float | None, *, digits: int = 2) -> str:
-    """The one place the workspace prints an amount of its own (the header, the composer, a conversation's
-    cost): `—` where the platform cannot say, never 0. S67-25 makes it follow the organisation's currency."""
-    return DASH if amount is None else f"${amount:.{digits}f}"
 
 
 def facts(title: Text | str, rows: list[tuple[str, Text | str]], *notes: Text) -> Group:
@@ -399,7 +393,10 @@ class Workspace(App[None]):
         self.conversation: dict[str, Any] | None = None
         self.out = theme.console()
         self.board = activity.Board()
-        self.today: float | None = None
+        self.today = money.Amount()
+        #: The organisation's currency and its ledger's ratio (S67-25): every amount goes through `price`.
+        self.currency: str | None = None
+        self.rate: float | None = None
         self.assistants: list[dict[str, Any]] = []
         self.conversations: list[dict[str, Any]] = []
         self.pending: list[dict[str, Any]] | None = None
@@ -538,18 +535,20 @@ class Workspace(App[None]):
 
     async def load(self) -> None:
         org = self.organisation
-        assistants, conversations, inbox, today = await asyncio.gather(
+        assistants, conversations, inbox, spent, currency = await asyncio.gather(
             self._read("/me/assistants"),
             self._read("/me/conversations", limit=CONVERSATIONS_SHOWN),
             self._read("/me/inbox", limit=20),
             self._spend(),
+            self._currency(),
         )
         self.assistants = [a for a in (assistants or {}).get("items") or [] if a.get("org") == org]
         self.conversations = [
             c for c in (conversations or {}).get("items") or [] if c.get("org") in (org, None)
         ]
         self.inbox = list((inbox or {}).get("items") or [])
-        self.today = today
+        self.today, self.rate = spent
+        self.currency = currency
         if self.conversation_id:
             await self.open_conversation(self.conversation_id)
         else:
@@ -558,16 +557,40 @@ class Workspace(App[None]):
         await self.refresh_decisions()
         self.redraw()
 
-    async def _spend(self) -> float | None:
-        day = datetime.now(UTC).date().isoformat()
+    def price(self, amount: money.Amount, places: int = 2) -> str:
+        """The one place the workspace prints an amount: the organisation's currency, `—` when unknown."""
+        return amount.text(self.currency, places, self.rate)
+
+    async def _currency(self) -> str | None:
+        """The organisation's currency (`GET /orgs`); `None` when unreadable (own symbols then)."""
+        try:
+            listed = await self.api.get("/orgs")
+        except (ApiError, httpx.TransportError):
+            return None
+        for org in listed or []:
+            if self.organisation == org.get("slug") or self.organisation in (org.get("aliases") or []):
+                value = org.get("currency") or "EUR"  # the setting's default (S29-03)
+                return value if value in money.SYMBOLS else None
+        return None
+
+    async def _spend(self) -> tuple[money.Amount, float | None]:
+        """What was spent today, and the euros-per-dollar ratio the month's report shows."""
+        today = datetime.now(UTC).date()
+        first = today.replace(day=1).isoformat()
+        day = today.isoformat()
         try:
             report = await self.api.get(
                 f"/orgs/{self.organisation}/costs", params={"since": day, "until": day}
             )
+            month = await self.api.get(
+                f"/orgs/{self.organisation}/costs", params={"since": first, "until": day}
+            )
         except (ApiError, httpx.TransportError):
-            return None  # a project member may not read it: "—", never 0
-        value = ((report or {}).get("total") or {}).get("cost_usd")
-        return float(value) if isinstance(value, int | float) else None
+            return money.Amount(), None  # a project member may not read it: "—", never 0
+        spent = money.amount((report or {}).get("total"))
+        total = money.amount((month or {}).get("total"))
+        rate = total.eur / total.usd if total.usd and total.eur else None
+        return spent, rate
 
     async def refresh_decisions(self) -> None:
         """What waits for the person, across the organisations and conversations they belong to."""
@@ -632,12 +655,14 @@ class Workspace(App[None]):
         right.append(f"{self.board.running()} running", style=theme.RUNNING.style)
         right.append(" · ", style="dim")
         right.append(f"{waiting} waiting for you", style="yellow" if self.pending else "")
-        right.append(f" · {money(self.today)} today", style="dim")
+        right.append(f" · {self.price(self.today)} today", style="dim")
         figures.update(right)
 
     def draw_cost(self) -> None:
-        cost = (self.conversation or {}).get("cost_usd")
-        shown = money(float(cost), digits=4) if isinstance(cost, int | float) else ""
+        cost = money.amount(self.conversation)
+        shown = (
+            self.price(cost, 4) if self.conversation and self.conversation.get("cost_usd") is not None else ""
+        )
         self.query_one("#cost", Static).update(shown)
 
     def _tree_shape(self) -> tuple[list[Key], list[Row]]:
@@ -969,7 +994,7 @@ class Workspace(App[None]):
                         ("assistant", str(found.get("assistant") or found.get("agent") or DASH)),
                         ("status", str(found.get("status") or DASH)),
                         ("turns", str(found.get("turns") or 0)),
-                        ("cost", money(float(found.get("cost_usd") or 0), digits=4)),
+                        ("cost", self.price(money.amount(found), 4)),
                         ("opened", self._when(found.get("created_at"))),
                     ],
                 )
@@ -991,7 +1016,7 @@ class Workspace(App[None]):
                 row = Text(str(summary.get("title") or "(untitled)"))
                 row.append(
                     f"  {summary.get('assistant') or summary.get('agent')} · "
-                    f"{money(float(summary.get('cost_usd') or 0))}",
+                    f"{self.price(money.amount(summary))}",
                     style="dim",
                 )
                 parts.append(one_line(row))
@@ -1257,7 +1282,7 @@ class Workspace(App[None]):
         for summary in self.conversations:
             label = Text(str(summary.get("title") or "(untitled)"), style="bold")
             who = summary.get("assistant") or summary.get("agent")
-            tail = f"  {who} · {summary.get('status')} · {money(float(summary.get('cost_usd') or 0))}"
+            tail = f"  {who} · {summary.get('status')} · {self.price(money.amount(summary))}"
             label.append(tail)
             options.append((str(summary["id"]), label))
 
