@@ -472,7 +472,6 @@ stories:
     depends_on: [S4-02, S0-05]
     acceptance:
       - "Unvalidated combination refused with a link to the matrix; admin `allow_unvalidated` works"
-
   # ───────────────────────── S5 — Front ─────────────────────────
   - id: S5-01
     title: "Socle Next.js (App Router, TS strict, Tailwind, shadcn, TanStack Query, Auth.js OIDC Keycloak, next-intl FR/EN, Playwright) contre API mock"
@@ -5667,3 +5666,13 @@ stories:
     size: L
     depends_on: []
     notes: "Decision of 2026-11-18. NOTICE, licence headers, console footer, publishing identity (security contact, commit address, plugin repository and index) and docs name GRAAL.SYSTEMS SAS; the default plugin source varga becomes tranibor (migration, old name still resolved); guarded by tests/licences/test_no_varga.py."
+  - id: S4-07
+    title: "The cost ledger separates cache writes from cache reads (ADR 0188)"
+    stream: S4
+    sprint: 67
+    priority: 7
+    size: M
+    depends_on: [S4-03]
+    acceptance:
+      - "`cost_ledger.tokens_cache_write` (migration, default 0); the gateway adapter reads `cache_creation_input_tokens`"
+      - "The cost report's rows and total carry `tokens_cache_write` next to `tokens_cached` (contract PR first)"
