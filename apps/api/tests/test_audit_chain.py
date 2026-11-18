@@ -38,7 +38,7 @@ def _chain(count: int) -> list[Link]:
 
 
 def _walk(links: list[Link], *, head: tuple[int, str] | None = None, **kwargs: object) -> ChainWalker:
-    walker = ChainWalker(ORG, "varga", **kwargs)  # type: ignore[arg-type]
+    walker = ChainWalker(ORG, "tranibor", **kwargs)  # type: ignore[arg-type]
     for link in links:
         if not walker.feed(link):
             break
@@ -175,7 +175,7 @@ def test_a_checkpoint_of_another_chain_is_not_read() -> None:
 
 def test_an_anchor_line_reads_back_as_the_checkpoint_it_prints() -> None:
     signed = sign(ORG, 9, "a" * 64, T0, new_key())
-    line = json.dumps(signed.as_anchor("varga"))
+    line = json.dumps(signed.as_anchor("tranibor"))
     (back,) = read_anchors(["", line], "kept.jsonl")
     assert back == replace(signed, source="kept.jsonl") and back.signature_holds()
     with pytest.raises(ValueError, match=r"kept\.jsonl:1"):
