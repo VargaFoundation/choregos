@@ -132,7 +132,7 @@ _SPECS: dict[tuple[str, str], ConnectorTypeSpec] = {}
 
 #: The type a project gets for a kind it does not configure.
 DEFAULT_TYPES: dict[str, str] = {
-    # A project without a tracker connector files its requests in Choregos, as
+    # A project without a tracker connector files its requests in Tranibor, as
     # `tracker_is_internal` says (#704): `github-issues` with no `repo` could only crash.
     "tracker": "internal",
     "scm": "github",

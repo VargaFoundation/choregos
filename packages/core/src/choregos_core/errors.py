@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Errors of the Choregos core, located when the source is known."""
+"""Errors of the Tranibor core, located when the source is known."""
 
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ class Issue:
 
 
 class ChoregosError(Exception):
-    """Base of the Choregos errors."""
+    """Base of the Tranibor errors."""
 
 
 @dataclass

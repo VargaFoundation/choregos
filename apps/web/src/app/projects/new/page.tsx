@@ -12,7 +12,7 @@ import { useSession } from "@/lib/session";
 
 const STEPS = ["template", "project", "connectors", "summary"];
 const TRACKERS = [
-  { value: "internal", label: "Choregos (requests are filed here)" },
+  { value: "internal", label: "Tranibor (requests are filed here)" },
   { value: "github", label: "GitHub Issues / Projects" },
   { value: "jira", label: "Jira" },
   { value: "gitlab", label: "GitLab" },
@@ -23,7 +23,7 @@ const TRACKERS = [
  *
  * The repository is OPTIONAL (ADR 0012): a trade without code has none, and the wizard
  * required one anyway. The templates come from the API, not from a hard-coded list;
- * the tracker is chosen here, and "Choregos" means requests are placed in
+ * the tracker is chosen here, and "Tranibor" means requests are placed in
  * the tool (`items create`, or the board).
  */
 export default function NewProjectPage() {

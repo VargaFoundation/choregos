@@ -17,7 +17,7 @@ const NONE: GitHubAppRegistrationStatus = {
   source: "none",
   usable: false,
   blocked_by: null,
-  suggested_name: "Choregos acme.example",
+  suggested_name: "Tranibor acme.example",
   permissions: { contents: "write", metadata: "read" },
   events: ["issues", "pull_request"],
   webhook_url: "https://acme.example/api/v1/webhooks/github",
@@ -44,7 +44,7 @@ describe("the instance's GitHub App, created from a manifest (S70-21)", () => {
     vi.mocked(api.platformGitHubApp).mockResolvedValue(NONE);
     wrap(<GitHubAppRegistration />);
     const button = await screen.findByRole("button", { name: "Continue on GitHub" });
-    expect(screen.getByLabelText(/Name on GitHub/)).toHaveValue("Choregos acme.example");
+    expect(screen.getByLabelText(/Name on GitHub/)).toHaveValue("Tranibor acme.example");
     expect(screen.getByRole("radio", { name: /Private/ })).not.toBeChecked();
     expect(screen.getByRole("radio", { name: /Public/ })).not.toBeChecked();
     expect(button).toBeDisabled();
@@ -56,7 +56,7 @@ describe("the instance's GitHub App, created from a manifest (S70-21)", () => {
     vi.mocked(api.platformGitHubApp).mockResolvedValue(NONE);
     vi.mocked(api.startGitHubAppManifest).mockResolvedValue({
       action_url: "https://github.com/organizations/acme/settings/apps/new?state=s1",
-      manifest: { name: "Choregos acme.example", public: true },
+      manifest: { name: "Tranibor acme.example", public: true },
     });
     wrap(<GitHubAppRegistration />);
     fireEvent.change(await screen.findByLabelText(/Owner organisation/), { target: { value: "acme" } });
@@ -64,7 +64,7 @@ describe("the instance's GitHub App, created from a manifest (S70-21)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Continue on GitHub" }));
     await waitFor(() => expect(submit).toHaveBeenCalled());
     expect(api.startGitHubAppManifest).toHaveBeenCalledWith({
-      name: "Choregos acme.example",
+      name: "Tranibor acme.example",
       organization: "acme",
       public: true,
       webhook_active: true,
@@ -73,7 +73,7 @@ describe("the instance's GitHub App, created from a manifest (S70-21)", () => {
     expect(form.method).toBe("post");
     expect(form.action).toBe("https://github.com/organizations/acme/settings/apps/new?state=s1");
     const field = form.querySelector("input[name='manifest']") as HTMLInputElement;
-    expect(JSON.parse(field.value)).toEqual({ name: "Choregos acme.example", public: true });
+    expect(JSON.parse(field.value)).toEqual({ name: "Tranibor acme.example", public: true });
   });
 
   it("says why the console cannot create one, and shows the deployment's App", async () => {
@@ -95,7 +95,7 @@ describe("the instance's GitHub App, created from a manifest (S70-21)", () => {
       ...NONE,
       source: "manifest",
       app_id: "4242",
-      name: "Choregos acme",
+      name: "Tranibor acme",
       owner_login: "acme",
       public: false,
       usable: true,

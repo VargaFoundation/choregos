@@ -24,7 +24,7 @@ The master key can mint and revoke keys and read spend, so it is the platform's:
 (it gets a per-run key). Tags on keys are a LiteLLM **Enterprise** feature: on the open-source proxy leave
 `enterprise_tags` false, or minting fails with `403`.
 
-## In Choregos
+## In Tranibor
 
 Chart values, or Connectors, **Gateway**, type **LiteLLM**: `base_url`, optionally `team_id`,
 `internal_prices`, `enterprise_tags`, and `master_key` in the password field.

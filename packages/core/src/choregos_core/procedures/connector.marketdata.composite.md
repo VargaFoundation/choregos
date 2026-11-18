@@ -31,7 +31,7 @@ Only what each source needs: nothing for Stooq and Yahoo, an API key for Alpha V
 
 They read public market data. Nothing is written.
 
-## In Choregos
+## In Tranibor
 
 Connectors, **Market data**, type **composite**. `sources`: for example `["stooq", "alphavantage"]`.
 `source_configs`: a sub-configuration per provider, for example `{"stooq": {"suffix_map": {}}}`.

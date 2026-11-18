@@ -118,12 +118,12 @@ export function EditionFooterLine({ productName }: { productName?: string }) {
   const publisher = edition.data?.edition === "enterprise" ? edition.data.publisher : null;
   // The foundation is named here, and only here (ADR 0048). A theme cannot remove this line; a renamed
   // instance says what it is built on (ADR 0064), an enterprise edition who publishes it (ADR 0024).
-  const product = productName === "Choregos" ? "" : `${productName} · `;
+  const product = productName === "Tranibor" ? "" : `${productName} · `;
   return (
     <span data-testid="footer-foundation">
       {publisher
-        ? `${product}Choregos Enterprise edition by ${publisher} · built on Choregos by Varga Foundation (Apache 2.0)`
-        : `${productName === "Choregos" ? "Choregos" : `${productName}, built on Choregos`} by Varga Foundation · Apache 2.0`}
+        ? `${product}Enterprise edition by ${publisher} · built on Tranibor by Varga Foundation (Apache 2.0)`
+        : `${productName === "Tranibor" ? "Tranibor" : `${productName}, built on Tranibor`} by Varga Foundation · Apache 2.0`}
     </span>
   );
 }
@@ -191,7 +191,7 @@ export function AboutPanel() {
       <dl className="divide-y divide-line" aria-label="Deployed version">
         <Row label="Product">{productName}</Row>
         <Row label="Core">
-          Choregos <span className="font-mono">{data.version}</span>
+          Tranibor <span className="font-mono">{data.version}</span>
           {" · "}
           <span data-testid="about-core-licence">{data.licence ?? "Apache-2.0"}</span> licence
         </Row>

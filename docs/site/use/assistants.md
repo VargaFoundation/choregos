@@ -117,7 +117,7 @@ an account you connected.
 2. You are sent to the source's own page to give your consent. You come back to the console.
 3. The account then shows **Connected**, the scopes you gave and when it was last used.
 
-**Revoke** removes the connection at once, and Choregos forgets its secret. **Reconnect** appears when a
+**Revoke** removes the connection at once, and Tranibor forgets its secret. **Reconnect** appears when a
 source stopped accepting the account. Until you connect, the assistant carries on without that source and
 says so; it never reads it with someone else's rights. The same list is at `/me/connected-accounts`.
 

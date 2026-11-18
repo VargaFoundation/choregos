@@ -1,6 +1,6 @@
 ---
 title: Workflow YAML
-description: Every key of a Choregos workflow, with its type, its default and what it does, and complete examples that the platform's own parser checks.
+description: Every key of a Tranibor workflow, with its type, its default and what it does, and complete examples that the platform's own parser checks.
 sidebar_position: 2
 ---
 

@@ -18,7 +18,7 @@ fields:
 
 ## Before you start
 
-- A Tavily account and its API key. Choregos never asks Tavily for page contents: reading a result
+- A Tavily account and its API key. Tranibor never asks Tavily for page contents: reading a result
   goes through `web_fetch`.
 - The built-in `web_search` returns links and snippets, never pages.
 
@@ -30,14 +30,14 @@ Create a key in the Tavily dashboard.
 
 The key only searches. It stays in the API: no runner ever sees it.
 
-## In Choregos
+## In Tranibor
 
 1. Connectors, **Web search**, type **Tavily**. `api_key` in the password field (sealed, shown once).
-2. Choregos does **not** know what Tavily keeps of a query: its terms were not reviewed. Under a
+2. Tranibor does **not** know what Tavily keeps of a query: its terms were not reviewed. Under a
    ceiling that caps retention or forbids reuse, the tool stays off until you fill the **Data
    handling** fields (under Edit settings, or when you declare the connector) from your contract: query
    retention in days, whether queries are reused, the region, and the **terms reference**. The form shows what
-   Choregos knows of the backend ("unknown" until its terms are reviewed). A declaration can only be stricter,
+   Tranibor knows of the backend ("unknown" until its terms are reviewed). A declaration can only be stricter,
    and the terms reference is required as soon as anything is declared; the form refuses a save that is not.
    A field left on "Not declared" stays unknown, and an unknown value fails every bound that reads it.
 3. The organisation's ceiling opens the tool: Settings, **Policy ceiling**, `web_search: {mode: allow}`.

@@ -30,7 +30,7 @@ The orchestrator creates, reads and deletes `PipelineRun`s and `Secret`s in the 
 stage's pod runs as `choregos-runner`, the account the chart creates: give it nothing beyond what the
 runner needs. That account is the deployment's and is not set on a connector.
 
-## In Choregos
+## In Tranibor
 
 Mostly chart values. If a connector is declared, `pipeline` names the Pipeline to start.
 

@@ -31,7 +31,7 @@ async def test_demo_runs_end_to_end(tmp_path: Path, monkeypatch: Any, capsys: An
     assert code == 0
     output = capsys.readouterr().out
     assert "final state          : deployed_prod" in output
-    assert "Choregos — progress" in output, "the status comment is written in the work item"
+    assert "Tranibor — progress" in output, "the status comment is written in the work item"
     assert "agent refine" in output and "agent implement" in output and "agent verify" in output
     assert "| Approval |" in output, "the human step appears in the table"
     assert "findings filed       : 1" in output

@@ -21,7 +21,7 @@ There is no vendor and nothing to create.
 
 It reads and writes only the platform's own tables, under the organisation's isolation.
 
-## In Choregos
+## In Tranibor
 
 Connectors, **Memory**, type **lexical**. There is nothing to configure.
 

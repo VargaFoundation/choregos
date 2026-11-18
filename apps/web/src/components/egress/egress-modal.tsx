@@ -13,9 +13,9 @@ import {
 } from "@/lib/egress";
 import type { EgressVerdict } from "@/lib/types";
 
-/** What Choregos can and cannot do about the cluster's network, said plainly (ADR 0066 §7). */
+/** What Tranibor can and cannot do about the cluster's network, said plainly (ADR 0066 §7). */
 export const HONEST_SENTENCE =
-  "Choregos cannot change the cluster's network policy: it holds no credential to the platform's repository and must not hold one.";
+  "Tranibor cannot change the cluster's network policy: it holds no credential to the platform's repository and must not hold one.";
 
 export interface EgressModalProps {
   open: boolean;
@@ -47,7 +47,7 @@ export function EgressModal({ open, verdicts, gesture, busy, error, onAllow, onR
       <div className="space-y-4 text-sm" data-testid="egress-modal">
         <p className="text-ink-muted">
           {gesture ? <>To {gesture.charAt(0).toLowerCase() + gesture.slice(1)}, </> : <>To do this, </>}
-          Choregos must call the {verdicts.length === 1 ? "host" : "hosts"} below from its own pods. An
+          Tranibor must call the {verdicts.length === 1 ? "host" : "hosts"} below from its own pods. An
           organisation allows each one first.
         </p>
         <ul className="space-y-3" data-testid="egress-hosts">

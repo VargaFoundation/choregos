@@ -372,7 +372,7 @@ class EgressProxy:
                 writer,
                 502,
                 f"choregos-egress: {host}:{port} is allowed for this run but could not be reached "
-                "(unresolvable, refused or timed out): the block is below Choregos, check the network",
+                "(unresolvable, refused or timed out): the block is below Tranibor, check the network",
             )
             return None
         self.reporter.record(run_id, token, host, port, "allowed", reason)

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Runner Choregos : client ACP headless, guardrails, boucle DoD, publication.
+"""Runner Tranibor : client ACP headless, guardrails, boucle DoD, publication.
 
 The runner is disposable: it keeps nothing. Everything it produces leaves through the internal API
 (journal, findings, result) and through the object store (transcript, reports).

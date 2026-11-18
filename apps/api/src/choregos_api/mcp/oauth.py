@@ -43,7 +43,7 @@ def metadata(settings: Settings, path: str = "/mcp", base: str | None = None) ->
         "authorization_servers": [issuer_of(settings)],
         "scopes_supported": ["mcp:read", "mcp:write"],
         "bearer_methods_supported": ["header"],
-        "resource_name": "Choregos",
+        "resource_name": "Tranibor",
     }
 
 

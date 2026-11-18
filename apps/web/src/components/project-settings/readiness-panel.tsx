@@ -33,7 +33,7 @@ export function askWho(by: ReadinessItem["fix"]["by"], viewer: { orgAdmin: boole
   if (by === "project_owner") return viewer.projectOwner || viewer.orgAdmin ? null : "Ask a project owner";
   if (by === "org_admin") return viewer.orgAdmin ? null : "Ask your organisation admin";
   if (by === "platform_operator") return "Ask the platform operator";
-  return "Done outside Choregos";
+  return "Done outside Tranibor";
 }
 
 /**

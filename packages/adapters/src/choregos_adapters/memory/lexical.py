@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""The fallback MemoryAdapter: **lexical** search, in Choregos's own database.
+"""The fallback MemoryAdapter: **lexical** search, in Tranibor's own database.
 
 This connector was called `pgvector` until 2026-09-26, and the name lied on three counts: there is
 no `vector` extension in the migrations, the `embedding` column is a `Json`, and the similarity is

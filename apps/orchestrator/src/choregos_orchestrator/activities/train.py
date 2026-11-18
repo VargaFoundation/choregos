@@ -576,7 +576,7 @@ async def train_stats(payload: dict[str, Any]) -> dict[str, Any]:
 async def apply_terraform(payload: dict[str, Any]) -> dict[str, Any]:
     """Trigger the Atlantis `apply` of the batch's infrastructure PRs, after approval (docs/plan/05).
 
-    Choregos holds no cloud credential: it comments `atlantis apply` on the infrastructure PR
+    Tranibor holds no cloud credential: it comments `atlantis apply` on the infrastructure PR
     and awaits the verdict of the `atlantis/apply` check. Atlantis holds the lock and the
     credentials; the train merely chooses the moment: during a departure, after the approval,
     never in between.

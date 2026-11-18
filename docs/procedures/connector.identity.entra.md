@@ -35,7 +35,7 @@ with admin consent. They are **tenant-wide**: the connector refuses to touch an 
 Not proven here: the role-based variant has not been run against a live tenant from this repository.
 Check the first run on a test unit before pointing it at people.
 
-## In Choregos
+## In Tranibor
 
 1. Administration, **Connectors**, **Declare**: capability **Identity**, type **Microsoft Entra ID**.
 2. `tenant_id`, `client_id`: from the app's Overview. `client_secret`: the Value, in the password field.

@@ -9,7 +9,7 @@ sidebar_position: 5
 An [assistant](../use/assistants.md) your organisation installed for you is not limited to the console.
 Two doors open the same conversations, in your personal space: the **MCP door**, for claude.ai, Claude
 Code and any other MCP client, and an **embedded component**, for a panel inside an internal web
-application. The assistant, its sources and its budget stay on the Choregos side. At `acme`, the
+application. The assistant, its sources and its budget stay on the Tranibor side. At `acme`, the
 billing assistant is reachable from claude.ai and from the finance team's intranet.
 
 **What you will be able to do:** list and ask assistants from an MCP client, follow an answer that takes
@@ -43,7 +43,7 @@ https://choregos.example.com/mcp/assistants/acme:billing
 
 There the tools are `ask` and `get_conversation`, and the assistant's own MCP prompts (a ready-made
 question with arguments) are served as MCP prompts. Outside the audience, that address answers `404`.
-Choregos exposes its assistants only, never the tools of other servers.
+Tranibor exposes its assistants only, never the tools of other servers.
 
 A conversation opened here is one of your conversations in the console: you can continue it there.
 
@@ -80,7 +80,7 @@ link, never as an action done.
 ## Embed an assistant in your application
 
 A host page shows the assistant in an iframe. The host holds no token, no model and no transcript: the
-person signs in to Choregos, and the conversation is theirs.
+person signs in to Tranibor, and the conversation is theirs.
 
 1. Ask an owner of the installation to list your application's origin in the installation's
    `config.embed_origins`: origins only (`https://intranet.acme.example`), no path, no `*`, and `http`
@@ -93,7 +93,7 @@ person signs in to Choregos, and the conversation is theirs.
 ```
 
 3. Optionally pass a `context`: a JSON object, base64url-encoded, that tells the assistant what the
-   screen shows (for example the invoice open on it). Choregos checks it against the assistant's
+   screen shows (for example the invoice open on it). Tranibor checks it against the assistant's
    `surfaces.embed.context_schema` and gives it to the agent as data, never as an instruction. An
    assistant that declares no schema refuses a context.
 4. Listen to the frame's events (below).

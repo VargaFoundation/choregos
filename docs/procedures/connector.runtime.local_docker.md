@@ -18,7 +18,7 @@ first run, which can take several minutes (the pull has a 15 minute timeout).
 
 Whoever can reach the Docker socket controls the host. Do not use this executor on a shared machine.
 
-## In Choregos
+## In Tranibor
 
 Chart or compose settings: `runner.executor: local_docker`. The only option is `network`, the Docker
 network the runner container joins so it can reach the API.

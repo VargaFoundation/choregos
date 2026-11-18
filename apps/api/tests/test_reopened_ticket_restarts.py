@@ -216,7 +216,7 @@ async def test_a_jira_ticket_moved_back_to_work_restarts_its_ended_work_item_onc
     assert (item.recurrence, item.state, item.closed_at) == (1, "inbox", None)
     assert _temporal().restarted[restarted:] == ["wi-bill-BILL-42"]
 
-    # Choregos mirrors the new pass's start state; a person moves it along: no second pass.
+    # Tranibor mirrors the new pass's start state; a person moves it along: no second pass.
     await _jira(client, "j-3", ("Todo", "In progress"), "indeterminate")
     assert len(_temporal().restarted) == restarted + 1 and (await _row(item_id)).recurrence == 1
 

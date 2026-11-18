@@ -3,7 +3,7 @@
 
 `GET`, `PUT`, `DELETE` and `POST .../test` of `/orgs/{org}/mcp-gateway` are `org_admin` only. The
 credential is sealed, write-only, and in no answer, log or audit row. `POST .../assertion-key` is
-`org_admin` only. `GET .../jwks.json` is public: the gateway reads it to verify what Choregos signs. It
+`org_admin` only. `GET .../jwks.json` is public: the gateway reads it to verify what Tranibor signs. It
 answers the same 404 for an unknown organisation and for one without a key. Limit: `OrgAliasMiddleware`
 adds a `Link: rel="canonical"` header to every answer for a former slug, so a keyless organisation
 reached by its old slug is distinguishable from an unknown slug by that header (not this route's doing).

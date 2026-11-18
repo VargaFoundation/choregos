@@ -38,7 +38,7 @@ def test_version_prints_the_release_version() -> None:
     expected = _pyproject(ROOT / "packages" / "cli")["project"]["version"]
     result = CliRunner().invoke(app, ["--version"])
     assert result.exit_code == 0, result.output
-    assert result.output.strip() == f"choregos {expected}"
+    assert result.output.strip() == f"tranibor {expected}"
     assert __version__ == expected
 
 

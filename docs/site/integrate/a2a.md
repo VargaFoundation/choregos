@@ -6,7 +6,7 @@ sidebar_position: 2
 
 # Start a workflow over A2A
 
-Your billing team's order system should be able to say "ship this change" to Choregos and get the
+Your billing team's order system should be able to say "ship this change" to Tranibor and get the
 result back, without anyone opening the console. The **A2A door** does that: it serves your workflows
 as skills of the [A2A protocol](https://a2a-protocol.org), versions **0.3.0** and **1.0**, as JSON-RPC
 over HTTP. Any HTTP client can call it; the CLI's `choregos a2a` writes the JSON-RPC for you.

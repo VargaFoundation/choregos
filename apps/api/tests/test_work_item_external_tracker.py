@@ -1,4 +1,4 @@
-"""A work item filed in Choregos is born in its external tracker first (S39-16, ADR 0059)."""
+"""A work item filed in Tranibor is born in its external tracker first (S39-16, ADR 0059)."""
 
 from __future__ import annotations
 
@@ -95,7 +95,7 @@ async def test_a_github_project_files_the_issue_then_the_work_item(
     issue = tracker.items[key]
     assert "source:choregos" in issue.labels and "team:identity" in issue.labels
     assert "agent-ready" not in issue.labels
-    assert "Filed from Choregos by admin@varga.dev" in issue.body and issue.body.startswith("Please.")
+    assert "Filed from Tranibor by admin@varga.dev" in issue.body and issue.body.startswith("Please.")
     body = created.json()
     assert body["fields"] == {"role": "data"} and body["budget_usd"] == 1.5
     assert body["url"] == f"https://fake.tracker/{key}"

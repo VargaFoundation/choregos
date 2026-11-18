@@ -30,7 +30,7 @@ several free accounts to add up their limits.
 
 The token only reads market data. It is yours: do not share one token between organisations.
 
-## In Choregos
+## In Tranibor
 
 Connectors, **Market data**, type **Tiingo**. `api_key` in the password field (sealed, shown once). In a
 **composite**, list it after the primary source, for example `["yahoo", "tiingo"]`, with the token in

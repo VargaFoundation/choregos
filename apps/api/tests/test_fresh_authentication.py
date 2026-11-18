@@ -1,6 +1,6 @@
 """Is a FRESH authentication really fresh?
 
-`authenticated_at` used to read the session's `iat`: the time Choregos opened it. After a silent SSO
+`authenticated_at` used to read the session's `iat`: the time Tranibor opened it. After a silent SSO
 reconnection (the IdP still has a session and hands control back without asking anything), that
 time is new although the user has not authenticated for hours. A door that demands a recent
 authentication (approving a release, validating a risky action) was therefore satisfied by a plain

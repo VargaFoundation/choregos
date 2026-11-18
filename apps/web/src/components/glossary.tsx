@@ -15,7 +15,7 @@ export const NOTIONS: { cle: NotionDuGlossaire; terme: string; href: string; def
     terme: "Agent",
     href: "/agents",
     definition:
-      "does the work of a workflow step: instructions, a model, the skills it carries and the tools it may call. An internal agent runs in Choregos, under a budget; an external agent is an AI client registered here, whose calls carry its name and limits.",
+      "does the work of a workflow step: instructions, a model, the skills it carries and the tools it may call. An internal agent runs in Tranibor, under a budget; an external agent is an AI client registered here, whose calls carry its name and limits.",
   },
   {
     cle: "skills",
@@ -28,14 +28,14 @@ export const NOTIONS: { cle: NotionDuGlossaire; terme: string; href: string; def
     terme: "Connector",
     href: "/admin/connectors",
     definition:
-      "an installed instance of a system Choregos reaches OUT to: a directory, a device fleet, an MCP server. Each operation is allowed, needs an approval, or is forbidden. A catalogue lists what the platform offers (MCP servers, connector types); installing one from it makes a connector. A project's delivery tools — tracker, repository, CI, deployment — are set in the project's settings.",
+      "an installed instance of a system Tranibor reaches OUT to: a directory, a device fleet, an MCP server. Each operation is allowed, needs an approval, or is forbidden. A catalogue lists what the platform offers (MCP servers, connector types); installing one from it makes a connector. A project's delivery tools — tracker, repository, CI, deployment — are set in the project's settings.",
   },
   {
     cle: "clients",
     terme: "Client",
     href: "/integrations",
     definition:
-      "an AI assistant that reaches IN to Choregos through its MCP door — Claude Code, Cursor, ChatGPT — with its human's access token: their rights, never more, fewer once registered as an external agent. It never decides.",
+      "an AI assistant that reaches IN to Tranibor through its MCP door — Claude Code, Cursor, ChatGPT — with its human's access token: their rights, never more, fewer once registered as an external agent. It never decides.",
   },
 ];
 

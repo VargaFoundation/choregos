@@ -9,7 +9,7 @@ const shown = (value: unknown, unit = ""): string =>
 
 /**
  * What the organisation's contract says the search provider does with a query (ADR 0083 §3), as four
- * fields instead of raw JSON. Choregos' own declaration is shown beside them: the organisation can
+ * fields instead of raw JSON. Tranibor's own declaration is shown beside them: the organisation can
  * only make it stricter, and must name the terms (`terms_ref`). "Not declared" leaves a value to the
  * backend's own declaration; an unknown value fails every bound that reads it.
  *
@@ -41,7 +41,7 @@ export function DataHandlingField({
   return (
     <div className="space-y-2 rounded border border-line p-3" data-testid="data-handling">
       <p className="text-xs text-ink-muted" data-testid="data-handling-declared">
-        Choregos knows this backend as: retention {shown(declared.query_retention_days, " days")}, reuse{" "}
+        Tranibor knows this backend as: retention {shown(declared.query_retention_days, " days")}, reuse{" "}
         {declared.query_reuse == null ? "unknown" : declared.query_reuse ? "yes" : "no"}, region{" "}
         {shown(declared.region)}. Your declaration can only be stricter, and it must name the terms it comes from. An
         unknown value fails every bound that reads it.

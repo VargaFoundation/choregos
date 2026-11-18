@@ -1,12 +1,12 @@
 # SPDX-License-Identifier: Apache-2.0
 """The "internal" tracker: there is no other, the platform holds the ticket.
 
-Choregos' default model is to be **a guest** of an existing tracker: GitHub Issues, Jira. The
+Tranibor's default model is to be **a guest** of an existing tracker: GitHub Issues, Jira. The
 state, the cost and the proofs are reflected there because that is where humans look. Two
 situations do not fit this mould:
 
 - a trade whose requests exist nowhere else (a staffing need, a case to examine) and for whom
-  Choregos' board IS the place where people look;
+  Tranibor's board IS the place where people look;
 - a demonstration bench, which has neither a GitHub organisation nor a Jira site.
 
 This connector then returns plain no-ops rather than errors: nothing to reflect, nothing to
@@ -25,7 +25,7 @@ from choregos_core.domain import NewItem, TrackerStateMapping, WorkItemData
 
 
 class InternalTracker:
-    """Choregos' database is the source; this connector talks to nobody.
+    """Tranibor's database is the source; this connector talks to nobody.
 
     `owns_items = False` is the important fact, and it has a history. Delivered on 2026-09-23
     as a series of no-ops, this connector left two holes that the bench showed the next day:
@@ -43,7 +43,7 @@ class InternalTracker:
     owns_items = False
 
     async def fetch_item(self, key: str) -> WorkItemData:
-        # The ticket lives in Choregos' database: the orchestrator already has it in hand, and
+        # The ticket lives in Tranibor's database: the orchestrator already has it in hand, and
         # what would be returned here would be a poorer copy. So the strict minimum is returned.
         return WorkItemData(key=key, title=key)
 

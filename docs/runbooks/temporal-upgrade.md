@@ -22,7 +22,7 @@ helm upgrade temporal ... --set server.image.tag=<new-version>
 kubectl -n choregos-temporal rollout status statefulset/temporal-history
 ```
 
-Choregos workers support rolling upgrades: workflow versioning (`patched()`) guarantees
+Tranibor workers support rolling upgrades: workflow versioning (`patched()`) guarantees
 that a new worker resumes an old history.
 
 ## After

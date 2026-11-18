@@ -250,7 +250,7 @@ export function RemoteAgentForm({
               </div>
               <p className="text-xs text-ink-muted" data-testid="cost-note">
                 The protocol reports no cost. What you declare is booked in the cost ledger as external, apart from model spend; with nothing
-                declared the ledger says unmeasured, and Choregos does not know what this agent costs.
+                declared the ledger says unmeasured, and Tranibor does not know what this agent costs.
               </p>
               <Field label="What the step sends">
                 {(props) => (

@@ -19,20 +19,20 @@ fields:
   candidates_jql: "optional: the JQL of the issues the platform takes on by itself, without a webhook (BILL issues matching it, not done)"
   match_labels: "optional: when several projects share this Jira project, the labels that send an issue here; the project without them takes the rest"
   project_key: "the project's key, the prefix of its issue keys (BILL in BILL-42)"
-  field_names: "a map of the custom fields Choregos writes (Cost, Size, Risk, Run) to their names in your Jira"
+  field_names: "a map of the custom fields Tranibor writes (Cost, Size, Risk, Run) to their names in your Jira"
   api_token: "the API token, typed once"
   webhook_secret: "not used by the Jira webhook endpoint: the platform's shared webhook secret is"
 ---
 
 ## Before you start
 
-- A Jira Cloud site and an Atlassian account **dedicated to Choregos**: its permissions are what the
+- A Jira Cloud site and an Atlassian account **dedicated to Tranibor**: its permissions are what the
   platform may do in the project, and comments and transitions appear under its name. The best fit
   is an Atlassian **service account** (no licence seat, no password, an organisation administrator
-  creates it); a regular account dedicated to Choregos works too.
+  creates it); a regular account dedicated to Tranibor works too.
 - The project key.
 - The platform's shared webhook secret (`CHOREGOS_GENERIC_WEBHOOK_SECRET`), held by whoever operates
-  Choregos. Jira Cloud does not sign webhooks, so the platform accepts a delivery only if it carries this
+  Tranibor. Jira Cloud does not sign webhooks, so the platform accepts a delivery only if it carries this
   secret in an `X-Choregos-Secret` header.
 
 ## At Atlassian
@@ -66,25 +66,25 @@ transitions, the comments, the new issues and the links between issues. A classi
 scopes, carries all of the account's rights.
 
 A scoped token is **refused by the site** (`401`): it works only through the gateway,
-`https://api.atlassian.com/ex/jira/<cloud_id>`. With `auth: scoped` Choregos goes through it by itself;
+`https://api.atlassian.com/ex/jira/<cloud_id>`. With `auth: scoped` Tranibor goes through it by itself;
 keep the site in `base_url`, the links to issues point to it.
 
-**What Choregos writes, and as whom.** The workflow's bookkeeping goes through this connector, through
+**What Tranibor writes, and as whom.** The workflow's bookkeeping goes through this connector, through
 Jira's REST API, under the dedicated account: the status, the status comment, the `Cost (€)`, `Size`,
 `Risk` and `Run` fields, the questions to a person, the close-out. The connector card says
-"Choregos writes as" that email, and each line of a work item's timeline that wrote to Jira says
+"Tranibor writes as" that email, and each line of a work item's timeline that wrote to Jira says
 "via Jira as" it. An agent's own actions do not go through this connector: they go through the MCP
 tools its version names, under each tool connector's account, listed on its run.
 
-## In Choregos
+## In Tranibor
 
 1. Project settings, Connectors, **Tracker**, type **Jira Cloud**.
 2. `base_url`: `https://<site>.atlassian.net`, the site, whatever the token. `email`: the dedicated
    account's email. `auth`: `scoped` for a service account's token, `basic` (the default) for a classic
-   one. Leave `cloud_id` empty: Choregos reads it from the site. `project_key`: the key. A webhook delivery reaches the project whose Jira connector holds the issue's key, whatever the
+   one. Leave `cloud_id` empty: Tranibor reads it from the site. `project_key`: the key. A webhook delivery reaches the project whose Jira connector holds the issue's key, whatever the
    project's slug; two projects holding the same key are told apart by the Jira site, and a key held
    twice on the same site routes nothing.
-3. `field_names`: only if your Jira names the custom fields Choregos writes differently. They are
+3. `field_names`: only if your Jira names the custom fields Tranibor writes differently. They are
    `Cost (€)`, `Size`, `Risk` and `Run`.
 4. `api_token`: the token, in the password field (sealed, shown once).
 5. Label an issue `agent-ready`: the platform starts one workflow per issue.

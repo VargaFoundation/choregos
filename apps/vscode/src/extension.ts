@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
- * The Choregos extension: a developer surface of the platform (ADR 0155). It shows what the platform serves
+ * The Tranibor extension: a developer surface of the platform (ADR 0155). It shows what the platform serves
  * and runs nothing on the person's machine.
  */
 import * as vscode from "vscode";
@@ -51,7 +51,7 @@ export interface Extension {
 }
 
 export function activate(context: vscode.ExtensionContext): Extension {
-  const log = vscode.window.createOutputChannel("Choregos", { log: true });
+  const log = vscode.window.createOutputChannel("Tranibor", { log: true });
   context.subscriptions.push(log);
   const write = (line: string): void => {
     log.info(redact(line));
@@ -84,7 +84,7 @@ export function activate(context: vscode.ExtensionContext): Extension {
   const live = new LiveTree(feed);
   const liveView = vscode.window.createTreeView(VIEWS.live, { treeDataProvider: live });
   const status = vscode.window.createStatusBarItem("choregos.status", vscode.StatusBarAlignment.Left, 50);
-  status.name = "Choregos";
+  status.name = "Tranibor";
   const draw = (): void => {
     liveView.message = live.message() ?? "";
     const { text, tooltip } = statusText(feed);
@@ -140,7 +140,7 @@ export function activate(context: vscode.ExtensionContext): Extension {
       if (stored) await auth.removeSession(stored.id);
     }),
   );
-  write(`Choregos ${version} activated`);
+  write(`Tranibor ${version} activated`);
   draw();
   restart();
   return { auth, feed, live, status };

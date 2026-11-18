@@ -6,10 +6,10 @@ For an organisation administrator. Procedure `connector.web_search.firecrawl`, v
 
 ## Before you start
 
-- A **self-hosted Firecrawl instance** you run, reachable from the Choregos API. Choregos never uses
+- A **self-hosted Firecrawl instance** you run, reachable from the Tranibor API. Tranibor never uses
   Firecrawl's cloud (`*.firecrawl.dev`): it is refused when you save the connector and again when the
-  platform builds it. Choregos does not deploy the instance for you.
-- Choregos never asks Firecrawl to scrape: reading a result goes through `web_fetch`.
+  platform builds it. Tranibor does not deploy the instance for you.
+- Tranibor never asks Firecrawl to scrape: reading a result goes through `web_fetch`.
 - The built-in `web_search` returns links and snippets, never pages.
 
 ## At the vendor
@@ -23,11 +23,11 @@ The key, if any, only searches. It stays in the API: no runner ever sees it. The
 instance's host and port, and only that: add it to the organisation's egress allowlist and keep it
 out of the network ceiling's deny list.
 
-## In Choregos
+## In Tranibor
 
 1. Connectors, **Web search**, type **Firecrawl**. Set `base_url` to your instance. If it has a key,
    type it in `api_key` (sealed, shown once).
-2. Choregos does **not** know what your instance keeps of a query, nor what the engines behind it do:
+2. Tranibor does **not** know what your instance keeps of a query, nor what the engines behind it do:
    a self-hosted Firecrawl still sends the query to the search engines it uses (SearXNG, or whatever
    its upstream is), so "local" does not mean the query never leaves. Under a ceiling that caps
    retention or forbids reuse, the tool stays off until you fill `data_handling` from your own terms,

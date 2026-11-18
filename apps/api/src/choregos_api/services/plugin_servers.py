@@ -650,7 +650,7 @@ async def plugin_client(
 
     `bearer`: the person's exchanged token for one call (ADR 0135), which replaces the server's own.
     `user_token`: the person's `user_consent` token for one call, sent in `X-Choregos-User-Token` NEXT TO
-    the platform's token, which still authenticates Choregos to the server."""
+    the platform's token, which still authenticates Tranibor to the server."""
     if bearer is not None and instance.plugin_server is not None:
         url = str(
             instance.plugin_server["fake_url"] if bound_fake(instance) else instance.plugin_server["url"]

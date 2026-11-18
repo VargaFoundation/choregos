@@ -1,6 +1,6 @@
-# Choregos for Visual Studio Code
+# Tranibor for Visual Studio Code
 
-Work through your Choregos platform from the editor: what runs on it — work items, workflow stages, agents —
+Work through your Tranibor platform from the editor: what runs on it — work items, workflow stages, agents —
 what it spends, and what waits for you.
 
 **Nothing runs on your machine.** The extension is a surface of the platform
@@ -10,13 +10,13 @@ run in the platform's sandbox, under its budgets, audit and approvals.
 
 ## What it shows
 
-- **Live** (in the Choregos view of the activity bar): what runs on your instance — project, work item, then each
+- **Live** (in the Tranibor view of the activity bar): what runs on your instance — project, work item, then each
   run, agent session or conversation turn, with its state (an icon, a word and your theme's colour), elapsed time,
   tokens and cost so far. A figure the platform does not know reads `—`, never 0.
 - **The status line**: `N running · — waiting for you · $X today`. "Waiting for you" reads `—` until your instance
   can list it.
 
-Sign in with **Choregos: Sign in** and your own API token (the console: My account → API tokens). It reads what
+Sign in with **Tranibor: Sign in** and your own API token (the console: My account → API tokens). It reads what
 you may read; it decides nothing.
 
 ## Settings

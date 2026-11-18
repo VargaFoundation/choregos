@@ -13,7 +13,7 @@ For a project owner. Procedure `connector.scm.gitlab`, version 1, reviewed 2026-
 - **GitLab.com needs the Premium or Ultimate tier for project access tokens.** On the Free tier the
   connector cannot give a run its token. A self-managed GitLab has no such tier limit.
 - The platform's shared webhook secret (`CHOREGOS_GENERIC_WEBHOOK_SECRET`), held by whoever operates
-  Choregos, if you want merge request events.
+  Tranibor, if you want merge request events.
 
 ## At GitLab
 
@@ -36,7 +36,7 @@ For a project owner. Procedure `connector.scm.gitlab`, version 1, reviewed 2026-
   per run, and a failure there never stops the run). Tokens with other names are never touched. Each token
   is backed by a bot user in the project: this cleanup is what keeps them from piling up.
 
-## In Choregos
+## In Tranibor
 
 1. Project settings, Connectors, **SCM**, type **GitLab**.
 2. `base_url`: `https://gitlab.com` (the default) or your self-managed address. `project`: the project's

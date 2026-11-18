@@ -1,7 +1,7 @@
 """`choregos-agent-sdk` is a run-contract adapter, not an agent framework: its surface is frozen.
 
 A planner, a memory, a graph primitive added here turns this red. It needs an amendment of ADR 0063
-("No Choregos framework"), not a quiet export.
+("No Tranibor framework"), not a quiet export.
 """
 
 from __future__ import annotations

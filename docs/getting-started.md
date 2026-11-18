@@ -112,7 +112,7 @@ platform itself (hot reload, a development cluster), see [development](developme
 | An **API token** | issued by the person who will use it (`choregos tokens create`, or *My account → Access tokens*, in the menu under your name); the very first one from the server side (`choregos-admin tokens create`) |
 | The **application repository** (GitHub, GitLab) — *if the work is code* | it is what agents modify, on a branch, through a PR. A business project has none |
 | A **GitOps repository** — *for a templated stack* | provisioning writes the project's manifests there, Argo CD applies them |
-| A **board** (GitHub Projects v2, Jira) — *or nothing* | with `tracker: internal` the requests are filed in Choregos itself |
+| A **board** (GitHub Projects v2, Jira) — *or nothing* | with `tracker: internal` the requests are filed in Tranibor itself |
 | A **GitHub App** installed on the organisation — *for GitHub* | scoped installation tokens, webhooks; never a broad PAT. Install it from the console (*Settings → Connections → Install on GitHub*): the installation is discovered and claimed by your organisation, and you never type an installation id ([ADR 0073](adr/0073-github-app-installations-are-discovered-not-typed.md)). For companies other than the App's owner the App must be public ([deployment](deployment.md#the-github-app)) |
 | A **cluster** (or an Azure subscription) | agents run in `agent-sandbox` sandboxes by default (the platform team installs the operator, [ADR 0072](adr/0072-agent-sandbox-is-the-runtime-of-a-real-deployment.md)); Tekton or Jobs only where the deployment says so; or Container Apps jobs |
 | The **platform secrets** | `session-secret`, the run-token key pair, the webhook secrets, the App ID and its private key — in the vault, read by External Secrets (`charts/choregos/charts/api/templates/externalsecret.yaml`) |
@@ -179,7 +179,7 @@ choregos projects provision billing-api --follow
 Provisioning is **idempotent**: rerunning it after a failure resumes where it stopped,
 without redoing what was done.
 
-A project without code takes its requests from Choregos itself:
+A project without code takes its requests from Tranibor itself:
 
 ```bash
 choregos projects create staffing --name "Staffing"                    # no --repo → tracker `internal`
@@ -196,8 +196,8 @@ PRs), a team and a budget at the gateway, and a test message on the notification
 Once provisioning is done, open *Settings* (or run `choregos projects readiness <slug>`): the readiness list tells you what is left, item by item, and who can fix it ([usage](usage.md#project-settings-and-readiness)).
 
 The board's fields are `Status`, `Cost (€)`, `Size`, `Risk` and `Run`. A board provisioned by
-Choregos 0.17 or earlier named three of them `Coût (€)`, `Taille` and `Risque`: provisioning again
-renames them in place — the values already on the cards stay — and, until then, Choregos keeps
+Tranibor 0.17 or earlier named three of them `Coût (€)`, `Taille` and `Risque`: provisioning again
+renames them in place — the values already on the cards stay — and, until then, Tranibor keeps
 writing to the fields the board has.
 
 And a **scaffolding PR** on your repository:

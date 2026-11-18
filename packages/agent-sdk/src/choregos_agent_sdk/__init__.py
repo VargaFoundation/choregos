@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Choregos agent SDK: write an agent in Python, run it under the platform's guarantees.
+"""Tranibor agent SDK: write an agent in Python, run it under the platform's guarantees.
 
 An agent is one async function. The SDK speaks ACP to the runner, sends every tool call and every
 write through the runner's permission path, counts turns against the step's limit, and writes the

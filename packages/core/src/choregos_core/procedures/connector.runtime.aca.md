@@ -44,7 +44,7 @@ fields:
 The service principal creates and starts jobs; the managed identity only pulls images. The run's token is
 a job secret referenced by `secretRef`, never an environment variable in clear.
 
-## In Choregos
+## In Tranibor
 
 Set `runner.executor: aca` in the chart and declare the connector: `subscription_id`, `resource_group`,
 `environment_id` (required), `location` (default `westeurope`), `tenant_id`, `client_id`, `client_secret`

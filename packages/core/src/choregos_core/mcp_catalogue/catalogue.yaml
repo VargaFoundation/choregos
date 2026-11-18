@@ -2506,7 +2506,7 @@ entries:
     version: null
 - id: fetch
   title: Fetch
-  description: Fetch a web page and convert it to Markdown. A Choregos run already has a shell, git and files; this
+  description: Fetch a web page and convert it to Markdown. A Tranibor run already has a shell, git and files; this
     is usually unnecessary.
   publisher: Model Context Protocol
   official: false
@@ -2529,7 +2529,7 @@ entries:
     version: null
 - id: filesystem
   title: Filesystem
-  description: Read and write files in allowed directories. A Choregos run already has a workspace; this is usually
+  description: Read and write files in allowed directories. A Tranibor run already has a workspace; this is usually
     unnecessary.
   publisher: Model Context Protocol
   official: false
@@ -2552,7 +2552,7 @@ entries:
     version: null
 - id: git
   title: Git
-  description: Read, search and modify Git repositories. A Choregos run already has git; this is usually unnecessary.
+  description: Read, search and modify Git repositories. A Tranibor run already has git; this is usually unnecessary.
   publisher: Model Context Protocol
   official: false
   reference: true
@@ -2574,7 +2574,7 @@ entries:
     version: null
 - id: memory
   title: Memory
-  description: A knowledge-graph memory. Choregos has its own governed memory; this is usually unnecessary.
+  description: A knowledge-graph memory. Tranibor has its own governed memory; this is usually unnecessary.
   publisher: Model Context Protocol
   official: false
   reference: true

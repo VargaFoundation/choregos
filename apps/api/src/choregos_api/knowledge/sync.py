@@ -173,7 +173,7 @@ async def github_app_credential(session: Any, org_id: str, url: str) -> Callable
     claimed = await claimed_installation_for(session, org_id, owner)
     if claimed is None and not await implicit_claim_enabled(session):
         raise SourceUnavailableError(
-            f"The Choregos GitHub App is not installed on `{owner}` for this organisation: "
+            f"The Tranibor GitHub App is not installed on `{owner}` for this organisation: "
             "install it from Settings, Connections, then sync again."
         )
     auth = GitHubAppAuth(

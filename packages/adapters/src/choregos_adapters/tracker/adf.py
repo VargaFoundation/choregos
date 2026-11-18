@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Markdown <-> Atlassian Document Format, just what Choregos needs.
+"""Markdown <-> Atlassian Document Format, just what Tranibor needs.
 
 Jira Cloud no longer accepts markdown in its comments: it wants ADF. The status comment (§4.3)
 is a heading, a few paragraphs, a list and a table, and that subset is what gets translated,
@@ -72,7 +72,7 @@ def markdown_to_adf(markdown: str) -> dict[str, Any]:
 
 
 def text_of_adf(document: Any) -> str:
-    """Renders the text of an ADF document: what Choregos reads back to find its marker."""
+    """Renders the text of an ADF document: what Tranibor reads back to find its marker."""
     if document is None:
         return ""
     if isinstance(document, str):

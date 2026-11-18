@@ -80,5 +80,5 @@ async def check_scope(
 
 
 def config_files_touched(changed: list[str], workspace_path: Path) -> list[str]:
-    """Choregos configuration files modified: always suspect, never silent."""
+    """Tranibor configuration files modified: always suspect, never silent."""
     return [path for path in changed if path.startswith(".choregos/") and not path.endswith("result.json")]

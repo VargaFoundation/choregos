@@ -176,7 +176,7 @@ describe("the project settings page (S40-03b)", () => {
   it("a GitHub card says which account's installation it goes through (no installation id)", async () => {
     await renderPage("connections");
     const card = await screen.findByTestId("connector-kind-tracker");
-    expect(await within(card).findByText("via the Choregos App on acme")).toBeTruthy();
+    expect(await within(card).findByText("via the Tranibor App on acme")).toBeTruthy();
     expect(card.textContent).not.toMatch(/installation id/i);
   });
 

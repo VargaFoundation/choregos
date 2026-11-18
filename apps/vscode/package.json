@@ -1,7 +1,7 @@
 {
   "name": "choregos",
-  "displayName": "Choregos",
-  "description": "Work through your Choregos platform from the editor: what runs, what it spends, what waits for you. Nothing runs on your machine.",
+  "displayName": "Tranibor",
+  "description": "Work through your Tranibor platform from the editor: what runs, what it spends, what waits for you. Nothing runs on your machine.",
   "version": "0.27.0",
   "publisher": "graalsystems",
   "license": "Apache-2.0",
@@ -38,12 +38,12 @@
   },
   "contributes": {
     "configuration": {
-      "title": "Choregos",
+      "title": "Tranibor",
       "properties": {
         "choregos.instanceUrl": {
           "type": "string",
           "default": "",
-          "markdownDescription": "The address of your Choregos instance, as you open its console (for example `https://choregos.example.com`). The extension calls its API at this origin and nowhere else."
+          "markdownDescription": "The address of your Tranibor instance, as you open its console (for example `https://choregos.example.com`). The extension calls its API at this origin and nowhere else."
         },
         "choregos.organisation": {
           "type": "string",
@@ -56,7 +56,7 @@
       "activitybar": [
         {
           "id": "choregos",
-          "title": "Choregos",
+          "title": "Tranibor",
           "icon": "media/choregos.svg"
         }
       ]
@@ -80,7 +80,7 @@
     "viewsWelcome": [
       {
         "view": "choregos.live",
-        "contents": "What runs on your Choregos instance appears here.\n[Sign in](command:choregos.signIn)\n[Open settings](command:workbench.action.openSettings?%22choregos%22)"
+        "contents": "What runs on your Tranibor instance appears here.\n[Sign in](command:choregos.signIn)\n[Open settings](command:workbench.action.openSettings?%22choregos%22)"
       },
       {
         "view": "choregos.decisions",
@@ -95,17 +95,17 @@
       {
         "command": "choregos.signIn",
         "title": "Sign in",
-        "category": "Choregos"
+        "category": "Tranibor"
       },
       {
         "command": "choregos.signOut",
         "title": "Sign out",
-        "category": "Choregos"
+        "category": "Tranibor"
       },
       {
         "command": "choregos.showLog",
         "title": "Show log",
-        "category": "Choregos"
+        "category": "Tranibor"
       }
     ]
   },

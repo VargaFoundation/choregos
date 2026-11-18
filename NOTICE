@@ -1,4 +1,4 @@
-Choregos
+Tranibor (formerly Choregos)
 Copyright 2026 Varga Foundation
 
 This product includes software developed at the Varga Foundation
@@ -15,7 +15,7 @@ A separate **enterprise edition**, published by a third party
 (GRAAL.SYSTEMS SAS, a DiametralGroup company), builds on this one and is proprietary. It is not distributed here, and no file in this repository is
 subject to its terms. See docs/adr/0024-two-editions.md.
 
-Neither the name "Choregos" nor the Varga Foundation name may be used to endorse
+Neither the name "Tranibor" nor the Varga Foundation name may be used to endorse
 or describe a derived product in a way that suggests it is this project. The
 Apache licence grants no trademark rights (section 6).
 

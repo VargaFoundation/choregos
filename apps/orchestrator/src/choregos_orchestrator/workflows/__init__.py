@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Workflows Temporal de Choregos."""
+"""Workflows Temporal de Tranibor."""
 
 from __future__ import annotations
 

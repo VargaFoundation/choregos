@@ -226,7 +226,7 @@ test("distinct page titles, and a skip link to the content", async ({ page }) =>
   }
   expect(titles.size).toBe(6);
   await page.goto("/p/billing-api/board");
-  await expect(page).toHaveTitle("board · billing-api · choregos");
+  await expect(page).toHaveTitle("board · billing-api · tranibor");
   await page.keyboard.press("Tab");
   const skipLink = page.getByRole("link", { name: "Skip to content" });
   await expect(skipLink).toBeFocused();

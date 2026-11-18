@@ -8,9 +8,9 @@ const SINGULIERS: Record<string, string> = { items: "ticket", runs: "run", actio
 
 /**
  * A page's title, from its path, from the most specific to the broadest:
- * `/p/billing-api/items/w1` -> "ticket w1 · billing-api · choregos".
+ * `/p/billing-api/items/w1` -> "ticket w1 · billing-api · tranibor".
  */
-export function titleFromPath(pathname: string, productName = "Choregos"): string {
+export function titleFromPath(pathname: string, productName = "Tranibor"): string {
   const segments = pathname.split("/").filter(Boolean).map(decodeURIComponent);
   if (segments[0] === "p") segments.shift();
   const parties: string[] = [];
@@ -25,7 +25,7 @@ export function titleFromPath(pathname: string, productName = "Choregos"): strin
     }
   }
   // The suffix is the product's name; the default stays lower-case so that titles do not change.
-  const suffix = productName === "Choregos" ? "choregos" : productName;
+  const suffix = productName === "Tranibor" ? "tranibor" : productName;
   return [...parties.reverse(), ...(parties.length ? [] : ["projects"]), suffix].join(" · ");
 }
 

@@ -1,10 +1,10 @@
 ---
-title: Script Choregos with the REST API
+title: Script Tranibor with the REST API
 description: Call the REST API from a script or a CI job with a full-access token, to open a work item, follow it and list a project's work.
 sidebar_position: 4
 ---
 
-# Script Choregos with the REST API
+# Script Tranibor with the REST API
 
 Your CI job should open a work item when a release branch is cut, and your weekly report should list
 what is waiting. Both are a few HTTP calls to the **REST API**, the same API the console and the CLI

@@ -88,7 +88,7 @@ class JiraTracker:
         self.site_url = (site_url or getattr(client, "site", None) or client.base_url).rstrip("/")
         self.project_key = project_key.upper()
         self.webhook_secret = webhook_secret
-        # The Jira-side names of the structured fields Choregos writes. A configuration from before
+        # The Jira-side names of the structured fields Tranibor writes. A configuration from before
         # S22-21 designated them by their former logical name (French `Taille`): it counts as the
         # new one (`Size`).
         self.field_names = {
@@ -216,7 +216,7 @@ class JiraTracker:
 
         The third case exists because Jira **translates the status names** into the language of the
         site: on a French instance, "In Progress" is translated, and so is "Done".
-        Choregos' templates write the English names; without this fallback, no ticket moved on a
+        Tranibor's templates write the English names; without this fallback, no ticket moved on a
         French-speaking Jira, which is what the live test against `meltingcode.atlassian.net`
         showed. The category fallback only applies when **a single** transition leads there: two
         "in progress" statuses (one in progress, one in review) are not told apart by chance, they raise an
@@ -311,7 +311,7 @@ class JiraTracker:
         for name, value in fields.items():
             field_id = mapping.get(self._present_name(current_name(name), mapping, casefold=True).casefold())
             if field_id is None:
-                continue  # a missing field is not a failure: Choregos writes what it can
+                continue  # a missing field is not a failure: Tranibor writes what it can
             payload[field_id] = str(value) if not isinstance(value, int | float) else value
         if payload:
             await self.client.request("PUT", f"/rest/api/3/issue/{key}", json={"fields": payload})

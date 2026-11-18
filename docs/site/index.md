@@ -1,18 +1,18 @@
 ---
-title: Choregos
-description: What Choregos is, who it is for, a five-minute tour, and a map of this documentation.
+title: Tranibor
+description: What Tranibor is, who it is for, a five-minute tour, and a map of this documentation.
 sidebar_position: 1
 ---
 
-# Choregos
+# Tranibor
 
-**Choregos runs your team's work through agents and people, under rules you can check.** A request
-comes in: an issue, a ticket, a form, a call from another system. Choregos moves it through a
+**Tranibor runs your team's work through agents and people, under rules you can check.** A request
+comes in: an issue, a ticket, a form, a call from another system. Tranibor moves it through a
 **workflow** you declare. Agents do the steps they are given. People decide where the workflow says a
 person decides. Every step has a budget it cannot exceed and leaves evidence you can read. Nothing
 moves on because an agent says it is done: the platform checks.
 
-Choregos is open source (Apache 2.0), self-hosted, and works with any agent. It is published by the
+Tranibor is open source (Apache 2.0), self-hosted, and works with any agent. It is published by the
 Varga Foundation.
 
 ## Who it is for
@@ -31,7 +31,7 @@ change: anything that arrives as a request and is done in steps.
 
 - **Not a chat.** Agents work unattended. People step in at the points the workflow names, with a
   deadline.
-- **Not a coding agent.** Choregos runs the coding agents you choose, in disposable sandboxes, and
+- **Not a coding agent.** Tranibor runs the coding agents you choose, in disposable sandboxes, and
   gives them only what one step needs.
 - **Not a promise in a prompt.** A check (a **gate**) is code: tests that really ran, a diff inside the
   allowed paths, the documents a step must produce. A gate that cannot see what it must check refuses.
@@ -43,7 +43,7 @@ software-delivery template.
 
 1. **A developer opens an issue** on GitHub, "Export invoices as CSV", and labels it `agent-ready`
    and `feature`. That label is the only trigger.
-2. **Choregos picks the workflow.** The `feature` label routes it to the `dev-complex` workflow. The
+2. **Tranibor picks the workflow.** The `feature` label routes it to the `dev-complex` workflow. The
    work item appears on the project's **Board**, in the first column.
 3. **An agent triages it**, sizes it (S, M, L or XL) and estimates the risk. **Another agent writes
    the specification**, with criteria that can be checked.
@@ -54,7 +54,7 @@ software-delivery template.
    allows. After each step a gate checks the result: the tests were really run, no secret was written,
    the diff stays in scope. A failed check sends the work back, a few times at most, then to a person.
 6. **Agents review the change**, then the platform opens the pull request. A maintainer approves it
-   in Choregos. When the repository's checks are green, the platform merges it.
+   in Tranibor. When the repository's checks are green, the platform merges it.
 7. **A release train deploys it**, first to staging, then to production after a release captain
    approves the departure. An agent checks production from measured facts.
 8. **Everything stays readable.** The work item's page draws its journey, step by step. Each run shows
@@ -67,8 +67,8 @@ Read it in order the first time: what it is, the ideas, a first project, then th
 | Section | Read it to |
 | :-- | :-- |
 | [Concepts](concepts.md) | Learn the words: organisation, project, workflow, run, gate, evidence, budget |
-| [Get started](get-started.md) | Try Choregos on your machine, then run a first real project end to end |
-| **Use Choregos** | Do the daily work in the console |
+| [Get started](get-started.md) | Try Tranibor on your machine, then run a first real project end to end |
+| **Use Tranibor** | Do the daily work in the console |
 | ▸ [Projects and members](use/projects-and-members.md) | Create a project, invite people, give them roles |
 | ▸ [Workflows](use/workflows.md) | Choose, read, change and publish the process a project follows |
 | ▸ [Work items](use/work-items.md) | File work, follow it, take over when it is stuck |
@@ -84,8 +84,8 @@ Read it in order the first time: what it is, the ideas, a first project, then th
 | ▸ [Plugins](build/plugins.md) | Ship templates, agents and connectors as one package |
 | ▸ [Tools](build/tools.md) | Give agents tools they cannot misuse |
 | ▸ [Assistants](build/assistants.md) | Ship a conversational assistant in a plugin |
-| **Integrate** | Reach Choregos from outside |
-| ▸ [MCP](integrate/mcp.md) | Connect an AI assistant (Claude, Cursor, VS Code) to Choregos |
+| **Integrate** | Reach Tranibor from outside |
+| ▸ [MCP](integrate/mcp.md) | Connect an AI assistant (Claude, Cursor, VS Code) to Tranibor |
 | ▸ [Assistants](integrate/assistants.md) | Use an assistant from claude.ai or embed it in your application |
 | ▸ [A2A](integrate/a2a.md) | Start and follow a workflow from another agent or an application |
 | ▸ [Triggers](integrate/triggers.md) | Start work from a schedule, a webhook or a tracker |
@@ -93,7 +93,7 @@ Read it in order the first time: what it is, the ideas, a first project, then th
 | **Command line** | Use the `choregos` command |
 | ▸ [Install](cli/install.md) | Install the command on your machine |
 | ▸ [Reference](cli/reference.md) | Look up every command and option |
-| [Host Choregos](host/index.md) | Deploy, secure and upgrade an instance |
+| [Host Tranibor](host/index.md) | Deploy, secure and upgrade an instance |
 | [Reference](reference/index.md) | The workflow YAML, the errors, the API |
 
 ## Editions
@@ -107,7 +107,7 @@ shows which edition runs under **About**, at the bottom of the sidebar.
 
 ## Where the deep detail lives
 
-These pages are written for people who use Choregos. The complete reference, written for the people
+These pages are written for people who use Tranibor. The complete reference, written for the people
 who run and extend it, is in the repository: the [reference documentation](../README.md), the
 [concepts in depth](../concepts.md), [usage in depth](../usage.md), [security](../security.md) and the
 [architecture decisions](../adr/README.md). Where a page and the code disagree, the code is right and

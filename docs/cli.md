@@ -5,6 +5,10 @@ Generated from the CLI itself by `tools/gen_cli_reference.py` — do not edit by
 
 ## Installing the CLI
 
+The command is `tranibor`; `choregos` stays as an alias entry point of the Python package
+(ADR 0176). The native files below are still named `choregos-*` and the binary is still called
+`choregos`: renaming the release assets is a later step of the plan (ADR 0176, R3).
+
 `choregos` ships as one native, self-contained file per platform: nothing to install first, no
 Python, no SDK, no runtime. Each release attaches them to its GitHub release, under names that
 never change, and the API image carries the same files in `/opt/choregos/cli/`:
@@ -51,7 +55,7 @@ path): `api_url`, `token`, `org`. `choregos login` writes it; `CHOREGOS_API_URL`
 
 ## Install from your instance
 
-Every Choregos instance serves the CLI in the exact version it runs, through the console's host:
+Every Tranibor instance serves the CLI in the exact version it runs, through the console's host:
 no Python, no access to GitHub needed. The console shows the command for your system under
 Integrations › CLI.
 
@@ -594,7 +598,7 @@ Options:
 ```text
 Usage: choregos items create [OPTIONS] {project}
 
-  File a request in Choregos (a project with the internal tracker) and start
+  File a request in Tranibor (a project with the internal tracker) and start
   its interpreter.
 
 Arguments:
@@ -1214,7 +1218,7 @@ Options:
   --template <str>
   --org <str>
   --language <str>  [default: python]
-  --tracker <str>   `internal`: requests are filed in Choregos. Without
+  --tracker <str>   `internal`: requests are filed in Tranibor. Without
                     `--repo` the default is `internal`; with `--repo` it is
                     written only when given
   --help            Show this message and exit.

@@ -134,9 +134,9 @@ export default function OrgConnectorsPage() {
           MCP servers ({mcp.length})
         </h2>
         <p className="max-w-3xl text-sm text-ink-muted">
-          Tool servers Choregos calls over MCP: discover lists their tools, and each new tool is born closed. A
-          supplier&apos;s agent served over MCP is declared here — to Choregos it is a tool server. To let <em>your</em>{" "}
-          assistant call Choregos, see{" "}
+          Tool servers Tranibor calls over MCP: discover lists their tools, and each new tool is born closed. A
+          supplier&apos;s agent served over MCP is declared here — to Tranibor it is a tool server. To let <em>your</em>{" "}
+          assistant call Tranibor, see{" "}
           <Link href="/integrations" className="underline">
             Integrations
           </Link>

@@ -19,7 +19,7 @@ export const MODES: { value: GatewayMode; label: string; note: string }[] = [
   },
 ];
 
-/** How Choregos authenticates to the gateway, and whether the card asks for a secret. */
+/** How Tranibor authenticates to the gateway, and whether the card asks for a secret. */
 export const AUTH_TYPES: { value: GatewayAuthType; label: string; needsSecret: boolean }[] = [
   { value: "bearer", label: "Bearer token", needsSecret: true },
   { value: "header", label: "Custom header", needsSecret: true },

@@ -8,7 +8,7 @@ For an organisation administrator. Procedure `connector.mcp.mcp.atlassian-rovo`,
 
 - An Atlassian organisation administrator, because **API token access to the Rovo MCP Server is off
   until an admin enables it**.
-- This gives agents Atlassian's tools (search, Jira, Confluence, and more) under Choregos's per-tool
+- This gives agents Atlassian's tools (search, Jira, Confluence, and more) under Tranibor's per-tool
   policy. It does not call the Rovo agent itself; for that, see the remote agent procedure.
 - The server allows about 1 000 calls an hour on Standard and Premium plans.
 
@@ -30,7 +30,7 @@ For an organisation administrator. Procedure `connector.mcp.mcp.atlassian-rovo`,
   article says so). If you see only those, the token is the cause.
 - Every tool acts with the account's own Jira and Confluence permissions.
 
-## In Choregos
+## In Tranibor
 
 1. A service account key: install it from the MCP catalogue ("Atlassian Rovo"), with the key as its
    credential. The install sends it as Bearer to `https://mcp.atlassian.com/v2/mcp`.

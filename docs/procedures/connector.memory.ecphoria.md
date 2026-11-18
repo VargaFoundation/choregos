@@ -22,7 +22,7 @@ own documentation is the reference for that; this repository does not describe i
 The token must be able to read and write memories of the tenant and create tenants if the platform is to
 create one per project.
 
-## In Choregos
+## In Tranibor
 
 Usually the chart's `global.memory.*` values. To declare it on a project: Connectors, **Memory**, type
 **Ecphoria**, `base_url`, `tenant`, optionally `read_timeout_ms`, and `token` in the password field.

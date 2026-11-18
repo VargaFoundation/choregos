@@ -28,7 +28,7 @@ test("catalogue-style add: the modal names the host, shows the platform change, 
   await expect(modal.getByTestId("org-mcp.example.test")).toHaveText("not allowed");
   await expect(modal.getByTestId("ceiling-mcp.example.test")).toHaveText("outside the declared ceiling");
   await expect(modal.getByTestId("egress-snippet")).toContainText("mcp.example.test");
-  await expect(modal.getByText("Choregos cannot change the cluster's network policy")).toBeVisible();
+  await expect(modal.getByText("Tranibor cannot change the cluster's network policy")).toBeVisible();
   await expect(modal.getByRole("link", { name: "Open a prefilled issue" })).toBeVisible();
   await modal.getByRole("button", { name: "Allow and continue" }).click();
   await expect(modal).toBeHidden();

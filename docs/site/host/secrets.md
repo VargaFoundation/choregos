@@ -1,6 +1,6 @@
 ---
 title: Secrets
-description: The secrets a Choregos instance needs, where it reads them, how to generate them, and the key that seals connector secrets.
+description: The secrets a Tranibor instance needs, where it reads them, how to generate them, and the key that seals connector secrets.
 sidebar_position: 4
 ---
 

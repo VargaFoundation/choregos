@@ -1,6 +1,6 @@
 ---
 id: agent.door.cli
-title: Use the Choregos CLI
+title: Use the Tranibor CLI
 applies_to: {door_client: cli}
 audience: everyone
 version: 1
@@ -26,7 +26,7 @@ platform's address filled in; open it with the link below the panel.
 A **full-access** token (scope `*`) that you mint yourself. The REST API accepts it and the MCP door
 refuses it. Keep it off shared machines and give it an expiry.
 
-## In Choregos
+## In Tranibor
 
 Mint a token (Integrations, or `choregos-admin tokens create` for the very first one), then
 `choregos login --api-url {{api_url}} --token <token> --org <org>`.

@@ -52,7 +52,7 @@ list whose first element is a `google.rpc.ErrorInfo`; refused fields come in a `
 | HTTP `400`, unsupported protocol version | the client speaks a version other than `2025-11-25`, `2025-06-18`, `2025-03-26` | update the client |
 | HTTP `401` | no token, or an unknown, revoked, expired one; with OAuth, a token of the wrong audience or issuer | mint a token, or sign in again |
 | HTTP `403`, `insufficient_scope` | a full-access token, or OAuth without an MCP scope | mint an `mcp:read` or `mcp:write` token |
-| HTTP `403`, *sign in to the console once* | OAuth: the identity provider knows the person, Choregos does not yet | sign in to the console |
+| HTTP `403`, *sign in to the console once* | OAuth: the identity provider knows the person, Tranibor does not yet | sign in to the console |
 | HTTP `403`, bound to a project | the token belongs to another project | use the project's door or token |
 | HTTP `404` | the project in `/mcp/projects/…` does not exist | check `org:slug` |
 | HTTP `405` | a `GET` or `DELETE`: the door has no stream and no session | nothing: the protocol allows it |

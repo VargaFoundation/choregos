@@ -38,7 +38,7 @@ TASK = (
     "Acceptance: every test in `tests/test_orders.py` passes, and no other file than `src/orders.py` changes."
 )
 CLAUDE_MD = (
-    "# Instructions (Choregos)\n\n"
+    "# Instructions (Tranibor)\n\n"
     "This repository follows `AGENTS.md`. In addition, for this step:\n\n"
     "- Work item: PROJ-7 — Discounts\n- Role: implement\n"
     "- Allowed paths: see `.choregos/allowed_paths.txt`.\n"
@@ -170,7 +170,7 @@ async def observe_all(context: ContextMeasure, *calls: dict[str, Any]) -> None:
 
 
 def test_the_callbacks_split_is_context_breakdowns_split() -> None:
-    """The gateway's image has no Choregos package: the callback carries a copy of the split. On the
+    """The gateway's image has no Tranibor package: the callback carries a copy of the split. On the
     Claude Code request, with and without parts, and on a chat-completions one, the two agree."""
     registered = registration()
     hints = core.registered_hints(registered["parts"], registered["mcp_servers"])
@@ -416,7 +416,7 @@ def test_registration_holds_no_text() -> None:
 
 
 def test_the_callback_imports_nothing_the_gateways_image_lacks() -> None:
-    """LiteLLM's image has the standard library, the OpenTelemetry SDK and LiteLLM: a Choregos import
+    """LiteLLM's image has the standard library, the OpenTelemetry SDK and LiteLLM: a Tranibor import
     (or any other) in the copy would stop the gateway from loading its callbacks."""
     tree = ast.parse(pathlib.Path(llm_spans.__file__).read_text(encoding="utf-8"))
     nodes = list(ast.walk(tree))

@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 #
-# Installs the `choregos` CLI from a Choregos instance, in the version that instance runs.
+# Installs the `choregos` CLI from a Tranibor instance, in the version that instance runs.
 #
 #   irm __CHOREGOS_INSTANCE_URL__/cli/install.ps1 | iex
 #

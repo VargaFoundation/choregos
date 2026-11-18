@@ -22,7 +22,7 @@ contents and open pull requests there.
 Contents read, and pull requests write on that repository. Nothing reaches the server: the release
 process applies what is merged.
 
-## In Choregos
+## In Tranibor
 
 1. Administration, **Connectors**, **Declare**: capability **Web server**, type **nginx**.
 2. `repo`: `owner/repo`. `ref`, `root` if your layout differs. `api_url` for a self-hosted forge.

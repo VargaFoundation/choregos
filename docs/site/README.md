@@ -1,6 +1,6 @@
 # The public user documentation: how to write it
 
-This folder is the source of the public documentation of Choregos, published at
+This folder is the source of the public documentation of Tranibor, published at
 <https://graalsystems.github.io/tranibor/>. This page is for the people who write it. It is not
 published: the build of the site (`website/`, ADR 0185) leaves every `README.md` out.
 
@@ -16,14 +16,14 @@ these addresses (`CHOREGOS_DOCS_URL`, by default `https://graalsystems.github.io
 
 | Folder | Section | Order |
 | :-- | :-- | :-- |
-| `index.md` | Overview: what Choregos is, for whom, a five-minute tour, the map | 1 |
+| `index.md` | Overview: what Tranibor is, for whom, a five-minute tour, the map | 1 |
 | `concepts.md` | Concepts | 2 |
 | `get-started.md` | Get started | 3 |
-| `use/` | Use Choregos: the seven task pages of the contract | 4 |
+| `use/` | Use Tranibor: the seven task pages of the contract | 4 |
 | `build/` | Build agents: skills, agents, plugins, tools | 5 |
 | `integrate/` | Integrate: MCP, A2A, triggers, REST | 6 |
 | `cli/` | Command line: install, reference | 7 |
-| `host/` | Host Choregos: deployment, security, upgrades (`host/index.md` is the section's page) | 8 |
+| `host/` | Host Tranibor: deployment, security, upgrades (`host/index.md` is the section's page) | 8 |
 | `reference/` | Reference: workflow YAML, errors, API (`reference/index.md` is the section's page) | 9 |
 
 Each section folder has a `_category_.json` with its label and position. It is written once, here, for
@@ -100,5 +100,5 @@ The site is built with Docusaurus 3, which reads every page as MDX:
 ## How it is published
 
 The documentation site (graalsystems/docs) imports this folder at the **latest release tag** of
-Choregos, on a schedule and on demand, and opens a pull request there. A change merged here reaches the
+Tranibor, on a schedule and on demand, and opens a pull request there. A change merged here reaches the
 site with the next release. The site's "Edit this page" link opens the file here, on `main`.

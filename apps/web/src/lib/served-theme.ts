@@ -14,7 +14,7 @@ export type ServedTheme = Theme;
 
 export const DEFAULT_SERVED_THEME: ServedTheme = {
   id: "default",
-  product_name: "Choregos",
+  product_name: "Tranibor",
   default_mode: "dark",
   tokens: { dark: {}, light: {} },
 };

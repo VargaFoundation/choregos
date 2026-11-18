@@ -44,7 +44,7 @@ The platform asks for the `read:user` scope and nothing else: it can read the me
 not their repositories, organisations or e-mail addresses. With a GitHub App the scope is ignored and
 the App's own permissions apply: keep them empty.
 
-## In Choregos
+## In Tranibor
 
 1. Administration, **Connectors**, **Declare**: capability **Member accounts**, type **GitHub sign-in**.
 2. `base_url`: leave `https://github.com`, or your GitHub Enterprise Server's address.

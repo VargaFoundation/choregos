@@ -26,7 +26,7 @@ from choregos_adapters import register
 
 
 class InHouseTracker:
-    """A tracker that does not exist in Choregos' tree."""
+    """A tracker that does not exist in Tranibor's tree."""
 
     def __init__(self, config):
         self.config = config

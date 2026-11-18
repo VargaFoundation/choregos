@@ -6,7 +6,7 @@ sidebar_position: 6
 
 # Connectors
 
-A connector is how Choregos talks to a system outside it: the tracker where requests live, the
+A connector is how Tranibor talks to a system outside it: the tracker where requests live, the
 repository agents change, the tool that deploys, the directory where accounts are created. This page
 shows where each kind is set, how to tell that it works, and what to do when it does not.
 
@@ -21,7 +21,7 @@ shows where each kind is set, how to tell that it works, and what to do when it 
 
 - A project's connectors: **Project owner** on the project.
 - The organisation's connectors: **Organisation admin**.
-- The address of the system, and a credential for it: a token, an App, a service account. Choregos
+- The address of the system, and a credential for it: a token, an App, a service account. Tranibor
   never needs a broad personal token.
 
 ## Two levels, three pages
@@ -30,7 +30,7 @@ shows where each kind is set, how to tell that it works, and what to do when it 
 | :-- | :-- | :-- |
 | **Settings › Connections**, in a project | The project's delivery tools: the work tracker, the source code, CI pipelines, the deployment (CD), the agent runtime, the model gateway, memory; and **Notifications** | Project owner |
 | **Admin › Installed connectors** | The organisation's business systems and MCP servers: a directory, a device fleet, a document store, a web search, any MCP server, and which projects may use each | Organisation admin |
-| **Connector types**, in the library | The catalogue: every kind of system Choregos can connect to, and what each one can do | Everyone |
+| **Connector types**, in the library | The catalogue: every kind of system Tranibor can connect to, and what each one can do | Everyone |
 
 A project needs only what its workflows use. A workflow that opens pull requests needs a source code
 connector; a release train needs a deployment connector; an HR workflow with no repository needs
@@ -62,9 +62,9 @@ A failing test does not refuse the save: the settings are kept, and the card say
 
 ### GitHub
 
-Repositories on GitHub are reached through the Choregos GitHub App, never a personal token. When the
+Repositories on GitHub are reached through the Tranibor GitHub App, never a personal token. When the
 App is not installed on the repository's owner, the **Source code** card says so: press **Install on
-GitHub**, choose the repository on GitHub, and you come back to Choregos. The installation is found on
+GitHub**, choose the repository on GitHub, and you come back to Tranibor. The installation is found on
 its own; there is no number to copy.
 
 For the platform to merge, protect the default branch with required status checks but no required
@@ -90,7 +90,7 @@ which holds the credential. See [Tools](../build/tools.md) and [MCP](../integrat
 
 ## The network
 
-Choregos calls an outside system from its own servers, and only the hosts your organisation has opened.
+Tranibor calls an outside system from its own servers, and only the hosts your organisation has opened.
 When you add a connector, an MCP server or a knowledge source whose host is not open, a **network
 access** window lists each host and whether it is allowed. An organisation admin presses **Allow and
 continue**; anyone else presses **Ask an administrator**, and the request waits in the admins'
@@ -112,7 +112,7 @@ is generated from the platform's own procedures.
 | :-- | :-- |
 | A card reads **Failing** | Read the error on the card. A `401` or `403` is the credential or its permissions; a timeout is often the network |
 | A card reads **Not connected** | A workflow needs it: press **Configure**, or ask an organisation admin when the readiness list says so |
-| "The Choregos App is not installed" on the source code card | Press **Install on GitHub**, then come back |
+| "The Tranibor App is not installed" on the source code card | Press **Install on GitHub**, then come back |
 | A readiness line still says a connector is stale | Its last passing test is older than a week; press **Test** |
 | Nothing starts when an issue is labelled | Check the App's recent webhook deliveries on GitHub: the address must be your instance's, and reachable |
 

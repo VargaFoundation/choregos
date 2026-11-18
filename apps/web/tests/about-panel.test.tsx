@@ -66,7 +66,7 @@ describe("the About panel (S42-12)", () => {
     fireEvent.click(within(screen.getByRole("complementary", { name: "Sidebar" })).getByRole("button", { name: "About" }));
     const panel = await screen.findByRole("dialog", { name: "About" });
     expect(await within(panel).findByText("Community edition")).toBeInTheDocument();
-    expect(within(panel).getByText("Choregos")).toBeInTheDocument();
+    expect(within(panel).getByText("Tranibor")).toBeInTheDocument();
     expect(within(panel).getByText("0.17.16")).toBeInTheDocument();
     expect(within(panel).getByTestId("about-core-licence")).toHaveTextContent("Apache-2.0");
     expect(within(panel).getByText("0123abc4567def890123abc4567def890123abc4")).toBeInTheDocument();
@@ -113,7 +113,7 @@ describe("the About panel (S42-12)", () => {
     vi.mocked(api.edition).mockResolvedValue(COMMUNITY);
     render(wrap(<AboutPanel />));
     expect(await screen.findByText("Product")).toBeInTheDocument();
-    expect(screen.getByText("Product").nextSibling).toHaveTextContent("Choregos");
+    expect(screen.getByText("Product").nextSibling).toHaveTextContent("Tranibor");
   });
 
   it("copies a plain-text summary for support", async () => {
@@ -125,7 +125,7 @@ describe("the About panel (S42-12)", () => {
     await waitFor(() => expect(write).toHaveBeenCalled());
     expect(write).toHaveBeenCalledWith(
       [
-        "Product: Choregos",
+        "Product: Tranibor",
         "Core version: 0.17.16",
         "Edition: enterprise",
         "Edition version: 0.2.0",
@@ -147,8 +147,8 @@ describe("the About panel (S42-12)", () => {
   });
 
   it("the support text of the community edition has no edition version and an unknown revision", () => {
-    expect(aboutSupportText("Choregos", { ...COMMUNITY, build: { revision: null } })).toBe(
-      "Product: Choregos\nCore version: 0.17.16\nEdition: community\nRevision: unknown",
+    expect(aboutSupportText("Tranibor", { ...COMMUNITY, build: { revision: null } })).toBe(
+      "Product: Tranibor\nCore version: 0.17.16\nEdition: community\nRevision: unknown",
     );
   });
 

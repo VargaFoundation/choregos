@@ -52,7 +52,7 @@ from ..http.egress import guarded
 MAX_PAGES = 50
 
 #: The versions this CLIENT speaks, newest first; `initialize` offers the first. It differs from
-#: `choregos_core.mcp.VERSIONS`, what Choregos's own servers claim (the sidecar, the API's door):
+#: `choregos_core.mcp.VERSIONS`, what Tranibor's own servers claim (the sidecar, the API's door):
 #: they do not implement 2026-07-28, and answer an offer of it with a version listed here.
 CLIENT_VERSIONS: Final = ("2026-07-28", "2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05")
 

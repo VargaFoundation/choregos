@@ -7,7 +7,7 @@ import * as vscode from "vscode";
 import { SessionStore, signInWithToken, SignInRefused, type StoredSession } from "./session";
 
 export const AUTH_TYPE = "choregos";
-export const AUTH_LABEL = "Choregos";
+export const AUTH_LABEL = "Tranibor";
 
 export interface AuthDeps {
   store: SessionStore;
@@ -44,7 +44,7 @@ export class ChoregosAuthProvider implements vscode.AuthenticationProvider, vsco
 
   async createSession(): Promise<vscode.AuthenticationSession> {
     const pasted = await vscode.window.showInputBox({
-      title: "Sign in to Choregos",
+      title: "Sign in to Tranibor",
       prompt:
         "Your own API token (scope `*`), from the console: My account → API tokens. It reads what you may read; it decides nothing.",
       password: true,
@@ -60,7 +60,7 @@ export class ChoregosAuthProvider implements vscode.AuthenticationProvider, vsco
     } catch (error) {
       const message = error instanceof SignInRefused ? error.message : "the sign-in failed";
       this.deps.log(`sign-in refused: ${message}`);
-      void vscode.window.showErrorMessage(`Choregos: ${message}`);
+      void vscode.window.showErrorMessage(`Tranibor: ${message}`);
       throw error;
     }
     const previous = await this.current();

@@ -20,7 +20,7 @@ from .runner import Runner, RunOutcome
 
 app = typer.Typer(
     add_completion=False,
-    help="Choregos runner: runs an agent step and publishes its StageResult.",
+    help="Tranibor runner: runs an agent step and publishes its StageResult.",
 )
 
 #: The name the runner gives itself when it refuses to start.

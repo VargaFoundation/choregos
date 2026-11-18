@@ -5,7 +5,7 @@
  * import from it. The look is an operations console in the manner of Temporal's UI: sentence case,
  * sans for what is read and mono only for what is compared, 4–6 px radii, round pills.
  *
- * What is specific to Choregos (a ticket's state, a run's cost, a step's actor) is
+ * What is specific to Tranibor (a ticket's state, a run's cost, a step's actor) is
  * said in tinted pills, plum for what acts alone, and always in full words.
  */
 "use client";

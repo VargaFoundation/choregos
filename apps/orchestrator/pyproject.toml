@@ -1,7 +1,7 @@
 [project]
 name = "choregos-orchestrator"
 version = "0.27.12"
-description = "Orchestrateur Choregos : workers et workflows Temporal"
+description = "Orchestrateur Tranibor : workers et workflows Temporal"
 requires-python = ">=3.12,<3.13"
 license = { text = "Apache-2.0" }
 dependencies = [

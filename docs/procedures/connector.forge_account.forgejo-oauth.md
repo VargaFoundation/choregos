@@ -23,7 +23,7 @@ For an organisation administrator. Procedure `connector.forge_account.forgejo-oa
 The platform asks for `read:user` only: it reads the member's own profile, nothing of their
 repositories or organisations.
 
-## In Choregos
+## In Tranibor
 
 1. Administration, **Connectors**, **Declare**: capability **Member accounts**, type **Forgejo sign-in**.
 2. `base_url`: the instance's address, `https://forge.example` (https only).

@@ -104,7 +104,7 @@ class MemoryProfile(Base, PkMixin, TimestampMixin):
 
 
 class MemoryFact(Base, PkMixin, TimestampMixin):
-    """Lexical fallback: memory stored in Choregos when Ecphoria is not deployed.
+    """Lexical fallback: memory stored in Tranibor when Ecphoria is not deployed.
 
     `embedding` is a `Json`, not a vector: the similarity is a dot product between
     bags of words, computed in Python. The connector used to be called `pgvector`, which promised

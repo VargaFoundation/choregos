@@ -1,12 +1,12 @@
 ---
-title: Host Choregos
-description: For operators. What a Choregos instance is made of, what it needs, and how to install, secure, upgrade and back it up on Kubernetes.
+title: Host Tranibor
+description: For operators. What a Tranibor instance is made of, what it needs, and how to install, secure, upgrade and back it up on Kubernetes.
 sidebar_position: 1
 ---
 
-# Host Choregos
+# Host Tranibor
 
-These pages are for the people who run a Choregos instance on Kubernetes. They are a digest: each one
+These pages are for the people who run a Tranibor instance on Kubernetes. They are a digest: each one
 says what to do and links to the full
 [deployment reference](../../deployment.md) for
 every value and every edge case.
@@ -48,7 +48,7 @@ there), gVisor as a `RuntimeClass` for agent pods, and a memory service (Ecphori
 
 ## Try it on your machine first
 
-To see Choregos before installing it on a cluster, run it with Docker Compose from the repository:
+To see Tranibor before installing it on a cluster, run it with Docker Compose from the repository:
 `git clone https://github.com/graalsystems/tranibor.git`, `cp .env.example .env`, then
 `docker compose up`, and open `http://localhost:3000`. It listens on `127.0.0.1` only and is not a
 deployment.

@@ -386,7 +386,7 @@
     },
     "deprecated": false,
     "dev_only": false,
-    "display": "internal (Choregos holds the work items)",
+    "display": "internal (Tranibor holds the work items)",
     "has_check_config": false,
     "has_egress": false,
     "has_factory": true,
@@ -1857,7 +1857,7 @@
           "additionalProperties": false,
           "properties": {
             "rule": {
-              "description": "pfrest v2 rule fields: type, interface, ipprotocol, protocol, source, destination, destination_port, descr…",
+              "description": "pfrest v2 rule fields: type, interface, ipprotocol, protocol, source, destination, destination_port, descr\u2026",
               "type": "object"
             }
           },
@@ -1884,7 +1884,7 @@
           "additionalProperties": false,
           "properties": {
             "changes": {
-              "description": "pfrest v2 rule fields: type, interface, ipprotocol, protocol, source, destination, destination_port, descr…",
+              "description": "pfrest v2 rule fields: type, interface, ipprotocol, protocol, source, destination, destination_port, descr\u2026",
               "type": "object"
             },
             "tracker": {
@@ -2370,7 +2370,7 @@
       "properties": {
         "key_rotation": {
           "default": "failover",
-          "description": "with several keys (`api_key.2` …): `failover` uses the first that answers, `round_robin` spreads the calls",
+          "description": "with several keys (`api_key.2` \u2026): `failover` uses the first that answers, `round_robin` spreads the calls",
           "enum": [
             "failover",
             "round_robin"
@@ -2549,7 +2549,7 @@
       "properties": {
         "key_rotation": {
           "default": "failover",
-          "description": "with several keys (`api_key.2` …): `failover` uses the first that answers, `round_robin` spreads the calls",
+          "description": "with several keys (`api_key.2` \u2026): `failover` uses the first that answers, `round_robin` spreads the calls",
           "enum": [
             "failover",
             "round_robin"
@@ -2745,7 +2745,7 @@
         },
         "key_rotation": {
           "default": "failover",
-          "description": "with several keys (`api_key.2` …): `failover` uses the first that answers, `round_robin` spreads the calls",
+          "description": "with several keys (`api_key.2` \u2026): `failover` uses the first that answers, `round_robin` spreads the calls",
           "enum": [
             "failover",
             "round_robin"
@@ -2905,7 +2905,7 @@
         },
         "key_rotation": {
           "default": "failover",
-          "description": "with several keys (`api_key.2` …): `failover` uses the first that answers, `round_robin` spreads the calls",
+          "description": "with several keys (`api_key.2` \u2026): `failover` uses the first that answers, `round_robin` spreads the calls",
           "enum": [
             "failover",
             "round_robin"
@@ -2974,7 +2974,7 @@
         },
         "key_rotation": {
           "default": "failover",
-          "description": "with several keys (`api_key.2` …): `failover` uses the first that answers, `round_robin` spreads the calls",
+          "description": "with several keys (`api_key.2` \u2026): `failover` uses the first that answers, `round_robin` spreads the calls",
           "enum": [
             "failover",
             "round_robin"

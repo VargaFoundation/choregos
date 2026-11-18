@@ -40,7 +40,7 @@ def _converted(markdown: str) -> dict[str, Any]:
 
 
 BROKEN = (
-    "<!-- choregos:status -->\n### Choregos — progress\n\n"
+    "<!-- choregos:status -->\n### Tranibor — progress\n\n"
     "| # | Step | Result |\n|--:|:--|:--|\n"
     "| 1 | Triaged | the result does not follow the contract:\n"
     "- `evidence.facts.duplicate_of.str`: Input should be  |\n"

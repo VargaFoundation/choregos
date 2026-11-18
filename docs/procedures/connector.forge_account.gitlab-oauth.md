@@ -23,7 +23,7 @@ For an organisation administrator. Procedure `connector.forge_account.gitlab-oau
 `read_user` reads the member's own profile: id, username, avatar, profile page. It gives no access to
 projects, groups or the API on the member's behalf beyond that read.
 
-## In Choregos
+## In Tranibor
 
 1. Administration, **Connectors**, **Declare**: capability **Member accounts**, type **GitLab sign-in**.
 2. `base_url`: leave `https://gitlab.com`, or your instance's address (`https://gitlab.example`).

@@ -1568,7 +1568,7 @@ def _commit_message(stage_input: StageInput, result: StageResult) -> str:
         "document": "docs",
     }.get(stage_input.transition.role, "chore")
     scope = stage_input.work_item.key.rsplit("#", 1)[-1]
-    summary = result.summary.strip().splitlines()[0][:100] if result.summary else "Choregos step"
+    summary = result.summary.strip().splitlines()[0][:100] if result.summary else "Tranibor step"
     return f"{prefix}({scope}): {summary}"
 
 

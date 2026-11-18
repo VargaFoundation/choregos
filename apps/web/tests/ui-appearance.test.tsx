@@ -156,9 +156,9 @@ describe("the console's primitives", () => {
     expect(screen.getByText("2")).toHaveClass("rounded-full", "font-mono");
   });
 
-  it("the mark is the Choregos wordmark, not the foundation's", () => {
+  it("the mark is the Tranibor wordmark, not the foundation's", () => {
     const { container } = render(<Wordmark />);
-    expect(container).toHaveTextContent(/^Choregos$/);
+    expect(container).toHaveTextContent(/^Tranibor$/);
     expect(container.textContent).not.toMatch(/varga/i);
   });
 });

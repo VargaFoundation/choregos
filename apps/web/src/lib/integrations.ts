@@ -196,7 +196,7 @@ export function extrait(
         language: "json",
         code: JSON.stringify(
           {
-            inputs: [{ type: "promptString", id: "choregos-token", description: "Choregos MCP token", password: true }],
+            inputs: [{ type: "promptString", id: "choregos-token", description: "Tranibor MCP token", password: true }],
             servers: { choregos: { type: "http", url, headers: { Authorization: "Bearer ${input:choregos-token}" } } },
           },
           null,
@@ -230,7 +230,7 @@ export function extrait(
           where: "claude.ai — Settings, Connectors, Add custom connector, then Advanced settings",
           language: "text",
           code: [
-            "Name:                  Choregos",
+            "Name:                  Tranibor",
             `Remote MCP server URL: ${url}`,
             `OAuth Client ID:       ${enregistre.client_id}`,
             "OAuth Client Secret:   ask your administrator — it is never shown on this page",

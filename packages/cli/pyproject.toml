@@ -1,7 +1,7 @@
 [project]
 name = "choregos-cli"
 version = "0.27.12"
-description = "CLI choregos"
+description = "The Tranibor command line (also installed as `choregos`)"
 requires-python = ">=3.12,<3.13"
 license = { text = "Apache-2.0" }
 dependencies = [
@@ -14,6 +14,7 @@ dependencies = [
 ]
 
 [project.scripts]
+tranibor = "choregos_cli.main:main"
 choregos = "choregos_cli.main:main"
 
 [build-system]

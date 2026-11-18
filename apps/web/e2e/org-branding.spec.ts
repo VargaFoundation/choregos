@@ -19,13 +19,13 @@ test.describe("the remembered organisation's theme, drawn by the server", () => 
     );
     await expect(page.locator('link[rel="icon"]')).toHaveAttribute("href", "/api/v1/mock-theme-assets/favicon.svg");
     await expect(page.getByTestId("footer-text")).toHaveText("Operated by Acme Labs");
-    await expect(page.getByTestId("footer-foundation")).toContainText("Acme Labs, built on Choregos by Varga Foundation");
+    await expect(page.getByTestId("footer-foundation")).toContainText("Acme Labs, built on Tranibor by Varga Foundation");
   });
 
   test("a cookie that is not a slug is ignored", async ({ page, context, baseURL }) => {
     await context.addCookies([{ name: "choregos_org", value: "..%2F..%2Fadmin", url: baseURL! }]);
     await page.goto("/");
-    await expect(page.getByTestId("footer-foundation")).toContainText("Choregos by Varga Foundation");
+    await expect(page.getByTestId("footer-foundation")).toContainText("Tranibor by Varga Foundation");
     await expect(page.getByText("Acme Labs")).toHaveCount(0);
   });
 

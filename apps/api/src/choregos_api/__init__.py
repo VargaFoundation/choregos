@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Choregos API: REST, webhooks, SSE, internal API, OIDC, RLS."""
+"""Tranibor API: REST, webhooks, SSE, internal API, OIDC, RLS."""
 
 from __future__ import annotations
 

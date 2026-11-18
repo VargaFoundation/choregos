@@ -21,7 +21,7 @@ Nothing to create for a public repository.
 
 The source makes one shallow fetch of the ref and reads files. It reads at most 500 files of 5 MiB each.
 
-## In Choregos
+## In Tranibor
 
 1. **Knowledge**, the base, **Add source**, kind **Git**.
 2. For a private repository, name the **connector**. Then `url`, `ref` and `paths` (globs; the default is markdown anywhere).

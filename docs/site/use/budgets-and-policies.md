@@ -38,7 +38,7 @@ model.
 
 ## How a budget works
 
-When a stage starts, Choregos gives its run a model key capped at what is **left**. What is left is the
+When a stage starts, Tranibor gives its run a model key capped at what is **left**. What is left is the
 smallest of:
 
 - the stage's budget (by role and work item size);
@@ -150,7 +150,7 @@ policy saved before the ceiling existed is not refused: what runs is brought dow
 **Settings › Guardrails** lists each field that was brought down.
 
 The ceiling's network section bounds the hosts every project and agent may reach, with a deny list that
-always wins. **Admin › Network** shows it with the hosts Choregos itself calls.
+always wins. **Admin › Network** shows it with the hosts Tranibor itself calls.
 
 ## What can go wrong
 

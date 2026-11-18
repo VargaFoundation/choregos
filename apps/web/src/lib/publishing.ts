@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
- * The publishing identity (ADR 0156): who publishes Choregos, where its source, releases,
+ * The publishing identity (ADR 0156): who publishes Tranibor, where its source, releases,
  * documentation and plugins live. `publishing.json` beside this module is the copy of
  * `packages/core/src/choregos_core/publishing.json` that `tools/publishing_identity.py` keeps
  * identical; the console reads it here and never spells a value out elsewhere.

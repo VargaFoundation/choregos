@@ -20,7 +20,7 @@ reported, the run's correlation keys, and an error status with `error.type` on a
 a message, a prompt, a tool argument or a response (ADR 0018 conditions).
 
 Stdlib and the OpenTelemetry SDK only: LiteLLM's image has the SDK and the OTLP/HTTP exporter, and
-no Choregos package. Off unless `OTEL_EXPORTER_OTLP_ENDPOINT` (or its `_TRACES_` form) is set; an
+no Tranibor package. Off unless `OTEL_EXPORTER_OTLP_ENDPOINT` (or its `_TRACES_` form) is set; an
 error here is logged and never reaches the call.
 
 The same callback measures what fills an ACP CLI's context (ADR 0141 §4, S64-08b): for a call made

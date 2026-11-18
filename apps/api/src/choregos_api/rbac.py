@@ -175,7 +175,7 @@ class Principal:
         return self.kind != OUTPOST and any(role == Role.ORG_ADMIN for role in self.org_roles.values())
 
 
-SYSTEM = Principal(user_id="system", email="system@choregos", display_name="Choregos", kind="system")
+SYSTEM = Principal(user_id="system", email="system@choregos", display_name="Tranibor", kind="system")
 
 
 def outpost_principal(*, outpost_id: str, instance_id: str, display_name: str = "") -> Principal:

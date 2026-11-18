@@ -645,7 +645,7 @@ async def put_policy(ctx: ProjectCtx, body: PolicyPut, session: Db) -> PolicyDto
     refused = unenforced_governance(policy)
     if refused:
         raise unprocessable(
-            "the policy declares guards Choregos does not enforce (ADR 0101): "
+            "the policy declares guards Tranibor does not enforce (ADR 0101): "
             + "; ".join(i.message for i in refused),
             [
                 {"loc": ["policy", *(i.path or "").split(".")], "msg": i.message, "code": i.code}

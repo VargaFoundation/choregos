@@ -7,7 +7,7 @@ For the person who operates the platform. Procedure `connector.gateway.direct`, 
 ## Before you start
 
 - **Development only.** This gateway hands out the key it was given: it mints no key per run, so there is
-  no hard cap, and the cost ledger stays at zero. On staging and prod Choregos **refuses to build it** and
+  no hard cap, and the cost ledger stays at zero. On staging and prod Tranibor **refuses to build it** and
   says so: use `litellm` (or `openai-compatible`, knowing its limits).
 
 ## At the vendor
@@ -18,7 +18,7 @@ Create a provider API key with a spending limit set at the provider's side.
 
 The key is used as is by every run. Give it only the models you list.
 
-## In Choregos
+## In Tranibor
 
 Connectors, **Gateway**, type **direct**: `models` (a list of names), `key` in the password field.
 

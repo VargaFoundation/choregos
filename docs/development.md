@@ -1,4 +1,4 @@
-# Developing on Choregos
+# Developing on Tranibor
 
 ## Three levels, from the lightest to the closest to production
 
@@ -70,7 +70,7 @@ In the console, signed in as an administrator:
    `supplier` (also `mdm`, `shipping`, `access_control`), then Discover.
 
 The upstream token (`local-upstream-only`) lives only in the gateway container: it never enters
-Choregos, which holds the gateway credential alone.
+Tranibor, which holds the gateway credential alone.
 
 For `jwt_assertion`, set `CHOREGOS_FAKE_GATEWAY_AUTH=jwt_assertion`,
 `CHOREGOS_FAKE_GATEWAY_JWKS_URL=http://api:8000/api/v1/orgs/demo/mcp-gateway/jwks.json` and
@@ -250,7 +250,7 @@ knowing before designing around it.
 
 ## Shipping a connector from outside this tree
 
-A package installed next to Choregos can register its own connectors — no fork, no patch to the
+A package installed next to Tranibor can register its own connectors — no fork, no patch to the
 core. Declare an entry point in the `choregos.plugins` group. A package loaded that way is an
 **extension**; "plugin" means the package of [ADR 0093](adr/0093-an-agent-ships-as-a-plugin.md), see
 [plugins.md](plugins.md):
@@ -622,7 +622,7 @@ The edition API (`choregos_api.edition`) and the `Principal` followed in 0.21 (S
 
 ## The publishing identity
 
-Who publishes Choregos and where (the image and chart namespace, the source repository and its
+Who publishes Tranibor and where (the image and chart namespace, the source repository and its
 releases, the documentation site, the security contact, the agent's commit address, the plugins'
 repository and signed index) is defined once, in `packages/core/src/choregos_core/publishing.json`
 ([ADR 0156](adr/0156-the-publishing-identity-is-one-file.md)).

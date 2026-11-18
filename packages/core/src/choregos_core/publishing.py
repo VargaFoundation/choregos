@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""The publishing identity: who publishes Choregos and where (ADR 0156).
+"""The publishing identity: who publishes Tranibor and where (ADR 0156).
 
 Where the images and charts are pushed, where the source and its releases live, where the user
 documentation is served, where a vulnerability is reported, which address the agent commits as,

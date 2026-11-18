@@ -21,7 +21,7 @@ fields:
 
 - A GitLab project with CI pipelines, where you are a Maintainer (to create a token and a webhook).
 - The platform's shared webhook secret (`CHOREGOS_GENERIC_WEBHOOK_SECRET`), held by whoever operates
-  Choregos: GitLab sends it as the webhook's secret token, and without it the endpoint refuses every
+  Tranibor: GitLab sends it as the webhook's secret token, and without it the endpoint refuses every
   delivery.
 
 ## At GitLab
@@ -38,7 +38,7 @@ fields:
   creates pipelines. A `read_api` token can read but cannot trigger.
 - The token is project-scoped: it cannot touch another project.
 
-## In Choregos
+## In Tranibor
 
 1. Project settings, Connectors, **CI**, type **GitLab CI**.
 2. `base_url`: `https://gitlab.com` (the default) or your self-managed address. `project`: the project's

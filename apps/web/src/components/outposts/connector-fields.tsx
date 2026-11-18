@@ -87,7 +87,7 @@ export function OutpostConnectorFields({
     <div className="space-y-3" data-testid="outpost-connector-fields">
       <p className="text-xs text-ink-muted">
         No URL and no secret: the server&apos;s address and its credential are written in the outpost&apos;s policy file,
-        never in Choregos.
+        never in Tranibor.
       </p>
       <div className="grid gap-3 md:grid-cols-2 [&>*]:min-w-0">
         <Field label="Outpost" hint="An outpost of this organisation, enabled for tools." error={errors.outpost}>

@@ -40,14 +40,14 @@ export function InboxView({ project, heading = "h1" }: { project?: string; headi
           {project ? (
             <>
               Everything in project {project} that cannot move until someone decides: a ticket that asks for an
-              approval, an answer or a task, and a write into a system outside Choregos. Groups are not checked yet —
+              approval, an answer or a task, and a write into a system outside Tranibor. Groups are not checked yet —
               you see what is addressed to others too.{" "}
               <Link href="/inbox">The whole organisation&apos;s inbox</Link>
             </>
           ) : (
             <>
               Everything in organisation {org} that cannot move until someone decides: a ticket that asks for an
-              approval, an answer or a task, and a write into a system outside Choregos. Groups are not checked yet —
+              approval, an answer or a task, and a write into a system outside Tranibor. Groups are not checked yet —
               you see what is addressed to others too.
             </>
           )}
@@ -149,7 +149,7 @@ export function InboxView({ project, heading = "h1" }: { project?: string; headi
       {!project && (
         <Card title="Network access" action={<span className="text-xs text-ink-muted">{inbox.egressRequests.length} waiting</span>}>
           <p className="mb-3 max-w-3xl text-sm text-ink-muted">
-            A host somebody needs Choregos to call for the organisation — an MCP server, a git repository, a web site.
+            A host somebody needs Tranibor to call for the organisation — an MCP server, a git repository, a web site.
             An administrator allows it, or refuses it; the person asked retries once it is approved.
           </p>
           {!inbox.pret ? (

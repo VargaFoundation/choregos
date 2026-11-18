@@ -21,8 +21,8 @@ fields:
 
 ## Before you start
 
-- A **GitHub App** for the platform: one per installation of Choregos, never a broad personal token.
-  The person who operates Choregos creates it, either from the console (*Administration, GitHub App*:
+- A **GitHub App** for the platform: one per installation of Tranibor, never a broad personal token.
+  The person who operates Tranibor creates it, either from the console (*Administration, GitHub App*:
   the platform registers it on GitHub from a manifest with the permissions and events below, and keeps
   its credentials sealed) or by hand as platform settings (`github-app-id`, `github-app-private-key`,
   `github-webhook-secret`). If the App exists, skip to step 4, "Install".
@@ -37,7 +37,7 @@ Skip steps 1 to 3 when the App was created from the console: the manifest set th
    platform holds as `github-webhook-secret`. GitHub signs each delivery with it and the platform
    refuses an unsigned one.
 3. Set the permissions and events below, then create the App and generate a **private key**.
-4. **Install** the App on the repositories Choregos works in, from the console: the repository field's
+4. **Install** the App on the repositories Tranibor works in, from the console: the repository field's
    **Install on GitHub** button opens GitHub's install page and brings you back. The installation is
    discovered by the platform: there is no number to copy. The App's **Setup URL** is the
    platform's `/api/v1/github/setup`.
@@ -65,14 +65,14 @@ Subscribe to these events: `issues`, `issue_comment`, `projects_v2_item`, `pull_
 Add `workflows: write` only if agents must edit files under `.github/workflows`; without it GitHub
 refuses such a push.
 
-**What Choregos writes, and as whom.** The workflow's bookkeeping goes through this connector, through
-GitHub's REST API, as the Choregos GitHub App (`<app>[bot]` on GitHub): the board column and labels,
+**What Tranibor writes, and as whom.** The workflow's bookkeeping goes through this connector, through
+GitHub's REST API, as the Tranibor GitHub App (`<app>[bot]` on GitHub): the board column and labels,
 the status comment, the questions to a person, the close-out. The connector card names the account
 whose installation it goes through, and each line of a work item's timeline that wrote to GitHub says
 "via GitHub Issues". An agent's own actions do not go through this connector: they go through the MCP
 tools its version names, under each tool connector's account, listed on its run.
 
-## In Choregos
+## In Tranibor
 
 1. Project settings, Connectors, **Tracker**, type **GitHub Issues + Projects v2**.
 2. `repo`: pick the repository in the list (what the App's installations claimed by your organisation

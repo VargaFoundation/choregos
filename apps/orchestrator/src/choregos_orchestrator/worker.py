@@ -175,7 +175,7 @@ async def run_worker(queues: list[str]) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Workers Temporal de Choregos")
+    parser = argparse.ArgumentParser(description="Workers Temporal de Tranibor")
     parser.add_argument(
         "--queues",
         default=",".join(ALL_QUEUES),

@@ -248,7 +248,7 @@ def dockerfile(runtime: HostedRuntime, archive: SourceArchive) -> str:
     source = runtime.source
     assert source.type == "zip"
     lines = [
-        f"# Written by Choregos (ADR 0080 §9, template {TEMPLATE_VERSION}). The zip's own Dockerfile,",
+        f"# Written by Tranibor (ADR 0080 §9, template {TEMPLATE_VERSION}). The zip's own Dockerfile,",
         "# if it has one, is not read.",
     ]
     kind = family(source.runtime)

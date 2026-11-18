@@ -34,7 +34,7 @@ export function InDoubt({ action }: { action: Action }) {
     <Alert tone="warn" title="In doubt: this write was sent, and nobody knows whether it was made">
       <div className="space-y-2" data-testid="in-doubt">
         <p>
-          An instance of the outpost took the write and its answer never came back. Choregos does not send it again
+          An instance of the outpost took the write and its answer never came back. Tranibor does not send it again
           and has undone nothing: the effects already done stay done, the ones after it did not run.
         </p>
         {sent.length > 0 && (

@@ -220,7 +220,7 @@ async def _answer(ctx: Context, message: dict[str, Any], request: Request) -> di
                     "tools": {"listChanged": False},
                     **({"prompts": {"listChanged": False}} if ctx.assistant is not None else {}),
                 },
-                "serverInfo": {"name": "choregos", "title": "Choregos", "version": __version__},
+                "serverInfo": {"name": "choregos", "title": "Tranibor", "version": __version__},
                 "instructions": INSTRUCTIONS,
             },
         )

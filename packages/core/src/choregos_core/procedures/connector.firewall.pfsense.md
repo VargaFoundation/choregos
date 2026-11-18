@@ -34,9 +34,9 @@ fields:
 ## Permissions
 
 The key can do what its user's privileges allow, so give a read-only user if agents only need to read. Even
-with write rights, no write happens without a human approval in Choregos.
+with write rights, no write happens without a human approval in Tranibor.
 
-## In Choregos
+## In Tranibor
 
 1. Administration, **Connectors**, **Declare**: capability **Firewall**, type **pfSense**.
 2. `base_url`: `https://<pfsense>`, **without** `/api/v2`.

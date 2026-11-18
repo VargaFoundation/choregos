@@ -98,7 +98,7 @@ class StatusComment:
             "\n".join(
                 [
                     STATUS_MARKER,
-                    "### Choregos — progress",
+                    "### Tranibor — progress",
                     header,
                     "",
                     TABLE_HEADER,
@@ -158,7 +158,7 @@ def render_human_request(kind: str, payload: dict[str, object], public_url: str,
         options = payload.get("options") or []
         lines = [
             "<!-- choregos:human -->",
-            "### Choregos — question",
+            "### Tranibor — question",
             str(payload.get("question", "")),
         ]
         if isinstance(options, list) and options:
@@ -173,7 +173,7 @@ def render_human_request(kind: str, payload: dict[str, object], public_url: str,
         return "\n".join(
             [
                 "<!-- choregos:human -->",
-                "### Choregos — wider scope requested",
+                "### Tranibor — wider scope requested",
                 f"Reason: {payload.get('justification', '')}",
                 "",
                 "Paths requested:",
@@ -185,7 +185,7 @@ def render_human_request(kind: str, payload: dict[str, object], public_url: str,
     return "\n".join(
         [
             "<!-- choregos:human -->",
-            "### Choregos — approval requested",
+            "### Tranibor — approval requested",
             str(payload.get("summary", "A person's decision is needed to continue.")),
             "",
             f"Approve or refuse in the console: {public_url}",

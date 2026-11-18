@@ -8,7 +8,7 @@ For a project owner. Procedure `connector.notify.teams`, version 1, reviewed 202
 
 - A Teams channel where the assistant's task outputs and its owners' notices should appear.
 - The right to add a workflow to that channel (otherwise a Teams administrator does it).
-- Management of the assistant's installation in Choregos (`assistant:manage`).
+- Management of the assistant's installation in Tranibor (`assistant:manage`).
 
 ## At Microsoft Teams
 
@@ -19,11 +19,11 @@ For a project owner. Procedure `connector.notify.teams`, version 1, reviewed 202
 
 ## Permissions
 
-- The URL is the credential: whoever holds it can post to the channel. Choregos seals it and never shows it
+- The URL is the credential: whoever holds it can post to the channel. Tranibor seals it and never shows it
   again.
-- Nothing is read from Teams; Choregos only posts message cards.
+- Nothing is read from Teams; Tranibor only posts message cards.
 
-## In Choregos
+## In Tranibor
 
 1. Open the assistant's installation (**Assistants**, the installation's page) as one of its managers.
 2. In the **Microsoft Teams** card, paste the URL and save it. It is sealed and the field empties.

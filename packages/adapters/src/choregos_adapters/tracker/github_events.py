@@ -5,7 +5,7 @@ This is where the tracker becomes an interface: a moved card or a label that was
 events the orchestrator understands.
 
 The `/choregos ...` comments are PARSED into `HUMAN_DECISION`, but the orchestrator translates
-them into nothing: no decision goes through them (#138). A tracker login is not a Choregos
+them into nothing: no decision goes through them (#138). A tracker login is not a Tranibor
 principal: no rights, no recent authentication, no gesture checks. Wiring them up will mean
 resolving that login to a user and going through `extensions.check_gesture`.
 """

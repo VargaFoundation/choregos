@@ -17,7 +17,7 @@ each answer means.
 
 **Before you start:**
 
-- a project whose tracker is Choregos's own (the internal tracker): a trigger does not open issues in
+- a project whose tracker is Tranibor's own (the internal tracker): a trigger does not open issues in
   an external tracker;
 - the right to change the project's connectors, to mint the token;
 - a workflow to open the work items in (here `ship-a-change`, whose `metadata.inputs` require a
@@ -143,7 +143,7 @@ senders that sign their webhooks, such as many monitoring and ticketing tools.
 
 ## Other ways work starts
 
-- **From your tracker:** an issue labelled `agent-ready` starts in Choregos; *start rules* start other
+- **From your tracker:** an issue labelled `agent-ready` starts in Tranibor; *start rules* start other
   items, for instance a Jira bug of a given type or an issue carrying two labels. They are edited as
   JSON in the same **Triggers** card, under *Tracker start rules (JSON)*
   ([usage reference](../../usage.md#tracker-items-that-start-without-agent-ready)).

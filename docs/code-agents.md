@@ -9,9 +9,9 @@ reads its result in the contract's shape. The decision and the alternatives are 
 An agent you already have, written for Azure AI Foundry's hosted contract or with no code at all,
 is a [prompt, voice or hosted agent](hosted-agents.md) instead.
 
-## Why no Choregos framework
+## Why no Tranibor framework
 
-Choregos has no agent framework and does not need one. `choregos-agent-sdk` is a **run-contract
+Tranibor has no agent framework and does not need one. `choregos-agent-sdk` is a **run-contract
 adapter**: it gives an agent written on any framework the four things a step needs from the platform
 and nothing else —
 

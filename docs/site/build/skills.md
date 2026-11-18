@@ -66,9 +66,9 @@ curl -s "$CHOREGOS_API_URL/api/v1/orgs/acme/skills/import" -H "Authorization: Be
 ```
 
 **From a git repository:** in **Skills**, card **Import from a repository**, give the repository, the
-branch, tag or commit, and the folder, then **Preview**: Choregos reads the skills it finds, and
+branch, tag or commit, and the folder, then **Preview**: Tranibor reads the skills it finds, and
 **Import** takes them at the exact commit shown. Public repositories on `github.com` and `gitlab.com`
-are read; your organisation keeps a list of allowed sources. Choregos can later tell you that a new
+are read; your organisation keeps a list of allowed sources. Tranibor can later tell you that a new
 commit changes the skill (**Check for an update**); it never applies an update by itself.
 
 **From the library:** the **Library** tab of **Skills** lists the skills shipped with the platform;
@@ -88,7 +88,7 @@ Every version is rated when it is added:
 
 ## 4. Publish the next version
 
-A version never changes. Import the folder again (the zip, or a new commit): Choregos publishes the
+A version never changes. Import the folder again (the zip, or a new commit): Tranibor publishes the
 next version of the skill whose `name` matches. Agents that name the skill without a version take the
 latest one at their next run; an agent that pinned a version keeps it.
 

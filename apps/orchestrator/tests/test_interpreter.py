@@ -92,7 +92,7 @@ async def test_default_simple_full_traversal(setup: Fixture, temporal_env: Any, 
     assert outcome["state"] == "deployed_prod"
     assert outcome["cost_usd"] >= 0
     comment = setup.adapters.tracker.status_comment(setup.tracker_key)
-    assert comment is not None and "Choregos — progress" in comment
+    assert comment is not None and "Tranibor — progress" in comment
     assert "agent refine" in comment and "agent implement" in comment
 
 
@@ -199,7 +199,7 @@ async def test_agent_question_creates_human_request(
         rows = (await session.execute(select(HumanRequest))).scalars().all()
     assert any(row.kind == "question" for row in rows)
     comments = setup.adapters.tracker.items[setup.tracker_key].comments
-    assert any("Choregos — question" in c.body for c in comments)
+    assert any("Tranibor — question" in c.body for c in comments)
 
 
 async def test_pause_and_resume(setup: Fixture, temporal_env: Any, worker_factory: Any) -> None:

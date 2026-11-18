@@ -142,7 +142,7 @@ def test_the_count_is_what_was_masked_and_the_responses_shape_is_covered() -> No
 
 
 def test_the_known_shapes_are_the_no_secrets_gate_s() -> None:
-    """The guard is stdlib-only (LiteLLM's image has no Choregos package), so it copies the shapes."""
+    """The guard is stdlib-only (LiteLLM's image has no Tranibor package), so it copies the shapes."""
     assert tuple(pattern for _, pattern in SECRET_PATTERNS) == llm_guardrail.KNOWN_SHAPES
     assert [p.pattern for p in redaction._KNOWN_SHAPES] == list(llm_guardrail.KNOWN_SHAPES)
 

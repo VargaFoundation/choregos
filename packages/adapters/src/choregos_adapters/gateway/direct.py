@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """The "direct" gateway: there is none.
 
-Choregos' default model is a gateway that mints **one virtual key per run**, capped, and that
+Tranibor's default model is a gateway that mints **one virtual key per run**, capped, and that
 counts the spend at the source. Two situations do not fit this mould:
 
 - the agent brings its own credentials (a Claude Code subscription, for example): the platform

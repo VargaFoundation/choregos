@@ -22,7 +22,7 @@ fields:
 
 - An Atlassian administrator, for a **service account** (recommended) or a dedicated user.
 - The Confluence space (and, if you want only a branch, the page) to read. The account's permissions are
-  what Choregos can read: everything it reads in the space becomes readable by everyone the knowledge
+  what Tranibor can read: everything it reads in the space becomes readable by everyone the knowledge
   base is open to, whatever the page restrictions say for other people.
 
 ## At Atlassian
@@ -44,9 +44,9 @@ token**. It carries all of that user's rights: prefer a Confluence-only user.
   stops at the folder), plus `read:attachment:confluence` when the source indexes attachments.
 - Give the account **read** on the spaces to index (Space settings, Permissions) and nothing else.
 - A scoped token is only accepted through `https://api.atlassian.com/ex/confluence/<cloudId>/…`, with
-  Basic authentication using the service account's email. Choregos does that when `auth` is `scoped`.
+  Basic authentication using the service account's email. Tranibor does that when `auth` is `scoped`.
 
-## In Choregos
+## In Tranibor
 
 1. Administration, **Connectors**, **Declare**: capability **Documents**, type **Confluence**.
 2. `base_url`: `https://<site>.atlassian.net`. `email`: the account's email.

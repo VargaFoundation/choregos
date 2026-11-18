@@ -141,7 +141,7 @@ tools:
   identity, never `service`.
 - A person's identity never falls back to the service's: without a token the call fails and the
   assistant says what is missing.
-- The source decides what a person may read, not Choregos.
+- The source decides what a person may read, not Tranibor.
 
 ### Upgrading a plugin that changes a need
 

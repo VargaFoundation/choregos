@@ -83,7 +83,7 @@ def only(exporter: InMemorySpanExporter) -> ReadableSpan:
 
 
 def test_the_names_are_telemetrys() -> None:
-    """LiteLLM's process has no Choregos package: the copy spells every name as telemetry does."""
+    """LiteLLM's process has no Tranibor package: the copy spells every name as telemetry does."""
     for name in (
         "SEMCONV_SCHEMA_URL",
         "OPERATION_NAME",

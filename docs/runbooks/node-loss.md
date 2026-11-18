@@ -22,7 +22,7 @@ Measured on a cluster (`tests/cluster/test_node_loss.py`), node stopped abruptly
 
 The five minutes in between are a pod's default toleration of
 `node.kubernetes.io/unreachable`. It is meant for workloads whose replacement is expensive
-to start — a Choregos worker is not one of them: it is interchangeable and Temporal resumes
+to start — a Tranibor worker is not one of them: it is interchangeable and Temporal resumes
 its work where it stopped.
 
 The chart therefore sets `choregos-orchestrator.unreachableTolerationSeconds: 20`. To get

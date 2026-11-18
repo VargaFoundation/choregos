@@ -88,7 +88,7 @@ async function openDeclareForm(type: string) {
 }
 
 describe("data_handling editor (S40-01j)", () => {
-  it("is four fields, not raw JSON, and says what Choregos knows and that only stricter is allowed", async () => {
+  it("is four fields, not raw JSON, and says what Tranibor knows and that only stricter is allowed", async () => {
     const editor = await openDeclareForm("brave");
     expect(within(editor).getByLabelText("Query retention (days)")).toBeInTheDocument();
     expect(within(editor).getByLabelText(/Queries reused/)).toBeInTheDocument();

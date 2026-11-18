@@ -47,7 +47,7 @@ way: ask for a token, or use the site's repository or another connector.
 - The secret is kept in the platform's secret store and resolved when the crawl starts; it is never shown
   again, written in a log line or returned by the API.
 
-## In Choregos
+## In Tranibor
 
 1. Administration, **Connectors**, **Declare**: capability **Documents**, type **Web site behind a login**.
 2. `host`: the site's host name, without `https://`.

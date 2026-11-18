@@ -1,15 +1,15 @@
 ---
 title: Identity
-description: Connect Choregos to your OIDC identity provider, give roles through groups, and let MCP clients sign in with OAuth.
+description: Connect Tranibor to your OIDC identity provider, give roles through groups, and let MCP clients sign in with OAuth.
 sidebar_position: 3
 ---
 
 # Identity
 
-People sign in to Choregos through your identity provider, and their roles come from its groups. No
-password is stored by Choregos.
+People sign in to Tranibor through your identity provider, and their roles come from its groups. No
+password is stored by Tranibor.
 
-**What you will be able to do:** register Choregos at your identity provider, map groups to roles,
+**What you will be able to do:** register Tranibor at your identity provider, map groups to roles,
 and let claude.ai or Claude Code sign in to the MCP door with single sign-on.
 
 ## 1. Register the client
@@ -31,14 +31,14 @@ global:
     secretRef: choregos-oidc
 ```
 
-The provider must publish a discovery document whose `issuer` equals `global.oidc.issuer`. Choregos
+The provider must publish a discovery document whose `issuer` equals `global.oidc.issuer`. Tranibor
 signs in with PKCE, a single-use `state` and a `nonce`. A person is bound to their `sub`: a changed
 e-mail keeps the account. **Admin › Identity** shows what the instance reads (issuer, client, redirect
 URI to register, whether the secret is set), never a secret's value.
 
 ## 2. Give roles through groups
 
-| Group at the identity provider | Role in Choregos |
+| Group at the identity provider | Role in Tranibor |
 | --- | --- |
 | `choregos:<org>:org-admins` | `org_admin` of the organisation |
 | `choregos:<org>:product-owners` | `project_owner` |

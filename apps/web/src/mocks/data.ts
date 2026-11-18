@@ -2205,7 +2205,7 @@ export const platformGitHubApp: GitHubAppRegistrationStatus = {
   source: "none",
   usable: false,
   blocked_by: null,
-  suggested_name: "Choregos choregos.example.com",
+  suggested_name: "Tranibor choregos.example.com",
   permissions: {
     contents: "write",
     issues: "write",
@@ -2523,11 +2523,11 @@ export const skillGitPreview: SkillGitPreview = {
 const githubRepoProperty = {
   type: "string",
   format: "github-repo",
-  description: "The repository, as owner/repo; the Choregos App must be installed on its owner.",
+  description: "The repository, as owner/repo; the Tranibor App must be installed on its owner.",
 };
 const objet = (properties: Record<string, unknown>, required: string[] = []) => ({ type: "object", properties, required });
 export const connectorTypes: ConnectorType[] = [
-  { kind: "tracker", type: "internal", display: "internal (Choregos holds the work items)", config_schema: objet({}), capabilities: ["tracker"], secret_fields: [] },
+  { kind: "tracker", type: "internal", display: "internal (Tranibor holds the work items)", config_schema: objet({}), capabilities: ["tracker"], secret_fields: [] },
   {
     kind: "tracker",
     type: "jira",
@@ -2884,7 +2884,7 @@ export const projectRequirements: ProjectRequirement[] = [
   { capability: "gateway", reasons: ["default-simple: the agent dev calls models"], connector: null, default_type: "litellm" },
 ];
 
-/** The Choregos GitHub App on the mock: two accounts it is installed on, three repositories. */
+/** The Tranibor GitHub App on the mock: two accounts it is installed on, three repositories. */
 const githubInstallations = [
   { id: 1001, account_login: "globex", account_type: "Organization", repository_selection: "selected", suspended: false, claimed: true, settings_url: "https://github.com/organizations/globex/settings/installations/1001" },
   { id: 1002, account_login: "acme", account_type: "Organization", repository_selection: "all", suspended: false, claimed: true, settings_url: "https://github.com/organizations/acme/settings/installations/1002" },
@@ -2897,7 +2897,7 @@ const githubRepositories = [
 const githubStatus = () => ({
   configured: true,
   app_slug: "choregos-bot",
-  app_name: "Choregos",
+  app_name: "Tranibor",
   install_url: "https://github.com/apps/choregos-bot/installations/new",
   multi_org_claim: "implicit",
   installations: structuredClone(githubInstallations),
@@ -3785,7 +3785,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       const owner = repo.split("/")[0] ?? "";
       if ((reqBody.type === "github" || reqBody.type === "github-issues") && owner && !githubInstallations.some((i) => i.account_login.toLowerCase() === owner.toLowerCase()))
         throw new ApiError(422, {
-          detail: `The Choregos GitHub App is not installed on \`${owner}\` for this organisation. Install it: https://github.com/apps/choregos-bot/installations/new`,
+          detail: `The Tranibor GitHub App is not installed on \`${owner}\` for this organisation. Install it: https://github.com/apps/choregos-bot/installations/new`,
         });
       const saved = {
         id: `c-${kind}`,

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Choregos playbooks: one prompt per role, rendered with Jinja2, versioned and evaluated.
+"""Tranibor playbooks: one prompt per role, rendered with Jinja2, versioned and evaluated.
 
 Invariants shared by every role (docs/plan/02 §2.5): write `.choregos/result.json`,
 never widen the scope without `request_scope_change`, report with `report_finding`,

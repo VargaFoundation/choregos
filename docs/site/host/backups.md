@@ -1,6 +1,6 @@
 ---
 title: Backups and restore
-description: What to back up on a Choregos instance, and how to restore it to one consistent instant.
+description: What to back up on a Tranibor instance, and how to restore it to one consistent instant.
 sidebar_position: 6
 ---
 

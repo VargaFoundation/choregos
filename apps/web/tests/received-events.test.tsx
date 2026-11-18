@@ -35,7 +35,7 @@ const view = () =>
   );
 
 describe("a project's received webhook events (S42-06f)", () => {
-  it("lists each event with what Choregos did, its work item and its summary, and pages back", async () => {
+  it("lists each event with what Tranibor did, its work item and its summary, and pages back", async () => {
     vi.mocked(api.receivedEvents).mockImplementation(async (_slug, params) =>
       params?.cursor === "e-2"
         ? page([event("e-3", "ignored_not_agent_ready", { work_item_key: "XXX-9", work_item_id: null })], null)

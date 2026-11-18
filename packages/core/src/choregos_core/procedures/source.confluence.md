@@ -38,7 +38,7 @@ the pages it holds. A folder has no page number: choose the page above it, or th
 The source mirrors what the connector's account can read. A page that is deleted, archived, moved out of
 the chosen tree or restricted against the account leaves the base at the next sync.
 
-## In Choregos
+## In Tranibor
 
 1. **Knowledge**, the base, **Add source**, kind **Confluence**.
 2. Pick the **connector**, then `space_key`; optionally `page_id`, or several `page_ids` (paste page addresses in the console), with `descendants: false` to read only those pages (and `include_root`), `labels` (one request

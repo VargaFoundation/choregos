@@ -13,7 +13,7 @@ body. What the platform can prove goes in the header, nothing else:
   `valid_to` is past is `status: deprecated`, which is all OKF can say of it.
 
 The adapter must list one memory's facts and only those (`list_facts`). Ecphoria cannot: it does not
-read the namespace header Choregos sends, so a listing would mix every memory of the tenant. Its
+read the namespace header Tranibor sends, so a listing would mix every memory of the tenant. Its
 export is refused, never approximated.
 """
 

@@ -27,7 +27,7 @@
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "1. **The operator names the image**: `global.images.agents` in the chart maps a name to a reference\n   **pinned by digest**. By default (`global.images.requireDigest: true`) a tag-only reference stops the API and\n   the workers at start-up; `false` is for a bench only.\n2. **Agents**, **New**, **Runtime**: choose **Code (image)**. Pick the image by its name, give the command\n   (one argument per line) and the model API (`openai` or `anthropic`).\n3. Run it from a workflow like any registry agent. Use an executor that starts a pod per run\n   (`k8s_job`): `agent_sandbox` runs one pool image and refuses a run whose image differs."
       },
       {
@@ -51,7 +51,7 @@
   },
   {
     "id": "agent.door.chatgpt",
-    "title": "Connect ChatGPT to Choregos",
+    "title": "Connect ChatGPT to Tranibor",
     "version": 1,
     "audience": "everyone",
     "applies_to": {
@@ -63,7 +63,7 @@
       {
         "key": "before",
         "title": "Before you start",
-        "markdown": "ChatGPT connects **to** Choregos through the MCP door, with **your** rights and never more. It lists your\nprojects, reads workflows and work items, and tells you what waits for a decision. It never decides: a\ndecision needs you, signed in again, in the console. The door is `https://choregos.example.com/mcp`.\n\nChatGPT calls from the vendor's cloud and signs in with OAuth, so it needs a public HTTPS address and OAuth enabled on the door."
+        "markdown": "ChatGPT connects **to** Tranibor through the MCP door, with **your** rights and never more. It lists your\nprojects, reads workflows and work items, and tells you what waits for a decision. It never decides: a\ndecision needs you, signed in again, in the console. The door is `https://choregos.example.com/mcp`.\n\nChatGPT calls from the vendor's cloud and signs in with OAuth, so it needs a public HTTPS address and OAuth enabled on the door."
       },
       {
         "key": "at",
@@ -77,13 +77,13 @@
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "Open **Integrations**, choose ChatGPT and copy the snippet. The page gives what to enter when the platform names a ChatGPT client."
       },
       {
         "key": "test",
         "title": "Test it",
-        "markdown": "Ask the client \"what is waiting for my decision in Choregos?\". It should call `list_pending_decisions`."
+        "markdown": "Ask the client \"what is waiting for my decision in Tranibor?\". It should call `list_pending_decisions`."
       },
       {
         "key": "fails",
@@ -106,7 +106,7 @@
   },
   {
     "id": "agent.door.claude-ai",
-    "title": "Connect claude.ai to Choregos",
+    "title": "Connect claude.ai to Tranibor",
     "version": 1,
     "audience": "everyone",
     "applies_to": {
@@ -118,7 +118,7 @@
       {
         "key": "before",
         "title": "Before you start",
-        "markdown": "claude.ai connects **to** Choregos through the MCP door, with **your** rights and never more. It lists your\nprojects, reads workflows and work items, and tells you what waits for a decision. It never decides: a\ndecision needs you, signed in again, in the console. The door is `https://choregos.example.com/mcp`.\n\nclaude.ai calls from the vendor's cloud and signs in with OAuth: it cannot be handed a token, so it needs a public HTTPS address and OAuth enabled on the door."
+        "markdown": "claude.ai connects **to** Tranibor through the MCP door, with **your** rights and never more. It lists your\nprojects, reads workflows and work items, and tells you what waits for a decision. It never decides: a\ndecision needs you, signed in again, in the console. The door is `https://choregos.example.com/mcp`.\n\nclaude.ai calls from the vendor's cloud and signs in with OAuth: it cannot be handed a token, so it needs a public HTTPS address and OAuth enabled on the door."
       },
       {
         "key": "at",
@@ -132,18 +132,18 @@
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "Open **Integrations**, choose claude.ai and copy the snippet. When the platform names a claude.ai client, the page shows the URL and client ID to enter in Settings, Connectors, Add custom connector; the client secret is never shown there."
       },
       {
         "key": "test",
         "title": "Test it",
-        "markdown": "Ask the client \"what is waiting for my decision in Choregos?\". It should call `list_pending_decisions`."
+        "markdown": "Ask the client \"what is waiting for my decision in Tranibor?\". It should call `list_pending_decisions`."
       },
       {
         "key": "fails",
         "title": "When it fails",
-        "markdown": "- `401`: the token is missing, unknown, revoked or expired.\n- `403 insufficient_scope`: a full-access token was used; mint an `mcp:read` or `mcp:write` one.\n- A tool is missing: a read-only token, a role without the right, or a project whose tracker is external.\n- claude.ai never offers to sign in: `/.well-known/oauth-protected-resource` is not routed to the API, or OAuth is off.\n- `403` \"sign in to the console once\": the identity provider knows you and Choregos does not yet."
+        "markdown": "- `401`: the token is missing, unknown, revoked or expired.\n- `403 insufficient_scope`: a full-access token was used; mint an `mcp:read` or `mcp:write` one.\n- A tool is missing: a read-only token, a role without the right, or a project whose tracker is external.\n- claude.ai never offers to sign in: `/.well-known/oauth-protected-resource` is not routed to the API, or OAuth is off.\n- `403` \"sign in to the console once\": the identity provider knows you and Tranibor does not yet."
       }
     ],
     "values": {
@@ -161,7 +161,7 @@
   },
   {
     "id": "agent.door.claude-code",
-    "title": "Connect Claude Code to Choregos",
+    "title": "Connect Claude Code to Tranibor",
     "version": 1,
     "audience": "everyone",
     "applies_to": {
@@ -173,7 +173,7 @@
       {
         "key": "before",
         "title": "Before you start",
-        "markdown": "Claude Code connects **to** Choregos through the MCP door, with **your** rights and never more. It lists your\nprojects, reads workflows and work items, and tells you what waits for a decision. It never decides: a\ndecision needs you, signed in again, in the console. The door is `https://choregos.example.com/mcp`.\n\nClaude Code runs on your machine: it reaches a platform behind your VPN."
+        "markdown": "Claude Code connects **to** Tranibor through the MCP door, with **your** rights and never more. It lists your\nprojects, reads workflows and work items, and tells you what waits for a decision. It never decides: a\ndecision needs you, signed in again, in the console. The door is `https://choregos.example.com/mcp`.\n\nClaude Code runs on your machine: it reaches a platform behind your VPN."
       },
       {
         "key": "at",
@@ -187,13 +187,13 @@
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "Open **Integrations**, choose Claude Code and copy the snippet. With single sign-on the page shows a `claude mcp add --client-id …` command and you authenticate from `/mcp` in Claude Code."
       },
       {
         "key": "test",
         "title": "Test it",
-        "markdown": "Ask the client \"what is waiting for my decision in Choregos?\". It should call `list_pending_decisions`."
+        "markdown": "Ask the client \"what is waiting for my decision in Tranibor?\". It should call `list_pending_decisions`."
       },
       {
         "key": "fails",
@@ -216,7 +216,7 @@
   },
   {
     "id": "agent.door.claude-desktop",
-    "title": "Connect Claude Desktop to Choregos",
+    "title": "Connect Claude Desktop to Tranibor",
     "version": 1,
     "audience": "everyone",
     "applies_to": {
@@ -228,7 +228,7 @@
       {
         "key": "before",
         "title": "Before you start",
-        "markdown": "Claude Desktop connects **to** Choregos through the MCP door, with **your** rights and never more. It lists your\nprojects, reads workflows and work items, and tells you what waits for a decision. It never decides: a\ndecision needs you, signed in again, in the console. The door is `https://choregos.example.com/mcp`.\n\nClaude Desktop's own connectors call from Anthropic's network; for a platform inside your network use the local bridge on the page."
+        "markdown": "Claude Desktop connects **to** Tranibor through the MCP door, with **your** rights and never more. It lists your\nprojects, reads workflows and work items, and tells you what waits for a decision. It never decides: a\ndecision needs you, signed in again, in the console. The door is `https://choregos.example.com/mcp`.\n\nClaude Desktop's own connectors call from Anthropic's network; for a platform inside your network use the local bridge on the page."
       },
       {
         "key": "at",
@@ -242,13 +242,13 @@
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "Open **Integrations**, choose Claude Desktop and copy the snippet. The snippet goes in `claude_desktop_config.json` and uses the `mcp-remote` bridge; add `--allow-http` only for a plain HTTP platform."
       },
       {
         "key": "test",
         "title": "Test it",
-        "markdown": "Ask the client \"what is waiting for my decision in Choregos?\". It should call `list_pending_decisions`."
+        "markdown": "Ask the client \"what is waiting for my decision in Tranibor?\". It should call `list_pending_decisions`."
       },
       {
         "key": "fails",
@@ -271,7 +271,7 @@
   },
   {
     "id": "agent.door.cli",
-    "title": "Use the Choregos CLI",
+    "title": "Use the Tranibor CLI",
     "version": 1,
     "audience": "everyone",
     "applies_to": {
@@ -297,7 +297,7 @@
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "Mint a token (Integrations, or `choregos-admin tokens create` for the very first one), then\n`choregos login --api-url https://choregos.example.com --token <token> --org <org>`."
       },
       {
@@ -321,7 +321,7 @@
   },
   {
     "id": "agent.door.cursor",
-    "title": "Connect Cursor to Choregos",
+    "title": "Connect Cursor to Tranibor",
     "version": 1,
     "audience": "everyone",
     "applies_to": {
@@ -333,7 +333,7 @@
       {
         "key": "before",
         "title": "Before you start",
-        "markdown": "Cursor connects **to** Choregos through the MCP door, with **your** rights and never more. It lists your\nprojects, reads workflows and work items, and tells you what waits for a decision. It never decides: a\ndecision needs you, signed in again, in the console. The door is `https://choregos.example.com/mcp`.\n\nCursor runs on your machine."
+        "markdown": "Cursor connects **to** Tranibor through the MCP door, with **your** rights and never more. It lists your\nprojects, reads workflows and work items, and tells you what waits for a decision. It never decides: a\ndecision needs you, signed in again, in the console. The door is `https://choregos.example.com/mcp`.\n\nCursor runs on your machine."
       },
       {
         "key": "at",
@@ -347,13 +347,13 @@
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "Open **Integrations**, choose Cursor and copy the snippet. The snippet goes in `~/.cursor/mcp.json` and reads the token from an environment variable."
       },
       {
         "key": "test",
         "title": "Test it",
-        "markdown": "Ask the client \"what is waiting for my decision in Choregos?\". It should call `list_pending_decisions`."
+        "markdown": "Ask the client \"what is waiting for my decision in Tranibor?\". It should call `list_pending_decisions`."
       },
       {
         "key": "fails",
@@ -376,7 +376,7 @@
   },
   {
     "id": "agent.door.other",
-    "title": "Connect another MCP client to Choregos",
+    "title": "Connect another MCP client to Tranibor",
     "version": 1,
     "audience": "everyone",
     "applies_to": {
@@ -388,7 +388,7 @@
       {
         "key": "before",
         "title": "Before you start",
-        "markdown": "another MCP client connects **to** Choregos through the MCP door, with **your** rights and never more. It lists your\nprojects, reads workflows and work items, and tells you what waits for a decision. It never decides: a\ndecision needs you, signed in again, in the console. The door is `https://choregos.example.com/mcp`.\n\nAny client that speaks the Model Context Protocol over Streamable HTTP will do."
+        "markdown": "another MCP client connects **to** Tranibor through the MCP door, with **your** rights and never more. It lists your\nprojects, reads workflows and work items, and tells you what waits for a decision. It never decides: a\ndecision needs you, signed in again, in the console. The door is `https://choregos.example.com/mcp`.\n\nAny client that speaks the Model Context Protocol over Streamable HTTP will do."
       },
       {
         "key": "at",
@@ -402,13 +402,13 @@
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "Open **Integrations**, choose another MCP client and copy the snippet. Point the client at the door with that header; the door has no SSE stream and no session, and a `GET` answers 405, which the protocol allows."
       },
       {
         "key": "test",
         "title": "Test it",
-        "markdown": "Ask the client \"what is waiting for my decision in Choregos?\". It should call `list_pending_decisions`."
+        "markdown": "Ask the client \"what is waiting for my decision in Tranibor?\". It should call `list_pending_decisions`."
       },
       {
         "key": "fails",
@@ -431,7 +431,7 @@
   },
   {
     "id": "agent.door.rest",
-    "title": "Use the Choregos REST API",
+    "title": "Use the Tranibor REST API",
     "version": 1,
     "audience": "everyone",
     "applies_to": {
@@ -457,7 +457,7 @@
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "Mint a token from Integrations, store it where your program keeps secrets, and give it an expiry."
       },
       {
@@ -481,7 +481,7 @@
   },
   {
     "id": "agent.door.vscode",
-    "title": "Connect VS Code to Choregos",
+    "title": "Connect VS Code to Tranibor",
     "version": 1,
     "audience": "everyone",
     "applies_to": {
@@ -493,7 +493,7 @@
       {
         "key": "before",
         "title": "Before you start",
-        "markdown": "VS Code connects **to** Choregos through the MCP door, with **your** rights and never more. It lists your\nprojects, reads workflows and work items, and tells you what waits for a decision. It never decides: a\ndecision needs you, signed in again, in the console. The door is `https://choregos.example.com/mcp`.\n\nVS Code runs on your machine."
+        "markdown": "VS Code connects **to** Tranibor through the MCP door, with **your** rights and never more. It lists your\nprojects, reads workflows and work items, and tells you what waits for a decision. It never decides: a\ndecision needs you, signed in again, in the console. The door is `https://choregos.example.com/mcp`.\n\nVS Code runs on your machine."
       },
       {
         "key": "at",
@@ -507,13 +507,13 @@
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "Open **Integrations**, choose VS Code and copy the snippet. The snippet goes in `.vscode/mcp.json`."
       },
       {
         "key": "test",
         "title": "Test it",
-        "markdown": "Ask the client \"what is waiting for my decision in Choregos?\". It should call `list_pending_decisions`."
+        "markdown": "Ask the client \"what is waiting for my decision in Tranibor?\". It should call `list_pending_decisions`."
       },
       {
         "key": "fails",
@@ -548,7 +548,7 @@
       {
         "key": "before",
         "title": "Before you start",
-        "markdown": "- A **remote agent** runs elsewhere: a workflow step calls it over the A2A protocol and takes its answer\n  as the step's result. It is the reverse of the MCP door. Choregos reads its **card** and pins it.\n- You need the **agent card URL** (A2A 0.3 serves `/.well-known/agent.json`; newer versions an\n  `agent-card.json`), the protocol version it speaks, the **skill** to call and how it authenticates.\n- An organisation administrator does the first part (the credential); whoever builds agents does the\n  second.\n- The agent acts with whatever identity the credential carries. Choose that account with care."
+        "markdown": "- A **remote agent** runs elsewhere: a workflow step calls it over the A2A protocol and takes its answer\n  as the step's result. It is the reverse of the MCP door. Tranibor reads its **card** and pins it.\n- You need the **agent card URL** (A2A 0.3 serves `/.well-known/agent.json`; newer versions an\n  `agent-card.json`), the protocol version it speaks, the **skill** to call and how it authenticates.\n- An organisation administrator does the first part (the credential); whoever builds agents does the\n  second.\n- The agent acts with whatever identity the credential carries. Choose that account with care."
       },
       {
         "key": "at",
@@ -562,7 +562,7 @@
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "1. Administration, **Remote agents**, **Connect**: give the card URL, then sign in **as the account the\n   agent will act as** and accept. The credential shows `connected` and who it is authorised as.\n2. **Agents**, **New**, **Remote agent (A2A)**: paste the card URL, **Read the card**, pick the skill and\n   the credential, set the timeout and the **declared cost** (A2A reports none: it is declared, not\n   measured), then publish. Publication pins the card's digest.\n3. Allow the hosts: a project that uses it must allow the agent's host in `sandbox.network.allow_domains`,\n   and the runner pods, the API and the orchestrator must be allowed to reach the card, endpoint and\n   token hosts (see the network allowlist of your platform)."
       },
       {
@@ -573,7 +573,7 @@
       {
         "key": "fails",
         "title": "When it fails",
-        "markdown": "- `remote_card_changed`: the card changed since publication. Publish a new version to accept it.\n- `remote_auth_required`: the credential expired or was revoked. Reconnect it.\n- `remote_input_required`: the agent asked a question. It is shown; answering it from the console is not\n  supported yet.\n- `remote_timeout`: the remote task is cancelled; raise the timeout or narrow the task.\n- A cut at about 30 s on a synchronous call: Choregos streams, so a long task still works.\n- A refusal naming a host: it is not in the stage's allowed domains, or the platform's egress allowlist\n  does not open it."
+        "markdown": "- `remote_card_changed`: the card changed since publication. Publish a new version to accept it.\n- `remote_auth_required`: the credential expired or was revoked. Reconnect it.\n- `remote_input_required`: the agent asked a question. It is shown; answering it from the console is not\n  supported yet.\n- `remote_timeout`: the remote task is cancelled; raise the timeout or narrow the task.\n- A cut at about 30 s on a synchronous call: Tranibor streams, so a long task still works.\n- A refusal naming a host: it is not in the stage's allowed domains, or the platform's egress allowlist\n  does not open it."
       }
     ],
     "values": {
@@ -608,21 +608,21 @@
       {
         "key": "before",
         "title": "Before you start",
-        "markdown": "- An Atlassian site with **Rovo**, and an Atlassian organisation administrator.\n- A **dedicated Atlassian account** (for example `choregos-bot@your-domain`) licensed for Rovo, whose Jira\n  and Confluence permissions are exactly what Rovo may do for Choregos. Rovo acts **as that user**. There\n  are no service accounts for A2A.\n- This calls the Rovo **agent**. To give your own agents Rovo's **tools** (search, Jira, Confluence) use\n  the Rovo MCP Server procedure instead; they are two different things.\n- Not run against the real service from this repository: the registration exchange with Atlassian is\n  exercised against a fake. Check the first connection on a test site."
+        "markdown": "- An Atlassian site with **Rovo**, and an Atlassian organisation administrator.\n- A **dedicated Atlassian account** (for example `choregos-bot@your-domain`) licensed for Rovo, whose Jira\n  and Confluence permissions are exactly what Rovo may do for Tranibor. Rovo acts **as that user**. There\n  are no service accounts for A2A.\n- This calls the Rovo **agent**. To give your own agents Rovo's **tools** (search, Jira, Confluence) use\n  the Rovo MCP Server procedure instead; they are two different things.\n- Not run against the real service from this repository: the registration exchange with Atlassian is\n  exercised against a fake. Check the first connection on a test site."
       },
       {
         "key": "at",
         "title": "At Atlassian",
-        "markdown": "1. In Atlassian Administration, **allow A2A connections** (Manage A2A connections in Admin Hub).\n2. The agent card is `https://a2a.atlassian.com/.well-known/agent.json` and the endpoint\n   `https://a2a.atlassian.com/v1/rovo`, A2A 0.3.0. It is **one agent with two skills**:\n   `work-in-jira` and `work-in-confluence`. Agents built in Rovo Studio are **not** individually\n   addressable.\n3. You register no client: the card advertises dynamic client registration and Choregos registers itself."
+        "markdown": "1. In Atlassian Administration, **allow A2A connections** (Manage A2A connections in Admin Hub).\n2. The agent card is `https://a2a.atlassian.com/.well-known/agent.json` and the endpoint\n   `https://a2a.atlassian.com/v1/rovo`, A2A 0.3.0. It is **one agent with two skills**:\n   `work-in-jira` and `work-in-confluence`. Agents built in Rovo Studio are **not** individually\n   addressable.\n3. You register no client: the card advertises dynamic client registration and Tranibor registers itself."
       },
       {
         "key": "permissions",
         "title": "Permissions",
-        "markdown": "- OAuth 2.0 authorization code with PKCE and dynamic client registration, nothing else: no API token.\n  Scopes: `read:me`, `offline_access`, `full_access:chat:rovo`.\n- The callback address Choregos registers is `https://choregos.example.com/api/v1/remote-credentials/oauth/callback`.\n- The agent can do whatever the dedicated account can do in Jira and Confluence."
+        "markdown": "- OAuth 2.0 authorization code with PKCE and dynamic client registration, nothing else: no API token.\n  Scopes: `read:me`, `offline_access`, `full_access:chat:rovo`.\n- The callback address Tranibor registers is `https://choregos.example.com/api/v1/remote-credentials/oauth/callback`.\n- The agent can do whatever the dedicated account can do in Jira and Confluence."
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "1. Administration, **Remote agents**, **Connect**: card URL `https://a2a.atlassian.com/.well-known/agent.json`.\n   Atlassian's consent page opens: sign in **as the dedicated account** and accept. The credential shows\n   `connected` and who it is authorised as.\n2. **Agents**, **New**, **Remote agent (A2A)**: paste the same card URL, **Read the card**, pick the skill\n   (`work-in-jira` or `work-in-confluence`) and the credential, and set the timeout.\n3. Set the **declared cost**: Rovo reports none, and its use counts against your Atlassian subscription.\n4. Allow `a2a.atlassian.com` in the projects that use it (`sandbox.network.allow_domains`), and open\n   `a2a.atlassian.com` for the runner pods and `auth.atlassian.com` for the API and the orchestrator."
       },
       {
@@ -633,7 +633,7 @@
       {
         "key": "fails",
         "title": "When it fails",
-        "markdown": "- `access_denied` at consent: A2A connections are not allowed in Atlassian Administration.\n- `401` when the token is refreshed: it was revoked. Reconnect the credential.\n- `remote_card_changed`: Atlassian changed the card. Publish a new version to accept it.\n- A cut at about 30 s on a synchronous call: Choregos streams; Rovo has no push notifications.\n- A refusal naming `a2a.atlassian.com` or `auth.atlassian.com`: the stage's allowed domains or the\n  egress allowlist."
+        "markdown": "- `access_denied` at consent: A2A connections are not allowed in Atlassian Administration.\n- `401` when the token is refreshed: it was revoked. Reconnect the credential.\n- `remote_card_changed`: Atlassian changed the card. Publish a new version to accept it.\n- A cut at about 30 s on a synchronous call: Tranibor streams; Rovo has no push notifications.\n- A refusal naming `a2a.atlassian.com` or `auth.atlassian.com`: the stage's allowed domains or the\n  egress allowlist."
       }
     ],
     "values": {
@@ -684,7 +684,7 @@
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "Declare the connector with type `demo`. Leave `url` empty to run the fakes in the same process, or give\nthe address of the one process that serves them for several replicas."
       },
       {
@@ -721,7 +721,7 @@
       {
         "key": "before",
         "title": "Before you start",
-        "markdown": "- Argo CD, and a **GitOps repository** it watches. Choregos never runs `kubectl apply`: a promotion is a\n  pull request on that repository, and Argo CD applies it.\n- The GitHub App of the platform installed on the GitOps repository (see the GitHub procedures): the\n  writes go through it.\n- The platform's shared webhook secret (`CHOREGOS_GENERIC_WEBHOOK_SECRET`)."
+        "markdown": "- Argo CD, and a **GitOps repository** it watches. Tranibor never runs `kubectl apply`: a promotion is a\n  pull request on that repository, and Argo CD applies it.\n- The GitHub App of the platform installed on the GitOps repository (see the GitHub procedures): the\n  writes go through it.\n- The platform's shared webhook secret (`CHOREGOS_GENERIC_WEBHOOK_SECRET`)."
       },
       {
         "key": "at",
@@ -735,7 +735,7 @@
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "1. Project settings, Connectors, **CD**, type **Argo CD**.\n2. `gitops_repo`: `owner/repo`. `base_url`: the Argo CD server's address. `path_prefix` and `app_pattern`\n   if your layout differs from `apps/` and `{app}-{env}`.\n3. `token`: the API token, in the password field."
       },
       {
@@ -800,7 +800,7 @@
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "Declare the connector with type `demo`. Leave `url` empty to run the fakes in the same process, or give\nthe address of the one process that serves them for several replicas."
       },
       {
@@ -837,7 +837,7 @@
       {
         "key": "before",
         "title": "Before you start",
-        "markdown": "- A GitLab project with CI pipelines, where you are a Maintainer (to create a token and a webhook).\n- The platform's shared webhook secret (`CHOREGOS_GENERIC_WEBHOOK_SECRET`), held by whoever operates\n  Choregos: GitLab sends it as the webhook's secret token, and without it the endpoint refuses every\n  delivery."
+        "markdown": "- A GitLab project with CI pipelines, where you are a Maintainer (to create a token and a webhook).\n- The platform's shared webhook secret (`CHOREGOS_GENERIC_WEBHOOK_SECRET`), held by whoever operates\n  Tranibor: GitLab sends it as the webhook's secret token, and without it the endpoint refuses every\n  delivery."
       },
       {
         "key": "at",
@@ -851,7 +851,7 @@
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "1. Project settings, Connectors, **CI**, type **GitLab CI**.\n2. `base_url`: `https://gitlab.com` (the default) or your self-managed address. `project`: the project's\n   path (for example `group/app`) or numeric id.\n3. `token`: the access token, in the password field (sealed, shown once)."
       },
       {
@@ -920,7 +920,7 @@
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "1. Project settings, Connectors, **CI**, type **Tekton Pipelines**.\n2. `namespace`: where the runs live. `pipeline`: the Pipeline's name, `choregos-ci` by default."
       },
       {
@@ -964,7 +964,7 @@
       {
         "key": "before",
         "title": "Before you start",
-        "markdown": "- An Atlassian administrator, for a **service account** (recommended) or a dedicated user.\n- The Confluence space (and, if you want only a branch, the page) to read. The account's permissions are\n  what Choregos can read: everything it reads in the space becomes readable by everyone the knowledge\n  base is open to, whatever the page restrictions say for other people."
+        "markdown": "- An Atlassian administrator, for a **service account** (recommended) or a dedicated user.\n- The Confluence space (and, if you want only a branch, the page) to read. The account's permissions are\n  what Tranibor can read: everything it reads in the space becomes readable by everyone the knowledge\n  base is open to, whatever the page restrictions say for other people."
       },
       {
         "key": "at",
@@ -974,11 +974,11 @@
       {
         "key": "permissions",
         "title": "Permissions",
-        "markdown": "- Scopes for a scoped token: `read:space:confluence`, `read:page:confluence`,\n  `read:hierarchical-content:confluence` (the pages under a page, through folders),\n  `read:folder:confluence` (a folder's name in the path of the pages it holds; without it the path\n  stops at the folder), plus `read:attachment:confluence` when the source indexes attachments.\n- Give the account **read** on the spaces to index (Space settings, Permissions) and nothing else.\n- A scoped token is only accepted through `https://api.atlassian.com/ex/confluence/<cloudId>/…`, with\n  Basic authentication using the service account's email. Choregos does that when `auth` is `scoped`."
+        "markdown": "- Scopes for a scoped token: `read:space:confluence`, `read:page:confluence`,\n  `read:hierarchical-content:confluence` (the pages under a page, through folders),\n  `read:folder:confluence` (a folder's name in the path of the pages it holds; without it the path\n  stops at the folder), plus `read:attachment:confluence` when the source indexes attachments.\n- Give the account **read** on the spaces to index (Space settings, Permissions) and nothing else.\n- A scoped token is only accepted through `https://api.atlassian.com/ex/confluence/<cloudId>/…`, with\n  Basic authentication using the service account's email. Tranibor does that when `auth` is `scoped`."
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "1. Administration, **Connectors**, **Declare**: capability **Documents**, type **Confluence**.\n2. `base_url`: `https://<site>.atlassian.net`. `email`: the account's email.\n3. `auth`: `basic` (the default) for a classic token, `scoped` for a scoped one. For `scoped`, set\n   `cloud_id`; the site publishes it at `https://<site>.atlassian.net/_edge/tenant_info`.\n4. `api_token`: paste the token in the password field (sealed, shown once).\n5. **Knowledge**, a base, **Add source**, **Confluence**: pick the connector, a space key (for example\n   `ENG`; a personal space starts with `~`), optionally a page id (the number in\n   `…/wiki/spaces/ENG/pages/<id>/Title`) for that page and everything under it, labels, attachments."
       },
       {
@@ -1048,7 +1048,7 @@
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "1. Administration, **Connectors**, **Declare**: capability **Documents**, type **Git over https**.\n2. `host`: `github.com` (the default) or your host.\n3. `auth`: `token`, then paste the token in `token`. Or `auth`: `github_app`, then `app_id`, optionally\n   `installation_id`, and the App's key in `private_key`. For GitHub Enterprise Server also set `api_url`.\n4. **Knowledge**, a base, **Add source**, kind **Git**: pick this connector, then the repository's https\n   address, a `ref` (a branch is followed, a commit is pinned) and `paths` (globs; markdown by default)."
       },
       {
@@ -1107,16 +1107,16 @@
       {
         "key": "at",
         "title": "At Microsoft",
-        "markdown": "1. Entra admin center, **App registrations**, **New registration**. Name it for the platform, single\n   tenant, no redirect URI.\n2. On the new app's Overview page, copy the **Directory (tenant) ID** and the **Application (client) ID**.\n3. **Certificates & secrets**, **New client secret**. Copy the secret's **Value** now: it is shown once.\n   The Value is what Choregos needs, not the Secret ID. A secret expires (24 months at most): note the\n   date in your calendar, because the day it expires every sync of this connector fails."
+        "markdown": "1. Entra admin center, **App registrations**, **New registration**. Name it for the platform, single\n   tenant, no redirect URI.\n2. On the new app's Overview page, copy the **Directory (tenant) ID** and the **Application (client) ID**.\n3. **Certificates & secrets**, **New client secret**. Copy the secret's **Value** now: it is shown once.\n   The Value is what Tranibor needs, not the Secret ID. A secret expires (24 months at most): note the\n   date in your calendar, because the day it expires every sync of this connector fails."
       },
       {
         "key": "permissions",
         "title": "Permissions",
-        "markdown": "Least privilege first: the app reads only the sites you name.\n\n1. **API permissions**, **Add a permission**, **Microsoft Graph**, **Application permissions**,\n   `Sites.Selected`, then **Grant admin consent**. Never `Files.Read.All` or `Sites.Read.All`.\n2. Grant the app **each site**. Find the site's id with\n   `GET https://graph.microsoft.com/v1.0/sites/<host>:/sites/<path>` (the answer's `id`), then\n   `POST https://graph.microsoft.com/v1.0/sites/{site-id}/permissions` with the body\n   `{\"roles\": [\"read\"], \"grantedToIdentities\": [{\"application\": {\"id\": \"<client_id>\", \"displayName\": \"Choregos\"}}]}`.\n   The call must be made by a caller that holds `Sites.FullControl.All`. PnP PowerShell does the same\n   with `Grant-PnPAzureADAppSitePermission -AppId <client_id> -DisplayName Choregos -Site <site url> -Permissions Read`.\n\nWithout step 2 the app is authorised and reads **nothing**: every site answers 403.\n\n### Or a read-only service account\n\nUse it when neither grant fits: a folder-level grant would break the site's permission inheritance, and\na site-wide application grant would bypass its restricted folders. The connector then signs in as a\ndirectory user, and **reads only what that account may read**, through its group memberships.\n\n1. Create a dedicated user, with no administrator role, and put it in the groups that give it read\n   access. It needs a password that Microsoft Entra checks: an account federated to another identity\n   provider usually cannot sign in this way.\n2. On the same app, **API permissions**, **Add a permission**, **Microsoft Graph**, **Delegated\n   permissions**, `Sites.Read.All`, then **Grant admin consent**. Delegated, it opens nothing the account\n   cannot already read; the \"never\" above is about the application permission.\n3. The account must have **no interactive MFA requirement**, because this sign-in cannot answer a\n   challenge. Where you can, have a Conditional Access policy allow it only from the platform's network\n   location.\n\nMicrosoft discourages this sign-in (the password grant): use `Sites.Selected` wherever a per-site read fits."
+        "markdown": "Least privilege first: the app reads only the sites you name.\n\n1. **API permissions**, **Add a permission**, **Microsoft Graph**, **Application permissions**,\n   `Sites.Selected`, then **Grant admin consent**. Never `Files.Read.All` or `Sites.Read.All`.\n2. Grant the app **each site**. Find the site's id with\n   `GET https://graph.microsoft.com/v1.0/sites/<host>:/sites/<path>` (the answer's `id`), then\n   `POST https://graph.microsoft.com/v1.0/sites/{site-id}/permissions` with the body\n   `{\"roles\": [\"read\"], \"grantedToIdentities\": [{\"application\": {\"id\": \"<client_id>\", \"displayName\": \"Tranibor\"}}]}`.\n   The call must be made by a caller that holds `Sites.FullControl.All`. PnP PowerShell does the same\n   with `Grant-PnPAzureADAppSitePermission -AppId <client_id> -DisplayName Tranibor -Site <site url> -Permissions Read`.\n\nWithout step 2 the app is authorised and reads **nothing**: every site answers 403.\n\n### Or a read-only service account\n\nUse it when neither grant fits: a folder-level grant would break the site's permission inheritance, and\na site-wide application grant would bypass its restricted folders. The connector then signs in as a\ndirectory user, and **reads only what that account may read**, through its group memberships.\n\n1. Create a dedicated user, with no administrator role, and put it in the groups that give it read\n   access. It needs a password that Microsoft Entra checks: an account federated to another identity\n   provider usually cannot sign in this way.\n2. On the same app, **API permissions**, **Add a permission**, **Microsoft Graph**, **Delegated\n   permissions**, `Sites.Read.All`, then **Grant admin consent**. Delegated, it opens nothing the account\n   cannot already read; the \"never\" above is about the application permission.\n3. The account must have **no interactive MFA requirement**, because this sign-in cannot answer a\n   challenge. Where you can, have a Conditional Access policy allow it only from the platform's network\n   location.\n\nMicrosoft discourages this sign-in (the password grant): use `Sites.Selected` wherever a per-site read fits."
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "1. Administration, **Connectors**, **Declare**: capability **Documents**, type **SharePoint**, any name\n   (it is lowercase, and knowledge sources refer to it).\n2. `tenant_id`: the Directory (tenant) ID. `client_id`: the Application (client) ID.\n3. `client_secret`: paste the secret's Value in the password field. It is sealed and never shown again;\n   to rotate it, use **Replace**.\n4. For a service account, fill `username` and type its `password`, sealed like the secret. Set both or\n   neither: leaving both empty signs in as the application, and only one of them fails the sync.\n5. Leave `graph_url` and `login_url` alone unless you use a sovereign cloud.\n6. Then **Knowledge**, a base, **Add source**, **SharePoint**: pick this connector, the site (or a\n   OneDrive's drive) and, if you want, a folder."
       },
       {
@@ -1186,7 +1186,7 @@
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "1. Administration, **Connectors**, **Declare**: capability **Documents**, type **Web site behind a login**.\n2. `host`: the site's host name, without `https://`.\n3. `auth`: `bearer`, `basic` (then `username`) or `header` (then `header_name`). Paste the token, password\n   or header value in `secret`.\n4. Optionally `headers`: plain headers sent with every request, such as `Accept-Language`.\n5. **Knowledge**, a base, **Add source**, kind **Web**, open **Advanced: authentication and HTTP headers**\n   and pick this connector under **Authentication**."
       },
       {
@@ -1244,11 +1244,11 @@
       {
         "key": "permissions",
         "title": "Permissions",
-        "markdown": "The key can do what its user's privileges allow, so give a read-only user if agents only need to read. Even\nwith write rights, no write happens without a human approval in Choregos."
+        "markdown": "The key can do what its user's privileges allow, so give a read-only user if agents only need to read. Even\nwith write rights, no write happens without a human approval in Tranibor."
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "1. Administration, **Connectors**, **Declare**: capability **Firewall**, type **pfSense**.\n2. `base_url`: `https://<pfsense>`, **without** `/api/v2`.\n3. `ca_cert`: the PEM of the CA, if the certificate is private. Keep `verify_tls` true:\n   `verify_tls: false` is accepted in development only, logged each time, and refused in staging and prod.\n4. `api_key`: in the password field. Then open the operations the agents need."
       },
       {
@@ -1308,7 +1308,7 @@
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "1. Administration, **Connectors**, **Declare**: capability **Member accounts**, type **Forgejo sign-in**.\n2. `base_url`: the instance's address, `https://forge.example` (https only).\n3. `client_id`: the Client ID. `client_secret`: the Client secret, in the password field.\n4. Tick **open the hosts in the egress allowlist**, or open the instance's host yourself."
       },
       {
@@ -1371,7 +1371,7 @@
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "1. Administration, **Connectors**, **Declare**: capability **Member accounts**, type **GitHub sign-in**.\n2. `base_url`: leave `https://github.com`, or your GitHub Enterprise Server's address.\n3. `client_id`: the Client ID. `client_secret`: the client secret, in the password field.\n4. Tick **open the hosts in the egress allowlist** (or open `github.com` and `api.github.com` yourself)."
       },
       {
@@ -1445,7 +1445,7 @@
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "1. Administration, **Connectors**, **Declare**: capability **Member accounts**, type **GitLab sign-in**.\n2. `base_url`: leave `https://gitlab.com`, or your instance's address (`https://gitlab.example`).\n3. `client_id`: the Application ID. `client_secret`: the Secret, in the password field.\n4. Tick **open the hosts in the egress allowlist**, or open the instance's host yourself."
       },
       {
@@ -1500,7 +1500,7 @@
       {
         "key": "before",
         "title": "Before you start",
-        "markdown": "- **Development only.** This gateway hands out the key it was given: it mints no key per run, so there is\n  no hard cap, and the cost ledger stays at zero. On staging and prod Choregos **refuses to build it** and\n  says so: use `litellm` (or `openai-compatible`, knowing its limits)."
+        "markdown": "- **Development only.** This gateway hands out the key it was given: it mints no key per run, so there is\n  no hard cap, and the cost ledger stays at zero. On staging and prod Tranibor **refuses to build it** and\n  says so: use `litellm` (or `openai-compatible`, knowing its limits)."
       },
       {
         "key": "at",
@@ -1514,7 +1514,7 @@
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "Connectors, **Gateway**, type **direct**: `models` (a list of names), `key` in the password field.\n\nWith `sandbox.llm_security_analyzer` in the project's policy (the `team` and `regulated` presets), this\ngateway is refused: it has no guard to mask secrets on the LLM path. Use the LiteLLM gateway,\nor turn the flag off in the policy."
       },
       {
@@ -1567,7 +1567,7 @@
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "Chart values, or Connectors, **Gateway**, type **LiteLLM**: `base_url`, optionally `team_id`,\n`internal_prices`, `enterprise_tags`, and `master_key` in the password field."
       },
       {
@@ -1612,7 +1612,7 @@
       {
         "key": "before",
         "title": "Before you start",
-        "markdown": "- Any gateway that serves `GET {base_url}/models` and `/chat/completions` (Portkey, Kong AI Gateway, Envoy\n  AI Gateway, OpenRouter, a vLLM router...).\n- Read the limits first. This adapter gives **discovery only**: no per-run virtual key, no hard budget at\n  the source, no measured cost (spend is \"not measured\", not \"free\"). Choregos alone holds the budget\n  (the reservation, turns and minutes)."
+        "markdown": "- Any gateway that serves `GET {base_url}/models` and `/chat/completions` (Portkey, Kong AI Gateway, Envoy\n  AI Gateway, OpenRouter, a vLLM router...).\n- Read the limits first. This adapter gives **discovery only**: no per-run virtual key, no hard budget at\n  the source, no measured cost (spend is \"not measured\", not \"free\"). Tranibor alone holds the budget\n  (the reservation, turns and minutes)."
       },
       {
         "key": "at",
@@ -1626,7 +1626,7 @@
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "Chart (`global.gateway.type: openai-compatible`) or Connectors, **Gateway**: `base_url`, optional `headers`\nand `timeout_s`, then `api_key` and `run_key` in their password fields.\n\nWith `sandbox.llm_security_analyzer` in the project's policy (the `team` and `regulated` presets), this\ngateway is refused: it has no guard to mask secrets on the LLM path. Use the LiteLLM gateway,\nor turn the flag off in the policy."
       },
       {
@@ -1687,7 +1687,7 @@
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "1. Administration, **Connectors**, **Declare**: capability **Identity**, type **Microsoft Entra ID**.\n2. `tenant_id`, `client_id`: from the app's Overview. `client_secret`: the Value, in the password field.\n3. `administrative_unit_id`: the unit's Object ID. Every account the platform creates enters it; any\n   other account is refused."
       },
       {
@@ -1756,7 +1756,7 @@
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "Connectors, **Market data**, type **Alpha Vantage**. `api_key` in the password field (sealed, shown once)."
       },
       {
@@ -1815,7 +1815,7 @@
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "Connectors, **Market data**, type **composite**. `sources`: for example `[\"stooq\", \"alphavantage\"]`.\n`source_configs`: a sub-configuration per provider, for example `{\"stooq\": {\"suffix_map\": {}}}`.\n`cross_check` and `tolerance`. Keys in their password fields: `stooq_api_key`, `alphavantage_api_key`, `tiingo_api_key`.\nTo cross-check a range of years, put a full-history source second: `[\"yahoo\", \"tiingo\"]`."
       },
       {
@@ -1873,7 +1873,7 @@
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "Connectors, **Market data**, type **Stooq**. `suffix_map` maps your tickers to Stooq's market suffixes\n(for example the empty suffix to `.us`, `.L` to `.uk`). `timeout_s` defaults to 20."
       },
       {
@@ -1932,7 +1932,7 @@
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "Connectors, **Market data**, type **Tiingo**. `api_key` in the password field (sealed, shown once). In a\n**composite**, list it after the primary source, for example `[\"yahoo\", \"tiingo\"]`, with the token in\n`tiingo_api_key`: it then cross-checks the whole range, not only the recent days."
       },
       {
@@ -1994,7 +1994,7 @@
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "Connectors, **Market data**, type **Yahoo**. The only option is `timeout_s` (20 by default)."
       },
       {
@@ -2042,11 +2042,11 @@
       {
         "key": "permissions",
         "title": "Permissions",
-        "markdown": "- The connector's tools act with **that account's permissions**, nothing in Choregos can widen them.\n- Tools are **born closed**: after discovery each tool is `forbidden` until an administrator\n  opens it. A read can be `allowed`; a write is a governed action that waits for approval.\n- A project sees only the tools its groups are opened to, and can only tighten them."
+        "markdown": "- The connector's tools act with **that account's permissions**, nothing in Tranibor can widen them.\n- Tools are **born closed**: after discovery each tool is `forbidden` until an administrator\n  opens it. A read can be `allowed`; a write is a governed action that waits for approval.\n- A project sees only the tools its groups are opened to, and can only tighten them."
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "1. Administration, **Connectors**, **Declare**: capability **MCP**, type **MCP server**, a lowercase name.\n2. `url`: the endpoint.\n3. `auth_scheme`: `bearer` (the default) sends `Authorization: Bearer <token>`. `basic` sends\n   `Authorization: Basic base64(username:token)`; it needs `username`, usually an email.\n   `oauth_client_credentials` has the platform fetch a token from `token_url` with `client_id` and\n   `client_secret`, keep it until shortly before it expires, and fetch a new one when the server\n   answers 401; `scope` and `audience` are sent only when filled in.\n4. `token` (bearer, basic) or `client_secret` (oauth_client_credentials): paste it in the password\n   field. It is sealed and shown once; **Replace** rotates it. Neither the secret nor a token ever\n   reaches an agent: the platform signs each call itself.\n5. Allow the hosts the connector reaches when asked: the server's, and with\n   `oauth_client_credentials` the token endpoint's.\n6. Press **Discover**, then open the operations the agents need, one by one."
       },
       {
@@ -2102,32 +2102,32 @@
       {
         "key": "before",
         "title": "Before you start",
-        "markdown": "- Your organisation runs an **MCP gateway**, and an administrator has set it in Choregos (the\n  gateway's address and how Choregos signs in to it). Without that, this connector cannot be used.\n- The server is already registered at the gateway, under a name. Ask the gateway's owner for it.\n- An organisation administrator declares the connector. What an agent may then call is decided tool by\n  tool, below."
+        "markdown": "- Your organisation runs an **MCP gateway**, and an administrator has set it in Tranibor (the\n  gateway's address and how Tranibor signs in to it). Without that, this connector cannot be used.\n- The server is already registered at the gateway, under a name. Ask the gateway's owner for it.\n- An organisation administrator declares the connector. What an agent may then call is decided tool by\n  tool, below."
       },
       {
         "key": "at",
         "title": "At your MCP gateway",
-        "markdown": "Register the server there under a name, and give the gateway the server's credential or OAuth setup.\n**Choregos never holds that credential**: it asks the gateway for the server by its name, and the\ngateway reaches the server with its own access. Prefer an account whose rights are exactly what the\nagents should have."
+        "markdown": "Register the server there under a name, and give the gateway the server's credential or OAuth setup.\n**Tranibor never holds that credential**: it asks the gateway for the server by its name, and the\ngateway reaches the server with its own access. Prefer an account whose rights are exactly what the\nagents should have."
       },
       {
         "key": "permissions",
         "title": "Permissions",
-        "markdown": "- The connector's tools act with the permissions the **gateway** grants for that server, nothing in\n  Choregos can widen them.\n- Tools are **born closed**: after discovery each tool is `forbidden` until an administrator\n  opens it. A read can be `allowed`; a write is a governed action that waits for approval.\n- A project sees only the tools its groups are opened to, and can only tighten them."
+        "markdown": "- The connector's tools act with the permissions the **gateway** grants for that server, nothing in\n  Tranibor can widen them.\n- Tools are **born closed**: after discovery each tool is `forbidden` until an administrator\n  opens it. A read can be `allowed`; a write is a governed action that waits for approval.\n- A project sees only the tools its groups are opened to, and can only tighten them."
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "1. Administration, **Connectors**, **Declare**: capability **MCP**, type **MCP server through the\n   organisation's MCP gateway**, a lowercase name.\n2. `server`: the name your MCP gateway gives the server. There is no URL and no token to give.\n3. `timeout_s`: optional; leave it empty to use the gateway's timeout.\n4. Press **Discover**, then open the operations the agents need, one by one."
       },
       {
         "key": "test",
         "title": "Test it",
-        "markdown": "**Discover** asks the server, through the gateway, for its tools. A list of tools proves the gateway\nsetting, Choregos's sign-in to the gateway and the server's name."
+        "markdown": "**Discover** asks the server, through the gateway, for its tools. A list of tools proves the gateway\nsetting, Tranibor's sign-in to the gateway and the server's name."
       },
       {
         "key": "fails",
         "title": "When it fails",
-        "markdown": "- `409 gateway_not_configured`: no gateway is set for the organisation. An administrator sets it first.\n- `409 gateway_assertion_key_missing`: the gateway is set, but the key Choregos signs its requests\n  with is not. An administrator finishes the gateway setting.\n- `401` from the gateway: the gateway refused Choregos's sign-in, or the caller is not allowed to use\n  that server. Check the gateway's own logs.\n- `404` for an unknown server name: the name is not registered at the gateway; check the spelling\n  against the gateway's list.\n- \"No tools\", or only a few: discovery has not run, or the gateway's access to the server is too\n  narrow to list more."
+        "markdown": "- `409 gateway_not_configured`: no gateway is set for the organisation. An administrator sets it first.\n- `409 gateway_assertion_key_missing`: the gateway is set, but the key Tranibor signs its requests\n  with is not. An administrator finishes the gateway setting.\n- `401` from the gateway: the gateway refused Tranibor's sign-in, or the caller is not allowed to use\n  that server. Check the gateway's own logs.\n- `404` for an unknown server name: the name is not registered at the gateway; check the spelling\n  against the gateway's list.\n- \"No tools\", or only a few: discovery has not run, or the gateway's access to the server is too\n  narrow to list more."
       }
     ],
     "values": {},
@@ -2160,21 +2160,21 @@
       {
         "key": "before",
         "title": "Before you start",
-        "markdown": "- The server lives in a network nothing outside may connect to. An **outpost** is installed there:\n  the daemon `choregos-outpost`, which only dials out to Choregos and makes the calls it is handed.\n- An organisation administrator has created the outpost in Choregos, and a person has approved an\n  instance of it against the fingerprint the daemon printed. Without an approved instance that\n  polls, the connector answers \"offline\".\n- **An outpost does not keep data where it is.** A tool's result travels to Choregos, is bounded and\n  screened there, and is read by a model. A result that must not leave that network must not be a\n  tool's answer.\n- An organisation administrator declares the connector. What an agent may then call is decided tool\n  by tool, below."
+        "markdown": "- The server lives in a network nothing outside may connect to. An **outpost** is installed there:\n  the daemon `choregos-outpost`, which only dials out to Tranibor and makes the calls it is handed.\n- An organisation administrator has created the outpost in Tranibor, and a person has approved an\n  instance of it against the fingerprint the daemon printed. Without an approved instance that\n  polls, the connector answers \"offline\".\n- **An outpost does not keep data where it is.** A tool's result travels to Tranibor, is bounded and\n  screened there, and is read by a model. A result that must not leave that network must not be a\n  tool's answer.\n- An organisation administrator declares the connector. What an agent may then call is decided tool\n  by tool, below."
       },
       {
         "key": "at",
         "title": "At your outpost",
-        "markdown": "The address of the server and the credential that opens it are written in the outpost's own policy\nfile, by whoever runs the outpost. **Choregos never holds either**: it names an alias, and the\noutpost decides alone what that alias reaches.\n\n1. In the policy file, under `endpoints`, give the server an alias: its `url` (reachable from the\n   outpost), where its credential is read (`auth.from_file`), and the tool-name patterns the outpost\n   lets through (`tools`).\n2. `writes` is `deny` unless the file says `allow`: a tool the server does not declare read-only is\n   refused by the outpost itself.\n3. Restart the daemon, then run `choregos-outpost doctor`: it checks the door, the policy file and\n   every alias."
+        "markdown": "The address of the server and the credential that opens it are written in the outpost's own policy\nfile, by whoever runs the outpost. **Tranibor never holds either**: it names an alias, and the\noutpost decides alone what that alias reaches.\n\n1. In the policy file, under `endpoints`, give the server an alias: its `url` (reachable from the\n   outpost), where its credential is read (`auth.from_file`), and the tool-name patterns the outpost\n   lets through (`tools`).\n2. `writes` is `deny` unless the file says `allow`: a tool the server does not declare read-only is\n   refused by the outpost itself.\n3. Restart the daemon, then run `choregos-outpost doctor`: it checks the door, the policy file and\n   every alias."
       },
       {
         "key": "permissions",
         "title": "Permissions",
-        "markdown": "- The connector's tools act with the credential **the outpost** holds for that alias; nothing in\n  Choregos can widen it. Prefer an account whose rights are exactly what the agents should have.\n- Tools are **born closed**: after discovery each tool is `forbidden` until an administrator opens\n  it. A read can be `allowed`.\n- **A write is delivered at most once, and may end in doubt.** Choregos does not see the outpost's\n  server: when an instance took a write and its answer never comes back, nobody knows whether the\n  server made it. Choregos then never sends it again and undoes nothing by itself: the action stops\n  as `in doubt`, for a person to check. So a write is opened only when its rule says one of two\n  things, and the request that says neither is refused:\n  - **the tool takes Choregos's idempotency key**: it has an argument named `action_key` and makes\n    the same call harmless when it arrives twice with the same key. Choregos fills the key, and after\n    a doubt it sends the write again with it;\n  - **an in-doubt outcome is accepted** for this tool, explicitly.\n- A project sees only the tools its groups are opened to, and can only tighten them."
+        "markdown": "- The connector's tools act with the credential **the outpost** holds for that alias; nothing in\n  Tranibor can widen it. Prefer an account whose rights are exactly what the agents should have.\n- Tools are **born closed**: after discovery each tool is `forbidden` until an administrator opens\n  it. A read can be `allowed`.\n- **A write is delivered at most once, and may end in doubt.** Tranibor does not see the outpost's\n  server: when an instance took a write and its answer never comes back, nobody knows whether the\n  server made it. Tranibor then never sends it again and undoes nothing by itself: the action stops\n  as `in doubt`, for a person to check. So a write is opened only when its rule says one of two\n  things, and the request that says neither is refused:\n  - **the tool takes Tranibor's idempotency key**: it has an argument named `action_key` and makes\n    the same call harmless when it arrives twice with the same key. Tranibor fills the key, and after\n    a doubt it sends the write again with it;\n  - **an in-doubt outcome is accepted** for this tool, explicitly.\n- A project sees only the tools its groups are opened to, and can only tighten them."
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "1. Administration, **Connectors**, **Declare**: capability **MCP**, type **MCP server at an\n   outpost**, a lowercase name.\n2. `outpost`: the outpost's name. `endpoint`: the alias from its policy file. There is no URL and no\n   token to give.\n3. `timeout_s`: optional. It bounds the whole call: the wait for an instance of the outpost to take\n   it, then the server's answer.\n4. Press **Discover**, then open the read operations the agents need, one by one.\n5. To open a write, tick one of the two statements under it, **How it is delivered**: *It takes the\n   platform's idempotency key* (offered only when the tool has an `action_key` argument) or *An\n   in-doubt outcome is accepted for it, explicitly*. Then set its policy: the statement leaves with\n   it, in the same request. **Set**, under the statements, sends them alone. Through the API it is\n   `updateConnectorOperation`: `{\"policy\": \"approval\", \"platform_arguments\": [\"action_key\"]}` or\n   `{\"policy\": \"approval\", \"in_doubt_accepted\": true}`."
       },
       {
@@ -2190,7 +2190,7 @@
     ],
     "values": {},
     "egress": [
-      "none: Choregos opens no connection for it; the outpost calls the server from inside its own network"
+      "none: Tranibor opens no connection for it; the outpost calls the server from inside its own network"
     ],
     "fields": {
       "outpost": "the name of an outpost of your organisation",
@@ -2220,7 +2220,7 @@
       {
         "key": "before",
         "title": "Before you start",
-        "markdown": "- An Atlassian organisation administrator, because **API token access to the Rovo MCP Server is off\n  until an admin enables it**.\n- This gives agents Atlassian's tools (search, Jira, Confluence, and more) under Choregos's per-tool\n  policy. It does not call the Rovo agent itself; for that, see the remote agent procedure.\n- The server allows about 1 000 calls an hour on Standard and Premium plans."
+        "markdown": "- An Atlassian organisation administrator, because **API token access to the Rovo MCP Server is off\n  until an admin enables it**.\n- This gives agents Atlassian's tools (search, Jira, Confluence, and more) under Tranibor's per-tool\n  policy. It does not call the Rovo agent itself; for that, see the remote agent procedure.\n- The server allows about 1 000 calls an hour on Standard and Premium plans."
       },
       {
         "key": "at",
@@ -2234,7 +2234,7 @@
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "1. A service account key: install it from the MCP catalogue (\"Atlassian Rovo\"), with the key as its\n   credential. The install sends it as Bearer to `https://mcp.atlassian.com/v2/mcp`.\n2. A personal token: Administration, **Connectors**, **Declare**: type **MCP server**, `url`\n   `https://mcp.atlassian.com/v2/mcp`, `auth_scheme` `basic`, `username` the account's email. A\n   personal token sent as Bearer fails, so the catalogue install does not fit it.\n3. `token`: the token or key, in the password field.\n4. **Discover**, then open the tools the agents need."
       },
       {
@@ -2303,7 +2303,7 @@
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "Declare the connector with type `demo`. Leave `url` empty to run the fakes in the same process, or give\nthe address of the one process that serves them for several replicas."
       },
       {
@@ -2354,7 +2354,7 @@
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "Usually the chart's `global.memory.*` values. To declare it on a project: Connectors, **Memory**, type\n**Ecphoria**, `base_url`, `tenant`, optionally `read_timeout_ms`, and `token` in the password field."
       },
       {
@@ -2407,7 +2407,7 @@
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "Connectors, **Memory**, type **lexical**. There is nothing to configure."
       },
       {
@@ -2455,7 +2455,7 @@
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "Change the project's memory connector to `lexical` (same behaviour) or `ecphoria` (semantic memory)."
       },
       {
@@ -2503,7 +2503,7 @@
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "1. Administration, **Connectors**, **Declare**: capability **Network policy**, type **Cilium**.\n2. `kubernetes_url`, `ca_cert`, and `token` (password field). `verify_tls` stays true; `false` is for\n   development only.\n3. For flows: `hubble_server`, `hubble_tls`, `hubble_ca_cert`, `hubble_tls_server_name`, and for mTLS\n   `hubble_client_cert` and `hubble_client_key`.\n4. For proposals: `gitops_repo`, `gitops_base` (default `main`), `gitops_path` (default `cilium`) and\n   `gitops_token`."
       },
       {
@@ -2562,22 +2562,22 @@
       {
         "key": "at",
         "title": "At your mail provider",
-        "markdown": "1. Create an account or an app password dedicated to Choregos, so you can revoke it alone.\n2. Note the host, the port and the TLS mode.\n3. Check that the sending address is allowed for that account."
+        "markdown": "1. Create an account or an app password dedicated to Tranibor, so you can revoke it alone.\n2. Note the host, the port and the TLS mode.\n3. Check that the sending address is allowed for that account."
       },
       {
         "key": "permissions",
         "title": "Permissions",
-        "markdown": "- The account only needs to send mail. Give it no mailbox access.\n- The password is a write-only secret: Choregos seals it and never shows it again."
+        "markdown": "- The account only needs to send mail. Give it no mailbox access.\n- The password is a write-only secret: Tranibor seals it and never shows it again."
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "1. Project settings, Connectors, **Notify**, type **E-mail (SMTP)**.\n2. `host`, `port` and the TLS mode: keep `starttls` on for port 587, or turn on `use_ssl` for port 465.\n3. `from_address`: the sending address.\n4. `username`, and the `password` in its password field (sealed, shown once).\n5. Recipients come from the project's e-mail addresses (Project settings, Notifications). `to` on the\n   connector is the fallback when the project sets none.\n6. Open the network policy: the platform reaches your SMTP host on the port you chose. SMTP does not go\n   through the HTTP egress guard, so the operator's network policy must allow that host and port."
       },
       {
         "key": "test",
         "title": "Test it",
-        "markdown": "Trigger a notification, for example a release train departure, and look in the recipients' inbox. The\nsubject starts with `[Choregos]`."
+        "markdown": "Trigger a notification, for example a release train departure, and look in the recipients' inbox. The\nsubject starts with `[Tranibor]`."
       },
       {
         "key": "fails",
@@ -2629,11 +2629,11 @@
       {
         "key": "permissions",
         "title": "Permissions",
-        "markdown": "- Webhook mode needs nothing else: the webhook can post to the one channel you picked.\n- Bot mode needs `chat:write`. Nothing else is read from the workspace.\n- Do not enable Interactivity: Choregos exposes no Slack interactivity endpoint today, so a message's\n  decision buttons do not post back. The button that opens the item in the console is a plain link and\n  works; decisions are taken in the console."
+        "markdown": "- Webhook mode needs nothing else: the webhook can post to the one channel you picked.\n- Bot mode needs `chat:write`. Nothing else is read from the workspace.\n- Do not enable Interactivity: Tranibor exposes no Slack interactivity endpoint today, so a message's\n  decision buttons do not post back. The button that opens the item in the console is a plain link and\n  works; decisions are taken in the console."
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "1. Project settings, Connectors, **Notify**, type **Slack** (or an organisation connector).\n2. `channel`: for example `#choregos`.\n3. `public_url`: this platform's console address, `https://choregos.example.com`. Messages carry a button that opens\n   the item here.\n4. Paste **one** of `webhook_url` or `bot_token` in its password field (sealed, shown once)."
       },
       {
@@ -2690,7 +2690,7 @@
       {
         "key": "before",
         "title": "Before you start",
-        "markdown": "- A Teams channel where the assistant's task outputs and its owners' notices should appear.\n- The right to add a workflow to that channel (otherwise a Teams administrator does it).\n- Management of the assistant's installation in Choregos (`assistant:manage`)."
+        "markdown": "- A Teams channel where the assistant's task outputs and its owners' notices should appear.\n- The right to add a workflow to that channel (otherwise a Teams administrator does it).\n- Management of the assistant's installation in Tranibor (`assistant:manage`)."
       },
       {
         "key": "at",
@@ -2700,11 +2700,11 @@
       {
         "key": "permissions",
         "title": "Permissions",
-        "markdown": "- The URL is the credential: whoever holds it can post to the channel. Choregos seals it and never shows it\n  again.\n- Nothing is read from Teams; Choregos only posts message cards."
+        "markdown": "- The URL is the credential: whoever holds it can post to the channel. Tranibor seals it and never shows it\n  again.\n- Nothing is read from Teams; Tranibor only posts message cards."
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "1. Open the assistant's installation (**Assistants**, the installation's page) as one of its managers.\n2. In the **Microsoft Teams** card, paste the URL and save it. It is sealed and the field empties.\n3. In the task's `deliver` list of the assistant's manifest, `teams` now posts to that channel; the\n   installation's owners' notices (plugin upgrades, knowledge updates) go there too.\n4. Open the URL's host in the organisation's egress allowlist: `*.logic.azure.com` or\n   `*.environment.api.powerplatform.com` for a Workflows URL, `*.webhook.office.com` for an incoming webhook."
       },
       {
@@ -2763,7 +2763,7 @@
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "Set `runner.executor: aca` in the chart and declare the connector: `subscription_id`, `resource_group`,\n`environment_id` (required), `location` (default `westeurope`), `tenant_id`, `client_id`, `client_secret`\n(password field; or a ready `token` instead of the three identity fields), `identity_id`, `registry_server` and `log_analytics_workspace_id`.\n\nThe job runs outside the cluster and calls the platform back, so it needs an address it can reach: the\nin-cluster Service is not one. Give runs a hostname of their own, a **run door**: list it in\n`choregos-api.runDoor.hostnames` (the chart then routes it to the run's API and to nothing else), serve\nit over TLS, allow only the addresses your Container Apps environment leaves from where your ingress\ncan, and set `global.internalApiUrl` to `https://<that hostname>`. The deployment guide has the steps\nunder \"The run's API and the run door\"."
       },
       {
@@ -2831,7 +2831,7 @@
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "Chart values; the connector's `pool_image`, `max_active` and the rest are optional. A step that names its\nown image is refused in a pool: use `k8s_job` for such steps."
       },
       {
@@ -2889,7 +2889,7 @@
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "Nothing to type: the executor is chosen by the chart. `maxActive` caps concurrent runs per namespace;\nbeyond it a Job is created suspended (no pod, no image pull, no quota) and admitted in arrival order."
       },
       {
@@ -2937,7 +2937,7 @@
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "Chart or compose settings: `runner.executor: local_docker`. The only option is `network`, the Docker\nnetwork the runner container joins so it can reach the API."
       },
       {
@@ -2987,7 +2987,7 @@
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "Mostly chart values. If a connector is declared, `pipeline` names the Pipeline to start."
       },
       {
@@ -3028,7 +3028,7 @@
       {
         "key": "before",
         "title": "Before you start",
-        "markdown": "- The same **GitHub App** as the tracker (see \"Use GitHub Issues and Projects v2 as the board\"): one App\n  serves both. The person who operates Choregos creates it from the console (*Administration, GitHub\n  App*, from a manifest with the permissions and events below) or sets its id, private key and webhook\n  secret as platform settings.\n- The repository the agents change. They work on a branch and open a pull request; nothing is pushed to\n  the default branch."
+        "markdown": "- The same **GitHub App** as the tracker (see \"Use GitHub Issues and Projects v2 as the board\"): one App\n  serves both. The person who operates Tranibor creates it from the console (*Administration, GitHub\n  App*, from a manifest with the permissions and events below) or sets its id, private key and webhook\n  secret as platform settings.\n- The repository the agents change. They work on a branch and open a pull request; nothing is pushed to\n  the default branch."
       },
       {
         "key": "at",
@@ -3042,7 +3042,7 @@
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "1. Project settings, Connectors, **SCM**, type **GitHub (App)**.\n2. `repo`: pick the repository in the list (what the App's installations claimed by your organisation\n   see), or type `owner/repo` when the list cannot be read.\n3. `merge_queue`: true (the default) enqueues through the merge queue; `merge_method`: `SQUASH` (the\n   default), `MERGE` or `REBASE`."
       },
       {
@@ -3101,7 +3101,7 @@
       {
         "key": "before",
         "title": "Before you start",
-        "markdown": "- A GitLab project the agents change. They work on a branch and open a merge request; nothing is pushed to\n  the default branch.\n- You are a **Maintainer** of that project: the connector creates a short-lived token for each run, and\n  only a Maintainer can create project access tokens.\n- **GitLab.com needs the Premium or Ultimate tier for project access tokens.** On the Free tier the\n  connector cannot give a run its token. A self-managed GitLab has no such tier limit.\n- The platform's shared webhook secret (`CHOREGOS_GENERIC_WEBHOOK_SECRET`), held by whoever operates\n  Choregos, if you want merge request events."
+        "markdown": "- A GitLab project the agents change. They work on a branch and open a merge request; nothing is pushed to\n  the default branch.\n- You are a **Maintainer** of that project: the connector creates a short-lived token for each run, and\n  only a Maintainer can create project access tokens.\n- **GitLab.com needs the Premium or Ultimate tier for project access tokens.** On the Free tier the\n  connector cannot give a run its token. A self-managed GitLab has no such tier limit.\n- The platform's shared webhook secret (`CHOREGOS_GENERIC_WEBHOOK_SECRET`), held by whoever operates\n  Tranibor, if you want merge request events."
       },
       {
         "key": "at",
@@ -3115,7 +3115,7 @@
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "1. Project settings, Connectors, **SCM**, type **GitLab**.\n2. `base_url`: `https://gitlab.com` (the default) or your self-managed address. `project`: the project's\n   path (for example `group/app`) or numeric id. `default_branch`: the branch merge requests target.\n3. `token`: the Maintainer access token, in the password field (sealed, shown once)."
       },
       {
@@ -3189,7 +3189,7 @@
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "Declare the connector with type `demo`. Leave `url` empty to run the fakes in the same process, or give\nthe address of the one process that serves them for several replicas."
       },
       {
@@ -3226,21 +3226,21 @@
       {
         "key": "before",
         "title": "Before you start",
-        "markdown": "- A **GitHub App** for the platform: one per installation of Choregos, never a broad personal token.\n  The person who operates Choregos creates it, either from the console (*Administration, GitHub App*:\n  the platform registers it on GitHub from a manifest with the permissions and events below, and keeps\n  its credentials sealed) or by hand as platform settings (`github-app-id`, `github-app-private-key`,\n  `github-webhook-secret`). If the App exists, skip to step 4, \"Install\".\n- The repository and, for a board, the organisation's Projects v2 number."
+        "markdown": "- A **GitHub App** for the platform: one per installation of Tranibor, never a broad personal token.\n  The person who operates Tranibor creates it, either from the console (*Administration, GitHub App*:\n  the platform registers it on GitHub from a manifest with the permissions and events below, and keeps\n  its credentials sealed) or by hand as platform settings (`github-app-id`, `github-app-private-key`,\n  `github-webhook-secret`). If the App exists, skip to step 4, \"Install\".\n- The repository and, for a board, the organisation's Projects v2 number."
       },
       {
         "key": "at",
         "title": "At GitHub",
-        "markdown": "Skip steps 1 to 3 when the App was created from the console: the manifest set them.\n\n1. Organization settings, Developer settings, **GitHub Apps**, **New GitHub App**.\n2. **Webhook URL**: `https://choregos.example.com/api/v1/webhooks/github`. **Webhook secret**: a random string, the same one the\n   platform holds as `github-webhook-secret`. GitHub signs each delivery with it and the platform\n   refuses an unsigned one.\n3. Set the permissions and events below, then create the App and generate a **private key**.\n4. **Install** the App on the repositories Choregos works in, from the console: the repository field's\n   **Install on GitHub** button opens GitHub's install page and brings you back. The installation is\n   discovered by the platform: there is no number to copy. The App's **Setup URL** is the\n   platform's `/api/v1/github/setup`."
+        "markdown": "Skip steps 1 to 3 when the App was created from the console: the manifest set them.\n\n1. Organization settings, Developer settings, **GitHub Apps**, **New GitHub App**.\n2. **Webhook URL**: `https://choregos.example.com/api/v1/webhooks/github`. **Webhook secret**: a random string, the same one the\n   platform holds as `github-webhook-secret`. GitHub signs each delivery with it and the platform\n   refuses an unsigned one.\n3. Set the permissions and events below, then create the App and generate a **private key**.\n4. **Install** the App on the repositories Tranibor works in, from the console: the repository field's\n   **Install on GitHub** button opens GitHub's install page and brings you back. The installation is\n   discovered by the platform: there is no number to copy. The App's **Setup URL** is the\n   platform's `/api/v1/github/setup`."
       },
       {
         "key": "permissions",
         "title": "Permissions",
-        "markdown": "Repository permissions:\n\n- `contents`: write\n- `issues`: write\n- `pull_requests`: write\n- `checks`: write\n- `metadata`: read\n- `statuses`: read\n\n`statuses` lets the platform read a CI that reports commit statuses (Tekton, Jenkins); an App without it\nkeeps working, and those statuses are not read.\n\nOrganization permissions, for the Projects v2 board:\n\n- `organization_projects`: write\n\nSubscribe to these events: `issues`, `issue_comment`, `projects_v2_item`, `pull_request`, `pull_request_review`, `check_suite`, `check_run`.\n\nAdd `workflows: write` only if agents must edit files under `.github/workflows`; without it GitHub\nrefuses such a push.\n\n**What Choregos writes, and as whom.** The workflow's bookkeeping goes through this connector, through\nGitHub's REST API, as the Choregos GitHub App (`<app>[bot]` on GitHub): the board column and labels,\nthe status comment, the questions to a person, the close-out. The connector card names the account\nwhose installation it goes through, and each line of a work item's timeline that wrote to GitHub says\n\"via GitHub Issues\". An agent's own actions do not go through this connector: they go through the MCP\ntools its version names, under each tool connector's account, listed on its run."
+        "markdown": "Repository permissions:\n\n- `contents`: write\n- `issues`: write\n- `pull_requests`: write\n- `checks`: write\n- `metadata`: read\n- `statuses`: read\n\n`statuses` lets the platform read a CI that reports commit statuses (Tekton, Jenkins); an App without it\nkeeps working, and those statuses are not read.\n\nOrganization permissions, for the Projects v2 board:\n\n- `organization_projects`: write\n\nSubscribe to these events: `issues`, `issue_comment`, `projects_v2_item`, `pull_request`, `pull_request_review`, `check_suite`, `check_run`.\n\nAdd `workflows: write` only if agents must edit files under `.github/workflows`; without it GitHub\nrefuses such a push.\n\n**What Tranibor writes, and as whom.** The workflow's bookkeeping goes through this connector, through\nGitHub's REST API, as the Tranibor GitHub App (`<app>[bot]` on GitHub): the board column and labels,\nthe status comment, the questions to a person, the close-out. The connector card names the account\nwhose installation it goes through, and each line of a work item's timeline that wrote to GitHub says\n\"via GitHub Issues\". An agent's own actions do not go through this connector: they go through the MCP\ntools its version names, under each tool connector's account, listed on its run."
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "1. Project settings, Connectors, **Tracker**, type **GitHub Issues + Projects v2**.\n2. `repo`: pick the repository in the list (what the App's installations claimed by your organisation\n   see), or type `owner/repo` when the list cannot be read.\n3. For a board: `org` and `project_number` (the number in the board's address).\n4. Label a ticket `agent-ready`: the platform starts one workflow per ticket."
       },
       {
@@ -3300,7 +3300,7 @@
       {
         "key": "before",
         "title": "Before you start",
-        "markdown": "- A GitLab project where you are a Maintainer (to create a token and a webhook).\n- The platform's shared webhook secret (`CHOREGOS_GENERIC_WEBHOOK_SECRET`), held by whoever operates\n  Choregos: GitLab sends it as the webhook's secret token, and without it the endpoint refuses every\n  delivery."
+        "markdown": "- A GitLab project where you are a Maintainer (to create a token and a webhook).\n- The platform's shared webhook secret (`CHOREGOS_GENERIC_WEBHOOK_SECRET`), held by whoever operates\n  Tranibor: GitLab sends it as the webhook's secret token, and without it the endpoint refuses every\n  delivery."
       },
       {
         "key": "at",
@@ -3310,11 +3310,11 @@
       {
         "key": "permissions",
         "title": "Permissions",
-        "markdown": "- The token needs the `api` scope and the Developer role: it reads issues, creates issues and comments,\n  and changes labels. A narrower scope cannot write.\n- The token is project-scoped: it cannot touch another project.\n\n**What Choregos writes, and as whom.** The workflow's bookkeeping goes through this connector, through\nGitLab's REST API, as the account that owns the token (a project access token writes as its bot user):\nthe labels, the status comment, the questions to a person, the close-out. Each line of a work item's\ntimeline that wrote to GitLab says \"via GitLab Issues\". An agent's own actions do not go through this\nconnector: they go through the MCP tools its version names, under each tool connector's account,\nlisted on its run."
+        "markdown": "- The token needs the `api` scope and the Developer role: it reads issues, creates issues and comments,\n  and changes labels. A narrower scope cannot write.\n- The token is project-scoped: it cannot touch another project.\n\n**What Tranibor writes, and as whom.** The workflow's bookkeeping goes through this connector, through\nGitLab's REST API, as the account that owns the token (a project access token writes as its bot user):\nthe labels, the status comment, the questions to a person, the close-out. Each line of a work item's\ntimeline that wrote to GitLab says \"via GitLab Issues\". An agent's own actions do not go through this\nconnector: they go through the MCP tools its version names, under each tool connector's account,\nlisted on its run."
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "1. Project settings, Connectors, **Tracker**, type **GitLab Issues**.\n2. `base_url`: `https://gitlab.com` (the default) or your self-managed address. `project`: the project's\n   path (for example `group/app`) or numeric id.\n3. `token`: the access token, in the password field (sealed, shown once)."
       },
       {
@@ -3354,7 +3354,7 @@
   },
   {
     "id": "connector.tracker.internal",
-    "title": "Let Choregos hold the work items",
+    "title": "Let Tranibor hold the work items",
     "version": 1,
     "audience": "project_owner",
     "applies_to": {
@@ -3366,7 +3366,7 @@
       {
         "key": "before",
         "title": "Before you start",
-        "markdown": "Nothing to create anywhere. Use this when the work does not live in GitHub, Jira or GitLab: requests are\nfiled in Choregos itself."
+        "markdown": "Nothing to create anywhere. Use this when the work does not live in GitHub, Jira or GitLab: requests are\nfiled in Tranibor itself."
       },
       {
         "key": "at",
@@ -3376,11 +3376,11 @@
       {
         "key": "permissions",
         "title": "Permissions",
-        "markdown": "Only Choregos roles apply: who may create, move and decide a work item is set by the project's members\nand the workflow's guarantees."
+        "markdown": "Only Tranibor roles apply: who may create, move and decide a work item is set by the project's members\nand the workflow's guarantees."
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "1. Project settings, Connectors, **Tracker**, type **internal**. There is nothing to configure.\n2. File work from the board with **New work item**, from the CLI, or through the MCP door with\n   `create_work_item`. The platform mints the key."
       },
       {
@@ -3414,7 +3414,7 @@
       {
         "key": "before",
         "title": "Before you start",
-        "markdown": "- A Jira Cloud site and an Atlassian account **dedicated to Choregos**: its permissions are what the\n  platform may do in the project, and comments and transitions appear under its name. The best fit\n  is an Atlassian **service account** (no licence seat, no password, an organisation administrator\n  creates it); a regular account dedicated to Choregos works too.\n- The project key.\n- The platform's shared webhook secret (`CHOREGOS_GENERIC_WEBHOOK_SECRET`), held by whoever operates\n  Choregos. Jira Cloud does not sign webhooks, so the platform accepts a delivery only if it carries this\n  secret in an `X-Choregos-Secret` header."
+        "markdown": "- A Jira Cloud site and an Atlassian account **dedicated to Tranibor**: its permissions are what the\n  platform may do in the project, and comments and transitions appear under its name. The best fit\n  is an Atlassian **service account** (no licence seat, no password, an organisation administrator\n  creates it); a regular account dedicated to Tranibor works too.\n- The project key.\n- The platform's shared webhook secret (`CHOREGOS_GENERIC_WEBHOOK_SECRET`), held by whoever operates\n  Tranibor. Jira Cloud does not sign webhooks, so the platform accepts a delivery only if it carries this\n  secret in an `X-Choregos-Secret` header."
       },
       {
         "key": "at",
@@ -3424,12 +3424,12 @@
       {
         "key": "permissions",
         "title": "Permissions",
-        "markdown": "On the project, for the dedicated account: **Browse projects**, **Create issues**, **Edit issues**,\n**Transition issues**, **Add comments**.\n\nWhat the two scopes cover is exactly what the connector calls: `read:jira-work` for the search, an\nissue, its transitions, the project and the list of fields; `write:jira-work` for the labels, the\ntransitions, the comments, the new issues and the links between issues. A classic token, without\nscopes, carries all of the account's rights.\n\nA scoped token is **refused by the site** (`401`): it works only through the gateway,\n`https://api.atlassian.com/ex/jira/<cloud_id>`. With `auth: scoped` Choregos goes through it by itself;\nkeep the site in `base_url`, the links to issues point to it.\n\n**What Choregos writes, and as whom.** The workflow's bookkeeping goes through this connector, through\nJira's REST API, under the dedicated account: the status, the status comment, the `Cost (€)`, `Size`,\n`Risk` and `Run` fields, the questions to a person, the close-out. The connector card says\n\"Choregos writes as\" that email, and each line of a work item's timeline that wrote to Jira says\n\"via Jira as\" it. An agent's own actions do not go through this connector: they go through the MCP\ntools its version names, under each tool connector's account, listed on its run."
+        "markdown": "On the project, for the dedicated account: **Browse projects**, **Create issues**, **Edit issues**,\n**Transition issues**, **Add comments**.\n\nWhat the two scopes cover is exactly what the connector calls: `read:jira-work` for the search, an\nissue, its transitions, the project and the list of fields; `write:jira-work` for the labels, the\ntransitions, the comments, the new issues and the links between issues. A classic token, without\nscopes, carries all of the account's rights.\n\nA scoped token is **refused by the site** (`401`): it works only through the gateway,\n`https://api.atlassian.com/ex/jira/<cloud_id>`. With `auth: scoped` Tranibor goes through it by itself;\nkeep the site in `base_url`, the links to issues point to it.\n\n**What Tranibor writes, and as whom.** The workflow's bookkeeping goes through this connector, through\nJira's REST API, under the dedicated account: the status, the status comment, the `Cost (€)`, `Size`,\n`Risk` and `Run` fields, the questions to a person, the close-out. The connector card says\n\"Tranibor writes as\" that email, and each line of a work item's timeline that wrote to Jira says\n\"via Jira as\" it. An agent's own actions do not go through this connector: they go through the MCP\ntools its version names, under each tool connector's account, listed on its run."
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
-        "markdown": "1. Project settings, Connectors, **Tracker**, type **Jira Cloud**.\n2. `base_url`: `https://<site>.atlassian.net`, the site, whatever the token. `email`: the dedicated\n   account's email. `auth`: `scoped` for a service account's token, `basic` (the default) for a classic\n   one. Leave `cloud_id` empty: Choregos reads it from the site. `project_key`: the key. A webhook delivery reaches the project whose Jira connector holds the issue's key, whatever the\n   project's slug; two projects holding the same key are told apart by the Jira site, and a key held\n   twice on the same site routes nothing.\n3. `field_names`: only if your Jira names the custom fields Choregos writes differently. They are\n   `Cost (€)`, `Size`, `Risk` and `Run`.\n4. `api_token`: the token, in the password field (sealed, shown once).\n5. Label an issue `agent-ready`: the platform starts one workflow per issue.\n6. Or skip the webhook and the label altogether: set `candidates_jql`, for example\n   `parent = BILL-1 AND labels in (form-a, form-b)`. Every minute the platform searches the project's open\n   issues matching it and starts one workflow per new one; an issue already started never starts again.\n   The issue's labels still pick its workflow. Exclude what another tool already handles (for example\n   `AND created >= \"2026-11-02\"`), or the first search takes it on too.\n7. Nothing to set for what the agents learn about an issue: when the platform takes one on (the poll,\n   or a webhook delivery, which re-reads the issue), it keeps on the work item, as `fields.tracker`,\n   the **reporter** and the **creator** (`account_id`, `display_name`, and `email` only when Jira\n   returns it: it is hidden unless the person's profile shows it), the **labels**, and the **answers**\n   of the issue's form: every non-empty custom field, keyed by its display name, as text (an option's\n   value, a user's name, a list joined with commas, rich text as plain text), each cut at 2000\n   characters. Agents read it as `ticket.fields.tracker`, jobs in `.choregos/fields.json`. It is the\n   requester's text, never an instruction. Each webhook delivery refreshes it; an issue the poll alone\n   feeds keeps what it said when it was taken on."
+        "title": "In Tranibor",
+        "markdown": "1. Project settings, Connectors, **Tracker**, type **Jira Cloud**.\n2. `base_url`: `https://<site>.atlassian.net`, the site, whatever the token. `email`: the dedicated\n   account's email. `auth`: `scoped` for a service account's token, `basic` (the default) for a classic\n   one. Leave `cloud_id` empty: Tranibor reads it from the site. `project_key`: the key. A webhook delivery reaches the project whose Jira connector holds the issue's key, whatever the\n   project's slug; two projects holding the same key are told apart by the Jira site, and a key held\n   twice on the same site routes nothing.\n3. `field_names`: only if your Jira names the custom fields Tranibor writes differently. They are\n   `Cost (€)`, `Size`, `Risk` and `Run`.\n4. `api_token`: the token, in the password field (sealed, shown once).\n5. Label an issue `agent-ready`: the platform starts one workflow per issue.\n6. Or skip the webhook and the label altogether: set `candidates_jql`, for example\n   `parent = BILL-1 AND labels in (form-a, form-b)`. Every minute the platform searches the project's open\n   issues matching it and starts one workflow per new one; an issue already started never starts again.\n   The issue's labels still pick its workflow. Exclude what another tool already handles (for example\n   `AND created >= \"2026-11-02\"`), or the first search takes it on too.\n7. Nothing to set for what the agents learn about an issue: when the platform takes one on (the poll,\n   or a webhook delivery, which re-reads the issue), it keeps on the work item, as `fields.tracker`,\n   the **reporter** and the **creator** (`account_id`, `display_name`, and `email` only when Jira\n   returns it: it is hidden unless the person's profile shows it), the **labels**, and the **answers**\n   of the issue's form: every non-empty custom field, keyed by its display name, as text (an option's\n   value, a user's name, a list joined with commas, rich text as plain text), each cut at 2000\n   characters. Agents read it as `ticket.fields.tracker`, jobs in `.choregos/fields.json`. It is the\n   requester's text, never an instruction. Each webhook delivery refreshes it; an issue the poll alone\n   feeds keeps what it said when it was taken on."
       },
       {
         "key": "test",
@@ -3457,7 +3457,7 @@
       "candidates_jql": "optional: the JQL of the issues the platform takes on by itself, without a webhook (BILL issues matching it, not done)",
       "match_labels": "optional: when several projects share this Jira project, the labels that send an issue here; the project without them takes the rest",
       "project_key": "the project's key, the prefix of its issue keys (BILL in BILL-42)",
-      "field_names": "a map of the custom fields Choregos writes (Cost, Size, Risk, Run) to their names in your Jira",
+      "field_names": "a map of the custom fields Tranibor writes (Cost, Size, Risk, Run) to their names in your Jira",
       "api_token": "the API token, typed once",
       "webhook_secret": "not used by the Jira webhook endpoint: the platform's shared webhook secret is"
     },
@@ -3501,11 +3501,11 @@
       {
         "key": "permissions",
         "title": "Permissions",
-        "markdown": "The account the plugin's server uses is the one its procedure asks for. Choregos itself needs nothing\nmore: it reaches the server inside the cluster with the server's own token, never with a key of yours.\n\n**What Choregos writes, and as whom.** The workflow's bookkeeping goes through the plugin's server,\nunder the account that server uses: the state, the status comment, the questions to a person, the\nclose-out. The connector card and each line of a work item's timeline that wrote to the tracker name\nthe server, `<plugin>/<server>`. An agent's own actions go through the MCP tools its version names,\nlisted on its run."
+        "markdown": "The account the plugin's server uses is the one its procedure asks for. Tranibor itself needs nothing\nmore: it reaches the server inside the cluster with the server's own token, never with a key of yours.\n\n**What Tranibor writes, and as whom.** The workflow's bookkeeping goes through the plugin's server,\nunder the account that server uses: the state, the status comment, the questions to a person, the\nclose-out. The connector card and each line of a work item's timeline that wrote to the tracker name\nthe server, `<plugin>/<server>`. An agent's own actions go through the MCP tools its version names,\nlisted on its run."
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "1. Project settings, Connectors, **Tracker**, type **Plugin server**.\n2. `plugin`: the plugin's name. `server`: its server's name.\n3. Nothing else: where the server answers and its token are read from the organisation's connector each\n   time, never typed nor stored on the project.\n\nA project created from a plugin's template whose tracker is `plugin:<plugin>/<server>` gets this\nconnector by itself."
       },
       {
@@ -3561,8 +3561,8 @@
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
-        "markdown": "1. Connectors, **Web search**, type **Brave Search API**. `api_key` in the password field (sealed, shown once).\n2. Choregos does **not** know what Brave Search API keeps of a query: its terms were not reviewed. Under a\n   ceiling that caps retention or forbids reuse, the tool stays off until you fill the **Data\n   handling** fields (under Edit settings, or when you declare the connector) from your contract: query\n   retention in days, whether queries are reused, the region, and the **terms reference**. The form shows what\n   Choregos knows of the backend (\"unknown\" until its terms are reviewed). A declaration can only be stricter,\n   and the terms reference is required as soon as anything is declared; the form refuses a save that is not.\n   A field left on \"Not declared\" stays unknown, and an unknown value fails every bound that reads it.\n3. The organisation's ceiling opens the tool: Settings, **Policy ceiling**, `web_search: {mode: allow}`."
+        "title": "In Tranibor",
+        "markdown": "1. Connectors, **Web search**, type **Brave Search API**. `api_key` in the password field (sealed, shown once).\n2. Tranibor does **not** know what Brave Search API keeps of a query: its terms were not reviewed. Under a\n   ceiling that caps retention or forbids reuse, the tool stays off until you fill the **Data\n   handling** fields (under Edit settings, or when you declare the connector) from your contract: query\n   retention in days, whether queries are reused, the region, and the **terms reference**. The form shows what\n   Tranibor knows of the backend (\"unknown\" until its terms are reviewed). A declaration can only be stricter,\n   and the terms reference is required as soon as anything is declared; the form refuses a save that is not.\n   A field left on \"Not declared\" stays unknown, and an unknown value fails every bound that reads it.\n3. The organisation's ceiling opens the tool: Settings, **Policy ceiling**, `web_search: {mode: allow}`."
       },
       {
         "key": "test",
@@ -3608,7 +3608,7 @@
       {
         "key": "before",
         "title": "Before you start",
-        "markdown": "- A **self-hosted Firecrawl instance** you run, reachable from the Choregos API. Choregos never uses\n  Firecrawl's cloud (`*.firecrawl.dev`): it is refused when you save the connector and again when the\n  platform builds it. Choregos does not deploy the instance for you.\n- Choregos never asks Firecrawl to scrape: reading a result goes through `web_fetch`.\n- The built-in `web_search` returns links and snippets, never pages."
+        "markdown": "- A **self-hosted Firecrawl instance** you run, reachable from the Tranibor API. Tranibor never uses\n  Firecrawl's cloud (`*.firecrawl.dev`): it is refused when you save the connector and again when the\n  platform builds it. Tranibor does not deploy the instance for you.\n- Tranibor never asks Firecrawl to scrape: reading a result goes through `web_fetch`.\n- The built-in `web_search` returns links and snippets, never pages."
       },
       {
         "key": "at",
@@ -3622,8 +3622,8 @@
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
-        "markdown": "1. Connectors, **Web search**, type **Firecrawl**. Set `base_url` to your instance. If it has a key,\n   type it in `api_key` (sealed, shown once).\n2. Choregos does **not** know what your instance keeps of a query, nor what the engines behind it do:\n   a self-hosted Firecrawl still sends the query to the search engines it uses (SearXNG, or whatever\n   its upstream is), so \"local\" does not mean the query never leaves. Under a ceiling that caps\n   retention or forbids reuse, the tool stays off until you fill `data_handling` from your own terms,\n   for example `{\"query_retention_days\": 0, \"query_reuse\": false, \"terms_ref\": \"runbook, section\"}`. A\n   declaration can only be stricter, and `terms_ref` is required.\n3. The organisation's ceiling opens the tool: Settings, **Policy ceiling**, `web_search: {mode: allow}`."
+        "title": "In Tranibor",
+        "markdown": "1. Connectors, **Web search**, type **Firecrawl**. Set `base_url` to your instance. If it has a key,\n   type it in `api_key` (sealed, shown once).\n2. Tranibor does **not** know what your instance keeps of a query, nor what the engines behind it do:\n   a self-hosted Firecrawl still sends the query to the search engines it uses (SearXNG, or whatever\n   its upstream is), so \"local\" does not mean the query never leaves. Under a ceiling that caps\n   retention or forbids reuse, the tool stays off until you fill `data_handling` from your own terms,\n   for example `{\"query_retention_days\": 0, \"query_reuse\": false, \"terms_ref\": \"runbook, section\"}`. A\n   declaration can only be stricter, and `terms_ref` is required.\n3. The organisation's ceiling opens the tool: Settings, **Policy ceiling**, `web_search: {mode: allow}`."
       },
       {
         "key": "test",
@@ -3674,7 +3674,7 @@
       {
         "key": "before",
         "title": "Before you start",
-        "markdown": "- A Tavily account and its API key. Choregos never asks Tavily for page contents: reading a result\n  goes through `web_fetch`.\n- The built-in `web_search` returns links and snippets, never pages."
+        "markdown": "- A Tavily account and its API key. Tranibor never asks Tavily for page contents: reading a result\n  goes through `web_fetch`.\n- The built-in `web_search` returns links and snippets, never pages."
       },
       {
         "key": "at",
@@ -3688,8 +3688,8 @@
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
-        "markdown": "1. Connectors, **Web search**, type **Tavily**. `api_key` in the password field (sealed, shown once).\n2. Choregos does **not** know what Tavily keeps of a query: its terms were not reviewed. Under a\n   ceiling that caps retention or forbids reuse, the tool stays off until you fill the **Data\n   handling** fields (under Edit settings, or when you declare the connector) from your contract: query\n   retention in days, whether queries are reused, the region, and the **terms reference**. The form shows what\n   Choregos knows of the backend (\"unknown\" until its terms are reviewed). A declaration can only be stricter,\n   and the terms reference is required as soon as anything is declared; the form refuses a save that is not.\n   A field left on \"Not declared\" stays unknown, and an unknown value fails every bound that reads it.\n3. The organisation's ceiling opens the tool: Settings, **Policy ceiling**, `web_search: {mode: allow}`."
+        "title": "In Tranibor",
+        "markdown": "1. Connectors, **Web search**, type **Tavily**. `api_key` in the password field (sealed, shown once).\n2. Tranibor does **not** know what Tavily keeps of a query: its terms were not reviewed. Under a\n   ceiling that caps retention or forbids reuse, the tool stays off until you fill the **Data\n   handling** fields (under Edit settings, or when you declare the connector) from your contract: query\n   retention in days, whether queries are reused, the region, and the **terms reference**. The form shows what\n   Tranibor knows of the backend (\"unknown\" until its terms are reviewed). A declaration can only be stricter,\n   and the terms reference is required as soon as anything is declared; the form refuses a save that is not.\n   A field left on \"Not declared\" stays unknown, and an unknown value fails every bound that reads it.\n3. The organisation's ceiling opens the tool: Settings, **Policy ceiling**, `web_search: {mode: allow}`."
       },
       {
         "key": "test",
@@ -3749,7 +3749,7 @@
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "1. Administration, **Connectors**, **Declare**: capability **Web server**, type **nginx**.\n2. `repo`: `owner/repo`. `ref`, `root` if your layout differs. `api_url` for a self-hosted forge.\n3. `token`: in the password field."
       },
       {
@@ -3810,7 +3810,7 @@
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "1. **Knowledge**, the base, **Add source**, kind **Confluence**.\n2. Pick the **connector**, then `space_key`; optionally `page_id`, or several `page_ids` (paste page addresses in the console), with `descendants: false` to read only those pages (and `include_root`), `labels` (one request\n   per page) and `include_attachments`.\n3. Choose the refresh: an interval, a cron expression, or manual."
       },
       {
@@ -3875,7 +3875,7 @@
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "1. **Knowledge**, the base, **Add source**, kind **Git**.\n2. For a private repository, name the **connector**. Then `url`, `ref` and `paths` (globs; the default is markdown anywhere).\n3. Choose the refresh. The cursor is the commit: the same commit is no change, and a file gone from the new\n   commit is deleted from the base.\n4. The egress allowlist must open the git host."
       },
       {
@@ -3930,7 +3930,7 @@
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "1. **Knowledge**, the base, **Add source**, kind **SharePoint**.\n2. Pick the **connector**. With none in the list, the form links to Administration, Connectors, to declare\n   one.\n3. `site_id` (or `drive_id` for a OneDrive), and optionally a `folder`.\n   **Excluded paths** leave out what the folder holds but should not be read, for example an archive:\n   globs under the folder, each starting with `/`, case-insensitive, where `*` also crosses `/`\n   (`/*Archive*/*` drops every `Archive` folder at any depth, `/*DO NOT USE*` every file or folder named so).\n   Changing them starts the next sync from scratch: what they now exclude leaves the base.\n4. Choose the refresh: every N minutes (5 minutes to 7 days), a cron expression, or manual."
       },
       {
@@ -3991,7 +3991,7 @@
       },
       {
         "key": "in_choregos",
-        "title": "In Choregos",
+        "title": "In Tranibor",
         "markdown": "1. **Knowledge**, the base, **Add source**, kind **Web**.\n2. `url`, `max_depth` and `max_pages`. For a single page tick **This page only** (depth 0, one page). Tick **Include linked documents** to also read the PDF, Word, PowerPoint and Excel files linked from the pages, on the same host (at most 5 MiB each).\n3. For a site behind a login, open **Advanced: authentication and HTTP headers** and pick the login\n   connector. Plain headers (`Accept-Language: fr`) go in **Extra HTTP headers**, one per line; a header\n   that carries a credential is refused there.\n4. Choose the refresh: every few hours, every day or every weekday at a time, chosen days of the week, once\n   a month, a cron expression of your own, or manually. Web content changes: once a day is usual.\n5. The API must be allowed to reach the site: the network egress allowlist must open its host."
       },
       {

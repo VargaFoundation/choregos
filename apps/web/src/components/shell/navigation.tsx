@@ -58,8 +58,8 @@ import { useSession } from "@/lib/session";
 import type { AdminSection } from "@/lib/types";
 
 // Skills have their own entry (review of 7 Oct: "there is no direct link in the menu"). The
-// `/integrations` page is where a person connects their AI assistant to Choregos through the MCP
-// door (inbound, whereas the connectors in the administration are where Choregos reaches out). It
+// `/integrations` page is where a person connects their AI assistant to Tranibor through the MCP
+// door (inbound, whereas the connectors in the administration are where Tranibor reaches out). It
 // bears the name of the project's own entry, "Integrations", and sits in the Organisation group:
 // it is how the organisation's people plug in, not something agents use (S40-08).
 export const NAV: { href: string; label: string; icone: LucideIcon }[] = [

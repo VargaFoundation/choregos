@@ -216,7 +216,7 @@ def policy_warnings(policy: Policy) -> list[Issue]:
             issues.append(
                 Issue(
                     "policy.approval_not_enforced",
-                    f"`approvals.{key}` is not enforced: Choregos asks no one for this approval. "
+                    f"`approvals.{key}` is not enforced: Tranibor asks no one for this approval. "
                     "Declare a human transition in the workflow (a human actor, or `train.approval`).",
                     f"approvals.{key}",
                 )
@@ -235,7 +235,7 @@ def policy_warnings(policy: Policy) -> list[Issue]:
         issues.append(
             Issue(
                 "policy.review_not_enforced",
-                "`review.require_human_for_risk` is not enforced: Choregos asks no one for this review. "
+                "`review.require_human_for_risk` is not enforced: Tranibor asks no one for this review. "
                 "Declare a human transition in the workflow.",
                 "review.require_human_for_risk",
             )

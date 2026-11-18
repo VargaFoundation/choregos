@@ -131,7 +131,7 @@ def _host(url: Any) -> str:
 async def _jira_project_for(session: Any, payload: dict[str, Any]) -> tuple[Project | None, bool]:
     """The project a Jira delivery is for, by its tracker connector's `project_key`.
 
-    A Jira project key (`XXX` in `XXX-42`) is not the Choregos project's slug: routing by the slug
+    A Jira project key (`XXX` in `XXX-42`) is not the Tranibor project's slug: routing by the slug
     dropped every event of a project named otherwise, with a log line as the only trace. Two
     projects whose connectors hold the same key are told apart by the Jira site the issue lives on
     (`issue.self`); if that does not settle it, nothing is routed. Returns the project and whether a
@@ -443,7 +443,7 @@ def _card_move(
     if created:
         received_events.record(session, project, event, "created_work_item", item)
         return 1
-    # Not counted, not audited, no comment: Choregos's own mirror comes back as moves too.
+    # Not counted, not audited, no comment: Tranibor's own mirror comes back as moves too.
     logger.info(
         "tracker move not applied: a card move is not a decision (ADR 0102)",
         project=project.slug,

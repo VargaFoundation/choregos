@@ -1,4 +1,4 @@
-"""As a Choregos job step (ADR 0056): paths from the workspace, results in `.choregos/job.json`."""
+"""As a Tranibor job step (ADR 0056): paths from the workspace, results in `.choregos/job.json`."""
 
 from __future__ import annotations
 

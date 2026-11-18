@@ -20,7 +20,7 @@ For an organisation administrator. Procedure `connector.documents.sharepoint`, v
    tenant, no redirect URI.
 2. On the new app's Overview page, copy the **Directory (tenant) ID** and the **Application (client) ID**.
 3. **Certificates & secrets**, **New client secret**. Copy the secret's **Value** now: it is shown once.
-   The Value is what Choregos needs, not the Secret ID. A secret expires (24 months at most): note the
+   The Value is what Tranibor needs, not the Secret ID. A secret expires (24 months at most): note the
    date in your calendar, because the day it expires every sync of this connector fails.
 
 ## Permissions
@@ -32,9 +32,9 @@ Least privilege first: the app reads only the sites you name.
 2. Grant the app **each site**. Find the site's id with
    `GET https://graph.microsoft.com/v1.0/sites/<host>:/sites/<path>` (the answer's `id`), then
    `POST https://graph.microsoft.com/v1.0/sites/{site-id}/permissions` with the body
-   `{"roles": ["read"], "grantedToIdentities": [{"application": {"id": "<client_id>", "displayName": "Choregos"}}]}`.
+   `{"roles": ["read"], "grantedToIdentities": [{"application": {"id": "<client_id>", "displayName": "Tranibor"}}]}`.
    The call must be made by a caller that holds `Sites.FullControl.All`. PnP PowerShell does the same
-   with `Grant-PnPAzureADAppSitePermission -AppId <client_id> -DisplayName Choregos -Site <site url> -Permissions Read`.
+   with `Grant-PnPAzureADAppSitePermission -AppId <client_id> -DisplayName Tranibor -Site <site url> -Permissions Read`.
 
 Without step 2 the app is authorised and reads **nothing**: every site answers 403.
 
@@ -56,7 +56,7 @@ directory user, and **reads only what that account may read**, through its group
 
 Microsoft discourages this sign-in (the password grant): use `Sites.Selected` wherever a per-site read fits.
 
-## In Choregos
+## In Tranibor
 
 1. Administration, **Connectors**, **Declare**: capability **Documents**, type **SharePoint**, any name
    (it is lowercase, and knowledge sources refer to it).
