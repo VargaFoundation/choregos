@@ -1,5 +1,8 @@
 image:
-  repository: ghcr.io/graalsystems/ecphoria
+  # The frozen namespace, as `compose.yaml` (S80-07d): the memory edition is published there and
+  # not yet under graalsystems/ecphoria, where `0.2.5-memory` does not exist and no pod could start.
+  # `tests/charts/test_ecphoria_image.py` keeps the chart on the image the local install runs.
+  repository: ghcr.io/vargafoundation/ecphoria
   tag: "0.2.5-memory"
 persistence:
   enabled: true

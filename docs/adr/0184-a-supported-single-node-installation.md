@@ -1,8 +1,8 @@
 # 0184 — A supported single-node installation: one k3s machine, a nightly backup, no high availability
 
 - **Status**: accepted, 2026-11-17; S80-07b delivers the profile, the backup and restore, the chart
-  tests and the proof script; S80-07c (2026-11-18) confines the agent pods; the proof does not run
-  nightly yet (see "What is not done")
+  tests and the proof script; S80-07c (2026-11-18) confines the agent pods; S80-07d (2026-11-18)
+  runs the proof end to end once; it does not run nightly yet (see "What is not done")
 - **Concerns**: `charts/choregos/values/single-node.yaml`, `charts/choregos/templates/backup.yaml`,
   `charts/choregos/templates/guard.yaml` (`singleNode.enabled`), `charts/choregos/templates/networkpolicies.yaml`, `tools/single-node/`,
   `docs/runbooks/single-node-restore.md`; builds on [ADR 0072](0072-agent-sandbox-is-the-runtime-of-a-real-deployment.md)
@@ -97,11 +97,18 @@ the existing chart on one k3s node, with a backup.
   twenty minutes). Until one does, the guarantee is only as fresh as the last manual run, recorded
   in STATUS.
 - No embedded object store and no embedded OIDC provider: a site without either brings one.
-- The isolation of agent pods (S80-07c) is proven on the rendered policies, evaluated as a
-  NetworkPolicy implementation does (`tests/charts/test_single_node_agent_network.py`), not yet on a
-  running k3s: `tools/single-node/proof.sh` opens TCP connections from a pod with an agent's labels
-  (the API, the gateway, the memory and the proxy must open; PostgreSQL and Temporal must not), and
-  has not run since.
+- The proof ran end to end once, on 2026-11-18 (S80-07d, k3d on a workstation, 925 s), after the
+  defects it found were fixed (the memory's image, the migrations' temporary directory, the backup
+  and restore connecting before the NetworkPolicy controller admitted them). Its isolation step held
+  on a running k3s: from a pod with an agent's labels the API, the gateway, the memory and the proxy
+  open, PostgreSQL and Temporal do not.
+- k3s's NetworkPolicy controller (kube-router) applies a pod's rules only once it has seen the pod:
+  a new pod is admitted to a store's ingress about 3 s after it starts (the backup and restore wait
+  for PostgreSQL for this reason), and, measured in the same run, a new agent pod reaches the
+  Internet directly for about 2 s before its egress rules apply. PostgreSQL and Temporal stay closed
+  in that window (their own ingress policies admit their clients by name). Closing it needs either a
+  policy engine that programs a pod before it runs, or an agent that cannot act in its first
+  seconds; neither is done.
 
 ## Alternatives considered
 

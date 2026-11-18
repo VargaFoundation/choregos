@@ -5441,6 +5441,14 @@ stories:
     size: L
     depends_on: [S80-07a]
     notes: "Plan workstream P4. values/single-node.yaml, the chart's backup and restore CronJobs, the guard's singleNode exception, tools/single-node/{proof,restore}.sh, the restore runbook. Not done: the proof as a nightly CI job; an embedded object store or OIDC provider; network isolation of agent pods on this profile (S80-07c)."
+  - id: S80-07d
+    title: "fix(charts,tools): the single-node proof runs once for real, on k3d, and what it found is fixed (ADR 0184)"
+    stream: S80
+    sprint: 1
+    priority: 7
+    size: S
+    depends_on: [S80-07c]
+    notes: "Runs tools/single-node/proof.sh end to end on a workstation (k3d, images built from main and imported). proof.sh gains PROOF_EVICTION (kubelet hard-eviction thresholds for a large, mostly full Docker disk) and PROOF_IMPORT_IMAGES. Not done: the proof as a nightly CI job."
   - id: S80-07c
     title: "fix(charts): on the single-node profile an agent pod reaches nothing it should not: the NetworkPolicies for the embedded layout and the egress proxy (ADR 0184)"
     stream: S80

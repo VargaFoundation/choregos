@@ -55,6 +55,10 @@ data:
     set -eu
     dir="/backup/$(cat /backup/.current)/postgres"
     mkdir -p "$dir"
+    # The database first answers: the NetworkPolicy controller admits a new pod to PostgreSQL a few
+    # seconds after it starts (k3s's kube-router, about 3 s; until then the connection is refused),
+    # and the first run of the proof failed there (S80-07d). Two minutes, then the step fails.
+    for _ in $(seq 60); do pg_isready -q -t 2 && break; sleep 2; done
     pg_dumpall --globals-only --no-role-passwords > "$dir/globals.sql"
     for db in $(psql -d postgres -Atc "SELECT datname FROM pg_database WHERE NOT datistemplate AND datname <> 'postgres' ORDER BY 1"); do
       pg_dump -Fc --create -d "$db" -f "$dir/$db.dump"
@@ -160,6 +164,10 @@ data:
   restore-database.sh: |
     set -eu
     dir="$(cat /restore/.dir)/postgres"
+    # The database first answers: the NetworkPolicy controller admits a new pod to PostgreSQL a few
+    # seconds after it starts (k3s's kube-router, about 3 s; until then the connection is refused),
+    # and the first run of the proof failed there (S80-07d). Two minutes, then the step fails.
+    for _ in $(seq 60); do pg_isready -q -t 2 && break; sleep 2; done
     for dump in "$dir"/*.dump; do
       [ -e "$dump" ] || continue
       db=$(basename "$dump" .dump)

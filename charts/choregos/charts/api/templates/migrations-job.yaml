@@ -92,7 +92,17 @@ spec:
           command: ["python", "-m", "choregos_api.migrate"]
           env: {{- include "choregos.commonEnv" . | nindent 12 }}
           securityContext: {{- toYaml .Values.global.securityContext | nindent 12 }}
+          # The root filesystem is read-only: a migration that reads the agent catalogue (the
+          # template catalogue's provenance, 2026-10-16) opens its plugin archives in a temporary
+          # directory. Without this volume every FIRST install failed there ("No usable temporary
+          # directory"), found by the single-node proof's first run (S80-07d); an installation
+          # whose database had passed that revision never ran it again.
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
           resources:
             requests: { cpu: 100m, memory: 256Mi }
             limits: { cpu: 500m, memory: 512Mi }
+      volumes:
+        - name: tmp
+          emptyDir: { sizeLimit: 256Mi }
 {{- end }}
