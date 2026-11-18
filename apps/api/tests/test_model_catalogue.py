@@ -78,7 +78,9 @@ async def test_the_deployment_gateway_is_an_environment_setting_whose_address_on
         "one organisation: its admin is the platform's"
     )
 
-    await client.post("/api/v1/orgs/northwind/members", json={"email": "po@northwind.dev", "role": "project_owner"})
+    await client.post(
+        "/api/v1/orgs/northwind/members", json={"email": "po@northwind.dev", "role": "project_owner"}
+    )
     await login(client, "po@northwind.dev")
     seen = (await client.get(BASE)).json()["gateway"]
     assert seen["source"] == "deployment"
@@ -93,7 +95,9 @@ async def test_the_organisations_own_gateway_shows_its_address_to_its_members(
 
     monkeypatch.setattr("choregos_api.routers.model_catalogue.org_brings_its_gateway", brings)
     gateway.base_url = "https://llm.acme.example/v1"  # type: ignore[attr-defined]
-    await client.post("/api/v1/orgs/northwind/members", json={"email": "po@northwind.dev", "role": "project_owner"})
+    await client.post(
+        "/api/v1/orgs/northwind/members", json={"email": "po@northwind.dev", "role": "project_owner"}
+    )
     await login(client, "po@northwind.dev")
     seen = (await client.get(BASE)).json()["gateway"]
     assert seen == {
@@ -330,7 +334,9 @@ async def test_the_curation_preview_lists_what_would_be_refused(
 ) -> None:
     await client.post(f"{BASE}/sync")
     entry = (await _entries(client))["platform/standard"]
-    await client.post("/api/v1/orgs/northwind/agents", json={"slug": "worker", "display_name": "W", "spec": SPEC})
+    await client.post(
+        "/api/v1/orgs/northwind/agents", json={"slug": "worker", "display_name": "W", "spec": SPEC}
+    )
     await client.patch(f"{BASE}/{entry['id']}", json={"enabled": False})
     preview = (await client.get(f"{BASE}/curate-preview")).json()
     assert preview["refused"] == [{"kind": "agent", "ref": "worker", "model": "platform/standard"}]

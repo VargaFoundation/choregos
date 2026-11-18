@@ -333,7 +333,9 @@ async def test_a_job_run_sees_the_operations_its_workflow_names(
                 stage_input={"job": {"command": ["x"], "tools": {"fournisseur": ["stock"]}}},
             )
         )
-    token = mint_run_token("run-job-1", project_slug="billing-api", work_item_key="northwind/x#1", ttl_minutes=30)
+    token = mint_run_token(
+        "run-job-1", project_slug="billing-api", work_item_key="northwind/x#1", ttl_minutes=30
+    )
     headers = {"Authorization": f"Bearer {token}"}
     job = "/api/v1/internal/runs/run-job-1/tools"
     names = [o["name"] for o in (await client.get(job, headers=headers)).json()["tools"]]

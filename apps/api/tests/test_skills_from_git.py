@@ -105,7 +105,9 @@ async def _member(email: str, role: str) -> None:
     from sqlalchemy import select
 
     async with session_scope() as session:
-        org = (await session.execute(select(Organization).where(Organization.slug == "northwind"))).scalar_one()
+        org = (
+            await session.execute(select(Organization).where(Organization.slug == "northwind"))
+        ).scalar_one()
         user = User(email=email, display_name=email.split("@", maxsplit=1)[0])
         session.add(user)
         await session.flush()
@@ -278,7 +280,8 @@ async def test_the_allowlist_is_the_administrators(
     defaults = (await client.get("/api/v1/orgs/northwind/skill-sources")).json()
     assert defaults == {"sources": ["github.com/anthropics/skills", "github.com/northwind"], "default": True}
     written = await client.put(
-        "/api/v1/orgs/northwind/skill-sources", json={"sources": ["github.com/elsewhere", "gitlab.com/team/sub"]}
+        "/api/v1/orgs/northwind/skill-sources",
+        json={"sources": ["github.com/elsewhere", "gitlab.com/team/sub"]},
     )
     assert written.status_code == 200, written.text
     assert (await client.get("/api/v1/orgs/northwind/skill-sources")).json()["default"] is False

@@ -18,9 +18,9 @@ async def test_the_currency_is_an_organisation_setting_eur_by_default(
     assert changed.status_code == 200 and changed.json()["currency"] == "USD"
     assert (await client.get("/api/v1/orgs/northwind/costs")).json()["currency"] == "USD"
     assert (await client.patch("/api/v1/orgs/northwind", json={"currency": "GBP"})).status_code == 422
-    assert (await client.patch("/api/v1/orgs/northwind", json={"name": "Northwind"})).json()["currency"] == "USD", (
-        "renaming keeps the setting"
-    )
+    assert (await client.patch("/api/v1/orgs/northwind", json={"name": "Northwind"})).json()[
+        "currency"
+    ] == "USD", "renaming keeps the setting"
 
 
 async def test_the_project_report_follows_the_currency(client: AsyncClient, project: dict[str, Any]) -> None:

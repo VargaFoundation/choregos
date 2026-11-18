@@ -203,7 +203,10 @@ def test_moving_the_publication_is_one_edit_and_one_command(tmp_path: pathlib.Pa
     )
     policy = (root / "infra/policies/plugin-servers.yaml").read_text(encoding="utf-8")
     # The frozen namespace of the images published before the move stays admitted beside the current one.
-    assert r"^(?:registry\\.example\\.org/exampleorg/tranibor-agents|ghcr\\.io/vargafoundation/choregos-agents)/" in policy
+    assert (
+        r"^(?:registry\\.example\\.org/exampleorg/tranibor-agents|ghcr\\.io/vargafoundation/choregos-agents)/"
+        in policy
+    )
     assert "@ExampleOrg/integrators" in (root / "CODEOWNERS").read_text(encoding="utf-8")
 
 

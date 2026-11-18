@@ -228,10 +228,11 @@ def parse_config(doc: Any, offline: str | None = None) -> PluginsConfig:
                 Range.parse(version)
             except VersionError as exc:
                 raise SourceError("config", f"default plugin `{raw['name']}`: {exc}") from exc
-        if raw["source"] == LEGACY_DEFAULT_SOURCE and LEGACY_DEFAULT_SOURCE not in names and DEFAULT_SOURCE in names:
-            raw = {**raw, "source": DEFAULT_SOURCE}
-        if raw["source"] not in {*names, OFFLINE}:
-            raise SourceError("config", f"default plugin `{raw['name']}`: no source `{raw['source']}`")
+        source = raw["source"]
+        if source == LEGACY_DEFAULT_SOURCE and LEGACY_DEFAULT_SOURCE not in names and DEFAULT_SOURCE in names:
+            source = DEFAULT_SOURCE
+        if source not in {*names, OFFLINE}:
+            raise SourceError("config", f"default plugin `{raw['name']}`: no source `{source}`")
         if set(raw) - {"source", "name", "version", "preapproved"}:
             raise SourceError(
                 "config", f"default plugin `{raw['name']}`: source, name, version and preapproved"
@@ -239,7 +240,7 @@ def parse_config(doc: Any, offline: str | None = None) -> PluginsConfig:
         preapproved = raw.get("preapproved", False)
         if not isinstance(preapproved, bool):
             raise SourceError("config", f"default plugin `{raw['name']}`: `preapproved` is true or false")
-        defaults.append(DefaultPlugin(raw["source"], raw["name"], version, preapproved))
+        defaults.append(DefaultPlugin(source, raw["name"], version, preapproved))
     directory = offline or doc.get("offline") or None
     return PluginsConfig(sources, tuple(defaults), Path(str(directory)) if directory else None)
 

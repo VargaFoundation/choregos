@@ -24,7 +24,9 @@ async def _member(email: str, role: str, project_slug: str | None = None) -> Non
     from sqlalchemy import select
 
     async with session_scope() as session:
-        org = (await session.execute(select(Organization).where(Organization.slug == "northwind"))).scalar_one()
+        org = (
+            await session.execute(select(Organization).where(Organization.slug == "northwind"))
+        ).scalar_one()
         user = (await session.execute(select(User).where(User.email == email))).scalar_one_or_none()
         if user is None:
             user = User(email=email, display_name=email.split("@", maxsplit=1)[0])

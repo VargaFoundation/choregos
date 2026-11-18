@@ -47,13 +47,17 @@ async def test_a_skill_is_born_and_its_versions_are_not_rewritten(client: AsyncC
     )
     assert v2.status_code == 201 and v2.json()["version"] == 2
     assert (await client.get("/api/v1/orgs/northwind/skills/procedure-onboarding/versions/1")).json() == v1
-    assert (await client.post("/api/v1/orgs/northwind/skills", json={"files": SKILL_FILES})).status_code == 409
+    assert (
+        await client.post("/api/v1/orgs/northwind/skills", json={"files": SKILL_FILES})
+    ).status_code == 409
 
 
 async def test_an_archive_with_its_root_folder_imports(client: AsyncClient, admin: str) -> None:
     imported = await _import(client, _zip({f"procedure-onboarding/{c}": t for c, t in SKILL_FILES.items()}))
     assert imported.status_code == 201, imported.text
-    files = (await client.get("/api/v1/orgs/northwind/skills/procedure-onboarding/versions/1")).json()["files"]
+    files = (await client.get("/api/v1/orgs/northwind/skills/procedure-onboarding/versions/1")).json()[
+        "files"
+    ]
     assert set(files) == {"SKILL.md", "references/groups.md"}
     # The same archive, imported again: the next version, not a duplicate.
     assert (await _import(client, _zip(SKILL_FILES))).json()["latest_version"] == 2

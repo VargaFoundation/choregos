@@ -189,7 +189,9 @@ async def test_internal_run_api(client: AsyncClient, project: dict[str, Any]) ->
         )
     )
     async with session_scope() as session:
-        item = WorkItem(project_id=project["id"], tracker_key="northwind/billing-api#1", title="T", state="ready")
+        item = WorkItem(
+            project_id=project["id"], tracker_key="northwind/billing-api#1", title="T", state="ready"
+        )
         session.add(item)
         await session.flush()
         run = Run(

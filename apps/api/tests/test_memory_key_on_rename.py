@@ -90,13 +90,17 @@ async def test_an_organisation_never_renamed_uses_its_slug(
         "org:northwind#memory:lessons", Fact(kind="decision", subject="tls", content="Pin TLS.")
     )
     # A name or currency change is not a slug change: no key is pinned.
-    assert (await client.patch(f"{ORGS}/northwind", json={"name": "Northwind", "currency": "USD"})).status_code == 200
+    assert (
+        await client.patch(f"{ORGS}/northwind", json={"name": "Northwind", "currency": "USD"})
+    ).status_code == 200
     from choregos_api.db.models import Organization
     from choregos_api.db.session import session_scope
     from sqlalchemy import select
 
     async with session_scope(orgs="*") as session:
-        row = (await session.execute(select(Organization).where(Organization.slug == "northwind"))).scalar_one()
+        row = (
+            await session.execute(select(Organization).where(Organization.slug == "northwind"))
+        ).scalar_one()
         assert "memory_key" not in (row.settings or {})
     assert await _seed_and_search(client, memory, "northwind") == ["Pin TLS."]
 

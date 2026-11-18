@@ -288,7 +288,9 @@ async def test_a_stopped_replica_leaves_nothing_behind(client: AsyncClient, admi
 
 async def test_only_an_org_admin_curates(client: AsyncClient, admin: str) -> None:
     await _base(client)
-    await client.post("/api/v1/orgs/northwind/members", json={"email": "dev@northwind.dev", "role": "developer"})
+    await client.post(
+        "/api/v1/orgs/northwind/members", json={"email": "dev@northwind.dev", "role": "developer"}
+    )
     await login(client, "dev@northwind.dev")
     assert (await client.post(BASE, json={"slug": "mine", "name": "Mine"})).status_code == 403
     assert (await _upload(client, "notes.md", b"# Notes\n")).status_code == 403

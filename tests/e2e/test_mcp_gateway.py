@@ -140,7 +140,10 @@ async def _prepare(platform: Platform, monkeypatch: pytest.MonkeyPatch, store: A
     assert agent.status_code == 201, agent.text
     async with session_scope() as session:
         item = WorkItem(
-            project_id=platform.project_id, tracker_key="northwind/billing-api#11", title="A PC", state="ready"
+            project_id=platform.project_id,
+            tracker_key="northwind/billing-api#11",
+            title="A PC",
+            state="ready",
         )
         session.add(item)
         await session.flush()

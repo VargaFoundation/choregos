@@ -54,7 +54,9 @@ async def test_the_organisation_gateway_is_built_with_the_key_typed_in_the_conso
     created = await client.post(ORG, json=_gateway("acme-llm"))
     assert created.status_code == 201, created.text
     async with session_scope(orgs="*") as session:
-        org = (await session.execute(select(Organization).where(Organization.slug == "northwind"))).scalar_one()
+        org = (
+            await session.execute(select(Organization).where(Organization.slug == "northwind"))
+        ).scalar_one()
         kind, _ = await org_gateway_and_type(session, org.id)
     assert kind == "openai-compatible"
     [(_, _, config)] = built

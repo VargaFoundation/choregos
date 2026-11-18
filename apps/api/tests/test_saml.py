@@ -463,7 +463,9 @@ async def test_a_domain_belongs_to_one_organisation(client: AsyncClient, configu
         await client.put("/api/v1/orgs/acme/saml", json=configuration(configured, domains=["acme.example"]))
     ).status_code == 200
     # ... and the organisation that holds it keeps it when it saves again.
-    assert (await client.put("/api/v1/orgs/northwind/saml", json=configuration(configured))).status_code == 200
+    assert (
+        await client.put("/api/v1/orgs/northwind/saml", json=configuration(configured))
+    ).status_code == 200
 
 
 async def test_a_domain_or_an_organisation_held_by_an_extension_s_provider_is_refused(
@@ -495,7 +497,9 @@ async def test_the_sign_in_page_leads_to_the_organisation_s_provider(
     client: AsyncClient, configured: kit.Idp
 ) -> None:
     by_link = await client.get("/api/v1/auth/login", params={"org": "northwind"})
-    assert by_link.status_code == 307 and by_link.headers["location"].startswith("/api/v1/saml/northwind/login?")
+    assert by_link.status_code == 307 and by_link.headers["location"].startswith(
+        "/api/v1/saml/northwind/login?"
+    )
     by_address = await client.get("/api/v1/auth/login", params={"login_hint": "ann@globex.example"})
     assert by_address.headers["location"].startswith("/api/v1/saml/northwind/login?")
     async with session_scope(orgs="*") as session:
@@ -536,7 +540,9 @@ async def test_a_sign_in_that_maps_no_group_grants_no_membership(app: Any, confi
     member = await browser(app)
     try:
         request_id = await start(member)
-        await post(member, response_for(configured, request_id, groups=("choregos:northwind:org-admins", "Nope")))
+        await post(
+            member, response_for(configured, request_id, groups=("choregos:northwind:org-admins", "Nope"))
+        )
     finally:
         await member.aclose()
     async with session_scope(orgs="*") as session:
@@ -642,7 +648,8 @@ async def test_the_request_cookie_of_another_organisation_or_purpose_is_refused(
         )  # a session-purpose tag
         assert (await post(member, encoded)).status_code == 401
         member.cookies.set(
-            "choregos_saml", sign_session({"id": REQUEST, "org": "northwind", "exp": 1}, purpose="saml-request")
+            "choregos_saml",
+            sign_session({"id": REQUEST, "org": "northwind", "exp": 1}, purpose="saml-request"),
         )
         assert (await post(member, encoded)).status_code == 401  # expired
     finally:

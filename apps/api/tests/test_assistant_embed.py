@@ -35,7 +35,9 @@ async def test_the_public_route_serves_the_installations_origins_to_anyone(
     app: Any,
     offline: Path,  # noqa: F811
 ) -> None:
-    await _installed(client, embed_origins=[*ORIGINS, "https://APP.northwind.dev:443", "https://app.northwind.dev/"])
+    await _installed(
+        client, embed_origins=[*ORIGINS, "https://APP.northwind.dev:443", "https://app.northwind.dev/"]
+    )
     stranger = AsyncClient(transport=ASGITransport(app=app), base_url="http://test")  # no session at all
     response = await stranger.get(EMBED)
     assert response.status_code == 200, response.text

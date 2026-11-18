@@ -174,7 +174,9 @@ async def test_a_project_owner_cannot_write_an_env_reference(
     # The organisation's administrator (the fixture's session) may.
     assert (await client.put(url, json=_jira("acme.atlassian.net", "env:CONNECTOR_X"))).status_code == 200
     async with session_scope() as session:
-        org = (await session.execute(select(Organization).where(Organization.slug == "northwind"))).scalar_one()
+        org = (
+            await session.execute(select(Organization).where(Organization.slug == "northwind"))
+        ).scalar_one()
         user = User(email="owner@northwind.dev", display_name="owner")
         session.add(user)
         await session.flush()

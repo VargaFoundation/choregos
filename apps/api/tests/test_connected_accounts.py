@@ -96,7 +96,9 @@ async def _consent(
     client: AsyncClient, provider: FakeOAuthProvider, seen: list[str], connector: str = "fournisseur"
 ) -> None:
     """The whole journey of the person: connect, consent at the source, the callback."""
-    started = await client.post(f"/api/v1/me/connected-accounts/{connector}/connect", params={"org": "northwind"})
+    started = await client.post(
+        f"/api/v1/me/connected-accounts/{connector}/connect", params={"org": "northwind"}
+    )
     assert started.status_code == 200, started.text
     seen.append(started.text)
     redirect = provider.authorize(started.json()["authorization_url"], PROVIDER_USER)
@@ -264,7 +266,9 @@ async def test_a_callback_with_a_forged_state_or_no_handshake_is_refused(
     client: AsyncClient, project: dict[str, Any], provider: FakeOAuthProvider, source: Any
 ) -> None:
     await _declare(client)
-    started = await client.post("/api/v1/me/connected-accounts/fournisseur/connect", params={"org": "northwind"})
+    started = await client.post(
+        "/api/v1/me/connected-accounts/fournisseur/connect", params={"org": "northwind"}
+    )
     url = started.json()["authorization_url"]
     redirect = urlparse(provider.authorize(url))
     forged = await client.get(f"{redirect.path}?code=x&state=forged.state")
@@ -279,7 +283,9 @@ async def test_a_connector_that_does_not_declare_the_mode_cannot_be_connected(
     client: AsyncClient, project: dict[str, Any], provider: FakeOAuthProvider, source: Any
 ) -> None:
     await _declare(client, {"url": "https://fournisseur.test/mcp", "identity_modes": ["service"]})
-    started = await client.post("/api/v1/me/connected-accounts/fournisseur/connect", params={"org": "northwind"})
+    started = await client.post(
+        "/api/v1/me/connected-accounts/fournisseur/connect", params={"org": "northwind"}
+    )
     assert started.status_code == 422
     unknown = await client.post("/api/v1/me/connected-accounts/nothing/connect", params={"org": "northwind"})
     assert unknown.status_code == 404
@@ -339,7 +345,9 @@ async def test_a_plugin_server_receives_the_persons_token_next_to_the_platforms(
 
 
 async def _begin_and_call_back(client: AsyncClient, provider: FakeOAuthProvider) -> httpx.Response:
-    started = await client.post("/api/v1/me/connected-accounts/fournisseur/connect", params={"org": "northwind"})
+    started = await client.post(
+        "/api/v1/me/connected-accounts/fournisseur/connect", params={"org": "northwind"}
+    )
     assert started.status_code == 200, started.text
     parsed = urlparse(provider.authorize(started.json()["authorization_url"], PROVIDER_USER))
     return await client.get(f"{parsed.path}?{parsed.query}")
@@ -391,7 +399,9 @@ async def test_an_authorization_endpoint_that_is_not_a_plain_https_address_is_ne
     client: AsyncClient, project: dict[str, Any], provider: FakeOAuthProvider, source: Any, endpoint: str
 ) -> None:
     await _declare(client, _consent_config(authorization_endpoint=endpoint))
-    started = await client.post("/api/v1/me/connected-accounts/fournisseur/connect", params={"org": "northwind"})
+    started = await client.post(
+        "/api/v1/me/connected-accounts/fournisseur/connect", params={"org": "northwind"}
+    )
     assert started.status_code == 422, started.text
     assert "authorization_url" not in started.text
 

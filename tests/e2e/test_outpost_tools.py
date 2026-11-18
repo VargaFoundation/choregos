@@ -535,7 +535,10 @@ async def _declared_discovered_and_opened(bench: Bench, *, writes: dict[str, Any
     assert agent.status_code == 201, agent.text
     async with session_scope() as session:
         item = WorkItem(
-            project_id=bench.platform.project_id, tracker_key="northwind/billing-api#7", title="T", state="ready"
+            project_id=bench.platform.project_id,
+            tracker_key="northwind/billing-api#7",
+            title="T",
+            state="ready",
         )
         session.add(item)
         await session.flush()

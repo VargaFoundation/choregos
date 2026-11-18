@@ -37,7 +37,9 @@ async def test_single_org_claims_every_installation_on_sync(
     assert set(got) == {"northwind-inc", "Other-Co"}, "the only organisation claims what the App sees"
     assert all(i["claimed"] for i in got.values())
     assert got["Other-Co"]["settings_url"] == "https://github.com/settings/installations/2"
-    assert got["northwind-inc"]["settings_url"].endswith("/organizations/northwind-inc/settings/installations/1")
+    assert got["northwind-inc"]["settings_url"].endswith(
+        "/organizations/northwind-inc/settings/installations/1"
+    )
     # a read does not need a refresh: the installation that disappears from GitHub disappears here
     github.remove_installation(2)
     assert {i["id"] for i in (await client.post(f"{STATUS}/refresh")).json()["installations"]} == {1}

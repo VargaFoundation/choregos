@@ -19,7 +19,9 @@ API = pathlib.Path(__file__).resolve().parents[1]
 BEFORE = "c8a1e3b5d7f9"
 AFTER = "e7b9d1f3a5c8"
 
-COLUMNS = "id, org_id, name, source, version, digest, manifest, contents, details, status, is_default, installed_at"
+COLUMNS = (
+    "id, org_id, name, source, version, digest, manifest, contents, details, status, is_default, installed_at"
+)
 SOURCES = "SELECT id, source FROM org_plugins ORDER BY id"
 
 

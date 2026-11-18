@@ -87,7 +87,9 @@ async def test_the_route_gives_the_relay_its_proxy_uncached_and_unaudited(
 ) -> None:
     assert (await _put(client)).status_code == 200
     before = len(await _audit("outbound_proxy.update"))
-    answer = await client.get(f"{ROUTE}/search_engines", headers=_bearer(mint_relay_token("northwind", days=1)))
+    answer = await client.get(
+        f"{ROUTE}/search_engines", headers=_bearer(mint_relay_token("northwind", days=1))
+    )
     assert answer.status_code == 200, answer.text
     assert answer.headers["cache-control"] == "no-store"
     assert answer.json() == {
@@ -136,7 +138,9 @@ async def test_the_route_is_a_503_when_the_proxy_applies_but_has_lost_its_passwo
 
     await _put(client)
     set_secret_store(FakeSecretStore())
-    answer = await client.get(f"{ROUTE}/search_engines", headers=_bearer(mint_relay_token("northwind", days=1)))
+    answer = await client.get(
+        f"{ROUTE}/search_engines", headers=_bearer(mint_relay_token("northwind", days=1))
+    )
     assert answer.status_code == 503, answer.text
     assert "gate.proxy.example:7000" in answer.text
 

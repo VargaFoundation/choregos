@@ -7,7 +7,7 @@ test("install waits for a second administrator, who approves; a server links to 
   await page.goto("/");
   await page.getByRole("navigation").getByRole("link", { name: "Plugins" }).click();
   await expect(page).toHaveURL(/\/library\/plugins$/);
-  await expect(page.getByTestId("trust-tranibor")).toContainText("keyless");
+  await expect(page.getByTestId("trust-northwind")).toContainText("keyless");
   await expect(page.getByTestId("source-partner")).toContainText("did not answer");
 
   // lea asked for hello: the demo's administrator approves it, and it is installed.

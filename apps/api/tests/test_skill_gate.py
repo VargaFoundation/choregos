@@ -34,7 +34,9 @@ async def _second_admin(email: str = "second@northwind.dev") -> None:
     from sqlalchemy import select
 
     async with session_scope() as session:
-        org = (await session.execute(select(Organization).where(Organization.slug == "northwind"))).scalar_one()
+        org = (
+            await session.execute(select(Organization).where(Organization.slug == "northwind"))
+        ).scalar_one()
         user = User(email=email, display_name="second")
         session.add(user)
         await session.flush()

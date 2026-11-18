@@ -225,7 +225,10 @@ async def test_the_parent_waits_for_every_child_then_reads_what_they_concluded(
     joined = (await _items(setup))[setup.tracker_key].documents["children"]
     assert joined["total"] == 2 and joined["succeeded"] == 1, joined
     assert joined["states"] == {"adopted": 1, "rejected": 1}
-    assert [c["key"] for c in joined["items"]] == ["northwind/billing-api#123.1", "northwind/billing-api#123.2"]
+    assert [c["key"] for c in joined["items"]] == [
+        "northwind/billing-api#123.1",
+        "northwind/billing-api#123.2",
+    ]
     signals = [
         e.workflow_execution_signaled_event_attributes.signal_name
         for e in history.events

@@ -25,7 +25,9 @@ PROXY = f"http://{EGRESS_NAME}.{RUNNERS}.svc:{EGRESS_PORT}"
 
 @pytest.fixture(scope="module", autouse=True)
 def project() -> Iterator[None]:
-    config = ProjectConfig(slug=SLUG, org="northwind", repo=RepoConfig(url="https://github.com/northwind/egress.git"))
+    config = ProjectConfig(
+        slug=SLUG, org="northwind", repo=RepoConfig(url="https://github.com/northwind/egress.git")
+    )
     manifests = render_project_manifests(SLUG, config, load_preset("team"))
     apply([manifests[name] for name in ("namespaces.yaml", "egress.yaml")])
     kubectl("-n", RUNNERS, "rollout", "status", f"deploy/{EGRESS_NAME}", "--timeout=180s", timeout_s=240)

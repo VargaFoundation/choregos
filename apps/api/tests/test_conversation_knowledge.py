@@ -39,7 +39,9 @@ async def _bases() -> dict[str, Any]:
         # `assistant:use` is the membership AND a group of the installation's audience (S63-15)
         admin = (await session.execute(select(User).where(User.email == "admin@northwind.dev"))).scalar_one()
         admin.groups = [AUDIENCE]
-        org = (await session.execute(select(Organization).where(Organization.slug == "northwind"))).scalar_one()
+        org = (
+            await session.execute(select(Organization).where(Organization.slug == "northwind"))
+        ).scalar_one()
         installation = AssistantInstallation(
             org_id=org.id, slug="coach", plugin="p", plugin_version="1", manifest_digest="sha256:0",
             assistant_name="coach", audience_groups=[AUDIENCE],

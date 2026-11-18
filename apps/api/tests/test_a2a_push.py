@@ -158,7 +158,9 @@ async def test_a_host_the_organisation_has_not_opened_is_refused_at_registration
     assert "egress" in refused["error"]["message"]
     async with session_scope(orgs="*") as session:
         assert (await session.execute(select(func.count()).select_from(A2aPushConfig))).scalar_one() == 0
-        org = (await session.execute(select(Organization).where(Organization.slug == "northwind"))).scalar_one()
+        org = (
+            await session.execute(select(Organization).where(Organization.slug == "northwind"))
+        ).scalar_one()
         session.add(OrgEgressRule(org_id=org.id, host="hooks.partner.example", status="allowed"))
     assert "result" in await _set(client, token, task["id"])
 

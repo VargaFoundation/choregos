@@ -154,7 +154,9 @@ async def test_a_session_calls_the_organisations_own_gateway(
     from sqlalchemy import select
 
     async with session_scope(orgs="*") as session:
-        org = (await session.execute(select(Organization).where(Organization.slug == "northwind"))).scalar_one()
+        org = (
+            await session.execute(select(Organization).where(Organization.slug == "northwind"))
+        ).scalar_one()
         session.add(
             OrgConnector(
                 org_id=org.id, name="acme-llm", kind="gateway", type="openai-compatible",

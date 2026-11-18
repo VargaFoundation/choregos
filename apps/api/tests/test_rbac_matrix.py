@@ -43,7 +43,12 @@ def _routes(project_id: str, workflow_yaml: str, policy_yaml: str) -> list[tuple
         ("item:control", "POST", f"/api/v1/projects/{project_id}/work-items", {"title": "T", "start": False}),
         ("train:operate", "POST", f"/api/v1/projects/{project_id}/trains/prod/freeze", {"reason": "test"}),
         ("memory:write", "POST", f"/api/v1/projects/{project_id}/memory/reimport", {}),
-        ("member:manage", "POST", "/api/v1/orgs/northwind/members", {"email": "x@northwind.dev", "role": "viewer"}),
+        (
+            "member:manage",
+            "POST",
+            "/api/v1/orgs/northwind/members",
+            {"email": "x@northwind.dev", "role": "viewer"},
+        ),
         ("member:read", "GET", "/api/v1/orgs/northwind/members", None),
         ("audit:read", "GET", "/api/v1/audit", None),
         ("platform:admin", "PUT", "/api/v1/platform/backends", {"name": "claude-code", "enabled": True}),
@@ -107,7 +112,9 @@ async def _member(email: str, role: Role) -> None:
     from sqlalchemy import select
 
     async with session_scope() as session:
-        org = (await session.execute(select(Organization).where(Organization.slug == "northwind"))).scalar_one()
+        org = (
+            await session.execute(select(Organization).where(Organization.slug == "northwind"))
+        ).scalar_one()
         user = (await session.execute(select(User).where(User.email == email))).scalar_one_or_none()
         if user is None:
             user = User(email=email, display_name=email.split("@", maxsplit=1)[0])

@@ -52,7 +52,9 @@ async def _setup() -> dict[str, Any]:
         reader = (await session.execute(select(User).where(User.email == READER))).scalar_one()
         reader.groups = [AUDIENCE]
         ids["reader"] = reader.id
-        org = (await session.execute(select(Organization).where(Organization.slug == "northwind"))).scalar_one()
+        org = (
+            await session.execute(select(Organization).where(Organization.slug == "northwind"))
+        ).scalar_one()
         ids["org"] = org.id
         installation = AssistantInstallation(
             org_id=org.id, slug="analyst", plugin="p", plugin_version="1", manifest_digest="sha256:0",

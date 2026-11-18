@@ -44,7 +44,9 @@ async def _governed_project(setup: Fixture) -> str:
     from sqlalchemy import select
 
     async with session_scope() as session:
-        org = (await session.execute(select(Organization).where(Organization.slug == "northwind"))).scalar_one()
+        org = (
+            await session.execute(select(Organization).where(Organization.slug == "northwind"))
+        ).scalar_one()
         project = Project(
             org_id=org.id,
             slug="dev",

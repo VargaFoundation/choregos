@@ -38,7 +38,10 @@ def _seed_old_facts(url: str) -> None:
     engine = create_engine(url)
     with engine.begin() as db:
         db.execute(
-            text("INSERT INTO organizations (id, slug, name, settings) VALUES ('o1', 'northwind', 'Northwind', '{}')")
+            text(
+                "INSERT INTO organizations (id, slug, name, settings) "
+                "VALUES ('o1', 'northwind', 'Northwind', '{}')"
+            )
         )
         db.execute(
             text(

@@ -47,9 +47,7 @@ ALLOWED = {
 
 
 def _tracked() -> list[str]:
-    out = subprocess.run(  # noqa: S603, S607 - a fixed command
-        ["git", "ls-files", "-z"], cwd=ROOT, check=True, capture_output=True
-    ).stdout
+    out = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT, check=True, capture_output=True).stdout
     return [name for name in out.decode().split("\0") if name]
 
 
@@ -67,16 +65,19 @@ def test_varga_is_named_only_where_the_allowlist_says() -> None:
         if not name.startswith(HISTORY) and name not in ALLOWED and _holds_varga(name)
     ]
     assert offenders == [], (
-        "the product does not name the Varga Foundation (ADR 0186): " + ", ".join(offenders)
+        "the product does not name the Varga Foundation (ADR 0186): "
+        + ", ".join(offenders)
         + "; name GRAAL.SYSTEMS SAS, or add the file to ALLOWED with its reason"
     )
 
 
 def test_every_exception_is_still_needed() -> None:
     tracked = set(_tracked())
-    stale = [name for name in ALLOWED if name != "tests/licences/test_no_varga.py" and (
-        name not in tracked or not _holds_varga(name)
-    )]
+    stale = [
+        name
+        for name in ALLOWED
+        if name != "tests/licences/test_no_varga.py" and (name not in tracked or not _holds_varga(name))
+    ]
     assert stale == [], "no longer names Varga, remove from ALLOWED: " + ", ".join(stale)
 
 

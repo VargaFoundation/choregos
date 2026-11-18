@@ -30,13 +30,19 @@ async def test_a_group_lists_who_carries_it_and_who_may_answer_here(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
     await _member("northwind", "lea@northwind.dev", ["product-owners"], "developer", project["id"])
-    await _member("northwind", "max@northwind.dev", ["choregos:northwind:product-owners"], "viewer", project["id"])
-    await _member("northwind", "sam@northwind.dev", ["choregos:other:product-owners"], "developer", project["id"])
+    await _member(
+        "northwind", "max@northwind.dev", ["choregos:northwind:product-owners"], "viewer", project["id"]
+    )
+    await _member(
+        "northwind", "sam@northwind.dev", ["choregos:other:product-owners"], "developer", project["id"]
+    )
     await _member("northwind", "noa@northwind.dev", ["architects"], "developer", project["id"])
     answer = await client.get(f"/api/v1/projects/{project['id']}/groups/product-owners/members")
     assert answer.status_code == 200, answer.text
     members = {m["email"]: m["can_decide"] for m in answer.json()["members"]}
-    assert members == {"lea@northwind.dev": True, "max@northwind.dev": False}, "a viewer carries it but cannot answer"
+    assert members == {"lea@northwind.dev": True, "max@northwind.dev": False}, (
+        "a viewer carries it but cannot answer"
+    )
     empty = (await client.get(f"/api/v1/projects/{project['id']}/groups/release-captains/members")).json()
     assert empty == {"group": "release-captains", "members": []}
 

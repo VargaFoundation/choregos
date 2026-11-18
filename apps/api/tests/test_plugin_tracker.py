@@ -217,7 +217,7 @@ async def test_an_unknown_plugin_or_server_is_404(
     for url in (
         "/api/v1/webhooks/plugins/northwind/nope/desk",
         "/api/v1/webhooks/plugins/northwind/desk/nope",
-        "/api/v1/webhooks/plugins/other/desk/desk",  # another organisation's URL never reaches northwind's server
+        "/api/v1/webhooks/plugins/other/desk/desk",  # another organisation's URL never reaches this server
     ):
         assert (await client.post(url, content=b"{}")).status_code == 404, url
 

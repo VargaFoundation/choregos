@@ -297,7 +297,11 @@ def test_an_index_says_which_agents_a_release_ships(offline: Path) -> None:
 
 def test_the_old_default_source_name_reaches_the_source_that_replaced_it() -> None:
     """ADR 0186: a deployment whose values still say `varga` keeps working against `tranibor`."""
-    tranibor = {"name": "tranibor", "index": "oci://registry.example.org/agents/index:latest", "trust": {"key": "k"}}
+    tranibor = {
+        "name": "tranibor",
+        "index": "oci://registry.example.org/agents/index:latest",
+        "trust": {"key": "k"},
+    }
     config = parse_config(
         {"sources": [tranibor], "defaultPlugins": [{"source": "varga", "name": "netops", "version": "*"}]}
     )

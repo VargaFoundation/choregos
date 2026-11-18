@@ -317,7 +317,9 @@ async def test_a_member_of_the_internal_group_answers_a_step_addressed_to_it_wit
     assert refused.status_code == 403 and GROUP in refused.text, refused.text
 
     assert (await _create(client)).status_code == 201
-    assert (await client.post(f"{BASE}/{GROUP}/members", json={"email": "cap@northwind.dev"})).status_code == 201
+    assert (
+        await client.post(f"{BASE}/{GROUP}/members", json={"email": "cap@northwind.dev"})
+    ).status_code == 201
     answered = await _decide(app, "cap@northwind.dev", item_id)
     assert answered.status_code == 202, answered.text
     assert await _audited("workitem.decision.group_override") == [], (
@@ -330,7 +332,9 @@ async def test_the_principal_carries_the_table_groups_namespaced_and_only_while_
 ) -> None:
     await _member(client, "cap@northwind.dev", "developer", ["from-the-idp"])
     assert (await _create(client)).status_code == 201
-    assert (await client.post(f"{BASE}/{GROUP}/members", json={"email": "cap@northwind.dev"})).status_code == 201
+    assert (
+        await client.post(f"{BASE}/{GROUP}/members", json={"email": "cap@northwind.dev"})
+    ).status_code == 201
 
     from choregos_api.db.models import User
     from choregos_api.db.session import session_scope
@@ -366,7 +370,9 @@ async def test_an_internal_group_with_a_member_is_known_and_its_members_are_list
     assert [w["code"] for w in empty] == ["actor.group_unknown"], "an empty group is carried by nobody"
 
     await _member(client, "cap@northwind.dev", "developer", [])
-    assert (await client.post(f"{BASE}/{GROUP}/members", json={"email": "cap@northwind.dev"})).status_code == 201
+    assert (
+        await client.post(f"{BASE}/{GROUP}/members", json={"email": "cap@northwind.dev"})
+    ).status_code == 201
     assert (await client.post(path, json={"yaml": WORKFLOW})).json()["warnings"] == []
 
     org_id = await _org_id()

@@ -46,7 +46,9 @@ def test_split_namespace_refuses_the_new_forms(namespace: str) -> None:
         split_namespace(namespace)
 
 
-@pytest.mark.parametrize("namespace", ["", "org:northwind", "org:#memory:x", "billing#memory:", "billing#agent:"])
+@pytest.mark.parametrize(
+    "namespace", ["", "org:northwind", "org:#memory:x", "billing#memory:", "billing#agent:"]
+)
 def test_malformed_namespaces_raise(namespace: str) -> None:
     with pytest.raises(ValueError):
         parse_namespace(namespace)
@@ -63,5 +65,7 @@ def test_the_memory_key_is_the_first_slug_else_the_slug() -> None:
     assert memory_key(_Org("northwind", {})) == "northwind"
     assert memory_key(_Org("globex", {MEMORY_KEY_SETTING: "northwind"})) == "northwind"
     assert memory_key(_Org("globex", {MEMORY_KEY_SETTING: ""})) == "globex"
-    namespace = global_store_namespace(memory_key(_Org("globex", {MEMORY_KEY_SETTING: "northwind"})), "lessons")
+    namespace = global_store_namespace(
+        memory_key(_Org("globex", {MEMORY_KEY_SETTING: "northwind"})), "lessons"
+    )
     assert parse_namespace(namespace).org == "northwind"

@@ -184,7 +184,9 @@ async def test_a_base_bigger_than_a_prompt_is_distilled_in_passes(
     assert outcome["parts_total"] == len(distiller.parts) > 1 and outcome["phase"] == "publish"
     assert distiller.merges >= 1
     assert sorted({name for part in distiller.parts for name in part}) == sorted(FOUR)
-    files = (await client.get("/api/v1/orgs/northwind/skills/architecture-principles/versions/1")).json()["files"]
+    files = (await client.get("/api/v1/orgs/northwind/skills/architecture-principles/versions/1")).json()[
+        "files"
+    ]
     for name in FOUR:
         assert f"`{name}`" in files["references/sources.md"]
 

@@ -102,7 +102,9 @@ async def test_a_principle_citing_nothing_of_the_base_is_dropped_and_said(
         "“Quantum”: cites no document of the base",
         "“Unsourced”: cites no document of the base",
     ]
-    files = (await client.get("/api/v1/orgs/northwind/skills/architecture-principles/versions/1")).json()["files"]
+    files = (await client.get("/api/v1/orgs/northwind/skills/architecture-principles/versions/1")).json()[
+        "files"
+    ]
     assert "quantum" not in files["SKILL.md"].lower()
 
 
@@ -116,7 +118,9 @@ async def test_only_an_org_admin_distils(client: AsyncClient, admin: str) -> Non
     from .conftest import login
 
     await client.post(BASE, json={"slug": "architecture", "name": "Architecture framework"})
-    await client.post("/api/v1/orgs/northwind/members", json={"email": "dev@northwind.dev", "role": "developer"})
+    await client.post(
+        "/api/v1/orgs/northwind/members", json={"email": "dev@northwind.dev", "role": "developer"}
+    )
     await login(client, "dev@northwind.dev")
     assert (await client.post(f"{BASE}/architecture/distill")).status_code == 403
 

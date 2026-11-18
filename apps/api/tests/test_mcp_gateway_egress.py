@@ -66,7 +66,9 @@ async def _organisation() -> Any:
     from choregos_api.db.session import session_scope
 
     async with session_scope() as session:
-        found = (await session.execute(select(Organization).where(Organization.slug == "northwind"))).scalar_one()
+        found = (
+            await session.execute(select(Organization).where(Organization.slug == "northwind"))
+        ).scalar_one()
         session.expunge(found)
         return found
 

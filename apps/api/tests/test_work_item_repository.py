@@ -11,7 +11,11 @@ from typing import Any
 
 from httpx import AsyncClient
 
-DIAMCTL = {"name": "diamctl", "url": "https://github.com/northwind/diamctl.git", "test_command": "go test ./..."}
+DIAMCTL = {
+    "name": "diamctl",
+    "url": "https://github.com/northwind/diamctl.git",
+    "test_command": "go test ./...",
+}
 STRICT = """apiVersion: choregos/v1
 kind: Workflow
 metadata:

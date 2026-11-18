@@ -141,7 +141,9 @@ async def assistants(items: dict[str, str], project: dict[str, Any]) -> dict[str
 def _url(scope: str, project: dict[str, Any], *, csv: bool = False) -> str:
     suffix = "costs.csv" if csv else "costs"
     return (
-        f"/api/v1/projects/{project['id']}/{suffix}" if scope == "project" else f"/api/v1/orgs/northwind/{suffix}"
+        f"/api/v1/projects/{project['id']}/{suffix}"
+        if scope == "project"
+        else f"/api/v1/orgs/northwind/{suffix}"
     )
 
 

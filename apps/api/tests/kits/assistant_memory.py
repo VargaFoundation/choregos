@@ -149,7 +149,9 @@ async def _stored(space: str) -> list[Any]:
         return found
 
 
-async def _profile(installation_id: str, document: dict[str, Any], email: str = "admin@northwind.dev") -> None:
+async def _profile(
+    installation_id: str, document: dict[str, Any], email: str = "admin@northwind.dev"
+) -> None:
     """An active version of the person's `investor_profile`, as the memory page writes one."""
     from choregos_api.db.models import AssistantInstallation, MemoryProfile, User
     from choregos_api.db.session import session_scope

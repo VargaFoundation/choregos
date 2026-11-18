@@ -108,7 +108,9 @@ async def test_a_step_addressed_to_a_person_is_answered_by_that_person_only(
 async def test_the_person_is_matched_without_regard_to_case(
     client: AsyncClient, project: dict[str, Any], app: Any
 ) -> None:
-    item_id, _ = await _waiting_ticket(client, project["id"], PERSON_ONLY.replace(PERSON, "Lea@Northwind.DEV"))
+    item_id, _ = await _waiting_ticket(
+        client, project["id"], PERSON_ONLY.replace(PERSON, "Lea@Northwind.DEV")
+    )
     await _member(client, PERSON, "developer", [])
     answered = await _decide(app, PERSON, item_id)
     assert answered.status_code == 202, answered.text

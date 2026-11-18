@@ -65,7 +65,9 @@ def _curls(name: str) -> list[tuple[str, str, Any]]:
             body = words[words.index("-d") + 1] if "-d" in words else None
             method = words[words.index("-X") + 1] if "-X" in words else ("POST" if body else "GET")
             path = (
-                url.removeprefix("$CHOREGOS_API_URL").replace("/acme/", "/northwind/").replace("acme:", "northwind:")
+                url.removeprefix("$CHOREGOS_API_URL")
+                .replace("/acme/", "/northwind/")
+                .replace("acme:", "northwind:")
             )
             found.append((method, path, json.loads(body) if body else None))
     assert found, f"{name} shows no request any more"
@@ -133,7 +135,8 @@ async def test_the_skill_refusals_the_page_lists_are_the_api_s(client: AsyncClie
         assert answer.status_code == 422 and message in answer.text, answer.text
         assert message.strip("`").split("`")[0] in table
     reserved = await client.post(
-        "/api/v1/orgs/northwind/skills", json={"files": {"SKILL.md": "---\nname: library\ndescription: d\n---\n"}}
+        "/api/v1/orgs/northwind/skills",
+        json={"files": {"SKILL.md": "---\nname: library\ndescription: d\n---\n"}},
     )
     assert reserved.status_code == 422 and "skill.slug_reserved" in reserved.text, reserved.text
     assert "skill.slug_reserved" in table
@@ -322,7 +325,9 @@ async def test_the_rest_page_s_requests_work_with_a_full_access_token(
     assert read.status_code == 200 and read.json()["id"] == created.json()["id"]
     for field in ("state", "state_display", "pending_request", "pr_url", "failure", "totals"):
         assert field in read.json(), field
-    listed = (await client.get("/api/v1/projects/northwind:billing-api/work-items?limit=20", headers=auth)).json()
+    listed = (
+        await client.get("/api/v1/projects/northwind:billing-api/work-items?limit=20", headers=auth)
+    ).json()
     assert set(listed) == {"items", "meta"} and {"next_cursor", "has_more"} <= set(listed["meta"])
     refused = await client.post(path, json={"workflow": "ship-a-change"}, headers=auth)
     assert refused.status_code == 422 and refused.json()["title"] == "Invalid request", refused.text

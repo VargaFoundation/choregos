@@ -396,7 +396,9 @@ async def test_a_target_of_another_owner_gets_that_owner_s_installation(
         project = await session.get(Project, setup.project_id)
         assert project is not None
         session.add(
-            Connector(project_id=project.id, kind="scm", type="github", config={"repo": "northwind/billing-api"})
+            Connector(
+                project_id=project.id, kind="scm", type="github", config={"repo": "northwind/billing-api"}
+            )
         )
         for kind in KINDS:
             session.add(Connector(project_id=project.id, kind=kind, type="probe", config={}))

@@ -163,7 +163,10 @@ async def test_a_person_of_the_audience_converses_through_the_door(
     assert listed["assistants"][0]["connector_path"] == CONNECTOR
 
     first = await _call(
-        client, installed, "ask_assistant", {"assistant": "northwind:investment-assistant", "message": "Why up?"}
+        client,
+        installed,
+        "ask_assistant",
+        {"assistant": "northwind:investment-assistant", "message": "Why up?"},
     )
     assert first["status"] == "completed" and first["text"] == "The index rose 1.2 % today."
     assert first["citations"] == [] and first["pending_actions"] == [] and first["missing_accounts"] == []
@@ -199,7 +202,10 @@ async def test_a_turn_longer_than_the_wait_answers_working_then_the_answer(
     _slow(upstream, 0.6)
     _wait(monkeypatch, 0.05)
     started = await _call(
-        client, installed, "ask_assistant", {"assistant": "northwind:investment-assistant", "message": "Slow?"}
+        client,
+        installed,
+        "ask_assistant",
+        {"assistant": "northwind:investment-assistant", "message": "Slow?"},
     )
     assert started["status"] == "working" and started["text"] == ""
     description = next(
@@ -425,7 +431,9 @@ async def test_a_token_principal_has_its_groups_re_read_at_every_request(
 
     async def groups(*names: str) -> None:
         async with session_scope() as session:
-            user = (await session.execute(select(User).where(User.email == "ines@northwind.dev"))).scalar_one()
+            user = (
+                await session.execute(select(User).where(User.email == "ines@northwind.dev"))
+            ).scalar_one()
             user.groups = list(names)
 
     created = await client.post("/api/v1/me/tokens", json={"name": "rest", "scopes": ["*"]})

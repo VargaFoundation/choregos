@@ -84,7 +84,9 @@ async def test_the_union_reads_only_the_organisations_own_rules(setup: Fixture) 
 
 
 def test_the_proxy_and_the_network_policy_render_the_union() -> None:
-    config = ProjectConfig(slug="billing", org="northwind", repo=RepoConfig(url="https://github.com/northwind/b.git"))
+    config = ProjectConfig(
+        slug="billing", org="northwind", repo=RepoConfig(url="https://github.com/northwind/b.git")
+    )
     policy = load_preset("team")
     plain = render_project_manifests("billing", config, policy)
     joined = render_project_manifests("billing", config, policy, org_allow_domains=["a2a.example.test"])

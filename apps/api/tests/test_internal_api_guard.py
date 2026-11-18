@@ -75,7 +75,9 @@ async def _session_pod(project: dict[str, Any]) -> tuple[str, dict[str, str]]:
     from sqlalchemy import select
 
     async with session_scope() as db:
-        org_id = (await db.execute(select(Organization.id).where(Organization.slug == "northwind"))).scalar_one()
+        org_id = (
+            await db.execute(select(Organization.id).where(Organization.slug == "northwind"))
+        ).scalar_one()
         record = AgentSessionRecord(
             org_id=org_id,
             project_id=project["id"],

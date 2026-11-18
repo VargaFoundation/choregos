@@ -43,7 +43,9 @@ async def _window(model: str, tokens: int | None) -> None:
     from choregos_api.db.session import session_scope
 
     async with session_scope() as session:
-        org = (await session.execute(select(Organization).where(Organization.slug == "northwind"))).scalar_one()
+        org = (
+            await session.execute(select(Organization).where(Organization.slug == "northwind"))
+        ).scalar_one()
         session.add(
             ModelCatalogueRow(org_id=org.id, model_name=model, gateway_facts={"max_input_tokens": tokens})
         )

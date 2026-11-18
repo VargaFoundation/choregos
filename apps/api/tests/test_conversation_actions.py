@@ -57,7 +57,9 @@ async def _installation(*, approval: str = "inline") -> dict[str, str]:
     from choregos_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
-        org = (await session.execute(select(Organization).where(Organization.slug == "northwind"))).scalar_one()
+        org = (
+            await session.execute(select(Organization).where(Organization.slug == "northwind"))
+        ).scalar_one()
         connector = (
             await session.execute(select(OrgConnector).where(OrgConnector.name == "fournisseur"))
         ).scalar_one()

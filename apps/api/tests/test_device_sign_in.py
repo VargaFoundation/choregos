@@ -370,10 +370,13 @@ async def _other_organisation_member(email: str, *, subject: str | None) -> None
 async def test_a_session_of_another_organisations_provider_is_refused(
     org: str, anyone: AsyncClient, browsers: Any
 ) -> None:
-    """The request names `other`. Alice, a member of `northwind` only, cannot approve it. Bob, a member of `other`
-    whose account is bound to another tenant's provider, cannot either. Carol, bound to `other`'s, can."""
+    """The request names `other`. Alice, a member of `northwind` only, cannot approve it. Bob, a member of
+    `other` whose account is bound to another tenant's provider, cannot either. Carol, bound to `other`'s,
+    can."""
     async with session_scope(orgs="*") as session:
-        northwind = (await session.execute(select(Organization).where(Organization.slug == "northwind"))).scalar_one()
+        northwind = (
+            await session.execute(select(Organization).where(Organization.slug == "northwind"))
+        ).scalar_one()
         northwind_id = northwind.id
     alice = await browsers(ALICE)
     bob = await browsers(BOB)

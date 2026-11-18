@@ -342,7 +342,9 @@ async def test_every_call_is_audited(client: AsyncClient, admin: str, docs_dir: 
             .all()
         )
         user = (await session.execute(select(User).where(User.email == ADMIN))).scalar_one()
-        org = (await session.execute(select(Organization).where(Organization.slug == "northwind"))).scalar_one()
+        org = (
+            await session.execute(select(Organization).where(Organization.slug == "northwind"))
+        ).scalar_one()
     calls = [
         (r.target_type, r.target_id, r.payload["issue"], r.payload["write"], r.actor_id, r.org_id)
         for r in rows

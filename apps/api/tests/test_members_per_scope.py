@@ -57,4 +57,6 @@ async def test_org_admin_is_not_a_project_role(client: AsyncClient, project: dic
         MEMBERS, json={"email": "x@northwind.dev", "role": "org_admin", "project_slug": "billing-api"}
     )
     assert refuse.status_code == 422, refuse.text
-    assert (await client.post(MEMBERS, json={"email": "x@northwind.dev", "role": "org_admin"})).status_code == 201
+    assert (
+        await client.post(MEMBERS, json={"email": "x@northwind.dev", "role": "org_admin"})
+    ).status_code == 201

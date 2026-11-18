@@ -31,7 +31,9 @@ def _zip(files: dict[str, str]) -> bytes:
 
 async def _import(client: AsyncClient, files: dict[str, str]) -> Any:
     return await client.post(
-        "/api/v1/orgs/northwind/skills/import", content=_zip(files), headers={"Content-Type": "application/zip"}
+        "/api/v1/orgs/northwind/skills/import",
+        content=_zip(files),
+        headers={"Content-Type": "application/zip"},
     )
 
 

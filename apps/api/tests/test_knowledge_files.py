@@ -52,7 +52,9 @@ async def _pinned(
     from sqlalchemy import select
 
     async with session_scope() as session:
-        org = (await session.execute(select(Organization).where(Organization.slug == "northwind"))).scalar_one()
+        org = (
+            await session.execute(select(Organization).where(Organization.slug == "northwind"))
+        ).scalar_one()
         project_id = (
             await session.execute(
                 select(Project.id).where(Project.org_id == org.id, Project.slug == project["slug"])

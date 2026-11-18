@@ -101,7 +101,9 @@ async def test_a_restart_with_the_old_bootstrap_slug_does_not_create_a_second_or
     from choregos_api.config import Settings
 
     await _rename(client)
-    done = await bootstrap_installation(Settings(bootstrap_org="northwind", bootstrap_admins="x@northwind.dev"))
+    done = await bootstrap_installation(
+        Settings(bootstrap_org="northwind", bootstrap_admins="x@northwind.dev")
+    )
     assert done == {"organisations": [], "administrateurs": []}
     assert [o["slug"] for o in (await client.get(ORG)).json()] == ["fondation"]
 

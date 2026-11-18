@@ -45,7 +45,9 @@ async def _run_token(client: AsyncClient, project: dict[str, Any]) -> str:
     )
     assert agent.status_code == 201, agent.text
     async with session_scope() as session:
-        item = WorkItem(project_id=project["id"], tracker_key="northwind/net#9", title="open 9443", state="ready")
+        item = WorkItem(
+            project_id=project["id"], tracker_key="northwind/net#9", title="open 9443", state="ready"
+        )
         session.add(item)
         await session.flush()
         session.add(

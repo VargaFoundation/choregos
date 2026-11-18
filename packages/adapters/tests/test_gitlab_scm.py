@@ -184,7 +184,9 @@ async def test_request_review_resolves_usernames_to_ids() -> None:
         return_value=httpx.Response(200, json=[])
     )
     put = respx.put(f"{BASE}/merge_requests/7").mock(return_value=httpx.Response(200, json={}))
-    await adapter().request_review(PrRef(repo="northwind/billing-api", number=7), ["ann", "ghost", "org/team"])
+    await adapter().request_review(
+        PrRef(repo="northwind/billing-api", number=7), ["ann", "ghost", "org/team"]
+    )
     assert body_of(put) == {"reviewer_ids": [11]}
 
 

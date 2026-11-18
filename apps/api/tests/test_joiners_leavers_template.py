@@ -22,7 +22,12 @@ async def _project(
 ) -> dict[str, Any]:
     created = await client.post(
         f"{ORG}/projects",
-        json={"slug": slug, "name": slug, "template_ref": template, "config": {"slug": slug, "org": "northwind"}},
+        json={
+            "slug": slug,
+            "name": slug,
+            "template_ref": template,
+            "config": {"slug": slug, "org": "northwind"},
+        },
     )
     assert created.status_code == 201, created.text
     return dict(created.json())

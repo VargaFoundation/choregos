@@ -160,7 +160,11 @@ async def test_a_project_born_of_the_template_gets_its_bases_served_owned_and_sy
             "source_id": source["id"],
             "interval_seconds": 1800,
         },
-        f"knowledge-sync-{guide['id']}": {"org": "northwind", "source_id": guide["id"], "interval_seconds": 3600},
+        f"knowledge-sync-{guide['id']}": {
+            "org": "northwind",
+            "source_id": guide["id"],
+            "interval_seconds": 3600,
+        },
     }
     assert len(await _audit(client, "knowledge.create")) == 2
     assert {a["payload"]["via"] for a in await _audit(client, "knowledge.source.create")} == {

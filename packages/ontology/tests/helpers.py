@@ -29,7 +29,11 @@ async def create_project(http: AsyncClient, slug: str) -> dict[str, Any]:
         json={
             "slug": slug,
             "name": slug,
-            "config": {"slug": slug, "org": "northwind", "repo": {"url": f"https://github.com/northwind/{slug}.git"}},
+            "config": {
+                "slug": slug,
+                "org": "northwind",
+                "repo": {"url": f"https://github.com/northwind/{slug}.git"},
+            },
         },
     )
     assert response.status_code == 201, response.text

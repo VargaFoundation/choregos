@@ -181,7 +181,9 @@ async def test_an_event_that_names_nobody_or_several_or_nobody_subscribed_is_ref
     # Two addresses in one string are not an address.
     assert (await _post(anonymous, _event("ann@northwind.dev, bob@northwind.dev", "f"))).status_code == 422
     # Several people: `delegated_event` reads `/who/*`, and this event names two of them.
-    several = await _post(anonymous, {"who": ["ann@northwind.dev", "bob@northwind.dev"]}, task="delegated_event")
+    several = await _post(
+        anonymous, {"who": ["ann@northwind.dev", "bob@northwind.dev"]}, task="delegated_event"
+    )
     assert several.status_code == 422 and "several people" in several.text
     assert (await _post(anonymous, None, raw=b"not json")).status_code == 422
     assert await _runs() == [], "a refused event starts nothing"

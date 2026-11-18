@@ -478,7 +478,9 @@ async def test_a_labelled_duplicate_boarding_triggers_the_express_lane(
     with temporal_env.auto_time_skipping_disabled():
         async with worker_factory():
             train = await start_prod_train(temporal_env, setup)
-            await train.signal("merged", {"work_item_key": "northwind/billing-api#13", "sha": "d1", "labels": []})
+            await train.signal(
+                "merged", {"work_item_key": "northwind/billing-api#13", "sha": "d1", "labels": []}
+            )
             await wait_until_state(train, "status_query", lambda s: s["batch_size"] == 1)
             # The configuration is loaded (the first window check, which follows it, set `next_departure`):
             # the duplicate goes through the signal. A fixed one-second sleep raced it on a busy runner.

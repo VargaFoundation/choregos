@@ -279,7 +279,9 @@ from choregos_api.security import mint_run_token
 
 async def main():
     async with session_scope(orgs="*") as session:
-        item = WorkItem(project_id="{project}", tracker_key="northwind/billing-api#7", title="T", state="ready")
+        item = WorkItem(
+            project_id="{project}", tracker_key="northwind/billing-api#7", title="T", state="ready"
+        )
         session.add(item)
         await session.flush()
         session.add(Run(id="{run}", work_item_id=item.id, project_id="{project}", stage_role="plan",

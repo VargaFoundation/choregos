@@ -216,7 +216,9 @@ def test_knowledge_group_scope_and_grants_read_namespaced_groups_for_their_org()
     grant = SimpleNamespace(subject_type="group", subject="architects", role="viewer")
 
     def person(group: str) -> Principal:
-        return Principal(user_id="u", email="u@x.dev", org_roles={"northwind": Role.DEVELOPER}, groups=[group])
+        return Principal(
+            user_id="u", email="u@x.dev", org_roles={"northwind": Role.DEVELOPER}, groups=[group]
+        )
 
     assert access._reaches(person("choregos:northwind:architects"), "northwind", base)
     assert not access._reaches(person("choregos:other:architects"), "northwind", base)

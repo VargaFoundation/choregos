@@ -23,7 +23,9 @@ SLUG = "manifests-test"
 
 
 def manifests(preset: str = "team") -> dict[str, str]:
-    config = ProjectConfig(slug=SLUG, org="northwind", repo=RepoConfig(url="https://github.com/northwind/demo.git"))
+    config = ProjectConfig(
+        slug=SLUG, org="northwind", repo=RepoConfig(url="https://github.com/northwind/demo.git")
+    )
     return render_project_manifests(SLUG, config, load_preset(preset))
 
 

@@ -468,7 +468,9 @@ async def test_the_agent_reads_who_filed_the_work_item_before_its_body(setup: Fi
     await install_agent(setup, instructions="{{ ticket.body }}\n--\n{{ ticket.reporter }}")
     prepare = await prepare_stage(agent_stage_plan(setup, agent="coordinateur"))
     prompt = prepare["stage_input"]["playbook"]["prompt"]
-    assert "Filed by: Jean Martin <jmartin@northwind.dev>\n\nLevel: maintainer\n--\nJean Martin" in prompt, prompt
+    assert "Filed by: Jean Martin <jmartin@northwind.dev>\n\nLevel: maintainer\n--\nJean Martin" in prompt, (
+        prompt
+    )
 
 
 async def test_a_work_item_without_a_reporter_reads_its_body_unchanged(setup: Fixture) -> None:

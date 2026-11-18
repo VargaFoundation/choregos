@@ -45,7 +45,9 @@ async def test_a_legacy_installation_id_is_dropped_on_save(
     client: AsyncClient, project: dict[str, Any], github: Any
 ) -> None:
     github.add_installation(1, "northwind")
-    saved = await _put(client, project, "scm", "github", {"repo": "northwind/billing", "installation_id": 999})
+    saved = await _put(
+        client, project, "scm", "github", {"repo": "northwind/billing", "installation_id": 999}
+    )
     assert saved.status_code == 200, saved.text
     assert "installation_id" not in saved.json()["config"]
     listed = (await client.get(f"/api/v1/projects/{project['id']}/connectors")).json()

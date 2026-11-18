@@ -51,7 +51,9 @@ async def _org_id() -> str:
 
     async with session_scope() as session:
         return str(
-            (await session.execute(select(Organization.id).where(Organization.slug == "northwind"))).scalar_one()
+            (
+                await session.execute(select(Organization.id).where(Organization.slug == "northwind"))
+            ).scalar_one()
         )
 
 
@@ -350,7 +352,9 @@ async def test_the_stream_sends_an_upsert_then_an_ended_for_a_run(
     vault = await _project(client, "vault")
     await _run(vault["id"], "r-hidden")
     await _run(project["id"], "r-live", status="queued")
-    viewer = Principal(user_id="u-v", email="v@northwind.dev", project_roles={"northwind/billing-api": Role.VIEWER})
+    viewer = Principal(
+        user_id="u-v", email="v@northwind.dev", project_roles={"northwind/billing-api": Role.VIEWER}
+    )
 
     def event(type_: EventType, run_id: str, **data: Any) -> ChoregosEvent:
         return ChoregosEvent.emit(type_, source="/t", subject=run_id, run_id=run_id, **data)
@@ -396,7 +400,9 @@ async def test_the_stream_says_a_run_ended_from_its_event_before_the_row_is_read
     finished = ChoregosEvent.emit(EventType.RUN_FINISHED, source="/t", run_id="r-racing", status="failed")
     org_id = await _org_id()
     async with session_scope() as session:
-        reader = ActivityReader(principal=admin, org_id=org_id, org_slug="northwind", filters=ActivityFilters())
+        reader = ActivityReader(
+            principal=admin, org_id=org_id, org_slug="northwind", filters=ActivityFilters()
+        )
         found = await entry_of_event(session, reader, finished)
         assert found is not None
         assert (found[0], found[1].status) == ("activity.ended", "failed")

@@ -159,7 +159,8 @@ async def test_a_token_of_someone_outside_the_organisation_cannot_be_attached(
 
 async def test_an_internal_agent_carries_no_client(client: AsyncClient, admin: str) -> None:
     internal = await client.post(
-        "/api/v1/orgs/northwind/agents", json={"slug": "internal", "display_name": "Internal", "kind": "internal"}
+        "/api/v1/orgs/northwind/agents",
+        json={"slug": "internal", "display_name": "Internal", "kind": "internal"},
     )
     assert internal.status_code == 201
     token_id, _ = await _token(client)

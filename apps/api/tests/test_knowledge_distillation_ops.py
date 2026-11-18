@@ -191,7 +191,11 @@ async def test_a_stopped_run_makes_no_further_call_and_publishes_nothing(
 
     base_id = await _base(client, FOUR, monkeypatch)
     await _set_record(
-        {"status": "running", "started_at": "2026-10-26T10:00:00+00:00", "requested_by": "admin@northwind.dev"}
+        {
+            "status": "running",
+            "started_at": "2026-10-26T10:00:00+00:00",
+            "requested_by": "admin@northwind.dev",
+        }
     )
 
     class StopsAfterTheFirstPart(Counting):

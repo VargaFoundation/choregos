@@ -348,9 +348,9 @@ async def test_network_activity_groups_by_host_and_is_refused_without_audit_read
         ).isoformat()
     }
     assert (await client.get("/api/v1/orgs/northwind/network-activity", params=future)).json() == {"rows": []}
-    assert (await client.get("/api/v1/orgs/northwind/network-activity", params={"project": "nope"})).json() == {
-        "rows": []
-    }
+    assert (
+        await client.get("/api/v1/orgs/northwind/network-activity", params={"project": "nope"})
+    ).json() == {"rows": []}
 
     added = await client.post(
         "/api/v1/orgs/northwind/members", json={"email": "dev@northwind.dev", "role": "developer"}

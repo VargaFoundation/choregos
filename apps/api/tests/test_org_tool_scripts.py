@@ -135,7 +135,9 @@ async def test_a_platform_administrator_who_is_not_its_administrator_is_refused(
     try:
         await login(client, "platform@example.dev")
         await _remove_the_memberships("platform@example.dev")
-        refused = await client.patch(f"{ORG}/northwind", json={"name": "Elsewhere", "tool_scripts": "enabled"})
+        refused = await client.patch(
+            f"{ORG}/northwind", json={"name": "Elsewhere", "tool_scripts": "enabled"}
+        )
         assert refused.status_code == 403, refused.text
         assert "org_admin" in refused.json()["detail"]
         renamed = await client.patch(f"{ORG}/northwind", json={"name": "Elsewhere"})

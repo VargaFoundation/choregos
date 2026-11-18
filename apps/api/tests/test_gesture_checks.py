@@ -108,7 +108,11 @@ async def test_one_project_too_many_is_refuseded_before_it_is_created(
     assert "cap: northwind reached its project cap" in refused.text
     assert await _count_projects() == before
     (request,) = extension["seen"]
-    assert (request.gesture, request.org, request.target) == ("project.create", "northwind", {"slug": "second"})
+    assert (request.gesture, request.org, request.target) == (
+        "project.create",
+        "northwind",
+        {"slug": "second"},
+    )
 
     extension["max_projects"] = None
     assert (await client.post("/api/v1/orgs/northwind/projects", json=_project("second"))).status_code == 201

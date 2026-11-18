@@ -105,7 +105,9 @@ async def _run(project: dict[str, Any], slug: str) -> tuple[str, dict[str, str]]
     _n[0] += 1
     run_id = f"run-{slug}-{_n[0]}"
     async with session_scope() as session:
-        item = WorkItem(project_id=project["id"], tracker_key=f"northwind/x#{run_id}", title="T", state="ready")
+        item = WorkItem(
+            project_id=project["id"], tracker_key=f"northwind/x#{run_id}", title="T", state="ready"
+        )
         session.add(item)
         await session.flush()
         session.add(

@@ -163,7 +163,8 @@ async def test_only_the_organisation_administrator_sets_an_organisation_secret(
     members = "/api/v1/orgs/northwind/members"
     assert (
         await client.post(
-            members, json={"email": "po@northwind.dev", "role": "project_owner", "project_slug": "billing-api"}
+            members,
+            json={"email": "po@northwind.dev", "role": "project_owner", "project_slug": "billing-api"},
         )
     ).status_code == 201
     client.cookies.clear()
@@ -621,7 +622,9 @@ async def test_an_organisation_gateway_with_a_typed_key_is_built_with_it(
     real_build = gateway_module.build
     monkeypatch.setattr(gateway_module, "build", lambda k, t, c: built.append(c) or real_build(k, t, c))
     async with session_scope(orgs="*") as session:
-        org = (await session.execute(select(Organization).where(Organization.slug == "northwind"))).scalar_one()
+        org = (
+            await session.execute(select(Organization).where(Organization.slug == "northwind"))
+        ).scalar_one()
         kind, _ = await gateway_module.org_gateway_and_type(session, org.id)
     assert kind == "litellm"
     assert built[0]["master_key"] == VALUE_1
@@ -659,7 +662,9 @@ async def test_a_pooled_field_takes_one_key_per_slot_and_resolves_to_the_list(
     assert cleared.status_code in (200, 204), cleared.text
 
     async with session_scope(orgs="*") as session:
-        org = (await session.execute(select(Organization).where(Organization.slug == "northwind"))).scalar_one()
+        org = (
+            await session.execute(select(Organization).where(Organization.slug == "northwind"))
+        ).scalar_one()
         row = (await session.execute(select(OrgConnector).where(OrgConnector.name == "search"))).scalar_one()
         config = await resolved_configuration(
             session, org.id, row.kind, row.type, row.config, row.secret_refs

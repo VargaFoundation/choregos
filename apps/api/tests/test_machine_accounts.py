@@ -106,7 +106,9 @@ async def test_it_outlives_the_person_who_created_it(client: AsyncClient, projec
     _, token = await _machine(client, project)
     client.cookies.clear()
     async with session_scope(orgs="*") as session:
-        creator = (await session.execute(select(User).where(User.email == "admin@northwind.dev"))).scalar_one()
+        creator = (
+            await session.execute(select(User).where(User.email == "admin@northwind.dev"))
+        ).scalar_one()
         await session.execute(delete(Membership).where(Membership.user_id == creator.id))
     assert (await client.get(CARD, headers=_bearer(token))).status_code == 200
 

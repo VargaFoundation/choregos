@@ -70,7 +70,19 @@ def _linked(connection: Any) -> list[tuple[Any, ...]]:
 
 
 EXPECTED = [
-    ("t1", "o1", "u1", "github", "https://github.com", "1001", "devon", False, None, None, "admin@northwind.dev"),
+    (
+        "t1",
+        "o1",
+        "u1",
+        "github",
+        "https://github.com",
+        "1001",
+        "devon",
+        False,
+        None,
+        None,
+        "admin@northwind.dev",
+    ),
     ("t2", "o2", "u2", "github", "https://github.com", "1001", "other", False, None, None, None),
 ]
 

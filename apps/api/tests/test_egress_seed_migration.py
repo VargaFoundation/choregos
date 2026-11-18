@@ -127,7 +127,11 @@ def test_existing_hosts_are_seeded_and_the_table_goes_away_on_downgrade(
     assert seeded[("northwind", "*.sharepoint.com")] == ([443], ["api", "workers"])
     assert seeded[("northwind", "docs.x.test")] == ([443], ["api", "workers"])
     # the default skill source is github.com/anthropics/skills: GitHub's hosts are open
-    assert {h for (s, h) in seeded if s == "northwind"} >= {"github.com", "api.github.com", "codeload.github.com"}
+    assert {h for (s, h) in seeded if s == "northwind"} >= {
+        "github.com",
+        "api.github.com",
+        "codeload.github.com",
+    }
     # an organisation's own list decides: gitlab and github both appear for `other`
     assert {h for (s, h) in seeded if s == "other"} == {
         "gitlab.com",

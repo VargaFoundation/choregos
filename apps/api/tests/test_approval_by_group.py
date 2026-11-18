@@ -66,7 +66,9 @@ async def _proposed_rule_change(client: AsyncClient, project: dict[str, Any], gr
     )
     assert agent.status_code == 201, agent.text
     async with session_scope() as session:
-        item = WorkItem(project_id=project["id"], tracker_key="northwind/net#2", title="open 9443", state="ready")
+        item = WorkItem(
+            project_id=project["id"], tracker_key="northwind/net#2", title="open 9443", state="ready"
+        )
         session.add(item)
         await session.flush()
         run = Run(id="run-group-1", work_item_id=item.id, project_id=project["id"], stage_role="x",

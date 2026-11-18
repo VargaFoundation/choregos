@@ -323,7 +323,9 @@ async def test_an_agent_of_the_organisation_with_the_same_name_wins(
     assert installed["contents"]["agents"] == []
     assert [by for _, by in await _versions("greeter")] == ["admin@northwind.dev"]
     assert (await client.delete(f"{ORG}/plugins/hello")).status_code == 200
-    assert [by for _, by in await _versions("greeter")] == ["admin@northwind.dev"], "never the plugin's to remove"
+    assert [by for _, by in await _versions("greeter")] == ["admin@northwind.dev"], (
+        "never the plugin's to remove"
+    )
 
 
 async def test_a_missing_plugin_or_version_is_a_404(client: AsyncClient, admin: str, offline: Path) -> None:

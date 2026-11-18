@@ -173,7 +173,7 @@ describe("Catalogue → Plugins", () => {
     await waitFor(() => expect(server).toHaveTextContent("unconfigured"));
     expect(within(server).getByRole("link", { name: "Configure" })).toHaveAttribute("href", "/admin/connectors?connector=servicenow");
 
-    expect(screen.getByTestId("trust-tranibor")).toHaveTextContent("keyless");
+    expect(screen.getByTestId("trust-northwind")).toHaveTextContent("keyless");
     expect(screen.getByTestId("source-partner")).toHaveTextContent("did not answer");
     const hello = screen.getByTestId("entry-northwind-hello");
     expect(hello).toHaveTextContent("needs core >=0.22.0");
