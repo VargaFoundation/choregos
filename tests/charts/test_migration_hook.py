@@ -27,6 +27,7 @@ import yaml
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 CHART = ROOT / "charts" / "choregos"
 ENVIRONMENTS = ("local", "dev", "staging", "prod")
+PROFILE = CHART / "values" / "single-node.yaml"
 
 pytestmark = pytest.mark.skipif(shutil.which("helm") is None, reason="helm absent")
 
@@ -166,3 +167,40 @@ def test_the_migrations_have_a_writable_temporary_directory(env: str) -> None:
         assert "/tmp" in mounts, "the migrations container has no writable /tmp"
         volumes = {v["name"]: v for v in pod.get("volumes", [])}
         assert "emptyDir" in volumes[mounts["/tmp"]]
+
+
+def test_the_embedded_database_admits_the_migration_pod() -> None:
+    """On the single-node profile the embedded PostgreSQL admits its clients by their
+    `app.kubernetes.io/name` (ADR 0184). S75-03 made `choregos.name` the same word in every
+    sub-chart: the migration pod became `choregos`, was refused, and the install's hook timed out
+    (the single-node proof of #1866)."""
+    site = [
+        "--set",
+        "backup.target.s3.url=s3://backups/choregos",
+        "--set",
+        "backup.target.s3.endpoint=http://s3:8333",
+    ]
+    result = subprocess.run(
+        ["helm", "template", "choregos", str(CHART), "-n", "choregos", "-f", str(PROFILE), *site],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=120,
+    )
+    documents = [d for d in yaml.safe_load_all(result.stdout) if d]
+    job = next(d for d in documents if d["kind"] == "Job" and "migrations" in d["metadata"]["name"])
+    label = job["spec"]["template"]["metadata"]["labels"]["app.kubernetes.io/name"]
+    policy = next(
+        d
+        for d in documents
+        if d["kind"] == "NetworkPolicy" and d["metadata"]["name"] == "choregos-postgresql-ingress"
+    )
+    admitted = {
+        value
+        for rule in policy["spec"]["ingress"]
+        for peer in rule["from"]
+        for expression in peer.get("podSelector", {}).get("matchExpressions", [])
+        if expression["key"] == "app.kubernetes.io/name" and expression["operator"] == "In"
+        for value in expression["values"]
+    }
+    assert label in admitted, f"the migration pod is `{label}`, PostgreSQL admits {sorted(admitted)}"
