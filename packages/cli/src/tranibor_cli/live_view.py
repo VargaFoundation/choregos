@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from rich.text import Text
@@ -356,7 +356,7 @@ def _boxes(view: Json, graph: Json | None, initial: str | None) -> tuple[list[Bo
                 ),
                 None,
             )
-            who = KIND_WORD[kind] + (f" · {actor}" if actor and kind != "end" else "")
+            who = str(actor) if actor and kind != "end" else KIND_WORD[kind]
         return Box(
             id=state,
             display=str(lane.get("display") or (node or {}).get("display") or state),
@@ -607,7 +607,7 @@ def _draw(  # noqa: C901, PLR0912, PLR0915
         y0 = a.y - 1 if above else a.y + a.h
         rail = (path_y - 2 - rank) if above else (ticker_free + 1 + rank)
         style = edge_style(edge)
-        h, v = stroke(edge)
+        h, v = h_line, v_line  # an arc is one unbroken line, whatever the edge's kind
         cells: list[tuple[int, int]] = []
         step = -1 if above else 1
         for y in range(y0, rail + step, step):
@@ -823,7 +823,7 @@ def _draw_box(  # noqa: C901
             canvas.text(cursor, y + 2, text, mark_style)
             cursor += len(text) + 1
         if not marks:
-            canvas.text(x + 2, y + 2, _fit(box.who, inner - 2), "dim")
+            canvas.text(x + 2, y + 2, _fit(box.who, inner - 1), "dim")
         picked = next((c for c in box.cards if c == motion.selected), None)
         if picked:
             key = str(cards[picked]["key"])
@@ -831,7 +831,7 @@ def _draw_box(  # noqa: C901
             canvas.text(x + 2, y + 3, _fit(key, inner - 2), "bold")
             token_at[picked] = (x + 2, y + 3, len(key))
         return
-    canvas.text(x + 2, y + 2, _fit(box.who, inner - 2), "dim")
+    canvas.text(x + 2, y + 2, _fit(box.who, inner - 1), "dim")
     shown, more = _tokens_of(box, cards, motion.selected, motion.fresh)
     travelling = {cid for cid, (_, progress) in motion.travel.items() if progress < 1}
     for row, cid in enumerate(shown):
@@ -931,16 +931,24 @@ def summary(view: Json, spend: str | None, width: int) -> Text:
     return line
 
 
+def _instant(iso: str | None) -> datetime:
+    if not iso:
+        return datetime.min.replace(tzinfo=UTC)
+    return datetime.fromisoformat(iso.replace("Z", "+00:00"))
+
+
 def ticker_lines(view: Json, rows: int, width: int, ascii_only: bool) -> list[Text]:
     """The last events, newest first: a run started, ended, failed; an item moved; a decision taken."""
     display = {lane["state"]: lane["display"] for lane in view["lanes"]}
     out: list[Text] = []
-    for entry in view["ticker"][:rows]:
+    newest = sorted(view["ticker"], key=lambda e: _instant(e["at"]), reverse=True)
+    for entry in newest[:rows]:
         plain, fancy, style = _TICKER.get(entry["kind"], ("-", "·", ""))
         line = Text(no_wrap=True, overflow="crop")
         line.append(f" {local_time(entry['at'])}  ", style="dim")
         line.append(plain if ascii_only else fancy, style=style)
-        line.append(f" {entry['key']} ", style="bold")
+        line.append(f" {entry['key']}", style="bold")
+        line.append("  ")
         stage = entry.get("stage")
         kind = entry["kind"]
         if kind == "moved":

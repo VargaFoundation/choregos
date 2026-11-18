@@ -713,7 +713,9 @@ def test_side_states_hang_below_the_station_they_are_reached_from() -> None:
 
 def test_a_rejection_is_drawn_over_the_path_with_its_label() -> None:
     text = plain(drawing(300))
-    assert "if rejected" in text and "▼" in text and "┄" in text
+    top = text.split("\n")[0]
+    assert "if rejected" in top and "▼" in text.split("\n")[1]
+    assert top.rstrip().endswith("─╮") and "┄" not in top  # one unbroken arc, not a dashed one
 
 
 def test_the_stations_collapse_to_counts_when_the_terminal_is_too_narrow() -> None:
@@ -902,3 +904,30 @@ def test_the_ascii_snapshot(snap_compare: Any, platform: Platform, monkeypatch: 
 
 def test_the_clock_is_pinned_for_the_snapshots() -> None:
     assert os.environ["TZ"] == "UTC"
+
+
+def test_the_ticker_is_newest_first_by_time_with_a_space_after_the_key() -> None:
+    view = live_flow.reduce(GRAPH, board(), [], NOW_ISO, DAY)
+    view["ticker"] = [
+        {"kind": "succeeded", "at": "2026-11-18T14:59:30Z", "key": "ACME-103", "stage": "implement"},
+        {
+            "kind": "failed",
+            "at": "2026-11-18T15:00:10Z",
+            "key": "ACME-102",
+            "stage": "plan",
+            "reason": "budget",
+        },
+        {"kind": "started", "at": "2026-11-18T15:00:00Z", "key": "ACME-101", "stage": "triage"},
+    ]
+    lines = [line.plain for line in live_view.ticker_lines(view, 5, 100, False)]
+    assert [line.split()[0] for line in lines] == ["15:00:10", "15:00:00", "14:59:30"]
+    assert "ACME-102 failed" in lines[0].replace("  ", " ")
+    assert lines[0].index("failed") > lines[0].index("ACME-102") + len("ACME-102")
+
+
+def test_a_station_subtitle_is_the_agents_name_in_the_boxs_full_width() -> None:
+    for width in (300, 100):
+        text = plain(drawing(width))
+        assert "agent ·" not in text and "human ·" not in text
+        assert "…" not in "\n".join(text.split("\n")[3:5])
+    assert "coder" in plain(drawing(300)) and "release train" in plain(drawing(300))
