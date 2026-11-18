@@ -89,6 +89,14 @@ def _item(**totals: Any) -> dict[str, Any]:
     }
 
 
+def _ledger(platform: Platform, usd: float, eur: float) -> respx.Route:
+    """The month's cost report: the ratio the API's own ledger applied."""
+    total = {"cost_usd": usd, "cost_eur": eur}
+    body = platform.contract("CostReport", {"group_by": "day", "rows": [], "total": total})
+    platform.costs = platform.router.get(f"{V1}/orgs/acme/costs").mock(return_value=Response(200, json=body))
+    return platform.costs
+
+
 def _serve_projects(platform: Platform, **stats: Any) -> None:
     # `Project.config` refers to a schema file the validator does not load: the stats are the part checked.
     platform.contract("ProjectStats", stats)
@@ -139,23 +147,51 @@ def test_the_work_item_detail_and_the_runs_follow_the_currency(platform: Platfor
 def test_an_amount_given_only_in_the_other_currency_keeps_its_own_symbol(platform: Platform) -> None:
     """A dollar organisation, a project's month served in euros only: `€`, never relabelled `$`."""
     platform.org("USD")
+    _ledger(platform, 0.0, 0.0)  # nothing spent yet: no ratio
     _serve_projects(platform, cost_month_eur=12.5)
     said = _run("projects", "list")
     assert "€12.50" in said and "$12.50" not in said
-    """A euro organisation, a run's spend served in dollars only: `$`, never `€`."""
+    """A euro organisation, a run's spend in dollars only and no ratio yet: `$`, never `€`."""
     platform.org("EUR")
-    platform.router.get(f"{V1}/work-items/w1/runs").mock(
-        return_value=Response(
-            200,
-            json=[
-                platform.contract(
-                    "Run", {"id": "run-1", "status": "succeeded", "stage_role": "coder", "cost_usd": 0.84}
-                )
-            ],
-        )
-    )
+    _ledger(platform, 0.0, 0.0)
+    _serve_runs(platform)
     said = _run("runs", "list", "w1")
     assert "$0.84" in said and "€0.84" not in said
+
+
+def _serve_runs(platform: Platform) -> None:
+    run = {"id": "run-1", "status": "succeeded", "stage_role": "coder", "cost_usd": 0.84}
+    platform.router.get(f"{V1}/work-items/w1/runs").mock(
+        return_value=Response(200, json=[platform.contract("Run", run)])
+    )
+
+
+def test_a_dollar_amount_in_a_euro_organisation_is_converted_with_the_ledgers_ratio(
+    platform: Platform,
+) -> None:
+    platform.org("EUR")
+    ledger = _ledger(platform, 10.0, 8.0)  # 0.8 euro per dollar
+    _serve_runs(platform)
+    said = _run("runs", "list", "w1")
+    assert "€0.67" in said and "$" not in said
+    _run("runs", "list", "w1")
+    assert ledger.call_count == 1  # the ratio is read once a process
+
+
+def test_a_euro_amount_in_a_dollar_organisation_is_converted_back(platform: Platform) -> None:
+    platform.org("USD")
+    _ledger(platform, 10.0, 8.0)
+    _serve_projects(platform, cost_month_eur=8.0)
+    said = _run("projects", "list")
+    assert "$10.00" in said and "€" not in said
+
+
+def test_the_ratio_is_not_read_when_every_amount_is_already_in_the_currency(platform: Platform) -> None:
+    platform.org("EUR")
+    ledger = _ledger(platform, 10.0, 8.0)
+    _serve_items(platform, cost_usd=3.0, cost_eur=2.5)
+    _run("items", "list", "billing")
+    assert not ledger.called
 
 
 def test_an_unknown_spend_is_a_dash_never_zero(platform: Platform) -> None:
@@ -241,7 +277,24 @@ def test_an_unread_amount_in_one_currency_never_takes_the_others_symbol() -> Non
     assert Amount(eur=2.0).text("USD") == "€2.00"
     assert Amount(usd=2.0, eur=1.8).text("EUR") == "€1.80"
     assert Amount(usd=2.0, eur=1.8).text("USD") == "$2.00"
+    assert Amount(usd=2.0).text("EUR", rate=0.8) == "€1.60"
+    assert Amount(eur=1.6).text("USD", rate=0.8) == "$2.00"
     assert Amount().text("EUR") == "—"
+
+
+def test_the_ask_cost_line_is_converted_in_a_euro_organisation(platform: Platform, capsys: Any) -> None:
+    from rich.console import Console
+    from tranibor_cli import ask
+    from tranibor_cli.client import Client
+
+    platform.org("EUR")
+    _ledger(platform, 10.0, 8.0)
+    platform.router.get(f"{V1}/me/conversations/c1").mock(
+        return_value=Response(200, json={"cost_usd": 0.0125})
+    )
+    err = Console(stderr=True, force_terminal=False, width=200)
+    ask._footer(err, Client(), "c1", {"status": "completed", "usage": {}}, [])
+    assert "€0.0100 spent in this conversation" in capsys.readouterr().err
 
 
 def test_the_ask_cost_line_prints_the_gateways_dollars_with_their_symbol(capsys: Any) -> None:
@@ -249,9 +302,27 @@ def test_the_ask_cost_line_prints_the_gateways_dollars_with_their_symbol(capsys:
     from tranibor_cli import ask
 
     class Api:
-        def get(self, path: str) -> dict[str, Any]:
+        profile = type("P", (), {"api_url": API, "org": "acme"})()
+
+        def get(self, path: str, **kwargs: Any) -> Any:
+            if path == "/orgs":
+                return [{"slug": "acme", "name": "Acme", "currency": "USD"}]
             return {"cost_usd": 0.0125}
 
     err = Console(stderr=True, force_terminal=False, width=200)
     ask._footer(err, Api(), "c1", {"status": "completed", "usage": {}}, [])  # type: ignore[arg-type]
     assert "$0.0125 spent in this conversation" in capsys.readouterr().err
+
+
+def test_an_activity_line_spend_is_converted_in_a_euro_organisation(platform: Platform) -> None:
+    from .test_activity import _run_entry
+
+    platform.org("EUR")
+    _ledger(platform, 10.0, 8.0)
+    entry = platform.contract("ActivityEntry", _run_entry("run-a1b2c3d4e5f6a7b8"))
+    platform.serve("/orgs/acme/activity", "ActivityList", {"in_flight": [entry], "finished": []})
+    platform.router.get(url__regex=rf"{V1}/runs/[^/]+/agents").mock(
+        return_value=Response(200, json=platform.contract("RunAgentList", {"items": []}))
+    )
+    said = _run("activity")
+    assert "€0.67" in said and "$0.84" not in said  # 0.84 dollars at 0.8

@@ -153,11 +153,11 @@ def activity(
         board = Board.of(api.get(f"/orgs/{organisation}/activity", params=filters))
         board.read_agents(api, clock())
         today = _today_spend(api, organisation)
-        currency = money.currency_of(api, organisation)
+        pricing = money.Pricing(api, organisation)
         if not watch:
-            out.print(render(board, organisation, today, out, currency=currency))
+            out.print(render(board, organisation, today, out, pricing=pricing))
             return
-        _follow(api, organisation, filters, board, today, out, currency)
+        _follow(api, organisation, filters, board, today, out, pricing)
     except ApiError as exc:
         main.fail(str(exc))
 
@@ -180,7 +180,7 @@ def _follow(
     board: Board,
     today: money.Amount | None,
     out: Console,
-    currency: str | None = None,
+    pricing: money.Pricing | None = None,
 ) -> None:
     """Apply the stream's events as they come, redrawing at least every second; stop when the stream ends."""
     events: queue.Queue[tuple[str, dict[str, Any]] | BaseException | None] = queue.Queue()
@@ -197,7 +197,7 @@ def _follow(
     threading.Thread(target=read, name="choregos-activity-stream", daemon=True).start()
     try:
         with Live(
-            render(board, organisation, today, out, currency=currency), console=out, auto_refresh=False
+            render(board, organisation, today, out, pricing=pricing), console=out, auto_refresh=False
         ) as live:
             for item in _drain(events):
                 if item is not None:
@@ -231,13 +231,15 @@ def render(
     today: money.Amount | float | None,
     out: Console,
     *,
-    currency: str | None = None,
+    pricing: money.Pricing | None = None,
 ) -> RenderableType:
     """The tree in its blue frame, what ended below it, the status line last."""
     now = clock()
     parts: list[RenderableType] = [
         Panel(
-            _tree(list(board.in_flight.values()), now, out, "nothing is running", board.agents),
+            _tree(
+                list(board.in_flight.values()), now, out, "nothing is running", board.agents, pricing=pricing
+            ),
             title=Text("In flight", style="bold"),
             title_align="left",
             border_style=theme.TREE_FRAME,
@@ -245,9 +247,17 @@ def render(
     ]
     if board.finished:
         parts.append(
-            _tree(list(board.finished.values()), now, out, "", board.agents, label="Ended in the last hour")
+            _tree(
+                list(board.finished.values()),
+                now,
+                out,
+                "",
+                board.agents,
+                label="Ended in the last hour",
+                pricing=pricing,
+            )
         )
-    parts.append(status_line(board, organisation, today, currency=currency))
+    parts.append(status_line(board, organisation, today, currency=pricing.currency if pricing else None))
     return Group(*parts)
 
 
@@ -277,6 +287,7 @@ def _tree(
     agents: dict[str, list[dict[str, Any]]],
     *,
     label: str = "",
+    pricing: money.Pricing | None = None,
 ) -> Tree:
     root = Tree(
         Text(label, style="bold") if label else Text(""), hide_root=not label, guide_style=theme.TREE_FRAME
@@ -290,11 +301,16 @@ def _tree(
         for runs in work_items.values():
             item = branch.add(work_item_label(runs[0]))
             for entry in runs:
-                _sub_agents(item.add(line(entry, now, out)), agents.get(str(entry.get("id"))) or [], now, out)
+                _sub_agents(
+                    item.add(line(entry, now, out, pricing=pricing)),
+                    agents.get(str(entry.get("id"))) or [],
+                    now,
+                    out,
+                )
     if grouped.sessions:
         sessions = root.add(Text("your sessions and conversations", style="bold"))
         for entry in grouped.sessions:
-            sessions.add(line(entry, now, out))
+            sessions.add(line(entry, now, out, pricing=pricing))
     return root
 
 
@@ -366,7 +382,14 @@ def work_item_label(entry: dict[str, Any]) -> Text:
     return text
 
 
-def line(entry: dict[str, Any], now: datetime, out: Console, *, compact: bool = False) -> Text:
+def line(
+    entry: dict[str, Any],
+    now: datetime,
+    out: Console,
+    *,
+    compact: bool = False,
+    pricing: money.Pricing | None = None,
+) -> Text:
     """`● running  implement · coder · sonnet-4.5   4m12s · 12.3k in / 800 out · $0.84   run 0192a3b4c5d6`.
 
     `compact` (the workspace's half-screen tree) leaves the model and the id out: the rest is the same."""
@@ -375,7 +398,7 @@ def line(entry: dict[str, Any], now: datetime, out: Console, *, compact: bool = 
     if not compact:
         what.append(model_name(entry.get("model")))
     text.append("  " + " · ".join(str(w) for w in what if w))
-    text.append(f"   {elapsed(entry, now)} · {spend(entry.get('spend'))}")
+    text.append(f"   {elapsed(entry, now)} · {spend(entry.get('spend'), pricing)}")
     if not compact:
         text.append(f"   {entry.get('kind')} {str(entry.get('id'))[:12]}")
     # One line per entry: on a narrow terminal the id is cut, never the status, the time or the spend.
@@ -418,12 +441,13 @@ def _count(tokens: Any) -> str:
     )
 
 
-def spend(value: Any) -> str:
+def spend(value: Any, pricing: money.Pricing | None = None) -> str:
     """Tokens and cost so far; "—" when the gateway cannot say (ADR 0141 §2): unknown is never shown as 0.
-    A run's spend is the gateway's, in dollars only: it is printed with its own symbol (no rate is stated)."""
+    A run's spend is the gateway's, in dollars: converted to the organisation's currency by `pricing` when
+    it has a rate, else printed with its own symbol."""
     if not isinstance(value, dict):
         return DASH
     return (
         f"{_count(value.get('tokens_in'))} in / {_count(value.get('tokens_out'))} out · "
-        f"{money.amount(value).text(None)}"
+        f"{pricing.text(money.amount(value)) if pricing else money.amount(value).text(None)}"
     )

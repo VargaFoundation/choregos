@@ -174,13 +174,13 @@ def fail(message: str) -> None:
     raise typer.Exit(1)
 
 
-def _currency(api: Client, org: str | None = None) -> str | None:
-    """The organisation's currency (`money.currency_of`), the profile's organisation when none is named;
-    `None` where there is none or it cannot be read: amounts then keep their own symbol."""
+def _pricing(api: Client, org: str | None = None) -> money.Pricing:
+    """The organisation's currency and rate (`money.Pricing`), the profile's organisation when none is named;
+    with none, amounts keep their own symbol."""
     try:
-        return money.currency_of(api, api.profile.organisation(org))
+        return money.Pricing(api, api.profile.organisation(org))
     except NoOrganisationError:
-        return None
+        return money.Pricing(api, None)
 
 
 def _organisation(profile: Profile, org: str | None) -> str:
@@ -520,7 +520,7 @@ def projects_list(org: Annotated[str | None, typer.Option()] = None) -> None:
     organization = _organisation(api.profile, org)
     page = api.get(f"/orgs/{organization}/projects")
     table = Table("slug", "name", "status", "active work items", "cost this month", "trains")
-    currency = money.currency_of(api, organization)
+    pricing = money.Pricing(api, organization)
     for project in page["items"]:
         stats = project.get("stats", {})
         table.add_row(
@@ -528,7 +528,7 @@ def projects_list(org: Annotated[str | None, typer.Option()] = None) -> None:
             project["name"],
             project["status"],
             str(stats.get("active_work_items", 0)),
-            money.amount(stats, eur="cost_month_eur").text(currency),
+            pricing.text(money.amount(stats, eur="cost_month_eur")),
             str(stats.get("trains_pending", 0)),
         )
     console.print(table)
@@ -617,7 +617,7 @@ def projects_readiness(project: str) -> None:
 def items_list(project: str, state: Annotated[str | None, typer.Option()] = None) -> None:
     api = client()
     page = api.get(f"/projects/{project}/work-items", params={"state": state} if state else None)
-    currency = _currency(api)
+    pricing = _pricing(api)
     table = Table("work item", "title", "state", "size", "cost", "PR")
     for item in page["items"]:
         totals = item.get("totals", {})
@@ -626,7 +626,7 @@ def items_list(project: str, state: Annotated[str | None, typer.Option()] = None
             item["title"][:60],
             item.get("state_display") or item["state"],
             item.get("size") or "—",
-            money.amount(totals).text(currency),
+            pricing.text(money.amount(totals)),
             item.get("pr_url") or "—",
         )
     console.print(table)
@@ -692,7 +692,7 @@ def items_show(item_id: str) -> None:
     console.print(f"[bold]{item['tracker_key']}[/bold] — {item['title']}")
     console.print(f"state: {item.get('state_display') or item['state']} · size {item.get('size') or '—'}")
     totals = item.get("totals", {})
-    console.print(f"cost: {money.amount(totals).text(_currency(api))} ({totals.get('runs', 0)} runs)")
+    console.print(f"cost: {_pricing(api).text(money.amount(totals))} ({totals.get('runs', 0)} runs)")
     timeline = api.get(f"/work-items/{item_id}/timeline")
     table = Table("when", "what", "detail")
     for entry in timeline[-15:]:
@@ -748,7 +748,7 @@ def items_action(
 def runs_list(item_id: str) -> None:
     api = client()
     runs = api.get(f"/work-items/{item_id}/runs")
-    currency = _currency(api)
+    pricing = _pricing(api)
     table = Table("run", "stage", "attempt", "status", "backend · model", "cost")
     for run in runs:
         table.add_row(
@@ -757,7 +757,7 @@ def runs_list(item_id: str) -> None:
             str(run.get("attempt", 1)),
             run["status"],
             f"{run.get('backend') or '—'} · {(run.get('model') or '—').split('/')[-1]}",
-            money.amount(run).text(currency),
+            pricing.text(money.amount(run)),
         )
     console.print(table)
 

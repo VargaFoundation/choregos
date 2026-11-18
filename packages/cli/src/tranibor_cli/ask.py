@@ -209,10 +209,13 @@ def _footer(err: Any, api: Client, cid: str, final: dict[str, Any], pending: lis
         reason = error.get("message") or "the turn did not complete"
         err.print(theme.badge(theme.status_of("failed"), err), f"{reason} ({error.get('code') or 'failed'})")
     summary = api.get(f"/me/conversations/{cid}")
+    cost = money.Pricing(api, summary.get("org") or api.profile.org or None).text(
+        money.amount(summary), places=4
+    )
     err.print(
         f"conversation {cid} · {int(usage.get('input_tokens') or 0)} in / "
         f"{int(usage.get('output_tokens') or 0)} out tokens · "
-        f"{money.amount(summary).text(None, places=4)} spent in this conversation",
+        f"{cost} spent in this conversation",
         markup=False,
     )
     for action in pending:
