@@ -6,7 +6,8 @@
   2026-11-17: "do the renames now", the trademark gate being skipped); R1 is implemented by S75-01,
   R3 steps (a) and (b) by S75-03 (2026-11-18), R2 by S75-02 (2026-11-18), shipped by release 0.27.14,
   and R3 step (c) on the Diametral deployments (2026-11-18, see the amendment "0.27.14 on a real
-  release"); R4 and R3 steps (d) and (e) are not started
+  release"), and R3 step (d) (2026-11-18, see the amendment "step (d)"); R4 and R3 step (e) are not
+  started
 - **Concerns**: the whole repository (25,000 occurrences of the old name in 4,600 files, counted on
   2026-11-17), and above all `packages/*` (the distributions and import packages), `publishing.json` and
   `tools/publishing_identity.py`, `charts/`, `docker/`, `infra/policies/`, the `CHOREGOS_*` variables;
@@ -282,3 +283,26 @@ One commit cannot rename all four, and the fourth layer must not be renamed by a
   (`--certificate-identity-regexp`), and the same check against `…@refs/tags/v0.27.13` fails, so the
   identity is what is checked. Not proven: a cluster's admission webhook verifying a `tranibor-*`
   reference (the Diametral clusters pull from Harbor).
+
+## Amendment (2026-11-18, S75-03): R3 step (d), the enterprise edition on the new base image
+
+- **Done.** `DiametralGroup/choregos-ee#113` builds the enterprise images FROM
+  `tranibor-api` / `tranibor-orchestrator` (its `Makefile`, `outils/coeur.sh`, `outils/coeur-local.sh`),
+  and its CI passes the same name (`DiametralGroup/choregos-deploy#300`: `choregos-kaniko-build` and
+  `choregos-ee-tests` take the base image's prefix, `tranibor` for the release pipeline). With the package
+  half (`choregos-ee#112`, `tranibor_*` imports), step (d) is complete. The image says which base it was
+  built from, in the OCI annotation `org.opencontainers.image.base.name`
+  (`harbor.build.diametral.com/choregos/tranibor-<component>:0.27.14` on both published images).
+- **The enterprise images keep their names** (`choregos-api-ee`, `choregos-orchestrator-ee`). Point 4
+  renames the core's artefacts; the enterprise edition is not "Tranibor Enterprise" (point 9), and a new
+  name for its images is a product decision, not part of this round. Nothing therefore moved in the
+  registry's immutability and retention rules or in the clusters' admission.
+- **Deployed** on dev (`choregos-deploy#301`) then prod (`#302`, synchronised by hand): the six EE
+  deployments run the new digests, ready without restart, and `GET /api/v1/edition` answers `enterprise`,
+  0.27.14, edition 0.2.0 on both. The base digests are the ones the former names carry (`tranibor-api:0.27.14`
+  and `choregos-api:0.27.14` are one digest, likewise the orchestrator), so the core inside is byte for
+  byte the one that ran before.
+- **Not changed by (d)**: the per-commit pipeline (`choregos-ee-edge`, suspended) still builds FROM
+  `choregos-<component>:<commit>`, because `main`'s per-commit images carry only the former name; it moves
+  when those images gain the new name. Step (e) may start counting: the old names stop being published
+  two minors after this step, so not before 0.29.
