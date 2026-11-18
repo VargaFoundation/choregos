@@ -82,6 +82,7 @@ DERIVED: tuple[str, ...] = (
     ".github/workflows/ci.yml",
     ".github/workflows/nightly.yml",
     ".github/workflows/release.yml",
+    ".github/workflows/single-node-proof.yml",
     # The charts' defaults: registry, memory image, plugin source, runbook links, chart sources.
     "charts/choregos-outpost/Chart.yaml",
     "charts/choregos-outpost/README.md",
