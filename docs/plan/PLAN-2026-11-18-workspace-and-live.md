@@ -3,7 +3,7 @@
 Source: the product owner's review of `choregos chat` on the production instance, 2026-11-18, and their go the
 same day (*"do something clean, follow your recommendations; I also want a live mode, for the CLI and the web,
 where I can see the workflow processing the items — something stylish"*). Decision:
-[ADR 0187](../adr/0187-the-workspace-is-one-screen-and-the-flow-is-live.md). Stories S67-18 to S67-28, added
+[ADR 0187](../adr/0187-the-workspace-is-one-screen-and-the-flow-is-live.md). Stories S67-18 to S67-29, added
 to S67 by the amendment of 2026-11-18 of [ADR 0180](../adr/0180-one-quarter-of-depth-the-scope-is-frozen.md).
 
 ## 0. What the review found
@@ -32,25 +32,34 @@ to S67 by the amendment of 2026-11-18 of [ADR 0180](../adr/0180-one-quarter-of-d
 
 ## 2. The live view, after
 
+Amended 2026-11-18 (the product owner's correction: *"you made me a live board; merge that with the board, I
+wanted to see the workflow moving the tickets through"*). The board itself is live, and the workflow's flow
+is a view of the workflow where the tickets travel.
+
+The terminal draws the flow as a horizontal pipeline of stations, the tokens parked at them:
+
 ```
- iris · diametral-dev                                                  LIVE ● 14:58:12
- triage 2      refine 1       plan 1        implement 3       review 2       done 41 (+3 today)
- ┌─────────┐   ┌──────────┐   ┌─────────┐   ┌──────────────┐  ┌──────────┐
- │ FON-322 │   │ FON-321  │   │ FON-320 │   │ ◐ FON-319    │  │ FON-310  │
- │ waiting │   │ ◐ 1m12   │   │ ✓       │   │ developer    │  │ ⏸ approve│
- └─────────┘   └──────────┘   └─────────┘   │ 3m34 · €0.52 │  └──────────┘
-                                            └──────────────┘
+ iris · diametral-dev · delivery                                       LIVE ● 14:58:12
+ 2 in flight   1 waiting for a person   1 failed   41 done today   €1.84 today
+
+  triage ───────▶ refine ───────▶ plan ───────▶ implement ───────▶ review ───────▶ done
+  platform        refine-agent    planner       developer           a person        41
+  (FON-322)       (◐ FON-321)     (FON-320)     (◐ FON-319 3m34     (⏸ FON-310
+                                                 €0.52)              approve)
+                                                   ╰─ ✗ FON-318 retry ─╯
  14:57:32  ✗ FON-319 implement-2  budget spent      14:52:18  ● FON-319 implement started
 ```
 
-On the web the same lanes are full-height columns, cards slide to their next lane, a running card pulses in
-the workflow's hue and its spend ticks; the wall mode drops the navigation and enlarges the type.
+On the web the board's columns follow the stream (a card slides to its column, a running card pulses and
+its spend ticks), and the flow view lays the same stations out as the workflow's map, left to right: a token
+travels along the edge when its item changes state, the station with a run glows in the workflow's hue, the
+wall mode drops the navigation and enlarges the type.
 
 ## 3. Order
 
 1. S67-18 (this plan), then S67-19 → S67-20 (the contract, then the service).
 2. S67-21 (the screen) and S67-26 (the reduction) in parallel; S67-25 at any time.
-3. S67-22, S67-23, S67-24 on S67-21; S67-27 on S67-26; S67-28 on S67-21 and S67-26.
+3. S67-22, S67-23, S67-24 on S67-21; S67-27 on S67-26; S67-29 on S67-27; S67-28 on S67-21 and S67-26 (and draws S67-29's flow).
 
 Each story is one pull request; its STATUS row says what it proves and what it does not.
 
