@@ -40,12 +40,16 @@ class Result:
     questions: list[str] = field(default_factory=list)
 
     def to_stage_result(self) -> StageResult:
+        # A fact without a value states nothing: it is dropped, as the runner drops it from a file it
+        # reads (S62-05). Validated as it came, `{"duplicate_of": None}` raised here and the agent
+        # failed its step before writing any result (S62-18).
+        facts = {name: value for name, value in self.facts.items() if value is not None}
         payload: dict[str, Any] = {
             "schema": "choregos/StageResult/v1",
             "status": self.status,
             "summary": (self.summary.strip() or "(no summary)")[:SUMMARY_MAX],
             "outputs": dict(self.outputs),
-            "evidence": {"facts": dict(self.facts)} if self.facts else {},
+            "evidence": {"facts": facts} if facts else {},
             "questions": [{"text": q} for q in self.questions],
         }
         if self.reason:
