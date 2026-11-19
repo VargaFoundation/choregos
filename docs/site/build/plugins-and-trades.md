@@ -47,7 +47,8 @@ the platform's own processes.
 | Effects of a governed action | | `effects.declare_effect` |
 | Its own tables, its own routes | | the `choregos.migrations` entry point, `extensions.declare_router` |
 | Gates and the facts they read | | `gates.gate` and `gates.context_provider` ([ADR 0181](../../adr/0181-the-contracts-speak-no-trade.md), round C0) |
-| Step effects for `does:`, inbound event types, finding types, stage roles | | the seams round C0 adds (ADR 0181) |
+| Step effects for `does:` | | `step_effects.step_effect` (ADR 0181, round C0) |
+| Inbound event types, finding types, memory kinds, stage roles | | the open lists of round C0 (ADR 0181) |
 | Durable code of its own (a release train) | | a worker seam (ADR 0181, round D) |
 
 A deterministic job step runs an image the operator allows (`CHOREGOS_JOB_IMAGES`); a plugin's template

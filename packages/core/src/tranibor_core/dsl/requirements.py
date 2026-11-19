@@ -28,6 +28,7 @@ from tranibor_contracts.enums import ActorType
 from tranibor_contracts.workflow import is_production_state, transition_effect
 
 from ..gates import gate_needs
+from ..step_effects import step_effect_of
 
 #: The roles whose playbook works in a repository: they read a diff, push a branch.
 ROLES_IN_A_REPOSITORY = frozenset(
@@ -91,9 +92,10 @@ def _states_and_transitions(workflow: Workflow, reasons: _Reasons) -> None:
         # What the platform DOES when it crosses a system transition (`does`, #175), deduced from the
         # name of the target state for a workflow written before.
         effect = transition_effect(transition)
-        if effect and isinstance(workflow.actors.get(transition.by or ""), SystemActor):
-            gesture = "opens" if effect == "open_pr" else "merges"
-            reasons.require("scm", f"{name}: {ident} {gesture} a pull request")
+        found = step_effect_of(effect)
+        if found is not None and isinstance(workflow.actors.get(transition.by or ""), SystemActor):
+            for capability in sorted(found.needs):
+                reasons.require(capability, f"{name}: {ident} {found.gesture}")
         if transition.via == "release_train" or transition.train is not None:
             reasons.require("cd", f"{name}: {ident} goes through a release train")
         for guarantee in transition.gates:
