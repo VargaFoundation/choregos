@@ -80,6 +80,12 @@ class VoiceSessionTest {
         }
     }
 
+    /**
+     * Every raw socket the phone opened so far, closed: the first one is not always the live one, since a runner
+     * that resolves `localhost` to both ::1 and 127.0.0.1 records the failed attempt first.
+     */
+    private fun cutTheLink() = rawSockets.forEach { it.close() }
+
     private val audio = Pcm.encode(ByteArray(960) { 5 })
 
     @Test fun `the session opens with the token, listens, and speaks what the agent says`() {
@@ -160,7 +166,7 @@ class VoiceSessionTest {
         val s = session(io).also { it.start() }
         await("first socket") { serverSockets.size == 1 && s.state.value.phase == Phase.Listening }
         Thread.sleep(100) // let both events be read
-        rawSockets.first().close() // the link drops, no close frame
+        cutTheLink() // the link drops, no close frame
         await("resumed and spoke") { io.played.isNotEmpty() }
         server.takeRequest()
         val second = server.takeRequest()
@@ -175,7 +181,7 @@ class VoiceSessionTest {
         val s = session(FakeIo(), resumeWindowMs = 0).also { it.start() }
         await("first socket") { serverSockets.size == 1 }
         Thread.sleep(50)
-        rawSockets.first().close()
+        cutTheLink()
         await("ended") { s.state.value.phase == Phase.Ended }
         assertEquals(EndKind.Dropped, s.state.value.notice?.kind)
     }
