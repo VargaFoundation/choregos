@@ -2749,7 +2749,7 @@ configured. The organisation's model catalogue (`/admin/models`, [ADR 0060](adr/
 | `virtual_keys` | one key per run, limited to its models | yes | no | no |
 | `hard_budget` | the key's budget is a cap enforced at the source | yes | no | no |
 | `spend_readback` | the spend of a key is read back | yes | no | no |
-| `teams` | a project's day budget held by the gateway | yes | no | no |
+| `teams` | a project's day budget held by the gateway | yes (not with `keyMode: delegated`) | no | no |
 | `pricing` | the catalogue carries prices | yes | no | no |
 
 With `openai-compatible` (Portkey, Kong AI Gateway, Envoy AI Gateway, OpenRouter, a vLLM router...)
@@ -2774,6 +2774,47 @@ guardrails:
 Without it, a key the platform marked `choregos_llm_guard: redact` reaches the provider unmasked,
 and nothing fails to say so. `GET /guardrails/list` with the master key shows `choregos-secrets`
 when the guard is loaded. LiteLLM reads its config only at start: restart it after the change.
+
+### A shared LiteLLM: delegated keys (ADR 0205)
+
+An operator that already runs one LiteLLM for several products does not need a second one in front of
+the providers. Point the platform at the shared gateway and give it a **service account's key**, not
+the master key:
+
+```yaml
+global:
+  gateway:
+    type: litellm
+    embedded: false                 # `delegated` is refused with the embedded LiteLLM
+    url: http://litellm.inference.svc.cluster.local:4000
+    secretRef: choregos-gateway-secrets   # key `delegation-key` (instead of `master-key`)
+    keyMode: delegated                    # env CHOREGOS_GATEWAY_KEY_MODE
+```
+
+The account is an `internal_user` of the shared gateway (its `max_budget`, `budget_duration` and `models`
+are the ceiling of everything the platform spends there). With its own key it can mint, read and delete
+its **child keys**, read their spend, and list its models; it cannot create a team or a user, nor give a
+key a `team_id`. Consequently, in this mode the platform:
+
+- never calls `/team/new` or `/team/update`, never sends `team_id` or `tags`: the `teams` capability is
+  absent (`GET /platform/models` shows it);
+- always sends `max_budget`, `models` and `duration` with a key, and refuses to mint without a budget
+  and a model: LiteLLM would fill `max_budget` with 1000 and accept any model at creation;
+- holds each project's day budget **itself**, from the measured spend: a run's key is capped at what
+  is left of the day after the cost ledger and the keys still open, and a project over its day starts
+  no run. What is lost against a gateway team is the second stop inside a run: a run's overshoot is
+  bounded by its key's cap;
+- marks a run that must have its secrets masked (`sandbox.llm_security_analyzer`) with
+  `metadata.choregos_llm_guard: redact` on its key, as always; the shared gateway must load a guard that
+  keys on it (the same file as above), otherwise the mark reaches nobody and nothing says so;
+- reads every key it holds with that credential: the variable `CHOREGOS_GATEWAY_MASTER_KEY` keeps its
+  name and holds the delegation key (also for the embedder and the router, which call the gateway
+  directly: the account's `models` must include the embedding and routing aliases).
+
+The platform's own LiteLLM callbacks (per-call trace spans, the context breakdown of an ACP CLI run)
+run inside the platform's LiteLLM and do not exist on a shared one. The model names are the shared
+gateway's; mapping the platform's tiers (`standard`, `cheap`, ...) onto them is a configuration of the
+deployment.
 
 ## The decision model (Laya behind LiteLLM)
 

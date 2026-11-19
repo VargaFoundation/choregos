@@ -758,6 +758,7 @@ def _register_memory_and_gateways() -> None:
             team_id=cfg.get("team_id"),
             internal_prices=cfg.get("internal_prices", {}),
             enterprise_tags=cfg.get("enterprise_tags", False),
+            key_mode=cfg.get("key_mode", _env("CHOREGOS_GATEWAY_KEY_MODE", "master")),
         )
     )
     register("gateway", "openai-compatible", _SHIPPED_SPECS[("gateway", "openai-compatible")])(

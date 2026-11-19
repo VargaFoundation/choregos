@@ -376,7 +376,7 @@ spec:
             - name: CHOREGOS_SECRETS_KEKS
               valueFrom: { secretKeyRef: { name: {{ .Values.global.secrets.keksSecretRef | default .Values.global.apiSecretRef }}, key: {{ .Values.global.secrets.keksKey | default "secrets-keks" }}, optional: true } }
             - name: CHOREGOS_GATEWAY_MASTER_KEY
-              valueFrom: { secretKeyRef: { name: {{ include "choregos.gatewaySecret" . }}, key: master-key } }
+              valueFrom: { secretKeyRef: { name: {{ include "choregos.gatewaySecret" . }}, key: {{ include "choregos.gatewayKeyName" . }} } }
           readinessProbe:
             httpGet: { path: /readyz, port: http }
             initialDelaySeconds: 5

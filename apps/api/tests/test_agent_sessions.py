@@ -479,3 +479,16 @@ async def test_a_gateway_without_the_guard_refuses_the_session_the_policy_guards
     answer = await _ask(client, "Where is order 42?")
     assert answer.status_code == 422 and "llm_guard" in answer.text
     assert not upstream.gateway.keys and not upstream.model.requests
+
+
+async def test_a_session_on_a_delegated_gateway_joins_no_team(
+    client: AsyncClient, project: dict[str, Any], upstream: Upstream
+) -> None:
+    """S82-05: a delegated key cannot create a team, nor mint a key that joins one (ADR 0205)."""
+    await _agent(client)
+    upstream.gateway.capabilities = upstream.gateway.capabilities - {"teams"}
+    upstream.gateway.delegated = True
+    upstream.model.say("Hello.")
+    answered = await _ask(client, "Hi")
+    assert answered.status_code == 200, answered.text
+    assert upstream.gateway.keys and not upstream.gateway.teams and not upstream.gateway.key_team

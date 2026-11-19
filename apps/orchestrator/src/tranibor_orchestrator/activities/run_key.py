@@ -22,6 +22,7 @@ import structlog
 from sqlalchemy import select
 from tranibor_adapters.base import llm_guard_refusal
 from tranibor_adapters.errors import ConfigurationError
+from tranibor_adapters.gateway.project_team import ensure_project_team
 from tranibor_api.db.models import GatewayKeyRow, Run
 from tranibor_contracts import Budget, StageInput
 from tranibor_core import utcnow
@@ -91,7 +92,10 @@ async def mint_key(
     if (daily := bundle.engine.daily_budget()) is not None:
         from .provisioning import project_team_id
 
-        team_id = await bundle.adapters.gateway.ensure_team(project_team_id(bundle.project.id), daily)
+        # None on a gateway without teams (delegated key, ADR 0205): the reservation holds the day.
+        team_id = await ensure_project_team(
+            bundle.adapters.gateway, project_team_id(bundle.project.id), daily
+        )
     return await bundle.adapters.gateway.mint_key(
         metadata, budget_usd=budget_usd, ttl_s=ttl_s, models=models, team_id=team_id
     )

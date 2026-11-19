@@ -533,6 +533,9 @@ _SHIPPED_SPECS: dict[tuple[str, str], ConnectorTypeSpec] = {
                 "team_id": _TEXT,
                 "internal_prices": {"type": "object", "additionalProperties": {"type": "string"}},
                 "enterprise_tags": {"type": "boolean", "default": False},
+                # `delegated`: `master_key` holds a service account's key on a gateway shared with
+                # others (ADR 0205): no teams, no tags, the platform holds the project's day.
+                "key_mode": {"type": "string", "enum": ["master", "delegated"], "default": "master"},
             }
         ),
         ("master_key",),

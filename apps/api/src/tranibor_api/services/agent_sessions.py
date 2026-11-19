@@ -322,7 +322,9 @@ async def mint_key(
     team_id = None
     policy = await effective_policy(session, project.id)
     if (daily := PolicyEngine(policy).daily_budget()) is not None:
-        team_id = await gateway.ensure_team(f"choregos-{project.id}", daily)
+        from tranibor_adapters.gateway.project_team import ensure_project_team
+
+        team_id = await ensure_project_team(gateway, f"choregos-{project.id}", daily)
     key_metadata: dict[str, Any] = {
         "project": project.slug,
         "agent": record.agent_slug,

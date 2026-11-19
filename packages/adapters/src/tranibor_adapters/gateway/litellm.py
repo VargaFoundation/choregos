@@ -17,9 +17,17 @@ from tranibor_core.domain import GatewayModel, Spend, VirtualKey, utcnow
 from tranibor_core.models import DECISION_MODE
 
 from ..base import GATEWAY_CAPABILITIES
-from ..errors import UpstreamError
+from ..errors import ConfigurationError, UpstreamError
 
 logger = structlog.get_logger("choregos.gateway.litellm")
+
+#: How the platform holds the gateway's credential (ADR 0205). `master`: the gateway's own master key,
+#: which the platform's LiteLLM runs under. `delegated`: the key of a service account of a gateway
+#: it shares with others (an `internal_user`), which can mint, read and delete its own child keys and
+#: nothing else: no teams, no `team_id` on a key.
+KEY_MODE_MASTER = "master"
+KEY_MODE_DELEGATED = "delegated"
+KEY_MODES = (KEY_MODE_MASTER, KEY_MODE_DELEGATED)
 
 
 class LiteLlmGateway:
@@ -35,9 +43,20 @@ class LiteLlmGateway:
         team_id: str | None = None,
         internal_prices: dict[str, float] | None = None,
         enterprise_tags: bool = False,
+        key_mode: str = KEY_MODE_MASTER,
         timeout: float = 20.0,
         client: httpx.AsyncClient | None = None,
     ) -> None:
+        if key_mode not in KEY_MODES:
+            raise ConfigurationError(
+                f"gateway key mode `{key_mode}` is unknown: use one of {', '.join(KEY_MODES)}"
+            )
+        self.key_mode = key_mode
+        self.delegated = key_mode == KEY_MODE_DELEGATED
+        if self.delegated:
+            # A delegated account is no team admin: the project's day is the platform's to hold.
+            self.capabilities = GATEWAY_CAPABILITIES - {"teams"}
+            team_id, enterprise_tags = None, False
         self.base_url = base_url.rstrip("/")
         self.master_key = master_key
         self.team_id = team_id
@@ -75,6 +94,10 @@ class LiteLlmGateway:
         models: list[str],
         team_id: str | None = None,
     ) -> VirtualKey:
+        if self.delegated and (not models or budget_usd <= 0):
+            # LiteLLM checks neither at creation (it fills `max_budget` with 1000 and accepts `models: []`):
+            # the caps are the platform's to send, never the gateway's to default.
+            raise ConfigurationError("a delegated key is minted with a budget and the models it may call")
         payload: dict[str, Any] = {
             "max_budget": budget_usd,
             "duration": f"{max(1, ttl_s // 60)}m",
@@ -88,7 +111,8 @@ class LiteLlmGateway:
                 f"run:{metadata.get('run_id', '')}",
             ]
         # The project's team (S27-10) wins over the gateway-wide one: its budget is the project's day.
-        if team_id or self.team_id:
+        # Never in delegated mode: the account is no team admin and the gateway answers 4xx.
+        if not self.delegated and (team_id or self.team_id):
             payload["team_id"] = team_id or self.team_id
         data = await self._mint(payload)
         return VirtualKey(
@@ -198,6 +222,7 @@ class LiteLlmGateway:
     async def ensure_team(self, team_id: str, budget_usd: float, duration: str = "1d") -> str:
         """The team of a project, with its budget per `duration` (S27-10, ADR 0047). Idempotent: a
         team that exists gets its budget updated, so a policy change reaches the gateway."""
+        self._refuse_teams()
         body = {
             "team_id": team_id,
             "team_alias": team_id,
@@ -218,10 +243,18 @@ class LiteLlmGateway:
 
     async def create_team(self, name: str, budget_usd: float) -> str:
         """A project's LiteLLM team, with its budget (provisioning step)."""
+        self._refuse_teams()
         data = await self._request(
             "POST", "/team/new", json={"team_alias": name, "max_budget": budget_usd, "budget_duration": "30d"}
         )
         return str(data.get("team_id", name))
+
+    def _refuse_teams(self) -> None:
+        if self.delegated:
+            raise ConfigurationError(
+                "a delegated gateway key cannot create or update a team: the project's day budget is "
+                "held by the platform (ADR 0205); callers check the `teams` capability first"
+            )
 
     async def test(self) -> dict[str, Any]:
         models = await self.list_models()
