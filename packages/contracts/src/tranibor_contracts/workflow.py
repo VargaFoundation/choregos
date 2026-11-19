@@ -6,14 +6,20 @@ from __future__ import annotations
 import re
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .enums import ActorType, StateKind, StateOutcome
+from .open_lists import OpenList
 
 Identifier = Annotated[str, Field(pattern=r"^[a-z0-9][a-z0-9_-]{0,62}$")]
 Slug = Annotated[str, Field(pattern=r"^[a-z0-9][a-z0-9-]{0,62}$")]
 
 AGENT_WILDCARD = "*agent"
+
+
+#: What the platform does when it takes a system transition (`does:`, ADR 0181): the core's two, which
+#: are the software-delivery plugin's in round C2 under the same names, and those extensions declare.
+STEP_EFFECTS = OpenList("step effect", r"^[a-z][a-z0-9_]{0,63}$", ("open_pr", "merge_pr"))
 
 
 class Strict(BaseModel):
@@ -443,7 +449,9 @@ class Transition(Strict):
     #: What the PLATFORM does when crossing a system transition: open the ticket's PR, or merge
     #: it. It used to be the prefix of the target state's name (`pr_`, `merged`): a rename from
     #: the console changed the behaviour without saying so (#175).
-    does: Literal["open_pr", "merge_pr"] | None = None
+    #: A step effect by name (ADR 0181): the core's `open_pr` and `merge_pr`, or one an extension
+    #: declared (`STEP_EFFECTS.declare`); any other is refused.
+    does: Annotated[str, AfterValidator(STEP_EFFECTS.check)] | None = None
     #: How the pull request is opened, on a transition that opens it (S51-11): `{draft: true}`.
     pull_request: PullRequestSpec | None = None
     #: A system transition can open one child work item per element of a list and wait for them
@@ -647,7 +655,7 @@ def implicit_effect(state: str) -> Literal["open_pr", "merge_pr"] | None:
     return None
 
 
-def transition_effect(transition: Transition) -> Literal["open_pr", "merge_pr"] | None:
+def transition_effect(transition: Transition) -> str | None:
     """What the platform does when crossing a system transition: written, otherwise deduced."""
     return transition.does or implicit_effect(transition.to)
 

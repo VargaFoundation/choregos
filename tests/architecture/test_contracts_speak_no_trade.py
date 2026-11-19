@@ -134,9 +134,6 @@ ALLOWED: dict[str, dict[str, int]] = {
         "train": 6,
         "trains": 14,
     },
-    "packages/contracts/schemas/context-pack.schema.json": {"flaky": 1, "hotspot": 1},
-    "packages/contracts/schemas/finding.schema.json": {"flaky": 1, "tech_debt": 1},
-    "packages/contracts/schemas/inbound-event.schema.json": {"cd": 4, "ci": 3, "pr": 5, "scm": 6},
     "packages/contracts/schemas/policy.schema.json": {"max_diff": 2, "release_train": 1, "train": 4},
     "packages/contracts/schemas/project.schema.json": {
         "branch": 5,
@@ -171,7 +168,6 @@ ALLOWED: dict[str, dict[str, int]] = {
     "packages/contracts/schemas/template.schema.json": {"repo": 1},
     "packages/contracts/schemas/workflow.schema.json": {
         "developer": 1,
-        "pr": 2,
         "pull_request": 1,
         "release_captain": 1,
         "release_train": 1,
@@ -226,7 +222,7 @@ ALLOWED: dict[str, dict[str, int]] = {
     },
     "packages/contracts/src/tranibor_contracts/workflow.py": {
         "developer": 1,
-        "pr": 11,
+        "pr": 9,
         "pull_request": 3,
         "release_captain": 1,
         "release_train": 2,

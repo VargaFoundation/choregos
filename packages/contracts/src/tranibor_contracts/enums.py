@@ -31,6 +31,10 @@ class StageRole(StrEnum):
     ADDRESS_REVIEW = "address_review"
     RELEASE_NOTES = "release_notes"
     VERIFY_PROD = "verify_prod"
+    #: A request that delivers no code (ADR 0110): the brief a person approves, then the deliverable.
+    #: The playbooks package always had them (`KNOWN_ROLES`); the two lists agree since ADR 0181 C0.
+    BRIEF = "brief"
+    DELIVER = "deliver"
     CUSTOM = "custom"
 
 
