@@ -43,6 +43,8 @@ HISTORICAL: dict[str, str] = {
     "docker/dockerfile": "the BuildKit frontend reference `docker/dockerfile:1`, not a path",
     "packages/adapters/memory/pgvector.py": "docs/plan/04: a fallback adapter, never built",
     "charts/choregos/values/gateway.yaml": "docs/plan/04: a sketched base configuration, never split out",
+    "trials/ontology/": "the 0.21 rename table: a trial removed with the ontology (ADR 0181, O4-1)",
+    "trials/dev-platform/": "the 0.21 rename table: a trial removed with the ontology (ADR 0181, O4-1)",
 }
 
 

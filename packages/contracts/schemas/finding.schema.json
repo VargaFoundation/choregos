@@ -8,7 +8,7 @@
   "additionalProperties": false,
   "properties": {
     "title": { "type": "string", "minLength": 3, "maxLength": 200 },
-    "type": { "type": "string", "enum": ["perf", "bug", "security", "tech-debt", "docs", "flaky-test", "ux"] },
+    "type": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,31}$", "description": "An open list (ADR 0181): the core's types, perf, bug, security, tech-debt, docs, flaky-test, ux, and the types an installed extension declares. The platform refuses any other." },
     "severity": { "type": "string", "enum": ["low", "medium", "high", "critical"] },
     "evidence": { "type": "string", "minLength": 1, "description": "path:line, test output, query…" },
     "suggested_fix": { "type": "string" },

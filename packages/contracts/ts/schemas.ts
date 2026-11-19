@@ -142,7 +142,8 @@ export type Assistant = unknown;
 
 export type ContextPackMemory = {
   id?: string;
-  kind: "decision" | "convention" | "incident" | "ticket_summary" | "run_lesson" | "flaky_test" | "hotspot" | "finding" | "other";
+  /** An open list (ADR 0181): the core's kinds, decision, convention, incident, ticket_summary, run_lesson, flaky_test, hotspot, finding, other, and the kinds an installed extension declares. */
+  kind: string;
   subject: string;
   content: string;
   score?: number;
@@ -314,7 +315,8 @@ export type Event = {
 /** A problem an agent found outside its scope. */
 export type Finding = {
   title: string;
-  type: "perf" | "bug" | "security" | "tech-debt" | "docs" | "flaky-test" | "ux";
+  /** An open list (ADR 0181): the core's types, perf, bug, security, tech-debt, docs, flaky-test, ux, and the types an installed extension declares. The platform refuses any other. */
+  type: string;
   severity: "low" | "medium" | "high" | "critical";
   /** path:line, test output, query… */
   evidence: string;
@@ -344,7 +346,8 @@ export type HumanDecision = {
 
 /** An external event, normalised by an adapter (docs/plan/01 §1.7). */
 export type InboundEvent = {
-  type: "tracker.item.created" | "tracker.item.updated" | "tracker.item.moved" | "tracker.item.commented" | "tracker.item.labeled" | "tracker.item.closed" | "scm.pr.opened" | "scm.pr.synchronized" | "scm.pr.review_submitted" | "scm.pr.merged" | "scm.pr.closed" | "scm.check.completed" | "ci.run.started" | "ci.run.succeeded" | "ci.run.failed" | "cd.app.synced" | "cd.app.degraded" | "cd.rollout.completed" | "cd.rollout.aborted" | "alert.fired" | "alert.resolved" | "human.decision";
+  /** An open list (ADR 0181): the core's types, tracker.item.created, tracker.item.updated, tracker.item.moved, tracker.item.commented, tracker.item.labeled, tracker.item.closed, scm.pr.opened, scm.pr.synchronized, scm.pr.review_submitted, scm.pr.merged, scm.pr.closed, scm.check.completed, ci.run.started, ci.run.succeeded, ci.run.failed, cd.app.synced, cd.app.degraded, cd.rollout.completed, cd.rollout.aborted, alert.fired, alert.resolved, human.decision, and the types an installed extension declares. The platform refuses any other. */
+  type: string;
   /** github, jira, gitlab, tekton, argocd, alertmanager, slack, web, cli */
   source: string;
   /** Unique delivery identifier (deduplication, replay). */
@@ -1731,7 +1734,7 @@ export type WorkflowActor = WorkflowAgentActor | WorkflowHumanActor | WorkflowSy
 
 export type WorkflowAgentActor = {
   type: "agent";
-  /** The agent's role. The package's roles — triage, refine, plan, implement, verify, review, fix_ci, address_review, release_notes, verify_prod, custom — keep their meaning; a business names its own (`sourcing`, `instruction_dossier`), and the playbook is resolved by the role's name. */
+  /** The agent's role. The package's roles — triage, refine, plan, implement, verify, review, fix_ci, address_review, release_notes, verify_prod, brief, deliver, custom — keep their meaning; a business names its own (`sourcing`, `instruction_dossier`), and the playbook is resolved by the role's name. */
   role: string;
   /** profile:<name>, profile:by_size, or a direct LiteLLM identifier. */
   model?: string;

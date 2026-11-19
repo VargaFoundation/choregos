@@ -15,7 +15,11 @@ the next one, and a test reads the fake's state to prove that nothing was writte
 | `network_policy` | `default`        | the netops eval's cluster and its recorded Hubble trace         |
 | `network_policy` | `dropped-flows`  | E2: 12 namespaces, 2,400 flows, 310 dropped                     |
 | `identity`       | `offboarding`    | E4: one enabled account in six groups                           |
-| `marketdata`     | `default`        | the synthetic bars of `FakeMarketData` (a walk seeded by symbol) |
+
+An extension adds the scenes of its own connector kind with `declare_scene` (one of ADR 0181's extension
+seams), as a first-party plugin's extension does for the connector kind it brings. A kind no scene is
+known for loads the installed extensions once, so a process that never started the API (the playbooks'
+scripted matrix) finds them too.
 
 S57-11a: the LIVE matrix plays an agent case on a deployment whose model is the real gateway and whose
 connectors are these scenes. Its seeding declares, in a per-case eval project, organisation connectors of
@@ -115,30 +119,52 @@ def _identity(name: str) -> tuple[Any, Any]:
     return connector, fake
 
 
-def _marketdata(name: str) -> tuple[Any, Any]:
-    from .marketdata import FakeMarketData
-
-    fake = FakeMarketData()
-    return fake, fake
-
-
 #: kind → (the type whose operations it declares, its scenes, the builder).
 _KINDS: dict[str, tuple[str, frozenset[str], Callable[[str], tuple[Any, Any]]]] = {
     "firewall": ("pfsense", frozenset({"default", "ssh-exposure"}), _firewall),
     "network_policy": ("cilium", frozenset({"default", "dropped-flows"}), _network_policy),
     "identity": ("entra", frozenset({"default", "offboarding"}), _identity),
-    "marketdata": ("composite", frozenset({"default"}), _marketdata),
 }
+_CORE_KINDS = frozenset(_KINDS)
+_extensions_loaded = False
+
+
+def declare_scene(
+    kind: str, type_name: str, names: frozenset[str], build: Callable[[str], tuple[Any, Any]]
+) -> None:
+    """An extension's scenes for its own connector kind: `build(name)` returns a fresh `(connector,
+    fake)` holding the scene `name`, the connector being of the registered type `type_name`, whose
+    operations the scene declares. Declaring the same kind again replaces it (the API loads extensions
+    twice); a core kind cannot be taken over."""
+    if kind in _CORE_KINDS:
+        raise AdapterError(f"the kind {kind!r} has the core's own scenes: an extension cannot replace them")
+    if not names:
+        raise AdapterError(f"the kind {kind!r} declares no scene")
+    _KINDS[kind] = (type_name, frozenset(names), build)
+
+
+def _known(
+    kind: str | None = None,
+) -> dict[str, tuple[str, frozenset[str], Callable[[str], tuple[Any, Any]]]]:
+    """The kinds with scenes; the installed extensions are loaded once when `kind` is not among them (or
+    when every kind is asked for), so their scenes are found outside the API and the worker too."""
+    global _extensions_loaded  # noqa: PLW0603 - once per process, like the registry it fills
+    if not _extensions_loaded and (kind is None or kind not in _KINDS):
+        from .. import load_extensions
+
+        _extensions_loaded = True
+        load_extensions()
+    return _KINDS
 
 
 def scenes() -> dict[str, list[str]]:
     """Every kind that has scenes, and their names."""
-    return {kind: sorted(names) for kind, (_, names, _) in _KINDS.items()}
+    return {kind: sorted(names) for kind, (_, names, _) in _known().items()}
 
 
 def scene(kind: str, name: str = "default") -> Scene:
     """A fresh connector of `kind` on a fake holding the scene `name`."""
-    if kind not in _KINDS:
+    if kind not in _known(kind):
         raise AdapterError(f"no scene for the kind {kind!r}: {', '.join(sorted(_KINDS))} have scenes")
     type_name, names, build = _KINDS[kind]
     if name not in names:
@@ -151,7 +177,7 @@ def scene(kind: str, name: str = "default") -> Scene:
 def scene_type(kind: str) -> str:
     """The registered type whose real connector a kind's scenes run (`firewall` → `pfsense`): the type of
     the organisation connector the live matrix declares, whose operations and policies are that type's."""
-    if kind not in _KINDS:
+    if kind not in _known(kind):
         raise AdapterError(f"no scene for the kind {kind!r}: {', '.join(sorted(_KINDS))} have scenes")
     return _KINDS[kind][0]
 

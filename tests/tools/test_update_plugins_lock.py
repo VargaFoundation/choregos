@@ -9,6 +9,8 @@ import shutil
 import tarfile
 from pathlib import Path
 
+from tranibor_core.publishing import PUBLISHING
+
 from tools.plugins.update_lock import problems, read
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -18,11 +20,24 @@ OFFLINE = ROOT / "plugins" / "offline"
 def test_the_archives_are_what_the_lock_says() -> None:
     assert problems(OFFLINE) == []
     index, locked = read(OFFLINE)
-    assert set(locked) == {"software-delivery", "netops", "authoring", "mcp-clients", "requests"}
+    assert set(locked) == {
+        "software-delivery",
+        "netops",
+        "authoring",
+        "mcp-clients",
+        "requests",
+        "investment-research",
+    }
+    current = PUBLISHING.plugin_index.removeprefix("oci://").rsplit("/", 1)[0]
     for entry in locked.values():
         # Beside the index the lock itself records: it stays the frozen source's until `make
-        # plugins-lock` refreshes it from the one the publishing identity names (ADR 0186).
-        assert entry.source == f"{index.rsplit('/', 1)[0]}/{entry.name}:{entry.version}"
+        # plugins-lock` refreshes it from the one the publishing identity names (ADR 0186). A plugin first
+        # published after the move (`investment-research`, S83-07) can only come from the new one, signed
+        # by its publish workflow.
+        frozen = f"{index.rsplit('/', 1)[0]}/{entry.name}:{entry.version}"
+        assert entry.source in (frozen, f"{current}/{entry.name}:{entry.version}"), entry
+        if not entry.source.startswith(index.rsplit("/", 1)[0]):
+            assert entry.signature == f"keyless, {PUBLISHING.plugin_signing_identity}", entry
 
 
 def test_a_changed_archive_or_an_unlisted_one_is_caught(tmp_path: Path) -> None:

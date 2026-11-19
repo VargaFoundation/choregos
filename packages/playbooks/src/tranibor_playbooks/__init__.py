@@ -29,7 +29,39 @@ ROLES_DIR = Path(__file__).parent / "roles"
 # without rewriting the platform.
 def extra_roles_dirs() -> list[Path]:
     raw = os.environ.get("CHOREGOS_PLAYBOOKS_DIR", "")
-    return [Path(p) for p in raw.split(":") if p.strip()]
+    return [Path(p) for p in raw.split(":") if p.strip()] + [d for d, _ in _DECLARED_DIRS]
+
+
+#: The playbook directories extensions declared, each with its plugin (ADR 0181, round C0): after the
+#: deployment's, so a deployment still adapts a plugin's role as it adapts the package's.
+_DECLARED_DIRS: list[tuple[Path, str]] = []
+
+
+def declare_roles_dir(directory: Path, *, plugin: str) -> list[str]:
+    """Add a plugin's playbook directory (same two forms as `CHOREGOS_PLAYBOOKS_DIR`), and return the
+    roles it holds. Use `tranibor_core.stage_roles.declare_stage_roles`, which also declares the roles
+    in the contract's open list."""
+    if not directory.is_dir():
+        raise FileNotFoundError(
+            f"the playbook directory of the plugin `{plugin}` does not exist: {directory}"
+        )
+    if (directory, plugin) not in _DECLARED_DIRS:
+        _DECLARED_DIRS.append((directory, plugin))
+        _env.cache_clear()
+    return roles_in(directory)
+
+
+def forget_roles_dirs(plugin: str) -> None:
+    """Drop what `plugin` declared (a test that installed an extension does it after)."""
+    _DECLARED_DIRS[:] = [(d, p) for d, p in _DECLARED_DIRS if p != plugin]
+    _env.cache_clear()
+
+
+def roles_in(directory: Path) -> list[str]:
+    """The roles a playbook directory holds: `<role>.md` and `<role>/prompt.md`."""
+    flat = {p.stem for p in directory.glob("*.md") if not p.name.startswith("_")}
+    nested = {p.parent.name for p in directory.glob("*/prompt.md")}
+    return sorted(flat | nested)
 
 
 KNOWN_ROLES = (
@@ -292,7 +324,9 @@ __all__ = [
     "KNOWN_ROLES",
     "LANGUAGE_NAMES",
     "OUTPUT_CONTRACT",
+    "declare_roles_dir",
     "extra_roles_dirs",
+    "forget_roles_dirs",
     "frame",
     "invariants_in",
     "language_name",
@@ -302,4 +336,5 @@ __all__ = [
     "playbook_source",
     "preview_playbook",
     "render_playbook",
+    "roles_in",
 ]

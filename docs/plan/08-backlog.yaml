@@ -55,6 +55,7 @@ streams:
   S75: "The core is named Tranibor: visible name, packages, images and charts, environment variables (ADR 0176)"
   S80: "From engine to product: the plan of 2026-11-16"
   S81: "The phone is a surface of the platform: an Android app for agents, assistants and voice (ADRs 0192-0194)"
+  S83: "The contracts speak no trade: neutral names, software delivery and investment research as plugins, ontology removed (ADR 0181)"
 
 stories:
 
@@ -5562,13 +5563,21 @@ stories:
     depends_on: []
     notes: "Plan workstream P3, first part. max_concurrent_activities=20 was a literal in worker.py and the other slots the SDK's defaults; the defaults are unchanged (20/100/100/1000). Not done: a load test, waiting for runs without polling, the import ceiling (the rest of P3)."
   - id: S80-08
-    title: "docs(adr): the contracts speak no trade: inventory, neutral names, a software-delivery pack, the O4 options, decided before the 1.0 freeze (ADR 0181)"
+    title: "docs(adr): the contracts speak no trade: inventory, neutral names, a software-delivery plugin, the O4 options, decided before the 1.0 freeze (ADR 0181)"
     stream: S80
     sprint: 1
     priority: 8
     size: S
     depends_on: []
     notes: "Plan workstreams A1 (decision) and O4 (decision); proposed, the project lead decides in December 2026. Docs only: no contract changes. The contract-change rounds C0, C1 (in the same minor as ADR 0176 R2) and C2 are tracked by issue #1832."
+  - id: S80-08b
+    title: "chore(core): the ontology package is removed, its tables dropped if present (ADR 0181 O4-1)"
+    stream: S80
+    sprint: 1
+    priority: 8
+    size: M
+    depends_on: [S80-08]
+    notes: "Project lead's decision of 2026-11-19: option O4-1. packages/ontology, the compat shim, the console card, the template extension and the ontology trials go; migration b4d6f8a0c2e5 drops the tables IF EXISTS and migrate.forget_retired_revisions removes onto0001-0003 from alembic_version. Persisted origin 'ontology', ontology.effet/preuve and params.ontologie stay readable; the contract is unchanged."  # lang: fr-ok
   - id: S80-02
     title: "docs(plan): STATUS.md becomes an index of per-stream status files, and the install guide names the current version"
     stream: S80
@@ -5701,6 +5710,14 @@ stories:
     size: S
     depends_on: [S80-10]
     notes: "graalsystems/ecphoria 0.2.6 is the first release published to ghcr.io/graalsystems/ecphoria and -operator. The chart and both compose files pin 0.2.6-memory there; the allowlist of tests/licences/test_no_varga.py loses the four files that named the frozen Ecphoria address."
+  - id: S80-12
+    title: "docs(adr,plan): the core ships the generic deployment, an operator's repository keeps its values (ADR 0195)"
+    stream: S80
+    sprint: 1
+    priority: 3
+    size: S
+    depends_on: []
+    notes: "Decision of 2026-11-19. Sorts the first operator's deployment repository into generic (moves here) and operator-specific (stays), and orders the moves."
   - id: S80-13
     title: "ci: the gateway's guarantees are proven every night against a real model, Claude Haiku 5.5, with a capped key"
     stream: S80
@@ -5710,6 +5727,38 @@ stories:
     depends_on: [S80-07e]
     notes: ".github/workflows/live-model.yml: nightly at 03:30 UTC and on dispatch, never on a pull request, only on graalsystems/tranibor from main. tests/live/model/compose.yaml starts the chart's LiteLLM (guard, span callback) with every alias on anthropic/claude-haiku-5-5; tests/live/test_litellm_live.py runs through it, a skip fails the job. The repository secret ANTHROPIC_API_KEY (a dedicated workspace with a monthly cap) is in the environment of the step that starts LiteLLM only. Guarded by tests/ci/test_live_model_job.py."
   # ───────────── S81 — the phone is a surface of the platform ─────────────
+  - id: S80-14
+    title: "feat(charts): Temporal over TLS and on PostgreSQL in the chart, adopting an existing volume and Service name (ADR 0195)"
+    stream: S80
+    sprint: 1
+    priority: 3
+    size: L
+    depends_on: [S80-12, S80-06]
+    notes: "First move of ADR 0195. The temporal subchart gains tls (cert-manager chain or an existing secret, an nginx relay for start-dev), mode server (auto-setup on PostgreSQL), persistence.existingClaim and service.name. Not done: a handshake against a real Temporal over TLS on a cluster."
+  - id: S80-15
+    title: "feat(charts): the LiteLLM subchart takes model prices, cache prices, a TLS database and a pinned image (ADR 0195)"
+    stream: S80
+    sprint: 1
+    priority: 3
+    size: M
+    depends_on: [S80-12]
+    notes: "Second move of ADR 0195. Per-model modelInfo, database sslmode and password secret, a security context, a configuration checksum on the pod."
+  - id: S80-16
+    title: "feat(charts): Ecphoria and the embedded components adopt an existing volume and Service name (ADR 0195)"
+    stream: S80
+    sprint: 1
+    priority: 3
+    size: S
+    depends_on: [S80-12]
+    notes: "Third move of ADR 0195."
+  - id: S80-17
+    title: "feat(charts): an optional web-search stack, SearXNG, Firecrawl search and the outbound-proxy relay (ADR 0195)"
+    stream: S80
+    sprint: 1
+    priority: 3
+    size: L
+    depends_on: [S80-12]
+    notes: "Fourth move of ADR 0195. A websearch subchart, off by default."
   - id: S81-01
     title: "docs(adr,plan): the scope freeze is lifted (ADR 0192); the phone is a surface of the platform (ADR 0193); stream S81"
     stream: S81
@@ -5777,3 +5826,156 @@ stories:
       - "Tools sorted, system first, volatile data after the breakpoint; two calls with different volatile input share a byte-identical prefix"
       - "`cache_control: ephemeral` on the last tool and the last system block for an Anthropic-family model; no cache field for any other provider"
       - "Cache counters read from `usage`; their ledger columns are S4-07's"
+  # ───────────── S83 — the contracts speak no trade (ADR 0181, decided 2026-11-19) ─────────────
+  - id: S83-01
+    title: "docs(adr,site,plan): ADR 0181 accepted (option D, O4-1, O4-3, O4-4); one unit per trade, the plugin; stream S83"
+    stream: S83
+    sprint: 1
+    priority: 1
+    size: S
+    depends_on: []
+    acceptance:
+      - "ADR 0181 is accepted in its file and in docs/adr/README.md, with a Decision (2026-11-19) section: option D, O4-1/3/4, the rounds re-planned with dates, the 1.0 assessment"
+      - "the word pack no longer names the software-delivery unit in ADR 0181 or the plan"
+      - "docs/site/build/plugins-and-trades.md defines core, plugin, first-party plugin, extension, extension seam and edition, with one example per trade, and tests/docs/test_site.py is green on it"
+    notes: "Decision of the project lead, 2026-11-19. Docs only. The plugin is software-delivery; its extension tranibor-software-delivery lives in plugins/software-delivery/ of this repository as its own distribution."
+  - id: S83-02
+    title: "contract(contracts,core,orchestrator): C0, the vocabulary guard, the gate seam and context providers, the step-effect registry, open lists (ADR 0181)"
+    stream: S83
+    sprint: 1
+    priority: 2
+    size: L
+    depends_on: [S83-01]
+    acceptance:
+      - "a test lists the software terms of ADR 0181's inventory found in packages/contracts and on the five surfaces on a both-ways allowlist: a new term turns it red, a stale entry too"
+      - "an extension registers a gate with gate() and a context provider; the gate activity fills GateContext's facts from the provider, and a fixture extension's gate passes and fails on its facts"
+      - "does: resolves through a step-effect registry; open_pr and merge_pr are registered under the same names and every stored workflow fixture validates unchanged"
+      - "inbound event types, finding types, memory kinds, connector kinds and stage roles are open lists an extension extends; StageRole and playbooks.KNOWN_ROLES agree"
+      - "a workflow naming a gate no installed extension provides is refused at publication, naming it"
+      - "nothing is renamed; make contracts-check is green"
+    notes: "10-16 pd, no break. Larger than one PR: split as S83-02a (guard), b (gate seam), c (effect registry), d (open lists) when started, each with its row. Start 2026-11-23, merged by 2026-12-18."
+  - id: S83-02a
+    title: "test(contracts,api): the vocabulary guard of the contracts and the five surfaces, a counted ratchet; the plugins-and-trades page held (ADR 0181 C0)"
+    stream: S83
+    sprint: 1
+    priority: 2
+    size: S
+    depends_on: [S83-01]
+    acceptance:
+      - "tests/architecture/test_contracts_speak_no_trade.py reads the names (not the prose) of packages/contracts and of the MCP, A2A, trigger and seam modules, counts the software-delivery terms of ADR 0181's inventory per file, and fails when a count grows or drops without the allowlist following"
+      - "tests/docs/test_plugins_and_trades_page.py fails when docs/site/build/plugins-and-trades.md is deleted, unlinked from the pages that introduce plugins, or names a seam the code lacks"
+  - id: S83-02b
+    title: "feat(core,orchestrator): the gate seam, context providers filling GateContext.facts, and a gate whose plugin is not installed refused at publication (ADR 0181 C0)"
+    stream: S83
+    sprint: 1
+    priority: 2
+    size: M
+    depends_on: [S83-02a]
+    acceptance:
+      - "an extension registers a gate with gate() and a context provider; the gate activity fills GateContext's facts from the provider, and a fixture extension's gate passes and fails on its facts"
+      - "a workflow naming a gate no installed extension provides is refused at publication, naming the gate and, when known, the plugin"
+  - id: S83-02c
+    title: "feat(core,orchestrator): does: resolves through a step-effect registry; open_pr and merge_pr registered by the core under the same names (ADR 0181 C0)"
+    stream: S83
+    sprint: 1
+    priority: 2
+    size: M
+    depends_on: [S83-02a]
+    acceptance:
+      - "does: resolves through a step-effect registry; open_pr and merge_pr are registered under the same names and every stored workflow fixture validates unchanged"
+  - id: S83-02d
+    title: "contract(contracts): open lists, inbound event types, finding types, memory kinds, connector kinds and stage roles declarable by an extension (ADR 0181 C0)"
+    stream: S83
+    sprint: 1
+    priority: 2
+    size: M
+    depends_on: [S83-02a]
+    acceptance:
+      - "inbound event types, finding types, memory kinds, connector kinds and stage roles are open lists an extension extends; every current value stays valid; StageRole and playbooks.KNOWN_ROLES agree"
+      - "nothing is renamed; make contracts-check is green"
+  - id: S83-03
+    title: "contract(contracts,api,core): C1, neutral names beside the old ones, one window list, and the test that fails when a removal release is reached (ADR 0181)"
+    stream: S83
+    sprint: 2
+    priority: 3
+    size: L
+    depends_on: [S83-02]
+    acceptance:
+      - "contributor and approver beside developer and release_captain (Role, the approver role of the DSL, the membership enums); links beside pr_url; workspace, workspace_fixed, writes_workspace, needs_workspace, in_change_request, first_pass_acceptance_rate beside the old fields; responses carry both, requests accept either"
+      - "a transition may declare repairs: <outcome>; the interpreter picks it on that outcome, behind a workflow.patched id, with a replayed history under tests/replay"
+      - "one window list names each old name and the release that removes it; a test fails when pyproject's version reaches that release and the name is still there"
+      - "memberships.role readers accept both spellings; the OpenAPI title is Tranibor API"
+    notes: "12-19 pd. R2 shipped in 0.27.14 without C1, so Python names take the window rule of REST and DSL names (ADR 0181 decision 6). The removal, at least two weeks after the round's release, is its own PR (S83-03b), with the memberships data migration once the enterprise group mapper emits the new names. 2027-01-04 to 2027-02-05; window closed by 2027-02-26."
+  - id: S83-04
+    title: "contract(contracts,core,orchestrator,api): C2, the twelve gates, does, the delivery sections, scm/ci/cd event types, the train contract and DORA move to the software-delivery plugin (ADR 0181)"
+    stream: S83
+    sprint: 3
+    priority: 4
+    size: L
+    depends_on: [S83-02, S83-03]
+    acceptance:
+      - "the twelve gates that declare needs=(scm,) and their context provider live in plugins/software-delivery under their own names, registered through C0's seam; the activity names do not change and the replay suite is green"
+      - "project, policy, stage-input and stage-result carry a delivery section the plugin validates, read in both forms for one window; the diff and test evidence fields become measured facts, written in both forms by the runner"
+      - "the scm.*, ci.* and cd.* inbound types, the finding types bug, perf, tech-debt, flaky-test, the memory kinds flaky_test and hotspot, the connector kinds scm, ci, cd and the stage roles fix_ci, address_review, release_notes, verify_prod are declared by the plugin, with their strings unchanged"
+      - "the trains operations, getRunDiff, getProjectDora and the train and DORA statistics are the plugin's and absent from the frozen REST list of ADR 0168 §3"
+      - "after the removal PR the vocabulary guard's allowlist holds nothing on a frozen surface"
+    notes: "13-20 pd. The trip-wire of the 1.0 date: merged by 2027-04-16, removal released by 2027-05-07; not merged by 2027-04-30 loses 2027-06-30. 2027-02-08 to 2027-04-16."
+  - id: S83-05
+    title: "refactor(plugins): D, the release train's code and tranibor-software-delivery as its own distribution (ADR 0181)"
+    stream: S83
+    sprint: 4
+    priority: 5
+    size: L
+    depends_on: [S83-04]
+    acceptance:
+      - "plugins/software-delivery is the distribution tranibor-software-delivery, released as its own wheel and registered as software-delivery in choregos.plugins; the published API and worker images install it"
+      - "the train's workflows, activities, routes and tables are in it, through a worker seam and extensions.declare_router; the train-*.json histories replay"
+      - "a CI job runs the core's suite with the extension uninstalled, and it is green"
+      - "the software-delivery content plugin names the extension it needs and an install without it is refused, naming it; the repository templates of templates/ are in that plugin"
+    notes: "12-20 pd, 2027-04-19 to 2027-05-28; the window list is empty by 2027-06-11. The valve: D touches no frozen surface, so if it is late it may finish after 1.0, by the project lead's call (ADR 0181 decision 7). Same repository, separate distribution: a contract change and its consumer land in one PR during the windows."
+  - id: S83-06
+    title: "refactor: O4-1, the ontology package is removed (ADR 0181)"
+    stream: S83
+    sprint: 1
+    priority: 2
+    size: M
+    depends_on: [S83-01]
+    acceptance:
+      - "packages/ontology, its tests, compat/choregos-ontology, CHOREGOS_ONTOLOGY_TRIAL, trials/ontology, the ontology entry of joiners-leavers and its fixture, and the console's ontology component are gone"
+      - "a core migration drops ontology_versions and managed_objects IF EXISTS"
+      - "readers keep accepting origin='ontology' and the frozen effect kinds; the contract's origin enum keeps ontology as a value read and never written"
+    notes: "4-6 pd, 2026-11-23 to 2026-12-11. R2 already renamed it: its shim leaves with it, or with R2's shim removal if that comes first."
+  - id: S83-07
+    title: "refactor: O4-3, quant and the investment template become the investment-research plugin with its own job image (ADR 0181)"
+    stream: S83
+    sprint: 2
+    priority: 6
+    size: M
+    depends_on: [S83-01]
+    acceptance:
+      - "the quant command runs from a job image the plugin ships (allowed by CHOREGOS_JOB_IMAGES); the runner no longer depends on tranibor-quant; packages/quant and compat/choregos-quant are gone"
+      - "the investment-research template, its two agents, two skills and evals are the plugin's content; the investment end-to-end and conformance tests play it as a plugin"
+      - "the six wi-campaign-*-S38-* replay histories still pass, as tests of the generic job step"
+    notes: "3-5 pd, 2027-01-04 to 2027-01-22. The code (job image, later the extension) under plugins/investment-research/ beside software-delivery."
+  - id: S83-08
+    title: "refactor(adapters): O4-4, the marketdata connector family moves to the investment-research plugin's extension (ADR 0181)"
+    stream: S83
+    sprint: 2
+    priority: 7
+    size: M
+    depends_on: [S83-07]
+    acceptance:
+      - "tranibor_adapters.marketdata, its fake and its entries in specs.py, families.py and builtins.py are in tranibor-investment-research, which registers the family through tranibor_adapters.register"
+      - "the two connector.marketdata procedures are the plugin's"
+      - "test_core_names_no_business_vocabulary.py has no exemption left"
+    notes: "4-6 pd, 2027-01-25 to 2027-02-12."
+  - id: S4-07
+    title: "The cost ledger separates cache writes from cache reads (ADR 0188)"
+    stream: S4
+    sprint: 67
+    priority: 7
+    size: M
+    depends_on: [S4-03]
+    acceptance:
+      - "`cost_ledger.tokens_cache_write` (migration, default 0); the gateway adapter reads `cache_creation_input_tokens`"
+      - "The cost report's rows and total carry `tokens_cache_write` next to `tokens_cached` (contract PR first)"

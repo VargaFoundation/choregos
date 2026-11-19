@@ -250,39 +250,130 @@ name, no reuse, and no way for two projects to start from the same model.
 
 ## Shipping a gate from outside this tree
 
-An extension can register a gate the same way it registers a connector, and nothing else is needed:
+An extension can register a gate the same way it registers a connector. A gate that judges what the
+step produced needs nothing else: `ctx.result` carries the step's outputs and `evidence.facts`.
 
 ```python
 from tranibor_core.gates import GateContext, GateOutcome, gate
 
-@gate("collecteur_propre")
-def _collecteur_propre(ctx: GateContext, params: dict) -> GateOutcome:
-    faits = (ctx.result.evidence.facts or {}) if ctx.result else {}
-    propre = bool(faits.get("collecteur_propre"))
-    return GateOutcome("collecteur_propre", propre, detail="…")
+@gate("clean_collector", plugin="collectors")
+def _clean_collector(ctx: GateContext, params: dict) -> GateOutcome:
+    facts = (ctx.result.evidence.facts or {}) if ctx.result else {}
+    clean = bool(facts.get("clean_collector"))
+    return GateOutcome("clean_collector", clean, detail="collector clean" if clean else "finding still there")
 ```
 
-The property that decides everything is that the **DSL validator accepts it**: an unknown gate is a
-blocking error (`gate.unknown`), so a gate registered at start-up must become known to the
-validator, or no workflow using it would ever be valid. It does, and
-`packages/core/tests/test_gate_outside_the_tree.py` proves it — including that the gate really is
-missing before the extension loads, so the test cannot lie to itself.
+A gate that reads something the step did not produce (a ticket's state, a pipeline's checks, a diff)
+declares a **context provider** for it (ADR 0181, round C0): an async function the gate activity calls
+before judging, whose mapping is filed in `GateContext.facts` under the provider's name. The gate says
+which providers it reads (`reads=`); the activity calls each of them once per evaluation, and only when a
+gate of the transition reads it. The provider gets a `ProviderRequest`: the project, work item and run
+ids, the stage result, the work item's fields and documents, the declarations that read it, and the
+project and database session as the worker holds them. It reads, never writes: the evaluation is called
+again whenever its transition is judged again.
 
-No field needs to be added to `GateContext`: `ctx.result` already carries the step's outputs and
-`evidence.facts`. That is enough for any gate that judges what the step produced — which is most of
-them.
+```python
+from tranibor_core.gates import GateContext, GateOutcome, ProviderRequest, context_provider, gate
 
-**What still needs a core change**: a gate that reads something the context does not carry — a live
-diff, a CI verdict, the cost ledger — needs its field on `GateContext` *and* its population in
-`activities/gates.py`. That is a narrower limit than the one the plan assumed, and it is worth
-knowing before designing around it.
+@context_provider("itsm.tickets", plugin="itsm")
+async def tickets(request: ProviderRequest) -> dict:
+    return {"state": await my_itsm.state_of(request.fields["ticket"])}
+
+@gate("ticket_resolved", reads=("itsm.tickets",), plugin="itsm")
+def _ticket_resolved(ctx: GateContext, params: dict) -> GateOutcome:
+    found = ctx.facts.get("itsm.tickets")
+    if found is None:  # the provider failed or is not installed: refuse, never assume
+        return GateOutcome("ticket_resolved", False, detail="the ticket's state could not be read")
+    return GateOutcome("ticket_resolved", found["state"] == "resolved", detail=f"ticket {found['state']}")
+```
+
+A provider that raises, or returns something other than a mapping, leaves no key in `facts`, and is
+logged with its plugin: its gates refuse, and the transition's other gates are judged as usual. Two
+providers under one name are refused when the second one loads.
+
+The **DSL validator** decides whether a workflow can be published. It refuses, with a blocking error, a
+gate this deployment cannot judge, so that a work item never reaches it: `gate.unknown` for a gate no
+installed extension registers, naming the plugin when the core knows which one serves it
+(`tranibor_core.gates.PLUGIN_GATES`: the twelve software-delivery gates, which move to the
+`software-delivery` plugin in round C2), and `gate.provider_missing` for a registered gate whose context
+provider no extension declares, naming the gate's plugin. `packages/core/tests/test_gate_outside_the_tree.py`
+and `packages/core/tests/test_gate_seam.py` prove it, and `apps/orchestrator/tests/test_gate_seam_extension.py`
+installs a test plugin's extension for real and has the gate activity judge its gate on its provider's facts.
+
+## Shipping a step effect from outside this tree
+
+`does:` on a system transition names what the platform does when it crosses it. The core's own are
+`open_pr` and `merge_pr` (they move to the `software-delivery` plugin in round C2 of ADR 0181, under the
+same names). An extension registers its own when it loads:
+
+```python
+from tranibor_core.step_effects import PASSED, StepEffectRequest, step_effect
+
+async def close_incident(request: StepEffectRequest) -> dict:
+    await my_itsm.close(request.work_item_id, idempotency_key=request.key)
+    return {"detail": "incident closed"}
+
+def register_extension() -> None:
+    step_effect("close_incident", gesture="closes the incident", when=PASSED, plugin="itsm",
+                execute=close_incident, needs=("tracker",))
+```
+
+`step_effect` also declares the name in the contract's open list (`tranibor_contracts.STEP_EFFECTS`), so
+a workflow that says `does: close_incident` validates; where the extension is not installed, it is
+refused at publication (`unknown step effect`). `when` is `entered` (when the transition is taken, before
+its gates are judged) or `passed` (once every gate has passed). The gesture is what the process view
+says ("the platform, which closes the incident"), and `needs` is what a workflow naming it requires of
+its project.
+
+The interpreter never reads this registry: for any effect other than the core's two, it calls the
+`run_step_effect` activity at both moments, and that activity, in the worker that loaded the extensions,
+runs the effect at its moment. Its answers are in the history, which therefore replays without the
+extension; and the interpreter reads its stored workflow with the `stored` context
+(`tranibor_contracts.open_lists.STORED`), so a running work item whose plugin was removed keeps parsing,
+and its effect is refused when reached, naming it. A failure of `execute` refuses the crossing like a
+blocking gate (`does:<name>`): the transition's `on_fail` applies. `execute` must be idempotent: the
+activity is retried, and `request.key` is stable for one crossing.
+`apps/orchestrator/tests/test_step_effect_extension.py` installs a test plugin's extension and has the
+real interpreter play its effect; its history is `tests/replay/histories/wi-step-effect-S83-02c.json`.
+
+## Extending the open lists
+
+Five lists the contracts used to close are open since round C0 of ADR 0181: the inbound event types,
+the finding types, the memory kinds, the connector kinds and the stage roles (and `does:`, above). Each
+schema holds a pattern; `tranibor_contracts` holds the core's values and the ones extensions declare,
+each with its plugin. A value neither the core's nor declared is refused where it always was, and every
+current value is valid under its spelling. An extension declares its own when it loads:
+
+```python
+from pathlib import Path
+
+from tranibor_adapters import register
+from tranibor_contracts import FINDING_TYPES, INBOUND_EVENT_TYPES, MEMORY_KINDS
+from tranibor_core.stage_roles import declare_stage_roles
+
+def register_extension() -> None:
+    INBOUND_EVENT_TYPES.declare("itsm.incident.opened", plugin="itsm")
+    FINDING_TYPES.declare("sla-breach", plugin="itsm")
+    MEMORY_KINDS.declare("runbook", plugin="itsm")
+    register("service_desk", "servicenow", plugin="itsm")(ServiceNowDesk)  # a connector kind
+    declare_stage_roles(Path(__file__).parent / "roles", plugin="itsm")    # its playbooks
+```
+
+A value belongs to one plugin: a second plugin declaring it is refused, naming the first (a connector
+kind is the exception: two plugins may each register a type of it). `declare_stage_roles` adds the
+directory to the playbooks' search path after `CHOREGOS_PLAYBOOKS_DIR`, so a deployment still adapts a
+plugin's role, and declares each role it holds. What the platform stored is read back even once the
+plugin is gone: a memory keeps its kind, and a stored document is validated with the `stored` context
+(`tranibor_contracts.open_lists.STORED`). `packages/core/tests/test_open_lists_extension.py` installs a
+test plugin's extension that declares one of each and checks each reader takes it.
 
 ## Shipping a connector from outside this tree
 
 A package installed next to Tranibor can register its own connectors — no fork, no patch to the
 core. Declare an entry point in the `choregos.plugins` group. A package loaded that way is an
 **extension**; "plugin" means the package of [ADR 0093](adr/0093-an-agent-ships-as-a-plugin.md), see
-[plugins.md](plugins.md):
+[plugins.md](plugins.md). An extension that brings a trade's code is that trade's plugin's code half, with
+the plugin's name ([Plugins, extensions and editions](site/build/plugins-and-trades.md)):
 
 ```toml
 # pyproject.toml of your package
@@ -789,9 +880,9 @@ modules, and they keep plain typed aliases.
 
 The API is a dependency that only shrinks ([ADR 0099](adr/0099-the-api-is-a-dependency-that-only-shrinks.md)).
 
-- The orchestrator and extensions (entry-point packages such as `tranibor_ontology`) may import the
-  API's persistence and services, never its HTTP layer (`routers`, `deps`, `main`, `mcp`, `a2a`,
-  `fastapi`).
+- The orchestrator may import the API's persistence and services, never its HTTP layer (`routers`,
+  `deps`, `main`, `mcp`, `a2a`, `fastapi`). No package under `packages/` imports the API: the last
+  one, the ontology's service, was removed with the package (ADR 0181, O4-1).
 - Services never import routers. One import remains (`services/readiness.py`), ratcheted and
   removed by S47-08.
 - Routers share helpers through services, not by importing each other's private names. An import
@@ -805,7 +896,7 @@ Five guards count the crossings that exist today and refuse a new one. Each asse
 | Guard | Counts |
 |---|---|
 | `tests/architecture/test_orchestrator_imports_of_the_api.py` | `tranibor_api` imports in `apps/orchestrator/src` |
-| `tests/architecture/test_packages_imports_of_the_api.py` | `tranibor_api` imports in `packages/*/src` (only `tranibor_ontology/service`) |
+| `tests/architecture/test_packages_imports_of_the_api.py` | `tranibor_api` imports in `packages/*/src` (none: the ceiling is 0) |
 | `apps/api/tests/test_layering_services_do_not_import_routers.py` | modules outside `routers/` that import a router |
 | `apps/api/tests/test_layering_router_private_imports.py` | private names imported between router units |
 | `apps/api/tests/test_one_organisation_lookup.py` | module-level `_organisation` / `_org` helpers in routers |

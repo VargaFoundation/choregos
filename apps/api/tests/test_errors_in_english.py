@@ -2,7 +2,7 @@
 
 What an HTTP client receives when the API refuses (the `title` and `detail` of an RFC 9457
 problem, the `msg` of its `errors` list, the MCP door's refusal) is swept in the syntax tree of
-`tranibor_api` and of the routes the ontology mounts there: every string literal, and the constant
+`tranibor_api`: every string literal, and the constant
 part of every f-string, passed to an error constructor (`not_found`, `forbidden`, `ApiError`...,
 and the refusals the API returns as a response: `SkillRefused`, `ArgumentsRefused`, `Refusal` of
 the door...) or stored under a `title`, `detail`, `msg` or `error` key of a literal dictionary. A
@@ -28,8 +28,8 @@ from collections.abc import Callable, Iterator
 from types import ModuleType
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
-#: The API, and the ontology routes it serves (`/projects/{id}/ontology`, `/proposals`...).
-SOURCES = (ROOT / "apps/api/src/tranibor_api", ROOT / "packages/ontology/src/tranibor_ontology/service")
+#: The API (the ontology routes it served went with the package, ADR 0181 O4-1).
+SOURCES = (ROOT / "apps/api/src/tranibor_api",)
 
 
 def _language_guard() -> ModuleType:

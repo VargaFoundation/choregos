@@ -947,7 +947,7 @@ def _extension_executor(provider: Any, name: str) -> Executor:
 
 
 async def _extension_tools(ctx: Context) -> list[Tool]:
-    """The tools an extension serves to people (the ontology), on a project's door only."""
+    """The tools an extension serves to people, on a project's door only."""
     if ctx.project is None or ctx.org is None:
         return []
     core_names = {tool.name for tool in core_tools(ctx)}
@@ -990,7 +990,7 @@ async def announced_tools(ctx: Context) -> list[Tool]:
             if not any(principal.can(tool.needs, org, p.slug) for p, org in projects):
                 continue
         visible.append(tool)
-    # Then those of the extensions (the project's ontology): a write appears only with `mcp:write`.
+    # Then those of the extensions: a write appears only with `mcp:write`.
     visible += [o for o in await _extension_tools(ctx) if ctx.caller.writes or not o.write]
     # The assistants the person may talk to (S63-11): announced only to someone in an audience.
     visible += await assistant_tools(ctx)

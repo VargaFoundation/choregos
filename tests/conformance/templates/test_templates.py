@@ -215,43 +215,18 @@ def test_the_template_agents_and_skills_are_installable(path: Path) -> None:
                 )
 
 
-#: The extensions a template may ship (S20-09): any other would have nobody to validate it
-#: before a customer — nor, probably, to install it.
-EXTENSIONS_CONNUES = {"ontology"}
-#: What an ontology proof can collect outside the SCM (`connector.query` only reads its PRs).
-SERVED_EVIDENCE = {"object.reread", "collector.rerun"}
+#: The extensions a template may ship (S20-09): any other would have nobody to validate it before a
+#: customer, nor, probably, to install it. None since the ontology was removed (ADR 0181, O4-1).
+EXTENSIONS_KNOWN: set[str] = set()
 
 
 @pytest.mark.parametrize("path", MANIFESTS, ids=lambda p: p.parent.name)
-def test_template_extensions_are_valid_for_their_extension_package(path: Path, tmp_path: Path) -> None:
-    """A shipped ontology compiles with no error NOR warning against what the plugin can play; its
-    effects and proofs are served; an agent it authorises to propose is shipped by the template."""
-    from tranibor_api.schemas.agents import AgentCreate
+def test_template_extensions_are_known(path: Path) -> None:
+    """A template ships no extension that nothing in this repository validates."""
     from tranibor_api.services.templates import delivery
 
-    livree = delivery(manifest(path), path.parent)
-    inconnues = set(livree.extensions) - EXTENSIONS_CONNUES
-    assert not inconnues, f"extensions nobody validates: {sorted(inconnues)}"
-    if "ontology" not in livree.extensions:
-        return
-    from tranibor_ontology.compiler import compile_directory
-    from tranibor_ontology.service.actions import SERVED_EFFECTS
-    from tranibor_ontology.service.api import REGISTRY, _check_package, _write_package
-
-    files = livree.extensions["ontology"]
-    _check_package(files)
-    _write_package(tmp_path, files)
-    compilee, validation = compile_directory(tmp_path, REGISTRY)
-    assert compilee is not None and validation.valid, [i.format() for i in validation.errors]
-    assert not validation.warnings, [i.format() for i in validation.warnings]
-    agents = {AgentCreate.model_validate(document).slug for document in livree.agents}
-    for action in compilee.to_dict()["action_types"]:
-        effects = {e["type"] for e in action["effects"]} - SERVED_EFFECTS
-        assert not effects, f"{action['name']}: effects the plugin does not execute: {sorted(effects)}"
-        evidence = {p["collect"]["type"] for p in action["evidence"]} - SERVED_EVIDENCE
-        assert not evidence, f"{action['name']}: proofs the plugin does not collect: {sorted(evidence)}"
-        absents = {p.removeprefix("agent:") for p in action["propose"] if p.startswith("agent:")} - agents
-        assert not absents, f"{action['name']}: agents the template does not ship: {sorted(absents)}"
+    unknown = set(delivery(manifest(path), path.parent).extensions) - EXTENSIONS_KNOWN
+    assert not unknown, f"extensions nobody validates: {sorted(unknown)}"
 
 
 @pytest.mark.parametrize("path", MANIFESTS, ids=lambda p: p.parent.name)

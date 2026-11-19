@@ -20,10 +20,12 @@ with workflow.unsafe.imports_passed_through():
     from tranibor_core import WorkflowEngine
     from tranibor_core.dsl.dates import UnreadableDate, due_date
     from tranibor_core.gates import ACTION_SETTLED, GateOutcome
+    from tranibor_core.step_effects import CORE_EFFECTS, ENTERED, PASSED
 
     from ...activities import actions as action_activities
     from ...activities import children as children_activities
     from ...activities import scm as scm_activities
+    from ...activities import step_effects as step_effect_activities
 
 from ..interpreter import FAN_OUT, TRANSITION_ACTIONS
 from .base import InterpreterBase
@@ -46,6 +48,16 @@ class SystemMixin(InterpreterBase):
         # What the platform does is WRITTEN (`does`, #175); a workflow published before carried it in
         # the target state's name, and is still read that way: a recorded history replays identically.
         effect = transition_effect(transition)
+        # An extension's effect (ADR 0181): one activity decides, in the worker, whether it runs now or
+        # once the gates have passed. The core's two keep their own activities below, so a recorded
+        # history (none names another effect) replays unchanged.
+        later = False
+        if effect is not None and effect not in CORE_EFFECTS:
+            entered = await self._step_effect(params, transition, effect, ENTERED, attempt + 1)
+            if not entered["ok"]:
+                refused = GateOutcome(f"does:{effect}", False, detail=str(entered.get("detail", "")))
+                return engine.after_gates(transition, [refused], self._counted_attempts(key))
+            later = bool(entered.get("later"))
         if effect == "open_pr":
             try:
                 # `draft` only when the transition asks for one (S51-11): every other transition
@@ -74,7 +86,34 @@ class SystemMixin(InterpreterBase):
                 start_to_close_timeout=timedelta(minutes=3),
                 retry_policy=DEFAULT_RETRY,
             )
+        if later and all(not o.blocking and not o.pending for o in outcomes):
+            done = await self._step_effect(params, transition, str(effect), PASSED, attempt + 1)
+            if not done["ok"]:
+                outcomes = [
+                    *outcomes,
+                    GateOutcome(f"does:{effect}", False, detail=str(done.get("detail", ""))),
+                ]
         return engine.after_gates(transition, outcomes, self._counted_attempts(key))
+
+    async def _step_effect(
+        self, params: InterpreterInput, transition: Any, effect: str, moment: str, attempt: int
+    ) -> dict[str, Any]:
+        """An extension's step effect at one moment of its transition (`run_step_effect`)."""
+        answer: dict[str, Any] = await execute_on_its_queue(
+            step_effect_activities.run_step_effect,
+            {
+                "effect": effect,
+                "moment": moment,
+                "project_id": params.project_id,
+                "work_item_id": params.work_item_id,
+                "transition": transition.key,
+                "attempt": attempt,
+                "workflow_id": workflow.info().workflow_id,
+            },
+            start_to_close_timeout=timedelta(minutes=3),
+            retry_policy=DEFAULT_RETRY,
+        )
+        return answer
 
     async def _run_action(
         self, params: InterpreterInput, engine: WorkflowEngine, transition: Any, attempt: int

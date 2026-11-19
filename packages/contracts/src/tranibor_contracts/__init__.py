@@ -76,6 +76,14 @@ from .enums import (
     StateOutcome,
 )
 from .events import ChoregosEvent, Control, DeployResult, HumanDecision, InboundEvent
+from .open_lists import (
+    CONNECTOR_KINDS,
+    FINDING_TYPES,
+    INBOUND_EVENT_TYPES,
+    MEMORY_KINDS,
+    STAGE_ROLES,
+    OpenList,
+)
 from .outpost import (
     CALL_SIGNATURE_TYPE,
     DOOR_STATUS,
@@ -217,6 +225,7 @@ from .stage import (
 )
 from .workflow import (
     RUN_ACTORS,
+    STEP_EFFECTS,
     ActionApprovalSpec,
     ActionApprover,
     ActionEffectSpec,
@@ -331,11 +340,14 @@ __all__ = [
     "ARTIFACT_TYPES",
     "CALL_SIGNATURE_TYPE",
     "CHECKED_TYPES",
+    "CONNECTOR_KINDS",
     "DIFF_ARTIFACT",
     "DOOR_STATUS",
     "ENROLMENT_TTL_S",
     "FACT_TYPES",
+    "FINDING_TYPES",
     "IAT_WINDOW_S",
+    "INBOUND_EVENT_TYPES",
     "INERT_BINARY_EXTENSIONS",
     "MAX_BINARY_BYTES",
     "MAX_BODY_BYTES",
@@ -347,6 +359,7 @@ __all__ = [
     "MAX_SEALED_CALL_BYTES",
     "MAX_SEQUENCE",
     "MAX_WAIT_S",
+    "MEMORY_KINDS",
     "NONCE_HEADER",
     "NONCE_TTL_S",
     "OUTPOST_DOOR_PREFIX",
@@ -362,6 +375,8 @@ __all__ = [
     "SIGNATURE_HEADER",
     "STAGE_INPUT_SCHEMA",
     "STAGE_RESULT_SCHEMA",
+    "STAGE_ROLES",
+    "STEP_EFFECTS",
     "VALUE_TYPES",
     "WELL_KNOWN_ARTIFACTS",
     "A2aConfig",
@@ -434,6 +449,7 @@ __all__ = [
     "ModelRef",
     "ModelsConfig",
     "NamedRepository",
+    "OpenList",
     "OutpostAnswer",
     "OutpostAnswerOutcome",
     "OutpostAssertedNames",

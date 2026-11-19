@@ -3,12 +3,13 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import AfterValidator, Field, field_validator, model_validator
 
 from .artifact import ARTIFACT_TYPES, ArtifactDisplay
-from .enums import ApiFormat, FindingType, Severity, StageStatus
+from .enums import ApiFormat, Severity, StageStatus
+from .open_lists import FINDING_TYPES
 from .workflow import Strict
 
 STAGE_INPUT_SCHEMA = "choregos/StageInput/v1"
@@ -438,7 +439,9 @@ class StageInput(Strict):
 
 class Finding(Strict):
     title: str = Field(min_length=3, max_length=200)
-    type: FindingType
+    #: One of the core's `FindingType` (returned as the member), or a type an extension declared
+    #: (`FINDING_TYPES.declare`, ADR 0181); any other is refused.
+    type: Annotated[str, AfterValidator(FINDING_TYPES.validate)]
     severity: Severity
     evidence: str = Field(min_length=1)
     suggested_fix: str | None = None

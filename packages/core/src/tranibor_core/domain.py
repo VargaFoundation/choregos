@@ -7,11 +7,13 @@ They are serialisable (pydantic) because they cross the Temporal activity bounda
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field
 from tranibor_contracts import (
+    MEMORY_KINDS,
     ExecutorKind,
     MemoryKind,
     ReleaseStatus,
@@ -308,6 +310,12 @@ class StageJobSpec(Model):
     agent_container: AgentContainer | None = None
     #: The runner's arguments: `run` for a step, `serve-session` for a hosted session's pod (S41-11).
     runner_command: list[str] = Field(default_factory=lambda: ["run"])
+    #: Where the step's agent runs (ADR 0146, `tranibor_core.agent_isolation`): `container` asks the
+    #: executor for the agent's own container, and one that cannot start it refuses the run.
+    agent_isolation: Literal["process", "container"] = "process"
+    #: The image of the agent's own container under `container` (ADR 0146 §10): the operator's, for an
+    #: agent written in code (ADR 0063), whose runner is then the platform's image. None: the runner's.
+    agent_image: str | None = None
 
 
 class ExecRef(Model):
@@ -372,7 +380,11 @@ class VirtualKey(Model):
 class Spend(Model):
     tokens_in: int = 0
     tokens_out: int = 0
+    #: The input tokens read from the provider's cache, part of `tokens_in`.
     tokens_cached: int = 0
+    #: The input tokens written to the provider's cache (Anthropic cache creation), part of
+    #: `tokens_in`; dearer than a fresh token, where a read is far cheaper (S4-07, ADR 0188).
+    tokens_cache_write: int = 0
     cost_usd: float = 0.0
     requests: int = 0
     models_used: list[str] = Field(default_factory=list)
@@ -382,6 +394,7 @@ class Spend(Model):
             tokens_in=self.tokens_in + other.tokens_in,
             tokens_out=self.tokens_out + other.tokens_out,
             tokens_cached=self.tokens_cached + other.tokens_cached,
+            tokens_cache_write=self.tokens_cache_write + other.tokens_cache_write,
             cost_usd=self.cost_usd + other.cost_usd,
             requests=self.requests + other.requests,
             models_used=sorted(set(self.models_used) | set(other.models_used)),
@@ -424,8 +437,27 @@ class Provenance(Model):
     ts: datetime = Field(default_factory=utcnow)
 
 
+#: A memory kind: one of the core's `MemoryKind` (returned as the member) or one an extension declared
+#: (`tranibor_contracts.MEMORY_KINDS`, ADR 0181); a stored one is read back with the `stored` context.
+MemoryKindName = Annotated[str, AfterValidator(MEMORY_KINDS.validate)]
+
+
+def _kind_read_back(value: Any) -> Any:
+    """A memory read back from the store keeps its kind, declared or not any more (ADR 0098 §4)."""
+    text = str(value)
+    if text in MEMORY_KINDS.core:
+        return MemoryKind(text)
+    if re.fullmatch(MEMORY_KINDS.pattern, text):
+        return text
+    raise ValueError(f"not a memory kind: {text!r}")
+
+
+#: The kind of a memory read back: any that matches the list's pattern.
+StoredMemoryKind = Annotated[str, AfterValidator(_kind_read_back)]
+
+
 class Fact(Model):
-    kind: MemoryKind
+    kind: MemoryKindName
     subject: str
     content: str
     external_id: str | None = None
@@ -437,7 +469,7 @@ class Fact(Model):
 
 class Memory(Model):
     id: str
-    kind: MemoryKind
+    kind: StoredMemoryKind
     subject: str
     content: str
     score: float | None = None

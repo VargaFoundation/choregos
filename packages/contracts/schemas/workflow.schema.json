@@ -192,7 +192,7 @@
         "role": {
           "type": "string",
           "pattern": "^[a-z][a-z0-9_]{1,31}$",
-          "description": "The agent's role. The package's roles — triage, refine, plan, implement, verify, review, fix_ci, address_review, release_notes, verify_prod, custom — keep their meaning; a business names its own (`sourcing`, `instruction_dossier`), and the playbook is resolved by the role's name."
+          "description": "The agent's role. The package's roles — triage, refine, plan, implement, verify, review, fix_ci, address_review, release_notes, verify_prod, brief, deliver, custom — keep their meaning; a business names its own (`sourcing`, `instruction_dossier`), and the playbook is resolved by the role's name."
         },
         "model": {
           "type": "string",
@@ -536,11 +536,8 @@
         },
         "does": {
           "type": "string",
-          "enum": [
-            "open_pr",
-            "merge_pr"
-          ],
-          "description": "What the platform does when it takes a system transition: open the work item's pull request, or merge it (before #175: the `pr_` or `merged` prefix of the target state)."
+          "pattern": "^[a-z][a-z0-9_]{0,63}$",
+          "description": "What the platform does when it takes a system transition, a step effect by name (ADR 0181): the core's open_pr (open the work item's pull request) and merge_pr (merge it), or one an installed extension declares; the platform refuses any other (before #175: the `pr_` or `merged` prefix of the target state)."
         },
         "pull_request": {
           "type": "object",
