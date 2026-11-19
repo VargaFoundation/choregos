@@ -152,13 +152,12 @@ class Bench(FakeExecutor):
 
 @pytest.fixture
 def market(monkeypatch: pytest.MonkeyPatch) -> Any:
-    import tranibor_adapters
-    from tranibor_adapters.fakes.marketdata import FakeMarketData
+    from tranibor_investment_research.marketdata import fake as fakes
 
-    fake = FakeMarketData()
+    fake = fakes.FakeMarketData()
     fake.fixtures["TRND.US"] = sawtooth()
     fake.fixtures["TRN2.US"] = sawtooth(seed=11, phase=20)
-    monkeypatch.setattr(tranibor_adapters, "FAKE_MARKETDATA", fake)
+    monkeypatch.setattr(fakes, "FAKE", fake)
     monkeypatch.setenv("CONNECTOR_E2E_MARKETDATA_KEY", KEY)
     return fake
 

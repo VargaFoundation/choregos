@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """The `marketdata` connector family: daily bars and instrument facts from free sources.
 
-Read-only. Types: `stooq`, `yahoo`, `alphavantage`, `tiingo`, `composite` (and `fake`, in `fakes/`).
+Read-only. Types: `stooq`, `yahoo`, `alphavantage`, `tiingo`, `composite` (and `fake`, in `fake.py`).
 """
 
 from __future__ import annotations

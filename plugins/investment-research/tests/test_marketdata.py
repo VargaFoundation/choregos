@@ -11,8 +11,7 @@ from typing import Any
 import httpx
 import pytest
 from tranibor_adapters.errors import AdapterError
-from tranibor_adapters.fakes.marketdata import FakeMarketData, seed_of, synthetic_bars
-from tranibor_adapters.marketdata import (
+from tranibor_investment_research.marketdata import (
     AlphaVantageProvider,
     CompositeProvider,
     MarketDataError,
@@ -22,7 +21,8 @@ from tranibor_adapters.marketdata import (
     UnknownSymbol,
     YahooProvider,
 )
-from tranibor_adapters.marketdata.composite import compare_closes
+from tranibor_investment_research.marketdata.composite import compare_closes
+from tranibor_investment_research.marketdata.fake import FakeMarketData, seed_of, synthetic_bars
 
 KEY = "k3y-t0p-s3cret"
 

@@ -23,10 +23,9 @@ from datetime import date
 from typing import Any
 
 import httpx
+from tranibor_adapters.errors import AdapterError
+from tranibor_adapters.http.pool import Pool, Strategy
 from tranibor_core.publishing import PUBLISHING
-
-from ..errors import AdapterError
-from ..http.pool import Pool, Strategy
 
 #: What a symbol may be: letters, digits and `. ^ = _ -` (`BRK-B`, `^GSPC`, `EURUSD=X`, `MC.PA`).
 SYMBOL_PATTERN = r"^[A-Za-z0-9.^=_-]{1,20}$"

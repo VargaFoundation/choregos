@@ -12,6 +12,8 @@ WORKDIR /app
 COPY pyproject.toml uv.lock README.md ./
 COPY packages packages
 COPY compat compat
+# A workspace member (ADR 0181): uv reads every member's metadata, and this image installs none of its code.
+COPY plugins/investment-research/pyproject.toml plugins/investment-research/
 COPY apps/api/pyproject.toml apps/api/
 COPY apps/orchestrator/pyproject.toml apps/orchestrator/
 RUN mkdir -p apps/api/src apps/orchestrator/src \

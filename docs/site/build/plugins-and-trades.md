@@ -72,9 +72,11 @@ names it.
 - **HR**: the joiners and leavers workflows (today the core's `joiners-leavers` template). Content
   only: two coordinator agents, two skills, two workflows whose every write to the directory, the device
   fleet, the carrier or the badge readers is a governed action on the organisation's connectors.
-- **Investment research**: `investment-research`, by 1.0 (today in the core). Content: the campaign
-  template, two agents, two skills, their evals, and the job image that runs the deterministic quant
-  steps. Extension: the `marketdata` connector family.
+- **Investment research**: `investment-research`. Content: the campaign template, two agents, two
+  skills, their evals, the setup procedures of its connectors, and the job image that runs the
+  deterministic quant steps (by 1.0; today the template is still in the core). Extension: the
+  `marketdata` connector family, the distribution `tranibor-investment-research` in
+  `plugins/investment-research/` of the core's repository, which the published images install.
 
 ## What changes before 1.0
 
@@ -91,7 +93,8 @@ first-party plugin like any other, in its own distribution, before 1.0.
 | The release train, its routes and the DORA figures | `software-delivery` |
 | The repository templates | `software-delivery`'s content |
 | `packages/ontology` | removed |
-| The `quant` command and the investment template, the `marketdata` connectors | `investment-research` |
+| The `quant` command and the investment template | `investment-research` |
+| The `marketdata` connectors | `investment-research`'s extension: done (S83-08) |
 
 Gate names, event types and effect names do not change: stored workflows and subscribers keep working
 once the plugin is installed. A renamed field is served under both names for one minor release, then

@@ -15,7 +15,6 @@ from tranibor_contracts.outpost import ENDPOINT_ALIAS_PATTERN, OUTPOST_SLUG_PATT
 
 from .errors import AdapterError, ConfigurationError
 from .families import FAMILIES as _FAMILIES
-from .families import OPERATIONS_MARKETDATA as _OPERATIONS_MARKETDATA
 from .forge_accounts import DEFAULT_BASE_URL as _FORGE_DEFAULTS
 from .forge_accounts import KIND as _FORGE_KIND
 from .forge_accounts import check_config as _forge_check_config
@@ -717,84 +716,6 @@ _SHIPPED_SPECS: dict[tuple[str, str], ConnectorTypeSpec] = {
         secret_fields=("api_key",),
         operations=_FAMILIES["access_control"],
         dev_only=True,
-    ),
-    # The `marketdata` family (S38-03): prices from free sources, read by the platform for a run whose
-    # sandbox has no egress. Keys stay API-side (`secret_refs`).
-    ("marketdata", "stooq"): ConnectorTypeSpec(
-        "Stooq (daily CSV, free)",
-        ("marketdata",),
-        _object_schema(
-            {
-                "suffix_map": {
-                    "type": "object",
-                    "additionalProperties": {"type": "string"},
-                    "description": 'ticker suffix -> Stooq market suffix, e.g. {"": ".us", ".L": ".uk"}',
-                },
-                "timeout_s": {"type": "number", "default": 20},
-                **_KEY_ROTATION,
-            }
-        ),
-        ("api_key",),
-        operations=_OPERATIONS_MARKETDATA,
-        pooled_fields=("api_key",),
-    ),
-    ("marketdata", "yahoo"): ConnectorTypeSpec(
-        "Yahoo Finance chart (unofficial: personal use only, may break)",
-        ("marketdata",),
-        _object_schema({"timeout_s": {"type": "number", "default": 20}}),
-        operations=_OPERATIONS_MARKETDATA,
-    ),
-    ("marketdata", "alphavantage"): ConnectorTypeSpec(
-        "Alpha Vantage (free key: about 25 requests a day, unadjusted daily bars)",
-        ("marketdata",),
-        _object_schema(
-            {
-                "timeout_s": {"type": "number", "default": 20},
-                "outputsize": {
-                    "enum": ["auto", "compact"],
-                    "default": "auto",
-                    "description": "`compact`: always the last 100 trading days (free key); cross-check only",
-                },
-                **_KEY_ROTATION,
-            }
-        ),
-        ("api_key",),
-        operations=_OPERATIONS_MARKETDATA,
-        pooled_fields=("api_key",),
-    ),
-    ("marketdata", "tiingo"): ConnectorTypeSpec(
-        "Tiingo (free key: 30+ years of daily history, internal and personal use only)",
-        ("marketdata",),
-        _object_schema({"timeout_s": {"type": "number", "default": 20}, **_KEY_ROTATION}),
-        ("api_key",),
-        operations=_OPERATIONS_MARKETDATA,
-        pooled_fields=("api_key",),
-    ),
-    ("marketdata", "composite"): ConnectorTypeSpec(
-        "market data from several sources, with fallback and a cross-check of the closes",
-        ("marketdata",),
-        _object_schema(
-            {
-                "sources": {
-                    "type": "array",
-                    "items": {"enum": ["stooq", "yahoo", "alphavantage", "tiingo"]},
-                    "minItems": 1,
-                    "description": "provider types, in the order they are tried",
-                },
-                "source_configs": {
-                    "type": "object",
-                    "additionalProperties": {"type": "object"},
-                    "description": 'sub-configuration by provider type, e.g. {"stooq": {"suffix_map": {}}}',
-                },
-                "cross_check": {"type": "boolean", "default": True},
-                "tolerance": {"type": "number", "default": 0.02, "minimum": 0},
-                **_KEY_ROTATION,
-            },
-            ("sources",),
-        ),
-        ("stooq_api_key", "alphavantage_api_key", "tiingo_api_key"),
-        operations=_OPERATIONS_MARKETDATA,
-        pooled_fields=("stooq_api_key", "alphavantage_api_key", "tiingo_api_key"),
     ),
     # The `web_search` family (S40-01g, ADR 0083): called by the API's built-in `web_search`, never by a
     # runner. Each type declares what it does with the queries (`tranibor_adapters.web_search`); the

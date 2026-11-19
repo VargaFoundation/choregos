@@ -373,8 +373,11 @@ demonstration environment for a `cd: demo` connector (`/cd/mcp`): the release tr
 project promotes, checks and rolls back there, with no Argo CD — refused in staging and prod too. A supplier's agent needs no family: it is an MCP
 server like any other, its tools discovered and born closed.
 
-**Market data: `marketdata`.** Daily prices for stocks and ETFs, read **through the platform**: the
-run's sandbox keeps its egress closed, provider keys stay on the API side (`secret_refs`, never in
+**Market data: `marketdata`.** A connector family of the `investment-research` plugin's extension,
+`tranibor-investment-research` ([ADR 0181](adr/0181-the-contracts-speak-no-trade.md), O4-4), not of the
+core: the published API and worker images install it, and its setup procedures come with the plugin's
+content ([Plugins, extensions and editions](site/build/plugins-and-trades.md)). Daily prices for stocks
+and ETFs, read **through the platform**: the run's sandbox keeps its egress closed, provider keys stay on the API side (`secret_refs`, never in
 the pod), and every call is a row of the cost ledger. Read-only, so both operations are `allowed`:
 `get_bars` (`symbol`, `start`, `end` as `YYYY-MM-DD` — bars sorted, one per date, `adj_close` null
 when the source has none) and `get_instrument` (`symbol` — name, `stock`/`etf`/`unknown`, currency,
@@ -392,7 +395,8 @@ is a named error (`422`).
 The composite lists provider **types**, not other connectors (an adapter is built from one
 connector's configuration and secrets), hence the flat `<type>_api_key` secret fields. With
 `CHOREGOS_FAKES=1` a `fake` serves deterministic synthetic bars (a random walk seeded by the symbol,
-business days only). Every tool call also records `request_sha256` and `response_sha256` (SHA-256 of
+business days only): the extension registers it as the family's `fake` type, as the core does for its
+own, and tests script it as `tranibor_investment_research.marketdata.fake.FAKE`. Every tool call also records `request_sha256` and `response_sha256` (SHA-256 of
 the canonical JSON) in its `tool.called` event, so a result can later be matched to what the run was
 served, and `response_bytes`, the size in UTF-8 bytes of that same canonical JSON of the result: what
 the call put back into the model's context (S57-01). It also records `origin`, the door the call came through —

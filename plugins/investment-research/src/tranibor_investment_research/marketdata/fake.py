@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import Any
 
-from ..marketdata.base import (
+from .base import (
     MarketDataError,
     MarketDataProvider,
     UnknownSymbol,
@@ -131,3 +131,16 @@ class FakeMarketData(MarketDataProvider):
 
 
 __all__ = ["FakeMarketData", "MarketDataError", "seed_of", "synthetic_bars"]
+
+
+#: The process-wide fake of `CHOREGOS_FAKES=1`, scripted by the tests, the e2e and the demo. `None` until
+#: the first build; a test rebinds it here.
+FAKE: FakeMarketData | None = None
+
+
+def shared() -> FakeMarketData:
+    """The process-wide fake, created on first use."""
+    global FAKE  # noqa: PLW0603 - the process-wide fake, rebound by tests as the core's are
+    if FAKE is None:
+        FAKE = FakeMarketData()
+    return FAKE
