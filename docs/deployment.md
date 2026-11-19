@@ -2235,6 +2235,21 @@ leave in **0.30.0** (not before 2026-12-07).
 | A step result's `artifacts.pr_url` | Read beside `artifacts.links`. | Nothing. |
 | The OpenAPI title | "Tranibor API". | Nothing. |
 
+**The agent runs in a container of its own by default** (S65-04m, [ADR 0146](adr/0146-the-runner-and-the-agent-do-not-share-a-container.md)).
+`global.runner.agentIsolation` now defaults to `container`: with values that say nothing, the API, the workers
+and the warm pool's template are told `CHOREGOS_RUNNER_AGENT_ISOLATION=container`, the warm pool's pod and
+`k8s_job`'s Job get the agent's sidecar after the egress gate, and the agent holds none of the run's
+credentials (proved on a gVisor cluster with the real runner image, S65-04o). `process` stays a choice,
+journaled on every run as `agent.isolation: process`.
+
+| What | What happens | What to do |
+| :-- | :-- | :-- |
+| A deployment that already sets `global.runner.agentIsolation: container` | Nothing. | Nothing. |
+| A deployment on `agent_sandbox`, `k8s_job` or `local_docker` that set nothing | Its next pods have two containers; the runner's requests `runner.ownResources` (250m, 512Mi) beside the agent's, so a namespace quota sees 1.25 CPU and 2.5Gi requested per run instead of 1 and 2Gi, and a LimitRange judges each container. | Check the quota and the LimitRange of the runs' namespace; or set `process` to keep the former pod. |
+| A deployment on `tekton` or `aca` | Neither can start the agent's container: every run is refused at its start with `agent_isolation_unavailable`, and `/readiness` says so first. | Set `global.runner.agentIsolation: process`. |
+| A cluster older than Kubernetes 1.29 | No native sidecar: `k8s_job` refuses each run before creating anything, and the warm pool's template needs native sidecars too. | Set `process`, or upgrade the cluster. |
+| `docker compose`, `make demo`, a process started without the chart | Unchanged: the code's default, read when `CHOREGOS_RUNNER_AGENT_ISOLATION` is unset, stays `process`; the runner is told by its executor. | Set the variable to `container` to try the shape locally (`local_docker`). |
+
 ## Upgrading past 0.27.13: the egress gate
 
 **Every agent pod waits for its egress policy** (S80-07f, [the egress gate](#the-egress-gate)). From
