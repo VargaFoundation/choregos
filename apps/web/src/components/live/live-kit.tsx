@@ -9,8 +9,11 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
+  type ReactNode,
   type RefObject,
 } from "react";
+import { createPortal } from "react-dom";
 import { API_BASE, api } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import {
@@ -233,12 +236,15 @@ export function useLiveFlow({
   workflow,
   feed,
   demo,
+  story = "board",
 }: {
   graph: WorkflowGraph | undefined;
   items: WorkItemDto[];
   workflow: string;
   feed: Feed;
   demo: boolean;
+  /** Which scripted story the demo plays: the board's, or the flow's (on its own, richer graph). */
+  story?: "board" | "flow";
 }) {
   const start = (): Box => ({
     state: initialState(graph, demo ? [] : items, { day_start: startOfDay() }),
@@ -284,9 +290,12 @@ export function useLiveFlow({
     let stopped = false;
     let timers: ReturnType<typeof setTimeout>[] = [];
     const play = async () => {
-      const { liveScript } = await import("@/mocks/live");
+      const { liveScript, flowScript } = await import("@/mocks/live");
       if (stopped) return;
-      const fresh = liveScript(graph, workflow, Date.now());
+      const fresh =
+        story === "flow"
+          ? flowScript(workflow, Date.now())
+          : liveScript(graph, workflow, Date.now());
       setBox({
         state: initialState(graph, fresh.items, { day_start: startOfDay() }),
         arrived: {},
@@ -313,7 +322,7 @@ export function useLiveFlow({
       stopped = true;
       timers.forEach(clearTimeout);
     };
-  }, [demo, graph, workflow, setState]);
+  }, [demo, graph, workflow, story, setState]);
 
   const flow = useMemo(() => view(box.state, new Date(now).toISOString()), [box.state, now]);
   const arrived = useMemo(
@@ -502,3 +511,71 @@ export function Summary({
   );
 }
 
+/** The wall's clock, top right: the time of the last tick. */
+export function Clock({ now }: { now: number }) {
+  return (
+    <time
+      data-testid="live-clock"
+      dateTime={new Date(now).toISOString()}
+      className="font-mono text-4xl tabular-nums text-ink-muted"
+    >
+      {new Date(now).toLocaleTimeString("en-GB", {
+        hour: "2-digit",
+        minute: "2-digit",
+      })}
+    </time>
+  );
+}
+
+/**
+ * The wall: the live view on the whole screen, taken out of the console's shell. The shell stays in the
+ * page but is made `inert` (no focus, no click, hidden from assistive technology) while the wall is up.
+ */
+export function Wall({
+  children,
+  onExit,
+}: {
+  children: ReactNode;
+  onExit: () => void;
+}) {
+  // False while the page is rendered on the server, where there is no `document` to portal into.
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
+  const node = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!mounted) return;
+    const covered: HTMLElement[] = [];
+    for (const el of Array.from(document.body.children)) {
+      if (
+        el instanceof HTMLElement &&
+        el !== node.current &&
+        !el.hasAttribute("inert")
+      ) {
+        el.setAttribute("inert", "");
+        covered.push(el);
+      }
+    }
+    const key = (e: KeyboardEvent) => e.key === "Escape" && onExit();
+    window.addEventListener("keydown", key);
+    document.documentElement.dataset.wall = "true";
+    return () => {
+      for (const el of covered) el.removeAttribute("inert");
+      window.removeEventListener("keydown", key);
+      delete document.documentElement.dataset.wall;
+    };
+  }, [mounted, onExit]);
+  if (!mounted) return null;
+  return createPortal(
+    <div
+      ref={node}
+      data-testid="live-wall"
+      className="fixed inset-0 z-50 overflow-hidden bg-surface-sunken text-ink"
+    >
+      {children}
+    </div>,
+    document.body,
+  );
+}

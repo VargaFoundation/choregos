@@ -232,7 +232,8 @@
         "status": "idle",
         "running": null,
         "failure": null,
-        "waiting": null
+        "waiting": null,
+        "transition": null
       },
       {
         "id": "w2",
@@ -249,7 +250,8 @@
           "cost_usd": 0.52
         },
         "failure": null,
-        "waiting": null
+        "waiting": null,
+        "transition": null
       }
     ],
     "ticker": [

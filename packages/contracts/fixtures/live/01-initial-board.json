@@ -271,7 +271,8 @@
         "status": "idle",
         "running": null,
         "failure": null,
-        "waiting": null
+        "waiting": null,
+        "transition": null
       },
       {
         "id": "w2",
@@ -288,7 +289,8 @@
           "cost_usd": 0.12
         },
         "failure": null,
-        "waiting": null
+        "waiting": null,
+        "transition": null
       },
       {
         "id": "w3",
@@ -301,7 +303,8 @@
           "reason": "workflow",
           "summary": "Interpreter died: worker lost"
         },
-        "waiting": null
+        "waiting": null,
+        "transition": null
       },
       {
         "id": "w4",
@@ -314,7 +317,8 @@
         "waiting": {
           "kind": "approval",
           "label": "Approve the pull request"
-        }
+        },
+        "transition": null
       },
       {
         "id": "w5",
@@ -324,7 +328,8 @@
         "status": "idle",
         "running": null,
         "failure": null,
-        "waiting": null
+        "waiting": null,
+        "transition": null
       },
       {
         "id": "w6",
@@ -334,7 +339,8 @@
         "status": "idle",
         "running": null,
         "failure": null,
-        "waiting": null
+        "waiting": null,
+        "transition": null
       },
       {
         "id": "w7",
@@ -344,7 +350,8 @@
         "status": "idle",
         "running": null,
         "failure": null,
-        "waiting": null
+        "waiting": null,
+        "transition": null
       },
       {
         "id": "w8",
@@ -354,7 +361,8 @@
         "status": "idle",
         "running": null,
         "failure": null,
-        "waiting": null
+        "waiting": null,
+        "transition": null
       },
       {
         "id": "w9",
@@ -367,7 +375,8 @@
         "waiting": {
           "kind": "question",
           "label": "question"
-        }
+        },
+        "transition": null
       }
     ],
     "ticker": []

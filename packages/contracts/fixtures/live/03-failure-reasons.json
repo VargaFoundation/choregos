@@ -276,7 +276,8 @@
           "reason": "budget",
           "summary": "The run spent its budget of 2.00 USD."
         },
-        "waiting": null
+        "waiting": null,
+        "transition": null
       },
       {
         "id": "w2",
@@ -289,7 +290,8 @@
           "reason": "timed_out",
           "summary": ""
         },
-        "waiting": null
+        "waiting": null,
+        "transition": null
       },
       {
         "id": "w3",
@@ -302,7 +304,8 @@
           "reason": "loop",
           "summary": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy…"
         },
-        "waiting": null
+        "waiting": null,
+        "transition": null
       }
     ],
     "ticker": [

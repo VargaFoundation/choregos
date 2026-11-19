@@ -328,3 +328,112 @@
     opacity: 0.35;
   }
 }
+
+/*
+ * The workflow's flow (S67-29). A station with a run in flight glows in the workflow's hue
+ * (`.live-running`); its token carries a spinning ring; a failed token flashes red; an edge lights up
+ * for a moment when a token has just walked along it (`data-lit`, set by the view). Edges are drawn in
+ * the console's tokens, so both themes read. All motion stops for whoever asked for less.
+ */
+.flow-station {
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+.flow-station-side {
+  border-style: dashed;
+  background: color-mix(in srgb, var(--choregos-surface-sunken) 60%, var(--choregos-surface));
+}
+.flow-edge-base {
+  stroke: var(--choregos-line-strong);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+.flow-edge-side .flow-edge-base {
+  stroke-dasharray: 5 5;
+  stroke-width: 1.5;
+}
+.flow-edge-pulse {
+  stroke: var(--live-hue, var(--choregos-accent));
+  stroke-width: 4;
+  stroke-linecap: round;
+  opacity: 0;
+  transition: opacity 0.9s ease-out;
+  filter: drop-shadow(0 0 6px var(--live-hue, var(--choregos-accent)));
+}
+.flow-edge[data-lit="true"] .flow-edge-pulse {
+  opacity: 0.9;
+  transition: opacity 0.15s ease-in;
+}
+.flow-edge[data-lit="true"] .flow-edge-base {
+  stroke: var(--live-hue, var(--choregos-accent));
+}
+.flow-edge-label {
+  fill: var(--choregos-ink-muted);
+  paint-order: stroke;
+  stroke: var(--choregos-surface);
+  stroke-width: 5px;
+  stroke-linejoin: round;
+  font-size: 11px;
+  font-family: var(--choregos-font-sans);
+}
+.flow-edge {
+  color: var(--choregos-line-strong);
+}
+.flow-ring {
+  position: absolute;
+  inset: -3px;
+  border-radius: 9999px;
+  background: conic-gradient(
+    from var(--flow-angle),
+    transparent 0 45%,
+    var(--live-hue, var(--choregos-running-solid)) 100%
+  );
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px));
+  animation: flow-spin 1.4s linear infinite;
+}
+@property --flow-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+@keyframes flow-spin {
+  to {
+    --flow-angle: 360deg;
+  }
+}
+@keyframes flow-flash {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+  35% {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--choregos-failed-solid) 45%, transparent);
+  }
+}
+.flow-flash {
+  animation: flow-flash 1.1s ease-out 3;
+}
+.flow-token:hover,
+.flow-token:focus-within {
+  z-index: 40;
+}
+html[data-wall] body {
+  overflow: hidden;
+}
+@media (prefers-reduced-motion: reduce) {
+  .flow-ring {
+    animation: none;
+    background: var(--live-hue, var(--choregos-running-solid));
+    opacity: 0.35;
+  }
+  .flow-flash {
+    animation: none;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--choregos-failed-solid) 45%, transparent);
+  }
+  .flow-token {
+    transition: none;
+  }
+  .flow-edge-pulse {
+    transition: none;
+  }
+}

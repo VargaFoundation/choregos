@@ -654,6 +654,30 @@ Options:
   --help       Show this message and exit.
 ```
 
+### `choregos live`
+
+```text
+Usage: choregos live [OPTIONS]
+
+  Watch a workflow's flow: its stations, the items parked in them, and the
+  ones that move.
+
+  Stations from left to right, side states (rejections, retries, waits) below,
+  each item a token coloured by what it is doing: blue runs, amber waits for a
+  person, red failed (with why). A token that changes station travels along
+  its arrow. Enter opens an item, q quits. It needs a terminal, and writes
+  nothing; `choregos activity` is the scriptable form.
+
+Options:
+  -p, --project <str>   the project's slug; the only one of the organisation
+                        otherwise
+  -w, --workflow <str>  the workflow's name; the project's default otherwise
+  --org <str>           the organisation; the profile's otherwise
+  --no-motion           no spinner and no travelling token (also
+                        CHOREGOS_NO_MOTION, and NO_COLOR)
+  --help                Show this message and exit.
+```
+
 ### `choregos login`
 
 ```text

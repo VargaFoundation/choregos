@@ -210,7 +210,8 @@
           "cost_usd": null
         },
         "failure": null,
-        "waiting": null
+        "waiting": null,
+        "transition": null
       },
       {
         "id": "w2",
@@ -227,7 +228,8 @@
           "cost_usd": null
         },
         "failure": null,
-        "waiting": null
+        "waiting": null,
+        "transition": null
       }
     ],
     "ticker": [

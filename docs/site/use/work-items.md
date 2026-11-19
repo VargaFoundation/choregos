@@ -78,6 +78,20 @@ happens. There is no separate page to open:
 
 With *reduce motion* set in your system, nothing pulses or slides: cards change place plainly.
 
+### The flow
+
+**Flow** (in the project's navigation, and a tab of every workflow's page) draws the workflow as a line and
+shows the work items travelling through it:
+
+- The stations of the nominal path run left to right; the states that leave it (rejections, retries, escalations, human waits) sit on a row below. Each station says who acts there (agent, human or platform) and how many work items are in it.
+- Every work item is a small token with its key, resting in its station and coloured by status: amber when it waits for a person, red when its run failed (hover or focus it for the reason), a spinning ring while a run is in flight (the elapsed time and the spend are in its tooltip). A station with a run in flight glows in the workflow's colour.
+- When a work item changes state its token walks along the edge to the next station, and the edge lights up for a moment. A token opens its work item.
+- A click on a station narrows **Latest events** to it and lists its tickets.
+- **Wall mode** (or `?wall=1`) takes the whole screen for a display nobody operates: the project and workflow in large type, a clock, the summary, the flow and the ticker. **Escape** leaves it.
+- The workflow switcher on the project's Flow page picks another workflow; the default one opens first.
+
+With *reduce motion* set in your system, tokens jump to their new station instead of walking.
+
 ### On its page
 
 Open a work item. From top to bottom:
