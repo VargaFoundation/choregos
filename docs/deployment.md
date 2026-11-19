@@ -220,6 +220,34 @@ by default `^CONNECTOR_[A-Z0-9_]+$`, set as `CHOREGOS_SECRET_ENV_PATTERN`. Widen
 an upgrade, a stored reference outside the pattern stops resolving (the connector shows in error):
 rename its variable or widen the pattern.
 
+## Web Push to a person's phone ([ADR 0194](adr/0194-a-persons-devices-are-told-by-web-push.md))
+
+Off until the instance holds a VAPID key: without it `GET /push/vapid-public-key` answers 404
+`push_not_configured` and a device registration 409. Generate the key once and keep it:
+
+```bash
+openssl ecparam -name prime256v1 -genkey -noout | openssl pkcs8 -topk8 -nocrypt -out vapid.pem
+kubectl -n <namespace> create secret generic choregos-push-vapid --from-file vapid-private-key=vapid.pem
+```
+
+```yaml
+choregos-api:
+  push:
+    vapid:
+      existingSecret: choregos-push-vapid
+      subject: "mailto:ops@example.com"   # a mailto: or https: contact a push service may use
+```
+
+| Setting | Source | Role |
+| :-- | :-- | :-- |
+| `CHOREGOS_PUSH_VAPID_PRIVATE_KEY` | the Secret above (`push.vapid.key`, default `vapid-private-key`) | PEM or 32 raw bytes in base64url, P-256 only |
+| `CHOREGOS_PUSH_VAPID_SUBJECT` | `choregos-api.push.vapid.subject` | required with the key: an empty subject turns push off and logs a warning |
+| `CHOREGOS_PUSH_ALLOW_PRIVATE_ENDPOINTS` | `choregos-api.push.allowPrivateEndpoints` | accept push services on private addresses (self-hosted); default false |
+
+The API needs egress to the push services of the devices' vendors (HTTPS, port 443). **Rotating the
+key invalidates every registered device**: a subscription is bound to the key it was made with, so
+each device registers again. A push is best effort: the inbox and the console remain the record.
+
 ## The GitHub App
 
 One App serves the deployment: the tracker, the pull requests, the checks and the run's git token go

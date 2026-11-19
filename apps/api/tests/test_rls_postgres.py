@@ -1053,3 +1053,33 @@ async def test_org_egress_rules_are_isolated(two_organisations: dict[str, str]) 
             session.add(OrgEgressRule(org_id=ids["b"], host="stolen.example.test", status="allowed"))
     async with session_scope() as session:
         assert (await session.execute(select(OrgEgressRule))).scalars().all() == [], "no scope, nothing"
+
+
+async def test_a_device_is_visible_to_its_person_and_to_the_platform_only(pg_app: Any) -> None:
+    """`push_subscriptions` carries no `org_id`: the policy is the person (S81-03, ADR 0194)."""
+    from tranibor_api.db.models import PushSubscription, User
+    from tranibor_api.db.session import name_the_user, session_scope
+
+    async with session_scope(orgs="*") as session:
+        people = [User(email=f"{n}@example.test", display_name=n) for n in ("one", "two")]
+        session.add_all(people)
+        await session.flush()
+        ids = [p.id for p in people]
+        for user_id, tag in zip(ids, ("one", "two"), strict=True):
+            session.add(
+                PushSubscription(
+                    user_id=user_id,
+                    endpoint=f"https://push.example.test/{tag}",
+                    p256dh="k",
+                    auth="a",
+                    device_name=tag,
+                )
+            )
+    async with session_scope() as session:  # no scope and no person: nothing
+        assert (await session.execute(select(PushSubscription))).scalars().all() == []
+    async with session_scope() as session:
+        await name_the_user(session, ids[0])
+        rows = (await session.execute(select(PushSubscription))).scalars().all()
+        assert [r.device_name for r in rows] == ["one"]
+    async with session_scope(orgs="*") as session:
+        assert len((await session.execute(select(PushSubscription))).scalars().all()) == 2

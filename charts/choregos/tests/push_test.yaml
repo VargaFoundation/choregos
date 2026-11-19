@@ -1,0 +1,29 @@
+# Web Push (S81-03, ADR 0194): the API is told its VAPID key only when a Secret is named.
+suite: web push
+templates:
+  - charts/choregos-api/templates/deployment.yaml
+tests:
+  - it: by default the API gets no push setting
+    asserts:
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content: { name: CHOREGOS_PUSH_VAPID_SUBJECT, value: "mailto:ops@example.com" }
+      - notExists:
+          path: spec.template.spec.containers[0].env[?(@.name=="CHOREGOS_PUSH_VAPID_PRIVATE_KEY")]
+  - it: with a Secret the key is read by reference and the subject is set
+    set:
+      choregos-api.push.vapid.existingSecret: choregos-push-vapid
+      choregos-api.push.vapid.subject: "mailto:ops@example.com"
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].env[?(@.name=="CHOREGOS_PUSH_VAPID_PRIVATE_KEY")].valueFrom.secretKeyRef.name
+          value: choregos-push-vapid
+      - equal:
+          path: spec.template.spec.containers[0].env[?(@.name=="CHOREGOS_PUSH_VAPID_SUBJECT")].value
+          value: "mailto:ops@example.com"
+  - it: a key without a subject stops the rendering
+    set:
+      choregos-api.push.vapid.existingSecret: choregos-push-vapid
+    asserts:
+      - failedTemplate:
+          errorPattern: "push.vapid.subject"

@@ -114,6 +114,9 @@ _SERVED: dict[str, set[str]] = {"prompt": {"prompt", "hosted"}, "voice": {"voice
 #: person (ADR 0142 §4), a decision, not a failure.
 _CLEAN_ENDS = {"closed", "expired", "max_minutes", "idle", "caller_gone", "agent_closed", "agent_stopped"}
 
+#: A session its own person ended, or walked away from, is not news to them (ADR 0194 §3).
+_ENDED_BY_ITS_PERSON = {"closed", "caller_gone"}
+
 #: The gateway's own words for a spent key, as `tranibor_runner.budget` reads them.
 _BUDGET_SIGNATURES = ("budget_exceeded", "budgetexceedederror", "exceededbudget", "budget has been exceeded")
 
@@ -971,6 +974,23 @@ async def close_session(session: AsyncSession, record: AgentSessionRecord, *, re
         closed.update(priced)
     await journal(session, record, "session.closed", closed)
     log.info("agent_session.closed", session_id=record.id, reason=reason, cost_usd=record.cost_usd)
+    if reason not in _ENDED_BY_ITS_PERSON:
+        from ..push.delivery import Notice, tell
+
+        tell(
+            session,
+            Notice(
+                kind="session.ended",
+                org_id=record.org_id,
+                project_id=record.project_id,
+                title="Session ended",
+                body=f"Your session with {record.agent_slug} ended ({reason.replace('_', ' ')})",
+                ref_type="agent_session",
+                ref_id=record.id,
+                path="/conversations",
+                candidates=frozenset({record.user_id}),
+            ),
+        )
 
 
 async def opened_terms(session: AsyncSession, record: AgentSessionRecord) -> dict[str, Any]:

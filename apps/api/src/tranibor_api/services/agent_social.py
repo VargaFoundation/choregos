@@ -283,6 +283,21 @@ async def notify(
             for user_id in recipients
         ],
     )
+    from ..push.delivery import Notice, tell
+
+    tell(
+        session,
+        Notice(
+            kind="agent.notification",
+            org_id=agent.org_id,
+            title=f"Agent {agent.slug}",
+            body=kind.replace("_", " ").replace(".", " "),
+            ref_type="agent",
+            ref_id=agent.id,
+            path="/inbox",
+            candidates=frozenset(recipients),
+        ),
+    )
     return len(recipients)
 
 

@@ -10,19 +10,8 @@ PREFIX = "/api/v1"
 
 # Contract-first (ADR 0001): operations the contract declares before the API serves them. Each entry
 # names the story that implements it; an entry the API does serve must be removed from here.
-CONTRACT_ONLY: dict[str, str] = {
-    "getPushVapidPublicKey": "S81-03",
-    "listMyPushSubscriptions": "S81-03",
-    "createMyPushSubscription": "S81-03",
-    "deleteMyPushSubscription": "S81-03",
-    "testMyPushSubscription": "S81-03",
-}
-CONTRACT_ONLY_PATHS: set[str] = {
-    "/push/vapid-public-key",
-    "/me/push-subscriptions",
-    "/me/push-subscriptions/{id}",
-    "/me/push-subscriptions/{id}/test",
-}
+CONTRACT_ONLY: dict[str, str] = {}
+CONTRACT_ONLY_PATHS: set[str] = set()
 
 
 def _app_paths(spec: dict[str, Any]) -> set[str]:

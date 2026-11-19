@@ -107,6 +107,18 @@ mcpCatalogueExtra: ""
 # a missing property fails the whole ExternalSecret sync.
 externalSecrets:
   sessionSecretPrevious: false
+# Web Push to a person's phone (S81-03, ADR 0194). Off until a Secret holds the VAPID key:
+#   openssl ecparam -name prime256v1 -genkey -noout | openssl pkcs8 -topk8 -nocrypt -out vapid.pem
+#   kubectl create secret generic choregos-push-vapid --from-file vapid-private-key=vapid.pem
+# `subject` is a `mailto:` or `https:` contact a push service may use to reach the operator. Rotating
+# the key makes every registered device re-register (docs/deployment.md). `allowPrivateEndpoints`
+# accepts push services on private addresses (a self-hosted one); leave it false otherwise.
+push:
+  vapid:
+    existingSecret: ""
+    key: vapid-private-key
+    subject: ""
+  allowPrivateEndpoints: false
 # The OIDC provider's endpoints, for one that publishes no discovery document (ADR 0100). Set all
 # three or none: the render fails otherwise. Empty (the default): the API reads the provider's
 # discovery document, whose `issuer` must equal `global.oidc.issuer`, and answers 503 when it cannot.
