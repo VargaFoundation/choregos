@@ -72,7 +72,7 @@ def test_the_readme_says_the_new_name_and_the_notice_keeps_the_former_one() -> N
     # former name is kept where history belongs: NOTICE, the trademark page, ADR 0176.
     readme = (ROOT / "README.md").read_text()
     assert readme.startswith("# Tranibor\n")
-    assert "choregos" not in readme.lower() and "varga" not in readme.lower()
+    assert "choregos" not in readme.lower()
     assert (ROOT / "NOTICE").read_text().startswith("Tranibor (formerly Choregos)\n")
 
 

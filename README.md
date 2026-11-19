@@ -11,8 +11,8 @@ behind a *release train*.
 Tranibor is published by [GRAAL.SYSTEMS SAS](https://github.com/graalsystems) under the Apache 2.0
 licence. It is the open core of the graal Agentic Platform.
 
-**Documentation:** [graalsystems.github.io/tranibor](https://graalsystems.github.io/tranibor/), or
-[`docs/`](docs/README.md) in this repository.
+**Documentation:** [`docs/`](docs/README.md), also published as the project website (linked from the
+repository's About panel).
 
 ## Principles
 
