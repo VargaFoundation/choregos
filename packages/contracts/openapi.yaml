@@ -107,6 +107,78 @@ paths:
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/EndedSessions" } } } }
         "401": { $ref: "#/components/responses/Unauthorized" }
+  /push/vapid-public-key:
+    get:
+      tags: [session]
+      operationId: getPushVapidPublicKey
+      summary: The instance's VAPID public key, which a device subscribes with (S81-02, ADR 0194)
+      description: >-
+        The application server key of Web Push (RFC 8292): the uncompressed P-256 point, base64url without
+        padding, as `PushManager.subscribe` and UnifiedPush clients expect it. 404 (`code` `push_not_configured`)
+        when this instance has no VAPID key: no device can be told, and the routes of `/me/push-subscriptions`
+        that would store one answer 409 with the same code.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/PushVapidKey" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /me/push-subscriptions:
+    get:
+      tags: [session]
+      operationId: listMyPushSubscriptions
+      summary: The caller's devices that are told by Web Push, the most recently registered first
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/PushSubscription" } } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [session]
+      operationId: createMyPushSubscription
+      summary: Register a device (a Web Push subscription) for the caller; idempotent on `endpoint`
+      description: >-
+        What `PushSubscription.toJSON()` yields, or what a UnifiedPush distributor hands the application,
+        plus a name the person recognises the device by. Registering an endpoint the caller already holds
+        updates its keys, name and `kinds` and answers 200; a new one answers 201. An endpoint held by
+        ANOTHER person is moved to the caller (a device changes hands by signing in again; the other person
+        stops being told on it). `endpoint` must be an https URL of a public host (422 otherwise).
+        A person only, not a service account or an outpost (403). 409 `push_not_configured` when the
+        instance has no VAPID key.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/PushSubscriptionCreate" } } }
+      responses:
+        "200": { description: The endpoint was already registered; updated, content: { application/json: { schema: { $ref: "#/components/schemas/PushSubscription" } } } }
+        "201": { description: Registered, content: { application/json: { schema: { $ref: "#/components/schemas/PushSubscription" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /me/push-subscriptions/{id}:
+    delete:
+      tags: [session]
+      operationId: deleteMyPushSubscription
+      summary: Stop telling one of the caller's devices
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Deleted }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /me/push-subscriptions/{id}/test:
+    post:
+      tags: [session]
+      operationId: testMyPushSubscription
+      summary: Send a `push.test` message to one of the caller's devices and say what the push service answered
+      description: >-
+        Sends the `PushPayload` of kind `push.test` and waits for the push service's answer (this one call
+        is synchronous; real deliveries never are). A 404 or 410 from the push service means the device
+        is gone: the subscription is deleted and `removed` is true. A refusal or an outage of the push
+        service is a 200 with `delivered` false. 409 `push_not_configured` without a VAPID key.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/PushTestResult" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /auth/login:
     get:
       tags: [session]
@@ -11854,6 +11926,75 @@ components:
         user_agent: { type: [string, "null"], description: "The `User-Agent` of its last request, truncated." }
         ip: { type: [string, "null"], description: "The client address of its last request (an IPv6 client as its /64)." }
         current: { type: boolean, description: "The session this request came with." }
+    PushKind:
+      type: string
+      enum: [decision.awaiting, run.ended, agent.notification, session.ended]
+      description: >-
+        What a device may ask to be told about (`kinds` of a subscription): `decision.awaiting` (an action
+        waits for a decision the person may take, a human step), `run.ended` (a run the person started
+        reached a final state), `agent.notification` (an item of `GET /orgs/{org}/agent-notifications`),
+        `session.ended` (a hosted agent session the person opened ended).
+    PushVapidKey:
+      type: object
+      required: [public_key]
+      properties:
+        public_key: { type: string, description: "The uncompressed P-256 point (65 bytes, leading 0x04), base64url without padding." }
+    PushSubscriptionCreate:
+      type: object
+      required: [endpoint, keys, device_name]
+      additionalProperties: false
+      properties:
+        endpoint: { type: string, maxLength: 2048, description: "The push service's URL for this device. https, public host." }
+        keys:
+          type: object
+          required: [p256dh, auth]
+          additionalProperties: false
+          properties:
+            p256dh: { type: string, maxLength: 128, description: "The device's ECDH public key (65 bytes), base64url (RFC 8291)." }
+            auth: { type: string, maxLength: 64, description: "The device's 16-byte authentication secret, base64url (RFC 8291)." }
+        device_name: { type: string, minLength: 1, maxLength: 80, description: "How the person recognises the device (`Pixel 8`)." }
+        kinds: { type: [array, "null"], items: { $ref: "#/components/schemas/PushKind" }, uniqueItems: true, description: "The kinds this device is told about; null or absent: all of them." }
+    PushSubscription:
+      type: object
+      required: [id, device_name, endpoint_host, kinds, created_at]
+      description: "A registered device. The endpoint itself is a capability and is never echoed: its host is, for the person to recognise the push service."
+      properties:
+        id: { type: string }
+        device_name: { type: string }
+        endpoint_host: { type: string, description: "The host of the push service (`ntfy.sh`, `fcm.googleapis.com`)." }
+        kinds: { type: array, items: { $ref: "#/components/schemas/PushKind" } }
+        created_at: { type: string, format: date-time }
+        last_delivered_at: { type: [string, "null"], format: date-time, description: "The last time the push service accepted a message for this device." }
+        last_failure_at: { type: [string, "null"], format: date-time, description: "The last time delivery failed for a reason other than the device being gone (a gone device is deleted)." }
+    PushTestResult:
+      type: object
+      required: [delivered, removed]
+      properties:
+        delivered: { type: boolean, description: "The push service accepted the message (2xx)." }
+        status_code: { type: [integer, "null"], description: "What the push service answered; null when it could not be reached." }
+        removed: { type: boolean, description: "The push service said the device is gone (404 or 410): the subscription was deleted." }
+    PushRef:
+      type: object
+      required: [type, id]
+      properties:
+        type: { type: string, enum: [action, run, agent, agent_session, none], description: "What the message is about; `none` for a test." }
+        id: { type: string }
+    PushPayload:
+      type: object
+      required: [kind, title, body, org, ref, url, at]
+      description: >-
+        The JSON a device receives. It travels as an RFC 8291 `aes128gcm` message that only the device can
+        read, and it is minimal on purpose: a title, one line, and references the application resolves with
+        its own credential (nothing here is a secret or content of a work item). Not returned by any route;
+        documented here for the applications that decode it. `kind` is one of `PushKind` or `push.test`.
+      properties:
+        kind: { type: string, enum: [decision.awaiting, run.ended, agent.notification, session.ended, push.test] }
+        title: { type: string, maxLength: 120 }
+        body: { type: string, maxLength: 200, description: "One line." }
+        org: { type: string, description: "The organisation's slug; empty for a test." }
+        ref: { $ref: "#/components/schemas/PushRef" }
+        url: { type: string, description: "A path of the console (`/orgs/acme/...`), relative to the instance's origin: the application opens it on the server it is signed in to." }
+        at: { type: string, format: date-time }
     DeviceAuthorizationRequest:
       type: object
       required: [client_kind]
