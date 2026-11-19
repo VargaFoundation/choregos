@@ -121,6 +121,7 @@ choregos-temporal:
 - `choregos-temporal.tls.enabled` needs `global.temporal.tls.enabled`: the render refuses a TLS server whose
   clients would speak clear.
 
+
 ### Temporal over TLS, payloads encrypted ([ADR 0183](adr/0183-temporal-over-tls-payloads-encrypted.md))
 
 Temporal keeps every workflow's inputs, results, signals and failure messages: ticket text, agents'

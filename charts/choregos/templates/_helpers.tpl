@@ -524,9 +524,19 @@ monitoring
 {{- end -}}
 {{- end -}}
 
+{{- /* S80-15: the embedded Services' names, overridable so an operator whose clients already dial another
+name (`litellm`, `ecphoria`) keeps it (ADR 0195). Global, because the API, the workers and the other
+subcharts render the URLs from their own values. */ -}}
+{{- define "choregos.gatewayServiceName" -}}
+{{- (.Values.global.gateway).serviceName | default (printf "%s-litellm" .Release.Name) -}}
+{{- end -}}
+{{- define "choregos.memoryServiceName" -}}
+{{- (.Values.global.memory).serviceName | default (printf "%s-ecphoria" .Release.Name) -}}
+{{- end -}}
+
 {{- define "choregos.gatewayUrl" -}}
 {{- if .Values.global.gateway.embedded -}}
-http://{{ .Release.Name }}-litellm:4000
+http://{{ include "choregos.gatewayServiceName" . }}:4000
 {{- else -}}
 {{ .Values.global.gateway.url }}
 {{- end -}}
@@ -534,7 +544,7 @@ http://{{ .Release.Name }}-litellm:4000
 
 {{- define "choregos.memoryUrl" -}}
 {{- if .Values.global.memory.embedded -}}
-http://{{ .Release.Name }}-ecphoria:8432
+http://{{ include "choregos.memoryServiceName" . }}:8432
 {{- else -}}
 {{ .Values.global.memory.url }}
 {{- end -}}
