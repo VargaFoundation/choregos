@@ -272,6 +272,38 @@ async def test_agent_failing_initialize_exits_30(stage_input: StageInput, runner
     assert outcome.exit_code is Exit.AGENT_UNREACHABLE
 
 
+async def test_an_agent_that_refuses_its_session_ends_the_run_with_a_failed_result(
+    stage_input: StageInput, runner_settings: Any
+) -> None:
+    """#1986: `session/new` answered an error (opencode, `service: directory`) and the exception left
+    `Runner.execute`: no `run.failed`, no result, a traceback. Now the run says it and posts it."""
+    outcome, client = await execute(stage_input, runner_settings, {"fail_session_new": True})
+    assert outcome.exit_code is Exit.AGENT_UNREACHABLE
+    assert [r.reason for r in client.results] == ["agent_session_refused"]
+    assert client.results[0].status is StageStatus.FAILED
+    assert "session/new refused" in client.results[0].summary
+    failed = [e["payload"] for e in client.events if e["type"] == "run.failed"]
+    assert failed and failed[0]["phase"] == "session" and failed[0]["reason"] == "agent_session_refused"
+    assert "service=directory" in failed[0]["stderr"], "the agent's last error lines are journaled"
+
+
+async def test_an_agent_that_exits_at_start_ends_the_run_at_once_with_a_failed_result(
+    stage_input: StageInput, runner_settings: Any
+) -> None:
+    """#1986: an agent that exited before `initialize` was noticed after the 60 s timeout, and no result
+    was posted. Now the run ends when it exits, saying its code and its error output."""
+    started = asyncio.get_running_loop().time()
+    outcome, client = await asyncio.wait_for(
+        execute(stage_input, runner_settings, {"exit_at_start": 1}), timeout=30
+    )
+    assert asyncio.get_running_loop().time() - started < 30
+    assert outcome.exit_code is Exit.AGENT_UNREACHABLE
+    assert [r.reason for r in client.results] == ["agent_exited"]
+    failed = [e["payload"] for e in client.events if e["type"] == "run.failed"]
+    assert failed[0]["phase"] == "initialize" and failed[0]["exit_code"] == 1
+    assert "read-only file system" in failed[0]["stderr"]
+
+
 async def test_transcript_is_written_as_jsonl(stage_input: StageInput, runner_settings: Any) -> None:
     outcome, _ = await execute(
         stage_input, runner_settings, {"turns": [{"messages": ["a", "b"], "result": valid_result()}]}
