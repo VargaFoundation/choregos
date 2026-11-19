@@ -469,15 +469,34 @@ class ArtifactFile(Strict):
     size: int = Field(ge=0)
 
 
+#: The relation of the link to the change a step proposes for review (ADR 0181 C1): a pull request,
+#: a merge request, a change in a document system.
+CHANGE_REQUEST = "change_request"
+
+
+class Link(Strict):
+    """Where a step's work can be seen, by relation: `{rel: change_request, url}` (ADR 0181 C1)."""
+
+    rel: str = Field(pattern=r"^[a-z][a-z0-9_]{0,31}$")
+    url: str = Field(min_length=1, max_length=2048)
+
+
 class Artifacts(Strict):
     branch: str | None = None
     commits: list[str] = Field(default_factory=list)
+    #: The former name of the `change_request` link, read until the release `window.WINDOW` names.
     pr_url: str | None = None
+    #: Where the step's work can be seen, by relation (ADR 0181 C1).
+    links: list[Link] = Field(default_factory=list, max_length=20)
     transcript_url: str | None = None
     context_pack_url: str | None = None
     reports: dict[str, str] = Field(default_factory=dict)
     #: The files of `.choregos/outputs/`, by artifact name; written by the runner, never by the agent.
     files: dict[str, ArtifactFile] = Field(default_factory=dict)
+
+    def link(self, rel: str) -> str | None:
+        """The URL of the first link of this relation, if any."""
+        return next((link.url for link in self.links if link.rel == rel), None)
 
 
 class Evidence(Strict):

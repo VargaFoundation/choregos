@@ -66,6 +66,14 @@ SURFACES: tuple[str, ...] = (
     f"{API}/tenant_sign_in.py",
 )
 
+#: Files under `SURFACES` the guard does not read, each with its reason.
+EXCLUDED: dict[str, str] = {
+    "packages/contracts/src/tranibor_contracts/window.py": (
+        "the window list names each former name once, with the release that removes it; "
+        "tests/architecture/test_the_window_list.py removes them (ADR 0181 C1)"
+    ),
+}
+
 _C1 = "C1: a neutral name for a concept the core owns"
 _C2 = "C2: moves to the software-delivery plugin under the same name"
 #: term -> the round of ADR 0181 that takes it out of the core's contracts.
@@ -299,7 +307,8 @@ def hits_of(path: Path) -> Counter[str]:
 
 
 def surfaces() -> list[Path]:
-    return sorted({path for pattern in SURFACES for path in ROOT.glob(pattern) if path.is_file()})
+    found = {path for pattern in SURFACES for path in ROOT.glob(pattern) if path.is_file()}
+    return sorted(path for path in found if path.relative_to(ROOT).as_posix() not in EXCLUDED)
 
 
 def measure() -> dict[str, dict[str, int]]:
@@ -341,6 +350,11 @@ def test_the_contracts_and_the_surfaces_name_no_more_trade_than_allowed() -> Non
         "the vocabulary shrank: lower ALLOWED in the same PR (an entry at zero leaves), so it never comes "
         "back:\n" + "\n".join(dropped)
     )
+
+
+def test_an_excluded_file_exists() -> None:
+    gone = [file for file in EXCLUDED if not (ROOT / file).is_file()]
+    assert not gone, f"excluded files that no longer exist, take them off EXCLUDED: {gone}"
 
 
 def test_every_allowed_term_is_a_term_of_the_vocabulary() -> None:
