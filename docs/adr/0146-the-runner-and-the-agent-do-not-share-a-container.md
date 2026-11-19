@@ -76,10 +76,27 @@ the second executor when that one can, and refuses, naming both, when neither ca
 image is never sent back to the pool for it. The fake executor declares it (it starts no runner).
 A hosted session's pod (`serve-session`) asks for `process`: it starts no agent of its own.
 
-**Not built, still decided**: `k8s_job`, `local_docker`, `tekton`, `aca`
-get no second container here: under `container` they refuse the run at `start`. The runner container keeps
-today's requests and limits (§12 asks for a smaller one: not measured), so a `container` pod requests
-twice what a `process` pod does.
+**Built after, S65-04h (§9, `k8s_job` and `local_docker`)**: both declare `separate_agent`. Under
+`container` the Job gets the warm pool's agent container as a native sidecar (`separate_agent.py`: the
+platform's image, `launcher`, uid 1001 in group 1000, read-only root, `TMPDIR`/`HOME` only, the tree, the
+exchange `emptyDir` and its own `/tmp`), after the egress gate, which stays the first init container; beside
+a hosted agent it is named `launcher` (the hosted container keeps `agent`). Below Kubernetes 1.29 the run is
+refused before anything is created. Docker gets a second container in the runner's network namespace, as
+`1001:1000`, `--read-only`, with two volumes: the tree (filled from the image's `/workspace`, the runner's
+uid) and the exchange directory (a tmpfs owned by group 1000, setgid); the runner gives the tree's root to
+its group when it finds the launcher. Under `process` both render exactly what they rendered before (a
+fixture of the previous rendering). The executor reads the `runner` container's log by name.
+
+**§12, measured (2026-11-19)**: the runner's container gets its own requests and limits beside the agent's
+(`runner.ownResources`: 250m and 512 MiB requested, 1 CPU and 2 GiB at most), the agent's container takes
+what the single container had. Measured against this repository (4,869 files, a 121 MiB pack): the runner's
+modules 78 MiB resident; its `git fetch --depth 50` 146 MiB at peak; `checkout`, `add -A`, `diff` and `commit`
+of 400 changed files under 70 MiB, each under a second of CPU; a full clone 700 MiB. A `k8s_job` pod under
+`container` requests 1.25 CPU and 2.5 GiB where a `process` pod requests 1 and 2 GiB. Not measured: the
+compression proxy (ADR 0055) the runner starts for a policy that asks for it, and a real run end to end.
+
+**Not built, still decided**: `tekton` and `aca` get no second container: under `container` they refuse the
+run at `start`.
 
 **Proved** (`tests/cluster/test_agent_isolation.py`, kubelet 1.34, runc): the same probe, run as the
 runner's child, reads the runner's environment, process and file; run by the launcher, it reads none

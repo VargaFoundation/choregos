@@ -1479,8 +1479,8 @@ under runc and under gVisor. A hosted agent's container (ADR 0080) runs its auth
 instant, before the runner.
 
 **What it does.** Every pod that runs agent code gets, as its FIRST init container, `egress-gate`: the
-`k8s_job` pod (before a hosted agent's sidecar) and the `agent_sandbox` template (before the ADR 0146
-agent container). It runs from the runner's image (`python -m tranibor_core.egress_gate`), tries a
+`k8s_job` pod (before the ADR 0146 agent container and a hosted agent's sidecar) and the `agent_sandbox`
+template (before the ADR 0146 agent container). It runs from the runner's image (`python -m tranibor_core.egress_gate`), tries a
 direct TCP connection to `target` again and again, and exits 0 once three attempts in a row did not
 connect (refused, reset, unreachable or timed out: a REJECT rule answers like a closed port, a DROP rule
 like a dead host). An attempt that connects starts the count again. Still open after
@@ -2130,6 +2130,14 @@ agent's container (it does not declare `separate_agent`) refuses each run at its
 (`agent-isolation`); with `runner.customImageExecutor`, a run the warm pool cannot isolate goes to the
 second executor when that one can. The chart refuses to render with the former key set (either value),
 naming the new one: move the value, or remove it if it was `process`, the default.
+
+**`k8s_job` and `local_docker` start the agent's container** (S65-04h). Under `container` a Job's pod gets
+the agent's container as a native sidecar after the egress gate (Kubernetes 1.29 or later; an older cluster
+is refused at the run's start), and Docker a second container in the runner's network namespace. The
+runner's own container then requests `choregos-orchestrator.runner.ownResources` (250m and 512Mi, at most 1
+CPU and 2Gi; the warm pool's template too) and the agent's takes `runner.limits` and the run's requests, as
+the single container did: a namespace quota sees 1.25 CPU and 2.5Gi requested per run instead of 1 and 2Gi,
+and a LimitRange judges each container. `tekton` and `aca` refuse `container`.
 
 ## Upgrading past 0.27.13: the egress gate
 

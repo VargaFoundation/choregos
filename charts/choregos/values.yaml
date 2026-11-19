@@ -721,6 +721,15 @@ choregos-orchestrator:
     limits:
       cpu: "2"
       memory: 6Gi
+    # Under `global.runner.agentIsolation: container` (ADR 0146 §12) the agent's container takes the
+    # requests and the limits above, since the harness and the test suites are what use them; the
+    # runner's own container takes these (Python, git, the loopback listeners). Measured on
+    # 2026-11-19: the runner's modules 78 MiB resident, its `git fetch --depth 50` of a 121 MiB-pack
+    # repository 146 MiB at peak, commit and diff under 70 MiB. A pod then requests 1.25 CPU and 2.5 GiB
+    # (k8s_job) where a `process` pod requests 1 and 2 GiB.
+    ownResources:
+      requests: { cpu: 250m, memory: 512Mi }
+      limits: { cpu: "1", memory: 2Gi }
     # The pool's RuntimeClass. Prefer `global.runner.runtimeClass`, which the API reads too (this
     # value alone leaves `/readiness` unable to judge a gVisor policy). Both set: they must agree.
     runtimeClass: ""
