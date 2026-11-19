@@ -18,7 +18,7 @@ class _Jobs(FakeExecutor):
 
 
 def test_a_run_on_the_second_executor_reports_its_lesser_capabilities() -> None:
-    routing = RoutingExecutor(_Sandbox(capabilities=frozenset({"suspend", "resume"})), _Jobs(), "pool")
+    routing = RoutingExecutor(_Sandbox(capabilities=frozenset({"suspend", "resume"})), _Jobs(capabilities=frozenset()), "pool")
     sandbox_ref = ExecRef(kind=ExecutorKind.AGENT_SANDBOX, name="a", run_id="r1")
     jobs_ref = ExecRef(kind=ExecutorKind.K8S_JOB, name="b", run_id="r2")
     assert _capabilities_for(routing, sandbox_ref, ["x"]) == ["resume", "suspend"]
