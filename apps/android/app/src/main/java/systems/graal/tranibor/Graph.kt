@@ -14,9 +14,12 @@ import systems.graal.tranibor.auth.PrefsBlobStore
 import systems.graal.tranibor.auth.Session
 import systems.graal.tranibor.auth.SessionStore
 import systems.graal.tranibor.net.ApiClient
+import systems.graal.tranibor.push.Destination
+import systems.graal.tranibor.push.PushRegistrar
+import systems.graal.tranibor.push.UnifiedPushPlatform
 import systems.graal.tranibor.voice.VoiceController
 
-/** What the app holds for its whole life: the session, the client built on it, the voice session. */
+/** What the app holds for its whole life: the session, the client built on it, the voice session, the push registration. */
 class Graph(private val context: Context) {
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
@@ -41,6 +44,7 @@ class Graph(private val context: Context) {
 
     /** Forgets the session on this device (the caller ends it on the server first, when it can). */
     fun signedOut() {
+        push.disable()
         store.clear()
         _session.value = null
     }
@@ -48,5 +52,10 @@ class Graph(private val context: Context) {
     /** Small per-device choices (the organisation last used). Not secrets. */
     val prefs = PrefsKeyValue(context, "tranibor.ui")
 
+    /** A place a notification or a link asked to open; the UI takes it once. */
+    val link = MutableStateFlow<Destination?>(null)
+
     val voice = VoiceController(context, { _session.value?.origin }, { _session.value?.token })
+
+    val push = PushRegistrar(::api, scope, UnifiedPushPlatform(context), PrefsKeyValue(context, "tranibor.push"), deviceName)
 }

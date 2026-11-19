@@ -41,6 +41,7 @@ the freshness flag. The app never keeps a way around it.
 | Agents | The organisation's agents with their runtime kind; stop an agent, watch it, star it; chat with a prompt agent (text, streamed). |
 | Assistants | Your assistants and conversations; continue one, in text, streamed. |
 | Activity | What runs now and what just ended, live; stop a run, a session or a turn. |
+| Inbox | What waits for you: approve or reject a decision, answer a question, with a reason when you refuse. |
 | Agents (voice) | A voice agent has a *Talk* button: a spoken conversation, with a live transcript, mute and hang up. |
 | Account | Your sessions on this phone and elsewhere; sign out. |
 
@@ -61,6 +62,25 @@ session's configuration).
 - If the link drops, the app resumes the same session within 30 seconds, from the last event it read.
 - When the session's spending cap or the agent's time limit is reached, the app says so in words ("The
   spending limit of this voice session is reached.") instead of a close code.
+
+## Notifications
+
+The phone is told when a decision waits for you, a run ends, an agent writes or a session ends, by Web Push
+(ADR 0194 (S81-02)) through
+[UnifiedPush](https://unifiedpush.org): no Google services.
+
+1. Install a UnifiedPush distributor on the phone (ntfy, from F-Droid or the Play Store).
+2. *Account*, *Notifications*, choose the distributor. The app asks the instance for its VAPID key,
+   registers with the distributor, and sends the endpoint and its key pair to the instance.
+3. *Send a test* checks the chain; a push service that says the endpoint is gone clears the registration.
+
+The message is encrypted for this phone (RFC 8291); the connector library decrypts it with the key it holds
+and hands the app the clear payload. A notification opens the place it is about: a decision in the Inbox, a
+run or session in Activity, an agent. If the instance has no push configured, the app says so and nothing
+is registered.
+
+Approving from the phone follows [ADR 0170](adr/0170-sign-in-security-moves-into-the-core.md): when the
+instance asks for a fresh sign-in, the app opens the device flow again with the freshness flag, then retries.
 
 ## Build
 
@@ -109,4 +129,4 @@ secrets and a release job is added.
 ## What is not verified
 
 The unit suite covers the client, the sign-in, the stream readers and the parts of the app that hold logic.
-The voice session is tested against a fake WebSocket server (state machine, resume, barge-in, caps), the codec and the framing by unit tests. Real audio capture and playback, echo cancellation, Bluetooth routing, the foreground service and the screens have been compiled and linted, not run: no device or emulator took part in this work.
+The voice session is tested against a fake WebSocket server (state machine, resume, barge-in, caps), the codec and the framing by unit tests. Push registration is tested against a fake distributor and a fake instance (the registration, the test, the clearing of a dead endpoint, the payload parsing and the deep links). A real distributor, a real push delivery and the decryption of a real message, the inbox on a real instance, real audio capture and playback, echo cancellation, Bluetooth routing, the foreground service and the screens have been compiled and linted, not run: no device or emulator took part in this work.
