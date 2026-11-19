@@ -12,10 +12,13 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from tranibor_contracts import ExecutorKind, StageResult
+from tranibor_core.agent_isolation import SEPARATE_AGENT
 from tranibor_core.domain import RUN_GATEWAY_KEY_ENV, RUN_REMOTE_TOKEN_ENV, ExecRef, ExecStatus, StageJobSpec
 from tranibor_core.hosted import SHARED_WORKSPACE_AGENT, SHARED_WORKSPACE_RUNNER
 
 from ..errors import UpstreamError
+from . import separate_agent
+from .isolation import refuse_unless_separate
 
 RESULT_PATH = "/workspace/.choregos/result.json"
 PULL_TIMEOUT_S = 900.0
@@ -25,10 +28,17 @@ KEEP_FINISHED = 10
 
 
 class LocalDockerExecutor:
-    """Launches the runner in a local container, with the same variables as in a cluster."""
+    """Launches the runner in a local container, with the same variables as in a cluster.
+
+    Under `container` (ADR 0146) the agent gets a second container, as the Job's native sidecar: in the
+    runner's network namespace (the launcher listens on its loopback), from the same image, as uid 1001
+    in the runner's group, with a read-only root and a `/tmp` of its own, no secret and no variable but
+    `TMPDIR` and `HOME`. The two share two volumes and only two: the working tree (`<run>-tree`, filled
+    from the image's `/workspace`, so the runner's uid owns it) and the exchange directory (`<run>-exchange`,
+    a tmpfs owned by the runner's group, setgid, as the pod's `fsGroup` makes an `emptyDir`)."""
 
     kind = ExecutorKind.LOCAL_DOCKER
-    capabilities: frozenset[str] = frozenset()
+    capabilities: frozenset[str] = frozenset({SEPARATE_AGENT})
 
     def __init__(self, *, network: str = "choregos_default", docker: str = "docker") -> None:
         self.network = network
@@ -68,10 +78,13 @@ class LocalDockerExecutor:
         stale = stdout.split()[KEEP_FINISHED:] if code == 0 else []
         if stale:
             await self._run("rm", "--force", *stale)
-            # The copy a hosted container worked in (S41-18), when there was one.
-            await self._run("volume", "rm", "--force", *(_workspace_volume(name) for name in stale))
+            # The copy a hosted container worked in (S41-18), and the agent's two shared volumes
+            # (ADR 0146), when there were some.
+            volumes = [v for name in stale for v in (_workspace_volume(name), *_shared_volumes(name))]
+            await self._run("volume", "rm", "--force", *volumes)
 
     async def start(self, spec: StageJobSpec) -> ExecRef:
+        refuse_unless_separate(str(self.kind), self.capabilities, spec)
         name = self._name(spec.run_id)
         code, _, _ = await self._run("inspect", name)
         if code == 0:
@@ -107,8 +120,16 @@ class LocalDockerExecutor:
             "--label",
             f"choregos.project={spec.project_slug}",
         ]
+        separate = spec.agent_isolation == "container"
+        told = separate_agent.runner_env() if separate else {}
         for key, value in spec.env.items():
-            args += ["--env", f"{key}={value}"]
+            if key not in told:
+                args += ["--env", f"{key}={value}"]
+        if separate:
+            await self._create_shared_volumes(name)
+            tree, exchange = _shared_volumes(name)
+            args += [arg for key, value in told.items() for arg in ("--env", f"{key}={value}")]
+            args += ["--volume", f"{tree}:/workspace", "--volume", f"{exchange}:{separate_agent.EXCHANGE}"]
         if spec.agent_container is not None and spec.agent_container.workspace != "none":
             args += ["--volume", f"{_workspace_volume(name)}:{SHARED_WORKSPACE_RUNNER}"]
         args += [spec.runner_image, *spec.runner_command]
@@ -118,9 +139,77 @@ class LocalDockerExecutor:
         if code != 0:
             raise UpstreamError("docker", f"cannot start: {stderr[:300]}")
         self.containers[spec.run_id] = name
+        if separate:
+            await self._start_launcher(spec, name)
         if spec.agent_container is not None:
             await self._start_agent(spec, name)
         return ExecRef(kind=self.kind, name=name, run_id=spec.run_id)
+
+    async def _create_shared_volumes(self, runner: str) -> None:
+        """The working tree, filled from the image's `/workspace` (owned by the runner's uid), and the
+        exchange directory, a tmpfs the runner's group owns, setgid: Docker gives a new volume's root to
+        root otherwise, and neither container could write it. Replayable: an existing volume is kept."""
+        tree, exchange = _shared_volumes(runner)
+        for volume, options in (
+            (tree, []),
+            (
+                exchange,
+                [
+                    *("--driver", "local"),
+                    *("--opt", "type=tmpfs", "--opt", "device=tmpfs"),
+                    *(
+                        "--opt",
+                        f"o=uid={separate_agent.RUNNER_GID},gid={separate_agent.RUNNER_GID},mode=2775",
+                    ),
+                ],
+            ),
+        ):
+            code, _stdout, stderr = await self._run("volume", "create", *options, volume)
+            if code != 0:
+                raise UpstreamError("docker", f"the agent's volume {volume} was not created: {stderr[:300]}")
+
+    async def _start_launcher(self, spec: StageJobSpec, runner: str) -> None:
+        """The agent's own container (ADR 0146): the launcher, in the runner's network namespace, holding
+        nothing of the run's. The runner waits for it on its loopback; one that does not start ends the
+        run here, the runner with it."""
+        tree, exchange = _shared_volumes(runner)
+        name = _launcher_name(runner, beside_hosted=spec.agent_container is not None)
+        args = [
+            "run",
+            "--detach",
+            "--name",
+            name,
+            "--network",
+            f"container:{runner}",
+            "--user",
+            f"{separate_agent.AGENT_UID}:{separate_agent.RUNNER_GID}",
+            "--read-only",
+            "--tmpfs",
+            "/tmp",  # noqa: S108 - the agent's own, as its `emptyDir` in a pod
+            "--cap-drop",
+            "ALL",
+            "--security-opt",
+            "no-new-privileges",
+            "--env",
+            f"TMPDIR={separate_agent.EXCHANGE}",
+            "--env",
+            f"HOME={separate_agent.EXCHANGE}",
+            "--volume",
+            f"{tree}:/workspace",
+            "--volume",
+            f"{exchange}:{separate_agent.EXCHANGE}",
+            "--label",
+            f"choregos.agent-of={spec.run_id}",
+            # A code agent's image (ADR 0146 §10), the platform's otherwise.
+            spec.agent_image or spec.runner_image,
+            "launcher",
+            "--port",
+            str(separate_agent.LAUNCHER_PORT),
+        ]
+        code, _stdout, stderr = await self._run(*args, timeout=PULL_TIMEOUT_S)
+        if code != 0:
+            await self._run("rm", "--force", runner)
+            raise UpstreamError("docker", f"the agent's container did not start: {stderr[:300]}")
 
     async def _start_agent(self, spec: StageJobSpec, runner: str) -> None:
         """A hosted agent's container (ADR 0080) in the runner's network namespace, as the pod's
@@ -165,8 +254,9 @@ class LocalDockerExecutor:
         state = payload[0].get("State", {}) if payload else {}
         if state.get("Running"):
             return ExecStatus(state="running")
-        # The runner is done: a hosted agent beside it is stopped, as Kubernetes stops a sidecar.
-        await self._run("rm", "--force", _agent_name(ref.name))
+        # The runner is done: the agent's container and a hosted agent beside it are stopped, as
+        # Kubernetes stops a sidecar.
+        await self._run("rm", "--force", *_sidecars(ref.name))
         exit_code = int(state.get("ExitCode", 0))
         return ExecStatus(
             state="succeeded" if exit_code == 0 else "failed",
@@ -200,11 +290,26 @@ class LocalDockerExecutor:
             yield line
 
     async def cancel(self, ref: ExecRef) -> None:
-        await self._run("rm", "-f", ref.name, _agent_name(ref.name))
+        await self._run("rm", "-f", ref.name, *_sidecars(ref.name))
 
 
 def _agent_name(runner: str) -> str:
     return f"{runner}-agent"
+
+
+def _launcher_name(runner: str, *, beside_hosted: bool) -> str:
+    """The agent's own container (ADR 0146): `<run>-agent`, as a hosted agent's; `<run>-launcher` beside
+    one, where it runs the project's checks only."""
+    return f"{runner}-launcher" if beside_hosted else _agent_name(runner)
+
+
+def _sidecars(runner: str) -> tuple[str, ...]:
+    return (_agent_name(runner), _launcher_name(runner, beside_hosted=True))
+
+
+def _shared_volumes(runner: str) -> tuple[str, str]:
+    """The working tree and the exchange directory the runner and the agent's container share."""
+    return f"{runner}-tree", f"{runner}-exchange"
 
 
 def _workspace_volume(runner: str) -> str:

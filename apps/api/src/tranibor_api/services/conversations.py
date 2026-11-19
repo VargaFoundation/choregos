@@ -352,6 +352,7 @@ async def _settle_turn(
             tokens_in=spend.tokens_in,
             tokens_out=spend.tokens_out,
             tokens_cached=spend.tokens_cached,
+            tokens_cache_write=spend.tokens_cache_write,
             cost_usd=spend.cost_usd,
             fx_rate=get_settings().fx_usd_eur,
         )

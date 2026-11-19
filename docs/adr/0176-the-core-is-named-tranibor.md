@@ -190,9 +190,18 @@ One commit cannot rename all four, and the fourth layer must not be renamed by a
   name, so both names render the same objects (`tests/charts/test_chart_names.py`).
 - `tranibor-quant` is dropped from point 4's list: no such image exists, `quant` is a command of the
   runner image (#1847).
+- **Amended 2026-11-19 (S83-07, [ADR 0181](0181-the-contracts-speak-no-trade.md) O4-3).** `quant` left the
+  core for the `investment-research` plugin, and with it the runner image: its command now runs in that
+  plugin's job image, **`tranibor-investment-research`**, not `tranibor-quant`. The release builds it
+  FROM the runner it has just published and signs it (jobs `job-image`, `job-image-manifest` of
+  `release.yml`), under that one name: it is new, so it has no `choregos-*` alias to carry, and it is
+  not one of the platform's images (`IMAGE_COMPONENTS`). R2's `quant` package and its shim
+  `compat/choregos-quant` are removed with it, as ADR 0181 point 6 planned.
 - **Not done in (b)**: the native CLI files keep their `choregos-<platform>` names (the install scripts
-  and the self-update must accept both first); the images `main` pushes for each commit keep the former
-  name only; the chart's per-component `repository` defaults (`choregos-api`, …) carry no registry, so
+  and the self-update must accept both first: the manifest names one file per platform, and an installed
+  CLI picks it by platform, so a second name needs a contract for the manifest first); the images `main`
+  pushes for each commit were pushed under the former name only, and are now pushed and signed under both
+  (`ci.yml`, S75-03); the chart's per-component `repository` defaults (`choregos-api`, …) carry no registry, so
   the rewrite does not see them, and they switch by hand with the deployments (step (c)), not by the
   identity.
 

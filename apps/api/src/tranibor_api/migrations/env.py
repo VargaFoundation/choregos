@@ -10,6 +10,8 @@ from alembic import context
 from tranibor_api.config import get_settings
 from tranibor_api.db.base import Base
 from tranibor_api.db.models import ALL_TABLES, is_core_object  # noqa: F401 - imports every table
+from tranibor_api.logging import get_logger
+from tranibor_api.migrate import forget_retired_revisions
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
@@ -37,6 +39,11 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection: Connection) -> None:
+    # The rows of a branch whose package was removed: Alembic cannot read them (ADR 0181, O4-1).
+    with connection.begin():
+        forgotten = forget_retired_revisions(connection, context.script)
+    if forgotten:
+        get_logger("choregos.migrate").warning("retired_revisions_forgotten", revisions=forgotten)
     context.configure(
         connection=connection,
         target_metadata=target_metadata,

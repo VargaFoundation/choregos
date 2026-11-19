@@ -17,15 +17,15 @@ actors:
   triager: { type: agent, role: triage, agent: triager, model: "profile:cheap" }
   spec_writer: { type: agent, role: refine, agent: spec-writer, model: "profile:standard" }
   planner: { type: agent, role: plan, agent: planner, model: "profile:standard" }
-  developer: { type: agent, role: implement, agent: developer, model: "profile:standard" }
+  developer: { type: agent, role: implement, agent: developer, model: "profile:standard", needs: [scm] }
   tester: { type: agent, role: verify, agent: tester, model: "profile:standard" }
-  docs_writer: { type: agent, role: document, agent: docs-writer, model: "profile:standard" }
-  reviewer: { type: agent, role: review, agent: reviewer, model: "profile:standard", fresh_context: true }
-  security_reviewer: { type: agent, role: review, agent: security-reviewer, model: "profile:standard", fresh_context: true }
-  responder: { type: agent, role: address_review, agent: review-responder, model: "profile:standard" }
-  notes_writer: { type: agent, role: release_notes, agent: release-notes-writer, model: "profile:cheap" }
-  ci_fixer: { type: agent, role: fix_ci, agent: ci-fixer, model: "profile:standard" }
-  prod_verifier: { type: agent, role: verify_prod, agent: prod-verifier, model: "profile:standard" }
+  docs_writer: { type: agent, role: document, agent: docs-writer, model: "profile:standard", needs: [scm] }
+  reviewer: { type: agent, role: review, agent: reviewer, model: "profile:standard", fresh_context: true, needs: [scm] }
+  security_reviewer: { type: agent, role: review, agent: security-reviewer, model: "profile:standard", fresh_context: true, needs: [scm] }
+  responder: { type: agent, role: address_review, agent: review-responder, model: "profile:standard", needs: [scm] }
+  notes_writer: { type: agent, role: release_notes, agent: release-notes-writer, model: "profile:cheap", needs: [scm] }
+  ci_fixer: { type: agent, role: fix_ci, agent: ci-fixer, model: "profile:standard", needs: [scm] }
+  prod_verifier: { type: agent, role: verify_prod, agent: prod-verifier, model: "profile:standard", needs: [cd] }
   platform: { type: system }
   product_owners: { type: human, group: product-owners, sla_hours: 24 }
   maintainers: { type: human, group: maintainers, sla_hours: 24 }
@@ -117,6 +117,7 @@ transitions:
     from: addressing_review
     to: implemented
     by: responder
+    repairs: changes_requested
     inputs: [review_markdown, security_review_markdown, human_feedback]
     outputs: [review_markdown]
     gates: [scope_respected, no_secrets]
@@ -155,6 +156,7 @@ transitions:
     from: fixing_ci
     to: awaiting_pr_approval
     by: ci_fixer
+    repairs: ci_failed
     gates: [scope_respected, no_secrets]
     on_fail: { to: fixing_ci, max_attempts: 2, escalate_to: needs_human }
   - id: t-stage

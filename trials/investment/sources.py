@@ -17,11 +17,11 @@ import json
 import os
 from typing import Any
 
-from choregos_adapters.marketdata.alphavantage import AlphaVantageProvider
-from choregos_adapters.marketdata.base import MarketDataProvider
-from choregos_adapters.marketdata.composite import CompositeProvider
-from choregos_adapters.marketdata.stooq import StooqProvider
-from choregos_adapters.marketdata.yahoo import YahooProvider
+from tranibor_investment_research.marketdata.alphavantage import AlphaVantageProvider
+from tranibor_investment_research.marketdata.base import MarketDataProvider
+from tranibor_investment_research.marketdata.composite import CompositeProvider
+from tranibor_investment_research.marketdata.stooq import StooqProvider
+from tranibor_investment_research.marketdata.yahoo import YahooProvider
 
 SYMBOLS = ("SPY", "AAPL", "MC.PA", "IBM", "NOSUCHXYZ")
 

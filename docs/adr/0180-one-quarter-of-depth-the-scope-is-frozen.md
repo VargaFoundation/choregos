@@ -1,6 +1,7 @@
 # 0180 — One quarter of depth: the scope is frozen
 
-- **Status**: accepted, 2026-11-17 (decided by the project lead; written by story S80-01)
+- **Status**: accepted, 2026-11-17 (decided by the project lead; written by story S80-01). §1 and the
+  *frozen* verdicts of §2 lifted on 2026-11-19 by [ADR 0192](0192-the-scope-freeze-is-lifted.md); §3 and §4 stand.
 - **Concerns**: every stream of `docs/plan/08-backlog.yaml` and every status row (`docs/plan/status/<stream>.md`, indexed by `docs/plan/STATUS.md`);
   the roadmap [PLAN-2026-11-17-engine-to-product](../plan/PLAN-2026-11-17-engine-to-product.md) and
   the triage of partial stories [TRIAGE-2026-11-17](../plan/TRIAGE-2026-11-17.md); `CODEOWNERS` and
@@ -146,3 +147,11 @@ The project lead, who decided this record, asked on 2026-11-18 for a cleaner and
 workspace and for a live view of a workflow processing its items, on the web and in the terminal
 ([ADR 0187](0187-the-workspace-is-one-screen-and-the-flow-is-live.md)). Those stories (S67-18 to S67-29) are
 added to S67, a stream this record lets finish; no stream is opened, and the row of S67 above names them.
+
+## Amendment, 2026-11-19: the freeze is lifted
+
+The project lead lifted §1 and the *frozen* verdicts of §2 on 2026-11-19
+([ADR 0192](0192-the-scope-freeze-is-lifted.md)): streams may be opened again, the frozen streams may take
+new stories, and `tests/docs/test_scope_freeze.py` is removed. The *finish* verdicts, §3 (human review)
+and §4 (the decisions due in December) stand. Stream S81 is opened
+([ADR 0193](0193-the-phone-is-a-surface-of-the-platform.md)).

@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+from collections.abc import Iterator
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -36,6 +39,57 @@ async def _activate(project_id: str) -> None:
         row = await session.get(Project, project_id)
         assert row is not None
         row.status = "active"
+
+
+#: The investment research template is the `investment-research` plugin's (S83-07, ADR 0181 O4-3): the core
+#: ships its published archive offline (`plugins/offline/`), and its job steps name the job image.
+RESEARCH = "plugin:investment-research/investment-research"
+OFFLINE = Path(__file__).resolve().parents[3] / "plugins" / "offline"
+
+
+@pytest.fixture
+def research(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    from tranibor_api.config import reset_settings_cache
+
+    monkeypatch.setenv("CHOREGOS_PLUGINS_OFFLINE", str(OFFLINE))
+    monkeypatch.setenv(
+        "CHOREGOS_JOB_IMAGES", json.dumps({"investment-research": "registry.example/ir@sha256:" + "a" * 64})
+    )
+    reset_settings_cache()
+    yield
+    monkeypatch.delenv("CHOREGOS_PLUGINS_OFFLINE")
+    monkeypatch.delenv("CHOREGOS_JOB_IMAGES")
+    reset_settings_cache()
+
+
+async def _research_project(client: AsyncClient, slug: str) -> str:
+    """A project born of the plugin's template, the plugin installed from the offline archive."""
+    installed = await client.post(
+        "/api/v1/orgs/northwind/plugins/install",
+        json={"source": "offline", "name": "investment-research", "version": "0.1.0"},
+    )
+    assert installed.status_code in (201, 409), installed.text
+    created = await client.post(
+        "/api/v1/orgs/northwind/projects",
+        json={
+            "slug": slug,
+            "name": slug.title(),
+            "template_ref": RESEARCH,
+            "config": {"slug": slug, "org": "northwind"},
+        },
+    )
+    assert created.status_code == 201, created.text
+    return str(created.json()["id"])
+
+
+def _shipped_campaign() -> str:
+    """`campaign.yaml` as the locked archive ships it."""
+    from tranibor_core.plugins import opened
+
+    with opened(OFFLINE / "investment-research-0.1.0.tar.gz") as plugin:
+        return (plugin.root / "templates/investment-research/workflows/campaign.yaml").read_text(
+            encoding="utf-8"
+        )
 
 
 async def _forget_the_tests(project_id: str) -> None:
@@ -219,6 +273,7 @@ async def test_the_probe_of_the_object_store_is_cached_and_reports_its_failure()
         readiness.forget_object_store_probe()
 
 
+@pytest.mark.usefixtures("research")
 async def test_readiness_of_a_project_that_writes_files_lists_the_object_store(
     client: AsyncClient, admin: str
 ) -> None:
@@ -230,17 +285,7 @@ async def test_readiness_of_a_project_that_writes_files_lists_the_object_store(
     use_object_store(store)
     readiness.forget_object_store_probe()
     try:
-        created = await client.post(
-            "/api/v1/orgs/northwind/projects",
-            json={
-                "slug": "quant",
-                "name": "Quant",
-                "template_ref": "investment-research@0.1.0",
-                "config": {"slug": "quant", "org": "northwind"},
-            },
-        )
-        assert created.status_code == 201, created.text
-        pid = created.json()["id"]
+        pid = await _research_project(client, "research")
         await _activate(pid)
         item = next(i for i in (await _readiness(client, pid))["items"] if i["id"] == "object-store")
         assert item["state"] == "done"
@@ -275,22 +320,11 @@ def _template_item(body: dict[str, Any]) -> dict[str, Any] | None:
     return next((i for i in body["items"] if i["id"] == "workflow-template"), None)
 
 
+@pytest.mark.usefixtures("research")
 async def test_a_workflow_copied_before_its_template_was_fixed_is_flagged_until_republished(
     client: AsyncClient, admin: str
 ) -> None:
-    from pathlib import Path
-
-    created = await client.post(
-        "/api/v1/orgs/northwind/projects",
-        json={
-            "slug": "research",
-            "name": "Research",
-            "template_ref": "investment-research@0.1.0",
-            "config": {"slug": "research", "org": "northwind"},
-        },
-    )
-    assert created.status_code == 201, created.text
-    pid = created.json()["id"]
+    pid = await _research_project(client, "research")
     await _activate(pid)
     fresh = _template_item(await _readiness(client, pid))
     assert fresh is not None and fresh["state"] == "done", fresh
@@ -308,35 +342,22 @@ async def test_a_workflow_copied_before_its_template_was_fixed_is_flagged_until_
     assert "`campaign` v1" in item["detail"] and "`./workflows/campaign.yaml`" in item["detail"]
     assert "`product-memo`" not in item["detail"], "the workflow that did not change is not named"
 
-    shipped = Path(__file__).resolve().parents[3] / "templates" / "investment-research" / "workflows"
     put = await client.put(
         f"/api/v1/projects/{pid}/workflows/campaign",
-        json={"yaml": (shipped / "campaign.yaml").read_text(), "source": "template", "activate": True},
+        json={"yaml": _shipped_campaign(), "source": "template", "activate": True},
     )
     assert put.status_code == 200, put.text
     republished = _template_item(await _readiness(client, pid))
     assert republished is not None and republished["state"] == "done", republished
 
 
+@pytest.mark.usefixtures("research")
 async def test_a_workflow_published_by_hand_or_a_project_with_no_template_is_not_judged(
     client: AsyncClient, admin: str
 ) -> None:
-    from pathlib import Path
-
-    created = await client.post(
-        "/api/v1/orgs/northwind/projects",
-        json={
-            "slug": "research",
-            "name": "Research",
-            "template_ref": "investment-research@0.1.0",
-            "config": {"slug": "research", "org": "northwind"},
-        },
-    )
-    assert created.status_code == 201, created.text
-    pid = created.json()["id"]
+    pid = await _research_project(client, "research")
     await _activate(pid)
-    shipped = Path(__file__).resolve().parents[3] / "templates" / "investment-research" / "workflows"
-    mine = (shipped / "campaign.yaml").read_text().replace("    output_types: { strategies: json }\n", "")
+    mine = _shipped_campaign().replace("    output_types: { strategies: json }\n", "")
     put = await client.put(
         f"/api/v1/projects/{pid}/workflows/campaign",
         json={"yaml": mine, "source": "platform", "activate": True},

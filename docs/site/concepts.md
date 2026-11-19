@@ -264,6 +264,10 @@ write, forbidden commands, the hosts a run may reach, release trains. An organis
 
 **Admin › Edition** and **About** (at the bottom of the sidebar) say which one runs.
 
+An edition is not a trade. What belongs to one trade (software delivery, IT service management, HR,
+documentation) comes in a plugin, and the core names none: see
+[Plugins, extensions and editions](build/plugins-and-trades.md).
+
 ## Go further
 
 - [Get started](get-started.md): try it, then run a first project.

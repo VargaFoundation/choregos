@@ -169,3 +169,15 @@ def test_the_chart_renders_the_new_names_and_the_policy_admits_them() -> None:
             assert any(image.startswith(PUBLISHING.image(f"{prefix}-{component}:")) for image in named), named
         for image in named:
             assert _admitting(image) == [{f"{PUBLISHING.source_repository}/.github/workflows/*"}], image
+
+
+def test_the_per_commit_images_of_main_carry_both_names_and_are_signed_under_both() -> None:
+    """`main` pushes each commit's image under both names (one build, one digest) and signs both."""
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    build = workflow.split("docker/build-push-action", 1)[1].split("Trivy scan", 1)[0]
+    signing = workflow.split("keyless signature, under both names", 1)[1].split("local-install:", 1)[0]
+    for prefix in PUBLISHING.image_prefixes:
+        reference = PUBLISHING.image(f"{prefix}-") + "${{ matrix.image }}:${{ github.sha }}"
+        assert reference in build, f"the commit's image is not tagged {prefix}-*"
+        assert prefix in signing, f"the commit's {prefix}-* image is not signed"
+    assert "steps.build.outputs.digest" in signing

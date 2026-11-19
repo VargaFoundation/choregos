@@ -5,6 +5,7 @@ import Link from "next/link";
 import { MarkdownView } from "@/components/markdown-view";
 import { Badge } from "@/components/ui";
 import type { Run } from "@/lib/types";
+import { changeRequestOf } from "@/lib/neutral-names";
 
 /** The output a reviewer reads first; the other `*_markdown` outputs follow it. */
 const FIRST = "summary_markdown";
@@ -30,7 +31,7 @@ function markdownOutputs(run: Run): Array<[string, string]> {
 function changedTheRepository(run: Run, prUrl: string | null | undefined): boolean {
   const artifacts = run.result?.artifacts;
   return Boolean(
-    prUrl || artifacts?.pr_url || artifacts?.branch || (artifacts?.commits?.length ?? 0) > 0 || (run.result?.evidence?.diff_files ?? 0) > 0,
+    prUrl || changeRequestOf(artifacts) || artifacts?.branch || (artifacts?.commits?.length ?? 0) > 0 || (run.result?.evidence?.diff_files ?? 0) > 0,
   );
 }
 

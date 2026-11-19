@@ -11,6 +11,7 @@ from typing import Any
 
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
+from tranibor_core.prompt_cache import with_prompt_cache
 
 from ..config import get_settings
 from ..db.models import AgentSessionRecord
@@ -68,7 +69,7 @@ async def model_title(
         ):
             reply = await http.post(
                 f"{gateway_url.rstrip('/')}/chat/completions",
-                json=body,
+                json=with_prompt_cache(body),
                 headers={"Authorization": f"Bearer {key}"},
             )
         if reply.status_code != 200:

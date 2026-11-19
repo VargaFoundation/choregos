@@ -51,7 +51,10 @@ class CostLedger(Base, PkMixin):
     size: Mapped[str | None] = mapped_column(String(4), nullable=True)
     tokens_in: Mapped[int] = mapped_column(Integer, default=0)
     tokens_out: Mapped[int] = mapped_column(Integer, default=0)
+    #: The input tokens read from the provider's cache, part of `tokens_in`.
     tokens_cached: Mapped[int] = mapped_column(Integer, default=0)
+    #: The input tokens written to the provider's cache, part of `tokens_in` (S4-07, ADR 0188).
+    tokens_cache_write: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
     cost_eur: Mapped[float] = mapped_column(Float, default=0.0)
     fx_rate: Mapped[float] = mapped_column(Float, default=1.0)

@@ -13,6 +13,7 @@ it through a workflow you declare, and every step is bounded, evidenced and audi
 | [Agents written in code](code-agents.md) | The Python SDK, the image, the registry entry, conformance, two examples |
 | [Prompt, voice and hosted agents](hosted-agents.md) | Foundry's three agent kinds: what a version may say, what runs today (the contract only) |
 | [Writing a plugin](plugins.md) | The plugin format (ADR 0093): layout, what `tranibor plugin validate` checks, pack and index |
+| [Plugins, extensions and editions](site/build/plugins-and-trades.md) | One unit per trade, the plugin; its content and its extension; extension seams; editions; what leaves the core before 1.0 (ADR 0181) |
 | [Usage](usage.md) | Onboarding a project, writing a workflow, tools, policy, reading a run, day-2 knobs |
 | [Development](development.md) | The three levels of a dev environment, the tests that touch the real world, pitfalls |
 | [Security](security.md) | What stops an agent from doing damage, and what is *not* a wall |
