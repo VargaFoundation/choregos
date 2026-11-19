@@ -139,25 +139,41 @@ choregos chat --assistant billing
 choregos
 ```
 
-`choregos chat` opens the workspace: the conversation and its prompt on the left, the live tree (blue
-frame) and what waits for you (amber frame) on the right, what moved elsewhere below, and a status line.
-A bare `choregos` opens the same thing, but only when both its input and output are a terminal: anywhere
-else (a pipe, a script) it prints the help, so no script that calls it changes behaviour. `choregos chat`
-itself refuses to run without a terminal and points to `ask` and `activity`.
+`choregos chat` opens the workspace: one screen of six tabs, a one-line header, and a context pane on the
+right. A bare `choregos` opens the same thing, but only when both its input and output are a terminal:
+anywhere else (a pipe, a script) it prints the help, so no script that calls it changes behaviour.
+`choregos chat` itself refuses to run without a terminal and points to `ask` and `activity`.
+
+The header reads `organisation · assistant`, then how many runs are running, how many things wait for you
+and what was spent today (`—` when the platform cannot say, never a false zero). The tabs:
+
+| Tab | Shows |
+| --- | --- |
+| 1 Conversation | The conversation, and the composer (`›`, the cost of the turn at its right) |
+| 2 Activity | The live tree: projects, work items, runs; what ended in the last hour |
+| 3 Projects | Every project of the organisation (coming) |
+| 4 Decisions | What waits for you, grouped by project, with its count in the tab |
+| 5 Artefacts | What was delivered to you |
+| 6 Live | The live flow of a workflow (coming) |
+
+The pane on the right follows the selection: the run, work item, decision or artefact under the cursor,
+in full. Below 120 columns it folds away and the main view takes the width. There are no frames, only one
+thin rule between the two; the status of a run is a glyph, a word and a colour, so `NO_COLOR` loses nothing.
 
 | Key | Does |
 | --- | --- |
-| Tab | Moves to the next pane |
+| Tab, Shift-Tab | Moves to the next or previous tab (works in the composer too) |
+| 1 to 6 | Goes to a tab (when you are not typing in the composer), as does a click on its name |
 | Enter, in the tree | Expands a project, a work item or a run (plan, tool calls, context, sub-agents) |
 | `x`, in the tree | Stops the run or work item under the cursor, **after asking why** |
 | Esc | Cancels the turn being answered; the platform books what it spent |
 | Ctrl-O, Ctrl-N, Ctrl-A | Switches conversation, starts a new one, switches assistant |
-| F2, or `d` in the decisions pane | Opens a decision (see [Decide](#decide)) |
+| F2, or Enter or `d` on a decision | Opens a decision (see [Decide](#decide)) |
 | Ctrl-Q | Quits |
 
 A stop always needs a reason: an empty one is not sent. The reason is audited and shown on the work item.
-`x` says so when you may not stop what is under the cursor. The footer lists the keys that apply to the
-pane you are in.
+`x` says so when you may not stop what is under the cursor. The footer lists the keys that apply to
+what you are on.
 
 ## Watch the flow live
 
