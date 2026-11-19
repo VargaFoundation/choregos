@@ -1229,6 +1229,9 @@ def test_the_workspace_snapshot(
     async def settled(pilot: Any) -> None:
         await until(pilot, lambda: app.live and app.conversation is not None, "the workspace")
         await until(pilot, lambda: bool(app.pending), "the decisions")
+        # The header's counts and amount come from their own reads: a loaded CI runner draws them late.
+        await until(pilot, lambda: bool(app.board.in_flight), "what runs")
+        await until(pilot, lambda: app.today.usd is not None or app.today.eur is not None, "today's spend")
         await show(pilot, view)
         await pilot.pause(0.3)
 
