@@ -60,9 +60,7 @@ async def test_an_interpreter_on_a_trial_item_ends(
         target.write_text(json.dumps(json.loads(history.to_json()), indent=1) + "\n", encoding="utf-8")
 
 
-async def test_an_interpreter_left_over_on_a_trial_item_replays_to_its_end(
-    caplog: pytest.LogCaptureFixture,
-) -> None:
+async def test_an_interpreter_left_over_on_a_trial_item_replays_to_its_end() -> None:
     """The history of an interpreter stuck on a trial item, recorded before the fix, replays without a
     nondeterminism error and reaches the end: the workflows left open in production close."""
     from temporalio.client import WorkflowHistory
@@ -75,8 +73,22 @@ async def test_an_interpreter_left_over_on_a_trial_item_replays_to_its_end(
     assert "EVENT_TYPE_WORKFLOW_EXECUTION_COMPLETED" not in kinds
     history = WorkflowHistory.from_json(LEFT_OVER.stem, payload)
 
-    with caplog.at_level(logging.WARNING):
+    # The workflow logger's own handler, not caplog's root one: in the full suite another module can leave
+    # `temporalio.workflow` above WARNING or not propagating, and the line never reaches the root (CI, #1905).
+    from temporalio import workflow
+
+    seen: list[logging.LogRecord] = []
+    handler = logging.Handler(logging.WARNING)
+    handler.emit = seen.append  # type: ignore[method-assign]
+    base = workflow.logger.base_logger
+    level = base.level
+    base.addHandler(handler)
+    base.setLevel(logging.WARNING)
+    try:
         result = await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
+    finally:
+        base.removeHandler(handler)
+        base.setLevel(level)
 
     assert result.replay_failure is None
-    assert any(ENDED in record.getMessage() for record in caplog.records), "the replay did not reach the end"
+    assert any(ENDED in record.getMessage() for record in seen), "the replay did not reach the end"
