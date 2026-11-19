@@ -40,6 +40,7 @@ from rich.style import Style
 from rich.table import Table
 from rich.text import Text
 from textual import on
+from textual.actions import SkipAction
 from textual.app import App, ComposeResult
 from textual.binding import Binding, BindingType
 from textual.containers import Horizontal, Vertical, VerticalScroll
@@ -204,6 +205,28 @@ class DecisionList(OptionList):
         app.decide_highlighted()
 
 
+class DrillList(OptionList):
+    """A list of the Projects tab: Enter goes down a level, Backspace or Esc goes back up."""
+
+    BINDINGS: ClassVar[list[BindingType]] = [Binding("backspace,escape", "up", "Up", show=False)]
+
+    def action_up(self) -> None:
+        app = self.app
+        assert isinstance(app, Workspace)
+        app.projects_up()
+
+
+class RunScroll(VerticalScroll):
+    """A run's steps in the Projects tab: Backspace or Esc goes back to the item's runs."""
+
+    BINDINGS: ClassVar[list[BindingType]] = [Binding("backspace,escape", "up", "Up", show=False)]
+
+    def action_up(self) -> None:
+        app = self.app
+        assert isinstance(app, Workspace)
+        app.projects_up()
+
+
 class StopScreen(ModalScreen[str | None]):
     """A stop always asks why (ADR 0142 §2): an empty reason is not sent."""
 
@@ -352,6 +375,15 @@ class Workspace(App[None]):
         text-style: reverse bold; background: ansi_default; color: ansi_default;
     }
     #decisions > .option-list--option-disabled { color: ansi_default; text-style: bold; }
+    #projects { height: 100%; }
+    #crumbs { height: 3; padding: 1 2 0 2; color: ansi_bright_black; }
+    #projects-list { height: 1fr; padding: 1 1 0 1; border: none; background: ansi_default; }
+    #projects-list > .option-list--option-highlighted,
+    #projects-list:focus > .option-list--option-highlighted {
+        text-style: reverse bold; background: ansi_default; color: ansi_default;
+    }
+    #projects-list > .option-list--option-disabled { color: ansi_bright_black; }
+    #projects-run { height: 1fr; padding: 1 2 0 2; }
     .placeholder { padding: 2 3; color: ansi_bright_black; }
     StopScreen, PickScreen, TextScreen, DecisionScreen { align: center middle; }
     #decision { width: 90%; height: 80%; border: round ansi_yellow; padding: 1 2; }
@@ -404,6 +436,16 @@ class Workspace(App[None]):
         self.outcome = ""
         self._deciding = False
         self.inbox: list[dict[str, Any]] = []
+        #: The organisation's projects, `None` while unread.
+        self.projects: list[dict[str, Any]] | None = None
+        #: How deep the Projects tab is: 0 projects, 1 items, 2 runs, 3 a run's steps.
+        self.depth = 0
+        self._project_shape: list[tuple[str | None, str]] | None = None
+        self.project: dict[str, Any] | None = None
+        self.item: dict[str, Any] | None = None
+        self.run_summary: dict[str, Any] | None = None
+        self.items: list[dict[str, Any]] | None = None
+        self.item_runs: list[dict[str, Any]] | None = None
         self.live = False
         #: The tab on show (a name of `TABS`).
         self.current_view = "conversation"
@@ -435,7 +477,11 @@ class Workspace(App[None]):
                         yield Input(placeholder="Say something", id="prompt")
                         yield Static(id="cost")
                 yield FlightTree("", id="tree")
-                yield Static("", id="projects", classes="placeholder")
+                with Vertical(id="projects"):
+                    yield Static(id="crumbs")
+                    yield DrillList(id="projects-list")
+                    with RunScroll(id="projects-run"):
+                        yield Static(id="projects-run-body")
                 yield DecisionList(id="decisions")
                 yield OptionList(id="artefacts")
                 yield Static("", id="live-view", classes="placeholder")
@@ -456,7 +502,7 @@ class Workspace(App[None]):
     VIEW_FOCUS: ClassVar[dict[str, str]] = {
         "conversation": "#prompt",
         "activity": "#tree",
-        "projects": "#projects",
+        "projects": "#projects-list",
         "decisions": "#decisions",
         "artefacts": "#artefacts",
         "live": "#live-view",
@@ -473,7 +519,7 @@ class Workspace(App[None]):
         tree = self.query_one(FlightTree)
         tree.show_root = False
         tree.show_guides = True
-        self.query_one("#projects", Static).update("Every project of the organisation, in a later change.")
+        self.query_one("#projects-run").display = False
         self.query_one("#live-view", Static).update("The live flow of a workflow is coming.")
         self.query_one("#prompt", Input).focus()
         self.set_interval(activity.REDRAW_EVERY_S, self.tick)
@@ -498,6 +544,8 @@ class Workspace(App[None]):
         self.draw_tabs()
         self.draw_context()
         self.query_one(self.VIEW_FOCUS[name]).focus()
+        if name == "projects":
+            self.run_worker(self.refresh_projects(), group="projects", exit_on_error=False)
 
     def _step_view(self, step: int) -> None:
         names = [name for name, _label in TABS]
@@ -535,13 +583,15 @@ class Workspace(App[None]):
 
     async def load(self) -> None:
         org = self.organisation
-        assistants, conversations, inbox, spent, currency = await asyncio.gather(
+        assistants, conversations, inbox, spent, currency, projects = await asyncio.gather(
             self._read("/me/assistants"),
             self._read("/me/conversations", limit=CONVERSATIONS_SHOWN),
             self._read("/me/inbox", limit=20),
             self._spend(),
             self._currency(),
+            self._read(f"/orgs/{org}/projects"),
         )
+        self.projects = None if projects is None else list(projects.get("items") or [])
         self.assistants = [a for a in (assistants or {}).get("items") or [] if a.get("org") == org]
         self.conversations = [
             c for c in (conversations or {}).get("items") or [] if c.get("org") in (org, None)
@@ -633,6 +683,7 @@ class Workspace(App[None]):
         self.draw_tree()
         self.draw_decisions()
         self.draw_artefacts()
+        self.draw_projects()
         self.draw_context()
 
     def draw_header(self) -> None:
@@ -925,6 +976,222 @@ class Workspace(App[None]):
         self._fill(listing, options)
         self.draw_context()
 
+    # ───────────────────────────── the Projects tab (S67-23) ─────────────────────────────
+
+    async def refresh_projects(self) -> None:
+        """Opening the tab reads the projects again: a project with no activity is listed too."""
+        found = await self._read(f"/orgs/{self.organisation}/projects")
+        if found is not None:
+            self.projects = list(found.get("items") or [])
+        self.draw_projects()
+        self.draw_context()
+
+    def _running_in(self, slug: str) -> int:
+        return sum(1 for e in self.board.in_flight.values() if e.get("project_slug") == slug)
+
+    def _waiting_in(self, slug: str) -> int:
+        return sum(1 for i in self.pending or [] if (i.get("where") or {}).get("project_slug") == slug)
+
+    @staticmethod
+    def _cell(value: str, width: int, *, style: str = "", right: bool = False) -> Text:
+        return Text(value.rjust(width) if right else value.ljust(width), style=style)
+
+    def _crumbs(self) -> Text:
+        parts = ["Projects"]
+        if self.project:
+            parts.append(str(self.project["name"]))
+        if self.item and self.depth >= 2:
+            parts.append(str(self.item["tracker_key"]))
+        if self.run_summary and self.depth >= 3:
+            parts.append(f"{self.run_summary['stage_role']} #{self.run_summary.get('attempt', 1)}")
+        crumbs = Text()
+        for n, part in enumerate(parts):
+            crumbs.append(" › " if n else "", style="dim")
+            crumbs.append(part, style="bold" if n == len(parts) - 1 else "dim")
+        hint = "Enter opens · Backspace goes up" if self.depth < 3 else "Backspace goes up"
+        if self.depth == 0:
+            hint = "Enter opens a project"
+        crumbs.append("\n")
+        crumbs.append(hint, style="dim")
+        return crumbs
+
+    def _project_options(self) -> list[Option]:
+        if self.projects is None:
+            return [
+                Option(Text(f"{DASH} the projects are not readable right now", style="dim"), disabled=True)
+            ]
+        if not self.projects:
+            return [Option(Text("this organisation has no project yet", style="dim"), disabled=True)]
+        width = min(30, max(len(str(p["name"])) for p in self.projects) + 3)
+        head = Text()
+        head.append(self._cell("project", width) + self._cell("running", 10) + self._cell("waiting", 10))
+        head.append("this month".rjust(12))
+        options = [Option(head, disabled=True)]
+        for project in self.projects:
+            running, waiting = self._running_in(project["slug"]), self._waiting_in(project["slug"])
+            month = (project.get("stats") or {}).get("cost_month_eur")
+            line = Text()
+            line.append(
+                self._cell(str(project["name"]), width, style=f"bold {theme.hue_style(project['slug'])}")
+            )
+            line.append(self._cell(str(running), 10, style="blue" if running else "dim"))
+            line.append(self._cell(str(waiting), 10, style="yellow" if waiting else "dim"))
+            line.append(self._cell(self.price(money.Amount(eur=month)), 12, style="dim", right=True))
+            options.append(Option(one_line(line), id=str(project["id"])))
+        return options
+
+    def _item_options(self) -> list[Option]:
+        if self.items is None:
+            return [
+                Option(Text(f"{DASH} the work items are not readable right now", style="dim"), disabled=True)
+            ]
+        if not self.items:
+            return [Option(Text("this project has no work item yet", style="dim"), disabled=True)]
+        head = Text()
+        head.append(self._cell("item", 12) + self._cell("state", 16) + self._cell("spend", 10) + "title")
+        options = [Option(Text(head.plain, style="dim"), disabled=True)]
+        for item in self.items:
+            cost = (item.get("totals") or {}).get("cost_eur")
+            line = Text()
+            line.append(self._cell(str(item["tracker_key"]), 12, style="bold"))
+            line.append(self._cell(str(item.get("state_display") or item["state"]), 16))
+            line.append(self._cell(self.price(money.Amount(eur=cost)), 10, style="dim"))
+            line.append(decide.clean(str(item["title"])).splitlines()[0] if item["title"] else DASH)
+            options.append(Option(one_line(line), id=str(item["id"])))
+        return options
+
+    def _run_options(self) -> list[Option]:
+        if self.item_runs is None:
+            return [Option(Text(f"{DASH} the runs are not readable right now", style="dim"), disabled=True)]
+        if not self.item_runs:
+            return [Option(Text("this work item has no run yet", style="dim"), disabled=True)]
+        head = Text(
+            "status".ljust(16) + "stage".ljust(14) + "try".ljust(5) + "spend".ljust(10) + "backend · model",
+            style="dim",
+        )
+        options = [Option(head, disabled=True)]
+        for run in self.item_runs:
+            status = theme.status_of(run["status"])
+            line = theme.badge(status, self.out)
+            line.append(" " * max(1, 16 - len(line.plain)))
+            line.append(self._cell(str(run["stage_role"]), 14))
+            line.append(self._cell(f"#{run.get('attempt', 1)}", 5, style="dim"))
+            line.append(self._cell(self.price(money.Amount(usd=run.get("cost_usd"))), 10, style="dim"))
+            line.append(
+                f"{run.get('backend') or DASH} · {(run.get('model') or DASH).split('/')[-1]}", style="dim"
+            )
+            options.append(Option(one_line(line), id=str(run["id"])))
+        return options
+
+    def draw_projects(self) -> None:
+        """The tab's crumbs and its list (or, at the deepest level, the run's steps)."""
+        try:
+            listing = self.query_one("#projects-list", DrillList)
+            self.query_one("#crumbs", Static).update(self._crumbs())
+        except NoMatches:
+            return
+        self.query_one("#projects-run").display = self.depth == 3
+        listing.display = self.depth < 3
+        if self.depth == 3:
+            self.draw_run_steps()
+            return
+        options = (self._project_options, self._item_options, self._run_options)[self.depth]()
+        shape = [(o.id, str(o.prompt)) for o in options]
+        if shape != getattr(self, "_project_shape", None):
+            self._project_shape = shape
+            self._fill(listing, options)
+        self.draw_context()
+
+    def draw_run_steps(self) -> None:
+        """A run's plan, tool calls, context and sub-agents: what `activity --run` shows, in the tab."""
+        run = self.run_summary
+        if run is None:
+            return
+        rows = run_rows((str(run["id"]),), self._details.get(str(run["id"])), activity.clock(), self.out)
+        parents = {key: parent for key, parent, _text, _data in rows}
+        lines: list[Text] = []
+        for key, _parent, text, _data in rows:
+            depth, up = 0, parents[key]
+            while up is not None and up in parents:
+                depth, up = depth + 1, parents[up]
+            line = Text("  " * depth)
+            line.append_text(text)
+            lines.append(line)
+        self.query_one("#projects-run-body", Static).update(Group(*lines))
+        self.draw_context()
+
+    @on(OptionList.OptionSelected, "#projects-list")
+    def project_opened(self, event: OptionList.OptionSelected) -> None:
+        chosen = event.option.id
+        if chosen is None:
+            return
+        if self.depth == 0:
+            self.project = next((p for p in self.projects or [] if str(p["id"]) == chosen), None)
+            if self.project:
+                self.depth, self.items = 1, None
+                self.run_worker(self.read_items(), group="projects-read", exit_on_error=False)
+        elif self.depth == 1:
+            self.item = next((i for i in self.items or [] if str(i["id"]) == chosen), None)
+            if self.item:
+                self.depth, self.item_runs = 2, None
+                self.run_worker(self.read_item_runs(), group="projects-read", exit_on_error=False)
+        elif self.depth == 2:
+            self.run_summary = next((r for r in self.item_runs or [] if str(r["id"]) == chosen), None)
+            if self.run_summary:
+                self.depth = 3
+                self.run_worker(
+                    self.follow_project_run(str(self.run_summary["id"])),
+                    group="projects-run",
+                    exit_on_error=False,
+                )
+        self._project_shape = None
+        self.draw_projects()
+        if self.depth == 3:
+            self.query_one("#projects-run").focus()
+
+    async def read_items(self) -> None:
+        assert self.project is not None
+        found = await self._read(f"/projects/{self.project['id']}/work-items")
+        self.items = None if found is None else list(found.get("items") or [])
+        self._project_shape = None
+        self.draw_projects()
+
+    async def read_item_runs(self) -> None:
+        assert self.item is not None
+        found = await self._read(f"/work-items/{self.item['id']}/runs")
+        self.item_runs = None if found is None else list(found)
+        self._project_shape = None
+        self.draw_projects()
+
+    async def follow_project_run(self, run_id: str) -> None:
+        """The run opened in the Projects tab, read as the tree reads an expanded one: once when it is over,
+        again every `RUN_POLL_S` while it runs."""
+        detail = self._details.setdefault(run_id, RunDetail())
+        while True:
+            await self.read_run(run_id, detail)
+            self.draw_run_steps()
+            if str((self.run_summary or {}).get("status")) not in ("running", "queued", "open"):
+                return
+            await asyncio.sleep(RUN_POLL_S)
+
+    def projects_up(self) -> None:
+        """Backspace or Esc: one level up. At the top Esc falls through to the turn's cancel."""
+        if self.depth == 0:
+            raise SkipAction()
+        for worker in list(self.workers):
+            if worker.group == "projects-run":
+                worker.cancel()
+        self.depth -= 1
+        if self.depth == 0:
+            self.project = self.item = self.run_summary = None
+        elif self.depth == 1:
+            self.item = self.run_summary = None
+        else:
+            self.run_summary = None
+        self._project_shape = None
+        self.draw_projects()
+        self.query_one("#projects-list").focus()
+
     @on(OptionList.OptionHighlighted)
     @on(Tree.NodeHighlighted)
     def selection_moved(self, event: Any) -> None:
@@ -959,6 +1226,8 @@ class Workspace(App[None]):
                 None,
             )
             return self._context_decision(item)
+        if view == "projects":
+            return self._context_projects()
         if view == "artefacts":
             found = next(
                 (
@@ -1088,6 +1357,67 @@ class Workspace(App[None]):
             else Text("")
         )
         return facts(title, rows, stop)
+
+    def _context_projects(self) -> RenderableType:
+        picked = self._highlighted(self.query_one("#projects-list", DrillList)) if self.depth < 3 else None
+        if self.depth == 0:
+            project = next((p for p in self.projects or [] if str(p["id"]) == picked), None)
+            if project is None:
+                return Text("Move to a project to see it in full.", style="dim")
+            stats = project.get("stats") or {}
+            slug = project["slug"]
+            budget = stats.get("budget_month_eur")
+            return facts(
+                Text(str(project["name"]), style=f"bold {theme.hue_style(slug)}"),
+                [
+                    ("status", str(project["status"])),
+                    ("running", str(self._running_in(slug))),
+                    ("waiting", str(self._waiting_in(slug))),
+                    ("work items", str(stats.get("active_work_items", DASH))),
+                    ("this month", self.price(money.Amount(eur=stats.get("cost_month_eur")))),
+                    ("budget", self.price(money.Amount(eur=budget))),
+                    ("workflow", str(project.get("workflow_name") or DASH)),
+                ],
+            )
+        if self.depth == 1:
+            item = next((i for i in self.items or [] if str(i["id"]) == picked), None)
+            if item is None:
+                return Text("Move to a work item to see it in full.", style="dim")
+            return self._item_facts(item)
+        run = (
+            self.run_summary
+            if self.depth == 3
+            else next((r for r in self.item_runs or [] if str(r["id"]) == picked), None)
+        )
+        if run is None:
+            return Text("Move to a run to see it in full.", style="dim")
+        status = theme.status_of(run["status"])
+        return facts(
+            theme.badge(status, self.out),
+            [
+                ("run", str(run["id"])),
+                ("stage", str(run["stage_role"])),
+                ("try", str(run.get("attempt", 1))),
+                ("backend", str(run.get("backend") or DASH)),
+                ("model", str(run.get("model") or DASH)),
+                ("spend", self.price(money.Amount(usd=run.get("cost_usd")))),
+                ("started", self._when(run.get("started_at"))),
+            ],
+        )
+
+    def _item_facts(self, item: dict[str, Any]) -> RenderableType:
+        totals = item.get("totals") or {}
+        return facts(
+            Text(str(item["tracker_key"]), style="bold"),
+            [
+                ("state", str(item.get("state_display") or item["state"])),
+                ("size", str(item.get("size") or DASH)),
+                ("spend", self.price(money.Amount(eur=totals.get("cost_eur")))),
+                ("pull request", str(item.get("pr_url") or DASH)),
+            ],
+            Text(""),
+            Text(decide.clean(str(item["title"]))),
+        )
 
     def _context_decision(self, item: dict[str, Any] | None) -> RenderableType:
         if item is None:

@@ -188,6 +188,33 @@ def _agent_node(node_id: str, parent: str | None, kind: str, **changes: Any) -> 
     } | changes
 
 
+def _project(pid: str, slug: str, name: str, *, active: int, month: float) -> dict[str, Any]:
+    return {
+        "id": pid,
+        "slug": slug,
+        "org": "acme",
+        "name": name,
+        "status": "active",
+        "config": {},
+        "workflow_name": "delivery",
+        "stats": {"active_work_items": active, "cost_month_eur": month, "budget_month_eur": 100.0},
+    }
+
+
+def _work_item(wid: str, key: str, title: str, state: str, cost: float) -> dict[str, Any]:
+    return {
+        "id": wid,
+        "project_slug": "billing-api",
+        "tracker_key": key,
+        "title": title,
+        "state": state,
+        "state_display": state.replace("_", " "),
+        "size": "M",
+        "totals": {"cost_eur": cost},
+        "pr_url": None,
+    }
+
+
 class Platform:
     """Every route the workspace reads, faked; what it sends is kept for the test to look at."""
 
@@ -262,6 +289,53 @@ class Platform:
         )
         router.get(url__regex=rf"{re.escape(V1)}/runs/[^/]+/agents").mock(side_effect=self._agents)
         router.post(f"{V1}/work-items/wi-12/actions").mock(side_effect=self._stop)
+        # The Projects tab (S67-23): every readable project, a project's items, an item's runs.
+        self.projects: list[dict[str, Any]] = [
+            _project("p-1", "billing-api", "Billing API", active=2, month=41.5),
+            _project("p-2", "docs-site", "Docs site", active=0, month=0.0),
+        ]
+        self.projects_status = 200
+        router.get(f"{V1}/orgs/acme/projects").mock(side_effect=self._projects)
+        router.get(f"{V1}/projects/p-1/work-items").mock(side_effect=self._items)
+        router.get(f"{V1}/projects/p-2/work-items").mock(side_effect=self._items)
+        router.get(url__regex=rf"{re.escape(V1)}/work-items/[^/]+/runs").mock(side_effect=self._item_runs)
+
+    def _projects(self, request: Any) -> Response:
+        if self.projects_status != 200:
+            return Response(self.projects_status, json={"title": "Forbidden", "detail": "no"})
+        # `Project.config` refers to a schema file the `contract` fixture cannot resolve: the part the
+        # workspace reads (`stats`) is validated, the rest is the fixture's limit.
+        for project in self.projects:
+            self.contract("ProjectStats", project["stats"])
+        return Response(200, json={"items": self.projects, "meta": {"has_more": False}})
+
+    def _items(self, request: Any) -> Response:
+        if request.url.path.endswith("/p-2/work-items"):
+            return Response(
+                200, json=self.contract("WorkItemPage", {"items": [], "meta": {"has_more": False}})
+            )
+        items = [
+            _work_item("wi-12", "FIN-12", "Fix the totals rounding", "in_progress", 12.5),
+            _work_item("wi-9", "FIN-9", "Add the VAT column", "done", 3.0),
+        ]
+        return Response(
+            200, json=self.contract("WorkItemPage", {"items": items, "meta": {"has_more": False}})
+        )
+
+    def _item_runs(self, request: Any) -> Response:
+        runs = [
+            {
+                "id": RUN,
+                "status": "running",
+                "stage_role": "implement",
+                "attempt": 2,
+                "backend": "claude-code",
+                "model": "anthropic/sonnet-4.5",
+                "cost_usd": 0.84,
+                "started_at": _iso(NOW - timedelta(minutes=4, seconds=12)),
+            }
+        ]
+        return Response(200, json=[self.contract("RunSummary", r) for r in runs])
 
     def assistants(self, items: list[dict[str, Any]]) -> None:
         body = self.contract("MyAssistantList", {"items": items})
@@ -470,7 +544,7 @@ async def test_the_workspace_is_one_screen_of_tabs_and_each_tab_shows_its_part(p
         text = screen_text(app)
         assert re.search(r"digest\.md +weekly-digest v2", text)
         await show(pilot, "projects")
-        assert "later change" in screen_text(app)
+        assert "Billing API" in screen_text(app)
         await show(pilot, "live")
         assert "coming" in screen_text(app)
 
@@ -1065,7 +1139,7 @@ def test_the_workspace_snapshot_with_an_expanded_run(
 
 @pytest.mark.parametrize("colour", ["colour", "no-color"])
 @pytest.mark.parametrize("columns", ["80", "160"])
-@pytest.mark.parametrize("view", ["conversation", "activity", "decisions", "artefacts"])
+@pytest.mark.parametrize("view", ["conversation", "activity", "projects", "decisions", "artefacts"])
 def test_the_workspace_snapshot(
     snap_compare: Any,
     platform: Platform,
@@ -1083,6 +1157,36 @@ def test_the_workspace_snapshot(
         await until(pilot, lambda: app.live and app.conversation is not None, "the workspace")
         await until(pilot, lambda: bool(app.pending), "the decisions")
         await show(pilot, view)
+        await pilot.pause(0.3)
+
+    assert snap_compare(app, terminal_size=SIZES[columns], run_before=settled)
+
+
+@pytest.mark.parametrize("colour", ["colour", "no-color"])
+@pytest.mark.parametrize("columns", ["80", "160"])
+@pytest.mark.parametrize("depth", [1, 2, 3])
+def test_the_projects_tab_snapshot_at_each_depth(
+    snap_compare: Any,
+    platform: Platform,
+    monkeypatch: pytest.MonkeyPatch,
+    colour: str,
+    columns: str,
+    depth: int,
+) -> None:
+    if colour == "no-color":
+        monkeypatch.setenv("NO_COLOR", "1")
+    _showcase(platform)
+    platform.currency("EUR")
+    app = make_app(conversation=CID)
+    shown = {1: "FIN-9", 2: "backend", 3: "Read the totals code"}
+
+    async def settled(pilot: Any) -> None:
+        await until(pilot, lambda: app.live and app.projects is not None, "the workspace")
+        await until(pilot, lambda: bool(app.pending), "the decisions")
+        await show(pilot, "projects")
+        for level in range(1, depth + 1):
+            await pilot.press("enter")
+            await until(pilot, lambda key=shown[level]: key in screen_text(app), f"depth {level}")
         await pilot.pause(0.3)
 
     assert snap_compare(app, terminal_size=SIZES[columns], run_before=settled)
@@ -1173,6 +1277,80 @@ async def test_a_read_that_lands_after_the_workspace_closed_draws_nothing(platfo
     async with app.run_test(size=(160, 40)) as pilot:
         await ready(pilot)
     app.draw_tree()  # the widgets are gone
+
+
+async def _open_projects(pilot: Any) -> Any:
+    app = pilot.app
+    await until(pilot, lambda: app.projects is not None, "the projects")
+    await show(pilot, "projects")
+    await until(pilot, lambda: "Docs site" in screen_text(app), "the projects listed")
+    return app
+
+
+async def test_the_projects_tab_lists_every_project_even_one_with_no_activity(platform: Platform) -> None:
+    platform.currency("EUR")  # a project's month is in euros: an organisation in euros shows it as given
+    platform.pending([_pending_action()])
+    async with make_app().run_test(size=(160, 40)) as pilot:
+        app = await _open_projects(pilot)
+        text = screen_text(app)
+        assert re.search(r"Billing API +1 +1 +€41\.50", text)
+        assert re.search(r"Docs site +0 +0 +€0\.00", text)
+        assert "Projects" in text
+        assert "Billing API" in pane(app) and "budget" in pane(app)
+        await pilot.press("down")
+        assert "Docs site" in pane(app)
+
+
+async def test_enter_goes_down_to_items_then_runs_then_steps_and_backspace_goes_back_up(
+    platform: Platform,
+) -> None:
+    platform.currency("EUR")  # a project's month is in euros: an organisation in euros shows it as given
+    async with make_app().run_test(size=(160, 40)) as pilot:
+        app = await _open_projects(pilot)
+        await pilot.press("enter")
+        await until(pilot, lambda: "FIN-12" in screen_text(app), "the items")
+        text = screen_text(app)
+        assert "Projects › Billing API" in text and "Fix the totals rounding" in text
+        assert "€12.50" in text and "FIN-9" in text
+        await pilot.press("enter")
+        await until(pilot, lambda: "implement" in screen_text(app), "the runs")
+        assert "Projects › Billing API › FIN-12" in screen_text(app)
+        assert "● running" in screen_text(app) and "#2" in screen_text(app)
+        await pilot.press("enter")
+        await until(pilot, lambda: "Read the totals code" in screen_text(app), "the steps")
+        assert "Projects › Billing API › FIN-12 › implement #2" in screen_text(app)
+        await pilot.press("backspace")
+        assert "Projects › Billing API › FIN-12" in screen_text(app) and "#2" in screen_text(app)
+        assert "Read the totals code" not in screen_text(app)
+        await pilot.press("escape")
+        assert "Fix the totals rounding" in screen_text(app) and app.depth == 1
+        await pilot.press("backspace")
+        assert app.depth == 0 and "Docs site" in screen_text(app)
+
+
+async def test_escape_at_the_top_of_projects_still_cancels_nothing_and_stays(platform: Platform) -> None:
+    platform.currency("EUR")  # a project's month is in euros: an organisation in euros shows it as given
+    async with make_app().run_test(size=(160, 40)) as pilot:
+        app = await _open_projects(pilot)
+        await pilot.press("escape", "backspace")
+        assert app.depth == 0 and app.current_view == "projects"
+
+
+async def test_a_project_with_no_work_item_says_so(platform: Platform) -> None:
+    platform.currency("EUR")  # a project's month is in euros: an organisation in euros shows it as given
+    async with make_app().run_test(size=(160, 40)) as pilot:
+        app = await _open_projects(pilot)
+        await pilot.press("down", "enter")
+        await until(pilot, lambda: "no work item yet" in screen_text(app), "the empty project")
+
+
+async def test_an_unreadable_projects_route_is_said_not_shown_empty(platform: Platform) -> None:
+    platform.currency("EUR")  # a project's month is in euros: an organisation in euros shows it as given
+    platform.projects_status = 403
+    async with make_app().run_test(size=(160, 40)) as pilot:
+        await pilot.pause()
+        await show(pilot, "projects")
+        await until(pilot, lambda: "not readable" in screen_text(pilot.app), "the refusal")
 
 
 async def test_the_amounts_follow_the_organisations_currency(platform: Platform) -> None:
