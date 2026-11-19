@@ -38,6 +38,7 @@ from tranibor_core.hosted import SHARED_WORKSPACE_AGENT, SHARED_WORKSPACE_RUNNER
 
 from ..errors import UnsupportedClusterError
 from . import egress_gate
+from .isolation import refuse_unless_separate
 from .tekton import (
     CORE_API,
     GATEWAY_KEY_FIELD,
@@ -117,6 +118,7 @@ class KubernetesJobExecutor:
         return f"run-{run_id}"[:63].lower()
 
     async def start(self, spec: StageJobSpec) -> ExecRef:
+        refuse_unless_separate(str(self.kind), self.capabilities, spec)
         if spec.agent_container is not None:
             # Below 1.29 the API server drops `restartPolicy: Always` from the init container: the
             # pod would wait on the agent forever. Refused before anything is created.

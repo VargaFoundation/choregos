@@ -443,6 +443,7 @@ vendor). `ready` is true when no item is `todo`.
 | `connector-<kind>-stale` | | the last passing test is older than 7 days |
 | `github-app-<kind>` | the repository's owner has no installation claimed by the organisation ([ADR 0073](adr/0073-github-app-installations-are-discovered-not-typed.md)); `not_needed` without an App | |
 | `runtime-class` | the policy says `sandbox.runtime: gvisor` and the `agent_sandbox` warm pool runs another RuntimeClass (`global.runner.runtimeClass`): every run would be refused at start. Not listed for another executor, under fakes, when the policy asks for none, or when the deployment never set `global.runner.runtimeClass` (the pool's class is then unknown) | |
+| `agent-isolation` | the deployment runs every agent in a container of its own (`global.runner.agentIsolation: container`, [ADR 0146](adr/0146-the-runner-and-the-agent-do-not-share-a-container.md)) and the project's executor does not declare `separate_agent`: every run would be refused at start, with the same sentence. Not listed under `process` (the default) or under fakes | |
 | `repository` | a repository is needed and has no URL | |
 | `repository-checks` | | no `repo.test_command` and no `dod.facts`: the runner measures nothing |
 | `backend` | the default backend is not enabled on the deployment | |

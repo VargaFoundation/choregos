@@ -282,7 +282,7 @@ def _pod(*overrides: str) -> dict[str, Any]:
     return _objects(*overrides)["SandboxTemplate/choregos-runner"]["spec"]["podTemplate"]["spec"]
 
 
-SEPARATE = "choregos-orchestrator.runner.sandbox.agentIsolation=container"
+SEPARATE = "global.runner.agentIsolation=container"
 
 
 def _agent(pod: dict[str, Any]) -> dict[str, Any]:
@@ -350,11 +350,35 @@ def test_the_separate_agent_template_fits_the_pinned_crds() -> None:
 
 @needs_helm
 def test_an_unknown_isolation_is_refused() -> None:
-    result = _render(
-        *SANDBOX_VALUES, "choregos-orchestrator.runner.sandbox.agentIsolation=shared", check=False
-    )
+    result = _render(*SANDBOX_VALUES, "global.runner.agentIsolation=shared", check=False)
     assert result.returncode != 0
     assert "agentIsolation" in result.stderr
+
+
+@needs_helm
+@pytest.mark.parametrize("value", ["process", "container"])
+def test_the_former_sandbox_value_is_refused_with_where_it_went(value: str) -> None:
+    """S65-04d: `runner.sandbox.agentIsolation` (0.27.6 to 0.27.15) moved to `global.runner.agentIsolation`.
+    Ignored, a `container` there would leave the agent beside the runner without a word."""
+    result = _render(
+        *SANDBOX_VALUES, f"choregos-orchestrator.runner.sandbox.agentIsolation={value}", check=False
+    )
+    assert result.returncode != 0
+    assert "moved to global.runner.agentIsolation" in result.stderr
+
+
+@needs_helm
+@pytest.mark.parametrize("isolation", ["process", "container"])
+def test_the_api_and_the_workers_read_the_same_isolation_as_the_template(isolation: str) -> None:
+    """One value (ADR 0146 §9): the API judges `/readiness` and the workers refuse with what the template
+    renders; a worker told `process` beside a `container` pool would refuse nothing it should."""
+    objects = _objects(f"global.runner.agentIsolation={isolation}")
+    for name in ("Deployment/choregos-api", "Deployment/choregos-orchestrator-executor"):
+        (container, *_) = objects[name]["spec"]["template"]["spec"]["containers"]
+        env = {e["name"]: e.get("value") for e in container["env"]}
+        assert env["CHOREGOS_RUNNER_AGENT_ISOLATION"] == isolation, name
+    pod = objects["SandboxTemplate/choregos-runner"]["spec"]["podTemplate"]["spec"]
+    assert ("agent" in {c["name"] for c in pod["initContainers"]}) is (isolation == "container")
 
 
 @needs_helm

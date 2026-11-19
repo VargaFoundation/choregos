@@ -22,6 +22,7 @@ from tranibor_contracts import ExecutorKind, StageResult
 from tranibor_core.domain import ExecRef, ExecStatus, StageJobSpec, utcnow
 
 from ..errors import ConfigurationError, UpstreamError
+from .isolation import refuse_unless_separate
 
 TEKTON_API = "/apis/tekton.dev/v1"
 CORE_API = "/api/v1"
@@ -123,6 +124,7 @@ class TektonExecutor:
 
     async def start(self, spec: StageJobSpec) -> ExecRef:
         """Idempotent: if the PipelineRun already exists, it is reused."""
+        refuse_unless_separate(str(self.kind), self.capabilities, spec)
         if spec.agent_container is not None:
             raise ConfigurationError(
                 "a hosted agent's container runs beside the runner in one pod (ADR 0080), which "

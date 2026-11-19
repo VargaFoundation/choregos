@@ -20,7 +20,8 @@
 
 **Decision**: §1-§4 and §8-§9 are the decision, for the `agent_sandbox` executor first: the agent runs
 in a container of its own, as another uid, and the flag is `CHOREGOS_RUNNER_AGENT_ISOLATION`
-(`process` | `container`), set in the chart by `runner.sandbox.agentIsolation`. **The default stays
+(`process` | `container`), set in the chart by `global.runner.agentIsolation` (until 0.27.15
+`runner.sandbox.agentIsolation`, the warm pool's alone; S65-04d made it the deployment's). **The default stays
 `process`** (§13): the shape is proved on a kubelet with runc, not yet on the operator or under
 gVisor. A deployment turns `container` on in dev first, and rolls back by setting `process`: the
 chart then renders the pod it rendered before this ADR (a test compares the two).
@@ -62,9 +63,21 @@ same proxy variables as the agent.
 **Built after, S65-04c (§5)**: the runner's git directory is outside the tree the agent writes (`--git-dir`
 the runner's own), and the hardening of #1345 is the second lock.
 
+**Built after, S65-04d (§9, the capability and the refusal)**: `separate_agent` is in the executors'
+vocabulary. The setting is the deployment's (`CHOREGOS_RUNNER_AGENT_ISOLATION`, the chart's
+`global.runner.agentIsolation`, given to the API, the workers and the warm pool's template) and travels
+with each run (`StageJobSpec.agent_isolation`). Every executor's `start` first calls
+`agent_isolation_refusal` (`tranibor_core.agent_isolation`): under `container`, one without the capability
+raises `AgentIsolationRefused` (`agent_isolation_unavailable`, not retried) naming itself, before it writes
+anything. `/readiness` judges the project's executor with the same function and what its class declares
+(`agent-isolation`). The warm pool declares the capability when its template has the agent's container
+(`AgentSandboxExecutor.pool_capabilities`); the routing executor sends a run its pool cannot isolate to
+the second executor when that one can, and refuses, naming both, when neither can; a step with its own
+image is never sent back to the pool for it. The fake executor declares it (it starts no runner).
+A hosted session's pod (`serve-session`) asks for `process`: it starts no agent of its own.
+
 **Not built, still decided**: `k8s_job`, `local_docker`, `tekton`, `aca`
-get no second container here: a runner told `container` there exits 100. The `separate_agent`
-capability has no consumer until one of them does, so it is not declared. The runner container keeps
+get no second container here: under `container` they refuse the run at `start`. The runner container keeps
 today's requests and limits (§12 asks for a smaller one: not measured), so a `container` pod requests
 twice what a `process` pod does.
 

@@ -308,6 +308,9 @@ class StageJobSpec(Model):
     agent_container: AgentContainer | None = None
     #: The runner's arguments: `run` for a step, `serve-session` for a hosted session's pod (S41-11).
     runner_command: list[str] = Field(default_factory=lambda: ["run"])
+    #: Where the step's agent runs (ADR 0146, `tranibor_core.agent_isolation`): `container` asks the
+    #: executor for the agent's own container, and one that cannot start it refuses the run.
+    agent_isolation: Literal["process", "container"] = "process"
 
 
 class ExecRef(Model):

@@ -154,6 +154,8 @@ async def start_session_pod(payload: dict[str, Any]) -> dict[str, Any]:
             # The runner serves the session's tools on its loopback MCP listener itself.
             agent_container=agent_container(stage_input, mcp_servers=[SESSION_MCP]),
             runner_command=["serve-session"],
+            # No `agent_isolation` (ADR 0146): `serve-session` starts no agent of its own, and the
+            # hosted container above already runs apart from the runner (ADR 0080).
         )
         await session.commit()  # the stage input is readable before the pod asks for it
         # The scope of the transaction ended with the commit (RLS is transaction-local).

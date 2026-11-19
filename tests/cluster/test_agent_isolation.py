@@ -1,6 +1,6 @@
 """ADR 0146 — the agent's container cannot read the runner's secrets, on a real kubelet.
 
-The pod is the shape the chart renders for `runner.sandbox.agentIsolation: container`: a `runner`
+The pod is the shape the chart renders for `global.runner.agentIsolation: container`: a `runner`
 container (uid 1000, the run's secret in its environment, files of its own) and a native sidecar
 `agent` (uid 1001, no secret) running `launcher.py`, the file the runner image ships, copied here
 from the repository. The `runner` container plays the runner's part: it asks the launcher to run
