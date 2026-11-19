@@ -401,15 +401,6 @@ def _cilium(cfg: dict[str, Any]) -> Any:
     return CiliumNetwork.from_config(cfg, scm=scm)
 
 
-def _fake_marketdata(cfg: dict[str, Any]) -> Any:
-    """The fake of the `marketdata` family, shared in the process (scriptable by tests)."""
-    if _package.FAKE_MARKETDATA is None:
-        from .fakes.marketdata import FakeMarketData
-
-        _package.FAKE_MARKETDATA = FakeMarketData()
-    return _package.FAKE_MARKETDATA
-
-
 def _fake_web_search(cfg: dict[str, Any]) -> Any:
     """The fake of the `web_search` family, shared in the process (scriptable by tests)."""
     if _package.FAKE_WEB_SEARCH is None:
@@ -438,56 +429,6 @@ def _demo_cd(cfg: dict[str, Any]) -> Any:
     if "cd" not in desks:
         desks["cd"] = FakeDemoCd()
     return DemoCd(Desk(desks["cd"], str(cfg.get("api_key", ""))))
-
-
-def _register_marketdata() -> None:
-    """The `marketdata` family (S38-03): its free providers, their composite and its fake."""
-    from .marketdata import PROVIDERS, CompositeProvider, MarketDataProvider
-
-    def _provider(type_name: str, cfg: dict[str, Any], key: str | list[str] = "") -> MarketDataProvider:
-        options: dict[str, Any] = {"timeout_s": float(cfg.get("timeout_s", 20))}
-        if type_name == "stooq" and cfg.get("suffix_map"):
-            options["suffix_map"] = dict(cfg["suffix_map"])
-        if type_name == "alphavantage" and cfg.get("outputsize"):
-            options["outputsize"] = str(cfg["outputsize"])
-        if type_name != "yahoo":
-            # A string, or a list when the field holds several keys (ADR 0089).
-            options["api_key"] = key or cfg.get("api_key") or ""
-            options["key_rotation"] = strategy_of(cfg.get("key_rotation"))
-        return PROVIDERS[type_name](**options)
-
-    def _composite(cfg: dict[str, Any]) -> CompositeProvider:
-        names = [str(n) for n in cfg.get("sources") or []]
-        unknown = [n for n in names if n not in PROVIDERS]
-        if not names or unknown:
-            raise ConfigurationError(
-                f"marketdata composite: `sources` must list provider types among {sorted(PROVIDERS)}"
-                + (f" (unknown: {unknown})" if unknown else "")
-            )
-        configs = cfg.get("source_configs") or {}
-        return CompositeProvider(
-            [
-                (
-                    n,
-                    _provider(
-                        n,
-                        {"key_rotation": cfg.get("key_rotation"), **dict(configs.get(n) or {})},
-                        cfg.get(f"{n}_api_key") or "",
-                    ),
-                )
-                for n in names
-            ],
-            cross_check=bool(cfg.get("cross_check", True)),
-            tolerance=float(cfg.get("tolerance", 0.02)),
-        )
-
-    def _constructor(name: str) -> Callable[[dict[str, Any]], MarketDataProvider]:
-        return lambda cfg: _provider(name, cfg)
-
-    for name in PROVIDERS:
-        register("marketdata", name, _SHIPPED_SPECS[("marketdata", name)])(_constructor(name))
-    register("marketdata", "composite", _SHIPPED_SPECS[("marketdata", "composite")])(_composite)
-    register("marketdata", "fake")(_fake_marketdata)
 
 
 def _register_web_search() -> None:
@@ -879,6 +820,5 @@ def _register_builtins() -> None:
     _register_runtimes()
     _register_memory_and_gateways()
     _register_documents_and_identity()
-    _register_marketdata()
     _register_web_search()
     _register_mcp_and_notifiers()

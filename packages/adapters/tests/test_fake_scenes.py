@@ -83,7 +83,6 @@ async def test_a_scene_is_built_anew_each_time() -> None:
 
 def test_the_scenes_name_their_kinds_and_refuse_the_unknown() -> None:
     assert scenes()["firewall"] == ["default", "ssh-exposure"]
-    assert {op.name for op in scene("marketdata").operations} == {"get_bars", "get_instrument"}
     with pytest.raises(AdapterError, match="no scene for the kind"):
         scene("tracker")
     with pytest.raises(AdapterError, match="has no scene"):
@@ -185,7 +184,12 @@ def test_each_kind_with_scenes_runs_a_registered_type() -> None:
         "firewall": "pfsense",
         "network_policy": "cilium",
         "identity": "entra",
-        "marketdata": "composite",
+        # The kinds an installed extension declares (ADR 0181): the `investment-research` plugin's.
+        **{
+            kind: scene_type(kind)
+            for kind in scenes()
+            if kind not in {"firewall", "network_policy", "identity"}
+        },
     }
     assert all(spec_of(kind, scene_type(kind)) is not None for kind in scenes())
     with pytest.raises(AdapterError, match="no scene for the kind"):

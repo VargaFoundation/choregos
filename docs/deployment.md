@@ -2118,6 +2118,27 @@ value>` on the first model call. Nothing said the key had never resolved.
 If the API refuses to start with `réglages non résolus`, fix the source of the secret — the key
 is missing where it is stored, not where it is read.
 
+## Upgrading past 0.27.15: investment research is a plugin
+
+**The `marketdata` connector family left the core** (S83-08,
+[ADR 0181](adr/0181-the-contracts-speak-no-trade.md) O4-4). Its types (`stooq`, `yahoo`, `alphavantage`,
+`tiingo`, `composite`) and their fake are now the extension of the `investment-research` plugin: the
+distribution `tranibor-investment-research` (`plugins/investment-research/` of the core's repository, its
+wheel attached to each release), loaded from the `choregos.plugins` entry point by the API and the
+workers ([Plugins, extensions and editions](site/build/plugins-and-trades.md)).
+
+- **With the published images, nothing to do for the connectors**: the API and worker images install the
+  extension, under the same kind, type names, configuration and secrets, so the organisation connectors
+  already declared keep validating and serving. An image built from the source must install it too
+  (`uv sync --all-packages` does, as `docker/api.Dockerfile`); without it building a `marketdata` connector fails
+  with `no adapter … for marketdata`.
+- **The five `connector.marketdata.*` setup procedures are the plugin's.** The core no longer serves them:
+  an organisation that uses these connectors installs the `investment-research` plugin from the
+  `tranibor` source (**Plugins** in the sidebar, or `defaultPlugins` in `global.plugins`), which brings
+  them back under the same ids.
+- A test or a demo that scripted the fake as `tranibor_adapters.FAKE_MARKETDATA` scripts
+  `tranibor_investment_research.marketdata.fake.FAKE`.
+
 ## Upgrading past 0.27.15: the agent's isolation is one setting
 
 **`choregos-orchestrator.runner.sandbox.agentIsolation` moved to `global.runner.agentIsolation`**

@@ -28,6 +28,7 @@ members = [
     "tranibor-cli",
     "tranibor-contracts",
     "tranibor-core",
+    "tranibor-investment-research",
     "tranibor-ontology",
     "tranibor-orchestrator",
     "tranibor-outpost",
@@ -534,6 +535,7 @@ dependencies = [
     { name = "tranibor-cli" },
     { name = "tranibor-contracts" },
     { name = "tranibor-core" },
+    { name = "tranibor-investment-research" },
     { name = "tranibor-ontology" },
     { name = "tranibor-orchestrator" },
     { name = "tranibor-outpost" },
@@ -584,6 +586,7 @@ requires-dist = [
     { name = "tranibor-cli", editable = "packages/cli" },
     { name = "tranibor-contracts", editable = "packages/contracts" },
     { name = "tranibor-core", editable = "packages/core" },
+    { name = "tranibor-investment-research", editable = "plugins/investment-research" },
     { name = "tranibor-ontology", editable = "packages/ontology" },
     { name = "tranibor-orchestrator", editable = "apps/orchestrator" },
     { name = "tranibor-outpost", editable = "packages/outpost" },
@@ -2507,6 +2510,21 @@ requires-dist = [
     { name = "tranibor-contracts", editable = "packages/contracts" },
 ]
 provides-extras = ["telemetry", "temporal"]
+
+[[package]]
+name = "tranibor-investment-research"
+version = "0.27.15"
+source = { editable = "plugins/investment-research" }
+dependencies = [
+    { name = "httpx" },
+    { name = "tranibor-adapters" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "tranibor-adapters", editable = "packages/adapters" },
+]
 
 [[package]]
 name = "tranibor-ontology"

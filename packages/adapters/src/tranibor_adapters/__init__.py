@@ -103,7 +103,6 @@ FAKE_OAUTH: Any = None  # the fake OAuth provider of a `user_consent` source (AD
 FAKE_MCP_GATEWAY: Any = None  # the fake MCP gateway, whose fallback is always the CURRENT `FAKE_MCP`
 FAKE_OUTPOST: Any = None  # the fake outpost (ADR 0149), whose every alias is served by the CURRENT `FAKE_MCP`
 FAKE_ENTRA: Any = None  # the fake Graph
-FAKE_MARKETDATA: Any = None  # the fake of the `marketdata` family
 FAKE_WEB_SEARCH: Any = None  # the fake of the `web_search` family
 FAKE_TEAMS: Any = None  # the fake Teams webhook (S63-25)
 #: The netops fakes (ADR 0052): one pfSense, one cluster, one recorded Hubble trace, one GitOps repository.
