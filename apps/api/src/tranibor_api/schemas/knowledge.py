@@ -243,7 +243,7 @@ class KnowledgeSearchResult(Dto):
     hits: list[KnowledgeCitation] = Field(default_factory=list)
 
 
-SourceKind = Literal["sharepoint", "confluence", "web", "git"]
+SourceKind = Literal["sharepoint", "confluence", "web", "git", "mcp"]
 #: interval: every `interval_minutes`; cron: `refresh_cron` in `refresh_timezone`; manual: on demand only
 RefreshMode = Literal["interval", "cron", "manual"]
 

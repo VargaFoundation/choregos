@@ -19,6 +19,7 @@ import os
 import re
 from collections import Counter
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 
 from tranibor_core.publishing import PUBLISHING
@@ -81,6 +82,9 @@ class Page:
     body_terms: Counter[str] = field(default_factory=Counter)
     title_terms: frozenset[str] = frozenset()
     length: int = 0
+    #: When the file was last written (ISO 8601, UTC): what the door's resources declare as
+    #: `lastModified`, so that a knowledge base reads a page again only when it changed (ADR 0191).
+    modified: str = ""
 
     def url(self, base: str) -> str:
         base = base.rstrip("/")
@@ -180,7 +184,8 @@ def slug_of(relative: Path) -> tuple[str, bool]:
 
 def _page(path: Path, relative: Path) -> Page | None:
     try:
-        if path.stat().st_size > MAX_PAGE_BYTES:
+        stat = path.stat()
+        if stat.st_size > MAX_PAGE_BYTES:
             return None
         text = path.read_text(encoding="utf-8").replace("\r\n", "\n")
     except (OSError, UnicodeDecodeError):
@@ -203,6 +208,7 @@ def _page(path: Path, relative: Path) -> Page | None:
         body_terms=body_terms,
         title_terms=frozenset(terms(f"{title} {slug.replace('/', ' ')}")),
         length=sum(body_terms.values()),
+        modified=datetime.fromtimestamp(stat.st_mtime, UTC).isoformat(timespec="seconds"),
     )
 
 

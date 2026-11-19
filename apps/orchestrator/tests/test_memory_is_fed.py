@@ -130,7 +130,7 @@ async def test_a_failed_run_leaves_its_lesson_once(setup: Fixture) -> None:
     assert (await _record_failure(run_id))["status"] == "failed"
     facts = setup.adapters.memory.facts["billing-api"]
     assert [(m.subject, m.content) for m in facts] == [
-        ("run_lesson:billing-api:implement", "The implement step failed (tests) — attempt 2.")
+        ("run_lesson:billing-api:implement:run-failed", "The implement step failed (tests) — attempt 2.")
     ]
     assert facts[0].provenance["external_id"] == f"run:{run_id}"
 
@@ -162,3 +162,64 @@ async def test_an_alert_is_not_kept_under_a_policy_without_memory(setup: Fixture
     event = {"delivery_id": "f-1", "payload": {"labels": {"alertname": "ErrorBudget"}}}
     assert (await ingest_alert({"project_slug": "billing-api", "event": event}))["ingested"] is False
     assert not setup.adapters.memory.facts.get("billing-api")
+
+
+async def _fail_runs(setup: Fixture, *run_ids: str) -> None:
+    """Failed runs of the SAME stage with different outcomes (different attempts), as in prod."""
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
+
+    async with session_scope() as session:
+        for attempt, run_id in enumerate(run_ids, start=1):
+            session.add(
+                Run(
+                    id=run_id,
+                    work_item_id=setup.work_item_id,
+                    project_id=setup.project_id,
+                    stage_role="implement",
+                    attempt=attempt,
+                    status="failed",
+                    result={"reason": f"tests-{attempt}"},
+                )
+            )
+
+
+async def test_the_loop_does_not_rewrite_the_lessons_of_failed_runs_on_every_pass(setup: Fixture) -> None:
+    """Prod, 2026-11-18: runs of one stage shared a subject, Ecphoria superseded on each content change,
+    so a few lessons were rewritten ~960 times (5,259 superseded against 27 active)."""
+    from tranibor_orchestrator.activities.memory import ingest_sources
+
+    await _fail_runs(setup, "run-a", "run-b", "run-c")
+    request = {"project_slug": "billing-api", "sources": ["run_lessons"]}
+    for _ in range(4):  # the loop's passes, with no cursor: a restarted loop, a requested re-import
+        await ingest_sources(request)
+    memory = setup.adapters.memory.facts["billing-api"]
+    assert len(memory) == 3, f"one memory per failed run, never a new version: {len(memory)}"
+    assert {m.status for m in memory} == {"active"}
+    assert len({m.subject for m in memory}) == 3, "a lesson per run, none overwrites another"
+
+
+async def test_the_run_lessons_cursor_sends_a_failed_run_only_once(setup: Fixture) -> None:
+    from tranibor_orchestrator.activities.memory import ingest_sources
+
+    await _fail_runs(setup, "run-a", "run-b")
+    first = await ingest_sources({"project_slug": "billing-api", "sources": ["run_lessons"]})
+    assert first["facts"] == 2 and first["run_lessons_watermark"]
+    again = await ingest_sources(
+        {
+            "project_slug": "billing-api",
+            "sources": ["run_lessons"],
+            "run_lessons_since": first["run_lessons_watermark"],
+        }
+    )
+    assert again["facts"] == 0 and "run_lessons_watermark" not in again, "nothing new, nothing sent"
+
+    await _fail_runs(setup, "run-c")
+    newer = await ingest_sources(
+        {
+            "project_slug": "billing-api",
+            "sources": ["run_lessons"],
+            "run_lessons_since": first["run_lessons_watermark"],
+        }
+    )
+    assert newer["facts"] == 1, "a run that failed after the watermark is picked up"

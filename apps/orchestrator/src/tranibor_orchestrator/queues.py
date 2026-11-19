@@ -49,6 +49,7 @@ ACTIVITIES_BY_QUEUE: dict[str, tuple[str, ...]] = {
     "tracker": (
         "mirror_state",
         "update_status_comment",
+        "record_status_comment_missed",
         "create_human_request",
         "close_human_request",
         "notify",
