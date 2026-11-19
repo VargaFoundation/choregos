@@ -199,7 +199,7 @@ async def remember_deleted(
 # -- the seed's own sources --------------------------------------------------------------------------------
 
 #: The kinds a seed's `sources` may name (the ones a base's source routes know).
-SOURCE_KINDS = ("sharepoint", "confluence", "web", "git")
+SOURCE_KINDS = ("sharepoint", "confluence", "web", "git", "mcp")
 
 
 async def _attach_sources(

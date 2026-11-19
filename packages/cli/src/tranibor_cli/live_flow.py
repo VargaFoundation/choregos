@@ -95,7 +95,16 @@ def _slot_of(item: Json) -> Json:
         "stream_failure": None,
         "item_failure": _item_failure_of(item),
         "waiting": _waiting_of(item),
+        "last_move": None,
     }
+
+
+def edge_between(graph: Json | None, source: str, target: str) -> str | None:
+    """The id of the edge from one state to another (`from->to` without one), None when there is none."""
+    for edge in (graph or {}).get("edges", []):
+        if edge["from"] == source and edge["to"] == target:
+            return edge.get("id") or f"{source}->{target}"
+    return None
 
 
 def lanes_from_graph(graph: Json | None, items: list[Json]) -> list[Json]:
@@ -228,6 +237,11 @@ def apply_items(state: Json, items: list[Json], at: str) -> Json:
             if _today(state, at):
                 nxt["left"][before["lane"]] = nxt["left"].get(before["lane"], 0) + 1
             slot["lane"] = item["state"]
+            slot["last_move"] = {
+                "from": before["lane"],
+                "to": item["state"],
+                "edge": edge_between(state["graph"], before["lane"], item["state"]),
+            }
             slot["stream_failure"] = None
             moved.append(slot)
             continue
@@ -313,6 +327,7 @@ def view(state: Json, now: str) -> Json:
                 "running": running,
                 "failure": failure,
                 "waiting": slot["waiting"],
+                "transition": slot["last_move"],
             }
         )
     seeds = [{"state": s["lane"], "state_display": s["lane_display"]} for s in state["slots"]]

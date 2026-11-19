@@ -73,6 +73,7 @@ ALL_ACTIVITIES = [
     decision.note_transition_taken,
     tracker.mirror_state,
     tracker.update_status_comment,
+    tracker.record_status_comment_missed,
     tracker.create_human_request,
     tracker.close_human_request,
     tracker.notify,

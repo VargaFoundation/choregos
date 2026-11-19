@@ -33,6 +33,8 @@ class MemoryInput:
     org: str = ""
     ab_report_weeks: int = 4
     last_report_week: int = 0
+    #: Cursor of the `run_lessons` source (ISO timestamp): runs touched after it are not yet ingested.
+    run_lessons_since: str = ""
 
 
 @workflow.defn(name="MemoryIngestion", sandboxed=False)
@@ -45,6 +47,7 @@ class MemoryIngestion:
         self.stopped = False
         self.last_report_week = 0
         self.last_report: dict[str, Any] = {}
+        self.run_lessons_since = ""
 
     @workflow.signal
     def reimport(self, payload: dict[str, Any]) -> None:
@@ -77,6 +80,7 @@ class MemoryIngestion:
     async def run(self, payload: dict[str, Any]) -> dict[str, Any]:
         params = MemoryInput(**payload)
         sources = params.sources or DEFAULT_SOURCES
+        self.run_lessons_since = params.run_lessons_since
         while self.cycles < params.max_cycles and not self.stopped:
             with contextlib.suppress(asyncio.TimeoutError):
                 await workflow.wait_condition(
@@ -91,25 +95,38 @@ class MemoryIngestion:
                     start_to_close_timeout=timedelta(minutes=2),
                     retry_policy=RETRY,
                 )
+            reimport = self.requested is not None
             wanted = self.requested or sources
             self.requested = None
+            request: dict[str, Any] = {"project_slug": params.project_slug, "sources": wanted}
+            if self.run_lessons_since and not reimport:  # a requested re-import reads everything again
+                request["run_lessons_since"] = self.run_lessons_since
             outcome = await execute_on_its_queue(
                 memory_activities.ingest_sources,
-                {"project_slug": params.project_slug, "sources": wanted},
+                request,
                 start_to_close_timeout=timedelta(minutes=15),
                 retry_policy=RETRY,
             )
+            self.run_lessons_since = str(outcome.get("run_lessons_watermark") or self.run_lessons_since)
             self.ingested += int(outcome.get("facts", 0))
             self.cycles += 1
             await self._weekly_ab_report(params)
             if workflow.info().get_current_history_length() > 10_000:
-                workflow.continue_as_new({**payload, "last_report_week": self.last_report_week})
+                workflow.continue_as_new(self._carried(payload))
         if not self.stopped and workflow.patched(LOOP_CONTINUES):
             # The loop is a project's for its whole life (S51-02): a completed `mem-<slug>` cannot be
             # started again under its id (the start reuses only a FAILED id), so after `max_cycles` it
             # carries on as a new run instead of returning. Only `stop` (the project archived) ends it.
-            workflow.continue_as_new({**payload, "last_report_week": self.last_report_week})
+            workflow.continue_as_new(self._carried(payload))
         return {"cycles": self.cycles, "ingested": self.ingested}
+
+    def _carried(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """The payload of the next run: what the loop remembers goes with it."""
+        return {
+            **payload,
+            "last_report_week": self.last_report_week,
+            "run_lessons_since": self.run_lessons_since,
+        }
 
     async def _weekly_ab_report(self, params: MemoryInput) -> None:
         """Once per ISO week: does the memory pay off? (docs/plan/04, decision 4)

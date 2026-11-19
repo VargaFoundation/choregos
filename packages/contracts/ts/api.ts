@@ -3435,11 +3435,11 @@ export type KnowledgeBase = {
 };
 
 export type KnowledgeSourceCreate = {
-  kind: "sharepoint" | "confluence" | "web" | "git";
+  kind: "sharepoint" | "confluence" | "web" | "git" | "mcp";
   name: string;
-  /** `sharepoint`, `confluence`: the organisation connector of capability `documents` */
+  /** `sharepoint`, `confluence`: the organisation connector of capability `documents`; `mcp`: the organisation connector of capability `mcp` whose resources the source reads (ADR 0191) */
   connector?: string | null;
-  /** `sharepoint`: `site_id` or `drive_id`, optional `folder` and `exclude` (≤ 50 path globs under the folder, each starting with `/`, case-insensitive, `*` crossing `/`); `confluence`: `space_key`, optional `page_id` (that page and its descendants), `include_root` (default true), `include_attachments` (default false), `labels` (≤ 20); `web`: `url` (https), `max_depth` (≤ 5), `max_pages` (≤ 500); `git`: `url` (https), `ref`, `paths` (globs, default `*.md`), and `github_app: true` to read a github.com repository through the deployment's GitHub App (no `connector`; an organisation administrator, and an installation the organisation claimed on the repository's owner: 403 or 409 otherwise); on a patch, absent keeps what the source had while its URL stays, `false` removes it */
+  /** `sharepoint`: `site_id` or `drive_id`, optional `folder` and `exclude` (≤ 50 path globs under the folder, each starting with `/`, case-insensitive, `*` crossing `/`); `confluence`: `space_key`, optional `page_id` (that page and its descendants), `include_root` (default true), `include_attachments` (default false), `labels` (≤ 20); `web`: `url` (https), `max_depth` (≤ 5), `max_pages` (≤ 500); `git`: `url` (https), `ref`, `paths` (globs, default `*.md`), and `github_app: true` to read a github.com repository through the deployment's GitHub App (no `connector`; an organisation administrator, and an installation the organisation claimed on the repository's owner: 403 or 409 otherwise); `mcp`: optional `uri_prefix` (≤ 2000 characters: only the resources whose URI starts with it) and `mime_types` (≤ 20: only the resources of those types); on a patch, absent keeps what the source had while its URL stays, `false` removes it */
   config?: {
     [key: string]: unknown;
   };
@@ -3469,7 +3469,7 @@ export type KnowledgeSourcePatch = {
 
 export type KnowledgeSource = {
   id: string;
-  kind: "sharepoint" | "confluence" | "web" | "git";
+  kind: "sharepoint" | "confluence" | "web" | "git" | "mcp";
   name: string;
   connector?: string | null;
   config?: {
@@ -6168,6 +6168,8 @@ export type CostReport = {
     tokens_in?: number;
     tokens_out?: number;
     tokens_cached?: number;
+    /** the input tokens the provider wrote to its cache (Anthropic cache creation), part of tokens_in; absent from a line booked before S4-07 */
+    tokens_cache_write?: number;
     runs?: number;
   }>;
   total: {
@@ -6179,6 +6181,8 @@ export type CostReport = {
     tokens_out?: number;
     /** the input tokens the model read from its cache, part of tokens_in */
     tokens_cached?: number;
+    /** the input tokens the provider wrote to its cache, part of tokens_in (S4-07) */
+    tokens_cache_write?: number;
   };
 };
 

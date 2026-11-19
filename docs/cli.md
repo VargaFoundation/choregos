@@ -384,9 +384,10 @@ Usage: choregos chat [OPTIONS]
   The workspace: converse with an assistant, watch what runs, see what waits
   for you.
 
-  Conversation on the left, the live tree (blue) and the decisions (amber) on
-  the right, what moved elsewhere below. The keys are in the footer. It needs
-  a terminal; `choregos ask` and `choregos activity` are the scriptable forms.
+  One screen of tabs (conversation, activity, projects, decisions, artefacts,
+  live), a header of what runs and what waits, and a context pane that follows
+  the selection. The keys are in the footer. It needs a terminal; `choregos
+  ask` and `choregos activity` are the scriptable forms.
 
 Options:
   -a, --assistant <str>     the assistant's slug; the only one ready for you
@@ -708,6 +709,30 @@ Arguments:
 Options:
   --org <str>
   --help       Show this message and exit.
+```
+
+### `choregos live`
+
+```text
+Usage: choregos live [OPTIONS]
+
+  Watch a workflow's flow: its stations, the items parked in them, and the
+  ones that move.
+
+  Stations from left to right, side states (rejections, retries, waits) below,
+  each item a token coloured by what it is doing: blue runs, amber waits for a
+  person, red failed (with why). A token that changes station travels along
+  its arrow. Enter opens an item, q quits. It needs a terminal, and writes
+  nothing; `choregos activity` is the scriptable form.
+
+Options:
+  -p, --project <str>   the project's slug; the only one of the organisation
+                        otherwise
+  -w, --workflow <str>  the workflow's name; the project's default otherwise
+  --org <str>           the organisation; the profile's otherwise
+  --no-motion           no spinner and no travelling token (also
+                        CHOREGOS_NO_MOTION, and NO_COLOR)
+  --help                Show this message and exit.
 ```
 
 ### `choregos login`

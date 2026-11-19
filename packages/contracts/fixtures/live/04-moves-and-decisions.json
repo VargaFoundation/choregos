@@ -309,7 +309,12 @@
         "status": "idle",
         "running": null,
         "failure": null,
-        "waiting": null
+        "waiting": null,
+        "transition": {
+          "from": "implement",
+          "to": "review",
+          "edge": "implement->review"
+        }
       },
       {
         "id": "w2",
@@ -319,7 +324,12 @@
         "status": "idle",
         "running": null,
         "failure": null,
-        "waiting": null
+        "waiting": null,
+        "transition": {
+          "from": "review",
+          "to": "done",
+          "edge": "review->done"
+        }
       },
       {
         "id": "w4",
@@ -329,7 +339,8 @@
         "status": "idle",
         "running": null,
         "failure": null,
-        "waiting": null
+        "waiting": null,
+        "transition": null
       }
     ],
     "ticker": [

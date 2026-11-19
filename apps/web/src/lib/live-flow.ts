@@ -34,6 +34,15 @@ export interface LiveCard {
   } | null;
   failure: { reason: string; summary: string } | null;
   waiting: { kind: string; label: string } | null;
+  /** The last move this card made (a re-read saw its state change), with the graph edge it took; null when it has not moved. */
+  transition: Transition | null;
+}
+
+/** A card's last move: the state it left, the state it entered and the graph edge between them (null when the graph has none). */
+export interface Transition {
+  from: string;
+  to: string;
+  edge: string | null;
 }
 
 export interface LiveLane {
@@ -102,6 +111,7 @@ interface Slot {
   stream_failure: { reason: string; summary: string } | null;
   item_failure: { reason: string; summary: string } | null;
   waiting: { kind: string; label: string } | null;
+  last_move: Transition | null;
 }
 
 export interface LiveState {
@@ -198,6 +208,7 @@ export function initialState(
       stream_failure: null,
       item_failure: itemFailureOf(item),
       waiting: waitingOf(item),
+      last_move: null,
     });
     if (item.current_run)
       state.seen.set(item.current_run.id, item.current_run.status);
@@ -205,6 +216,17 @@ export function initialState(
       state.closed.set(item.state, (state.closed.get(item.state) ?? 0) + 1);
   }
   return state;
+}
+
+/** The id of the graph edge from one state to another (`from->to` when the edge has no id), null when the graph has none. */
+export function edgeBetween(
+  graph: WorkflowGraph | undefined,
+  from: string,
+  to: string,
+): string | null {
+  const edges = (graph?.edges ?? []) as { id?: string; from: string; to: string }[];
+  const edge = edges.find((e) => e.from === from && e.to === to);
+  return edge ? (edge.id ?? `${from}->${to}`) : null;
 }
 
 function push(state: LiveState, entry: TickerEntry): void {
@@ -256,6 +278,7 @@ export function applyItems(
         stream_failure: null,
         item_failure: itemFailureOf(item),
         waiting,
+        last_move: null,
       });
       continue;
     }
@@ -298,6 +321,11 @@ export function applyItems(
       if (today(state, at))
         next.left.set(before.lane, (next.left.get(before.lane) ?? 0) + 1);
       slot.lane = item.state;
+      slot.last_move = {
+        from: before.lane,
+        to: item.state,
+        edge: edgeBetween(state.graph, before.lane, item.state),
+      };
       slot.stream_failure = null;
       moved.push(slot);
       continue;
@@ -443,6 +471,7 @@ export function view(state: LiveState, now: string): LiveView {
         : null,
       failure,
       waiting: slot.waiting,
+      transition: slot.last_move,
     };
   });
   const lanes: LiveLane[] = columns.map((column) => {

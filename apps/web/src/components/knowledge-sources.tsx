@@ -4,7 +4,7 @@
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
-import { BookOpen, Cloud, GitBranch, Globe, Plus, type LucideIcon } from "lucide-react";
+import { BookOpen, Cloud, Database, GitBranch, Globe, Plus, type LucideIcon } from "lucide-react";
 import { ProcedurePanel } from "@/components/procedures/procedure-panel";
 import { egressFlag, useEgressGuard } from "@/components/egress/egress-provider";
 import { Badge, Card, Disclosure, ErrorNote, Input, LEGENDE, Select, Textarea, buttonClasses } from "@/components/ui";
@@ -14,6 +14,7 @@ import { relative } from "@/lib/format";
 import { RefreshFields } from "@/components/knowledge-refresh";
 import {
   CONNECTED_KINDS,
+  connectorKindOf,
   CREDENTIAL_HEADER,
   draftOf,
   firstUsableKind,
@@ -24,6 +25,7 @@ import {
   nextSyncLabel,
   refreshBody,
   refreshLabel,
+  servesSource,
   sourceConfig,
   sourceState,
   syncSummary,
@@ -37,17 +39,30 @@ import type { KnowledgeSource, OrgConnector } from "@/lib/types";
 
 type Kind = SourceKind;
 const CONNECTED: Kind[] = CONNECTED_KINDS;
-const KIND: Record<Kind, string> = { sharepoint: "SharePoint / OneDrive", confluence: "Confluence space or page tree", web: "web site", git: "git repository" };
+const KIND: Record<Kind, string> = {
+  sharepoint: "SharePoint / OneDrive",
+  confluence: "Confluence space or page tree",
+  web: "web site",
+  git: "git repository",
+  mcp: "MCP server's resources",
+};
 const KIND_OPTION: Record<Kind, string> = {
   sharepoint: "SharePoint / OneDrive",
   confluence: "Confluence space or page tree",
   web: "web site (https, same host)",
   git: "git repository (https)",
+  mcp: "MCP server's resources (a data platform, a catalogue…)",
 };
-const KIND_ICON: Record<Kind, LucideIcon> = { sharepoint: Cloud, confluence: BookOpen, web: Globe, git: GitBranch };
+const KIND_ICON: Record<Kind, LucideIcon> = { sharepoint: Cloud, confluence: BookOpen, web: Globe, git: GitBranch, mcp: Database };
+/** How the "no connector yet" note names what an administrator must declare, and where. */
+const CONNECTOR_NEEDED: Partial<Record<Kind, { what: string; type: string }>> = {
+  sharepoint: { what: "SharePoint", type: "documents/sharepoint" },
+  confluence: { what: "Confluence", type: "documents/confluence" },
+  mcp: { what: "MCP", type: "mcp/mcp" },
+};
 /** Kinds that read anonymously, or through a connector holding a credential when the material is private. */
 const OPTIONALLY_CONNECTED: Kind[] = ["web", "git"];
-const EMPTY_FIELDS = { name: "", connector: "", site: "", folder: "", space: "", pageId: "", url: "", exclude: "", depth: "2", maxPages: "50", ref: "main", paths: "*.md", headers: "" };
+const EMPTY_FIELDS = { name: "", connector: "", site: "", folder: "", space: "", pageId: "", url: "", exclude: "", depth: "2", maxPages: "50", ref: "main", paths: "*.md", headers: "", uriPrefix: "", mimeTypes: "" };
 
 /** A control with its name above it, for the fields a placeholder alone would leave unnamed once filled. */
 function Labelled({ label, className, children }: { label: string; className?: string; children: ReactNode }) {
@@ -153,8 +168,8 @@ export function KnowledgeSources({
   const admin = isOrgAdmin(me.data ?? null, org);
   const connectors = useQuery({ queryKey: ["org-connectors", org], queryFn: () => api.orgConnectors(org) });
   const kind: Kind = picked ?? firstUsableKind(connectors.data);
-  const pickable = (connectors.data ?? []).filter((c) => c.kind === "documents" && c.type === kind);
-  const usable = (k: Kind) => !CONNECTED.includes(k) || !connectors.data || connectors.data.some((c) => c.kind === "documents" && c.type === k);
+  const pickable = (connectors.data ?? []).filter((c) => servesSource(kind, c));
+  const usable = (k: Kind) => !CONNECTED.includes(k) || !connectors.data || connectors.data.some((c) => servesSource(k, c));
   const set = (key: keyof typeof fields) => (e: { target: { value: string } }) => setFields({ ...fields, [key]: e.target.value });
   /** Runs a gesture; true when it went through. */
   async function act(gesture: () => Promise<unknown>): Promise<boolean> {
@@ -366,7 +381,7 @@ export function KnowledgeSources({
             <ProcedurePanel target={sourceTarget(kind)} autoOpen={chosen} />
             {CONNECTED.includes(kind) && (
               <ProcedurePanel
-                target={connectorTarget("documents", kind)}
+                target={kind === "mcp" ? connectorTarget("mcp", "mcp") : connectorTarget("documents", kind)}
                 label="Set up the connector"
                 autoOpen={false}
               />
@@ -379,8 +394,8 @@ export function KnowledgeSources({
             <>
               {pickable.length > 0 || !connectors.data ? (
                 <Labelled label="Connector">
-                  <Select aria-label="documents connector" value={fields.connector} onChange={set("connector")}>
-                    <option value="">documents connector…</option>
+                  <Select aria-label={`${connectorKindOf(kind)} connector`} value={fields.connector} onChange={set("connector")}>
+                    <option value="">{connectorKindOf(kind)} connector…</option>
                     {pickable.map((c) => (
                       <option key={c.name} value={c.name}>
                         {c.name}
@@ -393,10 +408,10 @@ export function KnowledgeSources({
                   className="rounded border border-waiting-line bg-waiting-soft px-2 py-1 text-xs text-waiting-ink sm:col-span-2"
                   data-testid="no-documents-connector"
                 >
-                  This organisation has no {kind === "confluence" ? "Confluence" : "SharePoint"} connector yet: this kind cannot sync
+                  This organisation has no {CONNECTOR_NEEDED[kind]?.what} connector yet: this kind cannot sync
                   until an administrator{" "}
-                  <Link className="underline" href={`/admin/connectors?type=documents/${kind}`}>
-                    declares a {kind === "confluence" ? "Confluence" : "SharePoint"} connector
+                  <Link className="underline" href={`/admin/connectors?type=${CONNECTOR_NEEDED[kind]?.type}`}>
+                    declares {kind === "mcp" ? "an" : "a"} {CONNECTOR_NEEDED[kind]?.what} connector
                   </Link>
                   .
                 </p>
@@ -410,6 +425,19 @@ export function KnowledgeSources({
               <Input aria-label="excluded paths" placeholder="excluded paths: /Archive/*, /*DO NOT USE*" value={fields.exclude} onChange={set("exclude")} />
               <p className="text-xs text-ink-muted sm:col-span-3">
                 SharePoint reads the sites granted to its application (<code>Sites.Selected</code>), or what its connector&apos;s service account may read.
+              </p>
+            </>
+          ) : kind === "mcp" ? (
+            <>
+              <Labelled label="URI prefix (optional)">
+                <Input aria-label="uri prefix" placeholder="catalog://sales/" value={fields.uriPrefix} onChange={set("uriPrefix")} />
+              </Labelled>
+              <Labelled label="Media types (optional)">
+                <Input aria-label="media types" placeholder="text/markdown, application/pdf" value={fields.mimeTypes} onChange={set("mimeTypes")} />
+              </Labelled>
+              <p className="text-xs text-ink-muted sm:col-span-3">
+                Reads the resources the server lists, under the connector&apos;s own credential: everything it can read under the prefix
+                becomes readable by everyone this base is open to. A resource the server no longer lists leaves the base at the next sync.
               </p>
             </>
           ) : kind === "confluence" ? (

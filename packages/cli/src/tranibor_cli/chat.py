@@ -40,9 +40,9 @@ def chat(
 ) -> None:
     """The workspace: converse with an assistant, watch what runs, see what waits for you.
 
-    Conversation on the left, the live tree (blue) and the decisions (amber) on the right, what moved
-    elsewhere below. The keys are in the footer. It needs a terminal; `choregos ask` and `choregos
-    activity` are the scriptable forms.
+    One screen of tabs (conversation, activity, projects, decisions, artefacts, live), a header of
+    what runs and what waits, and a context pane that follows the selection. The keys are in the footer.
+    It needs a terminal; `choregos ask` and `choregos activity` are the scriptable forms.
     """
     open_workspace(org=org, assistant=assistant, conversation=conversation, smoke=smoke)
 

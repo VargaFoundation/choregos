@@ -206,6 +206,33 @@ def test_the_work_item_line_carries_its_title_when_the_platform_says_it(platform
     assert "FIN-12 Reconcile the March ledger" in _said(_run())
 
 
+BUDGET_BODY = (
+    '{"error": {"message": "Budget has been exceeded! Current cost: 10.2, Max budget: 10.0",'
+    ' "type": "budget_exceeded", "param": null, "code": "400"}}'
+)
+
+
+@pytest.mark.parametrize(
+    ("reason", "word"),
+    [
+        ("loop", "loop"),
+        ("budget", "budget spent"),
+        ("max_turns", "too many tool calls"),
+        ("timeout", "timed out"),
+        ("gateway", "gateway refused"),
+        (BUDGET_BODY, "failed"),
+    ],
+)
+def test_a_failed_run_prints_its_reason_as_a_word_never_a_provider_body(
+    platform: Platform, reason: str, word: str
+) -> None:
+    failure = {"reason": reason, "summary": "The gateway said no."}
+    platform.listing([], [_run_entry("run-f", status="failed", failure=failure)])
+    said = _said(_run())
+    assert "✗ failed" in said and f" · {word}" in said
+    assert "{" not in said and "Budget has been exceeded" not in said and "gateway said no" not in said
+
+
 def test_nothing_running_says_so(platform: Platform) -> None:
     platform.listing([], [])
     assert "nothing is running" in _said(_run())
