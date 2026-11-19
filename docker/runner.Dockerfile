@@ -268,6 +268,14 @@ RUN set -eux; \
 # fake gateway refusing for budget, and the runner's own detector, with no network.
 COPY docker/headroom/relays_budget_refusal.py /tmp/relays_budget_refusal.py
 RUN timeout 180 /app/.venv/bin/python /tmp/relays_budget_refusal.py && rm /tmp/relays_budget_refusal.py
+# `/workspace` is the build's `$HOME`: every step above left its caches there (`.npm`, `.cache`, `.config`,
+# `.gemini`, `.local`, and a root-owned `.headroom`). A run's tree must start EMPTY, and on Docker it
+# starts as this directory (`local_docker` runs the runner on it; a new volume is filled from it). With
+# them, the runner took a fresh tree for a replay's leftovers and checked nothing out (S65-04c keeps the
+# files of a tree that has content), so the agent found an empty repository; and the root-owned
+# `.headroom/` could not be reverted, which blocked every step on scope (S65-04a, measured with
+# claude-agent-acp). The build fails if anything is left.
+RUN find /workspace -mindepth 1 -delete && test -z "$(ls -A /workspace)"
 WORKDIR /workspace
 USER 1000
 ENTRYPOINT ["/usr/bin/tini", "--", "/app/.venv/bin/choregos-runner"]
