@@ -68,7 +68,7 @@ vocabulary. The setting is the deployment's (`CHOREGOS_RUNNER_AGENT_ISOLATION`, 
 `global.runner.agentIsolation`, given to the API, the workers and the warm pool's template) and travels
 with each run (`StageJobSpec.agent_isolation`). Every executor's `start` first calls
 `agent_isolation_refusal` (`tranibor_core.agent_isolation`): under `container`, one without the capability
-raises `AgentIsolationRefused` (`agent_isolation_unavailable`, not retried) naming itself, before it writes
+raises `AgentIsolationRefusedError` (`agent_isolation_unavailable`, not retried) naming itself, before it writes
 anything. `/readiness` judges the project's executor with the same function and what its class declares
 (`agent-isolation`). The warm pool declares the capability when its template has the agent's container
 (`AgentSandboxExecutor.pool_capabilities`); the routing executor sends a run its pool cannot isolate to

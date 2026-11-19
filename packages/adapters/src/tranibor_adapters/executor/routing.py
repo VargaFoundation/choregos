@@ -13,8 +13,9 @@ refused, naming both, when neither can. A step that must go to the second execut
 to the first for it: the first cannot honour its image.
 
 The choice is made once, at `start`, on `spec.runner_image`, `spec.agent_container` and
-`spec.agent_isolation`. Everything after is routed by `ref.kind`, which the orchestrator persists per run (`runs.executor_kind`):
-status, logs, cancel, renew, suspend and resume reach the executor that started the run.
+`spec.agent_isolation`. Everything after is routed by `ref.kind`, which the orchestrator persists per
+run (`runs.executor_kind`): status, logs, cancel, renew, suspend and resume reach the executor that
+started the run.
 """
 
 from __future__ import annotations
@@ -24,7 +25,6 @@ from datetime import datetime
 from typing import Any
 
 from tranibor_core import ExecRef, ExecStatus, StageJobSpec
-
 from tranibor_core.agent_isolation import agent_isolation_refusal
 
 from ..base import Executor

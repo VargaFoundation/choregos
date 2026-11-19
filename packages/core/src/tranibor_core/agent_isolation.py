@@ -17,7 +17,7 @@ quieter mode: a run asked to isolate its agent is never run with the agent besid
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
-from typing import Literal, cast
+from typing import Literal
 
 AgentIsolation = Literal["process", "container"]
 
@@ -35,11 +35,11 @@ def deployment_agent_isolation(environ: Mapping[str, str]) -> AgentIsolation:
     """The deployment's setting; `process` when it says nothing. An unknown value is refused, never
     read as `process`: a typo would otherwise turn the isolation off."""
     value = (environ.get(AGENT_ISOLATION_ENV) or "").strip() or AGENT_ISOLATION_MODES[0]
-    if value not in AGENT_ISOLATION_MODES:
-        raise ValueError(
-            f"{AGENT_ISOLATION_ENV}={value!r}: expected one of {', '.join(AGENT_ISOLATION_MODES)} (ADR 0146)"
-        )
-    return cast(AgentIsolation, value)
+    if value in ("process", "container"):
+        return value  # type: ignore[return-value]  # narrowed by the test, which mypy does not see
+    raise ValueError(
+        f"{AGENT_ISOLATION_ENV}={value!r}: expected one of {', '.join(AGENT_ISOLATION_MODES)} (ADR 0146)"
+    )
 
 
 def agent_isolation_refusal(asked: str, executor: str, capabilities: Iterable[str]) -> str | None:

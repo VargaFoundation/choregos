@@ -10,19 +10,20 @@ class, without building it: the API judges `/readiness` with it, and it holds no
 from __future__ import annotations
 
 from collections.abc import Iterable
+from typing import Any
 
 from tranibor_core.agent_isolation import agent_isolation_refusal
 from tranibor_core.domain import StageJobSpec
 
-from ..errors import AgentIsolationRefused
+from ..errors import AgentIsolationRefusedError
 
 
 def refuse_unless_separate(executor: str, capabilities: Iterable[str], spec: StageJobSpec) -> None:
-    """Raises `AgentIsolationRefused` when the run asks for the agent's own container and the executor
+    """Raises `AgentIsolationRefusedError` when the run asks for the agent's own container and the executor
     cannot start one."""
     refusal = agent_isolation_refusal(spec.agent_isolation, executor, capabilities)
     if refusal is not None:
-        raise AgentIsolationRefused(refusal)
+        raise AgentIsolationRefusedError(refusal)
 
 
 def declared_capabilities(kind: str, *, agent_isolation: str) -> frozenset[str]:
@@ -37,7 +38,7 @@ def declared_capabilities(kind: str, *, agent_isolation: str) -> frozenset[str]:
 
     if kind == "agent_sandbox":
         return AgentSandboxExecutor.pool_capabilities(agent_isolation)
-    classes = {
+    classes: dict[str, Any] = {
         "k8s_job": KubernetesJobExecutor,
         "local_docker": LocalDockerExecutor,
         "tekton": TektonExecutor,

@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 from tranibor_adapters import available, build
-from tranibor_adapters.errors import AgentIsolationRefused, ConfigurationError
+from tranibor_adapters.errors import AgentIsolationRefusedError, ConfigurationError
 from tranibor_adapters.executor.aca import AcaExecutor
 from tranibor_adapters.executor.agent_sandbox import AgentSandboxExecutor
 from tranibor_adapters.executor.isolation import declared_capabilities
@@ -90,7 +90,7 @@ async def test_an_executor_that_cannot_isolate_refuses_before_sending_anything(k
     executor, recorder = _without(kind)
     if SEPARATE_AGENT in executor.capabilities:
         pytest.skip(f"{kind} starts the agent's container: its own tests prove the shape")
-    with pytest.raises(AgentIsolationRefused) as refused:
+    with pytest.raises(AgentIsolationRefusedError) as refused:
         await executor.start(_spec("container"))
     assert f"`{kind}`" in str(refused.value), "the refusal names the executor"
     assert isinstance(refused.value, ConfigurationError), "not retried by the activity"
@@ -136,6 +136,8 @@ def test_the_api_reads_what_the_built_executor_declares(
     kind: str, isolation: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("CHOREGOS_RUNNER_AGENT_ISOLATION", isolation)
+    # The real executors, not the fakes another test may have switched on.
+    monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
     built = build("runtime", kind, CONFIGS[kind])
     assert declared_capabilities(kind, agent_isolation=isolation) == built.capabilities
 
@@ -195,7 +197,7 @@ async def test_the_pool_keeps_a_container_run_it_can_isolate() -> None:
 
 async def test_when_neither_can_the_routing_refuses_naming_both() -> None:
     routing, sandbox, jobs = _routing(frozenset({"queue"}), frozenset({"queue"}))
-    with pytest.raises(AgentIsolationRefused) as refused:
+    with pytest.raises(AgentIsolationRefusedError) as refused:
         await routing.start(_spec("container"))
     assert "`agent_sandbox`" in str(refused.value) and "`k8s_job`" in str(refused.value)
     assert sandbox.start_calls_by_run == {} and jobs.start_calls_by_run == {}
@@ -203,7 +205,7 @@ async def test_when_neither_can_the_routing_refuses_naming_both() -> None:
 
 async def test_a_custom_image_step_is_never_sent_back_to_the_pool_for_its_isolation() -> None:
     """The pool cannot honour another image: the second executor refuses it, the pool never runs it."""
-    routing, sandbox, jobs = _routing(frozenset({SEPARATE_AGENT}), frozenset({"queue"}))
-    with pytest.raises(AgentIsolationRefused, match="`k8s_job`"):
+    routing, sandbox, _jobs = _routing(frozenset({SEPARATE_AGENT}), frozenset({"queue"}))
+    with pytest.raises(AgentIsolationRefusedError, match="`k8s_job`"):
         await routing.start(_spec("container", image="registry.example/agent-tools:3"))
     assert sandbox.start_calls_by_run == {}

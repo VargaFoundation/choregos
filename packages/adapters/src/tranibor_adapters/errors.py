@@ -58,7 +58,7 @@ class UnsupportedClusterError(ConfigurationError):
     code = UNSUPPORTED_CLUSTER
 
 
-class AgentIsolationRefused(ConfigurationError):
+class AgentIsolationRefusedError(ConfigurationError):
     """The deployment runs every agent in a container of its own (ADR 0146) and this executor cannot
     start one: refused before anything reaches its backend, never run with the agent beside the runner."""
 
