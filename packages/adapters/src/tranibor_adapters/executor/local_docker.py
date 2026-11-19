@@ -200,7 +200,8 @@ class LocalDockerExecutor:
             f"{exchange}:{separate_agent.EXCHANGE}",
             "--label",
             f"choregos.agent-of={spec.run_id}",
-            spec.runner_image,
+            # A code agent's image (ADR 0146 §10), the platform's otherwise.
+            spec.agent_image or spec.runner_image,
             "launcher",
             "--port",
             str(separate_agent.LAUNCHER_PORT),

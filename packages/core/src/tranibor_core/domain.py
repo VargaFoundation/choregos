@@ -311,6 +311,9 @@ class StageJobSpec(Model):
     #: Where the step's agent runs (ADR 0146, `tranibor_core.agent_isolation`): `container` asks the
     #: executor for the agent's own container, and one that cannot start it refuses the run.
     agent_isolation: Literal["process", "container"] = "process"
+    #: The image of the agent's own container under `container` (ADR 0146 §10): the operator's, for an
+    #: agent written in code (ADR 0063), whose runner is then the platform's image. None: the runner's.
+    agent_image: str | None = None
 
 
 class ExecRef(Model):

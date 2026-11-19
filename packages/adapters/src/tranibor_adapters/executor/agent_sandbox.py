@@ -177,6 +177,12 @@ class AgentSandboxExecutor:
                 "in the pool's image would silently substitute it; use `runner.executor: k8s_job` "
                 "for steps that name their own image"
             )
+        if spec.agent_image and spec.agent_image != self.pool_image:
+            raise ConfigurationError(
+                f"the run's agent asks for image `{spec.agent_image}` (an agent written in code, ADR 0146 "
+                f"§10), the warm pool `{self.warm_pool}` runs its agent's container from its own image: "
+                "use `runner.executor: k8s_job` for agents written in code"
+            )
         name = self._name(spec.run_id)
         ref = self._ref(name, spec.namespace, spec.run_id)
         claim = await self.client.request("GET", f"{self._claims(spec.namespace)}/{name}")
