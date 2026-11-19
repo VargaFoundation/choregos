@@ -12,7 +12,9 @@ the ACP updates themselves, so polling `after_seq` is the one way to read each u
 
 from __future__ import annotations
 
+import json
 import time
+from dataclasses import asdict
 from datetime import datetime
 from typing import Any
 
@@ -52,6 +54,25 @@ def show(api: Client, run_id: str, *, watch: bool, out: Console) -> None:
                 live.update(render(run, steps, breakdown, out), refresh=True)
     except KeyboardInterrupt:
         return
+
+
+def as_json(api: Client, run_id: str) -> str:
+    """The run's steps as one JSON object, for a script: the run as the API gave it, the plan (`null` when the
+    agent declared none), every tool call, how many updates were of a kind the reader skips, and the latest
+    breakdown (`null` when not measured). The whole journal, not the latest `STEPS_SHOWN`."""
+    steps = RunSteps()
+    run = api.get(f"/runs/{run_id}")
+    _read(api, run_id, steps)
+    return json.dumps(
+        {
+            "run": run,
+            "plan": None if steps.plan is None else [asdict(task) for task in steps.plan],
+            "steps": [asdict(step) for step in steps.steps.values()],
+            "unknown_updates": steps.unknown,
+            "context": _breakdown(api, run_id),
+        },
+        indent=2,
+    )
 
 
 def _read(api: Client, run_id: str, steps: RunSteps) -> None:
