@@ -60,12 +60,17 @@ test.describe("a host application frames the assistant", () => {
     await frame.getByRole("button", { name: "Send" }).click();
     await expect(frame.getByText("Bonjour")).toBeVisible();
 
-    const events = await page.evaluate(() => (window as unknown as { __events: { origin: string; data: { type: string; spaces?: string[] } }[] }).__events);
+    type HostEvent = { origin: string; data: { type: string; spaces?: string[] } };
+    const heard = () => page.evaluate(() => (window as unknown as { __events: HostEvent[] }).__events);
+    // `memory.updated` is sent after the turn's actions are read back, i.e. AFTER "Bonjour" is on screen
+    // (the run on #1900 caught it missing): wait for it rather than reading the list once.
+    await expect
+      .poll(async () => (await heard()).find((e) => e.data.type === "memory.updated")?.data.spaces)
+      .toEqual(["notes"]);
+    const events = await heard();
     const types = events.map((e) => e.data.type);
     expect(types).toContain("conversation.started");
     expect(types).toContain("resize");
-    // The turn reported that it wrote in a memory space: the host hears `memory.updated`.
-    expect(events.find((e) => e.data.type === "memory.updated")?.data.spaces).toEqual(["notes"]);
     for (const event of events) expect(event.origin).toBe(CONSOLE);
 
     calls = await callsOf(page.request);
