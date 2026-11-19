@@ -6,7 +6,11 @@ locally with the CLI, how a deployment declares the sources it fetches plugins f
 them, what installing one into an organisation does, and the plugins a deployment installs by default.
 
 "Plugin" here means this package. A Python wheel loaded through the `choregos.plugins` entry point is an
-**extension**.
+**extension**. A plugin is the one unit a trade ships: when its trade needs code inside the platform (a
+connector type, gates, effects), that code is the plugin's extension, under the plugin's name and
+version; the enterprise edition is an extension that is no plugin. The public page
+[Plugins, extensions and editions](site/build/plugins-and-trades.md) sets the words out, with one example
+per trade ([ADR 0181](adr/0181-the-contracts-speak-no-trade.md), decision of 2026-11-19).
 
 ## The layout
 

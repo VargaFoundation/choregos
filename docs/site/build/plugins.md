@@ -164,6 +164,8 @@ it in **Plugins**.
 ## Go further
 
 - A plugin can also ship a conversational assistant: [Ship an assistant in a plugin](assistants.md).
+- What a plugin is beside the core, an extension and an edition, and what each trade ships:
+  [Plugins, extensions and editions](plugins-and-trades.md).
 - The full plugin format, servers and trust:
   [plugins reference](../../plugins.md).
 - [CLI reference](../cli/reference.md#choregos-plugin) for every option of `choregos plugin`.
