@@ -651,6 +651,7 @@ def _register_forges() -> None:
 
 def _register_runtimes() -> None:
     """The executors of the agents' steps."""
+    from tranibor_core.agent_isolation import deployment_agent_isolation
     from tranibor_core.egress_gate import gate_from_env
 
     from .executor.aca import AcaExecutor, AzureArmClient
@@ -705,6 +706,9 @@ def _register_runtimes() -> None:
                     "ttl_seconds", os.environ.get("CHOREGOS_SANDBOX_TTL_SECONDS", "") or DEFAULT_TTL_SECONDS
                 )
             ),
+            # The deployment's, never a connector's (ADR 0146): the chart renders the template's agent
+            # container from the same `global.runner.agentIsolation`.
+            agent_isolation=deployment_agent_isolation(os.environ),
         )
     )
     register("runtime", "aca", _SHIPPED_SPECS[("runtime", "aca")])(

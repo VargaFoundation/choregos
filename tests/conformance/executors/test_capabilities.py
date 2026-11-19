@@ -23,6 +23,8 @@ pytestmark = pytest.mark.conformance
 #: concerned (ceiling reached, queue in arrival order).
 #: `snapshot` imposes none either since ADR 0053: it is a property of `start` (every run gets a
 #: sandbox made from the template, never a used one), proved by the executor's own tests.
+#: `separate_agent` neither (ADR 0146 §9): a property of `start` too, the agent's own container in the
+#: run's pod; an executor without it refuses a run under `container` (`test_agent_isolation_refusal.py`).
 EXPECTED_METHOD = {"renew": "renew", "suspend": "suspend", "resume": "resume"}
 
 # Building an executor outside a cluster: without `token`, the Kubernetes client goes and reads
@@ -44,7 +46,10 @@ def _executors() -> list[str]:
 
 def test_the_vocabulary_stays_closed() -> None:
     """A capability invented on the fly means nothing to the caller."""
-    assert frozenset({"queue", "renew", "suspend", "resume", "snapshot"}) == EXECUTOR_CAPABILITIES
+    assert (
+        frozenset({"queue", "renew", "suspend", "resume", "snapshot", "separate_agent"})
+        == EXECUTOR_CAPABILITIES
+    )
 
 
 @pytest.mark.parametrize("name", _executors())

@@ -16,6 +16,7 @@ from tranibor_core.domain import RUN_GATEWAY_KEY_ENV, RUN_REMOTE_TOKEN_ENV, Exec
 from tranibor_core.hosted import SHARED_WORKSPACE_AGENT, SHARED_WORKSPACE_RUNNER
 
 from ..errors import UpstreamError
+from .isolation import refuse_unless_separate
 
 RESULT_PATH = "/workspace/.choregos/result.json"
 PULL_TIMEOUT_S = 900.0
@@ -72,6 +73,7 @@ class LocalDockerExecutor:
             await self._run("volume", "rm", "--force", *(_workspace_volume(name) for name in stale))
 
     async def start(self, spec: StageJobSpec) -> ExecRef:
+        refuse_unless_separate(str(self.kind), self.capabilities, spec)
         name = self._name(spec.run_id)
         code, _, _ = await self._run("inspect", name)
         if code == 0:

@@ -150,6 +150,9 @@ is amended before wave 3; the boundary of waves 2 and 4 does not depend on it.
 - `CHOREGOS_RUNNER_AGENT_ISOLATION` (`process`, the default, or `container`), the chart's value, the
   `separate_agent` capability, the runner's exit code for "no launcher", the `agent.isolation` event,
   and the API's readiness line. No executor declares the capability yet.
+- **Done** (2026-11-19): the chart's value is `global.runner.agentIsolation` (the API, the workers and the
+  warm pool's template read one value); `agent_sandbox` declares the capability when its template has the
+  agent's container; the routing executor sends a run to the executor that can isolate it.
 - **Accepted when**: under `container`, `start` on an executor without the capability raises a
   `ConfigurationError` that names the executor and sends nothing to its backend; readiness says the
   same sentence; a runner told `container` with nothing on the launcher's port exits with the new code

@@ -59,7 +59,7 @@ def _executor_env(*arguments: str) -> dict[str, str]:
 
 @pytest.mark.parametrize("isolation", ["process", "container"])
 def test_the_sandbox_templates_first_init_container_is_the_gate(isolation: str) -> None:
-    pod = _template_pod("--set", f"choregos-orchestrator.runner.sandbox.agentIsolation={isolation}")
+    pod = _template_pod("--set", f"global.runner.agentIsolation={isolation}")
 
     names = [c["name"] for c in pod["initContainers"]]
     assert names[0] == GATE_CONTAINER

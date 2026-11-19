@@ -83,6 +83,11 @@ class OrchestratorSettings(BaseSettings):
     # (`sandbox.runtime: gvisor` wins). Empty: the cluster's default runtime. A cluster that has
     # gVisor or Kata says so here once, rather than project by project.
     runner_runtime_class: str = ""
+    #: Where every run's agent runs (ADR 0146, `tranibor_core.agent_isolation`), the chart's
+    #: `global.runner.agentIsolation`: `process`, the runner's child, or `container`, a container of its
+    #: own that the executor starts; one that cannot refuses the run. `CHOREGOS_RUNNER_AGENT_ISOLATION`,
+    #: the same variable the runner and the API read.
+    runner_agent_isolation: Literal["process", "container"] = "process"
     #: Below this reservation (USD), a stage does not start: its key would be refused at its first
     #: model call (ADR 0047, S27-02). `CHOREGOS_MIN_RUN_RESERVATION_USD`.
     min_run_reservation_usd: float = Field(default=0.01, ge=0)

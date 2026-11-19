@@ -274,6 +274,8 @@ async def start_run(payload: dict[str, Any]) -> dict[str, Any]:
             },
             # A hosted agent's container beside the runner (ADR 0080): loopback addresses only.
             agent_container=agent_container(stage_input),
+            # Where the agent runs (ADR 0146): an executor that cannot start its container refuses.
+            agent_isolation=settings.runner_agent_isolation,
         )
         try:
             ref = await bundle.adapters.executor.start(spec)

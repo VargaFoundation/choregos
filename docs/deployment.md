@@ -2118,6 +2118,19 @@ value>` on the first model call. Nothing said the key had never resolved.
 If the API refuses to start with `réglages non résolus`, fix the source of the secret — the key
 is missing where it is stored, not where it is read.
 
+## Upgrading past 0.27.15: the agent's isolation is one setting
+
+**`choregos-orchestrator.runner.sandbox.agentIsolation` moved to `global.runner.agentIsolation`**
+(S65-04d, [ADR 0146](adr/0146-the-runner-and-the-agent-do-not-share-a-container.md) §9). It said where
+the coding agent runs (`process`, the runner's child; `container`, a container of its own) for the warm
+pool alone. It is now the deployment's: the chart gives it to the API, the workers and the warm pool's
+template as `CHOREGOS_RUNNER_AGENT_ISOLATION`. Under `container`, an executor that cannot start the
+agent's container (it does not declare `separate_agent`) refuses each run at its start with
+`agent_isolation_unavailable` and the reason, and a project's `/readiness` says the same sentence first
+(`agent-isolation`); with `runner.customImageExecutor`, a run the warm pool cannot isolate goes to the
+second executor when that one can. The chart refuses to render with the former key set (either value),
+naming the new one: move the value, or remove it if it was `process`, the default.
+
 ## Upgrading past 0.27.13: the egress gate
 
 **Every agent pod waits for its egress policy** (S80-07f, [the egress gate](#the-egress-gate)). From
