@@ -22,6 +22,11 @@ paths = [
 # garde : un `sk-ant-` ou un JWT dans un historique reste un fuite.
 regexTarget = "match"
 regexes = [
+  # RFC 8291, appendix A: the published Web Push test vector (the user agent's private key and
+  # authentication secret), used by apps/api/tests/test_push.py to prove the encryption round-trip
+  # (S81-03). Public by design.
+  '''q1dXpw3UpT5VOmu_cf_v6ih07Aems3njxI-JWgLcM94''',
+  '''BTBZMqHH6r4Tts7J_aSIgg''',
   '''choregos-api:8000/api/v1/internal''',
   # ADR 0091 (S40-26d) describes the relay's token in prose: "the run-token key, `aud=choregos-relay`".
   # The `generic-api-key` rule reads `key, ` followed by a quoted word as a key. The CI scans every
