@@ -13,7 +13,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
-from tranibor_contracts import ConnectorKind
+from tranibor_contracts import CONNECTOR_KINDS, ConnectorKind
 
 from .base import (
     CdAdapter,
@@ -145,11 +145,21 @@ DEFAULT_TYPES: dict[str, str] = {
 
 
 def register(
-    kind: ConnectorKind | str, type_name: str, spec: ConnectorTypeSpec | None = None
+    kind: ConnectorKind | str,
+    type_name: str,
+    spec: ConnectorTypeSpec | None = None,
+    *,
+    plugin: str | None = None,
 ) -> Callable[[Factory], Factory]:
-    """Registers an implementation for a (kind, type) pair, and what it declares."""
+    """Registers an implementation for a (kind, type) pair, and what it declares.
+
+    `plugin`: the plugin whose extension registers it. A kind neither the core's list nor anyone
+    declared yet is then declared for it in `tranibor_contracts.CONNECTOR_KINDS` (ADR 0181); another
+    plugin may register types of the same kind (two ITSM trackers)."""
 
     def decorator(factory: Factory) -> Factory:
+        if plugin is not None and str(kind) not in CONNECTOR_KINDS.known():
+            CONNECTOR_KINDS.declare(str(kind), plugin=plugin)
         pair = (str(kind), type_name)
         _REGISTRY[pair] = factory
         # Replacing the implementation does not remove the declaration: the API re-registers the

@@ -336,6 +336,37 @@ activity is retried, and `request.key` is stable for one crossing.
 `apps/orchestrator/tests/test_step_effect_extension.py` installs a test plugin's extension and has the
 real interpreter play its effect; its history is `tests/replay/histories/wi-step-effect-S83-02c.json`.
 
+## Extending the open lists
+
+Five lists the contracts used to close are open since round C0 of ADR 0181: the inbound event types,
+the finding types, the memory kinds, the connector kinds and the stage roles (and `does:`, above). Each
+schema holds a pattern; `tranibor_contracts` holds the core's values and the ones extensions declare,
+each with its plugin. A value neither the core's nor declared is refused where it always was, and every
+current value is valid under its spelling. An extension declares its own when it loads:
+
+```python
+from pathlib import Path
+
+from tranibor_adapters import register
+from tranibor_contracts import FINDING_TYPES, INBOUND_EVENT_TYPES, MEMORY_KINDS
+from tranibor_core.stage_roles import declare_stage_roles
+
+def register_extension() -> None:
+    INBOUND_EVENT_TYPES.declare("itsm.incident.opened", plugin="itsm")
+    FINDING_TYPES.declare("sla-breach", plugin="itsm")
+    MEMORY_KINDS.declare("runbook", plugin="itsm")
+    register("service_desk", "servicenow", plugin="itsm")(ServiceNowDesk)  # a connector kind
+    declare_stage_roles(Path(__file__).parent / "roles", plugin="itsm")    # its playbooks
+```
+
+A value belongs to one plugin: a second plugin declaring it is refused, naming the first (a connector
+kind is the exception: two plugins may each register a type of it). `declare_stage_roles` adds the
+directory to the playbooks' search path after `CHOREGOS_PLAYBOOKS_DIR`, so a deployment still adapts a
+plugin's role, and declares each role it holds. What the platform stored is read back even once the
+plugin is gone: a memory keeps its kind, and a stored document is validated with the `stored` context
+(`tranibor_contracts.open_lists.STORED`). `packages/core/tests/test_open_lists_extension.py` installs a
+test plugin's extension that declares one of each and checks each reader takes it.
+
 ## Shipping a connector from outside this tree
 
 A package installed next to Tranibor can register its own connectors — no fork, no patch to the
