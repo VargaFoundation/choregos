@@ -31,6 +31,7 @@ from rich.tree import Tree
 
 from . import money, theme
 from .client import ApiError, Client, NoOrganisationError
+from .live_view import reason_long
 
 #: The statuses of an entry still in flight (`ActivityEntry.status`).
 IN_FLIGHT = frozenset({"queued", "running", "open"})
@@ -399,6 +400,10 @@ def line(
         what.append(model_name(entry.get("model")))
     text.append("  " + " · ".join(str(w) for w in what if w))
     text.append(f"   {elapsed(entry, now)} · {spend(entry.get('spend'), pricing)}")
+    failure = entry.get("failure")
+    if entry.get("status") == "failed" and failure:
+        # The reason as a word, never the provider's body (ADR 0187 §3): the summary is for the detail pane.
+        text.append(f" · {reason_long(failure.get('reason'))}", style="red")
     if not compact:
         text.append(f"   {entry.get('kind')} {str(entry.get('id'))[:12]}")
     # One line per entry: on a narrow terminal the id is cut, never the status, the time or the spend.

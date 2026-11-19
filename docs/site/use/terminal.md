@@ -160,6 +160,12 @@ The pane on the right follows the selection: the run, work item, decision or art
 in full. Below 120 columns it folds away and the main view takes the width. There are no frames, only one
 thin rule between the two; the status of a run is a glyph, a word and a colour, so `NO_COLOR` loses nothing.
 
+A list is one line per thing. A failed run prints its reason as a word after its status (`✗ failed · budget
+spent`, `loop`, `too many tool calls`, `timed out`, `gateway refused`) and its summary is in the pane; a reason
+that is not a short identifier (a provider's raw error body) reads `failed` and is never printed in a list. A
+decision's title longer than one line shows its first line, and the whole text is in the pane. `choregos
+activity` prints the same words.
+
 | Key | Does |
 | --- | --- |
 | Tab, Shift-Tab | Moves to the next or previous tab (works in the composer too) |

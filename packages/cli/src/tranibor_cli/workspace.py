@@ -52,6 +52,7 @@ from textual.widgets.tree import TreeNode
 
 from . import activity, decide, money, run_activity, theme
 from .client import ApiError, AsyncClient, Profile
+from .live_view import reason_long
 from .run_steps import RunSteps
 
 #: Seconds before the activity stream is opened again after it ended or failed.
@@ -916,6 +917,12 @@ class Workspace(App[None]):
         else:
             listing.highlighted = next((n for n, option in enumerate(options) if not option.disabled), None)
 
+    @staticmethod
+    def _title_line(what: Any) -> str:
+        """A decision's title on one line: its first non-empty line; the whole text is in the context pane."""
+        lines = [line.strip() for line in decide.clean(str(what or "")).splitlines()]
+        return next((line for line in lines if line), DASH)
+
     def draw_decisions(self) -> None:
         """Every thing that waits for the person, one line each, grouped by project."""
         try:
@@ -951,7 +958,7 @@ class Workspace(App[None]):
                 for item in items:
                     line = Text()
                     line.append(f" {glyph} ", style=theme.WAITING.style)
-                    line.append(decide.clean(item["what"]).splitlines()[0] if item["what"] else DASH)
+                    line.append(self._title_line(item["what"]))
                     options.append(Option(one_line(line), id=str(item["id"])))
         self._fill(listing, options)
         self.draw_context()
@@ -1351,12 +1358,18 @@ class Workspace(App[None]):
             ("steps", str(entry.get("steps") if entry.get("steps") is not None else DASH)),
             ("id", str(entry.get("id"))),
         ]
+        notes: list[Text] = []
+        failure = entry.get("failure")
+        if entry.get("status") == "failed" and failure:
+            rows.insert(1, ("reason", Text(reason_long(failure.get("reason")), style="red")))
+            if failure.get("summary"):
+                notes.append(Text(decide.clean(str(failure["summary"]))))
         stop = (
             Text("x stops it, with a reason", style="dim")
             if entry.get("can_stop") and entry.get("status") in activity.IN_FLIGHT
             else Text("")
         )
-        return facts(title, rows, stop)
+        return facts(title, rows, *notes, stop)
 
     def _context_projects(self) -> RenderableType:
         picked = self._highlighted(self.query_one("#projects-list", DrillList)) if self.depth < 3 else None

@@ -16,6 +16,7 @@ it waits for, whatever the terminal's colours; an ASCII mode draws the same with
 
 from __future__ import annotations
 
+import re
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -97,13 +98,24 @@ BOX = {
 }
 
 
+#: What an open `failure.reason` may look like to be printed: a short identifier. Anything else (a provider's
+#: raw error body, a JSON blob, a sentence) is never printed in a list (ADR 0187 §3): it reads `failed`,
+#: and the summary carries the detail where there is room.
+_WORD = re.compile(r"[a-z][a-z0-9_ ]{0,23}")
+
+
+def _clean_reason(reason: str | None) -> str:
+    text = (reason or "").strip()
+    return text if _WORD.fullmatch(text) else "failed"
+
+
 def reason_word(reason: str | None) -> str:
-    text = reason or "failed"
+    text = _clean_reason(reason)
     return REASON_WORD.get(text, text.replace("_", " ")[:8])
 
 
 def reason_long(reason: str | None) -> str:
-    text = reason or "failed"
+    text = _clean_reason(reason)
     return REASON_LONG.get(text, text.replace("_", " "))
 
 

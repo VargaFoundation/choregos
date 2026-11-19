@@ -627,6 +627,78 @@ async def test_every_status_is_a_word(platform: Platform) -> None:
         assert word in text, word
 
 
+# ───────────────────────── failures and decisions in one line (S67-22) ─────────────────────────
+
+BUDGET_BODY = (
+    '{"error": {"message": "Budget has been exceeded! Current cost: 10.2, Max budget: 10.0",'
+    ' "type": "budget_exceeded", "param": null, "code": "400"}}'
+)
+
+
+@pytest.mark.parametrize(
+    ("reason", "word"),
+    [
+        ("loop", "loop"),
+        ("budget", "budget spent"),
+        ("max_turns", "too many tool calls"),
+        ("timeout", "timed out"),
+        ("gateway", "gateway refused"),
+    ],
+)
+async def test_a_failed_run_prints_its_reason_as_a_word_and_its_summary_in_the_pane(
+    platform: Platform, reason: str, word: str
+) -> None:
+    failure = {"reason": reason, "summary": "The run stopped at the 31st call."}
+    platform.finished = [_entry("run-bad", status="failed", ended_at=_iso(NOW), failure=failure)]
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await put_cursor_on(pilot, "failed")
+        await until(
+            pilot, lambda: "The run stopped at the 31st call." in pane(app), "the summary in the pane"
+        )
+        tree = "\n".join(line.partition("│")[0] for line in screen_text(app).splitlines())
+        assert "✗ failed" in tree and f"· {word}" in tree
+        assert "The run stopped" not in tree
+        assert word in pane(app)
+
+
+async def test_a_provider_error_body_never_reaches_a_list(platform: Platform) -> None:
+    failure = {"reason": BUDGET_BODY, "summary": "Budget exceeded."}
+    platform.finished = [_entry("run-bad", status="failed", ended_at=_iso(NOW), failure=failure)]
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await show(pilot, "activity")
+        text = screen_text(app)
+    assert "✗ failed" in text and "{" not in text and "budget_exceeded" not in text
+
+
+async def test_a_long_decision_title_is_one_line_and_whole_in_the_pane(platform: Platform) -> None:
+    title = "Merge the release train\nit carries the ledger fix and 14 other changes " + "x" * 200
+    platform.pending([{**_pending_action(), "what": title}])
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await until(pilot, lambda: bool(app.pending), "the decisions")
+        await show(pilot, "decisions")
+        rows = [line.partition("│")[0] for line in screen_text(app).splitlines()]
+        assert sum("Merge the release train" in row for row in rows) == 1
+        assert not any("ledger fix" in row for row in rows)
+        assert "ledger fix" in pane(app)
+
+
+async def test_a_decision_whose_title_starts_with_a_blank_line_is_not_a_blank_row(platform: Platform) -> None:
+    platform.pending([{**_pending_action(), "what": "\n\nMerge the release train"}])
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await until(pilot, lambda: bool(app.pending), "the decisions")
+        await show(pilot, "decisions")
+        rows = [line.partition("│")[0] for line in screen_text(app).splitlines()]
+        assert any("Merge the release train" in row for row in rows)
+
+
 # ─────────────────────────────── the tabs (S67-21) ───────────────────────────────
 
 
@@ -1073,6 +1145,7 @@ def _showcase(platform: Platform) -> None:
             work_item_key="OPS-4",
             project_slug="platform",
             ended_at=_iso(NOW),
+            failure={"reason": "budget", "summary": "The run spent its budget of $10.00 at the 31st call."},
         ),
         _entry(
             "run-done-00001",
