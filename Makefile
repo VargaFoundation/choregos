@@ -27,6 +27,10 @@ setup:  ## Install the dependencies (Python + web)
 .PHONY: ci
 ci: lint typecheck test-cov contracts-check procedures-check charts-lint  ## Everything that blocks a PR
 
+.PHONY: android-ci
+android-ci:  ## The phone app (apps/android): Android lint, the JVM unit suite, the unsigned release APK (JDK 17 and the Android SDK; ANDROID_HOME)
+	cd apps/android && ./gradlew lint test assembleRelease
+
 .PHONY: lint
 lint:  ## ruff check + format --check + no French in lines added since origin/main (ADR 0046) + the French ratchet (ADR 0098)
 	$(UV) run ruff check $(PY_PATHS)
