@@ -47,6 +47,9 @@ ARGUMENT_BASES: dict[str, str] = {
     "examples/agents/openai-agents/Dockerfile": "the runner image of this repository, passed by the builder",
     "examples/agents/plain/Dockerfile": "the runner image of this repository, passed by the builder",
     "examples/agents/pydantic-ai/Dockerfile": "the runner image of this repository, passed by the builder",
+    "plugins/investment-research/Dockerfile": (
+        "the runner image of the same release, passed by digest by `release.yml` and by CI (ADR 0181 O4-3)"
+    ),
 }
 
 #: Exceptions to the rules, as (file, reference): reason. Empty, and meant to stay so.
