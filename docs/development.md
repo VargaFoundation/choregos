@@ -282,7 +282,8 @@ knowing before designing around it.
 A package installed next to Tranibor can register its own connectors — no fork, no patch to the
 core. Declare an entry point in the `choregos.plugins` group. A package loaded that way is an
 **extension**; "plugin" means the package of [ADR 0093](adr/0093-an-agent-ships-as-a-plugin.md), see
-[plugins.md](plugins.md):
+[plugins.md](plugins.md). An extension that brings a trade's code is that trade's plugin's code half, with
+the plugin's name ([Plugins, extensions and editions](site/build/plugins-and-trades.md)):
 
 ```toml
 # pyproject.toml of your package

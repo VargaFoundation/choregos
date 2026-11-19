@@ -90,6 +90,12 @@ def test_the_key_is_in_the_environment_of_one_step_the_one_that_starts_the_gatew
     assert "docker compose" in holder["run"] and " up " in holder["run"], holder["run"]
     # A vanished secret is an error, not a night of calls that fail for another reason.
     assert '[ -z "$ANTHROPIC_API_KEY" ]' in holder["run"] and "exit 1" in holder["run"]
+    # Before the gateway starts, Anthropic says whether it accepts the key and serves the model,
+    # with calls that spend nothing; the key goes to curl on stdin, never on its command line.
+    assert "https://api.anthropic.com/v1/$path" in holder["run"]
+    assert "models/claude-haiku-5-5" in holder["run"]
+    assert holder["run"].index("api.anthropic.com") < holder["run"].index("docker compose")
+    assert "-H @-" in holder["run"] and not re.search(r"-H ['\"]?x-api-key", holder["run"])
     # Nothing prints it: no echo, no env dump, no `set -x`.
     assert not re.search(r"echo[^\n]*\$\{?ANTHROPIC_API_KEY|\benv\b\s*$|printenv|set -x", holder["run"], re.M)
 

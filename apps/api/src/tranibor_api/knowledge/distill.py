@@ -51,6 +51,7 @@ from tranibor_adapters.batch import (
 )
 from tranibor_adapters.fakes.batch import FakeBatches
 from tranibor_core import utcnow
+from tranibor_core.prompt_cache import with_prompt_cache
 
 from ..config import Settings, get_settings
 from ..db.models import (
@@ -328,17 +329,19 @@ class GatewayDistiller:
                 "POST",
                 f"{self.base_url}/v1/chat/completions",
                 headers={"Authorization": f"Bearer {self.key}"},
-                json={
-                    "model": self.model,
-                    "messages": [
-                        {"role": "system", "content": system},
-                        {"role": "user", "content": user},
-                    ],
-                    "response_format": {"type": "json_object"},
-                    "stream": True,
-                    "stream_options": {"include_usage": True},
-                    "metadata": {"choregos_agent": AGENT},
-                },
+                json=with_prompt_cache(
+                    {
+                        "model": self.model,
+                        "messages": [
+                            {"role": "system", "content": system},
+                            {"role": "user", "content": user},
+                        ],
+                        "response_format": {"type": "json_object"},
+                        "stream": True,
+                        "stream_options": {"include_usage": True},
+                        "metadata": {"choregos_agent": AGENT},
+                    }
+                ),
             ) as response,
         ):
             if response.status_code >= 400:

@@ -294,3 +294,72 @@ async def test_a_detached_client_that_stays_gets_the_answer_it_would_get_without
     assert detached.json()["output_text"] == "Second." and set(detached.json()) == set(plain.json())
     busy = await client.post(f"{ME}/{conversation}/messages", json={"input": "c", "detach": True})
     assert busy.status_code in (200, 409)
+
+
+# ─────────────────────────── a real client that leaves ───────────────────────────
+
+
+async def _serving(app: Any) -> tuple[Any, asyncio.Task[None], str]:
+    """The app on a real socket (uvicorn, a free port): the ASGI test transport buffers a response, so a
+    client cannot leave it midway; a real connection can."""
+    import uvicorn
+
+    server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=0, lifespan="off", log_level="error"))
+    task = asyncio.create_task(server.serve())
+    for _ in range(200):
+        if server.started and server.servers:
+            break
+        await asyncio.sleep(0.05)
+    assert server.started, "the server did not start"
+    port = server.servers[0].sockets[0].getsockname()[1]
+    return server, task, f"http://127.0.0.1:{port}"
+
+
+async def test_a_client_that_really_disconnects_leaves_a_detached_turn_running_and_cancels_a_plain_one(
+    app: Any,
+    client: AsyncClient,
+    admin: str,
+    upstream: Upstream,  # noqa: F811
+) -> None:
+    from tranibor_api.services.turn_follow import run_of
+
+    await _agent(client)
+    server, serving, base = await _serving(app)
+    cookies = dict(client.cookies)
+    try:
+        for detach in (True, False):
+            conversation = await _open("northwind", admin)
+            upstream.model.say_chunks("one ", "two ", "three.")
+            gate = asyncio.Event()
+            _halfway(upstream, "one ", gate)
+            async with httpx.AsyncClient(base_url=base, cookies=cookies, timeout=20) as remote:
+                async with remote.stream(
+                    "POST",
+                    f"{ME}/{conversation}/messages",
+                    json={"input": "Go", "stream": True, "detach": detach},
+                ) as response:
+                    assert response.status_code == 200
+                    async for line in response.aiter_lines():
+                        if line.startswith("event: response.created"):
+                            break
+                run = run_of(conversation)
+                assert run is not None and not run.finished, "the turn is running"
+            # The connection is closed here: the server saw the client go.
+            if detach:
+                await asyncio.sleep(0.5)
+                assert not run.finished, "a detached turn runs on after its client left"
+                gate.set()
+                assert run.task is not None
+                await asyncio.wait_for(run.task, timeout=10)
+                assert run.events[-1][0] == "response.completed"
+                assert (await _record(conversation)).turns == 1
+            else:
+                for _ in range(100):
+                    if run.finished:
+                        break
+                    await asyncio.sleep(0.1)
+                assert run.finished and run.events[-1][0] != "response.completed", "cancelled"
+                gate.set()
+    finally:
+        server.should_exit = True
+        await asyncio.wait_for(serving, timeout=10)

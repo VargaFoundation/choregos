@@ -57,6 +57,28 @@ jobs:
             echo "::error::the ANTHROPIC_API_KEY secret is not set: the night proves nothing without it"
             exit 1
           fi
+          # The key is checked before the gateway starts, so a key Anthropic refuses is named as
+          # such rather than as five failed tests: two free calls (no token is spent) say whether it
+          # is accepted and whether it reaches the model. The key goes to curl on stdin, never on a
+          # command line; what is printed is a hint about its shape, never any part of it.
+          case "$ANTHROPIC_API_KEY" in
+            *[[:space:]]*) hint="it contains whitespace (set the secret again without it)" ;;
+            sk-ant-admin*) hint="it is an Admin API key; the Messages API needs a workspace API key" ;;
+            sk-ant-api*) hint="it is shaped like a workspace API key: revoked, or of another workspace?" ;;
+            *) hint="it is not shaped like an Anthropic API key (sk-ant-api...)" ;;
+          esac
+          for path in models models/claude-haiku-5-5; do
+            status=$(printf 'x-api-key: %s\n' "$ANTHROPIC_API_KEY" | curl -sS -o "$RUNNER_TEMP/anthropic.json" \
+              -w '%{http_code}' -H @- -H 'anthropic-version: 2023-06-01' "https://api.anthropic.com/v1/$path")
+            if [ "$status" != 200 ]; then
+              if [ "$status" = 404 ] && [ "$path" != models ]; then
+                hint="the key is accepted, but its workspace does not serve ${path#models/}"
+              fi
+              echo "::error::Anthropic answers $status to GET /v1/$path with the ANTHROPIC_API_KEY secret; $hint"
+              head -c 300 "$RUNNER_TEMP/anthropic.json"; echo
+              exit 1
+            fi
+          done
           docker compose -p livemodel -f tests/live/model/compose.yaml up -d --wait
       - name: keys, scope, budget, cost and the Anthropic format, on Claude Haiku 5.5
         run: |
