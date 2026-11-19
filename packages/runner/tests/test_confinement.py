@@ -323,3 +323,20 @@ async def test_a_port_the_launch_plan_declares_passes_the_port_rule(
     assert outcome.exit_code is Exit.OK, outcome.detail
     [event] = _events(client, "agent.confinement")
     assert event["connect_ports"] is not None and OPENCODE_SERVER_PORT in event["connect_ports"], event
+
+
+def test_gemini_cli_trusts_the_runs_workspace_so_it_reads_its_mcp_servers(
+    stage_input: StageInput, tmp_path: Path
+) -> None:
+    """S65-04a: gemini-cli 0.60.0 drops a workspace's `.gemini/settings.json` (its `mcpServers` with it) in
+    a folder it does not trust, and nobody is there to trust it over ACP: not one request reached the
+    step's MCP server. With `GEMINI_CLI_TRUST_WORKSPACE` the server was listed and called. The step's own
+    `launch.env` still wins."""
+    step = stage_input.model_copy(update={"agent": AgentRef(backend="gemini-cli")})
+    assert get_backend("gemini-cli").launch_plan(step, tmp_path).env["GEMINI_CLI_TRUST_WORKSPACE"] == "true"
+    own = step.model_copy(
+        update={
+            "agent": AgentRef(backend="gemini-cli", launch={"env": {"GEMINI_CLI_TRUST_WORKSPACE": "false"}})
+        }
+    )
+    assert get_backend("gemini-cli").launch_plan(own, tmp_path).env["GEMINI_CLI_TRUST_WORKSPACE"] == "false"
