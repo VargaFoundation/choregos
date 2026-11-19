@@ -358,7 +358,11 @@ async def post_decision(
         HumanRequest.work_item_id == item.id, HumanRequest.decided_at.is_(None)
     )
     if body.request_id:
-        query = select(HumanRequest).where(HumanRequest.id == body.request_id)
+        # The request is one of THIS work item's: a decision never answers (and closes) another item's
+        # request, which that item's interpreter would not receive (S67-15).
+        query = select(HumanRequest).where(
+            HumanRequest.id == body.request_id, HumanRequest.work_item_id == item.id
+        )
     request_row = (
         await session.execute(query.order_by(HumanRequest.requested_at.desc()).limit(1))
     ).scalar_one_or_none()

@@ -141,7 +141,8 @@ Usage: choregos activity [OPTIONS]
 
   Read-only. `--watch` follows the activity stream; elapsed times move every
   second. `--run ID` shows one run's own steps (the agent's plan, its tool
-  calls with state and time, what fills its context).
+  calls with state and time, what fills its context); with `--json` they are
+  one JSON object for a script (not with `--watch`).
 
 Options:
   -w, --watch       keep the tree live until the stream ends or Ctrl-C
@@ -151,6 +152,7 @@ Options:
   --kind <str>      run, session or turn
   --org <str>       the organisation; the profile's otherwise
   --run <str>       one run's steps instead: its plan, tool calls and context
+  --json            with --run: one JSON object, nothing drawn
   --help            Show this message and exit.
 ```
 

@@ -36,7 +36,8 @@ def test_the_trivy_step_is_not_restricted_to_main() -> None:
 def test_the_scanned_image_is_one_a_pull_request_run_has() -> None:
     build = _step("docker/build-push-action")["with"]
     trivy = _step("aquasecurity/trivy-action")["with"]
-    assert trivy["image-ref"] == build["tags"], "the scan must read the tag the build produces"
+    tags = str(build["tags"]).splitlines()
+    assert trivy["image-ref"] in tags, "the scan must read a tag the build produces"
     assert build["push"] == "${{ " + MAIN + " }}", "main keeps pushing, pull requests do not"
     assert build["load"] == "${{ github.ref != 'refs/heads/main' }}", (
         "off main the image is loaded locally, otherwise there is nothing to scan"

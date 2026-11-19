@@ -32,7 +32,12 @@ async def installed_row(session: AsyncSession, org_id: str, name: str) -> OrgPlu
 
 
 def _cache_root() -> Path:
-    return Path(tempfile.gettempdir()) / "choregos-plugin-files"
+    """Where stored files are materialised: `CHOREGOS_PLUGIN_FILES_DIR` when set, else a directory of the
+    process's own user under the temp directory (a fixed shared path breaks when another account made it)."""
+    configured = os.environ.get("CHOREGOS_PLUGIN_FILES_DIR")
+    if configured:
+        return Path(configured)
+    return Path(tempfile.gettempdir()) / f"choregos-plugin-files-{os.getuid()}"
 
 
 async def _materialise(session: AsyncSession, row: OrgPlugin) -> Path:
@@ -47,7 +52,7 @@ async def _materialise(session: AsyncSession, row: OrgPlugin) -> Path:
             )
         )
     ).scalars()
-    _cache_root().mkdir(parents=True, exist_ok=True)
+    _cache_root().mkdir(mode=0o700, parents=True, exist_ok=True)
     staging = Path(tempfile.mkdtemp(prefix="staging-", dir=_cache_root()))
     for stored in files:
         path = inside(staging, stored.path)

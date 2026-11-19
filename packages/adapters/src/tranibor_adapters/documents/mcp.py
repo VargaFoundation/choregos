@@ -14,8 +14,10 @@ data platform, a wiki, a catalogue): it reads the protocol, and the protocol onl
 - **Name**: the resource's `name` (or the last segment of its URI), with the extension its
   `mimeType` calls for, so that the platform converts it as what it is. Two resources listed under
   the same name both carry a short digest of their URI, so neither replaces the other.
-- **Content**: a `text` is UTF-8, a `blob` is base64. A resource that answers nothing readable, or
-  that is gone since the listing, is skipped and said; the sync goes on.
+- **Content**: a `text` is UTF-8, a `blob` is base64. A resource that answers several contents (a
+  collection) is one document: its JSON parts as one array, its text parts one after the other. A
+  resource that answers nothing readable, or that is gone since the listing, is skipped and said; the
+  sync goes on.
 
 A document's own Open Knowledge Format header (ADR 0174) is read by the platform as for any source:
 it is how the server says a resource is `deprecated`, what it is titled, where it comes from.
@@ -26,6 +28,7 @@ from __future__ import annotations
 import base64
 import binascii
 import hashlib
+import json
 import re
 import uuid
 from pathlib import PurePosixPath
@@ -58,6 +61,8 @@ NAME_MAX = 200
 #: At most this many characters of `uri_prefix`, and this many media types in `mime_types`.
 PREFIX_MAX = 2000
 MIME_TYPES_MAX = 20
+#: At most this many contents of one resource are joined into its document.
+MAX_PARTS = 1000
 
 _UNSAFE = re.compile(r"[\x00-\x1f\x7f/\\]+")
 
@@ -169,8 +174,10 @@ class McpResourceSource:
                 raise ItemUnreadableError(f"gone since the listing: {error}") from error
             raise
         own = [c for c in contents if c.get("uri") == item.ref] or contents
-        if len(own) != 1:
-            raise ItemUnreadableError(f"{len(own)} contents answered for one resource")
+        if not own:
+            raise ItemUnreadableError("no content answered")
+        if len(own) > 1:
+            return _collection(item, own)
         content = own[0]
         if isinstance(content.get("text"), str):
             return str(content["text"]).encode("utf-8")
@@ -180,3 +187,22 @@ class McpResourceSource:
             except (binascii.Error, ValueError) as error:
                 raise ItemUnreadableError("its `blob` is not base64") from error
         raise ItemUnreadableError("neither a `text` nor a `blob`")
+
+
+def _collection(item: SourceItem, contents: list[dict[str, Any]]) -> bytes:
+    """A resource that answers several contents (a collection, each part under its own URI) is one
+    document: JSON parts as one JSON array, text parts one after the other. Binary parts cannot be
+    joined: the resource is skipped and said."""
+    if len(contents) > MAX_PARTS:
+        raise ItemUnreadableError(f"{len(contents)} contents for one resource, at most {MAX_PARTS}")
+    texts = [c.get("text") for c in contents]
+    if not all(isinstance(t, str) for t in texts):
+        raise ItemUnreadableError(f"{len(contents)} contents, not all of them text: they cannot be joined")
+    parts = [str(t) for t in texts]
+    if PurePosixPath(item.name.lower()).suffix == ".json":
+        try:
+            joined = json.dumps([json.loads(t) for t in parts], ensure_ascii=False, indent=2)
+        except ValueError as error:
+            raise ItemUnreadableError(f"{len(parts)} contents, not all of them JSON") from error
+        return joined.encode("utf-8")
+    return "\n\n".join(t.rstrip("\n") for t in parts).encode("utf-8") + b"\n"

@@ -125,11 +125,15 @@ For one run, give its id:
 ```bash
 choregos activity --run RUN_ID
 choregos activity --run RUN_ID --watch
+choregos activity --run RUN_ID --json
 ```
 
 It shows the plan the agent declared, its tool calls (state, time, title) and what fills the model's
 context now. A backend the platform cannot see into shows "Context: not measured". `--run` takes none of
-the tree's filters. With `--watch`, it follows the run until it ends.
+the tree's filters. With `--watch`, it follows the run until it ends. With `--json`, it prints one object for a
+script and draws nothing: the run, the plan (`null` when none was declared), every tool call (not only the latest
+forty a screen shows), the count of updates of a kind the terminal does not know, and the context (`null` when
+not measured); `--json` does not combine with `--watch`.
 
 ## The workspace
 
