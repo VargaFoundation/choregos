@@ -1,10 +1,15 @@
 [project]
 name = "tranibor-investment-research"
 version = "0.27.16"
-description = "The extension of the investment-research plugin: the marketdata connector family (ADR 0181)"
+description = "The code of the investment-research plugin: the marketdata connector family and the choregos-quant job command (ADR 0181)"
 requires-python = ">=3.12,<3.13"
 license = { text = "Apache-2.0" }
 dependencies = ["tranibor-adapters", "httpx>=0.27"]
+
+# The deterministic engine a job step runs (ADR 0056), in the plugin's job image (`Dockerfile`): standard
+# library only, so the job image installs this distribution without its dependencies.
+[project.scripts]
+choregos-quant = "tranibor_investment_research.quant.cli:main"
 
 # The plugin's code half (ADR 0181 point 4): the API and the worker load it at start-up.
 [project.entry-points."choregos.plugins"]

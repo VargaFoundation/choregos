@@ -17,7 +17,6 @@ members = [
     "choregos-orchestrator",
     "choregos-outpost",
     "choregos-playbooks",
-    "choregos-quant",
     "choregos-runner",
     "choregos-tools-mcp",
     "choregos-workspace",
@@ -31,7 +30,6 @@ members = [
     "tranibor-orchestrator",
     "tranibor-outpost",
     "tranibor-playbooks",
-    "tranibor-quant",
     "tranibor-runner",
     "tranibor-tools-mcp",
 ]
@@ -434,21 +432,6 @@ requires-dist = [
 ]
 
 [[package]]
-name = "choregos-quant"
-version = "0.27.16"
-source = { editable = "compat/choregos-quant" }
-dependencies = [
-    { name = "tranibor-contracts" },
-    { name = "tranibor-quant" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "tranibor-contracts", editable = "packages/contracts" },
-    { name = "tranibor-quant", editable = "packages/quant" },
-]
-
-[[package]]
 name = "choregos-runner"
 version = "0.27.16"
 source = { editable = "compat/choregos-runner" }
@@ -492,7 +475,6 @@ dependencies = [
     { name = "choregos-orchestrator" },
     { name = "choregos-outpost" },
     { name = "choregos-playbooks" },
-    { name = "choregos-quant" },
     { name = "choregos-runner" },
     { name = "choregos-tools-mcp" },
     { name = "tranibor-adapters" },
@@ -505,7 +487,6 @@ dependencies = [
     { name = "tranibor-orchestrator" },
     { name = "tranibor-outpost" },
     { name = "tranibor-playbooks" },
-    { name = "tranibor-quant" },
     { name = "tranibor-runner" },
     { name = "tranibor-tools-mcp" },
 ]
@@ -541,7 +522,6 @@ requires-dist = [
     { name = "choregos-orchestrator", editable = "compat/choregos-orchestrator" },
     { name = "choregos-outpost", editable = "compat/choregos-outpost" },
     { name = "choregos-playbooks", editable = "compat/choregos-playbooks" },
-    { name = "choregos-quant", editable = "compat/choregos-quant" },
     { name = "choregos-runner", editable = "compat/choregos-runner" },
     { name = "choregos-tools-mcp", editable = "compat/choregos-tools-mcp" },
     { name = "tranibor-adapters", editable = "packages/adapters" },
@@ -554,7 +534,6 @@ requires-dist = [
     { name = "tranibor-orchestrator", editable = "apps/orchestrator" },
     { name = "tranibor-outpost", editable = "packages/outpost" },
     { name = "tranibor-playbooks", editable = "packages/playbooks" },
-    { name = "tranibor-quant", editable = "packages/quant" },
     { name = "tranibor-runner", editable = "packages/runner" },
     { name = "tranibor-tools-mcp", editable = "packages/tools-mcp" },
 ]
@@ -2506,11 +2485,6 @@ requires-dist = [
 ]
 
 [[package]]
-name = "tranibor-quant"
-version = "0.27.16"
-source = { editable = "packages/quant" }
-
-[[package]]
 name = "tranibor-runner"
 version = "0.27.16"
 source = { editable = "packages/runner" }
@@ -2522,7 +2496,6 @@ dependencies = [
     { name = "structlog" },
     { name = "tranibor-adapters" },
     { name = "tranibor-core", extra = ["telemetry"] },
-    { name = "tranibor-quant" },
     { name = "tranibor-tools-mcp" },
     { name = "typer" },
     { name = "uvicorn" },
@@ -2538,7 +2511,6 @@ requires-dist = [
     { name = "structlog", specifier = ">=24.4" },
     { name = "tranibor-adapters", editable = "packages/adapters" },
     { name = "tranibor-core", extras = ["telemetry"], editable = "packages/core" },
-    { name = "tranibor-quant", editable = "packages/quant" },
     { name = "tranibor-tools-mcp", editable = "packages/tools-mcp" },
     { name = "typer", specifier = ">=0.15" },
     { name = "uvicorn", specifier = ">=0.32" },

@@ -10,7 +10,6 @@ dependencies = [
   "tranibor-core",
   "tranibor-adapters",
   "tranibor-runner",
-  "tranibor-quant",
   "tranibor-tools-mcp",
   "tranibor-playbooks",
   "tranibor-cli",
@@ -25,7 +24,6 @@ dependencies = [
   "choregos-core", # compat-ok
   "choregos-adapters", # compat-ok
   "choregos-runner", # compat-ok
-  "choregos-quant", # compat-ok
   "choregos-tools-mcp", # compat-ok
   "choregos-playbooks", # compat-ok
   "choregos-cli", # compat-ok
@@ -67,7 +65,6 @@ tranibor-contracts = { workspace = true }
 tranibor-core = { workspace = true }
 tranibor-adapters = { workspace = true }
 tranibor-runner = { workspace = true }
-tranibor-quant = { workspace = true }
 tranibor-tools-mcp = { workspace = true }
 tranibor-playbooks = { workspace = true }
 tranibor-cli = { workspace = true }
@@ -80,7 +77,6 @@ choregos-contracts = { workspace = true } # compat-ok
 choregos-core = { workspace = true } # compat-ok
 choregos-adapters = { workspace = true } # compat-ok
 choregos-runner = { workspace = true } # compat-ok
-choregos-quant = { workspace = true } # compat-ok
 choregos-tools-mcp = { workspace = true } # compat-ok
 choregos-playbooks = { workspace = true } # compat-ok
 choregos-cli = { workspace = true } # compat-ok
@@ -156,7 +152,7 @@ plugins = ["pydantic.mypy"]
 exclude = ["(^|/)(\\.venv|node_modules|generated)/", "^apps/web/"]
 namespace_packages = true
 explicit_package_bases = true
-mypy_path = "packages/contracts/src:packages/core/src:packages/adapters/src:packages/runner/src:packages/quant/src:packages/tools-mcp/src:packages/playbooks/src:packages/cli/src:packages/agent-sdk/src:packages/outpost/src:plugins/investment-research/src:examples/agents/plain/src:apps/api/src:apps/orchestrator/src"
+mypy_path = "packages/contracts/src:packages/core/src:packages/adapters/src:packages/runner/src:packages/tools-mcp/src:packages/playbooks/src:packages/cli/src:packages/agent-sdk/src:packages/outpost/src:plugins/investment-research/src:examples/agents/plain/src:apps/api/src:apps/orchestrator/src"
 
 [[tool.mypy.overrides]]
 module = ["temporalio.*", "mcp.*", "kubernetes_asyncio.*", "slack_sdk.*", "authlib.*", "jsonschema_rs.*", "prometheus_client.*", "structlog.*", "asyncpg.*", "openpyxl.*", "lxml.*"]
@@ -200,7 +196,7 @@ filterwarnings = ["ignore::DeprecationWarning"]
 
 [tool.coverage.run]
 branch = true
-source = ["packages/core/src", "packages/runner/src", "packages/agent-sdk/src", "packages/adapters/src", "apps/api/src", "apps/orchestrator/src", "packages/cli/src", "packages/contracts/src", "packages/playbooks/src", "packages/quant/src", "packages/tools-mcp/src", "packages/outpost/src", "plugins/investment-research/src"]
+source = ["packages/core/src", "packages/runner/src", "packages/agent-sdk/src", "packages/adapters/src", "apps/api/src", "apps/orchestrator/src", "packages/cli/src", "packages/contracts/src", "packages/playbooks/src", "packages/tools-mcp/src", "packages/outpost/src", "plugins/investment-research/src"]
 omit = ["*/generated/*", "*/tests/*"]
 
 [tool.coverage.report]

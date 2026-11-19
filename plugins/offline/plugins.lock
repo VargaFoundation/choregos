@@ -11,6 +11,13 @@ plugins:
     artifact: sha256:accfbdc4ef010cc259179f910956607d9115da7cf5aaed2331519059e07bf9fb
     file: authoring-1.1.0.tar.gz
     signature: keyless, https://github.com/VargaFoundation/choregos-agents/.github/workflows/publish.yml@refs/heads/main
+  investment-research:
+    version: 0.1.0
+    digest: sha256:88d1ff414a2c28f69af2100208060feb8f7f78732c0d176935c876962a87448a
+    source: ghcr.io/graalsystems/tranibor-agents/investment-research:0.1.0
+    artifact: sha256:a653a03006dea3e8e0555dbeb2c55def5927c08afb368082818c5fce55f009a7
+    file: investment-research-0.1.0.tar.gz
+    signature: keyless, https://github.com/graalsystems/tranibor-agents/.github/workflows/publish.yml@refs/heads/main
   mcp-clients:
     version: 1.0.0
     digest: sha256:2470e930c1433d783aa3afe664884c22c6a0e907992988071a553551bbd3bdc5

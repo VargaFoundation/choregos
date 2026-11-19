@@ -31,7 +31,8 @@ INTERNAL = [e for e in entries() if e.kind == "internal"]
 
 
 def test_the_templates_ship_agents() -> None:
-    assert {p.parent.parent.name for p in AGENT_FILES} == {"investment-research", "joiners-leavers"}
+    # The investment research template left with its plugin (S83-07): `plugins/investment-research/tests`.
+    assert {p.parent.parent.name for p in AGENT_FILES} == {"joiners-leavers"}
 
 
 @pytest.mark.parametrize("path", AGENT_FILES, ids=lambda p: f"{p.parent.parent.name}/{p.stem}")

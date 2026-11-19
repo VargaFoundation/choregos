@@ -27,7 +27,7 @@ import json
 import math
 import os
 import random
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
@@ -56,6 +56,8 @@ STRATEGIES = {
 }
 PERIOD = {"start": "2018-01-01", "oos_start": "2022-01-01", "end": "2024-12-31"}
 HISTORIES = Path(__file__).resolve().parents[1] / "replay" / "histories"
+OFFLINE = Path(__file__).resolve().parents[2] / "plugins" / "offline"
+JOB_IMAGE = "registry.example/tranibor-investment-research@sha256:" + "b" * 64
 
 
 async def _replayed(handle: Any, archive: str) -> None:
@@ -151,7 +153,7 @@ class Bench(FakeExecutor):
 
 
 @pytest.fixture
-def market(monkeypatch: pytest.MonkeyPatch) -> Any:
+def market(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
     from tranibor_investment_research.marketdata import fake as fakes
 
     fake = fakes.FakeMarketData()
@@ -159,7 +161,21 @@ def market(monkeypatch: pytest.MonkeyPatch) -> Any:
     fake.fixtures["TRN2.US"] = sawtooth(seed=11, phase=20)
     monkeypatch.setattr(fakes, "FAKE", fake)
     monkeypatch.setenv("CONNECTOR_E2E_MARKETDATA_KEY", KEY)
-    return fake
+    # The template is the `investment-research` plugin's (S83-07): installed from the archive the core ships
+    # offline, its job steps name the plugin's job image, which the operator maps. The bench runs the
+    # command in a subprocess, whatever the image; the API and the worker still check the name.
+    monkeypatch.setenv("CHOREGOS_PLUGINS_OFFLINE", str(OFFLINE))
+    monkeypatch.setenv("CHOREGOS_JOB_IMAGES", json.dumps({"investment-research": JOB_IMAGE}))
+    _settings_changed()
+    yield fake
+
+
+def _settings_changed() -> None:
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_orchestrator.config import get_settings
+
+    reset_settings_cache()
+    get_settings.cache_clear()
 
 
 @pytest.fixture
@@ -292,9 +308,13 @@ async def _organisation(client: AsyncClient) -> dict[str, Any]:
               "secret_refs": {"api_key": "env:CONNECTOR_E2E_MARKETDATA_KEY"}},
     )  # fmt: skip
     assert connector.status_code == 201, connector.text
+    plugin = {"source": "offline", "name": "investment-research", "version": "0.1.0"}
+    installed = await client.post(f"{ORG}/plugins/install", json=plugin)
+    assert installed.status_code == 201, installed.text
     created = await client.post(
         f"{ORG}/projects",
-        json={"slug": "research", "name": "Research", "template_ref": "investment-research",
+        json={"slug": "research", "name": "Research",
+              "template_ref": "plugin:investment-research/investment-research",
               "config": {"slug": "research", "org": "northwind"}},
     )  # fmt: skip
     assert created.status_code == 201, created.text

@@ -384,7 +384,7 @@ reference: they name an image, and the operator maps names to references.
 ```yaml
 global:
   images:
-    jobs:   { quant: harbor.example.com/choregos/quant@sha256:… }
+    jobs:   { investment-research: ghcr.io/graalsystems/tranibor-investment-research@sha256:… }
     agents: { ticket-triager: harbor.example.com/agents/ticket-triager@sha256:… }
     requireDigest: true     # the default: a tag-only reference stops the API and the workers at start-up
 ```
@@ -2117,6 +2117,40 @@ value>` on the first model call. Nothing said the key had never resolved.
 
 If the API refuses to start with `réglages non résolus`, fix the source of the secret — the key
 is missing where it is stored, not where it is read.
+
+## Upgrading past 0.27.16: the investment research template and its job image
+
+**The investment research template and `choregos-quant` left the core** (S83-07,
+[ADR 0181](adr/0181-the-contracts-speak-no-trade.md) O4-3), after the connectors (below). The
+template, its two agents, two skills and evals are the `investment-research` plugin's content
+(0.1.0, published in the `tranibor` source and shipped offline in the API image); `choregos-quant` is in
+the plugin's own job image, and the runner image no longer carries it. A deployment that runs
+investment research campaigns:
+
+1. **Maps the job image.** Each release publishes and signs
+   `ghcr.io/graalsystems/tranibor-investment-research:<version>`, built FROM that release's runner image.
+   Map it under the name the template's job steps use, at the release's version, pinned by digest:
+
+   ```yaml
+   global:
+     images:
+       jobs: { investment-research: ghcr.io/graalsystems/tranibor-investment-research@sha256:… }
+   ```
+
+   Without it a campaign's first job step fails with `job_image_unknown`, without a retry. Move the
+   digest with every upgrade, as the runner's: the job image carries that release's runner.
+2. **Installs the plugin** in each organisation that runs campaigns (**Plugins** in the sidebar, or
+   `defaultPlugins` in `global.plugins`), from the `offline` source the API image carries or from the
+   `tranibor` source. A new project names the template
+   `plugin:investment-research/investment-research`.
+3. **Republishes the `campaign` workflow of an existing project.** A project born of the core's former
+   template keeps the workflows it published, whose job steps name no image: they would run in the
+   runner image, which no longer has `choregos-quant`, and fail. Publish the plugin's `campaign.yaml`
+   over it (`PUT /projects/{id}/workflows/campaign` with `source: template`, or `choregos workflow
+   push`), or add `image: investment-research` to its three job actors. Its readiness no longer compares
+   its workflows with a template: the core does not ship it any more.
+
+Nothing to do for a deployment that never used it: the runner image is one command lighter.
 
 ## Upgrading past 0.27.15: investment research is a plugin
 

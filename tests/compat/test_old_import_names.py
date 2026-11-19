@@ -31,7 +31,6 @@ PACKAGES = [
     ("core", "core", "packages/core"),
     ("adapters", "adapters", "packages/adapters"),
     ("runner", "runner", "packages/runner"),
-    ("quant", "quant", "packages/quant"),
     ("tools-mcp", "tools_mcp", "packages/tools-mcp"),
     ("playbooks", "playbooks", "packages/playbooks"),
     ("cli", "cli", "packages/cli"),
