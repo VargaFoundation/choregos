@@ -1,0 +1,9 @@
+apiVersion: v2
+name: choregos-websearch
+description: >-
+  Self-hosted web search for the governed `web_search` tool (S80-16, ADR 0195): SearXNG behind a
+  search-only Firecrawl with its Redis, and optionally the egress proxy's relay (ADR 0091). No scrape,
+  crawl or browser service.
+type: application
+version: 0.27.15
+appVersion: "0.27.15"

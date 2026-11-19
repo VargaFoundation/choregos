@@ -915,3 +915,8 @@ networkPolicies:
   # policy leaves out. Empty on a cluster, whose platform team opens the outside its own way (the
   # egress ceiling above says what it opened); the single-node profile opens it here (ADR 0184).
   platformEgress: []
+
+# S80-16: self-hosted web search for the governed `web_search` tool. Off by default; see
+# charts/websearch/values.yaml and docs/deployment.md.
+choregos-websearch:
+  enabled: false

@@ -1,0 +1,304 @@
+{{- $r := .Release.Name }}
+{{- $fc := .Values.names.firecrawl | default (printf "%s-firecrawl" $r) }}
+{{- $sx := .Values.names.searxng | default (printf "%s-searxng" $r) }}
+{{- $rd := .Values.names.redis | default (printf "%s-firecrawl-redis" $r) }}
+{{- $rl := .Values.names.relay | default (printf "%s-relay" $r) }}
+{{- $relay := .Values.relay }}
+{{- if and $relay.enabled (not $relay.secretName) }}
+{{- fail "choregos-websearch.relay.enabled needs relay.secretName: the Secret holding `api-token` and `client-token`." }}
+{{- end }}
+{{- if and $relay.enabled (not $relay.organisation) }}
+{{- fail "choregos-websearch.relay.enabled needs relay.organisation: the organisation whose proxy the relay applies." }}
+{{- end }}
+{{- if $relay.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $sx }}-config
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+data:
+  settings.yml: |
+    use_default_settings:
+      engines:
+        keep_only: {{ .Values.searxng.engines | toJson }}
+    general:
+      instance_name: {{ .Values.searxng.instanceName | quote }}
+      enable_metrics: false
+    server:
+      # Replaced at start by a random value (init container): nothing secret in the chart, and the
+      # instance keeps no state a rotation at each restart would break.
+      secret_key: "REPLACED_AT_STARTUP"
+      limiter: false
+      public_instance: false
+      image_proxy: false
+    search:
+      safe_search: 0
+      # `json` is ABSENT by default and SearXNG answers 403 to `format=json` until it is enabled: it is
+      # what Firecrawl calls.
+      formats: [html, json]
+    outgoing:
+      request_timeout: 6.0
+      max_request_timeout: 10.0
+      # All the traffic to the engines goes through the relay; the user names the kind of traffic
+      # (`search_engines`), the password is RELAY_CLIENT_TOKEN, set at start, never in the chart.
+      proxies:
+        all://:
+          - "http://search_engines:REPLACED_RELAY_TOKEN@{{ $rl }}:3128"
+{{- else }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $sx }}-config
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+data:
+  settings.yml: |
+    use_default_settings:
+      engines:
+        keep_only: {{ .Values.searxng.engines | toJson }}
+    general:
+      instance_name: {{ .Values.searxng.instanceName | quote }}
+      enable_metrics: false
+    server:
+      secret_key: "REPLACED_AT_STARTUP"
+      limiter: false
+      public_instance: false
+      image_proxy: false
+    search:
+      safe_search: 0
+      formats: [html, json]
+    outgoing:
+      request_timeout: 6.0
+      max_request_timeout: 10.0
+{{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $sx }}
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app.kubernetes.io/name: choregos-searxng, app.kubernetes.io/instance: {{ $r }} }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: choregos-searxng, app.kubernetes.io/instance: {{ $r }}, app.kubernetes.io/component: websearch }
+      annotations:
+        # SearXNG reads its settings at start only (the init container copies them): the digest restarts the pod.
+        checksum/settings: {{ print (toJson .Values.searxng) $relay.enabled | sha256sum }}
+    spec:
+      automountServiceAccountToken: false
+      {{- include "choregos.imagePullSecrets" . | nindent 6 }}
+      # The image starts as root then hands over to `searxng` (977); started as 977 the entrypoint tries
+      # no `chown` and the pod passes the `non-root` rule.
+      securityContext: { runAsNonRoot: true, runAsUser: 977, runAsGroup: 977, fsGroup: 977, seccompProfile: { type: RuntimeDefault } }
+      initContainers:
+        - name: settings
+          image: {{ .Values.searxng.image.repository }}:{{ .Values.searxng.image.tag }}
+          {{- if $relay.enabled }}
+          env:
+            - name: RELAY_CLIENT_TOKEN
+              valueFrom: { secretKeyRef: { name: {{ $relay.secretName }}, key: client-token } }
+          {{- end }}
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+              secret="$(head -c 24 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9')"
+              {{- if $relay.enabled }}
+              # The relay's token, encoded for a URL (it may carry `/`, `@`, `:`).
+              token="$(python3 -c 'import os, urllib.parse; print(urllib.parse.quote(os.environ["RELAY_CLIENT_TOKEN"], safe=""))')"
+              case "$token" in ""|"%3Cno%20value%3E") echo "RELAY_CLIENT_TOKEN absent" >&2; exit 1;; esac
+              sed -e "s/REPLACED_AT_STARTUP/${secret}/" -e "s/REPLACED_RELAY_TOKEN/${token}/" /config/settings.yml > /etc/searxng/settings.yml
+              {{- else }}
+              sed -e "s/REPLACED_AT_STARTUP/${secret}/" /config/settings.yml > /etc/searxng/settings.yml
+              {{- end }}
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { cpu: 100m, memory: 64Mi }
+          securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } }
+          volumeMounts:
+            - { name: config, mountPath: /config, readOnly: true }
+            - { name: settings, mountPath: /etc/searxng }
+      containers:
+        - name: searxng
+          image: {{ .Values.searxng.image.repository }}:{{ .Values.searxng.image.tag }}
+          env:
+            - { name: GRANIAN_PORT, value: "8080" }
+            - { name: GRANIAN_HOST, value: "0.0.0.0" }
+          ports:
+            - { name: http, containerPort: 8080 }
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          resources: {{- toYaml .Values.searxng.resources | nindent 12 }}
+          securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: ["ALL"] } }
+          volumeMounts:
+            - { name: settings, mountPath: /etc/searxng }
+            - { name: cache, mountPath: /var/cache/searxng }
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - { name: config, configMap: { name: {{ $sx }}-config } }
+        - { name: settings, emptyDir: {} }
+        - { name: cache, emptyDir: {} }
+        - { name: tmp, emptyDir: {} }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $sx }}
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+spec:
+  selector: { app.kubernetes.io/name: choregos-searxng, app.kubernetes.io/instance: {{ $r }} }
+  ports:
+    - { name: http, port: 8080, targetPort: http }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $rd }}
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app.kubernetes.io/name: choregos-firecrawl-redis, app.kubernetes.io/instance: {{ $r }} }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: choregos-firecrawl-redis, app.kubernetes.io/instance: {{ $r }}, app.kubernetes.io/component: websearch }
+    spec:
+      automountServiceAccountToken: false
+      {{- include "choregos.imagePullSecrets" . | nindent 6 }}
+      # The image starts as root then hands over to `redis` (999): started as 999 directly.
+      securityContext: { runAsNonRoot: true, runAsUser: 999, runAsGroup: 999, fsGroup: 999, seccompProfile: { type: RuntimeDefault } }
+      containers:
+        - name: redis
+          image: {{ .Values.redis.image.repository }}:{{ .Values.redis.image.tag }}
+          args: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "128mb", "--maxmemory-policy", "allkeys-lru"]
+          ports:
+            - { name: redis, containerPort: 6379 }
+          readinessProbe:
+            tcpSocket: { port: redis }
+            periodSeconds: 10
+          resources: {{- toYaml .Values.redis.resources | nindent 12 }}
+          securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $rd }}
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+spec:
+  selector: { app.kubernetes.io/name: choregos-firecrawl-redis, app.kubernetes.io/instance: {{ $r }} }
+  ports:
+    - { name: redis, port: 6379, targetPort: redis }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $fc }}
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app.kubernetes.io/name: choregos-firecrawl, app.kubernetes.io/instance: {{ $r }} }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: choregos-firecrawl, app.kubernetes.io/instance: {{ $r }}, app.kubernetes.io/component: websearch }
+    spec:
+      automountServiceAccountToken: false
+      {{- include "choregos.imagePullSecrets" . | nindent 6 }}
+      # The image runs as root by default but writes nowhere in /app: uid 1000 is enough.
+      securityContext: { runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, fsGroup: 1000, seccompProfile: { type: RuntimeDefault } }
+      containers:
+        - name: firecrawl
+          image: {{ .Values.firecrawl.image.repository }}:{{ .Values.firecrawl.image.tag }}
+          command: ["node", "dist/src/index.js"]
+          env:
+            - { name: HOST, value: "0.0.0.0" }
+            - { name: PORT, value: "3002" }
+            - { name: ENV, value: local }
+            - { name: REDIS_URL, value: "redis://{{ $rd }}:6379" }
+            - { name: REDIS_RATE_LIMIT_URL, value: "redis://{{ $rd }}:6379" }
+            # No Supabase: see the authentication warning in values.yaml.
+            - { name: USE_DB_AUTHENTICATION, value: "false" }
+            # OUR SearXNG. Empty, Firecrawl would query DuckDuckGo itself.
+            - { name: SEARXNG_ENDPOINT, value: "http://{{ $sx }}:8080" }
+          ports:
+            - { name: http, containerPort: 3002 }
+          readinessProbe:
+            httpGet: { path: /, port: http }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /, port: http }
+            initialDelaySeconds: 60
+            periodSeconds: 30
+          resources: {{- toYaml .Values.firecrawl.resources | nindent 12 }}
+          securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: ["ALL"] } }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $fc }}
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+spec:
+  selector: { app.kubernetes.io/name: choregos-firecrawl, app.kubernetes.io/instance: {{ $r }} }
+  ports:
+    - { name: http, port: 3002, targetPort: http }
+{{- if $relay.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $rl }}
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app.kubernetes.io/name: choregos-relay, app.kubernetes.io/instance: {{ $r }} }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: choregos-relay, app.kubernetes.io/instance: {{ $r }}, app.kubernetes.io/component: websearch }
+    spec:
+      automountServiceAccountToken: false
+      {{- include "choregos.imagePullSecrets" . | nindent 6 }}
+      securityContext: { runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, seccompProfile: { type: RuntimeDefault } }
+      containers:
+        - name: relay
+          image: {{ include "choregos.image" (dict "global" .Values.global "image" $relay.image) }}
+          command: ["python", "-m", "choregos_api.relay", "serve"]
+          env:
+            - { name: CHOREGOS_RELAY_ORG, value: {{ $relay.organisation | quote }} }
+            - { name: CHOREGOS_RELAY_API_URL, value: {{ $relay.apiUrl | default (printf "http://%s-api:8000/api/v1" $r) | quote }} }
+            - { name: CHOREGOS_RELAY_LISTEN, value: "0.0.0.0:3128" }
+            - name: CHOREGOS_RELAY_API_TOKEN
+              valueFrom: { secretKeyRef: { name: {{ $relay.secretName }}, key: api-token } }
+            - name: CHOREGOS_RELAY_CLIENT_TOKEN
+              valueFrom: { secretKeyRef: { name: {{ $relay.secretName }}, key: client-token } }
+          ports:
+            - { name: proxy, containerPort: 3128 }
+          readinessProbe:
+            tcpSocket: { port: proxy }
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket: { port: proxy }
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          resources: {{- toYaml $relay.resources | nindent 12 }}
+          securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $rl }}
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+spec:
+  selector: { app.kubernetes.io/name: choregos-relay, app.kubernetes.io/instance: {{ $r }} }
+  ports:
+    - { name: proxy, port: 3128, targetPort: proxy }
+{{- end }}
