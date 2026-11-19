@@ -107,3 +107,36 @@ async def test_the_proposal_carries_the_persons_name_and_waits_in_the_console(
     assert read.status_code == 200, read.text
     assert read.json()["proposed_by"] == {"kind": "user", "id": "admin@northwind.dev", "via": "mcp"}
     assert read.json()["status"] == "pending_approval"
+
+
+async def test_the_persons_gate_offers_no_way_to_decide(
+    client: AsyncClient, project: dict[str, Any], core_ref: pathlib.Path, mutate: Any
+) -> None:
+    """The plugin's human tools only propose and list (S67-15): no tool of the gate decides, a call that tries
+    to is an unknown tool, and the proposal keeps waiting for the console."""
+    mutate("policies/core_ref.yaml", "when: \"action.risk == 'low'\"", 'when: "false"')
+    await _ontology(client, project, core_ref)
+    token = await _token(client)
+    client.cookies.clear()
+    proposed = await _rpc(
+        client,
+        token,
+        "tools/call",
+        {"name": "action_open_finding", "arguments": {"params": PARAMS, "justification": "disk full"}},
+    )
+    proposal = proposed["result"]["structuredContent"]["proposal"]
+
+    names = {t["name"] for t in (await _rpc(client, token, "tools/list"))["result"]["tools"]}
+    assert not {n for n in names if any(word in n for word in ("decide", "approve", "reject", "settle"))}
+    for tool in ("decide_proposal", "approve_proposal", "decide_action", "settle_action"):
+        call = await _rpc(
+            client,
+            token,
+            "tools/call",
+            {"name": tool, "arguments": {"proposal": proposal, "decision": "approve"}},
+        )
+        assert call["error"]["code"] == -32602, tool
+
+    await sign_in(client, "admin@northwind.dev")
+    read = await client.get(f"/api/v1/projects/{project['id']}/proposals/{proposal}")
+    assert read.json()["status"] == "pending_approval"

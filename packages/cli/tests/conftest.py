@@ -18,13 +18,21 @@ OPENAPI = Path(__file__).resolve().parents[3] / "packages" / "contracts" / "open
 
 
 @pytest.fixture(autouse=True)
-def _no_real_profile(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def _no_real_profile(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, tmp_path_factory: pytest.TempPathFactory
+) -> None:
     # `client.CONFIG_PATH` is read from the environment when the module is first imported: a suite that
     # imports it at collection (the workspace's) would freeze the developer's real profile for the ones
     # that import it later. A suite that wants a profile file points `CONFIG_PATH` at its own.
     from tranibor_cli import client
 
     monkeypatch.setattr(client, "CONFIG_PATH", tmp_path / "no-profile.json")
+    # Everything else derived from the home directory (profile, version-check cache, tokens) too (#1777).
+    home = tmp_path_factory.mktemp("home")  # not under `tmp_path`: tests list that directory
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(home / ".config"))
+    monkeypatch.setenv("XDG_CACHE_HOME", str(home / ".cache"))
+    monkeypatch.delenv("CHOREGOS_CONFIG", raising=False)
 
 
 @pytest.fixture(autouse=True)
