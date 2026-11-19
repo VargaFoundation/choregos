@@ -37,6 +37,7 @@ async def _action(
     group: str | None = None,
     role: str = "project_owner",
     age: timedelta = timedelta(0),
+    origin: str = "tool",
 ) -> str:
     """A governed action waiting for approval (the fake of this kind: a row, nothing reaches Temporal)."""
     from tranibor_api.db.models import Action, Project
@@ -51,7 +52,7 @@ async def _action(
         row = Action(
             org_id=project.org_id,
             project_id=project_id,
-            origin="tool",
+            origin=origin,
             kind="net.firewall_rule",
             title=title,
             effects=[],
@@ -182,6 +183,37 @@ async def test_a_governed_action_is_listed_to_whoever_may_approve_it_never_to_it
     assert _ids(max_, "governed_action") == {proposed_by_lea}, (
         "another owner decides Lea's; the group gates the other"
     )
+
+
+async def test_a_plugins_proposal_is_listed_like_any_governed_action_and_once(
+    client: AsyncClient, project: dict[str, Any], app: Any
+) -> None:
+    """A plugin's proposal IS a core action (origin `ontology`, S20-08): the person's list carries it under
+    the core's rule, once, whatever the plugin's own `pending` says (S67-07)."""
+    from tranibor_api import extensions
+
+    await _member(client, LEA, "project_owner", [])
+    proposal = await _action(project["id"], "Reassign order O-9", origin="ontology")
+    own = await _action(project["id"], "Reassign order O-8", origin="ontology", proposed_by=LEA)
+
+    async def list_tools(*_: Any) -> list[Any]:
+        return []
+
+    async def call_tool(*_: Any) -> tuple[int, dict[str, Any]]:
+        return 404, {}
+
+    async def pending(*_: Any) -> list[dict[str, Any]]:
+        return [{"key": proposal, "title": "x", "kind": "action proposal", "decision_path": "/x"}]
+
+    extensions.declare_human_tools("ontology", list_tools, call_tool, pending)
+    try:
+        mine = await _pending(app, LEA)
+    finally:
+        extensions.reset()
+    assert [i["id"] for i in mine] == [proposal], "listed once, and never to its own proposer"
+    assert own not in {i["id"] for i in mine}
+    assert mine[0]["kind"] == "governed_action"
+    assert mine[0]["decision"]["path"].endswith(f"/actions/{proposal}/decision")
 
 
 async def test_a_governed_action_of_a_project_the_person_cannot_read_is_not_listed(
