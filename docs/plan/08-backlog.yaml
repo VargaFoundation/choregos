@@ -5921,3 +5921,13 @@ stories:
       - "the two connector.marketdata procedures are the plugin's"
       - "test_core_names_no_business_vocabulary.py has no exemption left"
     notes: "4-6 pd, 2027-01-25 to 2027-02-12."
+  - id: S4-07
+    title: "The cost ledger separates cache writes from cache reads (ADR 0188)"
+    stream: S4
+    sprint: 67
+    priority: 7
+    size: M
+    depends_on: [S4-03]
+    acceptance:
+      - "`cost_ledger.tokens_cache_write` (migration, default 0); the gateway adapter reads `cache_creation_input_tokens`"
+      - "The cost report's rows and total carry `tokens_cache_write` next to `tokens_cached` (contract PR first)"

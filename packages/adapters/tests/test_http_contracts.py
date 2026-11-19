@@ -88,6 +88,7 @@ async def test_litellm_reads_cache_reads_where_its_spend_logs_write_them() -> No
     )
     spend = await LiteLlmGateway(LITELLM, "sk").spend("tok-1")
     assert (spend.tokens_in, spend.tokens_cached) == (51629, 51253)
+    assert spend.tokens_cache_write == 269, "Anthropic's cache creation is its own count; OpenAI has none"
 
 
 @respx.mock

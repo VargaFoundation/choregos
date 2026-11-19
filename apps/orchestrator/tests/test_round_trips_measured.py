@@ -19,6 +19,7 @@ async def _book(
     calls: int,
     tokens: dict[str, Any] | None = None,
     capabilities: frozenset[str] | None = None,
+    cache_write: int = 0,
 ) -> dict[str, Any]:
     """A run whose key made `calls` model calls at the fake gateway, then `collect_spend`."""
     from tranibor_api.db.models import Run
@@ -31,7 +32,14 @@ async def _book(
         gateway.capabilities = capabilities
     key = await gateway.mint_key({}, 5.0, 600, ["platform/standard"])
     for _ in range(calls):
-        gateway.record_usage(key.key_id, tokens_in=1_000, tokens_out=100, model="platform/standard")
+        gateway.record_usage(
+            key.key_id,
+            tokens_in=1_000,
+            tokens_out=100,
+            cached=300 if cache_write else 0,
+            cache_write=cache_write,
+            model="platform/standard",
+        )
     async with session_scope() as session:
         session.add(
             Run(
@@ -127,3 +135,23 @@ async def test_a_work_item_with_a_run_booked_before_the_count_stays_unknown(setu
     totals = await _item_totals(setup)
     assert totals["runs"] == 2
     assert "requests" not in totals, "two of its calls are not all of them"
+
+
+async def test_a_run_books_its_cache_writes_apart_from_its_cache_reads(setup: Fixture) -> None:
+    """S4-07: the segment, the run's tokens, the work item's totals and the ledger line each carry the
+    cache writes next to the reads; without the field they would be lumped or dropped."""
+    from sqlalchemy import select
+    from tranibor_api.db.models import CostLedger
+    from tranibor_api.db.session import session_scope
+
+    booked = await _book(setup, "run-cache", calls=2, cache_write=200)
+    assert (booked["tokens_cached"], booked["tokens_cache_write"]) == (600, 400)
+    tokens = await _tokens("run-cache")
+    assert (tokens["tokens_cached"], tokens["tokens_cache_write"]) == (600, 400)
+    totals = await _item_totals(setup)
+    assert (totals["tokens_cached"], totals["tokens_cache_write"]) == (600, 400)
+    async with session_scope() as session:
+        line = (
+            await session.execute(select(CostLedger).where(CostLedger.run_id == "run-cache"))
+        ).scalar_one()
+    assert (line.tokens_cached, line.tokens_cache_write) == (600, 400)
