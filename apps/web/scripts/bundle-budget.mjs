@@ -72,7 +72,10 @@ const CHUNKS = join(process.cwd(), ".next", "static", "chunks");
 // the stated result, the record once settled), about 20 kB on top of S66-23's 2533 kB; no new dependency.
 // 2026-11-18 (S72-05): 2575 -> 2600 kB. The knowledge source of kind `mcp` (its option, connector list, URI prefix
 // and media type fields) tips main's 2575 kB line by a fraction of a kilobyte (CI of #1902); no new dependency.
-const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 2600);
+// 2026-11-18 (S67-27): 2600 -> 2625 kB. The live board (its stream subscription, the cards' running, waiting and failed
+// states with the reason of a failure, the lane counts and the ticker) adds about 18 kB to main's 2576 kB; no new
+// dependency.
+const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 2625);
 const CHUNK_MAX_KB = Number(process.env.BUNDLE_CHUNK_MAX_KB ?? 600);
 
 function* files(dir) {

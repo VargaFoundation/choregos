@@ -12,6 +12,9 @@ vi.mock("next/navigation", () => ({
   usePathname: () => "/p/billing-api/board",
   useSearchParams: () => new URLSearchParams(),
 }));
+vi.mock("@/lib/session", () => ({
+  useSession: () => ({ org: "acme", orgs: [{ slug: "acme", currency: "EUR" }], me: null }),
+}));
 vi.mock("@/lib/api", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/api")>();
   return {
@@ -22,6 +25,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
       workflows: vi.fn().mockResolvedValue([{ name: "default-simple", version: 1, is_default: true }]),
       workflowNamed: vi.fn().mockResolvedValue({ name: "default-simple", version: 1, yaml: "", json: { metadata: {} } }),
       validateWorkflow: vi.fn().mockResolvedValue({ valid: true, graph: { nodes: [], edges: [] } }),
+      costs: vi.fn().mockResolvedValue({ rows: [], total: { cost_usd: 0, cost_eur: 0 } }),
       connectors: vi.fn(),
       createWorkItem: vi.fn(),
     },

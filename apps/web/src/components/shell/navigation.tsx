@@ -177,6 +177,7 @@ export function projectGroups(slug: string, features: ProjectFeatures = {}): Nav
         section("", "Overview", LayoutDashboard),
         // A ticket and its runs belong to the board (S23-12).
         section("/board", "Board", SquareKanban, ["/items", "/runs"]),
+        // The same work, as it happens (S67-27).
         { ...section("/inbox", "Inbox", Inbox), counts: true },
         // The organisation's Activity narrowed to the project (S64-06): one screen, not a route per
         // project, which cost the bundle a second copy of the screen's chunks.
