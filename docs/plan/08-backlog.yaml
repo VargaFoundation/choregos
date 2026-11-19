@@ -5806,6 +5806,45 @@ stories:
       - "a workflow naming a gate no installed extension provides is refused at publication, naming it"
       - "nothing is renamed; make contracts-check is green"
     notes: "10-16 pd, no break. Larger than one PR: split as S83-02a (guard), b (gate seam), c (effect registry), d (open lists) when started, each with its row. Start 2026-11-23, merged by 2026-12-18."
+  - id: S83-02a
+    title: "test(contracts,api): the vocabulary guard of the contracts and the five surfaces, a counted ratchet; the plugins-and-trades page held (ADR 0181 C0)"
+    stream: S83
+    sprint: 1
+    priority: 2
+    size: S
+    depends_on: [S83-01]
+    acceptance:
+      - "tests/architecture/test_contracts_speak_no_trade.py reads the names (not the prose) of packages/contracts and of the MCP, A2A, trigger and seam modules, counts the software-delivery terms of ADR 0181's inventory per file, and fails when a count grows or drops without the allowlist following"
+      - "tests/docs/test_plugins_and_trades_page.py fails when docs/site/build/plugins-and-trades.md is deleted, unlinked from the pages that introduce plugins, or names a seam the code lacks"
+  - id: S83-02b
+    title: "feat(core,orchestrator): the gate seam, context providers filling GateContext.facts, and a gate whose plugin is not installed refused at publication (ADR 0181 C0)"
+    stream: S83
+    sprint: 1
+    priority: 2
+    size: M
+    depends_on: [S83-02a]
+    acceptance:
+      - "an extension registers a gate with gate() and a context provider; the gate activity fills GateContext's facts from the provider, and a fixture extension's gate passes and fails on its facts"
+      - "a workflow naming a gate no installed extension provides is refused at publication, naming the gate and, when known, the plugin"
+  - id: S83-02c
+    title: "feat(core,orchestrator): does: resolves through a step-effect registry; open_pr and merge_pr registered by the core under the same names (ADR 0181 C0)"
+    stream: S83
+    sprint: 1
+    priority: 2
+    size: M
+    depends_on: [S83-02a]
+    acceptance:
+      - "does: resolves through a step-effect registry; open_pr and merge_pr are registered under the same names and every stored workflow fixture validates unchanged"
+  - id: S83-02d
+    title: "contract(contracts): open lists, inbound event types, finding types, memory kinds, connector kinds and stage roles declarable by an extension (ADR 0181 C0)"
+    stream: S83
+    sprint: 1
+    priority: 2
+    size: M
+    depends_on: [S83-02a]
+    acceptance:
+      - "inbound event types, finding types, memory kinds, connector kinds and stage roles are open lists an extension extends; every current value stays valid; StageRole and playbooks.KNOWN_ROLES agree"
+      - "nothing is renamed; make contracts-check is green"
   - id: S83-03
     title: "contract(contracts,api,core): C1, neutral names beside the old ones, one window list, and the test that fails when a removal release is reached (ADR 0181)"
     stream: S83
@@ -5882,6 +5921,16 @@ stories:
       - "the two connector.marketdata procedures are the plugin's"
       - "test_core_names_no_business_vocabulary.py has no exemption left"
     notes: "4-6 pd, 2027-01-25 to 2027-02-12."
+  - id: S4-07
+    title: "The cost ledger separates cache writes from cache reads (ADR 0188)"
+    stream: S4
+    sprint: 67
+    priority: 7
+    size: M
+    depends_on: [S4-03]
+    acceptance:
+      - "`cost_ledger.tokens_cache_write` (migration, default 0); the gateway adapter reads `cache_creation_input_tokens`"
+      - "The cost report's rows and total carry `tokens_cache_write` next to `tokens_cached` (contract PR first)"
   - id: S4-09
     title: "Non-interactive model work through a batch API at -50 % — distillation map step first, evals after"
     stream: S4
