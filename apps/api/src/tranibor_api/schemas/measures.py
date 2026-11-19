@@ -6,7 +6,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from .base import Dto
 
@@ -59,8 +59,18 @@ class MemoryAbGroup(Dto):
 
     projects: list[str] = Field(default_factory=list)
     tickets: int = 0
+    #: The share of the work items accepted without a rework loop (ADR 0181 C1).
+    first_pass_acceptance_rate: float | None = None
+    #: Its former name, served beside it until the release `tranibor_contracts.window` names.
     first_pass_merge_rate: float | None = None
     cost_per_ticket_usd: float | None = None
+
+    @model_validator(mode="after")
+    def _both_names(self) -> MemoryAbGroup:
+        if self.first_pass_acceptance_rate is None:
+            self.first_pass_acceptance_rate = self.first_pass_merge_rate
+        self.first_pass_merge_rate = self.first_pass_acceptance_rate
+        return self
 
 
 class MemoryAbReport(Dto):
