@@ -140,11 +140,43 @@ class ConnectorKind(StrEnum):
 
 
 class Role(StrEnum):
+    """A person's role in an organisation or a project.
+
+    `CONTRIBUTOR` and `APPROVER` are the neutral names of ADR 0181 (round C1). The two members before
+    them are their former names, kept for one window: they are on `tranibor_contracts.window.WINDOW`
+    with the release that removes them. Compare roles through `neutral`, which reads both spellings
+    as one role, and write a row with `stored`, the spelling every reader of the previous release knows
+    (ADR 0098 §4: readers first, writers one release later).
+    """
+
     ORG_ADMIN = "org_admin"
     PROJECT_OWNER = "project_owner"
     DEVELOPER = "developer"
     RELEASE_CAPTAIN = "release_captain"
     VIEWER = "viewer"
+    #: Does the project's work and decides its work items.
+    CONTRIBUTOR = "contributor"
+    #: A contributor who also approves what leaves the project for production.
+    APPROVER = "approver"
+
+    @property
+    def neutral(self) -> Role:
+        """This role under its neutral name: a former name gives its successor, any other itself."""
+        from .window import ROLE_SUCCESSORS
+
+        return ROLE_SUCCESSORS.get(self, self)
+
+    @property
+    def stored(self) -> Role:
+        """The spelling a row is written with during the window: the former name of a renamed role."""
+        from .window import ROLE_STORED_AS
+
+        return ROLE_STORED_AS.get(self, self)
+
+    @classmethod
+    def current(cls) -> tuple[Role, ...]:
+        """The roles under their neutral names, in the order the former ones were declared."""
+        return (cls.ORG_ADMIN, cls.PROJECT_OWNER, cls.CONTRIBUTOR, cls.APPROVER, cls.VIEWER)
 
 
 class HumanRequestKind(StrEnum):

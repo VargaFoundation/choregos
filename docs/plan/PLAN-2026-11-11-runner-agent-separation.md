@@ -125,6 +125,62 @@ is amended before wave 3; the boundary of waves 2 and 4 does not depend on it.
   shape, passes its seven checks for the three harnesses, or the STATUS row names each harness and
   check that fails and why.
 
+#### Measured (S65-04a, 2026-11-19)
+
+`tests/live/test_agent_shape_live.py` (marker `live`) makes the pod with Docker: the runner's container
+on an `--internal` network whose only way out is an egress proxy container standing in for the pod's
+(`agent_shape/egress_proxy.py`, it logs every tunnel); the agent's container in the runner's network
+namespace, uid 1001 group 1000, read-only root, its own `/tmp`, no capability, no secret, `choregos-runner
+launcher` as its command; `/workspace` and `/exchange` shared, empty, setgid group 1000, as the
+SandboxTemplate gives them (S65-04i). The step runs through `Runner.execute` with
+`agent_isolation=container` (`agent_shape/runner_side.py`): fix `add()` in a small Python repository, read a
+code word from an MCP server that wants a bearer header, write it to a file; the project's checks are
+`make test`, a dependency install through the proxy variables (`pip install six`, `npm pack is-number`)
+and a probe that looks, by SHA-256 digest, for the gateway key, the egress token, the MCP header and the
+run token in every `/proc/*/environ` and `cmdline` it can read and every small file of `/workspace`,
+`/exchange` and `/tmp`. Model: `choregos-claude-haiku` on the dev LiteLLM, key `tranibor-live-tests`.
+Image: 0.27.15 with the two image fixes below applied on top, the checkout's `packages/` mounted over
+the image's; Linux 6.18 (WSL2), Landlock ABI 7, `confinement: best_effort`.
+
+| | claude-agent-acp 0.85.1 | opencode 1.18.31 | gemini-cli 0.60.0 |
+|:--|:--|:--|:--|
+| Started by the launcher, in the agent's container | yes | yes, after #1977 (exited before `initialize`, then `session/new` refused) | yes |
+| What it asked of 4001 | `POST /v1/messages?beta` ×9, `POST /v1/messages/count_tokens?beta` ×20 (both 404 before #1964) | `POST /chat/completions` ×9 | `POST /v1beta/models/<m>:streamGenerateContent?alt=sse` ×9-26 |
+| Headers it sent there (names) | `x-api-key`, `authorization`, `anthropic-version`, `anthropic-beta`, `anthropic-dangerous-direct-browser-access`, `x-app`, `x-claude-code-session-id`, `x-stainless-*` | `authorization`, `x-session-affinity`, `x-session-id` | `x-goog-api-key`, `x-goog-api-client`, `x-gemini-api-privileged-user-id` |
+| Key in its environment | the loopback key only (`ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`) | the loopback key only (`OPENAI_API_KEY`) | the loopback key only (`GEMINI_API_KEY`, `OPENAI_API_KEY`) |
+| Probe: the four credentials in its container | none, 8 processes all uid 1001, no runner process visible | none, 7 processes | none, 8 processes |
+| MCP through 4002, header added by the runner | yes: `server/discover`, `initialize`, `tools/list`, `tools/call` | yes | yes after #1991 (no request at all before) |
+| Network: direct / through 4003 | direct refused (no route, no DNS); `https://pypi.org` 200 in 0.15 s | same | same |
+| What it tried to reach on its own | `api.anthropic.com` ×3, refused (#1987) | nothing | `play.googleapis.com` ×13-41, refused (#1987) |
+| Dependency install through 4003 | pip 0.99 s, npm 0.77 s, no failure | pip 1.0 s, npm 0.86 s | pip 1.05 s, npm 0.95 s |
+| The project's checks, in the agent's container | 3 of 3 pass | 3 of 3 pass | 3 of 3 pass (the file was fixed) |
+| Tool calls (`max_turns` 25) | 9 | 9 | 2-3 |
+| Outcome | `done`, 20 s, 0.004 USD at the gateway | `done`, 25 s | `invalid_result`: the gateway refused the turns (#1990) |
+| Runner container: peak memory, CPU | 80 MiB, 2.1 s | 82 MiB, 2.3 s | 77-89 MiB, 2.7-4.1 s |
+| Agent container: peak memory, CPU | 298 MiB, 7.0 s | 693 MiB, 19.0 s | 394-406 MiB, 7-8 s |
+
+What broke and was fixed: #1964 (the model listener forwarded `messages` to the gateway's root, where
+LiteLLM serves it only under `/v1`, and did not serve `count_tokens`; the image's `/workspace` held the
+build's caches, so a Docker run's fresh tree was taken for a replay's and nothing was checked out),
+#1977 (opencode wrote into its read-only config root at start; its ACP layer connects to its own server
+on a random loopback port, which the port rule refused), #1991 (gemini-cli read no MCP server from an
+untrusted workspace). Findings: #1986 (a `session/new` error escapes `Runner.execute`; a dead agent is
+seen only at the 60 s `initialize` timeout), #1987 (harness telemetry through 4003), #1990 (gemini-cli on
+a Claude model through LiteLLM's Gemini adapter).
+Since then `gemini-cli` is declared with Gemini models only (#1990: LiteLLM's adapter names every tool call
+`call_<function name>` and reads no id from the body, so no listener-side id can help).
+An agent that fails before its first prompt now ends the run with a failed result naming how
+(`agent_exited`, `agent_session_refused`, `agent_unreachable`), when it fails rather than at the `initialize` timeout (#1986).
+
+Not measured: the conformance suite file itself in this shape (its seven checks are read from the
+step's journal instead: `initialize`, MCP, the trivial prompt, the result, `max_turns` and the cost at
+the gateway; **a denied write was not attempted**, so `permission_denied` is not measured); the checks of
+two real repositories under the port rule (the checks run unconfined in the agent's container, S65-04g);
+a kubelet, the agent-sandbox operator, gVisor; an image built by the CI with the fixes (they were
+applied on top of 0.27.15). A last run of the three, meant to give one set of numbers from one image,
+was cut short by the dev gateway (502 during a LiteLLM rollout, then `max_parallel_requests` 4 held at
+0): the numbers above come from the last good run of each harness.
+
 ### S65-04b · fix(runner): the runner follows no link in the tree
 
 - One helper, the discipline of `hosted_workspace.py` (a descriptor per directory, `O_NOFOLLOW`),

@@ -172,12 +172,18 @@ def test_the_mapping_is_the_offline_plugins() -> None:
     locked = read_lock(pathlib.Path(__file__).resolve().parents[3] / "plugins" / "offline")
     assert locked is not None
     # The migration names the plugins the core's own agents moved to; a plugin locked later (`requests`,
-    # #1091) held no agent of the core's, so the migration has nothing to say about it. A plugin the lock
-    # moved on since (netops 1.1.0, S57-15b) keeps the migration's pin only while its version is the same.
+    # #1091; `investment-research`, S83-07) held none of the agents it moved, so the migration has
+    # nothing to say about it. A plugin the lock moved on since (netops 1.1.0, S57-15b) keeps the
+    # migration's pin only while its version is the same.
     for n, (v, d, *_) in module.PLUGINS.items():
         assert n in locked, n
         if locked[n][0] == v:
             assert locked[n] == (v, d), n
         else:
             assert semver_key(locked[n][0]) > semver_key(v), (n, locked[n], v)
-    assert set(locked) - set(module.PLUGINS) <= {"requests"}
+    later = set(locked) - set(module.PLUGINS)
+    assert later <= {"requests", "investment-research"}, later
+    moved = {slug for _, _, agents, _, _ in module.PLUGINS.values() for slug in agents}
+    for n in later:
+        held = {e.slug for e in shipped.entries if e.plugin == n}
+        assert not held & moved, (n, held & moved)

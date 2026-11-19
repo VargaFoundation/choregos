@@ -6,8 +6,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import ConfigDict, Field
-from tranibor_contracts import StageResult
+from pydantic import ConfigDict, Field, model_validator
+from tranibor_contracts import CHANGE_REQUEST, StageResult
 
 from .base import Dto, PageMeta
 
@@ -145,6 +145,13 @@ class WorkflowFailure(Dto):
     at: datetime | None = None
 
 
+class LinkDto(Dto):
+    """Where some work can be seen, by relation (ADR 0181 C1)."""
+
+    rel: str = Field(pattern=r"^[a-z][a-z0-9_]{0,31}$")
+    url: str
+
+
 class WorkItemDto(Dto):
     id: str
     fields: dict[str, Any] = Field(default_factory=dict)
@@ -172,11 +179,17 @@ class WorkItemDto(Dto):
     paused: bool = False
     current_run: RunSummary | None = None
     pending_request: HumanRequestDto | None = None
+    #: Where its work can be seen, by relation: `change_request` for the change it proposes (ADR 0181 C1).
+    links: list[LinkDto] = Field(default_factory=list)
+    #: The workspace it works on (ADR 0124, ADR 0181 C1): the repository it is fixed to, else
+    #: `fields.repository`, else the project's primary; `None` for a project without one.
+    workspace: str | None = None
+    #: Whether a step touched its workspace, so `fields.repository` may no longer name another one.
+    workspace_fixed: bool = False
+    #: The former names of the `change_request` link, `workspace` and `workspace_fixed`, served beside
+    #: them until the release `tranibor_contracts.window` names (ADR 0181 C1).
     pr_url: str | None = None
-    #: The repository it works on (ADR 0124): the one it is fixed to, else `fields.repository`, else the
-    #: project's primary; `None` for a project without a repository.
     repository: str | None = None
-    #: Whether a step touched its repository, so `fields.repository` may no longer name another one.
     repository_fixed: bool = False
     totals: Totals = Field(default_factory=Totals)
     #: The budget given at launch (or by the workflow), if any; the policy's applies otherwise.
@@ -193,6 +206,19 @@ class WorkItemDto(Dto):
     redacted: bool = False
     created_at: datetime
     closed_at: datetime | None = None
+
+    @model_validator(mode="after")
+    def _both_names(self) -> WorkItemDto:
+        """A response carries the neutral names and their former ones, whichever was given (ADR 0181 C1)."""
+        change = next((link.url for link in self.links if link.rel == CHANGE_REQUEST), None)
+        if change is None and self.pr_url:
+            self.links = [*self.links, LinkDto(rel=CHANGE_REQUEST, url=self.pr_url)]
+        elif self.pr_url is None:
+            self.pr_url = change
+        self.workspace = self.workspace or self.repository
+        self.repository = self.repository or self.workspace
+        self.workspace_fixed = self.repository_fixed = self.workspace_fixed or self.repository_fixed
+        return self
 
 
 class WorkItemPage(Dto):

@@ -530,11 +530,11 @@ def item_people(f: Facts) -> list[ReadinessItem]:
             _item(
                 "people-release-captain",
                 "people",
-                "A release captain",
+                "An approver",
                 "done" if f.has_release_captain else "todo",
-                "a release captain is a member."
+                "an approver is a member."
                 if f.has_release_captain
-                else "the workflows run a release train and nobody holds the release_captain role.",
+                else "the workflows run a release train and nobody holds the approver role.",
                 ReadinessFix(href=members, by="project_owner"),
             )
         )
@@ -1160,7 +1160,8 @@ async def load_facts(session: AsyncSession, project: Project, org_slug: str) -> 
         ticket_budget_set=bool(policy.budgets.ticket_usd),
         daily_budget_set=policy.budgets.daily_project_usd is not None,
         has_owner="project_owner" in memberships,
-        has_release_captain="release_captain" in memberships,
+        # Either spelling of the role (ADR 0181 C1).
+        has_release_captain=bool({"approver", "release_captain"} & set(memberships)),
         unknown_groups=tuple(unknown_groups),
         has_release_train=await declares_a_release_train(session, project.id),
         announces=bool(policy.findings.notify_severities) or policy.memory.enabled,

@@ -523,9 +523,10 @@ jobs:
         env:
           RUNNER_IMAGE: ${{ github.ref == 'refs/heads/main' && format('ghcr.io/graalsystems/tranibor-runner@{0}', steps.build.outputs.digest) || format('ghcr.io/graalsystems/tranibor-runner:{0}', github.sha) }}
         run: |
+          # Run by the id of the image just built: nothing pulled, nothing named that could move.
           docker buildx build --builder default --load -f plugins/investment-research/Dockerfile \
-            --build-arg "RUNNER_IMAGE=${RUNNER_IMAGE}" -t investment-research-job:ci .
-          docker run --rm --entrypoint choregos-quant investment-research-job:ci --help >/dev/null
+            --build-arg "RUNNER_IMAGE=${RUNNER_IMAGE}" --iidfile /tmp/investment-research.iid .
+          docker run --rm --entrypoint choregos-quant "$(cat /tmp/investment-research.iid)" --help >/dev/null
       - uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1
         if: github.ref == 'refs/heads/main'
       - name: keyless signature, under both names

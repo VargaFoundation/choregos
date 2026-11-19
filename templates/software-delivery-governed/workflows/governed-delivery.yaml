@@ -22,18 +22,18 @@ initial: inbox
 actors:
   triager: { type: agent, role: triage, agent: triager, model: "profile:cheap" }
   researcher: { type: agent, role: research, agent: researcher, model: "profile:standard" }
-  architect: { type: agent, role: architect, agent: architect, model: "profile:strong" }
+  architect: { type: agent, role: architect, agent: architect, model: "profile:strong", needs: [scm] }
   spec_writer: { type: agent, role: refine, agent: spec-writer, model: "profile:standard" }
   planner: { type: agent, role: plan, agent: planner, model: "profile:standard" }
-  developer: { type: agent, role: implement, agent: developer, model: "profile:standard" }
+  developer: { type: agent, role: implement, agent: developer, model: "profile:standard", needs: [scm] }
   qa: { type: agent, role: verify, agent: qa, model: "profile:standard" }
-  security_reviewer: { type: agent, role: review, agent: security-reviewer, model: "profile:standard", fresh_context: true }
-  secops: { type: agent, role: review, agent: secops, model: "profile:standard", fresh_context: true }
-  compliance: { type: agent, role: review, agent: compliance, model: "profile:standard", fresh_context: true }
-  responder: { type: agent, role: address_review, agent: review-responder, model: "profile:standard" }
-  docs_writer: { type: agent, role: implement, agent: docs-writer, model: "profile:standard" }
-  ci_fixer: { type: agent, role: fix_ci, agent: ci-fixer, model: "profile:standard" }
-  devops: { type: agent, role: verify_prod, agent: devops, model: "profile:standard" }
+  security_reviewer: { type: agent, role: review, agent: security-reviewer, model: "profile:standard", fresh_context: true, needs: [scm] }
+  secops: { type: agent, role: review, agent: secops, model: "profile:standard", fresh_context: true, needs: [scm] }
+  compliance: { type: agent, role: review, agent: compliance, model: "profile:standard", fresh_context: true, needs: [scm] }
+  responder: { type: agent, role: address_review, agent: review-responder, model: "profile:standard", needs: [scm] }
+  docs_writer: { type: agent, role: implement, agent: docs-writer, model: "profile:standard", needs: [scm] }
+  ci_fixer: { type: agent, role: fix_ci, agent: ci-fixer, model: "profile:standard", needs: [scm] }
+  devops: { type: agent, role: verify_prod, agent: devops, model: "profile:standard", needs: [cd] }
   platform: { type: system }
   architects: { type: human, group: architects, sla_hours: 48 }
   compliance_officers: { type: human, group: compliance-officers, sla_hours: 48 }
@@ -149,6 +149,7 @@ transitions:
     from: addressing_review
     to: implemented
     by: responder
+    repairs: changes_requested
     inputs: [security_review_markdown, secops_report, compliance_review, human_feedback]
     outputs: [review_markdown]
     gates: [scope_respected, no_secrets]
@@ -195,6 +196,7 @@ transitions:
     from: fixing_ci
     to: awaiting_pr_approval
     by: ci_fixer
+    repairs: ci_failed
     gates: [scope_respected, no_secrets]
     on_fail: { to: fixing_ci, max_attempts: 2, escalate_to: needs_human }
   - id: t-stage

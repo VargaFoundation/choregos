@@ -22,8 +22,8 @@ async def _publish(client: AsyncClient, project_id: str, agent: str) -> tuple[in
     from tranibor_core.dsl import template_yaml
 
     yaml = template_yaml("default-simple").replace(
-        'dev: { type: agent, role: implement, model: "profile:by_size" }',
-        f'dev: {{ type: agent, role: implement, model: "profile:by_size", agent: {agent} }}',
+        'dev: { type: agent, role: implement, model: "profile:by_size", needs: [scm] }',
+        f'dev: {{ type: agent, role: implement, model: "profile:by_size", needs: [scm], agent: {agent} }}',
     )
     assert f"agent: {agent}" in yaml
     response = await client.put(

@@ -554,6 +554,12 @@ A project that names its own `agent` or `models` keeps them. When a runner pod d
 report — an image it cannot pull, a backend it cannot reach — the run says so: the runner's exit
 code and what it means (`30`: agent backend unreachable, `50`: a skill missing or with a wrong
 digest, `60`: an input that does not match its digest, `80`: the context reduction the policy requires did not start, `90`: confinement required and the kernel cannot confine the agent, ADR 0094, `120`: the fakes are on in staging or prod…), or why the container never started.
+An agent that fails before its first prompt is reported by the runner itself, with exit `30` and a
+failed result whose reason says how: `agent_unreachable` (it could not be started, or did not answer
+`initialize`), `agent_exited` (its process ended first: said when it ends, with its exit code, not after
+the 60 s `initialize` timeout) or `agent_session_refused` (it answered `session/new` with an error); the
+run's journal holds a `run.failed` event with the phase (`start`, `initialize`, `session`), the reason and
+the agent's last error lines (#1986).
 
 ## Theme
 
@@ -1671,16 +1677,22 @@ Roles come from **groups**, and a group names its organisation:
 |---|---|
 | `choregos:<org>:org-admins` | `org_admin` on `<org>` |
 | `choregos:<org>:product-owners` | `project_owner` |
-| `choregos:<org>:release-captains` | `release_captain` |
-| `choregos:<org>:developers` | `developer` |
+| `choregos:<org>:approvers` (formerly `release-captains`) | `approver` (formerly `release_captain`) |
+| `choregos:<org>:contributors` (formerly `developers`) | `contributor` (formerly `developer`) |
 | `choregos:<org>:viewers` | `viewer` |
+
+`approvers` and `contributors` are the neutral names of `release-captains` and `developers`
+([ADR 0181](adr/0181-the-contracts-speak-no-trade.md) round C1). Until 0.30.0 both spellings give
+the same role, and the API may answer either `approver` or `release_captain`, `contributor` or
+`developer`; rename the groups at the identity provider before upgrading to 0.30.0, which reads only
+the new ones.
 
 The same claim carries an organisation's **human groups** (ADR 0052): a workflow's
 `group: architects` is matched by a member carrying `architects` or `choregos:<org>:architects`
 (the one mapper prefix `choregos:<org>:` serves roles and human groups). A group namespaced for
 another organisation never counts. The groups are stored as sent.
 
-Unprefixed groups (`developers`, `org-admins`) apply only when `global.oidc.defaultOrg`
+Unprefixed groups (`contributors`, `org-admins`) apply only when `global.oidc.defaultOrg`
 names the organisation they belong to; otherwise they are ignored. Before 2026-09-24 a
 group granted its role on **every** organisation of the instance.
 
@@ -2210,6 +2222,18 @@ the `ontology:` extension of the `joiners-leavers` template are gone. It was off
 | A plugin of your own that declared a template installer, tools for people or effects | The extension seam it used stays: nothing of it was specific to the ontology. | Nothing. |
 
 The downgrade of `b4d6f8a0c2e5` does not create the tables again.
+
+**Neutral names beside the former ones** ([ADR 0181](adr/0181-the-contracts-speak-no-trade.md), round C1).
+Every former name is listed, with the release that removes it, in `tranibor_contracts.window`: those of C1
+leave in **0.30.0** (not before 2026-12-07).
+
+| What | What happens | What to do |
+| :-- | :-- | :-- |
+| The roles `developer`, `release_captain` | `contributor` and `approver` are their neutral names: a request may send either, both hold the same permissions, and a membership keeps the spelling its row holds. Writers switch to the new spelling in 0.29.0; 0.30.0 rewrites the remaining rows. | A script or a values file that names a role: switch it before 0.30.0. |
+| The role groups `developers`, `release-captains` | `contributors` and `approvers` give the same roles. | Rename the groups at the identity provider before 0.30.0. |
+| `WorkItem.pr_url`, `repository`, `repository_fixed`; `ProcessStep.writes_branch`; `WorkflowCatalogueEntry.needs_repository`; `ArtifactFlow.in_pull_request`; `first_pass_merge_rate` | Served beside `links` (`rel: change_request`), `workspace`, `workspace_fixed`, `writes_workspace`, `needs_workspace`, `in_change_request`, `first_pass_acceptance_rate`. | A client of the REST API reads the new names before 0.30.0. |
+| A step result's `artifacts.pr_url` | Read beside `artifacts.links`. | Nothing. |
+| The OpenAPI title | "Tranibor API". | Nothing. |
 
 ## Upgrading past 0.27.13: the egress gate
 

@@ -9,7 +9,7 @@ from typing import Annotated, Any, Literal
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .enums import ActorType, StateKind, StateOutcome
-from .open_lists import OpenList
+from .open_lists import CONNECTOR_KIND_PATTERN, OpenList
 
 Identifier = Annotated[str, Field(pattern=r"^[a-z0-9][a-z0-9_-]{0,62}$")]
 Slug = Annotated[str, Field(pattern=r"^[a-z0-9][a-z0-9-]{0,62}$")]
@@ -73,6 +73,19 @@ class AgentActor(Strict):
     #: A registry agent (ADR 0033): `slug` or `slug@version`; its instructions take precedence over
     #: the playbook.
     agent: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9-]{1,62}(@[1-9][0-9]*)?$")
+    #: The connector kinds the agent works through, which the project must connect (ADR 0181 C1): the
+    #: workflow says it, the platform no longer guesses it from the role's name. Absent from the stored
+    #: spec when not written, so a workflow published before keeps its digest.
+    needs: list[Annotated[str, Field(pattern=CONNECTOR_KIND_PATTERN)]] | None = Field(
+        default=None, max_length=10
+    )
+
+    @field_validator("needs")
+    @classmethod
+    def _needs_once(cls, value: list[str] | None) -> list[str] | None:
+        if value is not None and len(set(value)) != len(value):
+            raise ValueError("`needs` names a connector kind more than once")
+        return value
 
     @property
     def playbook_name(self) -> str:
@@ -307,7 +320,11 @@ class ActionEffectSpec(Strict):
 
 
 class ActionApprover(Strict):
-    role: Literal["developer", "release_captain", "project_owner", "org_admin"] = "project_owner"
+    #: The least rank an approver holds. `developer` and `release_captain` are the former names of
+    #: `contributor` and `approver`, read until the release `window.WINDOW` names (ADR 0181 C1).
+    role: Literal["contributor", "approver", "project_owner", "org_admin", "developer", "release_captain"] = (
+        "project_owner"
+    )
     #: An identity-provider group the approver must ALSO belong to (ADR 0052): a rank says how
     #: much someone may decide, a group says who is competent to — `netops-approvers` for a firewall.
     group: str | None = Field(default=None, min_length=1, max_length=200)
@@ -452,6 +469,10 @@ class Transition(Strict):
     #: A step effect by name (ADR 0181): the core's `open_pr` and `merge_pr`, or one an extension
     #: declared (`STEP_EFFECTS.declare`); any other is refused.
     does: Annotated[str, AfterValidator(STEP_EFFECTS.validate)] | None = None
+    #: The outcome this transition repairs (ADR 0181 C1): taken from its state when the work item meets
+    #: that outcome (`ci_failed`, `changes_requested`, or one an event names), never on the normal
+    #: path. It replaces the platform's guess from the actor's role.
+    repairs: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9_]{0,62}$")
     #: How the pull request is opened, on a transition that opens it (S51-11): `{draft: true}`.
     pull_request: PullRequestSpec | None = None
     #: A system transition can open one child work item per element of a list and wait for them

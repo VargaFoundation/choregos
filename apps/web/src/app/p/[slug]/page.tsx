@@ -14,6 +14,7 @@ import type { DoraMetric } from "@/lib/types";
 import { GettingStarted } from "@/components/getting-started";
 import { Card, CostChip, Empty, ErrorNote, ReadState, Label, Stat, StateBadge } from "@/components/ui";
 import { Activity, GitMerge, Timer, TrainFront, Wallet } from "lucide-react";
+import { acceptanceRate } from "@/lib/neutral-names";
 
 export default function ProjectOverview({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
@@ -75,7 +76,7 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
           <Stat value={actifs} label="Active tickets" tone={actifs > 0 ? "accent" : "ink"} icon={Activity} hue={1} />
         </div>
         <div className="border-l border-line p-6">
-          <Stat value={percent(stats?.first_pass_merge_rate)} label="PRs merged on first pass" icon={GitMerge} hue={6} />
+          <Stat value={percent(acceptanceRate(stats))} label="PRs merged on first pass" icon={GitMerge} hue={6} />
         </div>
         <div className="border-t border-line p-6 md:border-t-0 md:border-l">
           <Stat

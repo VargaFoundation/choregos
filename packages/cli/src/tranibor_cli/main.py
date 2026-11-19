@@ -32,6 +32,7 @@ from .client import ApiError, Client, NoOrganisationError, Profile
 from .decide import decide_app
 from .device_login import DeviceSignInError
 from .knowledge import knowledge_app
+from .neutral_names import change_request_of, neutral_role
 from .outposts import outposts_app
 from .plugins import plugin_app
 from .self_update import self_app
@@ -378,7 +379,8 @@ def whoami() -> None:
     me = client().get("/me")
     table = Table("organisation", "project", "role", title=me["email"])
     for membership in me["memberships"]:
-        table.add_row(membership["org"], membership.get("project_slug") or "—", membership["role"])
+        role = neutral_role(membership["role"])
+        table.add_row(membership["org"], membership.get("project_slug") or "—", role)
     console.print(table)
 
 
@@ -688,7 +690,7 @@ def items_list(project: str, state: Annotated[str | None, typer.Option()] = None
             item.get("state_display") or item["state"],
             item.get("size") or "—",
             pricing.text(money.amount(totals)),
-            item.get("pr_url") or "—",
+            change_request_of(item) or "—",
         )
     console.print(table)
 

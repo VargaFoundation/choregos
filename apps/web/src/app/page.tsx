@@ -12,6 +12,7 @@ import { OrgPageHeader } from "@/components/org-page-header";
 import { Activity, FolderKanban, Wallet } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { HUE_CLASSES, hueOf } from "@/lib/workflow-hue";
+import { acceptanceRate } from "@/lib/neutral-names";
 
 export default function ProjectsPage() {
   const { org } = useSession();
@@ -93,7 +94,7 @@ export default function ProjectsPage() {
                   value={eur(project.stats?.cost_month_eur)}
                   label={project.stats?.budget_month_eur ? `of ${eur(project.stats.budget_month_eur)}` : "Cost this month"}
                 />
-                <Stat value={percent(project.stats?.first_pass_merge_rate)} label="PRs on first pass" />
+                <Stat value={percent(acceptanceRate(project.stats))} label="PRs on first pass" />
                 {hasReleaseTrain(project) && (
                   <Stat value={project.stats?.trains_pending ?? 0} label="Trains in flight" />
                 )}

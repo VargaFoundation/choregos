@@ -376,7 +376,7 @@ def create_app() -> FastAPI:
     # (S63-17): played by the `SuitePlayer` a deployment (or a test) registers, none without one.
     set_conversation_source(installed_suite_source)
     app = FastAPI(
-        title="Choregos API",
+        title="Tranibor API",
         # The package's version, not a constant: the API announced itself as `1.0.0` from the first
         # day, and the dev tenant's `/openapi.json` repeated it while the chart and the packages
         # were at 0.4.1. A version that lies is what this repository hunts.

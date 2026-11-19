@@ -31,6 +31,12 @@ from .conftest import FakeInternalClient, agent_script, valid_result
 
 TOKEN = "rt-runner-5e1d2c3b4a59687766554433"
 HEADING = "## Calling tools from a script"
+def _accepted_model(backend: str) -> str:
+    """A model of the family the backend is held to: Claude for claude-code, Gemini for gemini-cli
+    (#1990); the others take either."""
+    return "gemini/gemini-2.5-pro" if backend == "gemini-cli" else "anthropic/claude-sonnet-5"
+
+
 #: A rule set whose raw description the model never needs to read: only the script does.
 RULES = [
     {"id": 17, "interface": "wan", "source": "PARTNERS", "descr": "RAW-RULE-NOT-FOR-THE-MODEL"},
@@ -164,7 +170,7 @@ async def test_the_agent_gets_the_client_its_environment_and_the_instructions(
     # the agent may write, the runner's own.
     monkeypatch.delenv("TMPDIR")
     stage_input.agent.backend = backend
-    stage_input.model.provider_model = "anthropic/claude-sonnet-5"  # what claude-code requires
+    stage_input.model.provider_model = _accepted_model(backend)
     stage_input.tools.scripts = ToolScripts()
     _, ran = await _run(stage_input, settings, "print('hello')\n")
 
@@ -192,7 +198,7 @@ async def test_the_first_prompt_carries_the_scripts_section_when_the_run_is_offe
     the agent's FIRST prompt, read before the task with its own instructions, and the journal says so —
     not a file it may never open."""
     stage_input.agent.backend = backend
-    stage_input.model.provider_model = "anthropic/claude-sonnet-5"  # what claude-code requires
+    stage_input.model.provider_model = _accepted_model(backend)
     stage_input.tools.scripts = ToolScripts() if offered else None
     client, ran = await _run(stage_input, settings, "print('hello')\n")
 
