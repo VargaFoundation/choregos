@@ -250,32 +250,55 @@ name, no reuse, and no way for two projects to start from the same model.
 
 ## Shipping a gate from outside this tree
 
-An extension can register a gate the same way it registers a connector, and nothing else is needed:
+An extension can register a gate the same way it registers a connector. A gate that judges what the
+step produced needs nothing else: `ctx.result` carries the step's outputs and `evidence.facts`.
 
 ```python
 from tranibor_core.gates import GateContext, GateOutcome, gate
 
-@gate("collecteur_propre")
-def _collecteur_propre(ctx: GateContext, params: dict) -> GateOutcome:
-    faits = (ctx.result.evidence.facts or {}) if ctx.result else {}
-    propre = bool(faits.get("collecteur_propre"))
-    return GateOutcome("collecteur_propre", propre, detail="…")
+@gate("clean_collector", plugin="collectors")
+def _clean_collector(ctx: GateContext, params: dict) -> GateOutcome:
+    facts = (ctx.result.evidence.facts or {}) if ctx.result else {}
+    clean = bool(facts.get("clean_collector"))
+    return GateOutcome("clean_collector", clean, detail="collector clean" if clean else "finding still there")
 ```
 
-The property that decides everything is that the **DSL validator accepts it**: an unknown gate is a
-blocking error (`gate.unknown`), so a gate registered at start-up must become known to the
-validator, or no workflow using it would ever be valid. It does, and
-`packages/core/tests/test_gate_outside_the_tree.py` proves it — including that the gate really is
-missing before the extension loads, so the test cannot lie to itself.
+A gate that reads something the step did not produce (a ticket's state, a pipeline's checks, a diff)
+declares a **context provider** for it (ADR 0181, round C0): an async function the gate activity calls
+before judging, whose mapping is filed in `GateContext.facts` under the provider's name. The gate says
+which providers it reads (`reads=`); the activity calls each of them once per evaluation, and only when a
+gate of the transition reads it. The provider gets a `ProviderRequest`: the project, work item and run
+ids, the stage result, the work item's fields and documents, the declarations that read it, and the
+project and database session as the worker holds them. It reads, never writes: the evaluation is called
+again whenever its transition is judged again.
 
-No field needs to be added to `GateContext`: `ctx.result` already carries the step's outputs and
-`evidence.facts`. That is enough for any gate that judges what the step produced — which is most of
-them.
+```python
+from tranibor_core.gates import GateContext, GateOutcome, ProviderRequest, context_provider, gate
 
-**What still needs a core change**: a gate that reads something the context does not carry — a live
-diff, a CI verdict, the cost ledger — needs its field on `GateContext` *and* its population in
-`activities/gates.py`. That is a narrower limit than the one the plan assumed, and it is worth
-knowing before designing around it.
+@context_provider("itsm.tickets", plugin="itsm")
+async def tickets(request: ProviderRequest) -> dict:
+    return {"state": await my_itsm.state_of(request.fields["ticket"])}
+
+@gate("ticket_resolved", reads=("itsm.tickets",), plugin="itsm")
+def _ticket_resolved(ctx: GateContext, params: dict) -> GateOutcome:
+    found = ctx.facts.get("itsm.tickets")
+    if found is None:  # the provider failed or is not installed: refuse, never assume
+        return GateOutcome("ticket_resolved", False, detail="the ticket's state could not be read")
+    return GateOutcome("ticket_resolved", found["state"] == "resolved", detail=f"ticket {found['state']}")
+```
+
+A provider that raises, or returns something other than a mapping, leaves no key in `facts`, and is
+logged with its plugin: its gates refuse, and the transition's other gates are judged as usual. Two
+providers under one name are refused when the second one loads.
+
+The **DSL validator** decides whether a workflow can be published. It refuses, with a blocking error, a
+gate this deployment cannot judge, so that a work item never reaches it: `gate.unknown` for a gate no
+installed extension registers, naming the plugin when the core knows which one serves it
+(`tranibor_core.gates.PLUGIN_GATES`: the twelve software-delivery gates, which move to the
+`software-delivery` plugin in round C2), and `gate.provider_missing` for a registered gate whose context
+provider no extension declares, naming the gate's plugin. `packages/core/tests/test_gate_outside_the_tree.py`
+and `packages/core/tests/test_gate_seam.py` prove it, and `apps/orchestrator/tests/test_gate_seam_extension.py`
+installs a test plugin's extension for real and has the gate activity judge its gate on its provider's facts.
 
 ## Shipping a connector from outside this tree
 
