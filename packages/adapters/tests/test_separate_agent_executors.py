@@ -266,3 +266,50 @@ def test_the_deployment_sets_the_runners_own_resources(monkeypatch: pytest.Monke
     assert executor.runner_limits == {"memory": "1Gi"}
     monkeypatch.setenv("CHOREGOS_RUNNER_OWN_RESOURCES", "")
     assert build("runtime", "k8s_job", kube).runner_requests == separate_agent.RUNNER_REQUESTS
+
+
+# S65-04k: a code agent's image is the agent's container ─────────────────────────────────────
+
+TRIAGER = "registry.example/agents/ticket-triager@sha256:" + "b" * 64
+
+
+def test_the_jobs_agent_container_runs_the_code_agents_image() -> None:
+    pod = _pod(agent_image=TRIAGER)
+    assert _init(pod, "agent")["image"] == TRIAGER
+    assert pod["containers"][0]["image"] == "registry.example/choregos-runner:1.0", "the platform's runner"
+    assert _init(pod, GATE_CONTAINER)["image"] == "registry.example/choregos-runner:1.0"
+
+
+async def test_docker_s_agent_container_runs_the_code_agents_image() -> None:
+    docker = _Docker()
+    await docker.start(_spec(agent_isolation="container", agent_image=TRIAGER))
+    runner, agent = [call for call in docker.calls if call[0] == "run"]
+    assert agent[-4] == TRIAGER and runner[-2] == "registry.example/choregos-runner:1.0"
+
+
+async def test_the_warm_pool_refuses_a_code_agents_image_and_the_routing_sends_it_to_jobs() -> None:
+    from tranibor_adapters.errors import ConfigurationError
+    from tranibor_adapters.executor.agent_sandbox import AgentSandboxExecutor
+    from tranibor_adapters.executor.routing import RoutingExecutor
+    from tranibor_adapters.fakes.executor import FakeExecutor
+    from tranibor_contracts import ExecutorKind
+
+    pool_image = "registry.example/choregos-runner:1.0"
+    sandbox = AgentSandboxExecutor(
+        client=_Cluster("v1.34.0"),  # type: ignore[arg-type]
+        pool_image=pool_image,
+        agent_isolation="container",
+    )
+    with pytest.raises(ConfigurationError, match="written in code"):
+        await sandbox.start(_spec(agent_isolation="container", agent_image=TRIAGER, runtime_class=None))
+
+    class _Jobs(FakeExecutor):
+        kind = ExecutorKind.K8S_JOB
+
+    class _Pool(FakeExecutor):
+        kind = ExecutorKind.AGENT_SANDBOX
+
+    pool, jobs = _Pool(), _Jobs()
+    routing = RoutingExecutor(pool, jobs, pool_image)
+    await routing.start(_spec(agent_isolation="container", agent_image=TRIAGER))
+    assert [s.agent_image for s in jobs.started] == [TRIAGER] and pool.started == []

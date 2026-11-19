@@ -250,15 +250,23 @@ async def start_run(payload: dict[str, Any]) -> dict[str, Any]:
             await session.commit()
             # The scope of the transaction ended with the commit (RLS is transaction-local).
             await limit_to_organisations(session, "*")
+        code_agent_apart = (
+            settings.runner_agent_isolation == "container"
+            and stage_input.job is None
+            and bool(stage_input.agent.image)
+        )
         spec = StageJobSpec(
             run_id=stage_input.run_id,
             project_slug=bundle.slug,
             namespace=_runner_namespace(settings, bundle.slug),
             # A job names its image (ADR 0056), an agent written in code too (ADR 0063); prepare_stage
-            # resolved each against the operator's map. Neither names a free reference.
+            # resolved each against the operator's map. Neither names a free reference. Under
+            # `container` a code agent's image is the agent's container and the runner is the platform's
+            # image (ADR 0146 §10): the author's code never runs beside the run's credentials.
             runner_image=(stage_input.job.image if stage_input.job else None)
-            or stage_input.agent.image
+            or (None if code_agent_apart else stage_input.agent.image)
             or settings.runner_image,
+            agent_image=stage_input.agent.image if code_agent_apart else None,
             api_url=stage_input.callbacks.api_url,
             run_token=run_token,
             gateway_key=gateway_key,

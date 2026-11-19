@@ -47,6 +47,9 @@ class RoutingExecutor:
         # A hosted agent's container beside the runner (ADR 0080): no pool sandbox has one.
         if spec.agent_container is not None:
             return True
+        # A code agent's own image as the agent's container (ADR 0146 §10): no pool sandbox has it.
+        if spec.agent_image and spec.agent_image != self.pool_image:
+            return True
         return bool(spec.runner_image) and spec.runner_image != self.pool_image
 
     def _delegate(self, ref: ExecRef) -> Executor:

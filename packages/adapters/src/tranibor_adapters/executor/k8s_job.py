@@ -352,7 +352,8 @@ class KubernetesJobExecutor:
             # (it then runs the project's checks only, under another name).
             separate_agent.add_to_pod(
                 pod_spec,
-                spec.runner_image,
+                # A code agent's image (ADR 0146 §10), the platform's otherwise.
+                spec.agent_image or spec.runner_image,
                 name=separate_agent.LAUNCHER_BESIDE_HOSTED
                 if spec.agent_container is not None
                 else separate_agent.AGENT_CONTAINER,

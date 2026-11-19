@@ -95,6 +95,13 @@ of 400 changed files under 70 MiB, each under a second of CPU; a full clone 700 
 `container` requests 1.25 CPU and 2.5 GiB where a `process` pod requests 1 and 2 GiB. Not measured: the
 compression proxy (ADR 0055) the runner starts for a policy that asks for it, and a real run end to end.
 
+**Built after, S65-04k (§10)**: under `container`, a step an agent written in code carries gets the
+platform's runner image for `runner` and the operator's image for the agent's container
+(`StageJobSpec.agent_image`), started by the launcher that image inherits from the runner image; under
+`process` nothing changes (the runner runs from the operator's image, as before). The warm pool refuses such
+a step and the routing executor sends it to `k8s_job`. `docs/code-agents.md` says what such an image must
+hold (the runner's entrypoint, the agent readable by uid 1001 under a read-only root, no secret).
+
 **Not built, still decided**: `tekton` and `aca` get no second container: under `container` they refuse the
 run at `start`.
 
