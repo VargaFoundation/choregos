@@ -64,7 +64,11 @@ class GeminiCliBackend(Backend):
         }
         return LaunchPlan(
             command=command,
-            env=dict(stage_input.agent.launch.env),
+            # gemini-cli ignores the workspace's `.gemini/settings.json`, its `mcpServers` with it, in a
+            # folder it does not trust, and over ACP nobody is there to trust it: measured on 0.60.0
+            # (S65-04a), not one request reached the step's MCP server; with this variable the server was
+            # listed and called. The workspace is the run's own clone. The step's `launch.env` comes last.
+            env={"GEMINI_CLI_TRUST_WORKSPACE": "true", **stage_input.agent.launch.env},
             files={
                 ".gemini/settings.json": json.dumps(settings, indent=2, ensure_ascii=False),
                 **stage_input.agent.launch.files,
